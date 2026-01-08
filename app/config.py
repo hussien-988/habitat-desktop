@@ -19,6 +19,24 @@ class Config:
     VERSION: str = "1.0.0"
     ORGANIZATION: str = "UN-Habitat"
 
+    # Data Provider Configuration
+    # Options: "mock", "http", "local_db"
+    # - mock: Uses in-memory mock data for development (no backend required)
+    # - http: Connects to a REST API backend
+    # - local_db: Uses local SQLite/PostgreSQL database (current default)
+    DATA_PROVIDER: str = "local_db"
+
+    # Mock Data Provider Settings
+    MOCK_SIMULATE_DELAY: bool = True
+    MOCK_DELAY_MS: int = 200
+    MOCK_PERSIST_TO_FILE: bool = False
+
+    # HTTP API Backend Settings
+    API_BASE_URL: str = "http://localhost:8080"
+    API_VERSION: str = "v1"
+    API_TIMEOUT: int = 30
+    API_MAX_RETRIES: int = 3
+
     # Paths
     PROJECT_ROOT: Path = Path(__file__).parent.parent
     DATA_DIR: Path = PROJECT_ROOT / "data"
@@ -28,9 +46,21 @@ class Config:
     FONTS_DIR: Path = ASSETS_DIR / "fonts"
     IMAGES_DIR: Path = ASSETS_DIR / "images"
 
-    # Database
+    # Database Configuration
+    # SQLite (development/fallback)
     DB_NAME: str = "trrcms.db"
     DB_PATH: Path = DATA_DIR / DB_NAME
+
+    # PostgreSQL (production) - FSD 5.2
+    # Set TRRCMS_DB_TYPE=postgresql to use PostgreSQL
+    DB_TYPE: str = "sqlite"  # "sqlite" or "postgresql"
+    POSTGRES_HOST: str = "localhost"
+    POSTGRES_PORT: int = 5432
+    POSTGRES_DB: str = "trrcms"
+    POSTGRES_USER: str = "trrcms_user"
+    POSTGRES_PASSWORD: str = "trrcms_password"
+    POSTGRES_MIN_CONN: int = 1
+    POSTGRES_MAX_CONN: int = 10
 
     # Logging
     LOG_FILE: str = "app.log"
@@ -124,6 +154,7 @@ class Pages:
     PERSONS = "persons"
     PERSON_DETAILS = "person_details"
     CLAIMS = "claims"
+    DRAFT_CLAIMS = "draft_claims"  # Draft claims page
     CLAIM_DETAILS = "claim_details"
     DOCUMENTS = "documents"
     HOUSEHOLDS = "households"
@@ -132,6 +163,7 @@ class Pages:
     CONFLICTS = "conflicts"
     DUPLICATES = "duplicates"  # UC-007, UC-008: Property & Person duplicates
     FIELD_ASSIGNMENT = "field_assignment"  # UC-012: Assign buildings to field teams
+    DRAFT_OFFICE_SURVEYS = "draft_office_surveys"  # UC-005: Draft office surveys list
     SEARCH = "search"
     REPORTS = "reports"
     MAP_VIEW = "map_view"

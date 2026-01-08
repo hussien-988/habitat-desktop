@@ -1,134 +1,105 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """
-UN-Habitat Syria - Tenure Rights Registration & Claims Management System
-Main application entry point.
+TRRCMS - Tenure Rights Registration & Claims Management System
+Main entry point for the application
+
+نظام تسجيل حقوق الحيازة وإدارة المطالبات
+نقطة الدخول الرئيسية للتطبيق
 """
 
 import sys
-import traceback
 from pathlib import Path
 
-# Add project root to path
-PROJECT_ROOT = Path(__file__).parent
-sys.path.insert(0, str(PROJECT_ROOT))
+# Add trrcms directory to Python path (MUST be before any trrcms imports)
+trrcms_path = Path(__file__).parent / "trrcms"
+sys.path.insert(0, str(trrcms_path))
 
-# IMPORTANT: Import QtWebEngineWidgets BEFORE creating QApplication
-# This is required by Qt for proper WebEngine initialization
-try:
-    from PyQt5.QtWebEngineWidgets import QWebEngineView  # noqa: F401
-except ImportError:
-    pass  # WebEngine not available, map will use fallback
+# Now we can import from trrcms
+from PyQt5.QtWidgets import QApplication
+from PyQt5.QtCore import Qt
 
-from PyQt5.QtWidgets import QApplication, QMessageBox
-from PyQt5.QtCore import Qt, QLocale
-from PyQt5.QtGui import QFont, QFontDatabase
-
-from app.config import Config
-from app.main_window import MainWindow
-from app.styles import get_stylesheet
-from repositories.database import Database
-from repositories.seed import seed_database
-from utils.logger import setup_logger, get_logger
-from utils.i18n import I18n
+# Import trrcms modules after path is set
+# Note: IDE may show warnings, but these imports will work at runtime
+from app.config import Config  # type: ignore
+from app import MainWindow  # type: ignore
+from repositories.database import Database  # type: ignore
+from utils.i18n import I18n  # type: ignore
+from utils.logger import setup_logger  # type: ignore
 
 
-def exception_hook(exc_type, exc_value, exc_tb):
-    """Global exception handler to catch crashes."""
-    logger = get_logger(__name__)
-    error_msg = "".join(traceback.format_exception(exc_type, exc_value, exc_tb))
-    logger.critical(f"Unhandled exception:\n{error_msg}")
-    print(f"CRITICAL ERROR:\n{error_msg}", file=sys.stderr)
-
-    # Show error dialog if app is running
-    try:
-        QMessageBox.critical(
-            None,
-            "خطأ في التطبيق",
-            f"حدث خطأ غير متوقع:\n\n{exc_value}\n\nراجع ملف السجل للتفاصيل."
-        )
-    except:
-        pass
-
-    sys.__excepthook__(exc_type, exc_value, exc_tb)
-
-
-def setup_fonts(app: QApplication) -> None:
-    """Load custom fonts for Arabic support."""
-    fonts_dir = PROJECT_ROOT / "assets" / "fonts"
-
-    # Try to load Noto Sans Arabic if available
-    noto_arabic = fonts_dir / "NotoSansArabic-Regular.ttf"
-    if noto_arabic.exists():
-        font_id = QFontDatabase.addApplicationFont(str(noto_arabic))
-        if font_id >= 0:
-            families = QFontDatabase.applicationFontFamilies(font_id)
-            if families:
-                Config.ARABIC_FONT_FAMILY = families[0]
-
-    # Set default application font
-    font = QFont(Config.FONT_FAMILY, Config.FONT_SIZE)
-    app.setFont(font)
-
-
-def main() -> int:
+def main():
     """Main application entry point."""
-    # Install global exception handler
-    sys.excepthook = exception_hook
 
-    # Setup logging first
+    # Set Qt attributes BEFORE creating QApplication
+    QApplication.setAttribute(Qt.AA_EnableHighDpiScaling, True)  # type: ignore
+    QApplication.setAttribute(Qt.AA_UseHighDpiPixmaps, True)  # type: ignore
+    QApplication.setAttribute(Qt.AA_ShareOpenGLContexts, True)  # type: ignore
+
+    # Initialize logging
     logger = setup_logger()
-    logger.info("=" * 60)
-    logger.info("UN-Habitat Syria Application Starting")
-    logger.info("=" * 60)
 
-    # Enable high DPI scaling
-    QApplication.setAttribute(Qt.AA_EnableHighDpiScaling, True)
-    QApplication.setAttribute(Qt.AA_UseHighDpiPixmaps, True)
+    try:
+        # Create Qt application
+        app = QApplication(sys.argv)
+        app.setApplicationName(Config.APP_NAME)
+        app.setOrganizationName("UN-Habitat")
+        app.setOrganizationDomain("unhabitat.org")
 
-    # Create application
-    app = QApplication(sys.argv)
-    app.setApplicationName(Config.APP_NAME)
-    app.setApplicationVersion(Config.VERSION)
-    app.setOrganizationName(Config.ORGANIZATION)
+        # Log startup
+        logger.info("=" * 80)
+        logger.info("Starting TRRCMS Application")
+        logger.info("=" * 80)
 
-    # Set locale for proper number/date formatting
-    QLocale.setDefault(QLocale(QLocale.English, QLocale.UnitedStates))
+        # Initialize database
+        logger.info("Initializing database...")
+        db = Database()
+        db.initialize()
+        logger.info(">> Database initialized successfully")
 
-    # Setup fonts
-    setup_fonts(app)
+        # Initialize i18n
+        logger.info("Initializing internationalization...")
+        i18n = I18n()
+        i18n.set_language("ar")  # Default to Arabic
+        logger.info(">> Internationalization initialized (Arabic)")
 
-    # Initialize translations
-    i18n = I18n()
+        # Create main window (now using v2 with Navbar)
+        logger.info("Creating main window (NEW DESIGN v2 with Navbar)...")
+        window = MainWindow(db, i18n)
+        window.show()
+        logger.info(">> Main window created and displayed")
 
-    # Apply UN-Habitat branding stylesheet
-    app.setStyleSheet(get_stylesheet())
+        logger.info("=" * 80)
+        logger.info(">> Application started successfully!")
+        logger.info("=" * 80)
 
-    # Initialize database
-    logger.info("Initializing database...")
-    db = Database()
-    db.initialize()
+        # Run application event loop
+        exit_code = app.exec_()
+        logger.info(f"Application closed with exit code: {exit_code}")
+        sys.exit(exit_code)
 
-    # Seed demo data if database is empty
-    logger.info("Checking for demo data...")
-    seed_database(db)
+    except ImportError as e:
+        error_msg = f"Import Error: {e}"
+        print(f"\n[ERROR] {error_msg}")
+        print("\nPossible causes:")
+        print("1. Missing dependencies - Run: pip install -r requirements.txt")
+        print("2. Python path issue - Make sure you're in the correct directory")
+        print("\nDetails:", str(e))
+        if 'logger' in locals():
+            logger.exception(error_msg)
+        sys.exit(1)
 
-    # Create and show main window
-    logger.info("Creating main window...")
-    window = MainWindow(db, i18n)
-    window.show()
-
-    logger.info("Application ready")
-
-    # Run event loop
-    exit_code = app.exec_()
-
-    # Cleanup
-    logger.info("Application shutting down")
-    db.close()
-
-    return exit_code
+    except Exception as e:
+        error_msg = f"Fatal error during application startup: {e}"
+        print(f"\n[ERROR] {error_msg}")
+        print("\nPlease check trrcms/logs/app.log for details")
+        if 'logger' in locals():
+            logger.exception(error_msg)
+        else:
+            import traceback
+            traceback.print_exc()
+        sys.exit(1)
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    main()

@@ -268,3 +268,49 @@ class VocabularyRepository:
                 data[field] = datetime.fromisoformat(data[field])
 
         return VocabularyTerm(**{k: v for k, v in data.items() if k in VocabularyTerm.__dataclass_fields__})
+
+    def delete_term(self, term_id: str) -> bool:
+        """
+        Permanently delete a vocabulary term.
+        Use with caution - this is for cleaning up test data only.
+        For production use, prefer deprecate_term() instead.
+        """
+        query = "DELETE FROM vocabulary_terms WHERE term_id = ?"
+        self.db.execute(query, (term_id,))
+        logger.info(f"Deleted vocabulary term: {term_id}")
+        return True
+
+    def cleanup_test_data(self, vocabulary_name: str = None) -> int:
+        """
+        Remove non-default vocabulary terms (test data cleanup).
+
+        Default terms are defined in database._seed_default_vocabularies().
+        This method removes any terms that don't match those defaults.
+
+        Returns:
+            Number of terms deleted
+        """
+        # Default vocabulary codes from database.py
+        default_codes = {
+            "building_type": {"residential", "commercial", "mixed_use", "industrial", "public"},
+            "building_status": {"intact", "minor_damage", "major_damage", "destroyed", "under_construction"},
+            "unit_type": {"apartment", "shop", "office", "warehouse", "garage", "other"},
+            "relation_type": {"owner", "tenant", "heir", "guest", "occupant", "other"},
+            "case_status": {"draft", "submitted", "screening", "under_review", "awaiting_docs", "conflict", "approved", "rejected"},
+        }
+
+        count = 0
+        vocabs = [vocabulary_name] if vocabulary_name else list(default_codes.keys())
+
+        for vocab_name in vocabs:
+            if vocab_name not in default_codes:
+                continue
+
+            terms = self.get_terms(vocab_name, include_deprecated=True)
+            for term in terms:
+                if term.term_code not in default_codes[vocab_name]:
+                    self.delete_term(term.term_id)
+                    count += 1
+                    logger.info(f"Deleted test term: {vocab_name}/{term.term_code}")
+
+        return count

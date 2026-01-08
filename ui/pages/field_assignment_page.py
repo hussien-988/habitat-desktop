@@ -592,9 +592,9 @@ class FieldAssignmentPage(QWidget):
         building = self.buildings_model.get_building(index.row())
         if building:
             if self.queue_widget.add_building(building):
-                Toast.show(self, f"تم إضافة المبنى {building.building_id}", Toast.SUCCESS)
+                Toast.show_toast(self, f"تم إضافة المبنى {building.building_id}", Toast.SUCCESS)
             else:
-                Toast.show(self, "المبنى موجود في القائمة", Toast.WARNING)
+                Toast.show_toast(self, "المبنى موجود في القائمة", Toast.WARNING)
 
     def _on_add_selected(self):
         """Add selected buildings to queue."""
@@ -606,7 +606,7 @@ class FieldAssignmentPage(QWidget):
                 added += 1
 
         if added > 0:
-            Toast.show(self, f"تم إضافة {added} مبنى للقائمة", Toast.SUCCESS)
+            Toast.show_toast(self, f"تم إضافة {added} مبنى للقائمة", Toast.SUCCESS)
 
     def _on_add_all(self):
         """Add all visible buildings to queue."""
@@ -617,7 +617,7 @@ class FieldAssignmentPage(QWidget):
                 added += 1
 
         if added > 0:
-            Toast.show(self, f"تم إضافة {added} مبنى للقائمة", Toast.SUCCESS)
+            Toast.show_toast(self, f"تم إضافة {added} مبنى للقائمة", Toast.SUCCESS)
 
     def _on_queue_changed(self):
         """Handle queue content change."""
@@ -650,14 +650,14 @@ class FieldAssignmentPage(QWidget):
                 field_team_name=team_name
             )
 
-            Toast.show(self, f"تم تعيين {len(assignments)} مبنى للفريق {team_name}", Toast.SUCCESS)
+            Toast.show_toast(self, f"تم تعيين {len(assignments)} مبنى للفريق {team_name}", Toast.SUCCESS)
             self.queue_widget.clear()
             self._load_recent_assignments()
             self._update_stats()
 
         except Exception as e:
             logger.error(f"Assignment failed: {e}")
-            Toast.show(self, f"فشل في التعيين: {str(e)}", Toast.ERROR)
+            Toast.show_toast(self, f"فشل في التعيين: {str(e)}", Toast.ERROR)
 
     def _on_transfer(self):
         """Transfer buildings to tablet (UC-012 S08-S12)."""
@@ -710,14 +710,14 @@ class FieldAssignmentPage(QWidget):
 
             progress.setValue(len(assignment_ids))
 
-            Toast.show(self, f"تم نقل {len(result['success'])} مبنى بنجاح", Toast.SUCCESS)
+            Toast.show_toast(self, f"تم نقل {len(result['success'])} مبنى بنجاح", Toast.SUCCESS)
             self.queue_widget.clear()
             self._load_recent_assignments()
             self._update_stats()
 
         except Exception as e:
             logger.error(f"Transfer failed: {e}")
-            Toast.show(self, f"فشل في النقل: {str(e)}", Toast.ERROR)
+            Toast.show_toast(self, f"فشل في النقل: {str(e)}", Toast.ERROR)
 
     def _load_recent_assignments(self):
         """Load recent assignments into table."""

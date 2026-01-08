@@ -329,13 +329,13 @@ class BuildingDetailsPage(QWidget):
                         setattr(self.current_building, key, value)
 
                 self.building_repo.update(self.current_building)
-                Toast.show(self, f"تم تحديث المبنى بنجاح", Toast.SUCCESS)
+                Toast.show_toast(self, f"تم تحديث المبنى بنجاح", Toast.SUCCESS)
 
                 # Refresh display
                 self.refresh(self.current_building.building_id)
             except Exception as e:
                 logger.error(f"Failed to update building: {e}")
-                Toast.show(self, f"فشل في تحديث المبنى: {str(e)}", Toast.ERROR)
+                Toast.show_toast(self, f"فشل في تحديث المبنى: {str(e)}", Toast.ERROR)
 
     def update_language(self, is_arabic: bool):
         """Update labels for language change."""

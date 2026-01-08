@@ -257,14 +257,14 @@ class ReportsPage(QWidget):
 
         try:
             # Generate report (placeholder - would use reportlab for PDF)
-            Toast.show(self, f"جاري إنشاء التقرير: {report_type}", Toast.INFO)
+            Toast.show_toast(self, f"جاري إنشاء التقرير: {report_type}", Toast.INFO)
 
             # In production, this would call a PDF generation service
             # For now, we'll export as CSV
             file_path = Path(filename).with_suffix('.csv')
             result = self.export_service.export_buildings_csv(file_path, {})
 
-            Toast.show(
+            Toast.show_toast(
                 self,
                 f"تم إنشاء التقرير بنجاح: {result['record_count']} سجل",
                 Toast.SUCCESS
@@ -317,13 +317,13 @@ class ReportsPage(QWidget):
             self.progress.setValue(100)
 
             if result:
-                Toast.show(
+                Toast.show_toast(
                     self,
                     f"تم التصدير بنجاح: {result.get('record_count', 0)} سجل",
                     Toast.SUCCESS
                 )
             else:
-                Toast.show(self, "تم التصدير بنجاح", Toast.SUCCESS)
+                Toast.show_toast(self, "تم التصدير بنجاح", Toast.SUCCESS)
 
         except Exception as e:
             logger.error(f"Export failed: {e}")

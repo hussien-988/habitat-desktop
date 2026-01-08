@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 """
 Property Unit entity model.
+Implements FR-D-8 STDM legacy integration support.
 """
 
 from dataclasses import dataclass, field
@@ -18,6 +19,8 @@ class PropertyUnit:
     BUILDING_ID-UUU
     - BUILDING_ID: 17-digit building ID
     - UUU: Unit number (3 digits)
+
+    Implements FR-D-8.2 STDM Integration for Units.
     """
 
     # Primary identifiers
@@ -37,6 +40,11 @@ class PropertyUnit:
 
     # Area (optional, approximate)
     area_sqm: Optional[float] = None
+
+    # Legacy STDM Integration (FR-D-8.2)
+    legacy_stdm_id: Optional[str] = None  # Original STDM unit identifier
+    legacy_stdm_party_id: Optional[str] = None  # STDM party reference
+    legacy_stdm_spatial_unit_id: Optional[str] = None  # STDM spatial unit reference
 
     # Metadata
     created_at: datetime = field(default_factory=datetime.now)
@@ -108,6 +116,9 @@ class PropertyUnit:
             "apartment_status": self.apartment_status,
             "property_description": self.property_description,
             "area_sqm": self.area_sqm,
+            "legacy_stdm_id": self.legacy_stdm_id,
+            "legacy_stdm_party_id": self.legacy_stdm_party_id,
+            "legacy_stdm_spatial_unit_id": self.legacy_stdm_spatial_unit_id,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
             "created_by": self.created_by,

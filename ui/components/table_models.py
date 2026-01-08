@@ -102,6 +102,10 @@ class BuildingsTableModel(QAbstractTableModel):
             return self._buildings[row]
         return None
 
+    def get_all_buildings(self) -> List[Building]:
+        """Get all buildings in the model."""
+        return self._buildings
+
 
 class UnitsTableModel(QAbstractTableModel):
     """Table model for property units list."""

@@ -95,19 +95,60 @@ class UnitRepository:
         )
         return result["count"] if result else 0
 
+    def get_next_unit_number(self, building_id: str) -> str:
+        """
+        Get the next available unit_number for a building.
+        Returns a 3-digit padded string (e.g., '001', '002', etc.)
+        """
+        result = self.db.fetch_one(
+            "SELECT MAX(CAST(unit_number AS INTEGER)) as max_num FROM property_units WHERE building_id = ?",
+            (building_id,)
+        )
+        max_num = result["max_num"] if result and result["max_num"] else 0
+        next_num = max_num + 1
+        return str(next_num).zfill(3)
+
+    def unit_number_exists(self, building_id: str, unit_number: str, exclude_unit_uuid: str = None) -> bool:
+        """
+        Check if a unit_number already exists for a given building.
+        Optionally exclude a specific unit (for edit mode).
+        """
+        if exclude_unit_uuid:
+            result = self.db.fetch_one(
+                "SELECT COUNT(*) as count FROM property_units WHERE building_id = ? AND unit_number = ? AND unit_uuid != ?",
+                (building_id, unit_number, exclude_unit_uuid)
+            )
+        else:
+            result = self.db.fetch_one(
+                "SELECT COUNT(*) as count FROM property_units WHERE building_id = ? AND unit_number = ?",
+                (building_id, unit_number)
+            )
+        return result["count"] > 0 if result else False
+
+    def get_by_building_and_unit_number(self, building_id: str, unit_number: str) -> Optional[PropertyUnit]:
+        """Get unit by building_id and unit_number combination."""
+        query = "SELECT * FROM property_units WHERE building_id = ? AND unit_number = ?"
+        row = self.db.fetch_one(query, (building_id, unit_number))
+        if row:
+            return self._row_to_unit(row)
+        return None
+
     def update(self, unit: PropertyUnit) -> PropertyUnit:
         """Update an existing unit."""
         unit.updated_at = datetime.now()
+        # Ensure unit_id is consistent with building_id and unit_number
+        unit.unit_id = f"{unit.building_id}-{unit.unit_number}"
+
         query = """
             UPDATE property_units SET
-                unit_type = ?, unit_number = ?, floor_number = ?,
+                building_id = ?, unit_id = ?, unit_type = ?, unit_number = ?, floor_number = ?,
                 apartment_number = ?, apartment_status = ?,
                 property_description = ?, area_sqm = ?,
                 updated_at = ?, updated_by = ?
             WHERE unit_uuid = ?
         """
         params = (
-            unit.unit_type, unit.unit_number, unit.floor_number,
+            unit.building_id, unit.unit_id, unit.unit_type, unit.unit_number, unit.floor_number,
             unit.apartment_number, unit.apartment_status,
             unit.property_description, unit.area_sqm,
             unit.updated_at.isoformat(), unit.updated_by,

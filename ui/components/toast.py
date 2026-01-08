@@ -109,8 +109,8 @@ class Toast(QLabel):
         self.fade_out.finished.connect(self.hide)
         self.fade_out.start()
 
-    @classmethod
-    def show(cls, parent: QWidget, message: str, toast_type: str = "info", duration: int = 3000):
+    @staticmethod
+    def show_toast(parent: QWidget, message: str, toast_type: str = "info", duration: int = 3000):
         """
         Convenience method to show a toast on a widget.
 

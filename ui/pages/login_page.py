@@ -1,14 +1,16 @@
 # -*- coding: utf-8 -*-
 """
-صفحة تسجيل الدخول بتصميم احترافي.
+Login Page - Based on Figma Design Reference
+Exact implementation matching the provided screenshot
 """
 
 from PyQt5.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
+    QWidget, QVBoxLayout, QLabel, QLineEdit,
     QPushButton, QFrame, QGraphicsDropShadowEffect
 )
 from PyQt5.QtCore import Qt, pyqtSignal
-from PyQt5.QtGui import QColor
+from PyQt5.QtGui import QColor, QPainter, QPaintEvent, QFont, QFontDatabase, QPixmap
+import os
 
 from app.config import Config
 from repositories.database import Database
@@ -20,7 +22,7 @@ logger = get_logger(__name__)
 
 
 class LoginPage(QWidget):
-    """صفحة تسجيل الدخول."""
+    """Login page exactly matching the reference screenshot."""
 
     login_successful = pyqtSignal(object)
 
@@ -29,303 +31,277 @@ class LoginPage(QWidget):
         self.db = db
         self.i18n = i18n
         self.auth_service = AuthService(db)
+        self.password_visible = False
 
+        # Load custom fonts
+        self._load_fonts()
         self._setup_ui()
 
+    def _load_fonts(self):
+        """Load Noto Kufi Arabic fonts"""
+        fonts_dir = os.path.join(os.path.dirname(__file__), "..", "..", "assets", "fonts", "Noto_Kufi_Arabic")
+        font_files = [
+            "NotoKufiArabic-Regular.ttf",
+            "NotoKufiArabic-Bold.ttf",
+            "NotoKufiArabic-SemiBold.ttf",
+            "NotoKufiArabic-Medium.ttf"
+        ]
+
+        for font_file in font_files:
+            font_path = os.path.join(fonts_dir, font_file)
+            if os.path.exists(font_path):
+                QFontDatabase.addApplicationFont(font_path)
+
+    def paintEvent(self, event: QPaintEvent):
+        """Paint two-tone background"""
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing)
+
+        width = self.width()
+        height = self.height()
+        mid_height = height // 2
+
+        # Top half - blue (#3890DF based on reference)
+        painter.fillRect(0, 0, width, mid_height, QColor("#3890DF"))
+
+        # Bottom half - very light blue-gray (#F0F4F8 based on reference)
+        painter.fillRect(0, mid_height, width, height - mid_height, QColor("#F0F4F8"))
+
     def _setup_ui(self):
-        """إعداد واجهة تسجيل الدخول."""
-        self.setObjectName("login-container")
-
-        # التخطيط الرئيسي
-        main_layout = QHBoxLayout(self)
+        """Setup the login UI"""
+        main_layout = QVBoxLayout(self)
+        main_layout.setAlignment(Qt.AlignCenter)
         main_layout.setContentsMargins(0, 0, 0, 0)
-        main_layout.setSpacing(0)
 
-        # الجانب الأيسر - منطقة الشعار مع خلفية الصورة
-        left_panel = QFrame()
-        left_panel.setFixedWidth(420)
-        left_panel.setObjectName("left-panel")
+        # Create login card
+        card = self._create_login_card()
+        main_layout.addWidget(card)
 
-        # تحديد خلفية الشعار مع تأثير overlay
-        logo_path = str(Config.LOGO_PATH).replace("\\", "/")
-        left_panel.setStyleSheet(f"""
-            QFrame#left-panel {{
-                background-image: url("{logo_path}");
-                background-repeat: no-repeat;
-                background-position: center;
-                border: none;
-            }}
-        """)
-
-        # طبقة overlay شفافة فوق الصورة
-        overlay = QFrame(left_panel)
-        overlay.setObjectName("overlay")
-        overlay.setStyleSheet(f"""
-            QFrame#overlay {{
-                background: qlineargradient(
-                    x1:0, y1:0, x2:0, y2:1,
-                    stop:0 rgba(0, 114, 188, 0.85),
-                    stop:0.5 rgba(0, 90, 156, 0.88),
-                    stop:1 rgba(0, 60, 120, 0.92)
-                );
-            }}
-        """)
-
-        # تخطيط الـ overlay ليملأ كامل المساحة
-        left_panel_layout = QVBoxLayout(left_panel)
-        left_panel_layout.setContentsMargins(0, 0, 0, 0)
-        left_panel_layout.setSpacing(0)
-        left_panel_layout.addWidget(overlay)
-
-        # محتوى الـ overlay
-        overlay_layout = QVBoxLayout(overlay)
-        overlay_layout.setAlignment(Qt.AlignCenter)
-        overlay_layout.setContentsMargins(40, 80, 40, 80)
-        overlay_layout.setSpacing(0)
-
-        overlay_layout.addStretch(2)
-
-        # اسم النظام - السطر الأول
-        system_name1 = QLabel("نظام تسجيل حقوق الحيازة")
-        system_name1.setStyleSheet(f"""
-            color: white;
-            font-size: 15pt;
-            font-weight: 600;
-            letter-spacing: 1px;
-            background: transparent;
-        """)
-        system_name1.setAlignment(Qt.AlignCenter)
-        overlay_layout.addWidget(system_name1)
-
-        overlay_layout.addSpacing(8)
-
-        # اسم النظام - السطر الثاني
-        system_name2 = QLabel("وإدارة المطالبات")
-        system_name2.setStyleSheet(f"""
-            color: rgba(255, 255, 255, 0.9);
-            font-size: 14pt;
-            font-weight: 500;
-            letter-spacing: 1px;
-            background: transparent;
-        """)
-        system_name2.setAlignment(Qt.AlignCenter)
-        overlay_layout.addWidget(system_name2)
-
-        overlay_layout.addStretch(3)
-
-        main_layout.addWidget(left_panel)
-
-        # الجانب الأيمن - نموذج تسجيل الدخول
-        right_panel = QWidget()
-        right_panel.setStyleSheet(f"background-color: {Config.BACKGROUND_COLOR};")
-
-        right_layout = QVBoxLayout(right_panel)
-        right_layout.setAlignment(Qt.AlignCenter)
-        right_layout.setContentsMargins(80, 60, 80, 60)
-
-        # كارد تسجيل الدخول
+    def _create_login_card(self) -> QFrame:
+        """Create the white login card matching reference design"""
         card = QFrame()
-        card.setObjectName("login-card")
-        card.setFixedWidth(420)
+        card.setObjectName("login_card")
+        card.setFixedSize(420, 520)  # Adjusted card size
         card.setStyleSheet("""
-            QFrame#login-card {
+            QFrame#login_card {
                 background-color: white;
-                border-radius: 16px;
-                border: none;
+                border-radius: 12px;
             }
         """)
 
-        # إضافة ظل
+        # Subtle shadow
         shadow = QGraphicsDropShadowEffect()
-        shadow.setBlurRadius(30)
-        shadow.setColor(QColor(0, 0, 0, 40))
-        shadow.setOffset(0, 8)
+        shadow.setBlurRadius(25)
+        shadow.setColor(QColor(150, 150, 150, 40))
+        shadow.setOffset(0, 3)
         card.setGraphicsEffect(shadow)
 
         card_layout = QVBoxLayout(card)
         card_layout.setSpacing(0)
-        card_layout.setContentsMargins(44, 44, 44, 44)
+        card_layout.setContentsMargins(32, 32, 32, 32)
 
-        # عنوان الترحيب
-        welcome_label = QLabel("مرحباً بك")
-        welcome_label.setStyleSheet(f"""
-            font-size: {Config.FONT_SIZE_H1 + 4}pt;
-            font-weight: 700;
-            color: {Config.TEXT_COLOR};
-            background: transparent;
-            padding: 0;
-            margin: 0;
-        """)
-        welcome_label.setAlignment(Qt.AlignCenter)
-        card_layout.addWidget(welcome_label)
+        # Logo area with UN-HABITAT image
+        logo_label = QLabel()
+        logo_label.setAlignment(Qt.AlignCenter)
+        logo_label.setFixedHeight(80)
 
-        card_layout.addSpacing(10)
+        # Try to load the logo image
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        logo_path = os.path.join(current_dir, "..", "..", "assets", "images", "un-logo.jpg")
+        logo_path = os.path.normpath(logo_path)
 
-        # العنوان الفرعي
-        subtitle = QLabel("قم بتسجيل الدخول للمتابعة")
-        subtitle.setStyleSheet(f"""
-            font-size: {Config.FONT_SIZE_BODY + 1}pt;
-            color: {Config.TEXT_LIGHT};
-            background: transparent;
-            padding: 0;
-            margin: 0;
-        """)
+        if os.path.exists(logo_path):
+            pixmap = QPixmap(logo_path)
+            if not pixmap.isNull():
+                scaled_pixmap = pixmap.scaled(70, 70, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+                logo_label.setPixmap(scaled_pixmap)
+
+        # If no image, show text
+        if logo_label.pixmap() is None or logo_label.pixmap().isNull():
+            logo_label.setText("UN-HABITAT")
+            logo_label.setStyleSheet("color: #3890DF; font-size: 14px; font-weight: bold; background: transparent;")
+
+        card_layout.addWidget(logo_label)
+        card_layout.addSpacing(20)
+
+        # Title
+        title = QLabel("تسجيل الدخول إلى الحساب")
+        title.setAlignment(Qt.AlignCenter)
+        title.setFont(QFont("Noto Kufi Arabic", 11, QFont.Bold))
+        title.setStyleSheet("color: #2C3E50; background: transparent;")
+        card_layout.addWidget(title)
+
+        card_layout.addSpacing(6)
+
+        # Subtitle
+        subtitle = QLabel("يرجى إدخال بيانات الدخول للمتابعة واستخدام النظام")
         subtitle.setAlignment(Qt.AlignCenter)
+        subtitle.setWordWrap(True)
+        subtitle.setFont(QFont("Noto Kufi Arabic", 8))
+        subtitle.setStyleSheet("color: #7F8C9B; background: transparent;")
         card_layout.addWidget(subtitle)
 
-        card_layout.addSpacing(38)
+        card_layout.addSpacing(24)
 
-        # حقل اسم المستخدم
+        # Username label
         username_label = QLabel("اسم المستخدم")
-        username_label.setStyleSheet(f"""
-            font-size: {Config.FONT_SIZE + 2}pt;
-            font-weight: 700;
-            color: {Config.TEXT_COLOR};
-            background: transparent;
-            padding: 0;
-            margin: 0;
-        """)
+        username_label.setFont(QFont("Noto Kufi Arabic", 11, QFont.DemiBold))
+        username_label.setStyleSheet("color: #2C3E50; background: transparent;")
         card_layout.addWidget(username_label)
 
         card_layout.addSpacing(6)
 
+        # Username input
         self.username_input = QLineEdit()
         self.username_input.setPlaceholderText("أدخل اسم المستخدم")
         self.username_input.setLayoutDirection(Qt.RightToLeft)
-        self.username_input.setFixedHeight(52)
-        self.username_input.setStyleSheet(f"""
-            QLineEdit {{
-                background-color: #F8FAFC;
-                border: 2px solid #E2E8F0;
-                border-radius: 10px;
-                padding: 0 16px;
-                font-size: {Config.FONT_SIZE + 2}pt;
-                color: {Config.TEXT_COLOR};
-            }}
-            QLineEdit:focus {{
-                border: 2px solid {Config.PRIMARY_COLOR};
+        self.username_input.setFixedHeight(42)
+        self.username_input.setFont(QFont("Noto Kufi Arabic", 11))
+        self.username_input.setStyleSheet("""
+            QLineEdit {
                 background-color: white;
-            }}
+                border: 1px solid #D5DBDB;
+                border-radius: 6px;
+                padding: 8px 12px;
+                color: #2C3E50;
+            }
+            QLineEdit:focus {
+                border: 1px solid #3890DF;
+                outline: none;
+            }
+            QLineEdit::placeholder {
+                color: #BDC3C7;
+            }
         """)
+        self.username_input.textChanged.connect(self._hide_error)
         card_layout.addWidget(self.username_input)
 
-        card_layout.addSpacing(28)
+        card_layout.addSpacing(14)
 
-        # حقل كلمة المرور
+        # Password label
         password_label = QLabel("كلمة المرور")
-        password_label.setStyleSheet(f"""
-            font-size: {Config.FONT_SIZE + 2}pt;
-            font-weight: 700;
-            color: {Config.TEXT_COLOR};
-            background: transparent;
-            padding: 0;
-            margin: 0;
-        """)
+        password_label.setFont(QFont("Noto Kufi Arabic", 11, QFont.DemiBold))
+        password_label.setStyleSheet("color: #2C3E50; background: transparent;")
         card_layout.addWidget(password_label)
 
         card_layout.addSpacing(6)
 
-        self.password_input = QLineEdit()
+        # Password input with eye icon
+        password_container = QFrame()
+        password_container.setFixedHeight(42)
+        password_container.setStyleSheet("background: transparent; border: none;")
+
+        self.password_input = QLineEdit(password_container)
         self.password_input.setPlaceholderText("أدخل كلمة المرور")
         self.password_input.setEchoMode(QLineEdit.Password)
         self.password_input.setLayoutDirection(Qt.RightToLeft)
-        self.password_input.setFixedHeight(52)
-        self.password_input.setStyleSheet(f"""
-            QLineEdit {{
-                background-color: #F8FAFC;
-                border: 2px solid #E2E8F0;
-                border-radius: 10px;
-                padding: 0 16px;
-                font-size: {Config.FONT_SIZE + 2}pt;
-                color: {Config.TEXT_COLOR};
-            }}
-            QLineEdit:focus {{
-                border: 2px solid {Config.PRIMARY_COLOR};
+        self.password_input.setFixedHeight(42)
+        self.password_input.setFont(QFont("Noto Kufi Arabic", 11))
+
+        # Calculate width to match username input (full width)
+        card_width = 420 - 64  # card width minus left/right margins (32 each)
+        self.password_input.setGeometry(0, 0, card_width, 42)
+
+        self.password_input.setStyleSheet("""
+            QLineEdit {
                 background-color: white;
-            }}
+                border: 1px solid #D5DBDB;
+                border-radius: 6px;
+                padding-right: 40px;
+                padding-left: 12px;
+                padding-top: 8px;
+                padding-bottom: 8px;
+                color: #2C3E50;
+            }
+            QLineEdit:focus {
+                border: 1px solid #3890DF;
+                outline: none;
+            }
+            QLineEdit::placeholder {
+                color: #BDC3C7;
+            }
         """)
+        self.password_input.textChanged.connect(self._hide_error)
         self.password_input.returnPressed.connect(self._on_login)
-        card_layout.addWidget(self.password_input)
 
-        card_layout.addSpacing(32)
+        # Eye icon positioned on the left for RTL
+        self.toggle_password_btn = QPushButton("👁", password_container)
+        self.toggle_password_btn.setGeometry(8, 7, 28, 28)
+        self.toggle_password_btn.setCursor(Qt.PointingHandCursor)
+        self.toggle_password_btn.setStyleSheet("""
+            QPushButton {
+                background: transparent;
+                border: none;
+                font-size: 14px;
+                color: #95A5A6;
+            }
+            QPushButton:hover {
+                color: #3890DF;
+            }
+        """)
+        self.toggle_password_btn.clicked.connect(self._toggle_password_visibility)
 
-        # رسالة الخطأ
+        card_layout.addWidget(password_container)
+
+        card_layout.addSpacing(20)
+
+        # Error message
         self.error_label = QLabel("")
-        self.error_label.setStyleSheet(f"""
-            color: {Config.ERROR_COLOR};
-            font-size: {Config.FONT_SIZE_SMALL}pt;
-            padding: 10px;
-            background-color: #FEE2E2;
-            border-radius: 6px;
+        self.error_label.setStyleSheet("""
+            background-color: #FADBD8;
+            color: #E74C3C;
+            font-size: 10px;
+            padding: 8px 10px;
+            border-radius: 4px;
+            border: 1px solid #E74C3C;
         """)
         self.error_label.setAlignment(Qt.AlignCenter)
         self.error_label.setWordWrap(True)
         self.error_label.hide()
         card_layout.addWidget(self.error_label)
 
-        # زر تسجيل الدخول
-        self.login_btn = QPushButton("تسجيل الدخول")
-        self.login_btn.setFixedHeight(54)
+        # Login button
+        self.login_btn = QPushButton("تسجيل دخول")
+        self.login_btn.setFixedHeight(40)
         self.login_btn.setCursor(Qt.PointingHandCursor)
-        self.login_btn.setStyleSheet(f"""
-            QPushButton {{
-                background-color: {Config.PRIMARY_COLOR};
+        self.login_btn.setFont(QFont("Noto Kufi Arabic", 12, QFont.Bold))
+        self.login_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #3890DF;
                 color: white;
                 border: none;
-                border-radius: 10px;
-                font-size: {Config.FONT_SIZE_H2 + 1}pt;
-                font-weight: 600;
-            }}
-            QPushButton:hover {{
-                background-color: {Config.PRIMARY_DARK};
-            }}
-            QPushButton:pressed {{
-                background-color: #004A7C;
-            }}
+                border-radius: 6px;
+            }
+            QPushButton:hover {
+                background-color: #2A7BC9;
+            }
+            QPushButton:pressed {
+                background-color: #1F68B3;
+            }
         """)
         self.login_btn.clicked.connect(self._on_login)
         card_layout.addWidget(self.login_btn)
 
-        card_layout.addSpacing(28)
+        card_layout.addSpacing(12)
 
-        # بيانات تجريبية
-        hint_container = QFrame()
-        hint_container.setStyleSheet("""
-            background-color: transparent;
-            border: none;
-        """)
-        hint_layout = QVBoxLayout(hint_container)
-        hint_layout.setContentsMargins(0, 8, 0, 0)
-        hint_layout.setSpacing(2)
+        # Version
+        version_label = QLabel("v 1.4")
+        version_label.setAlignment(Qt.AlignCenter)
+        version_label.setStyleSheet("color: #BDC3C7; font-size: 9px; background: transparent;")
+        card_layout.addWidget(version_label)
 
-        hint_title = QLabel("بيانات الدخول التجريبية")
-        hint_title.setStyleSheet(f"""
-            color: {Config.TEXT_LIGHT};
-            font-weight: 500;
-            font-size: {Config.FONT_SIZE}pt;
-            background: transparent;
-        """)
-        hint_title.setAlignment(Qt.AlignCenter)
-        hint_layout.addWidget(hint_title)
+        return card
 
-        hint_text = QLabel("admin / admin123")
-        hint_text.setStyleSheet(f"""
-            color: {Config.PRIMARY_COLOR};
-            font-size: {Config.FONT_SIZE}pt;
-            font-weight: 600;
-            background: transparent;
-        """)
-        hint_text.setAlignment(Qt.AlignCenter)
-        hint_layout.addWidget(hint_text)
-
-        card_layout.addWidget(hint_container)
-
-        right_layout.addWidget(card)
-
-        main_layout.addWidget(right_panel, 1)
+    def _toggle_password_visibility(self):
+        """Toggle password visibility"""
+        self.password_visible = not self.password_visible
+        if self.password_visible:
+            self.password_input.setEchoMode(QLineEdit.Normal)
+        else:
+            self.password_input.setEchoMode(QLineEdit.Password)
 
     def _on_login(self):
-        """معالجة تسجيل الدخول."""
+        """Handle login attempt"""
         username = self.username_input.text().strip()
         password = self.password_input.text()
 
@@ -345,21 +321,26 @@ class LoginPage(QWidget):
             self._show_error("اسم المستخدم أو كلمة المرور غير صحيحة")
 
     def _show_error(self, message: str):
-        """عرض رسالة الخطأ."""
+        """Show error message"""
         self.error_label.setText(message)
         self.error_label.show()
 
+    def _hide_error(self):
+        """Hide error message"""
+        if self.error_label.isVisible():
+            self.error_label.hide()
+
     def _clear_form(self):
-        """مسح النموذج."""
+        """Clear form fields"""
         self.username_input.clear()
         self.password_input.clear()
         self.error_label.hide()
 
     def refresh(self, data=None):
-        """تحديث الصفحة."""
+        """Refresh the page"""
         self._clear_form()
         self.username_input.setFocus()
 
     def update_language(self, is_arabic: bool):
-        """تحديث اللغة."""
+        """Update language"""
         pass

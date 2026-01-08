@@ -465,10 +465,10 @@ class DuplicatesPage(QWidget):
                     group, master_uuid, justification
                 )
                 if success:
-                    Toast.show(self, "تم دمج السجلات بنجاح", Toast.SUCCESS)
+                    Toast.show_toast(self, "تم دمج السجلات بنجاح", Toast.SUCCESS)
                     self.refresh()
                 else:
-                    Toast.show(self, "فشل في دمج السجلات", Toast.ERROR)
+                    Toast.show_toast(self, "فشل في دمج السجلات", Toast.ERROR)
 
     def _on_keep_separate_clicked(self, entity_type: str):
         """Handle keep separate action."""
@@ -495,10 +495,10 @@ class DuplicatesPage(QWidget):
                 group, justification.strip()
             )
             if success:
-                Toast.show(self, "تم تسجيل القرار بنجاح", Toast.SUCCESS)
+                Toast.show_toast(self, "تم تسجيل القرار بنجاح", Toast.SUCCESS)
                 self.refresh()
             else:
-                Toast.show(self, "فشل في تسجيل القرار", Toast.ERROR)
+                Toast.show_toast(self, "فشل في تسجيل القرار", Toast.ERROR)
 
     def _on_escalate_clicked(self, entity_type: str):
         """Handle escalate action."""
@@ -525,10 +525,10 @@ class DuplicatesPage(QWidget):
                 group, justification.strip()
             )
             if success:
-                Toast.show(self, "تم تصعيد الحالة للمراجعة", Toast.SUCCESS)
+                Toast.show_toast(self, "تم تصعيد الحالة للمراجعة", Toast.SUCCESS)
                 self.refresh()
             else:
-                Toast.show(self, "فشل في تصعيد الحالة", Toast.ERROR)
+                Toast.show_toast(self, "فشل في تصعيد الحالة", Toast.ERROR)
 
     def update_language(self, is_arabic: bool):
         """Update UI language."""

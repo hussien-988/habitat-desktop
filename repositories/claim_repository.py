@@ -330,10 +330,30 @@ class ClaimRepository:
         # Handle date fields
         for field in ["assigned_date", "submission_date", "decision_date"]:
             if data.get(field):
-                data[field] = date.fromisoformat(data[field])
+                try:
+                    # Handle both date strings and datetime strings
+                    date_str = data[field]
+                    if 'T' in date_str:
+                        # It's a datetime string, extract just the date part
+                        date_str = date_str.split('T')[0]
+                    data[field] = date.fromisoformat(date_str)
+                except (ValueError, AttributeError):
+                    data[field] = None
 
         for field in ["created_at", "updated_at"]:
             if data.get(field):
-                data[field] = datetime.fromisoformat(data[field])
+                try:
+                    # Parse datetime, handle microseconds
+                    dt_str = data[field]
+                    # fromisoformat doesn't handle microseconds with 6+ digits
+                    # Truncate to 6 digits if longer
+                    if '.' in dt_str:
+                        parts = dt_str.split('.')
+                        if len(parts) == 2:
+                            microseconds = parts[1][:6]  # Take only first 6 digits
+                            dt_str = f"{parts[0]}.{microseconds}"
+                    data[field] = datetime.fromisoformat(dt_str)
+                except (ValueError, AttributeError):
+                    data[field] = None
 
         return Claim(**{k: v for k, v in data.items() if k in Claim.__dataclass_fields__})

@@ -120,7 +120,7 @@ class Building:
             "minor_damage": "Minor Damage",
             "major_damage": "Major Damage",
             "destroyed": "Destroyed",
-            "under_construction": "Under  Construction",
+            "under_construction": "Under Construction",
         }
         return statuses.get(self.building_status, self.building_status)
 

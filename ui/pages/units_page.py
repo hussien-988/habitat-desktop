@@ -98,6 +98,8 @@ class UnitDialog(QDialog):
         self.i18n = i18n
         self.unit = unit
         self.building_repo = BuildingRepository(db)
+        self.unit_repo = UnitRepository(db)
+        self._is_edit_mode = unit is not None
 
         self.setWindowTitle(i18n.t("edit_unit") if unit else i18n.t("add_unit"))
         self.setMinimumWidth(500)
@@ -105,6 +107,9 @@ class UnitDialog(QDialog):
 
         if unit:
             self._populate_data()
+        else:
+            # Auto-suggest first unit number for selected building
+            self._on_building_changed()
 
     def _setup_ui(self):
         layout = QVBoxLayout(self)
@@ -120,7 +125,43 @@ class UnitDialog(QDialog):
         for b in buildings:
             display = f"{b.building_id} - {b.neighborhood_name_ar}"
             self.building_combo.addItem(display, b.building_id)
+        self.building_combo.currentIndexChanged.connect(self._on_building_changed)
         form.addRow(self.i18n.t("building") + ":", self.building_combo)
+
+        # Unit number (3-digit suffix)
+        unit_number_container = QWidget()
+        unit_number_layout = QVBoxLayout(unit_number_container)
+        unit_number_layout.setContentsMargins(0, 0, 0, 0)
+        unit_number_layout.setSpacing(4)
+
+        self.unit_number_input = QLineEdit()
+        self.unit_number_input.setPlaceholderText("001")
+        self.unit_number_input.setMaxLength(3)
+        self.unit_number_input.setStyleSheet(f"""
+            QLineEdit {{
+                background-color: #F8FAFC;
+                border: 1px solid {Config.INPUT_BORDER};
+                border-radius: 6px;
+                padding: 8px 12px;
+                font-size: 14px;
+            }}
+            QLineEdit:focus {{
+                border: 2px solid {Config.PRIMARY_COLOR};
+            }}
+        """)
+        self.unit_number_input.textChanged.connect(self._validate_unit_number)
+        unit_number_layout.addWidget(self.unit_number_input)
+
+        self.unit_number_hint = QLabel("رقم الوحدة: 3 أرقام (001-999)")
+        self.unit_number_hint.setStyleSheet(f"color: {Config.TEXT_LIGHT}; font-size: 11px;")
+        unit_number_layout.addWidget(self.unit_number_hint)
+
+        self.unit_number_error = QLabel("")
+        self.unit_number_error.setStyleSheet("color: #DC2626; font-size: 11px;")
+        self.unit_number_error.setVisible(False)
+        unit_number_layout.addWidget(self.unit_number_error)
+
+        form.addRow("رقم الوحدة:", unit_number_container)
 
         # Unit type
         self.type_combo = QComboBox()
@@ -192,10 +233,15 @@ class UnitDialog(QDialog):
         if not self.unit:
             return
 
-        # Find and select building
+        # Find and select building (block signal to avoid auto-suggest overwriting)
+        self.building_combo.blockSignals(True)
         idx = self.building_combo.findData(self.unit.building_id)
         if idx >= 0:
             self.building_combo.setCurrentIndex(idx)
+        self.building_combo.blockSignals(False)
+
+        # Unit number
+        self.unit_number_input.setText(self.unit.unit_number or "001")
 
         # Unit type
         idx = self.type_combo.findData(self.unit.unit_type)
@@ -214,10 +260,109 @@ class UnitDialog(QDialog):
 
         self.description.setPlainText(self.unit.property_description or "")
 
+    def _on_building_changed(self):
+        """Handle building selection change - auto-suggest next unit number."""
+        if self._is_edit_mode:
+            return  # Don't auto-suggest in edit mode
+
+        building_id = self.building_combo.currentData()
+        if building_id:
+            next_number = self.unit_repo.get_next_unit_number(building_id)
+            self.unit_number_input.setText(next_number)
+            self.unit_number_hint.setText(f"رقم الوحدة التالي المتاح: {next_number}")
+
+    def _validate_unit_number(self):
+        """Validate unit number format and uniqueness."""
+        text = self.unit_number_input.text().strip()
+
+        # Check if empty
+        if not text:
+            self._show_unit_number_error("رقم الوحدة مطلوب")
+            return False
+
+        # Check if numeric
+        if not text.isdigit():
+            self._show_unit_number_error("يجب أن يكون رقم الوحدة أرقاماً فقط")
+            return False
+
+        # Check range (001-999)
+        num = int(text)
+        if num < 1 or num > 999:
+            self._show_unit_number_error("يجب أن يكون الرقم بين 001 و 999")
+            return False
+
+        # Check uniqueness
+        building_id = self.building_combo.currentData()
+        padded_number = text.zfill(3)
+        exclude_uuid = self.unit.unit_uuid if self.unit else None
+
+        if self.unit_repo.unit_number_exists(building_id, padded_number, exclude_uuid):
+            self._show_unit_number_error("رقم الوحدة موجود مسبقاً في هذا المبنى")
+            return False
+
+        # Valid
+        self._hide_unit_number_error()
+        return True
+
+    def _show_unit_number_error(self, message: str):
+        """Show unit number validation error."""
+        self.unit_number_error.setText(message)
+        self.unit_number_error.setVisible(True)
+        self.unit_number_input.setStyleSheet(f"""
+            QLineEdit {{
+                background-color: #FEF2F2;
+                border: 2px solid #DC2626;
+                border-radius: 6px;
+                padding: 8px 12px;
+                font-size: 14px;
+            }}
+        """)
+
+    def _hide_unit_number_error(self):
+        """Hide unit number validation error."""
+        self.unit_number_error.setVisible(False)
+        self.unit_number_input.setStyleSheet(f"""
+            QLineEdit {{
+                background-color: #F8FAFC;
+                border: 1px solid {Config.INPUT_BORDER};
+                border-radius: 6px;
+                padding: 8px 12px;
+                font-size: 14px;
+            }}
+            QLineEdit:focus {{
+                border: 2px solid {Config.PRIMARY_COLOR};
+            }}
+        """)
+
+    def _get_padded_unit_number(self) -> str:
+        """Get unit number padded to 3 digits."""
+        text = self.unit_number_input.text().strip()
+        if text.isdigit():
+            return text.zfill(3)
+        return "001"
+
+    def accept(self):
+        """Override accept to validate before closing."""
+        if not self._validate_unit_number():
+            QMessageBox.warning(
+                self,
+                "خطأ في البيانات",
+                "الرجاء تصحيح رقم الوحدة قبل الحفظ"
+            )
+            return
+        super().accept()
+
     def get_data(self) -> dict:
         """Get form data as dictionary."""
+        unit_number = self._get_padded_unit_number()
+        building_id = self.building_combo.currentData()
+        # Generate unit_id from building_id + unit_number
+        unit_id = f"{building_id}-{unit_number}"
+
         return {
-            "building_id": self.building_combo.currentData(),
+            "building_id": building_id,
+            "unit_number": unit_number,
+            "unit_id": unit_id,
             "unit_type": self.type_combo.currentData(),
             "floor_number": self.floor_spin.value(),
             "apartment_number": self.apt_number.text().strip(),
@@ -445,11 +590,11 @@ class UnitsPage(QWidget):
 
             try:
                 self.unit_repo.create(unit)
-                Toast.show(self, "تم إضافة الوحدة بنجاح", Toast.SUCCESS)
+                Toast.show_toast(self, "تم إضافة الوحدة بنجاح", Toast.SUCCESS)
                 self._load_units()
             except Exception as e:
                 logger.error(f"Failed to create unit: {e}")
-                Toast.show(self, f"فشل في إضافة الوحدة: {str(e)}", Toast.ERROR)
+                Toast.show_toast(self, f"فشل في إضافة الوحدة: {str(e)}", Toast.ERROR)
 
     def _edit_unit(self, unit: PropertyUnit):
         """Edit existing unit."""
@@ -461,11 +606,11 @@ class UnitsPage(QWidget):
 
             try:
                 self.unit_repo.update(unit)
-                Toast.show(self, "تم تحديث الوحدة بنجاح", Toast.SUCCESS)
+                Toast.show_toast(self, "تم تحديث الوحدة بنجاح", Toast.SUCCESS)
                 self._load_units()
             except Exception as e:
                 logger.error(f"Failed to update unit: {e}")
-                Toast.show(self, f"فشل في تحديث الوحدة: {str(e)}", Toast.ERROR)
+                Toast.show_toast(self, f"فشل في تحديث الوحدة: {str(e)}", Toast.ERROR)
 
     def update_language(self, is_arabic: bool):
         """Update language."""

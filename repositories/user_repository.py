@@ -23,15 +23,15 @@ class UserRepository:
         """Create a new user record."""
         query = """
             INSERT INTO users (
-                user_id, username, password_hash, email,
+                user_id, username, password_hash, password_salt, email,
                 full_name, full_name_ar, role,
                 is_active, is_locked, failed_attempts,
                 last_login, last_activity,
                 created_at, updated_at, created_by
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """
         params = (
-            user.user_id, user.username, user.password_hash, user.email,
+            user.user_id, user.username, user.password_hash, user.password_salt, user.email,
             user.full_name, user.full_name_ar, user.role,
             1 if user.is_active else 0,
             1 if user.is_locked else 0,
@@ -102,15 +102,15 @@ class UserRepository:
     def update_password(self, user_id: str, password_hash: str) -> bool:
         """Update user password."""
         query = "UPDATE users SET password_hash = ?, updated_at = ? WHERE user_id = ?"
-        cursor = self.db.execute(query, (password_hash, datetime.now().isoformat(), user_id))
-        return cursor.rowcount > 0
+        self.db.execute(query, (password_hash, datetime.now().isoformat(), user_id))
+        return True
 
     def update_last_login(self, user_id: str) -> bool:
         """Update user last login timestamp."""
         now = datetime.now().isoformat()
         query = "UPDATE users SET last_login = ?, last_activity = ? WHERE user_id = ?"
-        cursor = self.db.execute(query, (now, now, user_id))
-        return cursor.rowcount > 0
+        self.db.execute(query, (now, now, user_id))
+        return True
 
     def increment_failed_attempts(self, user_id: str) -> int:
         """Increment failed login attempts and return new count."""
@@ -129,20 +129,20 @@ class UserRepository:
     def reset_failed_attempts(self, user_id: str) -> bool:
         """Reset failed login attempts."""
         query = "UPDATE users SET failed_attempts = 0, is_locked = 0 WHERE user_id = ?"
-        cursor = self.db.execute(query, (user_id,))
-        return cursor.rowcount > 0
+        self.db.execute(query, (user_id,))
+        return True
 
     def lock_user(self, user_id: str) -> bool:
         """Lock a user account."""
         query = "UPDATE users SET is_locked = 1 WHERE user_id = ?"
-        cursor = self.db.execute(query, (user_id,))
-        return cursor.rowcount > 0
+        self.db.execute(query, (user_id,))
+        return True
 
     def delete(self, user_id: str) -> bool:
         """Delete a user by ID."""
         query = "DELETE FROM users WHERE user_id = ?"
-        cursor = self.db.execute(query, (user_id,))
-        return cursor.rowcount > 0
+        self.db.execute(query, (user_id,))
+        return True
 
     def count(self) -> int:
         """Count total users."""

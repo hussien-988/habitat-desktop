@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 """
 Claim/Case entity model.
+Implements FR-D-8 STDM legacy integration and UC-006 modification tracking.
 """
 
 from dataclasses import dataclass, field
@@ -18,6 +19,10 @@ class Claim:
     - CL: Fixed prefix
     - YYYY: Year of submission
     - NNNNNN: Sequential number (6 digits)
+
+    Implements:
+    - FR-D-8.4 STDM Integration for Claims
+    - UC-006 Modification reason tracking
     """
 
     # Primary identifier
@@ -59,6 +64,15 @@ class Claim:
     # Conflict tracking
     has_conflict: bool = False
     conflict_claim_ids: str = ""  # Related conflicting claims
+
+    # Modification Tracking (UC-006 S08-S11)
+    last_modification_reason: Optional[str] = None  # Required reason for updates
+    modification_history: str = ""  # JSON array of modification records
+
+    # Legacy STDM Integration (FR-D-8.4)
+    legacy_stdm_id: Optional[str] = None  # Original STDM claim/case identifier
+    legacy_stdm_tenure_type: Optional[str] = None  # STDM tenure type
+    legacy_stdm_relationship_id: Optional[str] = None  # STDM social tenure relationship
 
     # Metadata
     created_at: datetime = field(default_factory=datetime.now)
@@ -138,6 +152,47 @@ class Claim:
             ids.append(person_id)
             self.person_ids = ",".join(ids)
 
+    def add_modification_record(self, reason: str, user_id: str, old_values: dict, new_values: dict):
+        """
+        Add a modification record to history (UC-006 S11).
+
+        Args:
+            reason: Reason for modification
+            user_id: User who made the modification
+            old_values: Previous field values
+            new_values: New field values
+        """
+        import json
+
+        record = {
+            "timestamp": datetime.now().isoformat(),
+            "user_id": user_id,
+            "reason": reason,
+            "old_values": old_values,
+            "new_values": new_values
+        }
+
+        history = []
+        if self.modification_history:
+            try:
+                history = json.loads(self.modification_history)
+            except json.JSONDecodeError:
+                history = []
+
+        history.append(record)
+        self.modification_history = json.dumps(history, ensure_ascii=False)
+        self.last_modification_reason = reason
+
+    def get_modification_history(self) -> List[dict]:
+        """Get list of modification records."""
+        import json
+        if self.modification_history:
+            try:
+                return json.loads(self.modification_history)
+            except json.JSONDecodeError:
+                return []
+        return []
+
     def to_dict(self) -> dict:
         """Convert to dictionary for serialization."""
         return {
@@ -161,6 +216,11 @@ class Claim:
             "resolution_notes": self.resolution_notes,
             "has_conflict": self.has_conflict,
             "conflict_claim_ids": self.conflict_claim_ids,
+            "last_modification_reason": self.last_modification_reason,
+            "modification_history": self.modification_history,
+            "legacy_stdm_id": self.legacy_stdm_id,
+            "legacy_stdm_tenure_type": self.legacy_stdm_tenure_type,
+            "legacy_stdm_relationship_id": self.legacy_stdm_relationship_id,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
             "created_by": self.created_by,

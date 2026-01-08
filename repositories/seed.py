@@ -99,15 +99,50 @@ def seed_database(db: Database):
     _seed_claims(claim_repo, units, persons, 50)
 
     logger.info("Database seeding completed!")
-    logger.info(f"  - Users: 4")
+    logger.info(f"  - Users: 5")
     logger.info(f"  - Buildings: {len(buildings)}")
     logger.info(f"  - Units: {len(units)}")
     logger.info(f"  - Persons: {len(persons)}")
     logger.info(f"  - Claims: 50")
 
 
+def reset_test_user_passwords(db: Database):
+    """
+    Reset passwords for test users to fix login issues.
+    Call this when users can't login with default credentials.
+    """
+    user_repo = UserRepository(db)
+    test_users = {
+        "admin": "admin123",
+        "manager": "manager123",
+        "clerk": "clerk123",
+        "supervisor": "supervisor123",
+        "analyst": "analyst123",
+    }
+
+    for username, password in test_users.items():
+        user = user_repo.get_by_username(username)
+        if user:
+            user.set_password(password, track_history=False)
+            # Update password in database using the adapter's execute method
+            db.execute(
+                "UPDATE users SET password_hash = ?, password_salt = ?, is_locked = 0, failed_attempts = 0 WHERE username = ?",
+                (user.password_hash, user.password_salt, username)
+            )
+            logger.info(f"Reset password for user: {username}")
+
+
 def _seed_users(repo: UserRepository):
-    """Seed default users."""
+    """
+    Seed default users for all roles as per UC-009.
+
+    Test accounts created:
+    - admin / admin123 - مدير النظام (Full system access)
+    - manager / manager123 - مدير البيانات (Data import/export/review)
+    - clerk / clerk123 - موظف المكتب (Data entry/document scanning)
+    - supervisor / supervisor123 - مشرف ميداني (Field oversight)
+    - analyst / analyst123 - محلل (Reports/analysis)
+    """
     users = [
         User(
             username="admin",
@@ -131,6 +166,13 @@ def _seed_users(repo: UserRepository):
             email="clerk@unhabitat.org"
         ),
         User(
+            username="supervisor",
+            full_name="Field Supervisor",
+            full_name_ar="مشرف ميداني",
+            role="field_supervisor",
+            email="supervisor@unhabitat.org"
+        ),
+        User(
             username="analyst",
             full_name="Data Analyst",
             full_name_ar="محلل البيانات",
@@ -139,7 +181,7 @@ def _seed_users(repo: UserRepository):
         ),
     ]
 
-    passwords = ["admin123", "manager123", "clerk123", "analyst123"]
+    passwords = ["admin123", "manager123", "clerk123", "supervisor123", "analyst123"]
 
     for user, password in zip(users, passwords):
         user.set_password(password)

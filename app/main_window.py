@@ -75,6 +75,8 @@ class MainWindow(QMainWindow):
         from ui.pages.building_details_page import BuildingDetailsPage
         from ui.pages.units_page import UnitsPage
         from ui.pages.persons_page import PersonsPage
+        from ui.pages.relations_page import RelationsPage
+        from ui.pages.households_page import HouseholdsPage
         from ui.pages.claims_page import ClaimsPage
         from ui.pages.search_page import SearchPage
         from ui.pages.reports_page import ReportsPage
@@ -83,6 +85,8 @@ class MainWindow(QMainWindow):
         from ui.pages.map_page import MapPage
         from ui.pages.duplicates_page import DuplicatesPage
         from ui.pages.field_assignment_page import FieldAssignmentPage
+        from ui.pages.draft_office_surveys_page import DraftOfficeSurveysPage
+        from ui.pages.office_survey_wizard import OfficeSurveyWizard
 
         # Central widget
         self.central_widget = QWidget()
@@ -126,6 +130,14 @@ class MainWindow(QMainWindow):
         self.pages[Pages.PERSONS] = PersonsPage(self.db, self.i18n, self)
         self.stack.addWidget(self.pages[Pages.PERSONS])
 
+        # Relations page (Person-Unit Relations)
+        self.pages[Pages.RELATIONS] = RelationsPage(self.db, self.i18n, self)
+        self.stack.addWidget(self.pages[Pages.RELATIONS])
+
+        # Households page (FSD 6.1.6)
+        self.pages[Pages.HOUSEHOLDS] = HouseholdsPage(self.db, self.i18n, self)
+        self.stack.addWidget(self.pages[Pages.HOUSEHOLDS])
+
         # Claims page (UC-007, UC-008)
         self.pages[Pages.CLAIMS] = ClaimsPage(self.db, self.i18n, self)
         self.stack.addWidget(self.pages[Pages.CLAIMS])
@@ -158,6 +170,14 @@ class MainWindow(QMainWindow):
         self.pages[Pages.FIELD_ASSIGNMENT] = FieldAssignmentPage(self.db, self.i18n, self)
         self.stack.addWidget(self.pages[Pages.FIELD_ASSIGNMENT])
 
+        # Draft Office Surveys page (UC-005)
+        self.pages[Pages.DRAFT_OFFICE_SURVEYS] = DraftOfficeSurveysPage(self.db, self)
+        self.stack.addWidget(self.pages[Pages.DRAFT_OFFICE_SURVEYS])
+
+        # Office Survey Wizard (UC-004, UC-005)
+        self.office_survey_wizard = OfficeSurveyWizard(self.db, self.i18n, self)
+        self.stack.addWidget(self.office_survey_wizard)
+
     def _setup_layout(self):
         """Setup the main layout."""
         # Main horizontal layout
@@ -165,20 +185,20 @@ class MainWindow(QMainWindow):
         main_layout.setContentsMargins(0, 0, 0, 0)
         main_layout.setSpacing(0)
 
-        # Add sidebar
-        main_layout.addWidget(self.sidebar)
+        # Add sidebar (no stretch - fixed width area)
+        main_layout.addWidget(self.sidebar, 0)
 
         # Content area (topbar + stack)
         content_layout = QVBoxLayout()
         content_layout.setContentsMargins(0, 0, 0, 0)
         content_layout.setSpacing(0)
 
-        content_layout.addWidget(self.topbar)
-        content_layout.addWidget(self.stack)
+        content_layout.addWidget(self.topbar, 0)  # No stretch for topbar
+        content_layout.addWidget(self.stack, 1)   # Stack takes all remaining space
 
         content_widget = QWidget()
         content_widget.setLayout(content_layout)
-        main_layout.addWidget(content_widget)
+        main_layout.addWidget(content_widget, 1)  # Content expands to fill space
 
     def _connect_signals(self):
         """Connect widget signals to slots."""
@@ -202,6 +222,14 @@ class MainWindow(QMainWindow):
 
         # Import wizard completion
         self.pages[Pages.IMPORT_WIZARD].import_completed.connect(self._on_import_completed)
+
+        # Draft Office Surveys - resume draft (UC-005 S03)
+        self.pages[Pages.DRAFT_OFFICE_SURVEYS].draft_selected.connect(self._on_draft_selected)
+
+        # Office Survey Wizard signals
+        self.office_survey_wizard.survey_completed.connect(self._on_survey_completed)
+        self.office_survey_wizard.survey_cancelled.connect(self._on_survey_cancelled)
+        self.office_survey_wizard.survey_saved_draft.connect(self._on_survey_saved_draft)
 
         # Language change signal
         self.language_changed.connect(self._on_language_changed)
@@ -275,13 +303,55 @@ class MainWindow(QMainWindow):
     def _on_import_completed(self, stats: dict):
         """Handle import wizard completion."""
         from ui.components.toast import Toast
-        Toast.show(
+        Toast.show_toast(
             self,
             self.i18n.t("import_success").format(count=stats.get("imported", 0)),
             Toast.SUCCESS
         )
         # Refresh dashboard
         self.navigate_to(Pages.DASHBOARD)
+
+    def _on_draft_selected(self, draft_context: dict):
+        """
+        Handle draft survey selection from draft list (UC-005 S03).
+        Load the draft into the office survey wizard.
+        """
+        logger.info(f"Loading draft survey into wizard")
+
+        # Load draft data into wizard
+        self.office_survey_wizard.load_draft(draft_context)
+
+        # Navigate to wizard
+        self.stack.setCurrentWidget(self.office_survey_wizard)
+        logger.debug("Draft loaded into office survey wizard")
+
+    def _on_survey_completed(self, survey_id: str):
+        """Handle survey completion from wizard."""
+        from ui.components.toast import Toast
+        logger.info(f"Survey completed: {survey_id}")
+
+        Toast.show_toast(
+            self,
+            "✅ تم إنهاء المسح بنجاح!",
+            Toast.SUCCESS
+        )
+
+        # Refresh draft list and return to it
+        self.pages[Pages.DRAFT_OFFICE_SURVEYS].refresh()
+        self.navigate_to(Pages.DASHBOARD)
+
+    def _on_survey_cancelled(self):
+        """Handle survey cancellation from wizard."""
+        logger.info("Survey cancelled")
+        # Return to draft list or dashboard
+        self.navigate_to(Pages.DRAFT_OFFICE_SURVEYS)
+
+    def _on_survey_saved_draft(self, survey_id: str):
+        """Handle survey saved as draft."""
+        logger.info(f"Survey saved as draft: {survey_id}")
+        # Refresh the draft list
+        if hasattr(self.pages.get(Pages.DRAFT_OFFICE_SURVEYS), 'refresh'):
+            self.pages[Pages.DRAFT_OFFICE_SURVEYS].refresh()
 
     def toggle_language(self):
         """Toggle between English and Arabic."""
