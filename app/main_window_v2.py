@@ -116,6 +116,8 @@ class MainWindow(QMainWindow):
         # Central widget
         self.central_widget = QWidget()
         self.setCentralWidget(self.central_widget)
+        self.central_widget.setStyleSheet(f"background-color: {Config.BACKGROUND_COLOR};")
+
 
         # Navbar (hidden initially - shown after login)
         self.navbar = Navbar(user_id="12345", parent=self)
@@ -123,6 +125,7 @@ class MainWindow(QMainWindow):
 
         # Stacked widget for pages
         self.stack = QStackedWidget()
+        self.stack.setStyleSheet(f"background-color: {Config.BACKGROUND_COLOR};")
 
         # Create pages
         self.pages = {}

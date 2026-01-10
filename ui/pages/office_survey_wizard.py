@@ -31,6 +31,9 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt, pyqtSignal, QDate
 from PyQt5.QtGui import QColor
 
+from PyQt5.QtWidgets import QSizePolicy,QLayout
+from PyQt5.QtWidgets import QToolButton
+
 from app.config import Config
 from repositories.database import Database
 from repositories.building_repository import BuildingRepository
@@ -43,6 +46,7 @@ from models.unit import PropertyUnit as Unit
 from models.person import Person
 from models.claim import Claim
 from ui.components.toast import Toast
+from ui.design_system import Colors
 from utils.i18n import I18n
 from utils.logger import get_logger
 
@@ -182,6 +186,8 @@ class AddEvidenceDialog(QDialog):
         self.setWindowTitle("إضافة دليل / وثيقة")
         self.setMinimumWidth(500)
         self._setup_ui()
+        self.building_map = None
+
 
     def _setup_ui(self):
         layout = QVBoxLayout(self)
@@ -316,12 +322,12 @@ class OfficeSurveyWizard(QWidget):
     STEP_REVIEW = 6
 
     STEP_NAMES = [
-        ("1", "اختيار المبنى"),
+        ("1", "تسجيل البناء"),
         ("2", "الوحدة العقارية"),
-        ("3", "الأسرة والإشغال"),
-        ("4", "تسجيل الأشخاص"),
-        ("5", "العلاقات والأدلة"),
-        ("6", "إنشاء المطالبة"),
+        ("3", "تفاصيل الإشغال"),
+        ("4", "الأشخاص"),
+        ("5", "العلاقة والأدلة"),
+        ("6", "المطالبة"),
         ("7", "المراجعة النهائية"),
     ]
 
@@ -348,72 +354,118 @@ class OfficeSurveyWizard(QWidget):
 
     def _setup_ui(self):
         """Setup the wizard UI."""
+        CONTENT_WIDTH = 1120
         layout = QVBoxLayout(self)
         layout.setContentsMargins(24, 24, 24, 24)
         layout.setSpacing(16)
 
         # Header
-        header_layout = QHBoxLayout()
+        # ===== Page header (matches design) =====
+        page_header = QFrame()
+        page_header.setStyleSheet("QFrame { background: transparent; }")
+        #page_header.setLayoutDirection(Qt.LeftToRight)
 
-        title = QLabel("معالج المسح المكتبي")
-        title.setStyleSheet(f"font-size: 18pt; font-weight: bold; color: {Config.TEXT_COLOR};")
-        header_layout.addWidget(title)
+        ph = QHBoxLayout(page_header)
+        ph.setContentsMargins(0, 0, 0, 0)
+        ph.setSpacing(12)
 
-        header_layout.addStretch()
+        # Left: Save button (must be created BEFORE adding)
+        title_widget = QWidget()
+        title_widget.setLayoutDirection(Qt.RightToLeft)
 
-        # Reference number badge (Comment 1)
-        self.ref_badge = QLabel(f"الرقم المرجعي: {self.context.reference_number}")
-        self.ref_badge.setStyleSheet(f"""
-            background-color: {Config.SUCCESS_COLOR};
-            color: white;
-            padding: 6px 12px;
-            border-radius: 12px;
-            font-size: 9pt;
-            font-weight: bold;
+        title_col = QVBoxLayout(title_widget)
+        title_col.setContentsMargins(0, 0, 0, 0)
+        title_col.setSpacing(0)
+
+        page_title = QLabel("إضافة حالة جديدة")
+        page_title.setStyleSheet("font-family: Noto Kufi Arabic;font-size: 20px; font-weight: 800; color: #1F2D3D; margin:0; padding:0;")
+        #page_title.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+
+        breadcrumb = QLabel("المطالبات المكتملة  •  إضافة حالة جديدة")
+        breadcrumb.setStyleSheet("font-family: Noto Kufi Arabic;font-size: 14px; color: #7F8C9B;font-weight: 600; padding:0; margin-top: 4px;")
+        #breadcrumb.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+
+        # اجعلهم نفس العرض حتى يبدأوا من نفس النقطة
+        w = max(page_title.sizeHint().width(), breadcrumb.sizeHint().width())
+        page_title.setFixedWidth(w)
+        breadcrumb.setFixedWidth(w)
+
+        title_col.addWidget(page_title)
+        title_col.addWidget(breadcrumb)
+
+        ph.addWidget(title_widget, 0, Qt.AlignRight)
+        ph.addStretch(1)
+        # Right
+        self.save_btn = QPushButton("حفظ 💾")
+        self.save_btn.setFixedSize(110, 44)
+        self.save_btn.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {Colors.PRIMARY_BLUE};
+                color: white;
+                border: none;
+                border-radius: 12px;
+                font-weight: 600;
+                font-size: 10pt;
+                font-family: Noto Kufi Arabic;
+                padding: 0 16px;
+            }}
+            QPushButton:hover {{
+                background-color: #2A7BC9;
+            }}
+            QPushButton:pressed {{
+                background-color: #1F68B3;
+            }}
         """)
-        header_layout.addWidget(self.ref_badge)
+        self.save_btn.clicked.connect(self._save_as_draft)
+        ph.addWidget(self.save_btn, 0, Qt.AlignLeft)
 
-        # Survey ID badge
-        self.survey_badge = QLabel(f"#{self.context.survey_id[:8]}")
-        self.survey_badge.setStyleSheet(f"""
-            background-color: {Config.INFO_COLOR};
-            color: white;
-            padding: 6px 12px;
-            border-radius: 12px;
-            font-size: 9pt;
-        """)
-        header_layout.addWidget(self.survey_badge)
+        SIDE_PAD = 90  # جرّب 120، إذا بدك أوسع خليها 140، إذا أضيق 100
 
-        layout.addLayout(header_layout)
+        header_row = QHBoxLayout()
+        header_row.setContentsMargins(SIDE_PAD, 0, SIDE_PAD, 0)
+        header_row.addWidget(page_header)
+        layout.addLayout(header_row)
 
+        
         # Step indicators
+        # ===== Step tabs (Navbar style) - matches design =====
         steps_frame = QFrame()
-        steps_frame.setStyleSheet("""
-            QFrame {
-                background-color: white;
-                border-radius: 8px;
-                padding: 8px;
-            }
-        """)
+        steps_frame.setLayoutDirection(Qt.RightToLeft)
+        steps_frame.setStyleSheet("QFrame { background: transparent; border: none; }")
+
         steps_layout = QHBoxLayout(steps_frame)
-        steps_layout.setSpacing(4)
+        steps_layout.setContentsMargins(0, 0, 0, 0)
+        steps_layout.setSpacing(10)
+
+        # لتكون التبويبات على اليمين مثل التصميم
 
         self.step_labels = []
-        for num, name in self.STEP_NAMES:
-            step_widget = QLabel(f" {num}. {name} ")
-            step_widget.setAlignment(Qt.AlignCenter)
-            step_widget.setStyleSheet(f"""
-                background-color: {Config.BACKGROUND_COLOR};
-                color: {Config.TEXT_LIGHT};
-                padding: 6px 10px;
-                border-radius: 12px;
-                font-size: 9pt;
+        for _, name in self.STEP_NAMES:
+            lbl = QLabel(name)
+            lbl.setAlignment(Qt.AlignCenter)
+            lbl.setMinimumHeight(34)
+            lbl.setStyleSheet("""
+                QLabel {
+                    background-color: #FFFFFF;
+                    border: 1px solid #F0F7FF;
+                    border-radius: 17px;
+                    padding: 7px 12px;
+                    color: #2C3E50;
+                    font-weight: 800;
+                    font-size: 9pt;
+                    font-family: 'Noto Kufi Arabic';
+                }
             """)
-            self.step_labels.append(step_widget)
-            steps_layout.addWidget(step_widget)
+            self.step_labels.append(lbl)
+            steps_layout.addWidget(lbl)
 
-        steps_layout.addStretch()
-        layout.addWidget(steps_frame)
+        steps_layout.addStretch(1)
+
+        steps_row = QHBoxLayout()
+        steps_row.setContentsMargins(SIDE_PAD, 0, SIDE_PAD, 0)
+        steps_row.addWidget(steps_frame)
+        layout.addLayout(steps_row)
+
 
         # Content area
         self.content_stack = QStackedWidget()
@@ -427,53 +479,68 @@ class OfficeSurveyWizard(QWidget):
         self.content_stack.addWidget(self._create_claim_step())     # 5
         self.content_stack.addWidget(self._create_review_step())    # 6
 
-        layout.addWidget(self.content_stack)
+        content_row = QHBoxLayout()
+        content_row.setContentsMargins(SIDE_PAD, 0, SIDE_PAD, 0)
+        content_row.addWidget(self.content_stack)
+        layout.addLayout(content_row)
+
 
         # Navigation buttons
-        nav_layout = QHBoxLayout()
-
-        # Save as draft button (S22)
-        self.draft_btn = QPushButton("💾 حفظ كمسودة")
-        self.draft_btn.setStyleSheet(f"""
-            QPushButton {{
-                background-color: {Config.WARNING_COLOR};
-                color: white;
-                border: none;
-                border-radius: 6px;
-                padding: 10px 20px;
-                font-weight: 600;
-            }}
+        # ===================== Footer (design card) =====================
+        self.footer_frame = QFrame()
+        self.footer_frame.setObjectName("wizardFooter")
+        self.footer_frame.setStyleSheet("""
+        QFrame#wizardFooter {
+            background-color: #FFFFFF;
+            border: 1px solid #E1E8ED;
+            border-radius: 82px;
+        }
         """)
-        self.draft_btn.clicked.connect(self._save_as_draft)
-        nav_layout.addWidget(self.draft_btn)
 
-        nav_layout.addStretch()
+        self.footer_frame.setLayoutDirection(Qt.LeftToRight)
 
-        self.cancel_btn = QPushButton("إلغاء")
-        self.cancel_btn.clicked.connect(self._on_cancel)
-        nav_layout.addWidget(self.cancel_btn)
+        nav_layout = QHBoxLayout(self.footer_frame)
+        nav_layout.setContentsMargins(16, 12, 16, 12)
+        nav_layout.setSpacing(12)
 
+        # زر السابق
         self.prev_btn = QPushButton("→ السابق")
         self.prev_btn.clicked.connect(self._on_previous)
         self.prev_btn.setEnabled(False)
-        nav_layout.addWidget(self.prev_btn)
-
-        self.next_btn = QPushButton("التالي ←")
-        self.next_btn.setStyleSheet(f"""
-            QPushButton {{
-                background-color: {Config.PRIMARY_COLOR};
-                color: white;
-                border: none;
-                border-radius: 6px;
-                padding: 10px 24px;
-                font-weight: 600;
-            }}
+        self.prev_btn.setStyleSheet("""
+        QPushButton {
+            background-color: #FFFFFF;
+            border: 1px solid #3890fd;
+            border-radius: 10px;
+            padding: 10px 22px;
+            color: #3890fd;
+            font-weight: 800;
+        }
+        QPushButton:disabled { color: #A0AEC0; }
         """)
+
+        # زر التالي
+        self.next_btn = QPushButton("التالي ←")
         self.next_btn.clicked.connect(self._on_next)
         self.next_btn.setEnabled(False)
-        nav_layout.addWidget(self.next_btn)
+        self.next_btn.setStyleSheet("""
+        QPushButton {
+            background-color: #FFFFFF;
+            border: 1px solid #3890fd;
+            color: #3890fd;
+            border-radius: 10px;
+            padding: 12px 60px;
+            font-weight: 800;
+        }
+        QPushButton:disabled { background-color: #; }
+        """)
 
-        layout.addLayout(nav_layout)
+        # حسب التصميم: "التالي" يسار و "السابق" يمين
+        nav_layout.addWidget(self.next_btn)
+        nav_layout.addStretch(1)
+        nav_layout.addWidget(self.prev_btn)
+
+        layout.addWidget(self.footer_frame)
 
         # Update display
         self._update_step_display()
@@ -486,159 +553,188 @@ class OfficeSurveyWizard(QWidget):
         widget.setLayoutDirection(Qt.RightToLeft)
 
         layout = QVBoxLayout(widget)
-        layout.setContentsMargins(24, 24, 24, 24)
+        layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(16)
 
     # ===== Card: Building Data =====
         card = QFrame()
+        card.setObjectName("buildingCard")
         card.setStyleSheet("""
-            QFrame {
-            background-color: #FFFFFF;
-            border: 1px solid #E1E8ED;
-            border-radius: 12px;
+            QFrame#buildingCard {
+                background-color: #FFFFFF;
+                border: 1px solid #E1E8ED;
+                border-radius: 12px;
             }
-            """)
+        """)
         card_layout = QVBoxLayout(card)
         card_layout.setContentsMargins(16, 16, 16, 16)
         card_layout.setSpacing(12)
-
+        card.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        card_layout.setSizeConstraint(QLayout.SetMinimumSize)
         # Header (title + subtitle)
         header_row = QHBoxLayout()
         header_row.setSpacing(8)
 
         header_text_col = QVBoxLayout()
-        header_text_col.setSpacing(2)
-
+        header_text_col.setSpacing(1)
         title = QLabel("بيانات البناء")
-        title.setStyleSheet("font-size: 16px; font-weight: 700; color: #2C3E50;")
+        title.setStyleSheet("background: transparent;font-family:'Noto Kufi Arabic'; font-size: 8pt; font-weight: 900; color:#1F2D3D;")
         subtitle = QLabel("ابحث عن معلومات البناء والموقع الجغرافي")
-        subtitle.setStyleSheet("font-size: 12px; color: #7F8C9B;")
+        subtitle.setStyleSheet("background: transparent;font-family:'Noto Kufi Arabic'; font-size: 8pt; color:#7F8C9B;")
 
         header_text_col.addWidget(title)
         header_text_col.addWidget(subtitle)
 
-        header_row.addLayout(header_text_col)
-        header_row.addStretch()
         icon_lbl = QLabel("📄")
+        icon_lbl.setFixedSize(40, 40)
+        icon_lbl.setAlignment(Qt.AlignCenter)
         icon_lbl.setStyleSheet("""
             QLabel {
-                background-color: #EFF6FF;
+                background-color: #ffffff;
                 border: 1px solid #DBEAFE;
                 border-radius: 10px;
-                padding: 8px 10px;
                 font-size: 16px;
             }
         """)
+
         header_row.addWidget(icon_lbl)
+        header_row.addLayout(header_text_col)
+        header_row.addStretch(1)
 
         card_layout.addLayout(header_row)
 
-        # Building Code label
+
+        # Label: building code
         code_label = QLabel("رمز البناء")
-        code_label.setStyleSheet("font-size: 12px; color: #2C3E50; font-weight: 600;")
+        code_label.setStyleSheet("background: transparent;font-family:'Noto Kufi Arabic'; font-size: 8pt; color:#1F2D3D; font-weight:800;")
         card_layout.addWidget(code_label)
 
-        # Row: code input + search icon button
-        code_row = QHBoxLayout()
-        code_row.setSpacing(8)
+        # One long input bar (search icon right + link left) - matches design
+        # --- Search bar (one row) ---
+        search_bar = QFrame()
+        search_bar.setObjectName("searchBar")
+        search_bar.setStyleSheet("""
+            QFrame#searchBar {
+                background-color: #F0F7FF;
+                border: 1px solid #E6EEF8;
+                border-radius: 18px;
+            }
+        """)
+        search_bar.setLayoutDirection(Qt.LeftToRight)
 
+        sb = QHBoxLayout(search_bar)
+        sb.setContentsMargins(10,4, 10, 4)
+        sb.setSpacing(8)
+        # ✅ زر العدسة (يظهر داخل الحقل لأن الشريط نفسه هو الحقل)
+        search_icon_btn = QToolButton()
+        search_icon_btn.setText("🔍")
+        search_icon_btn.setCursor(Qt.PointingHandCursor)
+        search_icon_btn.setFixedSize(30, 30)
+        search_icon_btn.setStyleSheet("""
+            QToolButton {
+                border: none;
+                background: transparent;
+                font-size: 14px;
+            }
+            QToolButton:hover {
+                background-color: #EEF6FF;
+                border-radius: 8px;
+            }
+        """)
+        search_icon_btn.clicked.connect(self._search_buildings)
+                # Input
         self.building_search = QLineEdit()
         self.building_search.setPlaceholderText("ابحث عن رمز البناء ...")
+        self.building_search.setLayoutDirection(Qt.RightToLeft)
+        
         self.building_search.setStyleSheet("""
             QLineEdit {
-                background-color: #FFFFFF;
-                border: 1px solid #E1E8ED;
-                border-radius: 10px;
-                padding: 10px 12px;
-                font-size: 13px;
-            }
-            QLineEdit:focus {
-            border: 2px solid #00B2E3;
-            padding: 9px 11px;
-            }
-            """)
-    # نفس الربط القديم بس بدل ما نكسر شي
+                border: none;
+                background: transparent;
+                font-family: 'Noto Kufi Arabic';
+                font-size: 10pt;
+                padding: 0px 6px;
+                min-height: 28px;
+                color: #2C3E50;
+                    }
+        """)
         self.building_search.textChanged.connect(self._on_building_code_changed)
         self.building_search.returnPressed.connect(self._search_buildings)
-        code_row.addWidget(self.building_search, stretch=1)
 
-        search_icon_btn = QPushButton("🔍")
-        search_icon_btn.setFixedWidth(44)
-        search_icon_btn.setStyleSheet("""
+        # Left link
+        self.search_on_map_btn = QPushButton("بحث على الخريطة")
+        self.search_on_map_btn.setCursor(Qt.PointingHandCursor)
+        self.search_on_map_btn.setFlat(True)
+        self.search_on_map_btn.setStyleSheet("""
             QPushButton {
-                background-color: #FFFFFF;
-                border: 1px solid #E1E8ED;
-                border-radius: 10px;
-                padding: 8px;
+                border: none;
+                background: transparent;
+                color: #3890DF;
+                font-family: 'Noto Kufi Arabic';
+                font-weight: 600;
+                font-size: 7pt;
+                text-decoration: underline;
+                padding: 0;
+                margin-top: 1px;
             }
-            QPushButton:hover { background-color: #F8FAFC; }
-            """)
-        search_icon_btn.clicked.connect(self._search_buildings)
-        code_row.addWidget(search_icon_btn)
+        """)
+        self.search_on_map_btn.clicked.connect(self._open_map_search_dialog)
 
-        card_layout.addLayout(code_row)
 
-    # Suggestions list (Dropdown look)
+
+        # Search icon inside input (Action)
+        sb.addWidget(self.search_on_map_btn)   # left
+        sb.addWidget(self.building_search)  # middle (stretch)
+        sb.addWidget(search_icon_btn,1)
+        
+        # Add bar to card 
+        card_layout.addWidget(search_bar)
+
+
+        # Suggestions list (dropdown look)
         self.buildings_list = QListWidget()
         self.buildings_list.setVisible(False)
+        self.buildings_list.setMaximumHeight(170)
         self.buildings_list.setStyleSheet("""
             QListWidget {
                 border: 1px solid #E1E8ED;
                 border-radius: 10px;
                 background-color: #FFFFFF;
-                }
+            }
             QListWidget::item {
                 padding: 10px 12px;
                 border-bottom: 1px solid #F1F5F9;
                 color: #2C3E50;
-                }
+                font-family: 'Noto Kufi Arabic';
+                font-size: 9pt;
+            }
             QListWidget::item:selected {
                 background-color: #EFF6FF;
-                }
+            }
         """)
-        self.buildings_list.setMaximumHeight(160)
         self.buildings_list.itemClicked.connect(self._on_building_selected)
         self.buildings_list.itemDoubleClicked.connect(self._on_building_confirmed)
         card_layout.addWidget(self.buildings_list)
-
-    # "Search on Map" button (looks like input)
-        self.search_on_map_btn = QPushButton("بحث على الخريطة")
-        self.search_on_map_btn.setCursor(Qt.PointingHandCursor)
-        self.search_on_map_btn.setStyleSheet("""
-            QPushButton {
-                text-align: right;
-                background-color: #F5FAFF;
-                border: 1px solid #DCE7F5;
-                border-radius: 10px;
-                padding: 10px 12px;
-                color: #3890DF;
-                font-weight: 600;
-            }
-            QPushButton:hover { background-color: #EEF6FF; }
-        """)
-        self.search_on_map_btn.clicked.connect(self._open_map_search_dialog)
-        card_layout.addWidget(self.search_on_map_btn)
-
-        
-        self.gov_combo = QComboBox()
-        self.gov_combo.addItem("كل المحافظات", "")
-        self.gov_combo.setVisible(False)
+    
 
         layout.addWidget(card)
+        layout.addStretch(1)
+
 
     # ===== Selected building details (New UI blocks) =====
         self.selected_building_frame = QFrame()
+        self.selected_building_frame.setObjectName("selectedBuildingFrame")
         self.selected_building_frame.setStyleSheet("""
-            QFrame {
+            QFrame#selectedBuildingFrame {
                 background-color: #FFFFFF;
                 border: 1px solid #E1E8ED;
                 border-radius: 12px;
-        }
+            }
         """)
         self.selected_building_frame.hide()
 
         sb = QVBoxLayout(self.selected_building_frame)
-        sb.setContentsMargins(16, 16, 16, 16)
+        sb.setContentsMargins(14, 6, 14, 6)
         sb.setSpacing(12)
 
         # 1) General info line (arrow 1)
@@ -865,6 +961,9 @@ class OfficeSurveyWizard(QWidget):
 
     def _load_buildings_map(self):
         """Load interactive map for building selection (S02)."""
+        if not hasattr(self, "building_map") or self.building_map is None:
+        # Map view is created inside the dialog, so nothing to load yet.
+            return
         # Get buildings with coordinates
         buildings = self.building_repo.get_all(limit=200)
         markers_js = ""
@@ -938,7 +1037,7 @@ class OfficeSurveyWizard(QWidget):
     def _search_buildings(self):
         """Search buildings from database."""
         search = self.building_search.text().strip()
-        gov_code = self.gov_combo.currentData()
+        
 
         if search:
             buildings = self.building_repo.search(building_id=search, limit=50)
@@ -2503,44 +2602,79 @@ class OfficeSurveyWizard(QWidget):
 
     def _update_step_display(self):
         """Update step indicators."""
+        # 1) Update step tab styles
         for i, label in enumerate(self.step_labels):
             if i < self.current_step:
-                # Completed
-                label.setStyleSheet(f"""
-                    background-color: {Config.SUCCESS_COLOR};
-                    color: white;
-                    padding: 6px 10px;
-                    border-radius: 12px;
-                    font-size: 9pt;
+                # Completed (مكتملة): شفاف + بوردر أزرق + نص أزرق
+                label.setStyleSheet("""
+                    QLabel {
+                        background-color: transparent;
+                        border: 1px solid #3890DF;
+                        border-radius: 17px;
+                        padding: 7px 12px;
+                        color: #3890DF;
+                        font-weight: 600;
+                        font-size: 9pt;
+                        line-height: 18px;
+
+                    }
                 """)
             elif i == self.current_step:
-                # Active
-                label.setStyleSheet(f"""
-                    background-color: {Config.PRIMARY_COLOR};
-                    color: white;
-                    padding: 6px 10px;
-                    border-radius: 12px;
-                    font-size: 9pt;
-                    font-weight: bold;
+                # Active (الحالية): أبيض + نص أزرق
+                label.setStyleSheet("""
+                    QLabel {
+                        background-color: #FFFFFF;
+                        border: 2px solid #3890DF;
+                        border-radius: 17px;
+                        padding: 7px 12px;
+                        color: #3890DF;
+                        font-weight: 600;
+                        font-size: 8pt;
+                        font-family: 'Noto Kufi Arabic';
+                        line-height: 20px;
+
+                    }
                 """)
             else:
-                # Pending
-                label.setStyleSheet(f"""
-                    background-color: {Config.BACKGROUND_COLOR};
-                    color: {Config.TEXT_LIGHT};
-                    padding: 6px 10px;
-                    border-radius: 12px;
-                    font-size: 9pt;
+                # Inactive (غير نشطة): شفاف + بوردر أبيض + نص غامق
+                label.setStyleSheet("""
+                    QLabel {
+                        background-color: #FFFFFF;
+                        border: 1px solid #F0F7FF;
+                        border-radius: 17px;
+                        padding: 7px 12px;
+                        color: #2C3E50;
+                        font-weight: 600;
+                        font-size: 8pt;
+                        font-family: 'Noto Kufi Arabic';
+                        line-height: 18px;
+
+                    }
                 """)
 
-        self.content_stack.setCurrentIndex(self.current_step)
-        self.prev_btn.setEnabled(self.current_step > 0)
+        # 2) Switch stacked content page (safe guard to avoid crashes during init)
+        if hasattr(self, "content_stack") and self.content_stack is not None:
+            try:
+                self.content_stack.setCurrentIndex(self.current_step)
+                # السابق يظهر فقط بعد أول خطوة (بعد تسجيل البناء)
+                show_prev = self.current_step > self.STEP_BUILDING
+                self.prev_btn.setVisible(show_prev)
+                self.prev_btn.setEnabled(show_prev)
 
-        # Update next button for final step
-        if self.current_step == self.STEP_REVIEW:
-            self.next_btn.hide()
-        else:
-            self.next_btn.show()
+            except Exception:
+                pass
+
+        # 3) Prev button enable/disable (safe guard)
+        if hasattr(self, "prev_btn") and self.prev_btn is not None:
+            self.prev_btn.setEnabled(self.current_step > 0)
+
+        # 4) Next button hide on final step (safe guard)
+        if hasattr(self, "next_btn") and self.next_btn is not None:
+            if self.current_step == self.STEP_REVIEW:
+                self.next_btn.hide()
+            else:
+                self.next_btn.show()
+
 
     def _on_previous(self):
         """Go to previous step."""

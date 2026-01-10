@@ -172,7 +172,7 @@ class Navbar(QFrame):
 
         # Search input
         search_input = QLineEdit()
-        search_input.setPlaceholderText("ابحث عن اسم المستلم،رقم المطالبة...")
+        search_input.setPlaceholderText("ابحث عنالرمزأوالاسم...")
         search_input.setFont(QFont("Noto Kufi Arabic", 10))
         search_input.setStyleSheet("""
             QLineEdit {
@@ -234,7 +234,7 @@ class Navbar(QFrame):
             "المباني",             # Buildings
             "الوحدات السكنية",     # Residential Units
             "التكرارات",           # Duplicates
-            "استيراد البيانات"     # Import Data (UC-003)
+            "استيراد"     # Import Data (UC-003)
         ]
 
         self.tab_buttons = []
@@ -256,7 +256,7 @@ class Navbar(QFrame):
         tab_btn = QPushButton(title)
         tab_btn.setFixedHeight(48)
         tab_btn.setCursor(QCursor(Qt.PointingHandCursor))
-        tab_btn.setFont(QFont("Noto Kufi Arabic", 11))
+        tab_btn.setFont(QFont("Noto Kufi Arabic", 9))
         tab_btn.setProperty("tab_index", index)
         tab_btn.setProperty("active", False)
 
@@ -288,16 +288,16 @@ class Navbar(QFrame):
                 btn.setProperty("active", True)
                 btn.setStyleSheet(f"""
                     QPushButton {{
-                        background-color: {Colors.NAVBAR_TAB_ACTIVE};
-                        color: {Colors.NAVBAR_BG};
+                        background-color: {Colors.BACKGROUND};
+                        color: #3890fd;
                         border: none;
-                        border-radius: 4px;
-                        padding: 6px 14px;
+                        border-radius: 8px;
+                        padding: 6px 12px;
                         text-align: center;
                         font-weight: 600;
                     }}
                     QPushButton:hover {{
-                        background-color: {Colors.NAVBAR_TAB_ACTIVE};
+                        border: 1px solid #F0F7FF;
                     }}
                 """)
             else:
@@ -308,7 +308,7 @@ class Navbar(QFrame):
                         background: transparent;
                         color: rgba(255, 255, 255, 0.7);
                         border: none;
-                        padding: 6px 14px;
+                        padding: 6px 12px;
                         text-align: center;
                     }
                     QPushButton:hover {

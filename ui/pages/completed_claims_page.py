@@ -74,7 +74,7 @@ class CompletedClaimsPage(QWidget):
 
         # Page title (dynamic based on tab)
         self.title_label = QLabel(self.current_tab_title)
-        self.title_label.setFont(QFont("Noto Kufi Arabic", 18, QFont.Bold))
+        self.title_label.setFont(QFont("Noto Kufi Arabic", 10, QFont.Bold))
         self.title_label.setStyleSheet(f"color: {Colors.TEXT_PRIMARY}; border: none;")
         layout.addWidget(self.title_label)
 
@@ -82,17 +82,17 @@ class CompletedClaimsPage(QWidget):
         layout.addSpacerItem(QSpacerItem(40, 20, QSizePolicy.Expanding, QSizePolicy.Minimum))
 
         # Add button
-        add_btn = QPushButton("⊕ إضافة حالة جديدة")
+        add_btn = QPushButton("إضافة حالة جديدة +")
         add_btn.setFixedHeight(40)
         add_btn.setCursor(Qt.PointingHandCursor)
-        add_btn.setFont(QFont("Noto Kufi Arabic", 12, QFont.DemiBold))
+        add_btn.setFont(QFont("Noto Kufi Arabic", 9, QFont.Bold))
         add_btn.setStyleSheet(f"""
             QPushButton {{
                 background-color: {Colors.PRIMARY_BLUE};
                 color: white;
                 border: none;
-                border-radius: 6px;
-                padding: 0px 24px;
+                border-radius: 8px;
+                padding: 0px 20px;
             }}
             QPushButton:hover {{
                 background-color: #2A7BC9;

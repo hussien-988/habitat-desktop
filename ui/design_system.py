@@ -21,7 +21,7 @@ class Colors:
     PRIMARY_WHITE = "#FFFFFF"
 
     # UI Colors (from Figma Design - Pages 1-31)
-    BACKGROUND = "#F5F7FA"  # Light gray background (main app background)
+    BACKGROUND = "#f0f7ff"  # Light gray background (main app background)
     BACKGROUND_LIGHT = "#F0F4F8"  # Very light blue-gray (login page)
     SURFACE = "#FFFFFF"  # White surface/cards
     LIGHT_GRAY_BG = "#FAFBFC"  # Very light gray for alternating rows

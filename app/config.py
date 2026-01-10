@@ -83,7 +83,7 @@ class Config:
     ACCENT_COLOR: str = "#FDB714"  # UN Gold/Yellow
     TEXT_COLOR: str = "#2C3E50"
     TEXT_LIGHT: str = "#5D6D7E"
-    BACKGROUND_COLOR: str = "#EEF2F7"  # Soft blue-gray background
+    BACKGROUND_COLOR: str = "#F0F7FF"  # Soft blue-gray background
     CARD_BACKGROUND: str = "#FFFFFF"
     BORDER_COLOR: str = "#D5DCE6"
     SUCCESS_COLOR: str = "#27AE60"
