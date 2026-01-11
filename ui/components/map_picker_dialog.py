@@ -260,11 +260,14 @@ class MapPickerDialog(QDialog):
 
     Implements UC-000 S04: Enter geo location/Geometry
     Works completely OFFLINE using local MBTiles and Leaflet.
+
+    Uses Singleton Pattern for performance optimization.
     """
 
     _tile_server = None
     _tile_server_port = None
     _tile_server_thread = None
+    _shared_instance = None  # Singleton instance
 
     def __init__(
         self,
@@ -288,6 +291,46 @@ class MapPickerDialog(QDialog):
         self._start_tile_server()
 
         self._setup_ui()
+        self._load_map()
+
+    @classmethod
+    def get_instance(cls, initial_lat: float = 36.2, initial_lon: float = 37.15, allow_polygon: bool = True, parent=None):
+        """
+        Get or create singleton instance.
+        Reuses existing dialog for performance.
+        """
+        if cls._shared_instance is None:
+            logger.info("Creating new MapPickerDialog instance (first time)")
+            cls._shared_instance = cls(initial_lat, initial_lon, allow_polygon, parent)
+        else:
+            logger.info("Reusing existing MapPickerDialog instance (Singleton)")
+            # Update parameters and reset map
+            cls._shared_instance.initial_lat = initial_lat
+            cls._shared_instance.initial_lon = initial_lon
+            cls._shared_instance.allow_polygon = allow_polygon
+            cls._shared_instance._result = None
+            cls._shared_instance._reset_map()
+
+        return cls._shared_instance
+
+    def _reset_map(self):
+        """Reset map to new location without recreating QWebEngineView."""
+        logger.info(f"Resetting map to {self.initial_lat}, {self.initial_lon}")
+
+        # Reset bridge
+        self.bridge._latitude = None
+        self.bridge._longitude = None
+        self.bridge._polygon_wkt = None
+
+        # Update coordinate displays
+        self.lat_input.setText(f"{self.initial_lat:.6f}")
+        self.lon_input.setText(f"{self.initial_lon:.6f}")
+
+        # Reset result displays
+        self.result_lat_label.setText("---")
+        self.result_lon_label.setText("---")
+
+        # Reload map HTML with new coordinates
         self._load_map()
 
     def _start_tile_server(self):

@@ -278,11 +278,16 @@ class BuildingDialog(QDialog):
             current_lat = self.latitude_spin.value()
             current_lon = self.longitude_spin.value()
 
-            dialog = MapPickerDialog(
+            # Use singleton instance for performance + top-level window for performance
+            dialog = MapPickerDialog.get_instance(
                 initial_lat=current_lat,
                 initial_lon=current_lon,
-                parent=self
+                parent=None  # Top-level window (not inside complex UI hierarchy)
             )
+
+            # Ensure it's a top-level dialog for performance
+            dialog.setParent(None)
+            dialog.setWindowFlags(Qt.Dialog | Qt.WindowStaysOnTopHint)
 
             if dialog.exec_() == QDialog.Accepted:
                 result = dialog.get_result()
@@ -904,7 +909,18 @@ class BuildingsPage(QWidget):
         self.map_view.setHtml(html)
 
     def _get_map_html(self, buildings_geojson: str) -> str:
-        """Generate HTML for interactive buildings map with click-to-edit (UC-000 S02a)."""
+        """Generate HTML for interactive buildings map with click-to-edit (UC-000 S02a) - OFFLINE VERSION."""
+        # Use the shared tile server from MapPickerDialog
+        from ui.components.map_picker_dialog import MapPickerDialog
+
+        # Ensure tile server is started
+        if MapPickerDialog._tile_server_port is None:
+            # Start tile server if not already running
+            temp_dialog = MapPickerDialog.__new__(MapPickerDialog)
+            temp_dialog._start_tile_server()
+
+        tile_server_url = f"http://127.0.0.1:{MapPickerDialog._tile_server_port}"
+
         return f'''
 <!DOCTYPE html>
 <html dir="rtl">
@@ -912,8 +928,8 @@ class BuildingsPage(QWidget):
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>خريطة المباني</title>
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <link rel="stylesheet" href="{tile_server_url}/leaflet.css" />
+    <script src="{tile_server_url}/leaflet.js"></script>
     <style>
         * {{ margin: 0; padding: 0; box-sizing: border-box; }}
         html, body {{ height: 100%; width: 100%; }}
@@ -970,12 +986,20 @@ class BuildingsPage(QWidget):
     <div id="map"></div>
     <script>
         // Initialize map centered on Aleppo
-        var map = L.map('map').setView([36.2021, 37.1343], 13);
+        var map = L.map('map', {{
+            preferCanvas: true,  // Use Canvas renderer for better performance
+            zoomAnimation: true,
+            fadeAnimation: false
+        }}).setView([36.2021, 37.1343], 13);
 
-        // Add tile layer
-        L.tileLayer('https://{{s}}.tile.openstreetmap.org/{{z}}/{{x}}/{{y}}.png', {{
+        // Add LOCAL tile layer from MBTiles
+        L.tileLayer('{tile_server_url}/tiles/{{z}}/{{x}}/{{y}}.png', {{
             maxZoom: 18,
-            attribution: '© OpenStreetMap | UN-Habitat'
+            minZoom: 12,
+            attribution: 'UN-Habitat Syria - يعمل بدون اتصال بالإنترنت',
+            updateWhenIdle: true,
+            keepBuffer: 2,
+            errorTileUrl: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=='
         }}).addTo(map);
 
         // Status colors

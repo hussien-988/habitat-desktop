@@ -9,7 +9,11 @@ Main entry point for the application
 """
 
 import sys
+import os
 from pathlib import Path
+
+# Enable GPU acceleration for QWebEngineView (MUST be before Qt imports)
+os.environ["QTWEBENGINE_CHROMIUM_FLAGS"] = "--enable-gpu-rasterization --disable-gpu-sandbox --enable-accelerated-2d-canvas --ignore-gpu-blocklist"
 
 # Add trrcms directory to Python path (MUST be before any trrcms imports)
 trrcms_path = Path(__file__).parent / "trrcms"

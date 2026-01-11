@@ -960,18 +960,29 @@ class OfficeSurveyWizard(QWidget):
 
 
     def _load_buildings_map(self):
-        """Load interactive map for building selection (S02)."""
+        """Load interactive map for building selection (S02) - OFFLINE VERSION."""
         if not hasattr(self, "building_map") or self.building_map is None:
-        # Map view is created inside the dialog, so nothing to load yet.
+            # Map view is created inside the dialog, so nothing to load yet.
             return
+
+        # Use the shared tile server from MapPickerDialog
+        from ui.components.map_picker_dialog import MapPickerDialog
+
+        # Ensure tile server is started
+        if MapPickerDialog._tile_server_port is None:
+            temp_dialog = MapPickerDialog.__new__(MapPickerDialog)
+            temp_dialog._start_tile_server()
+
+        tile_server_url = f"http://127.0.0.1:{MapPickerDialog._tile_server_port}"
+
         # Get buildings with coordinates
         buildings = self.building_repo.get_all(limit=200)
         markers_js = ""
 
         for b in buildings:
             if hasattr(b, 'latitude') and b.latitude and hasattr(b, 'longitude') and b.longitude:
-                # Use building_type_display if building_type_display doesn't exist
-                building_type = getattr(b, 'building_type_display', getattr(b, 'building_type_display', b.building_type))
+                # Use building_type_display if available
+                building_type = getattr(b, 'building_type_display', getattr(b, 'building_type', 'مبنى'))
                 markers_js += f"""
                     var marker_{b.building_id.replace('-', '_')} = L.marker([{b.latitude}, {b.longitude}])
                         .addTo(map)
@@ -986,7 +997,7 @@ class OfficeSurveyWizard(QWidget):
 <html>
 <head>
     <meta charset="utf-8">
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="stylesheet" href="{tile_server_url}/leaflet.css" />
     <style>
         body {{ margin: 0; padding: 0; }}
         #map {{ width: 100%; height: 100vh; }}
@@ -994,11 +1005,21 @@ class OfficeSurveyWizard(QWidget):
 </head>
 <body>
     <div id="map"></div>
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="{tile_server_url}/leaflet.js"></script>
     <script>
-        var map = L.map('map').setView([36.2, 37.15], 13);
-        L.tileLayer('https://{{s}}.tile.openstreetmap.org/{{z}}/{{x}}/{{y}}.png', {{
-            attribution: '© OpenStreetMap'
+        var map = L.map('map', {{
+            preferCanvas: true,
+            zoomAnimation: true,
+            fadeAnimation: false
+        }}).setView([36.2, 37.15], 13);
+
+        L.tileLayer('{tile_server_url}/tiles/{{z}}/{{x}}/{{y}}.png', {{
+            maxZoom: 18,
+            minZoom: 12,
+            attribution: 'UN-Habitat Syria - يعمل بدون اتصال بالإنترنت',
+            updateWhenIdle: true,
+            keepBuffer: 2,
+            errorTileUrl: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=='
         }}).addTo(map);
 
         {markers_js}
