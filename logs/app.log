@@ -8841,3 +8841,1932 @@ Query:
 2026-01-08 20:48:06 | DEBUG    | trrcms.app.main_window_v2 | Tab 5 selected -> navigating to import_wizard
 2026-01-08 20:48:11 | INFO     | trrcms.app.main_window_v2 | Application closing
 2026-01-08 20:48:11 | INFO     | trrcms | Application closed with exit code: 0
+2026-01-08 21:12:22 | INFO     | trrcms | ================================================================================
+2026-01-08 21:12:22 | INFO     | trrcms | Starting TRRCMS Application
+2026-01-08 21:12:22 | INFO     | trrcms | ================================================================================
+2026-01-08 21:12:22 | INFO     | trrcms | Initializing database...
+2026-01-08 21:12:22 | ERROR    | trrcms.repositories.db_adapter | PostgreSQL connection error: connection to server at "localhost" (::1), port 5432 failed: fe_sendauth: no password supplied
+
+2026-01-08 21:12:22 | WARNING  | trrcms.repositories.db_adapter | PostgreSQL unavailable, falling back to SQLite
+2026-01-08 21:12:22 | INFO     | trrcms.repositories.db_adapter | Using SQLite database: E:\Project\code\trrcms\trrcms\data\trrcms.db
+2026-01-08 21:12:22 | INFO     | trrcms.repositories.db_adapter | Initializing SQLite database at: E:\Project\code\trrcms\trrcms\data\trrcms.db
+2026-01-08 21:12:22 | DEBUG    | trrcms.repositories.db_adapter | All SQLite tables created successfully
+2026-01-08 21:12:22 | INFO     | trrcms.repositories.db_adapter | SQLite database initialized successfully
+2026-01-08 21:12:22 | INFO     | trrcms | >> Database initialized successfully
+2026-01-08 21:12:22 | INFO     | trrcms | Initializing internationalization...
+2026-01-08 21:12:22 | INFO     | trrcms | >> Internationalization initialized (Arabic)
+2026-01-08 21:12:22 | INFO     | trrcms | Creating main window (NEW DESIGN v2 with Navbar)...
+2026-01-08 21:12:26 | ERROR    | trrcms.repositories.db_adapter | SQLite fetch_all error: no such table: surveys
+Query: 
+            SELECT * FROM surveys
+            WHERE status = 'draft' AND source = 'office'
+            ORDER BY updated_at DESC
+            LIMIT ? OFFSET ?
+        
+2026-01-08 21:12:26 | ERROR    | trrcms.ui.pages.draft_office_surveys_page_v2 | Error loading drafts: no such table: surveys
+2026-01-08 21:12:26 | INFO     | trrcms.app.main_window_v2 | Showing login page
+2026-01-08 21:12:27 | INFO     | trrcms | >> Main window created and displayed
+2026-01-08 21:12:27 | INFO     | trrcms | ================================================================================
+2026-01-08 21:12:27 | INFO     | trrcms | >> Application started successfully!
+2026-01-08 21:12:27 | INFO     | trrcms | ================================================================================
+2026-01-08 21:12:33 | INFO     | trrcms.app.main_window_v2 | Application closing
+2026-01-08 21:12:33 | INFO     | trrcms | Application closed with exit code: 0
+2026-01-09 13:48:54 | INFO     | trrcms | ================================================================================
+2026-01-09 13:48:55 | INFO     | trrcms | Starting TRRCMS Application
+2026-01-09 13:48:55 | INFO     | trrcms | ================================================================================
+2026-01-09 13:48:55 | INFO     | trrcms | Initializing database...
+2026-01-09 13:48:55 | ERROR    | trrcms.repositories.db_adapter | PostgreSQL connection error: connection to server at "localhost" (::1), port 5432 failed: fe_sendauth: no password supplied
+
+2026-01-09 13:48:55 | WARNING  | trrcms.repositories.db_adapter | PostgreSQL unavailable, falling back to SQLite
+2026-01-09 13:48:55 | INFO     | trrcms.repositories.db_adapter | Using SQLite database: E:\Project\code\trrcms\trrcms\data\trrcms.db
+2026-01-09 13:48:55 | INFO     | trrcms.repositories.db_adapter | Initializing SQLite database at: E:\Project\code\trrcms\trrcms\data\trrcms.db
+2026-01-09 13:48:55 | DEBUG    | trrcms.repositories.db_adapter | All SQLite tables created successfully
+2026-01-09 13:48:55 | INFO     | trrcms.repositories.db_adapter | SQLite database initialized successfully
+2026-01-09 13:48:55 | INFO     | trrcms | >> Database initialized successfully
+2026-01-09 13:48:55 | INFO     | trrcms | Initializing internationalization...
+2026-01-09 13:48:55 | INFO     | trrcms | >> Internationalization initialized (Arabic)
+2026-01-09 13:48:55 | INFO     | trrcms | Creating main window (NEW DESIGN v2 with Navbar)...
+2026-01-09 13:49:02 | ERROR    | trrcms.repositories.db_adapter | SQLite fetch_all error: no such table: surveys
+Query: 
+            SELECT * FROM surveys
+            WHERE status = 'draft' AND source = 'office'
+            ORDER BY updated_at DESC
+            LIMIT ? OFFSET ?
+        
+2026-01-09 13:49:02 | ERROR    | trrcms.ui.pages.draft_office_surveys_page_v2 | Error loading drafts: no such table: surveys
+2026-01-09 13:49:02 | INFO     | trrcms.app.main_window_v2 | Showing login page
+2026-01-09 13:49:02 | INFO     | trrcms | >> Main window created and displayed
+2026-01-09 13:49:02 | INFO     | trrcms | ================================================================================
+2026-01-09 13:49:02 | INFO     | trrcms | >> Application started successfully!
+2026-01-09 13:49:02 | INFO     | trrcms | ================================================================================
+2026-01-09 13:49:15 | WARNING  | trrcms.services.auth_service | Failed login attempt for admin (1/5)
+2026-01-09 13:49:15 | WARNING  | trrcms.ui.pages.login_page | Login failed: admin
+2026-01-09 13:49:24 | INFO     | trrcms.services.auth_service | User logged in successfully: admin (admin)
+2026-01-09 13:49:24 | INFO     | trrcms.ui.pages.login_page | Login successful: admin
+2026-01-09 13:49:24 | INFO     | trrcms.app.main_window_v2 | User logged in: admin (admin)
+2026-01-09 13:49:24 | DEBUG    | trrcms.app.main_window_v2 | Navigated to: claims
+2026-01-09 13:49:24 | DEBUG    | trrcms.app.main_window_v2 | Tab 0 selected -> navigating to claims
+2026-01-09 13:49:35 | INFO     | trrcms.app.main_window_v2 | Starting new office survey
+2026-01-09 13:49:35 | DEBUG    | trrcms.app.main_window_v2 | New office survey wizard opened
+2026-01-09 13:55:58 | DEBUG    | trrcms.app.main_window_v2 | Navigated to: draft_claims
+2026-01-09 13:55:58 | DEBUG    | trrcms.app.main_window_v2 | Tab 1 selected -> navigating to draft_claims
+2026-01-09 13:56:00 | DEBUG    | trrcms.ui.pages.buildings_page | Refreshing buildings page
+2026-01-09 13:56:00 | DEBUG    | trrcms.app.main_window_v2 | Navigated to: buildings
+2026-01-09 13:56:00 | DEBUG    | trrcms.app.main_window_v2 | Tab 2 selected -> navigating to buildings
+2026-01-09 13:56:01 | DEBUG    | trrcms.ui.pages.units_page | Refreshing units page
+2026-01-09 13:56:01 | DEBUG    | trrcms.app.main_window_v2 | Navigated to: units
+2026-01-09 13:56:01 | DEBUG    | trrcms.app.main_window_v2 | Tab 3 selected -> navigating to units
+2026-01-09 13:56:02 | DEBUG    | trrcms.ui.pages.duplicates_page | Refreshing duplicates page
+2026-01-09 13:56:02 | INFO     | trrcms.services.duplicate_service | Detected 0 building duplicate groups
+2026-01-09 13:56:02 | INFO     | trrcms.services.duplicate_service | Detected 0 unit duplicate groups
+2026-01-09 13:56:02 | INFO     | trrcms.services.duplicate_service | Detected 0 person duplicate groups
+2026-01-09 13:56:02 | INFO     | trrcms.services.duplicate_service | Detected 0 building duplicate groups
+2026-01-09 13:56:02 | INFO     | trrcms.services.duplicate_service | Detected 0 unit duplicate groups
+2026-01-09 13:56:02 | INFO     | trrcms.services.duplicate_service | Detected 0 person duplicate groups
+2026-01-09 13:56:02 | DEBUG    | trrcms.app.main_window_v2 | Navigated to: duplicates
+2026-01-09 13:56:02 | DEBUG    | trrcms.app.main_window_v2 | Tab 4 selected -> navigating to duplicates
+2026-01-09 13:56:03 | DEBUG    | trrcms.app.main_window_v2 | Navigated to: import_wizard
+2026-01-09 13:56:03 | DEBUG    | trrcms.app.main_window_v2 | Tab 5 selected -> navigating to import_wizard
+2026-01-09 13:56:05 | DEBUG    | trrcms.app.main_window_v2 | Navigated to: claims
+2026-01-09 13:56:05 | DEBUG    | trrcms.app.main_window_v2 | Tab 0 selected -> navigating to claims
+2026-01-09 13:56:18 | DEBUG    | trrcms.app.main_window_v2 | Navigated to: draft_claims
+2026-01-09 13:56:18 | DEBUG    | trrcms.app.main_window_v2 | Tab 1 selected -> navigating to draft_claims
+2026-01-09 13:56:19 | DEBUG    | trrcms.ui.pages.buildings_page | Refreshing buildings page
+2026-01-09 13:56:19 | DEBUG    | trrcms.app.main_window_v2 | Navigated to: buildings
+2026-01-09 13:56:19 | DEBUG    | trrcms.app.main_window_v2 | Tab 2 selected -> navigating to buildings
+2026-01-09 13:56:20 | DEBUG    | trrcms.ui.pages.units_page | Refreshing units page
+2026-01-09 13:56:20 | DEBUG    | trrcms.app.main_window_v2 | Navigated to: units
+2026-01-09 13:56:20 | DEBUG    | trrcms.app.main_window_v2 | Tab 3 selected -> navigating to units
+2026-01-09 13:56:21 | DEBUG    | trrcms.ui.pages.duplicates_page | Refreshing duplicates page
+2026-01-09 13:56:21 | INFO     | trrcms.services.duplicate_service | Detected 0 building duplicate groups
+2026-01-09 13:56:21 | INFO     | trrcms.services.duplicate_service | Detected 0 unit duplicate groups
+2026-01-09 13:56:21 | INFO     | trrcms.services.duplicate_service | Detected 0 person duplicate groups
+2026-01-09 13:56:21 | INFO     | trrcms.services.duplicate_service | Detected 0 building duplicate groups
+2026-01-09 13:56:21 | INFO     | trrcms.services.duplicate_service | Detected 0 unit duplicate groups
+2026-01-09 13:56:21 | INFO     | trrcms.services.duplicate_service | Detected 0 person duplicate groups
+2026-01-09 13:56:21 | DEBUG    | trrcms.app.main_window_v2 | Navigated to: duplicates
+2026-01-09 13:56:21 | DEBUG    | trrcms.app.main_window_v2 | Tab 4 selected -> navigating to duplicates
+2026-01-09 13:56:22 | DEBUG    | trrcms.app.main_window_v2 | Navigated to: import_wizard
+2026-01-09 13:56:22 | DEBUG    | trrcms.app.main_window_v2 | Tab 5 selected -> navigating to import_wizard
+2026-01-09 13:56:23 | DEBUG    | trrcms.app.main_window_v2 | Navigated to: claims
+2026-01-09 13:56:23 | DEBUG    | trrcms.app.main_window_v2 | Tab 0 selected -> navigating to claims
+2026-01-09 13:56:25 | INFO     | trrcms.app.main_window_v2 | Starting new office survey
+2026-01-09 13:56:25 | DEBUG    | trrcms.app.main_window_v2 | New office survey wizard opened
+2026-01-09 14:02:20 | DEBUG    | trrcms.app.main_window_v2 | Navigated to: import_wizard
+2026-01-09 14:02:20 | DEBUG    | trrcms.app.main_window_v2 | Tab 5 selected -> navigating to import_wizard
+2026-01-09 14:04:53 | DEBUG    | trrcms.app.main_window_v2 | Navigated to: claims
+2026-01-09 14:04:53 | DEBUG    | trrcms.app.main_window_v2 | Tab 0 selected -> navigating to claims
+2026-01-09 14:04:55 | INFO     | trrcms.app.main_window_v2 | Starting new office survey
+2026-01-09 14:04:55 | DEBUG    | trrcms.app.main_window_v2 | New office survey wizard opened
+2026-01-09 14:15:20 | INFO     | trrcms.app.main_window_v2 | Application closing
+2026-01-09 14:15:20 | INFO     | trrcms | Application closed with exit code: 0
+2026-01-09 14:15:41 | INFO     | trrcms | ================================================================================
+2026-01-09 14:15:41 | INFO     | trrcms | Starting TRRCMS Application
+2026-01-09 14:15:41 | INFO     | trrcms | ================================================================================
+2026-01-09 14:15:41 | INFO     | trrcms | Initializing database...
+2026-01-09 14:15:41 | ERROR    | trrcms.repositories.db_adapter | PostgreSQL connection error: connection to server at "localhost" (::1), port 5432 failed: fe_sendauth: no password supplied
+
+2026-01-09 14:15:41 | WARNING  | trrcms.repositories.db_adapter | PostgreSQL unavailable, falling back to SQLite
+2026-01-09 14:15:41 | INFO     | trrcms.repositories.db_adapter | Using SQLite database: E:\Project\code\trrcms\trrcms\data\trrcms.db
+2026-01-09 14:15:41 | INFO     | trrcms.repositories.db_adapter | Initializing SQLite database at: E:\Project\code\trrcms\trrcms\data\trrcms.db
+2026-01-09 14:15:41 | DEBUG    | trrcms.repositories.db_adapter | All SQLite tables created successfully
+2026-01-09 14:15:41 | INFO     | trrcms.repositories.db_adapter | SQLite database initialized successfully
+2026-01-09 14:15:41 | INFO     | trrcms | >> Database initialized successfully
+2026-01-09 14:15:41 | INFO     | trrcms | Initializing internationalization...
+2026-01-09 14:15:41 | INFO     | trrcms | >> Internationalization initialized (Arabic)
+2026-01-09 14:15:41 | INFO     | trrcms | Creating main window (NEW DESIGN v2 with Navbar)...
+2026-01-09 14:15:44 | ERROR    | trrcms.repositories.db_adapter | SQLite fetch_all error: no such table: surveys
+Query: 
+            SELECT * FROM surveys
+            WHERE status = 'draft' AND source = 'office'
+            ORDER BY updated_at DESC
+            LIMIT ? OFFSET ?
+        
+2026-01-09 14:15:44 | ERROR    | trrcms.ui.pages.draft_office_surveys_page_v2 | Error loading drafts: no such table: surveys
+2026-01-09 14:15:44 | INFO     | trrcms.app.main_window_v2 | Showing login page
+2026-01-09 14:15:44 | INFO     | trrcms | >> Main window created and displayed
+2026-01-09 14:15:44 | INFO     | trrcms | ================================================================================
+2026-01-09 14:15:44 | INFO     | trrcms | >> Application started successfully!
+2026-01-09 14:15:44 | INFO     | trrcms | ================================================================================
+2026-01-09 14:15:57 | INFO     | trrcms.services.auth_service | User logged in successfully: admin (admin)
+2026-01-09 14:15:57 | INFO     | trrcms.ui.pages.login_page | Login successful: admin
+2026-01-09 14:15:57 | INFO     | trrcms.app.main_window_v2 | User logged in: admin (admin)
+2026-01-09 14:15:57 | DEBUG    | trrcms.app.main_window_v2 | Navigated to: claims
+2026-01-09 14:15:57 | DEBUG    | trrcms.app.main_window_v2 | Tab 0 selected -> navigating to claims
+2026-01-09 14:16:01 | INFO     | trrcms.app.main_window_v2 | Starting new office survey
+2026-01-09 14:16:01 | DEBUG    | trrcms.app.main_window_v2 | New office survey wizard opened
+2026-01-09 14:17:22 | INFO     | trrcms.app.main_window_v2 | Application closing
+2026-01-09 14:17:22 | INFO     | trrcms | Application closed with exit code: 0
+2026-01-09 14:44:54 | INFO     | trrcms | ================================================================================
+2026-01-09 14:44:54 | INFO     | trrcms | Starting TRRCMS Application
+2026-01-09 14:44:54 | INFO     | trrcms | ================================================================================
+2026-01-09 14:44:54 | INFO     | trrcms | Initializing database...
+2026-01-09 14:44:54 | ERROR    | trrcms.repositories.db_adapter | PostgreSQL connection error: connection to server at "localhost" (::1), port 5432 failed: fe_sendauth: no password supplied
+
+2026-01-09 14:44:54 | WARNING  | trrcms.repositories.db_adapter | PostgreSQL unavailable, falling back to SQLite
+2026-01-09 14:44:54 | INFO     | trrcms.repositories.db_adapter | Using SQLite database: E:\Project\code\trrcms\trrcms\data\trrcms.db
+2026-01-09 14:44:54 | INFO     | trrcms.repositories.db_adapter | Initializing SQLite database at: E:\Project\code\trrcms\trrcms\data\trrcms.db
+2026-01-09 14:44:54 | DEBUG    | trrcms.repositories.db_adapter | All SQLite tables created successfully
+2026-01-09 14:44:54 | INFO     | trrcms.repositories.db_adapter | SQLite database initialized successfully
+2026-01-09 14:44:54 | INFO     | trrcms | >> Database initialized successfully
+2026-01-09 14:44:54 | INFO     | trrcms | Initializing internationalization...
+2026-01-09 14:44:54 | INFO     | trrcms | >> Internationalization initialized (Arabic)
+2026-01-09 14:44:54 | INFO     | trrcms | Creating main window (NEW DESIGN v2 with Navbar)...
+2026-01-09 14:44:56 | ERROR    | trrcms.repositories.db_adapter | SQLite fetch_all error: no such table: surveys
+Query: 
+            SELECT * FROM surveys
+            WHERE status = 'draft' AND source = 'office'
+            ORDER BY updated_at DESC
+            LIMIT ? OFFSET ?
+        
+2026-01-09 14:44:56 | ERROR    | trrcms.ui.pages.draft_office_surveys_page_v2 | Error loading drafts: no such table: surveys
+2026-01-09 14:44:56 | INFO     | trrcms.app.main_window_v2 | Showing login page
+2026-01-09 14:44:56 | INFO     | trrcms | >> Main window created and displayed
+2026-01-09 14:44:56 | INFO     | trrcms | ================================================================================
+2026-01-09 14:44:56 | INFO     | trrcms | >> Application started successfully!
+2026-01-09 14:44:56 | INFO     | trrcms | ================================================================================
+2026-01-09 14:45:10 | INFO     | trrcms.services.auth_service | User logged in successfully: admin (admin)
+2026-01-09 14:45:10 | INFO     | trrcms.ui.pages.login_page | Login successful: admin
+2026-01-09 14:45:10 | INFO     | trrcms.app.main_window_v2 | User logged in: admin (admin)
+2026-01-09 14:45:10 | DEBUG    | trrcms.app.main_window_v2 | Navigated to: claims
+2026-01-09 14:45:10 | DEBUG    | trrcms.app.main_window_v2 | Tab 0 selected -> navigating to claims
+2026-01-09 14:45:14 | INFO     | trrcms.app.main_window_v2 | Starting new office survey
+2026-01-09 14:45:14 | DEBUG    | trrcms.app.main_window_v2 | New office survey wizard opened
+2026-01-09 14:49:32 | INFO     | trrcms.app.main_window_v2 | Application closing
+2026-01-09 14:49:32 | INFO     | trrcms | Application closed with exit code: 0
+2026-01-09 14:51:57 | INFO     | trrcms | ================================================================================
+2026-01-09 14:51:57 | INFO     | trrcms | Starting TRRCMS Application
+2026-01-09 14:51:57 | INFO     | trrcms | ================================================================================
+2026-01-09 14:51:57 | INFO     | trrcms | Initializing database...
+2026-01-09 14:51:57 | ERROR    | trrcms.repositories.db_adapter | PostgreSQL connection error: connection to server at "localhost" (::1), port 5432 failed: fe_sendauth: no password supplied
+
+2026-01-09 14:51:57 | WARNING  | trrcms.repositories.db_adapter | PostgreSQL unavailable, falling back to SQLite
+2026-01-09 14:51:57 | INFO     | trrcms.repositories.db_adapter | Using SQLite database: E:\Project\code\trrcms\trrcms\data\trrcms.db
+2026-01-09 14:51:57 | INFO     | trrcms.repositories.db_adapter | Initializing SQLite database at: E:\Project\code\trrcms\trrcms\data\trrcms.db
+2026-01-09 14:51:57 | DEBUG    | trrcms.repositories.db_adapter | All SQLite tables created successfully
+2026-01-09 14:51:57 | INFO     | trrcms.repositories.db_adapter | SQLite database initialized successfully
+2026-01-09 14:51:57 | INFO     | trrcms | >> Database initialized successfully
+2026-01-09 14:51:57 | INFO     | trrcms | Initializing internationalization...
+2026-01-09 14:51:57 | INFO     | trrcms | >> Internationalization initialized (Arabic)
+2026-01-09 14:51:57 | INFO     | trrcms | Creating main window (NEW DESIGN v2 with Navbar)...
+2026-01-09 14:51:59 | ERROR    | trrcms.repositories.db_adapter | SQLite fetch_all error: no such table: surveys
+Query: 
+            SELECT * FROM surveys
+            WHERE status = 'draft' AND source = 'office'
+            ORDER BY updated_at DESC
+            LIMIT ? OFFSET ?
+        
+2026-01-09 14:51:59 | ERROR    | trrcms.ui.pages.draft_office_surveys_page_v2 | Error loading drafts: no such table: surveys
+2026-01-09 14:51:59 | INFO     | trrcms.app.main_window_v2 | Showing login page
+2026-01-09 14:51:59 | INFO     | trrcms | >> Main window created and displayed
+2026-01-09 14:51:59 | INFO     | trrcms | ================================================================================
+2026-01-09 14:51:59 | INFO     | trrcms | >> Application started successfully!
+2026-01-09 14:51:59 | INFO     | trrcms | ================================================================================
+2026-01-09 14:52:13 | INFO     | trrcms.services.auth_service | User logged in successfully: admin (admin)
+2026-01-09 14:52:13 | INFO     | trrcms.ui.pages.login_page | Login successful: admin
+2026-01-09 14:52:13 | INFO     | trrcms.app.main_window_v2 | User logged in: admin (admin)
+2026-01-09 14:52:13 | DEBUG    | trrcms.app.main_window_v2 | Navigated to: claims
+2026-01-09 14:52:13 | DEBUG    | trrcms.app.main_window_v2 | Tab 0 selected -> navigating to claims
+2026-01-09 14:52:16 | INFO     | trrcms.app.main_window_v2 | Starting new office survey
+2026-01-09 14:52:16 | DEBUG    | trrcms.app.main_window_v2 | New office survey wizard opened
+2026-01-09 14:54:18 | INFO     | trrcms.app.main_window_v2 | Survey cancelled
+2026-01-09 14:54:18 | DEBUG    | trrcms.app.main_window_v2 | Navigated to: draft_claims
+2026-01-09 14:54:18 | DEBUG    | trrcms.app.main_window_v2 | Tab 1 selected -> navigating to draft_claims
+2026-01-09 14:54:31 | DEBUG    | trrcms.app.main_window_v2 | Navigated to: claims
+2026-01-09 14:54:31 | DEBUG    | trrcms.app.main_window_v2 | Tab 0 selected -> navigating to claims
+2026-01-09 14:54:35 | INFO     | trrcms.app.main_window_v2 | Application closing
+2026-01-09 14:54:35 | INFO     | trrcms | Application closed with exit code: 0
+2026-01-09 18:46:19 | INFO     | trrcms | ================================================================================
+2026-01-09 18:46:19 | INFO     | trrcms | Starting TRRCMS Application
+2026-01-09 18:46:19 | INFO     | trrcms | ================================================================================
+2026-01-09 18:46:19 | INFO     | trrcms | Initializing database...
+2026-01-09 18:46:19 | ERROR    | trrcms.repositories.db_adapter | PostgreSQL connection error: connection to server at "localhost" (::1), port 5432 failed: fe_sendauth: no password supplied
+
+2026-01-09 18:46:19 | WARNING  | trrcms.repositories.db_adapter | PostgreSQL unavailable, falling back to SQLite
+2026-01-09 18:46:20 | INFO     | trrcms.repositories.db_adapter | Using SQLite database: E:\Project\code\trrcms\trrcms\data\trrcms.db
+2026-01-09 18:46:20 | INFO     | trrcms.repositories.db_adapter | Initializing SQLite database at: E:\Project\code\trrcms\trrcms\data\trrcms.db
+2026-01-09 18:46:20 | DEBUG    | trrcms.repositories.db_adapter | All SQLite tables created successfully
+2026-01-09 18:46:20 | INFO     | trrcms.repositories.db_adapter | SQLite database initialized successfully
+2026-01-09 18:46:20 | INFO     | trrcms | >> Database initialized successfully
+2026-01-09 18:46:20 | INFO     | trrcms | Initializing internationalization...
+2026-01-09 18:46:20 | INFO     | trrcms | >> Internationalization initialized (Arabic)
+2026-01-09 18:46:20 | INFO     | trrcms | Creating main window (NEW DESIGN v2 with Navbar)...
+2026-01-09 18:46:23 | ERROR    | trrcms.repositories.db_adapter | SQLite fetch_all error: no such table: surveys
+Query: 
+            SELECT * FROM surveys
+            WHERE status = 'draft' AND source = 'office'
+            ORDER BY updated_at DESC
+            LIMIT ? OFFSET ?
+        
+2026-01-09 18:46:23 | ERROR    | trrcms.ui.pages.draft_office_surveys_page_v2 | Error loading drafts: no such table: surveys
+2026-01-09 18:46:23 | INFO     | trrcms.app.main_window_v2 | Showing login page
+2026-01-09 18:46:23 | INFO     | trrcms | >> Main window created and displayed
+2026-01-09 18:46:23 | INFO     | trrcms | ================================================================================
+2026-01-09 18:46:23 | INFO     | trrcms | >> Application started successfully!
+2026-01-09 18:46:23 | INFO     | trrcms | ================================================================================
+2026-01-09 18:46:38 | INFO     | trrcms.services.auth_service | User logged in successfully: admin (admin)
+2026-01-09 18:46:38 | INFO     | trrcms.ui.pages.login_page | Login successful: admin
+2026-01-09 18:46:38 | INFO     | trrcms.app.main_window_v2 | User logged in: admin (admin)
+2026-01-09 18:46:38 | DEBUG    | trrcms.app.main_window_v2 | Navigated to: claims
+2026-01-09 18:46:38 | DEBUG    | trrcms.app.main_window_v2 | Tab 0 selected -> navigating to claims
+2026-01-09 18:46:41 | INFO     | trrcms.app.main_window_v2 | Starting new office survey
+2026-01-09 18:46:41 | DEBUG    | trrcms.app.main_window_v2 | New office survey wizard opened
+2026-01-09 18:47:22 | INFO     | trrcms.app.main_window_v2 | Application closing
+2026-01-09 18:47:22 | INFO     | trrcms | Application closed with exit code: 0
+2026-01-09 19:04:38 | INFO     | trrcms | ================================================================================
+2026-01-09 19:04:38 | INFO     | trrcms | Starting TRRCMS Application
+2026-01-09 19:04:38 | INFO     | trrcms | ================================================================================
+2026-01-09 19:04:38 | INFO     | trrcms | Initializing database...
+2026-01-09 19:04:38 | ERROR    | trrcms.repositories.db_adapter | PostgreSQL connection error: connection to server at "localhost" (::1), port 5432 failed: fe_sendauth: no password supplied
+
+2026-01-09 19:04:38 | WARNING  | trrcms.repositories.db_adapter | PostgreSQL unavailable, falling back to SQLite
+2026-01-09 19:04:38 | INFO     | trrcms.repositories.db_adapter | Using SQLite database: E:\Project\code\trrcms\trrcms\data\trrcms.db
+2026-01-09 19:04:38 | INFO     | trrcms.repositories.db_adapter | Initializing SQLite database at: E:\Project\code\trrcms\trrcms\data\trrcms.db
+2026-01-09 19:04:38 | DEBUG    | trrcms.repositories.db_adapter | All SQLite tables created successfully
+2026-01-09 19:04:38 | INFO     | trrcms.repositories.db_adapter | SQLite database initialized successfully
+2026-01-09 19:04:38 | INFO     | trrcms | >> Database initialized successfully
+2026-01-09 19:04:38 | INFO     | trrcms | Initializing internationalization...
+2026-01-09 19:04:38 | INFO     | trrcms | >> Internationalization initialized (Arabic)
+2026-01-09 19:04:38 | INFO     | trrcms | Creating main window (NEW DESIGN v2 with Navbar)...
+2026-01-09 19:04:41 | ERROR    | trrcms.repositories.db_adapter | SQLite fetch_all error: no such table: surveys
+Query: 
+            SELECT * FROM surveys
+            WHERE status = 'draft' AND source = 'office'
+            ORDER BY updated_at DESC
+            LIMIT ? OFFSET ?
+        
+2026-01-09 19:04:41 | ERROR    | trrcms.ui.pages.draft_office_surveys_page_v2 | Error loading drafts: no such table: surveys
+2026-01-09 19:04:42 | INFO     | trrcms.app.main_window_v2 | Showing login page
+2026-01-09 19:04:42 | INFO     | trrcms | >> Main window created and displayed
+2026-01-09 19:04:42 | INFO     | trrcms | ================================================================================
+2026-01-09 19:04:42 | INFO     | trrcms | >> Application started successfully!
+2026-01-09 19:04:42 | INFO     | trrcms | ================================================================================
+2026-01-09 19:04:53 | INFO     | trrcms.services.auth_service | User logged in successfully: admin (admin)
+2026-01-09 19:04:53 | INFO     | trrcms.ui.pages.login_page | Login successful: admin
+2026-01-09 19:04:53 | INFO     | trrcms.app.main_window_v2 | User logged in: admin (admin)
+2026-01-09 19:04:53 | DEBUG    | trrcms.app.main_window_v2 | Navigated to: claims
+2026-01-09 19:04:53 | DEBUG    | trrcms.app.main_window_v2 | Tab 0 selected -> navigating to claims
+2026-01-09 19:04:56 | INFO     | trrcms.app.main_window_v2 | Starting new office survey
+2026-01-09 19:04:56 | DEBUG    | trrcms.app.main_window_v2 | New office survey wizard opened
+2026-01-09 19:05:11 | INFO     | trrcms.app.main_window_v2 | Application closing
+2026-01-09 19:05:11 | INFO     | trrcms | Application closed with exit code: 0
+2026-01-10 23:57:47 | INFO     | trrcms | ================================================================================
+2026-01-10 23:57:47 | INFO     | trrcms | Starting TRRCMS Application
+2026-01-10 23:57:47 | INFO     | trrcms | ================================================================================
+2026-01-10 23:57:47 | INFO     | trrcms | Initializing database...
+2026-01-10 23:57:48 | ERROR    | trrcms.repositories.db_adapter | PostgreSQL connection error: connection to server at "localhost" (::1), port 5432 failed: fe_sendauth: no password supplied
+
+2026-01-10 23:57:48 | WARNING  | trrcms.repositories.db_adapter | PostgreSQL unavailable, falling back to SQLite
+2026-01-10 23:57:48 | INFO     | trrcms.repositories.db_adapter | Using SQLite database: e:\Project\code\trrcms\trrcms\data\trrcms.db
+2026-01-10 23:57:48 | INFO     | trrcms.repositories.db_adapter | Initializing SQLite database at: e:\Project\code\trrcms\trrcms\data\trrcms.db
+2026-01-10 23:57:48 | DEBUG    | trrcms.repositories.db_adapter | All SQLite tables created successfully
+2026-01-10 23:57:48 | INFO     | trrcms.repositories.db_adapter | SQLite database initialized successfully
+2026-01-10 23:57:48 | INFO     | trrcms | >> Database initialized successfully
+2026-01-10 23:57:48 | INFO     | trrcms | Initializing internationalization...
+2026-01-10 23:57:48 | INFO     | trrcms | >> Internationalization initialized (Arabic)
+2026-01-10 23:57:48 | INFO     | trrcms | Creating main window (NEW DESIGN v2 with Navbar)...
+2026-01-10 23:57:51 | ERROR    | trrcms.repositories.db_adapter | SQLite fetch_all error: no such table: surveys
+Query: 
+            SELECT * FROM surveys
+            WHERE status = 'draft' AND source = 'office'
+            ORDER BY updated_at DESC
+            LIMIT ? OFFSET ?
+        
+2026-01-10 23:57:51 | ERROR    | trrcms.ui.pages.draft_office_surveys_page_v2 | Error loading drafts: no such table: surveys
+2026-01-10 23:57:51 | INFO     | trrcms.app.main_window_v2 | Showing login page
+2026-01-10 23:57:51 | INFO     | trrcms | >> Main window created and displayed
+2026-01-10 23:57:51 | INFO     | trrcms | ================================================================================
+2026-01-10 23:57:51 | INFO     | trrcms | >> Application started successfully!
+2026-01-10 23:57:51 | INFO     | trrcms | ================================================================================
+2026-01-10 23:58:02 | INFO     | trrcms.services.auth_service | User logged in successfully: admin (admin)
+2026-01-10 23:58:02 | INFO     | trrcms.ui.pages.login_page | Login successful: admin
+2026-01-10 23:58:02 | INFO     | trrcms.app.main_window_v2 | User logged in: admin (admin)
+2026-01-10 23:58:02 | DEBUG    | trrcms.app.main_window_v2 | Navigated to: claims
+2026-01-10 23:58:02 | DEBUG    | trrcms.app.main_window_v2 | Tab 0 selected -> navigating to claims
+2026-01-10 23:58:05 | INFO     | trrcms.app.main_window_v2 | Starting new office survey
+2026-01-10 23:58:05 | DEBUG    | trrcms.app.main_window_v2 | New office survey wizard opened
+2026-01-10 23:58:27 | INFO     | trrcms.app.main_window_v2 | Survey cancelled
+2026-01-10 23:58:27 | DEBUG    | trrcms.app.main_window_v2 | Navigated to: draft_claims
+2026-01-10 23:58:27 | DEBUG    | trrcms.app.main_window_v2 | Tab 1 selected -> navigating to draft_claims
+2026-01-10 23:58:31 | INFO     | trrcms.app.main_window_v2 | Application closing
+2026-01-10 23:58:31 | INFO     | trrcms | Application closed with exit code: 0
+2026-01-10 23:59:22 | INFO     | trrcms | ================================================================================
+2026-01-10 23:59:22 | INFO     | trrcms | Starting TRRCMS Application
+2026-01-10 23:59:22 | INFO     | trrcms | ================================================================================
+2026-01-10 23:59:22 | INFO     | trrcms | Initializing database...
+2026-01-10 23:59:22 | ERROR    | trrcms.repositories.db_adapter | PostgreSQL connection error: connection to server at "localhost" (::1), port 5432 failed: fe_sendauth: no password supplied
+
+2026-01-10 23:59:22 | WARNING  | trrcms.repositories.db_adapter | PostgreSQL unavailable, falling back to SQLite
+2026-01-10 23:59:22 | INFO     | trrcms.repositories.db_adapter | Using SQLite database: E:\Project\code\trrcms\trrcms\data\trrcms.db
+2026-01-10 23:59:22 | INFO     | trrcms.repositories.db_adapter | Initializing SQLite database at: E:\Project\code\trrcms\trrcms\data\trrcms.db
+2026-01-10 23:59:22 | DEBUG    | trrcms.repositories.db_adapter | All SQLite tables created successfully
+2026-01-10 23:59:22 | INFO     | trrcms.repositories.db_adapter | SQLite database initialized successfully
+2026-01-10 23:59:22 | INFO     | trrcms | >> Database initialized successfully
+2026-01-10 23:59:22 | INFO     | trrcms | Initializing internationalization...
+2026-01-10 23:59:22 | INFO     | trrcms | >> Internationalization initialized (Arabic)
+2026-01-10 23:59:22 | INFO     | trrcms | Creating main window (NEW DESIGN v2 with Navbar)...
+2026-01-10 23:59:23 | ERROR    | trrcms.repositories.db_adapter | SQLite fetch_all error: no such table: surveys
+Query: 
+            SELECT * FROM surveys
+            WHERE status = 'draft' AND source = 'office'
+            ORDER BY updated_at DESC
+            LIMIT ? OFFSET ?
+        
+2026-01-10 23:59:23 | ERROR    | trrcms.ui.pages.draft_office_surveys_page_v2 | Error loading drafts: no such table: surveys
+2026-01-10 23:59:24 | INFO     | trrcms.app.main_window_v2 | Showing login page
+2026-01-10 23:59:24 | INFO     | trrcms | >> Main window created and displayed
+2026-01-10 23:59:24 | INFO     | trrcms | ================================================================================
+2026-01-10 23:59:24 | INFO     | trrcms | >> Application started successfully!
+2026-01-10 23:59:24 | INFO     | trrcms | ================================================================================
+2026-01-10 23:59:35 | INFO     | trrcms.services.auth_service | User logged in successfully: admin (admin)
+2026-01-10 23:59:35 | INFO     | trrcms.ui.pages.login_page | Login successful: admin
+2026-01-10 23:59:35 | INFO     | trrcms.app.main_window_v2 | User logged in: admin (admin)
+2026-01-10 23:59:35 | DEBUG    | trrcms.app.main_window_v2 | Navigated to: claims
+2026-01-10 23:59:35 | DEBUG    | trrcms.app.main_window_v2 | Tab 0 selected -> navigating to claims
+2026-01-10 23:59:37 | INFO     | trrcms.app.main_window_v2 | Starting new office survey
+2026-01-10 23:59:37 | DEBUG    | trrcms.app.main_window_v2 | New office survey wizard opened
+2026-01-11 00:00:13 | DEBUG    | trrcms.app.main_window_v2 | Navigated to: draft_claims
+2026-01-11 00:00:13 | DEBUG    | trrcms.app.main_window_v2 | Tab 1 selected -> navigating to draft_claims
+2026-01-11 00:00:14 | DEBUG    | trrcms.ui.pages.buildings_page | Refreshing buildings page
+2026-01-11 00:00:14 | DEBUG    | trrcms.app.main_window_v2 | Navigated to: buildings
+2026-01-11 00:00:14 | DEBUG    | trrcms.app.main_window_v2 | Tab 2 selected -> navigating to buildings
+2026-01-11 00:00:18 | DEBUG    | trrcms.ui.pages.units_page | Refreshing units page
+2026-01-11 00:00:18 | DEBUG    | trrcms.app.main_window_v2 | Navigated to: units
+2026-01-11 00:00:18 | DEBUG    | trrcms.app.main_window_v2 | Tab 3 selected -> navigating to units
+2026-01-11 00:00:19 | DEBUG    | trrcms.ui.pages.duplicates_page | Refreshing duplicates page
+2026-01-11 00:00:19 | INFO     | trrcms.services.duplicate_service | Detected 0 building duplicate groups
+2026-01-11 00:00:19 | INFO     | trrcms.services.duplicate_service | Detected 0 unit duplicate groups
+2026-01-11 00:00:19 | INFO     | trrcms.services.duplicate_service | Detected 0 person duplicate groups
+2026-01-11 00:00:19 | INFO     | trrcms.services.duplicate_service | Detected 0 building duplicate groups
+2026-01-11 00:00:19 | INFO     | trrcms.services.duplicate_service | Detected 0 unit duplicate groups
+2026-01-11 00:00:19 | INFO     | trrcms.services.duplicate_service | Detected 0 person duplicate groups
+2026-01-11 00:00:19 | DEBUG    | trrcms.app.main_window_v2 | Navigated to: duplicates
+2026-01-11 00:00:19 | DEBUG    | trrcms.app.main_window_v2 | Tab 4 selected -> navigating to duplicates
+2026-01-11 00:00:20 | DEBUG    | trrcms.app.main_window_v2 | Navigated to: import_wizard
+2026-01-11 00:00:20 | DEBUG    | trrcms.app.main_window_v2 | Tab 5 selected -> navigating to import_wizard
+2026-01-11 00:00:21 | DEBUG    | trrcms.app.main_window_v2 | Navigated to: claims
+2026-01-11 00:00:21 | DEBUG    | trrcms.app.main_window_v2 | Tab 0 selected -> navigating to claims
+2026-01-11 00:00:25 | INFO     | trrcms.app.main_window_v2 | Application closing
+2026-01-11 00:00:25 | INFO     | trrcms | Application closed with exit code: 0
+2026-01-11 00:01:02 | INFO     | trrcms | ================================================================================
+2026-01-11 00:01:02 | INFO     | trrcms | Starting TRRCMS Application
+2026-01-11 00:01:02 | INFO     | trrcms | ================================================================================
+2026-01-11 00:01:02 | INFO     | trrcms | Initializing database...
+2026-01-11 00:01:02 | ERROR    | trrcms.repositories.db_adapter | PostgreSQL connection error: connection to server at "localhost" (::1), port 5432 failed: fe_sendauth: no password supplied
+
+2026-01-11 00:01:02 | WARNING  | trrcms.repositories.db_adapter | PostgreSQL unavailable, falling back to SQLite
+2026-01-11 00:01:02 | INFO     | trrcms.repositories.db_adapter | Using SQLite database: E:\Project\code\trrcms\trrcms\data\trrcms.db
+2026-01-11 00:01:02 | INFO     | trrcms.repositories.db_adapter | Initializing SQLite database at: E:\Project\code\trrcms\trrcms\data\trrcms.db
+2026-01-11 00:01:02 | DEBUG    | trrcms.repositories.db_adapter | All SQLite tables created successfully
+2026-01-11 00:01:02 | INFO     | trrcms.repositories.db_adapter | SQLite database initialized successfully
+2026-01-11 00:01:02 | INFO     | trrcms | >> Database initialized successfully
+2026-01-11 00:01:02 | INFO     | trrcms | Initializing internationalization...
+2026-01-11 00:01:02 | INFO     | trrcms | >> Internationalization initialized (Arabic)
+2026-01-11 00:01:02 | INFO     | trrcms | Creating main window (NEW DESIGN v2 with Navbar)...
+2026-01-11 00:01:03 | ERROR    | trrcms.repositories.db_adapter | SQLite fetch_all error: no such table: surveys
+Query: 
+            SELECT * FROM surveys
+            WHERE status = 'draft' AND source = 'office'
+            ORDER BY updated_at DESC
+            LIMIT ? OFFSET ?
+        
+2026-01-11 00:01:03 | ERROR    | trrcms.ui.pages.draft_office_surveys_page_v2 | Error loading drafts: no such table: surveys
+2026-01-11 00:01:03 | INFO     | trrcms.app.main_window_v2 | Showing login page
+2026-01-11 00:01:03 | INFO     | trrcms | >> Main window created and displayed
+2026-01-11 00:01:03 | INFO     | trrcms | ================================================================================
+2026-01-11 00:01:03 | INFO     | trrcms | >> Application started successfully!
+2026-01-11 00:01:03 | INFO     | trrcms | ================================================================================
+2026-01-11 00:01:07 | INFO     | trrcms.app.main_window_v2 | Application closing
+2026-01-11 00:01:07 | INFO     | trrcms | Application closed with exit code: 0
+2026-01-11 00:03:51 | INFO     | trrcms | ================================================================================
+2026-01-11 00:03:51 | INFO     | trrcms | Starting TRRCMS Application
+2026-01-11 00:03:51 | INFO     | trrcms | ================================================================================
+2026-01-11 00:03:51 | INFO     | trrcms | Initializing database...
+2026-01-11 00:03:51 | ERROR    | trrcms.repositories.db_adapter | PostgreSQL connection error: connection to server at "localhost" (::1), port 5432 failed: fe_sendauth: no password supplied
+
+2026-01-11 00:03:51 | WARNING  | trrcms.repositories.db_adapter | PostgreSQL unavailable, falling back to SQLite
+2026-01-11 00:03:51 | INFO     | trrcms.repositories.db_adapter | Using SQLite database: e:\Project\code\trrcms\trrcms\data\trrcms.db
+2026-01-11 00:03:51 | INFO     | trrcms.repositories.db_adapter | Initializing SQLite database at: e:\Project\code\trrcms\trrcms\data\trrcms.db
+2026-01-11 00:03:51 | DEBUG    | trrcms.repositories.db_adapter | All SQLite tables created successfully
+2026-01-11 00:03:51 | INFO     | trrcms.repositories.db_adapter | SQLite database initialized successfully
+2026-01-11 00:03:51 | INFO     | trrcms | >> Database initialized successfully
+2026-01-11 00:03:51 | INFO     | trrcms | Initializing internationalization...
+2026-01-11 00:03:51 | INFO     | trrcms | >> Internationalization initialized (Arabic)
+2026-01-11 00:03:51 | INFO     | trrcms | Creating main window (NEW DESIGN v2 with Navbar)...
+2026-01-11 00:03:52 | ERROR    | trrcms.repositories.db_adapter | SQLite fetch_all error: no such table: surveys
+Query: 
+            SELECT * FROM surveys
+            WHERE status = 'draft' AND source = 'office'
+            ORDER BY updated_at DESC
+            LIMIT ? OFFSET ?
+        
+2026-01-11 00:03:52 | ERROR    | trrcms.ui.pages.draft_office_surveys_page_v2 | Error loading drafts: no such table: surveys
+2026-01-11 00:03:52 | INFO     | trrcms.app.main_window_v2 | Showing login page
+2026-01-11 00:03:52 | INFO     | trrcms | >> Main window created and displayed
+2026-01-11 00:03:52 | INFO     | trrcms | ================================================================================
+2026-01-11 00:03:52 | INFO     | trrcms | >> Application started successfully!
+2026-01-11 00:03:52 | INFO     | trrcms | ================================================================================
+2026-01-11 00:04:02 | INFO     | trrcms.services.auth_service | User logged in successfully: admin (admin)
+2026-01-11 00:04:02 | INFO     | trrcms.ui.pages.login_page | Login successful: admin
+2026-01-11 00:04:02 | INFO     | trrcms.app.main_window_v2 | User logged in: admin (admin)
+2026-01-11 00:04:02 | DEBUG    | trrcms.app.main_window_v2 | Navigated to: claims
+2026-01-11 00:04:02 | DEBUG    | trrcms.app.main_window_v2 | Tab 0 selected -> navigating to claims
+2026-01-11 00:04:05 | INFO     | trrcms.app.main_window_v2 | Starting new office survey
+2026-01-11 00:04:05 | DEBUG    | trrcms.app.main_window_v2 | New office survey wizard opened
+2026-01-11 00:04:21 | DEBUG    | trrcms.app.main_window_v2 | Navigated to: draft_claims
+2026-01-11 00:04:21 | DEBUG    | trrcms.app.main_window_v2 | Tab 1 selected -> navigating to draft_claims
+2026-01-11 00:04:22 | DEBUG    | trrcms.ui.pages.buildings_page | Refreshing buildings page
+2026-01-11 00:04:22 | DEBUG    | trrcms.app.main_window_v2 | Navigated to: buildings
+2026-01-11 00:04:22 | DEBUG    | trrcms.app.main_window_v2 | Tab 2 selected -> navigating to buildings
+2026-01-11 00:04:35 | DEBUG    | trrcms.ui.pages.units_page | Refreshing units page
+2026-01-11 00:04:35 | DEBUG    | trrcms.app.main_window_v2 | Navigated to: units
+2026-01-11 00:04:35 | DEBUG    | trrcms.app.main_window_v2 | Tab 3 selected -> navigating to units
+2026-01-11 00:04:37 | DEBUG    | trrcms.ui.pages.duplicates_page | Refreshing duplicates page
+2026-01-11 00:04:37 | INFO     | trrcms.services.duplicate_service | Detected 0 building duplicate groups
+2026-01-11 00:04:37 | INFO     | trrcms.services.duplicate_service | Detected 0 unit duplicate groups
+2026-01-11 00:04:37 | INFO     | trrcms.services.duplicate_service | Detected 0 person duplicate groups
+2026-01-11 00:04:37 | INFO     | trrcms.services.duplicate_service | Detected 0 building duplicate groups
+2026-01-11 00:04:37 | INFO     | trrcms.services.duplicate_service | Detected 0 unit duplicate groups
+2026-01-11 00:04:37 | INFO     | trrcms.services.duplicate_service | Detected 0 person duplicate groups
+2026-01-11 00:04:37 | DEBUG    | trrcms.app.main_window_v2 | Navigated to: duplicates
+2026-01-11 00:04:37 | DEBUG    | trrcms.app.main_window_v2 | Tab 4 selected -> navigating to duplicates
+2026-01-11 00:04:41 | DEBUG    | trrcms.app.main_window_v2 | Navigated to: import_wizard
+2026-01-11 00:04:41 | DEBUG    | trrcms.app.main_window_v2 | Tab 5 selected -> navigating to import_wizard
+2026-01-11 00:04:45 | INFO     | trrcms.app.main_window_v2 | Application closing
+2026-01-11 00:04:45 | INFO     | trrcms | Application closed with exit code: 0
+2026-01-11 00:05:46 | INFO     | trrcms | ================================================================================
+2026-01-11 00:05:46 | INFO     | trrcms | Starting TRRCMS Application
+2026-01-11 00:05:46 | INFO     | trrcms | ================================================================================
+2026-01-11 00:05:46 | INFO     | trrcms | Initializing database...
+2026-01-11 00:05:46 | ERROR    | trrcms.repositories.db_adapter | PostgreSQL connection error: connection to server at "localhost" (::1), port 5432 failed: fe_sendauth: no password supplied
+
+2026-01-11 00:05:46 | WARNING  | trrcms.repositories.db_adapter | PostgreSQL unavailable, falling back to SQLite
+2026-01-11 00:05:46 | INFO     | trrcms.repositories.db_adapter | Using SQLite database: E:\Project\code\trrcms\trrcms\data\trrcms.db
+2026-01-11 00:05:46 | INFO     | trrcms.repositories.db_adapter | Initializing SQLite database at: E:\Project\code\trrcms\trrcms\data\trrcms.db
+2026-01-11 00:05:46 | DEBUG    | trrcms.repositories.db_adapter | All SQLite tables created successfully
+2026-01-11 00:05:46 | INFO     | trrcms.repositories.db_adapter | SQLite database initialized successfully
+2026-01-11 00:05:46 | INFO     | trrcms | >> Database initialized successfully
+2026-01-11 00:05:46 | INFO     | trrcms | Initializing internationalization...
+2026-01-11 00:05:46 | INFO     | trrcms | >> Internationalization initialized (Arabic)
+2026-01-11 00:05:46 | INFO     | trrcms | Creating main window (NEW DESIGN v2 with Navbar)...
+2026-01-11 00:05:47 | ERROR    | trrcms.repositories.db_adapter | SQLite fetch_all error: no such table: surveys
+Query: 
+            SELECT * FROM surveys
+            WHERE status = 'draft' AND source = 'office'
+            ORDER BY updated_at DESC
+            LIMIT ? OFFSET ?
+        
+2026-01-11 00:05:47 | ERROR    | trrcms.ui.pages.draft_office_surveys_page_v2 | Error loading drafts: no such table: surveys
+2026-01-11 00:05:47 | INFO     | trrcms.app.main_window_v2 | Showing login page
+2026-01-11 00:05:48 | INFO     | trrcms | >> Main window created and displayed
+2026-01-11 00:05:48 | INFO     | trrcms | ================================================================================
+2026-01-11 00:05:48 | INFO     | trrcms | >> Application started successfully!
+2026-01-11 00:05:48 | INFO     | trrcms | ================================================================================
+2026-01-11 00:06:05 | INFO     | trrcms.services.auth_service | User logged in successfully: admin (admin)
+2026-01-11 00:06:05 | INFO     | trrcms.ui.pages.login_page | Login successful: admin
+2026-01-11 00:06:05 | INFO     | trrcms.app.main_window_v2 | User logged in: admin (admin)
+2026-01-11 00:06:05 | DEBUG    | trrcms.app.main_window_v2 | Navigated to: claims
+2026-01-11 00:06:05 | DEBUG    | trrcms.app.main_window_v2 | Tab 0 selected -> navigating to claims
+2026-01-11 00:06:08 | INFO     | trrcms.app.main_window_v2 | Starting new office survey
+2026-01-11 00:06:08 | DEBUG    | trrcms.app.main_window_v2 | New office survey wizard opened
+2026-01-11 00:06:30 | INFO     | trrcms.app.main_window_v2 | Application closing
+2026-01-11 00:06:30 | INFO     | trrcms | Application closed with exit code: 0
+2026-01-11 00:07:42 | INFO     | trrcms | ================================================================================
+2026-01-11 00:07:42 | INFO     | trrcms | Starting TRRCMS Application
+2026-01-11 00:07:42 | INFO     | trrcms | ================================================================================
+2026-01-11 00:07:42 | INFO     | trrcms | Initializing database...
+2026-01-11 00:07:42 | ERROR    | trrcms.repositories.db_adapter | PostgreSQL connection error: connection to server at "localhost" (::1), port 5432 failed: fe_sendauth: no password supplied
+
+2026-01-11 00:07:42 | WARNING  | trrcms.repositories.db_adapter | PostgreSQL unavailable, falling back to SQLite
+2026-01-11 00:07:42 | INFO     | trrcms.repositories.db_adapter | Using SQLite database: E:\Project\code\trrcms\trrcms\data\trrcms.db
+2026-01-11 00:07:42 | INFO     | trrcms.repositories.db_adapter | Initializing SQLite database at: E:\Project\code\trrcms\trrcms\data\trrcms.db
+2026-01-11 00:07:42 | DEBUG    | trrcms.repositories.db_adapter | All SQLite tables created successfully
+2026-01-11 00:07:42 | INFO     | trrcms.repositories.db_adapter | SQLite database initialized successfully
+2026-01-11 00:07:42 | INFO     | trrcms | >> Database initialized successfully
+2026-01-11 00:07:42 | INFO     | trrcms | Initializing internationalization...
+2026-01-11 00:07:42 | INFO     | trrcms | >> Internationalization initialized (Arabic)
+2026-01-11 00:07:42 | INFO     | trrcms | Creating main window (NEW DESIGN v2 with Navbar)...
+2026-01-11 00:07:43 | ERROR    | trrcms.repositories.db_adapter | SQLite fetch_all error: no such table: surveys
+Query: 
+            SELECT * FROM surveys
+            WHERE status = 'draft' AND source = 'office'
+            ORDER BY updated_at DESC
+            LIMIT ? OFFSET ?
+        
+2026-01-11 00:07:43 | ERROR    | trrcms.ui.pages.draft_office_surveys_page_v2 | Error loading drafts: no such table: surveys
+2026-01-11 00:07:43 | INFO     | trrcms.app.main_window_v2 | Showing login page
+2026-01-11 00:07:43 | INFO     | trrcms | >> Main window created and displayed
+2026-01-11 00:07:43 | INFO     | trrcms | ================================================================================
+2026-01-11 00:07:43 | INFO     | trrcms | >> Application started successfully!
+2026-01-11 00:07:43 | INFO     | trrcms | ================================================================================
+2026-01-11 00:07:51 | WARNING  | trrcms.services.auth_service | Failed login attempt for admin (1/5)
+2026-01-11 00:07:51 | WARNING  | trrcms.ui.pages.login_page | Login failed: admin
+2026-01-11 00:07:56 | INFO     | trrcms.services.auth_service | User logged in successfully: admin (admin)
+2026-01-11 00:07:56 | INFO     | trrcms.ui.pages.login_page | Login successful: admin
+2026-01-11 00:07:56 | INFO     | trrcms.app.main_window_v2 | User logged in: admin (admin)
+2026-01-11 00:07:56 | DEBUG    | trrcms.app.main_window_v2 | Navigated to: claims
+2026-01-11 00:07:56 | DEBUG    | trrcms.app.main_window_v2 | Tab 0 selected -> navigating to claims
+2026-01-11 00:07:58 | DEBUG    | trrcms.app.main_window_v2 | Navigated to: draft_claims
+2026-01-11 00:07:58 | DEBUG    | trrcms.app.main_window_v2 | Tab 1 selected -> navigating to draft_claims
+2026-01-11 00:08:00 | DEBUG    | trrcms.ui.pages.buildings_page | Refreshing buildings page
+2026-01-11 00:08:00 | DEBUG    | trrcms.app.main_window_v2 | Navigated to: buildings
+2026-01-11 00:08:00 | DEBUG    | trrcms.app.main_window_v2 | Tab 2 selected -> navigating to buildings
+2026-01-11 00:08:02 | DEBUG    | trrcms.ui.pages.units_page | Refreshing units page
+2026-01-11 00:08:02 | DEBUG    | trrcms.app.main_window_v2 | Navigated to: units
+2026-01-11 00:08:02 | DEBUG    | trrcms.app.main_window_v2 | Tab 3 selected -> navigating to units
+2026-01-11 00:08:05 | DEBUG    | trrcms.ui.pages.duplicates_page | Refreshing duplicates page
+2026-01-11 00:08:05 | INFO     | trrcms.services.duplicate_service | Detected 0 building duplicate groups
+2026-01-11 00:08:05 | INFO     | trrcms.services.duplicate_service | Detected 0 unit duplicate groups
+2026-01-11 00:08:05 | INFO     | trrcms.services.duplicate_service | Detected 0 person duplicate groups
+2026-01-11 00:08:05 | INFO     | trrcms.services.duplicate_service | Detected 0 building duplicate groups
+2026-01-11 00:08:05 | INFO     | trrcms.services.duplicate_service | Detected 0 unit duplicate groups
+2026-01-11 00:08:05 | INFO     | trrcms.services.duplicate_service | Detected 0 person duplicate groups
+2026-01-11 00:08:05 | DEBUG    | trrcms.app.main_window_v2 | Navigated to: duplicates
+2026-01-11 00:08:05 | DEBUG    | trrcms.app.main_window_v2 | Tab 4 selected -> navigating to duplicates
+2026-01-11 00:08:06 | DEBUG    | trrcms.app.main_window_v2 | Navigated to: import_wizard
+2026-01-11 00:08:06 | DEBUG    | trrcms.app.main_window_v2 | Tab 5 selected -> navigating to import_wizard
+2026-01-11 00:08:07 | DEBUG    | trrcms.app.main_window_v2 | Navigated to: claims
+2026-01-11 00:08:07 | DEBUG    | trrcms.app.main_window_v2 | Tab 0 selected -> navigating to claims
+2026-01-11 00:08:09 | INFO     | trrcms.app.main_window_v2 | Starting new office survey
+2026-01-11 00:08:09 | DEBUG    | trrcms.app.main_window_v2 | New office survey wizard opened
+2026-01-11 00:08:35 | DEBUG    | trrcms.app.main_window_v2 | Navigated to: draft_claims
+2026-01-11 00:08:35 | DEBUG    | trrcms.app.main_window_v2 | Tab 1 selected -> navigating to draft_claims
+2026-01-11 00:08:39 | INFO     | trrcms.app.main_window_v2 | Starting new office survey
+2026-01-11 00:08:39 | DEBUG    | trrcms.app.main_window_v2 | New office survey wizard opened
+2026-01-11 00:08:46 | INFO     | trrcms.app.main_window_v2 | Application closing
+2026-01-11 00:08:46 | INFO     | trrcms | Application closed with exit code: 0
+2026-01-11 00:10:02 | INFO     | trrcms | ================================================================================
+2026-01-11 00:10:02 | INFO     | trrcms | Starting TRRCMS Application
+2026-01-11 00:10:02 | INFO     | trrcms | ================================================================================
+2026-01-11 00:10:02 | INFO     | trrcms | Initializing database...
+2026-01-11 00:10:02 | ERROR    | trrcms.repositories.db_adapter | PostgreSQL connection error: connection to server at "localhost" (::1), port 5432 failed: fe_sendauth: no password supplied
+
+2026-01-11 00:10:02 | WARNING  | trrcms.repositories.db_adapter | PostgreSQL unavailable, falling back to SQLite
+2026-01-11 00:10:02 | INFO     | trrcms.repositories.db_adapter | Using SQLite database: E:\Project\code\trrcms\trrcms\data\trrcms.db
+2026-01-11 00:10:02 | INFO     | trrcms.repositories.db_adapter | Initializing SQLite database at: E:\Project\code\trrcms\trrcms\data\trrcms.db
+2026-01-11 00:10:02 | DEBUG    | trrcms.repositories.db_adapter | All SQLite tables created successfully
+2026-01-11 00:10:02 | INFO     | trrcms.repositories.db_adapter | SQLite database initialized successfully
+2026-01-11 00:10:02 | INFO     | trrcms | >> Database initialized successfully
+2026-01-11 00:10:02 | INFO     | trrcms | Initializing internationalization...
+2026-01-11 00:10:02 | INFO     | trrcms | >> Internationalization initialized (Arabic)
+2026-01-11 00:10:02 | INFO     | trrcms | Creating main window (NEW DESIGN v2 with Navbar)...
+2026-01-11 00:10:03 | ERROR    | trrcms.repositories.db_adapter | SQLite fetch_all error: no such table: surveys
+Query: 
+            SELECT * FROM surveys
+            WHERE status = 'draft' AND source = 'office'
+            ORDER BY updated_at DESC
+            LIMIT ? OFFSET ?
+        
+2026-01-11 00:10:03 | ERROR    | trrcms.ui.pages.draft_office_surveys_page_v2 | Error loading drafts: no such table: surveys
+2026-01-11 00:10:03 | INFO     | trrcms.app.main_window_v2 | Showing login page
+2026-01-11 00:10:03 | INFO     | trrcms | >> Main window created and displayed
+2026-01-11 00:10:03 | INFO     | trrcms | ================================================================================
+2026-01-11 00:10:03 | INFO     | trrcms | >> Application started successfully!
+2026-01-11 00:10:03 | INFO     | trrcms | ================================================================================
+2026-01-11 00:10:13 | INFO     | trrcms.services.auth_service | User logged in successfully: admin (admin)
+2026-01-11 00:10:13 | INFO     | trrcms.ui.pages.login_page | Login successful: admin
+2026-01-11 00:10:13 | INFO     | trrcms.app.main_window_v2 | User logged in: admin (admin)
+2026-01-11 00:10:14 | DEBUG    | trrcms.app.main_window_v2 | Navigated to: claims
+2026-01-11 00:10:14 | DEBUG    | trrcms.app.main_window_v2 | Tab 0 selected -> navigating to claims
+2026-01-11 00:10:17 | INFO     | trrcms.app.main_window_v2 | Starting new office survey
+2026-01-11 00:10:17 | DEBUG    | trrcms.app.main_window_v2 | New office survey wizard opened
+2026-01-11 10:21:13 | INFO     | trrcms.app.main_window_v2 | Application closing
+2026-01-11 10:21:14 | INFO     | trrcms | Application closed with exit code: 0
+2026-01-11 10:28:55 | INFO     | trrcms | ================================================================================
+2026-01-11 10:28:55 | INFO     | trrcms | Starting TRRCMS Application
+2026-01-11 10:28:55 | INFO     | trrcms | ================================================================================
+2026-01-11 10:28:55 | INFO     | trrcms | Initializing database...
+2026-01-11 10:28:55 | ERROR    | trrcms.repositories.db_adapter | PostgreSQL connection error: connection to server at "localhost" (::1), port 5432 failed: fe_sendauth: no password supplied
+
+2026-01-11 10:28:55 | WARNING  | trrcms.repositories.db_adapter | PostgreSQL unavailable, falling back to SQLite
+2026-01-11 10:28:56 | INFO     | trrcms.repositories.db_adapter | Using SQLite database: E:\Project\code\trrcms\trrcms\data\trrcms.db
+2026-01-11 10:28:56 | INFO     | trrcms.repositories.db_adapter | Initializing SQLite database at: E:\Project\code\trrcms\trrcms\data\trrcms.db
+2026-01-11 10:28:56 | DEBUG    | trrcms.repositories.db_adapter | All SQLite tables created successfully
+2026-01-11 10:28:56 | INFO     | trrcms.repositories.db_adapter | SQLite database initialized successfully
+2026-01-11 10:28:56 | INFO     | trrcms | >> Database initialized successfully
+2026-01-11 10:28:56 | INFO     | trrcms | Initializing internationalization...
+2026-01-11 10:28:56 | INFO     | trrcms | >> Internationalization initialized (Arabic)
+2026-01-11 10:28:56 | INFO     | trrcms | Creating main window (NEW DESIGN v2 with Navbar)...
+2026-01-11 10:29:01 | ERROR    | trrcms.repositories.db_adapter | SQLite fetch_all error: no such table: surveys
+Query: 
+            SELECT * FROM surveys
+            WHERE status = 'draft' AND source = 'office'
+            ORDER BY updated_at DESC
+            LIMIT ? OFFSET ?
+        
+2026-01-11 10:29:01 | ERROR    | trrcms.ui.pages.draft_office_surveys_page_v2 | Error loading drafts: no such table: surveys
+2026-01-11 10:29:01 | INFO     | trrcms.app.main_window_v2 | Showing login page
+2026-01-11 10:29:02 | INFO     | trrcms | >> Main window created and displayed
+2026-01-11 10:29:02 | INFO     | trrcms | ================================================================================
+2026-01-11 10:29:02 | INFO     | trrcms | >> Application started successfully!
+2026-01-11 10:29:02 | INFO     | trrcms | ================================================================================
+2026-01-11 10:29:16 | INFO     | trrcms.services.auth_service | User logged in successfully: admin (admin)
+2026-01-11 10:29:16 | INFO     | trrcms.ui.pages.login_page | Login successful: admin
+2026-01-11 10:29:16 | INFO     | trrcms.app.main_window_v2 | User logged in: admin (admin)
+2026-01-11 10:29:17 | DEBUG    | trrcms.app.main_window_v2 | Navigated to: claims
+2026-01-11 10:29:17 | DEBUG    | trrcms.app.main_window_v2 | Tab 0 selected -> navigating to claims
+2026-01-11 10:29:20 | INFO     | trrcms.app.main_window_v2 | Starting new office survey
+2026-01-11 10:29:20 | DEBUG    | trrcms.app.main_window_v2 | New office survey wizard opened
+2026-01-11 10:30:16 | DEBUG    | trrcms.ui.pages.buildings_page | Refreshing buildings page
+2026-01-11 10:30:16 | DEBUG    | trrcms.app.main_window_v2 | Navigated to: buildings
+2026-01-11 10:30:16 | DEBUG    | trrcms.app.main_window_v2 | Tab 2 selected -> navigating to buildings
+2026-01-11 10:30:18 | DEBUG    | trrcms.ui.pages.units_page | Refreshing units page
+2026-01-11 10:30:18 | DEBUG    | trrcms.app.main_window_v2 | Navigated to: units
+2026-01-11 10:30:18 | DEBUG    | trrcms.app.main_window_v2 | Tab 3 selected -> navigating to units
+2026-01-11 10:30:19 | DEBUG    | trrcms.ui.pages.buildings_page | Refreshing buildings page
+2026-01-11 10:30:19 | DEBUG    | trrcms.app.main_window_v2 | Navigated to: buildings
+2026-01-11 10:30:19 | DEBUG    | trrcms.app.main_window_v2 | Tab 2 selected -> navigating to buildings
+2026-01-11 10:30:29 | DEBUG    | trrcms.ui.pages.units_page | Refreshing units page
+2026-01-11 10:30:29 | DEBUG    | trrcms.app.main_window_v2 | Navigated to: units
+2026-01-11 10:30:29 | DEBUG    | trrcms.app.main_window_v2 | Tab 3 selected -> navigating to units
+2026-01-11 10:30:36 | DEBUG    | trrcms.ui.pages.duplicates_page | Refreshing duplicates page
+2026-01-11 10:30:36 | INFO     | trrcms.services.duplicate_service | Detected 0 building duplicate groups
+2026-01-11 10:30:36 | INFO     | trrcms.services.duplicate_service | Detected 0 unit duplicate groups
+2026-01-11 10:30:36 | INFO     | trrcms.services.duplicate_service | Detected 0 person duplicate groups
+2026-01-11 10:30:36 | INFO     | trrcms.services.duplicate_service | Detected 0 building duplicate groups
+2026-01-11 10:30:36 | INFO     | trrcms.services.duplicate_service | Detected 0 unit duplicate groups
+2026-01-11 10:30:36 | INFO     | trrcms.services.duplicate_service | Detected 0 person duplicate groups
+2026-01-11 10:30:36 | DEBUG    | trrcms.app.main_window_v2 | Navigated to: duplicates
+2026-01-11 10:30:36 | DEBUG    | trrcms.app.main_window_v2 | Tab 4 selected -> navigating to duplicates
+2026-01-11 10:30:40 | DEBUG    | trrcms.app.main_window_v2 | Navigated to: import_wizard
+2026-01-11 10:30:40 | DEBUG    | trrcms.app.main_window_v2 | Tab 5 selected -> navigating to import_wizard
+2026-01-11 10:30:42 | DEBUG    | trrcms.app.main_window_v2 | Navigated to: claims
+2026-01-11 10:30:42 | DEBUG    | trrcms.app.main_window_v2 | Tab 0 selected -> navigating to claims
+2026-01-11 10:30:46 | INFO     | trrcms.app.main_window_v2 | Application closing
+2026-01-11 10:30:46 | INFO     | trrcms | Application closed with exit code: 0
+2026-01-11 10:33:00 | INFO     | trrcms | ================================================================================
+2026-01-11 10:33:00 | INFO     | trrcms | Starting TRRCMS Application
+2026-01-11 10:33:00 | INFO     | trrcms | ================================================================================
+2026-01-11 10:33:00 | INFO     | trrcms | Initializing database...
+2026-01-11 10:33:00 | ERROR    | trrcms.repositories.db_adapter | PostgreSQL connection error: connection to server at "localhost" (::1), port 5432 failed: fe_sendauth: no password supplied
+
+2026-01-11 10:33:00 | WARNING  | trrcms.repositories.db_adapter | PostgreSQL unavailable, falling back to SQLite
+2026-01-11 10:33:00 | INFO     | trrcms.repositories.db_adapter | Using SQLite database: E:\Project\code\trrcms\trrcms\data\trrcms.db
+2026-01-11 10:33:00 | INFO     | trrcms.repositories.db_adapter | Initializing SQLite database at: E:\Project\code\trrcms\trrcms\data\trrcms.db
+2026-01-11 10:33:00 | DEBUG    | trrcms.repositories.db_adapter | All SQLite tables created successfully
+2026-01-11 10:33:00 | INFO     | trrcms.repositories.db_adapter | SQLite database initialized successfully
+2026-01-11 10:33:00 | INFO     | trrcms | >> Database initialized successfully
+2026-01-11 10:33:00 | INFO     | trrcms | Initializing internationalization...
+2026-01-11 10:33:00 | INFO     | trrcms | >> Internationalization initialized (Arabic)
+2026-01-11 10:33:00 | INFO     | trrcms | Creating main window (NEW DESIGN v2 with Navbar)...
+2026-01-11 10:33:04 | ERROR    | trrcms.repositories.db_adapter | SQLite fetch_all error: no such table: surveys
+Query: 
+            SELECT * FROM surveys
+            WHERE status = 'draft' AND source = 'office'
+            ORDER BY updated_at DESC
+            LIMIT ? OFFSET ?
+        
+2026-01-11 10:33:04 | ERROR    | trrcms.ui.pages.draft_office_surveys_page_v2 | Error loading drafts: no such table: surveys
+2026-01-11 10:33:05 | INFO     | trrcms.app.main_window_v2 | Showing login page
+2026-01-11 10:33:05 | INFO     | trrcms | >> Main window created and displayed
+2026-01-11 10:33:05 | INFO     | trrcms | ================================================================================
+2026-01-11 10:33:05 | INFO     | trrcms | >> Application started successfully!
+2026-01-11 10:33:05 | INFO     | trrcms | ================================================================================
+2026-01-11 10:33:16 | INFO     | trrcms.services.auth_service | User logged in successfully: admin (admin)
+2026-01-11 10:33:16 | INFO     | trrcms.ui.pages.login_page | Login successful: admin
+2026-01-11 10:33:16 | INFO     | trrcms.app.main_window_v2 | User logged in: admin (admin)
+2026-01-11 10:33:16 | DEBUG    | trrcms.app.main_window_v2 | Navigated to: claims
+2026-01-11 10:33:16 | DEBUG    | trrcms.app.main_window_v2 | Tab 0 selected -> navigating to claims
+2026-01-11 10:33:19 | INFO     | trrcms.app.main_window_v2 | Starting new office survey
+2026-01-11 10:33:19 | DEBUG    | trrcms.app.main_window_v2 | New office survey wizard opened
+2026-01-11 10:34:08 | INFO     | trrcms.app.main_window_v2 | Application closing
+2026-01-11 10:34:08 | INFO     | trrcms | Application closed with exit code: 0
+2026-01-11 12:53:49 | INFO     | trrcms | ================================================================================
+2026-01-11 12:53:49 | INFO     | trrcms | Starting TRRCMS Application
+2026-01-11 12:53:49 | INFO     | trrcms | ================================================================================
+2026-01-11 12:53:49 | INFO     | trrcms | Initializing database...
+2026-01-11 12:53:49 | ERROR    | trrcms.repositories.db_adapter | PostgreSQL connection error: connection to server at "localhost" (::1), port 5432 failed: fe_sendauth: no password supplied
+
+2026-01-11 12:53:49 | WARNING  | trrcms.repositories.db_adapter | PostgreSQL unavailable, falling back to SQLite
+2026-01-11 12:53:49 | INFO     | trrcms.repositories.db_adapter | Using SQLite database: E:\Project\code\trrcms\trrcms\data\trrcms.db
+2026-01-11 12:53:49 | INFO     | trrcms.repositories.db_adapter | Initializing SQLite database at: E:\Project\code\trrcms\trrcms\data\trrcms.db
+2026-01-11 12:53:49 | DEBUG    | trrcms.repositories.db_adapter | All SQLite tables created successfully
+2026-01-11 12:53:49 | INFO     | trrcms.repositories.db_adapter | SQLite database initialized successfully
+2026-01-11 12:53:49 | INFO     | trrcms | >> Database initialized successfully
+2026-01-11 12:53:49 | INFO     | trrcms | Initializing internationalization...
+2026-01-11 12:53:49 | INFO     | trrcms | >> Internationalization initialized (Arabic)
+2026-01-11 12:53:49 | INFO     | trrcms | Creating main window (NEW DESIGN v2 with Navbar)...
+2026-01-11 12:53:51 | ERROR    | trrcms.repositories.db_adapter | SQLite fetch_all error: no such table: surveys
+Query: 
+            SELECT * FROM surveys
+            WHERE status = 'draft' AND source = 'office'
+            ORDER BY updated_at DESC
+            LIMIT ? OFFSET ?
+        
+2026-01-11 12:53:51 | ERROR    | trrcms.ui.pages.draft_office_surveys_page_v2 | Error loading drafts: no such table: surveys
+2026-01-11 12:53:51 | INFO     | trrcms.app.main_window_v2 | Showing login page
+2026-01-11 12:53:51 | INFO     | trrcms | >> Main window created and displayed
+2026-01-11 12:53:51 | INFO     | trrcms | ================================================================================
+2026-01-11 12:53:51 | INFO     | trrcms | >> Application started successfully!
+2026-01-11 12:53:51 | INFO     | trrcms | ================================================================================
+2026-01-11 12:54:01 | INFO     | trrcms.services.auth_service | User logged in successfully: admin (admin)
+2026-01-11 12:54:01 | INFO     | trrcms.ui.pages.login_page | Login successful: admin
+2026-01-11 12:54:01 | INFO     | trrcms.app.main_window_v2 | User logged in: admin (admin)
+2026-01-11 12:54:01 | DEBUG    | trrcms.app.main_window_v2 | Navigated to: claims
+2026-01-11 12:54:01 | DEBUG    | trrcms.app.main_window_v2 | Tab 0 selected -> navigating to claims
+2026-01-11 12:54:03 | INFO     | trrcms.app.main_window_v2 | Starting new office survey
+2026-01-11 12:54:03 | DEBUG    | trrcms.app.main_window_v2 | New office survey wizard opened
+2026-01-11 12:55:06 | INFO     | trrcms.app.main_window_v2 | Survey cancelled
+2026-01-11 12:55:06 | DEBUG    | trrcms.app.main_window_v2 | Navigated to: draft_claims
+2026-01-11 12:55:06 | DEBUG    | trrcms.app.main_window_v2 | Tab 1 selected -> navigating to draft_claims
+2026-01-11 12:55:09 | INFO     | trrcms.app.main_window_v2 | Starting new office survey
+2026-01-11 12:55:09 | DEBUG    | trrcms.app.main_window_v2 | New office survey wizard opened
+2026-01-11 12:55:40 | INFO     | trrcms.app.main_window_v2 | Survey cancelled
+2026-01-11 12:55:40 | DEBUG    | trrcms.app.main_window_v2 | Navigated to: draft_claims
+2026-01-11 12:55:40 | DEBUG    | trrcms.app.main_window_v2 | Tab 1 selected -> navigating to draft_claims
+2026-01-11 12:55:44 | INFO     | trrcms.app.main_window_v2 | Application closing
+2026-01-11 12:55:44 | INFO     | trrcms | Application closed with exit code: 0
+2026-01-11 13:01:44 | INFO     | trrcms | ================================================================================
+2026-01-11 13:01:44 | INFO     | trrcms | Starting TRRCMS Application
+2026-01-11 13:01:44 | INFO     | trrcms | ================================================================================
+2026-01-11 13:01:44 | INFO     | trrcms | Initializing database...
+2026-01-11 13:01:44 | ERROR    | trrcms.repositories.db_adapter | PostgreSQL connection error: connection to server at "localhost" (::1), port 5432 failed: fe_sendauth: no password supplied
+
+2026-01-11 13:01:44 | WARNING  | trrcms.repositories.db_adapter | PostgreSQL unavailable, falling back to SQLite
+2026-01-11 13:01:44 | INFO     | trrcms.repositories.db_adapter | Using SQLite database: E:\Project\code\trrcms\trrcms\data\trrcms.db
+2026-01-11 13:01:44 | INFO     | trrcms.repositories.db_adapter | Initializing SQLite database at: E:\Project\code\trrcms\trrcms\data\trrcms.db
+2026-01-11 13:01:44 | DEBUG    | trrcms.repositories.db_adapter | All SQLite tables created successfully
+2026-01-11 13:01:44 | INFO     | trrcms.repositories.db_adapter | SQLite database initialized successfully
+2026-01-11 13:01:44 | INFO     | trrcms | >> Database initialized successfully
+2026-01-11 13:01:44 | INFO     | trrcms | Initializing internationalization...
+2026-01-11 13:01:44 | INFO     | trrcms | >> Internationalization initialized (Arabic)
+2026-01-11 13:01:44 | INFO     | trrcms | Creating main window (NEW DESIGN v2 with Navbar)...
+2026-01-11 13:01:45 | ERROR    | trrcms.repositories.db_adapter | SQLite fetch_all error: no such table: surveys
+Query: 
+            SELECT * FROM surveys
+            WHERE status = 'draft' AND source = 'office'
+            ORDER BY updated_at DESC
+            LIMIT ? OFFSET ?
+        
+2026-01-11 13:01:45 | ERROR    | trrcms.ui.pages.draft_office_surveys_page_v2 | Error loading drafts: no such table: surveys
+2026-01-11 13:01:45 | INFO     | trrcms.app.main_window_v2 | Showing login page
+2026-01-11 13:01:45 | INFO     | trrcms | >> Main window created and displayed
+2026-01-11 13:01:45 | INFO     | trrcms | ================================================================================
+2026-01-11 13:01:45 | INFO     | trrcms | >> Application started successfully!
+2026-01-11 13:01:45 | INFO     | trrcms | ================================================================================
+2026-01-11 13:01:56 | INFO     | trrcms.services.auth_service | User logged in successfully: admin (admin)
+2026-01-11 13:01:56 | INFO     | trrcms.ui.pages.login_page | Login successful: admin
+2026-01-11 13:01:56 | INFO     | trrcms.app.main_window_v2 | User logged in: admin (admin)
+2026-01-11 13:01:56 | DEBUG    | trrcms.app.main_window_v2 | Navigated to: claims
+2026-01-11 13:01:56 | DEBUG    | trrcms.app.main_window_v2 | Tab 0 selected -> navigating to claims
+2026-01-11 13:01:59 | INFO     | trrcms.app.main_window_v2 | Starting new office survey
+2026-01-11 13:01:59 | DEBUG    | trrcms.app.main_window_v2 | New office survey wizard opened
+2026-01-11 13:02:55 | INFO     | trrcms.app.main_window_v2 | Application closing
+2026-01-11 13:02:55 | INFO     | trrcms | Application closed with exit code: 0
+2026-01-11 13:09:40 | INFO     | trrcms | ================================================================================
+2026-01-11 13:09:40 | INFO     | trrcms | Starting TRRCMS Application
+2026-01-11 13:09:40 | INFO     | trrcms | ================================================================================
+2026-01-11 13:09:40 | INFO     | trrcms | Initializing database...
+2026-01-11 13:09:40 | ERROR    | trrcms.repositories.db_adapter | PostgreSQL connection error: connection to server at "localhost" (::1), port 5432 failed: fe_sendauth: no password supplied
+
+2026-01-11 13:09:40 | WARNING  | trrcms.repositories.db_adapter | PostgreSQL unavailable, falling back to SQLite
+2026-01-11 13:09:40 | INFO     | trrcms.repositories.db_adapter | Using SQLite database: E:\Project\code\trrcms\trrcms\data\trrcms.db
+2026-01-11 13:09:40 | INFO     | trrcms.repositories.db_adapter | Initializing SQLite database at: E:\Project\code\trrcms\trrcms\data\trrcms.db
+2026-01-11 13:09:40 | DEBUG    | trrcms.repositories.db_adapter | All SQLite tables created successfully
+2026-01-11 13:09:40 | INFO     | trrcms.repositories.db_adapter | SQLite database initialized successfully
+2026-01-11 13:09:40 | INFO     | trrcms | >> Database initialized successfully
+2026-01-11 13:09:40 | INFO     | trrcms | Initializing internationalization...
+2026-01-11 13:09:40 | INFO     | trrcms | >> Internationalization initialized (Arabic)
+2026-01-11 13:09:40 | INFO     | trrcms | Creating main window (NEW DESIGN v2 with Navbar)...
+2026-01-11 13:09:41 | ERROR    | trrcms.repositories.db_adapter | SQLite fetch_all error: no such table: surveys
+Query: 
+            SELECT * FROM surveys
+            WHERE status = 'draft' AND source = 'office'
+            ORDER BY updated_at DESC
+            LIMIT ? OFFSET ?
+        
+2026-01-11 13:09:41 | ERROR    | trrcms.ui.pages.draft_office_surveys_page_v2 | Error loading drafts: no such table: surveys
+2026-01-11 13:09:41 | INFO     | trrcms.app.main_window_v2 | Showing login page
+2026-01-11 13:09:41 | INFO     | trrcms | >> Main window created and displayed
+2026-01-11 13:09:41 | INFO     | trrcms | ================================================================================
+2026-01-11 13:09:41 | INFO     | trrcms | >> Application started successfully!
+2026-01-11 13:09:41 | INFO     | trrcms | ================================================================================
+2026-01-11 13:09:51 | INFO     | trrcms.services.auth_service | User logged in successfully: admin (admin)
+2026-01-11 13:09:51 | INFO     | trrcms.ui.pages.login_page | Login successful: admin
+2026-01-11 13:09:51 | INFO     | trrcms.app.main_window_v2 | User logged in: admin (admin)
+2026-01-11 13:09:51 | DEBUG    | trrcms.app.main_window_v2 | Navigated to: claims
+2026-01-11 13:09:51 | DEBUG    | trrcms.app.main_window_v2 | Tab 0 selected -> navigating to claims
+2026-01-11 13:09:54 | INFO     | trrcms.app.main_window_v2 | Starting new office survey
+2026-01-11 13:09:54 | DEBUG    | trrcms.app.main_window_v2 | New office survey wizard opened
+2026-01-11 13:12:36 | INFO     | trrcms.app.main_window_v2 | Application closing
+2026-01-11 13:12:36 | INFO     | trrcms | Application closed with exit code: 0
+2026-01-11 13:18:40 | INFO     | trrcms | ================================================================================
+2026-01-11 13:18:40 | INFO     | trrcms | Starting TRRCMS Application
+2026-01-11 13:18:40 | INFO     | trrcms | ================================================================================
+2026-01-11 13:18:40 | INFO     | trrcms | Initializing database...
+2026-01-11 13:18:40 | ERROR    | trrcms.repositories.db_adapter | PostgreSQL connection error: connection to server at "localhost" (::1), port 5432 failed: fe_sendauth: no password supplied
+
+2026-01-11 13:18:40 | WARNING  | trrcms.repositories.db_adapter | PostgreSQL unavailable, falling back to SQLite
+2026-01-11 13:18:40 | INFO     | trrcms.repositories.db_adapter | Using SQLite database: E:\Project\code\trrcms\trrcms\data\trrcms.db
+2026-01-11 13:18:40 | INFO     | trrcms.repositories.db_adapter | Initializing SQLite database at: E:\Project\code\trrcms\trrcms\data\trrcms.db
+2026-01-11 13:18:40 | DEBUG    | trrcms.repositories.db_adapter | All SQLite tables created successfully
+2026-01-11 13:18:40 | INFO     | trrcms.repositories.db_adapter | SQLite database initialized successfully
+2026-01-11 13:18:40 | INFO     | trrcms | >> Database initialized successfully
+2026-01-11 13:18:40 | INFO     | trrcms | Initializing internationalization...
+2026-01-11 13:18:40 | INFO     | trrcms | >> Internationalization initialized (Arabic)
+2026-01-11 13:18:40 | INFO     | trrcms | Creating main window (NEW DESIGN v2 with Navbar)...
+2026-01-11 13:18:41 | ERROR    | trrcms.repositories.db_adapter | SQLite fetch_all error: no such table: surveys
+Query: 
+            SELECT * FROM surveys
+            WHERE status = 'draft' AND source = 'office'
+            ORDER BY updated_at DESC
+            LIMIT ? OFFSET ?
+        
+2026-01-11 13:18:41 | ERROR    | trrcms.ui.pages.draft_office_surveys_page_v2 | Error loading drafts: no such table: surveys
+2026-01-11 13:18:41 | INFO     | trrcms.app.main_window_v2 | Showing login page
+2026-01-11 13:18:41 | INFO     | trrcms | >> Main window created and displayed
+2026-01-11 13:18:41 | INFO     | trrcms | ================================================================================
+2026-01-11 13:18:41 | INFO     | trrcms | >> Application started successfully!
+2026-01-11 13:18:41 | INFO     | trrcms | ================================================================================
+2026-01-11 13:18:56 | INFO     | trrcms.services.auth_service | User logged in successfully: admin (admin)
+2026-01-11 13:18:56 | INFO     | trrcms.ui.pages.login_page | Login successful: admin
+2026-01-11 13:18:56 | INFO     | trrcms.app.main_window_v2 | User logged in: admin (admin)
+2026-01-11 13:18:56 | DEBUG    | trrcms.app.main_window_v2 | Navigated to: claims
+2026-01-11 13:18:56 | DEBUG    | trrcms.app.main_window_v2 | Tab 0 selected -> navigating to claims
+2026-01-11 13:18:59 | INFO     | trrcms.app.main_window_v2 | Starting new office survey
+2026-01-11 13:18:59 | DEBUG    | trrcms.app.main_window_v2 | New office survey wizard opened
+2026-01-11 13:21:09 | INFO     | trrcms.app.main_window_v2 | Application closing
+2026-01-11 13:21:09 | INFO     | trrcms | Application closed with exit code: 0
+2026-01-11 13:29:33 | INFO     | trrcms | ================================================================================
+2026-01-11 13:29:33 | INFO     | trrcms | Starting TRRCMS Application
+2026-01-11 13:29:33 | INFO     | trrcms | ================================================================================
+2026-01-11 13:29:33 | INFO     | trrcms | Initializing database...
+2026-01-11 13:29:33 | ERROR    | trrcms.repositories.db_adapter | PostgreSQL connection error: connection to server at "localhost" (::1), port 5432 failed: fe_sendauth: no password supplied
+
+2026-01-11 13:29:33 | WARNING  | trrcms.repositories.db_adapter | PostgreSQL unavailable, falling back to SQLite
+2026-01-11 13:29:33 | INFO     | trrcms.repositories.db_adapter | Using SQLite database: E:\Project\code\trrcms\trrcms\data\trrcms.db
+2026-01-11 13:29:33 | INFO     | trrcms.repositories.db_adapter | Initializing SQLite database at: E:\Project\code\trrcms\trrcms\data\trrcms.db
+2026-01-11 13:29:33 | DEBUG    | trrcms.repositories.db_adapter | All SQLite tables created successfully
+2026-01-11 13:29:33 | INFO     | trrcms.repositories.db_adapter | SQLite database initialized successfully
+2026-01-11 13:29:33 | INFO     | trrcms | >> Database initialized successfully
+2026-01-11 13:29:33 | INFO     | trrcms | Initializing internationalization...
+2026-01-11 13:29:33 | INFO     | trrcms | >> Internationalization initialized (Arabic)
+2026-01-11 13:29:33 | INFO     | trrcms | Creating main window (NEW DESIGN v2 with Navbar)...
+2026-01-11 13:29:34 | ERROR    | trrcms.repositories.db_adapter | SQLite fetch_all error: no such table: surveys
+Query: 
+            SELECT * FROM surveys
+            WHERE status = 'draft' AND source = 'office'
+            ORDER BY updated_at DESC
+            LIMIT ? OFFSET ?
+        
+2026-01-11 13:29:34 | ERROR    | trrcms.ui.pages.draft_office_surveys_page_v2 | Error loading drafts: no such table: surveys
+2026-01-11 13:29:34 | INFO     | trrcms.app.main_window_v2 | Showing login page
+2026-01-11 13:29:35 | INFO     | trrcms | >> Main window created and displayed
+2026-01-11 13:29:35 | INFO     | trrcms | ================================================================================
+2026-01-11 13:29:35 | INFO     | trrcms | >> Application started successfully!
+2026-01-11 13:29:35 | INFO     | trrcms | ================================================================================
+2026-01-11 13:29:48 | INFO     | trrcms.services.auth_service | User logged in successfully: admin (admin)
+2026-01-11 13:29:48 | INFO     | trrcms.ui.pages.login_page | Login successful: admin
+2026-01-11 13:29:48 | INFO     | trrcms.app.main_window_v2 | User logged in: admin (admin)
+2026-01-11 13:29:48 | DEBUG    | trrcms.app.main_window_v2 | Navigated to: claims
+2026-01-11 13:29:48 | DEBUG    | trrcms.app.main_window_v2 | Tab 0 selected -> navigating to claims
+2026-01-11 13:29:52 | INFO     | trrcms.app.main_window_v2 | Starting new office survey
+2026-01-11 13:29:52 | DEBUG    | trrcms.app.main_window_v2 | New office survey wizard opened
+2026-01-11 13:35:19 | INFO     | trrcms.app.main_window_v2 | Application closing
+2026-01-11 13:35:19 | INFO     | trrcms | Application closed with exit code: 0
+2026-01-11 13:47:16 | INFO     | trrcms | ================================================================================
+2026-01-11 13:47:16 | INFO     | trrcms | Starting TRRCMS Application
+2026-01-11 13:47:16 | INFO     | trrcms | ================================================================================
+2026-01-11 13:47:16 | INFO     | trrcms | Initializing database...
+2026-01-11 13:47:16 | ERROR    | trrcms.repositories.db_adapter | PostgreSQL connection error: connection to server at "localhost" (::1), port 5432 failed: fe_sendauth: no password supplied
+
+2026-01-11 13:47:16 | WARNING  | trrcms.repositories.db_adapter | PostgreSQL unavailable, falling back to SQLite
+2026-01-11 13:47:16 | INFO     | trrcms.repositories.db_adapter | Using SQLite database: E:\Project\code\trrcms\trrcms\data\trrcms.db
+2026-01-11 13:47:16 | INFO     | trrcms.repositories.db_adapter | Initializing SQLite database at: E:\Project\code\trrcms\trrcms\data\trrcms.db
+2026-01-11 13:47:16 | DEBUG    | trrcms.repositories.db_adapter | All SQLite tables created successfully
+2026-01-11 13:47:16 | INFO     | trrcms.repositories.db_adapter | SQLite database initialized successfully
+2026-01-11 13:47:16 | INFO     | trrcms | >> Database initialized successfully
+2026-01-11 13:47:16 | INFO     | trrcms | Initializing internationalization...
+2026-01-11 13:47:16 | INFO     | trrcms | >> Internationalization initialized (Arabic)
+2026-01-11 13:47:16 | INFO     | trrcms | Creating main window (NEW DESIGN v2 with Navbar)...
+2026-01-11 13:47:20 | ERROR    | trrcms.repositories.db_adapter | SQLite fetch_all error: no such table: surveys
+Query: 
+            SELECT * FROM surveys
+            WHERE status = 'draft' AND source = 'office'
+            ORDER BY updated_at DESC
+            LIMIT ? OFFSET ?
+        
+2026-01-11 13:47:20 | ERROR    | trrcms.ui.pages.draft_office_surveys_page_v2 | Error loading drafts: no such table: surveys
+2026-01-11 13:47:20 | INFO     | trrcms.app.main_window_v2 | Showing login page
+2026-01-11 13:47:20 | INFO     | trrcms | >> Main window created and displayed
+2026-01-11 13:47:20 | INFO     | trrcms | ================================================================================
+2026-01-11 13:47:20 | INFO     | trrcms | >> Application started successfully!
+2026-01-11 13:47:20 | INFO     | trrcms | ================================================================================
+2026-01-11 13:47:32 | INFO     | trrcms.services.auth_service | User logged in successfully: admin (admin)
+2026-01-11 13:47:32 | INFO     | trrcms.ui.pages.login_page | Login successful: admin
+2026-01-11 13:47:32 | INFO     | trrcms.app.main_window_v2 | User logged in: admin (admin)
+2026-01-11 13:47:32 | DEBUG    | trrcms.app.main_window_v2 | Navigated to: claims
+2026-01-11 13:47:32 | DEBUG    | trrcms.app.main_window_v2 | Tab 0 selected -> navigating to claims
+2026-01-11 13:47:35 | INFO     | trrcms.app.main_window_v2 | Starting new office survey
+2026-01-11 13:47:35 | DEBUG    | trrcms.app.main_window_v2 | New office survey wizard opened
+2026-01-11 13:48:40 | INFO     | trrcms.app.main_window_v2 | Application closing
+2026-01-11 13:48:40 | INFO     | trrcms | Application closed with exit code: 0
+2026-01-11 13:49:52 | INFO     | trrcms | ================================================================================
+2026-01-11 13:49:52 | INFO     | trrcms | Starting TRRCMS Application
+2026-01-11 13:49:52 | INFO     | trrcms | ================================================================================
+2026-01-11 13:49:52 | INFO     | trrcms | Initializing database...
+2026-01-11 13:49:52 | ERROR    | trrcms.repositories.db_adapter | PostgreSQL connection error: connection to server at "localhost" (::1), port 5432 failed: fe_sendauth: no password supplied
+
+2026-01-11 13:49:52 | WARNING  | trrcms.repositories.db_adapter | PostgreSQL unavailable, falling back to SQLite
+2026-01-11 13:49:52 | INFO     | trrcms.repositories.db_adapter | Using SQLite database: E:\Project\code\trrcms\trrcms\data\trrcms.db
+2026-01-11 13:49:52 | INFO     | trrcms.repositories.db_adapter | Initializing SQLite database at: E:\Project\code\trrcms\trrcms\data\trrcms.db
+2026-01-11 13:49:52 | DEBUG    | trrcms.repositories.db_adapter | All SQLite tables created successfully
+2026-01-11 13:49:52 | INFO     | trrcms.repositories.db_adapter | SQLite database initialized successfully
+2026-01-11 13:49:52 | INFO     | trrcms | >> Database initialized successfully
+2026-01-11 13:49:52 | INFO     | trrcms | Initializing internationalization...
+2026-01-11 13:49:52 | INFO     | trrcms | >> Internationalization initialized (Arabic)
+2026-01-11 13:49:52 | INFO     | trrcms | Creating main window (NEW DESIGN v2 with Navbar)...
+2026-01-11 13:49:55 | ERROR    | trrcms.repositories.db_adapter | SQLite fetch_all error: no such table: surveys
+Query: 
+            SELECT * FROM surveys
+            WHERE status = 'draft' AND source = 'office'
+            ORDER BY updated_at DESC
+            LIMIT ? OFFSET ?
+        
+2026-01-11 13:49:55 | ERROR    | trrcms.ui.pages.draft_office_surveys_page_v2 | Error loading drafts: no such table: surveys
+2026-01-11 13:49:55 | INFO     | trrcms.app.main_window_v2 | Showing login page
+2026-01-11 13:49:55 | INFO     | trrcms | >> Main window created and displayed
+2026-01-11 13:49:55 | INFO     | trrcms | ================================================================================
+2026-01-11 13:49:55 | INFO     | trrcms | >> Application started successfully!
+2026-01-11 13:49:55 | INFO     | trrcms | ================================================================================
+2026-01-11 13:50:15 | INFO     | trrcms.services.auth_service | User logged in successfully: admin (admin)
+2026-01-11 13:50:15 | INFO     | trrcms.ui.pages.login_page | Login successful: admin
+2026-01-11 13:50:15 | INFO     | trrcms.app.main_window_v2 | User logged in: admin (admin)
+2026-01-11 13:50:15 | DEBUG    | trrcms.app.main_window_v2 | Navigated to: claims
+2026-01-11 13:50:15 | DEBUG    | trrcms.app.main_window_v2 | Tab 0 selected -> navigating to claims
+2026-01-11 13:50:18 | INFO     | trrcms.app.main_window_v2 | Starting new office survey
+2026-01-11 13:50:18 | DEBUG    | trrcms.app.main_window_v2 | New office survey wizard opened
+2026-01-11 13:50:42 | INFO     | trrcms.app.main_window_v2 | Application closing
+2026-01-11 13:50:42 | INFO     | trrcms | Application closed with exit code: 0
+2026-01-11 13:53:19 | INFO     | trrcms | ================================================================================
+2026-01-11 13:53:19 | INFO     | trrcms | Starting TRRCMS Application
+2026-01-11 13:53:19 | INFO     | trrcms | ================================================================================
+2026-01-11 13:53:19 | INFO     | trrcms | Initializing database...
+2026-01-11 13:53:19 | ERROR    | trrcms.repositories.db_adapter | PostgreSQL connection error: connection to server at "localhost" (::1), port 5432 failed: fe_sendauth: no password supplied
+
+2026-01-11 13:53:19 | WARNING  | trrcms.repositories.db_adapter | PostgreSQL unavailable, falling back to SQLite
+2026-01-11 13:53:19 | INFO     | trrcms.repositories.db_adapter | Using SQLite database: E:\Project\code\trrcms\trrcms\data\trrcms.db
+2026-01-11 13:53:19 | INFO     | trrcms.repositories.db_adapter | Initializing SQLite database at: E:\Project\code\trrcms\trrcms\data\trrcms.db
+2026-01-11 13:53:19 | DEBUG    | trrcms.repositories.db_adapter | All SQLite tables created successfully
+2026-01-11 13:53:19 | INFO     | trrcms.repositories.db_adapter | SQLite database initialized successfully
+2026-01-11 13:53:19 | INFO     | trrcms | >> Database initialized successfully
+2026-01-11 13:53:19 | INFO     | trrcms | Initializing internationalization...
+2026-01-11 13:53:19 | INFO     | trrcms | >> Internationalization initialized (Arabic)
+2026-01-11 13:53:19 | INFO     | trrcms | Creating main window (NEW DESIGN v2 with Navbar)...
+2026-01-11 13:53:22 | ERROR    | trrcms.repositories.db_adapter | SQLite fetch_all error: no such table: surveys
+Query: 
+            SELECT * FROM surveys
+            WHERE status = 'draft' AND source = 'office'
+            ORDER BY updated_at DESC
+            LIMIT ? OFFSET ?
+        
+2026-01-11 13:53:22 | ERROR    | trrcms.ui.pages.draft_office_surveys_page_v2 | Error loading drafts: no such table: surveys
+2026-01-11 13:53:22 | INFO     | trrcms.app.main_window_v2 | Showing login page
+2026-01-11 13:53:23 | INFO     | trrcms | >> Main window created and displayed
+2026-01-11 13:53:23 | INFO     | trrcms | ================================================================================
+2026-01-11 13:53:23 | INFO     | trrcms | >> Application started successfully!
+2026-01-11 13:53:23 | INFO     | trrcms | ================================================================================
+2026-01-11 13:53:36 | INFO     | trrcms.services.auth_service | User logged in successfully: admin (admin)
+2026-01-11 13:53:36 | INFO     | trrcms.ui.pages.login_page | Login successful: admin
+2026-01-11 13:53:36 | INFO     | trrcms.app.main_window_v2 | User logged in: admin (admin)
+2026-01-11 13:53:37 | DEBUG    | trrcms.app.main_window_v2 | Navigated to: claims
+2026-01-11 13:53:37 | DEBUG    | trrcms.app.main_window_v2 | Tab 0 selected -> navigating to claims
+2026-01-11 13:53:39 | INFO     | trrcms.app.main_window_v2 | Starting new office survey
+2026-01-11 13:53:39 | DEBUG    | trrcms.app.main_window_v2 | New office survey wizard opened
+2026-01-11 14:01:22 | INFO     | trrcms.app.main_window_v2 | Application closing
+2026-01-11 14:01:22 | INFO     | trrcms | Application closed with exit code: 0
+2026-01-11 14:01:30 | INFO     | trrcms | ================================================================================
+2026-01-11 14:01:30 | INFO     | trrcms | Starting TRRCMS Application
+2026-01-11 14:01:30 | INFO     | trrcms | ================================================================================
+2026-01-11 14:01:30 | INFO     | trrcms | Initializing database...
+2026-01-11 14:01:30 | ERROR    | trrcms.repositories.db_adapter | PostgreSQL connection error: connection to server at "localhost" (::1), port 5432 failed: fe_sendauth: no password supplied
+
+2026-01-11 14:01:30 | WARNING  | trrcms.repositories.db_adapter | PostgreSQL unavailable, falling back to SQLite
+2026-01-11 14:01:30 | INFO     | trrcms.repositories.db_adapter | Using SQLite database: E:\Project\code\trrcms\trrcms\data\trrcms.db
+2026-01-11 14:01:30 | INFO     | trrcms.repositories.db_adapter | Initializing SQLite database at: E:\Project\code\trrcms\trrcms\data\trrcms.db
+2026-01-11 14:01:30 | DEBUG    | trrcms.repositories.db_adapter | All SQLite tables created successfully
+2026-01-11 14:01:30 | INFO     | trrcms.repositories.db_adapter | SQLite database initialized successfully
+2026-01-11 14:01:30 | INFO     | trrcms | >> Database initialized successfully
+2026-01-11 14:01:30 | INFO     | trrcms | Initializing internationalization...
+2026-01-11 14:01:30 | INFO     | trrcms | >> Internationalization initialized (Arabic)
+2026-01-11 14:01:30 | INFO     | trrcms | Creating main window (NEW DESIGN v2 with Navbar)...
+2026-01-11 14:01:34 | ERROR    | trrcms.repositories.db_adapter | SQLite fetch_all error: no such table: surveys
+Query: 
+            SELECT * FROM surveys
+            WHERE status = 'draft' AND source = 'office'
+            ORDER BY updated_at DESC
+            LIMIT ? OFFSET ?
+        
+2026-01-11 14:01:34 | ERROR    | trrcms.ui.pages.draft_office_surveys_page_v2 | Error loading drafts: no such table: surveys
+2026-01-11 14:01:34 | ERROR    | trrcms | Fatal error during application startup: name 'QIcon' is not defined
+Traceback (most recent call last):
+  File "E:\Project\code\trrcms\trrcms\main.py", line 68, in main
+    window = MainWindow(db, i18n)
+  File "E:\Project\code\trrcms\trrcms\app\main_window_v2.py", line 37, in __init__
+    self._create_widgets()
+    ~~~~~~~~~~~~~~~~~~~~^^
+  File "E:\Project\code\trrcms\trrcms\app\main_window_v2.py", line 203, in _create_widgets
+    self.office_survey_wizard = OfficeSurveyWizard(self.db, self.i18n, self)
+                                ~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "E:\Project\code\trrcms\trrcms\ui\pages\office_survey_wizard.py", line 347, in __init__
+    self._setup_ui()
+    ~~~~~~~~~~~~~~^^
+  File "E:\Project\code\trrcms\trrcms\ui\pages\office_survey_wizard.py", line 423, in _setup_ui
+    self.content_stack.addWidget(self._create_unit_step())      # 1
+                                 ~~~~~~~~~~~~~~~~~~~~~~^^
+  File "E:\Project\code\trrcms\trrcms\ui\pages\office_survey_wizard.py", line 963, in _create_unit_step
+    self.add_unit_btn.setIcon(QIcon.fromTheme("list-add"))
+                              ^^^^^
+NameError: name 'QIcon' is not defined
+2026-01-11 14:04:24 | INFO     | trrcms | ================================================================================
+2026-01-11 14:04:24 | INFO     | trrcms | Starting TRRCMS Application
+2026-01-11 14:04:24 | INFO     | trrcms | ================================================================================
+2026-01-11 14:04:24 | INFO     | trrcms | Initializing database...
+2026-01-11 14:04:24 | ERROR    | trrcms.repositories.db_adapter | PostgreSQL connection error: connection to server at "localhost" (::1), port 5432 failed: fe_sendauth: no password supplied
+
+2026-01-11 14:04:24 | WARNING  | trrcms.repositories.db_adapter | PostgreSQL unavailable, falling back to SQLite
+2026-01-11 14:04:24 | INFO     | trrcms.repositories.db_adapter | Using SQLite database: E:\Project\code\trrcms\trrcms\data\trrcms.db
+2026-01-11 14:04:24 | INFO     | trrcms.repositories.db_adapter | Initializing SQLite database at: E:\Project\code\trrcms\trrcms\data\trrcms.db
+2026-01-11 14:04:24 | DEBUG    | trrcms.repositories.db_adapter | All SQLite tables created successfully
+2026-01-11 14:04:24 | INFO     | trrcms.repositories.db_adapter | SQLite database initialized successfully
+2026-01-11 14:04:24 | INFO     | trrcms | >> Database initialized successfully
+2026-01-11 14:04:24 | INFO     | trrcms | Initializing internationalization...
+2026-01-11 14:04:24 | INFO     | trrcms | >> Internationalization initialized (Arabic)
+2026-01-11 14:04:24 | INFO     | trrcms | Creating main window (NEW DESIGN v2 with Navbar)...
+2026-01-11 14:04:28 | ERROR    | trrcms.repositories.db_adapter | SQLite fetch_all error: no such table: surveys
+Query: 
+            SELECT * FROM surveys
+            WHERE status = 'draft' AND source = 'office'
+            ORDER BY updated_at DESC
+            LIMIT ? OFFSET ?
+        
+2026-01-11 14:04:28 | ERROR    | trrcms.ui.pages.draft_office_surveys_page_v2 | Error loading drafts: no such table: surveys
+2026-01-11 14:04:28 | INFO     | trrcms.app.main_window_v2 | Showing login page
+2026-01-11 14:04:29 | INFO     | trrcms | >> Main window created and displayed
+2026-01-11 14:04:29 | INFO     | trrcms | ================================================================================
+2026-01-11 14:04:29 | INFO     | trrcms | >> Application started successfully!
+2026-01-11 14:04:29 | INFO     | trrcms | ================================================================================
+2026-01-11 14:04:46 | INFO     | trrcms.services.auth_service | User logged in successfully: admin (admin)
+2026-01-11 14:04:46 | INFO     | trrcms.ui.pages.login_page | Login successful: admin
+2026-01-11 14:04:46 | INFO     | trrcms.app.main_window_v2 | User logged in: admin (admin)
+2026-01-11 14:04:47 | DEBUG    | trrcms.app.main_window_v2 | Navigated to: claims
+2026-01-11 14:04:47 | DEBUG    | trrcms.app.main_window_v2 | Tab 0 selected -> navigating to claims
+2026-01-11 14:04:49 | INFO     | trrcms.app.main_window_v2 | Starting new office survey
+2026-01-11 14:04:49 | DEBUG    | trrcms.app.main_window_v2 | New office survey wizard opened
+2026-01-11 14:15:13 | INFO     | trrcms.app.main_window_v2 | Application closing
+2026-01-11 14:15:13 | INFO     | trrcms | Application closed with exit code: 0
+2026-01-11 14:15:18 | INFO     | trrcms | ================================================================================
+2026-01-11 14:15:18 | INFO     | trrcms | Starting TRRCMS Application
+2026-01-11 14:15:18 | INFO     | trrcms | ================================================================================
+2026-01-11 14:15:18 | INFO     | trrcms | Initializing database...
+2026-01-11 14:15:18 | ERROR    | trrcms.repositories.db_adapter | PostgreSQL connection error: connection to server at "localhost" (::1), port 5432 failed: fe_sendauth: no password supplied
+
+2026-01-11 14:15:18 | WARNING  | trrcms.repositories.db_adapter | PostgreSQL unavailable, falling back to SQLite
+2026-01-11 14:15:18 | INFO     | trrcms.repositories.db_adapter | Using SQLite database: E:\Project\code\trrcms\trrcms\data\trrcms.db
+2026-01-11 14:15:18 | INFO     | trrcms.repositories.db_adapter | Initializing SQLite database at: E:\Project\code\trrcms\trrcms\data\trrcms.db
+2026-01-11 14:15:18 | DEBUG    | trrcms.repositories.db_adapter | All SQLite tables created successfully
+2026-01-11 14:15:18 | INFO     | trrcms.repositories.db_adapter | SQLite database initialized successfully
+2026-01-11 14:15:18 | INFO     | trrcms | >> Database initialized successfully
+2026-01-11 14:15:18 | INFO     | trrcms | Initializing internationalization...
+2026-01-11 14:15:18 | INFO     | trrcms | >> Internationalization initialized (Arabic)
+2026-01-11 14:15:18 | INFO     | trrcms | Creating main window (NEW DESIGN v2 with Navbar)...
+2026-01-11 14:15:21 | ERROR    | trrcms.repositories.db_adapter | SQLite fetch_all error: no such table: surveys
+Query: 
+            SELECT * FROM surveys
+            WHERE status = 'draft' AND source = 'office'
+            ORDER BY updated_at DESC
+            LIMIT ? OFFSET ?
+        
+2026-01-11 14:15:21 | ERROR    | trrcms.ui.pages.draft_office_surveys_page_v2 | Error loading drafts: no such table: surveys
+2026-01-11 14:15:21 | INFO     | trrcms.app.main_window_v2 | Showing login page
+2026-01-11 14:15:21 | INFO     | trrcms | >> Main window created and displayed
+2026-01-11 14:15:21 | INFO     | trrcms | ================================================================================
+2026-01-11 14:15:21 | INFO     | trrcms | >> Application started successfully!
+2026-01-11 14:15:21 | INFO     | trrcms | ================================================================================
+2026-01-11 14:15:40 | INFO     | trrcms.services.auth_service | User logged in successfully: admin (admin)
+2026-01-11 14:15:40 | INFO     | trrcms.ui.pages.login_page | Login successful: admin
+2026-01-11 14:15:40 | INFO     | trrcms.app.main_window_v2 | User logged in: admin (admin)
+2026-01-11 14:15:40 | DEBUG    | trrcms.app.main_window_v2 | Navigated to: claims
+2026-01-11 14:15:40 | DEBUG    | trrcms.app.main_window_v2 | Tab 0 selected -> navigating to claims
+2026-01-11 14:15:43 | INFO     | trrcms.app.main_window_v2 | Starting new office survey
+2026-01-11 14:15:43 | DEBUG    | trrcms.app.main_window_v2 | New office survey wizard opened
+2026-01-11 14:17:25 | INFO     | trrcms.app.main_window_v2 | Application closing
+2026-01-11 14:17:25 | INFO     | trrcms | Application closed with exit code: 0
+2026-01-11 14:20:26 | INFO     | trrcms | ================================================================================
+2026-01-11 14:20:26 | INFO     | trrcms | Starting TRRCMS Application
+2026-01-11 14:20:26 | INFO     | trrcms | ================================================================================
+2026-01-11 14:20:26 | INFO     | trrcms | Initializing database...
+2026-01-11 14:20:27 | ERROR    | trrcms.repositories.db_adapter | PostgreSQL connection error: connection to server at "localhost" (::1), port 5432 failed: fe_sendauth: no password supplied
+
+2026-01-11 14:20:27 | WARNING  | trrcms.repositories.db_adapter | PostgreSQL unavailable, falling back to SQLite
+2026-01-11 14:20:27 | INFO     | trrcms.repositories.db_adapter | Using SQLite database: E:\Project\code\trrcms\trrcms\data\trrcms.db
+2026-01-11 14:20:27 | INFO     | trrcms.repositories.db_adapter | Initializing SQLite database at: E:\Project\code\trrcms\trrcms\data\trrcms.db
+2026-01-11 14:20:27 | DEBUG    | trrcms.repositories.db_adapter | All SQLite tables created successfully
+2026-01-11 14:20:27 | INFO     | trrcms.repositories.db_adapter | SQLite database initialized successfully
+2026-01-11 14:20:27 | INFO     | trrcms | >> Database initialized successfully
+2026-01-11 14:20:27 | INFO     | trrcms | Initializing internationalization...
+2026-01-11 14:20:27 | INFO     | trrcms | >> Internationalization initialized (Arabic)
+2026-01-11 14:20:27 | INFO     | trrcms | Creating main window (NEW DESIGN v2 with Navbar)...
+2026-01-11 14:20:30 | ERROR    | trrcms.repositories.db_adapter | SQLite fetch_all error: no such table: surveys
+Query: 
+            SELECT * FROM surveys
+            WHERE status = 'draft' AND source = 'office'
+            ORDER BY updated_at DESC
+            LIMIT ? OFFSET ?
+        
+2026-01-11 14:20:30 | ERROR    | trrcms.ui.pages.draft_office_surveys_page_v2 | Error loading drafts: no such table: surveys
+2026-01-11 14:20:30 | INFO     | trrcms.app.main_window_v2 | Showing login page
+2026-01-11 14:20:31 | INFO     | trrcms | >> Main window created and displayed
+2026-01-11 14:20:31 | INFO     | trrcms | ================================================================================
+2026-01-11 14:20:31 | INFO     | trrcms | >> Application started successfully!
+2026-01-11 14:20:31 | INFO     | trrcms | ================================================================================
+2026-01-11 14:20:41 | INFO     | trrcms.services.auth_service | User logged in successfully: admin (admin)
+2026-01-11 14:20:41 | INFO     | trrcms.ui.pages.login_page | Login successful: admin
+2026-01-11 14:20:41 | INFO     | trrcms.app.main_window_v2 | User logged in: admin (admin)
+2026-01-11 14:20:41 | DEBUG    | trrcms.app.main_window_v2 | Navigated to: claims
+2026-01-11 14:20:41 | DEBUG    | trrcms.app.main_window_v2 | Tab 0 selected -> navigating to claims
+2026-01-11 14:20:44 | INFO     | trrcms.app.main_window_v2 | Starting new office survey
+2026-01-11 14:20:44 | DEBUG    | trrcms.app.main_window_v2 | New office survey wizard opened
+2026-01-11 14:21:39 | INFO     | trrcms.app.main_window_v2 | Application closing
+2026-01-11 14:21:39 | INFO     | trrcms | Application closed with exit code: 0
+2026-01-11 14:23:33 | INFO     | trrcms | ================================================================================
+2026-01-11 14:23:33 | INFO     | trrcms | Starting TRRCMS Application
+2026-01-11 14:23:33 | INFO     | trrcms | ================================================================================
+2026-01-11 14:23:33 | INFO     | trrcms | Initializing database...
+2026-01-11 14:23:33 | ERROR    | trrcms.repositories.db_adapter | PostgreSQL connection error: connection to server at "localhost" (::1), port 5432 failed: fe_sendauth: no password supplied
+
+2026-01-11 14:23:33 | WARNING  | trrcms.repositories.db_adapter | PostgreSQL unavailable, falling back to SQLite
+2026-01-11 14:23:33 | INFO     | trrcms.repositories.db_adapter | Using SQLite database: E:\Project\code\trrcms\trrcms\data\trrcms.db
+2026-01-11 14:23:33 | INFO     | trrcms.repositories.db_adapter | Initializing SQLite database at: E:\Project\code\trrcms\trrcms\data\trrcms.db
+2026-01-11 14:23:33 | DEBUG    | trrcms.repositories.db_adapter | All SQLite tables created successfully
+2026-01-11 14:23:33 | INFO     | trrcms.repositories.db_adapter | SQLite database initialized successfully
+2026-01-11 14:23:33 | INFO     | trrcms | >> Database initialized successfully
+2026-01-11 14:23:33 | INFO     | trrcms | Initializing internationalization...
+2026-01-11 14:23:33 | INFO     | trrcms | >> Internationalization initialized (Arabic)
+2026-01-11 14:23:33 | INFO     | trrcms | Creating main window (NEW DESIGN v2 with Navbar)...
+2026-01-11 14:23:36 | ERROR    | trrcms.repositories.db_adapter | SQLite fetch_all error: no such table: surveys
+Query: 
+            SELECT * FROM surveys
+            WHERE status = 'draft' AND source = 'office'
+            ORDER BY updated_at DESC
+            LIMIT ? OFFSET ?
+        
+2026-01-11 14:23:36 | ERROR    | trrcms.ui.pages.draft_office_surveys_page_v2 | Error loading drafts: no such table: surveys
+2026-01-11 14:23:37 | INFO     | trrcms.app.main_window_v2 | Showing login page
+2026-01-11 14:23:37 | INFO     | trrcms | >> Main window created and displayed
+2026-01-11 14:23:37 | INFO     | trrcms | ================================================================================
+2026-01-11 14:23:37 | INFO     | trrcms | >> Application started successfully!
+2026-01-11 14:23:37 | INFO     | trrcms | ================================================================================
+2026-01-11 14:23:47 | INFO     | trrcms.services.auth_service | User logged in successfully: admin (admin)
+2026-01-11 14:23:47 | INFO     | trrcms.ui.pages.login_page | Login successful: admin
+2026-01-11 14:23:47 | INFO     | trrcms.app.main_window_v2 | User logged in: admin (admin)
+2026-01-11 14:23:47 | DEBUG    | trrcms.app.main_window_v2 | Navigated to: claims
+2026-01-11 14:23:47 | DEBUG    | trrcms.app.main_window_v2 | Tab 0 selected -> navigating to claims
+2026-01-11 14:23:50 | INFO     | trrcms.app.main_window_v2 | Starting new office survey
+2026-01-11 14:23:50 | DEBUG    | trrcms.app.main_window_v2 | New office survey wizard opened
+2026-01-11 14:28:06 | DEBUG    | trrcms.app.main_window_v2 | Navigated to: draft_claims
+2026-01-11 14:28:06 | DEBUG    | trrcms.app.main_window_v2 | Tab 1 selected -> navigating to draft_claims
+2026-01-11 14:28:07 | DEBUG    | trrcms.app.main_window_v2 | Navigated to: claims
+2026-01-11 14:28:07 | DEBUG    | trrcms.app.main_window_v2 | Tab 0 selected -> navigating to claims
+2026-01-11 14:28:11 | INFO     | trrcms.app.main_window_v2 | Application closing
+2026-01-11 14:28:11 | INFO     | trrcms | Application closed with exit code: 0
+2026-01-11 14:35:07 | INFO     | trrcms | ================================================================================
+2026-01-11 14:35:07 | INFO     | trrcms | Starting TRRCMS Application
+2026-01-11 14:35:07 | INFO     | trrcms | ================================================================================
+2026-01-11 14:35:07 | INFO     | trrcms | Initializing database...
+2026-01-11 14:35:07 | ERROR    | trrcms.repositories.db_adapter | PostgreSQL connection error: connection to server at "localhost" (::1), port 5432 failed: fe_sendauth: no password supplied
+
+2026-01-11 14:35:07 | WARNING  | trrcms.repositories.db_adapter | PostgreSQL unavailable, falling back to SQLite
+2026-01-11 14:35:07 | INFO     | trrcms.repositories.db_adapter | Using SQLite database: E:\Project\code\trrcms\trrcms\data\trrcms.db
+2026-01-11 14:35:07 | INFO     | trrcms.repositories.db_adapter | Initializing SQLite database at: E:\Project\code\trrcms\trrcms\data\trrcms.db
+2026-01-11 14:35:07 | DEBUG    | trrcms.repositories.db_adapter | All SQLite tables created successfully
+2026-01-11 14:35:07 | INFO     | trrcms.repositories.db_adapter | SQLite database initialized successfully
+2026-01-11 14:35:07 | INFO     | trrcms | >> Database initialized successfully
+2026-01-11 14:35:07 | INFO     | trrcms | Initializing internationalization...
+2026-01-11 14:35:07 | INFO     | trrcms | >> Internationalization initialized (Arabic)
+2026-01-11 14:35:07 | INFO     | trrcms | Creating main window (NEW DESIGN v2 with Navbar)...
+2026-01-11 14:35:11 | ERROR    | trrcms.repositories.db_adapter | SQLite fetch_all error: no such table: surveys
+Query: 
+            SELECT * FROM surveys
+            WHERE status = 'draft' AND source = 'office'
+            ORDER BY updated_at DESC
+            LIMIT ? OFFSET ?
+        
+2026-01-11 14:35:11 | ERROR    | trrcms.ui.pages.draft_office_surveys_page_v2 | Error loading drafts: no such table: surveys
+2026-01-11 14:35:11 | INFO     | trrcms.app.main_window_v2 | Showing login page
+2026-01-11 14:35:12 | INFO     | trrcms | >> Main window created and displayed
+2026-01-11 14:35:12 | INFO     | trrcms | ================================================================================
+2026-01-11 14:35:12 | INFO     | trrcms | >> Application started successfully!
+2026-01-11 14:35:12 | INFO     | trrcms | ================================================================================
+2026-01-11 14:35:22 | INFO     | trrcms.services.auth_service | User logged in successfully: admin (admin)
+2026-01-11 14:35:22 | INFO     | trrcms.ui.pages.login_page | Login successful: admin
+2026-01-11 14:35:22 | INFO     | trrcms.app.main_window_v2 | User logged in: admin (admin)
+2026-01-11 14:35:22 | DEBUG    | trrcms.app.main_window_v2 | Navigated to: claims
+2026-01-11 14:35:22 | DEBUG    | trrcms.app.main_window_v2 | Tab 0 selected -> navigating to claims
+2026-01-11 14:35:24 | INFO     | trrcms.app.main_window_v2 | Starting new office survey
+2026-01-11 14:35:24 | DEBUG    | trrcms.app.main_window_v2 | New office survey wizard opened
+2026-01-11 14:46:24 | INFO     | trrcms.app.main_window_v2 | Application closing
+2026-01-11 14:46:24 | INFO     | trrcms | Application closed with exit code: 0
+2026-01-11 14:56:53 | INFO     | trrcms | ================================================================================
+2026-01-11 14:56:53 | INFO     | trrcms | Starting TRRCMS Application
+2026-01-11 14:56:53 | INFO     | trrcms | ================================================================================
+2026-01-11 14:56:53 | INFO     | trrcms | Initializing database...
+2026-01-11 14:56:53 | ERROR    | trrcms.repositories.db_adapter | PostgreSQL connection error: connection to server at "localhost" (::1), port 5432 failed: fe_sendauth: no password supplied
+
+2026-01-11 14:56:53 | WARNING  | trrcms.repositories.db_adapter | PostgreSQL unavailable, falling back to SQLite
+2026-01-11 14:56:53 | INFO     | trrcms.repositories.db_adapter | Using SQLite database: E:\Project\code\trrcms\trrcms\data\trrcms.db
+2026-01-11 14:56:53 | INFO     | trrcms.repositories.db_adapter | Initializing SQLite database at: E:\Project\code\trrcms\trrcms\data\trrcms.db
+2026-01-11 14:56:53 | DEBUG    | trrcms.repositories.db_adapter | All SQLite tables created successfully
+2026-01-11 14:56:53 | INFO     | trrcms.repositories.db_adapter | SQLite database initialized successfully
+2026-01-11 14:56:53 | INFO     | trrcms | >> Database initialized successfully
+2026-01-11 14:56:53 | INFO     | trrcms | Initializing internationalization...
+2026-01-11 14:56:53 | INFO     | trrcms | >> Internationalization initialized (Arabic)
+2026-01-11 14:56:53 | INFO     | trrcms | Creating main window (NEW DESIGN v2 with Navbar)...
+2026-01-11 14:56:54 | ERROR    | trrcms.repositories.db_adapter | SQLite fetch_all error: no such table: surveys
+Query: 
+            SELECT * FROM surveys
+            WHERE status = 'draft' AND source = 'office'
+            ORDER BY updated_at DESC
+            LIMIT ? OFFSET ?
+        
+2026-01-11 14:56:54 | ERROR    | trrcms.ui.pages.draft_office_surveys_page_v2 | Error loading drafts: no such table: surveys
+2026-01-11 14:56:54 | INFO     | trrcms.app.main_window_v2 | Showing login page
+2026-01-11 14:56:55 | INFO     | trrcms | >> Main window created and displayed
+2026-01-11 14:56:55 | INFO     | trrcms | ================================================================================
+2026-01-11 14:56:55 | INFO     | trrcms | >> Application started successfully!
+2026-01-11 14:56:55 | INFO     | trrcms | ================================================================================
+2026-01-11 14:57:05 | INFO     | trrcms.services.auth_service | User logged in successfully: admin (admin)
+2026-01-11 14:57:05 | INFO     | trrcms.ui.pages.login_page | Login successful: admin
+2026-01-11 14:57:05 | INFO     | trrcms.app.main_window_v2 | User logged in: admin (admin)
+2026-01-11 14:57:05 | DEBUG    | trrcms.app.main_window_v2 | Navigated to: claims
+2026-01-11 14:57:05 | DEBUG    | trrcms.app.main_window_v2 | Tab 0 selected -> navigating to claims
+2026-01-11 14:57:07 | INFO     | trrcms.app.main_window_v2 | Starting new office survey
+2026-01-11 14:57:07 | DEBUG    | trrcms.app.main_window_v2 | New office survey wizard opened
+2026-01-11 14:59:33 | INFO     | trrcms.app.main_window_v2 | Application closing
+2026-01-11 14:59:33 | INFO     | trrcms | Application closed with exit code: 0
+2026-01-11 15:25:07 | INFO     | trrcms | ================================================================================
+2026-01-11 15:25:08 | INFO     | trrcms | Starting TRRCMS Application
+2026-01-11 15:25:08 | INFO     | trrcms | ================================================================================
+2026-01-11 15:25:08 | INFO     | trrcms | Initializing database...
+2026-01-11 15:25:08 | ERROR    | trrcms.repositories.db_adapter | PostgreSQL connection error: connection to server at "localhost" (::1), port 5432 failed: fe_sendauth: no password supplied
+
+2026-01-11 15:25:08 | WARNING  | trrcms.repositories.db_adapter | PostgreSQL unavailable, falling back to SQLite
+2026-01-11 15:25:08 | INFO     | trrcms.repositories.db_adapter | Using SQLite database: E:\Project\code\trrcms\trrcms\data\trrcms.db
+2026-01-11 15:25:08 | INFO     | trrcms.repositories.db_adapter | Initializing SQLite database at: E:\Project\code\trrcms\trrcms\data\trrcms.db
+2026-01-11 15:25:08 | DEBUG    | trrcms.repositories.db_adapter | All SQLite tables created successfully
+2026-01-11 15:25:08 | INFO     | trrcms.repositories.db_adapter | SQLite database initialized successfully
+2026-01-11 15:25:08 | INFO     | trrcms | >> Database initialized successfully
+2026-01-11 15:25:08 | INFO     | trrcms | Initializing internationalization...
+2026-01-11 15:25:08 | INFO     | trrcms | >> Internationalization initialized (Arabic)
+2026-01-11 15:25:08 | INFO     | trrcms | Creating main window (NEW DESIGN v2 with Navbar)...
+2026-01-11 15:25:10 | ERROR    | trrcms.repositories.db_adapter | SQLite fetch_all error: no such table: surveys
+Query: 
+            SELECT * FROM surveys
+            WHERE status = 'draft' AND source = 'office'
+            ORDER BY updated_at DESC
+            LIMIT ? OFFSET ?
+        
+2026-01-11 15:25:10 | ERROR    | trrcms.ui.pages.draft_office_surveys_page_v2 | Error loading drafts: no such table: surveys
+2026-01-11 15:25:10 | INFO     | trrcms.app.main_window_v2 | Showing login page
+2026-01-11 15:25:10 | INFO     | trrcms | >> Main window created and displayed
+2026-01-11 15:25:10 | INFO     | trrcms | ================================================================================
+2026-01-11 15:25:10 | INFO     | trrcms | >> Application started successfully!
+2026-01-11 15:25:10 | INFO     | trrcms | ================================================================================
+2026-01-11 15:25:20 | INFO     | trrcms.services.auth_service | User logged in successfully: admin (admin)
+2026-01-11 15:25:20 | INFO     | trrcms.ui.pages.login_page | Login successful: admin
+2026-01-11 15:25:20 | INFO     | trrcms.app.main_window_v2 | User logged in: admin (admin)
+2026-01-11 15:25:20 | DEBUG    | trrcms.app.main_window_v2 | Navigated to: claims
+2026-01-11 15:25:20 | DEBUG    | trrcms.app.main_window_v2 | Tab 0 selected -> navigating to claims
+2026-01-11 15:25:23 | INFO     | trrcms.app.main_window_v2 | Starting new office survey
+2026-01-11 15:25:23 | DEBUG    | trrcms.app.main_window_v2 | New office survey wizard opened
+2026-01-11 15:26:07 | INFO     | trrcms.app.main_window_v2 | Application closing
+2026-01-11 15:26:07 | INFO     | trrcms | Application closed with exit code: 0
+2026-01-11 15:47:31 | INFO     | trrcms | ================================================================================
+2026-01-11 15:47:31 | INFO     | trrcms | Starting TRRCMS Application
+2026-01-11 15:47:31 | INFO     | trrcms | ================================================================================
+2026-01-11 15:47:31 | INFO     | trrcms | Initializing database...
+2026-01-11 15:47:31 | ERROR    | trrcms.repositories.db_adapter | PostgreSQL connection error: connection to server at "localhost" (::1), port 5432 failed: fe_sendauth: no password supplied
+
+2026-01-11 15:47:31 | WARNING  | trrcms.repositories.db_adapter | PostgreSQL unavailable, falling back to SQLite
+2026-01-11 15:47:31 | INFO     | trrcms.repositories.db_adapter | Using SQLite database: E:\Project\code\trrcms\trrcms\data\trrcms.db
+2026-01-11 15:47:31 | INFO     | trrcms.repositories.db_adapter | Initializing SQLite database at: E:\Project\code\trrcms\trrcms\data\trrcms.db
+2026-01-11 15:47:31 | DEBUG    | trrcms.repositories.db_adapter | All SQLite tables created successfully
+2026-01-11 15:47:31 | INFO     | trrcms.repositories.db_adapter | SQLite database initialized successfully
+2026-01-11 15:47:31 | INFO     | trrcms | >> Database initialized successfully
+2026-01-11 15:47:31 | INFO     | trrcms | Initializing internationalization...
+2026-01-11 15:47:31 | INFO     | trrcms | >> Internationalization initialized (Arabic)
+2026-01-11 15:47:31 | INFO     | trrcms | Creating main window (NEW DESIGN v2 with Navbar)...
+2026-01-11 15:47:32 | ERROR    | trrcms.repositories.db_adapter | SQLite fetch_all error: no such table: surveys
+Query: 
+            SELECT * FROM surveys
+            WHERE status = 'draft' AND source = 'office'
+            ORDER BY updated_at DESC
+            LIMIT ? OFFSET ?
+        
+2026-01-11 15:47:32 | ERROR    | trrcms.ui.pages.draft_office_surveys_page_v2 | Error loading drafts: no such table: surveys
+2026-01-11 15:47:32 | INFO     | trrcms.app.main_window_v2 | Showing login page
+2026-01-11 15:47:32 | INFO     | trrcms | >> Main window created and displayed
+2026-01-11 15:47:32 | INFO     | trrcms | ================================================================================
+2026-01-11 15:47:32 | INFO     | trrcms | >> Application started successfully!
+2026-01-11 15:47:32 | INFO     | trrcms | ================================================================================
+2026-01-11 15:47:46 | INFO     | trrcms.services.auth_service | User logged in successfully: admin (admin)
+2026-01-11 15:47:46 | INFO     | trrcms.ui.pages.login_page | Login successful: admin
+2026-01-11 15:47:46 | INFO     | trrcms.app.main_window_v2 | User logged in: admin (admin)
+2026-01-11 15:47:46 | DEBUG    | trrcms.app.main_window_v2 | Navigated to: claims
+2026-01-11 15:47:46 | DEBUG    | trrcms.app.main_window_v2 | Tab 0 selected -> navigating to claims
+2026-01-11 15:47:48 | INFO     | trrcms.app.main_window_v2 | Starting new office survey
+2026-01-11 15:47:48 | DEBUG    | trrcms.app.main_window_v2 | New office survey wizard opened
+2026-01-11 15:48:41 | INFO     | trrcms.app.main_window_v2 | Application closing
+2026-01-11 15:48:41 | INFO     | trrcms | Application closed with exit code: 0
+2026-01-11 15:52:42 | INFO     | trrcms | ================================================================================
+2026-01-11 15:52:42 | INFO     | trrcms | Starting TRRCMS Application
+2026-01-11 15:52:42 | INFO     | trrcms | ================================================================================
+2026-01-11 15:52:42 | INFO     | trrcms | Initializing database...
+2026-01-11 15:52:42 | ERROR    | trrcms.repositories.db_adapter | PostgreSQL connection error: connection to server at "localhost" (::1), port 5432 failed: fe_sendauth: no password supplied
+
+2026-01-11 15:52:42 | WARNING  | trrcms.repositories.db_adapter | PostgreSQL unavailable, falling back to SQLite
+2026-01-11 15:52:42 | INFO     | trrcms.repositories.db_adapter | Using SQLite database: E:\Project\code\trrcms\trrcms\data\trrcms.db
+2026-01-11 15:52:42 | INFO     | trrcms.repositories.db_adapter | Initializing SQLite database at: E:\Project\code\trrcms\trrcms\data\trrcms.db
+2026-01-11 15:52:42 | DEBUG    | trrcms.repositories.db_adapter | All SQLite tables created successfully
+2026-01-11 15:52:42 | INFO     | trrcms.repositories.db_adapter | SQLite database initialized successfully
+2026-01-11 15:52:42 | INFO     | trrcms | >> Database initialized successfully
+2026-01-11 15:52:42 | INFO     | trrcms | Initializing internationalization...
+2026-01-11 15:52:42 | INFO     | trrcms | >> Internationalization initialized (Arabic)
+2026-01-11 15:52:42 | INFO     | trrcms | Creating main window (NEW DESIGN v2 with Navbar)...
+2026-01-11 15:52:43 | ERROR    | trrcms.repositories.db_adapter | SQLite fetch_all error: no such table: surveys
+Query: 
+            SELECT * FROM surveys
+            WHERE status = 'draft' AND source = 'office'
+            ORDER BY updated_at DESC
+            LIMIT ? OFFSET ?
+        
+2026-01-11 15:52:43 | ERROR    | trrcms.ui.pages.draft_office_surveys_page_v2 | Error loading drafts: no such table: surveys
+2026-01-11 15:52:43 | INFO     | trrcms.app.main_window_v2 | Showing login page
+2026-01-11 15:52:43 | INFO     | trrcms | >> Main window created and displayed
+2026-01-11 15:52:43 | INFO     | trrcms | ================================================================================
+2026-01-11 15:52:43 | INFO     | trrcms | >> Application started successfully!
+2026-01-11 15:52:43 | INFO     | trrcms | ================================================================================
+2026-01-11 15:52:58 | INFO     | trrcms.services.auth_service | User logged in successfully: admin (admin)
+2026-01-11 15:52:58 | INFO     | trrcms.ui.pages.login_page | Login successful: admin
+2026-01-11 15:52:58 | INFO     | trrcms.app.main_window_v2 | User logged in: admin (admin)
+2026-01-11 15:52:58 | DEBUG    | trrcms.app.main_window_v2 | Navigated to: claims
+2026-01-11 15:52:58 | DEBUG    | trrcms.app.main_window_v2 | Tab 0 selected -> navigating to claims
+2026-01-11 15:53:00 | INFO     | trrcms.app.main_window_v2 | Starting new office survey
+2026-01-11 15:53:00 | DEBUG    | trrcms.app.main_window_v2 | New office survey wizard opened
+2026-01-11 15:54:04 | INFO     | trrcms.app.main_window_v2 | Application closing
+2026-01-11 15:54:04 | INFO     | trrcms | Application closed with exit code: 0
+2026-01-11 15:59:08 | INFO     | trrcms | ================================================================================
+2026-01-11 15:59:08 | INFO     | trrcms | Starting TRRCMS Application
+2026-01-11 15:59:08 | INFO     | trrcms | ================================================================================
+2026-01-11 15:59:08 | INFO     | trrcms | Initializing database...
+2026-01-11 15:59:08 | ERROR    | trrcms.repositories.db_adapter | PostgreSQL connection error: connection to server at "localhost" (::1), port 5432 failed: fe_sendauth: no password supplied
+
+2026-01-11 15:59:08 | WARNING  | trrcms.repositories.db_adapter | PostgreSQL unavailable, falling back to SQLite
+2026-01-11 15:59:08 | INFO     | trrcms.repositories.db_adapter | Using SQLite database: E:\Project\code\trrcms\trrcms\data\trrcms.db
+2026-01-11 15:59:08 | INFO     | trrcms.repositories.db_adapter | Initializing SQLite database at: E:\Project\code\trrcms\trrcms\data\trrcms.db
+2026-01-11 15:59:08 | DEBUG    | trrcms.repositories.db_adapter | All SQLite tables created successfully
+2026-01-11 15:59:08 | INFO     | trrcms.repositories.db_adapter | SQLite database initialized successfully
+2026-01-11 15:59:08 | INFO     | trrcms | >> Database initialized successfully
+2026-01-11 15:59:08 | INFO     | trrcms | Initializing internationalization...
+2026-01-11 15:59:08 | INFO     | trrcms | >> Internationalization initialized (Arabic)
+2026-01-11 15:59:08 | INFO     | trrcms | Creating main window (NEW DESIGN v2 with Navbar)...
+2026-01-11 15:59:09 | ERROR    | trrcms.repositories.db_adapter | SQLite fetch_all error: no such table: surveys
+Query: 
+            SELECT * FROM surveys
+            WHERE status = 'draft' AND source = 'office'
+            ORDER BY updated_at DESC
+            LIMIT ? OFFSET ?
+        
+2026-01-11 15:59:09 | ERROR    | trrcms.ui.pages.draft_office_surveys_page_v2 | Error loading drafts: no such table: surveys
+2026-01-11 15:59:09 | INFO     | trrcms.app.main_window_v2 | Showing login page
+2026-01-11 15:59:09 | INFO     | trrcms | >> Main window created and displayed
+2026-01-11 15:59:09 | INFO     | trrcms | ================================================================================
+2026-01-11 15:59:09 | INFO     | trrcms | >> Application started successfully!
+2026-01-11 15:59:09 | INFO     | trrcms | ================================================================================
+2026-01-11 15:59:19 | INFO     | trrcms.services.auth_service | User logged in successfully: admin (admin)
+2026-01-11 15:59:19 | INFO     | trrcms.ui.pages.login_page | Login successful: admin
+2026-01-11 15:59:19 | INFO     | trrcms.app.main_window_v2 | User logged in: admin (admin)
+2026-01-11 15:59:19 | DEBUG    | trrcms.app.main_window_v2 | Navigated to: claims
+2026-01-11 15:59:19 | DEBUG    | trrcms.app.main_window_v2 | Tab 0 selected -> navigating to claims
+2026-01-11 15:59:23 | INFO     | trrcms.app.main_window_v2 | Starting new office survey
+2026-01-11 15:59:23 | DEBUG    | trrcms.app.main_window_v2 | New office survey wizard opened
+2026-01-11 16:02:03 | INFO     | trrcms.app.main_window_v2 | Application closing
+2026-01-11 16:02:03 | INFO     | trrcms | Application closed with exit code: 0
+2026-01-11 22:32:06 | INFO     | trrcms | ================================================================================
+2026-01-11 22:32:06 | INFO     | trrcms | Starting TRRCMS Application
+2026-01-11 22:32:06 | INFO     | trrcms | ================================================================================
+2026-01-11 22:32:06 | INFO     | trrcms | Initializing database...
+2026-01-11 22:32:07 | ERROR    | trrcms.repositories.db_adapter | PostgreSQL connection error: connection to server at "localhost" (::1), port 5432 failed: fe_sendauth: no password supplied
+
+2026-01-11 22:32:07 | WARNING  | trrcms.repositories.db_adapter | PostgreSQL unavailable, falling back to SQLite
+2026-01-11 22:32:07 | INFO     | trrcms.repositories.db_adapter | Using SQLite database: E:\Project\code\trrcms\trrcms\data\trrcms.db
+2026-01-11 22:32:07 | INFO     | trrcms.repositories.db_adapter | Initializing SQLite database at: E:\Project\code\trrcms\trrcms\data\trrcms.db
+2026-01-11 22:32:07 | DEBUG    | trrcms.repositories.db_adapter | All SQLite tables created successfully
+2026-01-11 22:32:07 | INFO     | trrcms.repositories.db_adapter | SQLite database initialized successfully
+2026-01-11 22:32:07 | INFO     | trrcms | >> Database initialized successfully
+2026-01-11 22:32:07 | INFO     | trrcms | Initializing internationalization...
+2026-01-11 22:32:07 | INFO     | trrcms | >> Internationalization initialized (Arabic)
+2026-01-11 22:32:07 | INFO     | trrcms | Creating main window (NEW DESIGN v2 with Navbar)...
+2026-01-11 22:32:23 | ERROR    | trrcms.repositories.db_adapter | SQLite fetch_all error: no such table: surveys
+Query: 
+            SELECT * FROM surveys
+            WHERE status = 'draft' AND source = 'office'
+            ORDER BY updated_at DESC
+            LIMIT ? OFFSET ?
+        
+2026-01-11 22:32:23 | ERROR    | trrcms.ui.pages.draft_office_surveys_page_v2 | Error loading drafts: no such table: surveys
+2026-01-11 22:32:23 | INFO     | trrcms.app.main_window_v2 | Showing login page
+2026-01-11 22:32:23 | INFO     | trrcms | >> Main window created and displayed
+2026-01-11 22:32:23 | INFO     | trrcms | ================================================================================
+2026-01-11 22:32:23 | INFO     | trrcms | >> Application started successfully!
+2026-01-11 22:32:23 | INFO     | trrcms | ================================================================================
+2026-01-11 22:32:51 | INFO     | trrcms.services.auth_service | User logged in successfully: admin (admin)
+2026-01-11 22:32:51 | INFO     | trrcms.ui.pages.login_page | Login successful: admin
+2026-01-11 22:32:51 | INFO     | trrcms.app.main_window_v2 | User logged in: admin (admin)
+2026-01-11 22:32:51 | DEBUG    | trrcms.app.main_window_v2 | Navigated to: claims
+2026-01-11 22:32:51 | DEBUG    | trrcms.app.main_window_v2 | Tab 0 selected -> navigating to claims
+2026-01-11 22:32:54 | INFO     | trrcms.app.main_window_v2 | Starting new office survey
+2026-01-11 22:32:54 | DEBUG    | trrcms.app.main_window_v2 | New office survey wizard opened
+2026-01-11 22:34:06 | INFO     | trrcms.app.main_window_v2 | Application closing
+2026-01-11 22:34:06 | INFO     | trrcms | Application closed with exit code: 0
+2026-01-11 22:47:31 | INFO     | trrcms | ================================================================================
+2026-01-11 22:47:31 | INFO     | trrcms | Starting TRRCMS Application
+2026-01-11 22:47:31 | INFO     | trrcms | ================================================================================
+2026-01-11 22:47:31 | INFO     | trrcms | Initializing database...
+2026-01-11 22:47:31 | ERROR    | trrcms.repositories.db_adapter | PostgreSQL connection error: connection to server at "localhost" (::1), port 5432 failed: fe_sendauth: no password supplied
+
+2026-01-11 22:47:31 | WARNING  | trrcms.repositories.db_adapter | PostgreSQL unavailable, falling back to SQLite
+2026-01-11 22:47:31 | INFO     | trrcms.repositories.db_adapter | Using SQLite database: E:\Project\code\trrcms\trrcms\data\trrcms.db
+2026-01-11 22:47:31 | INFO     | trrcms.repositories.db_adapter | Initializing SQLite database at: E:\Project\code\trrcms\trrcms\data\trrcms.db
+2026-01-11 22:47:31 | DEBUG    | trrcms.repositories.db_adapter | All SQLite tables created successfully
+2026-01-11 22:47:31 | INFO     | trrcms.repositories.db_adapter | SQLite database initialized successfully
+2026-01-11 22:47:31 | INFO     | trrcms | >> Database initialized successfully
+2026-01-11 22:47:31 | INFO     | trrcms | Initializing internationalization...
+2026-01-11 22:47:31 | INFO     | trrcms | >> Internationalization initialized (Arabic)
+2026-01-11 22:47:31 | INFO     | trrcms | Creating main window (NEW DESIGN v2 with Navbar)...
+2026-01-11 22:47:32 | ERROR    | trrcms.repositories.db_adapter | SQLite fetch_all error: no such table: surveys
+Query: 
+            SELECT * FROM surveys
+            WHERE status = 'draft' AND source = 'office'
+            ORDER BY updated_at DESC
+            LIMIT ? OFFSET ?
+        
+2026-01-11 22:47:32 | ERROR    | trrcms.ui.pages.draft_office_surveys_page_v2 | Error loading drafts: no such table: surveys
+2026-01-11 22:47:32 | INFO     | trrcms.app.main_window_v2 | Showing login page
+2026-01-11 22:47:33 | INFO     | trrcms | >> Main window created and displayed
+2026-01-11 22:47:33 | INFO     | trrcms | ================================================================================
+2026-01-11 22:47:33 | INFO     | trrcms | >> Application started successfully!
+2026-01-11 22:47:33 | INFO     | trrcms | ================================================================================
+2026-01-11 22:47:50 | INFO     | trrcms.services.auth_service | User logged in successfully: admin (admin)
+2026-01-11 22:47:50 | INFO     | trrcms.ui.pages.login_page | Login successful: admin
+2026-01-11 22:47:50 | INFO     | trrcms.app.main_window_v2 | User logged in: admin (admin)
+2026-01-11 22:47:50 | DEBUG    | trrcms.app.main_window_v2 | Navigated to: claims
+2026-01-11 22:47:50 | DEBUG    | trrcms.app.main_window_v2 | Tab 0 selected -> navigating to claims
+2026-01-11 22:47:53 | INFO     | trrcms.app.main_window_v2 | Starting new office survey
+2026-01-11 22:47:53 | DEBUG    | trrcms.app.main_window_v2 | New office survey wizard opened
+2026-01-11 22:50:02 | INFO     | trrcms | ================================================================================
+2026-01-11 22:50:02 | INFO     | trrcms | Starting TRRCMS Application
+2026-01-11 22:50:02 | INFO     | trrcms | ================================================================================
+2026-01-11 22:50:02 | INFO     | trrcms | Initializing database...
+2026-01-11 22:50:03 | ERROR    | trrcms.repositories.db_adapter | PostgreSQL connection error: connection to server at "localhost" (::1), port 5432 failed: fe_sendauth: no password supplied
+
+2026-01-11 22:50:03 | WARNING  | trrcms.repositories.db_adapter | PostgreSQL unavailable, falling back to SQLite
+2026-01-11 22:50:03 | INFO     | trrcms.repositories.db_adapter | Using SQLite database: E:\Project\code\trrcms\trrcms\data\trrcms.db
+2026-01-11 22:50:03 | INFO     | trrcms.repositories.db_adapter | Initializing SQLite database at: E:\Project\code\trrcms\trrcms\data\trrcms.db
+2026-01-11 22:50:03 | DEBUG    | trrcms.repositories.db_adapter | All SQLite tables created successfully
+2026-01-11 22:50:03 | INFO     | trrcms.repositories.db_adapter | SQLite database initialized successfully
+2026-01-11 22:50:03 | INFO     | trrcms | >> Database initialized successfully
+2026-01-11 22:50:03 | INFO     | trrcms | Initializing internationalization...
+2026-01-11 22:50:03 | INFO     | trrcms | >> Internationalization initialized (Arabic)
+2026-01-11 22:50:03 | INFO     | trrcms | Creating main window (NEW DESIGN v2 with Navbar)...
+2026-01-11 22:50:04 | ERROR    | trrcms.repositories.db_adapter | SQLite fetch_all error: no such table: surveys
+Query: 
+            SELECT * FROM surveys
+            WHERE status = 'draft' AND source = 'office'
+            ORDER BY updated_at DESC
+            LIMIT ? OFFSET ?
+        
+2026-01-11 22:50:04 | ERROR    | trrcms.ui.pages.draft_office_surveys_page_v2 | Error loading drafts: no such table: surveys
+2026-01-11 22:50:04 | INFO     | trrcms.app.main_window_v2 | Showing login page
+2026-01-11 22:50:04 | INFO     | trrcms | >> Main window created and displayed
+2026-01-11 22:50:04 | INFO     | trrcms | ================================================================================
+2026-01-11 22:50:04 | INFO     | trrcms | >> Application started successfully!
+2026-01-11 22:50:04 | INFO     | trrcms | ================================================================================
+2026-01-11 22:50:13 | INFO     | trrcms.services.auth_service | User logged in successfully: admin (admin)
+2026-01-11 22:50:13 | INFO     | trrcms.ui.pages.login_page | Login successful: admin
+2026-01-11 22:50:13 | INFO     | trrcms.app.main_window_v2 | User logged in: admin (admin)
+2026-01-11 22:50:13 | DEBUG    | trrcms.app.main_window_v2 | Navigated to: claims
+2026-01-11 22:50:13 | DEBUG    | trrcms.app.main_window_v2 | Tab 0 selected -> navigating to claims
+2026-01-11 22:50:16 | INFO     | trrcms.app.main_window_v2 | Starting new office survey
+2026-01-11 22:50:16 | DEBUG    | trrcms.app.main_window_v2 | New office survey wizard opened
+2026-01-11 22:51:02 | INFO     | trrcms.app.main_window_v2 | Survey cancelled
+2026-01-11 22:51:02 | DEBUG    | trrcms.app.main_window_v2 | Navigated to: draft_claims
+2026-01-11 22:51:02 | DEBUG    | trrcms.app.main_window_v2 | Tab 1 selected -> navigating to draft_claims
+2026-01-11 22:51:10 | INFO     | trrcms.app.main_window_v2 | Application closing
+2026-01-11 22:51:10 | INFO     | trrcms | Application closed with exit code: 0
+2026-01-11 23:04:56 | INFO     | trrcms | ================================================================================
+2026-01-11 23:04:56 | INFO     | trrcms | Starting TRRCMS Application
+2026-01-11 23:04:56 | INFO     | trrcms | ================================================================================
+2026-01-11 23:04:56 | INFO     | trrcms | Initializing database...
+2026-01-11 23:04:56 | ERROR    | trrcms.repositories.db_adapter | PostgreSQL connection error: connection to server at "localhost" (::1), port 5432 failed: fe_sendauth: no password supplied
+
+2026-01-11 23:04:56 | WARNING  | trrcms.repositories.db_adapter | PostgreSQL unavailable, falling back to SQLite
+2026-01-11 23:04:56 | INFO     | trrcms.repositories.db_adapter | Using SQLite database: E:\Project\code\trrcms\trrcms\data\trrcms.db
+2026-01-11 23:04:56 | INFO     | trrcms.repositories.db_adapter | Initializing SQLite database at: E:\Project\code\trrcms\trrcms\data\trrcms.db
+2026-01-11 23:04:56 | DEBUG    | trrcms.repositories.db_adapter | All SQLite tables created successfully
+2026-01-11 23:04:56 | INFO     | trrcms.repositories.db_adapter | SQLite database initialized successfully
+2026-01-11 23:04:56 | INFO     | trrcms | >> Database initialized successfully
+2026-01-11 23:04:56 | INFO     | trrcms | Initializing internationalization...
+2026-01-11 23:04:56 | INFO     | trrcms | >> Internationalization initialized (Arabic)
+2026-01-11 23:04:56 | INFO     | trrcms | Creating main window (NEW DESIGN v2 with Navbar)...
+2026-01-11 23:04:57 | ERROR    | trrcms.repositories.db_adapter | SQLite fetch_all error: no such table: surveys
+Query: 
+            SELECT * FROM surveys
+            WHERE status = 'draft' AND source = 'office'
+            ORDER BY updated_at DESC
+            LIMIT ? OFFSET ?
+        
+2026-01-11 23:04:57 | ERROR    | trrcms.ui.pages.draft_office_surveys_page_v2 | Error loading drafts: no such table: surveys
+2026-01-11 23:04:57 | INFO     | trrcms.app.main_window_v2 | Showing login page
+2026-01-11 23:04:57 | INFO     | trrcms | >> Main window created and displayed
+2026-01-11 23:04:57 | INFO     | trrcms | ================================================================================
+2026-01-11 23:04:57 | INFO     | trrcms | >> Application started successfully!
+2026-01-11 23:04:57 | INFO     | trrcms | ================================================================================
+2026-01-11 23:05:07 | INFO     | trrcms.services.auth_service | User logged in successfully: admin (admin)
+2026-01-11 23:05:07 | INFO     | trrcms.ui.pages.login_page | Login successful: admin
+2026-01-11 23:05:07 | INFO     | trrcms.app.main_window_v2 | User logged in: admin (admin)
+2026-01-11 23:05:07 | DEBUG    | trrcms.app.main_window_v2 | Navigated to: claims
+2026-01-11 23:05:07 | DEBUG    | trrcms.app.main_window_v2 | Tab 0 selected -> navigating to claims
+2026-01-11 23:05:09 | INFO     | trrcms.app.main_window_v2 | Starting new office survey
+2026-01-11 23:05:09 | DEBUG    | trrcms.app.main_window_v2 | New office survey wizard opened
+2026-01-11 23:09:10 | ERROR    | trrcms.repositories.db_adapter | SQLite fetch_one error: no such table: surveys
+Query: SELECT * FROM surveys WHERE survey_id = ?
+2026-01-11 23:09:10 | ERROR    | trrcms.ui.pages.office_survey_wizard | Failed to save draft: no such table: surveys
+Traceback (most recent call last):
+  File "E:\Project\code\trrcms\trrcms\ui\pages\office_survey_wizard.py", line 2736, in _save_as_draft
+    existing_survey = self.survey_repo.get_by_id(self.context.survey_id)
+  File "E:\Project\code\trrcms\trrcms\repositories\survey_repository.py", line 130, in get_by_id
+    row = self.db.fetch_one(query, (survey_id,))
+  File "E:\Project\code\trrcms\trrcms\repositories\database.py", line 138, in fetch_one
+    return self._adapter.fetch_one(query, params)
+           ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^
+  File "E:\Project\code\trrcms\trrcms\repositories\db_adapter.py", line 286, in fetch_one
+    cursor.execute(query, params or ())
+    ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^
+sqlite3.OperationalError: no such table: surveys
+2026-01-11 23:09:56 | INFO     | trrcms.app.main_window_v2 | Application closing
+2026-01-11 23:09:56 | INFO     | trrcms | Application closed with exit code: 0
+2026-01-11 23:13:56 | INFO     | trrcms | ================================================================================
+2026-01-11 23:13:56 | INFO     | trrcms | Starting TRRCMS Application
+2026-01-11 23:13:56 | INFO     | trrcms | ================================================================================
+2026-01-11 23:13:56 | INFO     | trrcms | Initializing database...
+2026-01-11 23:13:56 | ERROR    | trrcms.repositories.db_adapter | PostgreSQL connection error: connection to server at "localhost" (::1), port 5432 failed: fe_sendauth: no password supplied
+
+2026-01-11 23:13:56 | WARNING  | trrcms.repositories.db_adapter | PostgreSQL unavailable, falling back to SQLite
+2026-01-11 23:13:56 | INFO     | trrcms.repositories.db_adapter | Using SQLite database: E:\Project\code\trrcms\trrcms\data\trrcms.db
+2026-01-11 23:13:56 | INFO     | trrcms.repositories.db_adapter | Initializing SQLite database at: E:\Project\code\trrcms\trrcms\data\trrcms.db
+2026-01-11 23:13:56 | DEBUG    | trrcms.repositories.db_adapter | All SQLite tables created successfully
+2026-01-11 23:13:56 | INFO     | trrcms.repositories.db_adapter | SQLite database initialized successfully
+2026-01-11 23:13:56 | INFO     | trrcms | >> Database initialized successfully
+2026-01-11 23:13:56 | INFO     | trrcms | Initializing internationalization...
+2026-01-11 23:13:56 | INFO     | trrcms | >> Internationalization initialized (Arabic)
+2026-01-11 23:13:56 | INFO     | trrcms | Creating main window (NEW DESIGN v2 with Navbar)...
+2026-01-11 23:13:57 | ERROR    | trrcms.repositories.db_adapter | SQLite fetch_all error: no such table: surveys
+Query: 
+            SELECT * FROM surveys
+            WHERE status = 'draft' AND source = 'office'
+            ORDER BY updated_at DESC
+            LIMIT ? OFFSET ?
+        
+2026-01-11 23:13:57 | ERROR    | trrcms.ui.pages.draft_office_surveys_page_v2 | Error loading drafts: no such table: surveys
+2026-01-11 23:13:57 | INFO     | trrcms.app.main_window_v2 | Showing login page
+2026-01-11 23:13:58 | INFO     | trrcms | >> Main window created and displayed
+2026-01-11 23:13:58 | INFO     | trrcms | ================================================================================
+2026-01-11 23:13:58 | INFO     | trrcms | >> Application started successfully!
+2026-01-11 23:13:58 | INFO     | trrcms | ================================================================================
+2026-01-11 23:14:07 | INFO     | trrcms.services.auth_service | User logged in successfully: admin (admin)
+2026-01-11 23:14:07 | INFO     | trrcms.ui.pages.login_page | Login successful: admin
+2026-01-11 23:14:07 | INFO     | trrcms.app.main_window_v2 | User logged in: admin (admin)
+2026-01-11 23:14:07 | DEBUG    | trrcms.app.main_window_v2 | Navigated to: claims
+2026-01-11 23:14:07 | DEBUG    | trrcms.app.main_window_v2 | Tab 0 selected -> navigating to claims
+2026-01-11 23:14:09 | INFO     | trrcms.app.main_window_v2 | Starting new office survey
+2026-01-11 23:14:09 | DEBUG    | trrcms.app.main_window_v2 | New office survey wizard opened
+2026-01-11 23:14:41 | INFO     | trrcms.app.main_window_v2 | Survey cancelled
+2026-01-11 23:14:41 | DEBUG    | trrcms.app.main_window_v2 | Navigated to: draft_claims
+2026-01-11 23:14:41 | DEBUG    | trrcms.app.main_window_v2 | Tab 1 selected -> navigating to draft_claims
+2026-01-11 23:14:45 | INFO     | trrcms.app.main_window_v2 | Application closing
+2026-01-11 23:14:45 | INFO     | trrcms | Application closed with exit code: 0
+2026-01-11 23:18:05 | INFO     | trrcms | ================================================================================
+2026-01-11 23:18:05 | INFO     | trrcms | Starting TRRCMS Application
+2026-01-11 23:18:05 | INFO     | trrcms | ================================================================================
+2026-01-11 23:18:05 | INFO     | trrcms | Initializing database...
+2026-01-11 23:18:05 | ERROR    | trrcms.repositories.db_adapter | PostgreSQL connection error: connection to server at "localhost" (::1), port 5432 failed: fe_sendauth: no password supplied
+
+2026-01-11 23:18:05 | WARNING  | trrcms.repositories.db_adapter | PostgreSQL unavailable, falling back to SQLite
+2026-01-11 23:18:05 | INFO     | trrcms.repositories.db_adapter | Using SQLite database: E:\Project\code\trrcms\trrcms\data\trrcms.db
+2026-01-11 23:18:05 | INFO     | trrcms.repositories.db_adapter | Initializing SQLite database at: E:\Project\code\trrcms\trrcms\data\trrcms.db
+2026-01-11 23:18:05 | DEBUG    | trrcms.repositories.db_adapter | All SQLite tables created successfully
+2026-01-11 23:18:05 | INFO     | trrcms.repositories.db_adapter | SQLite database initialized successfully
+2026-01-11 23:18:05 | INFO     | trrcms | >> Database initialized successfully
+2026-01-11 23:18:05 | INFO     | trrcms | Initializing internationalization...
+2026-01-11 23:18:05 | INFO     | trrcms | >> Internationalization initialized (Arabic)
+2026-01-11 23:18:05 | INFO     | trrcms | Creating main window (NEW DESIGN v2 with Navbar)...
+2026-01-11 23:18:06 | ERROR    | trrcms.repositories.db_adapter | SQLite fetch_all error: no such table: surveys
+Query: 
+            SELECT * FROM surveys
+            WHERE status = 'draft' AND source = 'office'
+            ORDER BY updated_at DESC
+            LIMIT ? OFFSET ?
+        
+2026-01-11 23:18:06 | ERROR    | trrcms.ui.pages.draft_office_surveys_page_v2 | Error loading drafts: no such table: surveys
+2026-01-11 23:18:06 | INFO     | trrcms.app.main_window_v2 | Showing login page
+2026-01-11 23:18:06 | INFO     | trrcms | >> Main window created and displayed
+2026-01-11 23:18:06 | INFO     | trrcms | ================================================================================
+2026-01-11 23:18:06 | INFO     | trrcms | >> Application started successfully!
+2026-01-11 23:18:06 | INFO     | trrcms | ================================================================================
+2026-01-11 23:18:21 | INFO     | trrcms.services.auth_service | User logged in successfully: admin (admin)
+2026-01-11 23:18:21 | INFO     | trrcms.ui.pages.login_page | Login successful: admin
+2026-01-11 23:18:21 | INFO     | trrcms.app.main_window_v2 | User logged in: admin (admin)
+2026-01-11 23:18:21 | DEBUG    | trrcms.app.main_window_v2 | Navigated to: claims
+2026-01-11 23:18:21 | DEBUG    | trrcms.app.main_window_v2 | Tab 0 selected -> navigating to claims
+2026-01-11 23:18:24 | INFO     | trrcms.app.main_window_v2 | Starting new office survey
+2026-01-11 23:18:24 | DEBUG    | trrcms.app.main_window_v2 | New office survey wizard opened
+2026-01-11 23:19:34 | INFO     | trrcms.app.main_window_v2 | Application closing
+2026-01-11 23:19:34 | INFO     | trrcms | Application closed with exit code: 0
+2026-01-11 23:23:02 | INFO     | trrcms | ================================================================================
+2026-01-11 23:23:02 | INFO     | trrcms | Starting TRRCMS Application
+2026-01-11 23:23:02 | INFO     | trrcms | ================================================================================
+2026-01-11 23:23:02 | INFO     | trrcms | Initializing database...
+2026-01-11 23:23:02 | ERROR    | trrcms.repositories.db_adapter | PostgreSQL connection error: connection to server at "localhost" (::1), port 5432 failed: fe_sendauth: no password supplied
+
+2026-01-11 23:23:02 | WARNING  | trrcms.repositories.db_adapter | PostgreSQL unavailable, falling back to SQLite
+2026-01-11 23:23:02 | INFO     | trrcms.repositories.db_adapter | Using SQLite database: E:\Project\code\trrcms\trrcms\data\trrcms.db
+2026-01-11 23:23:02 | INFO     | trrcms.repositories.db_adapter | Initializing SQLite database at: E:\Project\code\trrcms\trrcms\data\trrcms.db
+2026-01-11 23:23:02 | DEBUG    | trrcms.repositories.db_adapter | All SQLite tables created successfully
+2026-01-11 23:23:02 | INFO     | trrcms.repositories.db_adapter | SQLite database initialized successfully
+2026-01-11 23:23:02 | INFO     | trrcms | >> Database initialized successfully
+2026-01-11 23:23:02 | INFO     | trrcms | Initializing internationalization...
+2026-01-11 23:23:02 | INFO     | trrcms | >> Internationalization initialized (Arabic)
+2026-01-11 23:23:02 | INFO     | trrcms | Creating main window (NEW DESIGN v2 with Navbar)...
+2026-01-11 23:23:03 | ERROR    | trrcms.repositories.db_adapter | SQLite fetch_all error: no such table: surveys
+Query: 
+            SELECT * FROM surveys
+            WHERE status = 'draft' AND source = 'office'
+            ORDER BY updated_at DESC
+            LIMIT ? OFFSET ?
+        
+2026-01-11 23:23:03 | ERROR    | trrcms.ui.pages.draft_office_surveys_page_v2 | Error loading drafts: no such table: surveys
+2026-01-11 23:23:03 | INFO     | trrcms.app.main_window_v2 | Showing login page
+2026-01-11 23:23:03 | INFO     | trrcms | >> Main window created and displayed
+2026-01-11 23:23:03 | INFO     | trrcms | ================================================================================
+2026-01-11 23:23:03 | INFO     | trrcms | >> Application started successfully!
+2026-01-11 23:23:03 | INFO     | trrcms | ================================================================================
+2026-01-11 23:23:14 | INFO     | trrcms.services.auth_service | User logged in successfully: admin (admin)
+2026-01-11 23:23:14 | INFO     | trrcms.ui.pages.login_page | Login successful: admin
+2026-01-11 23:23:14 | INFO     | trrcms.app.main_window_v2 | User logged in: admin (admin)
+2026-01-11 23:23:14 | DEBUG    | trrcms.app.main_window_v2 | Navigated to: claims
+2026-01-11 23:23:14 | DEBUG    | trrcms.app.main_window_v2 | Tab 0 selected -> navigating to claims
+2026-01-11 23:23:17 | INFO     | trrcms.app.main_window_v2 | Starting new office survey
+2026-01-11 23:23:17 | DEBUG    | trrcms.app.main_window_v2 | New office survey wizard opened
+2026-01-11 23:25:38 | INFO     | trrcms.app.main_window_v2 | Application closing
+2026-01-11 23:25:38 | INFO     | trrcms | Application closed with exit code: 0
+2026-01-11 23:28:43 | INFO     | trrcms | ================================================================================
+2026-01-11 23:28:43 | INFO     | trrcms | Starting TRRCMS Application
+2026-01-11 23:28:43 | INFO     | trrcms | ================================================================================
+2026-01-11 23:28:43 | INFO     | trrcms | Initializing database...
+2026-01-11 23:28:43 | ERROR    | trrcms.repositories.db_adapter | PostgreSQL connection error: connection to server at "localhost" (::1), port 5432 failed: fe_sendauth: no password supplied
+
+2026-01-11 23:28:43 | WARNING  | trrcms.repositories.db_adapter | PostgreSQL unavailable, falling back to SQLite
+2026-01-11 23:28:43 | INFO     | trrcms.repositories.db_adapter | Using SQLite database: E:\Project\code\trrcms\trrcms\data\trrcms.db
+2026-01-11 23:28:43 | INFO     | trrcms.repositories.db_adapter | Initializing SQLite database at: E:\Project\code\trrcms\trrcms\data\trrcms.db
+2026-01-11 23:28:43 | DEBUG    | trrcms.repositories.db_adapter | All SQLite tables created successfully
+2026-01-11 23:28:43 | INFO     | trrcms.repositories.db_adapter | SQLite database initialized successfully
+2026-01-11 23:28:43 | INFO     | trrcms | >> Database initialized successfully
+2026-01-11 23:28:43 | INFO     | trrcms | Initializing internationalization...
+2026-01-11 23:28:43 | INFO     | trrcms | >> Internationalization initialized (Arabic)
+2026-01-11 23:28:43 | INFO     | trrcms | Creating main window (NEW DESIGN v2 with Navbar)...
+2026-01-11 23:28:44 | ERROR    | trrcms.repositories.db_adapter | SQLite fetch_all error: no such table: surveys
+Query: 
+            SELECT * FROM surveys
+            WHERE status = 'draft' AND source = 'office'
+            ORDER BY updated_at DESC
+            LIMIT ? OFFSET ?
+        
+2026-01-11 23:28:44 | ERROR    | trrcms.ui.pages.draft_office_surveys_page_v2 | Error loading drafts: no such table: surveys
+2026-01-11 23:28:44 | INFO     | trrcms.app.main_window_v2 | Showing login page
+2026-01-11 23:28:44 | INFO     | trrcms | >> Main window created and displayed
+2026-01-11 23:28:44 | INFO     | trrcms | ================================================================================
+2026-01-11 23:28:44 | INFO     | trrcms | >> Application started successfully!
+2026-01-11 23:28:44 | INFO     | trrcms | ================================================================================
+2026-01-11 23:28:55 | INFO     | trrcms.services.auth_service | User logged in successfully: admin (admin)
+2026-01-11 23:28:55 | INFO     | trrcms.ui.pages.login_page | Login successful: admin
+2026-01-11 23:28:55 | INFO     | trrcms.app.main_window_v2 | User logged in: admin (admin)
+2026-01-11 23:28:55 | DEBUG    | trrcms.app.main_window_v2 | Navigated to: claims
+2026-01-11 23:28:55 | DEBUG    | trrcms.app.main_window_v2 | Tab 0 selected -> navigating to claims
+2026-01-11 23:28:58 | INFO     | trrcms.app.main_window_v2 | Starting new office survey
+2026-01-11 23:28:58 | DEBUG    | trrcms.app.main_window_v2 | New office survey wizard opened
+2026-01-11 23:41:40 | ERROR    | trrcms.repositories.db_adapter | SQLite fetch_one error: no such table: surveys
+Query: SELECT * FROM surveys WHERE survey_id = ?
+2026-01-11 23:41:40 | ERROR    | trrcms.ui.pages.office_survey_wizard | Failed to save draft: no such table: surveys
+Traceback (most recent call last):
+  File "E:\Project\code\trrcms\trrcms\ui\pages\office_survey_wizard.py", line 2923, in _save_as_draft
+    existing_survey = self.survey_repo.get_by_id(self.context.survey_id)
+  File "E:\Project\code\trrcms\trrcms\repositories\survey_repository.py", line 130, in get_by_id
+    row = self.db.fetch_one(query, (survey_id,))
+  File "E:\Project\code\trrcms\trrcms\repositories\database.py", line 138, in fetch_one
+    return self._adapter.fetch_one(query, params)
+           ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^
+  File "E:\Project\code\trrcms\trrcms\repositories\db_adapter.py", line 286, in fetch_one
+    cursor.execute(query, params or ())
+    ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^
+sqlite3.OperationalError: no such table: surveys
+2026-01-11 23:42:23 | INFO     | trrcms.app.main_window_v2 | Application closing
+2026-01-11 23:42:23 | INFO     | trrcms | Application closed with exit code: 0
+2026-01-11 23:49:55 | INFO     | trrcms | ================================================================================
+2026-01-11 23:49:55 | INFO     | trrcms | Starting TRRCMS Application
+2026-01-11 23:49:55 | INFO     | trrcms | ================================================================================
+2026-01-11 23:49:55 | INFO     | trrcms | Initializing database...
+2026-01-11 23:49:55 | ERROR    | trrcms.repositories.db_adapter | PostgreSQL connection error: connection to server at "localhost" (::1), port 5432 failed: fe_sendauth: no password supplied
+
+2026-01-11 23:49:55 | WARNING  | trrcms.repositories.db_adapter | PostgreSQL unavailable, falling back to SQLite
+2026-01-11 23:49:55 | INFO     | trrcms.repositories.db_adapter | Using SQLite database: E:\Project\code\trrcms\trrcms\data\trrcms.db
+2026-01-11 23:49:55 | INFO     | trrcms.repositories.db_adapter | Initializing SQLite database at: E:\Project\code\trrcms\trrcms\data\trrcms.db
+2026-01-11 23:49:55 | DEBUG    | trrcms.repositories.db_adapter | All SQLite tables created successfully
+2026-01-11 23:49:55 | INFO     | trrcms.repositories.db_adapter | SQLite database initialized successfully
+2026-01-11 23:49:55 | INFO     | trrcms | >> Database initialized successfully
+2026-01-11 23:49:55 | INFO     | trrcms | Initializing internationalization...
+2026-01-11 23:49:55 | INFO     | trrcms | >> Internationalization initialized (Arabic)
+2026-01-11 23:49:55 | INFO     | trrcms | Creating main window (NEW DESIGN v2 with Navbar)...
+2026-01-11 23:49:59 | ERROR    | trrcms.repositories.db_adapter | SQLite fetch_all error: no such table: surveys
+Query: 
+            SELECT * FROM surveys
+            WHERE status = 'draft' AND source = 'office'
+            ORDER BY updated_at DESC
+            LIMIT ? OFFSET ?
+        
+2026-01-11 23:49:59 | ERROR    | trrcms.ui.pages.draft_office_surveys_page_v2 | Error loading drafts: no such table: surveys
+2026-01-11 23:49:59 | INFO     | trrcms.app.main_window_v2 | Showing login page
+2026-01-11 23:50:00 | INFO     | trrcms | >> Main window created and displayed
+2026-01-11 23:50:00 | INFO     | trrcms | ================================================================================
+2026-01-11 23:50:00 | INFO     | trrcms | >> Application started successfully!
+2026-01-11 23:50:00 | INFO     | trrcms | ================================================================================
+2026-01-11 23:50:14 | INFO     | trrcms.services.auth_service | User logged in successfully: admin (admin)
+2026-01-11 23:50:14 | INFO     | trrcms.ui.pages.login_page | Login successful: admin
+2026-01-11 23:50:14 | INFO     | trrcms.app.main_window_v2 | User logged in: admin (admin)
+2026-01-11 23:50:14 | DEBUG    | trrcms.app.main_window_v2 | Navigated to: claims
+2026-01-11 23:50:14 | DEBUG    | trrcms.app.main_window_v2 | Tab 0 selected -> navigating to claims
+2026-01-11 23:50:17 | INFO     | trrcms.app.main_window_v2 | Starting new office survey
+2026-01-11 23:50:17 | DEBUG    | trrcms.app.main_window_v2 | New office survey wizard opened
+2026-01-11 23:52:11 | INFO     | trrcms.app.main_window_v2 | Application closing
+2026-01-11 23:52:11 | INFO     | trrcms | Application closed with exit code: 0
+2026-01-11 23:57:29 | INFO     | trrcms | ================================================================================
+2026-01-11 23:57:29 | INFO     | trrcms | Starting TRRCMS Application
+2026-01-11 23:57:29 | INFO     | trrcms | ================================================================================
+2026-01-11 23:57:29 | INFO     | trrcms | Initializing database...
+2026-01-11 23:57:29 | ERROR    | trrcms.repositories.db_adapter | PostgreSQL connection error: connection to server at "localhost" (::1), port 5432 failed: fe_sendauth: no password supplied
+
+2026-01-11 23:57:29 | WARNING  | trrcms.repositories.db_adapter | PostgreSQL unavailable, falling back to SQLite
+2026-01-11 23:57:29 | INFO     | trrcms.repositories.db_adapter | Using SQLite database: E:\Project\code\trrcms\trrcms\data\trrcms.db
+2026-01-11 23:57:29 | INFO     | trrcms.repositories.db_adapter | Initializing SQLite database at: E:\Project\code\trrcms\trrcms\data\trrcms.db
+2026-01-11 23:57:29 | DEBUG    | trrcms.repositories.db_adapter | All SQLite tables created successfully
+2026-01-11 23:57:29 | INFO     | trrcms.repositories.db_adapter | SQLite database initialized successfully
+2026-01-11 23:57:29 | INFO     | trrcms | >> Database initialized successfully
+2026-01-11 23:57:29 | INFO     | trrcms | Initializing internationalization...
+2026-01-11 23:57:29 | INFO     | trrcms | >> Internationalization initialized (Arabic)
+2026-01-11 23:57:29 | INFO     | trrcms | Creating main window (NEW DESIGN v2 with Navbar)...
+2026-01-11 23:57:32 | ERROR    | trrcms.repositories.db_adapter | SQLite fetch_all error: no such table: surveys
+Query: 
+            SELECT * FROM surveys
+            WHERE status = 'draft' AND source = 'office'
+            ORDER BY updated_at DESC
+            LIMIT ? OFFSET ?
+        
+2026-01-11 23:57:32 | ERROR    | trrcms.ui.pages.draft_office_surveys_page_v2 | Error loading drafts: no such table: surveys
+2026-01-11 23:57:33 | INFO     | trrcms.app.main_window_v2 | Showing login page
+2026-01-11 23:57:33 | INFO     | trrcms | >> Main window created and displayed
+2026-01-11 23:57:33 | INFO     | trrcms | ================================================================================
+2026-01-11 23:57:33 | INFO     | trrcms | >> Application started successfully!
+2026-01-11 23:57:33 | INFO     | trrcms | ================================================================================
+2026-01-11 23:57:45 | INFO     | trrcms.services.auth_service | User logged in successfully: admin (admin)
+2026-01-11 23:57:45 | INFO     | trrcms.ui.pages.login_page | Login successful: admin
+2026-01-11 23:57:45 | INFO     | trrcms.app.main_window_v2 | User logged in: admin (admin)
+2026-01-11 23:57:45 | DEBUG    | trrcms.app.main_window_v2 | Navigated to: claims
+2026-01-11 23:57:45 | DEBUG    | trrcms.app.main_window_v2 | Tab 0 selected -> navigating to claims
+2026-01-11 23:57:48 | INFO     | trrcms.app.main_window_v2 | Starting new office survey
+2026-01-11 23:57:48 | DEBUG    | trrcms.app.main_window_v2 | New office survey wizard opened
+2026-01-12 00:03:44 | INFO     | trrcms.app.main_window_v2 | Application closing
+2026-01-12 00:03:44 | INFO     | trrcms | Application closed with exit code: 0
+2026-01-12 00:03:48 | INFO     | trrcms | ================================================================================
+2026-01-12 00:03:48 | INFO     | trrcms | Starting TRRCMS Application
+2026-01-12 00:03:48 | INFO     | trrcms | ================================================================================
+2026-01-12 00:03:48 | INFO     | trrcms | Initializing database...
+2026-01-12 00:03:49 | ERROR    | trrcms.repositories.db_adapter | PostgreSQL connection error: connection to server at "localhost" (::1), port 5432 failed: fe_sendauth: no password supplied
+
+2026-01-12 00:03:49 | WARNING  | trrcms.repositories.db_adapter | PostgreSQL unavailable, falling back to SQLite
+2026-01-12 00:03:49 | INFO     | trrcms.repositories.db_adapter | Using SQLite database: E:\Project\code\trrcms\trrcms\data\trrcms.db
+2026-01-12 00:03:49 | INFO     | trrcms.repositories.db_adapter | Initializing SQLite database at: E:\Project\code\trrcms\trrcms\data\trrcms.db
+2026-01-12 00:03:49 | DEBUG    | trrcms.repositories.db_adapter | All SQLite tables created successfully
+2026-01-12 00:03:49 | INFO     | trrcms.repositories.db_adapter | SQLite database initialized successfully
+2026-01-12 00:03:49 | INFO     | trrcms | >> Database initialized successfully
+2026-01-12 00:03:49 | INFO     | trrcms | Initializing internationalization...
+2026-01-12 00:03:49 | INFO     | trrcms | >> Internationalization initialized (Arabic)
+2026-01-12 00:03:49 | INFO     | trrcms | Creating main window (NEW DESIGN v2 with Navbar)...
+2026-01-12 00:03:52 | ERROR    | trrcms.repositories.db_adapter | SQLite fetch_all error: no such table: surveys
+Query: 
+            SELECT * FROM surveys
+            WHERE status = 'draft' AND source = 'office'
+            ORDER BY updated_at DESC
+            LIMIT ? OFFSET ?
+        
+2026-01-12 00:03:52 | ERROR    | trrcms.ui.pages.draft_office_surveys_page_v2 | Error loading drafts: no such table: surveys
+2026-01-12 00:03:53 | INFO     | trrcms.app.main_window_v2 | Showing login page
+2026-01-12 00:03:53 | INFO     | trrcms | >> Main window created and displayed
+2026-01-12 00:03:53 | INFO     | trrcms | ================================================================================
+2026-01-12 00:03:53 | INFO     | trrcms | >> Application started successfully!
+2026-01-12 00:03:53 | INFO     | trrcms | ================================================================================
+2026-01-12 00:04:10 | INFO     | trrcms.services.auth_service | User logged in successfully: admin (admin)
+2026-01-12 00:04:10 | INFO     | trrcms.ui.pages.login_page | Login successful: admin
+2026-01-12 00:04:10 | INFO     | trrcms.app.main_window_v2 | User logged in: admin (admin)
+2026-01-12 00:04:10 | DEBUG    | trrcms.app.main_window_v2 | Navigated to: claims
+2026-01-12 00:04:10 | DEBUG    | trrcms.app.main_window_v2 | Tab 0 selected -> navigating to claims
+2026-01-12 00:04:12 | INFO     | trrcms.app.main_window_v2 | Starting new office survey
+2026-01-12 00:04:12 | DEBUG    | trrcms.app.main_window_v2 | New office survey wizard opened
+2026-01-12 00:04:53 | INFO     | trrcms.app.main_window_v2 | Application closing
+2026-01-12 00:04:54 | INFO     | trrcms | Application closed with exit code: 0
+2026-01-12 00:10:37 | INFO     | trrcms | ================================================================================
+2026-01-12 00:10:37 | INFO     | trrcms | Starting TRRCMS Application
+2026-01-12 00:10:37 | INFO     | trrcms | ================================================================================
+2026-01-12 00:10:37 | INFO     | trrcms | Initializing database...
+2026-01-12 00:10:37 | ERROR    | trrcms.repositories.db_adapter | PostgreSQL connection error: connection to server at "localhost" (::1), port 5432 failed: fe_sendauth: no password supplied
+
+2026-01-12 00:10:37 | WARNING  | trrcms.repositories.db_adapter | PostgreSQL unavailable, falling back to SQLite
+2026-01-12 00:10:37 | INFO     | trrcms.repositories.db_adapter | Using SQLite database: E:\Project\code\trrcms\trrcms\data\trrcms.db
+2026-01-12 00:10:37 | INFO     | trrcms.repositories.db_adapter | Initializing SQLite database at: E:\Project\code\trrcms\trrcms\data\trrcms.db
+2026-01-12 00:10:37 | DEBUG    | trrcms.repositories.db_adapter | All SQLite tables created successfully
+2026-01-12 00:10:37 | INFO     | trrcms.repositories.db_adapter | SQLite database initialized successfully
+2026-01-12 00:10:37 | INFO     | trrcms | >> Database initialized successfully
+2026-01-12 00:10:37 | INFO     | trrcms | Initializing internationalization...
+2026-01-12 00:10:37 | INFO     | trrcms | >> Internationalization initialized (Arabic)
+2026-01-12 00:10:37 | INFO     | trrcms | Creating main window (NEW DESIGN v2 with Navbar)...
+2026-01-12 00:10:41 | ERROR    | trrcms.repositories.db_adapter | SQLite fetch_all error: no such table: surveys
+Query: 
+            SELECT * FROM surveys
+            WHERE status = 'draft' AND source = 'office'
+            ORDER BY updated_at DESC
+            LIMIT ? OFFSET ?
+        
+2026-01-12 00:10:41 | ERROR    | trrcms.ui.pages.draft_office_surveys_page_v2 | Error loading drafts: no such table: surveys
+2026-01-12 00:10:41 | INFO     | trrcms.app.main_window_v2 | Showing login page
+2026-01-12 00:10:41 | INFO     | trrcms | >> Main window created and displayed
+2026-01-12 00:10:41 | INFO     | trrcms | ================================================================================
+2026-01-12 00:10:41 | INFO     | trrcms | >> Application started successfully!
+2026-01-12 00:10:41 | INFO     | trrcms | ================================================================================
+2026-01-12 00:10:54 | INFO     | trrcms.services.auth_service | User logged in successfully: admin (admin)
+2026-01-12 00:10:54 | INFO     | trrcms.ui.pages.login_page | Login successful: admin
+2026-01-12 00:10:54 | INFO     | trrcms.app.main_window_v2 | User logged in: admin (admin)
+2026-01-12 00:10:54 | DEBUG    | trrcms.app.main_window_v2 | Navigated to: claims
+2026-01-12 00:10:54 | DEBUG    | trrcms.app.main_window_v2 | Tab 0 selected -> navigating to claims
+2026-01-12 00:10:56 | INFO     | trrcms.app.main_window_v2 | Starting new office survey
+2026-01-12 00:10:56 | DEBUG    | trrcms.app.main_window_v2 | New office survey wizard opened
+2026-01-12 00:12:17 | INFO     | trrcms.app.main_window_v2 | Application closing
+2026-01-12 00:12:17 | INFO     | trrcms | Application closed with exit code: 0
