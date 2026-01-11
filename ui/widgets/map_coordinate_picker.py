@@ -357,54 +357,60 @@ class MapCoordinatePickerWidget(QWidget):
         self.map_view.setHtml(html)
 
     def _get_map_html(self) -> str:
-        """Generate the map HTML with Leaflet.js."""
+        """Generate the map HTML with Leaflet.js (OFFLINE VERSION)."""
+        # Note: This widget needs access to a tile server
+        # For now, we'll use a simple placeholder that can be updated
+        # when integrated with the main app's tile server
+
         return f'''
 <!DOCTYPE html>
 <html>
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    <link rel="stylesheet" href="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.css" />
     <style>
         html, body, #map {{ height: 100%; margin: 0; padding: 0; }}
-        .leaflet-container {{ font-family: 'Segoe UI', Tahoma, sans-serif; }}
-        .coordinate-popup {{ font-family: monospace; }}
+        .offline-notice {{
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            font-family: 'Segoe UI', Tahoma, sans-serif;
+            background: white;
+            padding: 40px;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }}
+        .offline-icon {{
+            font-size: 48px;
+            margin-bottom: 16px;
+        }}
     </style>
 </head>
 <body>
-    <div id="map"></div>
+    <div id="map">
+        <div class="offline-notice">
+            <div class="offline-icon">🗺️</div>
+            <h3 style="color: #0072BC; margin: 0 0 8px 0;">خريطة تفاعلية</h3>
+            <p style="color: #5D6D7E; margin: 0; font-size: 14px;">
+                يعمل بدون اتصال بالإنترنت<br>
+                استخدم زر "بحث على الخريطة" للوصول إلى الخريطة الكاملة
+            </p>
+        </div>
+    </div>
 
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    <script src="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.js"></script>
     <script src="qrc:///qtwebchannel/qwebchannel.js"></script>
 
     <script>
-        var map;
+        // Simplified version - full map is in MapPickerDialog
+        var map = null;
         var marker = null;
         var polygon = null;
-        var drawnItems;
-        var drawControl;
+        var drawnItems = null;
+        var drawControl = null;
         var pyBridge = null;
-        var currentMode = 'marker'; // marker or polygon
-
-        // Tile layers
-        var tileLayers = {{
-            osm: L.tileLayer('https://{{s}}.tile.openstreetmap.org/{{z}}/{{x}}/{{y}}.png', {{
-                attribution: '© OpenStreetMap contributors'
-            }}),
-            satellite: L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{{z}}/{{y}}/{{x}}', {{
-                attribution: '© Esri'
-            }}),
-            terrain: L.tileLayer('https://{{s}}.tile.opentopomap.org/{{z}}/{{x}}/{{y}}.png', {{
-                attribution: '© OpenTopoMap'
-            }}),
-            hybrid: L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{{z}}/{{y}}/{{x}}', {{
-                attribution: '© Esri'
-            }})
-        }};
-
-        var currentLayer = tileLayers.osm;
+        var currentMode = 'marker';
 
         // Initialize map
         function initMap() {{
