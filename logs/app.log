@@ -13168,3 +13168,1739 @@ Query:
 2026-01-10 19:18:31 | DEBUG    | trrcms.app.main_window_v2 | New office survey wizard opened
 2026-01-10 19:19:31 | INFO     | trrcms.app.main_window_v2 | Application closing
 2026-01-10 19:19:31 | INFO     | trrcms | Application closed with exit code: 0
+2026-01-11 01:16:42 | INFO     | trrcms | ================================================================================
+2026-01-11 01:16:42 | INFO     | trrcms | Starting TRRCMS Application
+2026-01-11 01:16:42 | INFO     | trrcms | ================================================================================
+2026-01-11 01:16:42 | INFO     | trrcms | Initializing database...
+2026-01-11 01:16:42 | WARNING  | trrcms.repositories.db_adapter | psycopg2 not installed. PostgreSQL support unavailable.
+2026-01-11 01:16:42 | WARNING  | trrcms.repositories.db_adapter | PostgreSQL unavailable, falling back to SQLite
+2026-01-11 01:16:42 | INFO     | trrcms.repositories.db_adapter | Using SQLite database: c:\Users\Laptop-PC\.javacpp\Desktop\un\Habitat-Desktop\data\trrcms.db
+2026-01-11 01:16:42 | INFO     | trrcms.repositories.db_adapter | Initializing SQLite database at: c:\Users\Laptop-PC\.javacpp\Desktop\un\Habitat-Desktop\data\trrcms.db
+2026-01-11 01:16:42 | DEBUG    | trrcms.repositories.db_adapter | All SQLite tables created successfully
+2026-01-11 01:16:42 | INFO     | trrcms.repositories.db_adapter | SQLite database initialized successfully
+2026-01-11 01:16:42 | INFO     | trrcms | >> Database initialized successfully
+2026-01-11 01:16:42 | INFO     | trrcms | Initializing internationalization...
+2026-01-11 01:16:42 | INFO     | trrcms | >> Internationalization initialized (Arabic)
+2026-01-11 01:16:43 | INFO     | trrcms | Creating main window (NEW DESIGN v2 with Navbar)...
+2026-01-11 01:16:46 | ERROR    | trrcms.repositories.db_adapter | SQLite fetch_all error: no such table: surveys
+Query: 
+            SELECT * FROM surveys
+            WHERE status = 'draft' AND source = 'office'
+            ORDER BY updated_at DESC
+            LIMIT ? OFFSET ?
+        
+2026-01-11 01:16:46 | ERROR    | trrcms.ui.pages.draft_office_surveys_page_v2 | Error loading drafts: no such table: surveys
+2026-01-11 01:16:47 | INFO     | trrcms.app.main_window_v2 | Showing login page
+2026-01-11 01:16:48 | INFO     | trrcms | >> Main window created and displayed
+2026-01-11 01:16:48 | INFO     | trrcms | ================================================================================
+2026-01-11 01:16:48 | INFO     | trrcms | >> Application started successfully!
+2026-01-11 01:16:48 | INFO     | trrcms | ================================================================================
+2026-01-11 01:17:01 | INFO     | trrcms.services.auth_service | User logged in successfully: admin (admin)
+2026-01-11 01:17:01 | INFO     | trrcms.ui.pages.login_page | Login successful: admin
+2026-01-11 01:17:01 | INFO     | trrcms.app.main_window_v2 | User logged in: admin (admin)
+2026-01-11 01:17:01 | DEBUG    | trrcms.app.main_window_v2 | Navigated to: claims
+2026-01-11 01:17:01 | DEBUG    | trrcms.app.main_window_v2 | Tab 0 selected -> navigating to claims
+2026-01-11 01:18:54 | INFO     | trrcms.app.main_window_v2 | Application closing
+2026-01-11 01:18:54 | INFO     | trrcms | Application closed with exit code: 0
+2026-01-11 01:19:07 | INFO     | trrcms | ================================================================================
+2026-01-11 01:19:07 | INFO     | trrcms | Starting TRRCMS Application
+2026-01-11 01:19:07 | INFO     | trrcms | ================================================================================
+2026-01-11 01:19:07 | INFO     | trrcms | Initializing database...
+2026-01-11 01:19:07 | WARNING  | trrcms.repositories.db_adapter | psycopg2 not installed. PostgreSQL support unavailable.
+2026-01-11 01:19:07 | WARNING  | trrcms.repositories.db_adapter | PostgreSQL unavailable, falling back to SQLite
+2026-01-11 01:19:07 | INFO     | trrcms.repositories.db_adapter | Using SQLite database: c:\Users\Laptop-PC\.javacpp\Desktop\un\Habitat-Desktop\data\trrcms.db
+2026-01-11 01:19:07 | INFO     | trrcms.repositories.db_adapter | Initializing SQLite database at: c:\Users\Laptop-PC\.javacpp\Desktop\un\Habitat-Desktop\data\trrcms.db
+2026-01-11 01:19:07 | DEBUG    | trrcms.repositories.db_adapter | All SQLite tables created successfully
+2026-01-11 01:19:07 | INFO     | trrcms.repositories.db_adapter | SQLite database initialized successfully
+2026-01-11 01:19:07 | INFO     | trrcms | >> Database initialized successfully
+2026-01-11 01:19:07 | INFO     | trrcms | Initializing internationalization...
+2026-01-11 01:19:07 | INFO     | trrcms | >> Internationalization initialized (Arabic)
+2026-01-11 01:19:07 | INFO     | trrcms | Creating main window (NEW DESIGN v2 with Navbar)...
+2026-01-11 01:19:10 | ERROR    | trrcms.repositories.db_adapter | SQLite fetch_all error: no such table: surveys
+Query: 
+            SELECT * FROM surveys
+            WHERE status = 'draft' AND source = 'office'
+            ORDER BY updated_at DESC
+            LIMIT ? OFFSET ?
+        
+2026-01-11 01:19:10 | ERROR    | trrcms.ui.pages.draft_office_surveys_page_v2 | Error loading drafts: no such table: surveys
+2026-01-11 01:19:11 | INFO     | trrcms.app.main_window_v2 | Showing login page
+2026-01-11 01:19:11 | INFO     | trrcms | >> Main window created and displayed
+2026-01-11 01:19:11 | INFO     | trrcms | ================================================================================
+2026-01-11 01:19:11 | INFO     | trrcms | >> Application started successfully!
+2026-01-11 01:19:11 | INFO     | trrcms | ================================================================================
+2026-01-11 01:19:58 | INFO     | trrcms.services.auth_service | User logged in successfully: admin (admin)
+2026-01-11 01:19:58 | INFO     | trrcms.ui.pages.login_page | Login successful: admin
+2026-01-11 01:19:58 | INFO     | trrcms.app.main_window_v2 | User logged in: admin (admin)
+2026-01-11 01:19:58 | DEBUG    | trrcms.app.main_window_v2 | Navigated to: claims
+2026-01-11 01:19:58 | DEBUG    | trrcms.app.main_window_v2 | Tab 0 selected -> navigating to claims
+2026-01-11 01:22:14 | INFO     | trrcms.app.main_window_v2 | Starting new office survey
+2026-01-11 01:22:14 | DEBUG    | trrcms.app.main_window_v2 | New office survey wizard opened
+2026-01-11 01:26:59 | INFO     | trrcms.app.main_window_v2 | Application closing
+2026-01-11 01:26:59 | INFO     | trrcms | Application closed with exit code: 0
+2026-01-11 01:58:10 | INFO     | trrcms | ================================================================================
+2026-01-11 01:58:10 | INFO     | trrcms | Starting TRRCMS Application
+2026-01-11 01:58:10 | INFO     | trrcms | ================================================================================
+2026-01-11 01:58:10 | INFO     | trrcms | Initializing database...
+2026-01-11 01:58:10 | WARNING  | trrcms.repositories.db_adapter | psycopg2 not installed. PostgreSQL support unavailable.
+2026-01-11 01:58:10 | WARNING  | trrcms.repositories.db_adapter | PostgreSQL unavailable, falling back to SQLite
+2026-01-11 01:58:10 | INFO     | trrcms.repositories.db_adapter | Using SQLite database: c:\Users\Laptop-PC\.javacpp\Desktop\un\Habitat-Desktop\data\trrcms.db
+2026-01-11 01:58:10 | INFO     | trrcms.repositories.db_adapter | Initializing SQLite database at: c:\Users\Laptop-PC\.javacpp\Desktop\un\Habitat-Desktop\data\trrcms.db
+2026-01-11 01:58:10 | DEBUG    | trrcms.repositories.db_adapter | All SQLite tables created successfully
+2026-01-11 01:58:10 | INFO     | trrcms.repositories.db_adapter | SQLite database initialized successfully
+2026-01-11 01:58:10 | INFO     | trrcms | >> Database initialized successfully
+2026-01-11 01:58:10 | INFO     | trrcms | Initializing internationalization...
+2026-01-11 01:58:10 | INFO     | trrcms | >> Internationalization initialized (Arabic)
+2026-01-11 01:58:10 | INFO     | trrcms | Creating main window (NEW DESIGN v2 with Navbar)...
+2026-01-11 01:58:11 | ERROR    | trrcms | Fatal error during application startup: name 'QFrame' is not defined
+Traceback (most recent call last):
+  File "c:\Users\Laptop-PC\.javacpp\Desktop\un\Habitat-Desktop\main.py", line 68, in main
+    window = MainWindow(db, i18n)
+  File "c:\Users\Laptop-PC\.javacpp\Desktop\un\Habitat-Desktop\app\main_window_v2.py", line 37, in __init__
+    self._create_widgets()
+    ~~~~~~~~~~~~~~~~~~~~^^
+  File "c:\Users\Laptop-PC\.javacpp\Desktop\un\Habitat-Desktop\app\main_window_v2.py", line 122, in _create_widgets
+    self.window_frame = QFrame(self.central_widget)
+                        ^^^^^^
+NameError: name 'QFrame' is not defined
+2026-01-11 02:01:15 | INFO     | trrcms | ================================================================================
+2026-01-11 02:01:15 | INFO     | trrcms | Starting TRRCMS Application
+2026-01-11 02:01:15 | INFO     | trrcms | ================================================================================
+2026-01-11 02:01:15 | INFO     | trrcms | Initializing database...
+2026-01-11 02:01:15 | WARNING  | trrcms.repositories.db_adapter | psycopg2 not installed. PostgreSQL support unavailable.
+2026-01-11 02:01:15 | WARNING  | trrcms.repositories.db_adapter | PostgreSQL unavailable, falling back to SQLite
+2026-01-11 02:01:15 | INFO     | trrcms.repositories.db_adapter | Using SQLite database: c:\Users\Laptop-PC\.javacpp\Desktop\un\Habitat-Desktop\data\trrcms.db
+2026-01-11 02:01:15 | INFO     | trrcms.repositories.db_adapter | Initializing SQLite database at: c:\Users\Laptop-PC\.javacpp\Desktop\un\Habitat-Desktop\data\trrcms.db
+2026-01-11 02:01:15 | DEBUG    | trrcms.repositories.db_adapter | All SQLite tables created successfully
+2026-01-11 02:01:15 | INFO     | trrcms.repositories.db_adapter | SQLite database initialized successfully
+2026-01-11 02:01:15 | INFO     | trrcms | >> Database initialized successfully
+2026-01-11 02:01:15 | INFO     | trrcms | Initializing internationalization...
+2026-01-11 02:01:15 | INFO     | trrcms | >> Internationalization initialized (Arabic)
+2026-01-11 02:01:15 | INFO     | trrcms | Creating main window (NEW DESIGN v2 with Navbar)...
+2026-01-11 02:01:18 | ERROR    | trrcms.repositories.db_adapter | SQLite fetch_all error: no such table: surveys
+Query: 
+            SELECT * FROM surveys
+            WHERE status = 'draft' AND source = 'office'
+            ORDER BY updated_at DESC
+            LIMIT ? OFFSET ?
+        
+2026-01-11 02:01:18 | ERROR    | trrcms.ui.pages.draft_office_surveys_page_v2 | Error loading drafts: no such table: surveys
+2026-01-11 02:01:18 | INFO     | trrcms.app.main_window_v2 | Showing login page
+2026-01-11 02:01:18 | INFO     | trrcms | >> Main window created and displayed
+2026-01-11 02:01:18 | INFO     | trrcms | ================================================================================
+2026-01-11 02:01:18 | INFO     | trrcms | >> Application started successfully!
+2026-01-11 02:01:18 | INFO     | trrcms | ================================================================================
+2026-01-11 02:20:52 | INFO     | trrcms.app.main_window_v2 | Application closing
+2026-01-11 02:20:52 | INFO     | trrcms | Application closed with exit code: 0
+2026-01-11 02:21:01 | INFO     | trrcms | ================================================================================
+2026-01-11 02:21:01 | INFO     | trrcms | Starting TRRCMS Application
+2026-01-11 02:21:01 | INFO     | trrcms | ================================================================================
+2026-01-11 02:21:01 | INFO     | trrcms | Initializing database...
+2026-01-11 02:21:01 | WARNING  | trrcms.repositories.db_adapter | psycopg2 not installed. PostgreSQL support unavailable.
+2026-01-11 02:21:01 | WARNING  | trrcms.repositories.db_adapter | PostgreSQL unavailable, falling back to SQLite
+2026-01-11 02:21:01 | INFO     | trrcms.repositories.db_adapter | Using SQLite database: c:\Users\Laptop-PC\.javacpp\Desktop\un\Habitat-Desktop\data\trrcms.db
+2026-01-11 02:21:01 | INFO     | trrcms.repositories.db_adapter | Initializing SQLite database at: c:\Users\Laptop-PC\.javacpp\Desktop\un\Habitat-Desktop\data\trrcms.db
+2026-01-11 02:21:01 | DEBUG    | trrcms.repositories.db_adapter | All SQLite tables created successfully
+2026-01-11 02:21:01 | INFO     | trrcms.repositories.db_adapter | SQLite database initialized successfully
+2026-01-11 02:21:01 | INFO     | trrcms | >> Database initialized successfully
+2026-01-11 02:21:01 | INFO     | trrcms | Initializing internationalization...
+2026-01-11 02:21:01 | INFO     | trrcms | >> Internationalization initialized (Arabic)
+2026-01-11 02:21:01 | INFO     | trrcms | Creating main window (NEW DESIGN v2 with Navbar)...
+2026-01-11 02:21:03 | ERROR    | trrcms.repositories.db_adapter | SQLite fetch_all error: no such table: surveys
+Query: 
+            SELECT * FROM surveys
+            WHERE status = 'draft' AND source = 'office'
+            ORDER BY updated_at DESC
+            LIMIT ? OFFSET ?
+        
+2026-01-11 02:21:03 | ERROR    | trrcms.ui.pages.draft_office_surveys_page_v2 | Error loading drafts: no such table: surveys
+2026-01-11 02:21:04 | INFO     | trrcms.app.main_window_v2 | Showing login page
+2026-01-11 02:21:04 | INFO     | trrcms | >> Main window created and displayed
+2026-01-11 02:21:04 | INFO     | trrcms | ================================================================================
+2026-01-11 02:21:04 | INFO     | trrcms | >> Application started successfully!
+2026-01-11 02:21:04 | INFO     | trrcms | ================================================================================
+2026-01-11 02:21:22 | INFO     | trrcms.services.auth_service | User logged in successfully: admin (admin)
+2026-01-11 02:21:22 | INFO     | trrcms.ui.pages.login_page | Login successful: admin
+2026-01-11 02:21:22 | INFO     | trrcms.app.main_window_v2 | User logged in: admin (admin)
+2026-01-11 02:21:23 | DEBUG    | trrcms.app.main_window_v2 | Navigated to: claims
+2026-01-11 02:21:23 | DEBUG    | trrcms.app.main_window_v2 | Tab 0 selected -> navigating to claims
+2026-01-11 02:49:37 | INFO     | trrcms.app.main_window_v2 | Application closing
+2026-01-11 02:49:37 | INFO     | trrcms | Application closed with exit code: 0
+2026-01-11 02:49:53 | INFO     | trrcms | ================================================================================
+2026-01-11 02:49:54 | INFO     | trrcms | Starting TRRCMS Application
+2026-01-11 02:49:54 | INFO     | trrcms | ================================================================================
+2026-01-11 02:49:54 | INFO     | trrcms | Initializing database...
+2026-01-11 02:49:54 | WARNING  | trrcms.repositories.db_adapter | psycopg2 not installed. PostgreSQL support unavailable.
+2026-01-11 02:49:54 | WARNING  | trrcms.repositories.db_adapter | PostgreSQL unavailable, falling back to SQLite
+2026-01-11 02:49:54 | INFO     | trrcms.repositories.db_adapter | Using SQLite database: c:\Users\Laptop-PC\.javacpp\Desktop\un\Habitat-Desktop\data\trrcms.db
+2026-01-11 02:49:54 | INFO     | trrcms.repositories.db_adapter | Initializing SQLite database at: c:\Users\Laptop-PC\.javacpp\Desktop\un\Habitat-Desktop\data\trrcms.db
+2026-01-11 02:49:54 | DEBUG    | trrcms.repositories.db_adapter | All SQLite tables created successfully
+2026-01-11 02:49:54 | INFO     | trrcms.repositories.db_adapter | SQLite database initialized successfully
+2026-01-11 02:49:54 | INFO     | trrcms | >> Database initialized successfully
+2026-01-11 02:49:54 | INFO     | trrcms | Initializing internationalization...
+2026-01-11 02:49:54 | INFO     | trrcms | >> Internationalization initialized (Arabic)
+2026-01-11 02:49:54 | INFO     | trrcms | Creating main window (NEW DESIGN v2 with Navbar)...
+2026-01-11 02:49:56 | ERROR    | trrcms.repositories.db_adapter | SQLite fetch_all error: no such table: surveys
+Query: 
+            SELECT * FROM surveys
+            WHERE status = 'draft' AND source = 'office'
+            ORDER BY updated_at DESC
+            LIMIT ? OFFSET ?
+        
+2026-01-11 02:49:56 | ERROR    | trrcms.ui.pages.draft_office_surveys_page_v2 | Error loading drafts: no such table: surveys
+2026-01-11 02:49:56 | INFO     | trrcms.app.main_window_v2 | Showing login page
+2026-01-11 02:49:56 | INFO     | trrcms | >> Main window created and displayed
+2026-01-11 02:49:56 | INFO     | trrcms | ================================================================================
+2026-01-11 02:49:56 | INFO     | trrcms | >> Application started successfully!
+2026-01-11 02:49:56 | INFO     | trrcms | ================================================================================
+2026-01-11 02:50:13 | INFO     | trrcms.services.auth_service | User logged in successfully: admin (admin)
+2026-01-11 02:50:13 | INFO     | trrcms.ui.pages.login_page | Login successful: admin
+2026-01-11 02:50:13 | INFO     | trrcms.app.main_window_v2 | User logged in: admin (admin)
+2026-01-11 02:50:13 | DEBUG    | trrcms.app.main_window_v2 | Navigated to: claims
+2026-01-11 02:50:13 | DEBUG    | trrcms.app.main_window_v2 | Tab 0 selected -> navigating to claims
+2026-01-11 03:11:21 | INFO     | trrcms.app.main_window_v2 | Application closing
+2026-01-11 03:11:21 | INFO     | trrcms | Application closed with exit code: 0
+2026-01-11 03:11:30 | INFO     | trrcms | ================================================================================
+2026-01-11 03:11:30 | INFO     | trrcms | Starting TRRCMS Application
+2026-01-11 03:11:30 | INFO     | trrcms | ================================================================================
+2026-01-11 03:11:30 | INFO     | trrcms | Initializing database...
+2026-01-11 03:11:30 | WARNING  | trrcms.repositories.db_adapter | psycopg2 not installed. PostgreSQL support unavailable.
+2026-01-11 03:11:30 | WARNING  | trrcms.repositories.db_adapter | PostgreSQL unavailable, falling back to SQLite
+2026-01-11 03:11:30 | INFO     | trrcms.repositories.db_adapter | Using SQLite database: c:\Users\Laptop-PC\.javacpp\Desktop\un\Habitat-Desktop\data\trrcms.db
+2026-01-11 03:11:30 | INFO     | trrcms.repositories.db_adapter | Initializing SQLite database at: c:\Users\Laptop-PC\.javacpp\Desktop\un\Habitat-Desktop\data\trrcms.db
+2026-01-11 03:11:30 | DEBUG    | trrcms.repositories.db_adapter | All SQLite tables created successfully
+2026-01-11 03:11:30 | INFO     | trrcms.repositories.db_adapter | SQLite database initialized successfully
+2026-01-11 03:11:30 | INFO     | trrcms | >> Database initialized successfully
+2026-01-11 03:11:30 | INFO     | trrcms | Initializing internationalization...
+2026-01-11 03:11:30 | INFO     | trrcms | >> Internationalization initialized (Arabic)
+2026-01-11 03:11:30 | INFO     | trrcms | Creating main window (NEW DESIGN v2 with Navbar)...
+2026-01-11 03:11:32 | ERROR    | trrcms.repositories.db_adapter | SQLite fetch_all error: no such table: surveys
+Query: 
+            SELECT * FROM surveys
+            WHERE status = 'draft' AND source = 'office'
+            ORDER BY updated_at DESC
+            LIMIT ? OFFSET ?
+        
+2026-01-11 03:11:32 | ERROR    | trrcms.ui.pages.draft_office_surveys_page_v2 | Error loading drafts: no such table: surveys
+2026-01-11 03:11:32 | INFO     | trrcms.app.main_window_v2 | Showing login page
+2026-01-11 03:11:33 | INFO     | trrcms | >> Main window created and displayed
+2026-01-11 03:11:33 | INFO     | trrcms | ================================================================================
+2026-01-11 03:11:33 | INFO     | trrcms | >> Application started successfully!
+2026-01-11 03:11:33 | INFO     | trrcms | ================================================================================
+2026-01-11 03:11:49 | INFO     | trrcms.services.auth_service | User logged in successfully: admin (admin)
+2026-01-11 03:11:49 | INFO     | trrcms.ui.pages.login_page | Login successful: admin
+2026-01-11 03:11:49 | INFO     | trrcms.app.main_window_v2 | User logged in: admin (admin)
+2026-01-11 03:11:49 | DEBUG    | trrcms.app.main_window_v2 | Navigated to: claims
+2026-01-11 03:11:49 | DEBUG    | trrcms.app.main_window_v2 | Tab 0 selected -> navigating to claims
+2026-01-11 03:12:17 | INFO     | trrcms.app.main_window_v2 | Application closing
+2026-01-11 03:12:17 | INFO     | trrcms | Application closed with exit code: 0
+2026-01-11 03:32:32 | INFO     | trrcms | ================================================================================
+2026-01-11 03:32:32 | INFO     | trrcms | Starting TRRCMS Application
+2026-01-11 03:32:32 | INFO     | trrcms | ================================================================================
+2026-01-11 03:32:32 | INFO     | trrcms | Initializing database...
+2026-01-11 03:32:32 | WARNING  | trrcms.repositories.db_adapter | psycopg2 not installed. PostgreSQL support unavailable.
+2026-01-11 03:32:32 | WARNING  | trrcms.repositories.db_adapter | PostgreSQL unavailable, falling back to SQLite
+2026-01-11 03:32:32 | INFO     | trrcms.repositories.db_adapter | Using SQLite database: c:\Users\Laptop-PC\.javacpp\Desktop\un\Habitat-Desktop\data\trrcms.db
+2026-01-11 03:32:32 | INFO     | trrcms.repositories.db_adapter | Initializing SQLite database at: c:\Users\Laptop-PC\.javacpp\Desktop\un\Habitat-Desktop\data\trrcms.db
+2026-01-11 03:32:32 | DEBUG    | trrcms.repositories.db_adapter | All SQLite tables created successfully
+2026-01-11 03:32:32 | INFO     | trrcms.repositories.db_adapter | SQLite database initialized successfully
+2026-01-11 03:32:32 | INFO     | trrcms | >> Database initialized successfully
+2026-01-11 03:32:32 | INFO     | trrcms | Initializing internationalization...
+2026-01-11 03:32:32 | INFO     | trrcms | >> Internationalization initialized (Arabic)
+2026-01-11 03:32:32 | INFO     | trrcms | Creating main window (NEW DESIGN v2 with Navbar)...
+2026-01-11 03:32:33 | ERROR    | trrcms | Fatal error during application startup: name 'QCursor' is not defined
+Traceback (most recent call last):
+  File "c:\Users\Laptop-PC\.javacpp\Desktop\un\Habitat-Desktop\main.py", line 68, in main
+    window = MainWindow(db, i18n)
+  File "c:\Users\Laptop-PC\.javacpp\Desktop\un\Habitat-Desktop\app\main_window_v2.py", line 41, in __init__
+    self._create_widgets()
+    ~~~~~~~~~~~~~~~~~~~~^^
+  File "c:\Users\Laptop-PC\.javacpp\Desktop\un\Habitat-Desktop\app\main_window_v2.py", line 162, in _create_widgets
+    self.pages[Pages.LOGIN] = LoginPage(self.db, self.i18n, self)
+                              ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "c:\Users\Laptop-PC\.javacpp\Desktop\un\Habitat-Desktop\ui\pages\login_page.py", line 69, in __init__
+    self._setup_login_window_controls()
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "c:\Users\Laptop-PC\.javacpp\Desktop\un\Habitat-Desktop\ui\pages\login_page.py", line 422, in _setup_login_window_controls
+    b.setCursor(QCursor(Qt.PointingHandCursor))
+                ^^^^^^^
+NameError: name 'QCursor' is not defined
+2026-01-11 03:35:27 | INFO     | trrcms | ================================================================================
+2026-01-11 03:35:27 | INFO     | trrcms | Starting TRRCMS Application
+2026-01-11 03:35:27 | INFO     | trrcms | ================================================================================
+2026-01-11 03:35:27 | INFO     | trrcms | Initializing database...
+2026-01-11 03:35:27 | WARNING  | trrcms.repositories.db_adapter | psycopg2 not installed. PostgreSQL support unavailable.
+2026-01-11 03:35:27 | WARNING  | trrcms.repositories.db_adapter | PostgreSQL unavailable, falling back to SQLite
+2026-01-11 03:35:27 | INFO     | trrcms.repositories.db_adapter | Using SQLite database: c:\Users\Laptop-PC\.javacpp\Desktop\un\Habitat-Desktop\data\trrcms.db
+2026-01-11 03:35:27 | INFO     | trrcms.repositories.db_adapter | Initializing SQLite database at: c:\Users\Laptop-PC\.javacpp\Desktop\un\Habitat-Desktop\data\trrcms.db
+2026-01-11 03:35:27 | DEBUG    | trrcms.repositories.db_adapter | All SQLite tables created successfully
+2026-01-11 03:35:27 | INFO     | trrcms.repositories.db_adapter | SQLite database initialized successfully
+2026-01-11 03:35:27 | INFO     | trrcms | >> Database initialized successfully
+2026-01-11 03:35:27 | INFO     | trrcms | Initializing internationalization...
+2026-01-11 03:35:27 | INFO     | trrcms | >> Internationalization initialized (Arabic)
+2026-01-11 03:35:27 | INFO     | trrcms | Creating main window (NEW DESIGN v2 with Navbar)...
+2026-01-11 03:35:29 | ERROR    | trrcms.repositories.db_adapter | SQLite fetch_all error: no such table: surveys
+Query: 
+            SELECT * FROM surveys
+            WHERE status = 'draft' AND source = 'office'
+            ORDER BY updated_at DESC
+            LIMIT ? OFFSET ?
+        
+2026-01-11 03:35:29 | ERROR    | trrcms.ui.pages.draft_office_surveys_page_v2 | Error loading drafts: no such table: surveys
+2026-01-11 03:35:29 | INFO     | trrcms.app.main_window_v2 | Showing login page
+2026-01-11 03:35:30 | INFO     | trrcms | >> Main window created and displayed
+2026-01-11 03:35:30 | INFO     | trrcms | ================================================================================
+2026-01-11 03:35:30 | INFO     | trrcms | >> Application started successfully!
+2026-01-11 03:35:30 | INFO     | trrcms | ================================================================================
+2026-01-11 03:35:53 | INFO     | trrcms.app.main_window_v2 | Application closing
+2026-01-11 03:35:53 | INFO     | trrcms | Application closed with exit code: 0
+2026-01-11 03:36:08 | INFO     | trrcms | ================================================================================
+2026-01-11 03:36:08 | INFO     | trrcms | Starting TRRCMS Application
+2026-01-11 03:36:08 | INFO     | trrcms | ================================================================================
+2026-01-11 03:36:08 | INFO     | trrcms | Initializing database...
+2026-01-11 03:36:08 | WARNING  | trrcms.repositories.db_adapter | psycopg2 not installed. PostgreSQL support unavailable.
+2026-01-11 03:36:08 | WARNING  | trrcms.repositories.db_adapter | PostgreSQL unavailable, falling back to SQLite
+2026-01-11 03:36:08 | INFO     | trrcms.repositories.db_adapter | Using SQLite database: c:\Users\Laptop-PC\.javacpp\Desktop\un\Habitat-Desktop\data\trrcms.db
+2026-01-11 03:36:08 | INFO     | trrcms.repositories.db_adapter | Initializing SQLite database at: c:\Users\Laptop-PC\.javacpp\Desktop\un\Habitat-Desktop\data\trrcms.db
+2026-01-11 03:36:08 | DEBUG    | trrcms.repositories.db_adapter | All SQLite tables created successfully
+2026-01-11 03:36:08 | INFO     | trrcms.repositories.db_adapter | SQLite database initialized successfully
+2026-01-11 03:36:08 | INFO     | trrcms | >> Database initialized successfully
+2026-01-11 03:36:08 | INFO     | trrcms | Initializing internationalization...
+2026-01-11 03:36:08 | INFO     | trrcms | >> Internationalization initialized (Arabic)
+2026-01-11 03:36:08 | INFO     | trrcms | Creating main window (NEW DESIGN v2 with Navbar)...
+2026-01-11 03:36:10 | ERROR    | trrcms.repositories.db_adapter | SQLite fetch_all error: no such table: surveys
+Query: 
+            SELECT * FROM surveys
+            WHERE status = 'draft' AND source = 'office'
+            ORDER BY updated_at DESC
+            LIMIT ? OFFSET ?
+        
+2026-01-11 03:36:10 | ERROR    | trrcms.ui.pages.draft_office_surveys_page_v2 | Error loading drafts: no such table: surveys
+2026-01-11 03:36:10 | INFO     | trrcms.app.main_window_v2 | Showing login page
+2026-01-11 03:36:11 | INFO     | trrcms | >> Main window created and displayed
+2026-01-11 03:36:11 | INFO     | trrcms | ================================================================================
+2026-01-11 03:36:11 | INFO     | trrcms | >> Application started successfully!
+2026-01-11 03:36:11 | INFO     | trrcms | ================================================================================
+2026-01-11 03:42:41 | INFO     | trrcms.app.main_window_v2 | Application closing
+2026-01-11 03:42:41 | INFO     | trrcms | Application closed with exit code: 0
+2026-01-11 03:42:49 | INFO     | trrcms | ================================================================================
+2026-01-11 03:42:49 | INFO     | trrcms | Starting TRRCMS Application
+2026-01-11 03:42:49 | INFO     | trrcms | ================================================================================
+2026-01-11 03:42:49 | INFO     | trrcms | Initializing database...
+2026-01-11 03:42:49 | WARNING  | trrcms.repositories.db_adapter | psycopg2 not installed. PostgreSQL support unavailable.
+2026-01-11 03:42:49 | WARNING  | trrcms.repositories.db_adapter | PostgreSQL unavailable, falling back to SQLite
+2026-01-11 03:42:49 | INFO     | trrcms.repositories.db_adapter | Using SQLite database: c:\Users\Laptop-PC\.javacpp\Desktop\un\Habitat-Desktop\data\trrcms.db
+2026-01-11 03:42:49 | INFO     | trrcms.repositories.db_adapter | Initializing SQLite database at: c:\Users\Laptop-PC\.javacpp\Desktop\un\Habitat-Desktop\data\trrcms.db
+2026-01-11 03:42:49 | DEBUG    | trrcms.repositories.db_adapter | All SQLite tables created successfully
+2026-01-11 03:42:49 | INFO     | trrcms.repositories.db_adapter | SQLite database initialized successfully
+2026-01-11 03:42:49 | INFO     | trrcms | >> Database initialized successfully
+2026-01-11 03:42:49 | INFO     | trrcms | Initializing internationalization...
+2026-01-11 03:42:49 | INFO     | trrcms | >> Internationalization initialized (Arabic)
+2026-01-11 03:42:49 | INFO     | trrcms | Creating main window (NEW DESIGN v2 with Navbar)...
+2026-01-11 03:42:51 | ERROR    | trrcms.repositories.db_adapter | SQLite fetch_all error: no such table: surveys
+Query: 
+            SELECT * FROM surveys
+            WHERE status = 'draft' AND source = 'office'
+            ORDER BY updated_at DESC
+            LIMIT ? OFFSET ?
+        
+2026-01-11 03:42:51 | ERROR    | trrcms.ui.pages.draft_office_surveys_page_v2 | Error loading drafts: no such table: surveys
+2026-01-11 03:42:51 | INFO     | trrcms.app.main_window_v2 | Showing login page
+2026-01-11 03:42:51 | INFO     | trrcms | >> Main window created and displayed
+2026-01-11 03:42:52 | INFO     | trrcms | ================================================================================
+2026-01-11 03:42:52 | INFO     | trrcms | >> Application started successfully!
+2026-01-11 03:42:52 | INFO     | trrcms | ================================================================================
+2026-01-11 03:43:04 | INFO     | trrcms.app.main_window_v2 | Application closing
+2026-01-11 03:43:04 | INFO     | trrcms | Application closed with exit code: 0
+2026-01-11 03:43:36 | INFO     | trrcms | ================================================================================
+2026-01-11 03:43:36 | INFO     | trrcms | Starting TRRCMS Application
+2026-01-11 03:43:36 | INFO     | trrcms | ================================================================================
+2026-01-11 03:43:36 | INFO     | trrcms | Initializing database...
+2026-01-11 03:43:36 | WARNING  | trrcms.repositories.db_adapter | psycopg2 not installed. PostgreSQL support unavailable.
+2026-01-11 03:43:36 | WARNING  | trrcms.repositories.db_adapter | PostgreSQL unavailable, falling back to SQLite
+2026-01-11 03:43:36 | INFO     | trrcms.repositories.db_adapter | Using SQLite database: c:\Users\Laptop-PC\.javacpp\Desktop\un\Habitat-Desktop\data\trrcms.db
+2026-01-11 03:43:36 | INFO     | trrcms.repositories.db_adapter | Initializing SQLite database at: c:\Users\Laptop-PC\.javacpp\Desktop\un\Habitat-Desktop\data\trrcms.db
+2026-01-11 03:43:36 | DEBUG    | trrcms.repositories.db_adapter | All SQLite tables created successfully
+2026-01-11 03:43:36 | INFO     | trrcms.repositories.db_adapter | SQLite database initialized successfully
+2026-01-11 03:43:36 | INFO     | trrcms | >> Database initialized successfully
+2026-01-11 03:43:36 | INFO     | trrcms | Initializing internationalization...
+2026-01-11 03:43:36 | INFO     | trrcms | >> Internationalization initialized (Arabic)
+2026-01-11 03:43:36 | INFO     | trrcms | Creating main window (NEW DESIGN v2 with Navbar)...
+2026-01-11 03:43:39 | ERROR    | trrcms.repositories.db_adapter | SQLite fetch_all error: no such table: surveys
+Query: 
+            SELECT * FROM surveys
+            WHERE status = 'draft' AND source = 'office'
+            ORDER BY updated_at DESC
+            LIMIT ? OFFSET ?
+        
+2026-01-11 03:43:39 | ERROR    | trrcms.ui.pages.draft_office_surveys_page_v2 | Error loading drafts: no such table: surveys
+2026-01-11 03:43:39 | INFO     | trrcms.app.main_window_v2 | Showing login page
+2026-01-11 03:43:39 | INFO     | trrcms | >> Main window created and displayed
+2026-01-11 03:43:39 | INFO     | trrcms | ================================================================================
+2026-01-11 03:43:39 | INFO     | trrcms | >> Application started successfully!
+2026-01-11 03:43:39 | INFO     | trrcms | ================================================================================
+2026-01-11 03:43:42 | INFO     | trrcms.app.main_window_v2 | Application closing
+2026-01-11 03:43:42 | INFO     | trrcms | Application closed with exit code: 0
+2026-01-11 03:44:15 | INFO     | trrcms | ================================================================================
+2026-01-11 03:44:15 | INFO     | trrcms | Starting TRRCMS Application
+2026-01-11 03:44:15 | INFO     | trrcms | ================================================================================
+2026-01-11 03:44:15 | INFO     | trrcms | Initializing database...
+2026-01-11 03:44:15 | WARNING  | trrcms.repositories.db_adapter | psycopg2 not installed. PostgreSQL support unavailable.
+2026-01-11 03:44:15 | WARNING  | trrcms.repositories.db_adapter | PostgreSQL unavailable, falling back to SQLite
+2026-01-11 03:44:15 | INFO     | trrcms.repositories.db_adapter | Using SQLite database: c:\Users\Laptop-PC\.javacpp\Desktop\un\Habitat-Desktop\data\trrcms.db
+2026-01-11 03:44:15 | INFO     | trrcms.repositories.db_adapter | Initializing SQLite database at: c:\Users\Laptop-PC\.javacpp\Desktop\un\Habitat-Desktop\data\trrcms.db
+2026-01-11 03:44:15 | DEBUG    | trrcms.repositories.db_adapter | All SQLite tables created successfully
+2026-01-11 03:44:15 | INFO     | trrcms.repositories.db_adapter | SQLite database initialized successfully
+2026-01-11 03:44:15 | INFO     | trrcms | >> Database initialized successfully
+2026-01-11 03:44:15 | INFO     | trrcms | Initializing internationalization...
+2026-01-11 03:44:15 | INFO     | trrcms | >> Internationalization initialized (Arabic)
+2026-01-11 03:44:15 | INFO     | trrcms | Creating main window (NEW DESIGN v2 with Navbar)...
+2026-01-11 03:44:17 | ERROR    | trrcms.repositories.db_adapter | SQLite fetch_all error: no such table: surveys
+Query: 
+            SELECT * FROM surveys
+            WHERE status = 'draft' AND source = 'office'
+            ORDER BY updated_at DESC
+            LIMIT ? OFFSET ?
+        
+2026-01-11 03:44:17 | ERROR    | trrcms.ui.pages.draft_office_surveys_page_v2 | Error loading drafts: no such table: surveys
+2026-01-11 03:44:17 | INFO     | trrcms.app.main_window_v2 | Showing login page
+2026-01-11 03:44:18 | INFO     | trrcms | >> Main window created and displayed
+2026-01-11 03:44:18 | INFO     | trrcms | ================================================================================
+2026-01-11 03:44:18 | INFO     | trrcms | >> Application started successfully!
+2026-01-11 03:44:18 | INFO     | trrcms | ================================================================================
+2026-01-11 03:44:21 | INFO     | trrcms.app.main_window_v2 | Application closing
+2026-01-11 03:44:21 | INFO     | trrcms | Application closed with exit code: 0
+2026-01-11 03:44:51 | INFO     | trrcms | ================================================================================
+2026-01-11 03:44:51 | INFO     | trrcms | Starting TRRCMS Application
+2026-01-11 03:44:51 | INFO     | trrcms | ================================================================================
+2026-01-11 03:44:51 | INFO     | trrcms | Initializing database...
+2026-01-11 03:44:51 | WARNING  | trrcms.repositories.db_adapter | psycopg2 not installed. PostgreSQL support unavailable.
+2026-01-11 03:44:51 | WARNING  | trrcms.repositories.db_adapter | PostgreSQL unavailable, falling back to SQLite
+2026-01-11 03:44:51 | INFO     | trrcms.repositories.db_adapter | Using SQLite database: c:\Users\Laptop-PC\.javacpp\Desktop\un\Habitat-Desktop\data\trrcms.db
+2026-01-11 03:44:51 | INFO     | trrcms.repositories.db_adapter | Initializing SQLite database at: c:\Users\Laptop-PC\.javacpp\Desktop\un\Habitat-Desktop\data\trrcms.db
+2026-01-11 03:44:51 | DEBUG    | trrcms.repositories.db_adapter | All SQLite tables created successfully
+2026-01-11 03:44:51 | INFO     | trrcms.repositories.db_adapter | SQLite database initialized successfully
+2026-01-11 03:44:51 | INFO     | trrcms | >> Database initialized successfully
+2026-01-11 03:44:51 | INFO     | trrcms | Initializing internationalization...
+2026-01-11 03:44:51 | INFO     | trrcms | >> Internationalization initialized (Arabic)
+2026-01-11 03:44:51 | INFO     | trrcms | Creating main window (NEW DESIGN v2 with Navbar)...
+2026-01-11 03:44:53 | ERROR    | trrcms.repositories.db_adapter | SQLite fetch_all error: no such table: surveys
+Query: 
+            SELECT * FROM surveys
+            WHERE status = 'draft' AND source = 'office'
+            ORDER BY updated_at DESC
+            LIMIT ? OFFSET ?
+        
+2026-01-11 03:44:53 | ERROR    | trrcms.ui.pages.draft_office_surveys_page_v2 | Error loading drafts: no such table: surveys
+2026-01-11 03:44:54 | INFO     | trrcms.app.main_window_v2 | Showing login page
+2026-01-11 03:44:54 | INFO     | trrcms | >> Main window created and displayed
+2026-01-11 03:44:54 | INFO     | trrcms | ================================================================================
+2026-01-11 03:44:54 | INFO     | trrcms | >> Application started successfully!
+2026-01-11 03:44:54 | INFO     | trrcms | ================================================================================
+2026-01-11 03:45:01 | INFO     | trrcms.app.main_window_v2 | Application closing
+2026-01-11 03:45:01 | INFO     | trrcms | Application closed with exit code: 0
+2026-01-11 03:45:31 | INFO     | trrcms | ================================================================================
+2026-01-11 03:45:31 | INFO     | trrcms | Starting TRRCMS Application
+2026-01-11 03:45:31 | INFO     | trrcms | ================================================================================
+2026-01-11 03:45:31 | INFO     | trrcms | Initializing database...
+2026-01-11 03:45:31 | WARNING  | trrcms.repositories.db_adapter | psycopg2 not installed. PostgreSQL support unavailable.
+2026-01-11 03:45:31 | WARNING  | trrcms.repositories.db_adapter | PostgreSQL unavailable, falling back to SQLite
+2026-01-11 03:45:31 | INFO     | trrcms.repositories.db_adapter | Using SQLite database: c:\Users\Laptop-PC\.javacpp\Desktop\un\Habitat-Desktop\data\trrcms.db
+2026-01-11 03:45:31 | INFO     | trrcms.repositories.db_adapter | Initializing SQLite database at: c:\Users\Laptop-PC\.javacpp\Desktop\un\Habitat-Desktop\data\trrcms.db
+2026-01-11 03:45:31 | DEBUG    | trrcms.repositories.db_adapter | All SQLite tables created successfully
+2026-01-11 03:45:31 | INFO     | trrcms.repositories.db_adapter | SQLite database initialized successfully
+2026-01-11 03:45:31 | INFO     | trrcms | >> Database initialized successfully
+2026-01-11 03:45:31 | INFO     | trrcms | Initializing internationalization...
+2026-01-11 03:45:31 | INFO     | trrcms | >> Internationalization initialized (Arabic)
+2026-01-11 03:45:31 | INFO     | trrcms | Creating main window (NEW DESIGN v2 with Navbar)...
+2026-01-11 03:45:33 | ERROR    | trrcms.repositories.db_adapter | SQLite fetch_all error: no such table: surveys
+Query: 
+            SELECT * FROM surveys
+            WHERE status = 'draft' AND source = 'office'
+            ORDER BY updated_at DESC
+            LIMIT ? OFFSET ?
+        
+2026-01-11 03:45:33 | ERROR    | trrcms.ui.pages.draft_office_surveys_page_v2 | Error loading drafts: no such table: surveys
+2026-01-11 03:45:33 | INFO     | trrcms.app.main_window_v2 | Showing login page
+2026-01-11 03:45:33 | INFO     | trrcms | >> Main window created and displayed
+2026-01-11 03:45:33 | INFO     | trrcms | ================================================================================
+2026-01-11 03:45:34 | INFO     | trrcms | >> Application started successfully!
+2026-01-11 03:45:34 | INFO     | trrcms | ================================================================================
+2026-01-11 03:45:44 | INFO     | trrcms.app.main_window_v2 | Application closing
+2026-01-11 03:45:44 | INFO     | trrcms | Application closed with exit code: 0
+2026-01-11 04:05:09 | INFO     | trrcms | ================================================================================
+2026-01-11 04:05:09 | INFO     | trrcms | Starting TRRCMS Application
+2026-01-11 04:05:09 | INFO     | trrcms | ================================================================================
+2026-01-11 04:05:09 | INFO     | trrcms | Initializing database...
+2026-01-11 04:05:09 | WARNING  | trrcms.repositories.db_adapter | psycopg2 not installed. PostgreSQL support unavailable.
+2026-01-11 04:05:09 | WARNING  | trrcms.repositories.db_adapter | PostgreSQL unavailable, falling back to SQLite
+2026-01-11 04:05:09 | INFO     | trrcms.repositories.db_adapter | Using SQLite database: c:\Users\Laptop-PC\.javacpp\Desktop\un\Habitat-Desktop\data\trrcms.db
+2026-01-11 04:05:09 | INFO     | trrcms.repositories.db_adapter | Initializing SQLite database at: c:\Users\Laptop-PC\.javacpp\Desktop\un\Habitat-Desktop\data\trrcms.db
+2026-01-11 04:05:09 | DEBUG    | trrcms.repositories.db_adapter | All SQLite tables created successfully
+2026-01-11 04:05:09 | INFO     | trrcms.repositories.db_adapter | SQLite database initialized successfully
+2026-01-11 04:05:09 | INFO     | trrcms | >> Database initialized successfully
+2026-01-11 04:05:09 | INFO     | trrcms | Initializing internationalization...
+2026-01-11 04:05:09 | INFO     | trrcms | >> Internationalization initialized (Arabic)
+2026-01-11 04:05:09 | INFO     | trrcms | Creating main window (NEW DESIGN v2 with Navbar)...
+2026-01-11 04:05:12 | ERROR    | trrcms.repositories.db_adapter | SQLite fetch_all error: no such table: surveys
+Query: 
+            SELECT * FROM surveys
+            WHERE status = 'draft' AND source = 'office'
+            ORDER BY updated_at DESC
+            LIMIT ? OFFSET ?
+        
+2026-01-11 04:05:12 | ERROR    | trrcms.ui.pages.draft_office_surveys_page_v2 | Error loading drafts: no such table: surveys
+2026-01-11 04:05:12 | INFO     | trrcms.app.main_window_v2 | Showing login page
+2026-01-11 04:05:13 | INFO     | trrcms | >> Main window created and displayed
+2026-01-11 04:05:13 | INFO     | trrcms | ================================================================================
+2026-01-11 04:05:13 | INFO     | trrcms | >> Application started successfully!
+2026-01-11 04:05:13 | INFO     | trrcms | ================================================================================
+2026-01-11 04:05:28 | INFO     | trrcms.app.main_window_v2 | Application closing
+2026-01-11 04:05:29 | INFO     | trrcms | Application closed with exit code: 0
+2026-01-11 04:06:16 | INFO     | trrcms | ================================================================================
+2026-01-11 04:06:16 | INFO     | trrcms | Starting TRRCMS Application
+2026-01-11 04:06:16 | INFO     | trrcms | ================================================================================
+2026-01-11 04:06:16 | INFO     | trrcms | Initializing database...
+2026-01-11 04:06:16 | WARNING  | trrcms.repositories.db_adapter | psycopg2 not installed. PostgreSQL support unavailable.
+2026-01-11 04:06:16 | WARNING  | trrcms.repositories.db_adapter | PostgreSQL unavailable, falling back to SQLite
+2026-01-11 04:06:16 | INFO     | trrcms.repositories.db_adapter | Using SQLite database: c:\Users\Laptop-PC\.javacpp\Desktop\un\Habitat-Desktop\data\trrcms.db
+2026-01-11 04:06:16 | INFO     | trrcms.repositories.db_adapter | Initializing SQLite database at: c:\Users\Laptop-PC\.javacpp\Desktop\un\Habitat-Desktop\data\trrcms.db
+2026-01-11 04:06:16 | DEBUG    | trrcms.repositories.db_adapter | All SQLite tables created successfully
+2026-01-11 04:06:16 | INFO     | trrcms.repositories.db_adapter | SQLite database initialized successfully
+2026-01-11 04:06:16 | INFO     | trrcms | >> Database initialized successfully
+2026-01-11 04:06:16 | INFO     | trrcms | Initializing internationalization...
+2026-01-11 04:06:16 | INFO     | trrcms | >> Internationalization initialized (Arabic)
+2026-01-11 04:06:16 | INFO     | trrcms | Creating main window (NEW DESIGN v2 with Navbar)...
+2026-01-11 04:06:19 | ERROR    | trrcms.repositories.db_adapter | SQLite fetch_all error: no such table: surveys
+Query: 
+            SELECT * FROM surveys
+            WHERE status = 'draft' AND source = 'office'
+            ORDER BY updated_at DESC
+            LIMIT ? OFFSET ?
+        
+2026-01-11 04:06:19 | ERROR    | trrcms.ui.pages.draft_office_surveys_page_v2 | Error loading drafts: no such table: surveys
+2026-01-11 04:06:19 | INFO     | trrcms.app.main_window_v2 | Showing login page
+2026-01-11 04:06:19 | INFO     | trrcms | >> Main window created and displayed
+2026-01-11 04:06:19 | INFO     | trrcms | ================================================================================
+2026-01-11 04:06:19 | INFO     | trrcms | >> Application started successfully!
+2026-01-11 04:06:19 | INFO     | trrcms | ================================================================================
+2026-01-11 04:06:32 | INFO     | trrcms.app.main_window_v2 | Application closing
+2026-01-11 04:06:32 | INFO     | trrcms | Application closed with exit code: 0
+2026-01-11 04:07:36 | INFO     | trrcms | ================================================================================
+2026-01-11 04:07:36 | INFO     | trrcms | Starting TRRCMS Application
+2026-01-11 04:07:36 | INFO     | trrcms | ================================================================================
+2026-01-11 04:07:36 | INFO     | trrcms | Initializing database...
+2026-01-11 04:07:36 | WARNING  | trrcms.repositories.db_adapter | psycopg2 not installed. PostgreSQL support unavailable.
+2026-01-11 04:07:36 | WARNING  | trrcms.repositories.db_adapter | PostgreSQL unavailable, falling back to SQLite
+2026-01-11 04:07:36 | INFO     | trrcms.repositories.db_adapter | Using SQLite database: c:\Users\Laptop-PC\.javacpp\Desktop\un\Habitat-Desktop\data\trrcms.db
+2026-01-11 04:07:36 | INFO     | trrcms.repositories.db_adapter | Initializing SQLite database at: c:\Users\Laptop-PC\.javacpp\Desktop\un\Habitat-Desktop\data\trrcms.db
+2026-01-11 04:07:36 | DEBUG    | trrcms.repositories.db_adapter | All SQLite tables created successfully
+2026-01-11 04:07:36 | INFO     | trrcms.repositories.db_adapter | SQLite database initialized successfully
+2026-01-11 04:07:36 | INFO     | trrcms | >> Database initialized successfully
+2026-01-11 04:07:36 | INFO     | trrcms | Initializing internationalization...
+2026-01-11 04:07:36 | INFO     | trrcms | >> Internationalization initialized (Arabic)
+2026-01-11 04:07:36 | INFO     | trrcms | Creating main window (NEW DESIGN v2 with Navbar)...
+2026-01-11 04:07:39 | ERROR    | trrcms.repositories.db_adapter | SQLite fetch_all error: no such table: surveys
+Query: 
+            SELECT * FROM surveys
+            WHERE status = 'draft' AND source = 'office'
+            ORDER BY updated_at DESC
+            LIMIT ? OFFSET ?
+        
+2026-01-11 04:07:39 | ERROR    | trrcms.ui.pages.draft_office_surveys_page_v2 | Error loading drafts: no such table: surveys
+2026-01-11 04:07:39 | INFO     | trrcms.app.main_window_v2 | Showing login page
+2026-01-11 04:07:40 | INFO     | trrcms | >> Main window created and displayed
+2026-01-11 04:07:40 | INFO     | trrcms | ================================================================================
+2026-01-11 04:07:40 | INFO     | trrcms | >> Application started successfully!
+2026-01-11 04:07:40 | INFO     | trrcms | ================================================================================
+2026-01-11 04:07:48 | INFO     | trrcms.app.main_window_v2 | Application closing
+2026-01-11 04:07:48 | INFO     | trrcms | Application closed with exit code: 0
+2026-01-11 04:08:29 | INFO     | trrcms | ================================================================================
+2026-01-11 04:08:29 | INFO     | trrcms | Starting TRRCMS Application
+2026-01-11 04:08:29 | INFO     | trrcms | ================================================================================
+2026-01-11 04:08:29 | INFO     | trrcms | Initializing database...
+2026-01-11 04:08:29 | WARNING  | trrcms.repositories.db_adapter | psycopg2 not installed. PostgreSQL support unavailable.
+2026-01-11 04:08:29 | WARNING  | trrcms.repositories.db_adapter | PostgreSQL unavailable, falling back to SQLite
+2026-01-11 04:08:29 | INFO     | trrcms.repositories.db_adapter | Using SQLite database: c:\Users\Laptop-PC\.javacpp\Desktop\un\Habitat-Desktop\data\trrcms.db
+2026-01-11 04:08:29 | INFO     | trrcms.repositories.db_adapter | Initializing SQLite database at: c:\Users\Laptop-PC\.javacpp\Desktop\un\Habitat-Desktop\data\trrcms.db
+2026-01-11 04:08:29 | DEBUG    | trrcms.repositories.db_adapter | All SQLite tables created successfully
+2026-01-11 04:08:29 | INFO     | trrcms.repositories.db_adapter | SQLite database initialized successfully
+2026-01-11 04:08:29 | INFO     | trrcms | >> Database initialized successfully
+2026-01-11 04:08:29 | INFO     | trrcms | Initializing internationalization...
+2026-01-11 04:08:29 | INFO     | trrcms | >> Internationalization initialized (Arabic)
+2026-01-11 04:08:29 | INFO     | trrcms | Creating main window (NEW DESIGN v2 with Navbar)...
+2026-01-11 04:08:31 | ERROR    | trrcms.repositories.db_adapter | SQLite fetch_all error: no such table: surveys
+Query: 
+            SELECT * FROM surveys
+            WHERE status = 'draft' AND source = 'office'
+            ORDER BY updated_at DESC
+            LIMIT ? OFFSET ?
+        
+2026-01-11 04:08:31 | ERROR    | trrcms.ui.pages.draft_office_surveys_page_v2 | Error loading drafts: no such table: surveys
+2026-01-11 04:08:31 | INFO     | trrcms.app.main_window_v2 | Showing login page
+2026-01-11 04:08:31 | INFO     | trrcms | >> Main window created and displayed
+2026-01-11 04:08:31 | INFO     | trrcms | ================================================================================
+2026-01-11 04:08:31 | INFO     | trrcms | >> Application started successfully!
+2026-01-11 04:08:31 | INFO     | trrcms | ================================================================================
+2026-01-11 04:08:36 | INFO     | trrcms.app.main_window_v2 | Application closing
+2026-01-11 04:08:36 | INFO     | trrcms | Application closed with exit code: 0
+2026-01-11 04:09:17 | INFO     | trrcms | ================================================================================
+2026-01-11 04:09:17 | INFO     | trrcms | Starting TRRCMS Application
+2026-01-11 04:09:17 | INFO     | trrcms | ================================================================================
+2026-01-11 04:09:17 | INFO     | trrcms | Initializing database...
+2026-01-11 04:09:17 | WARNING  | trrcms.repositories.db_adapter | psycopg2 not installed. PostgreSQL support unavailable.
+2026-01-11 04:09:17 | WARNING  | trrcms.repositories.db_adapter | PostgreSQL unavailable, falling back to SQLite
+2026-01-11 04:09:17 | INFO     | trrcms.repositories.db_adapter | Using SQLite database: c:\Users\Laptop-PC\.javacpp\Desktop\un\Habitat-Desktop\data\trrcms.db
+2026-01-11 04:09:17 | INFO     | trrcms.repositories.db_adapter | Initializing SQLite database at: c:\Users\Laptop-PC\.javacpp\Desktop\un\Habitat-Desktop\data\trrcms.db
+2026-01-11 04:09:17 | DEBUG    | trrcms.repositories.db_adapter | All SQLite tables created successfully
+2026-01-11 04:09:17 | INFO     | trrcms.repositories.db_adapter | SQLite database initialized successfully
+2026-01-11 04:09:17 | INFO     | trrcms | >> Database initialized successfully
+2026-01-11 04:09:17 | INFO     | trrcms | Initializing internationalization...
+2026-01-11 04:09:17 | INFO     | trrcms | >> Internationalization initialized (Arabic)
+2026-01-11 04:09:17 | INFO     | trrcms | Creating main window (NEW DESIGN v2 with Navbar)...
+2026-01-11 04:09:20 | ERROR    | trrcms.repositories.db_adapter | SQLite fetch_all error: no such table: surveys
+Query: 
+            SELECT * FROM surveys
+            WHERE status = 'draft' AND source = 'office'
+            ORDER BY updated_at DESC
+            LIMIT ? OFFSET ?
+        
+2026-01-11 04:09:20 | ERROR    | trrcms.ui.pages.draft_office_surveys_page_v2 | Error loading drafts: no such table: surveys
+2026-01-11 04:09:20 | INFO     | trrcms.app.main_window_v2 | Showing login page
+2026-01-11 04:09:21 | INFO     | trrcms | >> Main window created and displayed
+2026-01-11 04:09:21 | INFO     | trrcms | ================================================================================
+2026-01-11 04:09:21 | INFO     | trrcms | >> Application started successfully!
+2026-01-11 04:09:21 | INFO     | trrcms | ================================================================================
+2026-01-11 04:09:27 | INFO     | trrcms.app.main_window_v2 | Application closing
+2026-01-11 04:09:27 | INFO     | trrcms | Application closed with exit code: 0
+2026-01-11 04:09:46 | INFO     | trrcms | ================================================================================
+2026-01-11 04:09:46 | INFO     | trrcms | Starting TRRCMS Application
+2026-01-11 04:09:46 | INFO     | trrcms | ================================================================================
+2026-01-11 04:09:46 | INFO     | trrcms | Initializing database...
+2026-01-11 04:09:46 | WARNING  | trrcms.repositories.db_adapter | psycopg2 not installed. PostgreSQL support unavailable.
+2026-01-11 04:09:46 | WARNING  | trrcms.repositories.db_adapter | PostgreSQL unavailable, falling back to SQLite
+2026-01-11 04:09:46 | INFO     | trrcms.repositories.db_adapter | Using SQLite database: c:\Users\Laptop-PC\.javacpp\Desktop\un\Habitat-Desktop\data\trrcms.db
+2026-01-11 04:09:46 | INFO     | trrcms.repositories.db_adapter | Initializing SQLite database at: c:\Users\Laptop-PC\.javacpp\Desktop\un\Habitat-Desktop\data\trrcms.db
+2026-01-11 04:09:46 | DEBUG    | trrcms.repositories.db_adapter | All SQLite tables created successfully
+2026-01-11 04:09:46 | INFO     | trrcms.repositories.db_adapter | SQLite database initialized successfully
+2026-01-11 04:09:46 | INFO     | trrcms | >> Database initialized successfully
+2026-01-11 04:09:46 | INFO     | trrcms | Initializing internationalization...
+2026-01-11 04:09:46 | INFO     | trrcms | >> Internationalization initialized (Arabic)
+2026-01-11 04:09:46 | INFO     | trrcms | Creating main window (NEW DESIGN v2 with Navbar)...
+2026-01-11 04:09:48 | ERROR    | trrcms.repositories.db_adapter | SQLite fetch_all error: no such table: surveys
+Query: 
+            SELECT * FROM surveys
+            WHERE status = 'draft' AND source = 'office'
+            ORDER BY updated_at DESC
+            LIMIT ? OFFSET ?
+        
+2026-01-11 04:09:48 | ERROR    | trrcms.ui.pages.draft_office_surveys_page_v2 | Error loading drafts: no such table: surveys
+2026-01-11 04:09:49 | INFO     | trrcms.app.main_window_v2 | Showing login page
+2026-01-11 04:09:49 | INFO     | trrcms | >> Main window created and displayed
+2026-01-11 04:09:49 | INFO     | trrcms | ================================================================================
+2026-01-11 04:09:49 | INFO     | trrcms | >> Application started successfully!
+2026-01-11 04:09:49 | INFO     | trrcms | ================================================================================
+2026-01-11 04:09:56 | INFO     | trrcms.app.main_window_v2 | Application closing
+2026-01-11 04:09:56 | INFO     | trrcms | Application closed with exit code: 0
+2026-01-11 04:10:16 | INFO     | trrcms | ================================================================================
+2026-01-11 04:10:16 | INFO     | trrcms | Starting TRRCMS Application
+2026-01-11 04:10:16 | INFO     | trrcms | ================================================================================
+2026-01-11 04:10:16 | INFO     | trrcms | Initializing database...
+2026-01-11 04:10:16 | WARNING  | trrcms.repositories.db_adapter | psycopg2 not installed. PostgreSQL support unavailable.
+2026-01-11 04:10:16 | WARNING  | trrcms.repositories.db_adapter | PostgreSQL unavailable, falling back to SQLite
+2026-01-11 04:10:16 | INFO     | trrcms.repositories.db_adapter | Using SQLite database: c:\Users\Laptop-PC\.javacpp\Desktop\un\Habitat-Desktop\data\trrcms.db
+2026-01-11 04:10:16 | INFO     | trrcms.repositories.db_adapter | Initializing SQLite database at: c:\Users\Laptop-PC\.javacpp\Desktop\un\Habitat-Desktop\data\trrcms.db
+2026-01-11 04:10:16 | DEBUG    | trrcms.repositories.db_adapter | All SQLite tables created successfully
+2026-01-11 04:10:16 | INFO     | trrcms.repositories.db_adapter | SQLite database initialized successfully
+2026-01-11 04:10:16 | INFO     | trrcms | >> Database initialized successfully
+2026-01-11 04:10:16 | INFO     | trrcms | Initializing internationalization...
+2026-01-11 04:10:16 | INFO     | trrcms | >> Internationalization initialized (Arabic)
+2026-01-11 04:10:16 | INFO     | trrcms | Creating main window (NEW DESIGN v2 with Navbar)...
+2026-01-11 04:10:19 | ERROR    | trrcms.repositories.db_adapter | SQLite fetch_all error: no such table: surveys
+Query: 
+            SELECT * FROM surveys
+            WHERE status = 'draft' AND source = 'office'
+            ORDER BY updated_at DESC
+            LIMIT ? OFFSET ?
+        
+2026-01-11 04:10:19 | ERROR    | trrcms.ui.pages.draft_office_surveys_page_v2 | Error loading drafts: no such table: surveys
+2026-01-11 04:10:19 | INFO     | trrcms.app.main_window_v2 | Showing login page
+2026-01-11 04:10:19 | INFO     | trrcms | >> Main window created and displayed
+2026-01-11 04:10:19 | INFO     | trrcms | ================================================================================
+2026-01-11 04:10:19 | INFO     | trrcms | >> Application started successfully!
+2026-01-11 04:10:19 | INFO     | trrcms | ================================================================================
+2026-01-11 04:10:26 | INFO     | trrcms.app.main_window_v2 | Application closing
+2026-01-11 04:10:26 | INFO     | trrcms | Application closed with exit code: 0
+2026-01-11 04:10:43 | INFO     | trrcms | ================================================================================
+2026-01-11 04:10:43 | INFO     | trrcms | Starting TRRCMS Application
+2026-01-11 04:10:43 | INFO     | trrcms | ================================================================================
+2026-01-11 04:10:43 | INFO     | trrcms | Initializing database...
+2026-01-11 04:10:43 | WARNING  | trrcms.repositories.db_adapter | psycopg2 not installed. PostgreSQL support unavailable.
+2026-01-11 04:10:43 | WARNING  | trrcms.repositories.db_adapter | PostgreSQL unavailable, falling back to SQLite
+2026-01-11 04:10:43 | INFO     | trrcms.repositories.db_adapter | Using SQLite database: c:\Users\Laptop-PC\.javacpp\Desktop\un\Habitat-Desktop\data\trrcms.db
+2026-01-11 04:10:43 | INFO     | trrcms.repositories.db_adapter | Initializing SQLite database at: c:\Users\Laptop-PC\.javacpp\Desktop\un\Habitat-Desktop\data\trrcms.db
+2026-01-11 04:10:43 | DEBUG    | trrcms.repositories.db_adapter | All SQLite tables created successfully
+2026-01-11 04:10:43 | INFO     | trrcms.repositories.db_adapter | SQLite database initialized successfully
+2026-01-11 04:10:43 | INFO     | trrcms | >> Database initialized successfully
+2026-01-11 04:10:43 | INFO     | trrcms | Initializing internationalization...
+2026-01-11 04:10:43 | INFO     | trrcms | >> Internationalization initialized (Arabic)
+2026-01-11 04:10:43 | INFO     | trrcms | Creating main window (NEW DESIGN v2 with Navbar)...
+2026-01-11 04:10:45 | ERROR    | trrcms.repositories.db_adapter | SQLite fetch_all error: no such table: surveys
+Query: 
+            SELECT * FROM surveys
+            WHERE status = 'draft' AND source = 'office'
+            ORDER BY updated_at DESC
+            LIMIT ? OFFSET ?
+        
+2026-01-11 04:10:45 | ERROR    | trrcms.ui.pages.draft_office_surveys_page_v2 | Error loading drafts: no such table: surveys
+2026-01-11 04:10:46 | INFO     | trrcms.app.main_window_v2 | Showing login page
+2026-01-11 04:10:46 | INFO     | trrcms | >> Main window created and displayed
+2026-01-11 04:10:46 | INFO     | trrcms | ================================================================================
+2026-01-11 04:10:46 | INFO     | trrcms | >> Application started successfully!
+2026-01-11 04:10:46 | INFO     | trrcms | ================================================================================
+2026-01-11 04:11:08 | INFO     | trrcms.app.main_window_v2 | Application closing
+2026-01-11 04:11:08 | INFO     | trrcms | Application closed with exit code: 0
+2026-01-11 04:11:47 | INFO     | trrcms | ================================================================================
+2026-01-11 04:11:47 | INFO     | trrcms | Starting TRRCMS Application
+2026-01-11 04:11:47 | INFO     | trrcms | ================================================================================
+2026-01-11 04:11:47 | INFO     | trrcms | Initializing database...
+2026-01-11 04:11:47 | WARNING  | trrcms.repositories.db_adapter | psycopg2 not installed. PostgreSQL support unavailable.
+2026-01-11 04:11:47 | WARNING  | trrcms.repositories.db_adapter | PostgreSQL unavailable, falling back to SQLite
+2026-01-11 04:11:47 | INFO     | trrcms.repositories.db_adapter | Using SQLite database: c:\Users\Laptop-PC\.javacpp\Desktop\un\Habitat-Desktop\data\trrcms.db
+2026-01-11 04:11:47 | INFO     | trrcms.repositories.db_adapter | Initializing SQLite database at: c:\Users\Laptop-PC\.javacpp\Desktop\un\Habitat-Desktop\data\trrcms.db
+2026-01-11 04:11:47 | DEBUG    | trrcms.repositories.db_adapter | All SQLite tables created successfully
+2026-01-11 04:11:47 | INFO     | trrcms.repositories.db_adapter | SQLite database initialized successfully
+2026-01-11 04:11:47 | INFO     | trrcms | >> Database initialized successfully
+2026-01-11 04:11:47 | INFO     | trrcms | Initializing internationalization...
+2026-01-11 04:11:47 | INFO     | trrcms | >> Internationalization initialized (Arabic)
+2026-01-11 04:11:47 | INFO     | trrcms | Creating main window (NEW DESIGN v2 with Navbar)...
+2026-01-11 04:11:49 | ERROR    | trrcms.repositories.db_adapter | SQLite fetch_all error: no such table: surveys
+Query: 
+            SELECT * FROM surveys
+            WHERE status = 'draft' AND source = 'office'
+            ORDER BY updated_at DESC
+            LIMIT ? OFFSET ?
+        
+2026-01-11 04:11:49 | ERROR    | trrcms.ui.pages.draft_office_surveys_page_v2 | Error loading drafts: no such table: surveys
+2026-01-11 04:11:49 | INFO     | trrcms.app.main_window_v2 | Showing login page
+2026-01-11 04:11:50 | INFO     | trrcms | >> Main window created and displayed
+2026-01-11 04:11:50 | INFO     | trrcms | ================================================================================
+2026-01-11 04:11:50 | INFO     | trrcms | >> Application started successfully!
+2026-01-11 04:11:50 | INFO     | trrcms | ================================================================================
+2026-01-11 04:11:57 | INFO     | trrcms.app.main_window_v2 | Application closing
+2026-01-11 04:11:57 | INFO     | trrcms | Application closed with exit code: 0
+2026-01-11 04:14:47 | INFO     | trrcms | ================================================================================
+2026-01-11 04:14:47 | INFO     | trrcms | Starting TRRCMS Application
+2026-01-11 04:14:47 | INFO     | trrcms | ================================================================================
+2026-01-11 04:14:47 | INFO     | trrcms | Initializing database...
+2026-01-11 04:14:47 | WARNING  | trrcms.repositories.db_adapter | psycopg2 not installed. PostgreSQL support unavailable.
+2026-01-11 04:14:47 | WARNING  | trrcms.repositories.db_adapter | PostgreSQL unavailable, falling back to SQLite
+2026-01-11 04:14:47 | INFO     | trrcms.repositories.db_adapter | Using SQLite database: c:\Users\Laptop-PC\.javacpp\Desktop\un\Habitat-Desktop\data\trrcms.db
+2026-01-11 04:14:47 | INFO     | trrcms.repositories.db_adapter | Initializing SQLite database at: c:\Users\Laptop-PC\.javacpp\Desktop\un\Habitat-Desktop\data\trrcms.db
+2026-01-11 04:14:47 | DEBUG    | trrcms.repositories.db_adapter | All SQLite tables created successfully
+2026-01-11 04:14:47 | INFO     | trrcms.repositories.db_adapter | SQLite database initialized successfully
+2026-01-11 04:14:47 | INFO     | trrcms | >> Database initialized successfully
+2026-01-11 04:14:47 | INFO     | trrcms | Initializing internationalization...
+2026-01-11 04:14:47 | INFO     | trrcms | >> Internationalization initialized (Arabic)
+2026-01-11 04:14:47 | INFO     | trrcms | Creating main window (NEW DESIGN v2 with Navbar)...
+2026-01-11 04:14:49 | ERROR    | trrcms.repositories.db_adapter | SQLite fetch_all error: no such table: surveys
+Query: 
+            SELECT * FROM surveys
+            WHERE status = 'draft' AND source = 'office'
+            ORDER BY updated_at DESC
+            LIMIT ? OFFSET ?
+        
+2026-01-11 04:14:49 | ERROR    | trrcms.ui.pages.draft_office_surveys_page_v2 | Error loading drafts: no such table: surveys
+2026-01-11 04:14:49 | INFO     | trrcms.app.main_window_v2 | Showing login page
+2026-01-11 04:14:50 | INFO     | trrcms | >> Main window created and displayed
+2026-01-11 04:14:50 | INFO     | trrcms | ================================================================================
+2026-01-11 04:14:50 | INFO     | trrcms | >> Application started successfully!
+2026-01-11 04:14:50 | INFO     | trrcms | ================================================================================
+2026-01-11 04:14:54 | INFO     | trrcms.app.main_window_v2 | Application closing
+2026-01-11 04:14:54 | INFO     | trrcms | Application closed with exit code: 0
+2026-01-11 04:15:19 | INFO     | trrcms | ================================================================================
+2026-01-11 04:15:19 | INFO     | trrcms | Starting TRRCMS Application
+2026-01-11 04:15:19 | INFO     | trrcms | ================================================================================
+2026-01-11 04:15:19 | INFO     | trrcms | Initializing database...
+2026-01-11 04:15:19 | WARNING  | trrcms.repositories.db_adapter | psycopg2 not installed. PostgreSQL support unavailable.
+2026-01-11 04:15:19 | WARNING  | trrcms.repositories.db_adapter | PostgreSQL unavailable, falling back to SQLite
+2026-01-11 04:15:19 | INFO     | trrcms.repositories.db_adapter | Using SQLite database: c:\Users\Laptop-PC\.javacpp\Desktop\un\Habitat-Desktop\data\trrcms.db
+2026-01-11 04:15:19 | INFO     | trrcms.repositories.db_adapter | Initializing SQLite database at: c:\Users\Laptop-PC\.javacpp\Desktop\un\Habitat-Desktop\data\trrcms.db
+2026-01-11 04:15:19 | DEBUG    | trrcms.repositories.db_adapter | All SQLite tables created successfully
+2026-01-11 04:15:19 | INFO     | trrcms.repositories.db_adapter | SQLite database initialized successfully
+2026-01-11 04:15:19 | INFO     | trrcms | >> Database initialized successfully
+2026-01-11 04:15:19 | INFO     | trrcms | Initializing internationalization...
+2026-01-11 04:15:19 | INFO     | trrcms | >> Internationalization initialized (Arabic)
+2026-01-11 04:15:19 | INFO     | trrcms | Creating main window (NEW DESIGN v2 with Navbar)...
+2026-01-11 04:15:21 | ERROR    | trrcms.repositories.db_adapter | SQLite fetch_all error: no such table: surveys
+Query: 
+            SELECT * FROM surveys
+            WHERE status = 'draft' AND source = 'office'
+            ORDER BY updated_at DESC
+            LIMIT ? OFFSET ?
+        
+2026-01-11 04:15:21 | ERROR    | trrcms.ui.pages.draft_office_surveys_page_v2 | Error loading drafts: no such table: surveys
+2026-01-11 04:15:22 | INFO     | trrcms.app.main_window_v2 | Showing login page
+2026-01-11 04:15:22 | INFO     | trrcms | >> Main window created and displayed
+2026-01-11 04:15:22 | INFO     | trrcms | ================================================================================
+2026-01-11 04:15:22 | INFO     | trrcms | >> Application started successfully!
+2026-01-11 04:15:22 | INFO     | trrcms | ================================================================================
+2026-01-11 04:15:27 | INFO     | trrcms.app.main_window_v2 | Application closing
+2026-01-11 04:15:27 | INFO     | trrcms | Application closed with exit code: 0
+2026-01-11 04:16:00 | INFO     | trrcms | ================================================================================
+2026-01-11 04:16:00 | INFO     | trrcms | Starting TRRCMS Application
+2026-01-11 04:16:00 | INFO     | trrcms | ================================================================================
+2026-01-11 04:16:00 | INFO     | trrcms | Initializing database...
+2026-01-11 04:16:00 | WARNING  | trrcms.repositories.db_adapter | psycopg2 not installed. PostgreSQL support unavailable.
+2026-01-11 04:16:00 | WARNING  | trrcms.repositories.db_adapter | PostgreSQL unavailable, falling back to SQLite
+2026-01-11 04:16:00 | INFO     | trrcms.repositories.db_adapter | Using SQLite database: c:\Users\Laptop-PC\.javacpp\Desktop\un\Habitat-Desktop\data\trrcms.db
+2026-01-11 04:16:00 | INFO     | trrcms.repositories.db_adapter | Initializing SQLite database at: c:\Users\Laptop-PC\.javacpp\Desktop\un\Habitat-Desktop\data\trrcms.db
+2026-01-11 04:16:00 | DEBUG    | trrcms.repositories.db_adapter | All SQLite tables created successfully
+2026-01-11 04:16:00 | INFO     | trrcms.repositories.db_adapter | SQLite database initialized successfully
+2026-01-11 04:16:00 | INFO     | trrcms | >> Database initialized successfully
+2026-01-11 04:16:00 | INFO     | trrcms | Initializing internationalization...
+2026-01-11 04:16:00 | INFO     | trrcms | >> Internationalization initialized (Arabic)
+2026-01-11 04:16:00 | INFO     | trrcms | Creating main window (NEW DESIGN v2 with Navbar)...
+2026-01-11 04:16:02 | ERROR    | trrcms.repositories.db_adapter | SQLite fetch_all error: no such table: surveys
+Query: 
+            SELECT * FROM surveys
+            WHERE status = 'draft' AND source = 'office'
+            ORDER BY updated_at DESC
+            LIMIT ? OFFSET ?
+        
+2026-01-11 04:16:02 | ERROR    | trrcms.ui.pages.draft_office_surveys_page_v2 | Error loading drafts: no such table: surveys
+2026-01-11 04:16:03 | INFO     | trrcms.app.main_window_v2 | Showing login page
+2026-01-11 04:16:03 | INFO     | trrcms | >> Main window created and displayed
+2026-01-11 04:16:03 | INFO     | trrcms | ================================================================================
+2026-01-11 04:16:03 | INFO     | trrcms | >> Application started successfully!
+2026-01-11 04:16:03 | INFO     | trrcms | ================================================================================
+2026-01-11 04:16:17 | INFO     | trrcms.app.main_window_v2 | Application closing
+2026-01-11 04:16:17 | INFO     | trrcms | Application closed with exit code: 0
+2026-01-11 04:19:43 | INFO     | trrcms | ================================================================================
+2026-01-11 04:19:43 | INFO     | trrcms | Starting TRRCMS Application
+2026-01-11 04:19:43 | INFO     | trrcms | ================================================================================
+2026-01-11 04:19:43 | INFO     | trrcms | Initializing database...
+2026-01-11 04:19:43 | WARNING  | trrcms.repositories.db_adapter | psycopg2 not installed. PostgreSQL support unavailable.
+2026-01-11 04:19:43 | WARNING  | trrcms.repositories.db_adapter | PostgreSQL unavailable, falling back to SQLite
+2026-01-11 04:19:43 | INFO     | trrcms.repositories.db_adapter | Using SQLite database: c:\Users\Laptop-PC\.javacpp\Desktop\un\Habitat-Desktop\data\trrcms.db
+2026-01-11 04:19:43 | INFO     | trrcms.repositories.db_adapter | Initializing SQLite database at: c:\Users\Laptop-PC\.javacpp\Desktop\un\Habitat-Desktop\data\trrcms.db
+2026-01-11 04:19:43 | DEBUG    | trrcms.repositories.db_adapter | All SQLite tables created successfully
+2026-01-11 04:19:43 | INFO     | trrcms.repositories.db_adapter | SQLite database initialized successfully
+2026-01-11 04:19:43 | INFO     | trrcms | >> Database initialized successfully
+2026-01-11 04:19:43 | INFO     | trrcms | Initializing internationalization...
+2026-01-11 04:19:43 | INFO     | trrcms | >> Internationalization initialized (Arabic)
+2026-01-11 04:19:43 | INFO     | trrcms | Creating main window (NEW DESIGN v2 with Navbar)...
+2026-01-11 04:19:45 | ERROR    | trrcms.repositories.db_adapter | SQLite fetch_all error: no such table: surveys
+Query: 
+            SELECT * FROM surveys
+            WHERE status = 'draft' AND source = 'office'
+            ORDER BY updated_at DESC
+            LIMIT ? OFFSET ?
+        
+2026-01-11 04:19:45 | ERROR    | trrcms.ui.pages.draft_office_surveys_page_v2 | Error loading drafts: no such table: surveys
+2026-01-11 04:19:46 | INFO     | trrcms.app.main_window_v2 | Showing login page
+2026-01-11 04:19:46 | INFO     | trrcms | >> Main window created and displayed
+2026-01-11 04:19:46 | INFO     | trrcms | ================================================================================
+2026-01-11 04:19:46 | INFO     | trrcms | >> Application started successfully!
+2026-01-11 04:19:46 | INFO     | trrcms | ================================================================================
+2026-01-11 04:19:52 | INFO     | trrcms.app.main_window_v2 | Application closing
+2026-01-11 04:19:52 | INFO     | trrcms | Application closed with exit code: 0
+2026-01-11 04:33:05 | INFO     | trrcms | ================================================================================
+2026-01-11 04:33:05 | INFO     | trrcms | Starting TRRCMS Application
+2026-01-11 04:33:05 | INFO     | trrcms | ================================================================================
+2026-01-11 04:33:05 | INFO     | trrcms | Initializing database...
+2026-01-11 04:33:05 | WARNING  | trrcms.repositories.db_adapter | psycopg2 not installed. PostgreSQL support unavailable.
+2026-01-11 04:33:05 | WARNING  | trrcms.repositories.db_adapter | PostgreSQL unavailable, falling back to SQLite
+2026-01-11 04:33:05 | INFO     | trrcms.repositories.db_adapter | Using SQLite database: c:\Users\Laptop-PC\.javacpp\Desktop\un\Habitat-Desktop\data\trrcms.db
+2026-01-11 04:33:05 | INFO     | trrcms.repositories.db_adapter | Initializing SQLite database at: c:\Users\Laptop-PC\.javacpp\Desktop\un\Habitat-Desktop\data\trrcms.db
+2026-01-11 04:33:05 | DEBUG    | trrcms.repositories.db_adapter | All SQLite tables created successfully
+2026-01-11 04:33:05 | INFO     | trrcms.repositories.db_adapter | SQLite database initialized successfully
+2026-01-11 04:33:05 | INFO     | trrcms | >> Database initialized successfully
+2026-01-11 04:33:05 | INFO     | trrcms | Initializing internationalization...
+2026-01-11 04:33:05 | INFO     | trrcms | >> Internationalization initialized (Arabic)
+2026-01-11 04:33:05 | INFO     | trrcms | Creating main window (NEW DESIGN v2 with Navbar)...
+2026-01-11 04:33:07 | ERROR    | trrcms.repositories.db_adapter | SQLite fetch_all error: no such table: surveys
+Query: 
+            SELECT * FROM surveys
+            WHERE status = 'draft' AND source = 'office'
+            ORDER BY updated_at DESC
+            LIMIT ? OFFSET ?
+        
+2026-01-11 04:33:07 | ERROR    | trrcms.ui.pages.draft_office_surveys_page_v2 | Error loading drafts: no such table: surveys
+2026-01-11 04:33:08 | INFO     | trrcms.app.main_window_v2 | Showing login page
+2026-01-11 04:33:08 | INFO     | trrcms | >> Main window created and displayed
+2026-01-11 04:33:08 | INFO     | trrcms | ================================================================================
+2026-01-11 04:33:08 | INFO     | trrcms | >> Application started successfully!
+2026-01-11 04:33:08 | INFO     | trrcms | ================================================================================
+2026-01-11 04:33:17 | INFO     | trrcms.app.main_window_v2 | Application closing
+2026-01-11 04:33:17 | INFO     | trrcms | Application closed with exit code: 0
+2026-01-11 04:33:44 | INFO     | trrcms | ================================================================================
+2026-01-11 04:33:44 | INFO     | trrcms | Starting TRRCMS Application
+2026-01-11 04:33:44 | INFO     | trrcms | ================================================================================
+2026-01-11 04:33:44 | INFO     | trrcms | Initializing database...
+2026-01-11 04:33:44 | WARNING  | trrcms.repositories.db_adapter | psycopg2 not installed. PostgreSQL support unavailable.
+2026-01-11 04:33:44 | WARNING  | trrcms.repositories.db_adapter | PostgreSQL unavailable, falling back to SQLite
+2026-01-11 04:33:44 | INFO     | trrcms.repositories.db_adapter | Using SQLite database: c:\Users\Laptop-PC\.javacpp\Desktop\un\Habitat-Desktop\data\trrcms.db
+2026-01-11 04:33:44 | INFO     | trrcms.repositories.db_adapter | Initializing SQLite database at: c:\Users\Laptop-PC\.javacpp\Desktop\un\Habitat-Desktop\data\trrcms.db
+2026-01-11 04:33:44 | DEBUG    | trrcms.repositories.db_adapter | All SQLite tables created successfully
+2026-01-11 04:33:44 | INFO     | trrcms.repositories.db_adapter | SQLite database initialized successfully
+2026-01-11 04:33:44 | INFO     | trrcms | >> Database initialized successfully
+2026-01-11 04:33:44 | INFO     | trrcms | Initializing internationalization...
+2026-01-11 04:33:44 | INFO     | trrcms | >> Internationalization initialized (Arabic)
+2026-01-11 04:33:44 | INFO     | trrcms | Creating main window (NEW DESIGN v2 with Navbar)...
+2026-01-11 04:33:46 | ERROR    | trrcms.repositories.db_adapter | SQLite fetch_all error: no such table: surveys
+Query: 
+            SELECT * FROM surveys
+            WHERE status = 'draft' AND source = 'office'
+            ORDER BY updated_at DESC
+            LIMIT ? OFFSET ?
+        
+2026-01-11 04:33:46 | ERROR    | trrcms.ui.pages.draft_office_surveys_page_v2 | Error loading drafts: no such table: surveys
+2026-01-11 04:33:47 | INFO     | trrcms.app.main_window_v2 | Showing login page
+2026-01-11 04:33:47 | INFO     | trrcms | >> Main window created and displayed
+2026-01-11 04:33:47 | INFO     | trrcms | ================================================================================
+2026-01-11 04:33:47 | INFO     | trrcms | >> Application started successfully!
+2026-01-11 04:33:47 | INFO     | trrcms | ================================================================================
+2026-01-11 04:33:50 | INFO     | trrcms.app.main_window_v2 | Application closing
+2026-01-11 04:33:50 | INFO     | trrcms | Application closed with exit code: 0
+2026-01-11 04:36:33 | INFO     | trrcms | ================================================================================
+2026-01-11 04:36:33 | INFO     | trrcms | Starting TRRCMS Application
+2026-01-11 04:36:33 | INFO     | trrcms | ================================================================================
+2026-01-11 04:36:33 | INFO     | trrcms | Initializing database...
+2026-01-11 04:36:33 | WARNING  | trrcms.repositories.db_adapter | psycopg2 not installed. PostgreSQL support unavailable.
+2026-01-11 04:36:33 | WARNING  | trrcms.repositories.db_adapter | PostgreSQL unavailable, falling back to SQLite
+2026-01-11 04:36:33 | INFO     | trrcms.repositories.db_adapter | Using SQLite database: c:\Users\Laptop-PC\.javacpp\Desktop\un\Habitat-Desktop\data\trrcms.db
+2026-01-11 04:36:33 | INFO     | trrcms.repositories.db_adapter | Initializing SQLite database at: c:\Users\Laptop-PC\.javacpp\Desktop\un\Habitat-Desktop\data\trrcms.db
+2026-01-11 04:36:33 | DEBUG    | trrcms.repositories.db_adapter | All SQLite tables created successfully
+2026-01-11 04:36:33 | INFO     | trrcms.repositories.db_adapter | SQLite database initialized successfully
+2026-01-11 04:36:33 | INFO     | trrcms | >> Database initialized successfully
+2026-01-11 04:36:33 | INFO     | trrcms | Initializing internationalization...
+2026-01-11 04:36:33 | INFO     | trrcms | >> Internationalization initialized (Arabic)
+2026-01-11 04:36:33 | INFO     | trrcms | Creating main window (NEW DESIGN v2 with Navbar)...
+2026-01-11 04:36:36 | ERROR    | trrcms.repositories.db_adapter | SQLite fetch_all error: no such table: surveys
+Query: 
+            SELECT * FROM surveys
+            WHERE status = 'draft' AND source = 'office'
+            ORDER BY updated_at DESC
+            LIMIT ? OFFSET ?
+        
+2026-01-11 04:36:36 | ERROR    | trrcms.ui.pages.draft_office_surveys_page_v2 | Error loading drafts: no such table: surveys
+2026-01-11 04:36:37 | INFO     | trrcms.app.main_window_v2 | Showing login page
+2026-01-11 04:36:37 | INFO     | trrcms | >> Main window created and displayed
+2026-01-11 04:36:37 | INFO     | trrcms | ================================================================================
+2026-01-11 04:36:37 | INFO     | trrcms | >> Application started successfully!
+2026-01-11 04:36:37 | INFO     | trrcms | ================================================================================
+2026-01-11 04:36:43 | INFO     | trrcms.app.main_window_v2 | Application closing
+2026-01-11 04:36:43 | INFO     | trrcms | Application closed with exit code: 0
+2026-01-11 04:37:29 | INFO     | trrcms | ================================================================================
+2026-01-11 04:37:29 | INFO     | trrcms | Starting TRRCMS Application
+2026-01-11 04:37:29 | INFO     | trrcms | ================================================================================
+2026-01-11 04:37:29 | INFO     | trrcms | Initializing database...
+2026-01-11 04:37:29 | WARNING  | trrcms.repositories.db_adapter | psycopg2 not installed. PostgreSQL support unavailable.
+2026-01-11 04:37:29 | WARNING  | trrcms.repositories.db_adapter | PostgreSQL unavailable, falling back to SQLite
+2026-01-11 04:37:29 | INFO     | trrcms.repositories.db_adapter | Using SQLite database: c:\Users\Laptop-PC\.javacpp\Desktop\un\Habitat-Desktop\data\trrcms.db
+2026-01-11 04:37:29 | INFO     | trrcms.repositories.db_adapter | Initializing SQLite database at: c:\Users\Laptop-PC\.javacpp\Desktop\un\Habitat-Desktop\data\trrcms.db
+2026-01-11 04:37:29 | DEBUG    | trrcms.repositories.db_adapter | All SQLite tables created successfully
+2026-01-11 04:37:29 | INFO     | trrcms.repositories.db_adapter | SQLite database initialized successfully
+2026-01-11 04:37:29 | INFO     | trrcms | >> Database initialized successfully
+2026-01-11 04:37:29 | INFO     | trrcms | Initializing internationalization...
+2026-01-11 04:37:29 | INFO     | trrcms | >> Internationalization initialized (Arabic)
+2026-01-11 04:37:29 | INFO     | trrcms | Creating main window (NEW DESIGN v2 with Navbar)...
+2026-01-11 04:37:31 | ERROR    | trrcms.repositories.db_adapter | SQLite fetch_all error: no such table: surveys
+Query: 
+            SELECT * FROM surveys
+            WHERE status = 'draft' AND source = 'office'
+            ORDER BY updated_at DESC
+            LIMIT ? OFFSET ?
+        
+2026-01-11 04:37:31 | ERROR    | trrcms.ui.pages.draft_office_surveys_page_v2 | Error loading drafts: no such table: surveys
+2026-01-11 04:37:32 | INFO     | trrcms.app.main_window_v2 | Showing login page
+2026-01-11 04:37:32 | INFO     | trrcms | >> Main window created and displayed
+2026-01-11 04:37:32 | INFO     | trrcms | ================================================================================
+2026-01-11 04:37:32 | INFO     | trrcms | >> Application started successfully!
+2026-01-11 04:37:32 | INFO     | trrcms | ================================================================================
+2026-01-11 04:37:38 | INFO     | trrcms.app.main_window_v2 | Application closing
+2026-01-11 04:37:38 | INFO     | trrcms | Application closed with exit code: 0
+2026-01-11 04:39:47 | INFO     | trrcms | ================================================================================
+2026-01-11 04:39:47 | INFO     | trrcms | Starting TRRCMS Application
+2026-01-11 04:39:47 | INFO     | trrcms | ================================================================================
+2026-01-11 04:39:47 | INFO     | trrcms | Initializing database...
+2026-01-11 04:39:47 | WARNING  | trrcms.repositories.db_adapter | psycopg2 not installed. PostgreSQL support unavailable.
+2026-01-11 04:39:47 | WARNING  | trrcms.repositories.db_adapter | PostgreSQL unavailable, falling back to SQLite
+2026-01-11 04:39:47 | INFO     | trrcms.repositories.db_adapter | Using SQLite database: c:\Users\Laptop-PC\.javacpp\Desktop\un\Habitat-Desktop\data\trrcms.db
+2026-01-11 04:39:47 | INFO     | trrcms.repositories.db_adapter | Initializing SQLite database at: c:\Users\Laptop-PC\.javacpp\Desktop\un\Habitat-Desktop\data\trrcms.db
+2026-01-11 04:39:47 | DEBUG    | trrcms.repositories.db_adapter | All SQLite tables created successfully
+2026-01-11 04:39:47 | INFO     | trrcms.repositories.db_adapter | SQLite database initialized successfully
+2026-01-11 04:39:47 | INFO     | trrcms | >> Database initialized successfully
+2026-01-11 04:39:47 | INFO     | trrcms | Initializing internationalization...
+2026-01-11 04:39:47 | INFO     | trrcms | >> Internationalization initialized (Arabic)
+2026-01-11 04:39:47 | INFO     | trrcms | Creating main window (NEW DESIGN v2 with Navbar)...
+2026-01-11 04:39:49 | ERROR    | trrcms.repositories.db_adapter | SQLite fetch_all error: no such table: surveys
+Query: 
+            SELECT * FROM surveys
+            WHERE status = 'draft' AND source = 'office'
+            ORDER BY updated_at DESC
+            LIMIT ? OFFSET ?
+        
+2026-01-11 04:39:49 | ERROR    | trrcms.ui.pages.draft_office_surveys_page_v2 | Error loading drafts: no such table: surveys
+2026-01-11 04:39:50 | INFO     | trrcms.app.main_window_v2 | Showing login page
+2026-01-11 04:39:50 | INFO     | trrcms | >> Main window created and displayed
+2026-01-11 04:39:50 | INFO     | trrcms | ================================================================================
+2026-01-11 04:39:50 | INFO     | trrcms | >> Application started successfully!
+2026-01-11 04:39:50 | INFO     | trrcms | ================================================================================
+2026-01-11 04:40:00 | INFO     | trrcms.app.main_window_v2 | Application closing
+2026-01-11 04:40:00 | INFO     | trrcms | Application closed with exit code: 0
+2026-01-11 04:40:30 | INFO     | trrcms | ================================================================================
+2026-01-11 04:40:30 | INFO     | trrcms | Starting TRRCMS Application
+2026-01-11 04:40:30 | INFO     | trrcms | ================================================================================
+2026-01-11 04:40:30 | INFO     | trrcms | Initializing database...
+2026-01-11 04:40:30 | WARNING  | trrcms.repositories.db_adapter | psycopg2 not installed. PostgreSQL support unavailable.
+2026-01-11 04:40:30 | WARNING  | trrcms.repositories.db_adapter | PostgreSQL unavailable, falling back to SQLite
+2026-01-11 04:40:30 | INFO     | trrcms.repositories.db_adapter | Using SQLite database: c:\Users\Laptop-PC\.javacpp\Desktop\un\Habitat-Desktop\data\trrcms.db
+2026-01-11 04:40:30 | INFO     | trrcms.repositories.db_adapter | Initializing SQLite database at: c:\Users\Laptop-PC\.javacpp\Desktop\un\Habitat-Desktop\data\trrcms.db
+2026-01-11 04:40:30 | DEBUG    | trrcms.repositories.db_adapter | All SQLite tables created successfully
+2026-01-11 04:40:30 | INFO     | trrcms.repositories.db_adapter | SQLite database initialized successfully
+2026-01-11 04:40:30 | INFO     | trrcms | >> Database initialized successfully
+2026-01-11 04:40:30 | INFO     | trrcms | Initializing internationalization...
+2026-01-11 04:40:30 | INFO     | trrcms | >> Internationalization initialized (Arabic)
+2026-01-11 04:40:30 | INFO     | trrcms | Creating main window (NEW DESIGN v2 with Navbar)...
+2026-01-11 04:40:32 | ERROR    | trrcms.repositories.db_adapter | SQLite fetch_all error: no such table: surveys
+Query: 
+            SELECT * FROM surveys
+            WHERE status = 'draft' AND source = 'office'
+            ORDER BY updated_at DESC
+            LIMIT ? OFFSET ?
+        
+2026-01-11 04:40:32 | ERROR    | trrcms.ui.pages.draft_office_surveys_page_v2 | Error loading drafts: no such table: surveys
+2026-01-11 04:40:33 | INFO     | trrcms.app.main_window_v2 | Showing login page
+2026-01-11 04:40:33 | INFO     | trrcms | >> Main window created and displayed
+2026-01-11 04:40:33 | INFO     | trrcms | ================================================================================
+2026-01-11 04:40:33 | INFO     | trrcms | >> Application started successfully!
+2026-01-11 04:40:33 | INFO     | trrcms | ================================================================================
+2026-01-11 04:40:41 | INFO     | trrcms.app.main_window_v2 | Application closing
+2026-01-11 04:40:41 | INFO     | trrcms | Application closed with exit code: 0
+2026-01-11 04:41:03 | INFO     | trrcms | ================================================================================
+2026-01-11 04:41:03 | INFO     | trrcms | Starting TRRCMS Application
+2026-01-11 04:41:03 | INFO     | trrcms | ================================================================================
+2026-01-11 04:41:03 | INFO     | trrcms | Initializing database...
+2026-01-11 04:41:03 | WARNING  | trrcms.repositories.db_adapter | psycopg2 not installed. PostgreSQL support unavailable.
+2026-01-11 04:41:03 | WARNING  | trrcms.repositories.db_adapter | PostgreSQL unavailable, falling back to SQLite
+2026-01-11 04:41:04 | INFO     | trrcms.repositories.db_adapter | Using SQLite database: c:\Users\Laptop-PC\.javacpp\Desktop\un\Habitat-Desktop\data\trrcms.db
+2026-01-11 04:41:04 | INFO     | trrcms.repositories.db_adapter | Initializing SQLite database at: c:\Users\Laptop-PC\.javacpp\Desktop\un\Habitat-Desktop\data\trrcms.db
+2026-01-11 04:41:04 | DEBUG    | trrcms.repositories.db_adapter | All SQLite tables created successfully
+2026-01-11 04:41:04 | INFO     | trrcms.repositories.db_adapter | SQLite database initialized successfully
+2026-01-11 04:41:04 | INFO     | trrcms | >> Database initialized successfully
+2026-01-11 04:41:04 | INFO     | trrcms | Initializing internationalization...
+2026-01-11 04:41:04 | INFO     | trrcms | >> Internationalization initialized (Arabic)
+2026-01-11 04:41:04 | INFO     | trrcms | Creating main window (NEW DESIGN v2 with Navbar)...
+2026-01-11 04:41:06 | ERROR    | trrcms.repositories.db_adapter | SQLite fetch_all error: no such table: surveys
+Query: 
+            SELECT * FROM surveys
+            WHERE status = 'draft' AND source = 'office'
+            ORDER BY updated_at DESC
+            LIMIT ? OFFSET ?
+        
+2026-01-11 04:41:06 | ERROR    | trrcms.ui.pages.draft_office_surveys_page_v2 | Error loading drafts: no such table: surveys
+2026-01-11 04:41:07 | INFO     | trrcms.app.main_window_v2 | Showing login page
+2026-01-11 04:41:07 | INFO     | trrcms | >> Main window created and displayed
+2026-01-11 04:41:07 | INFO     | trrcms | ================================================================================
+2026-01-11 04:41:07 | INFO     | trrcms | >> Application started successfully!
+2026-01-11 04:41:07 | INFO     | trrcms | ================================================================================
+2026-01-11 04:41:11 | INFO     | trrcms.app.main_window_v2 | Application closing
+2026-01-11 04:41:11 | INFO     | trrcms | Application closed with exit code: 0
+2026-01-11 04:42:01 | INFO     | trrcms | ================================================================================
+2026-01-11 04:42:01 | INFO     | trrcms | Starting TRRCMS Application
+2026-01-11 04:42:01 | INFO     | trrcms | ================================================================================
+2026-01-11 04:42:01 | INFO     | trrcms | Initializing database...
+2026-01-11 04:42:01 | WARNING  | trrcms.repositories.db_adapter | psycopg2 not installed. PostgreSQL support unavailable.
+2026-01-11 04:42:01 | WARNING  | trrcms.repositories.db_adapter | PostgreSQL unavailable, falling back to SQLite
+2026-01-11 04:42:01 | INFO     | trrcms.repositories.db_adapter | Using SQLite database: c:\Users\Laptop-PC\.javacpp\Desktop\un\Habitat-Desktop\data\trrcms.db
+2026-01-11 04:42:01 | INFO     | trrcms.repositories.db_adapter | Initializing SQLite database at: c:\Users\Laptop-PC\.javacpp\Desktop\un\Habitat-Desktop\data\trrcms.db
+2026-01-11 04:42:01 | DEBUG    | trrcms.repositories.db_adapter | All SQLite tables created successfully
+2026-01-11 04:42:01 | INFO     | trrcms.repositories.db_adapter | SQLite database initialized successfully
+2026-01-11 04:42:01 | INFO     | trrcms | >> Database initialized successfully
+2026-01-11 04:42:01 | INFO     | trrcms | Initializing internationalization...
+2026-01-11 04:42:01 | INFO     | trrcms | >> Internationalization initialized (Arabic)
+2026-01-11 04:42:01 | INFO     | trrcms | Creating main window (NEW DESIGN v2 with Navbar)...
+2026-01-11 04:42:03 | ERROR    | trrcms.repositories.db_adapter | SQLite fetch_all error: no such table: surveys
+Query: 
+            SELECT * FROM surveys
+            WHERE status = 'draft' AND source = 'office'
+            ORDER BY updated_at DESC
+            LIMIT ? OFFSET ?
+        
+2026-01-11 04:42:03 | ERROR    | trrcms.ui.pages.draft_office_surveys_page_v2 | Error loading drafts: no such table: surveys
+2026-01-11 04:42:03 | INFO     | trrcms.app.main_window_v2 | Showing login page
+2026-01-11 04:42:03 | INFO     | trrcms | >> Main window created and displayed
+2026-01-11 04:42:04 | INFO     | trrcms | ================================================================================
+2026-01-11 04:42:04 | INFO     | trrcms | >> Application started successfully!
+2026-01-11 04:42:04 | INFO     | trrcms | ================================================================================
+2026-01-11 04:42:11 | INFO     | trrcms.app.main_window_v2 | Application closing
+2026-01-11 04:42:11 | INFO     | trrcms | Application closed with exit code: 0
+2026-01-11 04:42:32 | INFO     | trrcms | ================================================================================
+2026-01-11 04:42:32 | INFO     | trrcms | Starting TRRCMS Application
+2026-01-11 04:42:32 | INFO     | trrcms | ================================================================================
+2026-01-11 04:42:32 | INFO     | trrcms | Initializing database...
+2026-01-11 04:42:32 | WARNING  | trrcms.repositories.db_adapter | psycopg2 not installed. PostgreSQL support unavailable.
+2026-01-11 04:42:32 | WARNING  | trrcms.repositories.db_adapter | PostgreSQL unavailable, falling back to SQLite
+2026-01-11 04:42:32 | INFO     | trrcms.repositories.db_adapter | Using SQLite database: c:\Users\Laptop-PC\.javacpp\Desktop\un\Habitat-Desktop\data\trrcms.db
+2026-01-11 04:42:32 | INFO     | trrcms.repositories.db_adapter | Initializing SQLite database at: c:\Users\Laptop-PC\.javacpp\Desktop\un\Habitat-Desktop\data\trrcms.db
+2026-01-11 04:42:32 | DEBUG    | trrcms.repositories.db_adapter | All SQLite tables created successfully
+2026-01-11 04:42:32 | INFO     | trrcms.repositories.db_adapter | SQLite database initialized successfully
+2026-01-11 04:42:32 | INFO     | trrcms | >> Database initialized successfully
+2026-01-11 04:42:32 | INFO     | trrcms | Initializing internationalization...
+2026-01-11 04:42:32 | INFO     | trrcms | >> Internationalization initialized (Arabic)
+2026-01-11 04:42:32 | INFO     | trrcms | Creating main window (NEW DESIGN v2 with Navbar)...
+2026-01-11 04:42:35 | ERROR    | trrcms.repositories.db_adapter | SQLite fetch_all error: no such table: surveys
+Query: 
+            SELECT * FROM surveys
+            WHERE status = 'draft' AND source = 'office'
+            ORDER BY updated_at DESC
+            LIMIT ? OFFSET ?
+        
+2026-01-11 04:42:35 | ERROR    | trrcms.ui.pages.draft_office_surveys_page_v2 | Error loading drafts: no such table: surveys
+2026-01-11 04:42:35 | INFO     | trrcms.app.main_window_v2 | Showing login page
+2026-01-11 04:42:36 | INFO     | trrcms | >> Main window created and displayed
+2026-01-11 04:42:36 | INFO     | trrcms | ================================================================================
+2026-01-11 04:42:36 | INFO     | trrcms | >> Application started successfully!
+2026-01-11 04:42:36 | INFO     | trrcms | ================================================================================
+2026-01-11 04:54:21 | INFO     | trrcms.app.main_window_v2 | Application closing
+2026-01-11 04:54:21 | INFO     | trrcms | Application closed with exit code: 0
+2026-01-11 04:54:33 | INFO     | trrcms | ================================================================================
+2026-01-11 04:54:33 | INFO     | trrcms | Starting TRRCMS Application
+2026-01-11 04:54:33 | INFO     | trrcms | ================================================================================
+2026-01-11 04:54:33 | INFO     | trrcms | Initializing database...
+2026-01-11 04:54:33 | WARNING  | trrcms.repositories.db_adapter | psycopg2 not installed. PostgreSQL support unavailable.
+2026-01-11 04:54:33 | WARNING  | trrcms.repositories.db_adapter | PostgreSQL unavailable, falling back to SQLite
+2026-01-11 04:54:33 | INFO     | trrcms.repositories.db_adapter | Using SQLite database: c:\Users\Laptop-PC\.javacpp\Desktop\un\Habitat-Desktop\data\trrcms.db
+2026-01-11 04:54:33 | INFO     | trrcms.repositories.db_adapter | Initializing SQLite database at: c:\Users\Laptop-PC\.javacpp\Desktop\un\Habitat-Desktop\data\trrcms.db
+2026-01-11 04:54:33 | DEBUG    | trrcms.repositories.db_adapter | All SQLite tables created successfully
+2026-01-11 04:54:33 | INFO     | trrcms.repositories.db_adapter | SQLite database initialized successfully
+2026-01-11 04:54:34 | INFO     | trrcms | >> Database initialized successfully
+2026-01-11 04:54:34 | INFO     | trrcms | Initializing internationalization...
+2026-01-11 04:54:34 | INFO     | trrcms | >> Internationalization initialized (Arabic)
+2026-01-11 04:54:34 | INFO     | trrcms | Creating main window (NEW DESIGN v2 with Navbar)...
+2026-01-11 04:54:37 | ERROR    | trrcms.repositories.db_adapter | SQLite fetch_all error: no such table: surveys
+Query: 
+            SELECT * FROM surveys
+            WHERE status = 'draft' AND source = 'office'
+            ORDER BY updated_at DESC
+            LIMIT ? OFFSET ?
+        
+2026-01-11 04:54:37 | ERROR    | trrcms.ui.pages.draft_office_surveys_page_v2 | Error loading drafts: no such table: surveys
+2026-01-11 04:54:37 | INFO     | trrcms.app.main_window_v2 | Showing login page
+2026-01-11 04:54:38 | INFO     | trrcms | >> Main window created and displayed
+2026-01-11 04:54:38 | INFO     | trrcms | ================================================================================
+2026-01-11 04:54:38 | INFO     | trrcms | >> Application started successfully!
+2026-01-11 04:54:38 | INFO     | trrcms | ================================================================================
+2026-01-11 04:54:54 | INFO     | trrcms.app.main_window_v2 | Application closing
+2026-01-11 04:54:54 | INFO     | trrcms | Application closed with exit code: 0
+2026-01-11 04:55:50 | INFO     | trrcms | ================================================================================
+2026-01-11 04:55:50 | INFO     | trrcms | Starting TRRCMS Application
+2026-01-11 04:55:50 | INFO     | trrcms | ================================================================================
+2026-01-11 04:55:50 | INFO     | trrcms | Initializing database...
+2026-01-11 04:55:50 | WARNING  | trrcms.repositories.db_adapter | psycopg2 not installed. PostgreSQL support unavailable.
+2026-01-11 04:55:50 | WARNING  | trrcms.repositories.db_adapter | PostgreSQL unavailable, falling back to SQLite
+2026-01-11 04:55:50 | INFO     | trrcms.repositories.db_adapter | Using SQLite database: c:\Users\Laptop-PC\.javacpp\Desktop\un\Habitat-Desktop\data\trrcms.db
+2026-01-11 04:55:50 | INFO     | trrcms.repositories.db_adapter | Initializing SQLite database at: c:\Users\Laptop-PC\.javacpp\Desktop\un\Habitat-Desktop\data\trrcms.db
+2026-01-11 04:55:50 | DEBUG    | trrcms.repositories.db_adapter | All SQLite tables created successfully
+2026-01-11 04:55:50 | INFO     | trrcms.repositories.db_adapter | SQLite database initialized successfully
+2026-01-11 04:55:50 | INFO     | trrcms | >> Database initialized successfully
+2026-01-11 04:55:50 | INFO     | trrcms | Initializing internationalization...
+2026-01-11 04:55:50 | INFO     | trrcms | >> Internationalization initialized (Arabic)
+2026-01-11 04:55:50 | INFO     | trrcms | Creating main window (NEW DESIGN v2 with Navbar)...
+2026-01-11 04:55:52 | ERROR    | trrcms.repositories.db_adapter | SQLite fetch_all error: no such table: surveys
+Query: 
+            SELECT * FROM surveys
+            WHERE status = 'draft' AND source = 'office'
+            ORDER BY updated_at DESC
+            LIMIT ? OFFSET ?
+        
+2026-01-11 04:55:52 | ERROR    | trrcms.ui.pages.draft_office_surveys_page_v2 | Error loading drafts: no such table: surveys
+2026-01-11 04:55:53 | INFO     | trrcms.app.main_window_v2 | Showing login page
+2026-01-11 04:55:53 | INFO     | trrcms | >> Main window created and displayed
+2026-01-11 04:55:53 | INFO     | trrcms | ================================================================================
+2026-01-11 04:55:53 | INFO     | trrcms | >> Application started successfully!
+2026-01-11 04:55:53 | INFO     | trrcms | ================================================================================
+2026-01-11 04:56:02 | INFO     | trrcms.app.main_window_v2 | Application closing
+2026-01-11 04:56:02 | INFO     | trrcms | Application closed with exit code: 0
+2026-01-11 04:56:56 | INFO     | trrcms | ================================================================================
+2026-01-11 04:56:56 | INFO     | trrcms | Starting TRRCMS Application
+2026-01-11 04:56:56 | INFO     | trrcms | ================================================================================
+2026-01-11 04:56:56 | INFO     | trrcms | Initializing database...
+2026-01-11 04:56:56 | WARNING  | trrcms.repositories.db_adapter | psycopg2 not installed. PostgreSQL support unavailable.
+2026-01-11 04:56:56 | WARNING  | trrcms.repositories.db_adapter | PostgreSQL unavailable, falling back to SQLite
+2026-01-11 04:56:56 | INFO     | trrcms.repositories.db_adapter | Using SQLite database: c:\Users\Laptop-PC\.javacpp\Desktop\un\Habitat-Desktop\data\trrcms.db
+2026-01-11 04:56:56 | INFO     | trrcms.repositories.db_adapter | Initializing SQLite database at: c:\Users\Laptop-PC\.javacpp\Desktop\un\Habitat-Desktop\data\trrcms.db
+2026-01-11 04:56:56 | DEBUG    | trrcms.repositories.db_adapter | All SQLite tables created successfully
+2026-01-11 04:56:56 | INFO     | trrcms.repositories.db_adapter | SQLite database initialized successfully
+2026-01-11 04:56:56 | INFO     | trrcms | >> Database initialized successfully
+2026-01-11 04:56:56 | INFO     | trrcms | Initializing internationalization...
+2026-01-11 04:56:56 | INFO     | trrcms | >> Internationalization initialized (Arabic)
+2026-01-11 04:56:56 | INFO     | trrcms | Creating main window (NEW DESIGN v2 with Navbar)...
+2026-01-11 04:56:59 | ERROR    | trrcms.repositories.db_adapter | SQLite fetch_all error: no such table: surveys
+Query: 
+            SELECT * FROM surveys
+            WHERE status = 'draft' AND source = 'office'
+            ORDER BY updated_at DESC
+            LIMIT ? OFFSET ?
+        
+2026-01-11 04:56:59 | ERROR    | trrcms.ui.pages.draft_office_surveys_page_v2 | Error loading drafts: no such table: surveys
+2026-01-11 04:56:59 | INFO     | trrcms.app.main_window_v2 | Showing login page
+2026-01-11 04:57:00 | INFO     | trrcms | >> Main window created and displayed
+2026-01-11 04:57:00 | INFO     | trrcms | ================================================================================
+2026-01-11 04:57:00 | INFO     | trrcms | >> Application started successfully!
+2026-01-11 04:57:00 | INFO     | trrcms | ================================================================================
+2026-01-11 04:57:18 | INFO     | trrcms.app.main_window_v2 | Application closing
+2026-01-11 04:57:19 | INFO     | trrcms | Application closed with exit code: 0
+2026-01-11 04:59:30 | INFO     | trrcms | ================================================================================
+2026-01-11 04:59:30 | INFO     | trrcms | Starting TRRCMS Application
+2026-01-11 04:59:30 | INFO     | trrcms | ================================================================================
+2026-01-11 04:59:30 | INFO     | trrcms | Initializing database...
+2026-01-11 04:59:30 | WARNING  | trrcms.repositories.db_adapter | psycopg2 not installed. PostgreSQL support unavailable.
+2026-01-11 04:59:30 | WARNING  | trrcms.repositories.db_adapter | PostgreSQL unavailable, falling back to SQLite
+2026-01-11 04:59:30 | INFO     | trrcms.repositories.db_adapter | Using SQLite database: c:\Users\Laptop-PC\.javacpp\Desktop\un\Habitat-Desktop\data\trrcms.db
+2026-01-11 04:59:30 | INFO     | trrcms.repositories.db_adapter | Initializing SQLite database at: c:\Users\Laptop-PC\.javacpp\Desktop\un\Habitat-Desktop\data\trrcms.db
+2026-01-11 04:59:30 | DEBUG    | trrcms.repositories.db_adapter | All SQLite tables created successfully
+2026-01-11 04:59:30 | INFO     | trrcms.repositories.db_adapter | SQLite database initialized successfully
+2026-01-11 04:59:30 | INFO     | trrcms | >> Database initialized successfully
+2026-01-11 04:59:30 | INFO     | trrcms | Initializing internationalization...
+2026-01-11 04:59:30 | INFO     | trrcms | >> Internationalization initialized (Arabic)
+2026-01-11 04:59:30 | INFO     | trrcms | Creating main window (NEW DESIGN v2 with Navbar)...
+2026-01-11 04:59:32 | ERROR    | trrcms.repositories.db_adapter | SQLite fetch_all error: no such table: surveys
+Query: 
+            SELECT * FROM surveys
+            WHERE status = 'draft' AND source = 'office'
+            ORDER BY updated_at DESC
+            LIMIT ? OFFSET ?
+        
+2026-01-11 04:59:32 | ERROR    | trrcms.ui.pages.draft_office_surveys_page_v2 | Error loading drafts: no such table: surveys
+2026-01-11 04:59:32 | INFO     | trrcms.app.main_window_v2 | Showing login page
+2026-01-11 04:59:32 | INFO     | trrcms | >> Main window created and displayed
+2026-01-11 04:59:32 | INFO     | trrcms | ================================================================================
+2026-01-11 04:59:32 | INFO     | trrcms | >> Application started successfully!
+2026-01-11 04:59:32 | INFO     | trrcms | ================================================================================
+2026-01-11 05:06:41 | INFO     | trrcms.app.main_window_v2 | Application closing
+2026-01-11 05:06:41 | INFO     | trrcms | Application closed with exit code: 0
+2026-01-11 05:08:15 | INFO     | trrcms | ================================================================================
+2026-01-11 05:08:15 | INFO     | trrcms | Starting TRRCMS Application
+2026-01-11 05:08:15 | INFO     | trrcms | ================================================================================
+2026-01-11 05:08:15 | INFO     | trrcms | Initializing database...
+2026-01-11 05:08:15 | WARNING  | trrcms.repositories.db_adapter | psycopg2 not installed. PostgreSQL support unavailable.
+2026-01-11 05:08:15 | WARNING  | trrcms.repositories.db_adapter | PostgreSQL unavailable, falling back to SQLite
+2026-01-11 05:08:15 | INFO     | trrcms.repositories.db_adapter | Using SQLite database: c:\Users\Laptop-PC\.javacpp\Desktop\un\Habitat-Desktop\data\trrcms.db
+2026-01-11 05:08:15 | INFO     | trrcms.repositories.db_adapter | Initializing SQLite database at: c:\Users\Laptop-PC\.javacpp\Desktop\un\Habitat-Desktop\data\trrcms.db
+2026-01-11 05:08:15 | DEBUG    | trrcms.repositories.db_adapter | All SQLite tables created successfully
+2026-01-11 05:08:15 | INFO     | trrcms.repositories.db_adapter | SQLite database initialized successfully
+2026-01-11 05:08:15 | INFO     | trrcms | >> Database initialized successfully
+2026-01-11 05:08:15 | INFO     | trrcms | Initializing internationalization...
+2026-01-11 05:08:15 | INFO     | trrcms | >> Internationalization initialized (Arabic)
+2026-01-11 05:08:15 | INFO     | trrcms | Creating main window (NEW DESIGN v2 with Navbar)...
+2026-01-11 05:08:17 | ERROR    | trrcms.repositories.db_adapter | SQLite fetch_all error: no such table: surveys
+Query: 
+            SELECT * FROM surveys
+            WHERE status = 'draft' AND source = 'office'
+            ORDER BY updated_at DESC
+            LIMIT ? OFFSET ?
+        
+2026-01-11 05:08:17 | ERROR    | trrcms.ui.pages.draft_office_surveys_page_v2 | Error loading drafts: no such table: surveys
+2026-01-11 05:08:17 | INFO     | trrcms.app.main_window_v2 | Showing login page
+2026-01-11 05:08:18 | INFO     | trrcms | >> Main window created and displayed
+2026-01-11 05:08:18 | INFO     | trrcms | ================================================================================
+2026-01-11 05:08:18 | INFO     | trrcms | >> Application started successfully!
+2026-01-11 05:08:18 | INFO     | trrcms | ================================================================================
+2026-01-11 05:08:28 | INFO     | trrcms.app.main_window_v2 | Application closing
+2026-01-11 05:08:28 | INFO     | trrcms | Application closed with exit code: 0
+2026-01-11 05:24:20 | INFO     | trrcms | ================================================================================
+2026-01-11 05:24:20 | INFO     | trrcms | Starting TRRCMS Application
+2026-01-11 05:24:20 | INFO     | trrcms | ================================================================================
+2026-01-11 05:24:20 | INFO     | trrcms | Initializing database...
+2026-01-11 05:24:20 | WARNING  | trrcms.repositories.db_adapter | psycopg2 not installed. PostgreSQL support unavailable.
+2026-01-11 05:24:20 | WARNING  | trrcms.repositories.db_adapter | PostgreSQL unavailable, falling back to SQLite
+2026-01-11 05:24:20 | INFO     | trrcms.repositories.db_adapter | Using SQLite database: c:\Users\Laptop-PC\.javacpp\Desktop\un\Habitat-Desktop\data\trrcms.db
+2026-01-11 05:24:20 | INFO     | trrcms.repositories.db_adapter | Initializing SQLite database at: c:\Users\Laptop-PC\.javacpp\Desktop\un\Habitat-Desktop\data\trrcms.db
+2026-01-11 05:24:20 | DEBUG    | trrcms.repositories.db_adapter | All SQLite tables created successfully
+2026-01-11 05:24:20 | INFO     | trrcms.repositories.db_adapter | SQLite database initialized successfully
+2026-01-11 05:24:20 | INFO     | trrcms | >> Database initialized successfully
+2026-01-11 05:24:20 | INFO     | trrcms | Initializing internationalization...
+2026-01-11 05:24:20 | INFO     | trrcms | >> Internationalization initialized (Arabic)
+2026-01-11 05:24:20 | INFO     | trrcms | Creating main window (NEW DESIGN v2 with Navbar)...
+2026-01-11 05:24:23 | ERROR    | trrcms.repositories.db_adapter | SQLite fetch_all error: no such table: surveys
+Query: 
+            SELECT * FROM surveys
+            WHERE status = 'draft' AND source = 'office'
+            ORDER BY updated_at DESC
+            LIMIT ? OFFSET ?
+        
+2026-01-11 05:24:23 | ERROR    | trrcms.ui.pages.draft_office_surveys_page_v2 | Error loading drafts: no such table: surveys
+2026-01-11 05:24:23 | INFO     | trrcms.app.main_window_v2 | Showing login page
+2026-01-11 05:24:24 | INFO     | trrcms | >> Main window created and displayed
+2026-01-11 05:24:24 | INFO     | trrcms | ================================================================================
+2026-01-11 05:24:24 | INFO     | trrcms | >> Application started successfully!
+2026-01-11 05:24:24 | INFO     | trrcms | ================================================================================
+2026-01-11 05:25:47 | INFO     | trrcms.app.main_window_v2 | Application closing
+2026-01-11 05:25:47 | INFO     | trrcms | Application closed with exit code: 0
+2026-01-11 05:25:53 | INFO     | trrcms | ================================================================================
+2026-01-11 05:25:53 | INFO     | trrcms | Starting TRRCMS Application
+2026-01-11 05:25:53 | INFO     | trrcms | ================================================================================
+2026-01-11 05:25:53 | INFO     | trrcms | Initializing database...
+2026-01-11 05:25:53 | WARNING  | trrcms.repositories.db_adapter | psycopg2 not installed. PostgreSQL support unavailable.
+2026-01-11 05:25:53 | WARNING  | trrcms.repositories.db_adapter | PostgreSQL unavailable, falling back to SQLite
+2026-01-11 05:25:53 | INFO     | trrcms.repositories.db_adapter | Using SQLite database: c:\Users\Laptop-PC\.javacpp\Desktop\un\Habitat-Desktop\data\trrcms.db
+2026-01-11 05:25:53 | INFO     | trrcms.repositories.db_adapter | Initializing SQLite database at: c:\Users\Laptop-PC\.javacpp\Desktop\un\Habitat-Desktop\data\trrcms.db
+2026-01-11 05:25:53 | DEBUG    | trrcms.repositories.db_adapter | All SQLite tables created successfully
+2026-01-11 05:25:53 | INFO     | trrcms.repositories.db_adapter | SQLite database initialized successfully
+2026-01-11 05:25:53 | INFO     | trrcms | >> Database initialized successfully
+2026-01-11 05:25:53 | INFO     | trrcms | Initializing internationalization...
+2026-01-11 05:25:53 | INFO     | trrcms | >> Internationalization initialized (Arabic)
+2026-01-11 05:25:53 | INFO     | trrcms | Creating main window (NEW DESIGN v2 with Navbar)...
+2026-01-11 05:25:55 | ERROR    | trrcms.repositories.db_adapter | SQLite fetch_all error: no such table: surveys
+Query: 
+            SELECT * FROM surveys
+            WHERE status = 'draft' AND source = 'office'
+            ORDER BY updated_at DESC
+            LIMIT ? OFFSET ?
+        
+2026-01-11 05:25:55 | ERROR    | trrcms.ui.pages.draft_office_surveys_page_v2 | Error loading drafts: no such table: surveys
+2026-01-11 05:25:56 | INFO     | trrcms.app.main_window_v2 | Showing login page
+2026-01-11 05:25:56 | INFO     | trrcms | >> Main window created and displayed
+2026-01-11 05:25:56 | INFO     | trrcms | ================================================================================
+2026-01-11 05:25:56 | INFO     | trrcms | >> Application started successfully!
+2026-01-11 05:25:56 | INFO     | trrcms | ================================================================================
+2026-01-11 05:26:01 | INFO     | trrcms.app.main_window_v2 | Application closing
+2026-01-11 05:26:01 | INFO     | trrcms | Application closed with exit code: 0
+2026-01-11 05:35:42 | INFO     | trrcms | ================================================================================
+2026-01-11 05:35:42 | INFO     | trrcms | Starting TRRCMS Application
+2026-01-11 05:35:42 | INFO     | trrcms | ================================================================================
+2026-01-11 05:35:42 | INFO     | trrcms | Initializing database...
+2026-01-11 05:35:42 | WARNING  | trrcms.repositories.db_adapter | psycopg2 not installed. PostgreSQL support unavailable.
+2026-01-11 05:35:42 | WARNING  | trrcms.repositories.db_adapter | PostgreSQL unavailable, falling back to SQLite
+2026-01-11 05:35:42 | INFO     | trrcms.repositories.db_adapter | Using SQLite database: c:\Users\Laptop-PC\.javacpp\Desktop\un\Habitat-Desktop\data\trrcms.db
+2026-01-11 05:35:42 | INFO     | trrcms.repositories.db_adapter | Initializing SQLite database at: c:\Users\Laptop-PC\.javacpp\Desktop\un\Habitat-Desktop\data\trrcms.db
+2026-01-11 05:35:42 | DEBUG    | trrcms.repositories.db_adapter | All SQLite tables created successfully
+2026-01-11 05:35:42 | INFO     | trrcms.repositories.db_adapter | SQLite database initialized successfully
+2026-01-11 05:35:42 | INFO     | trrcms | >> Database initialized successfully
+2026-01-11 05:35:42 | INFO     | trrcms | Initializing internationalization...
+2026-01-11 05:35:42 | INFO     | trrcms | >> Internationalization initialized (Arabic)
+2026-01-11 05:35:42 | INFO     | trrcms | Creating main window (NEW DESIGN v2 with Navbar)...
+2026-01-11 05:35:44 | ERROR    | trrcms.repositories.db_adapter | SQLite fetch_all error: no such table: surveys
+Query: 
+            SELECT * FROM surveys
+            WHERE status = 'draft' AND source = 'office'
+            ORDER BY updated_at DESC
+            LIMIT ? OFFSET ?
+        
+2026-01-11 05:35:44 | ERROR    | trrcms.ui.pages.draft_office_surveys_page_v2 | Error loading drafts: no such table: surveys
+2026-01-11 05:35:45 | INFO     | trrcms.app.main_window_v2 | Showing login page
+2026-01-11 05:35:45 | INFO     | trrcms | >> Main window created and displayed
+2026-01-11 05:35:45 | INFO     | trrcms | ================================================================================
+2026-01-11 05:35:45 | INFO     | trrcms | >> Application started successfully!
+2026-01-11 05:35:45 | INFO     | trrcms | ================================================================================
+2026-01-11 05:35:57 | INFO     | trrcms.app.main_window_v2 | Application closing
+2026-01-11 05:35:57 | INFO     | trrcms | Application closed with exit code: 0
+2026-01-11 05:36:03 | INFO     | trrcms | ================================================================================
+2026-01-11 05:36:03 | INFO     | trrcms | Starting TRRCMS Application
+2026-01-11 05:36:03 | INFO     | trrcms | ================================================================================
+2026-01-11 05:36:03 | INFO     | trrcms | Initializing database...
+2026-01-11 05:36:03 | WARNING  | trrcms.repositories.db_adapter | psycopg2 not installed. PostgreSQL support unavailable.
+2026-01-11 05:36:03 | WARNING  | trrcms.repositories.db_adapter | PostgreSQL unavailable, falling back to SQLite
+2026-01-11 05:36:03 | INFO     | trrcms.repositories.db_adapter | Using SQLite database: c:\Users\Laptop-PC\.javacpp\Desktop\un\Habitat-Desktop\data\trrcms.db
+2026-01-11 05:36:03 | INFO     | trrcms.repositories.db_adapter | Initializing SQLite database at: c:\Users\Laptop-PC\.javacpp\Desktop\un\Habitat-Desktop\data\trrcms.db
+2026-01-11 05:36:03 | DEBUG    | trrcms.repositories.db_adapter | All SQLite tables created successfully
+2026-01-11 05:36:03 | INFO     | trrcms.repositories.db_adapter | SQLite database initialized successfully
+2026-01-11 05:36:03 | INFO     | trrcms | >> Database initialized successfully
+2026-01-11 05:36:03 | INFO     | trrcms | Initializing internationalization...
+2026-01-11 05:36:03 | INFO     | trrcms | >> Internationalization initialized (Arabic)
+2026-01-11 05:36:03 | INFO     | trrcms | Creating main window (NEW DESIGN v2 with Navbar)...
+2026-01-11 05:36:05 | ERROR    | trrcms.repositories.db_adapter | SQLite fetch_all error: no such table: surveys
+Query: 
+            SELECT * FROM surveys
+            WHERE status = 'draft' AND source = 'office'
+            ORDER BY updated_at DESC
+            LIMIT ? OFFSET ?
+        
+2026-01-11 05:36:05 | ERROR    | trrcms.ui.pages.draft_office_surveys_page_v2 | Error loading drafts: no such table: surveys
+2026-01-11 05:36:05 | INFO     | trrcms.app.main_window_v2 | Showing login page
+2026-01-11 05:36:06 | INFO     | trrcms | >> Main window created and displayed
+2026-01-11 05:36:06 | INFO     | trrcms | ================================================================================
+2026-01-11 05:36:06 | INFO     | trrcms | >> Application started successfully!
+2026-01-11 05:36:06 | INFO     | trrcms | ================================================================================
+2026-01-11 05:36:08 | INFO     | trrcms.app.main_window_v2 | Application closing
+2026-01-11 05:36:08 | INFO     | trrcms | Application closed with exit code: 0
+2026-01-11 05:37:04 | INFO     | trrcms | ================================================================================
+2026-01-11 05:37:04 | INFO     | trrcms | Starting TRRCMS Application
+2026-01-11 05:37:04 | INFO     | trrcms | ================================================================================
+2026-01-11 05:37:04 | INFO     | trrcms | Initializing database...
+2026-01-11 05:37:04 | WARNING  | trrcms.repositories.db_adapter | psycopg2 not installed. PostgreSQL support unavailable.
+2026-01-11 05:37:04 | WARNING  | trrcms.repositories.db_adapter | PostgreSQL unavailable, falling back to SQLite
+2026-01-11 05:37:04 | INFO     | trrcms.repositories.db_adapter | Using SQLite database: c:\Users\Laptop-PC\.javacpp\Desktop\un\Habitat-Desktop\data\trrcms.db
+2026-01-11 05:37:04 | INFO     | trrcms.repositories.db_adapter | Initializing SQLite database at: c:\Users\Laptop-PC\.javacpp\Desktop\un\Habitat-Desktop\data\trrcms.db
+2026-01-11 05:37:04 | DEBUG    | trrcms.repositories.db_adapter | All SQLite tables created successfully
+2026-01-11 05:37:04 | INFO     | trrcms.repositories.db_adapter | SQLite database initialized successfully
+2026-01-11 05:37:04 | INFO     | trrcms | >> Database initialized successfully
+2026-01-11 05:37:04 | INFO     | trrcms | Initializing internationalization...
+2026-01-11 05:37:04 | INFO     | trrcms | >> Internationalization initialized (Arabic)
+2026-01-11 05:37:04 | INFO     | trrcms | Creating main window (NEW DESIGN v2 with Navbar)...
+2026-01-11 05:37:06 | ERROR    | trrcms.repositories.db_adapter | SQLite fetch_all error: no such table: surveys
+Query: 
+            SELECT * FROM surveys
+            WHERE status = 'draft' AND source = 'office'
+            ORDER BY updated_at DESC
+            LIMIT ? OFFSET ?
+        
+2026-01-11 05:37:06 | ERROR    | trrcms.ui.pages.draft_office_surveys_page_v2 | Error loading drafts: no such table: surveys
+2026-01-11 05:37:07 | INFO     | trrcms.app.main_window_v2 | Showing login page
+2026-01-11 05:37:07 | INFO     | trrcms | >> Main window created and displayed
+2026-01-11 05:37:07 | INFO     | trrcms | ================================================================================
+2026-01-11 05:37:07 | INFO     | trrcms | >> Application started successfully!
+2026-01-11 05:37:07 | INFO     | trrcms | ================================================================================
+2026-01-11 05:37:13 | INFO     | trrcms.app.main_window_v2 | Application closing
+2026-01-11 05:37:13 | INFO     | trrcms | Application closed with exit code: 0
+2026-01-11 05:40:04 | INFO     | trrcms | ================================================================================
+2026-01-11 05:40:04 | INFO     | trrcms | Starting TRRCMS Application
+2026-01-11 05:40:04 | INFO     | trrcms | ================================================================================
+2026-01-11 05:40:04 | INFO     | trrcms | Initializing database...
+2026-01-11 05:40:04 | WARNING  | trrcms.repositories.db_adapter | psycopg2 not installed. PostgreSQL support unavailable.
+2026-01-11 05:40:04 | WARNING  | trrcms.repositories.db_adapter | PostgreSQL unavailable, falling back to SQLite
+2026-01-11 05:40:04 | INFO     | trrcms.repositories.db_adapter | Using SQLite database: c:\Users\Laptop-PC\.javacpp\Desktop\un\Habitat-Desktop\data\trrcms.db
+2026-01-11 05:40:04 | INFO     | trrcms.repositories.db_adapter | Initializing SQLite database at: c:\Users\Laptop-PC\.javacpp\Desktop\un\Habitat-Desktop\data\trrcms.db
+2026-01-11 05:40:04 | DEBUG    | trrcms.repositories.db_adapter | All SQLite tables created successfully
+2026-01-11 05:40:04 | INFO     | trrcms.repositories.db_adapter | SQLite database initialized successfully
+2026-01-11 05:40:04 | INFO     | trrcms | >> Database initialized successfully
+2026-01-11 05:40:04 | INFO     | trrcms | Initializing internationalization...
+2026-01-11 05:40:04 | INFO     | trrcms | >> Internationalization initialized (Arabic)
+2026-01-11 05:40:04 | INFO     | trrcms | Creating main window (NEW DESIGN v2 with Navbar)...
+2026-01-11 05:40:06 | ERROR    | trrcms.repositories.db_adapter | SQLite fetch_all error: no such table: surveys
+Query: 
+            SELECT * FROM surveys
+            WHERE status = 'draft' AND source = 'office'
+            ORDER BY updated_at DESC
+            LIMIT ? OFFSET ?
+        
+2026-01-11 05:40:06 | ERROR    | trrcms.ui.pages.draft_office_surveys_page_v2 | Error loading drafts: no such table: surveys
+2026-01-11 05:40:07 | INFO     | trrcms.app.main_window_v2 | Showing login page
+2026-01-11 05:40:07 | INFO     | trrcms | >> Main window created and displayed
+2026-01-11 05:40:07 | INFO     | trrcms | ================================================================================
+2026-01-11 05:40:07 | INFO     | trrcms | >> Application started successfully!
+2026-01-11 05:40:07 | INFO     | trrcms | ================================================================================
+2026-01-11 05:40:17 | INFO     | trrcms.app.main_window_v2 | Application closing
+2026-01-11 05:40:17 | INFO     | trrcms | Application closed with exit code: 0
+2026-01-11 05:41:30 | INFO     | trrcms | ================================================================================
+2026-01-11 05:41:30 | INFO     | trrcms | Starting TRRCMS Application
+2026-01-11 05:41:30 | INFO     | trrcms | ================================================================================
+2026-01-11 05:41:30 | INFO     | trrcms | Initializing database...
+2026-01-11 05:41:30 | WARNING  | trrcms.repositories.db_adapter | psycopg2 not installed. PostgreSQL support unavailable.
+2026-01-11 05:41:30 | WARNING  | trrcms.repositories.db_adapter | PostgreSQL unavailable, falling back to SQLite
+2026-01-11 05:41:30 | INFO     | trrcms.repositories.db_adapter | Using SQLite database: c:\Users\Laptop-PC\.javacpp\Desktop\un\Habitat-Desktop\data\trrcms.db
+2026-01-11 05:41:30 | INFO     | trrcms.repositories.db_adapter | Initializing SQLite database at: c:\Users\Laptop-PC\.javacpp\Desktop\un\Habitat-Desktop\data\trrcms.db
+2026-01-11 05:41:30 | DEBUG    | trrcms.repositories.db_adapter | All SQLite tables created successfully
+2026-01-11 05:41:30 | INFO     | trrcms.repositories.db_adapter | SQLite database initialized successfully
+2026-01-11 05:41:30 | INFO     | trrcms | >> Database initialized successfully
+2026-01-11 05:41:30 | INFO     | trrcms | Initializing internationalization...
+2026-01-11 05:41:30 | INFO     | trrcms | >> Internationalization initialized (Arabic)
+2026-01-11 05:41:30 | INFO     | trrcms | Creating main window (NEW DESIGN v2 with Navbar)...
+2026-01-11 05:41:32 | ERROR    | trrcms.repositories.db_adapter | SQLite fetch_all error: no such table: surveys
+Query: 
+            SELECT * FROM surveys
+            WHERE status = 'draft' AND source = 'office'
+            ORDER BY updated_at DESC
+            LIMIT ? OFFSET ?
+        
+2026-01-11 05:41:32 | ERROR    | trrcms.ui.pages.draft_office_surveys_page_v2 | Error loading drafts: no such table: surveys
+2026-01-11 05:41:32 | INFO     | trrcms.app.main_window_v2 | Showing login page
+2026-01-11 05:41:32 | INFO     | trrcms | >> Main window created and displayed
+2026-01-11 05:41:32 | INFO     | trrcms | ================================================================================
+2026-01-11 05:41:32 | INFO     | trrcms | >> Application started successfully!
+2026-01-11 05:41:32 | INFO     | trrcms | ================================================================================
+2026-01-11 05:41:44 | INFO     | trrcms.app.main_window_v2 | Application closing
+2026-01-11 05:41:44 | INFO     | trrcms | Application closed with exit code: 0
+2026-01-11 05:42:29 | INFO     | trrcms | ================================================================================
+2026-01-11 05:42:29 | INFO     | trrcms | Starting TRRCMS Application
+2026-01-11 05:42:29 | INFO     | trrcms | ================================================================================
+2026-01-11 05:42:29 | INFO     | trrcms | Initializing database...
+2026-01-11 05:42:29 | WARNING  | trrcms.repositories.db_adapter | psycopg2 not installed. PostgreSQL support unavailable.
+2026-01-11 05:42:29 | WARNING  | trrcms.repositories.db_adapter | PostgreSQL unavailable, falling back to SQLite
+2026-01-11 05:42:29 | INFO     | trrcms.repositories.db_adapter | Using SQLite database: c:\Users\Laptop-PC\.javacpp\Desktop\un\Habitat-Desktop\data\trrcms.db
+2026-01-11 05:42:29 | INFO     | trrcms.repositories.db_adapter | Initializing SQLite database at: c:\Users\Laptop-PC\.javacpp\Desktop\un\Habitat-Desktop\data\trrcms.db
+2026-01-11 05:42:29 | DEBUG    | trrcms.repositories.db_adapter | All SQLite tables created successfully
+2026-01-11 05:42:29 | INFO     | trrcms.repositories.db_adapter | SQLite database initialized successfully
+2026-01-11 05:42:29 | INFO     | trrcms | >> Database initialized successfully
+2026-01-11 05:42:29 | INFO     | trrcms | Initializing internationalization...
+2026-01-11 05:42:29 | INFO     | trrcms | >> Internationalization initialized (Arabic)
+2026-01-11 05:42:29 | INFO     | trrcms | Creating main window (NEW DESIGN v2 with Navbar)...
+2026-01-11 05:42:31 | ERROR    | trrcms.repositories.db_adapter | SQLite fetch_all error: no such table: surveys
+Query: 
+            SELECT * FROM surveys
+            WHERE status = 'draft' AND source = 'office'
+            ORDER BY updated_at DESC
+            LIMIT ? OFFSET ?
+        
+2026-01-11 05:42:31 | ERROR    | trrcms.ui.pages.draft_office_surveys_page_v2 | Error loading drafts: no such table: surveys
+2026-01-11 05:42:32 | INFO     | trrcms.app.main_window_v2 | Showing login page
+2026-01-11 05:42:32 | INFO     | trrcms | >> Main window created and displayed
+2026-01-11 05:42:32 | INFO     | trrcms | ================================================================================
+2026-01-11 05:42:32 | INFO     | trrcms | >> Application started successfully!
+2026-01-11 05:42:32 | INFO     | trrcms | ================================================================================
+2026-01-11 05:42:40 | INFO     | trrcms.app.main_window_v2 | Application closing
+2026-01-11 05:42:40 | INFO     | trrcms | Application closed with exit code: 0
+2026-01-11 05:43:04 | INFO     | trrcms | ================================================================================
+2026-01-11 05:43:04 | INFO     | trrcms | Starting TRRCMS Application
+2026-01-11 05:43:04 | INFO     | trrcms | ================================================================================
+2026-01-11 05:43:04 | INFO     | trrcms | Initializing database...
+2026-01-11 05:43:04 | WARNING  | trrcms.repositories.db_adapter | psycopg2 not installed. PostgreSQL support unavailable.
+2026-01-11 05:43:04 | WARNING  | trrcms.repositories.db_adapter | PostgreSQL unavailable, falling back to SQLite
+2026-01-11 05:43:04 | INFO     | trrcms.repositories.db_adapter | Using SQLite database: c:\Users\Laptop-PC\.javacpp\Desktop\un\Habitat-Desktop\data\trrcms.db
+2026-01-11 05:43:04 | INFO     | trrcms.repositories.db_adapter | Initializing SQLite database at: c:\Users\Laptop-PC\.javacpp\Desktop\un\Habitat-Desktop\data\trrcms.db
+2026-01-11 05:43:04 | DEBUG    | trrcms.repositories.db_adapter | All SQLite tables created successfully
+2026-01-11 05:43:04 | INFO     | trrcms.repositories.db_adapter | SQLite database initialized successfully
+2026-01-11 05:43:04 | INFO     | trrcms | >> Database initialized successfully
+2026-01-11 05:43:04 | INFO     | trrcms | Initializing internationalization...
+2026-01-11 05:43:04 | INFO     | trrcms | >> Internationalization initialized (Arabic)
+2026-01-11 05:43:04 | INFO     | trrcms | Creating main window (NEW DESIGN v2 with Navbar)...
+2026-01-11 05:43:06 | ERROR    | trrcms.repositories.db_adapter | SQLite fetch_all error: no such table: surveys
+Query: 
+            SELECT * FROM surveys
+            WHERE status = 'draft' AND source = 'office'
+            ORDER BY updated_at DESC
+            LIMIT ? OFFSET ?
+        
+2026-01-11 05:43:06 | ERROR    | trrcms.ui.pages.draft_office_surveys_page_v2 | Error loading drafts: no such table: surveys
+2026-01-11 05:43:06 | INFO     | trrcms.app.main_window_v2 | Showing login page
+2026-01-11 05:43:07 | INFO     | trrcms | >> Main window created and displayed
+2026-01-11 05:43:07 | INFO     | trrcms | ================================================================================
+2026-01-11 05:43:07 | INFO     | trrcms | >> Application started successfully!
+2026-01-11 05:43:07 | INFO     | trrcms | ================================================================================
+2026-01-11 05:43:15 | INFO     | trrcms.app.main_window_v2 | Application closing
+2026-01-11 05:43:15 | INFO     | trrcms | Application closed with exit code: 0
+2026-01-11 05:43:33 | INFO     | trrcms | ================================================================================
+2026-01-11 05:43:33 | INFO     | trrcms | Starting TRRCMS Application
+2026-01-11 05:43:33 | INFO     | trrcms | ================================================================================
+2026-01-11 05:43:33 | INFO     | trrcms | Initializing database...
+2026-01-11 05:43:33 | WARNING  | trrcms.repositories.db_adapter | psycopg2 not installed. PostgreSQL support unavailable.
+2026-01-11 05:43:33 | WARNING  | trrcms.repositories.db_adapter | PostgreSQL unavailable, falling back to SQLite
+2026-01-11 05:43:33 | INFO     | trrcms.repositories.db_adapter | Using SQLite database: c:\Users\Laptop-PC\.javacpp\Desktop\un\Habitat-Desktop\data\trrcms.db
+2026-01-11 05:43:33 | INFO     | trrcms.repositories.db_adapter | Initializing SQLite database at: c:\Users\Laptop-PC\.javacpp\Desktop\un\Habitat-Desktop\data\trrcms.db
+2026-01-11 05:43:33 | DEBUG    | trrcms.repositories.db_adapter | All SQLite tables created successfully
+2026-01-11 05:43:33 | INFO     | trrcms.repositories.db_adapter | SQLite database initialized successfully
+2026-01-11 05:43:33 | INFO     | trrcms | >> Database initialized successfully
+2026-01-11 05:43:33 | INFO     | trrcms | Initializing internationalization...
+2026-01-11 05:43:33 | INFO     | trrcms | >> Internationalization initialized (Arabic)
+2026-01-11 05:43:33 | INFO     | trrcms | Creating main window (NEW DESIGN v2 with Navbar)...
+2026-01-11 05:43:34 | ERROR    | trrcms.repositories.db_adapter | SQLite fetch_all error: no such table: surveys
+Query: 
+            SELECT * FROM surveys
+            WHERE status = 'draft' AND source = 'office'
+            ORDER BY updated_at DESC
+            LIMIT ? OFFSET ?
+        
+2026-01-11 05:43:34 | ERROR    | trrcms.ui.pages.draft_office_surveys_page_v2 | Error loading drafts: no such table: surveys
+2026-01-11 05:43:35 | INFO     | trrcms.app.main_window_v2 | Showing login page
+2026-01-11 05:43:35 | INFO     | trrcms | >> Main window created and displayed
+2026-01-11 05:43:35 | INFO     | trrcms | ================================================================================
+2026-01-11 05:43:35 | INFO     | trrcms | >> Application started successfully!
+2026-01-11 05:43:35 | INFO     | trrcms | ================================================================================
+2026-01-11 05:43:47 | INFO     | trrcms.app.main_window_v2 | Application closing
+2026-01-11 05:43:47 | INFO     | trrcms | Application closed with exit code: 0
+2026-01-11 05:44:05 | INFO     | trrcms | ================================================================================
+2026-01-11 05:44:05 | INFO     | trrcms | Starting TRRCMS Application
+2026-01-11 05:44:05 | INFO     | trrcms | ================================================================================
+2026-01-11 05:44:05 | INFO     | trrcms | Initializing database...
+2026-01-11 05:44:05 | WARNING  | trrcms.repositories.db_adapter | psycopg2 not installed. PostgreSQL support unavailable.
+2026-01-11 05:44:05 | WARNING  | trrcms.repositories.db_adapter | PostgreSQL unavailable, falling back to SQLite
+2026-01-11 05:44:05 | INFO     | trrcms.repositories.db_adapter | Using SQLite database: c:\Users\Laptop-PC\.javacpp\Desktop\un\Habitat-Desktop\data\trrcms.db
+2026-01-11 05:44:05 | INFO     | trrcms.repositories.db_adapter | Initializing SQLite database at: c:\Users\Laptop-PC\.javacpp\Desktop\un\Habitat-Desktop\data\trrcms.db
+2026-01-11 05:44:05 | DEBUG    | trrcms.repositories.db_adapter | All SQLite tables created successfully
+2026-01-11 05:44:05 | INFO     | trrcms.repositories.db_adapter | SQLite database initialized successfully
+2026-01-11 05:44:05 | INFO     | trrcms | >> Database initialized successfully
+2026-01-11 05:44:05 | INFO     | trrcms | Initializing internationalization...
+2026-01-11 05:44:05 | INFO     | trrcms | >> Internationalization initialized (Arabic)
+2026-01-11 05:44:05 | INFO     | trrcms | Creating main window (NEW DESIGN v2 with Navbar)...
+2026-01-11 05:44:07 | ERROR    | trrcms.repositories.db_adapter | SQLite fetch_all error: no such table: surveys
+Query: 
+            SELECT * FROM surveys
+            WHERE status = 'draft' AND source = 'office'
+            ORDER BY updated_at DESC
+            LIMIT ? OFFSET ?
+        
+2026-01-11 05:44:07 | ERROR    | trrcms.ui.pages.draft_office_surveys_page_v2 | Error loading drafts: no such table: surveys
+2026-01-11 05:44:07 | INFO     | trrcms.app.main_window_v2 | Showing login page
+2026-01-11 05:44:07 | INFO     | trrcms | >> Main window created and displayed
+2026-01-11 05:44:08 | INFO     | trrcms | ================================================================================
+2026-01-11 05:44:08 | INFO     | trrcms | >> Application started successfully!
+2026-01-11 05:44:08 | INFO     | trrcms | ================================================================================
+2026-01-11 05:44:13 | INFO     | trrcms.app.main_window_v2 | Application closing
+2026-01-11 05:44:13 | INFO     | trrcms | Application closed with exit code: 0
+2026-01-11 05:45:44 | INFO     | trrcms | ================================================================================
+2026-01-11 05:45:44 | INFO     | trrcms | Starting TRRCMS Application
+2026-01-11 05:45:44 | INFO     | trrcms | ================================================================================
+2026-01-11 05:45:44 | INFO     | trrcms | Initializing database...
+2026-01-11 05:45:44 | WARNING  | trrcms.repositories.db_adapter | psycopg2 not installed. PostgreSQL support unavailable.
+2026-01-11 05:45:44 | WARNING  | trrcms.repositories.db_adapter | PostgreSQL unavailable, falling back to SQLite
+2026-01-11 05:45:44 | INFO     | trrcms.repositories.db_adapter | Using SQLite database: c:\Users\Laptop-PC\.javacpp\Desktop\un\Habitat-Desktop\data\trrcms.db
+2026-01-11 05:45:44 | INFO     | trrcms.repositories.db_adapter | Initializing SQLite database at: c:\Users\Laptop-PC\.javacpp\Desktop\un\Habitat-Desktop\data\trrcms.db
+2026-01-11 05:45:44 | DEBUG    | trrcms.repositories.db_adapter | All SQLite tables created successfully
+2026-01-11 05:45:44 | INFO     | trrcms.repositories.db_adapter | SQLite database initialized successfully
+2026-01-11 05:45:44 | INFO     | trrcms | >> Database initialized successfully
+2026-01-11 05:45:44 | INFO     | trrcms | Initializing internationalization...
+2026-01-11 05:45:44 | INFO     | trrcms | >> Internationalization initialized (Arabic)
+2026-01-11 05:45:44 | INFO     | trrcms | Creating main window (NEW DESIGN v2 with Navbar)...
+2026-01-11 05:45:46 | ERROR    | trrcms.repositories.db_adapter | SQLite fetch_all error: no such table: surveys
+Query: 
+            SELECT * FROM surveys
+            WHERE status = 'draft' AND source = 'office'
+            ORDER BY updated_at DESC
+            LIMIT ? OFFSET ?
+        
+2026-01-11 05:45:46 | ERROR    | trrcms.ui.pages.draft_office_surveys_page_v2 | Error loading drafts: no such table: surveys
+2026-01-11 05:45:46 | INFO     | trrcms.app.main_window_v2 | Showing login page
+2026-01-11 05:45:46 | INFO     | trrcms | >> Main window created and displayed
+2026-01-11 05:45:46 | INFO     | trrcms | ================================================================================
+2026-01-11 05:45:46 | INFO     | trrcms | >> Application started successfully!
+2026-01-11 05:45:46 | INFO     | trrcms | ================================================================================
+2026-01-11 05:46:11 | INFO     | trrcms.app.main_window_v2 | Application closing
+2026-01-11 05:46:11 | INFO     | trrcms | Application closed with exit code: 0
+2026-01-11 05:47:19 | INFO     | trrcms | ================================================================================
+2026-01-11 05:47:19 | INFO     | trrcms | Starting TRRCMS Application
+2026-01-11 05:47:19 | INFO     | trrcms | ================================================================================
+2026-01-11 05:47:19 | INFO     | trrcms | Initializing database...
+2026-01-11 05:47:19 | WARNING  | trrcms.repositories.db_adapter | psycopg2 not installed. PostgreSQL support unavailable.
+2026-01-11 05:47:19 | WARNING  | trrcms.repositories.db_adapter | PostgreSQL unavailable, falling back to SQLite
+2026-01-11 05:47:19 | INFO     | trrcms.repositories.db_adapter | Using SQLite database: c:\Users\Laptop-PC\.javacpp\Desktop\un\Habitat-Desktop\data\trrcms.db
+2026-01-11 05:47:19 | INFO     | trrcms.repositories.db_adapter | Initializing SQLite database at: c:\Users\Laptop-PC\.javacpp\Desktop\un\Habitat-Desktop\data\trrcms.db
+2026-01-11 05:47:19 | DEBUG    | trrcms.repositories.db_adapter | All SQLite tables created successfully
+2026-01-11 05:47:19 | INFO     | trrcms.repositories.db_adapter | SQLite database initialized successfully
+2026-01-11 05:47:19 | INFO     | trrcms | >> Database initialized successfully
+2026-01-11 05:47:19 | INFO     | trrcms | Initializing internationalization...
+2026-01-11 05:47:19 | INFO     | trrcms | >> Internationalization initialized (Arabic)
+2026-01-11 05:47:19 | INFO     | trrcms | Creating main window (NEW DESIGN v2 with Navbar)...
+2026-01-11 05:47:22 | ERROR    | trrcms.repositories.db_adapter | SQLite fetch_all error: no such table: surveys
+Query: 
+            SELECT * FROM surveys
+            WHERE status = 'draft' AND source = 'office'
+            ORDER BY updated_at DESC
+            LIMIT ? OFFSET ?
+        
+2026-01-11 05:47:22 | ERROR    | trrcms.ui.pages.draft_office_surveys_page_v2 | Error loading drafts: no such table: surveys
+2026-01-11 05:47:22 | INFO     | trrcms.app.main_window_v2 | Showing login page
+2026-01-11 05:47:22 | INFO     | trrcms | >> Main window created and displayed
+2026-01-11 05:47:22 | INFO     | trrcms | ================================================================================
+2026-01-11 05:47:22 | INFO     | trrcms | >> Application started successfully!
+2026-01-11 05:47:22 | INFO     | trrcms | ================================================================================
+2026-01-11 05:47:29 | INFO     | trrcms.app.main_window_v2 | Application closing
+2026-01-11 05:47:29 | INFO     | trrcms | Application closed with exit code: 0
+2026-01-11 05:51:33 | INFO     | trrcms | ================================================================================
+2026-01-11 05:51:33 | INFO     | trrcms | Starting TRRCMS Application
+2026-01-11 05:51:33 | INFO     | trrcms | ================================================================================
+2026-01-11 05:51:33 | INFO     | trrcms | Initializing database...
+2026-01-11 05:51:33 | WARNING  | trrcms.repositories.db_adapter | psycopg2 not installed. PostgreSQL support unavailable.
+2026-01-11 05:51:33 | WARNING  | trrcms.repositories.db_adapter | PostgreSQL unavailable, falling back to SQLite
+2026-01-11 05:51:33 | INFO     | trrcms.repositories.db_adapter | Using SQLite database: c:\Users\Laptop-PC\.javacpp\Desktop\un\Habitat-Desktop\data\trrcms.db
+2026-01-11 05:51:33 | INFO     | trrcms.repositories.db_adapter | Initializing SQLite database at: c:\Users\Laptop-PC\.javacpp\Desktop\un\Habitat-Desktop\data\trrcms.db
+2026-01-11 05:51:33 | DEBUG    | trrcms.repositories.db_adapter | All SQLite tables created successfully
+2026-01-11 05:51:33 | INFO     | trrcms.repositories.db_adapter | SQLite database initialized successfully
+2026-01-11 05:51:33 | INFO     | trrcms | >> Database initialized successfully
+2026-01-11 05:51:33 | INFO     | trrcms | Initializing internationalization...
+2026-01-11 05:51:33 | INFO     | trrcms | >> Internationalization initialized (Arabic)
+2026-01-11 05:51:33 | INFO     | trrcms | Creating main window (NEW DESIGN v2 with Navbar)...
+2026-01-11 05:51:35 | ERROR    | trrcms.repositories.db_adapter | SQLite fetch_all error: no such table: surveys
+Query: 
+            SELECT * FROM surveys
+            WHERE status = 'draft' AND source = 'office'
+            ORDER BY updated_at DESC
+            LIMIT ? OFFSET ?
+        
+2026-01-11 05:51:35 | ERROR    | trrcms.ui.pages.draft_office_surveys_page_v2 | Error loading drafts: no such table: surveys
+2026-01-11 05:51:35 | INFO     | trrcms.app.main_window_v2 | Showing login page
+2026-01-11 05:51:35 | INFO     | trrcms | >> Main window created and displayed
+2026-01-11 05:51:35 | INFO     | trrcms | ================================================================================
+2026-01-11 05:51:35 | INFO     | trrcms | >> Application started successfully!
+2026-01-11 05:51:35 | INFO     | trrcms | ================================================================================
+2026-01-11 05:51:39 | INFO     | trrcms.app.main_window_v2 | Application closing
+2026-01-11 05:51:39 | INFO     | trrcms | Application closed with exit code: 0
+2026-01-11 05:54:27 | INFO     | trrcms | ================================================================================
+2026-01-11 05:54:27 | INFO     | trrcms | Starting TRRCMS Application
+2026-01-11 05:54:27 | INFO     | trrcms | ================================================================================
+2026-01-11 05:54:27 | INFO     | trrcms | Initializing database...
+2026-01-11 05:54:27 | WARNING  | trrcms.repositories.db_adapter | psycopg2 not installed. PostgreSQL support unavailable.
+2026-01-11 05:54:27 | WARNING  | trrcms.repositories.db_adapter | PostgreSQL unavailable, falling back to SQLite
+2026-01-11 05:54:27 | INFO     | trrcms.repositories.db_adapter | Using SQLite database: c:\Users\Laptop-PC\.javacpp\Desktop\un\Habitat-Desktop\data\trrcms.db
+2026-01-11 05:54:27 | INFO     | trrcms.repositories.db_adapter | Initializing SQLite database at: c:\Users\Laptop-PC\.javacpp\Desktop\un\Habitat-Desktop\data\trrcms.db
+2026-01-11 05:54:27 | DEBUG    | trrcms.repositories.db_adapter | All SQLite tables created successfully
+2026-01-11 05:54:27 | INFO     | trrcms.repositories.db_adapter | SQLite database initialized successfully
+2026-01-11 05:54:27 | INFO     | trrcms | >> Database initialized successfully
+2026-01-11 05:54:27 | INFO     | trrcms | Initializing internationalization...
+2026-01-11 05:54:27 | INFO     | trrcms | >> Internationalization initialized (Arabic)
+2026-01-11 05:54:27 | INFO     | trrcms | Creating main window (NEW DESIGN v2 with Navbar)...
+2026-01-11 05:54:29 | ERROR    | trrcms.repositories.db_adapter | SQLite fetch_all error: no such table: surveys
+Query: 
+            SELECT * FROM surveys
+            WHERE status = 'draft' AND source = 'office'
+            ORDER BY updated_at DESC
+            LIMIT ? OFFSET ?
+        
+2026-01-11 05:54:29 | ERROR    | trrcms.ui.pages.draft_office_surveys_page_v2 | Error loading drafts: no such table: surveys
+2026-01-11 05:54:30 | INFO     | trrcms.app.main_window_v2 | Showing login page
+2026-01-11 05:54:30 | INFO     | trrcms | >> Main window created and displayed
+2026-01-11 05:54:30 | INFO     | trrcms | ================================================================================
+2026-01-11 05:54:30 | INFO     | trrcms | >> Application started successfully!
+2026-01-11 05:54:30 | INFO     | trrcms | ================================================================================
+2026-01-11 05:54:33 | INFO     | trrcms.app.main_window_v2 | Application closing
+2026-01-11 05:54:33 | INFO     | trrcms | Application closed with exit code: 0
+2026-01-11 05:56:35 | INFO     | trrcms | ================================================================================
+2026-01-11 05:56:35 | INFO     | trrcms | Starting TRRCMS Application
+2026-01-11 05:56:35 | INFO     | trrcms | ================================================================================
+2026-01-11 05:56:35 | INFO     | trrcms | Initializing database...
+2026-01-11 05:56:35 | WARNING  | trrcms.repositories.db_adapter | psycopg2 not installed. PostgreSQL support unavailable.
+2026-01-11 05:56:35 | WARNING  | trrcms.repositories.db_adapter | PostgreSQL unavailable, falling back to SQLite
+2026-01-11 05:56:35 | INFO     | trrcms.repositories.db_adapter | Using SQLite database: c:\Users\Laptop-PC\.javacpp\Desktop\un\Habitat-Desktop\data\trrcms.db
+2026-01-11 05:56:35 | INFO     | trrcms.repositories.db_adapter | Initializing SQLite database at: c:\Users\Laptop-PC\.javacpp\Desktop\un\Habitat-Desktop\data\trrcms.db
+2026-01-11 05:56:35 | DEBUG    | trrcms.repositories.db_adapter | All SQLite tables created successfully
+2026-01-11 05:56:35 | INFO     | trrcms.repositories.db_adapter | SQLite database initialized successfully
+2026-01-11 05:56:35 | INFO     | trrcms | >> Database initialized successfully
+2026-01-11 05:56:35 | INFO     | trrcms | Initializing internationalization...
+2026-01-11 05:56:35 | INFO     | trrcms | >> Internationalization initialized (Arabic)
+2026-01-11 05:56:35 | INFO     | trrcms | Creating main window (NEW DESIGN v2 with Navbar)...
+2026-01-11 05:56:36 | ERROR    | trrcms.repositories.db_adapter | SQLite fetch_all error: no such table: surveys
+Query: 
+            SELECT * FROM surveys
+            WHERE status = 'draft' AND source = 'office'
+            ORDER BY updated_at DESC
+            LIMIT ? OFFSET ?
+        
+2026-01-11 05:56:36 | ERROR    | trrcms.ui.pages.draft_office_surveys_page_v2 | Error loading drafts: no such table: surveys
+2026-01-11 05:56:37 | INFO     | trrcms.app.main_window_v2 | Showing login page
+2026-01-11 05:56:37 | INFO     | trrcms | >> Main window created and displayed
+2026-01-11 05:56:37 | INFO     | trrcms | ================================================================================
+2026-01-11 05:56:37 | INFO     | trrcms | >> Application started successfully!
+2026-01-11 05:56:37 | INFO     | trrcms | ================================================================================
+2026-01-11 05:56:48 | INFO     | trrcms.app.main_window_v2 | Application closing
+2026-01-11 05:56:48 | INFO     | trrcms | Application closed with exit code: 0
+2026-01-11 05:58:34 | INFO     | trrcms | ================================================================================
+2026-01-11 05:58:34 | INFO     | trrcms | Starting TRRCMS Application
+2026-01-11 05:58:34 | INFO     | trrcms | ================================================================================
+2026-01-11 05:58:34 | INFO     | trrcms | Initializing database...
+2026-01-11 05:58:34 | WARNING  | trrcms.repositories.db_adapter | psycopg2 not installed. PostgreSQL support unavailable.
+2026-01-11 05:58:34 | WARNING  | trrcms.repositories.db_adapter | PostgreSQL unavailable, falling back to SQLite
+2026-01-11 05:58:34 | INFO     | trrcms.repositories.db_adapter | Using SQLite database: c:\Users\Laptop-PC\.javacpp\Desktop\un\Habitat-Desktop\data\trrcms.db
+2026-01-11 05:58:34 | INFO     | trrcms.repositories.db_adapter | Initializing SQLite database at: c:\Users\Laptop-PC\.javacpp\Desktop\un\Habitat-Desktop\data\trrcms.db
+2026-01-11 05:58:34 | DEBUG    | trrcms.repositories.db_adapter | All SQLite tables created successfully
+2026-01-11 05:58:34 | INFO     | trrcms.repositories.db_adapter | SQLite database initialized successfully
+2026-01-11 05:58:34 | INFO     | trrcms | >> Database initialized successfully
+2026-01-11 05:58:34 | INFO     | trrcms | Initializing internationalization...
+2026-01-11 05:58:34 | INFO     | trrcms | >> Internationalization initialized (Arabic)
+2026-01-11 05:58:34 | INFO     | trrcms | Creating main window (NEW DESIGN v2 with Navbar)...
+2026-01-11 05:58:36 | ERROR    | trrcms.repositories.db_adapter | SQLite fetch_all error: no such table: surveys
+Query: 
+            SELECT * FROM surveys
+            WHERE status = 'draft' AND source = 'office'
+            ORDER BY updated_at DESC
+            LIMIT ? OFFSET ?
+        
+2026-01-11 05:58:36 | ERROR    | trrcms.ui.pages.draft_office_surveys_page_v2 | Error loading drafts: no such table: surveys
+2026-01-11 05:58:37 | INFO     | trrcms.app.main_window_v2 | Showing login page
+2026-01-11 05:58:37 | INFO     | trrcms | >> Main window created and displayed
+2026-01-11 05:58:37 | INFO     | trrcms | ================================================================================
+2026-01-11 05:58:37 | INFO     | trrcms | >> Application started successfully!
+2026-01-11 05:58:37 | INFO     | trrcms | ================================================================================
+2026-01-11 05:58:46 | INFO     | trrcms.app.main_window_v2 | Application closing
+2026-01-11 05:58:46 | INFO     | trrcms | Application closed with exit code: 0
