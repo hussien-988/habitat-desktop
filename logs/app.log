@@ -8787,3 +8787,57 @@ Query:
 2026-01-08 20:31:56 | DEBUG    | trrcms.app.main_window_v2 | Tab 0 selected -> navigating to claims
 2026-01-08 20:32:02 | INFO     | trrcms.app.main_window_v2 | Application closing
 2026-01-08 20:32:02 | INFO     | trrcms | Application closed with exit code: 0
+2026-01-08 20:47:23 | INFO     | trrcms | ================================================================================
+2026-01-08 20:47:23 | INFO     | trrcms | Starting TRRCMS Application
+2026-01-08 20:47:23 | INFO     | trrcms | ================================================================================
+2026-01-08 20:47:23 | INFO     | trrcms | Initializing database...
+2026-01-08 20:47:23 | ERROR    | trrcms.repositories.db_adapter | PostgreSQL connection error: connection to server at "localhost" (::1), port 5432 failed: fe_sendauth: no password supplied
+
+2026-01-08 20:47:23 | WARNING  | trrcms.repositories.db_adapter | PostgreSQL unavailable, falling back to SQLite
+2026-01-08 20:47:23 | INFO     | trrcms.repositories.db_adapter | Using SQLite database: E:\Project\code\trrcms\trrcms\data\trrcms.db
+2026-01-08 20:47:23 | INFO     | trrcms.repositories.db_adapter | Initializing SQLite database at: E:\Project\code\trrcms\trrcms\data\trrcms.db
+2026-01-08 20:47:23 | DEBUG    | trrcms.repositories.db_adapter | All SQLite tables created successfully
+2026-01-08 20:47:23 | INFO     | trrcms.repositories.db_adapter | SQLite database initialized successfully
+2026-01-08 20:47:23 | INFO     | trrcms | >> Database initialized successfully
+2026-01-08 20:47:23 | INFO     | trrcms | Initializing internationalization...
+2026-01-08 20:47:23 | INFO     | trrcms | >> Internationalization initialized (Arabic)
+2026-01-08 20:47:23 | INFO     | trrcms | Creating main window (NEW DESIGN v2 with Navbar)...
+2026-01-08 20:47:27 | ERROR    | trrcms.repositories.db_adapter | SQLite fetch_all error: no such table: surveys
+Query: 
+            SELECT * FROM surveys
+            WHERE status = 'draft' AND source = 'office'
+            ORDER BY updated_at DESC
+            LIMIT ? OFFSET ?
+        
+2026-01-08 20:47:27 | ERROR    | trrcms.ui.pages.draft_office_surveys_page_v2 | Error loading drafts: no such table: surveys
+2026-01-08 20:47:27 | INFO     | trrcms.app.main_window_v2 | Showing login page
+2026-01-08 20:47:28 | INFO     | trrcms | >> Main window created and displayed
+2026-01-08 20:47:28 | INFO     | trrcms | ================================================================================
+2026-01-08 20:47:28 | INFO     | trrcms | >> Application started successfully!
+2026-01-08 20:47:28 | INFO     | trrcms | ================================================================================
+2026-01-08 20:47:59 | INFO     | trrcms.services.auth_service | User logged in successfully: admin (admin)
+2026-01-08 20:47:59 | INFO     | trrcms.ui.pages.login_page | Login successful: admin
+2026-01-08 20:47:59 | INFO     | trrcms.app.main_window_v2 | User logged in: admin (admin)
+2026-01-08 20:47:59 | DEBUG    | trrcms.app.main_window_v2 | Navigated to: claims
+2026-01-08 20:47:59 | DEBUG    | trrcms.app.main_window_v2 | Tab 0 selected -> navigating to claims
+2026-01-08 20:48:01 | DEBUG    | trrcms.app.main_window_v2 | Navigated to: draft_claims
+2026-01-08 20:48:01 | DEBUG    | trrcms.app.main_window_v2 | Tab 1 selected -> navigating to draft_claims
+2026-01-08 20:48:02 | DEBUG    | trrcms.ui.pages.buildings_page | Refreshing buildings page
+2026-01-08 20:48:02 | DEBUG    | trrcms.app.main_window_v2 | Navigated to: buildings
+2026-01-08 20:48:02 | DEBUG    | trrcms.app.main_window_v2 | Tab 2 selected -> navigating to buildings
+2026-01-08 20:48:03 | DEBUG    | trrcms.ui.pages.units_page | Refreshing units page
+2026-01-08 20:48:03 | DEBUG    | trrcms.app.main_window_v2 | Navigated to: units
+2026-01-08 20:48:03 | DEBUG    | trrcms.app.main_window_v2 | Tab 3 selected -> navigating to units
+2026-01-08 20:48:04 | DEBUG    | trrcms.ui.pages.duplicates_page | Refreshing duplicates page
+2026-01-08 20:48:04 | INFO     | trrcms.services.duplicate_service | Detected 0 building duplicate groups
+2026-01-08 20:48:04 | INFO     | trrcms.services.duplicate_service | Detected 0 unit duplicate groups
+2026-01-08 20:48:04 | INFO     | trrcms.services.duplicate_service | Detected 0 person duplicate groups
+2026-01-08 20:48:04 | INFO     | trrcms.services.duplicate_service | Detected 0 building duplicate groups
+2026-01-08 20:48:04 | INFO     | trrcms.services.duplicate_service | Detected 0 unit duplicate groups
+2026-01-08 20:48:04 | INFO     | trrcms.services.duplicate_service | Detected 0 person duplicate groups
+2026-01-08 20:48:04 | DEBUG    | trrcms.app.main_window_v2 | Navigated to: duplicates
+2026-01-08 20:48:04 | DEBUG    | trrcms.app.main_window_v2 | Tab 4 selected -> navigating to duplicates
+2026-01-08 20:48:06 | DEBUG    | trrcms.app.main_window_v2 | Navigated to: import_wizard
+2026-01-08 20:48:06 | DEBUG    | trrcms.app.main_window_v2 | Tab 5 selected -> navigating to import_wizard
+2026-01-08 20:48:11 | INFO     | trrcms.app.main_window_v2 | Application closing
+2026-01-08 20:48:11 | INFO     | trrcms | Application closed with exit code: 0
