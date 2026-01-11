@@ -3,3 +3,11 @@ __pycache__/
 *.pyc
 *.pyo
 *.pyd
+# local runtime files
+data/trrcms.db
+logs/app.log
+
+# optional: ignore all logs and DBs
+logs/
+*.log
+*.db
