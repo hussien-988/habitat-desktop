@@ -814,6 +814,28 @@ class SQLiteAdapter(DatabaseAdapter):
             )
         """)
 
+        # Surveys table (UC-004, UC-005)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS surveys (
+                survey_id TEXT PRIMARY KEY,
+                building_id TEXT,
+                unit_id TEXT,
+                field_collector_id TEXT,
+                survey_date TEXT,
+                survey_type TEXT,
+                status TEXT DEFAULT 'draft',
+                reference_code TEXT,
+                source TEXT DEFAULT 'field',
+                notes TEXT,
+                context_data TEXT,
+                created_at TEXT,
+                updated_at TEXT,
+                finalized_at TEXT,
+                FOREIGN KEY (building_id) REFERENCES buildings(building_id),
+                FOREIGN KEY (unit_id) REFERENCES property_units(unit_id)
+            )
+        """)
+
         # Create indexes
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_buildings_neighborhood ON buildings(neighborhood_code)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_buildings_status ON buildings(building_status)")
@@ -837,6 +859,9 @@ class SQLiteAdapter(DatabaseAdapter):
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_conflicts_status ON conflicts(status)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_conflicts_priority ON conflicts(priority)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_conflicts_type ON conflicts(conflict_type)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_surveys_building ON surveys(building_id)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_surveys_status ON surveys(status)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_surveys_source ON surveys(source)")
 
         # Seed default data
         self._seed_defaults(cursor)

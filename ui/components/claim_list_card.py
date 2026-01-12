@@ -29,11 +29,11 @@ class ClaimListCard(QFrame):
         self.setStyleSheet("""
             QFrame#claimCard {
                 background-color: white;
-                border-radius: 8px;
+                border-radius: 16px;
                 border: none;
             }
             QFrame#claimCard:hover {
-                background-color: #f9fafb;
+                background-color: #FAFBFC;
             }
         """)
 
@@ -130,9 +130,9 @@ class ClaimListCard(QFrame):
         details_container.setObjectName("detailsFrame")
         details_container.setStyleSheet("""
             QFrame#detailsFrame {
-                background-color: #fafafa;
+                background-color: #f0f7ff;
                 border: 1px solid #e0e0e0;
-                border-radius: 6px;
+                border-radius: 12px;
             }
         """)
 

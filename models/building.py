@@ -102,25 +102,31 @@ class Building:
 
     @property
     def building_type_display(self) -> str:
-        """Get display name for building type."""
+        """Get display name for building type (Arabic)."""
         types = {
-            "residential": "Residential",
-            "commercial": "Commercial",
-            "mixed_use": "Mixed Use",
-            "industrial": "Industrial",
-            "public": "Public",
+            "residential": "سكني",
+            "commercial": "تجاري",
+            "mixed_use": "متعدد الاستخدامات",
+            "industrial": "صناعي",
+            "public": "عام",
         }
         return types.get(self.building_type, self.building_type)
 
     @property
     def building_status_display(self) -> str:
-        """Get display name for building status."""
+        """Get display name for building status (Arabic)."""
         statuses = {
-            "intact": "Intact",
-            "minor_damage": "Minor Damage",
-            "major_damage": "Major Damage",
-            "destroyed": "Destroyed",
-            "under_construction": "Under Construction",
+            "intact": "سليم",
+            "standing": "سليم",
+            "minor_damage": "ضرر طفيف",
+            "damaged": "متضرر",
+            "partially_damaged": "متضرر جزئياً",
+            "major_damage": "ضرر كبير",
+            "severely_damaged": "متضرر بشدة",
+            "destroyed": "مدمر",
+            "demolished": "مهدم",
+            "rubble": "ركام",
+            "under_construction": "قيد البناء",
         }
         return statuses.get(self.building_status, self.building_status)
 

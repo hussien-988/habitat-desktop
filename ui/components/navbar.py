@@ -15,10 +15,45 @@ from PyQt5.QtWidgets import (
     QFrame, QHBoxLayout, QLabel, QWidget, QPushButton,
     QVBoxLayout, QSpacerItem, QSizePolicy, QLineEdit
 )
-from PyQt5.QtCore import Qt, pyqtSignal
+from PyQt5.QtCore import Qt, pyqtSignal, QPoint
 from PyQt5.QtGui import QFont, QCursor
 
 from ..design_system import Colors
+
+class DraggableFrame(QFrame):
+    """فريم بيتسحب منه التطبيق لما نشيل إطار الويندوز"""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._drag_pos = None
+
+    def mousePressEvent(self, event):
+        if event.button() == Qt.LeftButton:
+            self._drag_pos = event.globalPos() - self.window().frameGeometry().topLeft()
+            event.accept()
+        super().mousePressEvent(event)
+
+    def mouseMoveEvent(self, event):
+        if self._drag_pos is not None and (event.buttons() & Qt.LeftButton):
+            if not self.window().isMaximized():
+                self.window().move(event.globalPos() - self._drag_pos)
+            event.accept()
+        super().mouseMoveEvent(event)
+
+    def mouseReleaseEvent(self, event):
+        self._drag_pos = None
+        super().mouseReleaseEvent(event)
+
+    def mouseDoubleClickEvent(self, event):
+        if event.button() == Qt.LeftButton:
+            w = self.window()
+            if w.isMaximized():
+                w.showNormal()
+            else:
+                w.showMaximized()
+            event.accept()
+        super().mouseDoubleClickEvent(event)
+
 
 
 class Navbar(QFrame):
@@ -66,14 +101,17 @@ class Navbar(QFrame):
 
     def _create_top_bar(self):
         """Create the top bar - 60px height with logo, ID, search, menu"""
-        top_bar = QFrame()
+        top_bar = DraggableFrame()
         top_bar.setObjectName("navbar_top")
+        top_bar.setAttribute(Qt.WA_StyledBackground, True)
         top_bar.setFixedHeight(60)
 
         layout = QHBoxLayout(top_bar)
         layout.setContentsMargins(24, 0, 24, 0)  # 24px horizontal padding
         layout.setSpacing(16)
-
+        #الازرار 
+        win_controls = self._create_window_controls()
+        layout.addWidget(win_controls)
         # Spacer before search (to center it)
         layout.addSpacerItem(QSpacerItem(40, 20, QSizePolicy.Expanding, QSizePolicy.Minimum))
 
@@ -91,20 +129,80 @@ class Navbar(QFrame):
         # UN-HABITAT Logo - leftmost in RTL (rightmost visually)
         logo_widget = self._create_logo()
         layout.addWidget(logo_widget)
+        
+
 
         return top_bar
 
     def _create_logo(self):
-        """Create UN-HABITAT logo - white text on dark background"""
-        logo = QLabel("UN-HABITAT")
-        logo.setFont(QFont("Noto Kufi Arabic", 10, QFont.Bold))
+        """Create UN-HABITAT logo from image file"""
+        from pathlib import Path
+        from PyQt5.QtGui import QPixmap
+
+        logo = QLabel()
+
+        # Load logo image from assets
+        logo_path = Path(__file__).parent.parent.parent / "assets" / "images" / "header.png"
+
+        if logo_path.exists():
+            pixmap = QPixmap(str(logo_path))
+            # Scale to smaller size - 28px height
+            scaled_pixmap = pixmap.scaledToHeight(20, Qt.SmoothTransformation)
+            logo.setPixmap(scaled_pixmap)
+        else:
+            # Fallback to text if image not found
+            logo.setText("UN-HABITAT")
+            logo.setFont(QFont("Noto Kufi Arabic", 10, QFont.Bold))
+
         logo.setStyleSheet("""
             QLabel {
-                color: white;
                 background: transparent;
             }
         """)
         return logo
+    def _create_window_controls(self):
+        box = QWidget()
+        box.setObjectName("window_controls")
+
+        box.setLayoutDirection(Qt.LeftToRight)
+
+        lay = QHBoxLayout(box)
+        lay.setContentsMargins(0, 0, 0, 0)
+        lay.setSpacing(6)
+
+        btn_min = QPushButton("–")
+        btn_max = QPushButton("□")
+        btn_close = QPushButton("✕")
+
+        btn_min.setObjectName("win_btn")
+        btn_max.setObjectName("win_btn")
+        btn_close.setObjectName("win_close")
+
+        # حجم أكبر شوي (عدّل الأرقام إذا بدك)
+        for b in (btn_min, btn_max, btn_close):
+            b.setFixedSize(40, 28)
+            b.setFocusPolicy(Qt.NoFocus)
+            b.setCursor(QCursor(Qt.PointingHandCursor))
+
+        btn_min.clicked.connect(lambda: self.window().showMinimized())
+        btn_max.clicked.connect(self._toggle_max_restore)
+        btn_close.clicked.connect(lambda: self.window().close())
+
+    
+        lay.addWidget(btn_min)
+        lay.addWidget(btn_max)
+        lay.addWidget(btn_close)
+        return box
+
+
+
+    def _toggle_max_restore(self):
+        w = self.window()
+        if w.isMaximized():
+            w.showNormal()  
+        else:
+            w.showMaximized()
+
 
     def _create_id_badge(self):
         """Create ID badge with border"""
@@ -172,7 +270,7 @@ class Navbar(QFrame):
 
         # Search input
         search_input = QLineEdit()
-        search_input.setPlaceholderText("ابحث عن اسم المستلم،رقم المطالبة...")
+        search_input.setPlaceholderText("ابحث عنالرمزأوالاسم...")
         search_input.setFont(QFont("Noto Kufi Arabic", 10))
         search_input.setStyleSheet("""
             QLineEdit {
@@ -234,7 +332,7 @@ class Navbar(QFrame):
             "المباني",             # Buildings
             "الوحدات السكنية",     # Residential Units
             "التكرارات",           # Duplicates
-            "استيراد البيانات"     # Import Data (UC-003)
+            "استيراد"     # Import Data (UC-003)
         ]
 
         self.tab_buttons = []
@@ -256,7 +354,7 @@ class Navbar(QFrame):
         tab_btn = QPushButton(title)
         tab_btn.setFixedHeight(48)
         tab_btn.setCursor(QCursor(Qt.PointingHandCursor))
-        tab_btn.setFont(QFont("Noto Kufi Arabic", 11))
+        tab_btn.setFont(QFont("Noto Kufi Arabic", 9))
         tab_btn.setProperty("tab_index", index)
         tab_btn.setProperty("active", False)
 
@@ -288,16 +386,16 @@ class Navbar(QFrame):
                 btn.setProperty("active", True)
                 btn.setStyleSheet(f"""
                     QPushButton {{
-                        background-color: {Colors.NAVBAR_TAB_ACTIVE};
-                        color: {Colors.NAVBAR_BG};
+                        background-color: {Colors.BACKGROUND};
+                        color: #3890fd;
                         border: none;
-                        border-radius: 4px;
-                        padding: 6px 14px;
+                        border-radius: 8px;
+                        padding: 6px 12px;
                         text-align: center;
                         font-weight: 600;
                     }}
                     QPushButton:hover {{
-                        background-color: {Colors.NAVBAR_TAB_ACTIVE};
+                        border: 1px solid #F0F7FF;
                     }}
                 """)
             else:
@@ -308,7 +406,7 @@ class Navbar(QFrame):
                         background: transparent;
                         color: rgba(255, 255, 255, 0.7);
                         border: none;
-                        padding: 6px 14px;
+                        padding: 6px 12px;
                         text-align: center;
                     }
                     QPushButton:hover {
@@ -332,12 +430,38 @@ class Navbar(QFrame):
             }}
             QFrame#navbar_top {{
                 background-color: {Colors.NAVBAR_BG};
+                border-radius: 16px;
+                
                 border: none;
             }}
             QFrame#tabs_bar {{
                 background-color: {Colors.NAVBAR_BG};
                 border: none;
             }}
+            QWidget#window_controls {{ 
+                background: transparent; 
+            }}
+            QPushButton#win_btn, QPushButton#win_close {{
+                color: white;
+                background: transparent;
+                border: none;
+                font-size: 13px;
+                font-weight: 600;
+                border-radius: 8px;
+            }}
+            QPushButton#win_btn:hover {{
+                background: rgba(255,255,255,0.14);
+            }}
+            QPushButton#win_btn:pressed {{
+                background: rgba(255,255,255,0.22);
+            }}
+            QPushButton#win_close:hover {{
+                background: rgba(255,59,48,0.9);
+            }}
+            QPushButton#win_close:pressed {{
+                background: rgba(255, 59, 48, 0.75);
+            }}
+
         """)
 
     def _on_search(self):

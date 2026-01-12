@@ -7,10 +7,13 @@ Replaces sidebar with top navbar and tabs
 
 from PyQt5.QtWidgets import (
     QMainWindow, QWidget, QHBoxLayout, QVBoxLayout,
-    QStackedWidget, QShortcut, QMessageBox
+    QStackedWidget, QShortcut, QMessageBox,
+    QFrame, QGraphicsDropShadowEffect, QSizeGrip
 )
+
 from PyQt5.QtCore import Qt, pyqtSignal
-from PyQt5.QtGui import QKeySequence
+
+from PyQt5.QtGui import QKeySequence, QColor
 
 from .config import Config, Pages
 from repositories.database import Database
@@ -27,6 +30,7 @@ class MainWindow(QMainWindow):
 
     def __init__(self, db: Database, i18n: I18n, parent=None):
         super().__init__(parent)
+        self.WINDOW_RADIUS = 18
         self.db = db
         self.i18n = i18n
         self.current_user = None
@@ -56,10 +60,13 @@ class MainWindow(QMainWindow):
         x = (screen.width() - Config.WINDOW_MIN_WIDTH) // 2
         y = (screen.height() - Config.WINDOW_MIN_HEIGHT) // 2
         self.setGeometry(x, y, Config.WINDOW_MIN_WIDTH, Config.WINDOW_MIN_HEIGHT)
+        self.setWindowFlag(Qt.FramelessWindowHint, True)
+        self.setAttribute(Qt.WA_TranslucentBackground, True)
+
 
         # Add rounded corners to window (Windows 11 style)
         # Note: This uses Windows-specific API through Qt
-        try:
+        '''try:
             import ctypes
             from ctypes import wintypes
 
@@ -78,7 +85,7 @@ class MainWindow(QMainWindow):
         except Exception as e:
             # If Windows API fails, continue without rounded corners
             logger.debug(f"Could not set rounded corners: {e}")
-
+        '''
     def _setup_shortcuts(self):
         """Setup keyboard shortcuts."""
         # Language toggle: Ctrl+L
@@ -116,6 +123,29 @@ class MainWindow(QMainWindow):
         # Central widget
         self.central_widget = QWidget()
         self.setCentralWidget(self.central_widget)
+        self.central_widget.setStyleSheet("background: transparent;")
+        # إطار داخلي هو اللي رح يبين التطبيق + يعطي زوايا + ظل
+        self.window_frame = QFrame(self.central_widget)
+        self.window_frame.setObjectName("window_frame")
+        self.window_frame.setAttribute(Qt.WA_StyledBackground, True)
+        self.window_frame.setStyleSheet(f"""
+            QFrame#window_frame {{
+                background-color: {Config.BACKGROUND_COLOR};
+                border-radius: 18px;
+            }}
+        """)
+
+        shadow = QGraphicsDropShadowEffect(self)
+        shadow.setBlurRadius(35)
+        shadow.setOffset(0, 0)
+        shadow.setColor(QColor(0, 0, 0, 140))
+        self.window_frame.setGraphicsEffect(shadow)
+
+        # مقبض تغيير الحجم (resize) خليّه جوّا الإطار
+        self._size_grip = QSizeGrip(self.window_frame)
+        self._size_grip.setFixedSize(16, 16)
+        self._size_grip.setStyleSheet("background: transparent;")
+
 
         # Navbar (hidden initially - shown after login)
         self.navbar = Navbar(user_id="12345", parent=self)
@@ -123,6 +153,7 @@ class MainWindow(QMainWindow):
 
         # Stacked widget for pages
         self.stack = QStackedWidget()
+        self.stack.setStyleSheet(f"background-color: {Config.BACKGROUND_COLOR};")
 
         # Create pages
         self.pages = {}
@@ -220,17 +251,20 @@ class MainWindow(QMainWindow):
         }
 
     def _setup_layout(self):
-        """Setup the main layout with navbar on top."""
-        # Main vertical layout
-        main_layout = QVBoxLayout(self.central_widget)
-        main_layout.setContentsMargins(0, 0, 0, 0)
-        main_layout.setSpacing(0)
+    # لاي اوت خارجي: بس ليعطي فراغ للظل (مو يلزق بالشاشة)
+        outer = QVBoxLayout(self.central_widget)
+        outer.setContentsMargins(14, 14, 14, 14)
+        outer.setSpacing(0)
+        outer.addWidget(self.window_frame)
 
-        # Add navbar at top (hidden until login)
-        main_layout.addWidget(self.navbar, 0)  # No stretch
+    # لاي اوت داخلي: جوّا الإطار
+        inner = QVBoxLayout(self.window_frame)
+        inner.setContentsMargins(0, 0, 0, 0)
+        inner.setSpacing(0)
 
-        # Add stacked widget (takes remaining space)
-        main_layout.addWidget(self.stack, 1)  # Stretch to fill
+        inner.addWidget(self.navbar, 0)
+        inner.addWidget(self.stack, 1)
+
 
     def _connect_signals(self):
         """Connect widget signals to slots."""
@@ -481,3 +515,37 @@ class MainWindow(QMainWindow):
 
         logger.info("Application closing")
         event.accept()
+    
+    def showEvent(self, event):
+        super().showEvent(event)
+        self._apply_round_mask()
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+
+    # حرّك مقبض تغيير الحجم
+        if hasattr(self, "_size_grip") and self._size_grip:
+            m = 6
+            self._size_grip.move(
+                self.window_frame.width() - self._size_grip.width() - m,
+                self.window_frame.height() - self._size_grip.height() - m
+        )
+
+    # طبّق قصّ الزوايا بعد أي تغيير بالحجم
+        if hasattr(self, "window_frame") and self.window_frame:
+            self._apply_round_mask()
+
+    def _apply_round_mask(self):
+        from PyQt5.QtGui import QPainterPath
+        from PyQt5.QtCore import QRectF
+        from PyQt5.QtGui import QRegion
+
+        r = getattr(self, "WINDOW_RADIUS", 18)  # نفس رقم الراديوس اللي مستخدمه
+        path = QPainterPath()
+        rect = QRectF(self.window_frame.rect())
+        path.addRoundedRect(rect, r, r)
+
+        self.window_frame.setMask(QRegion(path.toFillPolygon().toPolygon()))
+        
+
+

@@ -90,14 +90,24 @@ class MapViewerDialog(QDialog):
         layout.addLayout(btn_layout)
 
     def _load_map(self):
-        """Load the map with marker."""
+        """Load the map with marker using OFFLINE tiles."""
+        # Use shared tile server from MapPickerDialog
+        from ui.components.map_picker_dialog import MapPickerDialog
+
+        # Ensure shared tile server is started
+        if MapPickerDialog._tile_server_port is None:
+            temp_dialog = MapPickerDialog.__new__(MapPickerDialog)
+            temp_dialog._start_tile_server()
+
+        tile_server_url = f"http://127.0.0.1:{MapPickerDialog._tile_server_port}"
+
         html = f"""
 <!DOCTYPE html>
 <html>
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="stylesheet" href="{tile_server_url}/leaflet.css" />
     <style>
         body {{ margin: 0; padding: 0; }}
         #map {{ width: 100%; height: 100vh; }}
@@ -106,26 +116,23 @@ class MapViewerDialog(QDialog):
 <body>
     <div id="map"></div>
 
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="{tile_server_url}/leaflet.js"></script>
     <script>
-        var map = L.map('map').setView([{self.latitude}, {self.longitude}], {self.zoom});
+        var map = L.map('map', {{
+            preferCanvas: true,
+            zoomAnimation: true,
+            fadeAnimation: false
+        }}).setView([{self.latitude}, {self.longitude}], {self.zoom});
 
-        // Add OpenStreetMap tiles
-        L.tileLayer('https://{{s}}.tile.openstreetmap.org/{{z}}/{{x}}/{{y}}.png', {{
-            attribution: '&copy; OpenStreetMap contributors'
+        // Use LOCAL tiles from MBTiles
+        L.tileLayer('{tile_server_url}/tiles/{{z}}/{{x}}/{{y}}.png', {{
+            maxZoom: 18,
+            minZoom: 12,
+            attribution: 'UN-Habitat Syria - يعمل بدون اتصال بالإنترنت',
+            updateWhenIdle: true,
+            keepBuffer: 2,
+            errorTileUrl: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=='
         }}).addTo(map);
-
-        // Add satellite layer
-        var satellite = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{{z}}/{{y}}/{{x}}', {{
-            attribution: 'Tiles &copy; Esri'
-        }});
-
-        // Layer control
-        var baseLayers = {{
-            "خريطة": L.tileLayer('https://{{s}}.tile.openstreetmap.org/{{z}}/{{x}}/{{y}}.png'),
-            "صور جوية": satellite
-        }};
-        L.control.layers(baseLayers).addTo(map);
 
         // Add marker
         var marker = L.marker([{self.latitude}, {self.longitude}]).addTo(map);

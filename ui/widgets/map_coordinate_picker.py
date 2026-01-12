@@ -357,81 +357,80 @@ class MapCoordinatePickerWidget(QWidget):
         self.map_view.setHtml(html)
 
     def _get_map_html(self) -> str:
-        """Generate the map HTML with Leaflet.js."""
+        """Generate the map HTML with Leaflet.js (OFFLINE VERSION using shared tile server)."""
+        # Use the shared tile server from MapPickerDialog
+        from ui.components.map_picker_dialog import MapPickerDialog
+
+        # Ensure tile server is started
+        if MapPickerDialog._tile_server_port is None:
+            temp_dialog = MapPickerDialog.__new__(MapPickerDialog)
+            temp_dialog._start_tile_server()
+
+        tile_server_url = f"http://127.0.0.1:{MapPickerDialog._tile_server_port}"
+
         return f'''
 <!DOCTYPE html>
 <html>
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    <link rel="stylesheet" href="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.css" />
+    <link rel="stylesheet" href="{tile_server_url}/leaflet.css" />
     <style>
         html, body, #map {{ height: 100%; margin: 0; padding: 0; }}
-        .leaflet-container {{ font-family: 'Segoe UI', Tahoma, sans-serif; }}
-        .coordinate-popup {{ font-family: monospace; }}
     </style>
 </head>
 <body>
     <div id="map"></div>
 
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    <script src="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.js"></script>
+    <script src="{tile_server_url}/leaflet.js"></script>
     <script src="qrc:///qtwebchannel/qwebchannel.js"></script>
 
     <script>
-        var map;
+        var map = null;
         var marker = null;
         var polygon = null;
-        var drawnItems;
-        var drawControl;
+        var drawnItems = null;
         var pyBridge = null;
-        var currentMode = 'marker'; // marker or polygon
+        var currentMode = 'marker';
 
-        // Tile layers
-        var tileLayers = {{
-            osm: L.tileLayer('https://{{s}}.tile.openstreetmap.org/{{z}}/{{x}}/{{y}}.png', {{
-                attribution: '© OpenStreetMap contributors'
-            }}),
-            satellite: L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{{z}}/{{y}}/{{x}}', {{
-                attribution: '© Esri'
-            }}),
-            terrain: L.tileLayer('https://{{s}}.tile.opentopomap.org/{{z}}/{{x}}/{{y}}.png', {{
-                attribution: '© OpenTopoMap'
-            }}),
-            hybrid: L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{{z}}/{{y}}/{{x}}', {{
-                attribution: '© Esri'
-            }})
-        }};
+        // Initialize QWebChannel
+        new QWebChannel(qt.webChannelTransport, function(channel) {{
+            pyBridge = channel.objects.pyBridge;
+            console.log('QWebChannel initialized for MapCoordinatePickerWidget');
+        }});
 
-        var currentLayer = tileLayers.osm;
+        // Initialize map with offline tiles
+        map = L.map('map', {{
+            preferCanvas: true,
+            zoomAnimation: true,
+            fadeAnimation: false
+        }}).setView([{self.DEFAULT_CENTER[0]}, {self.DEFAULT_CENTER[1]}], {self.DEFAULT_ZOOM});
 
-        // Initialize map
-        function initMap() {{
-            map = L.map('map').setView([{self.DEFAULT_CENTER[0]}, {self.DEFAULT_CENTER[1]}], {self.DEFAULT_ZOOM});
-            currentLayer.addTo(map);
+        // Use LOCAL tiles from MBTiles
+        L.tileLayer('{tile_server_url}/tiles/{{z}}/{{x}}/{{y}}.png', {{
+            maxZoom: 18,
+            minZoom: 12,
+            attribution: 'UN-Habitat Syria - يعمل بدون اتصال بالإنترنت',
+            updateWhenIdle: true,
+            keepBuffer: 2,
+            errorTileUrl: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=='
+        }}).addTo(map);
 
-            // Initialize draw controls
-            drawnItems = new L.FeatureGroup();
-            map.addLayer(drawnItems);
+        // Initialize draw controls
+        drawnItems = new L.FeatureGroup();
+        map.addLayer(drawnItems);
 
-            // Click handler for marker mode
-            map.on('click', function(e) {{
-                if (currentMode === 'marker') {{
-                    setMarker(e.latlng.lat, e.latlng.lng);
-                    if (pyBridge) {{
-                        pyBridge.onMapClick(e.latlng.lat, e.latlng.lng);
-                    }}
-                }} else if (currentMode === 'polygon') {{
-                    addPolygonPoint(e.latlng.lat, e.latlng.lng);
+        // Click handler for marker mode
+        map.on('click', function(e) {{
+            if (currentMode === 'marker') {{
+                setMarker(e.latlng.lat, e.latlng.lng);
+                if (pyBridge) {{
+                    pyBridge.onMapClick(e.latlng.lat, e.latlng.lng);
                 }}
-            }});
-
-            // Setup WebChannel
-            new QWebChannel(qt.webChannelTransport, function(channel) {{
-                pyBridge = channel.objects.pyBridge;
-            }});
-        }}
+            }} else if (currentMode === 'polygon') {{
+                addPolygonPoint(e.latlng.lat, e.latlng.lng);
+            }}
+        }});
 
         // Set marker position
         function setMarker(lat, lng) {{
@@ -494,13 +493,6 @@ class MapCoordinatePickerWidget(QWidget):
             polygonPoints = [];
         }}
 
-        // Change tile layer
-        function setTileLayer(layerName) {{
-            map.removeLayer(currentLayer);
-            currentLayer = tileLayers[layerName] || tileLayers.osm;
-            currentLayer.addTo(map);
-        }}
-
         // Pan to coordinates
         function panTo(lat, lng, zoom) {{
             map.setView([lat, lng], zoom || map.getZoom());
@@ -514,9 +506,6 @@ class MapCoordinatePickerWidget(QWidget):
                 clearDrawing();
             }}
         }}
-
-        // Initialize when page loads
-        document.addEventListener('DOMContentLoaded', initMap);
     </script>
 </body>
 </html>
