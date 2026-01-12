@@ -345,6 +345,9 @@ class OfficeSurveyWizard(QWidget):
         # Edit tracking
         self._editing_person_index: Optional[int] = None
 
+        # Map dialog (lazy initialization)
+        self._map_dialog = None
+
         self._setup_ui()
 
     def _setup_ui(self):
