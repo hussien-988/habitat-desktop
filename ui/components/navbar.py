@@ -135,12 +135,27 @@ class Navbar(QFrame):
         return top_bar
 
     def _create_logo(self):
-        """Create UN-HABITAT logo - white text on dark background"""
-        logo = QLabel("UN-HABITAT")
-        logo.setFont(QFont("Noto Kufi Arabic", 10, QFont.Bold))
+        """Create UN-HABITAT logo from image file"""
+        from pathlib import Path
+        from PyQt5.QtGui import QPixmap
+
+        logo = QLabel()
+
+        # Load logo image from assets
+        logo_path = Path(__file__).parent.parent.parent / "assets" / "images" / "header.png"
+
+        if logo_path.exists():
+            pixmap = QPixmap(str(logo_path))
+            # Scale to smaller size - 28px height
+            scaled_pixmap = pixmap.scaledToHeight(20, Qt.SmoothTransformation)
+            logo.setPixmap(scaled_pixmap)
+        else:
+            # Fallback to text if image not found
+            logo.setText("UN-HABITAT")
+            logo.setFont(QFont("Noto Kufi Arabic", 10, QFont.Bold))
+
         logo.setStyleSheet("""
             QLabel {
-                color: white;
                 background: transparent;
             }
         """)

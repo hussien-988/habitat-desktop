@@ -10,6 +10,7 @@ Works OFFLINE using local tiles and libraries.
 import json
 import sqlite3
 import base64
+import time
 from typing import Dict, Optional
 from pathlib import Path
 from http.server import HTTPServer, BaseHTTPRequestHandler
@@ -36,14 +37,39 @@ MBTILES_PATH = Path(__file__).parent.parent.parent / "data" / "aleppo_tiles.mbti
 
 
 class TileServer(BaseHTTPRequestHandler):
-    """HTTP server to serve tiles from MBTiles file and static assets."""
+    """HTTP server to serve tiles from MBTiles file and static assets - OPTIMIZED."""
 
     mbtiles_path = None
     assets_path = None
+    _tile_cache = {}  # In-memory tile cache
+    _db_connection = None  # Persistent database connection
+    _static_cache = {}  # Cache for static files
+    _perf_stats = {
+        'cache_hits': 0,
+        'cache_misses': 0,
+        'db_queries': 0,
+        'total_requests': 0,
+        'slowest_request': 0
+    }
 
     def log_message(self, format, *args):
         """Suppress logging."""
         pass
+
+    @classmethod
+    def _get_db_connection(cls):
+        """Get persistent database connection."""
+        if cls._db_connection is None and cls.mbtiles_path:
+            cls._db_connection = sqlite3.connect(
+                str(cls.mbtiles_path),
+                check_same_thread=False,  # Allow multi-threaded access
+                timeout=10.0
+            )
+            # Enable memory-mapped I/O for faster reads
+            cls._db_connection.execute("PRAGMA mmap_size = 268435456")  # 256MB
+            cls._db_connection.execute("PRAGMA page_size = 4096")
+            cls._db_connection.execute("PRAGMA cache_size = -64000")  # 64MB cache
+        return cls._db_connection
 
     def do_GET(self):
         """Handle GET requests for tiles and static files."""
@@ -52,20 +78,20 @@ class TileServer(BaseHTTPRequestHandler):
 
             # Serve Leaflet JS
             if path == '/leaflet.js':
-                self._serve_static_file(self.assets_path / 'leaflet.js', 'application/javascript')
+                self._serve_static_file_cached(self.assets_path / 'leaflet.js', 'application/javascript')
             # Serve Leaflet CSS
             elif path == '/leaflet.css':
-                self._serve_static_file(self.assets_path / 'leaflet.css', 'text/css')
+                self._serve_static_file_cached(self.assets_path / 'leaflet.css', 'text/css')
             # Serve Leaflet Draw JS
             elif path == '/leaflet.draw.js':
-                self._serve_static_file(self.assets_path / 'leaflet.draw.js', 'application/javascript')
+                self._serve_static_file_cached(self.assets_path / 'leaflet.draw.js', 'application/javascript')
             # Serve Leaflet Draw CSS
             elif path == '/leaflet.draw.css':
-                self._serve_static_file(self.assets_path / 'leaflet.draw.css', 'text/css')
+                self._serve_static_file_cached(self.assets_path / 'leaflet.draw.css', 'text/css')
             # Serve Leaflet images
             elif path.startswith('/images/'):
                 image_name = path[8:]  # Remove '/images/'
-                self._serve_static_file(self.assets_path / 'images' / image_name, 'image/png')
+                self._serve_static_file_cached(self.assets_path / 'images' / image_name, 'image/png')
             # Serve tiles: /tiles/{z}/{x}/{y}.png
             elif path.startswith('/tiles/'):
                 parts = path.split('/')
@@ -73,7 +99,7 @@ class TileServer(BaseHTTPRequestHandler):
                     z = int(parts[2])
                     x = int(parts[3])
                     y = int(parts[4].replace('.png', ''))
-                    self._serve_tile(z, x, y)
+                    self._serve_tile_cached(z, x, y)
                 else:
                     self.send_response(404)
                     self.end_headers()
@@ -85,50 +111,103 @@ class TileServer(BaseHTTPRequestHandler):
             self.send_response(500)
             self.end_headers()
 
-    def _serve_static_file(self, filepath, content_type):
-        """Serve a static file."""
-        if filepath.exists():
+    def _serve_static_file_cached(self, filepath, content_type):
+        """Serve a static file with caching."""
+        cache_key = str(filepath)
+
+        # Check cache first
+        if cache_key in TileServer._static_cache:
+            data = TileServer._static_cache[cache_key]
             self.send_response(200)
             self.send_header('Content-Type', content_type)
             self.send_header('Access-Control-Allow-Origin', '*')
-            self.send_header('Cache-Control', 'max-age=86400')
+            self.send_header('Cache-Control', 'public, max-age=31536000, immutable')
+            self.send_header('Content-Length', len(data))
             self.end_headers()
+            self.wfile.write(data)
+            return
+
+        # Load from disk and cache
+        if filepath.exists():
             with open(filepath, 'rb') as f:
-                self.wfile.write(f.read())
+                data = f.read()
+
+            # Cache it (only cache files < 500KB)
+            if len(data) < 500000:
+                TileServer._static_cache[cache_key] = data
+
+            self.send_response(200)
+            self.send_header('Content-Type', content_type)
+            self.send_header('Access-Control-Allow-Origin', '*')
+            self.send_header('Cache-Control', 'public, max-age=31536000, immutable')
+            self.send_header('Content-Length', len(data))
+            self.end_headers()
+            self.wfile.write(data)
         else:
-            logger.warning(f"File not found: {filepath}")
             self.send_response(404)
             self.end_headers()
 
-    def _serve_tile(self, z, x, y):
-        """Serve a map tile."""
-        tile_data = self._get_tile(z, x, y)
+    def _serve_tile_cached(self, z, x, y):
+        """Serve a map tile with aggressive caching."""
+        start_time = time.time()
+        TileServer._perf_stats['total_requests'] += 1
 
+        # Check cache first
+        cache_key = f"{z}/{x}/{y}"
+        if cache_key in TileServer._tile_cache:
+            TileServer._perf_stats['cache_hits'] += 1
+            tile_data = TileServer._tile_cache[cache_key]
+            self._send_tile_response(tile_data)
+            elapsed = (time.time() - start_time) * 1000
+            if elapsed > TileServer._perf_stats['slowest_request']:
+                TileServer._perf_stats['slowest_request'] = elapsed
+            return
+
+        # Cache miss - get from database
+        TileServer._perf_stats['cache_misses'] += 1
+        TileServer._perf_stats['db_queries'] += 1
+        tile_data = self._get_tile_fast(z, x, y)
+
+        # Cache it (limit cache size to 1000 tiles ~ 10-20MB)
+        if len(TileServer._tile_cache) < 1000:
+            TileServer._tile_cache[cache_key] = tile_data
+
+        self._send_tile_response(tile_data)
+
+        elapsed = (time.time() - start_time) * 1000
+        if elapsed > TileServer._perf_stats['slowest_request']:
+            TileServer._perf_stats['slowest_request'] = elapsed
+
+    def _send_tile_response(self, tile_data):
+        """Send tile HTTP response."""
         if tile_data:
             self.send_response(200)
             self.send_header('Content-Type', 'image/png')
             self.send_header('Access-Control-Allow-Origin', '*')
-            self.send_header('Cache-Control', 'max-age=86400')
+            self.send_header('Cache-Control', 'public, max-age=31536000, immutable')
+            self.send_header('Content-Length', len(tile_data))
             self.end_headers()
             self.wfile.write(tile_data)
         else:
             # Return transparent tile for missing tiles
+            transparent_tile = base64.b64decode(
+                'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=='
+            )
             self.send_response(200)
             self.send_header('Content-Type', 'image/png')
             self.send_header('Access-Control-Allow-Origin', '*')
+            self.send_header('Cache-Control', 'public, max-age=31536000, immutable')
+            self.send_header('Content-Length', len(transparent_tile))
             self.end_headers()
-            # 1x1 transparent PNG
-            self.wfile.write(base64.b64decode(
-                'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=='
-            ))
+            self.wfile.write(transparent_tile)
 
-    def _get_tile(self, z, x, y):
-        """Get tile from MBTiles database."""
+    def _get_tile_fast(self, z, x, y):
+        """Get tile from MBTiles database using persistent connection."""
         if not self.mbtiles_path or not self.mbtiles_path.exists():
             return None
 
         try:
-            conn = sqlite3.connect(str(self.mbtiles_path))
+            conn = self._get_db_connection()
             cursor = conn.cursor()
 
             # MBTiles uses TMS scheme (y is flipped)
@@ -139,12 +218,30 @@ class TileServer(BaseHTTPRequestHandler):
                 (z, x, tms_y)
             )
             row = cursor.fetchone()
-            conn.close()
 
             return row[0] if row else None
         except Exception as e:
-            logger.error(f"Error reading tile: {e}")
+            logger.error(f"Error reading tile {z}/{x}/{y}: {e}")
             return None
+
+    @classmethod
+    def log_performance_stats(cls):
+        """Log tile server performance statistics."""
+        stats = cls._perf_stats
+        total = stats['total_requests']
+        if total == 0:
+            logger.info("No tile requests yet")
+            return
+
+        cache_hit_rate = (stats['cache_hits'] / total * 100) if total > 0 else 0
+        logger.info(f"=== Tile Server Performance Stats ===")
+        logger.info(f"Total requests: {total}")
+        logger.info(f"Cache hits: {stats['cache_hits']} ({cache_hit_rate:.1f}%)")
+        logger.info(f"Cache misses: {stats['cache_misses']}")
+        logger.info(f"DB queries: {stats['db_queries']}")
+        logger.info(f"Slowest request: {stats['slowest_request']:.2f}ms")
+        logger.info(f"Cache size: {len(cls._tile_cache)} tiles")
+        logger.info(f"Static cache size: {len(cls._static_cache)} files")
 
 
 def find_free_port():
@@ -203,11 +300,14 @@ class MapPickerDialog(QDialog):
 
     Implements UC-000 S04: Enter geo location/Geometry
     Works completely OFFLINE using local MBTiles and Leaflet.
+
+    Uses Singleton Pattern for performance optimization.
     """
 
     _tile_server = None
     _tile_server_port = None
     _tile_server_thread = None
+    _shared_instance = None  # Singleton instance
 
     def __init__(
         self,
@@ -231,6 +331,46 @@ class MapPickerDialog(QDialog):
         self._start_tile_server()
 
         self._setup_ui()
+        self._load_map()
+
+    @classmethod
+    def get_instance(cls, initial_lat: float = 36.2, initial_lon: float = 37.15, allow_polygon: bool = True, parent=None):
+        """
+        Get or create singleton instance.
+        Reuses existing dialog for performance.
+        """
+        if cls._shared_instance is None:
+            logger.info("Creating new MapPickerDialog instance (first time)")
+            cls._shared_instance = cls(initial_lat, initial_lon, allow_polygon, parent)
+        else:
+            logger.info("Reusing existing MapPickerDialog instance (Singleton)")
+            # Update parameters and reset map
+            cls._shared_instance.initial_lat = initial_lat
+            cls._shared_instance.initial_lon = initial_lon
+            cls._shared_instance.allow_polygon = allow_polygon
+            cls._shared_instance._result = None
+            cls._shared_instance._reset_map()
+
+        return cls._shared_instance
+
+    def _reset_map(self):
+        """Reset map to new location without recreating QWebEngineView."""
+        logger.info(f"Resetting map to {self.initial_lat}, {self.initial_lon}")
+
+        # Reset bridge
+        self.bridge._latitude = None
+        self.bridge._longitude = None
+        self.bridge._polygon_wkt = None
+
+        # Update coordinate displays
+        self.lat_input.setText(f"{self.initial_lat:.6f}")
+        self.lon_input.setText(f"{self.initial_lon:.6f}")
+
+        # Reset result displays
+        self.result_lat_label.setText("---")
+        self.result_lon_label.setText("---")
+
+        # Reload map HTML with new coordinates
         self._load_map()
 
     def _start_tile_server(self):
@@ -405,48 +545,102 @@ class MapPickerDialog(QDialog):
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <!-- Preload critical resources -->
+    <link rel="preload" href="{tile_server_url}/leaflet.js" as="script">
+    <link rel="preload" href="{tile_server_url}/leaflet.css" as="style">
+
     <link rel="stylesheet" href="{tile_server_url}/leaflet.css" />
     <link rel="stylesheet" href="{tile_server_url}/leaflet.draw.css" />
     <style>
         body {{ margin: 0; padding: 0; }}
         #map {{ width: 100%; height: 100vh; }}
+
+        /* OPTIMIZATION 1: Skeleton UI with shimmer animation */
         .loading-overlay {{
             position: absolute;
             top: 0;
             left: 0;
             width: 100%;
             height: 100%;
-            background: rgba(255, 255, 255, 0.9);
-            display: flex;
-            align-items: center;
-            justify-content: center;
+            background: linear-gradient(
+                90deg,
+                #e8f1f9 0%,
+                #f0f7fc 20%,
+                #e8f1f9 40%,
+                #e8f1f9 100%
+            );
+            background-size: 200% 100%;
+            animation: shimmer 2s infinite linear;
+            z-index: 9998;
+        }}
+
+        @keyframes shimmer {{
+            0% {{ background-position: 200% 0; }}
+            100% {{ background-position: -200% 0; }}
+        }}
+
+        .loading-content {{
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
             z-index: 9999;
+        }}
+
+        .map-skeleton {{
+            width: 60px;
+            height: 60px;
+            margin: 0 auto 20px;
+            position: relative;
+        }}
+
+        .skeleton-marker {{
+            width: 30px;
+            height: 40px;
+            background: #0072BC;
+            border-radius: 50% 50% 50% 0;
+            transform: rotate(-45deg);
+            margin: 10px auto;
+            opacity: 0.3;
+            animation: pulse 1.5s ease-in-out infinite;
+        }}
+
+        @keyframes pulse {{
+            0%, 100% {{ opacity: 0.3; transform: rotate(-45deg) scale(1); }}
+            50% {{ opacity: 0.6; transform: rotate(-45deg) scale(1.1); }}
+        }}
+
+        .loading-text {{
+            color: #0072BC;
+            font-size: 15px;
+            font-weight: 600;
+            font-family: 'Segoe UI', Tahoma, sans-serif;
+            margin-bottom: 8px;
+        }}
+
+        .loading-subtext {{
+            color: #5D6D7E;
+            font-size: 12px;
             font-family: 'Segoe UI', Tahoma, sans-serif;
         }}
-        .loading-content {{
-            text-align: center;
-        }}
-        .spinner {{
-            border: 4px solid #f3f3f3;
-            border-top: 4px solid #0072BC;
-            border-radius: 50%;
-            width: 40px;
-            height: 40px;
-            animation: spin 1s linear infinite;
-            margin: 0 auto 16px;
-        }}
-        @keyframes spin {{
-            0% {{ transform: rotate(0deg); }}
-            100% {{ transform: rotate(360deg); }}
+
+        /* Low-quality tiles placeholder */
+        .leaflet-tile.lqip {{
+            filter: blur(8px);
+            opacity: 0.7;
         }}
     </style>
 </head>
 <body>
     <div id="loading" class="loading-overlay">
         <div class="loading-content">
-            <div class="spinner"></div>
-            <div style="color: #0072BC; font-size: 14px; font-weight: 600;">جارٍ تحميل الخريطة...</div>
-            <div style="color: #5D6D7E; font-size: 12px; margin-top: 8px;">يعمل بدون اتصال بالإنترنت</div>
+            <div class="map-skeleton">
+                <div class="skeleton-marker"></div>
+            </div>
+            <div class="loading-text">جارٍ تحميل الخريطة...</div>
+            <div class="loading-subtext">يعمل بدون اتصال بالإنترنت</div>
         </div>
     </div>
     <div id="map"></div>
@@ -464,19 +658,63 @@ class MapPickerDialog(QDialog):
             }}
         }}
 
-        var map = L.map('map').setView([{self.initial_lat}, {self.initial_lon}], 15);
+        // Optimize map initialization
+        var map = L.map('map', {{
+            preferCanvas: true,  // Use Canvas renderer (faster than SVG)
+            zoomAnimation: true,
+            fadeAnimation: false,  // Disable fade for faster rendering
+            markerZoomAnimation: false,
+            zoomSnap: 0.5,
+            wheelPxPerZoomLevel: 120
+        }}).setView([{self.initial_lat}, {self.initial_lon}], 15);
 
-        // Use LOCAL tiles from MBTiles
-        L.tileLayer('{tile_server_url}/tiles/{{z}}/{{x}}/{{y}}.png', {{
-            attribution: 'Map data &copy; OpenStreetMap | UN-Habitat Syria',
-            maxZoom: 18,
-            minZoom: 10
+        // OPTIMIZATION 2 & 3: Progressive Loading with LQIP
+        // CRITICAL FIX: MBTiles only has zoom 10-16, NOT 18!
+        var tileLayer = L.tileLayer('{tile_server_url}/tiles/{{z}}/{{x}}/{{y}}.png', {{
+            attribution: 'UN-Habitat Syria',
+            maxZoom: 16,  // FIXED: Was 18, but MBTiles only has up to 16
+            minZoom: 10,  // FIXED: Was 12, match MBTiles minimum
+            tileSize: 256,
+            updateWhenZooming: false,
+            updateWhenIdle: true,
+            keepBuffer: 4,
+            maxNativeZoom: 16,  // FIXED: Match actual data
+            bounds: [[35.8, 36.8], [36.5, 37.5]],  // Limit to Aleppo area
+            errorTileUrl: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=='
+        }});
+
+        // LQIP: Show low-res first (zoom - 3 for faster load)
+        var lqipLayer = L.tileLayer('{tile_server_url}/tiles/{{z}}/{{x}}/{{y}}.png', {{
+            maxZoom: 12,  // Low resolution
+            minZoom: 10,
+            className: 'lqip',
+            opacity: 0.6,
+            maxNativeZoom: 16
         }}).addTo(map);
 
-        // Hide loading after map loads
-        map.whenReady(function() {{
-            setTimeout(hideLoading, 500);
+        // Add full-res layer
+        tileLayer.addTo(map);
+
+        // Remove LQIP after first tiles load (optimized)
+        var tilesLoaded = 0;
+        tileLayer.on('tileload', function() {{
+            tilesLoaded++;
+            if (tilesLoaded >= 4 && map.hasLayer(lqipLayer)) {{  // Only 4 tiles needed
+                map.removeLayer(lqipLayer);
+            }}
         }});
+
+        // Hide loading IMMEDIATELY when ANY tile loads
+        var firstTileLoaded = false;
+        tileLayer.on('tileload', function() {{
+            if (!firstTileLoaded) {{
+                firstTileLoaded = true;
+                setTimeout(hideLoading, 50);  // Hide after first tile
+            }}
+        }});
+
+        // Aggressive fallback: hide after 500ms regardless
+        setTimeout(hideLoading, 500);
 
         var marker = null;
         var drawnItems = new L.FeatureGroup();

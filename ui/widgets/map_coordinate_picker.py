@@ -357,10 +357,16 @@ class MapCoordinatePickerWidget(QWidget):
         self.map_view.setHtml(html)
 
     def _get_map_html(self) -> str:
-        """Generate the map HTML with Leaflet.js (OFFLINE VERSION)."""
-        # Note: This widget needs access to a tile server
-        # For now, we'll use a simple placeholder that can be updated
-        # when integrated with the main app's tile server
+        """Generate the map HTML with Leaflet.js (OFFLINE VERSION using shared tile server)."""
+        # Use the shared tile server from MapPickerDialog
+        from ui.components.map_picker_dialog import MapPickerDialog
+
+        # Ensure tile server is started
+        if MapPickerDialog._tile_server_port is None:
+            temp_dialog = MapPickerDialog.__new__(MapPickerDialog)
+            temp_dialog._start_tile_server()
+
+        tile_server_url = f"http://127.0.0.1:{MapPickerDialog._tile_server_port}"
 
         return f'''
 <!DOCTYPE html>
@@ -368,76 +374,63 @@ class MapCoordinatePickerWidget(QWidget):
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="{tile_server_url}/leaflet.css" />
     <style>
         html, body, #map {{ height: 100%; margin: 0; padding: 0; }}
-        .offline-notice {{
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            text-align: center;
-            font-family: 'Segoe UI', Tahoma, sans-serif;
-            background: white;
-            padding: 40px;
-            border-radius: 8px;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-        }}
-        .offline-icon {{
-            font-size: 48px;
-            margin-bottom: 16px;
-        }}
     </style>
 </head>
 <body>
-    <div id="map">
-        <div class="offline-notice">
-            <div class="offline-icon">🗺️</div>
-            <h3 style="color: #0072BC; margin: 0 0 8px 0;">خريطة تفاعلية</h3>
-            <p style="color: #5D6D7E; margin: 0; font-size: 14px;">
-                يعمل بدون اتصال بالإنترنت<br>
-                استخدم زر "بحث على الخريطة" للوصول إلى الخريطة الكاملة
-            </p>
-        </div>
-    </div>
+    <div id="map"></div>
 
+    <script src="{tile_server_url}/leaflet.js"></script>
     <script src="qrc:///qtwebchannel/qwebchannel.js"></script>
 
     <script>
-        // Simplified version - full map is in MapPickerDialog
         var map = null;
         var marker = null;
         var polygon = null;
         var drawnItems = null;
-        var drawControl = null;
         var pyBridge = null;
         var currentMode = 'marker';
 
-        // Initialize map
-        function initMap() {{
-            map = L.map('map').setView([{self.DEFAULT_CENTER[0]}, {self.DEFAULT_CENTER[1]}], {self.DEFAULT_ZOOM});
-            currentLayer.addTo(map);
+        // Initialize QWebChannel
+        new QWebChannel(qt.webChannelTransport, function(channel) {{
+            pyBridge = channel.objects.pyBridge;
+            console.log('QWebChannel initialized for MapCoordinatePickerWidget');
+        }});
 
-            // Initialize draw controls
-            drawnItems = new L.FeatureGroup();
-            map.addLayer(drawnItems);
+        // Initialize map with offline tiles
+        map = L.map('map', {{
+            preferCanvas: true,
+            zoomAnimation: true,
+            fadeAnimation: false
+        }}).setView([{self.DEFAULT_CENTER[0]}, {self.DEFAULT_CENTER[1]}], {self.DEFAULT_ZOOM});
 
-            // Click handler for marker mode
-            map.on('click', function(e) {{
-                if (currentMode === 'marker') {{
-                    setMarker(e.latlng.lat, e.latlng.lng);
-                    if (pyBridge) {{
-                        pyBridge.onMapClick(e.latlng.lat, e.latlng.lng);
-                    }}
-                }} else if (currentMode === 'polygon') {{
-                    addPolygonPoint(e.latlng.lat, e.latlng.lng);
+        // Use LOCAL tiles from MBTiles
+        L.tileLayer('{tile_server_url}/tiles/{{z}}/{{x}}/{{y}}.png', {{
+            maxZoom: 18,
+            minZoom: 12,
+            attribution: 'UN-Habitat Syria - يعمل بدون اتصال بالإنترنت',
+            updateWhenIdle: true,
+            keepBuffer: 2,
+            errorTileUrl: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=='
+        }}).addTo(map);
+
+        // Initialize draw controls
+        drawnItems = new L.FeatureGroup();
+        map.addLayer(drawnItems);
+
+        // Click handler for marker mode
+        map.on('click', function(e) {{
+            if (currentMode === 'marker') {{
+                setMarker(e.latlng.lat, e.latlng.lng);
+                if (pyBridge) {{
+                    pyBridge.onMapClick(e.latlng.lat, e.latlng.lng);
                 }}
-            }});
-
-            // Setup WebChannel
-            new QWebChannel(qt.webChannelTransport, function(channel) {{
-                pyBridge = channel.objects.pyBridge;
-            }});
-        }}
+            }} else if (currentMode === 'polygon') {{
+                addPolygonPoint(e.latlng.lat, e.latlng.lng);
+            }}
+        }});
 
         // Set marker position
         function setMarker(lat, lng) {{
@@ -500,13 +493,6 @@ class MapCoordinatePickerWidget(QWidget):
             polygonPoints = [];
         }}
 
-        // Change tile layer
-        function setTileLayer(layerName) {{
-            map.removeLayer(currentLayer);
-            currentLayer = tileLayers[layerName] || tileLayers.osm;
-            currentLayer.addTo(map);
-        }}
-
         // Pan to coordinates
         function panTo(lat, lng, zoom) {{
             map.setView([lat, lng], zoom || map.getZoom());
@@ -520,9 +506,6 @@ class MapCoordinatePickerWidget(QWidget):
                 clearDrawing();
             }}
         }}
-
-        // Initialize when page loads
-        document.addEventListener('DOMContentLoaded', initMap);
     </script>
 </body>
 </html>

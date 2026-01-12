@@ -36,15 +36,11 @@ from utils.logger import get_logger
 
 logger = get_logger(__name__)
 
-# Path to MBTiles file
-MBTILES_PATH = Path(__file__).parent.parent.parent / "data" / "aleppo_tiles.mbtiles"
+# Note: TileServer is now shared via MapPickerDialog - no need for duplicate server
+# This page uses the shared tile server for better performance
 
 
-# Path to local assets
-ASSETS_PATH = Path(__file__).parent.parent.parent / "assets" / "leaflet"
-
-
-class TileServer(BaseHTTPRequestHandler):
+class _DeprecatedTileServer_DoNotUse(BaseHTTPRequestHandler):
     """HTTP server to serve tiles from MBTiles file and static assets."""
 
     mbtiles_path = None
@@ -581,9 +577,6 @@ class MapPage(QWidget):
         self.db = db
         self.i18n = i18n
         self.building_repo = BuildingRepository(db)
-        self.tile_server = None
-        self.tile_server_thread = None
-        self.tile_server_port = None
         self.buildings = []
 
         self._setup_ui()
@@ -711,29 +704,18 @@ class MapPage(QWidget):
         layout.addWidget(info_bar)
 
     def _start_tile_server(self):
-        """Start local tile server."""
-        if self.tile_server is not None:
-            return True  # Already running
+        """Use shared tile server from MapPickerDialog instead of creating new one."""
+        from ui.components.map_picker_dialog import MapPickerDialog
 
-        # Check if MBTiles file exists
-        if not MBTILES_PATH.exists():
-            logger.warning(f"MBTiles file not found: {MBTILES_PATH}")
-            return False
+        # Ensure shared tile server is started
+        if MapPickerDialog._tile_server_port is None:
+            temp_dialog = MapPickerDialog.__new__(MapPickerDialog)
+            temp_dialog._start_tile_server()
 
-        try:
-            self.tile_server_port = find_free_port()
-            TileServer.mbtiles_path = MBTILES_PATH
-            TileServer.assets_path = ASSETS_PATH
-
-            self.tile_server = HTTPServer(('127.0.0.1', self.tile_server_port), TileServer)
-            self.tile_server_thread = threading.Thread(target=self.tile_server.serve_forever, daemon=True)
-            self.tile_server_thread.start()
-
-            logger.info(f"Tile server started on port {self.tile_server_port}")
-            return True
-        except Exception as e:
-            logger.error(f"Failed to start tile server: {e}")
-            return False
+        # Use the shared port
+        self.tile_server_port = MapPickerDialog._tile_server_port
+        logger.info(f"Using shared tile server on port {self.tile_server_port}")
+        return True
 
     def _buildings_to_geojson(self, buildings) -> str:
         """Convert buildings to GeoJSON format."""
@@ -824,7 +806,6 @@ class MapPage(QWidget):
         pass
 
     def closeEvent(self, event):
-        """Stop tile server when closing."""
-        if self.tile_server:
-            self.tile_server.shutdown()
+        """Clean up on close (shared tile server remains active)."""
+        # Note: We don't shutdown the shared tile server as it may be used by other components
         super().closeEvent(event)
