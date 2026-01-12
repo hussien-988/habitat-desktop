@@ -26,7 +26,7 @@ from PyQt5.QtWidgets import (
     QGroupBox, QScrollArea, QSplitter, QMessageBox,
     QDialog, QFileDialog, QDateEdit, QCheckBox,
     QGraphicsDropShadowEffect, QRadioButton, QButtonGroup,
-    QTabWidget, QGridLayout
+    QTabWidget, QGridLayout, QSizePolicy, QToolButton, QLayout
 )
 from PyQt5.QtGui import QIcon
 from PyQt5.QtCore import Qt, pyqtSignal, QDate
