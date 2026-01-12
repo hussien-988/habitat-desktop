@@ -24,6 +24,7 @@ from PyQt5.QtCore import Qt
 from app.config import Config  # type: ignore
 from app import MainWindow  # type: ignore
 from repositories.database import Database  # type: ignore
+from repositories.seed import seed_database  # type: ignore
 from utils.i18n import I18n  # type: ignore
 from utils.logger import setup_logger  # type: ignore
 
@@ -56,6 +57,10 @@ def main():
         db = Database()
         db.initialize()
         logger.info(">> Database initialized successfully")
+
+        # Seed demo data if database is empty
+        logger.info("Checking for demo data...")
+        seed_database(db)
 
         # Initialize i18n
         logger.info("Initializing internationalization...")
