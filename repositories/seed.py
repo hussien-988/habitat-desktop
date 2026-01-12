@@ -86,16 +86,16 @@ def seed_database(db: Database):
     # Seed users
     _seed_users(user_repo)
 
-    # Seed buildings (RESTORED to original count)
+    # Seed buildings (100 buildings)
     buildings = _seed_buildings(building_repo, 100)
 
     # Seed units (2-8 per building)
     units = _seed_units(unit_repo, buildings)
 
-    # Seed persons (RESTORED to original count)
+    # Seed persons (150 persons)
     persons = _seed_persons(person_repo, 150)
 
-    # Seed claims (RESTORED to original count)
+    # Seed claims (50 claims)
     _seed_claims(claim_repo, units, persons, 50)
 
     logger.info("Database seeding completed!")

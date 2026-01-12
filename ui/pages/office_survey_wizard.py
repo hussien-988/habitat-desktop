@@ -26,7 +26,7 @@ from PyQt5.QtWidgets import (
     QGroupBox, QScrollArea, QSplitter, QMessageBox,
     QDialog, QFileDialog, QDateEdit, QCheckBox,
     QGraphicsDropShadowEffect, QRadioButton, QButtonGroup,
-    QTabWidget
+    QTabWidget, QGridLayout
 )
 from PyQt5.QtGui import QIcon
 from PyQt5.QtCore import Qt, pyqtSignal, QDate
@@ -1505,18 +1505,295 @@ class OfficeSurveyWizard(QWidget):
 
         layout.addWidget(overall_info_frame)
 
-        # Splitter for list and form
-        splitter = QSplitter(Qt.Horizontal)
+        # Create scroll area for family information sections
+        scroll_area = QScrollArea()
+        scroll_area.setWidgetResizable(True)
+        scroll_area.setFrameShape(QFrame.NoFrame)
+        scroll_area.setStyleSheet("""
+            QScrollArea {
+                background-color: transparent;
+                border: none;
+            }
+            QScrollBar:vertical {
+                border: none;
+                background: #F3F4F6;
+                width: 10px;
+                border-radius: 5px;
+            }
+            QScrollBar::handle:vertical {
+                background: #9CA3AF;
+                border-radius: 5px;
+                min-height: 20px;
+            }
+            QScrollBar::handle:vertical:hover {
+                background: #6B7280;
+            }
+            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+                border: none;
+                background: none;
+            }
+        """)
 
-        # Left: Households list
-        list_frame = QFrame()
-        list_layout = QVBoxLayout(list_frame)
+        # Container widget for scroll area content
+        scroll_content = QWidget()
+        scroll_layout = QVBoxLayout(scroll_content)
+        scroll_layout.setContentsMargins(0, 0, 0, 0)
+        scroll_layout.setSpacing(12)
 
-        hh_header = QHBoxLayout()
-        hh_label = QLabel("الأسر المقيمة:")
-        hh_label.setStyleSheet("font-weight: bold;")
-        hh_header.addWidget(hh_label)
-        hh_header.addStretch()
+        # معلومات الاسرة (Family Information) Section
+        family_info_frame = QFrame()
+        family_info_frame.setStyleSheet("""
+            QFrame {
+                background-color: white;
+                border: 1px solid #E5E7EB;
+                border-radius: 8px;
+                padding: 16px;
+            }
+        """)
+        family_info_layout = QVBoxLayout(family_info_frame)
+        family_info_layout.setSpacing(12)
+
+        # Header
+        family_info_header = QLabel("📋 معلومات الاسرة")
+        family_info_header.setStyleSheet("""
+            font-size: 13px;
+            font-weight: 700;
+            color: #1F2937;
+            padding: 4px 0px;
+        """)
+        family_info_layout.addWidget(family_info_header)
+
+        # Grid layout for family info fields (2 columns, RTL: right=0, left=1)
+        family_info_grid = QGridLayout()
+        family_info_grid.setSpacing(12)
+        family_info_grid.setColumnStretch(0, 1)
+        family_info_grid.setColumnStretch(1, 1)
+
+        # Right side: رب الأسرة/العائل (column 0 for RTL)
+        head_name_label = QLabel("رب الأسرة/العائل")
+        head_name_label.setStyleSheet("font-size: 12px; color: #374151; font-weight: 500; margin-bottom: 4px;")
+        head_name_label.setAlignment(Qt.AlignRight)
+        family_info_grid.addWidget(head_name_label, 0, 0)
+
+        self.hh_head_name = QLineEdit()
+        self.hh_head_name.setPlaceholderText("اسم رب الأسرة")
+        self.hh_head_name.setStyleSheet("""
+            QLineEdit {
+                padding: 8px 12px;
+                border: 1px solid #E5E7EB;
+                border-radius: 6px;
+                background-color: #F9FAFB;
+                font-size: 12px;
+            }
+        """)
+        family_info_grid.addWidget(self.hh_head_name, 1, 0)
+
+        # Left side: عدد الأفراد (column 1 for RTL)
+        total_members_label = QLabel("عدد الأفراد")
+        total_members_label.setStyleSheet("font-size: 12px; color: #374151; font-weight: 500; margin-bottom: 4px;")
+        total_members_label.setAlignment(Qt.AlignRight)
+        family_info_grid.addWidget(total_members_label, 0, 1)
+
+        self.hh_total_members = QSpinBox()
+        self.hh_total_members.setRange(0, 50)
+        self.hh_total_members.setValue(0)
+        self.hh_total_members.setStyleSheet("""
+            QSpinBox {
+                padding: 8px 12px;
+                border: 1px solid #E5E7EB;
+                border-radius: 6px;
+                background-color: #F9FAFB;
+                font-size: 12px;
+            }
+        """)
+        family_info_grid.addWidget(self.hh_total_members, 1, 1)
+
+        family_info_layout.addLayout(family_info_grid)
+        scroll_layout.addWidget(family_info_frame)
+
+        # تكوين الأسرة (Family Composition) Section
+        composition_frame = QFrame()
+        composition_frame.setStyleSheet("""
+            QFrame {
+                background-color: white;
+                border: 1px solid #E5E7EB;
+                border-radius: 8px;
+                padding: 16px;
+            }
+        """)
+        composition_layout = QVBoxLayout(composition_frame)
+        composition_layout.setSpacing(12)
+
+        # Header
+        composition_header = QLabel("👥 تكوين الأسرة")
+        composition_header.setStyleSheet("""
+            font-size: 13px;
+            font-weight: 700;
+            color: #1F2937;
+            padding: 4px 0px;
+        """)
+        composition_layout.addWidget(composition_header)
+
+        # Grid layout for composition fields (2 columns x multiple rows)
+        composition_grid = QGridLayout()
+        composition_grid.setSpacing(12)
+        composition_grid.setColumnStretch(0, 1)
+        composition_grid.setColumnStretch(1, 1)
+
+        label_style = "font-size: 12px; color: #374151; font-weight: 500; margin-bottom: 4px;"
+        spinbox_style = """
+            QSpinBox {
+                padding: 8px 12px;
+                border: 1px solid #E5E7EB;
+                border-radius: 6px;
+                background-color: #F9FAFB;
+                font-size: 12px;
+            }
+        """
+
+        # Row 0-1: عدد البالغين الذكور (RIGHT side, column 0)
+        adult_males_label = QLabel("عدد البالغين الذكور")
+        adult_males_label.setStyleSheet(label_style)
+        adult_males_label.setAlignment(Qt.AlignRight)
+        composition_grid.addWidget(adult_males_label, 0, 0)
+
+        self.hh_adult_males = QSpinBox()
+        self.hh_adult_males.setRange(0, 50)
+        self.hh_adult_males.setValue(0)
+        self.hh_adult_males.setStyleSheet(spinbox_style)
+        composition_grid.addWidget(self.hh_adult_males, 1, 0)
+
+        # Row 0-1: عدد البالغين الإناث (LEFT side, column 1)
+        adult_females_label = QLabel("عدد البالغين الإناث")
+        adult_females_label.setStyleSheet(label_style)
+        adult_females_label.setAlignment(Qt.AlignRight)
+        composition_grid.addWidget(adult_females_label, 0, 1)
+
+        self.hh_adult_females = QSpinBox()
+        self.hh_adult_females.setRange(0, 50)
+        self.hh_adult_females.setValue(0)
+        self.hh_adult_females.setStyleSheet(spinbox_style)
+        composition_grid.addWidget(self.hh_adult_females, 1, 1)
+
+        # Row 2-3: عدد الأطفال الذكور (أقل من 18) (RIGHT side, column 0)
+        male_children_label = QLabel("عدد الأطفال الذكور (أقل من 18)")
+        male_children_label.setStyleSheet(label_style)
+        male_children_label.setAlignment(Qt.AlignRight)
+        composition_grid.addWidget(male_children_label, 2, 0)
+
+        self.hh_male_children_under18 = QSpinBox()
+        self.hh_male_children_under18.setRange(0, 50)
+        self.hh_male_children_under18.setValue(0)
+        self.hh_male_children_under18.setStyleSheet(spinbox_style)
+        composition_grid.addWidget(self.hh_male_children_under18, 3, 0)
+
+        # Row 2-3: عدد الأطفال الإناث (أقل من 18) (LEFT side, column 1)
+        female_children_label = QLabel("عدد الأطفال الإناث (أقل من 18)")
+        female_children_label.setStyleSheet(label_style)
+        female_children_label.setAlignment(Qt.AlignRight)
+        composition_grid.addWidget(female_children_label, 2, 1)
+
+        self.hh_female_children_under18 = QSpinBox()
+        self.hh_female_children_under18.setRange(0, 50)
+        self.hh_female_children_under18.setValue(0)
+        self.hh_female_children_under18.setStyleSheet(spinbox_style)
+        composition_grid.addWidget(self.hh_female_children_under18, 3, 1)
+
+        # Row 4-5: عدد كبار السن الذكور (أكبر من 65) (RIGHT side, column 0)
+        male_elderly_label = QLabel("عدد كبار السن الذكور (أكبر من 65)")
+        male_elderly_label.setStyleSheet(label_style)
+        male_elderly_label.setAlignment(Qt.AlignRight)
+        composition_grid.addWidget(male_elderly_label, 4, 0)
+
+        self.hh_male_elderly_over65 = QSpinBox()
+        self.hh_male_elderly_over65.setRange(0, 50)
+        self.hh_male_elderly_over65.setValue(0)
+        self.hh_male_elderly_over65.setStyleSheet(spinbox_style)
+        composition_grid.addWidget(self.hh_male_elderly_over65, 5, 0)
+
+        # Row 4-5: عدد كبار السن الإناث (أكبر من 65) (LEFT side, column 1)
+        female_elderly_label = QLabel("عدد كبار السن الإناث (أكبر من 65)")
+        female_elderly_label.setStyleSheet(label_style)
+        female_elderly_label.setAlignment(Qt.AlignRight)
+        composition_grid.addWidget(female_elderly_label, 4, 1)
+
+        self.hh_female_elderly_over65 = QSpinBox()
+        self.hh_female_elderly_over65.setRange(0, 50)
+        self.hh_female_elderly_over65.setValue(0)
+        self.hh_female_elderly_over65.setStyleSheet(spinbox_style)
+        composition_grid.addWidget(self.hh_female_elderly_over65, 5, 1)
+
+        # Row 6-7: عدد المعاقين الذكور (RIGHT side, column 0)
+        disabled_males_label = QLabel("عدد المعاقين الذكور")
+        disabled_males_label.setStyleSheet(label_style)
+        disabled_males_label.setAlignment(Qt.AlignRight)
+        composition_grid.addWidget(disabled_males_label, 6, 0)
+
+        self.hh_disabled_males = QSpinBox()
+        self.hh_disabled_males.setRange(0, 50)
+        self.hh_disabled_males.setValue(0)
+        self.hh_disabled_males.setStyleSheet(spinbox_style)
+        composition_grid.addWidget(self.hh_disabled_males, 7, 0)
+
+        # Row 6-7: عدد المعاقين الإناث (LEFT side, column 1)
+        disabled_females_label = QLabel("عدد المعاقين الإناث")
+        disabled_females_label.setStyleSheet(label_style)
+        disabled_females_label.setAlignment(Qt.AlignRight)
+        composition_grid.addWidget(disabled_females_label, 6, 1)
+
+        self.hh_disabled_females = QSpinBox()
+        self.hh_disabled_females.setRange(0, 50)
+        self.hh_disabled_females.setValue(0)
+        self.hh_disabled_females.setStyleSheet(spinbox_style)
+        composition_grid.addWidget(self.hh_disabled_females, 7, 1)
+
+        composition_layout.addLayout(composition_grid)
+        scroll_layout.addWidget(composition_frame)
+
+        # ادخل ملاحظاتك (Notes) Section
+        notes_frame = QFrame()
+        notes_frame.setStyleSheet("""
+            QFrame {
+                background-color: white;
+                border: 1px solid #E5E7EB;
+                border-radius: 8px;
+                padding: 16px;
+            }
+        """)
+        notes_layout = QVBoxLayout(notes_frame)
+        notes_layout.setSpacing(12)
+
+        # Header
+        notes_header = QLabel("📝 ادخل ملاحظاتك")
+        notes_header.setStyleSheet("""
+            font-size: 13px;
+            font-weight: 700;
+            color: #1F2937;
+            padding: 4px 0px;
+        """)
+        notes_layout.addWidget(notes_header)
+
+        # Notes text area
+        self.hh_notes = QTextEdit()
+        self.hh_notes.setPlaceholderText("أدخل ملاحظاتك هنا...")
+        self.hh_notes.setMaximumHeight(100)
+        self.hh_notes.setStyleSheet("""
+            QTextEdit {
+                padding: 8px 12px;
+                border: 1px solid #E5E7EB;
+                border-radius: 6px;
+                background-color: #F9FAFB;
+                font-size: 12px;
+            }
+        """)
+        notes_layout.addWidget(self.hh_notes)
+
+        scroll_layout.addWidget(notes_frame)
+
+        # Add save button at the bottom of scroll content
+        save_btn_container = QWidget()
+        save_btn_layout = QHBoxLayout(save_btn_container)
+        save_btn_layout.setContentsMargins(0, 12, 0, 0)
 
         add_hh_btn = QPushButton("+ إضافة أسرة")
         add_hh_btn.setStyleSheet(f"""
@@ -1524,134 +1801,27 @@ class OfficeSurveyWizard(QWidget):
                 background-color: {Config.SUCCESS_COLOR};
                 color: white;
                 border: none;
-                border-radius: 4px;
-                padding: 6px 12px;
-            }}
-        """)
-        add_hh_btn.clicked.connect(self._add_household)
-        hh_header.addWidget(add_hh_btn)
-
-        list_layout.addLayout(hh_header)
-
-        self.households_list = QListWidget()
-        self.households_list.setStyleSheet("QListWidget::item { padding: 10px; }")
-        self.households_list.itemClicked.connect(self._on_household_selected)
-        list_layout.addWidget(self.households_list)
-
-        # Delete household button
-        del_hh_btn = QPushButton("🗑️ حذف الأسرة المحددة")
-        del_hh_btn.clicked.connect(self._delete_household)
-        list_layout.addWidget(del_hh_btn)
-
-        splitter.addWidget(list_frame)
-
-        # Right: Household form
-        form_frame = QFrame()
-        form_frame.setStyleSheet("background-color: #F8FAFC; border-radius: 8px; padding: 12px;")
-        form_layout = QVBoxLayout(form_frame)
-
-        form_title = QLabel("بيانات الأسرة")
-        form_title.setStyleSheet("font-weight: bold; font-size: 11pt;")
-        form_layout.addWidget(form_title)
-
-        hh_form = QFormLayout()
-        hh_form.setSpacing(10)
-
-        self.hh_head_name = QLineEdit()
-        self.hh_head_name.setPlaceholderText("اسم رب الأسرة")
-        hh_form.addRow("رب الأسرة:", self.hh_head_name)
-
-        # Adults/Minors breakdown (Medium priority gap)
-        age_group = QGroupBox("التوزيع العمري")
-        age_layout = QFormLayout(age_group)
-
-        self.hh_adults = QSpinBox()
-        self.hh_adults.setRange(0, 50)
-        self.hh_adults.setValue(1)
-        self.hh_adults.valueChanged.connect(self._update_household_size)
-        age_layout.addRow("بالغون (18+):", self.hh_adults)
-
-        self.hh_minors = QSpinBox()
-        self.hh_minors.setRange(0, 50)
-        self.hh_minors.valueChanged.connect(self._update_household_size)
-        age_layout.addRow("قاصرون (<18):", self.hh_minors)
-
-        hh_form.addRow(age_group)
-
-        # Gender breakdown
-        gender_group = QGroupBox("التوزيع حسب الجنس")
-        gender_layout = QFormLayout(gender_group)
-
-        self.hh_males = QSpinBox()
-        self.hh_males.setRange(0, 50)
-        self.hh_males.valueChanged.connect(self._update_household_size)
-        gender_layout.addRow("ذكور:", self.hh_males)
-
-        self.hh_females = QSpinBox()
-        self.hh_females.setRange(0, 50)
-        self.hh_females.valueChanged.connect(self._update_household_size)
-        gender_layout.addRow("إناث:", self.hh_females)
-
-        hh_form.addRow(gender_group)
-
-        # Auto-computed size (Low priority gap)
-        self.hh_size_label = QLabel("الحجم الإجمالي: 1")
-        self.hh_size_label.setStyleSheet(f"font-weight: bold; color: {Config.PRIMARY_COLOR};")
-        hh_form.addRow("", self.hh_size_label)
-
-        self.hh_vulnerable = QSpinBox()
-        self.hh_vulnerable.setRange(0, 20)
-        hh_form.addRow("الفئات الهشة:", self.hh_vulnerable)
-
-        form_layout.addLayout(hh_form)
-
-        # Save button
-        save_hh_btn = QPushButton("💾 حفظ بيانات الأسرة")
-        save_hh_btn.setStyleSheet(f"""
-            QPushButton {{
-                background-color: {Config.PRIMARY_COLOR};
-                color: white;
-                border: none;
                 border-radius: 6px;
-                padding: 10px;
-                font-weight: bold;
+                padding: 12px 24px;
+                font-weight: 600;
+                font-size: 14px;
+            }}
+            QPushButton:hover {{
+                background-color: #059669;
             }}
         """)
-        save_hh_btn.clicked.connect(self._save_household)
-        form_layout.addWidget(save_hh_btn)
+        add_hh_btn.clicked.connect(self._save_household)
+        save_btn_layout.addStretch()
+        save_btn_layout.addWidget(add_hh_btn)
+        save_btn_layout.addStretch()
 
-        form_layout.addStretch()
-        splitter.addWidget(form_frame)
+        scroll_layout.addWidget(save_btn_container)
 
-        splitter.setSizes([300, 400])
-        layout.addWidget(splitter)
+        # Set scroll content and add to main layout
+        scroll_area.setWidget(scroll_content)
+        layout.addWidget(scroll_area)
 
         return widget
-
-    def _update_household_size(self):
-        """Auto-compute household size (Low priority gap)."""
-        total = self.hh_adults.value() + self.hh_minors.value()
-        self.hh_size_label.setText(f"الحجم الإجمالي: {total}")
-
-        # Validate gender matches total
-        gender_total = self.hh_males.value() + self.hh_females.value()
-        if gender_total > 0 and gender_total != total:
-            self.hh_size_label.setStyleSheet(f"font-weight: bold; color: {Config.WARNING_COLOR};")
-            self.hh_size_label.setText(f"الحجم الإجمالي: {total} ⚠️ (الجنس: {gender_total})")
-        else:
-            self.hh_size_label.setStyleSheet(f"font-weight: bold; color: {Config.PRIMARY_COLOR};")
-
-    def _add_household(self):
-        """Add a new household entry."""
-        self._editing_household_index = None
-        self.hh_head_name.clear()
-        self.hh_adults.setValue(1)
-        self.hh_minors.setValue(0)
-        self.hh_males.setValue(0)
-        self.hh_females.setValue(0)
-        self.hh_vulnerable.setValue(0)
-        self._update_household_size()
-        Toast.show_toast(self, "أدخل بيانات الأسرة الجديدة", Toast.INFO)
 
     def _on_household_selected(self, item):
         """Load household data for editing."""
@@ -1660,12 +1830,16 @@ class OfficeSurveyWizard(QWidget):
             if hh['household_id'] == hh_id:
                 self._editing_household_index = i
                 self.hh_head_name.setText(hh['head_name'])
-                self.hh_adults.setValue(hh.get('adults', hh.get('size', 1)))
-                self.hh_minors.setValue(hh.get('minors', 0))
-                self.hh_males.setValue(hh.get('male_count', 0))
-                self.hh_females.setValue(hh.get('female_count', 0))
-                self.hh_vulnerable.setValue(hh.get('vulnerable_count', 0))
-                self._update_household_size()
+                self.hh_total_members.setValue(hh.get('size', 0))
+                self.hh_adult_males.setValue(hh.get('adult_males', 0))
+                self.hh_adult_females.setValue(hh.get('adult_females', 0))
+                self.hh_male_children_under18.setValue(hh.get('male_children_under18', 0))
+                self.hh_female_children_under18.setValue(hh.get('female_children_under18', 0))
+                self.hh_male_elderly_over65.setValue(hh.get('male_elderly_over65', 0))
+                self.hh_female_elderly_over65.setValue(hh.get('female_elderly_over65', 0))
+                self.hh_disabled_males.setValue(hh.get('disabled_males', 0))
+                self.hh_disabled_females.setValue(hh.get('disabled_females', 0))
+                self.hh_notes.setPlainText(hh.get('notes', ''))
                 break
 
     def _save_household(self):
@@ -1677,12 +1851,16 @@ class OfficeSurveyWizard(QWidget):
         household = {
             "household_id": str(uuid.uuid4()) if not hasattr(self, '_editing_household_index') or self._editing_household_index is None else self.context.households[self._editing_household_index]['household_id'],
             "head_name": self.hh_head_name.text().strip(),
-            "size": self.hh_adults.value() + self.hh_minors.value(),
-            "adults": self.hh_adults.value(),
-            "minors": self.hh_minors.value(),
-            "male_count": self.hh_males.value(),
-            "female_count": self.hh_females.value(),
-            "vulnerable_count": self.hh_vulnerable.value()
+            "size": self.hh_total_members.value(),
+            "adult_males": self.hh_adult_males.value(),
+            "adult_females": self.hh_adult_females.value(),
+            "male_children_under18": self.hh_male_children_under18.value(),
+            "female_children_under18": self.hh_female_children_under18.value(),
+            "male_elderly_over65": self.hh_male_elderly_over65.value(),
+            "female_elderly_over65": self.hh_female_elderly_over65.value(),
+            "disabled_males": self.hh_disabled_males.value(),
+            "disabled_females": self.hh_disabled_females.value(),
+            "notes": self.hh_notes.toPlainText().strip()
         }
 
         if hasattr(self, '_editing_household_index') and self._editing_household_index is not None:
@@ -1693,8 +1871,23 @@ class OfficeSurveyWizard(QWidget):
             Toast.show_toast(self, "تم إضافة الأسرة", Toast.SUCCESS)
 
         self._refresh_households_list()
-        self._add_household()  # Clear form
+        self._clear_household_form()  # Clear form
         self.next_btn.setEnabled(True)
+
+    def _clear_household_form(self):
+        """Clear household form fields."""
+        self._editing_household_index = None
+        self.hh_head_name.clear()
+        self.hh_total_members.setValue(0)
+        self.hh_adult_males.setValue(0)
+        self.hh_adult_females.setValue(0)
+        self.hh_male_children_under18.setValue(0)
+        self.hh_female_children_under18.setValue(0)
+        self.hh_male_elderly_over65.setValue(0)
+        self.hh_female_elderly_over65.setValue(0)
+        self.hh_disabled_males.setValue(0)
+        self.hh_disabled_females.setValue(0)
+        self.hh_notes.clear()
 
     def _delete_household(self):
         """Delete selected household."""
@@ -1705,19 +1898,13 @@ class OfficeSurveyWizard(QWidget):
         hh_id = current.data(Qt.UserRole)
         self.context.households = [h for h in self.context.households if h['household_id'] != hh_id]
         self._refresh_households_list()
-        self._add_household()
+        self._clear_household_form()
         Toast.show_toast(self, "تم حذف الأسرة", Toast.INFO)
 
     def _refresh_households_list(self):
-        """Refresh the households display list."""
-        self.households_list.clear()
-        for hh in self.context.households:
-            item = QListWidgetItem(
-                f"👨‍👩‍👧‍👦 {hh['head_name']}\n"
-                f"   الحجم: {hh['size']} (بالغون: {hh.get('adults', '-')}, قاصرون: {hh.get('minors', '-')})"
-            )
-            item.setData(Qt.UserRole, hh['household_id'])
-            self.households_list.addItem(item)
+        """Refresh the households display list (no UI update needed)."""
+        # No list widget to refresh since we removed it
+        pass
 
     # ==================== Step 4: Persons (S11-S13) ====================
 
