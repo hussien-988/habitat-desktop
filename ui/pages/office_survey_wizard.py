@@ -1983,39 +1983,37 @@ class OfficeSurveyWizard(QWidget):
         """Create Step 3: Household/Occupancy with adults/minors (S07-S10)."""
         widget = QWidget()
         layout = QVBoxLayout(widget)
-        layout.setContentsMargins(16, 16, 16, 16)
-        layout.setSpacing(12)
+        layout.setContentsMargins(16, 8, 16, 8)
+        layout.setSpacing(8)
 
-        # Building info card with search + metrics layout
+        # Building info card with all content in one bordered container
         self.household_building_frame = QFrame()
         self.household_building_frame.setObjectName("householdBuildingInfoCard")
         self.household_building_frame.setStyleSheet("""
             QFrame#householdBuildingInfoCard {
                 background-color: white;
                 border: 1px solid #E5E7EB;
-                border-radius: 8px;
+                border-radius: 6px;
             }
         """)
 
-        # Card layout
+        # Card layout with compact spacing
         self.household_building_layout = QVBoxLayout(self.household_building_frame)
-        self.household_building_layout.setSpacing(14)
-        self.household_building_layout.setContentsMargins(14, 14, 14, 14)
+        self.household_building_layout.setSpacing(8)
+        self.household_building_layout.setContentsMargins(12, 12, 12, 12)
 
-        # Building address row with icon (centered with border)
-        address_container = QFrame()
+        # Building address row with icon (centered, no separate border)
+        address_container = QWidget()
         address_container.setStyleSheet("""
-            QFrame {
-                background-color: white;
-                border: 1px solid #E5E7EB;
-                border-radius: 6px;
-                padding: 8px 12px;
+            QWidget {
+                background-color: transparent;
+                border: none;
             }
         """)
 
         address_row = QHBoxLayout(address_container)
-        address_row.setSpacing(8)
-        address_row.setContentsMargins(8, 8, 8, 8)
+        address_row.setSpacing(6)
+        address_row.setContentsMargins(6, 6, 6, 6)
 
         # Add stretch to center the content
         address_row.addStretch()
@@ -2051,29 +2049,31 @@ class OfficeSurveyWizard(QWidget):
 
         self.household_building_layout.addWidget(address_container)
 
-        # Metrics row container
-        self.household_building_metrics_layout = QHBoxLayout()
-        self.household_building_metrics_layout.setSpacing(22)
-        self.household_building_layout.addLayout(self.household_building_metrics_layout)
-
-        # Separator line between building info and unit info
-        separator = QFrame()
-        separator.setFrameShape(QFrame.HLine)
-        separator.setStyleSheet("""
-            QFrame {
-                background-color: #E5E7EB;
-                max-height: 1px;
+        # Metrics row container (no separate border, transparent background)
+        metrics_container = QWidget()
+        metrics_container.setStyleSheet("""
+            QWidget {
+                background-color: transparent;
                 border: none;
-                margin: 8px 0px;
             }
         """)
-        self.household_building_layout.addWidget(separator)
+        self.household_building_metrics_layout = QHBoxLayout(metrics_container)
+        self.household_building_metrics_layout.setSpacing(16)
+        self.household_building_metrics_layout.setContentsMargins(0, 0, 0, 0)
+        self.household_building_layout.addWidget(metrics_container)
 
-        # Unit info layout (inside the same building card)
-        self.household_unit_layout = QVBoxLayout()
-        self.household_unit_layout.setSpacing(8)
-        self.household_unit_layout.setContentsMargins(0, 8, 0, 0)
-        self.household_building_layout.addLayout(self.household_unit_layout)
+        # Unit info layout (no separate border, transparent background)
+        unit_info_container = QWidget()
+        unit_info_container.setStyleSheet("""
+            QWidget {
+                background-color: transparent;
+                border: none;
+            }
+        """)
+        self.household_unit_layout = QVBoxLayout(unit_info_container)
+        self.household_unit_layout.setSpacing(6)
+        self.household_unit_layout.setContentsMargins(0, 0, 0, 0)
+        self.household_building_layout.addWidget(unit_info_container)
 
         layout.addWidget(self.household_building_frame)
 
