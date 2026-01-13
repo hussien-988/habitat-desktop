@@ -1346,20 +1346,54 @@ class OfficeSurveyWizard(QWidget):
         self.unit_building_layout.setSpacing(14)
         self.unit_building_layout.setContentsMargins(14, 14, 14, 14)
 
-        # Building number label at the top
-        self.unit_building_number = QLabel("رقم البناء: ---")
-        self.unit_building_number.setAlignment(Qt.AlignCenter)
-        self.unit_building_number.setStyleSheet("""
-            QLabel {
-                padding: 6px 12px;
-                border: none;
-                background-color: transparent;
-                font-size: 14px;
-                color: #111827;
-                font-weight: 700;
+        # Building address row with icon (centered with border)
+        address_container = QFrame()
+        address_container.setStyleSheet("""
+            QFrame {
+                background-color: white;
+                border: 1px solid #E5E7EB;
+                border-radius: 6px;
+                padding: 8px 12px;
             }
         """)
-        self.unit_building_layout.addWidget(self.unit_building_number)
+
+        address_row = QHBoxLayout(address_container)
+        address_row.setSpacing(8)
+        address_row.setContentsMargins(8, 8, 8, 8)
+
+        # Add stretch to center the content
+        address_row.addStretch()
+
+        # Building icon
+        building_icon = QLabel("🏢")
+        building_icon.setStyleSheet("""
+            QLabel {
+                font-size: 16px;
+                border: none;
+                background-color: transparent;
+            }
+        """)
+        building_icon.setAlignment(Qt.AlignCenter)
+        address_row.addWidget(building_icon)
+
+        # Building address label
+        self.unit_building_address = QLabel("حلب الحميدية")
+        self.unit_building_address.setAlignment(Qt.AlignCenter)
+        self.unit_building_address.setStyleSheet("""
+            QLabel {
+                border: none;
+                background-color: transparent;
+                font-size: 12px;
+                color: #6B7280;
+                font-weight: 500;
+            }
+        """)
+        address_row.addWidget(self.unit_building_address)
+
+        # Add stretch to center the content
+        address_row.addStretch()
+
+        self.unit_building_layout.addWidget(address_container)
 
         # Metrics row container
         self.unit_building_metrics_layout = QHBoxLayout()
@@ -1968,43 +2002,80 @@ class OfficeSurveyWizard(QWidget):
         self.household_building_layout.setSpacing(14)
         self.household_building_layout.setContentsMargins(14, 14, 14, 14)
 
-        # Building number label at the top
-        self.household_building_number = QLabel("رقم البناء: ---")
-        self.household_building_number.setAlignment(Qt.AlignCenter)
-        self.household_building_number.setStyleSheet("""
-            QLabel {
-                padding: 6px 12px;
-                border: none;
-                background-color: transparent;
-                font-size: 14px;
-                color: #111827;
-                font-weight: 700;
+        # Building address row with icon (centered with border)
+        address_container = QFrame()
+        address_container.setStyleSheet("""
+            QFrame {
+                background-color: white;
+                border: 1px solid #E5E7EB;
+                border-radius: 6px;
+                padding: 8px 12px;
             }
         """)
-        self.household_building_layout.addWidget(self.household_building_number)
+
+        address_row = QHBoxLayout(address_container)
+        address_row.setSpacing(8)
+        address_row.setContentsMargins(8, 8, 8, 8)
+
+        # Add stretch to center the content
+        address_row.addStretch()
+
+        # Building icon
+        building_icon = QLabel("🏢")
+        building_icon.setStyleSheet("""
+            QLabel {
+                font-size: 16px;
+                border: none;
+                background-color: transparent;
+            }
+        """)
+        building_icon.setAlignment(Qt.AlignCenter)
+        address_row.addWidget(building_icon)
+
+        # Building address label
+        self.household_building_address = QLabel("حلب الحميدية")
+        self.household_building_address.setAlignment(Qt.AlignCenter)
+        self.household_building_address.setStyleSheet("""
+            QLabel {
+                border: none;
+                background-color: transparent;
+                font-size: 12px;
+                color: #6B7280;
+                font-weight: 500;
+            }
+        """)
+        address_row.addWidget(self.household_building_address)
+
+        # Add stretch to center the content
+        address_row.addStretch()
+
+        self.household_building_layout.addWidget(address_container)
 
         # Metrics row container
         self.household_building_metrics_layout = QHBoxLayout()
         self.household_building_metrics_layout.setSpacing(22)
         self.household_building_layout.addLayout(self.household_building_metrics_layout)
 
-        layout.addWidget(self.household_building_frame)
-
-        # Unit info card (separate card below building)
-        self.household_unit_frame = QFrame()
-        self.household_unit_frame.setStyleSheet("""
+        # Separator line between building info and unit info
+        separator = QFrame()
+        separator.setFrameShape(QFrame.HLine)
+        separator.setStyleSheet("""
             QFrame {
-                background-color: white;
-                border: 1px solid #E5E7EB;
-                border-radius: 8px;
-                padding: 12px;
+                background-color: #E5E7EB;
+                max-height: 1px;
+                border: none;
+                margin: 8px 0px;
             }
         """)
-        self.household_unit_layout = QVBoxLayout(self.household_unit_frame)
-        self.household_unit_layout.setSpacing(8)
-        self.household_unit_layout.setContentsMargins(12, 12, 12, 12)
+        self.household_building_layout.addWidget(separator)
 
-        layout.addWidget(self.household_unit_frame)
+        # Unit info layout (inside the same building card)
+        self.household_unit_layout = QVBoxLayout()
+        self.household_unit_layout.setSpacing(8)
+        self.household_unit_layout.setContentsMargins(0, 8, 0, 0)
+        self.household_building_layout.addLayout(self.household_unit_layout)
+
+        layout.addWidget(self.household_building_frame)
 
         # Create scroll area for family information sections
         scroll_area = QScrollArea()
@@ -3591,9 +3662,12 @@ class OfficeSurveyWizard(QWidget):
         if not building:
             return
 
-        # Set building number label
-        building_id = building.building_id if hasattr(building, 'building_id') else "---"
-        self.unit_building_number.setText(f"رقم البناء: {building_id}")
+        # Set building address label
+        if hasattr(building, 'full_address_ar') and building.full_address_ar:
+            address = building.full_address_ar
+        else:
+            address = "حلب - المحدثة - اسم الناحية - اسم التجمع - اسم الحي - رقم البناء - رقم الوحدة العقارية"
+        self.unit_building_address.setText(address)
 
         # Clear existing metrics
         while self.unit_building_metrics_layout.count():
@@ -3620,9 +3694,12 @@ class OfficeSurveyWizard(QWidget):
         if not building:
             return
 
-        # Set building number label
-        building_id = building.building_id if hasattr(building, 'building_id') else "---"
-        self.household_building_number.setText(f"رقم البناء: {building_id}")
+        # Set building address label
+        if hasattr(building, 'full_address_ar') and building.full_address_ar:
+            address = building.full_address_ar
+        else:
+            address = "حلب - المحدثة - اسم الناحية - اسم التجمع - اسم الحي - رقم البناء - رقم الوحدة العقارية"
+        self.household_building_address.setText(address)
 
         # Clear existing metrics
         while self.household_building_metrics_layout.count():
@@ -3705,41 +3782,6 @@ class OfficeSurveyWizard(QWidget):
 
         self.household_unit_layout.addLayout(grid)
 
-        # Dashed line separator
-        dash_line = QFrame()
-        dash_line.setObjectName("dashLine")
-        dash_line.setFixedHeight(1)
-        dash_line.setFrameShape(QFrame.HLine)
-        dash_line.setStyleSheet("""
-            QFrame#dashLine {
-                border: 0;
-                border-top: 1px dashed #D9E2F2;
-            }
-        """)
-        self.household_unit_layout.addWidget(dash_line)
-
-        # Description section
-        desc_title = QLabel("وصف العقار")
-        desc_title.setStyleSheet("""
-            color: #111827;
-            font-weight: 900;
-            font-size: 12px;
-        """)
-        desc_title.setAlignment(Qt.AlignRight)
-        self.household_unit_layout.addWidget(desc_title)
-
-        # Description text
-        desc_text = unit.property_description if unit.property_description else "وصف تفصيلي يشمل: عدد الغرف وأنواعها، المساحة التقريبية، الاتجاهات والحدود، وأي ميزات مميزة."
-        desc_label = QLabel(desc_text)
-        desc_label.setStyleSheet("""
-            color: #6B7280;
-            font-size: 11px;
-            line-height: 1.5;
-        """)
-        desc_label.setWordWrap(True)
-        desc_label.setAlignment(Qt.AlignRight)
-        self.household_unit_layout.addWidget(desc_label)
-
     def _format_household_new_unit_info(self, unit_data: dict):
         """Format new unit info for household step with same layout as unit card."""
         # Clear existing widgets
@@ -3807,41 +3849,6 @@ class OfficeSurveyWizard(QWidget):
             grid.addWidget(value, 1, col)
 
         self.household_unit_layout.addLayout(grid)
-
-        # Dashed line separator
-        dash_line = QFrame()
-        dash_line.setObjectName("dashLine")
-        dash_line.setFixedHeight(1)
-        dash_line.setFrameShape(QFrame.HLine)
-        dash_line.setStyleSheet("""
-            QFrame#dashLine {
-                border: 0;
-                border-top: 1px dashed #D9E2F2;
-            }
-        """)
-        self.household_unit_layout.addWidget(dash_line)
-
-        # Description section
-        desc_title = QLabel("وصف العقار")
-        desc_title.setStyleSheet("""
-            color: #111827;
-            font-weight: 900;
-            font-size: 12px;
-        """)
-        desc_title.setAlignment(Qt.AlignRight)
-        self.household_unit_layout.addWidget(desc_title)
-
-        # Description text
-        desc_text = unit_data.get('description', "وصف تفصيلي يشمل: عدد الغرف وأنواعها، المساحة التقريبية، الاتجاهات والحدود، وأي ميزات مميزة.")
-        desc_label = QLabel(desc_text)
-        desc_label.setStyleSheet("""
-            color: #6B7280;
-            font-size: 11px;
-            line-height: 1.5;
-        """)
-        desc_label.setWordWrap(True)
-        desc_label.setAlignment(Qt.AlignRight)
-        self.household_unit_layout.addWidget(desc_label)
 
     def _create_info_item(self, label: str, value: str) -> QWidget:
         """Create a compact info item (label + value)."""
