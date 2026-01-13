@@ -2922,6 +2922,7 @@ class OfficeSurveyWizard(QWidget):
 
         # Persons table container
         table_frame = QFrame()
+        table_frame.setMinimumWidth(800)  # Set minimum width for wider display
         table_frame.setStyleSheet("""
             QFrame {
                 background-color: white;
@@ -2930,7 +2931,7 @@ class OfficeSurveyWizard(QWidget):
             }
         """)
         table_layout = QVBoxLayout(table_frame)
-        table_layout.setContentsMargins(16, 16, 16, 16)
+        table_layout.setContentsMargins(20, 20, 20, 20)
         table_layout.setSpacing(12)
 
         # Header with title and add button
@@ -3003,11 +3004,12 @@ class OfficeSurveyWizard(QWidget):
     def _create_person_row_card(self, person: dict, index: int = 0) -> QFrame:
         """Create a person row card matching the photo layout."""
         card = QFrame()
+        card.setMinimumHeight(70)  # Set minimum height for taller rows
         card.setStyleSheet("""
             QFrame {
                 background-color: #F9FAFB;
                 border: 1px solid #E5E7EB;
-                border-radius: 6px;
+                border-radius: 8px;
             }
             QFrame:hover {
                 background-color: #F3F4F6;
@@ -3015,37 +3017,39 @@ class OfficeSurveyWizard(QWidget):
         """)
 
         card_layout = QHBoxLayout(card)
-        card_layout.setContentsMargins(12, 10, 12, 10)
-        card_layout.setSpacing(12)
+        card_layout.setContentsMargins(24, 16, 24, 16)
+        card_layout.setSpacing(16)
 
-        # Right side: Person info
+        # Right side: Person info (add first so it appears on the right)
         info_container = QWidget()
         info_layout = QVBoxLayout(info_container)
         info_layout.setContentsMargins(0, 0, 0, 0)
-        info_layout.setSpacing(2)
+        info_layout.setSpacing(4)
 
         # Person name with icon
         full_name = f"{person['first_name']} {person.get('father_name', '')} {person['last_name']}".strip()
         name_label = QLabel(f"👤 {full_name}")
         name_label.setStyleSheet("""
-            font-size: 13px;
+            font-size: 14px;
             font-weight: 700;
             color: #111827;
         """)
+        name_label.setAlignment(Qt.AlignRight)
         info_layout.addWidget(name_label)
 
         # Person role/status
         role_text = "مالك" if person.get('is_contact_person') else "ساكن"
         role_label = QLabel(role_text)
         role_label.setStyleSheet("""
-            font-size: 11px;
+            font-size: 12px;
             color: #6B7280;
         """)
+        role_label.setAlignment(Qt.AlignRight)
         info_layout.addWidget(role_label)
 
         card_layout.addWidget(info_container, 1)
 
-        # Left side: Action buttons
+        # Left side: Action buttons (add second so it appears on the left)
         actions_container = QWidget()
         actions_layout = QHBoxLayout(actions_container)
         actions_layout.setContentsMargins(0, 0, 0, 0)
@@ -3058,7 +3062,7 @@ class OfficeSurveyWizard(QWidget):
                 background-color: transparent;
                 border: none;
                 color: #6B7280;
-                font-size: 20px;
+                font-size: 24px;
                 padding: 4px 8px;
             }
             QPushButton:hover {
