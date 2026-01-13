@@ -1346,22 +1346,20 @@ class OfficeSurveyWizard(QWidget):
         self.unit_building_layout.setSpacing(14)
         self.unit_building_layout.setContentsMargins(14, 14, 14, 14)
 
-        # Search field (will be populated with building address)
-        self.unit_building_search = QLineEdit()
-        self.unit_building_search.setObjectName("unitBuildingSearch")
-        self.unit_building_search.setPlaceholderText("طلب - المدينة - اسم البناية - اسم التجمع - اسم الحي - رقم البناء")
-        self.unit_building_search.setReadOnly(True)
-        self.unit_building_search.setClearButtonEnabled(False)
-        self.unit_building_search.setStyleSheet("""
-            QLineEdit {
-                padding: 10px 12px;
-                border: 1px solid #E5E7EB;
-                border-radius: 6px;
-                background-color: #F9FAFB;
-                font-size: 13px;
+        # Building number label at the top
+        self.unit_building_number = QLabel("رقم البناء: ---")
+        self.unit_building_number.setAlignment(Qt.AlignCenter)
+        self.unit_building_number.setStyleSheet("""
+            QLabel {
+                padding: 6px 12px;
+                border: none;
+                background-color: transparent;
+                font-size: 14px;
+                color: #111827;
+                font-weight: 700;
             }
         """)
-        self.unit_building_layout.addWidget(self.unit_building_search)
+        self.unit_building_layout.addWidget(self.unit_building_number)
 
         # Metrics row container
         self.unit_building_metrics_layout = QHBoxLayout()
@@ -1970,22 +1968,20 @@ class OfficeSurveyWizard(QWidget):
         self.household_building_layout.setSpacing(14)
         self.household_building_layout.setContentsMargins(14, 14, 14, 14)
 
-        # Search field (will be populated with building address)
-        self.household_building_search = QLineEdit()
-        self.household_building_search.setObjectName("householdBuildingSearch")
-        self.household_building_search.setPlaceholderText("طلب - المدينة - اسم البناية - اسم التجمع - اسم الحي - رقم البناء")
-        self.household_building_search.setReadOnly(True)
-        self.household_building_search.setClearButtonEnabled(False)
-        self.household_building_search.setStyleSheet("""
-            QLineEdit {
-                padding: 10px 12px;
-                border: 1px solid #E5E7EB;
-                border-radius: 6px;
-                background-color: #F9FAFB;
-                font-size: 13px;
+        # Building number label at the top
+        self.household_building_number = QLabel("رقم البناء: ---")
+        self.household_building_number.setAlignment(Qt.AlignCenter)
+        self.household_building_number.setStyleSheet("""
+            QLabel {
+                padding: 6px 12px;
+                border: none;
+                background-color: transparent;
+                font-size: 14px;
+                color: #111827;
+                font-weight: 700;
             }
         """)
-        self.household_building_layout.addWidget(self.household_building_search)
+        self.household_building_layout.addWidget(self.household_building_number)
 
         # Metrics row container
         self.household_building_metrics_layout = QHBoxLayout()
@@ -3595,9 +3591,9 @@ class OfficeSurveyWizard(QWidget):
         if not building:
             return
 
-        # Set search field value to building address
-        address = building.full_address_ar if hasattr(building, 'full_address_ar') and building.full_address_ar else f"رقم البناء - {building.building_id}"
-        self.unit_building_search.setText(address)
+        # Set building number label
+        building_id = building.building_id if hasattr(building, 'building_id') else "---"
+        self.unit_building_number.setText(f"رقم البناء: {building_id}")
 
         # Clear existing metrics
         while self.unit_building_metrics_layout.count():
@@ -3624,9 +3620,9 @@ class OfficeSurveyWizard(QWidget):
         if not building:
             return
 
-        # Set search field value to building address
-        address = building.full_address_ar if hasattr(building, 'full_address_ar') and building.full_address_ar else f"رقم البناء - {building.building_id}"
-        self.household_building_search.setText(address)
+        # Set building number label
+        building_id = building.building_id if hasattr(building, 'building_id') else "---"
+        self.household_building_number.setText(f"رقم البناء: {building_id}")
 
         # Clear existing metrics
         while self.household_building_metrics_layout.count():
