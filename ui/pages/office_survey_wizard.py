@@ -326,7 +326,7 @@ class PersonDialog(QDialog):
         # Title
         title = QLabel("تعديل بيانات الشخص" if self.editing_mode else "إضافة شخص جديد")
         title.setStyleSheet("font-size: 20px; font-weight: bold; color: #2c3e50;")
-        title.setAlignment(Qt.AlignRight)
+        #title.setAlignment(Qt.AlignRight)
         main_layout.addWidget(title)
 
         # Form Grid
@@ -339,12 +339,12 @@ class PersonDialog(QDialog):
         # Row 0: First Name | Last Name
         first_name_label = QLabel("الاسم الأول")
         first_name_label.setStyleSheet(label_style)
-        first_name_label.setAlignment(Qt.AlignRight)
+        #first_name_label.setAlignment(Qt.AlignRight)
         grid.addWidget(first_name_label, 0, 0)
 
         last_name_label = QLabel("الكنية")
         last_name_label.setStyleSheet(label_style)
-        last_name_label.setAlignment(Qt.AlignRight)
+        #last_name_label.setAlignment(Qt.AlignRight)
         grid.addWidget(last_name_label, 0, 1)
 
         self.first_name = QLineEdit()
@@ -360,12 +360,12 @@ class PersonDialog(QDialog):
         # Row 2: Mother Name | Father Name
         mother_name_label = QLabel("اسم الأم")
         mother_name_label.setStyleSheet(label_style)
-        mother_name_label.setAlignment(Qt.AlignRight)
+       # mother_name_label.setAlignment(Qt.AlignRight)
         grid.addWidget(mother_name_label, 2, 0)
 
         father_name_label = QLabel("اسم الأب")
         father_name_label.setStyleSheet(label_style)
-        father_name_label.setAlignment(Qt.AlignRight)
+       # father_name_label.setAlignment(Qt.AlignRight)
         grid.addWidget(father_name_label, 2, 1)
 
         self.mother_name = QLineEdit()
@@ -381,12 +381,12 @@ class PersonDialog(QDialog):
         # Row 4: Birth Date | ID Number
         birth_date_label = QLabel("تاريخ الميلاد")
         birth_date_label.setStyleSheet(label_style)
-        birth_date_label.setAlignment(Qt.AlignRight)
+       # birth_date_label.setAlignment(Qt.AlignRight)
         grid.addWidget(birth_date_label, 4, 0)
 
         national_id_label = QLabel("الرقم الوطني")
         national_id_label.setStyleSheet(label_style)
-        national_id_label.setAlignment(Qt.AlignRight)
+       # national_id_label.setAlignment(Qt.AlignRight)
         grid.addWidget(national_id_label, 4, 1)
 
         self.birth_date = QDateEdit()
@@ -431,12 +431,12 @@ class PersonDialog(QDialog):
         # Row 7: Email | Relationship
         email_label = QLabel("البريد الالكتروني")
         email_label.setStyleSheet(label_style)
-        email_label.setAlignment(Qt.AlignRight)
+      #  email_label.setAlignment(Qt.AlignRight)
         grid.addWidget(email_label, 7, 0)
 
         relationship_label = QLabel("علاقة الشخص بوحدة العقار")
         relationship_label.setStyleSheet(label_style)
-        relationship_label.setAlignment(Qt.AlignRight)
+       # relationship_label.setAlignment(Qt.AlignRight)
         grid.addWidget(relationship_label, 7, 1)
 
         self.email = QLineEdit()
@@ -463,12 +463,12 @@ class PersonDialog(QDialog):
         # Row 9: Phone | Mobile
         landline_label = QLabel("رقم الهاتف")
         landline_label.setStyleSheet(label_style)
-        landline_label.setAlignment(Qt.AlignRight)
+        #landline_label.setAlignment(Qt.AlignRight)
         grid.addWidget(landline_label, 9, 0)
 
         mobile_label = QLabel("رقم الموبايل")
         mobile_label.setStyleSheet(label_style)
-        mobile_label.setAlignment(Qt.AlignRight)
+       # mobile_label.setAlignment(Qt.AlignRight)
         grid.addWidget(mobile_label, 9, 1)
 
         self.landline = QLineEdit()
@@ -521,7 +521,7 @@ class PersonDialog(QDialog):
         upload_frame.setFixedHeight(100)
         upload_layout = QVBoxLayout(upload_frame)
         upload_label = QLabel("📄  ارفع صور المستندات")
-        upload_label.setAlignment(Qt.AlignCenter)
+        #upload_label.setAlignment(Qt.AlignCenter)
         upload_label.setStyleSheet("color: #4a90e2; background: transparent; font-size: 14px; font-weight: bold;")
         upload_layout.addWidget(upload_label)
         main_layout.addWidget(upload_frame)
