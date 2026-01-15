@@ -3670,73 +3670,177 @@ class OfficeSurveyWizard(QWidget):
     def _create_claim_step(self) -> QWidget:
         """Create Step 6: Claim Creation (S17-S18)."""
         widget = QWidget()
-        layout = QVBoxLayout(widget)
-        layout.setContentsMargins(16, 16, 16, 16)
-        layout.setSpacing(16)
-
-        # Auto-evaluation info (S17)
-        eval_frame = QFrame()
-        eval_frame.setStyleSheet(f"""
-            QFrame {{
-                background-color: #FEF3C7;
-                border: 1px solid #F59E0B;
-                border-radius: 8px;
-                padding: 16px;
-            }}
+        widget.setLayoutDirection(Qt.RightToLeft)
+        widget.setStyleSheet("""
+            QLabel {
+                color: #444;
+                font-weight: bold;
+                font-size: 13px;
+            }
+            QLineEdit, QComboBox, QDateEdit, QTextEdit {
+                background-color: #ffffff;
+                border: 1px solid #dcdfe6;
+                border-radius: 6px;
+                padding: 10px;
+                color: #606266;
+            }
+            QLineEdit:focus, QComboBox:focus, QTextEdit:focus {
+                border: 1px solid #409eff;
+            }
         """)
-        eval_layout = QVBoxLayout(eval_frame)
 
-        eval_title = QLabel("📋 تقييم العلاقات للمطالبة (S17)")
-        eval_title.setStyleSheet("font-weight: bold; font-size: 11pt;")
-        eval_layout.addWidget(eval_title)
+        main_layout = QVBoxLayout(widget)
+        main_layout.setContentsMargins(40, 20, 40, 40)
+        main_layout.setSpacing(10)
 
-        self.claim_eval_label = QLabel("")
-        self.claim_eval_label.setWordWrap(True)
-        eval_layout.addWidget(self.claim_eval_label)
+        # --- Header Section (Outside the Card) ---
+        header_layout = QHBoxLayout()
 
-        layout.addWidget(eval_frame)
+        title_vbox = QVBoxLayout()
+        title_lbl = QLabel("تسجيل الحالة")
+        title_lbl.setStyleSheet("font-size: 22px; color: #2c3e50; font-weight: bold;")
+        #title_lbl.setAlignment(Qt.AlignRight)
+        sub_lbl = QLabel("ربط المطالبين بالوحدات العقارية وتتبع مطالبات تسجيل حقوق الحيازة")
+        sub_lbl.setStyleSheet("font-weight: normal; color: #909399; font-size: 14px;")
+        sub_lbl.setAlignment(Qt.AlignRight)
+        title_vbox.addWidget(title_lbl)
+        title_vbox.addWidget(sub_lbl)
 
-        # Claim form (S18)
-        claim_group = QGroupBox("بيانات المطالبة")
-        claim_form = QFormLayout(claim_group)
-        claim_form.setSpacing(12)
+        icon_label = QLabel()
+        icon_label.setFixedSize(50, 50)
+        icon_label.setAlignment(Qt.AlignCenter)
+        icon_label.setStyleSheet("font-size: 24px; background: #ffffff; border-radius: 10px; border: 1px solid #ebeef5;")
+
+        header_layout.addWidget(icon_label)
+        header_layout.addLayout(title_vbox)
+        header_layout.addStretch()
+        main_layout.addLayout(header_layout)
+        main_layout.addSpacing(10)
+
+        # --- The Main Card (QFrame) ---
+        card = QFrame()
+        card.setStyleSheet("""
+            QFrame#ClaimCard {
+                background-color: white;
+                border-radius: 15px;
+                border: 1px solid #e4e7ed;
+            }
+        """)
+        card.setObjectName("ClaimCard")
+        card_layout = QVBoxLayout(card)
+        card_layout.setContentsMargins(25, 25, 25, 25)
+        card_layout.setSpacing(20)
+
+        # 1. Grid Layout for top fields (RTL order: right to left)
+        grid = QGridLayout()
+        grid.setSpacing(15)
+
+        # Ensure columns stretch to fill full width
+        for i in range(4):
+            grid.setColumnStretch(i, 1)
+
+        def add_field(label_text, field_widget, row, col):
+            v = QVBoxLayout()
+            lbl = QLabel(label_text)
+          #  lbl.setAlignment(Qt.AlignRight)
+            v.addWidget(lbl)
+            v.addWidget(field_widget)
+            grid.addLayout(v, row, col)
+
+        # Row 1 (RTL): معرف المطالب | معرف الوحدة المطالب بها | نوع الحالة | طبيعة الأعمال
+        self.claim_person_search = QLineEdit()
+        self.claim_person_search.setPlaceholderText("اسم الشخص")
+        add_field("معرف المطالب", self.claim_person_search, 0, 0)
+
+        self.claim_unit_search = QLineEdit()
+        self.claim_unit_search.setPlaceholderText("رقم الوحدة")
+        add_field("معرف الوحدة المطالب بها", self.claim_unit_search, 0, 1)
 
         self.claim_type_combo = QComboBox()
-        claim_types = [("ownership", "ملكية"), ("occupancy", "إشغال"), ("tenancy", "إيجار")]
-        for code, ar in claim_types:
-            self.claim_type_combo.addItem(ar, code)
-        claim_form.addRow("نوع المطالبة:", self.claim_type_combo)
+        self.claim_type_combo.addItem("اختر", "")
+        self.claim_type_combo.addItem("ملكية", "ownership")
+        self.claim_type_combo.addItem("إشغال", "occupancy")
+        self.claim_type_combo.addItem("إيجار", "tenancy")
+        add_field("نوع الحالة", self.claim_type_combo, 0, 2)
+
+        self.claim_business_nature = QComboBox()
+        self.claim_business_nature.addItem("اختر", "")
+        self.claim_business_nature.addItem("سكني", "residential")
+        self.claim_business_nature.addItem("تجاري", "commercial")
+        self.claim_business_nature.addItem("زراعي", "agricultural")
+        add_field("طبيعة الأعمال", self.claim_business_nature, 0, 3)
+
+        # Row 2 (RTL): حالة الحالة | المصدر | تاريخ المسح | الأولوية
+        self.claim_status_combo = QComboBox()
+        self.claim_status_combo.addItem("اختر", "")
+        self.claim_status_combo.addItem("جديد", "new")
+        self.claim_status_combo.addItem("قيد المراجعة", "under_review")
+        self.claim_status_combo.addItem("مكتمل", "completed")
+        self.claim_status_combo.addItem("معلق", "pending")
+        add_field("حالة الحالة", self.claim_status_combo, 1, 0)
+
+        self.claim_source_combo = QComboBox()
+        self.claim_source_combo.addItem("اختر", "")
+        self.claim_source_combo.addItem("مسح ميداني", "field_survey")
+        self.claim_source_combo.addItem("طلب مباشر", "direct_request")
+        self.claim_source_combo.addItem("إحالة", "referral")
+        add_field("المصدر", self.claim_source_combo, 1, 1)
+
+        self.claim_survey_date = QDateEdit()
+        self.claim_survey_date.setCalendarPopup(True)
+        self.claim_survey_date.setDisplayFormat("dd-MM-yyyy")
+        self.claim_survey_date.setDate(QDate.currentDate())
+        add_field("تاريخ المسح", self.claim_survey_date, 1, 2)
 
         self.claim_priority_combo = QComboBox()
-        priorities = [("low", "منخفض"), ("normal", "عادي"), ("high", "عالي"), ("urgent", "عاجل")]
-        for code, ar in priorities:
-            self.claim_priority_combo.addItem(ar, code)
-        self.claim_priority_combo.setCurrentIndex(1)
-        claim_form.addRow("الأولوية:", self.claim_priority_combo)
+        self.claim_priority_combo.addItem("اختر", "")
+        self.claim_priority_combo.addItem("منخفض", "low")
+        self.claim_priority_combo.addItem("عادي", "normal")
+        self.claim_priority_combo.addItem("عالي", "high")
+        self.claim_priority_combo.addItem("عاجل", "urgent")
+        self.claim_priority_combo.setCurrentIndex(2)  # Default to normal
+        add_field("الأولوية", self.claim_priority_combo, 1, 3)
 
+        card_layout.addLayout(grid)
+
+        # 2. Notes Section
+        notes_label = QLabel("ملاحظات المراجعة")
+       # notes_label.setAlignment(Qt.AlignRight)
+        card_layout.addWidget(notes_label)
         self.claim_notes = QTextEdit()
-        self.claim_notes.setMaximumHeight(100)
-        claim_form.addRow("ملاحظات:", self.claim_notes)
+        self.claim_notes.setPlaceholderText("ملاحظات إضافية")
+        self.claim_notes.setMinimumHeight(100)
+        self.claim_notes.setMaximumHeight(120)
+        card_layout.addWidget(self.claim_notes)
 
-        layout.addWidget(claim_group)
+        # 3. Next Action Date Section
+        next_date_label = QLabel("تاريخ الإجراء التالي")
+       # next_date_label.setAlignment(Qt.AlignRight)
+        card_layout.addWidget(next_date_label)
+        next_date_container = QHBoxLayout()
+        self.claim_next_action_date = QDateEdit()
+        self.claim_next_action_date.setCalendarPopup(True)
+        self.claim_next_action_date.setDisplayFormat("dd-MM-yyyy")
+        self.claim_next_action_date.setMinimumHeight(45)
+        next_date_container.addWidget(self.claim_next_action_date)
+        card_layout.addLayout(next_date_container)
 
-        # Create claim button
-        create_claim_btn = QPushButton("✅ إنشاء المطالبة")
-        create_claim_btn.setStyleSheet(f"""
-            QPushButton {{
-                background-color: {Config.SUCCESS_COLOR};
-                color: white;
-                border: none;
-                border-radius: 8px;
-                padding: 14px 28px;
-                font-size: 12pt;
-                font-weight: bold;
-            }}
+        # 4. Status Bar (Inside Card) - Evidence available indicator
+        self.claim_eval_label = QLabel("الأدلة متوفرة")
+        self.claim_eval_label.setAlignment(Qt.AlignCenter)
+        self.claim_eval_label.setFixedHeight(50)
+        self.claim_eval_label.setStyleSheet("""
+            background-color: #e1f7ef;
+            color: #10b981;
+            border-radius: 8px;
+            font-weight: bold;
+            font-size: 15px;
         """)
-        create_claim_btn.clicked.connect(self._create_claim)
-        layout.addWidget(create_claim_btn)
+        card_layout.addWidget(self.claim_eval_label)
 
-        layout.addStretch()
+        main_layout.addWidget(card)
+        main_layout.addStretch()
+
         return widget
 
     def _evaluate_for_claim(self):
@@ -3749,32 +3853,53 @@ class OfficeSurveyWizard(QWidget):
         # Count total evidences
         total_evidences = sum(len(r.get('evidences', [])) for r in self.context.relations)
 
-        eval_text = f"📊 تحليل العلاقات المسجلة:\n\n"
-        eval_text += f"• {len(owners)} مالك/شريك في الملكية\n"
-        eval_text += f"• {len(tenants)} مستأجر\n"
-        eval_text += f"• {len(occupants)} شاغل\n"
-        eval_text += f"• {len(heirs)} وارث\n"
-        eval_text += f"• {total_evidences} وثيقة داعمة\n\n"
+        # Auto-populate unit ID if available
+        if self.context.unit:
+            self.claim_unit_search.setText(str(self.context.unit.unit_id or ""))
 
-        # Calculate total ownership share
-        total_share = sum(r.get('ownership_share', 0) for r in owners)
+        # Auto-populate claimant name from first person
+        if self.context.persons:
+            first_person = self.context.persons[0]
+            full_name = f"{first_person.get('first_name', '')} {first_person.get('last_name', '')}"
+            self.claim_person_search.setText(full_name.strip())
 
-        if owners:
-            eval_text += f"✅ يمكن إنشاء مطالبة ملكية (الحصة الإجمالية: {total_share}/2400)"
-            self.claim_type_combo.setCurrentIndex(0)
-        elif heirs:
-            eval_text += "✅ يمكن إنشاء مطالبة ملكية (إرث)"
-            self.claim_type_combo.setCurrentIndex(0)
+        # Auto-select claim type based on relations
+        if owners or heirs:
+            # Find index for "ownership"
+            for i in range(self.claim_type_combo.count()):
+                if self.claim_type_combo.itemData(i) == "ownership":
+                    self.claim_type_combo.setCurrentIndex(i)
+                    break
         elif tenants:
-            eval_text += "✅ يمكن إنشاء مطالبة إيجار"
-            self.claim_type_combo.setCurrentIndex(2)
+            for i in range(self.claim_type_combo.count()):
+                if self.claim_type_combo.itemData(i) == "tenancy":
+                    self.claim_type_combo.setCurrentIndex(i)
+                    break
         elif occupants:
-            eval_text += "✅ يمكن إنشاء مطالبة إشغال"
-            self.claim_type_combo.setCurrentIndex(1)
-        else:
-            eval_text += "⚠️ لم يتم تحديد علاقات - يمكن المتابعة يدوياً"
+            for i in range(self.claim_type_combo.count()):
+                if self.claim_type_combo.itemData(i) == "occupancy":
+                    self.claim_type_combo.setCurrentIndex(i)
+                    break
 
-        self.claim_eval_label.setText(eval_text)
+        # Update status bar based on evidence availability
+        if total_evidences > 0:
+            self.claim_eval_label.setText(f"الأدلة متوفرة ({total_evidences})")
+            self.claim_eval_label.setStyleSheet("""
+                background-color: #e1f7ef;
+                color: #10b981;
+                border-radius: 8px;
+                font-weight: bold;
+                font-size: 15px;
+            """)
+        else:
+            self.claim_eval_label.setText("لا توجد أدلة مرفقة")
+            self.claim_eval_label.setStyleSheet("""
+                background-color: #fef3c7;
+                color: #f59e0b;
+                border-radius: 8px;
+                font-weight: bold;
+                font-size: 15px;
+            """)
 
     def _create_claim(self):
         """Create the claim (S18)."""
@@ -3792,9 +3917,13 @@ class OfficeSurveyWizard(QWidget):
         self.context.claim_data = {
             "claim_type": self.claim_type_combo.currentData(),
             "priority": self.claim_priority_combo.currentData(),
+            "business_nature": self.claim_business_nature.currentData() if hasattr(self, 'claim_business_nature') else None,
+            "source": self.claim_source_combo.currentData() if hasattr(self, 'claim_source_combo') else "OFFICE_SUBMISSION",
+            "case_status": self.claim_status_combo.currentData() if hasattr(self, 'claim_status_combo') else "new",
+            "survey_date": self.claim_survey_date.date().toString("yyyy-MM-dd") if hasattr(self, 'claim_survey_date') else None,
+            "next_action_date": self.claim_next_action_date.date().toString("yyyy-MM-dd") if hasattr(self, 'claim_next_action_date') else None,
             "notes": self.claim_notes.toPlainText().strip(),
             "status": "draft",
-            "source": "OFFICE_SUBMISSION",
             "claimant_person_ids": claimant_ids,
             "evidence_ids": [e['evidence_id'] for e in all_evidences],
             "unit_id": self.context.unit.unit_id if self.context.unit else None,
