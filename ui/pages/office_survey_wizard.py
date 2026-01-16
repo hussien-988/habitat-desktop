@@ -3158,6 +3158,10 @@ class OfficeSurveyWizard(QWidget):
             person_card = self._create_person_row_card(person, idx)
             self.persons_table_layout.insertWidget(idx, person_card)
 
+        # Enable next button if there are persons
+        if self.current_step == self.STEP_PERSONS:
+            self.next_btn.setEnabled(len(self.context.persons) > 0)
+
     def _view_person(self, person_id: str):
         """Show dialog to view/edit person data."""
         person_data = None
