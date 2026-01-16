@@ -27,7 +27,7 @@ from PyQt5.QtWidgets import (
     QDialog, QFileDialog, QDateEdit, QCheckBox,
     QGraphicsDropShadowEffect, QRadioButton, QButtonGroup,
     QTabWidget, QGridLayout, QSizePolicy, QToolButton, QLayout,
-    QMenu, QDoubleSpinBox
+    QMenu, QDoubleSpinBox, QSpacerItem
 )
 from PyQt5.QtGui import QIcon
 from PyQt5.QtCore import Qt, pyqtSignal, QDate
@@ -2922,51 +2922,61 @@ class OfficeSurveyWizard(QWidget):
     def _create_persons_step(self) -> QWidget:
         """Create Step 4: Person Registration with Edit support (S11-S13)."""
         widget = QWidget()
+        widget.setStyleSheet("background-color: #F8FAFC;")
         layout = QVBoxLayout(widget)
-        layout.setContentsMargins(16, 16, 16, 16)
+        layout.setContentsMargins(50, 50, 50, 50)
         layout.setSpacing(16)
 
-        # Persons table container
+        # Main Card Container
         table_frame = QFrame()
-        table_frame.setMinimumWidth(800)  # Set minimum width for wider display
         table_frame.setStyleSheet("""
             QFrame {
                 background-color: white;
-                border: 1px solid #E5E7EB;
-                border-radius: 8px;
+                border-radius: 12px;
+                border: 1px solid #E2E8F0;
             }
         """)
         table_layout = QVBoxLayout(table_frame)
         table_layout.setContentsMargins(20, 20, 20, 20)
-        table_layout.setSpacing(12)
+        table_layout.setSpacing(10)
 
-        # Header with title and add button
+        # Header with "Add Person" Button and Title (RTL layout)
         persons_header = QHBoxLayout()
 
-        persons_label = QLabel("بيانات الأشخاص")
-        persons_label.setStyleSheet("font-weight: 700; font-size: 13px; color: #1F2937;")
-        persons_header.addWidget(persons_label)
-        persons_header.addStretch()
-
-        add_person_btn = QPushButton("+ إضافة شخص جديد")
-        add_person_btn.setStyleSheet(f"""
-            QPushButton {{
-                background-color: {Config.PRIMARY_COLOR};
-                color: white;
-                border: none;
+        # Add button on the left
+        add_person_btn = QPushButton("+ اضافة شخص جديد")
+        add_person_btn.setStyleSheet("""
+            QPushButton {
+                background-color: white;
+                color: #3182CE;
+                border: 1px solid #3182CE;
                 border-radius: 6px;
                 padding: 8px 16px;
-                font-size: 12px;
-                font-weight: 600;
-            }}
-            QPushButton:hover {{
-                background-color: #0056A3;
-            }}
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #EBF8FF;
+            }
         """)
         add_person_btn.clicked.connect(self._add_person)
+
+        # Title on the right
+        title_vbox = QVBoxLayout()
+        title_label = QLabel("بيانات الأشخاص")
+        title_label.setStyleSheet("font-weight: bold; font-size: 16px; border: none; color: #1A202C;")
+        title_label.setAlignment(Qt.AlignRight)
+        subtitle_label = QLabel("قائمة الأشخاص المسجلين")
+        subtitle_label.setStyleSheet("color: #A0AEC0; font-size: 12px; border: none;")
+        subtitle_label.setAlignment(Qt.AlignRight)
+        title_vbox.addWidget(title_label)
+        title_vbox.addWidget(subtitle_label)
+
         persons_header.addWidget(add_person_btn)
+        persons_header.addStretch()
+        persons_header.addLayout(title_vbox)
 
         table_layout.addLayout(persons_header)
+        table_layout.addSpacing(10)
 
         # Scroll area for person cards
         scroll_area = QScrollArea()
@@ -2979,8 +2989,9 @@ class OfficeSurveyWizard(QWidget):
         """)
 
         scroll_widget = QWidget()
+        scroll_widget.setStyleSheet("background-color: transparent;")
         self.persons_table_layout = QVBoxLayout(scroll_widget)
-        self.persons_table_layout.setSpacing(0)
+        self.persons_table_layout.setSpacing(10)
         self.persons_table_layout.setContentsMargins(0, 0, 0, 0)
         self.persons_table_layout.addStretch()
 
@@ -3008,80 +3019,33 @@ class OfficeSurveyWizard(QWidget):
             Toast.show_toast(self, "تم إضافة الشخص بنجاح", Toast.SUCCESS)
 
     def _create_person_row_card(self, person: dict, index: int = 0) -> QFrame:
-        """Create a person row card matching the photo layout."""
+        """Create a person row card matching the new design layout."""
         card = QFrame()
-        card.setMinimumHeight(70)  # Set minimum height for taller rows
+        card.setFixedHeight(80)
         card.setStyleSheet("""
             QFrame {
-                background-color: #F9FAFB;
-                border: 1px solid #E5E7EB;
+                background-color: #FFFFFF;
+                border: 1px solid #F0F0F0;
                 border-radius: 8px;
             }
-            QFrame:hover {
-                background-color: #F3F4F6;
-            }
         """)
 
+        # Main row layout
         card_layout = QHBoxLayout(card)
-        card_layout.setContentsMargins(24, 16, 24, 16)
-        card_layout.setSpacing(16)
+        card_layout.setContentsMargins(15, 0, 15, 0)
 
-        # Right side: Person info (add first so it appears on the right)
-        info_container = QWidget()
-        info_layout = QVBoxLayout(info_container)
-        info_layout.setContentsMargins(0, 0, 0, 0)
-        info_layout.setSpacing(4)
-
-        # Person name with icon
-        full_name = f"{person['first_name']} {person.get('father_name', '')} {person['last_name']}".strip()
-        name_label = QLabel(f"👤 {full_name}")
-        name_label.setStyleSheet("""
-            font-size: 14px;
-            font-weight: 700;
-            color: #111827;
-        """)
-        name_label.setAlignment(Qt.AlignRight)
-        info_layout.addWidget(name_label)
-
-        # Person role/status - use relationship_type if available
-        rel_type_map = {
-            "owner": "مالك",
-            "tenant": "مستأجر",
-            "occupant": "ساكن",
-            "co_owner": "شريك في الملكية",
-            "heir": "وارث",
-            "guardian": "ولي/وصي",
-            "other": "أخرى"
-        }
-        role_text = rel_type_map.get(person.get('relationship_type'), "ساكن")
-        role_label = QLabel(role_text)
-        role_label.setStyleSheet("""
-            font-size: 12px;
-            color: #6B7280;
-        """)
-        role_label.setAlignment(Qt.AlignRight)
-        info_layout.addWidget(role_label)
-
-        card_layout.addWidget(info_container, 1)
-
-        # Left side: Action buttons (add second so it appears on the left)
-        actions_container = QWidget()
-        actions_layout = QHBoxLayout(actions_container)
-        actions_layout.setContentsMargins(0, 0, 0, 0)
-        actions_layout.setSpacing(8)
-
-        # Three dots menu button
-        menu_btn = QPushButton("⋯")
+        # 1. Left Side: Menu Button
+        menu_btn = QPushButton("•••")
+        menu_btn.setFixedWidth(40)
         menu_btn.setStyleSheet("""
             QPushButton {
-                background-color: transparent;
                 border: none;
-                color: #6B7280;
-                font-size: 24px;
-                padding: 4px 8px;
+                color: #A0A0A0;
+                font-size: 18px;
+                background: transparent;
             }
             QPushButton:hover {
-                color: #111827;
+                color: #333333;
             }
         """)
         menu_btn.setCursor(Qt.PointingHandCursor)
@@ -3105,19 +3069,73 @@ class OfficeSurveyWizard(QWidget):
         """)
 
         # View action
-        view_action = menu.addAction("👁 عرض")
-        view_action.triggered.connect(lambda: self._view_person(person['person_id']))
+        view_action = menu.addAction("عرض")
+        view_action.triggered.connect(lambda _, pid=person['person_id']: self._view_person(pid))
 
         # Delete action
-        delete_action = menu.addAction("🗑 حذف")
-        delete_action.triggered.connect(lambda: self._delete_person_by_id(person['person_id']))
+        delete_action = menu.addAction("حذف")
+        delete_action.triggered.connect(lambda _, pid=person['person_id']: self._delete_person_by_id(pid))
 
-        menu_btn.setMenu(menu)
         menu_btn.clicked.connect(lambda: menu.exec_(menu_btn.mapToGlobal(menu_btn.rect().bottomLeft())))
 
-        actions_layout.addWidget(menu_btn)
+        # 2. Spacer: Pushes content to the edges
+        spacer = QSpacerItem(40, 20, QSizePolicy.Expanding, QSizePolicy.Minimum)
 
-        card_layout.addWidget(actions_container)
+        # 3. Right Side Group: Text and Icon
+        right_group = QHBoxLayout()
+        right_group.setSpacing(12)
+
+        # Text Container (Name and Role)
+        text_vbox = QVBoxLayout()
+        text_vbox.setSpacing(2)
+
+        # Person name
+        full_name = f"{person['first_name']} {person.get('father_name', '')} {person['last_name']}".strip()
+        name_lbl = QLabel(full_name)
+        name_lbl.setStyleSheet("font-weight: bold; color: #333333; font-size: 14px; border: none;")
+        name_lbl.setAlignment(Qt.AlignRight)
+
+        # Person role/status
+        rel_type_map = {
+            "owner": "مالك",
+            "tenant": "مستأجر",
+            "occupant": "ساكن",
+            "co_owner": "شريك في الملكية",
+            "heir": "وارث",
+            "guardian": "ولي/وصي",
+            "other": "أخرى"
+        }
+        role_text = rel_type_map.get(person.get('relationship_type'), "ساكن")
+        role_lbl = QLabel(role_text)
+        role_lbl.setStyleSheet("color: #8C8C8C; font-size: 12px; border: none;")
+        role_lbl.setAlignment(Qt.AlignRight)
+
+        text_vbox.addWidget(name_lbl)
+        text_vbox.addWidget(role_lbl)
+
+        # Icon
+        icon_lbl = QLabel()
+        icon_lbl.setFixedSize(36, 36)
+        icon_lbl.setAlignment(Qt.AlignCenter)
+        icon_lbl.setStyleSheet("""
+            QLabel {
+                background-color: #F4F8FF;
+                color: #3182CE;
+                border-radius: 18px;
+                font-size: 16px;
+                border: none;
+            }
+        """)
+        icon_lbl.setText("👤")
+
+        # Assemble the Right Group
+        right_group.addLayout(text_vbox)
+        right_group.addWidget(icon_lbl)
+
+        # Add all to main layout
+        card_layout.addWidget(menu_btn)      # Appears Left
+        card_layout.addSpacerItem(spacer)    # Middle Gap
+        card_layout.addLayout(right_group)   # Appears Right
 
         return card
 
