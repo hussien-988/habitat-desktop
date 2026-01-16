@@ -27,7 +27,7 @@ from PyQt5.QtWidgets import (
     QDialog, QFileDialog, QDateEdit, QCheckBox,
     QGraphicsDropShadowEffect, QRadioButton, QButtonGroup,
     QTabWidget, QGridLayout, QSizePolicy, QToolButton, QLayout,
-    QMenu, QDoubleSpinBox
+    QMenu, QDoubleSpinBox, QSpacerItem
 )
 from PyQt5.QtGui import QIcon
 from PyQt5.QtCore import Qt, pyqtSignal, QDate
@@ -2922,51 +2922,64 @@ class OfficeSurveyWizard(QWidget):
     def _create_persons_step(self) -> QWidget:
         """Create Step 4: Person Registration with Edit support (S11-S13)."""
         widget = QWidget()
+        widget.setLayoutDirection(Qt.RightToLeft)
+        widget.setStyleSheet("background-color: #F8FAFC;")
         layout = QVBoxLayout(widget)
-        layout.setContentsMargins(16, 16, 16, 16)
+        layout.setContentsMargins(50, 30, 50, 30)
         layout.setSpacing(16)
 
-        # Persons table container
+        # Main Card Container
         table_frame = QFrame()
-        table_frame.setMinimumWidth(800)  # Set minimum width for wider display
+        table_frame.setLayoutDirection(Qt.RightToLeft)
         table_frame.setStyleSheet("""
             QFrame {
                 background-color: white;
-                border: 1px solid #E5E7EB;
-                border-radius: 8px;
+                border-radius: 12px;
+                border: 1px solid #E2E8F0;
             }
         """)
         table_layout = QVBoxLayout(table_frame)
         table_layout.setContentsMargins(20, 20, 20, 20)
-        table_layout.setSpacing(12)
+        table_layout.setSpacing(10)
 
-        # Header with title and add button
+        # Header with Title on right and Add Button on left (RTL layout)
         persons_header = QHBoxLayout()
 
-        persons_label = QLabel("بيانات الأشخاص")
-        persons_label.setStyleSheet("font-weight: 700; font-size: 13px; color: #1F2937;")
-        persons_header.addWidget(persons_label)
-        persons_header.addStretch()
+        # Title on the right (appears first in RTL)
+        title_vbox = QVBoxLayout()
+        title_label = QLabel("بيانات الأشخاص")
+        title_label.setStyleSheet("font-weight: bold; font-size: 16px; border: none; color: #1A202C;")
+        title_label.setAlignment(Qt.AlignRight)
+        subtitle_label = QLabel("قائمة الأشخاص المسجلين")
+        subtitle_label.setStyleSheet("color: #A0AEC0; font-size: 12px; border: none;")
+        subtitle_label.setAlignment(Qt.AlignRight)
+        title_vbox.addWidget(title_label)
+        title_vbox.addWidget(subtitle_label)
 
-        add_person_btn = QPushButton("+ إضافة شخص جديد")
-        add_person_btn.setStyleSheet(f"""
-            QPushButton {{
-                background-color: {Config.PRIMARY_COLOR};
-                color: white;
-                border: none;
+        # Add button on the left (appears last in RTL)
+        add_person_btn = QPushButton("+ اضافة شخص جديد")
+        add_person_btn.setLayoutDirection(Qt.RightToLeft)
+        add_person_btn.setStyleSheet("""
+            QPushButton {
+                background-color: white;
+                color: #3182CE;
+                border: 1px solid #3182CE;
                 border-radius: 6px;
                 padding: 8px 16px;
-                font-size: 12px;
-                font-weight: 600;
-            }}
-            QPushButton:hover {{
-                background-color: #0056A3;
-            }}
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #EBF8FF;
+            }
         """)
         add_person_btn.clicked.connect(self._add_person)
+
+        persons_header.addLayout(title_vbox)
+        persons_header.addStretch()
         persons_header.addWidget(add_person_btn)
 
         table_layout.addLayout(persons_header)
+        table_layout.addSpacing(10)
 
         # Scroll area for person cards
         scroll_area = QScrollArea()
@@ -2979,8 +2992,10 @@ class OfficeSurveyWizard(QWidget):
         """)
 
         scroll_widget = QWidget()
+        scroll_widget.setLayoutDirection(Qt.RightToLeft)
+        scroll_widget.setStyleSheet("background-color: transparent;")
         self.persons_table_layout = QVBoxLayout(scroll_widget)
-        self.persons_table_layout.setSpacing(0)
+        self.persons_table_layout.setSpacing(10)
         self.persons_table_layout.setContentsMargins(0, 0, 0, 0)
         self.persons_table_layout.addStretch()
 
@@ -3008,42 +3023,52 @@ class OfficeSurveyWizard(QWidget):
             Toast.show_toast(self, "تم إضافة الشخص بنجاح", Toast.SUCCESS)
 
     def _create_person_row_card(self, person: dict, index: int = 0) -> QFrame:
-        """Create a person row card matching the photo layout."""
+        """Create a person row card matching the new design layout."""
         card = QFrame()
-        card.setMinimumHeight(70)  # Set minimum height for taller rows
+        card.setLayoutDirection(Qt.RightToLeft)
+        card.setFixedHeight(80)
         card.setStyleSheet("""
             QFrame {
-                background-color: #F9FAFB;
-                border: 1px solid #E5E7EB;
+                background-color: #FFFFFF;
+                border: 1px solid #F0F0F0;
                 border-radius: 8px;
             }
-            QFrame:hover {
-                background-color: #F3F4F6;
+        """)
+
+        # Main row layout (RTL: items added left-to-right appear right-to-left)
+        card_layout = QHBoxLayout(card)
+        card_layout.setContentsMargins(15, 0, 15, 0)
+
+        # 1. Right Side Group: Icon and Text (appears on right in RTL)
+        right_group = QHBoxLayout()
+        right_group.setSpacing(12)
+
+        # Icon
+        icon_lbl = QLabel()
+        icon_lbl.setFixedSize(36, 36)
+        icon_lbl.setAlignment(Qt.AlignCenter)
+        icon_lbl.setStyleSheet("""
+            QLabel {
+                background-color: #F4F8FF;
+                color: #3182CE;
+                border-radius: 18px;
+                font-size: 16px;
+                border: none;
             }
         """)
+        icon_lbl.setText("👤")
 
-        card_layout = QHBoxLayout(card)
-        card_layout.setContentsMargins(24, 16, 24, 16)
-        card_layout.setSpacing(16)
+        # Text Container (Name and Role)
+        text_vbox = QVBoxLayout()
+        text_vbox.setSpacing(2)
 
-        # Right side: Person info (add first so it appears on the right)
-        info_container = QWidget()
-        info_layout = QVBoxLayout(info_container)
-        info_layout.setContentsMargins(0, 0, 0, 0)
-        info_layout.setSpacing(4)
-
-        # Person name with icon
+        # Person name
         full_name = f"{person['first_name']} {person.get('father_name', '')} {person['last_name']}".strip()
-        name_label = QLabel(f"👤 {full_name}")
-        name_label.setStyleSheet("""
-            font-size: 14px;
-            font-weight: 700;
-            color: #111827;
-        """)
-        name_label.setAlignment(Qt.AlignRight)
-        info_layout.addWidget(name_label)
+        name_lbl = QLabel(full_name)
+        name_lbl.setStyleSheet("font-weight: bold; color: #333333; font-size: 14px; border: none;")
+        name_lbl.setAlignment(Qt.AlignRight)
 
-        # Person role/status - use relationship_type if available
+        # Person role/status
         rel_type_map = {
             "owner": "مالك",
             "tenant": "مستأجر",
@@ -3054,40 +3079,39 @@ class OfficeSurveyWizard(QWidget):
             "other": "أخرى"
         }
         role_text = rel_type_map.get(person.get('relationship_type'), "ساكن")
-        role_label = QLabel(role_text)
-        role_label.setStyleSheet("""
-            font-size: 12px;
-            color: #6B7280;
-        """)
-        role_label.setAlignment(Qt.AlignRight)
-        info_layout.addWidget(role_label)
+        role_lbl = QLabel(role_text)
+        role_lbl.setStyleSheet("color: #8C8C8C; font-size: 12px; border: none;")
+        role_lbl.setAlignment(Qt.AlignRight)
 
-        card_layout.addWidget(info_container, 1)
+        text_vbox.addWidget(name_lbl)
+        text_vbox.addWidget(role_lbl)
 
-        # Left side: Action buttons (add second so it appears on the left)
-        actions_container = QWidget()
-        actions_layout = QHBoxLayout(actions_container)
-        actions_layout.setContentsMargins(0, 0, 0, 0)
-        actions_layout.setSpacing(8)
+        # Assemble the Right Group (Icon first, then text in RTL)
+        right_group.addWidget(icon_lbl)
+        right_group.addLayout(text_vbox)
 
-        # Three dots menu button
-        menu_btn = QPushButton("⋯")
+        # 2. Spacer: Pushes content to the edges
+        spacer = QSpacerItem(40, 20, QSizePolicy.Expanding, QSizePolicy.Minimum)
+
+        # 3. Left Side: Menu Button (appears on left in RTL)
+        menu_btn = QPushButton("•••")
+        menu_btn.setFixedWidth(40)
         menu_btn.setStyleSheet("""
             QPushButton {
-                background-color: transparent;
                 border: none;
-                color: #6B7280;
-                font-size: 24px;
-                padding: 4px 8px;
+                color: #A0A0A0;
+                font-size: 18px;
+                background: transparent;
             }
             QPushButton:hover {
-                color: #111827;
+                color: #333333;
             }
         """)
         menu_btn.setCursor(Qt.PointingHandCursor)
 
         # Create context menu
         menu = QMenu(menu_btn)
+        menu.setLayoutDirection(Qt.RightToLeft)
         menu.setStyleSheet("""
             QMenu {
                 background-color: white;
@@ -3104,20 +3128,20 @@ class OfficeSurveyWizard(QWidget):
             }
         """)
 
-        # View action
+        # View action with icon
         view_action = menu.addAction("👁 عرض")
-        view_action.triggered.connect(lambda: self._view_person(person['person_id']))
+        view_action.triggered.connect(lambda _, pid=person['person_id']: self._view_person(pid))
 
-        # Delete action
+        # Delete action with icon
         delete_action = menu.addAction("🗑 حذف")
-        delete_action.triggered.connect(lambda: self._delete_person_by_id(person['person_id']))
+        delete_action.triggered.connect(lambda _, pid=person['person_id']: self._delete_person_by_id(pid))
 
-        menu_btn.setMenu(menu)
-        menu_btn.clicked.connect(lambda: menu.exec_(menu_btn.mapToGlobal(menu_btn.rect().bottomLeft())))
+        menu_btn.clicked.connect(lambda: menu.exec_(menu_btn.mapToGlobal(menu_btn.rect().bottomRight())))
 
-        actions_layout.addWidget(menu_btn)
-
-        card_layout.addWidget(actions_container)
+        # Add all to main layout (RTL order)
+        card_layout.addLayout(right_group)   # Appears Right
+        card_layout.addSpacerItem(spacer)    # Middle Gap
+        card_layout.addWidget(menu_btn)      # Appears Left
 
         return card
 
@@ -3133,6 +3157,10 @@ class OfficeSurveyWizard(QWidget):
         for idx, person in enumerate(self.context.persons):
             person_card = self._create_person_row_card(person, idx)
             self.persons_table_layout.insertWidget(idx, person_card)
+
+        # Enable next button if there are persons
+        if self.current_step == self.STEP_PERSONS:
+            self.next_btn.setEnabled(len(self.context.persons) > 0)
 
     def _view_person(self, person_id: str):
         """Show dialog to view/edit person data."""
@@ -3901,8 +3929,8 @@ class OfficeSurveyWizard(QWidget):
                 font-size: 15px;
             """)
 
-    def _create_claim(self):
-        """Create the claim (S18)."""
+    def _save_claim_data(self):
+        """Save claim data from the form to context (auto-save on navigation)."""
         # Collect all claimant person IDs
         claimant_ids = [r['person_id'] for r in self.context.relations
                         if r['relation_type'] in ('owner', 'co_owner', 'heir')]
@@ -3930,6 +3958,9 @@ class OfficeSurveyWizard(QWidget):
             "building_id": self.context.building.building_id if self.context.building else None
         }
 
+    def _create_claim(self):
+        """Create the claim (S18) - legacy method, now uses _save_claim_data."""
+        self._save_claim_data()
         Toast.show_toast(self, "تم إعداد المطالبة - انتقل للمراجعة النهائية", Toast.SUCCESS)
         self.next_btn.setEnabled(True)
 
@@ -3938,19 +3969,39 @@ class OfficeSurveyWizard(QWidget):
     def _create_review_step(self) -> QWidget:
         """Create Step 7: Final Review with full validation (S19-S21)."""
         widget = QWidget()
-        layout = QVBoxLayout(widget)
-        layout.setContentsMargins(16, 16, 16, 16)
-        layout.setSpacing(12)
+        widget.setLayoutDirection(Qt.RightToLeft)
+        widget.setStyleSheet("""
+            QLabel {
+                color: #444;
+                font-size: 13px;
+            }
+            QLineEdit, QComboBox, QDateEdit, QTextEdit {
+                background-color: #f9fafb;
+                border: 1px solid #dcdfe6;
+                border-radius: 6px;
+                padding: 10px;
+                color: #606266;
+            }
+        """)
 
-        # Title
-        header = QHBoxLayout()
-        review_title = QLabel("📋 المراجعة النهائية")
-        review_title.setStyleSheet("font-size: 16pt; font-weight: bold;")
-        header.addWidget(review_title)
+        main_layout = QVBoxLayout(widget)
+        main_layout.setContentsMargins(40, 20, 40, 40)
+        main_layout.setSpacing(15)
 
-        header.addStretch()
+        # --- Header Section ---
+        header_layout = QHBoxLayout()
 
-        # Reference number
+        title_vbox = QVBoxLayout()
+        title_lbl = QLabel("المراجعة النهائية")
+        title_lbl.setStyleSheet("font-size: 22px; color: #2c3e50; font-weight: bold;")
+        title_lbl.setAlignment(Qt.AlignRight)
+        sub_lbl = QLabel("مراجعة جميع البيانات المدخلة قبل الإرسال")
+        sub_lbl.setStyleSheet("font-weight: normal; color: #909399; font-size: 14px;")
+        sub_lbl.setAlignment(Qt.AlignRight)
+        title_vbox.addWidget(title_lbl)
+        title_vbox.addWidget(sub_lbl)
+
+        # Reference number badge
         self.review_ref_label = QLabel("")
         self.review_ref_label.setStyleSheet(f"""
             background-color: {Config.SUCCESS_COLOR};
@@ -3959,11 +4010,13 @@ class OfficeSurveyWizard(QWidget):
             border-radius: 8px;
             font-weight: bold;
         """)
-        header.addWidget(self.review_ref_label)
 
-        layout.addLayout(header)
+        header_layout.addWidget(self.review_ref_label)
+        header_layout.addStretch()
+        header_layout.addLayout(title_vbox)
+        main_layout.addLayout(header_layout)
 
-        # Validation status (S20 - full validation)
+        # --- Validation Status Frame ---
         self.validation_frame = QFrame()
         self.validation_frame.setStyleSheet("""
             QFrame { border-radius: 8px; padding: 12px; }
@@ -3971,48 +4024,45 @@ class OfficeSurveyWizard(QWidget):
         val_layout = QVBoxLayout(self.validation_frame)
         self.validation_label = QLabel("")
         self.validation_label.setWordWrap(True)
+        self.validation_label.setAlignment(Qt.AlignRight)
         val_layout.addWidget(self.validation_label)
-        layout.addWidget(self.validation_frame)
+        main_layout.addWidget(self.validation_frame)
 
-        # Scroll area for review content
+        # --- Scroll Area for Review Cards ---
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
-        scroll.setStyleSheet("QScrollArea { border: none; }")
+        scroll.setStyleSheet("QScrollArea { border: none; background: transparent; }")
 
         review_content = QWidget()
         review_layout = QVBoxLayout(review_content)
-        review_layout.setSpacing(12)
+        review_layout.setSpacing(20)
 
-        # Building section
-        self.review_building = self._create_review_section("🏢 المبنى", "")
-        review_layout.addWidget(self.review_building)
+        # Card 1: Unit Information (Step 2)
+        self.review_unit_card = self._create_review_card("الوحدة العقارية", "step2")
+        review_layout.addWidget(self.review_unit_card)
 
-        # Unit section
-        self.review_unit = self._create_review_section("🏠 الوحدة العقارية", "")
-        review_layout.addWidget(self.review_unit)
+        # Card 2: Household Information (Step 3)
+        self.review_household_card = self._create_review_card("الأسرة والإشغال", "step3")
+        review_layout.addWidget(self.review_household_card)
 
-        # Household section
-        self.review_household = self._create_review_section("👨‍👩‍👧‍👦 الأسر", "")
-        review_layout.addWidget(self.review_household)
+        # Card 3: Persons Information (Step 4)
+        self.review_persons_card = self._create_review_card("الأشخاص المسجلين", "step4")
+        review_layout.addWidget(self.review_persons_card)
 
-        # Persons section
-        self.review_persons = self._create_review_section("👤 الأشخاص", "")
-        review_layout.addWidget(self.review_persons)
+        # Card 4: Relations Information (Step 5)
+        self.review_relations_card = self._create_review_card("العلاقات والأدلة", "step5")
+        review_layout.addWidget(self.review_relations_card)
 
-        # Relations section
-        self.review_relations = self._create_review_section("🔗 العلاقات والأدلة", "")
-        review_layout.addWidget(self.review_relations)
-
-        # Claim section
-        self.review_claim = self._create_review_section("📄 المطالبة", "")
-        review_layout.addWidget(self.review_claim)
+        # Card 5: Claim Information (Step 6)
+        self.review_claim_card = self._create_review_card("تسجيل الحالة", "step6")
+        review_layout.addWidget(self.review_claim_card)
 
         review_layout.addStretch()
         scroll.setWidget(review_content)
-        layout.addWidget(scroll)
+        main_layout.addWidget(scroll)
 
-        # Final submit button
-        submit_btn = QPushButton("✅ تأكيد وإنهاء المسح")
+        # --- Final Submit Button ---
+        submit_btn = QPushButton("تأكيد وإنهاء المسح")
         submit_btn.setStyleSheet(f"""
             QPushButton {{
                 background-color: {Config.SUCCESS_COLOR};
@@ -4028,12 +4078,76 @@ class OfficeSurveyWizard(QWidget):
             }}
         """)
         submit_btn.clicked.connect(self._finalize_survey)
-        layout.addWidget(submit_btn)
+        main_layout.addWidget(submit_btn)
 
         return widget
 
+    def _create_review_card(self, title: str, step_id: str) -> QFrame:
+        """Create a review card matching the style of other steps."""
+        card = QFrame()
+        card.setObjectName(f"review_card_{step_id}")
+        card.setLayoutDirection(Qt.RightToLeft)
+        card.setStyleSheet("""
+            QFrame {
+                background-color: white;
+                border-radius: 15px;
+                border: 1px solid #e4e7ed;
+            }
+        """)
+        card_layout = QVBoxLayout(card)
+        card_layout.setContentsMargins(25, 20, 25, 20)
+        card_layout.setSpacing(15)
+
+        # Card Header
+        header_layout = QHBoxLayout()
+        title_label = QLabel(title)
+        title_label.setStyleSheet("font-size: 16px; color: #2c3e50; font-weight: bold;")
+        title_label.setAlignment(Qt.AlignRight)
+        header_layout.addWidget(title_label)
+        header_layout.addStretch()
+        card_layout.addLayout(header_layout)
+
+        # Content Grid (will be populated dynamically)
+        content_widget = QWidget()
+        content_widget.setObjectName(f"content_{step_id}")
+        content_widget.setLayoutDirection(Qt.RightToLeft)
+        content_layout = QGridLayout(content_widget)
+        content_layout.setSpacing(15)
+        for i in range(4):
+            content_layout.setColumnStretch(i, 1)
+        card_layout.addWidget(content_widget)
+
+        return card
+
+    def _create_review_field(self, label_text: str, value_text: str) -> QVBoxLayout:
+        """Create a read-only field for review display."""
+        v = QVBoxLayout()
+        lbl = QLabel(label_text)
+        lbl.setStyleSheet("font-weight: bold; color: #444; font-size: 12px;")
+        lbl.setAlignment(Qt.AlignRight)
+        lbl.setLayoutDirection(Qt.RightToLeft)
+
+        value = QLineEdit(value_text)
+        value.setReadOnly(True)
+        value.setAlignment(Qt.AlignRight)
+        value.setLayoutDirection(Qt.RightToLeft)
+        value.setStyleSheet("""
+            QLineEdit {
+                background-color: #f9fafb;
+                border: 1px solid #e5e7eb;
+                border-radius: 6px;
+                padding: 10px;
+                color: #374151;
+                text-align: right;
+            }
+        """)
+
+        v.addWidget(lbl)
+        v.addWidget(value)
+        return v
+
     def _create_review_section(self, title: str, content: str) -> QFrame:
-        """Create a review section frame."""
+        """Create a review section frame (legacy method for compatibility)."""
         frame = QFrame()
         frame.setStyleSheet("""
             QFrame {
@@ -4111,9 +4225,9 @@ class OfficeSurveyWizard(QWidget):
                     padding: 12px;
                 }}
             """)
-            val_text = "❌ أخطاء يجب تصحيحها:\n" + "\n".join(f"• {e}" for e in errors)
+            val_text = "أخطاء يجب تصحيحها:\n" + "\n".join(f"• {e}" for e in errors)
             if warnings:
-                val_text += "\n\n⚠️ تحذيرات:\n" + "\n".join(f"• {w}" for w in warnings)
+                val_text += "\n\nتحذيرات:\n" + "\n".join(f"• {w}" for w in warnings)
             self.validation_label.setText(val_text)
         elif warnings:
             self.validation_frame.setStyleSheet(f"""
@@ -4124,7 +4238,7 @@ class OfficeSurveyWizard(QWidget):
                     padding: 12px;
                 }}
             """)
-            self.validation_label.setText("⚠️ تحذيرات:\n" + "\n".join(f"• {w}" for w in warnings))
+            self.validation_label.setText("تحذيرات:\n" + "\n".join(f"• {w}" for w in warnings))
         else:
             self.validation_frame.setStyleSheet(f"""
                 QFrame {{
@@ -4134,67 +4248,186 @@ class OfficeSurveyWizard(QWidget):
                     padding: 12px;
                 }}
             """)
-            self.validation_label.setText("✅ جميع البيانات مكتملة وجاهزة للحفظ")
+            self.validation_label.setText("جميع البيانات مكتملة وجاهزة للحفظ")
 
-        # Building
-        if self.context.building:
-            self.review_building.findChild(QLabel, "content").setText(
-                f"رقم المبنى: {self.context.building.building_id}\n"
-                f"النوع: {self.context.building.building_type_display}"
-            )
+        # Populate Card 1: Unit Information (Step 2)
+        self._populate_unit_review_card()
 
-        # Unit
+        # Populate Card 2: Household Information (Step 3)
+        self._populate_household_review_card()
+
+        # Populate Card 3: Persons Information (Step 4)
+        self._populate_persons_review_card()
+
+        # Populate Card 4: Relations Information (Step 5)
+        self._populate_relations_review_card()
+
+        # Populate Card 5: Claim Information (Step 6)
+        self._populate_claim_review_card()
+
+    def _clear_grid_layout(self, grid_layout):
+        """Clear all items from a grid layout."""
+        while grid_layout.count():
+            item = grid_layout.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+            elif item.layout():
+                self._clear_layout(item.layout())
+
+    def _clear_layout(self, layout):
+        """Recursively clear a layout."""
+        while layout.count():
+            item = layout.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+            elif item.layout():
+                self._clear_layout(item.layout())
+
+    def _populate_unit_review_card(self):
+        """Populate the unit review card (Step 2 data)."""
+        content_widget = self.review_unit_card.findChild(QWidget, "content_step2")
+        grid = content_widget.layout()
+        self._clear_grid_layout(grid)
+
+        # Building info
+        building_id = self.context.building.building_id if self.context.building else "-"
+        building_type = self.context.building.building_type_display if self.context.building and hasattr(self.context.building, 'building_type_display') else "-"
+
+        # Unit info
         if self.context.unit:
-            self.review_unit.findChild(QLabel, "content").setText(
-                f"رقم الوحدة: {self.context.unit.unit_id}\n"
-                f"النوع: {self.context.unit.unit_type_display}"
-            )
+            unit_id = str(self.context.unit.unit_id) if self.context.unit.unit_id else "-"
+            unit_type = self.context.unit.unit_type_display if hasattr(self.context.unit, 'unit_type_display') else "-"
+            floor = str(self.context.unit.floor_number) if hasattr(self.context.unit, 'floor_number') and self.context.unit.floor_number else "-"
+            apartment = str(self.context.unit.apartment_number) if hasattr(self.context.unit, 'apartment_number') and self.context.unit.apartment_number else "-"
         elif self.context.is_new_unit and self.context.new_unit_data:
-            self.review_unit.findChild(QLabel, "content").setText(
-                f"وحدة جديدة\n"
-                f"النوع: {self.context.new_unit_data.get('unit_type', '-')}\n"
-                f"الطابق: {self.context.new_unit_data.get('floor_number', '-')}\n"
-                f"رقم الشقة: {self.context.new_unit_data.get('apartment_number', '-')}"
-            )
-
-        # Households
-        hh_text = f"عدد الأسر: {len(self.context.households)}\n"
-        total_persons_in_hh = sum(h.get('size', 0) for h in self.context.households)
-        hh_text += f"إجمالي الأفراد: {total_persons_in_hh}\n"
-        for hh in self.context.households:
-            hh_text += f"• {hh['head_name']} ({hh['size']} فرد)\n"
-        self.review_household.findChild(QLabel, "content").setText(hh_text)
-
-        # Persons
-        persons_text = f"عدد الأشخاص المسجلين: {len(self.context.persons)}\n"
-        for p in self.context.persons:
-            contact = "📞 " if p.get('is_contact_person') else ""
-            persons_text += f"• {contact}{p['first_name']} {p['last_name']}\n"
-        self.review_persons.findChild(QLabel, "content").setText(persons_text)
-
-        # Relations
-        rel_text = f"عدد العلاقات: {len(self.context.relations)}\n"
-        total_ev = sum(len(r.get('evidences', [])) for r in self.context.relations)
-        rel_text += f"إجمالي الوثائق: {total_ev}\n"
-        rel_type_map = {"owner": "مالك", "co_owner": "شريك", "tenant": "مستأجر", "occupant": "شاغل", "heir": "وارث"}
-        for r in self.context.relations:
-            type_ar = rel_type_map.get(r['relation_type'], r['relation_type'])
-            ev_count = len(r.get('evidences', []))
-            rel_text += f"• {r['person_name']} - {type_ar} ({ev_count} وثائق)\n"
-        self.review_relations.findChild(QLabel, "content").setText(rel_text)
-
-        # Claim
-        if self.context.claim_data:
-            claim_types = {"ownership": "ملكية", "occupancy": "إشغال", "tenancy": "إيجار"}
-            priorities = {"low": "منخفض", "normal": "عادي", "high": "عالي", "urgent": "عاجل"}
-            self.review_claim.findChild(QLabel, "content").setText(
-                f"نوع المطالبة: {claim_types.get(self.context.claim_data['claim_type'], '-')}\n"
-                f"الأولوية: {priorities.get(self.context.claim_data['priority'], '-')}\n"
-                f"الحالة: مسودة\n"
-                f"عدد المطالبين: {len(self.context.claim_data.get('claimant_person_ids', []))}"
-            )
+            unit_id = "جديد"
+            unit_type = self.context.new_unit_data.get('unit_type', '-')
+            floor = str(self.context.new_unit_data.get('floor_number', '-'))
+            apartment = str(self.context.new_unit_data.get('apartment_number', '-'))
         else:
-            self.review_claim.findChild(QLabel, "content").setText("لم يتم إنشاء المطالبة بعد")
+            unit_id = "-"
+            unit_type = "-"
+            floor = "-"
+            apartment = "-"
+
+        # Add fields to grid (RTL order)
+        grid.addLayout(self._create_review_field("رقم المبنى", building_id), 0, 0)
+        grid.addLayout(self._create_review_field("نوع المبنى", building_type), 0, 1)
+        grid.addLayout(self._create_review_field("رقم الوحدة", unit_id), 0, 2)
+        grid.addLayout(self._create_review_field("نوع الوحدة", unit_type), 0, 3)
+        grid.addLayout(self._create_review_field("الطابق", floor), 1, 0)
+        grid.addLayout(self._create_review_field("رقم الشقة", apartment), 1, 1)
+
+    def _populate_household_review_card(self):
+        """Populate the household review card (Step 3 data)."""
+        content_widget = self.review_household_card.findChild(QWidget, "content_step3")
+        grid = content_widget.layout()
+        self._clear_grid_layout(grid)
+
+        num_households = str(len(self.context.households))
+        total_persons = str(sum(h.get('size', 0) for h in self.context.households))
+        total_adults = str(sum(h.get('adults', 0) for h in self.context.households))
+        total_minors = str(sum(h.get('minors', 0) for h in self.context.households))
+
+        # First household head name
+        head_name = self.context.households[0].get('head_name', '-') if self.context.households else "-"
+
+        grid.addLayout(self._create_review_field("عدد الأسر", num_households), 0, 0)
+        grid.addLayout(self._create_review_field("إجمالي الأفراد", total_persons), 0, 1)
+        grid.addLayout(self._create_review_field("البالغين", total_adults), 0, 2)
+        grid.addLayout(self._create_review_field("القاصرين", total_minors), 0, 3)
+        grid.addLayout(self._create_review_field("رب الأسرة", head_name), 1, 0)
+
+    def _populate_persons_review_card(self):
+        """Populate the persons review card (Step 4 data)."""
+        content_widget = self.review_persons_card.findChild(QWidget, "content_step4")
+        grid = content_widget.layout()
+        self._clear_grid_layout(grid)
+
+        num_persons = str(len(self.context.persons))
+        contact_person = next((f"{p['first_name']} {p['last_name']}" for p in self.context.persons if p.get('is_contact_person')), "-")
+
+        # List first 3 persons
+        person_names = []
+        for i, p in enumerate(self.context.persons[:3]):
+            person_names.append(f"{p['first_name']} {p['last_name']}")
+
+        grid.addLayout(self._create_review_field("عدد الأشخاص", num_persons), 0, 0)
+        grid.addLayout(self._create_review_field("شخص التواصل", contact_person), 0, 1)
+
+        # Show persons in remaining columns
+        for i, name in enumerate(person_names):
+            grid.addLayout(self._create_review_field(f"الشخص {i+1}", name), 0 if i < 2 else 1, 2 + (i % 2))
+
+    def _populate_relations_review_card(self):
+        """Populate the relations review card (Step 5 data)."""
+        content_widget = self.review_relations_card.findChild(QWidget, "content_step5")
+        grid = content_widget.layout()
+        self._clear_grid_layout(grid)
+
+        num_relations = str(len(self.context.relations))
+        total_evidences = str(sum(len(r.get('evidences', [])) for r in self.context.relations))
+
+        rel_type_map = {"owner": "مالك", "co_owner": "شريك", "tenant": "مستأجر", "occupant": "شاغل", "heir": "وارث"}
+
+        # Count by relation type
+        owners = len([r for r in self.context.relations if r['relation_type'] in ('owner', 'co_owner')])
+        tenants = len([r for r in self.context.relations if r['relation_type'] == 'tenant'])
+
+        grid.addLayout(self._create_review_field("عدد العلاقات", num_relations), 0, 0)
+        grid.addLayout(self._create_review_field("إجمالي الوثائق", total_evidences), 0, 1)
+        grid.addLayout(self._create_review_field("الملاك/الشركاء", str(owners)), 0, 2)
+        grid.addLayout(self._create_review_field("المستأجرين", str(tenants)), 0, 3)
+
+        # Show first relation details
+        if self.context.relations:
+            r = self.context.relations[0]
+            type_ar = rel_type_map.get(r['relation_type'], r['relation_type'])
+            grid.addLayout(self._create_review_field("الشخص", r.get('person_name', '-')), 1, 0)
+            grid.addLayout(self._create_review_field("نوع العلاقة", type_ar), 1, 1)
+
+    def _populate_claim_review_card(self):
+        """Populate the claim review card (Step 6 data)."""
+        content_widget = self.review_claim_card.findChild(QWidget, "content_step6")
+        grid = content_widget.layout()
+        self._clear_grid_layout(grid)
+
+        claim_types = {"ownership": "ملكية", "occupancy": "إشغال", "tenancy": "إيجار", "": "-", None: "-"}
+        priorities = {"low": "منخفض", "normal": "عادي", "high": "عالي", "urgent": "عاجل", "": "-", None: "-"}
+        business_types = {"residential": "سكني", "commercial": "تجاري", "agricultural": "زراعي", "": "-", None: "-"}
+        sources = {"field_survey": "مسح ميداني", "direct_request": "طلب مباشر", "referral": "إحالة", "OFFICE_SUBMISSION": "تقديم مكتبي", "": "-", None: "-"}
+        statuses = {"new": "جديد", "under_review": "قيد المراجعة", "completed": "مكتمل", "pending": "معلق", "": "-", None: "-"}
+
+        if self.context.claim_data:
+            claim_type = claim_types.get(self.context.claim_data.get('claim_type'), '-')
+            priority = priorities.get(self.context.claim_data.get('priority'), '-')
+            business = business_types.get(self.context.claim_data.get('business_nature'), '-')
+            source = sources.get(self.context.claim_data.get('source'), '-')
+            status = statuses.get(self.context.claim_data.get('case_status'), '-')
+            survey_date = self.context.claim_data.get('survey_date', '-') or '-'
+            next_date = self.context.claim_data.get('next_action_date', '-') or '-'
+            num_claimants = str(len(self.context.claim_data.get('claimant_person_ids', [])))
+        else:
+            claim_type = "-"
+            priority = "-"
+            business = "-"
+            source = "-"
+            status = "-"
+            survey_date = "-"
+            next_date = "-"
+            num_claimants = "0"
+
+        # Row 1
+        grid.addLayout(self._create_review_field("نوع الحالة", claim_type), 0, 0)
+        grid.addLayout(self._create_review_field("طبيعة الأعمال", business), 0, 1)
+        grid.addLayout(self._create_review_field("الأولوية", priority), 0, 2)
+        grid.addLayout(self._create_review_field("المصدر", source), 0, 3)
+
+        # Row 2
+        grid.addLayout(self._create_review_field("حالة الحالة", status), 1, 0)
+        grid.addLayout(self._create_review_field("تاريخ المسح", survey_date), 1, 1)
+        grid.addLayout(self._create_review_field("تاريخ الإجراء التالي", next_date), 1, 2)
+        grid.addLayout(self._create_review_field("عدد المطالبين", num_claimants), 1, 3)
 
     def _finalize_survey(self):
         """Finalize and save the survey (S20-S21)."""
@@ -4394,6 +4627,11 @@ class OfficeSurveyWizard(QWidget):
             else:
                 QMessageBox.warning(self, "خطأ", "يجب إضافة علاقة واحدة على الأقل للمتابعة")
                 return False
+
+        elif self.current_step == self.STEP_CLAIM:
+            # Auto-save claim data when moving to review step
+            self._save_claim_data()
+            return True
 
         return True
 
@@ -4650,7 +4888,8 @@ class OfficeSurveyWizard(QWidget):
 
         elif step == self.STEP_CLAIM:
             self._evaluate_for_claim()
-            self.next_btn.setEnabled(False)
+            # Enable next button - form can be filled and proceed to review
+            self.next_btn.setEnabled(True)
 
         elif step == self.STEP_REVIEW:
             self._populate_review()
