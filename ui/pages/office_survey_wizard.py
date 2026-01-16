@@ -50,6 +50,16 @@ from utils.logger import get_logger
 
 logger = get_logger(__name__)
 
+# Check for WebEngine availability
+try:
+    from PyQt5.QtWebEngineWidgets import QWebEngineView
+    from PyQt5.QtWebChannel import QWebChannel
+    HAS_WEBENGINE = True
+    HAS_WEBCHANNEL = True
+except ImportError:
+    HAS_WEBENGINE = False
+    HAS_WEBCHANNEL = False
+
 
 # ============================================================================
 # Survey Context - Central data holder
@@ -755,46 +765,48 @@ class OfficeSurveyWizard(QWidget):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(24, 24, 24, 24)
         layout.setSpacing(16)
-
-        # Header
+        # Header (Matching the design in the image 100%)
         header_layout = QHBoxLayout()
 
-        title = QLabel("معالج المسح المكتبي")
-        title.setStyleSheet(f"font-size: 18pt; font-weight: bold; color: {Config.TEXT_COLOR};")
-        header_layout.addWidget(title)
+        # UN-HABITAT Logo/Text placeholder (Matching image top left)
+        logo_label = QLabel("اضافة حالة جديدة")
+        # Assuming you have an actual logo image or can use a specific style
+        logo_label.setStyleSheet("font-family: 'Noto Kufi Arabic';font-size: 13pt; font-weight: bold; color: #0000000;")
+        header_layout.addWidget(logo_label)
 
-        header_layout.addStretch()
+        # ID Badge (Matching the design fh2999aa-7632-4ba5-b4f2-9dff1cab3943)
+        # Using a dark blue background matching the image
+        
+        
+        
+        header_layout.addStretch() # Pushes remaining items to the right
 
-        # Reference number badge (Comment 1)
-        self.ref_badge = QLabel(f"الرقم المرجعي: {self.context.reference_number}")
-        self.ref_badge.setStyleSheet(f"""
-            background-color: {Config.SUCCESS_COLOR};
-            color: white;
-            padding: 6px 12px;
-            border-radius: 12px;
-            font-size: 9pt;
-            font-weight: bold;
+        # Save button (Matching the blue button in the image)
+        self.save_btn = QPushButton("حفظ")
+        self.save_btn.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {Config.PRIMARY_COLOR}; /* Use your primary color for blue background */
+                color: white;
+                border: none;
+                padding: 12px 24px;
+                font-weight: 600;
+                border-radius: 8px;
+            }}
         """)
-        header_layout.addWidget(self.ref_badge)
-
-        # Survey ID badge
-        self.survey_badge = QLabel(f"#{self.context.survey_id[:8]}")
-        self.survey_badge.setStyleSheet(f"""
-            background-color: {Config.INFO_COLOR};
-            color: white;
-            padding: 6px 12px;
-            border-radius: 12px;
-            font-size: 9pt;
-        """)
-        header_layout.addWidget(self.survey_badge)
+        self.save_btn.clicked.connect(self._save_as_draft) # Connect to your existing save method
+        header_layout.addWidget(self.save_btn)
 
         layout.addLayout(header_layout)
+
+        # Step indicators frame - REMOVED COMPLETELY as requested
+        # You should delete all the code related to steps_frame below this line
+
 
         # Step indicators
         steps_frame = QFrame()
         steps_frame.setStyleSheet("""
             QFrame {
-                background-color: white;
+                background-color: transparent;
                 border-radius: 8px;
                 padding: 8px;
             }
@@ -833,33 +845,27 @@ class OfficeSurveyWizard(QWidget):
 
         layout.addWidget(self.content_stack)
 
-        # Navigation buttons
+        # Navigation buttons (Footer) - Matching the design in the image
         nav_layout = QHBoxLayout()
 
-        # Save as draft button (S22)
-        self.draft_btn = QPushButton("💾 حفظ كمسودة")
-        self.draft_btn.setStyleSheet(f"""
+        # The stretch pushes buttons to the far left and far right
+        nav_layout.addStretch() 
+
+        self.prev_btn = QPushButton("→ السابق")
+        # Style prev/next buttons similar to the 'Next' in your original code, as requested
+        self.prev_btn.setStyleSheet(f"""
             QPushButton {{
-                background-color: {Config.WARNING_COLOR};
+                background-color: {Config.PRIMARY_COLOR};
                 color: white;
                 border: none;
                 border-radius: 6px;
-                padding: 10px 20px;
+                padding: 10px 24px;
                 font-weight: 600;
+                margin-right: 5px; /* Small gap between buttons */
             }}
         """)
-        self.draft_btn.clicked.connect(self._save_as_draft)
-        nav_layout.addWidget(self.draft_btn)
-
-        nav_layout.addStretch()
-
-        self.cancel_btn = QPushButton("إلغاء")
-        self.cancel_btn.clicked.connect(self._on_cancel)
-        nav_layout.addWidget(self.cancel_btn)
-
-        self.prev_btn = QPushButton("→ السابق")
         self.prev_btn.clicked.connect(self._on_previous)
-        self.prev_btn.setEnabled(False)
+        self.prev_btn.setEnabled(False) # This handles hiding/disabling on the first step
         nav_layout.addWidget(self.prev_btn)
 
         self.next_btn = QPushButton("التالي ←")
@@ -879,8 +885,9 @@ class OfficeSurveyWizard(QWidget):
 
         layout.addLayout(nav_layout)
 
-        # Update display
+        # Update display (Remains the same)
         self._update_step_display()
+
 
     # ==================== Helper Methods ====================
 
@@ -1303,6 +1310,18 @@ class OfficeSurveyWizard(QWidget):
 
                 # Setup QWebChannel for JavaScript-Python communication
                 if HAS_WEBCHANNEL:
+                    from PyQt5.QtCore import QObject, pyqtSlot
+
+                    # Simple bridge for building selection
+                    class BuildingMapBridge(QObject):
+                        def __init__(self, parent=None):
+                            super().__init__(parent)
+
+                        @pyqtSlot(str)
+                        def selectBuilding(self, building_id):
+                            pass  # Not used in wizard, just for compatibility
+
+                    self.building_map_bridge = BuildingMapBridge()
                     self.building_map_channel = QWebChannel(self.building_map.page())
                     self.building_map_channel.registerObject('buildingBridge', self.building_map_bridge)
                     self.building_map.page().setWebChannel(self.building_map_channel)
@@ -1344,20 +1363,20 @@ class OfficeSurveyWizard(QWidget):
 
 
     def _load_buildings_map(self):
-        """Load interactive map for building selection (S02) - OFFLINE VERSION."""
+        """Load interactive map for building selection (S02) - OFFLINE VERSION with RELATIVE URLs."""
         if not hasattr(self, "building_map") or self.building_map is None:
             # Map view is created inside the dialog, so nothing to load yet.
             return
 
-        # Use the shared tile server from MapPickerDialog
-        from ui.components.map_picker_dialog import MapPickerDialog
+        from services.tile_server_manager import get_tile_server_url
+        from PyQt5.QtCore import QUrl
 
-        # Ensure tile server is started
-        if MapPickerDialog._tile_server_port is None:
-            temp_dialog = MapPickerDialog.__new__(MapPickerDialog)
-            temp_dialog._start_tile_server()
+        tile_server_url = get_tile_server_url()
 
-        tile_server_url = f"http://127.0.0.1:{MapPickerDialog._tile_server_port}"
+        # Prepare base URL with trailing slash for relative URL resolution
+        if not tile_server_url.endswith('/'):
+            tile_server_url += '/'
+        base_url = QUrl(tile_server_url)
 
         # Get buildings with coordinates
         buildings = self.building_repo.get_all(limit=200)
@@ -1427,6 +1446,9 @@ class OfficeSurveyWizard(QWidget):
                             className: 'custom-popup'
                         }});
                 """
+
+        # Get tile server URL for absolute paths
+        tile_server_url = get_tile_server_url()
 
         html = f"""
 <!DOCTYPE html>
@@ -1620,7 +1642,9 @@ class OfficeSurveyWizard(QWidget):
 </body>
 </html>
 """
-        self.building_map.setHtml(html)
+        # Set HTML with base URL for relative URL resolution
+        logger.info(f"Loading buildings map with base URL: {base_url.toString()}")
+        self.building_map.setHtml(html, base_url)
 
     def _on_building_selected_from_map(self, building_id: str):
         """Handle building selection from map (UC-004 S02)."""

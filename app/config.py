@@ -1,6 +1,17 @@
 # -*- coding: utf-8 -*-
 """
 Application configuration and constants.
+
+Server Configuration Quick Guide:
+----------------------------------
+1. Map Tiles: Set TILE_SERVER_URL (line 44)
+2. REST API: Set API_BASE_URL (line 35) + DATA_PROVIDER="http" (line 26)
+3. Database: Set DB_TYPE (line 55) for SQLite or PostgreSQL
+
+Example for Production:
+    TILE_SERVER_URL = "https://tiles.yourserver.com/{z}/{x}/{y}.png"
+    API_BASE_URL = "https://api.yourserver.com"
+    DATA_PROVIDER = "http"
 """
 
 from pathlib import Path
@@ -36,6 +47,12 @@ class Config:
     API_VERSION: str = "v1"
     API_TIMEOUT: int = 30
     API_MAX_RETRIES: int = 3
+
+    # Map Tile Server Configuration
+    # None = use local tile server (development)
+    # For production: set to external tile server URL
+    # Example: "https://tiles.yourserver.com/{z}/{x}/{y}.png"
+    TILE_SERVER_URL: str = None
 
     # Paths
     PROJECT_ROOT: Path = Path(__file__).parent.parent

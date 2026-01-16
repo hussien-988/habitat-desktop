@@ -357,16 +357,11 @@ class MapCoordinatePickerWidget(QWidget):
         self.map_view.setHtml(html)
 
     def _get_map_html(self) -> str:
-        """Generate the map HTML with Leaflet.js (OFFLINE VERSION using shared tile server)."""
-        # Use the shared tile server from MapPickerDialog
-        from ui.components.map_picker_dialog import MapPickerDialog
+        """Generate the map HTML with Leaflet.js (OFFLINE VERSION using centralized tile server)."""
+        # Use the centralized tile server
+        from services.tile_server_manager import get_tile_server_url
 
-        # Ensure tile server is started
-        if MapPickerDialog._tile_server_port is None:
-            temp_dialog = MapPickerDialog.__new__(MapPickerDialog)
-            temp_dialog._start_tile_server()
-
-        tile_server_url = f"http://127.0.0.1:{MapPickerDialog._tile_server_port}"
+        tile_server_url = get_tile_server_url()
 
         return f'''
 <!DOCTYPE html>

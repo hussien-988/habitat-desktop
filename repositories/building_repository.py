@@ -104,10 +104,12 @@ class BuildingRepository:
                 building_id LIKE ? OR
                 neighborhood_name LIKE ? OR
                 neighborhood_name_ar LIKE ? OR
+                district_name LIKE ? OR
+                district_name_ar LIKE ? OR
                 building_number LIKE ?
             )"""
             search_pattern = f"%{search_text}%"
-            params.extend([search_pattern] * 4)
+            params.extend([search_pattern] * 6)
 
         query += " ORDER BY building_id LIMIT ? OFFSET ?"
         params.extend([limit, offset])

@@ -935,22 +935,8 @@ class ClaimsPage(QWidget):
         header_layout.addStretch()
 
         # Add claim button
-        add_btn = QPushButton("+ " + self.i18n.t("create_claim"))
-        add_btn.setStyleSheet(f"""
-            QPushButton {{
-                background-color: {Config.SUCCESS_COLOR};
-                color: white;
-                border: none;
-                border-radius: 8px;
-                padding: 10px 20px;
-                font-size: {Config.FONT_SIZE}pt;
-                font-weight: 600;
-            }}
-            QPushButton:hover {{
-                background-color: #219A52;
-            }}
-        """)
-        add_btn.setCursor(Qt.PointingHandCursor)
+        from ui.components.custom_button import CustomButton
+        add_btn = CustomButton.primary(self.i18n.t("create_claim"), self, width=160, height=45, icon="+")
         add_btn.clicked.connect(self._on_add_claim)
         header_layout.addWidget(add_btn)
 

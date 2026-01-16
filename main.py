@@ -52,14 +52,23 @@ def main():
         logger.info("Starting TRRCMS Application")
         logger.info("=" * 80)
 
+        # Delete old SQLite database to start fresh each time
+        logger.info("Cleaning up old database...")
+        sqlite_db_path = Config.DB_PATH
+        if sqlite_db_path.exists():
+            sqlite_db_path.unlink()
+            logger.info(f">> Old database deleted: {sqlite_db_path}")
+        else:
+            logger.info(">> No old database found (fresh start)")
+
         # Initialize database
         logger.info("Initializing database...")
         db = Database()
         db.initialize()
         logger.info(">> Database initialized successfully")
 
-        # Seed demo data if database is empty
-        logger.info("Checking for demo data...")
+        # Seed demo data from GeoJSON
+        logger.info("Loading demo data from GeoJSON...")
         seed_database(db)
 
         # Initialize i18n

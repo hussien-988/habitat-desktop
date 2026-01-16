@@ -67,11 +67,6 @@ class MapViewerDialog(QDialog):
         btn_layout = QHBoxLayout()
         btn_layout.addStretch()
 
-        # Open in browser button
-        browser_btn = QPushButton("فتح في المتصفح")
-        browser_btn.clicked.connect(self._open_in_browser)
-        btn_layout.addWidget(browser_btn)
-
         # Close button
         close_btn = QPushButton("إغلاق")
         close_btn.setStyleSheet(f"""
@@ -91,15 +86,9 @@ class MapViewerDialog(QDialog):
 
     def _load_map(self):
         """Load the map with marker using OFFLINE tiles."""
-        # Use shared tile server from MapPickerDialog
-        from ui.components.map_picker_dialog import MapPickerDialog
+        from services.tile_server_manager import get_tile_server_url
 
-        # Ensure shared tile server is started
-        if MapPickerDialog._tile_server_port is None:
-            temp_dialog = MapPickerDialog.__new__(MapPickerDialog)
-            temp_dialog._start_tile_server()
-
-        tile_server_url = f"http://127.0.0.1:{MapPickerDialog._tile_server_port}"
+        tile_server_url = get_tile_server_url()
 
         html = f"""
 <!DOCTYPE html>
@@ -150,9 +139,3 @@ class MapViewerDialog(QDialog):
 </html>
 """
         self.web_view.setHtml(html)
-
-    def _open_in_browser(self):
-        """Open location in default browser."""
-        import webbrowser
-        url = f"https://www.google.com/maps?q={self.latitude},{self.longitude}"
-        webbrowser.open(url)

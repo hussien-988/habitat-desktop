@@ -503,10 +503,7 @@ class BuildingController(BaseController):
         if longitude is not None:
             data["longitude"] = longitude
         if polygon_wkt is not None:
-            data["polygon_wkt"] = polygon_wkt
-            data["geometry_type"] = "polygon"
-        elif latitude is not None and longitude is not None:
-            data["geometry_type"] = "point"
+            data["geo_location"] = polygon_wkt
 
         return self.update_building(building_uuid, data)
 

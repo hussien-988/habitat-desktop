@@ -38,9 +38,9 @@ class ValidationService:
         warnings = []
 
         if not building_id:
-            errors.append("Building ID is required")
+            errors.append("رمز البناء مطلوب (Building ID is required)")
         elif not self.BUILDING_ID_PATTERN.match(building_id):
-            errors.append("Building ID must be in format: XX-XX-XX-XXX-XXX-XXXXX")
+            errors.append("صيغة رمز البناء غير صحيحة. الصيغة المطلوبة: GG-DD-SS-CCC-NNN-BBBBB")
 
         return ValidationResult(
             is_valid=len(errors) == 0,
@@ -125,16 +125,18 @@ class ValidationService:
             id_result = self.validate_building_id(building_data["building_id"])
             errors.extend(id_result.errors)
 
-        # Required codes
+        # Required codes - رسائل عربية واضحة
         required_codes = [
-            ("governorate_code", "Governorate code"),
-            ("district_code", "District code"),
-            ("neighborhood_code", "Neighborhood code"),
+            ("governorate_code", "رمز المحافظة مطلوب (Governorate code is required)"),
+            ("district_code", "رمز المنطقة مطلوب (District code is required)"),
+            ("subdistrict_code", "رمز المنطقة الفرعية مطلوب (Subdistrict code is required)"),
+            ("community_code", "رمز المجتمع مطلوب (Community code is required)"),
+            ("neighborhood_code", "رمز الحي مطلوب (Neighborhood code is required)"),
         ]
 
-        for field, label in required_codes:
+        for field, error_msg in required_codes:
             if not building_data.get(field):
-                errors.append(f"{label} is required")
+                errors.append(error_msg)
 
         # Validate coordinates if provided
         lat = building_data.get("latitude")
@@ -142,17 +144,17 @@ class ValidationService:
 
         if lat is not None:
             if lat < -90 or lat > 90:
-                errors.append("Latitude must be between -90 and 90")
-            # Aleppo approximate bounds
-            if lat < 35.5 or lat > 37.0:
-                warnings.append("Latitude is outside Aleppo region")
+                errors.append("خط العرض يجب أن يكون بين -90 و 90 (Latitude must be between -90 and 90)")
+            # Aleppo approximate bounds (relaxed - just a warning)
+            if lat < 35.0 or lat > 37.5:
+                warnings.append("الإحداثيات قد تكون خارج منطقة حلب (Coordinates may be outside Aleppo)")
 
         if lon is not None:
             if lon < -180 or lon > 180:
-                errors.append("Longitude must be between -180 and 180")
-            # Aleppo approximate bounds
-            if lon < 36.5 or lon > 38.0:
-                warnings.append("Longitude is outside Aleppo region")
+                errors.append("خط الطول يجب أن يكون بين -180 و 180 (Longitude must be between -180 and 180)")
+            # Aleppo approximate bounds (relaxed - just a warning)
+            if lon < 36.0 or lon > 38.5:
+                warnings.append("الإحداثيات قد تكون خارج منطقة حلب (Coordinates may be outside Aleppo)")
 
         return ValidationResult(
             is_valid=len(errors) == 0,

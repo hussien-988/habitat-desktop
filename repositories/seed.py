@@ -1,10 +1,12 @@
 # -*- coding: utf-8 -*-
 """
 Database seeder for demo data.
-Generates realistic Aleppo-based data for the prototype.
+Loads data from GeoJSON file for consistency with future API integration.
 """
 
 import random
+import json
+import os
 from datetime import datetime, timedelta
 from typing import List
 
@@ -67,14 +69,16 @@ RELATION_TYPES = ["owner", "tenant", "heir", "occupant"]
 CASE_STATUSES = ["draft", "submitted", "screening", "under_review", "awaiting_docs", "approved"]
 
 
-def seed_database(db: Database):
-    """Seed the database with demo data."""
-    # Check if already seeded
-    if not db.is_empty():
-        logger.info("Database already contains data, skipping seed")
-        return
+def seed_database(db: Database, force_reseed: bool = False):
+    """
+    Seed the database with demo data from GeoJSON.
 
-    logger.info("Seeding database with demo data...")
+    Args:
+        db: Database instance
+        force_reseed: If True, clear existing data and re-seed from GeoJSON
+    """
+    # Always seed fresh data (database is cleaned on startup)
+    logger.info("Seeding database with demo data from GeoJSON...")
 
     # Initialize repositories
     user_repo = UserRepository(db)
@@ -83,11 +87,16 @@ def seed_database(db: Database):
     person_repo = PersonRepository(db)
     claim_repo = ClaimRepository(db)
 
-    # Seed users
-    _seed_users(user_repo)
+    # Seed users (only if no users exist)
+    user_count = db.fetch_one("SELECT COUNT(*) as count FROM users")
+    if user_count and user_count['count'] == 0:
+        _seed_users(user_repo)
+        logger.info("✓ Created 5 test users")
+    else:
+        logger.info("✓ Users already exist, skipping user seed")
 
-    # Seed buildings (100 buildings)
-    buildings = _seed_buildings(building_repo, 100)
+    # Seed buildings from GeoJSON
+    buildings = _seed_buildings_from_geojson(building_repo)
 
     # Seed units (2-8 per building)
     units = _seed_units(unit_repo, buildings)
@@ -98,9 +107,9 @@ def seed_database(db: Database):
     # Seed claims (50 claims)
     _seed_claims(claim_repo, units, persons, 50)
 
-    logger.info("Database seeding completed!")
-    logger.info(f"  - Users: 5")
-    logger.info(f"  - Buildings: {len(buildings)}")
+    logger.info("✓ Database seeding completed successfully!")
+    logger.info(f"  - Users: {user_count['count'] if user_count else 0}")
+    logger.info(f"  - Buildings: {len(buildings)} (from GeoJSON)")
     logger.info(f"  - Units: {len(units)}")
     logger.info(f"  - Persons: {len(persons)}")
     logger.info(f"  - Claims: 50")
@@ -189,8 +198,98 @@ def _seed_users(repo: UserRepository):
         logger.debug(f"Created user: {user.username}")
 
 
+def _polygon_to_wkt(coordinates):
+    """Convert GeoJSON polygon coordinates to WKT format."""
+    # coordinates is a list of rings, we use the first (outer) ring
+    outer_ring = coordinates[0]
+    points = [f"{lon} {lat}" for lon, lat in outer_ring]
+    return f"POLYGON(({', '.join(points)}))"
+
+
+def _seed_buildings_from_geojson(repo: BuildingRepository) -> List[Building]:
+    """Load buildings from GeoJSON file - single source of truth."""
+    buildings = []
+
+    # Path to GeoJSON file
+    geojson_path = os.path.join(os.path.dirname(__file__), "..", "data", "sample_buildings.geojson")
+
+    if not os.path.exists(geojson_path):
+        logger.warning(f"GeoJSON file not found: {geojson_path}")
+        logger.warning("Falling back to legacy random generation...")
+        return _seed_buildings(repo, 10)
+
+    try:
+        with open(geojson_path, 'r', encoding='utf-8') as f:
+            geojson_data = json.load(f)
+
+        logger.info(f"Loading buildings from GeoJSON: {geojson_path}")
+
+        for feature in geojson_data.get('features', []):
+            props = feature.get('properties', {})
+            geom = feature.get('geometry', {})
+            geom_type = geom.get('type')
+            coords = geom.get('coordinates')
+
+            # Extract coordinates
+            if geom_type == 'Point':
+                lon, lat = coords
+                geo_location = None  # Point geometry - no polygon
+            elif geom_type == 'Polygon':
+                # Get center point (first coordinate of outer ring)
+                lon, lat = coords[0][0]
+                # Convert polygon to WKT
+                geo_location = _polygon_to_wkt(coords)
+            else:
+                logger.warning(f"Unsupported geometry type: {geom_type}")
+                continue
+
+            # Create building object
+            building = Building(
+                building_id=props.get('building_id'),
+                governorate_code=props.get('governorate_code', '01'),
+                governorate_name=props.get('governorate_name', 'Aleppo'),
+                governorate_name_ar=props.get('governorate_name_ar', 'حلب'),
+                district_code=props.get('district_code', '01'),
+                district_name=props.get('district_name', 'Aleppo City'),
+                district_name_ar=props.get('district_name_ar', 'مدينة حلب'),
+                subdistrict_code=props.get('subdistrict_code', '01'),
+                subdistrict_name=props.get('subdistrict_name', 'Aleppo Center'),
+                subdistrict_name_ar=props.get('subdistrict_name_ar', 'حلب المركز'),
+                community_code=props.get('community_code', '001'),
+                community_name=props.get('community_name', 'Downtown'),
+                community_name_ar=props.get('community_name_ar', 'وسط المدينة'),
+                neighborhood_code=props.get('neighborhood_code', '001'),
+                neighborhood_name=props.get('neighborhood_name', 'Unknown'),
+                neighborhood_name_ar=props.get('neighborhood_name_ar', 'غير معروف'),
+                building_number=props.get('building_number', '00001'),
+                building_type=props.get('building_type', 'residential'),
+                building_status=props.get('building_status', 'intact'),
+                number_of_floors=props.get('number_of_floors', 1),
+                number_of_units=props.get('number_of_units', 0),
+                number_of_apartments=props.get('number_of_apartments', 0),
+                number_of_shops=props.get('number_of_shops', 0),
+                latitude=lat,
+                longitude=lon,
+                geo_location=geo_location,
+                created_at=datetime.now(),
+                created_by="system"
+            )
+
+            repo.create(building)
+            buildings.append(building)
+            logger.debug(f"Created building: {building.building_id} (type: {geom_type})")
+
+        logger.info(f"✅ Loaded {len(buildings)} buildings from GeoJSON")
+        return buildings
+
+    except Exception as e:
+        logger.error(f"Failed to load GeoJSON: {e}")
+        logger.warning("Falling back to legacy random generation...")
+        return _seed_buildings(repo, 10)
+
+
 def _seed_buildings(repo: BuildingRepository, count: int) -> List[Building]:
-    """Seed buildings with realistic Aleppo data."""
+    """LEGACY: Seed buildings with random data (fallback only)."""
     buildings = []
 
     # Base coordinates for Aleppo city center
@@ -225,6 +324,7 @@ def _seed_buildings(repo: BuildingRepository, count: int) -> List[Building]:
             number_of_floors=random.randint(1, 8),
             latitude=base_lat + random.uniform(-0.05, 0.05),
             longitude=base_lon + random.uniform(-0.05, 0.05),
+            geo_location=None,  # No polygon in legacy mode
             created_at=datetime.now() - timedelta(days=random.randint(1, 365)),
             created_by="system"
         )
@@ -245,7 +345,7 @@ def _seed_buildings(repo: BuildingRepository, count: int) -> List[Building]:
         repo.create(building)
         buildings.append(building)
 
-    logger.debug(f"Created {len(buildings)} buildings")
+    logger.debug(f"Created {len(buildings)} buildings (legacy mode)")
     return buildings
 
 

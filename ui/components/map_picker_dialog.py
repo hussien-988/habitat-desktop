@@ -7,23 +7,16 @@ Uses Leaflet.js via QWebEngineView for the map interface.
 Works OFFLINE using local tiles and libraries.
 """
 
-import json
-import sqlite3
-import base64
-import time
 from typing import Dict, Optional
-from pathlib import Path
-from http.server import HTTPServer, BaseHTTPRequestHandler
-import threading
-import socket
 
 from PyQt5.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
-    QWidget, QFrame, QLineEdit, QGroupBox, QRadioButton,
+    QFrame, QLineEdit, QGroupBox, QRadioButton,
     QButtonGroup, QMessageBox
 )
-from PyQt5.QtCore import Qt, pyqtSignal, QUrl
-from PyQt5.QtWebEngineWidgets import QWebEngineView
+from PyQt5.QtCore import QObject, pyqtSignal, pyqtSlot, QUrl
+from PyQt5.QtWebEngineWidgets import QWebEngineView, QWebEngineSettings, QWebEnginePage, QWebEngineProfile
+from PyQt5.QtWebEngineCore import QWebEngineUrlRequestInterceptor
 from PyQt5.QtWebChannel import QWebChannel
 
 from app.config import Config
@@ -31,227 +24,34 @@ from utils.logger import get_logger
 
 logger = get_logger(__name__)
 
-# Paths to local assets
-ASSETS_PATH = Path(__file__).parent.parent.parent / "assets" / "leaflet"
-MBTILES_PATH = Path(__file__).parent.parent.parent / "data" / "aleppo_tiles.mbtiles"
+
+# NOTE: TileServer has been moved to services/tile_server_manager.py
+# This file now uses the centralized tile server manager
 
 
-class TileServer(BaseHTTPRequestHandler):
-    """HTTP server to serve tiles from MBTiles file and static assets - OPTIMIZED."""
+class DebugWebPage(QWebEnginePage):
+    """Custom QWebEnginePage that logs console messages."""
 
-    mbtiles_path = None
-    assets_path = None
-    _tile_cache = {}  # In-memory tile cache
-    _db_connection = None  # Persistent database connection
-    _static_cache = {}  # Cache for static files
-    _perf_stats = {
-        'cache_hits': 0,
-        'cache_misses': 0,
-        'db_queries': 0,
-        'total_requests': 0,
-        'slowest_request': 0
-    }
-
-    def log_message(self, format, *args):
-        """Suppress logging."""
-        pass
-
-    @classmethod
-    def _get_db_connection(cls):
-        """Get persistent database connection."""
-        if cls._db_connection is None and cls.mbtiles_path:
-            cls._db_connection = sqlite3.connect(
-                str(cls.mbtiles_path),
-                check_same_thread=False,  # Allow multi-threaded access
-                timeout=10.0
-            )
-            # Enable memory-mapped I/O for faster reads
-            cls._db_connection.execute("PRAGMA mmap_size = 268435456")  # 256MB
-            cls._db_connection.execute("PRAGMA page_size = 4096")
-            cls._db_connection.execute("PRAGMA cache_size = -64000")  # 64MB cache
-        return cls._db_connection
-
-    def do_GET(self):
-        """Handle GET requests for tiles and static files."""
-        try:
-            path = self.path.split('?')[0]  # Remove query string
-
-            # Serve Leaflet JS
-            if path == '/leaflet.js':
-                self._serve_static_file_cached(self.assets_path / 'leaflet.js', 'application/javascript')
-            # Serve Leaflet CSS
-            elif path == '/leaflet.css':
-                self._serve_static_file_cached(self.assets_path / 'leaflet.css', 'text/css')
-            # Serve Leaflet Draw JS
-            elif path == '/leaflet.draw.js':
-                self._serve_static_file_cached(self.assets_path / 'leaflet.draw.js', 'application/javascript')
-            # Serve Leaflet Draw CSS
-            elif path == '/leaflet.draw.css':
-                self._serve_static_file_cached(self.assets_path / 'leaflet.draw.css', 'text/css')
-            # Serve Leaflet images
-            elif path.startswith('/images/'):
-                image_name = path[8:]  # Remove '/images/'
-                self._serve_static_file_cached(self.assets_path / 'images' / image_name, 'image/png')
-            # Serve tiles: /tiles/{z}/{x}/{y}.png
-            elif path.startswith('/tiles/'):
-                parts = path.split('/')
-                if len(parts) >= 5:
-                    z = int(parts[2])
-                    x = int(parts[3])
-                    y = int(parts[4].replace('.png', ''))
-                    self._serve_tile_cached(z, x, y)
-                else:
-                    self.send_response(404)
-                    self.end_headers()
-            else:
-                self.send_response(404)
-                self.end_headers()
-        except Exception as e:
-            logger.error(f"Tile server error: {e}")
-            self.send_response(500)
-            self.end_headers()
-
-    def _serve_static_file_cached(self, filepath, content_type):
-        """Serve a static file with caching."""
-        cache_key = str(filepath)
-
-        # Check cache first
-        if cache_key in TileServer._static_cache:
-            data = TileServer._static_cache[cache_key]
-            self.send_response(200)
-            self.send_header('Content-Type', content_type)
-            self.send_header('Access-Control-Allow-Origin', '*')
-            self.send_header('Cache-Control', 'public, max-age=31536000, immutable')
-            self.send_header('Content-Length', len(data))
-            self.end_headers()
-            self.wfile.write(data)
-            return
-
-        # Load from disk and cache
-        if filepath.exists():
-            with open(filepath, 'rb') as f:
-                data = f.read()
-
-            # Cache it (only cache files < 500KB)
-            if len(data) < 500000:
-                TileServer._static_cache[cache_key] = data
-
-            self.send_response(200)
-            self.send_header('Content-Type', content_type)
-            self.send_header('Access-Control-Allow-Origin', '*')
-            self.send_header('Cache-Control', 'public, max-age=31536000, immutable')
-            self.send_header('Content-Length', len(data))
-            self.end_headers()
-            self.wfile.write(data)
-        else:
-            self.send_response(404)
-            self.end_headers()
-
-    def _serve_tile_cached(self, z, x, y):
-        """Serve a map tile with aggressive caching."""
-        start_time = time.time()
-        TileServer._perf_stats['total_requests'] += 1
-
-        # Check cache first
-        cache_key = f"{z}/{x}/{y}"
-        if cache_key in TileServer._tile_cache:
-            TileServer._perf_stats['cache_hits'] += 1
-            tile_data = TileServer._tile_cache[cache_key]
-            self._send_tile_response(tile_data)
-            elapsed = (time.time() - start_time) * 1000
-            if elapsed > TileServer._perf_stats['slowest_request']:
-                TileServer._perf_stats['slowest_request'] = elapsed
-            return
-
-        # Cache miss - get from database
-        TileServer._perf_stats['cache_misses'] += 1
-        TileServer._perf_stats['db_queries'] += 1
-        tile_data = self._get_tile_fast(z, x, y)
-
-        # Cache it (limit cache size to 1000 tiles ~ 10-20MB)
-        if len(TileServer._tile_cache) < 1000:
-            TileServer._tile_cache[cache_key] = tile_data
-
-        self._send_tile_response(tile_data)
-
-        elapsed = (time.time() - start_time) * 1000
-        if elapsed > TileServer._perf_stats['slowest_request']:
-            TileServer._perf_stats['slowest_request'] = elapsed
-
-    def _send_tile_response(self, tile_data):
-        """Send tile HTTP response."""
-        if tile_data:
-            self.send_response(200)
-            self.send_header('Content-Type', 'image/png')
-            self.send_header('Access-Control-Allow-Origin', '*')
-            self.send_header('Cache-Control', 'public, max-age=31536000, immutable')
-            self.send_header('Content-Length', len(tile_data))
-            self.end_headers()
-            self.wfile.write(tile_data)
-        else:
-            # Return transparent tile for missing tiles
-            transparent_tile = base64.b64decode(
-                'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=='
-            )
-            self.send_response(200)
-            self.send_header('Content-Type', 'image/png')
-            self.send_header('Access-Control-Allow-Origin', '*')
-            self.send_header('Cache-Control', 'public, max-age=31536000, immutable')
-            self.send_header('Content-Length', len(transparent_tile))
-            self.end_headers()
-            self.wfile.write(transparent_tile)
-
-    def _get_tile_fast(self, z, x, y):
-        """Get tile from MBTiles database using persistent connection."""
-        if not self.mbtiles_path or not self.mbtiles_path.exists():
-            return None
-
-        try:
-            conn = self._get_db_connection()
-            cursor = conn.cursor()
-
-            # MBTiles uses TMS scheme (y is flipped)
-            tms_y = (2 ** z) - 1 - y
-
-            cursor.execute(
-                'SELECT tile_data FROM tiles WHERE zoom_level=? AND tile_column=? AND tile_row=?',
-                (z, x, tms_y)
-            )
-            row = cursor.fetchone()
-
-            return row[0] if row else None
-        except Exception as e:
-            logger.error(f"Error reading tile {z}/{x}/{y}: {e}")
-            return None
-
-    @classmethod
-    def log_performance_stats(cls):
-        """Log tile server performance statistics."""
-        stats = cls._perf_stats
-        total = stats['total_requests']
-        if total == 0:
-            logger.info("No tile requests yet")
-            return
-
-        cache_hit_rate = (stats['cache_hits'] / total * 100) if total > 0 else 0
-        logger.info(f"=== Tile Server Performance Stats ===")
-        logger.info(f"Total requests: {total}")
-        logger.info(f"Cache hits: {stats['cache_hits']} ({cache_hit_rate:.1f}%)")
-        logger.info(f"Cache misses: {stats['cache_misses']}")
-        logger.info(f"DB queries: {stats['db_queries']}")
-        logger.info(f"Slowest request: {stats['slowest_request']:.2f}ms")
-        logger.info(f"Cache size: {len(cls._tile_cache)} tiles")
-        logger.info(f"Static cache size: {len(cls._static_cache)} files")
+    def javaScriptConsoleMessage(self, level, message, lineNumber, sourceID):
+        """Log JavaScript console messages."""
+        logger.info(f"JS [{level}]: {message} (line {lineNumber})")
 
 
-def find_free_port():
-    """Find a free port for the tile server."""
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-        s.bind(('', 0))
-        return s.getsockname()[1]
+class TileRequestInterceptor(QWebEngineUrlRequestInterceptor):
+    """
+    Interceptor to add required headers for tile loading.
+
+    Fixes blank/gray map issue by adding Accept-Language header.
+    Reference: https://help.openstreetmap.org/questions/79955/openstreetmap-tiles-not-loading-pyqt5/
+    """
+
+    def interceptRequest(self, info):
+        """Add required headers to tile requests."""
+        info.setHttpHeader(b"Accept-Language", b"en-US,en;q=0.9,ar;q=0.8")
+        info.setHttpHeader(b"User-Agent", b"UN-Habitat TRRCMS/1.0")
 
 
-class MapBridge(QWidget):
+class MapBridge(QObject):
     """Bridge object for communication between Python and JavaScript."""
 
     location_selected = pyqtSignal(float, float)  # lat, lon
@@ -263,6 +63,7 @@ class MapBridge(QWidget):
         self._longitude = None
         self._polygon_wkt = None
 
+    @pyqtSlot(float, float)
     def set_location(self, lat: float, lon: float):
         """Called from JavaScript when a point is selected."""
         self._latitude = lat
@@ -271,8 +72,10 @@ class MapBridge(QWidget):
         self.location_selected.emit(lat, lon)
         logger.debug(f"Location selected: {lat}, {lon}")
 
+    @pyqtSlot(str)
     def set_polygon(self, wkt: str):
         """Called from JavaScript when a polygon is drawn."""
+        logger.info(f"✅ Polygon received from JavaScript: {wkt[:100]}...")
         self._polygon_wkt = wkt
         # Extract centroid for lat/lon
         try:
@@ -287,11 +90,12 @@ class MapBridge(QWidget):
                 lats.append(float(parts[1]))
             self._latitude = sum(lats) / len(lats)
             self._longitude = sum(lons) / len(lons)
+            logger.info(f"✅ Centroid calculated: lat={self._latitude}, lon={self._longitude}")
         except Exception as e:
-            logger.warning(f"Could not extract centroid: {e}")
+            logger.error(f"❌ Could not extract centroid: {e}")
 
         self.polygon_selected.emit(wkt)
-        logger.debug(f"Polygon selected: {wkt[:100]}...")
+        logger.info(f"✅ Polygon signal emitted")
 
 
 class MapPickerDialog(QDialog):
@@ -304,9 +108,6 @@ class MapPickerDialog(QDialog):
     Uses Singleton Pattern for performance optimization.
     """
 
-    _tile_server = None
-    _tile_server_port = None
-    _tile_server_thread = None
     _shared_instance = None  # Singleton instance
 
     def __init__(
@@ -314,42 +115,77 @@ class MapPickerDialog(QDialog):
         initial_lat: float = 36.2,
         initial_lon: float = 37.15,
         allow_polygon: bool = True,
+        read_only: bool = False,
+        highlight_location: bool = False,
         parent=None
     ):
         super().__init__(parent)
         self.initial_lat = initial_lat
         self.initial_lon = initial_lon
         self.allow_polygon = allow_polygon
+        self.read_only = read_only
+        self.highlight_location = highlight_location
 
-        self._result = None
+        # Initialize result with initial coordinates so Confirm works immediately
+        self._result = {
+            "latitude": initial_lat,
+            "longitude": initial_lon,
+            "polygon_wkt": None
+        }
 
         self.setWindowTitle("اختيار الموقع على الخريطة")
         self.setMinimumSize(800, 600)
         self.resize(900, 700)
 
-        # Start local tile server
-        self._start_tile_server()
-
         self._setup_ui()
         self._load_map()
 
     @classmethod
-    def get_instance(cls, initial_lat: float = 36.2, initial_lon: float = 37.15, allow_polygon: bool = True, parent=None):
+    def get_instance(cls, initial_lat: float = 36.2, initial_lon: float = 37.15, allow_polygon: bool = True, read_only: bool = False, highlight_location: bool = False, parent=None):
         """
         Get or create singleton instance.
-        Reuses existing dialog for performance.
+        Reuses existing dialog for performance, but recreates if widgets were deleted.
         """
+        # Check if instance exists and widgets are still valid
+        needs_recreation = False
+
         if cls._shared_instance is None:
-            logger.info("Creating new MapPickerDialog instance (first time)")
-            cls._shared_instance = cls(initial_lat, initial_lon, allow_polygon, parent)
+            needs_recreation = True
+        else:
+            # Check if Qt widgets were deleted
+            try:
+                # Try to access a widget to check if it's still valid
+                if hasattr(cls._shared_instance, 'lat_input'):
+                    _ = cls._shared_instance.lat_input.text()  # Raises RuntimeError if deleted
+                else:
+                    needs_recreation = True
+            except RuntimeError:
+                logger.info("Previous dialog widgets were deleted by Qt, recreating...")
+                needs_recreation = True
+
+        if needs_recreation:
+            logger.info("Creating new MapPickerDialog instance")
+            cls._shared_instance = cls(initial_lat, initial_lon, allow_polygon, read_only, highlight_location, parent)
         else:
             logger.info("Reusing existing MapPickerDialog instance (Singleton)")
             # Update parameters and reset map
             cls._shared_instance.initial_lat = initial_lat
             cls._shared_instance.initial_lon = initial_lon
             cls._shared_instance.allow_polygon = allow_polygon
-            cls._shared_instance._result = None
-            cls._shared_instance._reset_map()
+            cls._shared_instance.read_only = read_only
+            cls._shared_instance.highlight_location = highlight_location
+            # Initialize result with initial coordinates so Confirm works immediately
+            cls._shared_instance._result = {
+                "latitude": initial_lat,
+                "longitude": initial_lon,
+                "polygon_wkt": None
+            }
+            try:
+                cls._shared_instance._reset_map()
+            except RuntimeError:
+                # Failed to reset, recreate the dialog
+                logger.warning("Failed to reset map (widgets deleted), recreating dialog...")
+                cls._shared_instance = cls(initial_lat, initial_lon, allow_polygon, read_only, highlight_location, parent)
 
         return cls._shared_instance
 
@@ -357,48 +193,67 @@ class MapPickerDialog(QDialog):
         """Reset map to new location without recreating QWebEngineView."""
         logger.info(f"Resetting map to {self.initial_lat}, {self.initial_lon}")
 
-        # Reset bridge
-        self.bridge._latitude = None
-        self.bridge._longitude = None
-        self.bridge._polygon_wkt = None
+        # Check if widgets still exist (Qt may have deleted them)
+        try:
+            # Reset bridge if it exists
+            if hasattr(self, 'bridge'):
+                self.bridge._latitude = None
+                self.bridge._longitude = None
+                self.bridge._polygon_wkt = None
 
-        # Update coordinate displays
-        self.lat_input.setText(f"{self.initial_lat:.6f}")
-        self.lon_input.setText(f"{self.initial_lon:.6f}")
+            # Update coordinate displays if they exist and are valid
+            if hasattr(self, 'lat_input') and self.lat_input is not None:
+                self.lat_input.setText(f"{self.initial_lat:.6f}")
+            if hasattr(self, 'lon_input') and self.lon_input is not None:
+                self.lon_input.setText(f"{self.initial_lon:.6f}")
 
-        # Reset result displays
-        self.result_lat_label.setText("---")
-        self.result_lon_label.setText("---")
+            # Clear geometry label if exists
+            if hasattr(self, 'geometry_label') and self.geometry_label is not None:
+                self.geometry_label.setText("")
 
-        # Reload map HTML with new coordinates
-        self._load_map()
+            # Reload map HTML with new coordinates
+            if hasattr(self, 'web_view') and self.web_view is not None:
+                self._load_map()
+        except RuntimeError as e:
+            # Widget was deleted by Qt - recreate the dialog
+            logger.warning(f"Widgets were deleted, need to recreate dialog: {e}")
+            # Force recreation by clearing the instance
+            MapPickerDialog._shared_instance = None
+            raise
 
-    def _start_tile_server(self):
-        """Start local HTTP server for tiles and Leaflet files."""
-        if MapPickerDialog._tile_server is None:
-            # Find free port
-            MapPickerDialog._tile_server_port = find_free_port()
+    def _get_tile_server_url(self):
+        """Get tile server URL from centralized manager."""
+        from services.tile_server_manager import get_tile_server_url
+        return get_tile_server_url()
 
-            # Set paths
-            TileServer.mbtiles_path = MBTILES_PATH
-            TileServer.assets_path = ASSETS_PATH
+    def _get_buildings_json(self):
+        """Get all buildings as JSON for map markers."""
+        import json
+        try:
+            from repositories.database import Database
+            from repositories.building_repository import BuildingRepository
 
-            # Create server
-            MapPickerDialog._tile_server = HTTPServer(
-                ('127.0.0.1', MapPickerDialog._tile_server_port),
-                TileServer
-            )
+            db = Database()
+            building_repo = BuildingRepository(db)
+            buildings = building_repo.get_all(limit=1000)  # Get up to 1000 buildings
 
-            # Start server in background thread
-            MapPickerDialog._tile_server_thread = threading.Thread(
-                target=MapPickerDialog._tile_server.serve_forever,
-                daemon=True
-            )
-            MapPickerDialog._tile_server_thread.start()
+            buildings_list = []
+            for b in buildings:
+                if b.latitude and b.longitude:
+                    # Map status codes to ensure correct colors
+                    status_code = b.building_status or "unknown"
+                    buildings_list.append({
+                        "id": b.building_id,
+                        "lat": b.latitude,
+                        "lon": b.longitude,
+                        "status": status_code,  # Send the code itself
+                        "type": b.building_type or "غير محدد"
+                    })
 
-            logger.info(f"Tile server started on port {MapPickerDialog._tile_server_port}")
-
-        self.tile_server_port = MapPickerDialog._tile_server_port
+            return json.dumps(buildings_list)
+        except Exception as e:
+            logger.error(f"Failed to load buildings for map: {e}")
+            return "[]"
 
     def _setup_ui(self):
         layout = QVBoxLayout(self)
@@ -406,9 +261,12 @@ class MapPickerDialog(QDialog):
         layout.setContentsMargins(16, 16, 16, 16)
 
         # Instructions
-        instructions = QLabel(
-            "انقر على الخريطة لتحديد موقع المبنى، أو استخدم أدوات الرسم لتحديد حدود المبنى"
-        )
+        if self.read_only:
+            instructions = QLabel("عرض موقع المبنى على الخريطة")
+        else:
+            instructions = QLabel(
+                "انقر على الخريطة لتحديد موقع المبنى، أو استخدم أدوات الرسم لتحديد حدود المبنى"
+            )
         instructions.setStyleSheet(f"""
             color: {Config.TEXT_LIGHT};
             font-size: 10pt;
@@ -419,11 +277,13 @@ class MapPickerDialog(QDialog):
         instructions.setWordWrap(True)
         layout.addWidget(instructions)
 
-        # Mode selection
-        if self.allow_polygon:
+        # Mode selection (hidden in read-only mode)
+        if self.allow_polygon and not self.read_only:
             mode_group = QGroupBox("نوع التحديد")
-            mode_layout = QHBoxLayout(mode_group)
+            mode_layout = QVBoxLayout(mode_group)
 
+            # Radio buttons
+            radio_layout = QHBoxLayout()
             self.point_radio = QRadioButton("نقطة (Point)")
             self.point_radio.setChecked(True)
             self.polygon_radio = QRadioButton("مضلع (Polygon)")
@@ -433,9 +293,24 @@ class MapPickerDialog(QDialog):
             self.mode_group.addButton(self.polygon_radio, 1)
             self.mode_group.buttonClicked.connect(self._on_mode_changed)
 
-            mode_layout.addWidget(self.point_radio)
-            mode_layout.addWidget(self.polygon_radio)
-            mode_layout.addStretch()
+            radio_layout.addWidget(self.point_radio)
+            radio_layout.addWidget(self.polygon_radio)
+            radio_layout.addStretch()
+            mode_layout.addLayout(radio_layout)
+
+            # Instruction label (below radio buttons)
+            self.mode_instruction = QLabel("👉 اضغط على الأيقونة في الصندوق الأبيض يسار الخريطة")
+            self.mode_instruction.setStyleSheet("""
+                color: #e67e22;
+                font-size: 12px;
+                font-weight: 600;
+                padding: 8px;
+                background-color: rgba(230, 126, 34, 0.1);
+                border-radius: 4px;
+                border-left: 3px solid #e67e22;
+            """)
+            self.mode_instruction.setWordWrap(True)
+            mode_layout.addWidget(self.mode_instruction)
 
             layout.addWidget(mode_group)
 
@@ -451,9 +326,23 @@ class MapPickerDialog(QDialog):
         map_layout = QVBoxLayout(map_container)
         map_layout.setContentsMargins(2, 2, 2, 2)
 
-        # Web view for map
+        # Web view for map with custom page for debugging
         self.web_view = QWebEngineView()
         self.web_view.setMinimumHeight(400)
+
+        # Create profile with cache disabled to force fresh tile requests
+        profile = QWebEngineProfile(self.web_view)
+        profile.setHttpCacheType(QWebEngineProfile.NoCache)  # CRITICAL: Disable HTTP cache
+
+        # Set custom page with no-cache profile
+        debug_page = DebugWebPage(profile, self.web_view)
+        self.web_view.setPage(debug_page)
+
+        # Simple settings - just enable hardware acceleration
+        settings = self.web_view.settings()
+        settings.setAttribute(QWebEngineSettings.Accelerated2dCanvasEnabled, True)
+        settings.setAttribute(QWebEngineSettings.WebGLEnabled, True)
+
         map_layout.addWidget(self.web_view)
 
         # Setup web channel for JS-Python communication
@@ -531,25 +420,25 @@ class MapPickerDialog(QDialog):
         layout.addLayout(btn_layout)
 
     def _load_map(self):
-        """Load the Leaflet map."""
+        """Load the Leaflet map - WITH base URL like test_map_simple.py."""
         html = self._generate_map_html()
-        self.web_view.setHtml(html)
+        tile_server_url = self._get_tile_server_url()
+        # CRITICAL: Set base URL so QWebEngineView can resolve requests
+        base_url = QUrl(tile_server_url)
+        self.web_view.setHtml(html, base_url)
 
     def _generate_map_html(self) -> str:
-        """Generate HTML for the Leaflet map (OFFLINE VERSION)."""
-        tile_server_url = f"http://127.0.0.1:{self.tile_server_port}"
+        """Generate HTML for the Leaflet map - SIMPLE offline version."""
+        tile_server_url = self._get_tile_server_url()
+
+        # Load all buildings from database
+        buildings_json = self._get_buildings_json()
 
         return f"""
 <!DOCTYPE html>
 <html>
 <head>
     <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
-    <!-- Preload critical resources -->
-    <link rel="preload" href="{tile_server_url}/leaflet.js" as="script">
-    <link rel="preload" href="{tile_server_url}/leaflet.css" as="style">
-
     <link rel="stylesheet" href="{tile_server_url}/leaflet.css" />
     <link rel="stylesheet" href="{tile_server_url}/leaflet.draw.css" />
     <style>
@@ -650,98 +539,177 @@ class MapPickerDialog(QDialog):
     <script src="qrc:///qtwebchannel/qwebchannel.js"></script>
 
     <script>
-        // Hide loading when map is ready
-        function hideLoading() {{
-            var loading = document.getElementById('loading');
-            if (loading) {{
-                loading.style.display = 'none';
-            }}
-        }}
+        console.log('=== MAP INITIALIZATION START ===');
+        console.log('Leaflet version:', L.version);
+        console.log('Tile server URL:', '{tile_server_url}');
 
-        // Optimize map initialization
+        // Simple map initialization
         var map = L.map('map', {{
-            preferCanvas: true,  // Use Canvas renderer (faster than SVG)
+            preferCanvas: true,
             zoomAnimation: true,
-            fadeAnimation: false,  // Disable fade for faster rendering
-            markerZoomAnimation: false,
-            zoomSnap: 0.5,
-            wheelPxPerZoomLevel: 120
-        }}).setView([{self.initial_lat}, {self.initial_lon}], 15);
+            fadeAnimation: false
+        }}).setView([{self.initial_lat}, {self.initial_lon}], 17);
 
-        // OPTIMIZATION 2 & 3: Progressive Loading with LQIP
-        // CRITICAL FIX: MBTiles only has zoom 10-16, NOT 18!
-        var tileLayer = L.tileLayer('{tile_server_url}/tiles/{{z}}/{{x}}/{{y}}.png', {{
-            attribution: 'UN-Habitat Syria',
-            maxZoom: 16,  // FIXED: Was 18, but MBTiles only has up to 16
-            minZoom: 10,  // FIXED: Was 12, match MBTiles minimum
-            tileSize: 256,
-            updateWhenZooming: false,
-            updateWhenIdle: true,
-            keepBuffer: 4,
-            maxNativeZoom: 16,  // FIXED: Match actual data
-            bounds: [[35.8, 36.8], [36.5, 37.5]],  // Limit to Aleppo area
-            errorTileUrl: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=='
-        }});
+        console.log('Map created, center:', map.getCenter(), 'zoom:', map.getZoom());
 
-        // LQIP: Show low-res first (zoom - 3 for faster load)
-        var lqipLayer = L.tileLayer('{tile_server_url}/tiles/{{z}}/{{x}}/{{y}}.png', {{
-            maxZoom: 12,  // Low resolution
+        // Simple tile layer - like office_survey_wizard
+        var tileUrl = '{tile_server_url}/tiles/{{z}}/{{x}}/{{y}}.png';
+        console.log('Tile URL template:', tileUrl);
+
+        var tileLayer = L.tileLayer(tileUrl, {{
+            maxZoom: 16,
             minZoom: 10,
-            className: 'lqip',
-            opacity: 0.6,
-            maxNativeZoom: 16
-        }}).addTo(map);
+            attribution: 'UN-Habitat Syria'
+        }});
 
-        // Add full-res layer
+        tileLayer.on('tileloadstart', function(e) {{
+            console.log('TILE LOAD START - z:', e.coords.z, 'x:', e.coords.x, 'y:', e.coords.y);
+            if (e.tile && e.tile.src) {{
+                console.log('  Tile SRC:', e.tile.src);
+            }}
+        }});
+
+        tileLayer.on('tileload', function(e) {{
+            console.log('TILE LOADED OK - z:', e.coords.z, 'x:', e.coords.x, 'y:', e.coords.y);
+            if (e.tile && e.tile.src) {{
+                console.log('  Tile SRC:', e.tile.src);
+            }}
+        }});
+
+        tileLayer.on('tileerror', function(e) {{
+            console.error('TILE ERROR - z:', e.coords.z, 'x:', e.coords.x, 'y:', e.coords.y);
+            if (e.tile && e.tile.src) {{
+                console.error('  Tile SRC:', e.tile.src);
+            }}
+        }});
+
         tileLayer.addTo(map);
+        console.log('Tile layer added to map');
 
-        // Remove LQIP after first tiles load (optimized)
-        var tilesLoaded = 0;
-        tileLayer.on('tileload', function() {{
-            tilesLoaded++;
-            if (tilesLoaded >= 4 && map.hasLayer(lqipLayer)) {{  // Only 4 tiles needed
-                map.removeLayer(lqipLayer);
-            }}
-        }});
-
-        // Hide loading IMMEDIATELY when ANY tile loads
-        var firstTileLoaded = false;
-        tileLayer.on('tileload', function() {{
-            if (!firstTileLoaded) {{
-                firstTileLoaded = true;
-                setTimeout(hideLoading, 50);  // Hide after first tile
-            }}
-        }});
-
-        // Aggressive fallback: hide after 500ms regardless
-        setTimeout(hideLoading, 500);
+        // Hide loading after short delay
+        setTimeout(function() {{
+            document.getElementById('loading').style.display = 'none';
+        }}, 500);
 
         var marker = null;
         var drawnItems = new L.FeatureGroup();
         map.addLayer(drawnItems);
 
-        var drawControl = new L.Control.Draw({{
-            draw: {{
-                polygon: {'true' if self.allow_polygon else 'false'},
-                polyline: false,
-                circle: false,
-                circlemarker: false,
-                rectangle: false,
-                marker: true
-            }},
-            edit: {{
-                featureGroup: drawnItems,
-                remove: true
+        var readOnly = {'true' if self.read_only else 'false'};
+        console.log('Read-only mode:', readOnly);
+
+        var drawControl = null;
+        var currentMode = 0; // 0 = point, 1 = polygon
+
+        // Add drawing controls only if NOT read-only
+        if (!readOnly) {{
+            drawControl = new L.Control.Draw({{
+                draw: {{
+                    polygon: false,
+                    polyline: false,
+                    circle: false,
+                    circlemarker: false,
+                    rectangle: false,
+                    marker: true  // Start with marker (point) enabled
+                }},
+                edit: {{
+                    featureGroup: drawnItems,
+                    remove: true
+                }}
+            }});
+            map.addControl(drawControl);
+        }}
+
+        // Load all buildings as markers
+        var buildings = {buildings_json};
+        var highlightLocation = {'true' if self.highlight_location else 'false'};
+        console.log('Loading', buildings.length, 'buildings on map');
+
+        // Color by damage status
+        function getMarkerColor(status) {{
+            // Check for destroyed/demolished
+            if (status === 'destroyed' || status === 'demolished' || status === 'rubble') return '#e74c3c';
+            // Check for damaged
+            if (status === 'damaged' || status === 'partially_damaged' || status === 'severely_damaged' ||
+                status === 'minor_damage' || status === 'major_damage') return '#f39c12';
+            // Check for intact
+            if (status === 'intact' || status === 'standing') return '#27ae60';
+            // Default gray for unknown
+            return '#95a5a6';
+        }}
+
+        // Custom icon (medium size for regular buildings)
+        function createIcon(color) {{
+            return L.icon({{
+                iconUrl: 'data:image/svg+xml;base64,' + btoa(
+                    '<svg width="26" height="38" xmlns="http://www.w3.org/2000/svg">' +
+                    '<path d="M13 0C5.8 0 0 5.8 0 13c0 9.75 13 25 13 25s13-15.25 13-25c0-7.2-5.8-13-13-13z" fill="' + color + '" stroke="white" stroke-width="2"/>' +
+                    '<circle cx="13" cy="13" r="5.5" fill="white"/>' +
+                    '</svg>'
+                ),
+                iconSize: [26, 38],
+                iconAnchor: [13, 38],
+                popupAnchor: [0, -38]
+            }});
+        }}
+
+        // Custom big icon for highlighted (bigger and blue)
+        function createBigIcon() {{
+            return L.icon({{
+                iconUrl: 'data:image/svg+xml;base64,' + btoa(
+                    '<svg width="38" height="56" xmlns="http://www.w3.org/2000/svg">' +
+                    '<path d="M19 0C8.5 0 0 8.5 0 19c0 14.25 19 37 19 37s19-22.75 19-37c0-10.5-8.5-19-19-19z" fill="#3498db" stroke="white" stroke-width="2.5"/>' +
+                    '<circle cx="19" cy="19" r="8" fill="white"/>' +
+                    '</svg>'
+                ),
+                iconSize: [38, 56],
+                iconAnchor: [19, 56],
+                popupAnchor: [0, -56]
+            }});
+        }}
+
+        // Add all building markers
+        buildings.forEach(function(building) {{
+            var isHighlighted = highlightLocation &&
+                                Math.abs(building.lat - {self.initial_lat}) < 0.00001 &&
+                                Math.abs(building.lon - {self.initial_lon}) < 0.00001;
+
+            if (!isHighlighted) {{
+                var markerColor = getMarkerColor(building.status);
+                var icon = createIcon(markerColor);
+
+                var buildingMarker = L.marker([building.lat, building.lon], {{
+                    icon: icon,
+                    riseOnHover: true
+                }}).addTo(map);
+
+                buildingMarker.bindPopup(
+                    '<b>رمز البناء: ' + building.id + '</b><br>' +
+                    'الحالة: ' + building.status + '<br>' +
+                    'النوع: ' + building.type
+                );
             }}
         }});
-        map.addControl(drawControl);
 
-        // Initial marker
-        marker = L.marker([{self.initial_lat}, {self.initial_lon}], {{draggable: true}}).addTo(map);
-        marker.on('dragend', function(e) {{
-            var pos = e.target.getLatLng();
-            sendLocation(pos.lat, pos.lng);
-        }});
+        // Initial marker (highlighted if needed, draggable only if NOT read-only)
+        var markerOptions = {{draggable: !readOnly, riseOnHover: true}};
+        if (highlightLocation) {{
+            // Highlighted marker (bigger, blue)
+            var bigIcon = createBigIcon();
+            markerOptions.icon = bigIcon;
+            marker = L.marker([{self.initial_lat}, {self.initial_lon}], markerOptions).addTo(map);
+            marker.bindPopup('<b>الموقع المحدد</b>').openPopup();
+        }} else {{
+            // Normal marker
+            marker = L.marker([{self.initial_lat}, {self.initial_lon}], markerOptions).addTo(map);
+        }}
+
+        if (!readOnly) {{
+            marker.on('dragend', function(e) {{
+                var pos = e.target.getLatLng();
+                sendLocation(pos.lat, pos.lng);
+            }});
+        }}
 
         // Connect to Python
         var bridge = null;
@@ -763,60 +731,65 @@ class MapPickerDialog(QDialog):
             }}
         }}
 
-        // Click to place marker
-        map.on('click', function(e) {{
-            if (marker) {{
-                map.removeLayer(marker);
-            }}
-            marker = L.marker(e.latlng, {{draggable: true}}).addTo(map);
-            marker.on('dragend', function(ev) {{
-                var pos = ev.target.getLatLng();
-                sendLocation(pos.lat, pos.lng);
-            }});
-            sendLocation(e.latlng.lat, e.latlng.lng);
-        }});
-
-        // Handle drawn items
-        map.on(L.Draw.Event.CREATED, function(e) {{
-            var layer = e.layer;
-            var type = e.layerType;
-
-            drawnItems.clearLayers();
-            drawnItems.addLayer(layer);
-
-            if (type === 'polygon') {{
-                var latlngs = layer.getLatLngs()[0];
-                var wkt = 'POLYGON((';
-                for (var i = 0; i < latlngs.length; i++) {{
-                    wkt += latlngs[i].lng + ' ' + latlngs[i].lat + ', ';
+        // Click to place marker (only if NOT read-only)
+        if (!readOnly) {{
+            map.on('click', function(e) {{
+                if (marker) {{
+                    map.removeLayer(marker);
                 }}
-                // Close the polygon
-                wkt += latlngs[0].lng + ' ' + latlngs[0].lat + '))';
-                sendPolygon(wkt);
-            }} else if (type === 'marker') {{
-                var pos = layer.getLatLng();
-                sendLocation(pos.lat, pos.lng);
-            }}
-        }});
+                marker = L.marker(e.latlng, {{draggable: true}}).addTo(map);
+                marker.on('dragend', function(ev) {{
+                    var pos = ev.target.getLatLng();
+                    sendLocation(pos.lat, pos.lng);
+                }});
+                sendLocation(e.latlng.lat, e.latlng.lng);
+            }});
+        }}
 
-        // Handle edit
-        map.on(L.Draw.Event.EDITED, function(e) {{
-            var layers = e.layers;
-            layers.eachLayer(function(layer) {{
-                if (layer instanceof L.Polygon) {{
+        // Handle drawn items (only if NOT read-only)
+        if (!readOnly) {{
+            map.on(L.Draw.Event.CREATED, function(e) {{
+                var layer = e.layer;
+                var type = e.layerType;
+
+                drawnItems.clearLayers();
+                drawnItems.addLayer(layer);
+
+                if (type === 'polygon') {{
                     var latlngs = layer.getLatLngs()[0];
                     var wkt = 'POLYGON((';
                     for (var i = 0; i < latlngs.length; i++) {{
                         wkt += latlngs[i].lng + ' ' + latlngs[i].lat + ', ';
                     }}
+                    // Close the polygon
                     wkt += latlngs[0].lng + ' ' + latlngs[0].lat + '))';
+                    console.log('Polygon WKT:', wkt);
                     sendPolygon(wkt);
-                }} else if (layer instanceof L.Marker) {{
+                }} else if (type === 'marker') {{
                     var pos = layer.getLatLng();
                     sendLocation(pos.lat, pos.lng);
                 }}
             }});
-        }});
+
+            // Handle edit
+            map.on(L.Draw.Event.EDITED, function(e) {{
+                var layers = e.layers;
+                layers.eachLayer(function(layer) {{
+                    if (layer instanceof L.Polygon) {{
+                        var latlngs = layer.getLatLngs()[0];
+                        var wkt = 'POLYGON((';
+                        for (var i = 0; i < latlngs.length; i++) {{
+                            wkt += latlngs[i].lng + ' ' + latlngs[i].lat + ', ';
+                        }}
+                        wkt += latlngs[0].lng + ' ' + latlngs[0].lat + '))';
+                        sendPolygon(wkt);
+                    }} else if (layer instanceof L.Marker) {{
+                        var pos = layer.getLatLng();
+                        sendLocation(pos.lat, pos.lng);
+                    }}
+                }});
+            }});
+        }}
 
         // Clear function
         window.clearSelection = function() {{
@@ -829,17 +802,63 @@ class MapPickerDialog(QDialog):
 
         // Set mode function
         window.setMode = function(mode) {{
+            if (!drawControl) {{
+                console.log('❌ No draw control available');
+                return;
+            }}
+
             // mode: 0 = point, 1 = polygon
+            console.log('🔄 Switching to mode:', mode === 0 ? 'Point' : 'Polygon');
+            currentMode = mode;
+
+            // Remove old draw control
+            try {{
+                map.removeControl(drawControl);
+            }} catch(e) {{
+                console.log('Warning: Could not remove control:', e);
+            }}
+
+            // Create new draw control with updated options
             if (mode === 0) {{
-                drawControl.setDrawingOptions({{
-                    polygon: false,
-                    marker: true
+                console.log('📍 Enabling Point marker');
+                drawControl = new L.Control.Draw({{
+                    draw: {{
+                        polygon: false,
+                        polyline: false,
+                        circle: false,
+                        circlemarker: false,
+                        rectangle: false,
+                        marker: true
+                    }},
+                    edit: {{
+                        featureGroup: drawnItems,
+                        remove: true
+                    }}
                 }});
             }} else {{
-                drawControl.setDrawingOptions({{
-                    polygon: true,
-                    marker: false
+                console.log('🔷 Enabling Polygon drawing');
+                drawControl = new L.Control.Draw({{
+                    draw: {{
+                        polygon: true,
+                        polyline: false,
+                        circle: false,
+                        circlemarker: false,
+                        rectangle: false,
+                        marker: false
+                    }},
+                    edit: {{
+                        featureGroup: drawnItems,
+                        remove: true
+                    }}
                 }});
+            }}
+
+            // Add new draw control
+            try {{
+                map.addControl(drawControl);
+                console.log('✅ Draw control updated and ready');
+            }} catch(e) {{
+                console.log('❌ Error adding control:', e);
             }}
         }};
     </script>

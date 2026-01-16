@@ -77,6 +77,17 @@ class ClaimRepository:
         rows = self.db.fetch_all(query, (unit_id,))
         return [self._row_to_claim(row) for row in rows]
 
+    def get_claims_for_building(self, building_uuid: str) -> List[Claim]:
+        """Get all claims for units in a building."""
+        query = """
+            SELECT c.* FROM claims c
+            JOIN property_units u ON c.unit_id = u.unit_uuid
+            WHERE u.building_id = ?
+            ORDER BY c.created_at DESC
+        """
+        rows = self.db.fetch_all(query, (building_uuid,))
+        return [self._row_to_claim(row) for row in rows]
+
     def get_all(self, limit: int = 100, offset: int = 0) -> List[Claim]:
         """Get all claims with pagination."""
         query = "SELECT * FROM claims ORDER BY created_at DESC LIMIT ? OFFSET ?"

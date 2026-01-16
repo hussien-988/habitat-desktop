@@ -5,12 +5,7 @@
 """
 
 import json
-import sqlite3
-import base64
 from pathlib import Path
-from http.server import HTTPServer, BaseHTTPRequestHandler
-import threading
-import socket
 
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
@@ -36,120 +31,7 @@ from utils.logger import get_logger
 
 logger = get_logger(__name__)
 
-# Note: TileServer is now shared via MapPickerDialog - no need for duplicate server
-# This page uses the shared tile server for better performance
-
-
-class _DeprecatedTileServer_DoNotUse(BaseHTTPRequestHandler):
-    """HTTP server to serve tiles from MBTiles file and static assets."""
-
-    mbtiles_path = None
-    assets_path = None
-
-    def log_message(self, format, *args):
-        """Suppress logging."""
-        pass
-
-    def do_GET(self):
-        """Handle GET requests for tiles and static files."""
-        try:
-            path = self.path.split('?')[0]  # Remove query string
-
-            # Serve Leaflet JS
-            if path == '/leaflet.js':
-                self._serve_static_file(self.assets_path / 'leaflet.js', 'application/javascript')
-            # Serve Leaflet CSS
-            elif path == '/leaflet.css':
-                self._serve_static_file(self.assets_path / 'leaflet.css', 'text/css')
-            # Serve Leaflet images
-            elif path.startswith('/images/'):
-                image_name = path[8:]  # Remove '/images/'
-                self._serve_static_file(self.assets_path / 'images' / image_name, 'image/png')
-            # Serve tiles: /tiles/{z}/{x}/{y}.png
-            elif path.startswith('/tiles/'):
-                parts = path.split('/')
-                if len(parts) >= 5:
-                    z = int(parts[2])
-                    x = int(parts[3])
-                    y = int(parts[4].replace('.png', ''))
-                    self._serve_tile(z, x, y)
-                else:
-                    self.send_response(404)
-                    self.end_headers()
-            else:
-                self.send_response(404)
-                self.end_headers()
-        except Exception as e:
-            logger.error(f"Tile server error: {e}")
-            self.send_response(500)
-            self.end_headers()
-
-    def _serve_static_file(self, filepath, content_type):
-        """Serve a static file."""
-        if filepath.exists():
-            self.send_response(200)
-            self.send_header('Content-Type', content_type)
-            self.send_header('Access-Control-Allow-Origin', '*')
-            self.send_header('Cache-Control', 'max-age=86400')
-            self.end_headers()
-            with open(filepath, 'rb') as f:
-                self.wfile.write(f.read())
-        else:
-            self.send_response(404)
-            self.end_headers()
-
-    def _serve_tile(self, z, x, y):
-        """Serve a map tile."""
-        tile_data = self._get_tile(z, x, y)
-
-        if tile_data:
-            self.send_response(200)
-            self.send_header('Content-Type', 'image/png')
-            self.send_header('Access-Control-Allow-Origin', '*')
-            self.send_header('Cache-Control', 'max-age=86400')
-            self.end_headers()
-            self.wfile.write(tile_data)
-        else:
-            # Return transparent tile for missing tiles
-            self.send_response(200)
-            self.send_header('Content-Type', 'image/png')
-            self.send_header('Access-Control-Allow-Origin', '*')
-            self.end_headers()
-            # 1x1 transparent PNG
-            self.wfile.write(base64.b64decode(
-                'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=='
-            ))
-
-    def _get_tile(self, z, x, y):
-        """Get tile from MBTiles database."""
-        if not self.mbtiles_path or not self.mbtiles_path.exists():
-            return None
-
-        try:
-            conn = sqlite3.connect(str(self.mbtiles_path))
-            cursor = conn.cursor()
-
-            # MBTiles uses TMS scheme (y is flipped)
-            tms_y = (2 ** z) - 1 - y
-
-            cursor.execute(
-                'SELECT tile_data FROM tiles WHERE zoom_level=? AND tile_column=? AND tile_row=?',
-                (z, x, tms_y)
-            )
-            row = cursor.fetchone()
-            conn.close()
-
-            return row[0] if row else None
-        except Exception as e:
-            logger.error(f"Error reading tile: {e}")
-            return None
-
-
-def find_free_port():
-    """Find a free port for the tile server."""
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-        s.bind(('', 0))
-        return s.getsockname()[1]
+# Note: This page uses the centralized tile server from services/tile_server_manager.py
 
 
 class BuildingListPanel(QFrame):
@@ -704,17 +586,13 @@ class MapPage(QWidget):
         layout.addWidget(info_bar)
 
     def _start_tile_server(self):
-        """Use shared tile server from MapPickerDialog instead of creating new one."""
-        from ui.components.map_picker_dialog import MapPickerDialog
+        """Get tile server URL from centralized manager."""
+        from services.tile_server_manager import get_tile_server_url
 
-        # Ensure shared tile server is started
-        if MapPickerDialog._tile_server_port is None:
-            temp_dialog = MapPickerDialog.__new__(MapPickerDialog)
-            temp_dialog._start_tile_server()
-
-        # Use the shared port
-        self.tile_server_port = MapPickerDialog._tile_server_port
-        logger.info(f"Using shared tile server on port {self.tile_server_port}")
+        tile_url = get_tile_server_url()
+        # Extract port from URL for backward compatibility
+        self.tile_server_port = tile_url.split(':')[-1]
+        logger.info(f"Using tile server: {tile_url}")
         return True
 
     def _buildings_to_geojson(self, buildings) -> str:
