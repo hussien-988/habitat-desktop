@@ -2922,13 +2922,15 @@ class OfficeSurveyWizard(QWidget):
     def _create_persons_step(self) -> QWidget:
         """Create Step 4: Person Registration with Edit support (S11-S13)."""
         widget = QWidget()
+        widget.setLayoutDirection(Qt.RightToLeft)
         widget.setStyleSheet("background-color: #F8FAFC;")
         layout = QVBoxLayout(widget)
-        layout.setContentsMargins(50, 50, 50, 50)
+        layout.setContentsMargins(50, 30, 50, 30)
         layout.setSpacing(16)
 
         # Main Card Container
         table_frame = QFrame()
+        table_frame.setLayoutDirection(Qt.RightToLeft)
         table_frame.setStyleSheet("""
             QFrame {
                 background-color: white;
@@ -2940,11 +2942,23 @@ class OfficeSurveyWizard(QWidget):
         table_layout.setContentsMargins(20, 20, 20, 20)
         table_layout.setSpacing(10)
 
-        # Header with "Add Person" Button and Title (RTL layout)
+        # Header with Title on right and Add Button on left (RTL layout)
         persons_header = QHBoxLayout()
 
-        # Add button on the left
+        # Title on the right (appears first in RTL)
+        title_vbox = QVBoxLayout()
+        title_label = QLabel("بيانات الأشخاص")
+        title_label.setStyleSheet("font-weight: bold; font-size: 16px; border: none; color: #1A202C;")
+        title_label.setAlignment(Qt.AlignRight)
+        subtitle_label = QLabel("قائمة الأشخاص المسجلين")
+        subtitle_label.setStyleSheet("color: #A0AEC0; font-size: 12px; border: none;")
+        subtitle_label.setAlignment(Qt.AlignRight)
+        title_vbox.addWidget(title_label)
+        title_vbox.addWidget(subtitle_label)
+
+        # Add button on the left (appears last in RTL)
         add_person_btn = QPushButton("+ اضافة شخص جديد")
+        add_person_btn.setLayoutDirection(Qt.RightToLeft)
         add_person_btn.setStyleSheet("""
             QPushButton {
                 background-color: white;
@@ -2960,20 +2974,9 @@ class OfficeSurveyWizard(QWidget):
         """)
         add_person_btn.clicked.connect(self._add_person)
 
-        # Title on the right
-        title_vbox = QVBoxLayout()
-        title_label = QLabel("بيانات الأشخاص")
-        title_label.setStyleSheet("font-weight: bold; font-size: 16px; border: none; color: #1A202C;")
-        title_label.setAlignment(Qt.AlignRight)
-        subtitle_label = QLabel("قائمة الأشخاص المسجلين")
-        subtitle_label.setStyleSheet("color: #A0AEC0; font-size: 12px; border: none;")
-        subtitle_label.setAlignment(Qt.AlignRight)
-        title_vbox.addWidget(title_label)
-        title_vbox.addWidget(subtitle_label)
-
-        persons_header.addWidget(add_person_btn)
-        persons_header.addStretch()
         persons_header.addLayout(title_vbox)
+        persons_header.addStretch()
+        persons_header.addWidget(add_person_btn)
 
         table_layout.addLayout(persons_header)
         table_layout.addSpacing(10)
@@ -2989,6 +2992,7 @@ class OfficeSurveyWizard(QWidget):
         """)
 
         scroll_widget = QWidget()
+        scroll_widget.setLayoutDirection(Qt.RightToLeft)
         scroll_widget.setStyleSheet("background-color: transparent;")
         self.persons_table_layout = QVBoxLayout(scroll_widget)
         self.persons_table_layout.setSpacing(10)
@@ -3021,6 +3025,7 @@ class OfficeSurveyWizard(QWidget):
     def _create_person_row_card(self, person: dict, index: int = 0) -> QFrame:
         """Create a person row card matching the new design layout."""
         card = QFrame()
+        card.setLayoutDirection(Qt.RightToLeft)
         card.setFixedHeight(80)
         card.setStyleSheet("""
             QFrame {
@@ -3030,60 +3035,28 @@ class OfficeSurveyWizard(QWidget):
             }
         """)
 
-        # Main row layout
+        # Main row layout (RTL: items added left-to-right appear right-to-left)
         card_layout = QHBoxLayout(card)
         card_layout.setContentsMargins(15, 0, 15, 0)
 
-        # 1. Left Side: Menu Button
-        menu_btn = QPushButton("•••")
-        menu_btn.setFixedWidth(40)
-        menu_btn.setStyleSheet("""
-            QPushButton {
-                border: none;
-                color: #A0A0A0;
-                font-size: 18px;
-                background: transparent;
-            }
-            QPushButton:hover {
-                color: #333333;
-            }
-        """)
-        menu_btn.setCursor(Qt.PointingHandCursor)
-
-        # Create context menu
-        menu = QMenu(menu_btn)
-        menu.setStyleSheet("""
-            QMenu {
-                background-color: white;
-                border: 1px solid #E5E7EB;
-                border-radius: 6px;
-                padding: 4px;
-            }
-            QMenu::item {
-                padding: 8px 16px;
-                border-radius: 4px;
-            }
-            QMenu::item:selected {
-                background-color: #F3F4F6;
-            }
-        """)
-
-        # View action
-        view_action = menu.addAction("عرض")
-        view_action.triggered.connect(lambda _, pid=person['person_id']: self._view_person(pid))
-
-        # Delete action
-        delete_action = menu.addAction("حذف")
-        delete_action.triggered.connect(lambda _, pid=person['person_id']: self._delete_person_by_id(pid))
-
-        menu_btn.clicked.connect(lambda: menu.exec_(menu_btn.mapToGlobal(menu_btn.rect().bottomLeft())))
-
-        # 2. Spacer: Pushes content to the edges
-        spacer = QSpacerItem(40, 20, QSizePolicy.Expanding, QSizePolicy.Minimum)
-
-        # 3. Right Side Group: Text and Icon
+        # 1. Right Side Group: Icon and Text (appears on right in RTL)
         right_group = QHBoxLayout()
         right_group.setSpacing(12)
+
+        # Icon
+        icon_lbl = QLabel()
+        icon_lbl.setFixedSize(36, 36)
+        icon_lbl.setAlignment(Qt.AlignCenter)
+        icon_lbl.setStyleSheet("""
+            QLabel {
+                background-color: #F4F8FF;
+                color: #3182CE;
+                border-radius: 18px;
+                font-size: 16px;
+                border: none;
+            }
+        """)
+        icon_lbl.setText("👤")
 
         # Text Container (Name and Role)
         text_vbox = QVBoxLayout()
@@ -3113,29 +3086,62 @@ class OfficeSurveyWizard(QWidget):
         text_vbox.addWidget(name_lbl)
         text_vbox.addWidget(role_lbl)
 
-        # Icon
-        icon_lbl = QLabel()
-        icon_lbl.setFixedSize(36, 36)
-        icon_lbl.setAlignment(Qt.AlignCenter)
-        icon_lbl.setStyleSheet("""
-            QLabel {
-                background-color: #F4F8FF;
-                color: #3182CE;
-                border-radius: 18px;
-                font-size: 16px;
+        # Assemble the Right Group (Icon first, then text in RTL)
+        right_group.addWidget(icon_lbl)
+        right_group.addLayout(text_vbox)
+
+        # 2. Spacer: Pushes content to the edges
+        spacer = QSpacerItem(40, 20, QSizePolicy.Expanding, QSizePolicy.Minimum)
+
+        # 3. Left Side: Menu Button (appears on left in RTL)
+        menu_btn = QPushButton("•••")
+        menu_btn.setFixedWidth(40)
+        menu_btn.setStyleSheet("""
+            QPushButton {
                 border: none;
+                color: #A0A0A0;
+                font-size: 18px;
+                background: transparent;
+            }
+            QPushButton:hover {
+                color: #333333;
             }
         """)
-        icon_lbl.setText("👤")
+        menu_btn.setCursor(Qt.PointingHandCursor)
 
-        # Assemble the Right Group
-        right_group.addLayout(text_vbox)
-        right_group.addWidget(icon_lbl)
+        # Create context menu
+        menu = QMenu(menu_btn)
+        menu.setLayoutDirection(Qt.RightToLeft)
+        menu.setStyleSheet("""
+            QMenu {
+                background-color: white;
+                border: 1px solid #E5E7EB;
+                border-radius: 6px;
+                padding: 4px;
+            }
+            QMenu::item {
+                padding: 8px 16px;
+                border-radius: 4px;
+            }
+            QMenu::item:selected {
+                background-color: #F3F4F6;
+            }
+        """)
 
-        # Add all to main layout
-        card_layout.addWidget(menu_btn)      # Appears Left
-        card_layout.addSpacerItem(spacer)    # Middle Gap
+        # View action with icon
+        view_action = menu.addAction("👁 عرض")
+        view_action.triggered.connect(lambda _, pid=person['person_id']: self._view_person(pid))
+
+        # Delete action with icon
+        delete_action = menu.addAction("🗑 حذف")
+        delete_action.triggered.connect(lambda _, pid=person['person_id']: self._delete_person_by_id(pid))
+
+        menu_btn.clicked.connect(lambda: menu.exec_(menu_btn.mapToGlobal(menu_btn.rect().bottomRight())))
+
+        # Add all to main layout (RTL order)
         card_layout.addLayout(right_group)   # Appears Right
+        card_layout.addSpacerItem(spacer)    # Middle Gap
+        card_layout.addWidget(menu_btn)      # Appears Left
 
         return card
 
