@@ -17,6 +17,7 @@ from PyQt5.QtGui import QColor
 
 from app.config import Config, Vocabularies
 from repositories.database import Database
+from ui.components.dialogs.base_dialog import BaseDialog
 from repositories.claim_repository import ClaimRepository
 from repositories.unit_repository import UnitRepository
 from repositories.person_repository import PersonRepository
@@ -768,20 +769,25 @@ class ClaimDetailsDialog(QDialog):
             QMessageBox.warning(self, "خطأ", str(e))
 
 
-class AddDocumentDialog(QDialog):
+class AddDocumentDialog(BaseDialog):
     """Dialog for adding a new document to a claim."""
 
-    def __init__(self, i18n: I18n, parent=None):
-        super().__init__(parent)
-        self.i18n = i18n
+    def __init__(self, i18n: I18n, parent=None, db=None):
         self.selected_file = None
 
+        super().__init__(
+            db=db,
+            i18n=i18n,
+            title_key="",  # Will use hardcoded title via setWindowTitle below
+            parent=parent,
+            size=(500, 400)
+        )
+        # Override title with hardcoded Arabic (preserving existing behavior)
         self.setWindowTitle("إضافة وثيقة جديدة")
-        self.setMinimumWidth(500)
         self._setup_ui()
 
     def _setup_ui(self):
-        layout = QVBoxLayout(self)
+        layout = self.main_layout
         layout.setSpacing(16)
         layout.setContentsMargins(24, 24, 24, 24)
 
