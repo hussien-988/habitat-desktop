@@ -12,7 +12,7 @@ from PyQt5.QtWidgets import (
     QMessageBox, QGroupBox, QListWidget, QListWidgetItem,
     QProgressDialog
 )
-from PyQt5.QtCore import Qt, QAbstractTableModel, QModelIndex, pyqtSignal, QTimer
+from PyQt5.QtCore import Qt, QModelIndex, pyqtSignal, QTimer
 from PyQt5.QtGui import QColor
 
 from app.config import Config, AleppoDivisions
@@ -21,65 +21,53 @@ from repositories.building_repository import BuildingRepository
 from repositories.unit_repository import UnitRepository
 from services.assignment_service import AssignmentService, BuildingAssignment
 from ui.components.toast import Toast
+from ui.components.base_table_model import BaseTableModel
 from utils.i18n import I18n
 from utils.logger import get_logger
 
 logger = get_logger(__name__)
 
 
-class BuildingsTableModel(QAbstractTableModel):
+class BuildingsTableModel(BaseTableModel):
     """Table model for buildings available for assignment."""
 
     def __init__(self):
-        super().__init__()
-        self._buildings = []
-        self._headers = ["رقم المبنى", "الحي", "النوع", "عدد الوحدات", "الحالة"]
-
-    def rowCount(self, parent=None):
-        return len(self._buildings)
-
-    def columnCount(self, parent=None):
-        return len(self._headers)
+        columns = [
+            ('building_id', "رقم المبنى", "رقم المبنى"),
+            ('neighborhood', "الحي", "الحي"),
+            ('type', "النوع", "النوع"),
+            ('units_count', "عدد الوحدات", "عدد الوحدات"),
+            ('status', "الحالة", "الحالة"),
+        ]
+        super().__init__(items=[], columns=columns)
 
     def data(self, index: QModelIndex, role=Qt.DisplayRole):
-        if not index.isValid() or index.row() >= len(self._buildings):
-            return None
+        """Override to add UserRole support."""
+        if role == Qt.UserRole:
+            if not index.isValid() or index.row() >= len(self._items):
+                return None
+            return self._items[index.row()]
+        return super().data(index, role)
 
-        building = self._buildings[index.row()]
-        col = index.column()
-
-        if role == Qt.DisplayRole:
-            if col == 0:
-                return building.building_id
-            elif col == 1:
-                return building.neighborhood_name_ar or building.neighborhood_name
-            elif col == 2:
-                return building.building_type or "-"
-            elif col == 3:
-                return str(building.number_of_units or 0)
-            elif col == 4:
-                return building.building_status or "-"
-        elif role == Qt.TextAlignmentRole:
-            return Qt.AlignCenter
-        elif role == Qt.UserRole:
-            return building
-
-        return None
-
-    def headerData(self, section, orientation, role=Qt.DisplayRole):
-        if orientation == Qt.Horizontal and role == Qt.DisplayRole:
-            return self._headers[section] if section < len(self._headers) else ""
-        return None
+    def get_item_value(self, item, field_name: str):
+        """Extract field value from building object."""
+        if field_name == 'building_id':
+            return item.building_id
+        elif field_name == 'neighborhood':
+            return item.neighborhood_name_ar or item.neighborhood_name
+        elif field_name == 'type':
+            return item.building_type or "-"
+        elif field_name == 'units_count':
+            return str(item.number_of_units or 0)
+        elif field_name == 'status':
+            return item.building_status or "-"
+        return "-"
 
     def set_buildings(self, buildings: list):
-        self.beginResetModel()
-        self._buildings = buildings
-        self.endResetModel()
+        self.set_items(buildings)
 
     def get_building(self, row: int):
-        if 0 <= row < len(self._buildings):
-            return self._buildings[row]
-        return None
+        return self.get_item(row)
 
 
 class AssignmentQueueWidget(QWidget):
