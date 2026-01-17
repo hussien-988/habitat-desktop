@@ -12,7 +12,7 @@ from PyQt5.QtWidgets import (
     QAbstractItemView, QGraphicsDropShadowEffect, QMessageBox,
     QDateEdit, QGroupBox, QDoubleSpinBox, QSplitter
 )
-from PyQt5.QtCore import Qt, pyqtSignal, QAbstractTableModel, QModelIndex, QDate
+from PyQt5.QtCore import Qt, pyqtSignal, QModelIndex, QDate
 from PyQt5.QtGui import QColor
 
 from app.config import Config
@@ -22,92 +22,71 @@ from repositories.unit_repository import UnitRepository
 from repositories.person_repository import PersonRepository
 from models.household import Household
 from ui.components.toast import Toast
+from ui.components.base_table_model import BaseTableModel
 from utils.i18n import I18n
 from utils.logger import get_logger
 
 logger = get_logger(__name__)
 
 
-class HouseholdsTableModel(QAbstractTableModel):
+class HouseholdsTableModel(BaseTableModel):
     """Table model for households list."""
 
     def __init__(self, is_arabic: bool = True):
-        super().__init__()
-        self._households = []
-        self._units_cache = {}
+        columns = [
+            ('unit', "Unit", "الوحدة"),
+            ('main_occupant', "Main Occupant", "الشاغل الرئيسي"),
+            ('size', "Size", "الحجم"),
+            ('gender_dist', "M/F", "ذ/أ"),
+            ('age_groups', "Age Groups", "الفئات العمرية"),
+            ('type', "Type", "النوع"),
+            ('nature', "Nature", "الطبيعة"),
+        ]
+        super().__init__(items=[], columns=columns)
         self._is_arabic = is_arabic
-        self._headers_en = ["Unit", "Main Occupant", "Size", "M/F", "Age Groups", "Type", "Nature"]
-        self._headers_ar = ["الوحدة", "الشاغل الرئيسي", "الحجم", "ذ/أ", "الفئات العمرية", "النوع", "الطبيعة"]
+        self._units_cache = {}
 
     def set_cache(self, units_cache: dict):
         """Set the cache for units lookups."""
         self._units_cache = units_cache
 
-    def rowCount(self, parent=None):
-        return len(self._households)
-
-    def columnCount(self, parent=None):
-        return len(self._headers_en)
-
     def data(self, index: QModelIndex, role=Qt.DisplayRole):
-        if not index.isValid() or index.row() >= len(self._households):
-            return None
-
-        household = self._households[index.row()]
-        col = index.column()
-
-        if role == Qt.DisplayRole:
-            if col == 0:
-                # Unit ID
-                unit = self._units_cache.get(household.unit_id)
-                return unit.unit_id if unit else household.unit_id[:15]
-            elif col == 1:
-                # Main occupant
-                return household.main_occupant_name or "-"
-            elif col == 2:
-                # Occupancy size
-                return str(household.occupancy_size)
-            elif col == 3:
-                # Gender distribution (Male/Female)
-                return f"{household.male_count}/{household.female_count}"
-            elif col == 4:
-                # Age groups (Minors/Adults/Elderly)
-                return f"{household.minors_count}/{household.adults_count}/{household.elderly_count}"
-            elif col == 5:
-                # Occupancy type
-                return household.occupancy_type_display_ar if self._is_arabic else household.occupancy_type_display
-            elif col == 6:
-                # Occupancy nature
-                return household.occupancy_nature_display_ar if self._is_arabic else household.occupancy_nature_display
-        elif role == Qt.TextAlignmentRole:
-            return Qt.AlignCenter
-        elif role == Qt.ToolTipRole:
+        """Override to add ToolTipRole support."""
+        if role == Qt.ToolTipRole:
+            if not index.isValid() or index.row() >= len(self._items):
+                return None
+            household = self._items[index.row()]
+            col = index.column()
             if col == 3:
                 return f"ذكور: {household.male_count}, إناث: {household.female_count}"
             elif col == 4:
                 return f"قاصرين: {household.minors_count}, بالغين: {household.adults_count}, كبار السن: {household.elderly_count}"
+        return super().data(index, role)
 
-        return None
-
-    def headerData(self, section, orientation, role=Qt.DisplayRole):
-        if orientation == Qt.Horizontal and role == Qt.DisplayRole:
-            headers = self._headers_ar if self._is_arabic else self._headers_en
-            return headers[section] if section < len(headers) else ""
-        return None
+    def get_item_value(self, item, field_name: str):
+        """Extract field value from household object."""
+        if field_name == 'unit':
+            unit = self._units_cache.get(item.unit_id)
+            return unit.unit_id if unit else item.unit_id[:15]
+        elif field_name == 'main_occupant':
+            return item.main_occupant_name or "-"
+        elif field_name == 'size':
+            return str(item.occupancy_size)
+        elif field_name == 'gender_dist':
+            return f"{item.male_count}/{item.female_count}"
+        elif field_name == 'age_groups':
+            return f"{item.minors_count}/{item.adults_count}/{item.elderly_count}"
+        elif field_name == 'type':
+            return item.occupancy_type_display_ar if self._is_arabic else item.occupancy_type_display
+        elif field_name == 'nature':
+            return item.occupancy_nature_display_ar if self._is_arabic else item.occupancy_nature_display
+        return "-"
 
     def set_households(self, households: list):
-        self.beginResetModel()
-        self._households = households
-        self.endResetModel()
+        self.set_items(households)
 
     def get_household(self, row: int):
-        if 0 <= row < len(self._households):
-            return self._households[row]
-        return None
-
-    def set_language(self, is_arabic: bool):
-        self._is_arabic = is_arabic
-        self.layoutChanged.emit()
+        return self.get_item(row)
 
 
 class HouseholdDialog(QDialog):
