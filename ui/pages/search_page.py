@@ -9,7 +9,7 @@ from PyQt5.QtWidgets import (
     QPushButton, QComboBox, QTableView, QTabWidget,
     QFrame, QAbstractItemView, QGraphicsDropShadowEffect, QHeaderView
 )
-from PyQt5.QtCore import Qt, pyqtSignal, QAbstractTableModel, QModelIndex
+from PyQt5.QtCore import Qt, pyqtSignal, QModelIndex
 from PyQt5.QtGui import QColor
 
 from app.config import Config, Pages
@@ -17,57 +17,47 @@ from repositories.database import Database
 from repositories.building_repository import BuildingRepository
 from repositories.person_repository import PersonRepository
 from repositories.claim_repository import ClaimRepository
+from ui.components.base_table_model import BaseTableModel
 from utils.i18n import I18n
 from utils.logger import get_logger
 
 logger = get_logger(__name__)
 
 
-class SearchResultsModel(QAbstractTableModel):
+class SearchResultsModel(BaseTableModel):
     """Generic search results model."""
 
     def __init__(self, headers: list):
-        super().__init__()
-        self._results = []
-        self._headers = headers
+        # Initialize with empty columns; will be set dynamically via set_results
+        super().__init__(items=[], columns=[])
+        self._custom_headers = headers
         self._data_keys = []
 
-    def rowCount(self, parent=None):
-        return len(self._results)
-
     def columnCount(self, parent=None):
-        return len(self._headers)
-
-    def data(self, index: QModelIndex, role=Qt.DisplayRole):
-        if not index.isValid() or index.row() >= len(self._results):
-            return None
-
-        if role == Qt.DisplayRole:
-            row = self._results[index.row()]
-            col = index.column()
-            if col < len(self._data_keys):
-                key = self._data_keys[col]
-                return str(getattr(row, key, "-") or "-")
-        elif role == Qt.TextAlignmentRole:
-            return Qt.AlignCenter
-
-        return None
+        """Override to use custom headers."""
+        return len(self._custom_headers)
 
     def headerData(self, section, orientation, role=Qt.DisplayRole):
+        """Override to use custom headers."""
         if orientation == Qt.Horizontal and role == Qt.DisplayRole:
-            return self._headers[section] if section < len(self._headers) else ""
+            return self._custom_headers[section] if section < len(self._custom_headers) else ""
         return None
+
+    def get_item_value(self, item, field_name: str):
+        """Extract field value dynamically using data_keys."""
+        # field_name is the index in this case
+        idx = int(field_name) if field_name.isdigit() else 0
+        if idx < len(self._data_keys):
+            key = self._data_keys[idx]
+            return str(getattr(item, key, "-") or "-")
+        return "-"
 
     def set_results(self, results: list, data_keys: list):
-        self.beginResetModel()
-        self._results = results
+        """Set search results and data keys for dynamic column mapping."""
         self._data_keys = data_keys
-        self.endResetModel()
-
-    def get_item(self, row: int):
-        if 0 <= row < len(self._results):
-            return self._results[row]
-        return None
+        # Build columns dynamically based on data_keys indices
+        self._columns = [(str(i), "", "") for i in range(len(data_keys))]
+        self.set_items(results)
 
 
 class SearchPage(QWidget):
