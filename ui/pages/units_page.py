@@ -21,11 +21,13 @@ from models.unit import PropertyUnit
 from ui.components.toast import Toast
 from utils.i18n import I18n
 from utils.logger import get_logger
+from ui.components.base_table_model import BaseTableModel
+
 
 logger = get_logger(__name__)
 
 
-class UnitsTableModel(QAbstractTableModel):
+class UnitsTableModel(BaseTableModel):
     """Table model for property units."""
 
     def __init__(self, is_arabic: bool = True):
