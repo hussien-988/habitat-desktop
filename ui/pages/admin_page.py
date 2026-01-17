@@ -13,7 +13,7 @@ from PyQt5.QtWidgets import (
     QScrollArea, QGroupBox, QSplitter, QStyle, QToolButton,
     QSizePolicy, QDateEdit
 )
-from PyQt5.QtCore import Qt, QAbstractTableModel, QModelIndex, QSize, QDate
+from PyQt5.QtCore import Qt, QModelIndex, QSize, QDate
 from PyQt5.QtGui import QColor, QIcon
 
 from app.config import Config, Roles, Vocabularies
@@ -23,53 +23,33 @@ from repositories.vocabulary_repository import VocabularyRepository, VocabularyT
 from services.security_service import SecurityService, SecuritySettings
 from models.user import User
 from ui.components.toast import Toast
+from ui.components.base_table_model import BaseTableModel
 from utils.i18n import I18n
 from utils.logger import get_logger
 
 logger = get_logger(__name__)
 
 
-class UsersTableModel(QAbstractTableModel):
+class UsersTableModel(BaseTableModel):
     """Table model for users (UC-009 S03)."""
 
     def __init__(self):
-        super().__init__()
-        self._users = []
-        self._headers = ["اسم المستخدم", "الاسم الكامل", "الدور", "البريد", "الحالة"]
-
-    def rowCount(self, parent=None):
-        return len(self._users)
-
-    def columnCount(self, parent=None):
-        return len(self._headers)
+        columns = [
+            ('username', "اسم المستخدم", "اسم المستخدم"),
+            ('full_name', "الاسم الكامل", "الاسم الكامل"),
+            ('role', "الدور", "الدور"),
+            ('email', "البريد", "البريد"),
+            ('status', "الحالة", "الحالة"),
+        ]
+        super().__init__(items=[], columns=columns)
 
     def data(self, index: QModelIndex, role=Qt.DisplayRole):
-        if not index.isValid() or index.row() >= len(self._users):
-            return None
-
-        user = self._users[index.row()]
-        col = index.column()
-
-        if role == Qt.DisplayRole:
-            if col == 0:
-                return user.username
-            elif col == 1:
-                return user.full_name_ar or user.full_name
-            elif col == 2:
-                return Roles.get_display_name(user.role, arabic=True)
-            elif col == 3:
-                return user.email or "-"
-            elif col == 4:
-                # Show locked/active/disabled status (UC-009 S03)
-                if user.is_locked:
-                    return "مقفل"
-                elif user.is_active:
-                    return "نشط"
-                else:
-                    return "معطل"
-        elif role == Qt.TextAlignmentRole:
-            return Qt.AlignCenter
-        elif role == Qt.BackgroundRole:
+        """Override to add BackgroundRole support for user status."""
+        if role == Qt.BackgroundRole:
+            if not index.isValid() or index.row() >= len(self._items):
+                return None
+            user = self._items[index.row()]
+            col = index.column()
             if col == 4:
                 if user.is_locked:
                     return QColor("#FEF3C7")  # Yellow for locked
@@ -77,23 +57,32 @@ class UsersTableModel(QAbstractTableModel):
                     return QColor("#D1FAE5")  # Green for active
                 else:
                     return QColor("#FEE2E2")  # Red for disabled
+        return super().data(index, role)
 
-        return None
-
-    def headerData(self, section, orientation, role=Qt.DisplayRole):
-        if orientation == Qt.Horizontal and role == Qt.DisplayRole:
-            return self._headers[section] if section < len(self._headers) else ""
-        return None
+    def get_item_value(self, item, field_name: str):
+        """Extract field value from user object."""
+        if field_name == 'username':
+            return item.username
+        elif field_name == 'full_name':
+            return item.full_name_ar or item.full_name
+        elif field_name == 'role':
+            return Roles.get_display_name(item.role, arabic=True)
+        elif field_name == 'email':
+            return item.email or "-"
+        elif field_name == 'status':
+            if item.is_locked:
+                return "مقفل"
+            elif item.is_active:
+                return "نشط"
+            else:
+                return "معطل"
+        return "-"
 
     def set_users(self, users: list):
-        self.beginResetModel()
-        self._users = users
-        self.endResetModel()
+        self.set_items(users)
 
     def get_user(self, row: int):
-        if 0 <= row < len(self._users):
-            return self._users[row]
-        return None
+        return self.get_item(row)
 
 
 class UserDialog(QDialog):
