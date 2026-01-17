@@ -108,65 +108,45 @@ class BuildingsTableModel(QAbstractTableModel):
         return self._buildings
 
 
-class UnitsTableModel(QAbstractTableModel):
+class UnitsTableModel(BaseTableModel):
     """Table model for property units list."""
 
     def __init__(self, units: List[PropertyUnit] = None, is_arabic: bool = False, parent=None):
-        super().__init__(parent)
-        self._units = units or []
-        self._is_arabic = is_arabic
-        self._columns = [
+        columns = [
             ("unit_number", "Unit #", "رقم الوحدة"),
             ("unit_type", "Type", "النوع"),
             ("floor_number", "Floor", "الطابق"),
             ("apartment_status", "Status", "الحالة"),
             ("area_sqm", "Area (m²)", "المساحة (م²)"),
         ]
-
-    def rowCount(self, parent=QModelIndex()) -> int:
-        return len(self._units)
-
-    def columnCount(self, parent=QModelIndex()) -> int:
-        return len(self._columns)
+        super().__init__(items=units or [], columns=columns)
+        self._is_arabic = is_arabic
 
     def data(self, index: QModelIndex, role: int = Qt.DisplayRole) -> Any:
-        if not index.isValid() or not self._units:
-            return QVariant()
+        """Override to add UserRole support."""
+        if role == Qt.UserRole:
+            if not index.isValid() or index.row() >= len(self._items):
+                return QVariant()
+            return self._items[index.row()].unit_id
+        return super().data(index, role)
 
-        unit = self._units[index.row()]
-        column_key = self._columns[index.column()][0]
-
-        if role == Qt.DisplayRole:
-            if column_key == "unit_number":
-                return unit.unit_number
-            elif column_key == "unit_type":
-                return unit.unit_type_display_ar if self._is_arabic else unit.unit_type_display
-            elif column_key == "floor_number":
-                return unit.floor_display
-            elif column_key == "apartment_status":
-                return unit.status_display
-            elif column_key == "area_sqm":
-                return f"{unit.area_sqm:.1f}" if unit.area_sqm else "-"
-
-        elif role == Qt.TextAlignmentRole:
-            return Qt.AlignCenter
-
-        elif role == Qt.UserRole:
-            return unit.unit_id
-
-        return QVariant()
-
-    def headerData(self, section: int, orientation: Qt.Orientation, role: int = Qt.DisplayRole) -> Any:
-        if orientation == Qt.Horizontal and role == Qt.DisplayRole:
-            col = self._columns[section]
-            return col[2] if self._is_arabic else col[1]
-        return QVariant()
+    def get_item_value(self, item, field_name: str):
+        """Extract field value from unit object."""
+        if field_name == "unit_number":
+            return item.unit_number
+        elif field_name == "unit_type":
+            return item.unit_type_display_ar if self._is_arabic else item.unit_type_display
+        elif field_name == "floor_number":
+            return item.floor_display
+        elif field_name == "apartment_status":
+            return item.status_display
+        elif field_name == "area_sqm":
+            return f"{item.area_sqm:.1f}" if item.area_sqm else "-"
+        return ""
 
     def set_units(self, units: List[PropertyUnit]):
         """Update the units list."""
-        self.beginResetModel()
-        self._units = units
-        self.endResetModel()
+        self.set_items(units)
 
 
 class PersonsTableModel(QAbstractTableModel):
