@@ -12,7 +12,7 @@ from PyQt5.QtWidgets import (
     QListWidget, QListWidgetItem, QSplitter, QScrollArea,
     QFileDialog, QGroupBox, QDateEdit
 )
-from PyQt5.QtCore import Qt, pyqtSignal, QAbstractTableModel, QModelIndex, QDate
+from PyQt5.QtCore import Qt, pyqtSignal, QModelIndex, QDate
 from PyQt5.QtGui import QColor
 
 from app.config import Config, Vocabularies
@@ -25,6 +25,7 @@ from models.claim import Claim
 from models.document import Document
 from services.workflow_service import WorkflowService
 from ui.components.toast import Toast
+from ui.components.base_table_model import BaseTableModel
 from utils.i18n import I18n
 from utils.logger import get_logger
 
@@ -50,49 +51,29 @@ DOCUMENT_TYPES = [
 ]
 
 
-class ClaimsTableModel(QAbstractTableModel):
+class ClaimsTableModel(BaseTableModel):
     """Table model for claims."""
 
     def __init__(self, is_arabic: bool = True):
-        super().__init__()
-        self._claims = []
+        columns = [
+            ('claim_id', "Claim ID", "رقم المطالبة"),
+            ('unit_id', "Unit ID", "رقم الوحدة"),
+            ('claim_type', "Type", "النوع"),
+            ('status', "Status", "الحالة"),
+            ('priority', "Priority", "الأولوية"),
+            ('submission_date', "Submission Date", "تاريخ التقديم"),
+            ('conflict', "Conflict", "تعارض"),
+        ]
+        super().__init__(items=[], columns=columns)
         self._is_arabic = is_arabic
-        self._headers_en = ["Claim ID", "Unit ID", "Type", "Status", "Priority", "Submission Date", "Conflict"]
-        self._headers_ar = ["رقم المطالبة", "رقم الوحدة", "النوع", "الحالة", "الأولوية", "تاريخ التقديم", "تعارض"]
-
-    def rowCount(self, parent=None):
-        return len(self._claims)
-
-    def columnCount(self, parent=None):
-        return len(self._headers_en)
 
     def data(self, index: QModelIndex, role=Qt.DisplayRole):
-        if not index.isValid() or index.row() >= len(self._claims):
-            return None
-
-        claim = self._claims[index.row()]
-        col = index.column()
-
-        if role == Qt.DisplayRole:
-            if col == 0:
-                return claim.claim_id
-            elif col == 1:
-                return claim.unit_id or "-"
-            elif col == 2:
-                types = {"ownership": "ملكية", "occupancy": "إشغال", "tenancy": "إيجار"}
-                return types.get(claim.claim_type, claim.claim_type)
-            elif col == 3:
-                return claim.case_status_display_ar if self._is_arabic else claim.case_status_display
-            elif col == 4:
-                priorities = {"low": "منخفض", "normal": "عادي", "high": "عالي", "urgent": "عاجل"}
-                return priorities.get(claim.priority, claim.priority)
-            elif col == 5:
-                return str(claim.submission_date) if claim.submission_date else "-"
-            elif col == 6:
-                return "نعم" if claim.has_conflict else "لا"
-        elif role == Qt.TextAlignmentRole:
-            return Qt.AlignCenter
-        elif role == Qt.BackgroundRole:
+        """Override to add BackgroundRole support for status and conflict."""
+        if role == Qt.BackgroundRole:
+            if not index.isValid() or index.row() >= len(self._items):
+                return None
+            claim = self._items[index.row()]
+            col = index.column()
             if col == 3:
                 status_colors = {
                     "draft": QColor("#F3F4F6"),
@@ -107,28 +88,33 @@ class ClaimsTableModel(QAbstractTableModel):
                 return status_colors.get(claim.case_status, QColor("white"))
             if col == 6 and claim.has_conflict:
                 return QColor("#FEE2E2")
+        return super().data(index, role)
 
-        return None
-
-    def headerData(self, section, orientation, role=Qt.DisplayRole):
-        if orientation == Qt.Horizontal and role == Qt.DisplayRole:
-            headers = self._headers_ar if self._is_arabic else self._headers_en
-            return headers[section] if section < len(headers) else ""
-        return None
+    def get_item_value(self, item, field_name: str):
+        """Extract field value from claim object."""
+        if field_name == 'claim_id':
+            return item.claim_id
+        elif field_name == 'unit_id':
+            return item.unit_id or "-"
+        elif field_name == 'claim_type':
+            types = {"ownership": "ملكية", "occupancy": "إشغال", "tenancy": "إيجار"}
+            return types.get(item.claim_type, item.claim_type)
+        elif field_name == 'status':
+            return item.case_status_display_ar if self._is_arabic else item.case_status_display
+        elif field_name == 'priority':
+            priorities = {"low": "منخفض", "normal": "عادي", "high": "عالي", "urgent": "عاجل"}
+            return priorities.get(item.priority, item.priority)
+        elif field_name == 'submission_date':
+            return str(item.submission_date) if item.submission_date else "-"
+        elif field_name == 'conflict':
+            return "نعم" if item.has_conflict else "لا"
+        return "-"
 
     def set_claims(self, claims: list):
-        self.beginResetModel()
-        self._claims = claims
-        self.endResetModel()
+        self.set_items(claims)
 
     def get_claim(self, row: int):
-        if 0 <= row < len(self._claims):
-            return self._claims[row]
-        return None
-
-    def set_language(self, is_arabic: bool):
-        self._is_arabic = is_arabic
-        self.layoutChanged.emit()
+        return self.get_item(row)
 
 
 class ClaimDialog(QDialog):
