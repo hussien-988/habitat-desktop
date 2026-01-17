@@ -149,59 +149,42 @@ class UnitsTableModel(BaseTableModel):
         self.set_items(units)
 
 
-class PersonsTableModel(QAbstractTableModel):
+class PersonsTableModel(BaseTableModel):
     """Table model for persons list."""
 
     def __init__(self, persons: List[Person] = None, is_arabic: bool = False, parent=None):
-        super().__init__(parent)
-        self._persons = persons or []
-        self._is_arabic = is_arabic
-        self._columns = [
+        columns = [
             ("name", "Name", "الاسم"),
             ("national_id", "National ID", "الرقم الوطني"),
             ("gender", "Gender", "الجنس"),
             ("phone", "Phone", "الهاتف"),
         ]
-
-    def rowCount(self, parent=QModelIndex()) -> int:
-        return len(self._persons)
-
-    def columnCount(self, parent=QModelIndex()) -> int:
-        return len(self._columns)
+        super().__init__(items=persons or [], columns=columns)
+        self._is_arabic = is_arabic
 
     def data(self, index: QModelIndex, role: int = Qt.DisplayRole) -> Any:
-        if not index.isValid() or not self._persons:
-            return QVariant()
+        """Override to add UserRole support."""
+        if role == Qt.UserRole:
+            if not index.isValid() or index.row() >= len(self._items):
+                return QVariant()
+            return self._items[index.row()].person_id
+        return super().data(index, role)
 
-        person = self._persons[index.row()]
-        column_key = self._columns[index.column()][0]
-
-        if role == Qt.DisplayRole:
-            if column_key == "name":
-                return person.full_name_ar if self._is_arabic else person.full_name
-            elif column_key == "national_id":
-                return person.national_id or "-"
-            elif column_key == "gender":
-                return person.gender_display_ar if self._is_arabic else person.gender_display
-            elif column_key == "phone":
-                return person.mobile_number or person.phone_number or "-"
-
-        elif role == Qt.UserRole:
-            return person.person_id
-
-        return QVariant()
-
-    def headerData(self, section: int, orientation: Qt.Orientation, role: int = Qt.DisplayRole) -> Any:
-        if orientation == Qt.Horizontal and role == Qt.DisplayRole:
-            col = self._columns[section]
-            return col[2] if self._is_arabic else col[1]
-        return QVariant()
+    def get_item_value(self, item, field_name: str):
+        """Extract field value from person object."""
+        if field_name == "name":
+            return item.full_name_ar if self._is_arabic else item.full_name
+        elif field_name == "national_id":
+            return item.national_id or "-"
+        elif field_name == "gender":
+            return item.gender_display_ar if self._is_arabic else item.gender_display
+        elif field_name == "phone":
+            return item.mobile_number or item.phone_number or "-"
+        return ""
 
     def set_persons(self, persons: List[Person]):
         """Update the persons list."""
-        self.beginResetModel()
-        self._persons = persons
-        self.endResetModel()
+        self.set_items(persons)
 
 
 class ImportRecordsTableModel(BaseTableModel):
