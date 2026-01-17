@@ -22,6 +22,7 @@ from repositories.unit_repository import UnitRepository
 from services.assignment_service import AssignmentService, BuildingAssignment
 from ui.components.toast import Toast
 from ui.components.base_table_model import BaseTableModel
+from ui.components.dialogs.base_dialog import BaseDialog
 from utils.i18n import I18n
 from utils.logger import get_logger
 
@@ -164,22 +165,24 @@ class AssignmentQueueWidget(QWidget):
         self.count_label.setText(f"{count} مبنى في القائمة")
 
 
-class TransferDialog(QDialog):
+class TransferDialog(BaseDialog):
     """Dialog for transferring buildings to tablet."""
 
-    def __init__(self, assignment_service: AssignmentService, building_count: int, parent=None):
-        super().__init__(parent)
+    def __init__(self, assignment_service: AssignmentService, building_count: int, parent=None, db=None, i18n=None):
         self.assignment_service = assignment_service
         self.building_count = building_count
         self.selected_team = None
         self.selected_tablet = None
 
+        # Initialize BaseDialog with empty title_key (we'll override)
+        super().__init__(db=db, i18n=i18n or I18n(), title_key="", parent=parent, size=(450, 400))
+
+        # Override title with hardcoded Arabic
         self.setWindowTitle("نقل المباني إلى الجهاز اللوحي")
-        self.setMinimumWidth(450)
         self._setup_ui()
 
     def _setup_ui(self):
-        layout = QVBoxLayout(self)
+        layout = self.main_layout
         layout.setSpacing(16)
         layout.setContentsMargins(24, 24, 24, 24)
 
