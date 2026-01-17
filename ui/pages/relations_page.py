@@ -12,7 +12,7 @@ from PyQt5.QtWidgets import (
     QDateEdit, QGroupBox, QFileDialog, QSplitter, QListWidget,
     QListWidgetItem, QStackedWidget
 )
-from PyQt5.QtCore import Qt, pyqtSignal, QAbstractTableModel, QModelIndex, QDate
+from PyQt5.QtCore import Qt, pyqtSignal, QModelIndex, QDate
 from PyQt5.QtGui import QColor, QIcon
 
 from app.config import Config, Vocabularies
@@ -24,163 +24,128 @@ from repositories.evidence_repository import EvidenceRepository
 from models.relation import PersonUnitRelation
 from models.evidence import Evidence
 from ui.components.toast import Toast
+from ui.components.base_table_model import BaseTableModel
 from utils.i18n import I18n
 from utils.logger import get_logger
 
 logger = get_logger(__name__)
 
 
-class RelationsTableModel(QAbstractTableModel):
+class RelationsTableModel(BaseTableModel):
     """Table model for person-unit relations."""
 
     def __init__(self, is_arabic: bool = True):
-        super().__init__()
-        self._relations = []
-        self._persons_cache = {}  # person_id -> Person
-        self._units_cache = {}    # unit_id -> PropertyUnit
+        columns = [
+            ('person', "Person", "الشخص"),
+            ('unit', "Unit", "الوحدة"),
+            ('relation_type', "Relation Type", "نوع العلاقة"),
+            ('share', "Share %", "الحصة %"),
+            ('status', "Status", "الحالة"),
+            ('start_date', "Start Date", "تاريخ البدء"),
+            ('notes', "Notes", "ملاحظات"),
+        ]
+        super().__init__(items=[], columns=columns)
         self._is_arabic = is_arabic
-        self._headers_en = ["Person", "Unit", "Relation Type", "Share %", "Status", "Start Date", "Notes"]
-        self._headers_ar = ["الشخص", "الوحدة", "نوع العلاقة", "الحصة %", "الحالة", "تاريخ البدء", "ملاحظات"]
+        self._persons_cache = {}
+        self._units_cache = {}
 
     def set_cache(self, persons_cache: dict, units_cache: dict):
         """Set the cache for persons and units lookups."""
         self._persons_cache = persons_cache
         self._units_cache = units_cache
 
-    def rowCount(self, parent=None):
-        return len(self._relations)
-
-    def columnCount(self, parent=None):
-        return len(self._headers_en)
-
     def data(self, index: QModelIndex, role=Qt.DisplayRole):
-        if not index.isValid() or index.row() >= len(self._relations):
-            return None
-
-        relation = self._relations[index.row()]
-        col = index.column()
-
-        if role == Qt.DisplayRole:
-            if col == 0:
-                # Person name
-                person = self._persons_cache.get(relation.person_id)
-                if person:
-                    return person.full_name_ar if self._is_arabic else person.full_name
-                return relation.person_id[:8] + "..."
-            elif col == 1:
-                # Unit ID
-                unit = self._units_cache.get(relation.unit_id)
-                if unit:
-                    return unit.unit_id
-                return relation.unit_id[:15] + "..."
-            elif col == 2:
-                return relation.relation_type_display_ar if self._is_arabic else relation.relation_type_display
-            elif col == 3:
-                return f"{relation.ownership_percentage:.1f}%" if relation.ownership_share > 0 else "-"
-            elif col == 4:
-                statuses_ar = {"pending": "معلق", "verified": "تم التحقق", "rejected": "مرفوض"}
-                return statuses_ar.get(relation.verification_status, relation.verification_status) if self._is_arabic else relation.verification_status_display
-            elif col == 5:
-                return relation.relation_start_date.strftime("%Y-%m-%d") if relation.relation_start_date else "-"
-            elif col == 6:
-                notes = relation.relation_notes or ""
-                return notes[:30] + "..." if len(notes) > 30 else notes if notes else "-"
-        elif role == Qt.TextAlignmentRole:
-            return Qt.AlignCenter
-        elif role == Qt.BackgroundRole:
+        """Override to add BackgroundRole support for verification status."""
+        if role == Qt.BackgroundRole:
+            if not index.isValid() or index.row() >= len(self._items):
+                return None
+            relation = self._items[index.row()]
             if relation.verification_status == "verified":
                 return QColor("#ECFDF5")  # Light green
             elif relation.verification_status == "rejected":
                 return QColor("#FEF2F2")  # Light red
+        return super().data(index, role)
 
-        return None
-
-    def headerData(self, section, orientation, role=Qt.DisplayRole):
-        if orientation == Qt.Horizontal and role == Qt.DisplayRole:
-            headers = self._headers_ar if self._is_arabic else self._headers_en
-            return headers[section] if section < len(headers) else ""
-        return None
+    def get_item_value(self, item, field_name: str):
+        """Extract field value from relation object."""
+        if field_name == 'person':
+            person = self._persons_cache.get(item.person_id)
+            if person:
+                return person.full_name_ar if self._is_arabic else person.full_name
+            return item.person_id[:8] + "..."
+        elif field_name == 'unit':
+            unit = self._units_cache.get(item.unit_id)
+            if unit:
+                return unit.unit_id
+            return item.unit_id[:15] + "..."
+        elif field_name == 'relation_type':
+            return item.relation_type_display_ar if self._is_arabic else item.relation_type_display
+        elif field_name == 'share':
+            return f"{item.ownership_percentage:.1f}%" if item.ownership_share > 0 else "-"
+        elif field_name == 'status':
+            statuses_ar = {"pending": "معلق", "verified": "تم التحقق", "rejected": "مرفوض"}
+            return statuses_ar.get(item.verification_status, item.verification_status) if self._is_arabic else item.verification_status_display
+        elif field_name == 'start_date':
+            return item.relation_start_date.strftime("%Y-%m-%d") if item.relation_start_date else "-"
+        elif field_name == 'notes':
+            notes = item.relation_notes or ""
+            return notes[:30] + "..." if len(notes) > 30 else notes if notes else "-"
+        return "-"
 
     def set_relations(self, relations: list):
-        self.beginResetModel()
-        self._relations = relations
-        self.endResetModel()
+        self.set_items(relations)
 
     def get_relation(self, row: int):
-        if 0 <= row < len(self._relations):
-            return self._relations[row]
-        return None
-
-    def set_language(self, is_arabic: bool):
-        self._is_arabic = is_arabic
-        self.layoutChanged.emit()
+        return self.get_item(row)
 
 
-class EvidenceTableModel(QAbstractTableModel):
+class EvidenceTableModel(BaseTableModel):
     """Table model for evidence list."""
 
     def __init__(self, is_arabic: bool = True):
-        super().__init__()
-        self._evidence_list = []
+        columns = [
+            ('type', "Type", "النوع"),
+            ('reference', "Reference #", "رقم المرجع"),
+            ('date', "Date", "التاريخ"),
+            ('status', "Status", "الحالة"),
+            ('description', "Description", "الوصف"),
+        ]
+        super().__init__(items=[], columns=columns)
         self._is_arabic = is_arabic
-        self._headers_en = ["Type", "Reference #", "Date", "Status", "Description"]
-        self._headers_ar = ["النوع", "رقم المرجع", "التاريخ", "الحالة", "الوصف"]
-
-    def rowCount(self, parent=None):
-        return len(self._evidence_list)
-
-    def columnCount(self, parent=None):
-        return len(self._headers_en)
 
     def data(self, index: QModelIndex, role=Qt.DisplayRole):
-        if not index.isValid() or index.row() >= len(self._evidence_list):
-            return None
-
-        evidence = self._evidence_list[index.row()]
-        col = index.column()
-
-        if role == Qt.DisplayRole:
-            if col == 0:
-                return evidence.evidence_type_display_ar if self._is_arabic else evidence.evidence_type_display
-            elif col == 1:
-                return evidence.reference_number or "-"
-            elif col == 2:
-                return evidence.reference_date.strftime("%Y-%m-%d") if evidence.reference_date else "-"
-            elif col == 3:
-                statuses_ar = {"pending": "معلق", "verified": "تم التحقق", "rejected": "مرفوض"}
-                return statuses_ar.get(evidence.verification_status, evidence.verification_status) if self._is_arabic else evidence.verification_status_display
-            elif col == 4:
-                desc = evidence.evidence_description or ""
-                return desc[:40] + "..." if len(desc) > 40 else desc if desc else "-"
-        elif role == Qt.TextAlignmentRole:
-            return Qt.AlignCenter
-        elif role == Qt.BackgroundRole:
+        """Override to add BackgroundRole support for verification status."""
+        if role == Qt.BackgroundRole:
+            if not index.isValid() or index.row() >= len(self._items):
+                return None
+            evidence = self._items[index.row()]
             if evidence.verification_status == "verified":
                 return QColor("#ECFDF5")
             elif evidence.verification_status == "rejected":
                 return QColor("#FEF2F2")
+        return super().data(index, role)
 
-        return None
-
-    def headerData(self, section, orientation, role=Qt.DisplayRole):
-        if orientation == Qt.Horizontal and role == Qt.DisplayRole:
-            headers = self._headers_ar if self._is_arabic else self._headers_en
-            return headers[section] if section < len(headers) else ""
-        return None
+    def get_item_value(self, item, field_name: str):
+        """Extract field value from evidence object."""
+        if field_name == 'type':
+            return item.evidence_type_display_ar if self._is_arabic else item.evidence_type_display
+        elif field_name == 'reference':
+            return item.reference_number or "-"
+        elif field_name == 'date':
+            return item.reference_date.strftime("%Y-%m-%d") if item.reference_date else "-"
+        elif field_name == 'status':
+            statuses_ar = {"pending": "معلق", "verified": "تم التحقق", "rejected": "مرفوض"}
+            return statuses_ar.get(item.verification_status, item.verification_status) if self._is_arabic else item.verification_status_display
+        elif field_name == 'description':
+            desc = item.evidence_description or ""
+            return desc[:40] + "..." if len(desc) > 40 else desc if desc else "-"
+        return "-"
 
     def set_evidence(self, evidence_list: list):
-        self.beginResetModel()
-        self._evidence_list = evidence_list
-        self.endResetModel()
+        self.set_items(evidence_list)
 
     def get_evidence(self, row: int):
-        if 0 <= row < len(self._evidence_list):
-            return self._evidence_list[row]
-        return None
-
-    def set_language(self, is_arabic: bool):
-        self._is_arabic = is_arabic
-        self.layoutChanged.emit()
+        return self.get_item(row)
 
 
 class EvidenceDialog(QDialog):
