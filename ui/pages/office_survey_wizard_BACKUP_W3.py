@@ -173,6 +173,545 @@ class Evidence:
 # ============================================================================
 
 # ============================================================================
+# DEPRECATED: Dialogs moved to ui/wizards/office_survey/dialogs/
+# Keeping as comments for reference during migration
+# ============================================================================
+
+"""
+class AddEvidenceDialog(QDialog):
+    # Dialog for adding evidence with full metadata.
+
+    DOCUMENT_TYPES = [
+        ("TAPU_GREEN", "صك ملكية (طابو أخضر)"),
+        ("PROPERTY_REG", "بيان قيد عقاري"),
+        ("COURT_RULING", "حكم قضائي"),
+        ("SALE_NOTARIZED", "عقد بيع موثق"),
+        ("SALE_INFORMAL", "عقد بيع غير موثق"),
+        ("RENT_REGISTERED", "عقد إيجار مسجل"),
+        ("RENT_INFORMAL", "عقد إيجار غير مسجل"),
+        ("UTILITY_BILL", "فاتورة مرافق"),
+        ("MUKHTAR_CERT", "شهادة المختار"),
+        ("INHERITANCE", "حصر إرث"),
+        ("WITNESS_STATEMENT", "إفادة شاهد"),
+        ("OTHER", "أخرى"),
+    ]
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.selected_file = None
+        self.setWindowTitle("إضافة دليل / وثيقة")
+        self.setMinimumWidth(500)
+        self._setup_ui()
+
+    def _setup_ui(self):
+        layout = QVBoxLayout(self)
+        layout.setSpacing(16)
+        layout.setContentsMargins(24, 24, 24, 24)
+
+        form = QFormLayout()
+        form.setSpacing(12)
+
+        # Document type
+        self.type_combo = QComboBox()
+        for code, ar in self.DOCUMENT_TYPES:
+            self.type_combo.addItem(ar, code)
+        form.addRow("نوع الوثيقة:", self.type_combo)
+
+        # Document number
+        self.number_edit = QLineEdit()
+        self.number_edit.setPlaceholderText("رقم الوثيقة (اختياري)")
+        form.addRow("رقم الوثيقة:", self.number_edit)
+
+        # Issue date
+        self.issue_date = QDateEdit()
+        self.issue_date.setCalendarPopup(True)
+        self.issue_date.setDate(QDate.currentDate())
+        self.issue_date.setDisplayFormat("yyyy-MM-dd")
+        form.addRow("تاريخ الإصدار:", self.issue_date)
+
+        # Issuing authority
+        self.authority_edit = QLineEdit()
+        self.authority_edit.setPlaceholderText("الجهة المصدرة")
+        form.addRow("الجهة المصدرة:", self.authority_edit)
+
+        layout.addLayout(form)
+
+        # File selection
+        file_frame = QGroupBox("ملف الوثيقة")
+        file_layout = QHBoxLayout(file_frame)
+
+        self.file_label = QLabel("لم يتم اختيار ملف")
+        self.file_label.setStyleSheet(f"color: {Config.TEXT_LIGHT};")
+        file_layout.addWidget(self.file_label)
+
+        browse_btn = QPushButton("استعراض...")
+        browse_btn.clicked.connect(self._browse_file)
+        file_layout.addWidget(browse_btn)
+
+        layout.addWidget(file_frame)
+
+        # Notes
+        self.notes_edit = QTextEdit()
+        self.notes_edit.setPlaceholderText("ملاحظات (اختياري)")
+        self.notes_edit.setMaximumHeight(80)
+        layout.addWidget(self.notes_edit)
+
+        # Buttons
+        btn_layout = QHBoxLayout()
+        btn_layout.addStretch()
+
+        cancel_btn = QPushButton("إلغاء")
+        cancel_btn.clicked.connect(self.reject)
+        btn_layout.addWidget(cancel_btn)
+
+        save_btn = QPushButton("إضافة")
+        save_btn.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {Config.PRIMARY_COLOR};
+                color: white;
+                border: none;
+                border-radius: 6px;
+                padding: 8px 24px;
+                font-weight: 600;
+            }}
+        """)
+        save_btn.clicked.connect(self.accept)
+        btn_layout.addWidget(save_btn)
+
+        layout.addLayout(btn_layout)
+
+    def _browse_file(self):
+        file_path, _ = QFileDialog.getOpenFileName(
+            self, "اختر ملف الوثيقة", "",
+            "Documents (*.pdf *.jpg *.jpeg *.png *.doc *.docx);;All Files (*)"
+        )
+        if file_path:
+            self.selected_file = file_path
+            from pathlib import Path
+            self.file_label.setText(Path(file_path).name)
+            self.file_label.setStyleSheet(f"color: {Config.SUCCESS_COLOR};")
+
+    def get_evidence(self) -> Evidence:
+        evidence = Evidence()
+        evidence.document_type = self.type_combo.currentData()
+        evidence.document_number = self.number_edit.text().strip() or None
+        evidence.issue_date = self.issue_date.date().toString("yyyy-MM-dd")
+        evidence.issuing_authority = self.authority_edit.text().strip() or None
+        evidence.file_path = self.selected_file
+        if self.selected_file:
+            from pathlib import Path
+            evidence.file_name = Path(self.selected_file).name
+        evidence.notes = self.notes_edit.toPlainText().strip() or None
+        return evidence
+"""
+
+# ============================================================================
+# Person Dialog - DEPRECATED (moved to dialogs/)
+# ============================================================================
+
+"""
+class PersonDialog(QDialog):
+    """Dialog for adding/editing person information."""
+
+    def __init__(self, parent=None, person_data: dict = None, households: list = None, existing_persons: list = None):
+        super().__init__(parent)
+        self.person_data = person_data
+        self.households = households or []
+        self.existing_persons = existing_persons or []
+        self.editing_mode = person_data is not None
+
+        self.setWindowTitle("تعديل بيانات الشخص" if self.editing_mode else "إضافة شخص جديد")
+        self.setModal(True)
+        self.setMinimumWidth(520)
+        self.setStyleSheet("""
+            QDialog {
+                background-color: #f5f7fa;
+            }
+        """)
+
+        self._setup_ui()
+
+        if self.editing_mode and person_data:
+            self._load_person_data(person_data)
+
+    def _setup_ui(self):
+        """Setup dialog UI using GridLayout."""
+        self.setLayoutDirection(Qt.RightToLeft)  # Set RTL for Arabic
+
+        main_layout = QVBoxLayout(self)
+        main_layout.setSpacing(15)
+        main_layout.setContentsMargins(30, 30, 30, 30)
+
+        # Title
+        title = QLabel("تعديل بيانات الشخص" if self.editing_mode else "إضافة شخص جديد")
+        title.setStyleSheet("font-size: 20px; font-weight: bold; color: #2c3e50;")
+        #title.setAlignment(Qt.AlignRight)
+        main_layout.addWidget(title)
+
+        # Form Grid
+        grid = QGridLayout()
+        grid.setSpacing(15)
+
+        # Label style - consistent right alignment
+        label_style = "color: #555; font-weight: 600; font-size: 13px; text-align: right;"
+
+        # Row 0: First Name | Last Name
+        first_name_label = QLabel("الاسم الأول")
+        first_name_label.setStyleSheet(label_style)
+        #first_name_label.setAlignment(Qt.AlignRight)
+        grid.addWidget(first_name_label, 0, 0)
+
+        last_name_label = QLabel("الكنية")
+        last_name_label.setStyleSheet(label_style)
+        #last_name_label.setAlignment(Qt.AlignRight)
+        grid.addWidget(last_name_label, 0, 1)
+
+        self.first_name = QLineEdit()
+        self.first_name.setPlaceholderText("ادخل الاسم الاول")
+        self.first_name.setStyleSheet(self._input_style())
+        grid.addWidget(self.first_name, 1, 0)
+
+        self.last_name = QLineEdit()
+        self.last_name.setPlaceholderText("ادخل اسم العائلة")
+        self.last_name.setStyleSheet(self._input_style())
+        grid.addWidget(self.last_name, 1, 1)
+
+        # Row 2: Mother Name | Father Name
+        mother_name_label = QLabel("اسم الأم")
+        mother_name_label.setStyleSheet(label_style)
+       # mother_name_label.setAlignment(Qt.AlignRight)
+        grid.addWidget(mother_name_label, 2, 0)
+
+        father_name_label = QLabel("اسم الأب")
+        father_name_label.setStyleSheet(label_style)
+       # father_name_label.setAlignment(Qt.AlignRight)
+        grid.addWidget(father_name_label, 2, 1)
+
+        self.mother_name = QLineEdit()
+        self.mother_name.setPlaceholderText("ادخل اسم الأم")
+        self.mother_name.setStyleSheet(self._input_style())
+        grid.addWidget(self.mother_name, 3, 0)
+
+        self.father_name = QLineEdit()
+        self.father_name.setPlaceholderText("ادخل اسم الاب")
+        self.father_name.setStyleSheet(self._input_style())
+        grid.addWidget(self.father_name, 3, 1)
+
+        # Row 4: Birth Date | ID Number
+        birth_date_label = QLabel("تاريخ الميلاد")
+        birth_date_label.setStyleSheet(label_style)
+       # birth_date_label.setAlignment(Qt.AlignRight)
+        grid.addWidget(birth_date_label, 4, 0)
+
+        national_id_label = QLabel("الرقم الوطني")
+        national_id_label.setStyleSheet(label_style)
+       # national_id_label.setAlignment(Qt.AlignRight)
+        grid.addWidget(national_id_label, 4, 1)
+
+        self.birth_date = QDateEdit()
+        self.birth_date.setCalendarPopup(True)
+        self.birth_date.setDate(QDate(1980, 1, 1))
+        self.birth_date.setDisplayFormat("yyyy-MM-dd")
+        self.birth_date.setStyleSheet(self._input_style())
+        grid.addWidget(self.birth_date, 5, 0)
+
+        # National ID with calendar button
+        national_id_widget = QWidget()
+        national_id_layout = QHBoxLayout(national_id_widget)
+        national_id_layout.setContentsMargins(0, 0, 0, 0)
+        national_id_layout.setSpacing(8)
+
+        self.national_id = QLineEdit()
+        self.national_id.setPlaceholderText("00000000000")
+        self.national_id.setMaxLength(11)
+        self.national_id.setStyleSheet(self._input_style())
+        self.national_id.textChanged.connect(self._validate_national_id)
+
+        calendar_btn = QPushButton("📅")
+        calendar_btn.setStyleSheet("""
+            QPushButton {
+                background-color: transparent;
+                border: 1px solid #e0e6ed;
+                border-radius: 6px;
+                padding: 10px;
+                font-size: 16px;
+            }
+        """)
+
+        national_id_layout.addWidget(self.national_id)
+        national_id_layout.addWidget(calendar_btn)
+        grid.addWidget(national_id_widget, 5, 1)
+
+        # National ID status (spans both columns)
+        self.national_id_status = QLabel("")
+        self.national_id_status.setAlignment(Qt.AlignRight)
+        grid.addWidget(self.national_id_status, 6, 0, 1, 2)
+
+        # Row 7: Email | Relationship
+        email_label = QLabel("البريد الالكتروني")
+        email_label.setStyleSheet(label_style)
+      #  email_label.setAlignment(Qt.AlignRight)
+        grid.addWidget(email_label, 7, 0)
+
+        relationship_label = QLabel("علاقة الشخص بوحدة العقار")
+        relationship_label.setStyleSheet(label_style)
+       # relationship_label.setAlignment(Qt.AlignRight)
+        grid.addWidget(relationship_label, 7, 1)
+
+        self.email = QLineEdit()
+        self.email.setPlaceholderText("*****@gmail.com")
+        self.email.setStyleSheet(self._input_style())
+        grid.addWidget(self.email, 8, 0)
+
+        self.relationship_combo = QComboBox()
+        self.relationship_combo.addItem("اختر", None)
+        relationship_types = [
+            ("owner", "مالك"),
+            ("tenant", "مستأجر"),
+            ("occupant", "ساكن"),
+            ("co_owner", "شريك في الملكية"),
+            ("heir", "وارث"),
+            ("guardian", "ولي/وصي"),
+            ("other", "أخرى")
+        ]
+        for code, ar_name in relationship_types:
+            self.relationship_combo.addItem(ar_name, code)
+        self.relationship_combo.setStyleSheet(self._input_style())
+        grid.addWidget(self.relationship_combo, 8, 1)
+
+        # Row 9: Phone | Mobile
+        landline_label = QLabel("رقم الهاتف")
+        landline_label.setStyleSheet(label_style)
+        #landline_label.setAlignment(Qt.AlignRight)
+        grid.addWidget(landline_label, 9, 0)
+
+        mobile_label = QLabel("رقم الموبايل")
+        mobile_label.setStyleSheet(label_style)
+       # mobile_label.setAlignment(Qt.AlignRight)
+        grid.addWidget(mobile_label, 9, 1)
+
+        self.landline = QLineEdit()
+        self.landline.setPlaceholderText("0000000")
+        self.landline.setStyleSheet(self._input_style())
+        grid.addWidget(self.landline, 10, 0)
+
+        # Mobile with country code
+        mobile_widget = QWidget()
+        mobile_layout = QHBoxLayout(mobile_widget)
+        mobile_layout.setContentsMargins(0, 0, 0, 0)
+        mobile_layout.setSpacing(8)
+
+        self.phone = QLineEdit()
+        self.phone.setPlaceholderText("09")
+        self.phone.setStyleSheet(self._input_style())
+
+        country_code = QLineEdit()
+        country_code.setText("+963")
+        country_code.setReadOnly(True)
+        country_code.setMaximumWidth(60)
+        country_code.setStyleSheet(self._input_style())
+
+        mobile_layout.addWidget(self.phone)
+        mobile_layout.addWidget(country_code)
+        grid.addWidget(mobile_widget, 10, 1)
+
+        main_layout.addLayout(grid)
+
+        # Gender (hidden but kept for compatibility)
+        self.gender = QComboBox()
+        self.gender.addItem("ذكر", "male")
+        self.gender.addItem("أنثى", "female")
+        self.gender.hide()
+
+        # Is contact person (hidden)
+        self.is_contact = QCheckBox("شخص التواصل الرئيسي")
+        self.is_contact.hide()
+
+        # Upload Area
+        upload_frame = QFrame()
+        upload_frame.setObjectName("uploadArea")
+        upload_frame.setStyleSheet("""
+            QFrame#uploadArea {
+                border: 2px dashed #d1d9e6;
+                border-radius: 10px;
+                background-color: #f0f4f8;
+            }
+        """)
+        upload_frame.setFixedHeight(100)
+        upload_layout = QVBoxLayout(upload_frame)
+        upload_label = QLabel("📄  ارفع صور المستندات")
+        #upload_label.setAlignment(Qt.AlignCenter)
+        upload_label.setStyleSheet("color: #4a90e2; background: transparent; font-size: 14px; font-weight: bold;")
+        upload_layout.addWidget(upload_label)
+        main_layout.addWidget(upload_frame)
+
+        # Buttons
+        btn_layout = QHBoxLayout()
+        btn_layout.setSpacing(12)
+
+        save_btn = QPushButton("حفظ")
+        save_btn.setObjectName("saveBtn")
+        save_btn.setStyleSheet("""
+            QPushButton#saveBtn {
+                background-color: #4a90e2;
+                color: white;
+                border-radius: 8px;
+                padding: 12px;
+                font-weight: bold;
+                font-size: 16px;
+            }
+            QPushButton#saveBtn:hover {
+                background-color: #357ABD;
+            }
+        """)
+        save_btn.clicked.connect(self._save_person)
+
+        cancel_btn = QPushButton("الغاء")
+        cancel_btn.setObjectName("cancelBtn")
+        cancel_btn.setStyleSheet("""
+            QPushButton#cancelBtn {
+                background-color: white;
+                color: #333;
+                border: 1px solid #ccc;
+                border-radius: 8px;
+                padding: 12px;
+                font-size: 16px;
+            }
+            QPushButton#cancelBtn:hover {
+                background-color: #f5f5f5;
+            }
+        """)
+        cancel_btn.clicked.connect(self.reject)
+
+        btn_layout.addWidget(save_btn)
+        btn_layout.addWidget(cancel_btn)
+        main_layout.addLayout(btn_layout)
+
+    def _input_style(self):
+        """Return standard input style."""
+        return """
+            QLineEdit, QComboBox, QDateEdit {
+                border: 1px solid #e0e6ed;
+                border-radius: 8px;
+                padding: 10px;
+                background-color: white;
+                color: #333;
+                font-size: 14px;
+            }
+            QLineEdit:focus, QComboBox:focus, QDateEdit:focus {
+                border: 1px solid #4a90e2;
+                background-color: white;
+            }
+            QComboBox::drop-down {
+                border: none;
+                padding-right: 10px;
+            }
+            QComboBox::down-arrow {
+                image: none;
+                border: none;
+            }
+        """
+
+    def _validate_national_id(self):
+        """Validate national ID."""
+        nid = self.national_id.text().strip()
+
+        if not nid:
+            self.national_id_status.setText("")
+            return True
+
+        # Use ValidationService for format check
+        format_result = self.parent().validation_service.validate_national_id(nid)
+        if not format_result.is_valid:
+            self.national_id_status.setText("⚠️ يجب أن يكون 11 رقم")
+            self.national_id_status.setStyleSheet(f"color: {Config.WARNING_COLOR};")
+            return False
+
+        # Use ValidationService for uniqueness check
+        exclude_id = self.person_data.get('person_id') if self.editing_mode and self.person_data else None
+        is_unique = self.parent().validation_service.check_national_id_uniqueness(
+            national_id=nid,
+            existing_persons=self.existing_persons,
+            exclude_person_id=exclude_id
+        )
+
+        if not is_unique:
+            self.national_id_status.setText("❌ الرقم موجود مسبقاً")
+            self.national_id_status.setStyleSheet(f"color: {Config.ERROR_COLOR};")
+            return False
+
+        self.national_id_status.setText("✅ الرقم متاح")
+        self.national_id_status.setStyleSheet(f"color: {Config.SUCCESS_COLOR};")
+        return True
+
+    def _load_person_data(self, person_data: dict):
+        """Load person data into form."""
+        self.first_name.setText(person_data.get('first_name', ''))
+        self.father_name.setText(person_data.get('father_name', ''))
+        self.mother_name.setText(person_data.get('mother_name', ''))
+        self.last_name.setText(person_data.get('last_name', ''))
+        self.national_id.setText(person_data.get('national_id', ''))
+        self.phone.setText(person_data.get('phone', ''))
+        self.email.setText(person_data.get('email', ''))
+        self.landline.setText(person_data.get('landline', ''))
+
+        # Gender
+        gender = person_data.get('gender', 'male')
+        idx = self.gender.findData(gender)
+        if idx >= 0:
+            self.gender.setCurrentIndex(idx)
+
+        # Birth date
+        if person_data.get('birth_date'):
+            bd = QDate.fromString(person_data['birth_date'], 'yyyy-MM-dd')
+            if bd.isValid():
+                self.birth_date.setDate(bd)
+
+        # Relationship type
+        rel_type = person_data.get('relationship_type')
+        if rel_type:
+            idx = self.relationship_combo.findData(rel_type)
+            if idx >= 0:
+                self.relationship_combo.setCurrentIndex(idx)
+
+        self.is_contact.setChecked(person_data.get('is_contact_person', False))
+
+    def _save_person(self):
+        """Validate and save person data."""
+        # Validation
+        if not self.first_name.text().strip():
+            Toast.show_toast(self, "الرجاء إدخال الاسم الأول", Toast.WARNING)
+            return
+
+        if not self.last_name.text().strip():
+            Toast.show_toast(self, "الرجاء إدخال اسم العائلة", Toast.WARNING)
+            return
+
+        # Validate national ID
+        if self.national_id.text().strip() and not self._validate_national_id():
+            return
+
+        self.accept()
+
+    def get_person_data(self) -> dict:
+        """Get person data from form."""
+        return {
+            'first_name': self.first_name.text().strip(),
+            'father_name': self.father_name.text().strip(),
+            'mother_name': self.mother_name.text().strip(),
+            'last_name': self.last_name.text().strip(),
+            'national_id': self.national_id.text().strip() or None,
+            'gender': self.gender.currentData(),
+            'birth_date': self.birth_date.date().toString('yyyy-MM-dd'),
+            'phone': self.phone.text().strip() or None,
+            'email': self.email.text().strip() or None,
+            'landline': self.landline.text().strip() or None,
+            'relationship_type': self.relationship_combo.currentData(),
+            'is_contact_person': self.is_contact.isChecked()
+        }
+"""
+
+# ============================================================================
 # Main Wizard
 # ============================================================================
 
