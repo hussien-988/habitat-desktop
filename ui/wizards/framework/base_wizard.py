@@ -11,7 +11,7 @@ Provides unified wizard UI with:
 """
 
 from typing import List, Optional, Callable
-from abc import ABC, abstractmethod
+from abc import ABCMeta, abstractmethod
 
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
@@ -25,7 +25,13 @@ from .wizard_context import WizardContext
 from .step_navigator import StepNavigator
 
 
-class BaseWizard(QWidget, ABC):
+# Combine PyQt5 metaclass with ABC metaclass
+class ABCQWidgetMeta(type(QWidget), ABCMeta):
+    """Metaclass that combines PyQt5's metaclass with ABC."""
+    pass
+
+
+class BaseWizard(QWidget, metaclass=ABCQWidgetMeta):
     """
     Abstract base class for wizards.
 

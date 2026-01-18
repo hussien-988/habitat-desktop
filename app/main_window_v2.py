@@ -118,7 +118,10 @@ class MainWindow(QMainWindow):
         from ui.pages.duplicates_page import DuplicatesPage
         from ui.pages.field_assignment_page import FieldAssignmentPage
         from ui.pages.draft_office_surveys_page_v2 import DraftOfficeSurveysPage
-        from ui.pages.office_survey_wizard import OfficeSurveyWizard
+        from ui.pages.office_survey_wizard import OfficeSurveyWizard  # OLD - temporary
+        print("OfficeSurveyWizard module:", OfficeSurveyWizard.__module__)
+        print("OfficeSurveyWizard class:", OfficeSurveyWizard)
+
 
         # Central widget
         self.central_widget = QWidget()
@@ -230,7 +233,7 @@ class MainWindow(QMainWindow):
         self.pages[Pages.DRAFT_OFFICE_SURVEYS] = DraftOfficeSurveysPage(self.db, self)
         self.stack.addWidget(self.pages[Pages.DRAFT_OFFICE_SURVEYS])
 
-        # Office Survey Wizard (UC-004, UC-005)
+        # Office Survey Wizard (UC-004, UC-005) - OLD version temporarily
         self.office_survey_wizard = OfficeSurveyWizard(self.db, self.i18n, self)
         self.stack.addWidget(self.office_survey_wizard)
 
@@ -425,15 +428,12 @@ class MainWindow(QMainWindow):
         logger.info("Starting new office survey")
         from ui.pages.office_survey_wizard import SurveyContext
 
-        # Reset wizard to initial state
+        # Reset wizard to initial state (OLD wizard interface)
         self.office_survey_wizard.context = SurveyContext()
         self.office_survey_wizard.current_step = 0
-
-        # Reload buildings in search and map
         self.office_survey_wizard._search_buildings()
         if hasattr(self.office_survey_wizard, '_load_buildings_map'):
             self.office_survey_wizard._load_buildings_map()
-
         self.office_survey_wizard._update_step_display()
 
         # Navigate to wizard

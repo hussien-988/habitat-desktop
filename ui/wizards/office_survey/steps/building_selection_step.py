@@ -36,7 +36,7 @@ class BuildingSelectionStep(BaseStep):
     def __init__(self, context: SurveyContext, parent=None):
         """Initialize the step."""
         super().__init__(context, parent)
-        self.building_repo = BuildingRepository()
+        self.building_repo = BuildingRepository(self.context.db)
         self.selected_building: Optional[Building] = None
 
     def setup_ui(self):
