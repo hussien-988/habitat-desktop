@@ -4,7 +4,6 @@ Export service for CSV, Excel, and GeoJSON exports.
 Implements FR-D-15 Data Export requirements.
 """
 
-import csv
 import json
 from pathlib import Path
 from typing import List, Dict, Any, Optional
@@ -13,6 +12,7 @@ from datetime import datetime
 from models.building import Building
 from repositories.database import Database
 from repositories.building_repository import BuildingRepository
+from services.export.export_strategy import CSVExportStrategy
 from utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -24,6 +24,25 @@ class ExportService:
     def __init__(self, db: Database):
         self.db = db
         self.building_repo = BuildingRepository(db)
+        self._csv_strategy = CSVExportStrategy()
+
+    def _write_csv_file(
+        self,
+        data: List[Dict[str, Any]],
+        file_path: Path,
+        columns: Optional[List[str]] = None
+    ) -> bool:
+        """
+        Internal helper to write CSV using CSVExportStrategy.
+
+        Maintains backwards compatibility with existing behavior.
+        """
+        return self._csv_strategy.export(
+            data=data,
+            file_path=str(file_path),
+            columns=columns,
+            encoding='utf-8-sig'
+        )
 
     def export_buildings_csv(
         self,
@@ -66,14 +85,11 @@ class ExportService:
             limit=10000  # Max export
         )
 
-        # Write CSV
-        with open(file_path, "w", newline="", encoding="utf-8-sig") as f:
-            writer = csv.DictWriter(f, fieldnames=columns, extrasaction="ignore")
-            writer.writeheader()
+        # Convert to list of dicts
+        data = [building.to_dict() for building in buildings]
 
-            for building in buildings:
-                row = building.to_dict()
-                writer.writerow({col: row.get(col, "") for col in columns})
+        # Write CSV using strategy
+        self._write_csv_file(data, file_path, columns)
 
         logger.info(f"Exported {len(buildings)} buildings to {file_path}")
 
@@ -500,11 +516,11 @@ class ExportService:
 
         rows = cursor.fetchall()
 
-        with open(file_path, "w", newline="", encoding="utf-8-sig") as f:
-            writer = csv.DictWriter(f, fieldnames=columns, extrasaction="ignore")
-            writer.writeheader()
-            for row in rows:
-                writer.writerow({col: dict(row).get(col, "") for col in columns})
+        # Convert to list of dicts
+        data = [dict(row) for row in rows]
+
+        # Write CSV using strategy
+        self._write_csv_file(data, file_path, columns)
 
         logger.info(f"Exported {len(rows)} claims to CSV: {file_path}")
 
@@ -620,11 +636,11 @@ class ExportService:
 
         rows = cursor.fetchall()
 
-        with open(file_path, "w", newline="", encoding="utf-8-sig") as f:
-            writer = csv.DictWriter(f, fieldnames=columns, extrasaction="ignore")
-            writer.writeheader()
-            for row in rows:
-                writer.writerow({col: dict(row).get(col, "") for col in columns})
+        # Convert to list of dicts
+        data = [dict(row) for row in rows]
+
+        # Write CSV using strategy
+        self._write_csv_file(data, file_path, columns)
 
         logger.info(f"Exported {len(rows)} persons to CSV: {file_path}")
 
@@ -665,11 +681,11 @@ class ExportService:
 
         rows = cursor.fetchall()
 
-        with open(file_path, "w", newline="", encoding="utf-8-sig") as f:
-            writer = csv.DictWriter(f, fieldnames=columns, extrasaction="ignore")
-            writer.writeheader()
-            for row in rows:
-                writer.writerow({col: dict(row).get(col, "") for col in columns})
+        # Convert to list of dicts
+        data = [dict(row) for row in rows]
+
+        # Write CSV using strategy
+        self._write_csv_file(data, file_path, columns)
 
         logger.info(f"Exported {len(rows)} units to CSV: {file_path}")
 
