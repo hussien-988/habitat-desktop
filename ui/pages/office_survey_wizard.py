@@ -41,6 +41,7 @@ from repositories.person_repository import PersonRepository
 from repositories.claim_repository import ClaimRepository
 from repositories.survey_repository import SurveyRepository
 from services.validation_service import ValidationService
+from services.wizard import StepValidator
 from models.building import Building
 from models.unit import PropertyUnit as Unit
 from models.person import Person
@@ -4150,34 +4151,24 @@ class OfficeSurveyWizard(QWidget):
 
     def _validate_current_step(self) -> bool:
         """Validate current step before proceeding."""
-        if self.current_step == self.STEP_BUILDING:
-            if not self.context.building:
-                QMessageBox.warning(self, "خطأ", "يجب اختيار مبنى للمتابعة")
-                return False
-
-        elif self.current_step == self.STEP_UNIT:
-            if not self.context.unit and not self.context.is_new_unit:
-                QMessageBox.warning(self, "خطأ", "يجب اختيار أو إنشاء وحدة عقارية")
-                return False
-            if self.context.is_new_unit:
-                self._save_new_unit_data()
+        # Handle special cases first (widget-dependent logic)
+        if self.current_step == self.STEP_UNIT and self.context.is_new_unit:
+            self._save_new_unit_data()
 
         elif self.current_step == self.STEP_RELATIONS:
             # Auto-save the current relation when moving to next step
             if self.rel_person_combo.currentData():
                 self._save_relation()
-                return True
-            # Allow moving to next step even without saving if there are existing relations
-            elif len(self.context.relations) > 0:
-                return True
-            else:
-                QMessageBox.warning(self, "خطأ", "يجب إضافة علاقة واحدة على الأقل للمتابعة")
-                return False
 
         elif self.current_step == self.STEP_CLAIM:
             # Auto-save claim data when moving to review step
             self._save_claim_data()
-            return True
+
+        # Use StepValidator for context validation
+        is_valid, error_msg = StepValidator.validate_step(self.current_step, self.context)
+        if not is_valid:
+            QMessageBox.warning(self, "خطأ", error_msg)
+            return False
 
         return True
 
