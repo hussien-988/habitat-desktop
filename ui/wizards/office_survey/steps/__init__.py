@@ -13,8 +13,8 @@ Contains individual steps for the office survey wizard:
 """
 
 from .building_selection_step import BuildingSelectionStep
-# from .unit_selection_step import UnitSelectionStep
-# from .household_step import HouseholdStep
+from .unit_selection_step import UnitSelectionStep
+from .household_step import HouseholdStep
 # from .person_step import PersonStep
 # from .relation_step import RelationStep
 # from .claim_step import ClaimStep
@@ -22,8 +22,8 @@ from .building_selection_step import BuildingSelectionStep
 
 __all__ = [
     'BuildingSelectionStep',
-    # 'UnitSelectionStep',
-    # 'HouseholdStep',
+    'UnitSelectionStep',
+    'HouseholdStep',
     # 'PersonStep',
     # 'RelationStep',
     # 'ClaimStep',

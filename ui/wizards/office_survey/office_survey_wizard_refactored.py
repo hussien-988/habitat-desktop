@@ -24,10 +24,12 @@ from PyQt5.QtWidgets import QMessageBox
 
 from ui.wizards.framework import BaseWizard, BaseStep
 from ui.wizards.office_survey.survey_context import SurveyContext
-from ui.wizards.office_survey.steps import BuildingSelectionStep
+from ui.wizards.office_survey.steps import (
+    BuildingSelectionStep,
+    UnitSelectionStep,
+    HouseholdStep
+)
 # from ui.wizards.office_survey.steps import (
-#     UnitSelectionStep,
-#     HouseholdStep,
 #     PersonStep,
 #     RelationStep,
 #     ClaimStep,
@@ -72,8 +74,8 @@ class OfficeSurveyWizard(BaseWizard):
         """
         steps = [
             BuildingSelectionStep(self.context, self),
-            # UnitSelectionStep(self.context, self),
-            # HouseholdStep(self.context, self),
+            UnitSelectionStep(self.context, self),
+            HouseholdStep(self.context, self),
             # PersonStep(self.context, self),
             # RelationStep(self.context, self),
             # ClaimStep(self.context, self),
