@@ -10,7 +10,7 @@ All wizard steps should inherit from this class and implement:
 """
 
 from typing import List, Dict, Any, Optional
-from abc import ABC, abstractmethod
+from abc import ABCMeta, abstractmethod
 from dataclasses import dataclass
 
 from PyQt5.QtWidgets import QWidget, QVBoxLayout
@@ -46,7 +46,13 @@ class StepValidationResult:
         return len(self.warnings) > 0
 
 
-class BaseStep(QWidget, ABC):
+# Combine PyQt5 metaclass with ABC metaclass
+class ABCQWidgetMeta(type(QWidget), ABCMeta):
+    """Metaclass that combines PyQt5's metaclass with ABC."""
+    pass
+
+
+class BaseStep(QWidget, metaclass=ABCQWidgetMeta):
     """
     Abstract base class for wizard steps.
 

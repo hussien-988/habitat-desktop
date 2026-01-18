@@ -9,20 +9,27 @@ This context extends WizardContext with survey-specific data:
 - Claim data
 """
 
-from typing import Optional, Dict, List, Any
+from typing import Optional, Dict, List, Any, TYPE_CHECKING
 from datetime import datetime
 
 from ui.wizards.framework import WizardContext
 from models.building import Building
 from models.unit import PropertyUnit as Unit
 
+if TYPE_CHECKING:
+    from repositories.database import Database
+
 
 class SurveyContext(WizardContext):
     """Context for office survey wizard (UC-004)."""
 
-    def __init__(self):
+    def __init__(self, db: 'Database' = None):
         """Initialize survey context."""
         super().__init__()
+        if db is None:
+            from repositories.database import Database
+            db = Database()
+        self.db = db
 
         # Selected entities
         self.building: Optional[Building] = None

@@ -20,6 +20,7 @@ Steps:
 from typing import List
 
 from PyQt5.QtWidgets import QMessageBox
+from PyQt5.QtCore import pyqtSignal
 
 from ui.wizards.framework import BaseWizard, BaseStep
 from ui.wizards.office_survey.survey_context import SurveyContext
@@ -34,6 +35,7 @@ from ui.wizards.office_survey.steps import (
 )
 
 from repositories.survey_repository import SurveyRepository
+from repositories.database import Database
 from utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -52,14 +54,25 @@ class OfficeSurveyWizard(BaseWizard):
     - Claim creation
     """
 
-    def __init__(self, parent=None):
+    # Signals (aliases for BaseWizard signals for backward compatibility)
+    survey_completed = pyqtSignal(dict)
+    survey_cancelled = pyqtSignal()
+    survey_saved_draft = pyqtSignal(str)
+
+    def __init__(self, db: Database = None, parent=None):
         """Initialize the wizard."""
-        self.survey_repo = SurveyRepository()
+        self.db = db or Database()
+        self.survey_repo = SurveyRepository(self.db)
         super().__init__(parent)
+
+        # Connect base wizard signals to survey-specific signals
+        self.wizard_completed.connect(self.survey_completed.emit)
+        self.wizard_cancelled.connect(self.survey_cancelled.emit)
+        self.draft_saved.connect(self.survey_saved_draft.emit)
 
     def create_context(self) -> SurveyContext:
         """Create and return wizard context."""
-        return SurveyContext()
+        return SurveyContext(db=self.db)
 
     def create_steps(self) -> List[BaseStep]:
         """Create and return list of wizard steps."""

@@ -41,7 +41,7 @@ class UnitSelectionStep(BaseStep):
     def __init__(self, context: SurveyContext, parent=None):
         """Initialize the step."""
         super().__init__(context, parent)
-        self.unit_repo = UnitRepository()
+        self.unit_repo = UnitRepository(self.context.db)
         self.selected_unit: Optional[Unit] = None
 
     def setup_ui(self):
