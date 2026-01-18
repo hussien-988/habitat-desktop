@@ -4,9 +4,10 @@ Data validation service.
 """
 
 import re
-from typing import List, Dict, Any, Tuple
+from typing import List, Dict, Any, Tuple, Optional
 from dataclasses import dataclass
 
+from services.validation.validation_factory import ValidationFactory
 from utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -31,6 +32,17 @@ class ValidationService:
 
     # Phone number pattern (Syrian format)
     PHONE_PATTERN = re.compile(r"^(\+963|0)?9\d{8}$")
+
+    def __init__(self, use_factory: bool = False):
+        """
+        Initialize validation service.
+
+        Args:
+            use_factory: If True, use ValidationFactory for basic field validation
+                        (Optional enhancement, defaults to False for backwards compatibility)
+        """
+        self._use_factory = use_factory
+        self._validation_factory = ValidationFactory() if use_factory else None
 
     def validate_building_id(self, building_id: str) -> ValidationResult:
         """Validate building ID format."""
@@ -200,19 +212,42 @@ class ValidationService:
             warnings=warnings
         )
 
+    def _validate_with_factory(self, record: Dict[str, Any], record_type: str) -> List[str]:
+        """
+        Internal helper to perform basic field validation using ValidationFactory.
+
+        Returns:
+            List of error messages from factory validation
+        """
+        if not self._validation_factory:
+            return []
+
+        return self._validation_factory.validate(record, record_type)
+
     def validate_import_record(self, record: Dict[str, Any], record_type: str) -> ValidationResult:
         """Validate a record from import file."""
+        # Optional: Perform basic field validation using factory if enabled
+        factory_errors = self._validate_with_factory(record, record_type) if self._use_factory else []
+
+        # Perform specialized validation (domain logic, patterns, etc.)
         if record_type == "building":
-            return self.validate_building(record)
+            result = self.validate_building(record)
         elif record_type == "person":
-            return self.validate_person(record)
+            result = self.validate_person(record)
         elif record_type == "unit":
-            return self.validate_unit(record)
+            result = self.validate_unit(record)
         elif record_type == "claim":
-            return self.validate_claim(record)
+            result = self.validate_claim(record)
         else:
             return ValidationResult(
                 is_valid=False,
                 errors=[f"Unknown record type: {record_type}"],
                 warnings=[]
             )
+
+        # Merge factory errors with specialized validation errors
+        if factory_errors:
+            result.errors = factory_errors + result.errors
+            result.is_valid = len(result.errors) == 0
+
+        return result
