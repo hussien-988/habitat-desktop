@@ -195,6 +195,71 @@ class ValidationService:
             warnings=warnings
         )
 
+    def check_unit_uniqueness(
+        self,
+        unit_number: str,
+        floor_number: int,
+        building_id: str,
+        existing_units: List[Dict[str, Any]],
+        exclude_unit_id: Optional[str] = None
+    ) -> bool:
+        """
+        Check if unit number is unique within building on same floor.
+
+        Args:
+            unit_number: The unit/apartment number to check
+            floor_number: Floor number
+            building_id: Building ID
+            existing_units: List of existing units to check against
+            exclude_unit_id: Optional unit ID to exclude (for edit mode)
+
+        Returns:
+            True if unique, False if duplicate exists
+        """
+        for unit in existing_units:
+            # Skip the unit being edited
+            if exclude_unit_id and unit.get("unit_id") == exclude_unit_id:
+                continue
+
+            # Check same building, floor, and number
+            if (unit.get("building_id") == building_id and
+                unit.get("floor_number") == floor_number and
+                (unit.get("apartment_number") == unit_number or
+                 unit.get("unit_number") == unit_number)):
+                return False
+
+        return True
+
+    def check_national_id_uniqueness(
+        self,
+        national_id: str,
+        existing_persons: List[Dict[str, Any]],
+        exclude_person_id: Optional[str] = None
+    ) -> bool:
+        """
+        Check if national ID is unique among existing persons.
+
+        Args:
+            national_id: National ID to check
+            existing_persons: List of existing persons to check against
+            exclude_person_id: Optional person ID to exclude (for edit mode)
+
+        Returns:
+            True if unique, False if duplicate exists
+        """
+        if not national_id:
+            return True  # Empty is allowed
+
+        for person in existing_persons:
+            # Skip the person being edited
+            if exclude_person_id and person.get("person_id") == exclude_person_id:
+                continue
+
+            if person.get("national_id") == national_id:
+                return False
+
+        return True
+
     def validate_claim(self, claim_data: Dict[str, Any]) -> ValidationResult:
         """Validate claim data."""
         errors = []

@@ -40,6 +40,7 @@ from repositories.unit_repository import UnitRepository
 from repositories.person_repository import PersonRepository
 from repositories.claim_repository import ClaimRepository
 from repositories.survey_repository import SurveyRepository
+from services.validation_service import ValidationService
 from models.building import Building
 from models.unit import PropertyUnit as Unit
 from models.person import Person
@@ -611,19 +612,25 @@ class PersonDialog(QDialog):
             self.national_id_status.setText("")
             return True
 
-        if len(nid) != 11 or not nid.isdigit():
+        # Use ValidationService for format check
+        format_result = self.parent().validation_service.validate_national_id(nid)
+        if not format_result.is_valid:
             self.national_id_status.setText("⚠️ يجب أن يكون 11 رقم")
             self.national_id_status.setStyleSheet(f"color: {Config.WARNING_COLOR};")
             return False
 
-        # Check if ID exists in other persons (skip current if editing)
-        for person in self.existing_persons:
-            if person.get('national_id') == nid:
-                if self.editing_mode and self.person_data and person['person_id'] == self.person_data.get('person_id'):
-                    continue
-                self.national_id_status.setText("❌ الرقم موجود مسبقاً")
-                self.national_id_status.setStyleSheet(f"color: {Config.ERROR_COLOR};")
-                return False
+        # Use ValidationService for uniqueness check
+        exclude_id = self.person_data.get('person_id') if self.editing_mode and self.person_data else None
+        is_unique = self.parent().validation_service.check_national_id_uniqueness(
+            national_id=nid,
+            existing_persons=self.existing_persons,
+            exclude_person_id=exclude_id
+        )
+
+        if not is_unique:
+            self.national_id_status.setText("❌ الرقم موجود مسبقاً")
+            self.national_id_status.setStyleSheet(f"color: {Config.ERROR_COLOR};")
+            return False
 
         self.national_id_status.setText("✅ الرقم متاح")
         self.national_id_status.setStyleSheet(f"color: {Config.SUCCESS_COLOR};")
@@ -747,6 +754,9 @@ class OfficeSurveyWizard(QWidget):
         self.person_repo = PersonRepository(db)
         self.claim_repo = ClaimRepository(db)
         self.survey_repo = SurveyRepository(db)
+
+        # Services
+        self.validation_service = ValidationService()
 
         # Survey context
         self.context = SurveyContext()
@@ -1935,15 +1945,26 @@ class OfficeSurveyWizard(QWidget):
         unit_number = self.apt_number.text().strip()
         floor = self.floor_spin.value()
 
-        # Check existing units
-        existing_units = self.unit_repo.get_by_building(self.context.building.building_id)
-        is_unique = True
+        # Get existing units and convert to dict format for ValidationService
+        existing_units_objs = self.unit_repo.get_by_building(self.context.building.building_id)
+        existing_units = [
+            {
+                'unit_id': unit.unit_id if hasattr(unit, 'unit_id') else None,
+                'building_id': unit.building_id if hasattr(unit, 'building_id') else None,
+                'floor_number': unit.floor_number if hasattr(unit, 'floor_number') else None,
+                'apartment_number': unit.apartment_number if hasattr(unit, 'apartment_number') else None,
+                'unit_number': unit.unit_number if hasattr(unit, 'unit_number') else None
+            }
+            for unit in existing_units_objs
+        ]
 
-        for unit in existing_units:
-            if (hasattr(unit, 'apartment_number') and unit.apartment_number == unit_number and
-                hasattr(unit, 'floor_number') and unit.floor_number == floor):
-                is_unique = False
-                break
+        # Use ValidationService for uniqueness check
+        is_unique = self.validation_service.check_unit_uniqueness(
+            unit_number=unit_number,
+            floor_number=floor,
+            building_id=self.context.building.building_id,
+            existing_units=existing_units
+        )
 
         if is_unique:
             self.unit_uniqueness_label.setText("✅ رقم الوحدة متاح")
