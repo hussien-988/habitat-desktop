@@ -5,8 +5,7 @@ Office Survey Wizard (Refactored) - UC-004.
 Multi-step wizard for conducting office-based property surveys.
 
 This is the refactored version using the unified Wizard Framework.
-The old implementation (office_survey_wizard.py) is kept for reference
-but will be gradually replaced by this new implementation.
+The old implementation (office_survey_wizard.py) is kept for reference.
 
 Steps:
 1. Building Selection - Search and select building
@@ -27,14 +26,12 @@ from ui.wizards.office_survey.survey_context import SurveyContext
 from ui.wizards.office_survey.steps import (
     BuildingSelectionStep,
     UnitSelectionStep,
-    HouseholdStep
+    HouseholdStep,
+    PersonStep,
+    RelationStep,
+    ClaimStep,
+    ReviewStep
 )
-# from ui.wizards.office_survey.steps import (
-#     PersonStep,
-#     RelationStep,
-#     ClaimStep,
-#     ReviewStep
-# )
 
 from repositories.survey_repository import SurveyRepository
 from utils.logger import get_logger
@@ -65,21 +62,15 @@ class OfficeSurveyWizard(BaseWizard):
         return SurveyContext()
 
     def create_steps(self) -> List[BaseStep]:
-        """
-        Create and return list of wizard steps.
-
-        Note: Currently only Step 1 (Building Selection) is implemented
-        as a demonstration. Other steps will be implemented following
-        the same pattern.
-        """
+        """Create and return list of wizard steps."""
         steps = [
             BuildingSelectionStep(self.context, self),
             UnitSelectionStep(self.context, self),
             HouseholdStep(self.context, self),
-            # PersonStep(self.context, self),
-            # RelationStep(self.context, self),
-            # ClaimStep(self.context, self),
-            # ReviewStep(self.context, self)
+            PersonStep(self.context, self),
+            RelationStep(self.context, self),
+            ClaimStep(self.context, self),
+            ReviewStep(self.context, self)
         ]
         return steps
 
@@ -224,31 +215,3 @@ class OfficeSurveyWizard(BaseWizard):
                 f"حدث خطأ أثناء تحميل المسودة:\n{str(e)}"
             )
             return None
-
-
-# ============================================================================
-# Migration Note
-# ============================================================================
-"""
-هذا هو التطبيق المُعاد هيكلته لـ Office Survey Wizard باستخدام الـFramework الموحد.
-
-المزايا:
-1. فصل واضح بين الـSteps
-2. كل Step في ملف منفصل
-3. Context موحد لإدارة البيانات
-4. Validation موحد
-5. Navigation موحد
-6. سهولة الصيانة والاختبار
-
-الخطوات التالية:
-1. إنشاء باقي الـSteps (UnitSelectionStep, HouseholdStep, etc.)
-2. نقل الـDialogs المشتركة (PersonDialog, EvidenceDialog) إلى مجلد dialogs/
-3. استخدام ValidationService بدلاً من validation logic مكررة
-4. اختبار الـWorkflow كاملاً
-5. استبدال office_survey_wizard.py القديم بهذا التطبيق الجديد
-
-ملاحظة:
-- الكود القديم (office_survey_wizard.py) محفوظ للمرجعية
-- يمكن نقل الـlogic من الكود القديم خطوة بخطوة
-- كل Step يجب أن يكون مستقلاً وقابل للاختبار
-"""
