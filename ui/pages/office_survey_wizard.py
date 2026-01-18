@@ -2422,23 +2422,32 @@ class OfficeSurveyWizard(QWidget):
     def _save_new_unit_data(self):
         """Save new unit data to context."""
         if self.context.is_new_unit:
+            # Check if widgets still exist before accessing them
+            if not hasattr(self, 'unit_area') or self.unit_area is None:
+                return
+
             # Parse area value
             area_value = None
-            if self.unit_area.text().strip():
-                try:
+            try:
+                if hasattr(self, 'unit_area') and self.unit_area is not None and self.unit_area.text().strip():
                     area_value = float(self.unit_area.text().strip())
-                except ValueError:
-                    pass
+            except (ValueError, RuntimeError):
+                pass
 
-            self.context.new_unit_data = {
-                "unit_type": self.unit_type_combo.currentData(),
-                "floor_number": self.floor_spin.value(),
-                "apartment_number": self.apt_number.text().strip(),
-                "area_sqm": area_value,
-                "number_of_rooms": self.unit_rooms.value(),
-                "property_description": self.unit_desc.toPlainText().strip(),
-                "building_id": self.context.building.building_id if self.context.building else None
-            }
+            # Safely get values from widgets with existence checks
+            try:
+                self.context.new_unit_data = {
+                    "unit_type": self.unit_type_combo.currentData() if hasattr(self, 'unit_type_combo') and self.unit_type_combo is not None else None,
+                    "floor_number": self.floor_spin.value() if hasattr(self, 'floor_spin') and self.floor_spin is not None else 0,
+                    "apartment_number": self.apt_number.text().strip() if hasattr(self, 'apt_number') and self.apt_number is not None else "",
+                    "area_sqm": area_value,
+                    "number_of_rooms": self.unit_rooms.value() if hasattr(self, 'unit_rooms') and self.unit_rooms is not None else 0,
+                    "property_description": self.unit_desc.toPlainText().strip() if hasattr(self, 'unit_desc') and self.unit_desc is not None else "",
+                    "building_id": self.context.building.building_id if self.context.building else None
+                }
+            except RuntimeError:
+                # Widgets were deleted, skip saving
+                pass
 
     # ==================== Step 3: Household (S07-S10) ====================
 
@@ -3662,36 +3671,51 @@ class OfficeSurveyWizard(QWidget):
 
     def _save_relation(self):
         """Save person-unit relation with linked evidences."""
-        if self.rel_person_combo.count() == 0:
-            QMessageBox.warning(self, "خطأ", "لا يوجد أشخاص لتحديد العلاقة")
+        # Check if widgets exist
+        if not hasattr(self, 'rel_person_combo') or self.rel_person_combo is None:
+            return
+
+        try:
+            if self.rel_person_combo.count() == 0:
+                QMessageBox.warning(self, "خطأ", "لا يوجد أشخاص لتحديد العلاقة")
+                return
+        except RuntimeError:
+            # Widget was deleted
             return
 
         # Build evidence list from uploaded files
         evidences = []
         if hasattr(self, '_relation_file_paths') and self._relation_file_paths:
             for file_path in self._relation_file_paths:
-                evidence = {
-                    "evidence_id": str(uuid.uuid4()),
-                    "document_type": self.rel_evidence_type.currentText() if self.rel_evidence_type.currentIndex() > 0 else "غير محدد",
-                    "description": self.rel_evidence_desc.text().strip() or None,
-                    "file_path": file_path,
-                    "upload_date": datetime.now().strftime("%Y-%m-%d")
-                }
-                evidences.append(evidence)
+                try:
+                    evidence = {
+                        "evidence_id": str(uuid.uuid4()),
+                        "document_type": self.rel_evidence_type.currentText() if hasattr(self, 'rel_evidence_type') and self.rel_evidence_type and self.rel_evidence_type.currentIndex() > 0 else "غير محدد",
+                        "description": self.rel_evidence_desc.text().strip() if hasattr(self, 'rel_evidence_desc') and self.rel_evidence_desc else None,
+                        "file_path": file_path,
+                        "upload_date": datetime.now().strftime("%Y-%m-%d")
+                    }
+                    evidences.append(evidence)
+                except RuntimeError:
+                    continue
 
-        relation = {
-            "relation_id": str(uuid.uuid4()) if not hasattr(self, '_editing_relation_index') or self._editing_relation_index is None else self.context.relations[self._editing_relation_index]['relation_id'],
-            "person_id": self.rel_person_combo.currentData(),
-            "person_name": self.rel_person_combo.currentText(),
-            "relation_type": self.rel_type_combo.currentData(),
-            "ownership_share": self.rel_share.value(),
-            "start_date": self.rel_start_date.date().toString("yyyy-MM-dd"),
-            "contract_type": self.rel_contract_type.currentText() if self.rel_contract_type.currentIndex() > 0 else None,
-            "evidence_type": self.rel_evidence_type.currentText() if self.rel_evidence_type.currentIndex() > 0 else None,
-            "evidence_description": self.rel_evidence_desc.text().strip() or None,
-            "notes": self.rel_notes.toPlainText().strip(),
-            "evidences": evidences
-        }
+        try:
+            relation = {
+                "relation_id": str(uuid.uuid4()) if not hasattr(self, '_editing_relation_index') or self._editing_relation_index is None else self.context.relations[self._editing_relation_index]['relation_id'],
+                "person_id": self.rel_person_combo.currentData() if hasattr(self, 'rel_person_combo') and self.rel_person_combo else None,
+                "person_name": self.rel_person_combo.currentText() if hasattr(self, 'rel_person_combo') and self.rel_person_combo else "",
+                "relation_type": self.rel_type_combo.currentData() if hasattr(self, 'rel_type_combo') and self.rel_type_combo else None,
+                "ownership_share": self.rel_share.value() if hasattr(self, 'rel_share') and self.rel_share else 0,
+                "start_date": self.rel_start_date.date().toString("yyyy-MM-dd") if hasattr(self, 'rel_start_date') and self.rel_start_date else datetime.now().strftime("%Y-%m-%d"),
+                "contract_type": self.rel_contract_type.currentText() if hasattr(self, 'rel_contract_type') and self.rel_contract_type and self.rel_contract_type.currentIndex() > 0 else None,
+                "evidence_type": self.rel_evidence_type.currentText() if hasattr(self, 'rel_evidence_type') and self.rel_evidence_type and self.rel_evidence_type.currentIndex() > 0 else None,
+                "evidence_description": self.rel_evidence_desc.text().strip() if hasattr(self, 'rel_evidence_desc') and self.rel_evidence_desc else None,
+                "notes": self.rel_notes.toPlainText().strip() if hasattr(self, 'rel_notes') and self.rel_notes else "",
+                "evidences": evidences
+            }
+        except RuntimeError:
+            # Widgets were deleted
+            return
 
         if hasattr(self, '_editing_relation_index') and self._editing_relation_index is not None:
             self.context.relations[self._editing_relation_index] = relation
@@ -3955,32 +3979,40 @@ class OfficeSurveyWizard(QWidget):
 
     def _save_claim_data(self):
         """Save claim data from the form to context (auto-save on navigation)."""
-        # Collect all claimant person IDs
-        claimant_ids = [r['person_id'] for r in self.context.relations
-                        if r['relation_type'] in ('owner', 'co_owner', 'heir')]
-        if not claimant_ids:
-            claimant_ids = [r['person_id'] for r in self.context.relations]
+        # Check if widgets exist
+        if not hasattr(self, 'claim_type_combo') or self.claim_type_combo is None:
+            return
 
-        # Collect all evidences
-        all_evidences = []
-        for rel in self.context.relations:
-            all_evidences.extend(rel.get('evidences', []))
+        try:
+            # Collect all claimant person IDs
+            claimant_ids = [r['person_id'] for r in self.context.relations
+                            if r['relation_type'] in ('owner', 'co_owner', 'heir')]
+            if not claimant_ids:
+                claimant_ids = [r['person_id'] for r in self.context.relations]
 
-        self.context.claim_data = {
-            "claim_type": self.claim_type_combo.currentData(),
-            "priority": self.claim_priority_combo.currentData(),
-            "business_nature": self.claim_business_nature.currentData() if hasattr(self, 'claim_business_nature') else None,
-            "source": self.claim_source_combo.currentData() if hasattr(self, 'claim_source_combo') else "OFFICE_SUBMISSION",
-            "case_status": self.claim_status_combo.currentData() if hasattr(self, 'claim_status_combo') else "new",
-            "survey_date": self.claim_survey_date.date().toString("yyyy-MM-dd") if hasattr(self, 'claim_survey_date') else None,
-            "next_action_date": self.claim_next_action_date.date().toString("yyyy-MM-dd") if hasattr(self, 'claim_next_action_date') else None,
-            "notes": self.claim_notes.toPlainText().strip(),
-            "status": "draft",
-            "claimant_person_ids": claimant_ids,
-            "evidence_ids": [e['evidence_id'] for e in all_evidences],
-            "unit_id": self.context.unit.unit_id if self.context.unit else None,
-            "building_id": self.context.building.building_id if self.context.building else None
-        }
+            # Collect all evidences
+            all_evidences = []
+            for rel in self.context.relations:
+                all_evidences.extend(rel.get('evidences', []))
+
+            self.context.claim_data = {
+                "claim_type": self.claim_type_combo.currentData() if hasattr(self, 'claim_type_combo') and self.claim_type_combo else None,
+                "priority": self.claim_priority_combo.currentData() if hasattr(self, 'claim_priority_combo') and self.claim_priority_combo else None,
+                "business_nature": self.claim_business_nature.currentData() if hasattr(self, 'claim_business_nature') and self.claim_business_nature else None,
+                "source": self.claim_source_combo.currentData() if hasattr(self, 'claim_source_combo') and self.claim_source_combo else "OFFICE_SUBMISSION",
+                "case_status": self.claim_status_combo.currentData() if hasattr(self, 'claim_status_combo') and self.claim_status_combo else "new",
+                "survey_date": self.claim_survey_date.date().toString("yyyy-MM-dd") if hasattr(self, 'claim_survey_date') and self.claim_survey_date else None,
+                "next_action_date": self.claim_next_action_date.date().toString("yyyy-MM-dd") if hasattr(self, 'claim_next_action_date') and self.claim_next_action_date else None,
+                "notes": self.claim_notes.toPlainText().strip() if hasattr(self, 'claim_notes') and self.claim_notes else "",
+                "status": "draft",
+                "claimant_person_ids": claimant_ids,
+                "evidence_ids": [e['evidence_id'] for e in all_evidences],
+                "unit_id": self.context.unit.unit_id if self.context.unit else None,
+                "building_id": self.context.building.building_id if self.context.building else None
+            }
+        except RuntimeError:
+            # Widgets were deleted
+            pass
 
     def _create_claim(self):
         """Create the claim (S18) - legacy method, now uses _save_claim_data."""
