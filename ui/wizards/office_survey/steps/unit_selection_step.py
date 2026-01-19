@@ -16,7 +16,7 @@ from PyQt5.QtWidgets import (
     QComboBox, QSpinBox, QTextEdit, QDialog, QFormLayout
 )
 from PyQt5.QtCore import Qt
-from PyQt5.QtGui import QCursor
+from PyQt5.QtGui import QCursor, QIcon
 
 from ui.wizards.framework import BaseStep, StepValidationResult
 from ui.wizards.office_survey.survey_context import SurveyContext
@@ -36,6 +36,7 @@ class UnitSelectionStep(BaseStep):
     - View existing units in the selected building
     - Select an existing unit
     - Create a new unit with uniqueness validation
+    UI copied from office_survey_wizard.py _create_unit_step() - exact match.
     """
 
     def __init__(self, context: SurveyContext, parent=None):
@@ -45,184 +46,241 @@ class UnitSelectionStep(BaseStep):
         self.selected_unit: Optional[Unit] = None
 
     def setup_ui(self):
-        """Setup the step's UI."""
-        # Header
-        header = QLabel("الخطوة 2: اختيار أو إنشاء الوحدة العقارية")
-        header.setStyleSheet("font-size: 16px; font-weight: bold; color: #2c3e50;")
-        self.main_layout.addWidget(header)
+        """Setup the step's UI - exact copy from old wizard."""
+        layout = self.main_layout
+        layout.setContentsMargins(16, 16, 16, 16)
+        layout.setSpacing(16)
 
-        # Description
-        desc = QLabel("اختر وحدة موجودة أو أنشئ وحدة جديدة")
-        desc.setStyleSheet("color: #7f8c8d; margin-bottom: 16px;")
-        self.main_layout.addWidget(desc)
-
-        # Building info card
-        building_info = self._create_building_info_card()
-        self.main_layout.addWidget(building_info)
-
-        # Units section
-        units_section = self._create_units_section()
-        self.main_layout.addWidget(units_section, 1)
-
-        # Selected unit info
-        self.selected_info = QLabel("لم يتم اختيار وحدة")
-        self.selected_info.setStyleSheet("""
-            background-color: #ecf0f1;
-            padding: 12px;
-            border-radius: 4px;
-            color: #7f8c8d;
+        # Selected building info card (search + metrics layout)
+        self.unit_building_frame = QFrame()
+        self.unit_building_frame.setObjectName("unitBuildingInfoCard")
+        self.unit_building_frame.setStyleSheet("""
+            QFrame#unitBuildingInfoCard {
+                background-color: white;
+                border: 1px solid #E1E8ED;
+                border-radius: 8px;
+            }
         """)
-        self.main_layout.addWidget(self.selected_info)
 
-    def _create_building_info_card(self) -> QGroupBox:
-        """Create building information card."""
-        group = QGroupBox("معلومات المبنى المختار")
-        layout = QVBoxLayout(group)
+        # Card layout
+        self.unit_building_layout = QVBoxLayout(self.unit_building_frame)
+        self.unit_building_layout.setSpacing(14)
+        self.unit_building_layout.setContentsMargins(14, 14, 14, 14)
 
-        if self.context.building:
-            # Building ID
-            building_id_label = QLabel(f"🏢 رمز المبنى: {self.context.building.building_id}")
-            building_id_label.setStyleSheet("font-weight: bold; font-size: 14px;")
-            layout.addWidget(building_id_label)
+        # Building address row with icon (centered with border)
+        address_container = QFrame()
+        address_container.setStyleSheet("""
+            QFrame {
+                background-color: white;
+                border: 1px solid #E1E8ED;
+                border-radius: 6px;
+                padding: 8px 12px;
+            }
+        """)
 
-            # Address
-            address = self.context.building.address or "غير محدد"
-            address_label = QLabel(f"📍 العنوان: {address}")
-            layout.addWidget(address_label)
+        address_row = QHBoxLayout(address_container)
+        address_row.setSpacing(8)
+        address_row.setContentsMargins(8, 8, 8, 8)
 
-            # Type and Status
-            info_layout = QHBoxLayout()
-            type_label = QLabel(f"النوع: {self.context.building.building_type_display or 'غير محدد'}")
-            status_label = QLabel(f"الحالة: {self.context.building.building_status_display or 'غير محدد'}")
-            info_layout.addWidget(type_label)
-            info_layout.addWidget(status_label)
-            info_layout.addStretch()
-            layout.addLayout(info_layout)
-        else:
-            error_label = QLabel("⚠️ لم يتم اختيار مبنى!")
-            error_label.setStyleSheet("color: #e74c3c; font-weight: bold;")
-            layout.addWidget(error_label)
+        # Add stretch to center the content
+        address_row.addStretch()
 
-        return group
+        # Building icon
+        building_icon = QLabel("🏢")
+        building_icon.setStyleSheet("""
+            QLabel {
+                font-size: 16px;
+                border: none;
+                background-color: transparent;
+            }
+        """)
+        building_icon.setAlignment(Qt.AlignCenter)
+        address_row.addWidget(building_icon)
 
-    def _create_units_section(self) -> QWidget:
-        """Create units list section."""
-        container = QWidget()
-        layout = QVBoxLayout(container)
-        layout.setContentsMargins(0, 0, 0, 0)
+        # Building address label
+        self.unit_building_address = QLabel("حلب الحميدية")
+        self.unit_building_address.setAlignment(Qt.AlignCenter)
+        self.unit_building_address.setStyleSheet("""
+            QLabel {
+                border: none;
+                background-color: transparent;
+                font-size: 12px;
+                color: #6B7280;
+                font-weight: 500;
+            }
+        """)
+        address_row.addWidget(self.unit_building_address)
 
-        # Header with add button
+        # Add stretch to center the content
+        address_row.addStretch()
+
+        self.unit_building_layout.addWidget(address_container)
+
+        # Metrics row container
+        self.unit_building_metrics_layout = QHBoxLayout()
+        self.unit_building_metrics_layout.setSpacing(22)
+        self.unit_building_layout.addLayout(self.unit_building_metrics_layout)
+
+        layout.addWidget(self.unit_building_frame)
+
+        # White container frame for all units
+        units_main_frame = QFrame()
+        units_main_frame.setStyleSheet("""
+            QFrame {
+                background-color: white;
+                border: 1px solid #E1E8ED;
+                border-radius: 8px;
+                padding: 16px;
+            }
+        """)
+        units_main_layout = QVBoxLayout(units_main_frame)
+        units_main_layout.setSpacing(12)
+        units_main_layout.setContentsMargins(16, 16, 16, 16)
+
+        # Header with title/subtitle on right and button on left
         header_layout = QHBoxLayout()
 
-        units_label = QLabel("الوحدات الموجودة")
-        units_label.setStyleSheet("font-size: 14px; font-weight: bold;")
-        header_layout.addWidget(units_label)
+        # Right side: Icon + Title and subtitle
+        right_header = QHBoxLayout()
+        right_header.setSpacing(8)
 
+        # Icon
+        icon_label = QLabel("🏘️")
+        icon_label.setStyleSheet("font-size: 20px; border: none; background: transparent;")
+        right_header.addWidget(icon_label)
+
+        # Title and subtitle
+        title_subtitle_layout = QVBoxLayout()
+        title_subtitle_layout.setSpacing(2)
+
+        title_label = QLabel("اختر الوحدة العقارية")
+        title_label.setStyleSheet("""
+            font-size: 12px;
+            font-weight: 200;
+            color: #111827;
+            border: none;
+            background: transparent;
+        """)
+        title_label.setAlignment(Qt.AlignRight)
+        title_subtitle_layout.addWidget(title_label)
+
+        subtitle_label = QLabel("اختر أو أضف معلومات الوحدة العقارية")
+        subtitle_label.setStyleSheet("""
+            font-size: 9px;
+            font-weight: 100;
+            color: #6B7280;
+            border: none;
+            background: transparent;
+        """)
+        subtitle_label.setAlignment(Qt.AlignRight)
+        title_subtitle_layout.addWidget(subtitle_label)
+
+        right_header.addLayout(title_subtitle_layout)
+        header_layout.addLayout(right_header)
         header_layout.addStretch()
 
-        # Add unit button
-        self.add_unit_btn = QPushButton("+ أضف وحدة جديدة")
-        self.add_unit_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #27ae60;
-                color: white;
+        # Left side: Add unit button
+        self.add_unit_btn = QPushButton("أضف وحدة")
+        self.add_unit_btn.setIcon(QIcon.fromTheme("list-add"))
+        self.add_unit_btn.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {Config.PRIMARY_COLOR};
                 border: none;
+                border-radius: 6px;
                 padding: 8px 16px;
-                border-radius: 4px;
-                font-weight: bold;
-            }
-            QPushButton:hover {
-                background-color: #229954;
-            }
+                color: white;
+                font-weight: 600;
+                font-size: 13px;
+            }}
+            QPushButton:hover {{
+                background-color: #005A9C;
+            }}
         """)
         self.add_unit_btn.clicked.connect(self._show_add_unit_dialog)
         header_layout.addWidget(self.add_unit_btn)
 
-        layout.addLayout(header_layout)
+        units_main_layout.addLayout(header_layout)
+
+        # Units list container (inside white frame)
+        self.units_container = QWidget()
+        self.units_layout = QVBoxLayout(self.units_container)
+        self.units_layout.setSpacing(10)
+        self.units_layout.setContentsMargins(0, 0, 0, 0)
 
         # Scroll area for units
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
+        scroll.setWidget(self.units_container)
         scroll.setStyleSheet("""
             QScrollArea {
-                border: 1px solid #ddd;
-                border-radius: 4px;
+                border: none;
                 background-color: white;
             }
         """)
+        units_main_layout.addWidget(scroll, 1)
 
-        # Units container
-        self.units_container = QWidget()
-        self.units_layout = QVBoxLayout(self.units_container)
-        self.units_layout.setSpacing(10)
-        self.units_layout.setContentsMargins(10, 10, 10, 10)
-
-        scroll.setWidget(self.units_container)
-        layout.addWidget(scroll, 1)
-
-        return container
+        layout.addWidget(units_main_frame, 1)
 
     def _load_units(self):
-        """Load units for the selected building."""
-        # Clear existing units
+        """Load units for the selected building and display as cards - exact copy from old wizard."""
+        if not self.context.building:
+            return
+
+        # Populate building info (simple text display)
+        if hasattr(self, 'unit_building_label'):
+            self.unit_building_label.setText(
+                f"🏢 المبنى المحدد: {self.context.building.building_id}"
+            )
+
+        # Clear existing unit cards
         while self.units_layout.count():
             child = self.units_layout.takeAt(0)
             if child.widget():
                 child.widget().deleteLater()
 
-        if not self.context.building:
-            empty_label = QLabel("⚠️ لا يوجد مبنى مختار")
+        # Load units from database
+        units = self.unit_repo.get_by_building(self.context.building.building_id)
+
+        if units:
+            for unit in units:
+                unit_card = self._create_unit_card(unit)
+                self.units_layout.addWidget(unit_card)
+        else:
+            # Empty state message
+            empty_label = QLabel("📭 لا توجد وحدات مسجلة. انقر على 'أضف وحدة' لإضافة وحدة جديدة")
             empty_label.setAlignment(Qt.AlignCenter)
-            empty_label.setStyleSheet("color: #7f8c8d; padding: 40px;")
+            empty_label.setStyleSheet("""
+                color: #9CA3AF;
+                font-size: 14px;
+                padding: 40px;
+            """)
             self.units_layout.addWidget(empty_label)
-            return
 
-        # Load units from repository
-        try:
-            units = self.unit_repo.get_by_building(self.context.building.building_id)
+        self.units_layout.addStretch()
 
-            if units:
-                for unit in units:
-                    unit_card = self._create_unit_card(unit)
-                    self.units_layout.addWidget(unit_card)
-            else:
-                # Empty state
-                empty_label = QLabel("📭 لا توجد وحدات مسجلة.\nانقر على 'أضف وحدة جديدة' لإضافة وحدة.")
-                empty_label.setAlignment(Qt.AlignCenter)
-                empty_label.setStyleSheet("""
-                    color: #9CA3AF;
-                    font-size: 14px;
-                    padding: 40px;
-                """)
-                self.units_layout.addWidget(empty_label)
+    def _create_unit_card(self, unit) -> QFrame:
+        """Create a unit card widget matching the exact photo layout - exact copy from old wizard."""
+        # Determine unit display number (from unit_number or apartment_number)
+        unit_display_num = unit.unit_number or unit.apartment_number or "?"
 
-            self.units_layout.addStretch()
+        # Check if this is the selected unit
+        is_selected = self.context.unit and self.context.unit.unit_id == unit.unit_id
 
-        except Exception as e:
-            logger.error(f"Error loading units: {e}", exc_info=True)
-            QMessageBox.critical(
-                self,
-                "خطأ",
-                f"حدث خطأ أثناء تحميل الوحدات: {str(e)}"
-            )
-
-    def _create_unit_card(self, unit: Unit) -> QFrame:
-        """Create a unit card widget."""
-        # Check if selected
-        is_selected = self.selected_unit and self.selected_unit.unit_id == unit.unit_id
-
-        # Create card
+        # Create card frame
         card = QFrame()
         card.setObjectName("unitCard")
 
-        # Style based on selection
+        # Different styles for selected and normal cards
         if is_selected:
             card.setStyleSheet("""
                 QFrame#unitCard {
-                    background-color: #d5f4e6;
-                    border: 2px solid #27ae60;
-                    border-radius: 8px;
-                    padding: 12px;
+                    background-color: #f0f7ff;
+                    border: 2px solid #3498db;
+                    border-radius: 10px;
+                }
+                QFrame#unitCard QLabel {
+                    border: none;
+                    color: #2c3e50;
                 }
             """)
         else:
@@ -230,112 +288,107 @@ class UnitSelectionStep(BaseStep):
                 QFrame#unitCard {
                     background-color: white;
                     border: 1px solid #e0e0e0;
-                    border-radius: 8px;
-                    padding: 12px;
+                    border-radius: 10px;
                 }
                 QFrame#unitCard:hover {
                     border-color: #3498db;
                     background-color: #f9fbfd;
                 }
+                QFrame#unitCard QLabel {
+                    border: none;
+                    color: #2c3e50;
+                }
             """)
 
-        card.setCursor(QCursor(Qt.PointingHandCursor))
+        card.setCursor(Qt.PointingHandCursor)
         card.mousePressEvent = lambda _: self._on_unit_card_clicked(unit)
+        card.setLayoutDirection(Qt.RightToLeft)
 
-        # Card layout
-        layout = QVBoxLayout(card)
-        layout.setSpacing(8)
+        # Main layout
+        main_layout = QVBoxLayout(card)
+        main_layout.setSpacing(0)
+        main_layout.setContentsMargins(0, 0, 0, 0)
 
-        # Unit number and type
-        header_layout = QHBoxLayout()
-        unit_num = unit.unit_number or unit.apartment_number or "غير محدد"
-        unit_label = QLabel(f"🏠 وحدة رقم: {unit_num}")
-        unit_label.setStyleSheet("font-weight: bold; font-size: 14px;")
-        header_layout.addWidget(unit_label)
+        # Get unit data
+        unit_type_val = unit.unit_type_display if hasattr(unit, 'unit_type_display') else unit.unit_type
+        status_val = unit.apartment_status_display if hasattr(unit, 'apartment_status_display') else unit.apartment_status or "جيدة"
+        floor_val = str(unit.floor_number) if unit.floor_number is not None else "-"
+        rooms_val = str(getattr(unit, 'number_of_rooms', 0)) if hasattr(unit, 'number_of_rooms') else "-"
+        area_val = f"{unit.area_sqm}" if unit.area_sqm else "120"
 
-        header_layout.addStretch()
+        # Top Row (Data Grid)
+        grid_layout = QHBoxLayout()
+        grid_layout.setContentsMargins(20, 15, 20, 15)
+        grid_layout.setSpacing(10)
 
+        # Column Data (In order for RTL)
+        data_points = [
+            ("حالة الوحدة", status_val),
+            ("نوع الوحدة", unit_type_val),
+            ("مساحة القسم", f"{area_val} (م²)"),
+            ("عدد الغرف", rooms_val),
+            ("رقم الطابق", floor_val),
+            ("رقم الوحدة", str(unit_display_num)),
+        ]
+
+        for label_text, value_text in data_points:
+            col = QVBoxLayout()
+            col.setSpacing(4)
+
+            lbl_title = QLabel(label_text)
+            lbl_title.setStyleSheet("font-weight: bold; color: #333; font-size: 11px;")
+            lbl_title.setAlignment(Qt.AlignCenter)
+
+            lbl_val = QLabel(str(value_text))
+            lbl_val.setStyleSheet("color: #666; font-size: 11px;")
+            lbl_val.setAlignment(Qt.AlignCenter)
+
+            col.addWidget(lbl_title)
+            col.addWidget(lbl_val)
+            grid_layout.addLayout(col)
+
+        main_layout.addLayout(grid_layout)
+
+        # Divider line
+        line = QFrame()
+        line.setFrameShape(QFrame.HLine)
+        line.setStyleSheet("background-color: #eeeeee; border: none; max-height: 1px;")
+        main_layout.addWidget(line)
+
+        # Bottom Section (Description)
+        desc_layout = QVBoxLayout()
+        desc_layout.setContentsMargins(20, 12, 20, 15)
+        desc_layout.setSpacing(6)
+
+        desc_title = QLabel("وصف العقار")
+        desc_title.setStyleSheet("font-weight: bold; color: #333; font-size: 11px;")
+
+        desc_text_content = unit.property_description if unit.property_description else "وصف تفصيلي يشمل: عدد الغرف وأنواعها، المساحة التقريبية، الاتجاهات والحدود، وأي ميزات مميزة."
+        desc_text = QLabel(desc_text_content)
+        desc_text.setStyleSheet("color: #7f8c8d; font-size: 10px;")
+        desc_text.setWordWrap(True)
+        desc_text.setMaximumHeight(40)
+
+        desc_layout.addWidget(desc_title)
+        desc_layout.addWidget(desc_text)
+        main_layout.addLayout(desc_layout)
+
+        # Checkmark for selected item
         if is_selected:
             check_label = QLabel("✓")
-            check_label.setStyleSheet("color: #27ae60; font-size: 18px; font-weight: bold;")
-            header_layout.addWidget(check_label)
-
-        layout.addLayout(header_layout)
-
-        # Details grid
-        details_layout = QHBoxLayout()
-        details_layout.setSpacing(16)
-
-        # Column 1
-        col1 = QVBoxLayout()
-        col1.addWidget(self._create_detail_item("النوع", unit.unit_type_display or unit.unit_type or "غير محدد"))
-        col1.addWidget(self._create_detail_item("الطابق", str(unit.floor_number) if unit.floor_number is not None else "-"))
-        details_layout.addLayout(col1)
-
-        # Column 2
-        col2 = QVBoxLayout()
-        col2.addWidget(self._create_detail_item("الحالة", unit.apartment_status_display or unit.apartment_status or "جيدة"))
-        col2.addWidget(self._create_detail_item("المساحة", f"{unit.area_sqm} م²" if unit.area_sqm else "-"))
-        details_layout.addLayout(col2)
-
-        # Column 3
-        col3 = QVBoxLayout()
-        rooms = str(getattr(unit, 'number_of_rooms', '-'))
-        col3.addWidget(self._create_detail_item("عدد الغرف", rooms))
-        details_layout.addLayout(col3)
-
-        details_layout.addStretch()
-        layout.addLayout(details_layout)
-
-        # Description (if available)
-        if unit.property_description:
-            desc_label = QLabel(unit.property_description)
-            desc_label.setStyleSheet("color: #7f8c8d; font-size: 11px;")
-            desc_label.setWordWrap(True)
-            desc_label.setMaximumHeight(40)
-            layout.addWidget(desc_label)
+            check_label.setStyleSheet("color: #3498db; font-size: 18px; font-weight: bold; border: none;")
+            check_label.setAlignment(Qt.AlignLeft)
+            main_layout.addWidget(check_label)
 
         return card
 
-    def _create_detail_item(self, label: str, value: str) -> QWidget:
-        """Create a detail label-value pair."""
-        container = QWidget()
-        layout = QVBoxLayout(container)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(2)
-
-        label_widget = QLabel(label)
-        label_widget.setStyleSheet("font-size: 11px; color: #9CA3AF;")
-        layout.addWidget(label_widget)
-
-        value_widget = QLabel(value)
-        value_widget.setStyleSheet("font-size: 12px; color: #2c3e50; font-weight: 600;")
-        layout.addWidget(value_widget)
-
-        return container
-
-    def _on_unit_card_clicked(self, unit: Unit):
-        """Handle unit card click."""
+    def _on_unit_card_clicked(self, unit):
+        """Handle unit card click - exact copy from old wizard."""
+        self.context.unit = unit
+        self.context.is_new_unit = False
         self.selected_unit = unit
-
-        # Update context
-        self.context.set_unit(unit, is_new=False)
-
         # Refresh cards to show selection
         self._load_units()
-
-        # Update selected info
-        self.selected_info.setText(
-            f"✓ تم اختيار الوحدة: {unit.unit_number or unit.apartment_number}\n"
-            f"النوع: {unit.unit_type_display or unit.unit_type}"
-        )
-        self.selected_info.setStyleSheet("""
-            background-color: #d5f4e6;
-            padding: 12px;
-            border-radius: 4px;
-            color: #27ae60;
-            font-weight: bold;
-        """)
 
         # Emit validation changed
         self.emit_validation_changed(True)
@@ -343,50 +396,24 @@ class UnitSelectionStep(BaseStep):
         logger.info(f"Unit selected: {unit.unit_id}")
 
     def _show_add_unit_dialog(self):
-        """Show dialog to add a new unit."""
+        """Show dialog to add a new unit - exact copy from old wizard."""
         from ui.wizards.office_survey.dialogs.unit_dialog import UnitDialog
 
-        dialog = UnitDialog(self.context.building, parent=self)
+        dialog = UnitDialog(self.context.building, self.context.db, parent=self)
 
         if dialog.exec_() == QDialog.Accepted:
-            unit_data = dialog.get_unit_data()
+            # Create new unit (will be saved when moving forward)
+            self.context.is_new_unit = True
+            self.context.new_unit_data = dialog.get_unit_data()
 
-            try:
-                # Create unit in database
-                new_unit = self.unit_repo.create(unit_data)
+            # Mark as having a selected unit (even though it's new)
+            # This allows validation to pass
+            self.selected_unit = "new_unit"  # Placeholder to indicate new unit
 
-                # Update context
-                self.context.set_unit(new_unit, is_new=True)
-                self.context.new_unit_data = unit_data
-                self.selected_unit = new_unit
+            # Enable next button by emitting validation changed
+            self.emit_validation_changed(True)
 
-                # Reload units
-                self._load_units()
-
-                # Update selected info
-                self.selected_info.setText(
-                    f"✓ تم إنشاء واختيار الوحدة الجديدة: {new_unit.unit_number or new_unit.apartment_number}"
-                )
-                self.selected_info.setStyleSheet("""
-                    background-color: #d5f4e6;
-                    padding: 12px;
-                    border-radius: 4px;
-                    color: #27ae60;
-                    font-weight: bold;
-                """)
-
-                # Emit validation changed
-                self.emit_validation_changed(True)
-
-                logger.info(f"New unit created: {new_unit.unit_id}")
-
-            except Exception as e:
-                logger.error(f"Error creating unit: {e}", exc_info=True)
-                QMessageBox.critical(
-                    self,
-                    "خطأ",
-                    f"حدث خطأ أثناء إنشاء الوحدة: {str(e)}"
-                )
+            QMessageBox.information(self, "تم", "سيتم إضافة الوحدة عند إتمام الاستمارة")
 
     def validate(self) -> StepValidationResult:
         """Validate the step."""
@@ -395,7 +422,8 @@ class UnitSelectionStep(BaseStep):
         if not self.context.building:
             result.add_error("لا يوجد مبنى مختار! يرجى العودة للخطوة السابقة")
 
-        if not self.selected_unit:
+        # Check if unit is selected OR new unit is being created
+        if not self.selected_unit and not self.context.is_new_unit:
             result.add_error("يجب اختيار وحدة أو إنشاء وحدة جديدة للمتابعة")
 
         return result
@@ -417,17 +445,8 @@ class UnitSelectionStep(BaseStep):
         # Restore selected unit if exists
         if self.context.unit:
             self.selected_unit = self.context.unit
-            # Update UI to show selection
-            self.selected_info.setText(
-                f"✓ الوحدة المختارة: {self.context.unit.unit_number or self.context.unit.apartment_number}"
-            )
-            self.selected_info.setStyleSheet("""
-                background-color: #d5f4e6;
-                padding: 12px;
-                border-radius: 4px;
-                color: #27ae60;
-                font-weight: bold;
-            """)
+            # Emit validation - unit is already selected
+            self.emit_validation_changed(True)
 
     def on_show(self):
         """Called when step is shown."""

@@ -118,9 +118,7 @@ class MainWindow(QMainWindow):
         from ui.pages.duplicates_page import DuplicatesPage
         from ui.pages.field_assignment_page import FieldAssignmentPage
         from ui.pages.draft_office_surveys_page_v2 import DraftOfficeSurveysPage
-        from ui.pages.office_survey_wizard import OfficeSurveyWizard  # OLD - temporary
-        print("OfficeSurveyWizard module:", OfficeSurveyWizard.__module__)
-        print("OfficeSurveyWizard class:", OfficeSurveyWizard)
+        from ui.wizards.office_survey import OfficeSurveyWizard
 
 
         # Central widget
@@ -233,8 +231,8 @@ class MainWindow(QMainWindow):
         self.pages[Pages.DRAFT_OFFICE_SURVEYS] = DraftOfficeSurveysPage(self.db, self)
         self.stack.addWidget(self.pages[Pages.DRAFT_OFFICE_SURVEYS])
 
-        # Office Survey Wizard (UC-004, UC-005) - OLD version temporarily
-        self.office_survey_wizard = OfficeSurveyWizard(self.db, self.i18n, self)
+        # Office Survey Wizard (UC-004, UC-005) - NEW wizard framework
+        self.office_survey_wizard = OfficeSurveyWizard(self.db, self)
         self.stack.addWidget(self.office_survey_wizard)
 
         # Map tabs to pages (based on Figma design)
@@ -413,8 +411,13 @@ class MainWindow(QMainWindow):
         """
         logger.info(f"Loading draft survey into wizard")
 
-        # Load draft data into wizard
-        self.office_survey_wizard.load_draft(draft_context)
+        # Restore context from draft (SurveyContext imported in wizard creation)
+        from ui.wizards.office_survey.survey_context import SurveyContext
+        self.office_survey_wizard.context = SurveyContext.from_dict(draft_context)
+
+        # Navigate to saved step
+        saved_step = self.office_survey_wizard.context.current_step_index or 0
+        self.office_survey_wizard.navigator.goto_step(saved_step, skip_validation=True)
 
         # Navigate to wizard
         self.stack.setCurrentWidget(self.office_survey_wizard)
@@ -426,15 +429,11 @@ class MainWindow(QMainWindow):
         Resets the wizard to initial state and opens it.
         """
         logger.info("Starting new office survey")
-        from ui.pages.office_survey_wizard import SurveyContext
 
-        # Reset wizard to initial state (OLD wizard interface)
-        self.office_survey_wizard.context = SurveyContext()
-        self.office_survey_wizard.current_step = 0
-        self.office_survey_wizard._search_buildings()
-        if hasattr(self.office_survey_wizard, '_load_buildings_map'):
-            self.office_survey_wizard._load_buildings_map()
-        self.office_survey_wizard._update_step_display()
+        # Reset wizard to initial state (NEW wizard framework)
+        from ui.wizards.office_survey.survey_context import SurveyContext
+        self.office_survey_wizard.context = SurveyContext(db=self.db)
+        self.office_survey_wizard.navigator.reset()
 
         # Navigate to wizard
         self.stack.setCurrentWidget(self.office_survey_wizard)

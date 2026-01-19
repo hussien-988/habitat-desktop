@@ -11,6 +11,16 @@ Complete workflow for office-based property surveys including:
 - Claim creation
 - Final review and submission
 - Full persistence support
+
+REFACTORING STATUS (PHASE WIZARD-CLOSE):
+- ✅ PR-W3: Dialogs extracted to ui/wizards/office_survey/dialogs/
+  - PersonDialog, EvidenceDialog moved to separate files
+  - Reduced from 5066 to 4518 lines (-548 lines)
+- ✅ PR-W4: Validation logic extracted to services/wizard/step_validator.py
+  - Context-based validation separated from UI
+  - Reusable across different wizard implementations
+- ✅ Uses ValidationService for field validation (national ID, unit uniqueness)
+- 🎯 Next: UI remains in this file until fully migrated to modular steps
 """
 
 from typing import Optional, Dict, List, Any

@@ -31,19 +31,20 @@ logger = get_logger(__name__)
 class UnitDialog(QDialog):
     """Dialog for creating or editing a property unit."""
 
-    def __init__(self, building: Building, unit_data: Optional[Dict] = None, parent=None):
+    def __init__(self, building: Building, db, unit_data: Optional[Dict] = None, parent=None):
         """
         Initialize the dialog.
 
         Args:
             building: The building this unit belongs to
+            db: Database instance
             unit_data: Optional existing unit data for editing
             parent: Parent widget
         """
         super().__init__(parent)
         self.building = building
         self.unit_data = unit_data
-        self.unit_repo = UnitRepository()
+        self.unit_repo = UnitRepository(db)
         self.validation_service = ValidationService()
 
         self.setWindowTitle("إضافة وحدة عقارية" if not unit_data else "تعديل وحدة عقارية")
