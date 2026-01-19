@@ -11,9 +11,9 @@ from PyQt5.QtWidgets import (
     QFrame, QGraphicsDropShadowEffect, QSizeGrip
 )
 
-from PyQt5.QtCore import Qt, pyqtSignal
+from PyQt5.QtCore import Qt, pyqtSignal, QPoint
 
-from PyQt5.QtGui import QKeySequence, QColor
+from PyQt5.QtGui import QKeySequence, QColor, QMouseEvent
 
 from .config import Config, Pages
 from repositories.database import Database
@@ -30,11 +30,14 @@ class MainWindow(QMainWindow):
 
     def __init__(self, db: Database, i18n: I18n, parent=None):
         super().__init__(parent)
-        self.WINDOW_RADIUS = 18
+        self.WINDOW_RADIUS = 12
         self.db = db
         self.i18n = i18n
         self.current_user = None
         self._is_arabic = True  # افتراضياً عربي
+
+        # For window dragging
+        self._drag_position = QPoint()
 
         self._setup_window()
         self._setup_shortcuts()
@@ -53,13 +56,17 @@ class MainWindow(QMainWindow):
         """Configure window properties."""
         # Set window title to match Figma design
         self.setWindowTitle("UN-HABITAT")
-        self.setMinimumSize(Config.WINDOW_MIN_WIDTH, Config.WINDOW_MIN_HEIGHT)
+
+        # Set exact dimensions from Figma: 1512 x 982
+        window_width = 1512
+        window_height = 982
+        self.setMinimumSize(window_width, window_height)
 
         # Center on screen
         screen = self.screen().geometry()
-        x = (screen.width() - Config.WINDOW_MIN_WIDTH) // 2
-        y = (screen.height() - Config.WINDOW_MIN_HEIGHT) // 2
-        self.setGeometry(x, y, Config.WINDOW_MIN_WIDTH, Config.WINDOW_MIN_HEIGHT)
+        x = (screen.width() - window_width) // 2
+        y = (screen.height() - window_height) // 2
+        self.setGeometry(x, y, window_width, window_height)
         self.setWindowFlag(Qt.FramelessWindowHint, True)
         self.setAttribute(Qt.WA_TranslucentBackground, True)
 
@@ -132,7 +139,7 @@ class MainWindow(QMainWindow):
         self.window_frame.setStyleSheet(f"""
             QFrame#window_frame {{
                 background-color: {Config.BACKGROUND_COLOR};
-                border-radius: 18px;
+                border-radius: 12px;
             }}
         """)
 
@@ -252,9 +259,9 @@ class MainWindow(QMainWindow):
         }
 
     def _setup_layout(self):
-    # لاي اوت خارجي: بس ليعطي فراغ للظل (مو يلزق بالشاشة)
+    # لاي اوت خارجي: بدون فراغ شفاف (حسب طلب المستخدم)
         outer = QVBoxLayout(self.central_widget)
-        outer.setContentsMargins(14, 14, 14, 14)
+        outer.setContentsMargins(0, 0, 0, 0)
         outer.setSpacing(0)
         outer.addWidget(self.window_frame)
 
@@ -545,6 +552,28 @@ class MainWindow(QMainWindow):
         path.addRoundedRect(rect, r, r)
 
         self.window_frame.setMask(QRegion(path.toFillPolygon().toPolygon()))
-        
+
+    # =========================================================================
+    # Mouse Events - Window Dragging
+    # =========================================================================
+
+    def mousePressEvent(self, event: QMouseEvent):
+        """Handle mouse press for window dragging."""
+        if event.button() == Qt.LeftButton:
+            # Store the position where user clicked
+            self._drag_position = event.globalPos() - self.frameGeometry().topLeft()
+            event.accept()
+
+    def mouseMoveEvent(self, event: QMouseEvent):
+        """Handle mouse move for window dragging."""
+        if event.buttons() == Qt.LeftButton:
+            # Move window to new position
+            self.move(event.globalPos() - self._drag_position)
+            event.accept()
+
+    def mouseReleaseEvent(self, event: QMouseEvent):
+        """Handle mouse release after dragging."""
+        if event.button() == Qt.LeftButton:
+            event.accept()
 
 

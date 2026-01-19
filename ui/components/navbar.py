@@ -178,14 +178,15 @@ class Navbar(QFrame):
         btn_max.setObjectName("win_btn")
         btn_close.setObjectName("win_close")
 
-        # حجم أكبر شوي (عدّل الأرقام إذا بدك)
+        # الحجم الأساسي (بدون تغيير)
         for b in (btn_min, btn_max, btn_close):
             b.setFixedSize(40, 28)
             b.setFocusPolicy(Qt.NoFocus)
             b.setCursor(QCursor(Qt.PointingHandCursor))
 
         btn_min.clicked.connect(lambda: self.window().showMinimized())
-        btn_max.clicked.connect(self._toggle_max_restore)
+        # زر التكبير متوقف - لا يفعل شيء
+        # btn_max.clicked.connect(self._toggle_max_restore)
         btn_close.clicked.connect(lambda: self.window().close())
 
     
