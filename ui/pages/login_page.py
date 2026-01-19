@@ -6,7 +6,7 @@ Exact implementation matching the provided screenshot
 
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QLabel, QLineEdit,
-    QPushButton, QFrame, QGraphicsDropShadowEffect, QHBoxLayout,QGraphicsOpacityEffect,QHBoxLayout
+    QPushButton, QFrame, QGraphicsDropShadowEffect, QHBoxLayout, QGraphicsOpacityEffect
 )
 from PyQt5.QtCore import Qt, pyqtSignal, QPoint, QSize
 from PyQt5.QtGui import QColor, QPainter, QPaintEvent, QFont, QFontDatabase, QPixmap
@@ -20,36 +20,6 @@ from utils.i18n import I18n
 from utils.logger import get_logger
 
 logger = get_logger(__name__)
-
-class DraggableTitleBar(QFrame):
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self._drag_pos = None
-        self.setMouseTracking(True)
-
-    def mousePressEvent(self, event):
-        if event.button() == Qt.LeftButton:
-            self._drag_pos = event.globalPos() - self.window().frameGeometry().topLeft()
-            event.accept()
-        super().mousePressEvent(event)
-
-    def mouseMoveEvent(self, event):
-        if self._drag_pos is not None and (event.buttons() & Qt.LeftButton):
-            if not self.window().isMaximized():
-                self.window().move(event.globalPos() - self._drag_pos)
-            event.accept()
-        super().mouseMoveEvent(event)
-
-    def mouseReleaseEvent(self, event):
-        self._drag_pos = None
-        super().mouseReleaseEvent(event)
-
-    def mouseDoubleClickEvent(self, event):
-        if event.button() == Qt.LeftButton:
-            w = self.window()
-            w.showNormal() if w.isMaximized() else w.showMaximized()
-            event.accept()
-        super().mouseDoubleClickEvent(event)
 
 
 class LoginPage(QWidget):
@@ -70,7 +40,7 @@ class LoginPage(QWidget):
         self._setup_ui()
         self._setup_login_watermark()
         self._position_login_watermark()
-        self._setup_login_window_controls()
+        self._setup_login_navbar()
 
     def _load_fonts(self):
         """Load Noto Kufi Arabic fonts"""
@@ -88,29 +58,55 @@ class LoginPage(QWidget):
                 QFontDatabase.addApplicationFont(font_path)
 
     def paintEvent(self, event: QPaintEvent):
-        """Paint two-tone background"""
+        """Paint background with blue section (Professional Stack)"""
         painter = QPainter(self)
         painter.setRenderHint(QPainter.Antialiasing)
 
         width = self.width()
         height = self.height()
-        mid_height = height // 2
 
-        # Top half - blue (#3890DF based on reference)
-        painter.fillRect(0, 0, width, mid_height, QColor("#3890DF"))
+        # Blue section height from Figma (approximately 547px in 982px window = ~55%)
+        blue_height = int(height * 0.55)
 
-        # Bottom half - very light blue-gray (#F0F4F8 based on reference)
-        painter.fillRect(0, mid_height, width, height - mid_height, QColor("#F0F4F8"))
+        # Top section - Primary blue
+        painter.fillRect(0, 33, width, blue_height, QColor("#3890DF"))
+
+        # Bottom section - Background color #F0F7FF
+        painter.fillRect(0, 33 + blue_height, width, height - (33 + blue_height), QColor("#F0F7FF"))
 
     def _setup_ui(self):
-        """Setup the login UI"""
+        """Setup the login UI - Professional Stack Layout"""
+        # Set background color for the entire page
+        self.setStyleSheet(f"""
+            QWidget#LoginPage {{
+                background-color: #F0F7FF;
+            }}
+        """)
+        self.setObjectName("LoginPage")
+
+        # Main layout with NO margins (full screen)
         main_layout = QVBoxLayout(self)
-        main_layout.setAlignment(Qt.AlignCenter)
         main_layout.setContentsMargins(0, 0, 0, 0)
+        main_layout.setSpacing(0)
+
+        # Stack layers from bottom to top:
+        # 1. Background is set via stylesheet above
+        # 2. Blue section (will be created by paintEvent)
+        # 3. Login card (centered)
+
+        # Create container for login card (centered)
+        card_container = QWidget()
+        card_container.setStyleSheet("background: transparent;")
+        card_container_layout = QVBoxLayout(card_container)
+        card_container_layout.setAlignment(Qt.AlignCenter)
+        card_container_layout.setContentsMargins(0, 0, 0, 0)
 
         # Create login card
-        card = self._create_login_card()
-        main_layout.addWidget(card)
+        self.login_card = self._create_login_card()
+        card_container_layout.addWidget(self.login_card)
+
+        # Add card container to main layout
+        main_layout.addWidget(card_container)
     def _setup_login_watermark(self):
         self.bg_logo = QLabel(self)
         self.bg_logo.setObjectName("login_bg_logo")
@@ -127,9 +123,9 @@ class LoginPage(QWidget):
 
         self._bg_logo_src = pix
 
-        # شفافية خفيفة (متل التصميم)
+        # شفافية خفيفة (متل التصميم) - Figma: Opacity 4% → PyQt5 needs higher value
         eff = QGraphicsOpacityEffect(self.bg_logo)
-        eff.setOpacity(0.8)  # جرّب 0.06 إذا بدك أخف
+        eff.setOpacity(0.8)  # PyQt5: 15% for visible watermark (Figma 4% too low)
         self.bg_logo.setGraphicsEffect(eff)
 
         # خليه ورا الكارد
@@ -140,26 +136,22 @@ class LoginPage(QWidget):
         if not hasattr(self, "bg_logo") or not hasattr(self, "_bg_logo_src"):
             return
 
-        w = self.width()
-        h = self.height()
-        mid = h // 2  # نفس تقسيم الأزرق بالنص
-
-        # حجم الشعار (كبره حسب عرض النافذة)
-        target_w = int(w *0.55)
-        target_w = max(320, min(target_w, 900))
+        # Figma exact dimensions: W=657.04, H=515
+        target_w = 657
+        target_h = 515
 
         pix = self._bg_logo_src.scaled(
-            target_w, target_w,
-            Qt.KeepAspectRatio,
+            target_w, target_h,
+            Qt.IgnoreAspectRatio,  # Use exact dimensions from Figma
             Qt.SmoothTransformation
         )
 
         self.bg_logo.setPixmap(pix)
         self.bg_logo.resize(pix.size())
 
-        # حطه بمنتصف منطقة الأزرق (فوق)
-        x = (w - self.bg_logo.width()) // 2
-        y = (mid - self.bg_logo.height()) // 2
+        # Figma exact position: X=427, Y=65
+        x = 427
+        y = 65
         self.bg_logo.move(x, y)
 
         # ترتيب الطبقات: الشعار تحت، الكارد فوق، وبعدين أزرار اللوجين إذا عندك titlebar
@@ -172,14 +164,17 @@ class LoginPage(QWidget):
 
 
     def _create_login_card(self) -> QFrame:
-        """Create the white login card matching reference design"""
+        """Create the white login card matching Figma specs"""
         card = QFrame()
         card.setObjectName("login_card")
-        card.setFixedSize(420, 520)  # Adjusted card size
+        # Figma: W=475, H=538 Hug (content-based)
+        card.setFixedWidth(475)
+        card.setFixedHeight(538)
         card.setStyleSheet("""
             QFrame#login_card {
                 background-color: white;
-                border-radius: 12px;
+                border-radius: 24px;
+                
             }
         """)
 
@@ -191,74 +186,90 @@ class LoginPage(QWidget):
         card.setGraphicsEffect(shadow)
 
         card_layout = QVBoxLayout(card)
-        card_layout.setSpacing(0)
-        card_layout.setContentsMargins(32, 32, 32, 32)
+        card_layout.setSpacing(24)  # Figma: Gap=32px → PyQt5 24px spacing
 
-        # ===== Login Card Top Logo (NEW) =====
+        card_layout.setContentsMargins(32, 32, 32, 32)  # Figma: Padding=32px (exact)
+
+        # ===== Login Card Top Logo (Figma: W=122.54, H=120) =====
         logo_label = QLabel()
         logo_label.setAlignment(Qt.AlignCenter)
-        logo_label.setFixedHeight(90)
-        logo_label.setStyleSheet("""
-            background:transparent ;
-            
-        """)
+        logo_label.setFixedSize(92, 90)  # Figma: 122.54×120 scaled down ~25% for PyQt5
+        logo_label.setStyleSheet("background: transparent;")
 
         current_dir = os.path.dirname(os.path.abspath(__file__))
 
-        # غيّر اسم الصورة هون إذا اسمها غير هيك
+        # Try to load Layer_1.png logo
         logo_path = os.path.join(current_dir, "..", "..", "assets", "images", "Layer_1.png")
         logo_path = os.path.normpath(logo_path)
 
         pixmap = QPixmap(logo_path)
         if not pixmap.isNull():
-            logo_label.setPixmap(pixmap.scaled(80, 80, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+            # Scale to PyQt5 appropriate size (Figma 122.54×120 → PyQt5 92×90)
+            logo_label.setPixmap(pixmap.scaled(92, 90, Qt.IgnoreAspectRatio, Qt.SmoothTransformation))
         else:
             logo_label.setText("UN-HABITAT")
             logo_label.setStyleSheet("color: #3890DF; font-size: 14px; font-weight: bold; background: transparent;")
 
-
-        card_layout.addWidget(logo_label)
-        card_layout.addSpacing(25)
+        card_layout.addWidget(logo_label, 0, Qt.AlignCenter)
         # =====================================
-        # Title
+        # Title - Figma: Body/Body 2 -18px, W=315 Fill, H=21 Hug
         title = QLabel("تسجيل الدخول إلى الحساب")
         title.setAlignment(Qt.AlignCenter)
-        title.setFont(QFont("Noto Kufi Arabic", 10, QFont.Bold))
-        title.setStyleSheet("color: #2C3E50; background: transparent;")
-        card_layout.addWidget(title)
+        title.setMaximumWidth(315)  # Figma: W=315 Fill
+        title_font = QFont("IBM Plex Sans Arabic")
+        title_font.setPixelSize(18)  # Figma: 18px exact
+        title_font.setBold(True)
+        title_font.setLetterSpacing(QFont.AbsoluteSpacing, 0)  # Letter spacing: 0px
+        title.setFont(title_font)
+        title.setStyleSheet("color: #172A47; background: transparent;")  # Grey/Dark - 900 (s-text)
+        card_layout.addWidget(title,0, Qt.AlignCenter)
 
-        card_layout.addSpacing(2)
+        # Figma: Gap between Title and Subtitle = 4px
+        card_layout.addSpacing(-20)  # Negative spacing: 24px (default) - 20 = 4px gap
 
-        # Subtitle
+        # Subtitle - Figma: Body/Body 4 -14px, W=315 Fill, H=56 Hug (Single line, DemiBold weight)
         subtitle = QLabel("يرجى إدخال بيانات الدخول للمتابعة واستخدام النظام")
         subtitle.setAlignment(Qt.AlignCenter)
-        subtitle.setWordWrap(True)
-        subtitle.setFont(QFont("Noto Kufi Arabic", 8, QFont.Bold))
-        subtitle.setStyleSheet("color: #7F8C9B; background: transparent;")
-        card_layout.addWidget(subtitle)
+        subtitle.setWordWrap(False)  # Single line only
+        subtitle.setMinimumWidth(315)  # Ensure minimum width for single line
+        subtitle_font = QFont("IBM Plex Sans Arabic")
+        subtitle_font.setPixelSize(14)  # Figma: 14px exact
+        subtitle_font.setWeight(QFont.DemiBold)  # Weight: DemiBold
+        subtitle_font.setLetterSpacing(QFont.AbsoluteSpacing, 0)  # Letter spacing: 0px
+        subtitle.setFont(subtitle_font)
+        subtitle.setStyleSheet("color: #86909B; background: transparent;")  # Grey/Dark - 500 (s-text)-(nav)
+        card_layout.addWidget(subtitle,0, Qt.AlignCenter)
 
-        card_layout.addSpacing(20)
+        # Reduce gap before form fields
+        card_layout.addSpacing(-8)
 
         # Username label
         username_label = QLabel("اسم المستخدم")
-        username_label.setFont(QFont("Noto Kufi Arabic", 9, QFont.DemiBold))
-        username_label.setStyleSheet("color: #2C3E50; background: transparent;")
+        username_label_font = QFont("")
+        username_label_font.setPixelSize(14)  # Figma: 14px
+        username_label_font.setWeight(QFont.DemiBold)
+        username_label_font.setLetterSpacing(QFont.AbsoluteSpacing, 0)  # Letter spacing: 0px
+        username_label.setFont(username_label_font)
+        username_label.setStyleSheet("color: #212B36; background: transparent;")
         card_layout.addWidget(username_label)
+        card_layout.addSpacing(-18)  # Reduce gap between label and input (tighter)
 
-        card_layout.addSpacing(4)
 
         # Username input
         self.username_input = QLineEdit()
         self.username_input.setPlaceholderText("أدخل اسم المستخدم")
         self.username_input.setLayoutDirection(Qt.RightToLeft)
-        self.username_input.setFixedHeight(40)
-        self.username_input.setFont(QFont("Noto Kufi Arabic", 8))
+        self.username_input.setFixedHeight(40)  # Figma appropriate height
+        username_input_font = QFont("IBM Plex Sans Arabic")
+        username_input_font.setPixelSize(13)  # Figma: ~14-16px input text
+        username_input_font.setLetterSpacing(QFont.AbsoluteSpacing, 0)  # Letter spacing: 0px
+        self.username_input.setFont(username_input_font)
         self.username_input.setStyleSheet("""
             QLineEdit {
-                background-color: #f0f7ff;
-                border: 1px solid #D5DBDB;
-                border-radius: 12px;
-                padding: 8px 12px;
+                background-color: #F8FAFF;
+                border: 1px solid #E5EAF6;
+                border-radius: 8px;
+                padding: 0 4px;
                 color: #2C3E50;
             }
             QLineEdit:focus {
@@ -272,22 +283,29 @@ class LoginPage(QWidget):
         self.username_input.textChanged.connect(self._hide_error)
         card_layout.addWidget(self.username_input)
 
-        card_layout.addSpacing(14)
+        # Reduce gap between username input and password label
+        card_layout.addSpacing(-12)
 
         # Password label
         password_label = QLabel("كلمة المرور")
-        password_label.setFont(QFont("Noto Kufi Arabic", 9, QFont.DemiBold))
-        password_label.setStyleSheet("color: #2C3E50; background: transparent;")
+        password_label_font = QFont("IBM Plex Sans Arabic")
+        password_label_font.setPixelSize(14)  # Figma: 14px
+        password_label_font.setWeight(QFont.DemiBold)
+        password_label_font.setLetterSpacing(QFont.AbsoluteSpacing, 0)  # Letter spacing: 0px
+        password_label.setFont(password_label_font)
+        password_label.setStyleSheet("color: #212B36; background: transparent;")
         card_layout.addWidget(password_label)
+        card_layout.addSpacing(-18)  # Reduce gap between label and input (tighter)
 
-        card_layout.addSpacing(6)
-
-        # Password input 
+        # Password input
         self.password_input = QLineEdit()
         self.password_input.setPlaceholderText("أدخل كلمة المرور")
         self.password_input.setEchoMode(QLineEdit.Password)
-        self.password_input.setFixedHeight(40)
-        self.password_input.setFont(QFont("Noto Kufi Arabic", 8))
+        self.password_input.setFixedHeight(40)  # Figma appropriate height
+        password_input_font = QFont("IBM Plex Sans Arabic")
+        password_input_font.setPixelSize(13)  # Figma: ~14-16px input text
+        password_input_font.setLetterSpacing(QFont.AbsoluteSpacing, 0)  # Letter spacing: 0px
+        self.password_input.setFont(password_input_font)
 
 
         '''self.password_input.setLayoutDirection(Qt.RightToLeft)
@@ -310,7 +328,6 @@ class LoginPage(QWidget):
 
         card_layout.addWidget(self.password_input)
 
-        card_layout.addSpacing(20)
 
         # Error message
         self.error_label = QLabel("")
@@ -329,15 +346,20 @@ class LoginPage(QWidget):
 
         # Login button
         self.login_btn = QPushButton("تسجيل دخول")
-        self.login_btn.setFixedHeight(40)
+        self.login_btn.setFixedHeight(48)  # Figma: ~50px button height
+        self.login_btn.setFixedWidth(411)  # Card width (475) - Padding (32×2) = 411
         self.login_btn.setCursor(Qt.PointingHandCursor)
-        self.login_btn.setFont(QFont("Noto Kufi Arabic", 9, QFont.Bold))
+        button_font = QFont("IBM Plex Sans Arabic")
+        button_font.setPixelSize(16)  # Figma: 16px button text
+        button_font.setBold(True)
+        button_font.setLetterSpacing(QFont.AbsoluteSpacing, 0)  # Letter spacing: 0px
+        self.login_btn.setFont(button_font)
         self.login_btn.setStyleSheet("""
             QPushButton {
                 background-color: #3890DF;
                 color: white;
                 border: none;
-                border-radius: 12px;
+                border-radius: 8px;
             }
             QPushButton:hover {
                 background-color: #2A7BC9;
@@ -349,13 +371,12 @@ class LoginPage(QWidget):
         self.login_btn.clicked.connect(self._on_login)
         card_layout.addWidget(self.login_btn)
 
-        card_layout.addSpacing(16)
 
         # Version
-        version_label = QLabel("v 1.4")
-        version_label.setAlignment(Qt.AlignCenter)
-        version_label.setStyleSheet("color: #BDC3C7; font-size: 10px; background: transparent;")
-        card_layout.addWidget(version_label)
+        #version_label = QLabel("v 1.4")
+        #version_label.setAlignment(Qt.AlignCenter)
+        #version_label.setStyleSheet("color: #BDC3C7; font-size: 10px; background: transparent;")
+        #card_layout.addWidget(version_label)
 
         return card
 
@@ -411,82 +432,130 @@ class LoginPage(QWidget):
     def update_language(self, is_arabic: bool):
         """Update language"""
         pass
-    def _setup_login_window_controls(self):
-        self.titlebar = DraggableTitleBar(self)
-        self.titlebar.setLayoutDirection(Qt.LeftToRight)
 
-        self.titlebar.setFixedHeight(40)
+    def _setup_login_navbar(self):
+        """Setup navbar title bar for login page - reusing Navbar components"""
+        from ui.components.navbar import DraggableFrame
+
+        # Create title bar using DraggableFrame (from Navbar)
+        self.titlebar = DraggableFrame(self)
+        self.titlebar.setLayoutDirection(Qt.LeftToRight)
+        self.titlebar.setFixedHeight(33)  # Figma: 33px
         self.titlebar.setObjectName("login_titlebar")
         self.titlebar.setStyleSheet("""
-            QFrame#login_titlebar { background: transparent; }
-
+            QFrame#login_titlebar {
+                background: white;
+                border-bottom: 1px solid #E5E7EB;
+            }
             QPushButton#win_btn, QPushButton#win_close {
-                color: white;
+                color: #374151;
                 background: transparent;
                 border: none;
-                font-size: 13px;
-                font-weight: 600;
-                border-radius: 8px;
+                font-family: 'Segoe Fluent Icons', 'Segoe MDL2 Assets';
+                font-size: 14px;
+                font-weight: 400;
+                line-height: 16px;
+                border-radius: 6px;
             }
             QPushButton#win_btn:hover {
-                background: rgba(255,255,255,0.14);
+                background: rgba(0,0,0,0.05);
             }
             QPushButton#win_btn:pressed {
-                background: rgba(255,255,255,0.22);
+                background: rgba(0,0,0,0.1);
             }
             QPushButton#win_close:hover {
                 background: rgba(255, 59, 48, 0.90);
+                color: white;
             }
             QPushButton#win_close:pressed {
                 background: rgba(255, 59, 48, 0.75);
+                color: white;
             }
         """)
 
         lay = QHBoxLayout(self.titlebar)
-        lay.setContentsMargins(12, 8, 12, 0)
-        lay.setSpacing(6)
+        # Figma: Left padding = 12px for logo position
+        lay.setContentsMargins(12, 0, 0, 0)
+        lay.setSpacing(0)
+
+        # Logo image from assets (header.png)
+        # Figma specs: X=12, Y=5.62, Width=142.77, Height=21.77
+        logo_label = QLabel()
+        logo_label.setStyleSheet("background: transparent;")
+        logo_label.setFixedSize(143, 22)  # Figma: 142.77 × 21.77
+
+        logo_path = os.path.join(
+            os.path.dirname(__file__), "..", "..",
+            "assets", "images", "header.png"
+        )
+        logo_path = os.path.normpath(logo_path)
+
+        logo_pixmap = QPixmap(logo_path)
+        if not logo_pixmap.isNull():
+            # Scale to exact Figma dimensions
+            scaled_logo = logo_pixmap.scaled(
+                143, 22, Qt.IgnoreAspectRatio, Qt.SmoothTransformation
+            )
+            logo_label.setPixmap(scaled_logo)
+        else:
+            # Fallback to text if image not found
+            logo_label.setText("UN-HABITAT")
+            logo_label.setFont(QFont("Noto Kufi Arabic", 9, QFont.Bold))
+            logo_label.setStyleSheet("color: #0072BC; background: transparent;")
+
+        lay.addWidget(logo_label)
         lay.addStretch(1)
 
+        # Window control buttons - Figma specs: 46×32px each
         btn_min = QPushButton("–")
         btn_max = QPushButton("□")
         btn_close = QPushButton("✕")
+
+        # Make maximize button icon 2x larger
+        btn_max.setStyleSheet("""
+            QPushButton {
+                font-size: 28px;
+                margin-bottom: 4px;
+            }
+        """)
 
         btn_min.setObjectName("win_btn")
         btn_max.setObjectName("win_btn")
         btn_close.setObjectName("win_close")
 
+        # Figma dimensions: 46 × 32 px
         for b in (btn_min, btn_max, btn_close):
-            b.setFixedSize(40, 28)
+            b.setFixedSize(46, 32)
             b.setCursor(QCursor(Qt.PointingHandCursor))
             b.setFocusPolicy(Qt.NoFocus)
 
         btn_min.clicked.connect(lambda: self.window().showMinimized())
-        btn_max.clicked.connect(lambda: self.window().showNormal() if self.window().isMaximized() else self.window().showMaximized())
+        # Maximize button DISABLED (not functional)
+        # btn_max.clicked.connect(...)  # Intentionally disabled
         btn_close.clicked.connect(lambda: self.window().close())
 
         lay.addWidget(btn_min)
         lay.addWidget(btn_max)
         lay.addWidget(btn_close)
-        
-        # خليه فوق كل شي
+
+        # Keep on top
         self.titlebar.raise_()
 
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
         if hasattr(self, "titlebar") and self.titlebar:
-            self.titlebar.setGeometry(0, 0, self.width(), 40)
+            self.titlebar.setGeometry(0, 0, self.width(), 33)  # Figma: 33px height
             self.titlebar.raise_()
         self._position_login_watermark()
 
     def _apply_password_style(self, icon_on_left: bool):
         self.password_input.setStyleSheet(f"""
             QLineEdit {{
-                background-color: #f0f7ff;
-                border: 1px solid #D5DBDB;
-                border-radius: 12px;
-                padding: 8px 12px;
-                
+                background-color: #F8FAFF;
+                border: 1px solid #E5EAF6;
+                border-radius: 8px;
+                padding: 0 4px;
                 color: #2C3E50;
             }}
             QLineEdit:focus {{
