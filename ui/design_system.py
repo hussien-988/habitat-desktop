@@ -96,21 +96,26 @@ class Colors:
 class Typography:
     """
     Typography system based on Brand Manual requirements
-    Primary: Roboto
-    Arabic: Noto Kufi Arabic
+    Primary Arabic Font: IBM Plex Sans Arabic (main font for the application)
+    Primary Latin Font: Roboto
     System Fallback: Calibri
+
+    Note: Noto Kufi Arabic removed - IBM Plex Sans Arabic is now the only Arabic font
     """
 
     # Font Families
-    FONT_FAMILY_PRIMARY = "Roboto"
-    FONT_FAMILY_ARABIC = "Noto Kufi Arabic"
-    FONT_FAMILY_FALLBACK = "Calibri"
+    FONT_FAMILY_PRIMARY = "IBM Plex Sans Arabic"  # Main font for the entire application
+    FONT_FAMILY_ARABIC = "IBM Plex Sans Arabic"   # Arabic text font (same as primary)
+    FONT_FAMILY_LATIN = "Roboto"                  # Latin text font (for English text if needed)
+    FONT_FAMILY_FALLBACK = "Calibri"              # System fallback only
 
     # Font Weights
     WEIGHT_LIGHT = 300
     WEIGHT_REGULAR = 400
     WEIGHT_MEDIUM = 500
+    WEIGHT_SEMIBOLD = 600  # SemiBold / DemiBold weight
     WEIGHT_BOLD = 700
+    WEIGHT_BLACK = 900  # Extra Bold / Black weight
 
     # Font Sizes (in pixels)
     SIZE_CAPTION = 12  # Small text, captions
@@ -208,6 +213,18 @@ class Spacing:
     BUTTON_PADDING_V = SM  # Vertical padding in buttons
     BUTTON_SPACING = SM  # Space between adjacent buttons
 
+    # Navbar spacing (from Figma specs)
+    NAVBAR_HORIZONTAL_PADDING = LG  # 24px horizontal padding in navbar
+    NAVBAR_TOP_HEIGHT = 52  # Top bar height (updated for 56px tabs)
+    NAVBAR_TABS_HEIGHT = 56  # Tabs bar height (Figma: 56 Hug)
+    NAVBAR_TOTAL_HEIGHT = 109  # Total navbar height (52 + 56 + 1)
+
+    # ID Badge spacing (from Figma specs)
+    ID_BADGE_PADDING_V = 8  # Vertical padding in ID badge
+    ID_BADGE_PADDING_H = 8  # Horizontal padding in ID badge
+    ID_BADGE_GAP = 8  # Gap between ID badge elements
+    ID_BADGE_RADIUS = 10  # Border radius for ID badge
+
 
 class BorderRadius:
     """Border radius values for components"""
@@ -242,6 +259,142 @@ class Icons:
     SIZE_MD = 24
     SIZE_LG = 32
     SIZE_XL = 48
+
+
+class NavbarDimensions:
+    """
+    Navbar dimensions from Figma specifications
+    Exact measurements for navbar components
+    """
+    # Container dimensions
+    CONTAINER_WIDTH = 1512  # Total navbar width from Figma
+    CONTAINER_HEIGHT = 109  # Total navbar height from Figma (60 + 48 + 1)
+
+    # Top bar dimensions
+    TOP_BAR_HEIGHT = 60  # Top bar section height (Figma: 60px)
+
+    # Logo dimensions (from Figma: 142.77×21.77)
+    LOGO_WIDTH = 142.77
+    LOGO_HEIGHT = 21.77
+    # Scaled for PyQt5 visual balance
+    LOGO_SCALED_HEIGHT = 22  # Rounded for PyQt5
+
+    # ID Badge dimensions (from Figma: 110.69×40)
+    ID_BADGE_WIDTH = 110.69
+    ID_BADGE_HEIGHT = 40
+    ID_BADGE_BORDER_RADIUS = 10  # From Figma
+    ID_BADGE_PADDING_V = 8  # Vertical padding
+    ID_BADGE_PADDING_H = 8  # Horizontal padding
+    ID_BADGE_GAP = 8  # Gap between elements
+
+    # Tabs bar dimensions (من Figma)
+    TABS_BAR_HEIGHT = 48  # Tabs section height (Figma: 48px)
+    TAB_HEIGHT = 32  # Individual tab height (Figma: 32px Hug)
+    TAB_PADDING_H = 12  # Horizontal padding in each tab (Figma: calculated from layout)
+    TAB_PADDING_V = 5  # Vertical padding in each tab (for 22px line-height)
+    TAB_GAP = 24  # Gap between tabs (Figma: 24px)
+    TAB_BORDER_RADIUS = 8  # Border radius for active tab (Figma: 8px)
+    TAB_FONT_SIZE = 11  # Tab text font size (Figma: 14px × 0.75 = 10.5pt ≈ 11pt)
+    TAB_FONT_WEIGHT = Typography.WEIGHT_SEMIBOLD  # SemiBold (600)
+    TAB_LINE_HEIGHT = 22  # Line height from Figma (22px)
+
+    # Search bar dimensions
+    SEARCH_BAR_WIDTH = 450
+    SEARCH_BAR_HEIGHT = 32
+
+
+class PageDimensions:
+    """
+    Page layout dimensions from Figma specifications
+    For content areas and common page elements
+
+    Calculations:
+    - Window: 1512×982px
+    - Navbar: 109px
+    - Available: 1512×873px
+    - Content: 1249×830px (from Figma)
+    - Horizontal padding: (1512-1249)/2 = 131.5px each side
+    - Vertical remaining: 873-830 = 43px (for header + bottom margin)
+    """
+    # Content container dimensions (from Figma: Completed Claims Page)
+    CONTENT_WIDTH = 1249  # Content area width (Figma: 1249 Hug)
+    CONTENT_HEIGHT = 830  # Content area height (Figma: 830 Hug)
+
+    # Page positioning (from Figma - exact position values)
+    CONTENT_POSITION_X = 131  # X position from left (Figma: 131px)
+    CONTENT_POSITION_Y = 141  # Y position from top of window (Figma: 141px)
+
+    # Calculated padding (for PyQt5 layout)
+    CONTENT_PADDING_H = 131  # Horizontal: (1512-1249)/2 = 131px each side
+    CONTENT_PADDING_V_TOP = 43  # Top: gap between navbar and content (982-109-830=43px)
+    CONTENT_PADDING_V_BOTTOM = 0  # Bottom: no padding
+
+    # Spacing and gaps
+    CARD_GAP_VERTICAL = 16    # Gap between card rows (Figma: 16px)
+    CARD_GAP_HORIZONTAL = 16  # Gap between card columns (Figma: 16px)
+    HEADER_GAP = 30           # Gap between header and first card (Figma: 30px)
+
+    # Header dimensions
+    PAGE_HEADER_HEIGHT = 48  # Page header height with button and title (Figma: 48px)
+
+    # Card dimensions
+    CARD_HEIGHT = 112           # Individual card height (Figma: 112px Hug)
+    CARD_WIDTH = 616            # Individual card width (Figma: 616.5px Fill, rounded to 616)
+    CARD_COLUMNS = 2            # Number of columns in grid (Figma shows 2-column layout)
+
+    # Card styling (from Figma)
+    CARD_PADDING = 12           # Card internal padding (Figma: 12px all sides)
+    CARD_BORDER_RADIUS = 8      # Card corner radius (Figma: 8px)
+    CARD_GAP_INTERNAL = 12      # Gap between elements inside card (Figma: 12px)
+
+    # Card shadow (from Figma Drop shadow)
+    CARD_SHADOW_X = 0           # Shadow X offset (Figma: 0)
+    CARD_SHADOW_Y = 4           # Shadow Y offset (Figma: 4)
+    CARD_SHADOW_BLUR = 8        # Shadow blur radius (Figma: 8)
+    CARD_SHADOW_SPREAD = 0      # Shadow spread (Figma: 0)
+    CARD_SHADOW_COLOR = "#919EAB"  # Shadow color (Figma: #919EAB)
+    CARD_SHADOW_OPACITY = 16    # Shadow opacity percentage (Figma: 16%)
+
+    # Card details container (inner box in card - from Figma)
+    CARD_DETAILS_HEIGHT = 28         # Details container height (Figma: 28px Hug)
+    CARD_DETAILS_PADDING_H = 8       # Horizontal padding (Figma: 8px)
+    CARD_DETAILS_PADDING_V = 6       # Vertical padding (Figma: 6px)
+    CARD_DETAILS_GAP = 8             # Gap between elements (Figma: 8px)
+    CARD_DETAILS_RADIUS = 14         # Corner radius (PyQt5: height/2 = 14px for pill shape, Figma: 32px)
+    CARD_DETAILS_BG = "#F8FAFF"      # Background color (Figma: #F8FAFF)
+    CARD_DETAILS_BORDER = "#E5EAF6"  # Border color (Figma: #E5EAF6)
+    CARD_DETAILS_BORDER_WIDTH = 1    # Border width (Figma: 1px, Inside)
+
+    # Card details text styling (text inside details container - from Figma)
+    CARD_DETAILS_TEXT_COLOR = "#757575"                          # Text color (Figma: #757575)
+    CARD_DETAILS_TEXT_SIZE = 6                                   # Font size (PyQt5: 6pt - adjusted for smaller display)
+    # DRY: Use primary Arabic font (IBM Plex Sans Arabic) from Typography
+    # Fallback: Calibri (system fallback only)
+    CARD_DETAILS_TEXT_WEIGHT = Typography.WEIGHT_LIGHT           # Font weight: Light (300)
+    CARD_DETAILS_TEXT_LETTER_SPACING = 0                         # Letter spacing (Figma: 0)
+
+
+class ButtonDimensions:
+    """
+    Button dimensions from Figma specifications (exact measurements).
+    User provided exact specs: 199×48px, padding 24×12, font 16px, border-radius 8px.
+
+    Font conversion: Figma uses pixels, PyQt5 QFont uses points.
+    Formula: Points = Pixels × 0.75 (because 1pt = 1.333px)
+    """
+    # Primary Button (e.g., "إضافة حالة جديدة +")
+    PRIMARY_WIDTH = 199                    # Button width (Figma: 199px - exact)
+    PRIMARY_HEIGHT = 48                    # Button height (Figma: 48px - exact)
+    PRIMARY_BORDER_RADIUS = 8              # Corner radius (Figma: 8px)
+    PRIMARY_PADDING_H = 24                 # Horizontal padding (Figma: 24px - exact)
+    PRIMARY_PADDING_V = 12                 # Vertical padding (Figma: 12px - exact)
+    PRIMARY_FONT_SIZE = 10                 # Font size (Figma: 16px → PyQt5: 16×0.75=12pt)
+
+    # Primary Button Colors (from Figma)
+    PRIMARY_HOVER_BG = "#2A7BC9"           # Hover state (darker blue)
+    PRIMARY_PRESSED_BG = "#1F68B3"         # Pressed state (even darker)
+    PRIMARY_DISABLED_BG = "#BDC3C7"        # Disabled background
+    PRIMARY_DISABLED_TEXT = "#7F8C9B"      # Disabled text color
 
 
 class ComponentStyles:
@@ -522,4 +675,6 @@ class DesignTokens:
     radius = BorderRadius
     shadows = Shadows
     icons = Icons
+    navbar = NavbarDimensions
+    page = PageDimensions
     components = ComponentStyles

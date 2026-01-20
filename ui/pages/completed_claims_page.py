@@ -2,22 +2,39 @@
 """
 صفحة المطالبات المكتملة - Completed Claims Page
 Displays completed/approved claims in a 2-column grid layout.
+
+Figma Specifications Applied:
+- Background: #F0F7FF (BACKGROUND color)
+- Typography: IBM Plex Sans Arabic, Letter spacing: 0px
+- Layout: Clean, professional spacing
+
+Note: Navbar is managed by MainWindow, not by individual pages
 """
 
 from PyQt5.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
+    QWidget, QVBoxLayout, QHBoxLayout, QLabel,
     QScrollArea, QSpacerItem, QSizePolicy, QFrame, QGridLayout
 )
 from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtGui import QFont
 
-from ..design_system import Colors
+from ..design_system import Colors, PageDimensions
 from ..components.empty_state import EmptyState
 from ..components.claim_list_card import ClaimListCard
+from ..components.primary_button import PrimaryButton
+from ..font_utils import create_font, FontManager
 
 
 class CompletedClaimsPage(QWidget):
-    """Completed claims page with grid layout."""
+    """
+    Completed claims page with grid layout.
+
+    Signals:
+        claim_selected(str): Emitted when a claim card is clicked
+        add_claim_clicked(): Emitted when add button is clicked
+
+    Note: Navbar is managed by MainWindow, not by this page
+    """
 
     claim_selected = pyqtSignal(str)
     add_claim_clicked = pyqtSignal()
@@ -31,15 +48,36 @@ class CompletedClaimsPage(QWidget):
         self._setup_ui()
 
     def _setup_ui(self):
-        """Setup page UI."""
-        main_layout = QVBoxLayout(self)
-        main_layout.setContentsMargins(0, 0, 0, 0)
-        main_layout.setSpacing(0)
+        """
+        Setup page UI.
 
+        Structure:
+        - Header (80px height with title and add button)
+        - Content area (scrollable grid of claim cards)
+
+        Note: Navbar is managed by MainWindow
+        """
+        main_layout = QVBoxLayout(self)
+        # Apply padding from Figma:
+        # - Horizontal: 131px each side
+        # - Top: 43px (gap between navbar and content: 982-109-830=43px)
+        # - Bottom: 0px
+        main_layout.setContentsMargins(
+            PageDimensions.CONTENT_PADDING_H,        # Left: 131px
+            PageDimensions.CONTENT_PADDING_V_TOP,    # Top: 43px
+            PageDimensions.CONTENT_PADDING_H,        # Right: 131px
+            PageDimensions.CONTENT_PADDING_V_BOTTOM  # Bottom: 0px
+        )
+        main_layout.setSpacing(PageDimensions.HEADER_GAP)  # 30px gap after header
+
+        # Background color from Figma
         self.setStyleSheet(f"background-color: {Colors.BACKGROUND};")
 
+        # Header with title and add button
         self.header = self._create_header()
         main_layout.addWidget(self.header)
+
+        # Content area (scrollable)
         self.content_area = QScrollArea()
         self.content_area.setWidgetResizable(True)
         self.content_area.setFrameShape(QFrame.NoFrame)
@@ -50,11 +88,14 @@ class CompletedClaimsPage(QWidget):
             }}
         """)
 
-        # Content widget
+        # Content widget with Grid Layout (Figma: 2 columns, 16px gaps)
         self.content_widget = QWidget()
-        self.content_layout = QVBoxLayout(self.content_widget)
-        self.content_layout.setContentsMargins(32, 32, 32, 32)
-        self.content_layout.setSpacing(16)
+        self.content_layout = QGridLayout(self.content_widget)
+        # No additional padding inside content (padding applied to main_layout)
+        self.content_layout.setContentsMargins(0, 0, 0, 0)
+        # Using Figma values: 16px gap both vertical and horizontal
+        self.content_layout.setVerticalSpacing(PageDimensions.CARD_GAP_VERTICAL)      # 16px
+        self.content_layout.setHorizontalSpacing(PageDimensions.CARD_GAP_HORIZONTAL)  # 16px
 
         self.content_area.setWidget(self.content_widget)
         main_layout.addWidget(self.content_area)
@@ -63,44 +104,45 @@ class CompletedClaimsPage(QWidget):
         self._show_empty_state()
 
     def _create_header(self):
-        """Create page header with dynamic title and add button"""
+        """
+        Create page header with dynamic title and add button.
+
+        Figma Specs:
+        - Height: 48px (button + title height)
+        - Gap after header: 30px (handled by main_layout spacing)
+        - Font: IBM Plex Sans Arabic, 16px Bold, Letter spacing 0
+        - Button: Border-radius 8px, Height 40px
+        """
         header = QWidget()
-        header.setFixedHeight(80)
+        header.setFixedHeight(PageDimensions.PAGE_HEADER_HEIGHT)  # 48px
         header.setStyleSheet(f"background-color: {Colors.BACKGROUND}; border: none;")
 
         layout = QHBoxLayout(header)
-        layout.setContentsMargins(32, 0, 32, 0)
+        layout.setContentsMargins(0, 0, 0, 0)  # No extra padding
         layout.setSpacing(16)
 
         # Page title (dynamic based on tab)
         self.title_label = QLabel(self.current_tab_title)
-        self.title_label.setFont(QFont("Noto Kufi Arabic", 10, QFont.Bold))
+
+        # Use centralized font utility (DRY + eliminates stylesheet conflicts)
+        # Figma: IBM Plex Sans Arabic, 24px Bold, Letter spacing 0
+        # Font conversion: 24px × 0.75 = 18pt
+        title_font = create_font(
+            size=FontManager.SIZE_TITLE,  # 18pt
+            weight=QFont.Bold,             # 700
+            letter_spacing=0
+        )
+        self.title_label.setFont(title_font)
+
         self.title_label.setStyleSheet(f"color: {Colors.TEXT_PRIMARY}; border: none;")
         layout.addWidget(self.title_label)
 
         # Spacer
         layout.addSpacerItem(QSpacerItem(40, 20, QSizePolicy.Expanding, QSizePolicy.Minimum))
 
-        # Add button
-        add_btn = QPushButton("إضافة حالة جديدة +")
-        add_btn.setFixedHeight(40)
-        add_btn.setCursor(Qt.PointingHandCursor)
-        add_btn.setFont(QFont("Noto Kufi Arabic", 9, QFont.Bold))
-        add_btn.setStyleSheet(f"""
-            QPushButton {{
-                background-color: {Colors.PRIMARY_BLUE};
-                color: white;
-                border: none;
-                border-radius: 8px;
-                padding: 0px 20px;
-            }}
-            QPushButton:hover {{
-                background-color: #2A7BC9;
-            }}
-            QPushButton:pressed {{
-                background-color: #1F68B3;
-            }}
-        """)
+        # Add button - Using reusable PrimaryButton component (DRY + SOLID)
+        # Figma: 199×48px, padding 24×12, font 16px, icon instead of "+"
+        add_btn = PrimaryButton("إضافة حالة جديدة", icon_name="icon")
         add_btn.clicked.connect(self.add_claim_clicked.emit)
         layout.addWidget(add_btn)
 
@@ -118,13 +160,16 @@ class CompletedClaimsPage(QWidget):
             description="ابدأ بإضافة الحالات للظهور هنا"
         )
 
-        # Center the empty state
-        self.content_layout.addSpacerItem(QSpacerItem(20, 40, QSizePolicy.Minimum, QSizePolicy.Expanding))
-        self.content_layout.addWidget(empty_state, alignment=Qt.AlignCenter)
-        self.content_layout.addSpacerItem(QSpacerItem(20, 40, QSizePolicy.Minimum, QSizePolicy.Expanding))
+        # Center the empty state in grid layout
+        # Add top spacer (row 0, spans 2 columns)
+        self.content_layout.addItem(QSpacerItem(20, 40, QSizePolicy.Minimum, QSizePolicy.Expanding), 0, 0, 1, 2)
+        # Add empty state widget (row 1, spans 2 columns, centered)
+        self.content_layout.addWidget(empty_state, 1, 0, 1, 2, Qt.AlignCenter)
+        # Add bottom spacer (row 2, spans 2 columns)
+        self.content_layout.addItem(QSpacerItem(20, 40, QSizePolicy.Minimum, QSizePolicy.Expanding), 2, 0, 1, 2)
 
     def _show_claims_list(self):
-        """Show claims in 2-column grid layout with spacing between cards"""
+        """Show claims in 2-column grid layout with Figma spacing"""
         # Clear existing content
         self._clear_content()
 
@@ -132,29 +177,20 @@ class CompletedClaimsPage(QWidget):
             self._show_empty_state()
             return
 
-        # Create grid container
-        grid_container = QWidget()
-        grid_layout = QGridLayout(grid_container)
-        grid_layout.setContentsMargins(0, 0, 0, 0)
-        grid_layout.setHorizontalSpacing(20)  # 20px horizontal spacing (reference design)
-        grid_layout.setVerticalSpacing(20)    # 20px vertical spacing (reference design)
-        grid_layout.setColumnStretch(0, 1)    # Equal column widths
-        grid_layout.setColumnStretch(1, 1)
-
-        # Add cards in 2-column grid (row, col)
+        # Add cards directly to content_layout (which is already QGridLayout)
+        # Grid layout was set up in _setup_ui with 16px gaps
         for index, claim in enumerate(self.claims_data):
-            row = index // 2  # Integer division for row
-            col = index % 2   # Modulo for column (0 or 1)
+            row = index // PageDimensions.CARD_COLUMNS  # Integer division for row
+            col = index % PageDimensions.CARD_COLUMNS   # Modulo for column (0 or 1)
 
             card = ClaimListCard(claim)
             card.clicked.connect(self._on_card_clicked)
-            grid_layout.addWidget(card, row, col)
+            self.content_layout.addWidget(card, row, col)
 
-        # Add spacer at the bottom
-        grid_layout.setRowStretch(len(self.claims_data) // 2 + 1, 1)
-
-        # Add grid container to content layout
-        self.content_layout.addWidget(grid_container)
+        # Add spacer at the bottom to push content up
+        spacer = QSpacerItem(20, 40, QSizePolicy.Minimum, QSizePolicy.Expanding)
+        final_row = (len(self.claims_data) + PageDimensions.CARD_COLUMNS - 1) // PageDimensions.CARD_COLUMNS
+        self.content_layout.addItem(spacer, final_row, 0, 1, PageDimensions.CARD_COLUMNS)
 
     def _on_card_clicked(self, claim_id: str):
         """Handle card click"""

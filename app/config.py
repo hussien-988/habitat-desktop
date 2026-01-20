@@ -119,9 +119,12 @@ class Config:
     INPUT_BORDER: str = "#CBD5E0"
     INPUT_FOCUS: str = "#0072BC"
 
-    # Fonts - Reduced sizes for data-dense desktop UI
-    FONT_FAMILY: str = "Segoe UI"
-    ARABIC_FONT_FAMILY: str = "Noto Kufi Arabic"
+    # Fonts - Updated to match ui/design_system.py
+    # Primary Arabic Font: IBM Plex Sans Arabic (main font for the application)
+    # Fallback: Calibri (system fallback only)
+    FONT_FAMILY: str = "IBM Plex Sans Arabic"  # Primary font for Arabic
+    ARABIC_FONT_FAMILY: str = "IBM Plex Sans Arabic"  # Updated from Noto Kufi Arabic
+    LATIN_FONT_FAMILY: str = "Roboto"  # For English text if needed
     FONT_SIZE: int = 9  # Body/UI: 12-13px
     FONT_SIZE_SMALL: int = 8  # Labels: 11-12px
     FONT_SIZE_LARGE: int = 10  # Slightly larger

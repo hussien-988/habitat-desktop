@@ -27,6 +27,7 @@ from repositories.database import Database  # type: ignore
 from repositories.seed import seed_database  # type: ignore
 from utils.i18n import I18n  # type: ignore
 from utils.logger import setup_logger  # type: ignore
+from ui.font_utils import set_application_default_font  # type: ignore
 
 
 def main():
@@ -46,6 +47,10 @@ def main():
         app.setApplicationName(Config.APP_NAME)
         app.setOrganizationName("UN-Habitat")
         app.setOrganizationDomain("unhabitat.org")
+
+        # CRITICAL: Set application-wide default font BEFORE creating any widgets
+        # This eliminates stylesheet font conflicts (Best Practice)
+        set_application_default_font()
 
         # Log startup
         logger.info("=" * 80)

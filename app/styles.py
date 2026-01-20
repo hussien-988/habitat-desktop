@@ -7,14 +7,20 @@ from .config import Config
 
 
 def get_stylesheet() -> str:
-    """Generate the main application stylesheet with UN-Habitat branding."""
+    """
+    Generate the main application stylesheet with UN-Habitat branding.
+
+    IMPORTANT: Font properties (font-family, font-size, font-weight) are NOT defined here.
+    Fonts must be set using QFont.setFont() to avoid stylesheet conflicts.
+    This follows PyQt5 best practices for font management.
+    """
     return f"""
     /* ===== Global Styles ===== */
     QWidget {{
-        font-family: "{Config.FONT_FAMILY}", "{Config.ARABIC_FONT_FAMILY}", sans-serif;
-        font-size: {Config.FONT_SIZE}pt;
         color: {Config.TEXT_COLOR};
         background-color: {Config.BACKGROUND_COLOR};
+        /* REMOVED: font-family and font-size to prevent conflicts */
+        /* Fonts are now set programmatically via QFont.setFont() */
     }}
 
     /* ===== Main Window ===== */

@@ -205,7 +205,7 @@ class LoginPage(QWidget):
         pixmap = QPixmap(logo_path)
         if not pixmap.isNull():
             # Scale to PyQt5 appropriate size (Figma 122.54×120 → PyQt5 92×90)
-            logo_label.setPixmap(pixmap.scaled(92, 90, Qt.IgnoreAspectRatio, Qt.SmoothTransformation))
+            logo_label.setPixmap(pixmap.scaled(95, 90, Qt.IgnoreAspectRatio, Qt.SmoothTransformation))
         else:
             logo_label.setText("UN-HABITAT")
             logo_label.setStyleSheet("color: #3890DF; font-size: 14px; font-weight: bold; background: transparent;")
@@ -372,11 +372,7 @@ class LoginPage(QWidget):
         card_layout.addWidget(self.login_btn)
 
 
-        # Version
-        #version_label = QLabel("v 1.4")
-        #version_label.setAlignment(Qt.AlignCenter)
-        #version_label.setStyleSheet("color: #BDC3C7; font-size: 10px; background: transparent;")
-        #card_layout.addWidget(version_label)
+        
 
         return card
 
