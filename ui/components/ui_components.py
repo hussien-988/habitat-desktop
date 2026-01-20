@@ -15,6 +15,7 @@ from PyQt5.QtCore import Qt, pyqtSignal, QSize
 from PyQt5.QtGui import QIcon, QFont, QColor, QPalette
 
 from ..design_system import DesignTokens, Colors, Typography, Spacing, BorderRadius
+from ..font_utils import create_font, FontManager
 
 
 class Button(QPushButton):
@@ -206,7 +207,7 @@ class EmptyState(QWidget):
 
         # Icon
         icon_label = QLabel(icon_text)
-        icon_label.setFont(QFont("Arial", 48))
+        icon_label.setFont(create_font(size=48, weight=FontManager.WEIGHT_REGULAR, letter_spacing=0))
         icon_label.setStyleSheet(f"""
             color: {Colors.PRIMARY_BLUE};
             background-color: {Colors.BACKGROUND};
@@ -331,7 +332,7 @@ class ConfirmDialog(Modal):
 
         # Warning icon
         icon_label = QLabel(icon)
-        icon_label.setFont(QFont("Arial", 32))
+        icon_label.setFont(create_font(size=32, weight=FontManager.WEIGHT_REGULAR, letter_spacing=0))
         icon_label.setStyleSheet(f"color: {Colors.WARNING};")
 
         # Message
@@ -365,7 +366,7 @@ class SuccessDialog(Modal):
 
         # Success icon
         icon_label = QLabel("👍")
-        icon_label.setFont(QFont("Arial", 48))
+        icon_label.setFont(create_font(size=48, weight=FontManager.WEIGHT_REGULAR, letter_spacing=0))
         icon_label.setAlignment(Qt.AlignCenter)
 
         # Message

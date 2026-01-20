@@ -58,6 +58,9 @@ from models.person import Person
 from models.claim import Claim
 from ui.components.toast import Toast
 from ui.wizards.office_survey.dialogs import PersonDialog, EvidenceDialog
+from ui.font_utils import create_font, FontManager
+from ui.style_manager import StyleManager
+from ui.design_system import Colors
 from utils.i18n import I18n
 from utils.logger import get_logger
 
@@ -261,7 +264,7 @@ class OfficeSurveyWizard(QWidget):
         # UN-HABITAT Logo/Text placeholder (Matching image top left)
         logo_label = QLabel("اضافة حالة جديدة")
         # Assuming you have an actual logo image or can use a specific style
-        logo_label.setStyleSheet("font-family: 'Noto Kufi Arabic';font-size: 13pt; font-weight: bold; color: #0000000;")
+        logo_label.setStyleSheet("font-family: 'IBM Plex Sans Arabic';font-size: 13pt; font-weight: bold; color: #0000000;")
         header_layout.addWidget(logo_label)
 
         # ID Badge (Matching the design fh2999aa-7632-4ba5-b4f2-9dff1cab3943)
@@ -464,9 +467,9 @@ class OfficeSurveyWizard(QWidget):
         header_text_col = QVBoxLayout()
         header_text_col.setSpacing(1)
         title = QLabel("بيانات البناء")
-        title.setStyleSheet("background: transparent;font-family:'Noto Kufi Arabic'; font-size: 8pt; font-weight: 900; color:#1F2D3D;")
+        title.setStyleSheet("background: transparent;font-family:'IBM Plex Sans Arabic'; font-size: 8pt; font-weight: 900; color:#1F2D3D;")
         subtitle = QLabel("ابحث عن معلومات البناء والموقع الجغرافي")
-        subtitle.setStyleSheet("background: transparent;font-family:'Noto Kufi Arabic'; font-size: 8pt; color:#7F8C9B;")
+        subtitle.setStyleSheet("background: transparent;font-family:'IBM Plex Sans Arabic'; font-size: 8pt; color:#7F8C9B;")
 
         header_text_col.addWidget(title)
         header_text_col.addWidget(subtitle)
@@ -492,7 +495,7 @@ class OfficeSurveyWizard(QWidget):
 
         # Label: building code
         code_label = QLabel("رمز البناء")
-        code_label.setStyleSheet("background: transparent;font-family:'Noto Kufi Arabic'; font-size: 8pt; color:#1F2D3D; font-weight:800;")
+        code_label.setStyleSheet("background: transparent;font-family:'IBM Plex Sans Arabic'; font-size: 8pt; color:#1F2D3D; font-weight:800;")
         card_layout.addWidget(code_label)
 
         # One long input bar (search icon right + link left) - matches design
@@ -537,7 +540,7 @@ class OfficeSurveyWizard(QWidget):
             QLineEdit {
                 border: none;
                 background: transparent;
-                font-family: 'Noto Kufi Arabic';
+                font-family: 'IBM Plex Sans Arabic';
                 font-size: 10pt;
                 padding: 0px 6px;
                 min-height: 28px;
@@ -556,7 +559,7 @@ class OfficeSurveyWizard(QWidget):
                 border: none;
                 background: transparent;
                 color: #3890DF;
-                font-family: 'Noto Kufi Arabic';
+                font-family: 'IBM Plex Sans Arabic';
                 font-weight: 600;
                 font-size: 7pt;
                 text-decoration: underline;
@@ -591,7 +594,7 @@ class OfficeSurveyWizard(QWidget):
                 padding: 10px 12px;
                 border-bottom: 1px solid #F1F5F9;
                 color: #2C3E50;
-                font-family: 'Noto Kufi Arabic';
+                font-family: 'IBM Plex Sans Arabic';
                 font-size: 9pt;
             }
             QListWidget::item:selected {

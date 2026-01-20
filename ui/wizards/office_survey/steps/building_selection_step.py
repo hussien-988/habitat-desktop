@@ -24,6 +24,7 @@ from ui.wizards.office_survey.survey_context import SurveyContext
 from repositories.building_repository import BuildingRepository
 from models.building import Building
 from utils.logger import get_logger
+from ui.font_utils import FontManager
 
 logger = get_logger(__name__)
 
@@ -84,9 +85,9 @@ class BuildingSelectionStep(BaseStep):
         header_text_col = QVBoxLayout()
         header_text_col.setSpacing(1)
         title = QLabel("بيانات البناء")
-        title.setStyleSheet("background: transparent;font-family:'Noto Kufi Arabic'; font-size: 8pt; font-weight: 900; color:#1F2D3D;")
+        title.setStyleSheet("background: transparent;font-family:'IBM Plex Sans Arabic'; font-size: 8pt; font-weight: 900; color:#1F2D3D;")
         subtitle = QLabel("ابحث عن معلومات البناء والموقع الجغرافي")
-        subtitle.setStyleSheet("background: transparent;font-family:'Noto Kufi Arabic'; font-size: 8pt; color:#7F8C9B;")
+        subtitle.setStyleSheet("background: transparent;font-family:'IBM Plex Sans Arabic'; font-size: 8pt; color:#7F8C9B;")
 
         header_text_col.addWidget(title)
         header_text_col.addWidget(subtitle)
@@ -111,7 +112,7 @@ class BuildingSelectionStep(BaseStep):
 
         # Label: building code
         code_label = QLabel("رمز البناء")
-        code_label.setStyleSheet("background: transparent;font-family:'Noto Kufi Arabic'; font-size: 8pt; color:#1F2D3D; font-weight:800;")
+        code_label.setStyleSheet("background: transparent;font-family:'IBM Plex Sans Arabic'; font-size: 8pt; color:#1F2D3D; font-weight:800;")
         card_layout.addWidget(code_label)
 
         # Search bar (one row)
@@ -157,7 +158,7 @@ class BuildingSelectionStep(BaseStep):
             QLineEdit {
                 border: none;
                 background: transparent;
-                font-family: 'Noto Kufi Arabic';
+                font-family: 'IBM Plex Sans Arabic';
                 font-size: 10pt;
                 padding: 0px 6px;
                 min-height: 28px;
@@ -176,7 +177,7 @@ class BuildingSelectionStep(BaseStep):
                 border: none;
                 background: transparent;
                 color: #3890DF;
-                font-family: 'Noto Kufi Arabic';
+                font-family: 'IBM Plex Sans Arabic';
                 font-weight: 600;
                 font-size: 7pt;
                 text-decoration: underline;
@@ -208,7 +209,7 @@ class BuildingSelectionStep(BaseStep):
                 padding: 10px 12px;
                 border-bottom: 1px solid #F1F5F9;
                 color: #2C3E50;
-                font-family: 'Noto Kufi Arabic';
+                font-family: 'IBM Plex Sans Arabic';
                 font-size: 9pt;
             }
             QListWidget::item:selected {

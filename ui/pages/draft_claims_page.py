@@ -12,6 +12,8 @@ from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtGui import QFont
 
 from ..design_system import Colors
+from ..font_utils import create_font, FontManager
+from ..style_manager import StyleManager
 from ..components.empty_state import EmptyState
 from ..components.claim_list_card import ClaimListCard
 
@@ -36,7 +38,7 @@ class DraftClaimsPage(QWidget):
         main_layout.setContentsMargins(0, 0, 0, 0)
         main_layout.setSpacing(0)
 
-        self.setStyleSheet(f"background-color: {Colors.BACKGROUND};")
+        self.setStyleSheet(StyleManager.page_background())
 
         self.header = self._create_header()
         main_layout.addWidget(self.header)
@@ -71,8 +73,10 @@ class DraftClaimsPage(QWidget):
         layout.setSpacing(16)
 
         self.title_label = QLabel(self.current_tab_title)
-        self.title_label.setFont(QFont("Noto Kufi Arabic", 18, QFont.Bold))
-        self.title_label.setStyleSheet(f"color: {Colors.TEXT_PRIMARY}; border: none;")
+        # Use centralized font utility: 18pt Bold (24px × 0.75 = 18pt)
+        title_font = create_font(size=FontManager.SIZE_TITLE, weight=QFont.Bold, letter_spacing=0)
+        self.title_label.setFont(title_font)
+        self.title_label.setStyleSheet(StyleManager.label_title())
         layout.addWidget(self.title_label)
 
         layout.addStretch()
@@ -80,22 +84,10 @@ class DraftClaimsPage(QWidget):
         add_btn = QPushButton("⊕ إضافة حالة جديدة")
         add_btn.setFixedHeight(40)
         add_btn.setCursor(Qt.PointingHandCursor)
-        add_btn.setFont(QFont("Noto Kufi Arabic", 12, QFont.DemiBold))
-        add_btn.setStyleSheet(f"""
-            QPushButton {{
-                background-color: {Colors.PRIMARY_BLUE};
-                color: white;
-                border: none;
-                border-radius: 6px;
-                padding: 0px 24px;
-            }}
-            QPushButton:hover {{
-                background-color: #2A7BC9;
-            }}
-            QPushButton:pressed {{
-                background-color: #1F68B3;
-            }}
-        """)
+        # Use centralized font: 12pt DemiBold (16px × 0.75 = 12pt)
+        btn_font = create_font(size=12, weight=QFont.DemiBold, letter_spacing=0)
+        add_btn.setFont(btn_font)
+        add_btn.setStyleSheet(StyleManager.button_primary())
         add_btn.clicked.connect(self.add_claim_clicked.emit)
         layout.addWidget(add_btn)
 

@@ -8,6 +8,10 @@ from PyQt5.QtWidgets import QWidget, QVBoxLayout, QLabel
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QFont, QPainter, QColor
 
+from ..design_system import Colors
+from ..font_utils import create_font, FontManager
+from ..style_manager import StyleManager
+
 
 class EmptyState(QWidget):
     """
@@ -42,11 +46,11 @@ class EmptyState(QWidget):
         # Icon circle (120px × 120px, blue background)
         icon_container = QWidget()
         icon_container.setFixedSize(120, 120)
-        icon_container.setStyleSheet("""
-            QWidget {
-                background-color: #3890DF;
+        icon_container.setStyleSheet(f"""
+            QWidget {{
+                background-color: {Colors.PRIMARY_BLUE};
                 border-radius: 60px;
-            }
+            }}
         """)
 
         icon_layout = QVBoxLayout(icon_container)
@@ -56,12 +60,14 @@ class EmptyState(QWidget):
         # Icon label (+ symbol or custom icon)
         icon_label = QLabel(self.icon_text)
         icon_label.setAlignment(Qt.AlignCenter)
-        icon_label.setFont(QFont("Noto Kufi Arabic", 36, QFont.Bold))
-        icon_label.setStyleSheet("""
-            QLabel {
-                color: white;
+        # Use centralized font utility
+        icon_font = create_font(size=36, weight=QFont.Bold)
+        icon_label.setFont(icon_font)
+        icon_label.setStyleSheet(f"""
+            QLabel {{
+                color: {Colors.PRIMARY_WHITE};
                 background: transparent;
-            }
+            }}
         """)
         icon_layout.addWidget(icon_label)
 
@@ -73,13 +79,10 @@ class EmptyState(QWidget):
         # Title
         title_label = QLabel(self.title_text)
         title_label.setAlignment(Qt.AlignCenter)
-        title_label.setFont(QFont("Noto Kufi Arabic", 18, QFont.DemiBold))
-        title_label.setStyleSheet("""
-            QLabel {
-                color: #2C3E50;
-                background: transparent;
-            }
-        """)
+        # Use centralized font utility
+        title_font = create_font(size=FontManager.SIZE_TITLE, weight=QFont.DemiBold)
+        title_label.setFont(title_font)
+        title_label.setStyleSheet(StyleManager.label_title())
         layout.addWidget(title_label)
 
         # Spacing between title and description (8px from Figma)
@@ -90,13 +93,10 @@ class EmptyState(QWidget):
         description_label.setAlignment(Qt.AlignCenter)
         description_label.setWordWrap(True)
         description_label.setMaximumWidth(400)
-        description_label.setFont(QFont("Noto Kufi Arabic", 14))
-        description_label.setStyleSheet("""
-            QLabel {
-                color: #7F8C9B;
-                background: transparent;
-            }
-        """)
+        # Use centralized font utility
+        desc_font = create_font(size=FontManager.SIZE_BODY, weight=FontManager.WEIGHT_REGULAR)
+        description_label.setFont(desc_font)
+        description_label.setStyleSheet(StyleManager.label_subtitle())
         layout.addWidget(description_label)
 
     def set_icon(self, icon_text: str):

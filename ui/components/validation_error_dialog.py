@@ -12,6 +12,7 @@ from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QFont
 
 from app.config import Config
+from ui.font_utils import create_font, FontManager
 
 
 class ValidationErrorDialog(QDialog):
@@ -63,12 +64,12 @@ class ValidationErrorDialog(QDialog):
         title_layout = QVBoxLayout()
 
         title = QLabel("فشل التحقق من صحة الحزمة")
-        title.setFont(QFont("Segoe UI", 16, QFont.Bold))
+        title.setFont(create_font(size=16, weight=QFont.Bold, letter_spacing=0))
         title.setStyleSheet(f"color: {Config.ERROR_COLOR};")
         title_layout.addWidget(title)
 
         error_type_label = QLabel(self._get_error_type_text())
-        error_type_label.setFont(QFont("Segoe UI", 12))
+        error_type_label.setFont(create_font(size=12, weight=FontManager.WEIGHT_REGULAR, letter_spacing=0))
         error_type_label.setStyleSheet("color: #991B1B;")
         title_layout.addWidget(error_type_label)
 
@@ -120,7 +121,7 @@ class ValidationErrorDialog(QDialog):
 
         # Detailed Error Message
         details_label = QLabel("📋 رسالة الخطأ الكاملة:")
-        details_label.setFont(QFont("Segoe UI", 10, QFont.Bold))
+        details_label.setFont(create_font(size=FontManager.SIZE_BODY, weight=QFont.Bold, letter_spacing=0))
         details_label.setStyleSheet(f"color: {Config.TEXT_COLOR}; margin-top: 8px;")
         details_layout.addWidget(details_label)
 
@@ -142,7 +143,7 @@ class ValidationErrorDialog(QDialog):
 
         # Recommended Actions
         actions_label = QLabel("💡 الإجراءات الموصى بها:")
-        actions_label.setFont(QFont("Segoe UI", 10, QFont.Bold))
+        actions_label.setFont(create_font(size=FontManager.SIZE_BODY, weight=QFont.Bold, letter_spacing=0))
         actions_label.setStyleSheet(f"color: {Config.TEXT_COLOR}; margin-top: 8px;")
         details_layout.addWidget(actions_label)
 
@@ -208,7 +209,7 @@ class ValidationErrorDialog(QDialog):
     def _add_section(self, parent_layout: QVBoxLayout, title: str, items: list):
         """Add an information section."""
         section_label = QLabel(title)
-        section_label.setFont(QFont("Segoe UI", 10, QFont.Bold))
+        section_label.setFont(create_font(size=FontManager.SIZE_BODY, weight=QFont.Bold, letter_spacing=0))
         section_label.setStyleSheet(f"color: {Config.TEXT_COLOR}; margin-top: 8px;")
         parent_layout.addWidget(section_label)
 
@@ -228,7 +229,7 @@ class ValidationErrorDialog(QDialog):
             row_layout = QHBoxLayout()
 
             label_widget = QLabel(label)
-            label_widget.setFont(QFont("Segoe UI", 9, QFont.Bold))
+            label_widget.setFont(create_font(size=9, weight=QFont.Bold, letter_spacing=0))
             label_widget.setStyleSheet(f"color: {Config.TEXT_LIGHT};")
             label_widget.setMinimumWidth(150)
             row_layout.addWidget(label_widget)

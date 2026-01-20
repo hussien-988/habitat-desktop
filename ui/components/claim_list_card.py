@@ -9,7 +9,8 @@ from PyQt5.QtCore import Qt, pyqtSignal, QSize
 from PyQt5.QtGui import QFont, QColor
 from PyQt5.QtWidgets import QGraphicsDropShadowEffect
 
-from ..design_system import Colors, PageDimensions, Typography
+from ..design_system import PageDimensions, Typography
+from ..style_manager import StyleManager
 from .icon import Icon, IconSize
 
 
@@ -37,25 +38,8 @@ class ClaimListCard(QFrame):
         """
         self.setObjectName("claimCard")
 
-        # Apply Figma styling with constants (DRY principle)
-        # IMPORTANT: Include ALL nested widget styles in ONE stylesheet to avoid conflicts
-        self.setStyleSheet(f"""
-            QFrame#claimCard {{
-                background-color: {Colors.PRIMARY_WHITE};
-                border-radius: {PageDimensions.CARD_BORDER_RADIUS}px;
-                border: none;
-            }}
-            QFrame#claimCard:hover {{
-                background-color: #FAFBFC;
-            }}
-
-            /* Details container (pill-shaped box) - nested QFrame */
-            QFrame#detailsFrame {{
-                background-color: {PageDimensions.CARD_DETAILS_BG};
-                border: {PageDimensions.CARD_DETAILS_BORDER_WIDTH}px solid {PageDimensions.CARD_DETAILS_BORDER};
-                border-radius: {PageDimensions.CARD_DETAILS_RADIUS}px;
-            }}
-        """)
+        # Apply Figma styling via StyleManager (Single Source of Truth)
+        self.setStyleSheet(StyleManager.card())
 
         # Figma: Card dimensions (112px height from Figma)
         self.setFixedHeight(PageDimensions.CARD_HEIGHT)  # 112px
@@ -102,16 +86,7 @@ class ClaimListCard(QFrame):
             # Fallback to text icon if image not found
             icon_btn.setText("📋")
 
-        icon_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #e3f2fd;
-                border: none;
-                border-radius: 6px;
-            }
-            QPushButton:hover {
-                background-color: #bbdefb;
-            }
-        """)
+        icon_btn.setStyleSheet(StyleManager.button_icon())
         icon_btn.clicked.connect(lambda: self.clicked.emit(self.claim_data.get('claim_id', '')))
         top_row.addWidget(icon_btn)
 

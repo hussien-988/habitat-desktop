@@ -11,6 +11,10 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QFont, QColor
 
+from ..font_utils import create_font, FontManager
+from ..style_manager import StyleManager
+from ..design_system import Colors
+
 
 class SuccessModal(QDialog):
     """
@@ -53,11 +57,11 @@ class SuccessModal(QDialog):
         # Container widget for rounded corners
         container = QWidget(self)
         container.setObjectName("modal_container")
-        container.setStyleSheet("""
-            QWidget#modal_container {
-                background-color: #FFFFFF;
+        container.setStyleSheet(f"""
+            QWidget#modal_container {{
+                background-color: {Colors.PRIMARY_WHITE};
                 border-radius: 12px;
-            }
+            }}
         """)
 
         # Main layout
@@ -95,13 +99,9 @@ class SuccessModal(QDialog):
         # Title
         title_label = QLabel(self.title_text)
         title_label.setAlignment(Qt.AlignCenter)
-        title_label.setFont(QFont("Noto Kufi Arabic", 20, QFont.Bold))
-        title_label.setStyleSheet("""
-            QLabel {
-                color: #2C3E50;
-                background: transparent;
-            }
-        """)
+        title_font = create_font(size=20, weight=QFont.Bold, letter_spacing=0)
+        title_label.setFont(title_font)
+        title_label.setStyleSheet(StyleManager.label_title())
         layout.addWidget(title_label)
 
         # Spacing (12px)
@@ -110,12 +110,13 @@ class SuccessModal(QDialog):
         # Claim ID display
         claim_id_label = QLabel(self.claim_id)
         claim_id_label.setAlignment(Qt.AlignCenter)
-        claim_id_label.setFont(QFont("Noto Kufi Arabic", 18, QFont.DemiBold))
-        claim_id_label.setStyleSheet("""
-            QLabel {
-                color: #3890DF;
+        claim_id_font = create_font(size=FontManager.SIZE_TITLE, weight=QFont.DemiBold, letter_spacing=0)
+        claim_id_label.setFont(claim_id_font)
+        claim_id_label.setStyleSheet(f"""
+            QLabel {{
+                color: {Colors.PRIMARY_BLUE};
                 background: transparent;
-            }
+            }}
         """)
         layout.addWidget(claim_id_label)
 
@@ -126,13 +127,9 @@ class SuccessModal(QDialog):
         message_label = QLabel(self.message_text)
         message_label.setAlignment(Qt.AlignCenter)
         message_label.setWordWrap(True)
-        message_label.setFont(QFont("Noto Kufi Arabic", 14))
-        message_label.setStyleSheet("""
-            QLabel {
-                color: #7F8C9B;
-                background: transparent;
-            }
-        """)
+        message_font = create_font(size=14, weight=FontManager.WEIGHT_REGULAR, letter_spacing=0)
+        message_label.setFont(message_font)
+        message_label.setStyleSheet(StyleManager.label_subtitle())
         layout.addWidget(message_label)
 
         # Spacing before button (32px)
@@ -142,22 +139,9 @@ class SuccessModal(QDialog):
         close_btn = QPushButton("حسناً")
         close_btn.setFixedHeight(44)
         close_btn.setCursor(Qt.PointingHandCursor)
-        close_btn.setFont(QFont("Noto Kufi Arabic", 14, QFont.DemiBold))
-        close_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #3890DF;
-                color: white;
-                border: none;
-                border-radius: 8px;
-                padding: 12px 48px;
-            }
-            QPushButton:hover {
-                background-color: #2A7BC9;
-            }
-            QPushButton:pressed {
-                background-color: #1F68B3;
-            }
-        """)
+        close_btn_font = create_font(size=14, weight=QFont.DemiBold, letter_spacing=0)
+        close_btn.setFont(close_btn_font)
+        close_btn.setStyleSheet(StyleManager.button_primary())
         close_btn.clicked.connect(self.accept)
         layout.addWidget(close_btn)
 

@@ -23,6 +23,7 @@ from ..components.empty_state import EmptyState
 from ..components.claim_list_card import ClaimListCard
 from ..components.primary_button import PrimaryButton
 from ..font_utils import create_font, FontManager
+from ..style_manager import StyleManager
 
 
 class CompletedClaimsPage(QWidget):
@@ -70,8 +71,8 @@ class CompletedClaimsPage(QWidget):
         )
         main_layout.setSpacing(PageDimensions.HEADER_GAP)  # 30px gap after header
 
-        # Background color from Figma
-        self.setStyleSheet(f"background-color: {Colors.BACKGROUND};")
+        # Background color from Figma via StyleManager
+        self.setStyleSheet(StyleManager.page_background())
 
         # Header with title and add button
         self.header = self._create_header()

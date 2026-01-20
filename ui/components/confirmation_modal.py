@@ -11,6 +11,8 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QFont, QColor
 
+from ..font_utils import create_font, FontManager
+
 
 class ConfirmationModal(QDialog):
     """
@@ -63,7 +65,9 @@ class ConfirmationModal(QDialog):
         icon_layout.setContentsMargins(0, 0, 0, 0)
         icon_label = QLabel("⚠")
         icon_label.setAlignment(Qt.AlignCenter)
-        icon_label.setFont(QFont("Segoe UI Emoji", 32))
+        # Use centralized font for icon: 32pt (42px × 0.75 ≈ 32pt)
+        icon_font = create_font(size=32, weight=QFont.Normal, letter_spacing=0)
+        icon_label.setFont(icon_font)
         icon_label.setStyleSheet("background: transparent;")
         icon_layout.addWidget(icon_label)
         layout.addWidget(icon_container, 0, Qt.AlignCenter)
@@ -72,7 +76,9 @@ class ConfirmationModal(QDialog):
         # Title
         title_label = QLabel(self.title_text)
         title_label.setAlignment(Qt.AlignCenter)
-        title_label.setFont(QFont("Noto Kufi Arabic", 18, QFont.Bold))
+        # Use centralized font: 18pt Bold (24px × 0.75 = 18pt)
+        title_font = create_font(size=FontManager.SIZE_TITLE, weight=QFont.Bold, letter_spacing=0)
+        title_label.setFont(title_font)
         title_label.setStyleSheet("QLabel { color: #2C3E50; background: transparent; }")
         layout.addWidget(title_label)
         layout.addSpacing(12)
@@ -81,7 +87,9 @@ class ConfirmationModal(QDialog):
         message_label = QLabel(self.message_text)
         message_label.setAlignment(Qt.AlignCenter)
         message_label.setWordWrap(True)
-        message_label.setFont(QFont("Noto Kufi Arabic", 14))
+        # Use centralized font: 14pt Normal (18px × 0.75 ≈ 14pt)
+        message_font = create_font(size=14, weight=QFont.Normal, letter_spacing=0)
+        message_label.setFont(message_font)
         message_label.setStyleSheet("QLabel { color: #7F8C9B; background: transparent; }")
         layout.addWidget(message_label)
         layout.addSpacing(32)
@@ -93,7 +101,9 @@ class ConfirmationModal(QDialog):
         cancel_btn = QPushButton(self.cancel_text)
         cancel_btn.setFixedHeight(44)
         cancel_btn.setCursor(Qt.PointingHandCursor)
-        cancel_btn.setFont(QFont("Noto Kufi Arabic", 14, QFont.Medium))
+        # Use centralized font: 14pt Medium (18px × 0.75 ≈ 14pt)
+        cancel_font = create_font(size=14, weight=FontManager.WEIGHT_REGULAR, letter_spacing=0)
+        cancel_btn.setFont(cancel_font)
         cancel_btn.setStyleSheet("""
             QPushButton {
                 background-color: #F3F4F6;
@@ -111,7 +121,9 @@ class ConfirmationModal(QDialog):
         confirm_btn = QPushButton(self.confirm_text)
         confirm_btn.setFixedHeight(44)
         confirm_btn.setCursor(Qt.PointingHandCursor)
-        confirm_btn.setFont(QFont("Noto Kufi Arabic", 14, QFont.DemiBold))
+        # Use centralized font: 14pt DemiBold (18px × 0.75 ≈ 14pt)
+        confirm_font = create_font(size=14, weight=QFont.DemiBold, letter_spacing=0)
+        confirm_btn.setFont(confirm_font)
 
         if self.confirm_style == "danger":
             confirm_btn.setStyleSheet("""
