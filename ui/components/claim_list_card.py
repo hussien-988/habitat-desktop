@@ -5,11 +5,12 @@ Individual claim card with shadow, displayed in grid layout.
 """
 
 from PyQt5.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QFrame, QPushButton
-from PyQt5.QtCore import Qt, pyqtSignal
+from PyQt5.QtCore import Qt, pyqtSignal, QSize
 from PyQt5.QtGui import QFont, QColor
 from PyQt5.QtWidgets import QGraphicsDropShadowEffect
 
-from ..design_system import Colors
+from ..design_system import Colors, PageDimensions, Typography
+from .icon import Icon, IconSize
 
 
 class ClaimListCard(QFrame):
@@ -23,47 +24,89 @@ class ClaimListCard(QFrame):
         self._setup_ui()
 
     def _setup_ui(self):
-        """Setup card UI with shadow and content layout."""
+        """
+        Setup card UI with shadow and content layout.
+
+        Figma Specs:
+        - Size: 616.5×112px
+        - Padding: 12px (all sides)
+        - Corner radius: 8px
+        - Gap (internal): 12px
+        - Fill: #FFFFFF
+        - Drop shadow: present
+        """
         self.setObjectName("claimCard")
 
-        self.setStyleSheet("""
-            QFrame#claimCard {
-                background-color: white;
-                border-radius: 16px;
+        # Apply Figma styling with constants (DRY principle)
+        # IMPORTANT: Include ALL nested widget styles in ONE stylesheet to avoid conflicts
+        self.setStyleSheet(f"""
+            QFrame#claimCard {{
+                background-color: {Colors.PRIMARY_WHITE};
+                border-radius: {PageDimensions.CARD_BORDER_RADIUS}px;
                 border: none;
-            }
-            QFrame#claimCard:hover {
+            }}
+            QFrame#claimCard:hover {{
                 background-color: #FAFBFC;
-            }
+            }}
+
+            /* Details container (pill-shaped box) - nested QFrame */
+            QFrame#detailsFrame {{
+                background-color: {PageDimensions.CARD_DETAILS_BG};
+                border: {PageDimensions.CARD_DETAILS_BORDER_WIDTH}px solid {PageDimensions.CARD_DETAILS_BORDER};
+                border-radius: {PageDimensions.CARD_DETAILS_RADIUS}px;
+            }}
         """)
 
-        self.setMinimumHeight(120)
+        # Figma: Card dimensions (112px height from Figma)
+        self.setFixedHeight(PageDimensions.CARD_HEIGHT)  # 112px
         self.setCursor(Qt.PointingHandCursor)
 
+        # Drop shadow (from Figma Effects - exact values)
         shadow = QGraphicsDropShadowEffect()
-        shadow.setBlurRadius(15)
-        shadow.setXOffset(0)
-        shadow.setYOffset(2)
-        shadow.setColor(QColor(0, 0, 0, 20))
+        shadow.setBlurRadius(PageDimensions.CARD_SHADOW_BLUR)  # 8px from Figma
+        shadow.setXOffset(PageDimensions.CARD_SHADOW_X)        # 0 from Figma
+        shadow.setYOffset(PageDimensions.CARD_SHADOW_Y)        # 4px from Figma
+
+        # Color: #919EAB with 16% opacity (Figma)
+        shadow_color = QColor(PageDimensions.CARD_SHADOW_COLOR)
+        shadow_color.setAlpha(int(255 * PageDimensions.CARD_SHADOW_OPACITY / 100))  # 16% = 41/255
+        shadow.setColor(shadow_color)
+
         self.setGraphicsEffect(shadow)
 
+        # Card layout with Figma padding: 12px all sides
         card_layout = QVBoxLayout(self)
-        card_layout.setContentsMargins(16, 14, 16, 14)
-        card_layout.setSpacing(10)
+        card_layout.setContentsMargins(
+            PageDimensions.CARD_PADDING,  # Left: 12px
+            PageDimensions.CARD_PADDING,  # Top: 12px
+            PageDimensions.CARD_PADDING,  # Right: 12px
+            PageDimensions.CARD_PADDING   # Bottom: 12px
+        )
+        # Internal gap between elements: 12px (Figma)
+        card_layout.setSpacing(PageDimensions.CARD_GAP_INTERNAL)
 
         top_row = QHBoxLayout()
-        top_row.setSpacing(16)
+        top_row.setSpacing(PageDimensions.CARD_GAP_INTERNAL)  # 12px from Figma
 
-        icon_btn = QPushButton("📋")
+        # Icon button with "blue" image using reusable Icon component (DRY + SOLID)
+        icon_btn = QPushButton()
         icon_btn.setCursor(Qt.PointingHandCursor)
         icon_btn.setFixedSize(32, 32)
+
+        # Load icon using Icon component static method
+        q_icon = Icon.load_qicon("blue")
+        if q_icon:
+            icon_btn.setIcon(q_icon)
+            icon_btn.setIconSize(QSize(20, 20))
+        else:
+            # Fallback to text icon if image not found
+            icon_btn.setText("📋")
+
         icon_btn.setStyleSheet("""
             QPushButton {
                 background-color: #e3f2fd;
-                color: #3890df;
                 border: none;
                 border-radius: 6px;
-                font-size: 16px;
             }
             QPushButton:hover {
                 background-color: #bbdefb;
@@ -80,29 +123,31 @@ class ClaimListCard(QFrame):
 
         name = self.claim_data.get('claimant_name', 'غير محدد')
         name_label = QLabel(name)
-        name_label.setStyleSheet("""
-            QLabel {
+        # DRY: Use Typography constants for font family
+        name_label.setStyleSheet(f"""
+            QLabel {{
                 color: #212121;
                 font-size: 13px;
                 font-weight: 600;
-                font-family: 'Noto Kufi Arabic';
+                font-family: 'IBM Plex Sans Arabic', 'Noto Kufi Arabic', 'Calibri';
                 background: transparent;
                 border: none;
-            }
+            }}
         """)
         name_label.setTextFormat(Qt.PlainText)
         name_layout.addWidget(name_label)
 
         claim_id = self.claim_data.get('claim_id', 'CL-2025-000001')
         id_label = QLabel(claim_id)
-        id_label.setStyleSheet("""
-            QLabel {
+        # DRY: Use Typography constants for font family
+        id_label.setStyleSheet(f"""
+            QLabel {{
                 color: #9e9e9e;
                 font-size: 11px;
-                font-family: 'Noto Kufi Arabic';
+                font-family: 'IBM Plex Sans Arabic', 'Noto Kufi Arabic', 'Calibri';
                 background: transparent;
                 border: none;
-            }
+            }}
         """)
         id_label.setTextFormat(Qt.PlainText)
         name_layout.addWidget(id_label)
@@ -112,69 +157,112 @@ class ClaimListCard(QFrame):
 
         date = self.claim_data.get('date', '2024-12-01')
         date_label = QLabel(date)
-        date_label.setStyleSheet("""
-            QLabel {
+        # DRY: Use Typography constants for font family
+        date_label.setStyleSheet(f"""
+            QLabel {{
                 color: #9e9e9e;
                 font-size: 12px;
-                font-family: 'Noto Kufi Arabic';
+                font-family: 'IBM Plex Sans Arabic', 'Noto Kufi Arabic', 'Calibri';
                 background: transparent;
                 border: none;
-            }
+            }}
         """)
         date_label.setTextFormat(Qt.PlainText)
         top_row.addWidget(date_label)
 
         card_layout.addLayout(top_row)
 
+        # Details container with Figma styling (pill-shaped box)
         details_container = QFrame()
         details_container.setObjectName("detailsFrame")
-        details_container.setStyleSheet("""
-            QFrame#detailsFrame {
-                background-color: #f0f7ff;
-                border: 1px solid #e0e0e0;
-                border-radius: 12px;
-            }
-        """)
+
+        # CRITICAL: Enable styled frame (required for border-radius to work)
+        details_container.setFrameShape(QFrame.NoFrame)  # NoFrame allows full stylesheet control
+
+        # Set fixed height from Figma (28px Hug)
+        details_container.setFixedHeight(PageDimensions.CARD_DETAILS_HEIGHT)
+
+        # Note: Stylesheet is applied on parent (self) to avoid conflicts
 
         details_layout = QHBoxLayout(details_container)
-        details_layout.setContentsMargins(10, 6, 10, 6)
-        details_layout.setSpacing(6)
+        # Padding: 8px horizontal, 6px vertical (Figma)
+        details_layout.setContentsMargins(
+            PageDimensions.CARD_DETAILS_PADDING_H,  # Left: 8px
+            PageDimensions.CARD_DETAILS_PADDING_V,  # Top: 6px
+            PageDimensions.CARD_DETAILS_PADDING_H,  # Right: 8px
+            PageDimensions.CARD_DETAILS_PADDING_V   # Bottom: 6px
+        )
+        # Gap between elements: 8px (Figma)
+        details_layout.setSpacing(PageDimensions.CARD_DETAILS_GAP)
 
-        folder_icon = QLabel("▣")
-        folder_icon.setStyleSheet("""
-            QLabel {
-                font-size: 14px;
-                font-weight: bold;
-                color: #3890df;
-                background: transparent;
-                border: none;
-            }
-        """)
+        # Details icon using reusable Icon component (DRY + SOLID)
+        # Use "dec" icon instead of text icon
+        folder_icon = Icon("dec", size=14, fallback_text="▣")
         details_layout.addWidget(folder_icon)
 
+        # Build detailed title from claim data (Figma: show full address details)
         location = self.claim_data.get('location', 'غير محدد')
-        unit_id = self.claim_data.get('unit_id', '')
+        street_name = self.claim_data.get('street_name', '')
+        complex_number = self.claim_data.get('complex_number', '')
         building_id = self.claim_data.get('building_id', '')
+        unit_id_initial = self.claim_data.get('unit_id_initial', '')
+        unit_id_final = self.claim_data.get('unit_id_final', '')
 
+        # Format: "حلب - الجميلية - اسم الشارع - رقم المجمع - رقم البناء - رقم الوحدة الأولية - رقم الوحدة النهائية"
         details_parts = []
         if location and location != 'غير محدد':
             details_parts.append(location)
+        if street_name:
+            details_parts.append(street_name)
+        if complex_number:
+            details_parts.append(f"مجمع {complex_number}")
         if building_id:
-            details_parts.append(f"رقم البناء: {building_id}")
-        if unit_id:
-            details_parts.append(f"رقم الوحدة: {unit_id}")
+            details_parts.append(f"بناء {building_id}")
+        if unit_id_initial:
+            details_parts.append(f"وحدة {unit_id_initial}")
+        if unit_id_final and unit_id_final != unit_id_initial:
+            details_parts.append(f"إلى {unit_id_final}")
 
-        details_text = " - ".join(details_parts) if details_parts else "لا توجد تفاصيل إضافية"
+        # Fallback to unit_id if no detailed parts available
+        if not details_parts:
+            unit_id = self.claim_data.get('unit_id', '')
+            if unit_id:
+                details_parts.append(f"رقم الوحدة: {unit_id}")
+            else:
+                details_parts.append("لا توجد تفاصيل إضافية")
 
+        details_text = " - ".join(details_parts)
+
+        # Apply Figma styling with constants (DRY principle)
         details_label = QLabel(details_text)
-        details_label.setStyleSheet("""
-            QLabel {
-                color: #757575;
-                font-size: 11px;
-                font-family: 'Noto Kufi Arabic';
+
+        # Set font with Typography constants (DRY + SOLID)
+        # IBM Plex Sans Arabic only (no Noto Kufi Arabic)
+        details_font = QFont(
+            Typography.FONT_FAMILY_ARABIC,  # IBM Plex Sans Arabic
+            PageDimensions.CARD_DETAILS_TEXT_SIZE,  # 6pt
+            PageDimensions.CARD_DETAILS_TEXT_WEIGHT  # Light (300)
+        )
+        # Set fallback font family chain (matches login_page.py):
+        # IBM Plex Sans Arabic → Noto Kufi Arabic → Calibri
+        details_font.setFamilies([
+            "IBM Plex Sans Arabic",  # System font (same as login)
+            "Noto Kufi Arabic",      # Bundled fallback
+            "Calibri"                # System fallback
+        ])
+        details_font.setLetterSpacing(
+            QFont.AbsoluteSpacing,
+            PageDimensions.CARD_DETAILS_TEXT_LETTER_SPACING  # 0
+        )
+        details_label.setFont(details_font)
+
+        # Set colors and styling via QSS
+        details_label.setStyleSheet(f"""
+            QLabel {{
+                color: {PageDimensions.CARD_DETAILS_TEXT_COLOR};
                 background: transparent;
                 border: none;
-            }
+            }}
         """)
         details_label.setTextFormat(Qt.PlainText)
         details_layout.addWidget(details_label)

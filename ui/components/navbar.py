@@ -1,27 +1,45 @@
 # -*- coding: utf-8 -*-
 """
-Shared Navbar Component - Figma Design (Pages 1-31)
+Navbar Component - UN-HABITAT TRRCMS
 المكون المشترك للشريط العلوي مع التبويبات
 
-This is the shared navigation bar that appears across all pages.
-Specifications extracted from Figma screenshot:
-- Background: #122C49 (dark navy blue)
-- Height: 60px (top bar) + 48px (tabs) = 108px total
-- Active tab indicator: #9BC2FF (3px bottom border)
-- Tab text: white with 0.7 opacity when inactive
+Exact Figma Specifications (المطالبات المكتملة page):
+- Container: W=1512, H=109
+- Top Bar: H=60
+- Tabs Bar: H=48
+- Logo: 142.77×21.77 (scaled to 22px height for PyQt5)
+- ID Badge: 110.69×40, border-radius=10px, padding=8px
+- Background: #122C49 (NAVBAR_BG)
+- Font: IBM Plex Sans Arabic, Letter spacing: 0px
+
+Architecture:
+- DRY: Reusable components (LogoWidget, IDBadgeWidget)
+- SOLID: Single responsibility, dependency injection
+- Clean Code: Clear naming, proper separation of concerns
 """
 
+from pathlib import Path
 from PyQt5.QtWidgets import (
     QFrame, QHBoxLayout, QLabel, QWidget, QPushButton,
     QVBoxLayout, QSpacerItem, QSizePolicy, QLineEdit
 )
-from PyQt5.QtCore import Qt, pyqtSignal, QPoint
-from PyQt5.QtGui import QFont, QCursor
+from PyQt5.QtCore import Qt, pyqtSignal, QPoint, QSize
+from PyQt5.QtGui import QFont, QCursor, QIcon
 
-from ..design_system import Colors
+from ..design_system import Colors, NavbarDimensions, Typography, Spacing
+from ..font_utils import create_font, FontManager
+from .logo import LogoWidget
+from .id_badge import IDBadgeWidget
+
 
 class DraggableFrame(QFrame):
-    """فريم بيتسحب منه التطبيق لما نشيل إطار الويندوز"""
+    """
+    Draggable frame for window movement
+    فريم قابل للسحب لتحريك النافذة
+
+    Allows dragging the window when frameless
+    Double-click to maximize/restore
+    """
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -55,187 +73,181 @@ class DraggableFrame(QFrame):
         super().mouseDoubleClickEvent(event)
 
 
-
 class Navbar(QFrame):
     """
-    Shared Navbar Component - المكون المشترك للشريط العلوي
+    Main Navbar Component with Tabs
+    المكون الرئيسي للشريط العلوي مع التبويبات
 
-    Exact specifications from Figma screenshot:
+    Figma Specifications:
+    - Total Height: 109px (60px top + 48px tabs + 1px adjustment)
     - Background: #122C49
-    - Total height: 108px (60px top + 48px tabs)
-    - Active tab indicator: #9BC2FF, 3px bottom border
-    - Inactive tabs: white text with 0.7 opacity
-    - Active tab: white text with 1.0 opacity
+    - Logo: Reusable LogoWidget
+    - ID Badge: Reusable IDBadgeWidget
+    - Search Bar: 450×32px
+    - Tabs: المطالبات المكتملة (active), المسودة, المباني, الوحدات السكنية, التكرارات, استيراد
+
+    Signals:
+        tab_changed(int): Emitted when tab is changed
+        search_requested(str): Emitted when search is performed
     """
 
     # Signals
-    tab_changed = pyqtSignal(int)  # Emitted when tab changes
-    search_requested = pyqtSignal(str)  # Emitted when search is performed
+    tab_changed = pyqtSignal(int)
+    search_requested = pyqtSignal(str)
+    logout_requested = pyqtSignal()
 
     def __init__(self, user_id=None, parent=None):
         super().__init__(parent)
-        # Default to placeholder if no user_id provided (for testing)
-        self.user_id = user_id or "00000"
-        self.setObjectName("shared_navbar")
+
+        self.user_id = user_id or "12345"
+        self.setObjectName("navbar")
         self.current_tab_index = 0
         self.tab_buttons = []
+        self.search_mode = "name"  # Default search mode
 
         self._setup_ui()
         self._apply_styles()
 
     def _setup_ui(self):
-        """Setup navbar UI matching Figma screenshot exactly"""
+        """Setup navbar UI structure"""
         main_layout = QVBoxLayout(self)
         main_layout.setContentsMargins(0, 0, 0, 0)
         main_layout.setSpacing(0)
 
-        # Top bar (logo, ID badge, search, menu) - 60px height
+        # Top bar - 60px height
         top_bar = self._create_top_bar()
         main_layout.addWidget(top_bar)
 
-        # Tab bar - 48px height
+        # Tabs bar - 48px height
         tabs_bar = self._create_tabs_bar()
         main_layout.addWidget(tabs_bar)
 
-        self.setFixedHeight(108)  # 60 + 48 = 108px total
+        # Figma: Total height 109px
+        self.setFixedHeight(NavbarDimensions.CONTAINER_HEIGHT)
 
     def _create_top_bar(self):
-        """Create the top bar - 60px height with logo, ID, search, menu"""
+        """
+        Create top bar with logo, ID badge, search, and window controls
+
+        Figma: H=60px, Padding=24px horizontal
+        Layout (RTL): [Window Controls] [Spacer] [Search] [Spacer] [ID Badge] [Logo]
+        """
         top_bar = DraggableFrame()
         top_bar.setObjectName("navbar_top")
         top_bar.setAttribute(Qt.WA_StyledBackground, True)
-        top_bar.setFixedHeight(60)
+        top_bar.setFixedHeight(NavbarDimensions.TOP_BAR_HEIGHT)
 
         layout = QHBoxLayout(top_bar)
-        layout.setContentsMargins(24, 0, 24, 0)  # 24px horizontal padding
+        layout.setContentsMargins(
+            Spacing.NAVBAR_HORIZONTAL_PADDING, 10,  # Left: 24px, Top: 10px (52-32)/2
+            0, 10  # Right: 0px (logo flush to edge), Bottom: 10px
+        )
         layout.setSpacing(16)
-        #الازرار 
+
+        # Window controls (minimize, maximize, close) - leftmost
         win_controls = self._create_window_controls()
         layout.addWidget(win_controls)
-        # Spacer before search (to center it)
+
+        # Spacer before search
         layout.addSpacerItem(QSpacerItem(40, 20, QSizePolicy.Expanding, QSizePolicy.Minimum))
 
-        # Search bar - 400px width (centered)
+        # Search bar (centered)
         self.search_bar = self._create_search_bar()
         layout.addWidget(self.search_bar)
 
-        # Spacer after search (to center it)
+        # Spacer after search
         layout.addSpacerItem(QSpacerItem(40, 20, QSizePolicy.Expanding, QSizePolicy.Minimum))
 
-        # ID Badge - far left in RTL (right side visually)
-        id_badge = self._create_id_badge()
-        layout.addWidget(id_badge)
+        # ID Badge - Reusable dropdown component
+        self.id_badge = IDBadgeWidget(user_id=self.user_id)
+        self.id_badge.logout_requested.connect(self._on_logout_requested)
+        layout.addWidget(self.id_badge)
 
-        # UN-HABITAT Logo - leftmost in RTL (rightmost visually)
-        logo_widget = self._create_logo()
-        layout.addWidget(logo_widget)
-        
+        # Divider line between ID and Logo (Figma spec)
+        divider = QFrame()
+        divider.setFrameShape(QFrame.VLine)
+        divider.setFixedHeight(24)  # Visual height of divider
+        divider.setStyleSheet("""
+            QFrame {
+                background-color: rgba(255, 255, 255, 0.2);
+                max-width: 1px;
+            }
+        """)
+        layout.addWidget(divider)
 
+        # Logo - Reusable component (rightmost)
+        self.logo = LogoWidget(height=NavbarDimensions.LOGO_SCALED_HEIGHT)
+        layout.addWidget(self.logo)
 
         return top_bar
 
-    def _create_logo(self):
-        """Create UN-HABITAT logo from image file"""
-        from pathlib import Path
-        from PyQt5.QtGui import QPixmap
-
-        logo = QLabel()
-
-        # Load logo image from assets
-        logo_path = Path(__file__).parent.parent.parent / "assets" / "images" / "header.png"
-
-        if logo_path.exists():
-            pixmap = QPixmap(str(logo_path))
-            # Scale to smaller size - 28px height
-            scaled_pixmap = pixmap.scaledToHeight(20, Qt.SmoothTransformation)
-            logo.setPixmap(scaled_pixmap)
-        else:
-            # Fallback to text if image not found
-            logo.setText("UN-HABITAT")
-            logo.setFont(QFont("Noto Kufi Arabic", 10, QFont.Bold))
-
-        logo.setStyleSheet("""
-            QLabel {
-                background: transparent;
-            }
-        """)
-        return logo
     def _create_window_controls(self):
+        """
+        Create window control buttons (minimize, maximize, close)
+
+        Figma: Size 46×32px each (matching login page)
+        """
         box = QWidget()
         box.setObjectName("window_controls")
-
         box.setLayoutDirection(Qt.LeftToRight)
 
         lay = QHBoxLayout(box)
         lay.setContentsMargins(0, 0, 0, 0)
-        lay.setSpacing(6)
+        lay.setSpacing(0)
 
+        # Buttons
         btn_min = QPushButton("–")
         btn_max = QPushButton("□")
         btn_close = QPushButton("✕")
+
+        # Make maximize button icon 2x larger (matching login page)
+        btn_max.setStyleSheet("""
+            QPushButton {
+                font-size: 28px;
+                margin-bottom: 4px;
+            }
+        """)
 
         btn_min.setObjectName("win_btn")
         btn_max.setObjectName("win_btn")
         btn_close.setObjectName("win_close")
 
-        # الحجم الأساسي (بدون تغيير)
+        # Figma dimensions: 46×32px (matching login page)
         for b in (btn_min, btn_max, btn_close):
-            b.setFixedSize(40, 28)
+            b.setFixedSize(46, 32)
             b.setFocusPolicy(Qt.NoFocus)
             b.setCursor(QCursor(Qt.PointingHandCursor))
 
+        # Connect signals
         btn_min.clicked.connect(lambda: self.window().showMinimized())
-        # زر التكبير متوقف - لا يفعل شيء
-        # btn_max.clicked.connect(self._toggle_max_restore)
+        # btn_max.clicked.connect(self._toggle_max_restore)  # Disabled per requirements
         btn_close.clicked.connect(lambda: self.window().close())
 
-    
         lay.addWidget(btn_min)
         lay.addWidget(btn_max)
         lay.addWidget(btn_close)
+
         return box
 
-
-
     def _toggle_max_restore(self):
+        """Toggle window maximize/restore"""
         w = self.window()
         if w.isMaximized():
-            w.showNormal()  
+            w.showNormal()
         else:
             w.showMaximized()
 
-
-    def _create_id_badge(self):
-        """Create ID badge with border"""
-        # If user_id is a UUID (long), show only last 5 characters
-        # Otherwise show the full ID
-        display_id = self.user_id
-        if len(str(self.user_id)) > 10:
-            # Extract last segment after last dash, or last 5 chars
-            if '-' in str(self.user_id):
-                display_id = str(self.user_id).split('-')[-1][:5]
-            else:
-                display_id = str(self.user_id)[-5:]
-
-        id_badge = QLabel(f"ID {display_id}")
-        id_badge.setFont(QFont("Noto Kufi Arabic", 9))
-        id_badge.setStyleSheet(f"""
-            QLabel {{
-                color: white;
-                background: transparent;
-                border: 1px solid rgba(255, 255, 255, 0.3);
-                border-radius: 3px;
-                padding: 3px 8px;
-            }}
-        """)
-        self._id_badge_widget = id_badge  # Store reference for updates
-        return id_badge
-
     def _create_search_bar(self):
-        """Create search bar with menu icon inside - matching Figma reference exactly"""
+        """
+        Create search bar with menu and icon
+
+        Figma: W=450px, H=32px, Border-radius=4px
+        Background: #1A3A5C (SEARCH_BG)
+        Layout: [Search Icon] [Input] [Menu Dropdown]
+        """
         search_container = QWidget()
-        search_container.setFixedWidth(450)
-        search_container.setFixedHeight(32)
+        search_container.setFixedWidth(NavbarDimensions.SEARCH_BAR_WIDTH)
+        search_container.setFixedHeight(NavbarDimensions.SEARCH_BAR_HEIGHT)
         search_container.setStyleSheet(f"""
             QWidget {{
                 background-color: {Colors.SEARCH_BG};
@@ -243,37 +255,51 @@ class Navbar(QFrame):
             }}
         """)
 
-        # Layout inside search container
         layout = QHBoxLayout(search_container)
         layout.setContentsMargins(10, 0, 10, 0)
         layout.setSpacing(8)
 
-        # Search icon button on the RIGHT (🔍) - clickable to trigger search
-        search_icon_btn = QPushButton("🔍")
+        # Search icon button (right side in RTL) - using search.png
+        search_icon_btn = QPushButton()
         search_icon_btn.setFixedSize(24, 24)
         search_icon_btn.setCursor(QCursor(Qt.PointingHandCursor))
-        search_icon_btn.setFont(QFont("Arial", 12))
+
+        # Load search icon
+        search_icon_path = Path(__file__).parent.parent.parent / "assets" / "images" / "search.png"
+        if search_icon_path.exists():
+            icon = QIcon(str(search_icon_path))
+            search_icon_btn.setIcon(icon)
+            search_icon_btn.setIconSize(QSize(16, 16))
+        else:
+            search_icon_btn.setText("🔍")
+            search_icon_btn.setFont(QFont("Arial", 12))
+
         search_icon_btn.setStyleSheet("""
             QPushButton {
                 background: transparent;
-                color: rgba(255, 255, 255, 0.6);
                 border: none;
                 padding: 0px;
             }
             QPushButton:hover {
-                color: white;
+                background: rgba(255, 255, 255, 0.1);
+                border-radius: 4px;
             }
             QPushButton:pressed {
-                color: rgba(255, 255, 255, 0.8);
+                background: rgba(255, 255, 255, 0.15);
             }
         """)
         search_icon_btn.clicked.connect(self._on_search)
 
-        # Search input
-        search_input = QLineEdit()
-        search_input.setPlaceholderText("ابحث عنالرمزأوالاسم...")
-        search_input.setFont(QFont("Noto Kufi Arabic", 10))
-        search_input.setStyleSheet("""
+        # Search input field
+        self.search_input = QLineEdit()
+        self.search_input.setPlaceholderText("ابحث عن الرمز أو الاسم...")
+
+        # Figma: IBM Plex Sans Arabic, 10px, Letter spacing 0
+        search_font = QFont(Typography.FONT_FAMILY_ARABIC, 10)
+        search_font.setLetterSpacing(QFont.AbsoluteSpacing, 0)
+        self.search_input.setFont(search_font)
+
+        self.search_input.setStyleSheet("""
             QLineEdit {
                 background: transparent;
                 color: white;
@@ -284,56 +310,75 @@ class Navbar(QFrame):
                 color: rgba(255, 255, 255, 0.5);
             }
         """)
-        search_input.returnPressed.connect(self._on_search)
-        search_input.textChanged.connect(self._on_search_text_changed)
+        self.search_input.returnPressed.connect(self._on_search)
 
-        # Dropdown menu button (▼) on the LEFT inside search field
-        menu_btn = QPushButton("▼")
+        # Menu dropdown button (left side in RTL) - using list.png
+        menu_btn = QPushButton()
         menu_btn.setFixedSize(20, 20)
         menu_btn.setCursor(QCursor(Qt.PointingHandCursor))
-        menu_btn.setFont(QFont("Arial", 10))
+
+        # Load list.png dropdown menu icon
+        list_icon_path = Path(__file__).parent.parent.parent / "assets" / "images" / "list.png"
+        if list_icon_path.exists():
+            list_icon = QIcon(str(list_icon_path))
+            menu_btn.setIcon(list_icon)
+            menu_btn.setIconSize(QSize(16, 16))
+        else:
+            menu_btn.setText("☰")
+            menu_btn.setFont(QFont("Arial", 12))
+
         menu_btn.setStyleSheet("""
             QPushButton {
                 background: transparent;
-                color: rgba(255, 255, 255, 0.7);
                 border: none;
                 padding: 0px;
             }
             QPushButton:hover {
-                color: white;
+                background: rgba(255, 255, 255, 0.1);
+                border-radius: 4px;
             }
         """)
         menu_btn.clicked.connect(self._on_search_menu_clicked)
+        self.search_menu_btn = menu_btn
 
-        # Add widgets to layout (RIGHT to LEFT in RTL)
+        # Add widgets (RTL layout)
         layout.addWidget(search_icon_btn)
-        layout.addWidget(search_input)
+        layout.addWidget(self.search_input)
         layout.addWidget(menu_btn)
 
-        self.search_input = search_input
-        self.search_menu_btn = menu_btn
-        self.search_mode = "name"  # Default: search by name
         return search_container
 
     def _create_tabs_bar(self):
-        """Create tabs bar - 48px height with custom tab buttons"""
+        """
+        Create tabs bar with navigation tabs
+
+        Figma Specs:
+        - Height: 48px
+        - Padding: 24px horizontal
+        - Gap between tabs: 24px
+        - Font: 14px (11pt) SemiBold, Line height 22px
+        - Active tab: Background=#DEEBFF, Text=#3B86FF, Border-radius=8px
+        """
         tabs_container = QFrame()
         tabs_container.setObjectName("tabs_bar")
-        tabs_container.setFixedHeight(48)
+        tabs_container.setFixedHeight(NavbarDimensions.TABS_BAR_HEIGHT)  # 48px
 
         layout = QHBoxLayout(tabs_container)
-        layout.setContentsMargins(24, 0, 24, 0)
-        layout.setSpacing(0)
+        # Vertical centering: (48 - 32) / 2 = 8px top/bottom
+        layout.setContentsMargins(
+            Spacing.NAVBAR_HORIZONTAL_PADDING, 8,  # 24px left, 8px top
+            Spacing.NAVBAR_HORIZONTAL_PADDING, 8   # 24px right, 8px bottom
+        )
+        layout.setSpacing(NavbarDimensions.TAB_GAP)  # 24px gap between tabs (Figma)
 
-        # Tab titles from Figma screenshot (RIGHT to LEFT as they appear visually)
-        # Starting with "المطالبات المكتملة" on the right
+        # Tab titles from Figma (RTL order)
         tab_titles = [
-            "المطالبات المكتملة",  # Completed Claims (rightmost) - ACTIVE by default
+            "المطالبات المكتملة",  # Completed Claims (active by default)
             "المسودة",             # Drafts
             "المباني",             # Buildings
             "الوحدات السكنية",     # Residential Units
             "التكرارات",           # Duplicates
-            "استيراد"     # Import Data (UC-003)
+            "استيراد"              # Import
         ]
 
         self.tab_buttons = []
@@ -342,7 +387,7 @@ class Navbar(QFrame):
             self.tab_buttons.append(tab_btn)
             layout.addWidget(tab_btn)
 
-        # Spacer to push tabs to the right (in RTL mode, this appears on the left)
+        # Spacer to push tabs to the right
         layout.addSpacerItem(QSpacerItem(40, 20, QSizePolicy.Expanding, QSizePolicy.Minimum))
 
         # Set first tab as active
@@ -351,135 +396,99 @@ class Navbar(QFrame):
         return tabs_container
 
     def _create_tab_button(self, title: str, index: int) -> QPushButton:
-        """Create a single tab button with exact Figma styling"""
+        """
+        Create a single tab button
+
+        Figma Specs:
+        - Height: 32px (Hug)
+        - Font: IBM Plex Sans Arabic, 14px (11pt in PyQt5), SemiBold (600)
+        - Line Height: 22px
+        - Padding: 5px (V) × 12px (H)
+        - Gap: 24px between tabs
+        - Border-radius: 8px
+        - Letter spacing: 0
+        """
         tab_btn = QPushButton(title)
-        tab_btn.setFixedHeight(48)
+        tab_btn.setFixedHeight(NavbarDimensions.TAB_HEIGHT)  # 32px
         tab_btn.setCursor(QCursor(Qt.PointingHandCursor))
-        tab_btn.setFont(QFont("Noto Kufi Arabic", 9))
+
+        # Use centralized font utility (DRY + eliminates conflicts)
+        # Figma: 14px SemiBold, Line height 22px, Letter spacing 0
+        tab_font = create_font(
+            size=NavbarDimensions.TAB_FONT_SIZE,  # 11pt (14px × 0.75)
+            weight=NavbarDimensions.TAB_FONT_WEIGHT,  # SemiBold (600)
+            letter_spacing=0
+        )
+        tab_btn.setFont(tab_font)
+
         tab_btn.setProperty("tab_index", index)
         tab_btn.setProperty("active", False)
-
-        # Initial style (inactive)
-        tab_btn.setStyleSheet("""
-            QPushButton {
-                background: transparent;
-                color: rgba(255, 255, 255, 0.7);
-                border: none;
-                padding: 0px 16px;
-                text-align: center;
-            }
-            QPushButton:hover {
-                color: rgba(255, 255, 255, 0.9);
-                background: rgba(255, 255, 255, 0.05);
-            }
-        """)
-
         tab_btn.clicked.connect(lambda: self._on_tab_clicked(index))
+
         return tab_btn
 
     def _set_active_tab(self, index: int):
-        """Set the active tab with background color from Figma"""
+        """
+        Set active tab with Figma styling
+
+        Figma Specs:
+        - Active: bg=#DEEBFF, text=#3B86FF, border-radius=8px, padding=5px 12px
+        - Inactive: bg=transparent, text=rgba(255,255,255,0.7), padding=5px 12px
+        - Font: 14px (11pt) SemiBold (600), Line height 22px
+        - Gap: 24px between tabs
+        """
         self.current_tab_index = index
 
         for i, btn in enumerate(self.tab_buttons):
             if i == index:
-                # Active tab style - background color #9BC2FF, text color #122C49
+                # Active tab - #DEEBFF background, #3B86FF text
                 btn.setProperty("active", True)
                 btn.setStyleSheet(f"""
                     QPushButton {{
-                        background-color: {Colors.BACKGROUND};
-                        color: #3890fd;
+                        background-color: #DEEBFF;
+                        color: #3B86FF;
                         border: none;
-                        border-radius: 8px;
-                        padding: 6px 12px;
+                        border-radius: {NavbarDimensions.TAB_BORDER_RADIUS}px;
+                        padding: {NavbarDimensions.TAB_PADDING_V}px {NavbarDimensions.TAB_PADDING_H}px;
                         text-align: center;
-                        font-weight: 600;
+                        line-height: {NavbarDimensions.TAB_LINE_HEIGHT}px;
                     }}
                     QPushButton:hover {{
-                        border: 1px solid #F0F7FF;
+                        background-color: #CDE0FF;
                     }}
                 """)
             else:
-                # Inactive tab style - transparent background, white text with opacity
+                # Inactive tab - Transparent background, white text with opacity
                 btn.setProperty("active", False)
-                btn.setStyleSheet("""
-                    QPushButton {
+                btn.setStyleSheet(f"""
+                    QPushButton {{
                         background: transparent;
                         color: rgba(255, 255, 255, 0.7);
                         border: none;
-                        padding: 6px 12px;
+                        padding: {NavbarDimensions.TAB_PADDING_V}px {NavbarDimensions.TAB_PADDING_H}px;
                         text-align: center;
-                    }
-                    QPushButton:hover {
+                        line-height: {NavbarDimensions.TAB_LINE_HEIGHT}px;
+                    }}
+                    QPushButton:hover {{
                         color: rgba(255, 255, 255, 0.9);
                         background: rgba(255, 255, 255, 0.05);
-                        border-radius: 4px;
-                    }
+                        border-radius: {NavbarDimensions.TAB_BORDER_RADIUS}px;
+                    }}
                 """)
 
     def _on_tab_clicked(self, index: int):
-        """Handle tab click"""
+        """Handle tab click event"""
         self._set_active_tab(index)
         self.tab_changed.emit(index)
 
-    def _apply_styles(self):
-        """Apply navbar background color"""
-        self.setStyleSheet(f"""
-            QFrame#shared_navbar {{
-                background-color: {Colors.NAVBAR_BG};
-                border: none;
-            }}
-            QFrame#navbar_top {{
-                background-color: {Colors.NAVBAR_BG};
-                border-radius: 16px;
-                
-                border: none;
-            }}
-            QFrame#tabs_bar {{
-                background-color: {Colors.NAVBAR_BG};
-                border: none;
-            }}
-            QWidget#window_controls {{ 
-                background: transparent; 
-            }}
-            QPushButton#win_btn, QPushButton#win_close {{
-                color: white;
-                background: transparent;
-                border: none;
-                font-size: 13px;
-                font-weight: 600;
-                border-radius: 8px;
-            }}
-            QPushButton#win_btn:hover {{
-                background: rgba(255,255,255,0.14);
-            }}
-            QPushButton#win_btn:pressed {{
-                background: rgba(255,255,255,0.22);
-            }}
-            QPushButton#win_close:hover {{
-                background: rgba(255,59,48,0.9);
-            }}
-            QPushButton#win_close:pressed {{
-                background: rgba(255, 59, 48, 0.75);
-            }}
-
-        """)
-
     def _on_search(self):
-        """Handle search request when user presses Enter"""
-        if hasattr(self, 'search_input'):
-            search_text = self.search_input.text()
-            if search_text.strip():
-                # Emit search with mode: (query, mode)
-                self.search_requested.emit(f"{self.search_mode}:{search_text}")
-
-    def _on_search_text_changed(self, text):
-        """Handle real-time search as user types"""
-        # يمكن استخدامها للبحث الفوري
-        pass
+        """Handle search request (Enter pressed or icon clicked)"""
+        search_text = self.search_input.text().strip()
+        if search_text:
+            self.search_requested.emit(f"{self.search_mode}:{search_text}")
 
     def _on_search_menu_clicked(self):
-        """Show menu to select search mode"""
+        """Show search mode selection menu"""
         from PyQt5.QtWidgets import QMenu
 
         menu = QMenu(self)
@@ -493,7 +502,7 @@ class Navbar(QFrame):
             QMenu::item {{
                 padding: 8px 20px;
                 color: #2C3E50;
-                font-family: 'Noto Kufi Arabic';
+                font-family: '{Typography.FONT_FAMILY_ARABIC}';
                 font-size: 11px;
             }}
             QMenu::item:selected {{
@@ -503,17 +512,19 @@ class Navbar(QFrame):
             }}
         """)
 
-        # إضافة خيارات البحث
+        # Search mode options
         name_action = menu.addAction("🔍 بحث بالاسم")
         id_action = menu.addAction("🔢 بحث برقم المطالبة")
         building_action = menu.addAction("🏢 بحث بالمبنى")
 
-        # عرض القائمة
-        action = menu.exec_(self.search_menu_btn.mapToGlobal(
-            self.search_menu_btn.rect().bottomLeft()
-        ))
+        # Show menu
+        action = menu.exec_(
+            self.search_menu_btn.mapToGlobal(
+                self.search_menu_btn.rect().bottomLeft()
+            )
+        )
 
-        # تحديد طريقة البحث بناءً على الاختيار
+        # Update search mode
         if action == name_action:
             self.search_mode = "name"
             self.search_input.setPlaceholderText("ابحث عن اسم المستلم...")
@@ -524,8 +535,54 @@ class Navbar(QFrame):
             self.search_mode = "building"
             self.search_input.setPlaceholderText("ابحث عن المبنى...")
 
+    def _apply_styles(self):
+        """Apply navbar background and component styles"""
+        self.setStyleSheet(f"""
+            QFrame#navbar {{
+                background-color: {Colors.NAVBAR_BG};
+                border: none;
+            }}
+            QFrame#navbar_top {{
+                background-color: {Colors.NAVBAR_BG};
+                border-radius: 16px;
+                border: none;
+            }}
+            QFrame#tabs_bar {{
+                background-color: {Colors.NAVBAR_BG};
+                border: none;
+            }}
+            QWidget#window_controls {{
+                background: transparent;
+            }}
+            QPushButton#win_btn, QPushButton#win_close {{
+                color: white;
+                background: transparent;
+                border: none;
+                font-size: 14px;
+                font-weight: 400;
+                line-height: 16px;
+                border-radius: 6px;
+            }}
+            QPushButton#win_btn:hover {{
+                background: rgba(255, 255, 255, 0.1);
+            }}
+            QPushButton#win_btn:pressed {{
+                background: rgba(255, 255, 255, 0.15);
+            }}
+            QPushButton#win_close:hover {{
+                background: rgba(255, 59, 48, 0.90);
+                color: white;
+            }}
+            QPushButton#win_close:pressed {{
+                background: rgba(255, 59, 48, 0.75);
+                color: white;
+            }}
+        """)
+
+    # Public API methods
+
     def set_current_tab(self, index: int):
-        """Set the active tab programmatically"""
+        """Set active tab programmatically"""
         if 0 <= index < len(self.tab_buttons):
             self._set_active_tab(index)
 
@@ -536,17 +593,21 @@ class Navbar(QFrame):
     def set_user_id(self, user_id: str):
         """Update user ID display"""
         self.user_id = user_id
-        # Find and update ID badge
-        for child in self.findChildren(QLabel):
-            if "ID" in child.text():
-                child.setText(f"ID {user_id}")
-                break
+        if hasattr(self, 'id_badge'):
+            self.id_badge.set_user_id(user_id)
+
+    def _on_logout_requested(self):
+        """Handle logout request from ID badge dropdown"""
+        self.logout_requested.emit()
 
 
 class SimpleNavbar(QFrame):
     """
     Simplified Navbar without tabs
-    For pages that don't need tab navigation (e.g., detail pages, forms)
+    For pages that don't need tab navigation
+
+    Usage:
+        navbar = SimpleNavbar(title="تفاصيل المطالبة", user_id="12345")
     """
 
     search_requested = pyqtSignal(str)
@@ -554,6 +615,7 @@ class SimpleNavbar(QFrame):
 
     def __init__(self, title="", user_id="12345", show_search=True, show_back=False, parent=None):
         super().__init__(parent)
+
         self.setObjectName("simple_navbar")
         self.user_id = user_id
         self.title = title
@@ -569,7 +631,7 @@ class SimpleNavbar(QFrame):
         layout.setContentsMargins(24, 0, 24, 0)
         layout.setSpacing(16)
 
-        # Back button (if needed)
+        # Back button
         if self.show_back:
             back_btn = QPushButton("←")
             back_btn.setFixedSize(40, 40)
@@ -590,36 +652,26 @@ class SimpleNavbar(QFrame):
             layout.addWidget(back_btn)
 
         # Logo
-        logo = QLabel("UN-HABITAT")
-        logo.setFont(QFont("Noto Kufi Arabic", 14, QFont.Bold))
-        logo.setStyleSheet("color: white; background: transparent;")
+        logo = LogoWidget(height=20)
         layout.addWidget(logo)
 
-        # User badge
-        user_badge = QLabel(f"ID {self.user_id}")
-        user_badge.setFont(QFont("Noto Kufi Arabic", 13))
-        user_badge.setStyleSheet("""
-            QLabel {
-                color: white;
-                background: transparent;
-                border: 1px solid rgba(255, 255, 255, 0.3);
-                border-radius: 4px;
-                padding: 4px 12px;
-            }
-        """)
-        layout.addWidget(user_badge)
+        # ID Badge
+        id_badge = IDBadgeWidget(user_id=self.user_id, font_size=13)
+        layout.addWidget(id_badge)
 
-        # Title (if provided)
+        # Title
         if self.title:
             title_label = QLabel(self.title)
-            title_label.setFont(QFont("Noto Kufi Arabic", 16, QFont.DemiBold))
+            title_font = QFont(Typography.FONT_FAMILY_ARABIC, 16, QFont.DemiBold)
+            title_font.setLetterSpacing(QFont.AbsoluteSpacing, 0)
+            title_label.setFont(title_font)
             title_label.setStyleSheet("color: white; background: transparent;")
             layout.addWidget(title_label)
 
         # Spacer
         layout.addSpacerItem(QSpacerItem(40, 20, QSizePolicy.Expanding, QSizePolicy.Minimum))
 
-        # Search bar (if needed)
+        # Search bar
         if self.show_search:
             search_widget = QWidget()
             search_widget.setFixedWidth(320)
@@ -628,7 +680,11 @@ class SimpleNavbar(QFrame):
 
             self.search_input = QLineEdit()
             self.search_input.setPlaceholderText("بحث...")
-            self.search_input.setFont(QFont("Noto Kufi Arabic", 13))
+
+            search_font = QFont(Typography.FONT_FAMILY_ARABIC, 13)
+            search_font.setLetterSpacing(QFont.AbsoluteSpacing, 0)
+            self.search_input.setFont(search_font)
+
             self.search_input.setFixedHeight(36)
             self.search_input.setStyleSheet(f"""
                 QLineEdit {{
@@ -649,7 +705,7 @@ class SimpleNavbar(QFrame):
         self.setFixedHeight(60)
 
     def _apply_styles(self):
-        """Apply styles"""
+        """Apply simple navbar styles"""
         self.setStyleSheet(f"""
             QFrame#simple_navbar {{
                 background-color: {Colors.NAVBAR_BG};
@@ -658,8 +714,8 @@ class SimpleNavbar(QFrame):
         """)
 
     def _on_search(self):
-        """Handle search"""
+        """Handle search event"""
         if self.show_search and hasattr(self, 'search_input'):
-            search_text = self.search_input.text()
-            if search_text.strip():
+            search_text = self.search_input.text().strip()
+            if search_text:
                 self.search_requested.emit(search_text)
