@@ -17,6 +17,7 @@ from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QPixmap, QFont
 
 from ..design_system import NavbarDimensions
+from ..font_utils import create_font, FontManager
 
 
 class LogoWidget(QLabel):
@@ -69,7 +70,7 @@ class LogoWidget(QLabel):
             self.setText(self.fallback_text)
 
             # Fallback font styling
-            font = QFont("IBM Plex Sans Arabic", 10, QFont.Bold)
+            font = create_font(size=FontManager.SIZE_BODY, weight=QFont.Bold, letter_spacing=0)
             self.setFont(font)
 
         # Transparent background

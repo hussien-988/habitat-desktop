@@ -9,8 +9,9 @@ Implements DRY, SOLID, Clean Code principles.
 from PyQt5.QtWidgets import QPushButton
 from PyQt5.QtCore import Qt, QSize
 
-from ..design_system import Colors, ButtonDimensions
+from ..design_system import ButtonDimensions
 from ..font_utils import create_font, FontManager
+from ..style_manager import StyleManager
 from .icon import Icon
 
 
@@ -67,27 +68,8 @@ class PrimaryButton(QPushButton):
         )
         self.setFont(btn_font)
 
-        # Apply colors and styling via QSS (works reliably for non-font properties)
-        self.setStyleSheet(f"""
-            QPushButton#PrimaryButton {{
-                background-color: {Colors.PRIMARY_BLUE};
-                color: {Colors.PRIMARY_WHITE};
-                border: none;
-                border-radius: {ButtonDimensions.PRIMARY_BORDER_RADIUS}px;
-                padding: {ButtonDimensions.PRIMARY_PADDING_V}px {ButtonDimensions.PRIMARY_PADDING_H}px;
-                text-align: center;
-            }}
-            QPushButton#PrimaryButton:hover {{
-                background-color: {ButtonDimensions.PRIMARY_HOVER_BG};
-            }}
-            QPushButton#PrimaryButton:pressed {{
-                background-color: {ButtonDimensions.PRIMARY_PRESSED_BG};
-            }}
-            QPushButton#PrimaryButton:disabled {{
-                background-color: {ButtonDimensions.PRIMARY_DISABLED_BG};
-                color: {ButtonDimensions.PRIMARY_DISABLED_TEXT};
-            }}
-        """)
+        # Apply colors and styling via StyleManager (Single Source of Truth)
+        self.setStyleSheet(StyleManager.button_primary())
 
     def _load_icon(self):
         """Load icon from assets folder using reusable Icon component (DRY + SOLID)."""

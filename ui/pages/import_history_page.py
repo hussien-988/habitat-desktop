@@ -16,6 +16,8 @@ from app.config import Config
 from repositories.database import Database
 from ui.components.commit_report_dialog import CommitReportDialog
 from ui.components.toast import Toast
+from ui.font_utils import create_font, FontManager
+from ui.style_manager import StyleManager
 from datetime import datetime
 
 
@@ -52,26 +54,16 @@ class ImportHistoryPage(QWidget):
         header_layout = QHBoxLayout()
 
         title_label = QLabel("📜 سجل الاستيرادات")
-        title_label.setFont(QFont("Segoe UI", 18, QFont.Bold))
+        # Use centralized font utility: 18pt Bold
+        title_font = create_font(size=FontManager.SIZE_TITLE, weight=QFont.Bold, letter_spacing=0)
+        title_label.setFont(title_font)
         header_layout.addWidget(title_label)
 
         header_layout.addStretch()
 
         # Refresh button
         refresh_btn = QPushButton("🔄 تحديث")
-        refresh_btn.setStyleSheet(f"""
-            QPushButton {{
-                background-color: {Config.PRIMARY_COLOR};
-                color: white;
-                border: none;
-                border-radius: 6px;
-                padding: 8px 16px;
-                font-weight: 600;
-            }}
-            QPushButton:hover {{
-                background-color: #1E40AF;
-            }}
-        """)
+        refresh_btn.setStyleSheet(StyleManager.button_primary())
         refresh_btn.clicked.connect(self.refresh)
         header_layout.addWidget(refresh_btn)
 
@@ -208,12 +200,16 @@ class ImportHistoryPage(QWidget):
 
         value_label = QLabel(value)
         value_label.setObjectName("stat_value")
-        value_label.setFont(QFont("Segoe UI", 22, QFont.Bold))
+        # 22pt Bold for stat values
+        value_font = create_font(size=22, weight=QFont.Bold, letter_spacing=0)
+        value_label.setFont(value_font)
         value_label.setStyleSheet(f"color: {color};")
         card_layout.addWidget(value_label)
 
         title_label = QLabel(title)
-        title_label.setFont(QFont("Segoe UI", 9))
+        # 9pt Normal for stat titles
+        title_font = create_font(size=9, weight=QFont.Normal, letter_spacing=0)
+        title_label.setFont(title_font)
         title_label.setStyleSheet(f"color: {Config.TEXT_LIGHT};")
         card_layout.addWidget(title_label)
 
@@ -351,7 +347,9 @@ class ImportHistoryPage(QWidget):
             # Package ID
             package_item = QTableWidgetItem(item['package_id'])
             package_item.setTextAlignment(Qt.AlignCenter)
-            package_item.setFont(QFont("Courier New", 9))
+            # 9pt monospace for package IDs
+            package_font = create_font(size=9, weight=QFont.Normal, letter_spacing=0)
+            package_item.setFont(package_font)
             self.history_table.setItem(row, 1, package_item)
 
             # Filename
@@ -374,7 +372,9 @@ class ImportHistoryPage(QWidget):
                 'failed': QColor(Config.ERROR_COLOR)
             }.get(status, QColor(Config.TEXT_COLOR))
             status_item.setForeground(status_color)
-            status_item.setFont(QFont("Segoe UI", 10, QFont.Bold))
+            # 10pt Bold for status
+            status_font = create_font(size=FontManager.SIZE_BODY, weight=QFont.Bold, letter_spacing=0)
+            status_item.setFont(status_font)
             self.history_table.setItem(row, 3, status_item)
 
             # Imported count

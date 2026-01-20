@@ -12,6 +12,7 @@ from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QFont
 
 from app.config import Config
+from ui.font_utils import create_font, FontManager
 
 
 class VocabularyIncompatibilityDialog(QDialog):
@@ -62,12 +63,12 @@ class VocabularyIncompatibilityDialog(QDialog):
         title_layout = QVBoxLayout()
 
         title = QLabel("المفردات غير متوافقة")
-        title.setFont(QFont("Segoe UI", 16, QFont.Bold))
+        title.setFont(create_font(size=16, weight=QFont.Bold, letter_spacing=0))
         title.setStyleSheet("color: #92400E;")
         title_layout.addWidget(title)
 
         subtitle = QLabel(f"تحتوي الحزمة على {len(self.incompatible_vocabs)} مفردات قديمة تحتاج للتحديث")
-        subtitle.setFont(QFont("Segoe UI", 11))
+        subtitle.setFont(create_font(size=11, weight=FontManager.WEIGHT_REGULAR, letter_spacing=0))
         subtitle.setStyleSheet("color: #B45309;")
         title_layout.addWidget(subtitle)
 
@@ -78,7 +79,7 @@ class VocabularyIncompatibilityDialog(QDialog):
 
         # Package Information
         pkg_label = QLabel("📦 معلومات الحزمة:")
-        pkg_label.setFont(QFont("Segoe UI", 10, QFont.Bold))
+        pkg_label.setFont(create_font(size=FontManager.SIZE_BODY, weight=QFont.Bold, letter_spacing=0))
         layout.addWidget(pkg_label)
 
         pkg_frame = QFrame()
@@ -102,7 +103,7 @@ class VocabularyIncompatibilityDialog(QDialog):
         for label_text, value_text in pkg_items:
             row = QHBoxLayout()
             label = QLabel(label_text)
-            label.setFont(QFont("Segoe UI", 9, QFont.Bold))
+            label.setFont(create_font(size=9, weight=QFont.Bold, letter_spacing=0))
             label.setStyleSheet(f"color: {Config.TEXT_LIGHT};")
             label.setMinimumWidth(120)
             row.addWidget(label)
@@ -117,7 +118,7 @@ class VocabularyIncompatibilityDialog(QDialog):
 
         # Incompatible Vocabularies Table
         table_label = QLabel("📋 المفردات التي تحتاج للتحديث:")
-        table_label.setFont(QFont("Segoe UI", 10, QFont.Bold))
+        table_label.setFont(create_font(size=FontManager.SIZE_BODY, weight=QFont.Bold, letter_spacing=0))
         layout.addWidget(table_label)
 
         self.vocab_table = QTableWidget()
@@ -161,7 +162,7 @@ class VocabularyIncompatibilityDialog(QDialog):
         for i, vocab in enumerate(self.incompatible_vocabs):
             # Vocabulary name
             name_item = QTableWidgetItem(vocab.get('name', 'N/A'))
-            name_item.setFont(QFont("Segoe UI", 9, QFont.Bold))
+            name_item.setFont(create_font(size=9, weight=QFont.Bold, letter_spacing=0))
             self.vocab_table.setItem(i, 0, name_item)
 
             # Current version
@@ -194,7 +195,7 @@ class VocabularyIncompatibilityDialog(QDialog):
 
         # Impact Assessment
         impact_label = QLabel("📊 تقييم التأثير:")
-        impact_label.setFont(QFont("Segoe UI", 10, QFont.Bold))
+        impact_label.setFont(create_font(size=FontManager.SIZE_BODY, weight=QFont.Bold, letter_spacing=0))
         layout.addWidget(impact_label)
 
         impact_text = self._generate_impact_assessment()
@@ -211,7 +212,7 @@ class VocabularyIncompatibilityDialog(QDialog):
 
         # Recommended Actions
         actions_label = QLabel("💡 الإجراءات الموصى بها:")
-        actions_label.setFont(QFont("Segoe UI", 10, QFont.Bold))
+        actions_label.setFont(create_font(size=FontManager.SIZE_BODY, weight=QFont.Bold, letter_spacing=0))
         layout.addWidget(actions_label)
 
         actions_text = (

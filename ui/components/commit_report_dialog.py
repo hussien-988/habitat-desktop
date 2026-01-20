@@ -13,6 +13,7 @@ from PyQt5.QtGui import QFont
 from datetime import datetime
 
 from app.config import Config
+from ui.font_utils import create_font, FontManager
 
 
 class CommitReportDialog(QDialog):
@@ -71,14 +72,14 @@ class CommitReportDialog(QDialog):
 
         title_text = "اكتمل الاستيراد بنجاح!" if success else "اكتمل الاستيراد مع ملاحظات"
         title = QLabel(title_text)
-        title.setFont(QFont("Segoe UI", 18, QFont.Bold))
+        title.setFont(create_font(size=18, weight=QFont.Bold, letter_spacing=0))
         title.setStyleSheet(f"color: {header_color};")
         title_layout.addWidget(title)
 
         summary = QLabel(
             f"تم استيراد {self.commit_result.get('imported', 0)} سجل بنجاح"
         )
-        summary.setFont(QFont("Segoe UI", 12))
+        summary.setFont(create_font(size=12, weight=FontManager.WEIGHT_REGULAR, letter_spacing=0))
         title_layout.addWidget(summary)
 
         timestamp = QLabel(
@@ -116,7 +117,7 @@ class CommitReportDialog(QDialog):
 
         # Imported Records Breakdown
         breakdown_group = QGroupBox("📊 تفصيل السجلات المستوردة حسب النوع")
-        breakdown_group.setFont(QFont("Segoe UI", 10, QFont.Bold))
+        breakdown_group.setFont(create_font(size=FontManager.SIZE_BODY, weight=QFont.Bold, letter_spacing=0))
         breakdown_group.setStyleSheet(f"""
             QGroupBox {{
                 border: 2px solid {Config.BORDER_COLOR};
@@ -155,11 +156,11 @@ class CommitReportDialog(QDialog):
             }.get(record_type, record_type)
 
             label = QLabel(f"{icon} {type_ar}:")
-            label.setFont(QFont("Segoe UI", 10))
+            label.setFont(create_font(size=FontManager.SIZE_BODY, weight=FontManager.WEIGHT_REGULAR, letter_spacing=0))
             breakdown_layout.addWidget(label, row, 0)
 
             value = QLabel(f"{count} سجل")
-            value.setFont(QFont("Segoe UI", 10, QFont.Bold))
+            value.setFont(create_font(size=FontManager.SIZE_BODY, weight=QFont.Bold, letter_spacing=0))
             value.setStyleSheet(f"color: {Config.PRIMARY_COLOR};")
             breakdown_layout.addWidget(value, row, 1)
 
@@ -169,7 +170,7 @@ class CommitReportDialog(QDialog):
 
         # Archive and Audit Information
         archive_group = QGroupBox("🗄️ معلومات الأرشفة وسجل التدقيق")
-        archive_group.setFont(QFont("Segoe UI", 10, QFont.Bold))
+        archive_group.setFont(create_font(size=FontManager.SIZE_BODY, weight=QFont.Bold, letter_spacing=0))
         archive_group.setStyleSheet(f"""
             QGroupBox {{
                 border: 2px solid {Config.BORDER_COLOR};
@@ -198,7 +199,7 @@ class CommitReportDialog(QDialog):
             row_layout = QHBoxLayout()
 
             label = QLabel(label_text)
-            label.setFont(QFont("Segoe UI", 9, QFont.Bold))
+            label.setFont(create_font(size=9, weight=QFont.Bold, letter_spacing=0))
             label.setStyleSheet(f"color: {Config.TEXT_LIGHT};")
             label.setMinimumWidth(180)
             row_layout.addWidget(label)
@@ -214,7 +215,7 @@ class CommitReportDialog(QDialog):
 
         # Full Report Text (for export)
         report_label = QLabel("📄 التقرير الكامل:")
-        report_label.setFont(QFont("Segoe UI", 10, QFont.Bold))
+        report_label.setFont(create_font(size=FontManager.SIZE_BODY, weight=QFont.Bold, letter_spacing=0))
         layout.addWidget(report_label)
 
         self.report_text = QTextEdit()
@@ -249,7 +250,7 @@ class CommitReportDialog(QDialog):
         buttons_frame_layout = QVBoxLayout(buttons_frame)
 
         buttons_label = QLabel("📋 خيارات التقرير:")
-        buttons_label.setFont(QFont("Segoe UI", 11, QFont.Bold))
+        buttons_label.setFont(create_font(size=11, weight=QFont.Bold, letter_spacing=0))
         buttons_frame_layout.addWidget(buttons_label)
 
         button_layout = QHBoxLayout()
@@ -345,12 +346,12 @@ class CommitReportDialog(QDialog):
         card_layout = QVBoxLayout(card)
 
         value_label = QLabel(value)
-        value_label.setFont(QFont("Segoe UI", 24, QFont.Bold))
+        value_label.setFont(create_font(size=24, weight=QFont.Bold, letter_spacing=0))
         value_label.setStyleSheet(f"color: {color};")
         card_layout.addWidget(value_label)
 
         title_label = QLabel(title)
-        title_label.setFont(QFont("Segoe UI", 9))
+        title_label.setFont(create_font(size=9, weight=FontManager.WEIGHT_REGULAR, letter_spacing=0))
         title_label.setStyleSheet("color: #6B7280;")
         card_layout.addWidget(title_label)
 

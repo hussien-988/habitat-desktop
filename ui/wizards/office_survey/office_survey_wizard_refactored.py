@@ -282,7 +282,7 @@ class OfficeSurveyWizard(BaseWizard):
 
         # Title (matching old wizard)
         logo_label = QLabel("اضافة حالة جديدة")
-        logo_label.setStyleSheet("font-family: 'Noto Kufi Arabic';font-size: 13pt; font-weight: bold; color: #000000;")
+        logo_label.setStyleSheet("font-family: 'IBM Plex Sans Arabic';font-size: 13pt; font-weight: bold; color: #000000;")
         header_layout.addWidget(logo_label)
 
         header_layout.addStretch()

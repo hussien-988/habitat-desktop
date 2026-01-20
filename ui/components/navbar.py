@@ -28,6 +28,7 @@ from PyQt5.QtGui import QFont, QCursor, QIcon
 
 from ..design_system import Colors, NavbarDimensions, Typography, Spacing
 from ..font_utils import create_font, FontManager
+from ..style_manager import StyleManager
 from .logo import LogoWidget
 from .id_badge import IDBadgeWidget
 
@@ -272,7 +273,8 @@ class Navbar(QFrame):
             search_icon_btn.setIconSize(QSize(16, 16))
         else:
             search_icon_btn.setText("🔍")
-            search_icon_btn.setFont(QFont("Arial", 12))
+            fallback_font = create_font(size=9, weight=QFont.Normal)  # 12px × 0.75 = 9pt
+            search_icon_btn.setFont(fallback_font)
 
         search_icon_btn.setStyleSheet("""
             QPushButton {
@@ -295,8 +297,8 @@ class Navbar(QFrame):
         self.search_input.setPlaceholderText("ابحث عن الرمز أو الاسم...")
 
         # Figma: IBM Plex Sans Arabic, 10px, Letter spacing 0
-        search_font = QFont(Typography.FONT_FAMILY_ARABIC, 10)
-        search_font.setLetterSpacing(QFont.AbsoluteSpacing, 0)
+        # Font conversion: 10px × 0.75 = 7.5pt ≈ 8pt
+        search_font = create_font(size=8, weight=QFont.Normal, letter_spacing=0)
         self.search_input.setFont(search_font)
 
         self.search_input.setStyleSheet("""
@@ -325,7 +327,8 @@ class Navbar(QFrame):
             menu_btn.setIconSize(QSize(16, 16))
         else:
             menu_btn.setText("☰")
-            menu_btn.setFont(QFont("Arial", 12))
+            fallback_font = create_font(size=9, weight=QFont.Normal)  # 12px × 0.75 = 9pt
+            menu_btn.setFont(fallback_font)
 
         menu_btn.setStyleSheet("""
             QPushButton {
@@ -635,7 +638,8 @@ class SimpleNavbar(QFrame):
         if self.show_back:
             back_btn = QPushButton("←")
             back_btn.setFixedSize(40, 40)
-            back_btn.setFont(QFont("Arial", 20))
+            back_font = create_font(size=15, weight=QFont.Normal)  # 20px × 0.75 = 15pt
+            back_btn.setFont(back_font)
             back_btn.setCursor(QCursor(Qt.PointingHandCursor))
             back_btn.setStyleSheet("""
                 QPushButton {
@@ -662,8 +666,8 @@ class SimpleNavbar(QFrame):
         # Title
         if self.title:
             title_label = QLabel(self.title)
-            title_font = QFont(Typography.FONT_FAMILY_ARABIC, 16, QFont.DemiBold)
-            title_font.setLetterSpacing(QFont.AbsoluteSpacing, 0)
+            # 16px × 0.75 = 12pt
+            title_font = create_font(size=12, weight=QFont.DemiBold, letter_spacing=0)
             title_label.setFont(title_font)
             title_label.setStyleSheet("color: white; background: transparent;")
             layout.addWidget(title_label)
@@ -681,9 +685,9 @@ class SimpleNavbar(QFrame):
             self.search_input = QLineEdit()
             self.search_input.setPlaceholderText("بحث...")
 
-            search_font = QFont(Typography.FONT_FAMILY_ARABIC, 13)
-            search_font.setLetterSpacing(QFont.AbsoluteSpacing, 0)
-            self.search_input.setFont(search_font)
+            # 13px × 0.75 = 9.75pt ≈ 10pt
+            simple_search_font = create_font(size=10, weight=QFont.Normal, letter_spacing=0)
+            self.search_input.setFont(simple_search_font)
 
             self.search_input.setFixedHeight(36)
             self.search_input.setStyleSheet(f"""

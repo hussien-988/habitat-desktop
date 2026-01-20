@@ -18,6 +18,8 @@ from repositories.database import Database
 from services.auth_service import AuthService
 from utils.i18n import I18n
 from utils.logger import get_logger
+from ui.font_utils import create_font, FontManager
+from ui.design_system import Colors
 
 logger = get_logger(__name__)
 
@@ -69,17 +71,17 @@ class LoginPage(QWidget):
         blue_height = int(height * 0.55)
 
         # Top section - Primary blue
-        painter.fillRect(0, 33, width, blue_height, QColor("#3890DF"))
+        painter.fillRect(0, 33, width, blue_height, QColor(Colors.PRIMARY_BLUE))
 
         # Bottom section - Background color #F0F7FF
-        painter.fillRect(0, 33 + blue_height, width, height - (33 + blue_height), QColor("#F0F7FF"))
+        painter.fillRect(0, 33 + blue_height, width, height - (33 + blue_height), QColor(Colors.BACKGROUND))
 
     def _setup_ui(self):
         """Setup the login UI - Professional Stack Layout"""
         # Set background color for the entire page
         self.setStyleSheet(f"""
             QWidget#LoginPage {{
-                background-color: #F0F7FF;
+                background-color: {Colors.BACKGROUND};
             }}
         """)
         self.setObjectName("LoginPage")
@@ -216,10 +218,7 @@ class LoginPage(QWidget):
         title = QLabel("تسجيل الدخول إلى الحساب")
         title.setAlignment(Qt.AlignCenter)
         title.setMaximumWidth(315)  # Figma: W=315 Fill
-        title_font = QFont("IBM Plex Sans Arabic")
-        title_font.setPixelSize(18)  # Figma: 18px exact
-        title_font.setBold(True)
-        title_font.setLetterSpacing(QFont.AbsoluteSpacing, 0)  # Letter spacing: 0px
+        title_font = create_font(size=FontManager.SIZE_TITLE, weight=QFont.Bold, letter_spacing=0)
         title.setFont(title_font)
         title.setStyleSheet("color: #172A47; background: transparent;")  # Grey/Dark - 900 (s-text)
         card_layout.addWidget(title,0, Qt.AlignCenter)
@@ -232,10 +231,7 @@ class LoginPage(QWidget):
         subtitle.setAlignment(Qt.AlignCenter)
         subtitle.setWordWrap(False)  # Single line only
         subtitle.setMinimumWidth(315)  # Ensure minimum width for single line
-        subtitle_font = QFont("IBM Plex Sans Arabic")
-        subtitle_font.setPixelSize(14)  # Figma: 14px exact
-        subtitle_font.setWeight(QFont.DemiBold)  # Weight: DemiBold
-        subtitle_font.setLetterSpacing(QFont.AbsoluteSpacing, 0)  # Letter spacing: 0px
+        subtitle_font = create_font(size=14, weight=QFont.DemiBold, letter_spacing=0)
         subtitle.setFont(subtitle_font)
         subtitle.setStyleSheet("color: #86909B; background: transparent;")  # Grey/Dark - 500 (s-text)-(nav)
         card_layout.addWidget(subtitle,0, Qt.AlignCenter)
@@ -245,10 +241,7 @@ class LoginPage(QWidget):
 
         # Username label
         username_label = QLabel("اسم المستخدم")
-        username_label_font = QFont("")
-        username_label_font.setPixelSize(14)  # Figma: 14px
-        username_label_font.setWeight(QFont.DemiBold)
-        username_label_font.setLetterSpacing(QFont.AbsoluteSpacing, 0)  # Letter spacing: 0px
+        username_label_font = create_font(size=14, weight=QFont.DemiBold, letter_spacing=0)
         username_label.setFont(username_label_font)
         username_label.setStyleSheet("color: #212B36; background: transparent;")
         card_layout.addWidget(username_label)
@@ -260,9 +253,7 @@ class LoginPage(QWidget):
         self.username_input.setPlaceholderText("أدخل اسم المستخدم")
         self.username_input.setLayoutDirection(Qt.RightToLeft)
         self.username_input.setFixedHeight(40)  # Figma appropriate height
-        username_input_font = QFont("IBM Plex Sans Arabic")
-        username_input_font.setPixelSize(13)  # Figma: ~14-16px input text
-        username_input_font.setLetterSpacing(QFont.AbsoluteSpacing, 0)  # Letter spacing: 0px
+        username_input_font = create_font(size=13, weight=FontManager.WEIGHT_REGULAR, letter_spacing=0)
         self.username_input.setFont(username_input_font)
         self.username_input.setStyleSheet("""
             QLineEdit {
@@ -288,10 +279,7 @@ class LoginPage(QWidget):
 
         # Password label
         password_label = QLabel("كلمة المرور")
-        password_label_font = QFont("IBM Plex Sans Arabic")
-        password_label_font.setPixelSize(14)  # Figma: 14px
-        password_label_font.setWeight(QFont.DemiBold)
-        password_label_font.setLetterSpacing(QFont.AbsoluteSpacing, 0)  # Letter spacing: 0px
+        password_label_font = create_font(size=14, weight=QFont.DemiBold, letter_spacing=0)
         password_label.setFont(password_label_font)
         password_label.setStyleSheet("color: #212B36; background: transparent;")
         card_layout.addWidget(password_label)
@@ -302,9 +290,7 @@ class LoginPage(QWidget):
         self.password_input.setPlaceholderText("أدخل كلمة المرور")
         self.password_input.setEchoMode(QLineEdit.Password)
         self.password_input.setFixedHeight(40)  # Figma appropriate height
-        password_input_font = QFont("IBM Plex Sans Arabic")
-        password_input_font.setPixelSize(13)  # Figma: ~14-16px input text
-        password_input_font.setLetterSpacing(QFont.AbsoluteSpacing, 0)  # Letter spacing: 0px
+        password_input_font = create_font(size=13, weight=FontManager.WEIGHT_REGULAR, letter_spacing=0)
         self.password_input.setFont(password_input_font)
 
 
@@ -349,10 +335,7 @@ class LoginPage(QWidget):
         self.login_btn.setFixedHeight(48)  # Figma: ~50px button height
         self.login_btn.setFixedWidth(411)  # Card width (475) - Padding (32×2) = 411
         self.login_btn.setCursor(Qt.PointingHandCursor)
-        button_font = QFont("IBM Plex Sans Arabic")
-        button_font.setPixelSize(16)  # Figma: 16px button text
-        button_font.setBold(True)
-        button_font.setLetterSpacing(QFont.AbsoluteSpacing, 0)  # Letter spacing: 0px
+        button_font = create_font(size=16, weight=QFont.Bold, letter_spacing=0)
         self.login_btn.setFont(button_font)
         self.login_btn.setStyleSheet("""
             QPushButton {
@@ -496,7 +479,7 @@ class LoginPage(QWidget):
         else:
             # Fallback to text if image not found
             logo_label.setText("UN-HABITAT")
-            logo_label.setFont(QFont("Noto Kufi Arabic", 9, QFont.Bold))
+            logo_label.setFont(create_font(size=9, weight=QFont.Bold, letter_spacing=0))
             logo_label.setStyleSheet("color: #0072BC; background: transparent;")
 
         lay.addWidget(logo_label)
