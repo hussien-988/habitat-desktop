@@ -16,7 +16,7 @@ Example for Production:
 
 from pathlib import Path
 from dataclasses import dataclass
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 
 
 @dataclass
@@ -52,7 +52,7 @@ class Config:
     # None = use local tile server (development)
     # For production: set to external tile server URL
     # Example: "https://tiles.yourserver.com/{z}/{x}/{y}.png"
-    TILE_SERVER_URL: str = None
+    TILE_SERVER_URL: Optional[str] = None
 
     # Paths
     PROJECT_ROOT: Path = Path(__file__).parent.parent

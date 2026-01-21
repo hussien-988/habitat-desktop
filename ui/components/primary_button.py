@@ -64,7 +64,7 @@ class PrimaryButton(QPushButton):
         btn_font = create_font(
             size=FontManager.SIZE_BODY,  # 10pt
             weight=FontManager.WEIGHT_SEMIBOLD,  # 600
-            letter_spacing=0
+            letter_spacing=0,
         )
         self.setFont(btn_font)
 

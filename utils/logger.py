@@ -19,11 +19,9 @@ def setup_logger() -> logging.Logger:
     """
     global _logger
 
-    # Import here to avoid circular imports
-    from app.config import Config
-
-    # Create logs directory
-    Config.LOGS_DIR.mkdir(parents=True, exist_ok=True)
+    # Use direct path instead of Config to avoid circular imports
+    logs_dir = Path(__file__).parent.parent / "logs"
+    logs_dir.mkdir(parents=True, exist_ok=True)
 
     # Create logger
     logger = logging.getLogger("trrcms")
@@ -33,10 +31,11 @@ def setup_logger() -> logging.Logger:
     logger.handlers.clear()
 
     # File handler with rotation
+    log_path = logs_dir / "app.log"
     file_handler = RotatingFileHandler(
-        Config.LOG_PATH,
-        maxBytes=Config.LOG_MAX_BYTES,
-        backupCount=Config.LOG_BACKUP_COUNT,
+        log_path,
+        maxBytes=10 * 1024 * 1024,  # 10MB
+        backupCount=5,
         encoding="utf-8"
     )
     file_handler.setLevel(logging.DEBUG)
