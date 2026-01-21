@@ -17,7 +17,7 @@ import re
 
 from app.config import Config, Vocabularies
 from repositories.database import Database
-from repositories.person_repository import PersonRepository
+from controllers.person_controller import PersonController, PersonFilter
 from models.person import Person
 from services.validation_service import ValidationService
 from ui.components.toast import Toast
@@ -587,7 +587,7 @@ class PersonsPage(QWidget):
         super().__init__(parent)
         self.db = db
         self.i18n = i18n
-        self.person_repo = PersonRepository(db)
+        self.person_controller = PersonController(db)
 
         self._setup_ui()
 
@@ -755,15 +755,25 @@ class PersonsPage(QWidget):
         nid = self.nid_search.text().strip()
         gender = self.gender_combo.currentData()
 
-        persons = self.person_repo.search(
-            name=name or None,
+        # Create filter and use controller
+        filter_ = PersonFilter(
+            full_name=name or None,
             national_id=nid or None,
             gender=gender or None,
             limit=500
         )
 
-        self.table_model.set_persons(persons)
-        self.count_label.setText(f"تم العثور على {len(persons)} شخص")
+        result = self.person_controller.load_persons(filter_)
+
+        if result.success:
+            persons = result.data
+            self.table_model.set_persons(persons)
+            self.count_label.setText(f"تم العثور على {len(persons)} شخص")
+        else:
+            logger.error(f"Failed to load persons: {result.message}")
+            Toast.show_toast(self, f"فشل في تحميل الأشخاص: {result.message}", Toast.ERROR)
+            self.table_model.set_persons([])
+            self.count_label.setText("تم العثور على 0 شخص")
 
     def _on_filter_changed(self):
         self._load_persons()
@@ -778,31 +788,41 @@ class PersonsPage(QWidget):
         dialog = PersonDialog(self.db, self.i18n, parent=self)
         if dialog.exec_() == QDialog.Accepted:
             data = dialog.get_data()
-            person = Person(**data)
 
-            try:
-                self.person_repo.create(person)
+            # Use controller to create person (delegates to PersonService)
+            result = self.person_controller.create_person(data)
+
+            if result.success:
                 Toast.show_toast(self, "تم إضافة الشخص بنجاح", Toast.SUCCESS)
                 self._load_persons()
-            except Exception as e:
-                logger.error(f"Failed to create person: {e}")
-                Toast.show_toast(self, f"فشل في إضافة الشخص: {str(e)}", Toast.ERROR)
+
+                # Show duplicate warning if exists
+                if hasattr(result, 'duplicate_warning') and result.duplicate_warning:
+                    warning_msg = "تحذير: تم العثور على أشخاص مشابهين في قاعدة البيانات"
+                    Toast.show_toast(self, warning_msg, Toast.WARNING)
+            else:
+                error_msg = result.error
+                if hasattr(result, 'validation_errors') and result.validation_errors:
+                    error_msg += "\n" + "\n".join(result.validation_errors)
+                Toast.show_toast(self, f"فشل في إضافة الشخص: {error_msg}", Toast.ERROR)
 
     def _edit_person(self, person: Person):
         """Edit existing person."""
         dialog = PersonDialog(self.db, self.i18n, person=person, parent=self)
         if dialog.exec_() == QDialog.Accepted:
             data = dialog.get_data()
-            for key, value in data.items():
-                setattr(person, key, value)
 
-            try:
-                self.person_repo.update(person)
+            # Use controller to update person (delegates to PersonService)
+            result = self.person_controller.update_person(person.person_id, data)
+
+            if result.success:
                 Toast.show_toast(self, "تم تحديث بيانات الشخص بنجاح", Toast.SUCCESS)
                 self._load_persons()
-            except Exception as e:
-                logger.error(f"Failed to update person: {e}")
-                Toast.show_toast(self, f"فشل في تحديث البيانات: {str(e)}", Toast.ERROR)
+            else:
+                error_msg = result.error
+                if hasattr(result, 'validation_errors') and result.validation_errors:
+                    error_msg += "\n" + "\n".join(result.validation_errors)
+                Toast.show_toast(self, f"فشل في تحديث البيانات: {error_msg}", Toast.ERROR)
 
     def update_language(self, is_arabic: bool):
         self.table_model.set_language(is_arabic)

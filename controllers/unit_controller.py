@@ -18,7 +18,7 @@ from typing import Any, Dict, List, Optional
 from PyQt5.QtCore import pyqtSignal
 
 from controllers.base_controller import BaseController, OperationResult
-from models.unit import Unit
+from models.unit import PropertyUnit
 from repositories.unit_repository import UnitRepository
 from repositories.database import Database
 from utils.logger import get_logger
@@ -58,25 +58,25 @@ class UnitController(BaseController):
         self.db = db
         self.repository = UnitRepository(db)
 
-        self._current_unit: Optional[Unit] = None
-        self._units_cache: List[Unit] = []
+        self._current_unit: Optional[PropertyUnit] = None
+        self._units_cache: List[PropertyUnit] = []
         self._current_filter = UnitFilter()
 
     # ==================== Properties ====================
 
     @property
-    def current_unit(self) -> Optional[Unit]:
+    def current_unit(self) -> Optional[PropertyUnit]:
         """Get currently selected unit."""
         return self._current_unit
 
     @property
-    def units(self) -> List[Unit]:
+    def units(self) -> List[PropertyUnit]:
         """Get cached units list."""
         return self._units_cache
 
     # ==================== CRUD Operations ====================
 
-    def create_unit(self, data: Dict[str, Any]) -> OperationResult[Unit]:
+    def create_unit(self, data: Dict[str, Any]) -> OperationResult[PropertyUnit]:
         """
         Create a new unit.
 
@@ -126,7 +126,7 @@ class UnitController(BaseController):
             self._emit_error("create_unit", error_msg)
             return OperationResult.fail(message=error_msg)
 
-    def update_unit(self, unit_uuid: str, data: Dict[str, Any]) -> OperationResult[Unit]:
+    def update_unit(self, unit_uuid: str, data: Dict[str, Any]) -> OperationResult[PropertyUnit]:
         """
         Update an existing unit.
 
@@ -252,7 +252,7 @@ class UnitController(BaseController):
             self._emit_error("delete_unit", error_msg)
             return OperationResult.fail(message=error_msg)
 
-    def get_unit(self, unit_uuid: str) -> OperationResult[Unit]:
+    def get_unit(self, unit_uuid: str) -> OperationResult[PropertyUnit]:
         """
         Get a unit by UUID.
 
@@ -278,7 +278,7 @@ class UnitController(BaseController):
 
     # ==================== Selection ====================
 
-    def select_unit(self, unit_uuid: str) -> OperationResult[Unit]:
+    def select_unit(self, unit_uuid: str) -> OperationResult[PropertyUnit]:
         """
         Select a unit as current.
 
@@ -304,7 +304,7 @@ class UnitController(BaseController):
 
     # ==================== Search and Filter ====================
 
-    def load_units(self, filter_: Optional[UnitFilter] = None) -> OperationResult[List[Unit]]:
+    def load_units(self, filter_: Optional[UnitFilter] = None) -> OperationResult[List[PropertyUnit]]:
         """
         Load units with optional filter.
 
@@ -335,7 +335,7 @@ class UnitController(BaseController):
             self._emit_error("load_units", error_msg)
             return OperationResult.fail(message=error_msg)
 
-    def get_units_for_building(self, building_uuid: str) -> OperationResult[List[Unit]]:
+    def get_units_for_building(self, building_uuid: str) -> OperationResult[List[PropertyUnit]]:
         """
         Get units for a specific building.
 
@@ -348,7 +348,7 @@ class UnitController(BaseController):
         filter_ = UnitFilter(building_uuid=building_uuid)
         return self.load_units(filter_)
 
-    def search_units(self, search_text: str) -> OperationResult[List[Unit]]:
+    def search_units(self, search_text: str) -> OperationResult[List[PropertyUnit]]:
         """
         Search units by text.
 
@@ -361,7 +361,7 @@ class UnitController(BaseController):
         filter_ = UnitFilter(search_text=search_text)
         return self.load_units(filter_)
 
-    def filter_by_type(self, unit_type: str) -> OperationResult[List[Unit]]:
+    def filter_by_type(self, unit_type: str) -> OperationResult[List[PropertyUnit]]:
         """
         Filter units by type.
 
@@ -374,7 +374,7 @@ class UnitController(BaseController):
         filter_ = UnitFilter(unit_type=unit_type)
         return self.load_units(filter_)
 
-    def _query_units(self, filter_: UnitFilter) -> List[Unit]:
+    def _query_units(self, filter_: UnitFilter) -> List[PropertyUnit]:
         """Execute unit query with filter."""
         query = "SELECT * FROM units WHERE 1=1"
         params = []
