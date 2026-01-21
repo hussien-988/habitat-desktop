@@ -86,7 +86,7 @@ class MainWindow(QMainWindow):
         from ui.pages.duplicates_page import DuplicatesPage
         from ui.pages.field_assignment_page import FieldAssignmentPage
         from ui.pages.draft_office_surveys_page import DraftOfficeSurveysPage
-        from ui.pages.office_survey_wizard import OfficeSurveyWizard  # OLD - temporary
+        from ui.wizards.office_survey.office_survey_wizard_refactored import OfficeSurveyWizard  # NEW - refactored
 
         # Central widget
         self.central_widget = QWidget()
@@ -174,8 +174,8 @@ class MainWindow(QMainWindow):
         self.pages[Pages.DRAFT_OFFICE_SURVEYS] = DraftOfficeSurveysPage(self.db, self)
         self.stack.addWidget(self.pages[Pages.DRAFT_OFFICE_SURVEYS])
 
-        # Office Survey Wizard (UC-004, UC-005) - OLD version temporarily
-        self.office_survey_wizard = OfficeSurveyWizard(self.db, self.i18n, self)
+        # Office Survey Wizard (UC-004, UC-005) - NEW refactored version
+        self.office_survey_wizard = OfficeSurveyWizard(db=self.db, parent=self)
         self.stack.addWidget(self.office_survey_wizard)
 
     def _setup_layout(self):

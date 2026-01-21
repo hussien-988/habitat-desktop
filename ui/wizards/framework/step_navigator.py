@@ -14,6 +14,9 @@ from PyQt5.QtCore import QObject, pyqtSignal
 
 from .base_step import BaseStep, StepValidationResult
 from .wizard_context import WizardContext
+from utils.logger import get_logger
+
+logger = get_logger(__name__)
 
 
 class StepNavigator(QObject):
@@ -80,29 +83,45 @@ class StepNavigator(QObject):
             True if navigation was successful
         """
         if not self.can_go_next():
+            logger.debug(f"Cannot go next: already at last step ({self.current_index})")
             return False
+
+        logger.info(f"Navigating: Step {self.current_index} → {self.current_index + 1}")
 
         # Validate current step
         if not skip_validation:
             current_step = self.get_current_step()
             if current_step:
+                logger.debug(f"Validating step {self.current_index}...")
                 validation_result = current_step.validate()
                 if not validation_result.is_valid:
+                    logger.warning(
+                        f"Step {self.current_index} validation failed: {validation_result.errors}"
+                    )
                     self.validation_failed.emit(validation_result)
                     return False
 
+                logger.debug(f"Step {self.current_index} validated successfully")
                 # Mark step as completed
                 self.context.mark_step_completed(self.current_index)
 
         # Move to next step
-        return self._navigate_to(self.current_index + 1)
+        result = self._navigate_to(self.current_index + 1)
+        if result:
+            logger.info(f"Successfully navigated to step {self.current_index}")
+        return result
 
     def previous_step(self) -> bool:
         """Navigate to the previous step."""
         if not self.can_go_previous():
+            logger.debug(f"Cannot go previous: already at first step ({self.current_index})")
             return False
 
-        return self._navigate_to(self.current_index - 1)
+        logger.info(f"Navigating back: Step {self.current_index} → {self.current_index - 1}")
+        result = self._navigate_to(self.current_index - 1)
+        if result:
+            logger.info(f"Successfully navigated back to step {self.current_index}")
+        return result
 
     def goto_step(self, index: int, skip_validation: bool = False) -> bool:
         """
@@ -143,13 +162,17 @@ class StepNavigator(QObject):
             True if navigation was successful
         """
         if new_index < 0 or new_index >= len(self.steps):
+            logger.error(f"Invalid step index: {new_index} (valid range: 0-{len(self.steps)-1})")
             return False
 
         old_index = self.current_index
+        logger.debug(f"_navigate_to: {old_index} → {new_index}")
 
         # Hide current step
         current_step = self.get_current_step()
         if current_step:
+            step_name = current_step.get_step_title()
+            logger.debug(f"Hiding step {old_index}: {step_name}")
             current_step.on_hide()
 
         # Update index and context
@@ -159,6 +182,8 @@ class StepNavigator(QObject):
         # Show new step
         new_step = self.get_current_step()
         if new_step:
+            step_name = new_step.get_step_title()
+            logger.debug(f"Showing step {new_index}: {step_name}")
             new_step.on_show()
 
         # Emit signals
@@ -166,6 +191,7 @@ class StepNavigator(QObject):
         self.can_go_next_changed.emit(self.can_go_next())
         self.can_go_previous_changed.emit(self.can_go_previous())
 
+        logger.info(f"Navigation complete: Step {new_index} is now active")
         return True
 
     def reset(self):

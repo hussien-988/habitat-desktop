@@ -21,7 +21,7 @@ from PyQt5.QtGui import QColor
 
 from ui.wizards.framework import BaseStep, StepValidationResult
 from ui.wizards.office_survey.survey_context import SurveyContext
-from repositories.building_repository import BuildingRepository
+from controllers.building_controller import BuildingController
 from models.building import Building
 from utils.logger import get_logger
 from ui.font_utils import FontManager
@@ -50,7 +50,7 @@ class BuildingSelectionStep(BaseStep):
     def __init__(self, context: SurveyContext, parent=None):
         """Initialize the step."""
         super().__init__(context, parent)
-        self.building_repo = BuildingRepository(self.context.db)
+        self.building_controller = BuildingController(self.context.db)
         self.selected_building: Optional[Building] = None
 
     def setup_ui(self):
@@ -399,9 +399,14 @@ class BuildingSelectionStep(BaseStep):
 
     def _load_buildings(self):
         """Load buildings into the list."""
-        buildings = self.building_repo.get_all(limit=100)
+        result = self.building_controller.load_buildings()
         self.buildings_list.clear()
 
+        if not result.success:
+            logger.error(f"Failed to load buildings: {result.message}")
+            return
+
+        buildings = result.data
         for building in buildings:
             item = QListWidgetItem(
                 f"🏢 {building.building_id} | "
@@ -423,11 +428,17 @@ class BuildingSelectionStep(BaseStep):
         search = self.building_search.text().strip()
 
         if search:
-            buildings = self.building_repo.search(building_id=search, limit=50)
+            result = self.building_controller.search_buildings(search)
         else:
-            buildings = self.building_repo.get_all(limit=100)
+            result = self.building_controller.load_buildings()
 
         self.buildings_list.clear()
+
+        if not result.success:
+            logger.error(f"Failed to search buildings: {result.message}")
+            return
+
+        buildings = result.data
         for building in buildings:
             item = QListWidgetItem(
                 f"🏢 {building.building_id} | "
