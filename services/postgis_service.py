@@ -818,6 +818,345 @@ class PostGISService:
         finally:
             self._return_connection(conn)
 
+    # ==================== Enhanced Spatial Queries ====================
+
+    def get_buildings_stats_in_polygon(
+        self,
+        polygon_wkt: str
+    ) -> Dict[str, Any]:
+        """
+        Get statistical summary of buildings within a polygon.
+
+        Returns:
+            Dict with:
+            - total_count: Total buildings in polygon
+            - by_type: Count by building type
+            - by_status: Count by building status
+            - total_area: Sum of building areas (if available)
+            - avg_distance_from_center: Average distance from polygon centroid
+        """
+        query = f"""
+            WITH polygon_geom AS (
+                SELECT ST_GeomFromText(%s, {self.config.srid}) as geom
+            ),
+            buildings_in_polygon AS (
+                SELECT
+                    b.*,
+                    ST_Distance(
+                        b.geometry::geography,
+                        ST_Centroid((SELECT geom FROM polygon_geom))::geography
+                    ) as dist_from_center
+                FROM {self.config.schema}.buildings b, polygon_geom p
+                WHERE ST_Within(b.geometry, p.geom)
+            )
+            SELECT
+                COUNT(*) as total_count,
+                json_object_agg(
+                    COALESCE(building_type, 'unknown'),
+                    type_count
+                ) FILTER (WHERE building_type IS NOT NULL) as by_type,
+                json_object_agg(
+                    COALESCE(building_status, 'unknown'),
+                    status_count
+                ) FILTER (WHERE building_status IS NOT NULL) as by_status,
+                AVG(dist_from_center) as avg_distance_from_center
+            FROM (
+                SELECT
+                    building_type,
+                    building_status,
+                    dist_from_center,
+                    COUNT(*) OVER (PARTITION BY building_type) as type_count,
+                    COUNT(*) OVER (PARTITION BY building_status) as status_count
+                FROM buildings_in_polygon
+            ) stats
+        """
+
+        conn = self._get_connection()
+        try:
+            cursor = conn.cursor()
+            cursor.execute(query, [polygon_wkt])
+            result = cursor.fetchone()
+
+            if result:
+                return {
+                    "total_count": result[0] or 0,
+                    "by_type": result[1] or {},
+                    "by_status": result[2] or {},
+                    "avg_distance_from_center": result[3] or 0
+                }
+
+            return {
+                "total_count": 0,
+                "by_type": {},
+                "by_status": {},
+                "avg_distance_from_center": 0
+            }
+
+        finally:
+            self._return_connection(conn)
+
+    def batch_check_buildings_in_polygons(
+        self,
+        polygons_wkt: List[str],
+        building_uuids: Optional[List[str]] = None
+    ) -> Dict[str, List[str]]:
+        """
+        Check which buildings are contained in which polygons (batch operation).
+
+        Args:
+            polygons_wkt: List of polygon WKT strings
+            building_uuids: Optional list of specific building UUIDs to check
+
+        Returns:
+            Dict mapping polygon index to list of building UUIDs contained
+        """
+        # Create temp table for polygons
+        with self._get_connection() as conn:
+            try:
+                cursor = conn.cursor()
+
+                # Create temporary table
+                cursor.execute("""
+                    CREATE TEMP TABLE IF NOT EXISTS temp_check_polygons (
+                        polygon_id INTEGER,
+                        geom GEOMETRY
+                    )
+                """)
+
+                # Insert polygons
+                for i, wkt in enumerate(polygons_wkt):
+                    cursor.execute(
+                        f"INSERT INTO temp_check_polygons VALUES (%s, ST_GeomFromText(%s, {self.config.srid}))",
+                        [i, wkt]
+                    )
+
+                # Build buildings filter
+                buildings_filter = ""
+                params = []
+                if building_uuids:
+                    placeholders = ", ".join(["%s"] * len(building_uuids))
+                    buildings_filter = f"AND b.building_uuid IN ({placeholders})"
+                    params = building_uuids
+
+                # Query for containment
+                query = f"""
+                    SELECT
+                        p.polygon_id,
+                        b.building_uuid
+                    FROM temp_check_polygons p
+                    JOIN {self.config.schema}.buildings b
+                        ON ST_Within(b.geometry, p.geom)
+                    WHERE 1=1 {buildings_filter}
+                    ORDER BY p.polygon_id
+                """
+
+                cursor.execute(query, params)
+
+                # Group results by polygon
+                results = {}
+                for row in cursor.fetchall():
+                    polygon_idx = str(row[0])
+                    building_uuid = row[1]
+
+                    if polygon_idx not in results:
+                        results[polygon_idx] = []
+                    results[polygon_idx].append(building_uuid)
+
+                # Clean up
+                cursor.execute("DROP TABLE IF EXISTS temp_check_polygons")
+                conn.commit()
+
+                return results
+
+            except Exception as e:
+                logger.error(f"Error in batch polygon check: {e}")
+                conn.rollback()
+                return {}
+
+    def get_polygon_intersection_areas(
+        self,
+        polygon1_wkt: str,
+        polygon2_wkt: str
+    ) -> Dict[str, float]:
+        """
+        Calculate intersection and union areas of two polygons.
+
+        Returns:
+            Dict with:
+            - intersection_area: Area of intersection in square meters
+            - union_area: Area of union in square meters
+            - polygon1_area: Area of first polygon
+            - polygon2_area: Area of second polygon
+            - overlap_percentage: Percentage of polygon1 covered by polygon2
+        """
+        query = f"""
+            WITH polys AS (
+                SELECT
+                    ST_GeomFromText(%s, {self.config.srid}) as geom1,
+                    ST_GeomFromText(%s, {self.config.srid}) as geom2
+            )
+            SELECT
+                ST_Area(ST_Intersection(geom1, geom2)::geography) as intersection_area,
+                ST_Area(ST_Union(geom1, geom2)::geography) as union_area,
+                ST_Area(geom1::geography) as area1,
+                ST_Area(geom2::geography) as area2
+            FROM polys
+        """
+
+        conn = self._get_connection()
+        try:
+            cursor = conn.cursor()
+            cursor.execute(query, [polygon1_wkt, polygon2_wkt])
+            result = cursor.fetchone()
+
+            if result:
+                intersection_area = result[0] or 0
+                union_area = result[1] or 0
+                area1 = result[2] or 0
+                area2 = result[3] or 0
+
+                overlap_percentage = (intersection_area / area1 * 100) if area1 > 0 else 0
+
+                return {
+                    "intersection_area": intersection_area,
+                    "union_area": union_area,
+                    "polygon1_area": area1,
+                    "polygon2_area": area2,
+                    "overlap_percentage": overlap_percentage
+                }
+
+            return {
+                "intersection_area": 0,
+                "union_area": 0,
+                "polygon1_area": 0,
+                "polygon2_area": 0,
+                "overlap_percentage": 0
+            }
+
+        finally:
+            self._return_connection(conn)
+
+    def find_buildings_intersecting_line(
+        self,
+        linestring_wkt: str,
+        buffer_meters: float = 0
+    ) -> List[SpatialQueryResult]:
+        """
+        Find buildings intersecting or near a line.
+
+        Useful for infrastructure impact analysis (roads, pipelines, etc.).
+
+        Args:
+            linestring_wkt: WKT representation of line
+            buffer_meters: Buffer distance around line (0 for exact intersection)
+        """
+        if buffer_meters > 0:
+            geom_expr = f"ST_Buffer(ST_GeomFromText(%s, {self.config.srid})::geography, %s)::geometry"
+            params = [linestring_wkt, buffer_meters]
+        else:
+            geom_expr = f"ST_GeomFromText(%s, {self.config.srid})"
+            params = [linestring_wkt]
+
+        query = f"""
+            SELECT
+                building_uuid,
+                ST_AsText(geometry) as wkt,
+                ST_AsGeoJSON(geometry) as geojson,
+                building_id,
+                neighborhood_code,
+                building_type,
+                building_status,
+                ST_Distance(
+                    geometry::geography,
+                    ST_GeomFromText(%s, {self.config.srid})::geography
+                ) as distance
+            FROM {self.config.schema}.buildings
+            WHERE ST_Intersects(
+                geometry,
+                {geom_expr}
+            )
+            ORDER BY distance
+        """
+
+        params.insert(0, linestring_wkt)  # For distance calculation
+
+        return self._execute_spatial_query(query, params)
+
+    def get_nearest_neighbor_analysis(
+        self,
+        sample_size: int = 100
+    ) -> Dict[str, float]:
+        """
+        Perform nearest neighbor analysis on buildings.
+
+        Returns:
+            Dict with:
+            - avg_nearest_distance: Average distance to nearest neighbor
+            - median_nearest_distance: Median distance
+            - min_distance: Minimum distance
+            - max_distance: Maximum distance
+            - clustering_index: Ratio indicating clustering (<1) or dispersion (>1)
+        """
+        query = f"""
+            WITH nearest_distances AS (
+                SELECT DISTINCT ON (b1.building_uuid)
+                    b1.building_uuid,
+                    ST_Distance(
+                        b1.geometry::geography,
+                        b2.geometry::geography
+                    ) as distance
+                FROM {self.config.schema}.buildings b1
+                JOIN {self.config.schema}.buildings b2
+                    ON b1.building_uuid != b2.building_uuid
+                WHERE b1.geometry IS NOT NULL
+                  AND b2.geometry IS NOT NULL
+                ORDER BY b1.building_uuid, distance
+                LIMIT %s
+            )
+            SELECT
+                AVG(distance) as avg_distance,
+                PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY distance) as median_distance,
+                MIN(distance) as min_distance,
+                MAX(distance) as max_distance,
+                COUNT(*) as sample_count
+            FROM nearest_distances
+        """
+
+        conn = self._get_connection()
+        try:
+            cursor = conn.cursor()
+            cursor.execute(query, [sample_size])
+            result = cursor.fetchone()
+
+            if result and result[4] > 0:  # sample_count > 0
+                avg_dist = result[0] or 0
+                median_dist = result[1] or 0
+
+                # Calculate clustering index (simplified)
+                # Real formula requires area and density, this is approximation
+                clustering_index = median_dist / avg_dist if avg_dist > 0 else 1.0
+
+                return {
+                    "avg_nearest_distance": avg_dist,
+                    "median_nearest_distance": median_dist,
+                    "min_distance": result[2] or 0,
+                    "max_distance": result[3] or 0,
+                    "sample_size": result[4],
+                    "clustering_index": clustering_index
+                }
+
+            return {
+                "avg_nearest_distance": 0,
+                "median_nearest_distance": 0,
+                "min_distance": 0,
+                "max_distance": 0,
+                "sample_size": 0,
+                "clustering_index": 1.0
+            }
+
+        finally:
+            self._return_connection(conn)
+
     # ==================== Utility Methods ====================
 
     def _execute_spatial_query(
