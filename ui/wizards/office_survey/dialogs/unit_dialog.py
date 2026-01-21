@@ -20,7 +20,7 @@ from PyQt5.QtCore import Qt
 
 from app.config import Config
 from models.building import Building
-from repositories.unit_repository import UnitRepository
+from controllers.unit_controller import UnitController
 from services.validation_service import ValidationService
 from ui.components.toast import Toast
 from utils.logger import get_logger
@@ -44,7 +44,7 @@ class UnitDialog(QDialog):
         super().__init__(parent)
         self.building = building
         self.unit_data = unit_data
-        self.unit_repo = UnitRepository(db)
+        self.unit_controller = UnitController(db)
         self.validation_service = ValidationService()
 
         self.setWindowTitle("إضافة وحدة عقارية" if not unit_data else "تعديل وحدة عقارية")
@@ -311,9 +311,16 @@ class UnitDialog(QDialog):
 
         # Check existing units
         try:
-            existing_units = self.unit_repo.get_by_building(self.building.building_id)
+            result = self.unit_controller.get_units_by_building(self.building.building_id)
             is_unique = True
 
+            if not result.success:
+                logger.error(f"Failed to check unit uniqueness: {result.message}")
+                self.uniqueness_label.setText("⚠️ خطأ في التحقق من التفرد")
+                self.uniqueness_label.setStyleSheet("color: #e67e22; font-size: 11px;")
+                return
+
+            existing_units = result.data
             for unit in existing_units:
                 # Skip if editing the same unit
                 if self.unit_data and hasattr(unit, 'unit_id') and unit.unit_id == self.unit_data.get('unit_id'):

@@ -20,7 +20,7 @@ from PyQt5.QtGui import QCursor, QIcon
 
 from ui.wizards.framework import BaseStep, StepValidationResult
 from ui.wizards.office_survey.survey_context import SurveyContext
-from repositories.unit_repository import UnitRepository
+from controllers.unit_controller import UnitController
 from models.unit import PropertyUnit as Unit
 from app.config import Config
 from utils.logger import get_logger
@@ -42,7 +42,7 @@ class UnitSelectionStep(BaseStep):
     def __init__(self, context: SurveyContext, parent=None):
         """Initialize the step."""
         super().__init__(context, parent)
-        self.unit_repo = UnitRepository(self.context.db)
+        self.unit_controller = UnitController(self.context.db)
         self.selected_unit: Optional[Unit] = None
 
     def setup_ui(self):
@@ -239,7 +239,19 @@ class UnitSelectionStep(BaseStep):
                 child.widget().deleteLater()
 
         # Load units from database
-        units = self.unit_repo.get_by_building(self.context.building.building_id)
+        result = self.unit_controller.get_units_by_building(self.context.building.building_id)
+
+        if not result.success:
+            logger.error(f"Failed to load units: {result.message}")
+            # Show empty state
+            empty_label = QLabel("⚠️ خطأ في تحميل الوحدات")
+            empty_label.setAlignment(Qt.AlignCenter)
+            empty_label.setStyleSheet("color: #EF4444; font-size: 14px; padding: 40px;")
+            self.units_layout.addWidget(empty_label)
+            self.units_layout.addStretch()
+            return
+
+        units = result.data
 
         if units:
             for unit in units:

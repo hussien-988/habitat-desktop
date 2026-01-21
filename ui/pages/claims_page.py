@@ -18,7 +18,7 @@ from PyQt5.QtGui import QColor
 from app.config import Config, Vocabularies
 from repositories.database import Database
 from ui.components.dialogs.base_dialog import BaseDialog
-from repositories.claim_repository import ClaimRepository
+from controllers.claim_controller import ClaimController
 from repositories.unit_repository import UnitRepository
 from repositories.person_repository import PersonRepository
 from repositories.document_repository import DocumentRepository
@@ -323,7 +323,7 @@ class ClaimDetailsDialog(QDialog):
         self.i18n = i18n
         self.claim = claim
         self.workflow = WorkflowService(db)
-        self.claim_repo = ClaimRepository(db)
+        self.claim_controller = ClaimController(db)
         self.doc_repo = DocumentRepository(db)
         self.edit_mode = False
         self.documents = []
@@ -613,8 +613,9 @@ class ClaimDetailsDialog(QDialog):
         history_layout = QVBoxLayout(history_widget)
         history_layout.setContentsMargins(20, 20, 20, 20)
 
-        # Load history
-        history = self.claim_repo.get_history(self.claim.claim_uuid)
+        # Load history using controller
+        result = self.claim_controller.get_claim_history(self.claim.claim_uuid)
+        history = result.data if result.success else []
 
         if history:
             scroll = QScrollArea()
@@ -728,20 +729,34 @@ class ClaimDetailsDialog(QDialog):
         self.claim.resolution_notes = self.resolution_edit.toPlainText().strip()
 
         try:
-            # Save with history (UC-006 S10)
-            self.claim_repo.update_with_history(self.claim, reason)
+            # Update claim using controller
+            data = {
+                'claim_type': self.claim.claim_type,
+                'priority': self.claim.priority,
+                'notes': self.claim.notes,
+                'resolution_notes': self.claim.resolution_notes
+            }
 
-            # Save new documents
-            for doc in self.pending_docs:
-                self.doc_repo.create(doc)
-                self.doc_repo.link_to_claim(self.claim.claim_uuid, doc.document_id)
+            result = self.claim_controller.update_claim(
+                self.claim.claim_uuid,
+                data,
+                modification_reason=reason
+            )
 
-            self.pending_docs.clear()
-            self._load_documents()
-            self._refresh_documents_list()
+            if result.success:
+                # Save new documents
+                for doc in self.pending_docs:
+                    self.doc_repo.create(doc)
+                    self.doc_repo.link_to_claim(self.claim.claim_uuid, doc.document_id)
 
-            Toast.show(self, "تم حفظ التعديلات بنجاح", Toast.SUCCESS)
-            self._toggle_edit_mode()
+                self.pending_docs.clear()
+                self._load_documents()
+                self._refresh_documents_list()
+
+                Toast.show(self, "تم حفظ التعديلات بنجاح", Toast.SUCCESS)
+                self._toggle_edit_mode()
+            else:
+                QMessageBox.critical(self, "خطأ", f"فشل في حفظ التعديلات: {result.message}")
 
         except Exception as e:
             logger.error(f"Failed to save claim changes: {e}")
@@ -903,7 +918,7 @@ class ClaimsPage(QWidget):
         super().__init__(parent)
         self.db = db
         self.i18n = i18n
-        self.claim_repo = ClaimRepository(db)
+        self.claim_controller = ClaimController(db)
 
         self._setup_ui()
 
@@ -1071,7 +1086,8 @@ class ClaimsPage(QWidget):
         claim_type = self.type_combo.currentData()
         conflicts_only = self.conflicts_btn.isChecked()
 
-        claims = self.claim_repo.search(
+        # Use controller to search claims
+        result = self.claim_controller.search_claims(
             claim_id=search or None,
             status=status or None,
             claim_type=claim_type or None,
@@ -1079,8 +1095,14 @@ class ClaimsPage(QWidget):
             limit=500
         )
 
-        self.table_model.set_claims(claims)
-        self.count_label.setText(f"تم العثور على {len(claims)} مطالبة")
+        if result.success:
+            claims = result.data
+            self.table_model.set_claims(claims)
+            self.count_label.setText(f"تم العثور على {len(claims)} مطالبة")
+        else:
+            logger.error(f"Failed to load claims: {result.message}")
+            self.table_model.set_claims([])
+            self.count_label.setText("تم العثور على 0 مطالبة")
 
     def _on_filter_changed(self):
         self._load_claims()
@@ -1097,15 +1119,23 @@ class ClaimsPage(QWidget):
         dialog = ClaimDialog(self.db, self.i18n, parent=self)
         if dialog.exec_() == QDialog.Accepted:
             data = dialog.get_data()
-            claim = Claim(**data)
 
-            try:
-                self.claim_repo.create(claim)
+            # Use controller to create claim
+            result = self.claim_controller.create_claim(data)
+
+            if result.success:
                 Toast.show(self, "تم إنشاء المطالبة بنجاح", Toast.SUCCESS)
+
+                # Show conflict warning if exists
+                if hasattr(result, 'conflict_warning') and result.conflict_warning:
+                    Toast.show(self, "تحذير: تم الكشف عن مطالبات متعارضة", Toast.WARNING)
+
                 self._load_claims()
-            except Exception as e:
-                logger.error(f"Failed to create claim: {e}")
-                Toast.show(self, f"فشل في إنشاء المطالبة: {str(e)}", Toast.ERROR)
+            else:
+                error_msg = result.message
+                if hasattr(result, 'validation_errors') and result.validation_errors:
+                    error_msg += "\n" + "\n".join(result.validation_errors)
+                Toast.show(self, f"فشل في إنشاء المطالبة: {error_msg}", Toast.ERROR)
 
     def update_language(self, is_arabic: bool):
         self.table_model.set_language(is_arabic)
