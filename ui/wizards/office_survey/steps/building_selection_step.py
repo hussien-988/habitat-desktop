@@ -168,7 +168,10 @@ class BuildingSelectionStep(BaseStep):
         self.building_search.textChanged.connect(self._on_building_code_changed)
         self.building_search.returnPressed.connect(self._search_buildings)
 
-        # Left link
+        # Left links (map search buttons)
+        left_links_layout = QHBoxLayout()
+        left_links_layout.setSpacing(8)
+
         self.search_on_map_btn = QPushButton("بحث على الخريطة")
         self.search_on_map_btn.setCursor(Qt.PointingHandCursor)
         self.search_on_map_btn.setFlat(True)
@@ -187,8 +190,35 @@ class BuildingSelectionStep(BaseStep):
         """)
         self.search_on_map_btn.clicked.connect(self._open_map_search_dialog)
 
+        # Separator
+        separator = QLabel("|")
+        separator.setStyleSheet("color: #D1E8ED; font-size: 7pt;")
+
+        # Polygon selection button
+        self.polygon_select_btn = QPushButton("تحديد منطقة")
+        self.polygon_select_btn.setCursor(Qt.PointingHandCursor)
+        self.polygon_select_btn.setFlat(True)
+        self.polygon_select_btn.setStyleSheet("""
+            QPushButton {
+                border: none;
+                background: transparent;
+                color: #10B981;
+                font-family: 'IBM Plex Sans Arabic';
+                font-weight: 600;
+                font-size: 7pt;
+                text-decoration: underline;
+                padding: 0;
+                margin-top: 1px;
+            }
+        """)
+        self.polygon_select_btn.clicked.connect(self._open_polygon_selector_dialog)
+
+        left_links_layout.addWidget(self.polygon_select_btn)
+        left_links_layout.addWidget(separator)
+        left_links_layout.addWidget(self.search_on_map_btn)
+
         # Assemble search bar
-        sb.addWidget(self.search_on_map_btn)   # left
+        sb.addLayout(left_links_layout)   # left
         sb.addWidget(self.building_search)  # middle (stretch)
         sb.addWidget(search_icon_btn, 1)
 
@@ -473,6 +503,195 @@ class BuildingSelectionStep(BaseStep):
         self._on_building_selected(item)
         # Note: The old wizard calls self._on_next() here, but we don't have that in the step
         # The wizard controller will handle navigation
+
+    def _open_polygon_selector_dialog(self):
+        """
+        Open polygon building selector dialog.
+
+        Allows user to draw a polygon on the map and select buildings within it.
+        If multiple buildings are found, shows a selection dialog.
+        """
+        try:
+            from ui.components.polygon_building_selector_dialog import PolygonBuildingSelectorDialog
+
+            # Open dialog
+            dialog = PolygonBuildingSelectorDialog(self.context.db, self)
+            buildings = dialog.exec_and_get_buildings()
+
+            if not buildings:
+                logger.info("No buildings selected from polygon")
+                return
+
+            # If only one building, select it automatically
+            if len(buildings) == 1:
+                building = buildings[0]
+                self.context.building = building
+                self.selected_building = building
+
+                self.selected_building_label.setText(
+                    f"✅ المبنى المحدد: {building.building_id}\n"
+                    f"النوع: {building.building_type_display} | "
+                    f"الحالة: {building.building_status_display}"
+                )
+                self.selected_building_frame.show()
+                self.buildings_list.setVisible(False)
+                self.emit_validation_changed(True)
+
+                logger.info(f"Building auto-selected from polygon: {building.building_id}")
+
+            else:
+                # Multiple buildings - show selection dialog
+                self._show_building_selection_dialog(buildings)
+
+        except Exception as e:
+            logger.error(f"Error opening polygon selector: {e}", exc_info=True)
+            QMessageBox.warning(
+                self,
+                "خطأ - Error",
+                f"حدث خطأ أثناء فتح محدد المنطقة:\n{str(e)}"
+            )
+
+    def _show_building_selection_dialog(self, buildings):
+        """
+        Show dialog to select one building from multiple candidates.
+
+        Args:
+            buildings: List of Building objects
+        """
+        from PyQt5.QtWidgets import QDialog, QVBoxLayout, QLabel, QPushButton
+
+        dialog = QDialog(self)
+        dialog.setWindowTitle(f"اختر مبنى - Select Building ({len(buildings)} found)")
+        dialog.setMinimumWidth(500)
+        dialog.setLayoutDirection(Qt.RightToLeft)
+
+        layout = QVBoxLayout(dialog)
+        layout.setSpacing(12)
+
+        # Instructions
+        info_label = QLabel(f"تم العثور على {len(buildings)} مبنى في المنطقة المحددة. اختر واحداً:")
+        info_label.setStyleSheet("""
+            QLabel {
+                font-family: 'IBM Plex Sans Arabic';
+                font-size: 10pt;
+                color: #2C3E50;
+                padding: 8px;
+            }
+        """)
+        layout.addWidget(info_label)
+
+        # Buildings list
+        buildings_list = QListWidget()
+        buildings_list.setStyleSheet("""
+            QListWidget {
+                border: 1px solid #E1E8ED;
+                border-radius: 6px;
+                font-family: 'IBM Plex Sans Arabic';
+                font-size: 9pt;
+            }
+            QListWidget::item {
+                padding: 10px;
+                border-bottom: 1px solid #F1F5F9;
+            }
+            QListWidget::item:selected {
+                background-color: #EFF6FF;
+            }
+        """)
+
+        for building in buildings:
+            item_text = (
+                f"🏢 {building.building_id} | "
+                f"النوع: {building.building_type_display} | "
+                f"الحالة: {building.building_status_display}"
+            )
+            item = QListWidgetItem(item_text)
+            item.setData(Qt.UserRole, building)
+            buildings_list.addItem(item)
+
+        layout.addWidget(buildings_list)
+
+        # Buttons
+        buttons_layout = QHBoxLayout()
+        buttons_layout.setSpacing(8)
+
+        select_btn = QPushButton("✓ تحديد - Select")
+        select_btn.setMinimumHeight(36)
+        select_btn.setStyleSheet("""
+            QPushButton {
+                font-family: 'IBM Plex Sans Arabic';
+                font-size: 9pt;
+                font-weight: 600;
+                background-color: #3890DF;
+                color: white;
+                border: none;
+                border-radius: 6px;
+                padding: 8px 16px;
+            }
+            QPushButton:hover {
+                background-color: #2E7BC6;
+            }
+            QPushButton:disabled {
+                background-color: #D1E8FF;
+            }
+        """)
+        select_btn.setEnabled(False)
+
+        cancel_btn = QPushButton("✕ إلغاء - Cancel")
+        cancel_btn.setMinimumHeight(36)
+        cancel_btn.setStyleSheet("""
+            QPushButton {
+                font-family: 'IBM Plex Sans Arabic';
+                font-size: 9pt;
+                background-color: #F1F5F9;
+                color: #64748B;
+                border: 1px solid #E1E8ED;
+                border-radius: 6px;
+                padding: 8px 16px;
+            }
+            QPushButton:hover {
+                background-color: #E8EFF6;
+            }
+        """)
+
+        buttons_layout.addStretch()
+        buttons_layout.addWidget(cancel_btn)
+        buttons_layout.addWidget(select_btn)
+        layout.addLayout(buttons_layout)
+
+        # Connect signals
+        def on_selection_changed():
+            select_btn.setEnabled(buildings_list.currentItem() is not None)
+
+        def on_select():
+            current_item = buildings_list.currentItem()
+            if current_item:
+                dialog.accept()
+
+        buildings_list.itemSelectionChanged.connect(on_selection_changed)
+        buildings_list.itemDoubleClicked.connect(lambda: on_select())
+        select_btn.clicked.connect(on_select)
+        cancel_btn.clicked.connect(dialog.reject)
+
+        # Show dialog
+        result = dialog.exec_()
+
+        if result == QDialog.Accepted:
+            current_item = buildings_list.currentItem()
+            if current_item:
+                building = current_item.data(Qt.UserRole)
+                self.context.building = building
+                self.selected_building = building
+
+                self.selected_building_label.setText(
+                    f"✅ المبنى المحدد: {building.building_id}\n"
+                    f"النوع: {building.building_type_display} | "
+                    f"الحالة: {building.building_status_display}"
+                )
+                self.selected_building_frame.show()
+                self.buildings_list.setVisible(False)
+                self.emit_validation_changed(True)
+
+                logger.info(f"Building selected from polygon list: {building.building_id}")
 
     def validate(self) -> StepValidationResult:
         """Validate the step."""
