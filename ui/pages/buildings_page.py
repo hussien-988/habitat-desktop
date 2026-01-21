@@ -26,7 +26,7 @@ except ImportError:
 from app.config import Config, Vocabularies, AleppoDivisions
 from models.building import Building
 from repositories.database import Database
-from repositories.building_repository import BuildingRepository
+from controllers.building_controller import BuildingController
 from services.export_service import ExportService
 from services.validation_service import ValidationService
 from ui.components.toast import Toast
@@ -68,9 +68,9 @@ class AddBuildingPage(QWidget):
     saved = pyqtSignal()
     cancelled = pyqtSignal()
 
-    def __init__(self, building_repo, i18n, building=None, parent=None):
+    def __init__(self, building_controller, i18n, building=None, parent=None):
         super().__init__(parent)
-        self.building_repo = building_repo
+        self.building_controller = building_controller
         self.i18n = i18n
         self.building = building
         self.validation_service = ValidationService()
@@ -813,9 +813,10 @@ class AddBuildingPage(QWidget):
             self.building_id_warning.hide()
             return
 
-        existing = self.building_repo.get_by_id(building_id)
+        # Use controller to check existence
+        result = self.building_controller.get_building(building_id)
 
-        if existing:
+        if result.success and result.data:
             self.building_id_warning.setText("⚠️ هذا البناء موجود بالفعل")
             self.building_id_warning.show()
         else:
@@ -1127,29 +1128,41 @@ class AddBuildingPage(QWidget):
 
         try:
             if self.building:
-                # Update
-                for key, value in data.items():
-                    if hasattr(self.building, key):
-                        setattr(self.building, key, value)
-                self.building_repo.update(self.building)
-                Toast.show_toast(self.window(), f"تم تحديث المبنى {self.building.building_id} بنجاح", Toast.SUCCESS)
+                # Update - use controller
+                result = self.building_controller.update_building(
+                    self.building.building_uuid,
+                    data
+                )
+
+                if result.success:
+                    Toast.show_toast(self.window(), f"تم تحديث المبنى {self.building.building_id} بنجاح", Toast.SUCCESS)
+                    self.saved.emit()
+                else:
+                    error_msg = result.message
+                    if hasattr(result, 'validation_errors') and result.validation_errors:
+                        error_msg += "\n" + "\n".join(result.validation_errors)
+                    self._show_validation_error_dialog([error_msg])
             else:
-                # Create
-                existing = self.building_repo.get_by_id(data["building_id"])
-                if existing:
-                    # عرض خطأ التكرار بشكل واضح حسب FSD
-                    self._show_duplicate_error_dialog(data['building_id'])
-                    return
+                # Create - use controller
+                result = self.building_controller.create_building(data)
 
-                building = Building(**data)
-                self.building_repo.create(building)
-                Toast.show_toast(self.window(), f"تم إضافة المبنى {building.building_id} بنجاح", Toast.SUCCESS)
+                if result.success:
+                    building = result.data
+                    Toast.show_toast(self.window(), f"تم إضافة المبنى {building.building_id} بنجاح", Toast.SUCCESS)
+                    self.saved.emit()
+                else:
+                    error_msg = result.message
+                    if hasattr(result, 'validation_errors') and result.validation_errors:
+                        error_msg += "\n" + "\n".join(result.validation_errors)
 
-            self.saved.emit()
+                    # Check if it's duplicate error
+                    if "already exists" in error_msg or "موجود" in error_msg:
+                        self._show_duplicate_error_dialog(data['building_id'])
+                    else:
+                        self._show_validation_error_dialog([error_msg])
 
         except Exception as e:
             logger.error(f"Failed to save building: {e}")
-            # عرض خطأ عام في نافذة واضحة
             self._show_validation_error_dialog([f"فشل في حفظ المبنى: {str(e)}"])
 
     def get_data(self):
@@ -1216,9 +1229,9 @@ class BuildingsListPage(QWidget):
     edit_building = pyqtSignal(object)
     add_building = pyqtSignal()
 
-    def __init__(self, building_repo, export_service, i18n, parent=None):
+    def __init__(self, building_controller, export_service, i18n, parent=None):
         super().__init__(parent)
-        self.building_repo = building_repo
+        self.building_controller = building_controller
         self.export_service = export_service
         self.i18n = i18n
         self.map_view = None
@@ -1372,11 +1385,17 @@ class BuildingsListPage(QWidget):
         Args:
             search_text: Optional search text to filter buildings
         """
-        # Load buildings with search filter
+        # Load buildings with search filter using controller
         if search_text:
-            all_buildings = self.building_repo.search(search_text=search_text, limit=500)
+            result = self.building_controller.search_buildings(search_text)
         else:
-            all_buildings = self.building_repo.search(limit=500)
+            result = self.building_controller.load_buildings()
+
+        if result.success:
+            all_buildings = result.data
+        else:
+            logger.error(f"Failed to load buildings: {result.message}")
+            all_buildings = []
 
         self._buildings = all_buildings  # Store for later access
 
@@ -1635,7 +1654,9 @@ class BuildingsListPage(QWidget):
         try:
             # التحقق من وجود مطالبات مرتبطة
             from repositories.claim_repository import ClaimRepository
-            claim_repo = ClaimRepository(self.building_repo.db)
+            from repositories.database import Database
+            db = Database.get_instance()
+            claim_repo = ClaimRepository(db)
             related_claims = claim_repo.get_claims_for_building(building.building_uuid)
 
             if related_claims:
@@ -1649,10 +1670,14 @@ class BuildingsListPage(QWidget):
                 ):
                     return
 
-            # حذف المبنى
-            self.building_repo.delete(building.building_uuid)
-            Toast.show_toast(self, f"تم حذف المبنى {building.building_id} بنجاح", Toast.SUCCESS)
-            self._load_buildings()
+            # حذف المبنى باستخدام controller
+            result = self.building_controller.delete_building(building.building_uuid)
+
+            if result.success:
+                Toast.show_toast(self, f"تم حذف المبنى {building.building_id} بنجاح", Toast.SUCCESS)
+                self._load_buildings()
+            else:
+                raise Exception(result.message)
 
         except Exception as e:
             logger.error(f"Failed to delete building: {e}")
@@ -1691,7 +1716,7 @@ class BuildingsPage(QWidget):
         super().__init__(parent)
         self.db = db
         self.i18n = i18n
-        self.building_repo = BuildingRepository(db)
+        self.building_controller = BuildingController(db)
         self.export_service = ExportService(db)
 
         self._setup_ui()
@@ -1709,7 +1734,7 @@ class BuildingsPage(QWidget):
 
         # Page 0: List
         self.list_page = BuildingsListPage(
-            self.building_repo,
+            self.building_controller,
             self.export_service,
             self.i18n,
             self
@@ -1737,7 +1762,7 @@ class BuildingsPage(QWidget):
             self.form_page.deleteLater()
 
         self.form_page = AddBuildingPage(
-            self.building_repo,
+            self.building_controller,
             self.i18n,
             building=None,
             parent=self
@@ -1754,7 +1779,7 @@ class BuildingsPage(QWidget):
             self.form_page.deleteLater()
 
         self.form_page = AddBuildingPage(
-            self.building_repo,
+            self.building_controller,
             self.i18n,
             building=building,
             parent=self
