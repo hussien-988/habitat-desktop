@@ -27,7 +27,7 @@ def qapp():
 @pytest.fixture
 def input_field(qapp):
     """Create an InputField instance."""
-    field = InputField(label="Test Label", placeholder="Enter text")
+    field = InputField(placeholder="Enter text")
     return field
 
 
@@ -38,15 +38,15 @@ def test_input_field_creation(input_field):
 
 def test_input_field_value(input_field):
     """Test getting and setting value."""
-    input_field.setValue("test value")
-    assert input_field.getValue() == "test value"
+    input_field.setText("test value")
+    assert input_field.text() == "test value"
 
 
 def test_input_field_clear(input_field):
     """Test clearing input field."""
-    input_field.setValue("some text")
+    input_field.setText("some text")
     input_field.clear()
-    assert input_field.getValue() == ""
+    assert input_field.text() == ""
 
 
 def test_input_field_enabled(input_field):

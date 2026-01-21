@@ -2,6 +2,7 @@
 """
 Common dialog components.
 """
+from typing import Optional
 
 from PyQt5.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
@@ -13,7 +14,7 @@ from PyQt5.QtCore import Qt
 class BaseDialog(QDialog):
     """Base dialog with consistent styling."""
 
-    def __init__(self, title: str, parent=None):
+    def __init__(self, title: str, parent: Optional[QWidget] = None) -> None:
         super().__init__(parent)
         self.setWindowTitle(title)
         self.setModal(True)
@@ -24,7 +25,7 @@ class BaseDialog(QDialog):
             self.windowFlags() & ~Qt.WindowContextHelpButtonHint
         )
 
-    def _create_button_row(self, buttons: list) -> QWidget:
+    def _create_button_row(self, buttons: list[QPushButton]) -> QWidget:
         """Create a row of buttons."""
         widget = QWidget()
         layout = QHBoxLayout(widget)
@@ -40,11 +41,11 @@ class BaseDialog(QDialog):
 class ConfirmDialog(BaseDialog):
     """Confirmation dialog with Yes/No buttons."""
 
-    def __init__(self, title: str, message: str, parent=None):
+    def __init__(self, title: str, message: str, parent: Optional[QWidget] = None) -> None:
         super().__init__(title, parent)
         self._setup_ui(message)
 
-    def _setup_ui(self, message: str):
+    def _setup_ui(self, message: str) -> None:
         """Setup dialog UI."""
         layout = QVBoxLayout(self)
         layout.setSpacing(16)
@@ -66,7 +67,7 @@ class ConfirmDialog(BaseDialog):
         layout.addWidget(self._create_button_row([self.no_btn, self.yes_btn]))
 
     @classmethod
-    def confirm(cls, parent: QWidget, title: str, message: str) -> bool:
+    def confirm(cls, parent: Optional[QWidget], title: str, message: str) -> bool:
         """Show confirm dialog and return True if confirmed."""
         dialog = cls(title, message, parent)
         return dialog.exec_() == QDialog.Accepted
@@ -75,11 +76,11 @@ class ConfirmDialog(BaseDialog):
 class ErrorDialog(BaseDialog):
     """Error message dialog."""
 
-    def __init__(self, title: str, message: str, details: str = None, parent=None):
+    def __init__(self, title: str, message: str, details: Optional[str] = None, parent: Optional[QWidget] = None):
         super().__init__(title, parent)
         self._setup_ui(message, details)
 
-    def _setup_ui(self, message: str, details: str):
+    def _setup_ui(self, message: str, details: Optional[str]):
         """Setup dialog UI."""
         layout = QVBoxLayout(self)
         layout.setSpacing(16)
@@ -111,7 +112,7 @@ class ErrorDialog(BaseDialog):
         layout.addWidget(self._create_button_row([ok_btn]))
 
     @classmethod
-    def show_error(cls, parent: QWidget, title: str, message: str, details: str = None):
+    def show_error(cls, parent: Optional[QWidget], title: str, message: str, details: Optional[str] = None) -> None:
         """Show error dialog."""
         dialog = cls(title, message, details, parent)
         dialog.exec_()
@@ -120,11 +121,11 @@ class ErrorDialog(BaseDialog):
 class InfoDialog(BaseDialog):
     """Information message dialog."""
 
-    def __init__(self, title: str, message: str, parent=None):
+    def __init__(self, title: str, message: str, parent: Optional[QWidget] = None) -> None:
         super().__init__(title, parent)
         self._setup_ui(message)
 
-    def _setup_ui(self, message: str):
+    def _setup_ui(self, message: str) -> None:
         """Setup dialog UI."""
         layout = QVBoxLayout(self)
         layout.setSpacing(16)
@@ -142,7 +143,7 @@ class InfoDialog(BaseDialog):
         layout.addWidget(self._create_button_row([ok_btn]))
 
     @classmethod
-    def show_info(cls, parent: QWidget, title: str, message: str):
+    def show_info(cls, parent: Optional[QWidget], title: str, message: str) -> None:
         """Show info dialog."""
         dialog = cls(title, message, parent)
         dialog.exec_()
