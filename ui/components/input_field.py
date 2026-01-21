@@ -57,7 +57,7 @@ class InputField(QLineEdit):
         input_font = create_font(
             size=FontManager.SIZE_BODY,  # 10pt
             weight=FontManager.WEIGHT_REGULAR,  # 400
-            letter_spacing=0
+            letter_spacing=0,
         )
         self.setFont(input_font)
 

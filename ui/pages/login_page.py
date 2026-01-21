@@ -218,7 +218,7 @@ class LoginPage(QWidget):
         title = QLabel("تسجيل الدخول إلى الحساب")
         title.setAlignment(Qt.AlignCenter)
         title.setMaximumWidth(315)  # Figma: W=315 Fill
-        title_font = create_font(size=FontManager.SIZE_TITLE, weight=QFont.Bold, letter_spacing=0)
+        title_font = create_font(size=FontManager.SIZE_HEADING, weight=QFont.Bold, letter_spacing=0)
         title.setFont(title_font)
         title.setStyleSheet("color: #172A47; background: transparent;")  # Grey/Dark - 900 (s-text)
         card_layout.addWidget(title,0, Qt.AlignCenter)
@@ -231,21 +231,21 @@ class LoginPage(QWidget):
         subtitle.setAlignment(Qt.AlignCenter)
         subtitle.setWordWrap(False)  # Single line only
         subtitle.setMinimumWidth(315)  # Ensure minimum width for single line
-        subtitle_font = create_font(size=14, weight=QFont.DemiBold, letter_spacing=0)
+        subtitle_font = create_font(size=FontManager.SIZE_BODY, weight=QFont.DemiBold, letter_spacing=0)
         subtitle.setFont(subtitle_font)
         subtitle.setStyleSheet("color: #86909B; background: transparent;")  # Grey/Dark - 500 (s-text)-(nav)
         card_layout.addWidget(subtitle,0, Qt.AlignCenter)
 
         # Reduce gap before form fields
-        card_layout.addSpacing(-8)
+        card_layout.addSpacing(16)
 
         # Username label
         username_label = QLabel("اسم المستخدم")
-        username_label_font = create_font(size=14, weight=QFont.DemiBold, letter_spacing=0)
+        username_label_font = create_font(size=10, weight=QFont.DemiBold, letter_spacing=0)
         username_label.setFont(username_label_font)
         username_label.setStyleSheet("color: #212B36; background: transparent;")
         card_layout.addWidget(username_label)
-        card_layout.addSpacing(-18)  # Reduce gap between label and input (tighter)
+        card_layout.addSpacing(-20)  # Reduce gap between label and input (tighter)
 
 
         # Username input
@@ -253,7 +253,7 @@ class LoginPage(QWidget):
         self.username_input.setPlaceholderText("أدخل اسم المستخدم")
         self.username_input.setLayoutDirection(Qt.RightToLeft)
         self.username_input.setFixedHeight(40)  # Figma appropriate height
-        username_input_font = create_font(size=13, weight=FontManager.WEIGHT_REGULAR, letter_spacing=0)
+        username_input_font = create_font(size=10, weight=FontManager.WEIGHT_REGULAR, letter_spacing=0)
         self.username_input.setFont(username_input_font)
         self.username_input.setStyleSheet("""
             QLineEdit {
@@ -279,18 +279,18 @@ class LoginPage(QWidget):
 
         # Password label
         password_label = QLabel("كلمة المرور")
-        password_label_font = create_font(size=14, weight=QFont.DemiBold, letter_spacing=0)
+        password_label_font = create_font(size=10, weight=QFont.DemiBold, letter_spacing=0)
         password_label.setFont(password_label_font)
         password_label.setStyleSheet("color: #212B36; background: transparent;")
         card_layout.addWidget(password_label)
-        card_layout.addSpacing(-18)  # Reduce gap between label and input (tighter)
+        card_layout.addSpacing(-20)  # Reduce gap between label and input (tighter)
 
         # Password input
         self.password_input = QLineEdit()
         self.password_input.setPlaceholderText("أدخل كلمة المرور")
         self.password_input.setEchoMode(QLineEdit.Password)
         self.password_input.setFixedHeight(40)  # Figma appropriate height
-        password_input_font = create_font(size=13, weight=FontManager.WEIGHT_REGULAR, letter_spacing=0)
+        password_input_font = create_font(size=10, weight=FontManager.WEIGHT_REGULAR, letter_spacing=0)
         self.password_input.setFont(password_input_font)
 
 
@@ -329,13 +329,13 @@ class LoginPage(QWidget):
         self.error_label.setWordWrap(True)
         self.error_label.hide()
         card_layout.addWidget(self.error_label)
-
+        card_layout.addSpacing(16)
         # Login button
         self.login_btn = QPushButton("تسجيل دخول")
         self.login_btn.setFixedHeight(48)  # Figma: ~50px button height
         self.login_btn.setFixedWidth(411)  # Card width (475) - Padding (32×2) = 411
         self.login_btn.setCursor(Qt.PointingHandCursor)
-        button_font = create_font(size=16, weight=QFont.Bold, letter_spacing=0)
+        button_font = create_font(size=12, weight=QFont.Bold, letter_spacing=0)
         self.login_btn.setFont(button_font)
         self.login_btn.setStyleSheet("""
             QPushButton {
