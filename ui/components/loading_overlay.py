@@ -2,21 +2,22 @@
 """
 Loading overlay component.
 """
+from typing import Optional
 
 from PyQt5.QtWidgets import QWidget, QVBoxLayout, QLabel, QProgressBar
 from PyQt5.QtCore import Qt
-from PyQt5.QtGui import QPainter, QColor
+from PyQt5.QtGui import QPainter, QColor, QPaintEvent
 
 
 class LoadingOverlay(QWidget):
     """Semi-transparent loading overlay with progress indicator."""
 
-    def __init__(self, parent=None):
+    def __init__(self, parent: Optional[QWidget] = None) -> None:
         super().__init__(parent)
         self._setup_ui()
         self.hide()
 
-    def _setup_ui(self):
+    def _setup_ui(self) -> None:
         """Setup overlay UI."""
         self.setAttribute(Qt.WA_TransparentForMouseEvents, False)
 
@@ -51,13 +52,13 @@ class LoadingOverlay(QWidget):
 
         layout.addWidget(container)
 
-    def paintEvent(self, event):
+    def paintEvent(self, event: QPaintEvent) -> None:
         """Paint semi-transparent background."""
         painter = QPainter(self)
         painter.fillRect(self.rect(), QColor(0, 0, 0, 100))
         super().paintEvent(event)
 
-    def show_loading(self, message: str = "Loading...", progress: int = -1):
+    def show_loading(self, message: str = "Loading...", progress: int = -1) -> None:
         """
         Show the loading overlay.
 
@@ -74,13 +75,14 @@ class LoadingOverlay(QWidget):
             self.progress_bar.setValue(progress)
 
         # Resize to parent
-        if self.parent():
-            self.setGeometry(self.parent().rect())
+        parent_widget = self.parent()
+        if parent_widget and isinstance(parent_widget, QWidget):
+            self.setGeometry(parent_widget.rect())
 
         self.show()
         self.raise_()
 
-    def update_progress(self, progress: int, message: str = None):
+    def update_progress(self, progress: int, message: Optional[str] = None) -> None:
         """
         Update progress and optionally message.
 
@@ -94,12 +96,12 @@ class LoadingOverlay(QWidget):
         if message:
             self.message_label.setText(message)
 
-    def hide_loading(self):
+    def hide_loading(self) -> None:
         """Hide the loading overlay."""
         self.hide()
 
     @classmethod
-    def create(cls, parent: QWidget) -> "LoadingOverlay":
+    def create(cls, parent: Optional[QWidget]) -> "LoadingOverlay":
         """Create and return a loading overlay for a widget."""
         overlay = cls(parent)
         return overlay
