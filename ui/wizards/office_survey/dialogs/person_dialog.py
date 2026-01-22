@@ -122,17 +122,17 @@ class PersonDialog(QDialog):
         row = 0
         first_name_label = QLabel("الاسم الأول")
         first_name_label.setStyleSheet(label_style)
-        first_name_label.setAlignment(Qt.AlignRight)
+       # first_name_label.setAlignment(Qt.AlignRight)
         person_grid.addWidget(first_name_label, row, 0)
 
         last_name_label = QLabel("الكنية")
         last_name_label.setStyleSheet(label_style)
-        last_name_label.setAlignment(Qt.AlignRight)
+        #last_name_label.setAlignment(Qt.AlignRight)
         person_grid.addWidget(last_name_label, row, 1)
 
         father_name_label = QLabel("اسم الأب")
         father_name_label.setStyleSheet(label_style)
-        father_name_label.setAlignment(Qt.AlignRight)
+        #father_name_label.setAlignment(Qt.AlignRight)
         person_grid.addWidget(father_name_label, row, 2)
 
         row += 1
@@ -155,17 +155,17 @@ class PersonDialog(QDialog):
         row += 1
         mother_name_label = QLabel("اسم الأم")
         mother_name_label.setStyleSheet(label_style)
-        mother_name_label.setAlignment(Qt.AlignRight)
+        #mother_name_label.setAlignment(Qt.AlignRight)
         person_grid.addWidget(mother_name_label, row, 0)
 
         birth_date_label = QLabel("تاريخ الميلاد")
         birth_date_label.setStyleSheet(label_style)
-        birth_date_label.setAlignment(Qt.AlignRight)
+       # birth_date_label.setAlignment(Qt.AlignRight)
         person_grid.addWidget(birth_date_label, row, 1)
 
         national_id_label = QLabel("الرقم الوطني")
         national_id_label.setStyleSheet(label_style)
-        national_id_label.setAlignment(Qt.AlignRight)
+        #national_id_label.setAlignment(Qt.AlignRight)
         person_grid.addWidget(national_id_label, row, 2)
 
         row += 1
@@ -198,17 +198,17 @@ class PersonDialog(QDialog):
         row += 1
         email_label = QLabel("البريد الالكتروني")
         email_label.setStyleSheet(label_style)
-        email_label.setAlignment(Qt.AlignRight)
+        #email_label.setAlignment(Qt.AlignRight)
         person_grid.addWidget(email_label, row, 0)
 
         relationship_label = QLabel("علاقة الشخص بوحدة العقار")
         relationship_label.setStyleSheet(label_style)
-        relationship_label.setAlignment(Qt.AlignRight)
+        #relationship_label.setAlignment(Qt.AlignRight)
         person_grid.addWidget(relationship_label, row, 1)
 
         landline_label = QLabel("رقم الهاتف")
         landline_label.setStyleSheet(label_style)
-        landline_label.setAlignment(Qt.AlignRight)
+        #landline_label.setAlignment(Qt.AlignRight)
         person_grid.addWidget(landline_label, row, 2)
 
         row += 1
@@ -242,7 +242,7 @@ class PersonDialog(QDialog):
         row += 1
         mobile_label = QLabel("رقم الموبايل")
         mobile_label.setStyleSheet(label_style)
-        mobile_label.setAlignment(Qt.AlignRight)
+        #mobile_label.setAlignment(Qt.AlignRight)
         person_grid.addWidget(mobile_label, row, 0)
 
         row += 1
@@ -286,7 +286,7 @@ class PersonDialog(QDialog):
         person_layout.addLayout(person_grid)
 
         # Save person button
-        save_person_btn = QPushButton("حفظ والانتقال للعلاقة")
+        save_person_btn = QPushButton("حفظ")
         save_person_btn.setStyleSheet("""
             QPushButton {
                 background-color: #4a90e2;
@@ -332,17 +332,17 @@ class PersonDialog(QDialog):
         row = 0
         contract_type_label = QLabel("نوع العقد")
         contract_type_label.setStyleSheet(label_style)
-        contract_type_label.setAlignment(Qt.AlignRight)
+       # contract_type_label.setAlignment(Qt.AlignRight)
         relation_grid.addWidget(contract_type_label, row, 0)
 
         rel_type_label = QLabel("نوع العلاقة")
         rel_type_label.setStyleSheet(label_style)
-        rel_type_label.setAlignment(Qt.AlignRight)
+        #rel_type_label.setAlignment(Qt.AlignRight)
         relation_grid.addWidget(rel_type_label, row, 1)
 
         start_date_label = QLabel("تاريخ بدء العلاقة")
         start_date_label.setStyleSheet(label_style)
-        start_date_label.setAlignment(Qt.AlignRight)
+        #start_date_label.setAlignment(Qt.AlignRight)
         relation_grid.addWidget(start_date_label, row, 2)
 
         row += 1
@@ -377,17 +377,17 @@ class PersonDialog(QDialog):
         row += 1
         ownership_share_label = QLabel("حصة الملكية")
         ownership_share_label.setStyleSheet(label_style)
-        ownership_share_label.setAlignment(Qt.AlignRight)
+        #ownership_share_label.setAlignment(Qt.AlignRight)
         relation_grid.addWidget(ownership_share_label, row, 0)
 
         evidence_type_label = QLabel("نوع الدليل")
         evidence_type_label.setStyleSheet(label_style)
-        evidence_type_label.setAlignment(Qt.AlignRight)
+        #evidence_type_label.setAlignment(Qt.AlignRight)
         relation_grid.addWidget(evidence_type_label, row, 1)
 
         evidence_desc_label = QLabel("وصف الدليل")
         evidence_desc_label.setStyleSheet(label_style)
-        evidence_desc_label.setAlignment(Qt.AlignRight)
+       # evidence_desc_label.setAlignment(Qt.AlignRight)
         relation_grid.addWidget(evidence_desc_label, row, 2)
 
         row += 1
@@ -413,7 +413,7 @@ class PersonDialog(QDialog):
         row += 1
         notes_label = QLabel("ادخل ملاحظاتك")
         notes_label.setStyleSheet(label_style)
-        notes_label.setAlignment(Qt.AlignRight)
+       # notes_label.setAlignment(Qt.AlignRight)
         relation_grid.addWidget(notes_label, row, 0, 1, 3)
 
         row += 1
@@ -439,7 +439,7 @@ class PersonDialog(QDialog):
         row += 1
         doc_label2 = QLabel("ارفع صور المستندات")
         doc_label2.setStyleSheet(label_style)
-        doc_label2.setAlignment(Qt.AlignRight)
+        #doc_label2.setAlignment(Qt.AlignRight)
         relation_grid.addWidget(doc_label2, row, 0, 1, 3)
 
         row += 1
