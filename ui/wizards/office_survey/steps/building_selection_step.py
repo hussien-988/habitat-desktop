@@ -190,31 +190,8 @@ class BuildingSelectionStep(BaseStep):
         """)
         self.search_on_map_btn.clicked.connect(self._open_map_search_dialog)
 
-        # Separator
-        separator = QLabel("|")
-        separator.setStyleSheet("color: #D1E8ED; font-size: 7pt;")
-
-        # Polygon selection button
-        self.polygon_select_btn = QPushButton("تحديد منطقة")
-        self.polygon_select_btn.setCursor(Qt.PointingHandCursor)
-        self.polygon_select_btn.setFlat(True)
-        self.polygon_select_btn.setStyleSheet("""
-            QPushButton {
-                border: none;
-                background: transparent;
-                color: #10B981;
-                font-family: 'IBM Plex Sans Arabic';
-                font-weight: 600;
-                font-size: 7pt;
-                text-decoration: underline;
-                padding: 0;
-                margin-top: 1px;
-            }
-        """)
-        self.polygon_select_btn.clicked.connect(self._open_polygon_selector_dialog)
-
-        left_links_layout.addWidget(self.polygon_select_btn)
-        left_links_layout.addWidget(separator)
+        # فقط زر البحث على الخريطة - تم إزالة زر "تحديد منطقة" كما طلب المستخدم
+        # الوظيفة الآن مدمجة في الخريطة نفسها
         left_links_layout.addWidget(self.search_on_map_btn)
 
         # Assemble search bar
@@ -506,11 +483,19 @@ class BuildingSelectionStep(BaseStep):
 
     def _open_polygon_selector_dialog(self):
         """
-        Open polygon building selector dialog.
+        تم إزالة هذه الوظيفة - الآن يتم استخدام الخريطة الموحدة
 
-        Allows user to draw a polygon on the map and select buildings within it.
-        If multiple buildings are found, shows a selection dialog.
+        DEPRECATED: This functionality has been removed as per user request.
+        Polygon selection is now integrated into the unified map view.
+        Use _open_map_search_dialog() instead which provides the same functionality.
         """
+        QMessageBox.information(
+            self,
+            "معلومة - Info",
+            "استخدم زر 'البحث على الخريطة' لتحديد المباني.\n"
+            "Please use 'Search on Map' button to select buildings."
+        )
+        return
         try:
             from ui.components.polygon_building_selector_dialog import PolygonBuildingSelectorDialog
 

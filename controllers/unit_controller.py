@@ -376,12 +376,21 @@ class UnitController(BaseController):
 
     def _query_units(self, filter_: UnitFilter) -> List[PropertyUnit]:
         """Execute unit query with filter."""
-        query = "SELECT * FROM units WHERE 1=1"
+        query = "SELECT * FROM property_units WHERE 1=1"
         params = []
 
         if filter_.building_uuid:
-            query += " AND building_uuid = ?"
-            params.append(filter_.building_uuid)
+            # Convert building_uuid to building_id since table uses building_id
+            building_result = self.db.fetch_one(
+                "SELECT building_id FROM buildings WHERE building_uuid = ?",
+                (filter_.building_uuid,)
+            )
+            if building_result:
+                query += " AND building_id = ?"
+                params.append(building_result['building_id'])
+            else:
+                # Building not found, return empty list
+                return []
 
         if filter_.unit_type:
             query += " AND unit_type = ?"
@@ -408,12 +417,11 @@ class UnitController(BaseController):
 
         query += f" ORDER BY floor_number, unit_id LIMIT {filter_.limit} OFFSET {filter_.offset}"
 
-        cursor = self.db.cursor()
-        cursor.execute(query, params)
+        rows = self.db.fetch_all(query, tuple(params) if params else None)
 
         units = []
-        for row in cursor.fetchall():
-            units.append(Unit.from_row(row))
+        for row in rows:
+            units.append(self.repository._row_to_unit(row))
 
         return units
 
@@ -436,12 +444,11 @@ class UnitController(BaseController):
 
             # Verify building exists
             if data.get("building_uuid"):
-                cursor = self.db.cursor()
-                cursor.execute(
-                    "SELECT COUNT(*) FROM buildings WHERE building_uuid = ?",
+                result = self.db.fetch_one(
+                    "SELECT COUNT(*) as count FROM buildings WHERE building_uuid = ?",
                     (data["building_uuid"],)
                 )
-                if cursor.fetchone()[0] == 0:
+                if not result or result['count'] == 0:
                     errors.append("Building not found")
 
         # Validate floor number
@@ -473,50 +480,46 @@ class UnitController(BaseController):
             return ""
 
         # Get building ID
-        cursor = self.db.cursor()
-        cursor.execute(
+        result = self.db.fetch_one(
             "SELECT building_id FROM buildings WHERE building_uuid = ?",
             (building_uuid,)
         )
-        result = cursor.fetchone()
-        building_id = result[0] if result else "UNKNOWN"
+        building_id = result['building_id'] if result else "UNKNOWN"
 
-        # Get next unit number for this building
-        cursor.execute("""
-            SELECT COUNT(*) + 1 FROM units WHERE building_uuid = ?
-        """, (building_uuid,))
+        # Get next unit number for this building (using building_id)
+        result = self.db.fetch_one("""
+            SELECT COUNT(*) + 1 as next_num FROM property_units WHERE building_id = ?
+        """, (building_id,))
 
-        unit_num = cursor.fetchone()[0]
+        unit_num = result['next_num'] if result else 1
 
         # Format: BuildingID-UnitNum
         return f"{building_id}-U{str(unit_num).zfill(3)}"
 
     def _has_dependencies(self, unit_uuid: str) -> bool:
         """Check if unit has dependent records."""
-        cursor = self.db.cursor()
-
         # Check for claims
-        cursor.execute(
-            "SELECT COUNT(*) FROM claims WHERE unit_uuid = ?",
+        result = self.db.fetch_one(
+            "SELECT COUNT(*) as count FROM claims WHERE unit_uuid = ?",
             (unit_uuid,)
         )
-        if cursor.fetchone()[0] > 0:
+        if result and result['count'] > 0:
             return True
 
         # Check for relations
-        cursor.execute(
-            "SELECT COUNT(*) FROM relations WHERE unit_uuid = ?",
+        result = self.db.fetch_one(
+            "SELECT COUNT(*) as count FROM relations WHERE unit_uuid = ?",
             (unit_uuid,)
         )
-        if cursor.fetchone()[0] > 0:
+        if result and result['count'] > 0:
             return True
 
         # Check for households
-        cursor.execute(
-            "SELECT COUNT(*) FROM households WHERE unit_uuid = ?",
+        result = self.db.fetch_one(
+            "SELECT COUNT(*) as count FROM households WHERE unit_uuid = ?",
             (unit_uuid,)
         )
-        if cursor.fetchone()[0] > 0:
+        if result and result['count'] > 0:
             return True
 
         return False
@@ -531,35 +534,33 @@ class UnitController(BaseController):
             OperationResult with statistics dictionary
         """
         try:
-            cursor = self.db.cursor()
-
             # Total count
-            cursor.execute("SELECT COUNT(*) FROM units")
-            total = cursor.fetchone()[0]
+            result = self.db.fetch_one("SELECT COUNT(*) as count FROM property_units")
+            total = result['count'] if result else 0
 
             # By type
-            cursor.execute("""
+            rows = self.db.fetch_all("""
                 SELECT unit_type, COUNT(*) as count
-                FROM units
+                FROM property_units
                 WHERE unit_type IS NOT NULL
                 GROUP BY unit_type
             """)
-            by_type = {row[0]: row[1] for row in cursor.fetchall()}
+            by_type = {row['unit_type']: row['count'] for row in rows}
 
             # By occupancy status
-            cursor.execute("""
+            rows = self.db.fetch_all("""
                 SELECT occupancy_status, COUNT(*) as count
-                FROM units
+                FROM property_units
                 WHERE occupancy_status IS NOT NULL
                 GROUP BY occupancy_status
             """)
-            by_occupancy = {row[0]: row[1] for row in cursor.fetchall()}
+            by_occupancy = {row['occupancy_status']: row['count'] for row in rows}
 
             # Average area
-            cursor.execute("""
-                SELECT AVG(unit_area) FROM units WHERE unit_area > 0
+            result = self.db.fetch_one("""
+                SELECT AVG(unit_area) as avg_area FROM property_units WHERE unit_area > 0
             """)
-            avg_area = cursor.fetchone()[0] or 0
+            avg_area = result['avg_area'] if result and result['avg_area'] else 0
 
             stats = {
                 "total": total,
@@ -583,9 +584,16 @@ class UnitController(BaseController):
         Returns:
             Number of units
         """
-        cursor = self.db.cursor()
-        cursor.execute(
-            "SELECT COUNT(*) FROM units WHERE building_uuid = ?",
+        # Get building_id from building_uuid
+        building_result = self.db.fetch_one(
+            "SELECT building_id FROM buildings WHERE building_uuid = ?",
             (building_uuid,)
         )
-        return cursor.fetchone()[0]
+        if not building_result:
+            return 0
+
+        result = self.db.fetch_one(
+            "SELECT COUNT(*) as count FROM property_units WHERE building_id = ?",
+            (building_result['building_id'],)
+        )
+        return result['count'] if result else 0

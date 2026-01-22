@@ -187,265 +187,123 @@ class BuildingMapWidget(QObject):
         self._channel.registerObject('buildingBridge', self._bridge)
         self._map_view.page().setWebChannel(self._channel)
 
+    def _parse_wkt_to_geojson(self, wkt: str) -> Optional[dict]:
+        """
+        تحويل WKT إلى GeoJSON.
+
+        Args:
+            wkt: WKT string (e.g., "POLYGON((lon lat, lon lat, ...))")
+
+        Returns:
+            GeoJSON geometry dict or None if invalid
+        """
+        try:
+            wkt = wkt.strip().upper()
+
+            if not wkt.startswith('POLYGON'):
+                return None
+
+            # Extract coordinates from WKT
+            # Format: POLYGON((lon1 lat1, lon2 lat2, lon3 lat3, lon1 lat1))
+            coords_str = wkt.replace('POLYGON', '').replace('((', '').replace('))', '').strip()
+
+            # Split into coordinate pairs
+            pairs = [p.strip() for p in coords_str.split(',')]
+
+            # Convert to GeoJSON format [lon, lat]
+            coordinates = []
+            for pair in pairs:
+                parts = pair.split()
+                if len(parts) == 2:
+                    try:
+                        lon = float(parts[0])
+                        lat = float(parts[1])
+                        coordinates.append([lon, lat])
+                    except ValueError:
+                        continue
+
+            if len(coordinates) < 3:
+                return None
+
+            # GeoJSON polygon requires array of rings
+            return {
+                "type": "Polygon",
+                "coordinates": [coordinates]
+            }
+
+        except Exception as e:
+            logger.error(f"Failed to parse WKT: {e}")
+            return None
+
     def _load_map(self):
-        """Load the interactive map with building markers."""
+        """Load the interactive map with building markers and polygons - استخدام LeafletHTMLGenerator الموحد."""
         if not self._map_view:
             return
 
         from services.tile_server_manager import get_tile_server_url
+        from services.leaflet_html_generator import generate_leaflet_html
+        import json
 
         tile_server_url = get_tile_server_url()
         if not tile_server_url.endswith('/'):
             tile_server_url += '/'
 
-        # Get buildings with coordinates
-        buildings = self.building_repo.get_all(limit=200)
-        markers_js = self._generate_markers_js(buildings)
-
-        # Generate HTML
-        html = self._generate_map_html(tile_server_url, markers_js)
-
-        # Load HTML
         base_url = QUrl(tile_server_url)
+
+        # تحويل المباني إلى GeoJSON باستخدام نفس منطق map_page.py
+        buildings = self.building_repo.get_all(limit=200)
+
+        features = []
+        for building in buildings:
+            geometry = None
+
+            # أولوية للمضلع إذا كان موجوداً
+            if building.geo_location and 'POLYGON' in building.geo_location.upper():
+                geometry = self._parse_wkt_to_geojson(building.geo_location)
+
+            # إذا لم يكن هناك مضلع، استخدم النقطة
+            if not geometry and building.latitude and building.longitude:
+                geometry = {
+                    "type": "Point",
+                    "coordinates": [building.longitude, building.latitude]
+                }
+
+            if geometry:
+                features.append({
+                    "type": "Feature",
+                    "geometry": geometry,
+                    "properties": {
+                        "building_id": building.building_id or "",
+                        "neighborhood": building.neighborhood_name_ar or building.neighborhood_name or "",
+                        "status": building.building_status or "intact",
+                        "units": building.number_of_units or 0,
+                        "type": building.building_type or "",
+                        "geometry_type": geometry["type"]
+                    }
+                })
+
+        buildings_geojson = json.dumps({
+            "type": "FeatureCollection",
+            "features": features
+        })
+
+        # استخدام LeafletHTMLGenerator الموحد مع تفعيل زر الاختيار
+        # الـ popup يفتح تلقائياً عند النقر، والزر داخل الـ popup
+        html = generate_leaflet_html(
+            tile_server_url=tile_server_url.rstrip('/'),
+            buildings_geojson=buildings_geojson,
+            center_lat=36.2021,
+            center_lon=37.1343,
+            zoom=13,
+            show_legend=True,
+            show_layer_control=False,
+            enable_selection=True,
+            enable_drawing=False
+        )
+
+        # LeafletHTMLGenerator يتعامل مع كل شيء - لا حاجة لإضافة JavaScript إضافي
         self._map_view.setHtml(html, base_url)
 
-    def _generate_markers_js(self, buildings) -> str:
-        """Generate JavaScript code for building markers."""
-        markers_js = ""
-
-        for b in buildings:
-            if not (hasattr(b, 'latitude') and b.latitude and hasattr(b, 'longitude') and b.longitude):
-                continue
-
-            building_type = getattr(b, 'building_type_display', getattr(b, 'building_type', 'مبنى'))
-            building_status = getattr(b, 'building_status', 'unknown')
-            status_display = getattr(b, 'building_status_display', building_status)
-            marker_color = self._get_marker_color(building_status)
-
-            safe_id = b.building_id.replace('-', '_')
-
-            markers_js += f"""
-                var icon_{safe_id} = L.divIcon({{
-                    className: 'custom-pin-marker',
-                    html: '<div class="pin-marker" style="background-color: {marker_color};"><div class="pin-point"></div></div>',
-                    iconSize: [20, 26],
-                    iconAnchor: [10, 26],
-                    popupAnchor: [0, -28]
-                }});
-
-                var popupContent_{safe_id} = `
-                    <div style="text-align: center; min-width: 180px;">
-                        <div style="font-size: 16px; font-weight: bold; color: #2C3E50; margin-bottom: 8px;">
-                            {b.building_id}
-                        </div>
-                        <div style="font-size: 13px; color: #555; margin-bottom: 4px;">
-                            النوع: {building_type}
-                        </div>
-                        <div style="font-size: 13px; color: {marker_color}; font-weight: bold; margin-bottom: 12px;">
-                            الحالة: {status_display}
-                        </div>
-                        <button onclick="selectBuilding('{b.building_id}')"
-                            style="width: 100%; padding: 8px 16px; background-color: #0072BC; color: white;
-                                   border: none; border-radius: 6px; cursor: pointer; font-weight: bold;
-                                   font-size: 14px;">
-                            ✓ اختيار هذا المبنى
-                        </button>
-                    </div>
-                `;
-
-                L.marker([{b.latitude}, {b.longitude}], {{ icon: icon_{safe_id} }})
-                    .addTo(map)
-                    .bindPopup(popupContent_{safe_id}, {{
-                        closeButton: true,
-                        maxWidth: 250,
-                        className: 'custom-popup'
-                    }});
-            """
-
-        return markers_js
-
-    def _get_marker_color(self, status: str) -> str:
-        """Get marker color based on building status."""
-        colors = {
-            'intact': '#28A745',
-            'standing': '#28A745',
-            'damaged': '#FFC107',
-            'partially_damaged': '#FF9800',
-            'severely_damaged': '#FF5722',
-            'destroyed': '#DC3545',
-            'demolished': '#DC3545',
-            'rubble': '#8B0000'
-        }
-        return colors.get(status, '#0072BC')
-
-    def _generate_map_html(self, tile_server_url: str, markers_js: str) -> str:
-        """Generate the complete map HTML."""
-        return f"""
-<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="utf-8">
-    <link rel="stylesheet" href="{tile_server_url}/leaflet.css" />
-    <style>
-        body {{ margin: 0; padding: 0; }}
-        #map {{ width: 100%; height: 100vh; }}
-
-        .custom-pin-marker {{ cursor: pointer; }}
-        .pin-marker {{
-            width: 20px;
-            height: 20px;
-            border-radius: 50% 50% 50% 0;
-            transform: rotate(-45deg);
-            border: 2px solid white;
-            box-shadow: 0 2px 6px rgba(0,0,0,0.4);
-            position: relative;
-            transition: transform 0.2s ease;
-        }}
-        .pin-marker:hover {{
-            transform: rotate(-45deg) scale(1.2);
-            box-shadow: 0 3px 10px rgba(0,0,0,0.6);
-        }}
-        .pin-point {{
-            width: 6px;
-            height: 6px;
-            background: white;
-            border-radius: 50%;
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-        }}
-
-        .custom-popup .leaflet-popup-content-wrapper {{
-            border-radius: 10px;
-            box-shadow: 0 4px 16px rgba(0,0,0,0.2);
-            padding: 4px;
-        }}
-        .custom-popup .leaflet-popup-content {{
-            margin: 12px;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-        }}
-        .custom-popup button:hover {{
-            background-color: #005A94 !important;
-            transform: scale(1.02);
-            transition: all 0.2s ease;
-        }}
-
-        .legend {{
-            position: absolute;
-            bottom: 20px;
-            right: 20px;
-            background: white;
-            padding: 12px;
-            border-radius: 8px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.3);
-            font-size: 12px;
-            z-index: 1000;
-        }}
-        .legend-title {{
-            font-weight: bold;
-            margin-bottom: 8px;
-            color: #2C3E50;
-            border-bottom: 1px solid #E1E8ED;
-            padding-bottom: 4px;
-        }}
-        .legend-item {{
-            display: flex;
-            align-items: center;
-            margin: 4px 0;
-        }}
-        .legend-color {{
-            width: 14px;
-            height: 14px;
-            border-radius: 50%;
-            margin-left: 8px;
-            border: 1px solid #DDD;
-        }}
-    </style>
-</head>
-<body>
-    <div id="map"></div>
-
-    <div class="legend">
-        <div class="legend-title">حالة المبنى</div>
-        <div class="legend-item">
-            <span class="legend-color" style="background-color: #28A745;"></span>
-            <span>سليم</span>
-        </div>
-        <div class="legend-item">
-            <span class="legend-color" style="background-color: #FFC107;"></span>
-            <span>متضرر</span>
-        </div>
-        <div class="legend-item">
-            <span class="legend-color" style="background-color: #FF9800;"></span>
-            <span>متضرر جزئياً</span>
-        </div>
-        <div class="legend-item">
-            <span class="legend-color" style="background-color: #FF5722;"></span>
-            <span>متضرر بشدة</span>
-        </div>
-        <div class="legend-item">
-            <span class="legend-color" style="background-color: #DC3545;"></span>
-            <span>مهدم</span>
-        </div>
-        <div class="legend-item">
-            <span class="legend-color" style="background-color: #8B0000;"></span>
-            <span>ركام</span>
-        </div>
-    </div>
-
-    <script src="{tile_server_url}/leaflet.js"></script>
-    <script src="qrc:///qtwebchannel/qwebchannel.js"></script>
-    <script>
-        var buildingBridge = null;
-
-        new QWebChannel(qt.webChannelTransport, function(channel) {{
-            buildingBridge = channel.objects.buildingBridge;
-            console.log('QWebChannel initialized');
-        }});
-
-        var map = L.map('map', {{
-            preferCanvas: true,
-            zoomAnimation: true,
-            fadeAnimation: false
-        }}).setView([36.2, 37.15], 13);
-
-        L.tileLayer('{tile_server_url}/tiles/{{z}}/{{x}}/{{y}}.png', {{
-            maxZoom: 16,
-            minZoom: 10,
-            maxNativeZoom: 16,
-            attribution: 'UN-Habitat Syria',
-            updateWhenIdle: false,
-            updateWhenZooming: false,
-            keepBuffer: 4,
-            errorTileUrl: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=='
-        }}).addTo(map);
-
-        {markers_js}
-
-        function selectBuilding(buildingId) {{
-            console.log('Selected building: ' + buildingId);
-
-            var button = event.target;
-            button.disabled = true;
-            button.innerHTML = '⏳ جاري الاختيار...';
-            button.style.backgroundColor = '#6C757D';
-
-            if (buildingBridge) {{
-                buildingBridge.selectBuilding(buildingId);
-                setTimeout(function() {{
-                    map.closePopup();
-                }}, 500);
-            }} else {{
-                console.error('buildingBridge not initialized');
-                button.innerHTML = '❌ خطأ في الاتصال';
-                button.style.backgroundColor = '#DC3545';
-            }}
-        }}
-    </script>
-</body>
-</html>
-"""
 
     def _on_building_selected_from_map(self, building_id: str):
         """Handle building selection from map."""

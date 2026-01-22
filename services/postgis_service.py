@@ -1329,15 +1329,24 @@ class SQLiteSpatialService:
 
         results = []
         for row in cursor.fetchall():
-            if self._point_in_polygon(row[3], row[2], polygon_points):
+            # Handle both tuple and Row objects
+            try:
+                lng = row[3] if isinstance(row, (tuple, list)) else row['longitude']
+                lat = row[2] if isinstance(row, (tuple, list)) else row['latitude']
+            except (KeyError, IndexError):
+                # Try accessing by column name
+                lng = row['longitude'] if hasattr(row, 'keys') else row[3]
+                lat = row['latitude'] if hasattr(row, 'keys') else row[2]
+
+            if self._point_in_polygon(lng, lat, polygon_points):
                 results.append({
-                    'building_uuid': row[0],
-                    'building_id': row[1],
-                    'latitude': row[2],
-                    'longitude': row[3],
-                    'neighborhood_code': row[4],
-                    'building_type': row[5],
-                    'building_status': row[6]
+                    'building_uuid': row[0] if isinstance(row, (tuple, list)) else row['building_uuid'],
+                    'building_id': row[1] if isinstance(row, (tuple, list)) else row['building_id'],
+                    'latitude': lat,
+                    'longitude': lng,
+                    'neighborhood_code': row[4] if isinstance(row, (tuple, list)) else row['neighborhood_code'],
+                    'building_type': row[5] if isinstance(row, (tuple, list)) else row['building_type'],
+                    'building_status': row[6] if isinstance(row, (tuple, list)) else row['building_status']
                 })
 
         return results[:limit]

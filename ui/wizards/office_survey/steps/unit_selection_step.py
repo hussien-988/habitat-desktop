@@ -239,7 +239,7 @@ class UnitSelectionStep(BaseStep):
                 child.widget().deleteLater()
 
         # Load units from database
-        result = self.unit_controller.get_units_by_building(self.context.building.building_id)
+        result = self.unit_controller.get_units_for_building(self.context.building.building_uuid)
 
         if not result.success:
             logger.error(f"Failed to load units: {result.message}")
