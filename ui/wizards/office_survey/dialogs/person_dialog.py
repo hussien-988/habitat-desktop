@@ -611,7 +611,7 @@ class PersonDialog(QDialog):
         self.accept()
 
     def get_person_data(self) -> Dict[str, Any]:
-        """Get person data from form."""
+        """Get person data from form including relationship data."""
         return {
             'person_id': self.person_data.get('person_id') if self.person_data else str(uuid.uuid4()),
             'first_name': self.first_name.text().strip(),
@@ -625,5 +625,15 @@ class PersonDialog(QDialog):
             'email': self.email.text().strip() or None,
             'landline': self.landline.text().strip() or None,
             'relationship_type': self.relationship_combo.currentData(),
-            'is_contact_person': self.is_contact.isChecked()
+            'is_contact_person': self.is_contact.isChecked(),
+            # Relationship tab data
+            'relation_data': {
+                'contract_type': self.contract_type.currentText() if self.contract_type.currentIndex() > 0 else None,
+                'rel_type': self.rel_type_combo.currentData(),
+                'start_date': self.start_date.date().toString('yyyy-MM-dd'),
+                'ownership_share': self.ownership_share.value(),
+                'evidence_type': self.evidence_type.currentText() if self.evidence_type.currentIndex() > 0 else None,
+                'evidence_desc': self.evidence_desc.text().strip() or None,
+                'notes': self.notes.toPlainText().strip() or None
+            }
         }

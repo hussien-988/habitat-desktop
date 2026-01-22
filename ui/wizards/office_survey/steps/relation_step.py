@@ -253,6 +253,43 @@ class RelationStep(BaseStep):
 
         card_layout.addLayout(grid)
 
+        # Pre-fill form fields with relation data from person dialog Tab 2
+        relation_data = person.get('relation_data', {})
+
+        # Pre-fill contract type
+        if relation_data.get('contract_type'):
+            idx = contract_type.findText(relation_data['contract_type'])
+            if idx >= 0:
+                contract_type.setCurrentIndex(idx)
+
+        # Pre-fill relation type from relation_data (priority) or relationship_type
+        rel_type_value = relation_data.get('rel_type') or person.get('relationship_type')
+        if rel_type_value:
+            for i in range(relation_type.count()):
+                if relation_type.itemData(i) == rel_type_value:
+                    relation_type.setCurrentIndex(i)
+                    break
+
+        # Pre-fill start date
+        if relation_data.get('start_date'):
+            date = QDate.fromString(relation_data['start_date'], 'yyyy-MM-dd')
+            if date.isValid():
+                start_date.setDate(date)
+
+        # Pre-fill ownership share
+        if relation_data.get('ownership_share') is not None:
+            ownership_share.setText(str(relation_data['ownership_share']))
+
+        # Pre-fill evidence type
+        if relation_data.get('evidence_type'):
+            idx = evidence_type.findText(relation_data['evidence_type'])
+            if idx >= 0:
+                evidence_type.setCurrentIndex(idx)
+
+        # Pre-fill evidence description
+        if relation_data.get('evidence_desc'):
+            evidence_desc.setText(relation_data['evidence_desc'])
+
         # Notes section
         notes_label = self._create_label("ادخل ملاحظاتك", label_style)
         card_layout.addWidget(notes_label)
@@ -268,6 +305,11 @@ class RelationStep(BaseStep):
                 color: #2d3436;
             }
         """)
+
+        # Pre-fill notes
+        if relation_data.get('notes'):
+            notes.setPlainText(relation_data['notes'])
+
         card_layout.addWidget(notes)
 
         # Documents section
