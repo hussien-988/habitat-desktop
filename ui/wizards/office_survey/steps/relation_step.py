@@ -50,7 +50,7 @@ class RelationStep(BaseStep):
         title_box = QVBoxLayout()
         title = QLabel("العلاقة والأدلة")
         title.setStyleSheet("color: #111827; font-weight: 700; font-size: 16px;")
-        subtitle = QLabel("تسجيل تفاصيل ملكية شخص للوحدة عقارية")
+        subtitle = QLabel("نوع العلاقة")
         subtitle.setStyleSheet("color: #6B7280; font-size: 12px;")
         title_box.addWidget(title)
         title_box.addWidget(subtitle)
