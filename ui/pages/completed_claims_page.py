@@ -104,6 +104,12 @@ class CompletedClaimsPage(QWidget):
         # Show empty state by default
         self._show_empty_state()
 
+    def showEvent(self, event):
+        """تحديث البيانات عند عرض الصفحة"""
+        super().showEvent(event)
+        # تحديث البيانات تلقائياً عند فتح الصفحة
+        self.refresh()
+
     def _create_header(self):
         """
         Create page header with dynamic title and add button.

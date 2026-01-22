@@ -74,9 +74,9 @@ class TileServer(BaseHTTPRequestHandler):
                 self._serve_static_file_cached(self.assets_path / 'leaflet.js', 'application/javascript')
             elif path == '/leaflet.css':
                 self._serve_static_file_cached(self.assets_path / 'leaflet.css', 'text/css')
-            elif path == '/leaflet.draw.js':
+            elif path == '/leaflet-draw.js' or path == '/leaflet.draw.js':
                 self._serve_static_file_cached(self.assets_path / 'leaflet.draw.js', 'application/javascript')
-            elif path == '/leaflet.draw.css':
+            elif path == '/leaflet-draw.css' or path == '/leaflet.draw.css':
                 self._serve_static_file_cached(self.assets_path / 'leaflet.draw.css', 'text/css')
             elif path.startswith('/images/'):
                 image_name = path[8:]
@@ -103,10 +103,18 @@ class TileServer(BaseHTTPRequestHandler):
             else:
                 self.send_response(404)
                 self.end_headers()
+        except (ConnectionAbortedError, ConnectionResetError, BrokenPipeError) as e:
+            # Normal browser behavior - connection closed prematurely (e.g., tab closed, navigation)
+            # Don't log these as errors - they're expected in web applications
+            pass
         except Exception as e:
             logger.error(f"Tile server error: {e}")
-            self.send_response(500)
-            self.end_headers()
+            try:
+                self.send_response(500)
+                self.end_headers()
+            except (ConnectionAbortedError, ConnectionResetError, BrokenPipeError):
+                # Connection already closed, can't send error response
+                pass
 
     def _serve_qwebchannel(self):
         """Serve Qt WebChannel JavaScript as empty placeholder."""
@@ -228,36 +236,40 @@ class TileServer(BaseHTTPRequestHandler):
 
     def _serve_static_file_cached(self, filepath, content_type):
         """Serve a static file with caching."""
-        cache_key = str(filepath)
+        try:
+            cache_key = str(filepath)
 
-        if cache_key in TileServer._static_cache:
-            data = TileServer._static_cache[cache_key]
-            self.send_response(200)
-            self.send_header('Content-Type', content_type)
-            self.send_header('Access-Control-Allow-Origin', '*')
-            self.send_header('Cache-Control', 'public, max-age=31536000, immutable')
-            self.send_header('Content-Length', len(data))
-            self.end_headers()
-            self.wfile.write(data)
-            return
+            if cache_key in TileServer._static_cache:
+                data = TileServer._static_cache[cache_key]
+                self.send_response(200)
+                self.send_header('Content-Type', content_type)
+                self.send_header('Access-Control-Allow-Origin', '*')
+                self.send_header('Cache-Control', 'public, max-age=31536000, immutable')
+                self.send_header('Content-Length', len(data))
+                self.end_headers()
+                self.wfile.write(data)
+                return
 
-        if filepath.exists():
-            with open(filepath, 'rb') as f:
-                data = f.read()
+            if filepath.exists():
+                with open(filepath, 'rb') as f:
+                    data = f.read()
 
-            if len(data) < 500000:
-                TileServer._static_cache[cache_key] = data
+                if len(data) < 500000:
+                    TileServer._static_cache[cache_key] = data
 
-            self.send_response(200)
-            self.send_header('Content-Type', content_type)
-            self.send_header('Access-Control-Allow-Origin', '*')
-            self.send_header('Cache-Control', 'public, max-age=31536000, immutable')
-            self.send_header('Content-Length', len(data))
-            self.end_headers()
-            self.wfile.write(data)
-        else:
-            self.send_response(404)
-            self.end_headers()
+                self.send_response(200)
+                self.send_header('Content-Type', content_type)
+                self.send_header('Access-Control-Allow-Origin', '*')
+                self.send_header('Cache-Control', 'public, max-age=31536000, immutable')
+                self.send_header('Content-Length', len(data))
+                self.end_headers()
+                self.wfile.write(data)
+            else:
+                self.send_response(404)
+                self.end_headers()
+        except (ConnectionAbortedError, ConnectionResetError, BrokenPipeError):
+            # Connection closed by client - ignore
+            pass
 
     def _serve_tile_cached(self, z, x, y):
         """Serve a map tile with aggressive caching."""
@@ -297,13 +309,17 @@ class TileServer(BaseHTTPRequestHandler):
 
     def _send_tile(self, tile_data):
         """Send tile data with proper headers."""
-        self.send_response(200)
-        self.send_header('Content-Type', 'image/png')
-        self.send_header('Access-Control-Allow-Origin', '*')
-        self.send_header('Cache-Control', 'public, max-age=31536000, immutable')
-        self.send_header('Content-Length', len(tile_data))
-        self.end_headers()
-        self.wfile.write(tile_data)
+        try:
+            self.send_response(200)
+            self.send_header('Content-Type', 'image/png')
+            self.send_header('Access-Control-Allow-Origin', '*')
+            self.send_header('Cache-Control', 'public, max-age=31536000, immutable')
+            self.send_header('Content-Length', len(tile_data))
+            self.end_headers()
+            self.wfile.write(tile_data)
+        except (ConnectionAbortedError, ConnectionResetError, BrokenPipeError):
+            # Connection closed by client - ignore
+            pass
 
     def _send_empty_tile(self):
         """Send an empty transparent tile."""

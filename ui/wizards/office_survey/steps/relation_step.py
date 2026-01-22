@@ -335,6 +335,51 @@ class RelationStep(BaseStep):
 
         card_layout.addWidget(upload_box)
 
+        # Save relation button
+        save_btn_row = QHBoxLayout()
+        save_btn_row.addStretch(1)
+
+        self.btn_save_relation = QPushButton("حفظ العلاقة ✓")
+        self.btn_save_relation.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {Config.PRIMARY_COLOR};
+                color: white;
+                border: none;
+                border-radius: 8px;
+                padding: 12px 32px;
+                font-weight: 700;
+                font-size: 14px;
+            }}
+            QPushButton:hover {{
+                background-color: #1D4ED8;
+            }}
+        """)
+        self.btn_save_relation.clicked.connect(self._save_relation)
+        save_btn_row.addWidget(self.btn_save_relation)
+
+        card_layout.addLayout(save_btn_row)
+
+        # Saved relations list
+        outer.addSpacing(12)
+        saved_title = QLabel("العلاقات المحفوظة")
+        saved_title.setStyleSheet("color: #111827; font-weight: 700; font-size: 14px;")
+        outer.addWidget(saved_title)
+
+        self.relations_list_frame = QFrame()
+        self.relations_list_frame.setStyleSheet("""
+            QFrame {
+                background-color: white;
+                border: 1px solid #E1E8ED;
+                border-radius: 12px;
+            }
+        """)
+        self.relations_list_layout = QVBoxLayout(self.relations_list_frame)
+        self.relations_list_layout.setContentsMargins(12, 12, 12, 12)
+        self.relations_list_layout.setSpacing(8)
+        outer.addWidget(self.relations_list_frame)
+
+        outer.addStretch(1)
+
     def _pick_evidence_files(self):
         """Pick evidence files for relation - exact copy from old wizard."""
         files, _ = QFileDialog.getOpenFileNames(
@@ -398,6 +443,87 @@ class RelationStep(BaseStep):
             Toast.show_toast(self, "تم حفظ العلاقة", Toast.SUCCESS)
 
         self._clear_relation_form()
+        self._update_relations_list()
+
+    def _update_relations_list(self):
+        """Update the list of saved relations."""
+        # Clear existing items
+        while self.relations_list_layout.count():
+            child = self.relations_list_layout.takeAt(0)
+            if child.widget():
+                child.widget().deleteLater()
+
+        if len(self.context.relations) == 0:
+            empty_label = QLabel("لم يتم إضافة أي علاقات بعد")
+            empty_label.setStyleSheet("color: #6B7280; font-size: 12px; padding: 12px;")
+            empty_label.setAlignment(Qt.AlignCenter)
+            self.relations_list_layout.addWidget(empty_label)
+        else:
+            for idx, relation in enumerate(self.context.relations):
+                rel_card = QFrame()
+                rel_card.setStyleSheet("""
+                    QFrame {
+                        background-color: #F9FAFB;
+                        border: 1px solid #E1E8ED;
+                        border-radius: 8px;
+                        padding: 8px;
+                    }
+                """)
+                rel_layout = QHBoxLayout(rel_card)
+                rel_layout.setContentsMargins(12, 8, 12, 8)
+
+                # Relation info
+                info_label = QLabel(f"👤 {relation['person_name']} - {self._get_relation_type_ar(relation['relation_type'])} ({relation['ownership_share']}%)")
+                info_label.setStyleSheet("color: #111827; font-weight: 600; font-size: 12px;")
+                rel_layout.addWidget(info_label)
+                rel_layout.addStretch()
+
+                # Delete button
+                delete_btn = QPushButton("🗑")
+                delete_btn.setFixedSize(28, 28)
+                delete_btn.setStyleSheet("""
+                    QPushButton {
+                        background-color: #FEE2E2;
+                        border: none;
+                        border-radius: 6px;
+                        font-size: 14px;
+                    }
+                    QPushButton:hover {
+                        background-color: #FCA5A5;
+                    }
+                """)
+                delete_btn.clicked.connect(lambda checked, i=idx: self._delete_relation(i))
+                rel_layout.addWidget(delete_btn)
+
+                self.relations_list_layout.addWidget(rel_card)
+
+    def _get_relation_type_ar(self, relation_type: str) -> str:
+        """Get Arabic name for relation type."""
+        types = {
+            "owner": "مالك",
+            "co_owner": "شريك في الملكية",
+            "tenant": "مستأجر",
+            "occupant": "شاغل",
+            "heir": "وارث",
+            "guardian": "ولي/وصي",
+            "other": "أخرى"
+        }
+        return types.get(relation_type, relation_type)
+
+    def _delete_relation(self, index: int):
+        """Delete a relation."""
+        from PyQt5.QtWidgets import QMessageBox
+        reply = QMessageBox.question(
+            self,
+            "تأكيد الحذف",
+            "هل أنت متأكد من حذف هذه العلاقة؟",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No
+        )
+        if reply == QMessageBox.Yes:
+            self.context.relations.pop(index)
+            self._update_relations_list()
+            Toast.show_toast(self, "تم حذف العلاقة", Toast.WARNING)
 
     def _clear_relation_form(self):
         """Clear relation form fields - exact copy from old wizard."""
@@ -438,11 +564,13 @@ class RelationStep(BaseStep):
     def populate_data(self):
         """Populate the step with data from context."""
         self._populate_relations_persons()
+        self._update_relations_list()
 
     def on_show(self):
         """Called when step is shown."""
         super().on_show()
         self._populate_relations_persons()
+        self._update_relations_list()
 
     def get_step_title(self) -> str:
         """Get step title."""

@@ -856,13 +856,15 @@ class OfficeSurveyWizard(QWidget):
 
 
     def _load_buildings_map(self):
-        """Load interactive map for building selection (S02) - OFFLINE VERSION with RELATIVE URLs."""
+        """Load interactive map for building selection (S02) - استخدام LeafletHTMLGenerator الموحد."""
         if not hasattr(self, "building_map") or self.building_map is None:
             # Map view is created inside the dialog, so nothing to load yet.
             return
 
         from services.tile_server_manager import get_tile_server_url
+        from services.leaflet_html_generator import generate_leaflet_html
         from PyQt5.QtCore import QUrl
+        import json
 
         tile_server_url = get_tile_server_url()
 
@@ -871,272 +873,89 @@ class OfficeSurveyWizard(QWidget):
             tile_server_url += '/'
         base_url = QUrl(tile_server_url)
 
-        # Get buildings with coordinates
+        # تحويل المباني إلى GeoJSON باستخدام نفس منطق map_page.py
         buildings = self.building_repo.get_all(limit=200)
-        markers_js = ""
 
-        # Helper function: get marker color based on building status
-        def get_marker_color(status):
-            """Return color based on building status."""
-            status_colors = {
-                'intact': '#28A745',       # أخضر - سليم
-                'standing': '#28A745',     # أخضر - سليم
-                'damaged': '#FFC107',      # أصفر - متضرر
-                'partially_damaged': '#FF9800',  # برتقالي - متضرر جزئياً
-                'severely_damaged': '#FF5722',   # برتقالي غامق - متضرر بشدة
-                'destroyed': '#DC3545',    # أحمر - مهدم
-                'demolished': '#DC3545',   # أحمر - مهدم
-                'rubble': '#8B0000'        # أحمر داكن - ركام
-            }
-            return status_colors.get(status, '#0072BC')  # أزرق افتراضي
+        features = []
+        for building in buildings:
+            geometry = None
 
-        for b in buildings:
-            if hasattr(b, 'latitude') and b.latitude and hasattr(b, 'longitude') and b.longitude:
-                # Get building info
-                building_type = getattr(b, 'building_type_display', getattr(b, 'building_type', 'مبنى'))
-                building_status = getattr(b, 'building_status', 'unknown')
-                status_display = getattr(b, 'building_status_display', building_status)
+            # أولوية للمضلع إذا كان موجوداً
+            if building.geo_location and 'POLYGON' in building.geo_location.upper():
+                from ui.pages.map_page import MapPage
+                temp_page = MapPage(None, None, None)
+                geometry = temp_page._parse_wkt_to_geojson(building.geo_location)
 
-                # Get color based on status
-                marker_color = get_marker_color(building_status)
+            # إذا لم يكن هناك مضلع، استخدم النقطة
+            if not geometry and building.latitude and building.longitude:
+                geometry = {
+                    "type": "Point",
+                    "coordinates": [building.longitude, building.latitude]
+                }
 
-                # Create custom colored marker icon (📍 small Google Maps style)
-                markers_js += f"""
-                    var icon_{b.building_id.replace('-', '_')} = L.divIcon({{
-                        className: 'custom-pin-marker',
-                        html: '<div class="pin-marker" style="background-color: {marker_color};"><div class="pin-point"></div></div>',
-                        iconSize: [20, 26],  // SMALLER: Google Maps size
-                        iconAnchor: [10, 26],  // نقطة الربط في أسفل الدبوس
-                        popupAnchor: [0, -28]  // الـ popup يظهر فوق الدبوس
-                    }});
+            if geometry:
+                features.append({
+                    "type": "Feature",
+                    "geometry": geometry,
+                    "properties": {
+                        "building_id": building.building_id or "",
+                        "neighborhood": building.neighborhood_name_ar or building.neighborhood_name or "",
+                        "status": building.building_status or "intact",
+                        "units": building.number_of_units or 0,
+                        "type": building.building_type or "",
+                        "geometry_type": geometry["type"]
+                    }
+                })
 
-                    // Popup content with confirm button
-                    var popupContent_{b.building_id.replace('-', '_')} = `
-                        <div style="text-align: center; min-width: 180px;">
-                            <div style="font-size: 16px; font-weight: bold; color: #2C3E50; margin-bottom: 8px;">
-                                {b.building_id}
-                            </div>
-                            <div style="font-size: 13px; color: #555; margin-bottom: 4px;">
-                                النوع: {building_type}
-                            </div>
-                            <div style="font-size: 13px; color: {marker_color}; font-weight: bold; margin-bottom: 12px;">
-                                الحالة: {status_display}
-                            </div>
-                            <button onclick="selectBuilding('{b.building_id}')"
-                                style="width: 100%; padding: 8px 16px; background-color: #0072BC; color: white;
-                                       border: none; border-radius: 6px; cursor: pointer; font-weight: bold;
-                                       font-size: 14px;">
-                                ✓ اختيار هذا المبنى
-                            </button>
-                        </div>
-                    `;
+        buildings_geojson = json.dumps({
+            "type": "FeatureCollection",
+            "features": features
+        })
 
-                    var marker_{b.building_id.replace('-', '_')} = L.marker([{b.latitude}, {b.longitude}], {{ icon: icon_{b.building_id.replace('-', '_')} }})
-                        .addTo(map)
-                        .bindPopup(popupContent_{b.building_id.replace('-', '_')}, {{
-                            closeButton: true,
-                            maxWidth: 250,
-                            className: 'custom-popup'
-                        }});
-                """
+        # استخدام LeafletHTMLGenerator الموحد
+        html = generate_leaflet_html(
+            tile_server_url=tile_server_url.rstrip('/'),
+            buildings_geojson=buildings_geojson,
+            center_lat=36.2021,
+            center_lon=37.1343,
+            zoom=14,
+            show_legend=True,
+            show_layer_control=False
+        )
 
-        # Get tile server URL for absolute paths
-        tile_server_url = get_tile_server_url()
-
-        html = f"""
-<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="utf-8">
-    <link rel="stylesheet" href="{tile_server_url}/leaflet.css" />
-    <style>
-        body {{ margin: 0; padding: 0; }}
-        #map {{ width: 100%; height: 100vh; }}
-
-        /* Pin marker style (📍 small Google Maps style) */
-        .custom-pin-marker {{ cursor: pointer; }}
-        .pin-marker {{
-            width: 20px;
-            height: 20px;
-            border-radius: 50% 50% 50% 0;
-            transform: rotate(-45deg);
-            border: 2px solid white;
-            box-shadow: 0 2px 6px rgba(0,0,0,0.4);
-            position: relative;
-            transition: transform 0.2s ease;
-        }}
-        .pin-marker:hover {{
-            transform: rotate(-45deg) scale(1.2);
-            box-shadow: 0 3px 10px rgba(0,0,0,0.6);
-        }}
-        .pin-point {{
-            width: 6px;
-            height: 6px;
-            background: white;
-            border-radius: 50%;
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-        }}
-
-        /* Custom popup styling (ناعم ومرتب) */
-        .custom-popup .leaflet-popup-content-wrapper {{
-            border-radius: 10px;
-            box-shadow: 0 4px 16px rgba(0,0,0,0.2);
-            padding: 4px;
-        }}
-        .custom-popup .leaflet-popup-content {{
-            margin: 12px;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-        }}
-        .custom-popup button:hover {{
-            background-color: #005A94 !important;
-            transform: scale(1.02);
-            transition: all 0.2s ease;
-        }}
-
-        /* Improve Leaflet controls styling */
-        .leaflet-control-zoom a {{
-            width: 32px !important;
-            height: 32px !important;
-            line-height: 32px !important;
-            font-size: 20px !important;
-            font-weight: bold !important;
-        }}
-        .leaflet-popup-close-button {{
-            font-size: 24px !important;
-            padding: 4px 8px !important;
-        }}
-
-        .legend {{
-            position: absolute;
-            bottom: 20px;
-            right: 20px;
-            background: white;
-            padding: 12px;
-            border-radius: 8px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.3);
-            font-size: 12px;
-            z-index: 1000;
-            max-width: 200px;
-        }}
-        .legend-title {{
-            font-weight: bold;
-            margin-bottom: 8px;
-            color: #2C3E50;
-            border-bottom: 1px solid #E1E8ED;
-            padding-bottom: 4px;
-        }}
-        .legend-item {{
-            display: flex;
-            align-items: center;
-            margin: 4px 0;
-        }}
-        .legend-color {{
-            width: 14px;
-            height: 14px;
-            border-radius: 50%;
-            margin-left: 8px;
-            border: 1px solid #DDD;
-        }}
-    </style>
-</head>
-<body>
-    <div id="map"></div>
-
-    <!-- Legend (دليل الألوان) -->
-    <div class="legend">
-        <div class="legend-title">حالة المبنى</div>
-        <div class="legend-item">
-            <span class="legend-color" style="background-color: #28A745;"></span>
-            <span>سليم</span>
-        </div>
-        <div class="legend-item">
-            <span class="legend-color" style="background-color: #FFC107;"></span>
-            <span>متضرر</span>
-        </div>
-        <div class="legend-item">
-            <span class="legend-color" style="background-color: #FF9800;"></span>
-            <span>متضرر جزئياً</span>
-        </div>
-        <div class="legend-item">
-            <span class="legend-color" style="background-color: #FF5722;"></span>
-            <span>متضرر بشدة</span>
-        </div>
-        <div class="legend-item">
-            <span class="legend-color" style="background-color: #DC3545;"></span>
-            <span>مهدم</span>
-        </div>
-        <div class="legend-item">
-            <span class="legend-color" style="background-color: #8B0000;"></span>
-            <span>ركام</span>
-        </div>
-        <div class="legend-item">
-            <span class="legend-color" style="background-color: #0072BC;"></span>
-            <span>غير محدد</span>
-        </div>
-    </div>
-
-    <script src="{tile_server_url}/leaflet.js"></script>
-    <script src="qrc:///qtwebchannel/qwebchannel.js"></script>
+        # إضافة JavaScript للتفاعل مع اختيار المبنى
+        # نضيف كود لاستدعاء selectBuilding عند النقر على المبنى
+        html = html.replace('</body>', f"""
     <script>
-        var buildingBridge = null;
-
-        // Initialize QWebChannel
-        new QWebChannel(qt.webChannelTransport, function(channel) {{
-            buildingBridge = channel.objects.buildingBridge;
-            console.log('QWebChannel initialized');
+        // تفعيل اختيار المبنى عند النقر
+        map.on('click', function(e) {{
+            var layers = map._layers;
+            for (var key in layers) {{
+                var layer = layers[key];
+                if (layer.feature && layer.feature.properties.building_id) {{
+                    var bounds = layer.getBounds ? layer.getBounds() : null;
+                    var latlng = layer.getLatLng ? layer.getLatLng() : null;
+                    if ((bounds && bounds.contains(e.latlng)) || (latlng && latlng.equals(e.latlng))) {{
+                        if (confirm('اختيار المبنى ' + layer.feature.properties.building_id + '?')) {{
+                            selectBuilding(layer.feature.properties.building_id);
+                        }}
+                    }}
+                }}
+            }}
         }});
 
-        var map = L.map('map', {{
-            preferCanvas: true,
-            zoomAnimation: true,
-            fadeAnimation: false
-            // No maxBounds - allow free panning for future tile expansion
-        }}).setView([36.2, 37.15], 13);
-
-        L.tileLayer('{tile_server_url}/tiles/{{z}}/{{x}}/{{y}}.png', {{
-            maxZoom: 16,  // FIXED: Match MBTiles actual data (10-16)
-            minZoom: 10,  // FIXED: Match MBTiles minimum
-            maxNativeZoom: 16,  // Prevent requesting non-existent zoom levels
-            attribution: 'UN-Habitat Syria - يعمل بدون اتصال بالإنترنت',
-            updateWhenIdle: false,  // FIXED: Update immediately for better UX
-            updateWhenZooming: false,  // Don't wait for zoom to finish
-            keepBuffer: 4,  // INCREASED: Keep more tiles in memory
-            errorTileUrl: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=='
-        }}).addTo(map);
-
-        {markers_js}
-
         function selectBuilding(buildingId) {{
-            console.log('Selected building: ' + buildingId);
-
-            // Visual feedback: disable button and show loading
-            var button = event.target;
-            button.disabled = true;
-            button.innerHTML = '⏳ جاري الاختيار...';
-            button.style.backgroundColor = '#6C757D';
-
-            // Send selection to Python
-            if (buildingBridge) {{
-                buildingBridge.selectBuilding(buildingId);
-                // Close popup after short delay
-                setTimeout(function() {{
-                    map.closePopup();
-                }}, 500);
-            }} else {{
-                console.error('buildingBridge not initialized');
-                button.innerHTML = '❌ خطأ في الاتصال';
-                button.style.backgroundColor = '#DC3545';
+            if (typeof QWebChannel !== 'undefined') {{
+                new QWebChannel(qt.webChannelTransport, function(channel) {{
+                    var bridge = channel.objects.bridge;
+                    if (bridge && bridge.buildingSelected) {{
+                        bridge.buildingSelected(buildingId);
+                    }}
+                }});
             }}
         }}
     </script>
-</body>
-</html>
-"""
-        # Set HTML with base URL for relative URL resolution
-        logger.info(f"Loading buildings map with base URL: {base_url.toString()}")
+</body>""")
         self.building_map.setHtml(html, base_url)
 
     def _on_building_selected_from_map(self, building_id: str):

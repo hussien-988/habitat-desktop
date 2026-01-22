@@ -76,7 +76,7 @@ class PolygonBuildingSelectorDialog(QDialog):
 
         # Fallback to SQLite spatial
         logger.info("Using SQLite spatial fallback")
-        return SQLiteSpatialService(self.db.conn)
+        return SQLiteSpatialService(self.db.get_connection())
 
     def _setup_ui(self):
         """Setup the dialog UI."""

@@ -311,7 +311,7 @@ class UnitDialog(QDialog):
 
         # Check existing units
         try:
-            result = self.unit_controller.get_units_by_building(self.building.building_id)
+            result = self.unit_controller.get_units_for_building(self.building.building_uuid)
             is_unique = True
 
             if not result.success:

@@ -427,7 +427,8 @@ class ClaimController(BaseController):
             params.append(filter_.claim_type)
 
         if filter_.building_uuid:
-            query += " AND unit_uuid IN (SELECT unit_uuid FROM units WHERE building_uuid = ?)"
+            # Join with buildings table to convert building_uuid to building_id
+            query += " AND unit_uuid IN (SELECT u.unit_uuid FROM property_units u JOIN buildings b ON u.building_id = b.building_id WHERE b.building_uuid = ?)"
             params.append(filter_.building_uuid)
 
         if filter_.unit_uuid:

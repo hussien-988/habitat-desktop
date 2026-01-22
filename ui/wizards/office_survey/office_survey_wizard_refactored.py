@@ -341,8 +341,8 @@ class OfficeSurveyWizard(BaseWizard):
         footer.setStyleSheet("background-color: transparent;")
 
         layout = QHBoxLayout(footer)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(0)
+        layout.setContentsMargins(24, 16, 24, 24)  # Add margins so footer is visible
+        layout.setSpacing(12)
 
         # Navigation buttons (Footer) - Matching the design in the old wizard
         nav_layout = QHBoxLayout()

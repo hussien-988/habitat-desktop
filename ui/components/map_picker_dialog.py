@@ -97,6 +97,42 @@ class MapBridge(QObject):
         self.polygon_selected.emit(wkt)
         logger.info(f"✅ Polygon signal emitted")
 
+    @pyqtSlot(str)
+    def geometryDrawn(self, geojson_str: str):
+        """
+        Called from Leaflet.draw when a shape is drawn.
+        Converts GeoJSON to WKT and processes it.
+        """
+        import json
+        logger.info(f"✅ Geometry drawn from Leaflet.draw: {geojson_str[:100]}...")
+
+        try:
+            geom = json.loads(geojson_str)
+            geom_type = geom.get('type')
+            coords = geom.get('coordinates')
+
+            if geom_type == 'Point':
+                # Point: coordinates = [lon, lat]
+                lon, lat = coords[0], coords[1]
+                self.set_location(lat, lon)
+
+            elif geom_type == 'Polygon':
+                # Polygon: coordinates = [[[lon, lat], [lon, lat], ...]]
+                # Convert to WKT
+                ring = coords[0]
+                wkt_coords = ', '.join([f"{lon} {lat}" for lon, lat in ring])
+                wkt = f"POLYGON(({wkt_coords}))"
+                self.set_polygon(wkt)
+
+            else:
+                logger.warning(f"Unsupported geometry type: {geom_type}")
+
+        except Exception as e:
+            logger.error(f"❌ Failed to parse drawn geometry: {e}")
+
+    # Alias for compatibility
+    shapeDrawn = geometryDrawn
+
 
 class MapPickerDialog(QDialog):
     """
@@ -226,8 +262,8 @@ class MapPickerDialog(QDialog):
         from services.tile_server_manager import get_tile_server_url
         return get_tile_server_url()
 
-    def _get_buildings_json(self):
-        """Get all buildings as JSON for map markers."""
+    def _get_buildings_geojson(self):
+        """Get all buildings as GeoJSON for unified map display."""
         import json
         try:
             from repositories.database import Database
@@ -237,23 +273,131 @@ class MapPickerDialog(QDialog):
             building_repo = BuildingRepository(db)
             buildings = building_repo.get_all(limit=1000)  # Get up to 1000 buildings
 
-            buildings_list = []
-            for b in buildings:
-                if b.latitude and b.longitude:
-                    # Map status codes to ensure correct colors
-                    status_code = b.building_status or "unknown"
-                    buildings_list.append({
-                        "id": b.building_id,
-                        "lat": b.latitude,
-                        "lon": b.longitude,
-                        "status": status_code,  # Send the code itself
-                        "type": b.building_type or "غير محدد"
+            # تحويل المباني إلى GeoJSON باستخدام نفس منطق map_page.py
+            features = []
+            for building in buildings:
+                geometry = None
+
+                # أولوية للمضلع إذا كان موجوداً
+                if building.geo_location and 'POLYGON' in building.geo_location.upper():
+                    geometry = self._parse_wkt_to_geojson(building.geo_location)
+
+                # إذا لم يكن هناك مضلع، استخدم النقطة
+                if not geometry and building.latitude and building.longitude:
+                    geometry = {
+                        "type": "Point",
+                        "coordinates": [building.longitude, building.latitude]
+                    }
+
+                if geometry:
+                    features.append({
+                        "type": "Feature",
+                        "geometry": geometry,
+                        "properties": {
+                            "building_id": building.building_id or "",
+                            "neighborhood": building.neighborhood_name_ar or building.neighborhood_name or "",
+                            "status": building.building_status or "intact",
+                            "units": building.number_of_units or 0,
+                            "type": building.building_type or "",
+                            "geometry_type": geometry["type"]
+                        }
                     })
 
-            return json.dumps(buildings_list)
+            return json.dumps({
+                "type": "FeatureCollection",
+                "features": features
+            })
         except Exception as e:
             logger.error(f"Failed to load buildings for map: {e}")
-            return "[]"
+            return '{"type": "FeatureCollection", "features": []}'
+
+    def _parse_wkt_to_geojson(self, wkt: str) -> dict:
+        """تحليل WKT (POLYGON/MULTIPOLYGON) إلى GeoJSON - نفس منطق map_page.py"""
+        try:
+            wkt = wkt.strip()
+
+            # معالجة MULTIPOLYGON
+            if wkt.upper().startswith('MULTIPOLYGON'):
+                content = wkt[wkt.index('(')+1:wkt.rindex(')')]
+
+                polygons = []
+                depth = 0
+                current_polygon = []
+                current_pos = 0
+
+                for i, char in enumerate(content):
+                    if char == '(':
+                        depth += 1
+                        if depth == 2:
+                            current_pos = i + 1
+                    elif char == ')':
+                        if depth == 2:
+                            polygon_str = content[current_pos:i]
+                            coords = self._parse_polygon_coords(polygon_str)
+                            if coords:
+                                polygons.append(coords)
+                        depth -= 1
+
+                if polygons:
+                    return {
+                        "type": "MultiPolygon",
+                        "coordinates": polygons
+                    }
+
+            # معالجة POLYGON عادي
+            elif wkt.upper().startswith('POLYGON'):
+                content = wkt[wkt.index('(')+1:wkt.rindex(')')]
+                coords = self._parse_polygon_coords(content)
+
+                if coords:
+                    return {
+                        "type": "Polygon",
+                        "coordinates": coords
+                    }
+
+        except Exception as e:
+            logger.warning(f"Failed to parse WKT: {e}")
+
+        return None
+
+    def _parse_polygon_coords(self, polygon_str: str) -> list:
+        """تحليل إحداثيات المضلع - نفس منطق map_page.py"""
+        rings = []
+
+        # تقسيم الحلقات (خارجية + ثقوب)
+        depth = 0
+        ring_parts = []
+        current_start = 0
+
+        for i, char in enumerate(polygon_str):
+            if char == '(':
+                if depth == 0:
+                    current_start = i + 1
+                depth += 1
+            elif char == ')':
+                depth -= 1
+                if depth == 0:
+                    ring_parts.append(polygon_str[current_start:i])
+
+        # إذا لم تكن هناك أقواس داخلية، استخدم النص كله
+        if not ring_parts:
+            ring_parts = [polygon_str.strip('()')]
+
+        for ring_str in ring_parts:
+            ring = []
+            for point_str in ring_str.split(','):
+                point_str = point_str.strip()
+                if point_str:
+                    parts = point_str.split()
+                    if len(parts) >= 2:
+                        lon = float(parts[0])
+                        lat = float(parts[1])
+                        ring.append([lon, lat])
+
+            if ring:
+                rings.append(ring)
+
+        return rings if rings else None
 
     def _setup_ui(self):
         layout = QVBoxLayout(self)
@@ -419,452 +563,38 @@ class MapPickerDialog(QDialog):
 
         layout.addLayout(btn_layout)
 
-    def _load_map(self):
+    def _load_map(self, drawing_mode: str = 'both'):
         """Load the Leaflet map - WITH base URL like test_map_simple.py."""
-        html = self._generate_map_html()
+        html = self._generate_map_html(drawing_mode=drawing_mode)
         tile_server_url = self._get_tile_server_url()
         # CRITICAL: Set base URL so QWebEngineView can resolve requests
         base_url = QUrl(tile_server_url)
         self.web_view.setHtml(html, base_url)
 
-    def _generate_map_html(self) -> str:
-        """Generate HTML for the Leaflet map - SIMPLE offline version."""
+    def _generate_map_html(self, drawing_mode: str = 'both') -> str:
+        """Generate HTML for the Leaflet map - استخدام LeafletHTMLGenerator الموحد."""
         tile_server_url = self._get_tile_server_url()
 
-        # Load all buildings from database
-        buildings_json = self._get_buildings_json()
+        # Load all buildings from database as GeoJSON
+        buildings_geojson = self._get_buildings_geojson()
 
-        return f"""
-<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="utf-8">
-    <link rel="stylesheet" href="{tile_server_url}/leaflet.css" />
-    <link rel="stylesheet" href="{tile_server_url}/leaflet.draw.css" />
-    <style>
-        body {{ margin: 0; padding: 0; }}
-        #map {{ width: 100%; height: 100vh; }}
+        # استخدام LeafletHTMLGenerator الموحد - DRY Principle
+        from services.leaflet_html_generator import generate_leaflet_html
 
-        /* OPTIMIZATION 1: Skeleton UI with shimmer animation */
-        .loading-overlay {{
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: linear-gradient(
-                90deg,
-                #e8f1f9 0%,
-                #f0f7fc 20%,
-                #e8f1f9 40%,
-                #e8f1f9 100%
-            );
-            background-size: 200% 100%;
-            animation: shimmer 2s infinite linear;
-            z-index: 9998;
-        }}
+        html = generate_leaflet_html(
+            tile_server_url=tile_server_url,
+            buildings_geojson=buildings_geojson,
+            center_lat=self.initial_lat,
+            center_lon=self.initial_lon,
+            zoom=17,
+            show_legend=True,
+            show_layer_control=False,
+            enable_selection=False,  # هذا للاختيار من خريطة، ليس لاختيار مبنى موجود
+            enable_drawing=True,     # تفعيل أدوات الرسم لإضافة نقطة أو مضلع جديدة
+            drawing_mode=drawing_mode  # تحديد نوع الرسم: point, polygon, both
+        )
 
-        @keyframes shimmer {{
-            0% {{ background-position: 200% 0; }}
-            100% {{ background-position: -200% 0; }}
-        }}
-
-        .loading-content {{
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            text-align: center;
-            z-index: 9999;
-        }}
-
-        .map-skeleton {{
-            width: 60px;
-            height: 60px;
-            margin: 0 auto 20px;
-            position: relative;
-        }}
-
-        .skeleton-marker {{
-            width: 30px;
-            height: 40px;
-            background: #0072BC;
-            border-radius: 50% 50% 50% 0;
-            transform: rotate(-45deg);
-            margin: 10px auto;
-            opacity: 0.3;
-            animation: pulse 1.5s ease-in-out infinite;
-        }}
-
-        @keyframes pulse {{
-            0%, 100% {{ opacity: 0.3; transform: rotate(-45deg) scale(1); }}
-            50% {{ opacity: 0.6; transform: rotate(-45deg) scale(1.1); }}
-        }}
-
-        .loading-text {{
-            color: #0072BC;
-            font-size: 15px;
-            font-weight: 600;
-            font-family: 'Segoe UI', Tahoma, sans-serif;
-            margin-bottom: 8px;
-        }}
-
-        .loading-subtext {{
-            color: #5D6D7E;
-            font-size: 12px;
-            font-family: 'Segoe UI', Tahoma, sans-serif;
-        }}
-
-        /* Low-quality tiles placeholder */
-        .leaflet-tile.lqip {{
-            filter: blur(8px);
-            opacity: 0.7;
-        }}
-    </style>
-</head>
-<body>
-    <div id="loading" class="loading-overlay">
-        <div class="loading-content">
-            <div class="map-skeleton">
-                <div class="skeleton-marker"></div>
-            </div>
-            <div class="loading-text">جارٍ تحميل الخريطة...</div>
-            <div class="loading-subtext">يعمل بدون اتصال بالإنترنت</div>
-        </div>
-    </div>
-    <div id="map"></div>
-
-    <script src="{tile_server_url}/leaflet.js"></script>
-    <script src="{tile_server_url}/leaflet.draw.js"></script>
-    <script src="qrc:///qtwebchannel/qwebchannel.js"></script>
-
-    <script>
-        console.log('=== MAP INITIALIZATION START ===');
-        console.log('Leaflet version:', L.version);
-        console.log('Tile server URL:', '{tile_server_url}');
-
-        // Simple map initialization
-        var map = L.map('map', {{
-            preferCanvas: true,
-            zoomAnimation: true,
-            fadeAnimation: false
-        }}).setView([{self.initial_lat}, {self.initial_lon}], 17);
-
-        console.log('Map created, center:', map.getCenter(), 'zoom:', map.getZoom());
-
-        // Simple tile layer - like office_survey_wizard
-        var tileUrl = '{tile_server_url}/tiles/{{z}}/{{x}}/{{y}}.png';
-        console.log('Tile URL template:', tileUrl);
-
-        var tileLayer = L.tileLayer(tileUrl, {{
-            maxZoom: 16,
-            minZoom: 10,
-            attribution: 'UN-Habitat Syria'
-        }});
-
-        tileLayer.on('tileloadstart', function(e) {{
-            console.log('TILE LOAD START - z:', e.coords.z, 'x:', e.coords.x, 'y:', e.coords.y);
-            if (e.tile && e.tile.src) {{
-                console.log('  Tile SRC:', e.tile.src);
-            }}
-        }});
-
-        tileLayer.on('tileload', function(e) {{
-            console.log('TILE LOADED OK - z:', e.coords.z, 'x:', e.coords.x, 'y:', e.coords.y);
-            if (e.tile && e.tile.src) {{
-                console.log('  Tile SRC:', e.tile.src);
-            }}
-        }});
-
-        tileLayer.on('tileerror', function(e) {{
-            console.error('TILE ERROR - z:', e.coords.z, 'x:', e.coords.x, 'y:', e.coords.y);
-            if (e.tile && e.tile.src) {{
-                console.error('  Tile SRC:', e.tile.src);
-            }}
-        }});
-
-        tileLayer.addTo(map);
-        console.log('Tile layer added to map');
-
-        // Hide loading after short delay
-        setTimeout(function() {{
-            document.getElementById('loading').style.display = 'none';
-        }}, 500);
-
-        var marker = null;
-        var drawnItems = new L.FeatureGroup();
-        map.addLayer(drawnItems);
-
-        var readOnly = {'true' if self.read_only else 'false'};
-        console.log('Read-only mode:', readOnly);
-
-        var drawControl = null;
-        var currentMode = 0; // 0 = point, 1 = polygon
-
-        // Add drawing controls only if NOT read-only
-        if (!readOnly) {{
-            drawControl = new L.Control.Draw({{
-                draw: {{
-                    polygon: false,
-                    polyline: false,
-                    circle: false,
-                    circlemarker: false,
-                    rectangle: false,
-                    marker: true  // Start with marker (point) enabled
-                }},
-                edit: {{
-                    featureGroup: drawnItems,
-                    remove: true
-                }}
-            }});
-            map.addControl(drawControl);
-        }}
-
-        // Load all buildings as markers
-        var buildings = {buildings_json};
-        var highlightLocation = {'true' if self.highlight_location else 'false'};
-        console.log('Loading', buildings.length, 'buildings on map');
-
-        // Color by damage status
-        function getMarkerColor(status) {{
-            // Check for destroyed/demolished
-            if (status === 'destroyed' || status === 'demolished' || status === 'rubble') return '#e74c3c';
-            // Check for damaged
-            if (status === 'damaged' || status === 'partially_damaged' || status === 'severely_damaged' ||
-                status === 'minor_damage' || status === 'major_damage') return '#f39c12';
-            // Check for intact
-            if (status === 'intact' || status === 'standing') return '#27ae60';
-            // Default gray for unknown
-            return '#95a5a6';
-        }}
-
-        // Custom icon (medium size for regular buildings)
-        function createIcon(color) {{
-            return L.icon({{
-                iconUrl: 'data:image/svg+xml;base64,' + btoa(
-                    '<svg width="26" height="38" xmlns="http://www.w3.org/2000/svg">' +
-                    '<path d="M13 0C5.8 0 0 5.8 0 13c0 9.75 13 25 13 25s13-15.25 13-25c0-7.2-5.8-13-13-13z" fill="' + color + '" stroke="white" stroke-width="2"/>' +
-                    '<circle cx="13" cy="13" r="5.5" fill="white"/>' +
-                    '</svg>'
-                ),
-                iconSize: [26, 38],
-                iconAnchor: [13, 38],
-                popupAnchor: [0, -38]
-            }});
-        }}
-
-        // Custom big icon for highlighted (bigger and blue)
-        function createBigIcon() {{
-            return L.icon({{
-                iconUrl: 'data:image/svg+xml;base64,' + btoa(
-                    '<svg width="38" height="56" xmlns="http://www.w3.org/2000/svg">' +
-                    '<path d="M19 0C8.5 0 0 8.5 0 19c0 14.25 19 37 19 37s19-22.75 19-37c0-10.5-8.5-19-19-19z" fill="#3498db" stroke="white" stroke-width="2.5"/>' +
-                    '<circle cx="19" cy="19" r="8" fill="white"/>' +
-                    '</svg>'
-                ),
-                iconSize: [38, 56],
-                iconAnchor: [19, 56],
-                popupAnchor: [0, -56]
-            }});
-        }}
-
-        // Add all building markers
-        buildings.forEach(function(building) {{
-            var isHighlighted = highlightLocation &&
-                                Math.abs(building.lat - {self.initial_lat}) < 0.00001 &&
-                                Math.abs(building.lon - {self.initial_lon}) < 0.00001;
-
-            if (!isHighlighted) {{
-                var markerColor = getMarkerColor(building.status);
-                var icon = createIcon(markerColor);
-
-                var buildingMarker = L.marker([building.lat, building.lon], {{
-                    icon: icon,
-                    riseOnHover: true
-                }}).addTo(map);
-
-                buildingMarker.bindPopup(
-                    '<b>رمز البناء: ' + building.id + '</b><br>' +
-                    'الحالة: ' + building.status + '<br>' +
-                    'النوع: ' + building.type
-                );
-            }}
-        }});
-
-        // Initial marker (highlighted if needed, draggable only if NOT read-only)
-        var markerOptions = {{draggable: !readOnly, riseOnHover: true}};
-        if (highlightLocation) {{
-            // Highlighted marker (bigger, blue)
-            var bigIcon = createBigIcon();
-            markerOptions.icon = bigIcon;
-            marker = L.marker([{self.initial_lat}, {self.initial_lon}], markerOptions).addTo(map);
-            marker.bindPopup('<b>الموقع المحدد</b>').openPopup();
-        }} else {{
-            // Normal marker
-            marker = L.marker([{self.initial_lat}, {self.initial_lon}], markerOptions).addTo(map);
-        }}
-
-        if (!readOnly) {{
-            marker.on('dragend', function(e) {{
-                var pos = e.target.getLatLng();
-                sendLocation(pos.lat, pos.lng);
-            }});
-        }}
-
-        // Connect to Python
-        var bridge = null;
-        new QWebChannel(qt.webChannelTransport, function(channel) {{
-            bridge = channel.objects.bridge;
-            // Send initial position
-            sendLocation({self.initial_lat}, {self.initial_lon});
-        }});
-
-        function sendLocation(lat, lng) {{
-            if (bridge) {{
-                bridge.set_location(lat, lng);
-            }}
-        }}
-
-        function sendPolygon(wkt) {{
-            if (bridge) {{
-                bridge.set_polygon(wkt);
-            }}
-        }}
-
-        // Click to place marker (only if NOT read-only)
-        if (!readOnly) {{
-            map.on('click', function(e) {{
-                if (marker) {{
-                    map.removeLayer(marker);
-                }}
-                marker = L.marker(e.latlng, {{draggable: true}}).addTo(map);
-                marker.on('dragend', function(ev) {{
-                    var pos = ev.target.getLatLng();
-                    sendLocation(pos.lat, pos.lng);
-                }});
-                sendLocation(e.latlng.lat, e.latlng.lng);
-            }});
-        }}
-
-        // Handle drawn items (only if NOT read-only)
-        if (!readOnly) {{
-            map.on(L.Draw.Event.CREATED, function(e) {{
-                var layer = e.layer;
-                var type = e.layerType;
-
-                drawnItems.clearLayers();
-                drawnItems.addLayer(layer);
-
-                if (type === 'polygon') {{
-                    var latlngs = layer.getLatLngs()[0];
-                    var wkt = 'POLYGON((';
-                    for (var i = 0; i < latlngs.length; i++) {{
-                        wkt += latlngs[i].lng + ' ' + latlngs[i].lat + ', ';
-                    }}
-                    // Close the polygon
-                    wkt += latlngs[0].lng + ' ' + latlngs[0].lat + '))';
-                    console.log('Polygon WKT:', wkt);
-                    sendPolygon(wkt);
-                }} else if (type === 'marker') {{
-                    var pos = layer.getLatLng();
-                    sendLocation(pos.lat, pos.lng);
-                }}
-            }});
-
-            // Handle edit
-            map.on(L.Draw.Event.EDITED, function(e) {{
-                var layers = e.layers;
-                layers.eachLayer(function(layer) {{
-                    if (layer instanceof L.Polygon) {{
-                        var latlngs = layer.getLatLngs()[0];
-                        var wkt = 'POLYGON((';
-                        for (var i = 0; i < latlngs.length; i++) {{
-                            wkt += latlngs[i].lng + ' ' + latlngs[i].lat + ', ';
-                        }}
-                        wkt += latlngs[0].lng + ' ' + latlngs[0].lat + '))';
-                        sendPolygon(wkt);
-                    }} else if (layer instanceof L.Marker) {{
-                        var pos = layer.getLatLng();
-                        sendLocation(pos.lat, pos.lng);
-                    }}
-                }});
-            }});
-        }}
-
-        // Clear function
-        window.clearSelection = function() {{
-            drawnItems.clearLayers();
-            if (marker) {{
-                map.removeLayer(marker);
-                marker = null;
-            }}
-        }};
-
-        // Set mode function
-        window.setMode = function(mode) {{
-            if (!drawControl) {{
-                console.log('❌ No draw control available');
-                return;
-            }}
-
-            // mode: 0 = point, 1 = polygon
-            console.log('🔄 Switching to mode:', mode === 0 ? 'Point' : 'Polygon');
-            currentMode = mode;
-
-            // Remove old draw control
-            try {{
-                map.removeControl(drawControl);
-            }} catch(e) {{
-                console.log('Warning: Could not remove control:', e);
-            }}
-
-            // Create new draw control with updated options
-            if (mode === 0) {{
-                console.log('📍 Enabling Point marker');
-                drawControl = new L.Control.Draw({{
-                    draw: {{
-                        polygon: false,
-                        polyline: false,
-                        circle: false,
-                        circlemarker: false,
-                        rectangle: false,
-                        marker: true
-                    }},
-                    edit: {{
-                        featureGroup: drawnItems,
-                        remove: true
-                    }}
-                }});
-            }} else {{
-                console.log('🔷 Enabling Polygon drawing');
-                drawControl = new L.Control.Draw({{
-                    draw: {{
-                        polygon: true,
-                        polyline: false,
-                        circle: false,
-                        circlemarker: false,
-                        rectangle: false,
-                        marker: false
-                    }},
-                    edit: {{
-                        featureGroup: drawnItems,
-                        remove: true
-                    }}
-                }});
-            }}
-
-            // Add new draw control
-            try {{
-                map.addControl(drawControl);
-                console.log('✅ Draw control updated and ready');
-            }} catch(e) {{
-                console.log('❌ Error adding control:', e);
-            }}
-        }};
-    </script>
-</body>
-</html>
-"""
+        return html
 
     def _on_location_selected(self, lat: float, lon: float):
         """Handle point selection."""
@@ -891,12 +621,20 @@ class MapPickerDialog(QDialog):
 
     def _on_mode_changed(self, button):
         """Handle mode change between point and polygon."""
-        mode = self.mode_group.id(button)
-        self.web_view.page().runJavaScript(f"setMode({mode});")
+        # تحديد الوضع بناءً على الزر المختار
+        if self.point_radio.isChecked():
+            drawing_mode = 'point'
+            logger.info("Drawing mode changed to: Point")
+        else:
+            drawing_mode = 'polygon'
+            logger.info("Drawing mode changed to: Polygon")
+
+        # إعادة تحميل الخريطة مع الوضع الجديد
+        self._load_map(drawing_mode=drawing_mode)
 
     def _clear_selection(self):
         """Clear the current selection."""
-        self.web_view.page().runJavaScript("clearSelection();")
+        # مسح العرض فقط، الخريطة ثابتة
         self.lat_input.clear()
         self.lon_input.clear()
         self.geometry_label.setText("")

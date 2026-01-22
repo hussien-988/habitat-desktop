@@ -425,12 +425,12 @@ class BuildingController(BaseController):
 
         query += f" ORDER BY created_at DESC LIMIT {filter_.limit} OFFSET {filter_.offset}"
 
-        cursor = self.db.cursor()
-        cursor.execute(query, params)
+        # استخدام fetch_all من Database بدلاً من cursor مباشرة
+        rows = self.db.fetch_all(query, tuple(params) if params else None)
 
         buildings = []
-        for row in cursor.fetchall():
-            buildings.append(Building.from_row(row))
+        for row in rows:
+            buildings.append(self.repository._row_to_building(row))
 
         return buildings
 
@@ -457,8 +457,7 @@ class BuildingController(BaseController):
             OperationResult with neighborhood counts
         """
         try:
-            cursor = self.db.cursor()
-            cursor.execute("""
+            rows = self.db.fetch_all("""
                 SELECT neighborhood_code, COUNT(*) as count
                 FROM buildings
                 WHERE neighborhood_code IS NOT NULL
@@ -467,8 +466,8 @@ class BuildingController(BaseController):
             """)
 
             result = {}
-            for row in cursor.fetchall():
-                result[row[0]] = row[1]
+            for row in rows:
+                result[row['neighborhood_code']] = row['count']
 
             return OperationResult.ok(data=result)
 
@@ -566,29 +565,33 @@ class BuildingController(BaseController):
         neigh = data.get("neighborhood_code", "000")[:3].zfill(3)
 
         # Get next building number
-        cursor = self.db.cursor()
-        cursor.execute("""
-            SELECT MAX(CAST(SUBSTR(building_id, 18, 5) AS INTEGER))
+        result = self.db.fetch_one("""
+            SELECT MAX(CAST(SUBSTR(building_id, 18, 5) AS INTEGER)) as max_num
             FROM buildings
             WHERE building_id LIKE ?
         """, (f"{gov}-{dist}-{sub}-{comm}-{neigh}-%",))
 
-        result = cursor.fetchone()
-        next_num = (result[0] or 0) + 1 if result else 1
+        next_num = (result['max_num'] or 0) + 1 if result and result['max_num'] else 1
         building_num = str(next_num).zfill(5)
 
         return f"{gov}-{dist}-{sub}-{comm}-{neigh}-{building_num}"
 
     def _has_dependencies(self, building_uuid: str) -> bool:
         """Check if building has dependent records."""
-        cursor = self.db.cursor()
-
-        # Check for units
-        cursor.execute(
-            "SELECT COUNT(*) FROM units WHERE building_uuid = ?",
+        # Get building_id from building_uuid
+        building_result = self.db.fetch_one(
+            "SELECT building_id FROM buildings WHERE building_uuid = ?",
             (building_uuid,)
         )
-        if cursor.fetchone()[0] > 0:
+        if not building_result:
+            return False
+
+        # Check for units
+        result = self.db.fetch_one(
+            "SELECT COUNT(*) as count FROM property_units WHERE building_id = ?",
+            (building_result['building_id'],)
+        )
+        if result and result['count'] > 0:
             return True
 
         return False

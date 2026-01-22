@@ -91,9 +91,9 @@ def seed_database(db: Database, force_reseed: bool = False):
     user_count = db.fetch_one("SELECT COUNT(*) as count FROM users")
     if user_count and user_count['count'] == 0:
         _seed_users(user_repo)
-        logger.info("✓ Created 5 test users")
+        logger.info(">> Created 5 test users")
     else:
-        logger.info("✓ Users already exist, skipping user seed")
+        logger.info(">> Users already exist, skipping user seed")
 
     # Seed buildings from GeoJSON
     buildings = _seed_buildings_from_geojson(building_repo)
@@ -107,7 +107,7 @@ def seed_database(db: Database, force_reseed: bool = False):
     # Seed claims (50 claims)
     _seed_claims(claim_repo, units, persons, 50)
 
-    logger.info("✓ Database seeding completed successfully!")
+    logger.info(">> Database seeding completed successfully!")
     logger.info(f"  - Users: {user_count['count'] if user_count else 0}")
     logger.info(f"  - Buildings: {len(buildings)} (from GeoJSON)")
     logger.info(f"  - Units: {len(units)}")
@@ -279,7 +279,7 @@ def _seed_buildings_from_geojson(repo: BuildingRepository) -> List[Building]:
             buildings.append(building)
             logger.debug(f"Created building: {building.building_id} (type: {geom_type})")
 
-        logger.info(f"✅ Loaded {len(buildings)} buildings from GeoJSON")
+        logger.info(f">> Loaded {len(buildings)} buildings from GeoJSON")
         return buildings
 
     except Exception as e:

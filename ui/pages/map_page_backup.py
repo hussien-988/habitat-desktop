@@ -407,55 +407,20 @@ def get_leaflet_html(tile_server_url: str, buildings_geojson: str) -> str:
                     fillOpacity: 0.9
                 }});
             }},
-            style: function(feature) {{
-                // تخصيص أسلوب المضلعات - ظهور باللون الأزرق
-                if (feature.geometry.type === 'Polygon' || feature.geometry.type === 'MultiPolygon') {{
-                    return {{
-                        color: '#0072BC',        // لون الحدود
-                        fillColor: '#0072BC',    // لون التعبئة
-                        weight: 2,
-                        opacity: 0.8,
-                        fillOpacity: 0.3
-                    }};
-                }}
-                return {{}};
-            }},
             onEachFeature: function(feature, layer) {{
                 var props = feature.properties;
                 var status = props.status || 'intact';
                 var statusLabel = statusLabels[status] || status;
                 var statusClass = 'status-' + status;
 
-                var geomType = feature.properties.geometry_type || feature.geometry.type;
-                var geomLabel = geomType === 'Polygon' || geomType === 'MultiPolygon' ? 'مضلع' : 'نقطة';
-
                 var popup = '<div class="building-popup">' +
                     '<h4>' + (props.building_id || 'مبنى') + '</h4>' +
                     '<p><strong>الحي:</strong> ' + (props.neighborhood || 'غير محدد') + '</p>' +
                     '<p><strong>الحالة:</strong> <span class="status-badge ' + statusClass + '">' + statusLabel + '</span></p>' +
                     '<p><strong>الوحدات:</strong> ' + (props.units || 0) + '</p>' +
-                    '<p><strong>النوع:</strong> ' + geomLabel + '</p>' +
                     '</div>';
 
                 layer.bindPopup(popup);
-
-                // تسليط الضوء عند hover للمضلعات
-                if (feature.geometry.type === 'Polygon' || feature.geometry.type === 'MultiPolygon') {{
-                    layer.on({{
-                        mouseover: function(e) {{
-                            e.target.setStyle({{
-                                fillOpacity: 0.5,
-                                weight: 3
-                            }});
-                        }},
-                        mouseout: function(e) {{
-                            e.target.setStyle({{
-                                fillOpacity: 0.3,
-                                weight: 2
-                            }});
-                        }}
-                    }});
-                }}
             }}
         }}).addTo(map);
 
@@ -642,130 +607,16 @@ class MapPage(QWidget):
         return True
 
     def _buildings_to_geojson(self, buildings) -> str:
-        """تحويل المباني إلى تنسيق GeoJSON - يدعم النقاط والمضلعات"""
-        features = []
+        """
+        Convert buildings to GeoJSON format.
 
-        for building in buildings:
-            geometry = None
+        Uses unified GeoJSONConverter service for consistent geometry handling.
+        Supports both Point and Polygon geometries.
 
-            # أولوية للمضلع إذا كان موجوداً
-            if building.geo_location and 'POLYGON' in building.geo_location.upper():
-                # تحليل WKT إلى GeoJSON
-                geometry = self._parse_wkt_to_geojson(building.geo_location)
-
-            # إذا لم يكن هناك مضلع، استخدم النقطة
-            if not geometry and building.latitude and building.longitude:
-                geometry = {
-                    "type": "Point",
-                    "coordinates": [building.longitude, building.latitude]
-                }
-
-            if geometry:
-                features.append({
-                    "type": "Feature",
-                    "geometry": geometry,
-                    "properties": {
-                        "building_id": building.building_id or "",
-                        "neighborhood": building.neighborhood_name_ar or building.neighborhood_name or "",
-                        "status": building.building_status or "intact",
-                        "units": building.number_of_units or 0,
-                        "geometry_type": geometry["type"]
-                    }
-                })
-
-        return json.dumps({
-            "type": "FeatureCollection",
-            "features": features
-        })
-
-    def _parse_wkt_to_geojson(self, wkt: str) -> dict:
-        """تحليل WKT (POLYGON/MULTIPOLYGON) إلى GeoJSON"""
-        try:
-            wkt = wkt.strip()
-
-            # معالجة MULTIPOLYGON
-            if wkt.upper().startswith('MULTIPOLYGON'):
-                # استخراج المحتوى بين الأقواس
-                content = wkt[wkt.index('(')+1:wkt.rindex(')')]
-
-                polygons = []
-                depth = 0
-                current_polygon = []
-                current_pos = 0
-
-                for i, char in enumerate(content):
-                    if char == '(':
-                        depth += 1
-                        if depth == 2:
-                            current_pos = i + 1
-                    elif char == ')':
-                        if depth == 2:
-                            polygon_str = content[current_pos:i]
-                            coords = self._parse_polygon_coords(polygon_str)
-                            if coords:
-                                polygons.append(coords)
-                        depth -= 1
-
-                if polygons:
-                    return {
-                        "type": "MultiPolygon",
-                        "coordinates": polygons
-                    }
-
-            # معالجة POLYGON عادي
-            elif wkt.upper().startswith('POLYGON'):
-                content = wkt[wkt.index('(')+1:wkt.rindex(')')]
-                coords = self._parse_polygon_coords(content)
-
-                if coords:
-                    return {
-                        "type": "Polygon",
-                        "coordinates": coords
-                    }
-
-        except Exception as e:
-            logger.warning(f"Failed to parse WKT: {e}")
-
-        return None
-
-    def _parse_polygon_coords(self, polygon_str: str) -> list:
-        """تحليل إحداثيات المضلع"""
-        rings = []
-
-        # تقسيم الحلقات (خارجية + ثقوب)
-        depth = 0
-        ring_parts = []
-        current_start = 0
-
-        for i, char in enumerate(polygon_str):
-            if char == '(':
-                if depth == 0:
-                    current_start = i + 1
-                depth += 1
-            elif char == ')':
-                depth -= 1
-                if depth == 0:
-                    ring_parts.append(polygon_str[current_start:i])
-
-        # إذا لم تكن هناك أقواس داخلية، استخدم النص كله
-        if not ring_parts:
-            ring_parts = [polygon_str.strip('()')]
-
-        for ring_str in ring_parts:
-            ring = []
-            for point_str in ring_str.split(','):
-                point_str = point_str.strip()
-                if point_str:
-                    parts = point_str.split()
-                    if len(parts) >= 2:
-                        lon = float(parts[0])
-                        lat = float(parts[1])
-                        ring.append([lon, lat])
-
-            if ring:
-                rings.append(ring)
-
-        return rings if rings else None
+        Best Practice (DRY): Delegates to centralized service
+        """
+        from services.geojson_converter import buildings_to_geojson
+        return buildings_to_geojson(buildings, prefer_polygons=True)
 
     def refresh(self, data=None):
         """تحديث بيانات الخريطة."""

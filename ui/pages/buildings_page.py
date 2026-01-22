@@ -1373,6 +1373,11 @@ class BuildingsListPage(QWidget):
 
         layout.addWidget(table_card)
 
+    def showEvent(self, event):
+        """تحميل البيانات تلقائياً عند عرض الصفحة"""
+        super().showEvent(event)
+        # تحميل البيانات تلقائياً عند فتح الصفحة
+        self.refresh()
 
     def refresh(self):
         """Refresh list."""
