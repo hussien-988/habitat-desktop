@@ -727,6 +727,33 @@ class StyleManager:
             }}
         """
 
+    # ==================== FOOTER ====================
+
+    @staticmethod
+    def wizard_footer() -> str:
+        """
+        Get wizard footer card stylesheet.
+
+        Usage: Footer card in wizard with navigation buttons
+
+        Figma Specs:
+        - Size: 1512×74px
+        - Background: White (#FFFFFF)
+        - Border: 1px solid #E1E8ED
+        - Internal padding: 130px left/right, 12px top/bottom
+        - Shadow: Applied via QGraphicsDropShadowEffect (not stylesheet)
+
+        Returns:
+            Complete QSS stylesheet string
+        """
+        return f"""
+            QFrame#WizardFooter {{
+                background-color: {Colors.SURFACE};
+                border: 1px solid {Colors.BORDER_DEFAULT};
+                border-radius: 0px;
+            }}
+        """
+
 
 # Convenience functions for backward compatibility
 def get_button_style(variant: str = "primary") -> str:

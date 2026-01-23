@@ -54,12 +54,19 @@ class BuildingSelectionStep(BaseStep):
         self.selected_building: Optional[Building] = None
 
     def setup_ui(self):
-        """Setup the step's UI - exact copy from old wizard."""
+        """
+        Setup the step's UI.
+
+        IMPORTANT: No horizontal padding here - the wizard handles it (131px).
+        Only vertical spacing for step content.
+        """
         widget = self  # Use self as the widget since BaseStep already has main_layout
         widget.setLayoutDirection(Qt.RightToLeft)
 
         layout = self.main_layout
-        layout.setContentsMargins(0, 0, 0, 0)
+        # No horizontal padding - wizard applies 131px (DRY principle)
+        # Only vertical spacing between elements
+        layout.setContentsMargins(0, 16, 0, 16)  # Top: 16px, Bottom: 16px
         layout.setSpacing(16)
 
         # ===== Card: Building Data =====
