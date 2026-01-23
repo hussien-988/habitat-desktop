@@ -30,6 +30,13 @@ class Config:
     VERSION: str = "1.0.0"
     ORGANIZATION: str = "UN-Habitat"
 
+    # Development Mode
+    # WARNING: Set to False in production! Only use True during development/testing
+    DEV_MODE: bool = True
+    DEV_AUTO_LOGIN: bool = True  # Auto-fill login credentials in dev mode
+    DEV_USERNAME: str = "admin"
+    DEV_PASSWORD: str = "admin123"
+
     # Data Provider Configuration
     # Options: "mock", "http", "local_db"
     # - mock: Uses in-memory mock data for development (no backend required)

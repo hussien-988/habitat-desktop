@@ -19,9 +19,18 @@ class ClaimListCard(QFrame):
 
     clicked = pyqtSignal(str)
 
-    def __init__(self, claim_data: dict, parent=None):
+    def __init__(self, claim_data: dict, icon_name: str = "blue", parent=None):
+        """
+        Initialize claim card.
+
+        Args:
+            claim_data: Dictionary containing claim information
+            icon_name: Icon name to display (default: "blue" for completed, "yellow" for drafts)
+            parent: Parent widget
+        """
         super().__init__(parent)
         self.claim_data = claim_data
+        self.icon_name = icon_name
         self._setup_ui()
 
     def _setup_ui(self):
@@ -36,7 +45,7 @@ class ClaimListCard(QFrame):
         - Fill: #FFFFFF
         - Drop shadow: present
         """
-        self.setObjectName("claimCard")
+        self.setObjectName("ClaimCard")  # Match StyleManager selector exactly
 
         # Apply Figma styling via StyleManager (Single Source of Truth)
         self.setStyleSheet(StyleManager.card())
@@ -72,13 +81,14 @@ class ClaimListCard(QFrame):
         top_row = QHBoxLayout()
         top_row.setSpacing(PageDimensions.CARD_GAP_INTERNAL)  # 12px from Figma
 
-        # Icon button with "blue" image using reusable Icon component (DRY + SOLID)
+        # Icon button using reusable Icon component (DRY + SOLID)
+        # Icon varies by claim type: "blue" for completed, "yellow" for drafts
         icon_btn = QPushButton()
         icon_btn.setCursor(Qt.PointingHandCursor)
         icon_btn.setFixedSize(32, 32)
 
         # Load icon using Icon component static method
-        q_icon = Icon.load_qicon("blue")
+        q_icon = Icon.load_qicon(self.icon_name)
         if q_icon:
             icon_btn.setIcon(q_icon)
             icon_btn.setIconSize(QSize(20, 20))
@@ -153,14 +163,14 @@ class ClaimListCard(QFrame):
 
         # CRITICAL: Enable styled frame (required for border-radius to work)
         details_container.setFrameShape(QFrame.NoFrame)  # NoFrame allows full stylesheet control
+        details_container.setAttribute(Qt.WA_StyledBackground, True)  # Enable custom stylesheet painting
 
-        # Set fixed height from Figma (28px Hug)
-        details_container.setFixedHeight(PageDimensions.CARD_DETAILS_HEIGHT)
-
-        # Note: Stylesheet is applied on parent (self) to avoid conflicts
+        # Apply Figma styling via StyleManager (DRY + Single Source of Truth)
+        details_container.setStyleSheet(StyleManager.card_details_container())
 
         details_layout = QHBoxLayout(details_container)
         # Padding: 8px horizontal, 6px vertical (Figma)
+        # Applied via layout margins for best rendering compatibility
         details_layout.setContentsMargins(
             PageDimensions.CARD_DETAILS_PADDING_H,  # Left: 8px
             PageDimensions.CARD_DETAILS_PADDING_V,  # Top: 6px
