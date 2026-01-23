@@ -46,9 +46,16 @@ class UnitSelectionStep(BaseStep):
         self.selected_unit: Optional[Unit] = None
 
     def setup_ui(self):
-        """Setup the step's UI - exact copy from old wizard."""
+        """
+        Setup the step's UI.
+
+        IMPORTANT: No horizontal padding here - the wizard handles it (131px).
+        Only vertical spacing for step content.
+        """
         layout = self.main_layout
-        layout.setContentsMargins(16, 16, 16, 16)
+        # No horizontal padding - wizard applies 131px (DRY principle)
+        # Only vertical spacing between elements
+        layout.setContentsMargins(0, 16, 0, 16)  # Top: 16px, Bottom: 16px
         layout.setSpacing(16)
 
         # Selected building info card (search + metrics layout)

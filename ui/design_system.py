@@ -325,8 +325,8 @@ class PageDimensions:
     CONTENT_POSITION_Y = 141  # Y position from top of window (Figma: 141px)
 
     # Calculated padding (for PyQt5 layout)
-    CONTENT_PADDING_H = 131  # Horizontal: (1512-1249)/2 = 131px each side
-    CONTENT_PADDING_V_TOP = 43  # Top: gap between navbar and content (982-109-830=43px)
+    CONTENT_PADDING_H = 131  # Horizontal: 131px each side (Figma exact value)
+    CONTENT_PADDING_V_TOP = 32  # Top: gap between navbar and content (Figma: 32px)
     CONTENT_PADDING_V_BOTTOM = 0  # Bottom: no padding
 
     # Spacing and gaps
@@ -376,6 +376,52 @@ class PageDimensions:
     CARD_DETAILS_TEXT_LETTER_SPACING = 0                         # Letter spacing (Figma: 0)
 
 
+class WizardDimensions:
+    """
+    Wizard-specific dimensions from Figma specifications.
+
+    Note: Wizard uses same page padding as claims pages (DRY principle).
+    Reuses PageDimensions.CONTENT_PADDING_H, CONTENT_PADDING_V_TOP, etc.
+
+    Figma Specs (Office Survey Wizard):
+    - Header section: Title + Buttons (height: 48px)
+    - Save button: 114×48px, padding 24×12, border-radius 8px
+    - Close button: 52×48px, padding 20×12, border-radius 8px
+    - Buttons gap: 16px
+    - Tabs bar: 1249×66px (Fill × Hug), gap 8px
+    - Spacing: Header→Tabs: 30px, Tabs→Content: 16px
+    """
+    # Header dimensions (from Figma images)
+    HEADER_HEIGHT = 48                    # Header height (same as button height)
+    HEADER_TITLE_FONT_SIZE = 18           # Title: 24px Figma = 18pt (×0.75)
+
+    # Save button (from Figma: 114×48px)
+    SAVE_BTN_WIDTH = 114                  # Width: 114px (Hug)
+    SAVE_BTN_HEIGHT = 48                  # Height: 48px
+    SAVE_BTN_PADDING_H = 24               # Horizontal padding: 24px
+    SAVE_BTN_PADDING_V = 12               # Vertical padding: 12px
+    SAVE_BTN_RADIUS = 8                   # Border-radius: 8px
+
+    # Close button (from Figma: 52×48px)
+    CLOSE_BTN_WIDTH = 52                  # Width: 52px (Hug)
+    CLOSE_BTN_HEIGHT = 48                 # Height: 48px
+    CLOSE_BTN_PADDING_H = 20              # Horizontal padding: 20px
+    CLOSE_BTN_PADDING_V = 12              # Vertical padding: 12px
+    CLOSE_BTN_RADIUS = 8                  # Border-radius: 8px
+
+    # Spacing (from Figma)
+    BUTTONS_GAP = 16                      # Gap between buttons (Figma: 16px)
+    HEADER_TO_TABS_GAP = 30               # Gap from header to tabs (30px)
+    TABS_TO_CONTENT_GAP = 16              # Gap from tabs to content (16px)
+
+    # Tabs bar dimensions (from Figma)
+    TABS_BAR_HEIGHT = 66                  # Tabs bar height (Figma: 66px Hug)
+    TABS_GAP = 8                          # Gap between tab items (Figma: 8px)
+
+    # DRY: Reuse page padding from PageDimensions
+    # No need to duplicate - use PageDimensions.CONTENT_PADDING_H, etc.
+
+
 class ButtonDimensions:
     """
     Button dimensions from Figma specifications (exact measurements).
@@ -397,6 +443,46 @@ class ButtonDimensions:
     PRIMARY_PRESSED_BG = "#1F68B3"         # Pressed state (even darker)
     PRIMARY_DISABLED_BG = "#BDC3C7"        # Disabled background
     PRIMARY_DISABLED_TEXT = "#7F8C9B"      # Disabled text color
+
+    # Save Button (Wizard header - Figma specs)
+    SAVE_WIDTH = 114                       # Button width (Figma: 114px)
+    SAVE_HEIGHT = 48                       # Button height (Figma: 48px)
+    SAVE_BORDER_RADIUS = 8                 # Corner radius (Figma: 8px)
+    SAVE_PADDING_H = 24                    # Horizontal padding (Figma: 24px)
+    SAVE_PADDING_V = 12                    # Vertical padding (Figma: 12px)
+    SAVE_FONT_SIZE = 12                    # Font size (Figma: 16px → PyQt5: 16×0.75=12pt)
+    SAVE_ICON_SIZE = 14                    # Icon size (14×14px)
+    SAVE_ICON_SPACING = 10                 # Spacing between icon and text (Figma: 10px)
+
+    # Close Button (Wizard header - Figma specs)
+    CLOSE_WIDTH = 52                       # Button width (Figma: 52px)
+    CLOSE_HEIGHT = 48                      # Button height (Figma: 48px)
+    CLOSE_BORDER_RADIUS = 8                # Corner radius (Figma: 8px)
+    CLOSE_PADDING_H = 16                   # Horizontal padding (Figma: 16px)
+    CLOSE_PADDING_V = 12                   # Vertical padding (Figma: 12px)
+    CLOSE_FONT_SIZE = 12                   # Font size (Figma: 16px → PyQt5: 16×0.75=12pt)
+
+    # Step Tab/Indicator (Wizard tabs bar - Figma specs)
+    STEP_TAB_WIDTH = 111                   # Tab width (Figma: 111px)
+    STEP_TAB_HEIGHT = 35                   # Tab height (Figma: 35px)
+    STEP_TAB_BORDER_RADIUS = 14            # Border-radius (same as pill: 14px)
+    STEP_TAB_PADDING_H = 16                # Horizontal padding (Figma: 16px - يمين/يسار)
+    STEP_TAB_PADDING_V = 10                # Vertical padding (Figma: 10px - فوق/تحت)
+    STEP_TAB_GAP = 20                      # Gap between tabs (Figma: 20px)
+    STEP_TAB_FONT_SIZE = 9                 # Font size (9pt)
+
+    # Footer Card (Wizard footer - Figma specs)
+    FOOTER_WIDTH = 1512                    # Footer width (Figma: 1512px)
+    FOOTER_HEIGHT = 74                     # Footer height (Figma: 74px)
+    FOOTER_PADDING_H = 130                 # Horizontal internal padding (Figma: 130px - يمين/يسار)
+    FOOTER_PADDING_V = 12                  # Vertical internal padding (Figma: 12px - فوق/تحت)
+
+    # Footer Navigation Buttons (Figma specs)
+    NAV_BUTTON_WIDTH = 252                 # Navigation button width (Figma: 252px)
+    NAV_BUTTON_HEIGHT = 50                 # Navigation button height (Figma: 50px)
+    NAV_BUTTON_GAP = 748                   # Gap between navigation buttons (Figma: 1512-130*2-252*2 = 748px)
+    NAV_BUTTON_BORDER_RADIUS = 8           # Border radius for navigation buttons (Figma: 8px)
+    NAV_BUTTON_FONT_SIZE = 12              # Font size for navigation buttons (Figma: 16px → 12pt Qt)
 
 
 class ComponentStyles:
