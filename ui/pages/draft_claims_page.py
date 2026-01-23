@@ -2,24 +2,40 @@
 """
 صفحة المسودات - Draft Claims Page
 Displays draft claims in a 2-column grid layout.
+
+Figma Specifications Applied:
+- Background: #F0F7FF (BACKGROUND color)
+- Typography: IBM Plex Sans Arabic, Letter spacing: 0px
+- Layout: Clean, professional spacing
+
+Note: Navbar is managed by MainWindow, not by individual pages
 """
 
 from PyQt5.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
-    QScrollArea, QSizePolicy, QFrame, QGridLayout
+    QWidget, QVBoxLayout, QHBoxLayout, QLabel,
+    QScrollArea, QSpacerItem, QSizePolicy, QFrame, QGridLayout
 )
 from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtGui import QFont
 
-from ..design_system import Colors
-from ..font_utils import create_font, FontManager
-from ..style_manager import StyleManager
+from ..design_system import Colors, PageDimensions
 from ..components.empty_state import EmptyState
 from ..components.claim_list_card import ClaimListCard
+from ..components.primary_button import PrimaryButton
+from ..font_utils import create_font, FontManager
+from ..style_manager import StyleManager
 
 
 class DraftClaimsPage(QWidget):
-    """Draft claims page with grid layout."""
+    """
+    Draft claims page with grid layout.
+
+    Signals:
+        claim_selected(str): Emitted when a claim card is clicked
+        add_claim_clicked(): Emitted when add button is clicked
+
+    Note: Navbar is managed by MainWindow, not by this page
+    """
 
     claim_selected = pyqtSignal(str)
     add_claim_clicked = pyqtSignal()
@@ -29,19 +45,40 @@ class DraftClaimsPage(QWidget):
         self.db = db
         self.i18n = i18n
         self.claims_data = []
-        self.current_tab_title = "المسودة"
+        self.current_tab_title = "المسودات"
         self._setup_ui()
 
     def _setup_ui(self):
-        """Setup page UI."""
-        main_layout = QVBoxLayout(self)
-        main_layout.setContentsMargins(0, 0, 0, 0)
-        main_layout.setSpacing(0)
+        """
+        Setup page UI.
 
+        Structure:
+        - Header (80px height with title and add button)
+        - Content area (scrollable grid of claim cards)
+
+        Note: Navbar is managed by MainWindow
+        """
+        main_layout = QVBoxLayout(self)
+        # Apply padding from Figma:
+        # - Horizontal: 131px each side
+        # - Top: 43px (gap between navbar and content: 982-109-830=43px)
+        # - Bottom: 0px
+        main_layout.setContentsMargins(
+            PageDimensions.CONTENT_PADDING_H,        # Left: 131px
+            PageDimensions.CONTENT_PADDING_V_TOP,    # Top: 43px
+            PageDimensions.CONTENT_PADDING_H,        # Right: 131px
+            PageDimensions.CONTENT_PADDING_V_BOTTOM  # Bottom: 0px
+        )
+        main_layout.setSpacing(PageDimensions.HEADER_GAP)  # 30px gap after header
+
+        # Background color from Figma via StyleManager
         self.setStyleSheet(StyleManager.page_background())
 
+        # Header with title and add button
         self.header = self._create_header()
         main_layout.addWidget(self.header)
+
+        # Content area (scrollable)
         self.content_area = QScrollArea()
         self.content_area.setWidgetResizable(True)
         self.content_area.setFrameShape(QFrame.NoFrame)
@@ -52,95 +89,123 @@ class DraftClaimsPage(QWidget):
             }}
         """)
 
+        # Content widget with Grid Layout (Figma: 2 columns, 16px gaps)
         self.content_widget = QWidget()
-        self.content_layout = QVBoxLayout(self.content_widget)
-        self.content_layout.setContentsMargins(32, 32, 32, 32)
-        self.content_layout.setSpacing(16)
+        self.content_layout = QGridLayout(self.content_widget)
+        # No additional padding inside content (padding applied to main_layout)
+        self.content_layout.setContentsMargins(0, 0, 0, 0)
+        # Using Figma values: 16px gap both vertical and horizontal
+        self.content_layout.setVerticalSpacing(PageDimensions.CARD_GAP_VERTICAL)      # 16px
+        self.content_layout.setHorizontalSpacing(PageDimensions.CARD_GAP_HORIZONTAL)  # 16px
 
         self.content_area.setWidget(self.content_widget)
         main_layout.addWidget(self.content_area)
 
+        # Show empty state by default
         self._show_empty_state()
 
+    def showEvent(self, event):
+        """تحديث البيانات عند عرض الصفحة"""
+        super().showEvent(event)
+        # تحديث البيانات تلقائياً عند فتح الصفحة
+        self.refresh()
+
     def _create_header(self):
-        """Create page header with title and add button."""
+        """
+        Create page header with dynamic title and add button.
+
+        Figma Specs:
+        - Height: 48px (button + title height)
+        - Gap after header: 30px (handled by main_layout spacing)
+        - Font: IBM Plex Sans Arabic, 16px Bold, Letter spacing 0
+        - Button: Border-radius 8px, Height 40px
+        """
         header = QWidget()
-        header.setFixedHeight(80)
+        header.setFixedHeight(PageDimensions.PAGE_HEADER_HEIGHT)  # 48px
         header.setStyleSheet(f"background-color: {Colors.BACKGROUND}; border: none;")
 
         layout = QHBoxLayout(header)
-        layout.setContentsMargins(32, 0, 32, 0)
+        layout.setContentsMargins(0, 0, 0, 0)  # No extra padding
         layout.setSpacing(16)
 
+        # Page title (dynamic based on tab)
         self.title_label = QLabel(self.current_tab_title)
-        # Use centralized font utility: 18pt Bold (24px × 0.75 = 18pt)
-        title_font = create_font(size=FontManager.SIZE_TITLE, weight=QFont.Bold, letter_spacing=0)
+
+        # Use centralized font utility (DRY + eliminates stylesheet conflicts)
+        # Figma: IBM Plex Sans Arabic, 24px Bold, Letter spacing 0
+        # Font conversion: 24px × 0.75 = 18pt
+        title_font = create_font(
+            size=FontManager.SIZE_TITLE,  # 18pt
+            weight=QFont.Bold,             # 700
+            letter_spacing=0
+        )
         self.title_label.setFont(title_font)
-        self.title_label.setStyleSheet(StyleManager.label_title())
+
+        self.title_label.setStyleSheet(f"color: {Colors.TEXT_PRIMARY}; border: none;")
         layout.addWidget(self.title_label)
 
-        layout.addStretch()
+        # Spacer
+        layout.addSpacerItem(QSpacerItem(40, 20, QSizePolicy.Expanding, QSizePolicy.Minimum))
 
-        add_btn = QPushButton("⊕ إضافة حالة جديدة")
-        add_btn.setFixedHeight(40)
-        add_btn.setCursor(Qt.PointingHandCursor)
-        # Use centralized font: 12pt DemiBold (16px × 0.75 = 12pt)
-        btn_font = create_font(size=12, weight=QFont.DemiBold, letter_spacing=0)
-        add_btn.setFont(btn_font)
-        add_btn.setStyleSheet(StyleManager.button_primary())
+        # Add button - Using reusable PrimaryButton component (DRY + SOLID)
+        # Figma: 199×48px, padding 24×12, font 16px, icon instead of "+"
+        add_btn = PrimaryButton("إضافة حالة جديدة", icon_name="icon")
         add_btn.clicked.connect(self.add_claim_clicked.emit)
         layout.addWidget(add_btn)
 
         return header
 
     def _show_empty_state(self):
-        """Show empty state when no claims exist."""
+        """Show empty state when no claims exist"""
+        # Clear existing content
         self._clear_content()
 
+        # Create empty state
         empty_state = EmptyState(
-            icon_text="📝",
-            title="لا توجد مسودات",
-            description="ابدأ بإضافة حالات جديدة أو احفظها كمسودة"
+            icon_text="+",
+            title="لا توجد بيانات بعد",
+            description="ابدأ بإضافة الحالات للظهور هنا"
         )
 
-        self.content_layout.addStretch()
-        self.content_layout.addWidget(empty_state, alignment=Qt.AlignCenter)
-        self.content_layout.addStretch()
+        # Center the empty state in grid layout
+        # Add top spacer (row 0, spans 2 columns)
+        self.content_layout.addItem(QSpacerItem(20, 40, QSizePolicy.Minimum, QSizePolicy.Expanding), 0, 0, 1, 2)
+        # Add empty state widget (row 1, spans 2 columns, centered)
+        self.content_layout.addWidget(empty_state, 1, 0, 1, 2, Qt.AlignCenter)
+        # Add bottom spacer (row 2, spans 2 columns)
+        self.content_layout.addItem(QSpacerItem(20, 40, QSizePolicy.Minimum, QSizePolicy.Expanding), 2, 0, 1, 2)
 
     def _show_claims_list(self):
-        """Show claims in 2-column grid layout."""
+        """Show claims in 2-column grid layout with Figma spacing"""
+        # Clear existing content
         self._clear_content()
 
         if not self.claims_data:
             self._show_empty_state()
             return
 
-        grid_container = QWidget()
-        grid_layout = QGridLayout(grid_container)
-        grid_layout.setContentsMargins(0, 0, 0, 0)
-        grid_layout.setHorizontalSpacing(20)
-        grid_layout.setVerticalSpacing(20)
-        grid_layout.setColumnStretch(0, 1)
-        grid_layout.setColumnStretch(1, 1)
-
+        # Add cards directly to content_layout (which is already QGridLayout)
+        # Grid layout was set up in _setup_ui with 16px gaps
         for index, claim in enumerate(self.claims_data):
-            row = index // 2
-            col = index % 2
+            row = index // PageDimensions.CARD_COLUMNS  # Integer division for row
+            col = index % PageDimensions.CARD_COLUMNS   # Modulo for column (0 or 1)
 
-            card = ClaimListCard(claim)
+            # DRY: Use ClaimListCard with yellow icon for drafts
+            card = ClaimListCard(claim, icon_name="yellow")
             card.clicked.connect(self._on_card_clicked)
-            grid_layout.addWidget(card, row, col)
+            self.content_layout.addWidget(card, row, col)
 
-        grid_layout.setRowStretch(len(self.claims_data) // 2 + 1, 1)
-
-        self.content_layout.addWidget(grid_container)
+        # Add spacer at the bottom to push content up
+        spacer = QSpacerItem(20, 40, QSizePolicy.Minimum, QSizePolicy.Expanding)
+        final_row = (len(self.claims_data) + PageDimensions.CARD_COLUMNS - 1) // PageDimensions.CARD_COLUMNS
+        self.content_layout.addItem(spacer, final_row, 0, 1, PageDimensions.CARD_COLUMNS)
 
     def _on_card_clicked(self, claim_id: str):
-        """Handle card click."""
+        """Handle card click"""
         self.claim_selected.emit(claim_id)
 
     def _clear_content(self):
-        """Clear all content from layout."""
+        """Clear all content from layout"""
         while self.content_layout.count():
             item = self.content_layout.takeAt(0)
             if item.widget():
@@ -150,10 +215,14 @@ class DraftClaimsPage(QWidget):
 
     def load_claims(self, claims_data):
         """
-        Load claims data and display.
+        Load claims data and display
 
         Args:
-            claims_data: List of claim dictionaries
+            claims_data: List of claim dictionaries with keys:
+                - claim_id: str
+                - claimant_name: str
+                - date: str
+                - metadata: list of strings
         """
         self.claims_data = claims_data
 
@@ -161,6 +230,16 @@ class DraftClaimsPage(QWidget):
             self._show_claims_list()
         else:
             self._show_empty_state()
+
+    def search_claims(self, query: str, mode: str = "name"):
+        """
+        Search claims based on query and mode.
+
+        Args:
+            query: Search query string
+            mode: Search mode (name, claim_id, building)
+        """
+        pass
 
     def set_tab_title(self, title: str):
         """Update page title."""
@@ -176,6 +255,7 @@ class DraftClaimsPage(QWidget):
                 claim_repo = ClaimRepository(self.db)
 
                 all_claims = claim_repo.get_all(limit=100)
+                # Filter for draft claims only
                 claims = [c for c in all_claims if c.case_status == 'draft']
 
                 self.claims_data = []
@@ -226,8 +306,12 @@ class DraftClaimsPage(QWidget):
                         'building_id': building_id if claim.unit_id else ''
                     })
             except Exception as e:
+                import traceback
+                print(f"Error loading claims: {e}")
+                print(f"Traceback:\n{traceback.format_exc()}")
                 self.claims_data = []
 
+        # Display based on data availability
         if self.claims_data:
             self._show_claims_list()
         else:

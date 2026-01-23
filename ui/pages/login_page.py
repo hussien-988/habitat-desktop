@@ -44,6 +44,9 @@ class LoginPage(QWidget):
         self._position_login_watermark()
         self._setup_login_navbar()
 
+        # Apply development mode settings (auto-fill credentials)
+        self._apply_dev_mode_settings()
+
     def _load_fonts(self):
         """Load Noto Kufi Arabic fonts"""
         fonts_dir = os.path.join(os.path.dirname(__file__), "..", "..", "assets", "fonts", "Noto_Kufi_Arabic")
@@ -358,6 +361,28 @@ class LoginPage(QWidget):
         
 
         return card
+
+    def _apply_dev_mode_settings(self):
+        """
+        Apply development mode settings for easier testing.
+
+        Best Practice:
+        - Only enabled when Config.DEV_MODE = True
+        - Auto-fills login credentials to skip manual entry during development
+        - MUST be disabled in production (set Config.DEV_MODE = False)
+
+        Security Note:
+        This feature is ONLY for development/testing environments.
+        Never enable DEV_MODE in production deployments.
+        """
+        if not Config.DEV_MODE or not Config.DEV_AUTO_LOGIN:
+            return
+
+        # Auto-fill credentials from Config
+        self.username_input.setText(Config.DEV_USERNAME)
+        self.password_input.setText(Config.DEV_PASSWORD)
+
+        logger.info("DEV MODE: Auto-filled login credentials")
 
     def _toggle_password_visibility(self):
         """Toggle password visibility"""

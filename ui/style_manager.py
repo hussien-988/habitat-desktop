@@ -450,17 +450,20 @@ class StyleManager:
         Figma Specs:
         - Background: #F8FAFF
         - Border: 1px solid #E5EAF6
-        - Border-radius: 14px (pill shape)
-        - Padding: 6×8px
+        - Border-radius: 14px (pill shape - maximum for 28px height)
+        - Padding: Applied via layout margins (not stylesheet)
+
+        Note: Border-radius is set to 14px (height/2) for perfect pill shape.
+        Padding is controlled by layout margins to avoid rendering conflicts.
 
         Returns:
             Complete QSS stylesheet string
         """
         return f"""
-            QFrame {{
+            QFrame#detailsFrame {{
                 background-color: {PageDimensions.CARD_DETAILS_BG};
                 border: {PageDimensions.CARD_DETAILS_BORDER_WIDTH}px solid {PageDimensions.CARD_DETAILS_BORDER};
-                border-radius: {PageDimensions.CARD_DETAILS_RADIUS}px;
+                border-radius: 14px;
             }}
         """
 

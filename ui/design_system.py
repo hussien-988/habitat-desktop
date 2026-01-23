@@ -360,7 +360,9 @@ class PageDimensions:
     CARD_DETAILS_PADDING_H = 8       # Horizontal padding (Figma: 8px)
     CARD_DETAILS_PADDING_V = 6       # Vertical padding (Figma: 6px)
     CARD_DETAILS_GAP = 8             # Gap between elements (Figma: 8px)
-    CARD_DETAILS_RADIUS = 14         # Corner radius (PyQt5: height/2 = 14px for pill shape, Figma: 32px)
+    CARD_DETAILS_RADIUS = 32         # Corner radius (Figma: 32px - stored for reference)
+                                      # Note: StyleManager uses 999px for perfect pill shape
+                                      # CSS limits radius to height/2 when value exceeds it
     CARD_DETAILS_BG = "#F8FAFF"      # Background color (Figma: #F8FAFF)
     CARD_DETAILS_BORDER = "#E5EAF6"  # Border color (Figma: #E5EAF6)
     CARD_DETAILS_BORDER_WIDTH = 1    # Border width (Figma: 1px, Inside)
