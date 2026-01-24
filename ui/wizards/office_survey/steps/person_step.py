@@ -51,6 +51,8 @@ class PersonStep(BaseStep):
         """Setup the step's UI - matching Step 1 styling."""
         widget = self
         widget.setLayoutDirection(Qt.RightToLeft)
+        # Set main window background color
+        widget.setStyleSheet(f"background-color: {Colors.BACKGROUND};")
 
         layout = self.main_layout
         # Match Step 1 margins: No horizontal padding - wizard handles it (131px)
@@ -186,14 +188,16 @@ class PersonStep(BaseStep):
             logger.info(f"Person added: {person_data['first_name']} {person_data['last_name']}")
 
     def _create_person_row_card(self, person: dict, index: int = 0) -> QFrame:
-        """Create a person row card matching Step 1 design."""
+        """Create a person row card matching the photo design."""
         card = QFrame()
         card.setLayoutDirection(Qt.RightToLeft)
         card.setFixedHeight(80)
+        # Use alternating background for visual separation
+        bg_color = Colors.SURFACE if index % 2 == 0 else Colors.TABLE_ROW_EVEN
         card.setStyleSheet(f"""
             QFrame {{
-                background-color: {Colors.SURFACE};
-                border: 1px solid {Colors.BORDER_DEFAULT};
+                background-color: {bg_color};
+                border: 1px solid #F0F0F0;
                 border-radius: 8px;
             }}
         """)
