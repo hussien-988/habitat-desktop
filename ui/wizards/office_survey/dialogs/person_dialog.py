@@ -47,7 +47,7 @@ class PersonDialog(QDialog):
 
         self.setWindowTitle("تعديل بيانات الشخص" if self.editing_mode else "إضافة شخص جديد")
         self.setModal(True)
-        self.setMinimumWidth(520)
+        self.setFixedSize(595, 691)  # Fixed size matching photo
         self.setStyleSheet("""
             QDialog {
                 background-color: #f5f7fa;
@@ -112,29 +112,21 @@ class PersonDialog(QDialog):
         person_title.setStyleSheet("font-size: 16px; font-weight: bold; color: #2c3e50;")
         person_layout.addWidget(person_title)
 
-        # Person info grid
+        # Person info grid - 2 columns layout
         person_grid = QGridLayout()
         person_grid.setSpacing(15)
         person_grid.setColumnStretch(0, 1)
         person_grid.setColumnStretch(1, 1)
-        person_grid.setColumnStretch(2, 1)
 
-        # Row 0: First Name | Last Name | Father Name (Right to Left layout)
+        # Row 0: First Name | Last Name (Right to Left layout)
         row = 0
         first_name_label = QLabel("الاسم الأول")
         first_name_label.setStyleSheet(label_style)
-       # first_name_label.setAlignment(Qt.AlignRight)
         person_grid.addWidget(first_name_label, row, 0)
 
         last_name_label = QLabel("الكنية")
         last_name_label.setStyleSheet(label_style)
-        #last_name_label.setAlignment(Qt.AlignRight)
         person_grid.addWidget(last_name_label, row, 1)
-
-        father_name_label = QLabel("اسم الأب")
-        father_name_label.setStyleSheet(label_style)
-        #father_name_label.setAlignment(Qt.AlignRight)
-        person_grid.addWidget(father_name_label, row, 2)
 
         row += 1
         self.first_name = QLineEdit()
@@ -147,70 +139,67 @@ class PersonDialog(QDialog):
         self.last_name.setStyleSheet(self._input_style())
         person_grid.addWidget(self.last_name, row, 1)
 
+        # Row 2: Father Name | Mother Name
+        row += 1
+        father_name_label = QLabel("اسم الأب")
+        father_name_label.setStyleSheet(label_style)
+        person_grid.addWidget(father_name_label, row, 0)
+
+        mother_name_label = QLabel("اسم الأم")
+        mother_name_label.setStyleSheet(label_style)
+        person_grid.addWidget(mother_name_label, row, 1)
+
+        row += 1
         self.father_name = QLineEdit()
         self.father_name.setPlaceholderText("ادخل اسم الأب")
         self.father_name.setStyleSheet(self._input_style())
-        person_grid.addWidget(self.father_name, row, 2)
+        person_grid.addWidget(self.father_name, row, 0)
 
-        # Row 2: Mother Name | Birth Date | National ID (Right to Left layout)
-        row += 1
-        mother_name_label = QLabel("اسم الأم")
-        mother_name_label.setStyleSheet(label_style)
-        #mother_name_label.setAlignment(Qt.AlignRight)
-        person_grid.addWidget(mother_name_label, row, 0)
-
-        birth_date_label = QLabel("تاريخ الميلاد")
-        birth_date_label.setStyleSheet(label_style)
-       # birth_date_label.setAlignment(Qt.AlignRight)
-        person_grid.addWidget(birth_date_label, row, 1)
-
-        national_id_label = QLabel("الرقم الوطني")
-        national_id_label.setStyleSheet(label_style)
-        #national_id_label.setAlignment(Qt.AlignRight)
-        person_grid.addWidget(national_id_label, row, 2)
-
-        row += 1
         self.mother_name = QLineEdit()
         self.mother_name.setPlaceholderText("ادخل اسم الأم")
         self.mother_name.setStyleSheet(self._input_style())
-        person_grid.addWidget(self.mother_name, row, 0)
+        person_grid.addWidget(self.mother_name, row, 1)
 
+        # Row 4: Birth Date | National ID
+        row += 1
+        birth_date_label = QLabel("تاريخ الميلاد")
+        birth_date_label.setStyleSheet(label_style)
+        person_grid.addWidget(birth_date_label, row, 0)
+
+        national_id_label = QLabel("الرقم الوطني")
+        national_id_label.setStyleSheet(label_style)
+        person_grid.addWidget(national_id_label, row, 1)
+
+        row += 1
         self.birth_date = QDateEdit()
         self.birth_date.setCalendarPopup(True)
         self.birth_date.setDate(QDate(1980, 1, 1))
         self.birth_date.setDisplayFormat("yyyy-MM-dd")
         self.birth_date.setStyleSheet(self._date_input_style())
-        person_grid.addWidget(self.birth_date, row, 1)
+        person_grid.addWidget(self.birth_date, row, 0)
 
         self.national_id = QLineEdit()
         self.national_id.setPlaceholderText("00000000000")
         self.national_id.setMaxLength(11)
         self.national_id.setStyleSheet(self._input_style())
         self.national_id.textChanged.connect(self._validate_national_id)
-        person_grid.addWidget(self.national_id, row, 2)
+        person_grid.addWidget(self.national_id, row, 1)
 
         # National ID status
         row += 1
         self.national_id_status = QLabel("")
         self.national_id_status.setAlignment(Qt.AlignRight)
-        person_grid.addWidget(self.national_id_status, row, 0, 1, 3)
+        person_grid.addWidget(self.national_id_status, row, 0, 1, 2)
 
-        # Row: Email | Relationship | Landline (Right to Left layout)
+        # Row 7: Email | Relationship
         row += 1
         email_label = QLabel("البريد الالكتروني")
         email_label.setStyleSheet(label_style)
-        #email_label.setAlignment(Qt.AlignRight)
         person_grid.addWidget(email_label, row, 0)
 
         relationship_label = QLabel("علاقة الشخص بوحدة العقار")
         relationship_label.setStyleSheet(label_style)
-        #relationship_label.setAlignment(Qt.AlignRight)
         person_grid.addWidget(relationship_label, row, 1)
-
-        landline_label = QLabel("رقم الهاتف")
-        landline_label.setStyleSheet(label_style)
-        #landline_label.setAlignment(Qt.AlignRight)
-        person_grid.addWidget(landline_label, row, 2)
 
         row += 1
         self.email = QLineEdit()
@@ -234,19 +223,22 @@ class PersonDialog(QDialog):
         self.relationship_combo.setStyleSheet(self._input_style())
         person_grid.addWidget(self.relationship_combo, row, 1)
 
+        # Row 9: Landline | Mobile phone
+        row += 1
+        landline_label = QLabel("رقم الهاتف")
+        landline_label.setStyleSheet(label_style)
+        person_grid.addWidget(landline_label, row, 0)
+
+        mobile_label = QLabel("رقم الموبايل")
+        mobile_label.setStyleSheet(label_style)
+        person_grid.addWidget(mobile_label, row, 1)
+
+        row += 1
         self.landline = QLineEdit()
         self.landline.setPlaceholderText("0000000")
         self.landline.setStyleSheet(self._input_style())
-        person_grid.addWidget(self.landline, row, 2)
+        person_grid.addWidget(self.landline, row, 0)
 
-        # Row: Mobile phone
-        row += 1
-        mobile_label = QLabel("رقم الموبايل")
-        mobile_label.setStyleSheet(label_style)
-        #mobile_label.setAlignment(Qt.AlignRight)
-        person_grid.addWidget(mobile_label, row, 0)
-
-        row += 1
         # Mobile with country code - matching photo layout
         mobile_widget = QWidget()
         mobile_layout = QHBoxLayout(mobile_widget)
@@ -260,6 +252,7 @@ class PersonDialog(QDialog):
         # Prefix label with separator
         prefix_label = QLabel("| +963")
         prefix_label.setFixedWidth(70)
+        prefix_label.setFixedHeight(23)
         prefix_label.setAlignment(Qt.AlignCenter)
         prefix_label.setStyleSheet("""
             QLabel {
@@ -276,13 +269,13 @@ class PersonDialog(QDialog):
 
         mobile_layout.addWidget(self.phone)
         mobile_layout.addWidget(prefix_label)
-        person_grid.addWidget(mobile_widget, row, 0)
+        person_grid.addWidget(mobile_widget, row, 1)
 
-        # Row: Document upload placeholder
+        # Row 11: Document upload
         row += 1
         doc_label = QLabel("المستندات")
         doc_label.setStyleSheet(label_style)
-        person_grid.addWidget(doc_label, row, 0, 1, 3)
+        person_grid.addWidget(doc_label, row, 0, 1, 2)
 
         row += 1
         # File upload frame matching photo layout
@@ -341,11 +334,17 @@ class PersonDialog(QDialog):
         upload_layout.addWidget(upload_icon)
         upload_layout.addWidget(self.doc_upload_btn)
 
-        person_grid.addWidget(upload_frame, row, 0, 1, 3)
+        person_grid.addWidget(upload_frame, row, 0, 1, 2)
 
         person_layout.addLayout(person_grid)
 
-        # Buttons layout (Save and Cancel)
+        # Set layout for person tab
+        person_tab_layout = QVBoxLayout(person_tab)
+        person_tab_layout.setContentsMargins(0, 0, 0, 0)
+        person_tab_layout.setSpacing(15)
+        person_tab_layout.addWidget(person_group)
+
+        # Buttons layout (Save and Cancel) - below the frame
         buttons_layout = QHBoxLayout()
         buttons_layout.setSpacing(10)
 
@@ -391,12 +390,7 @@ class PersonDialog(QDialog):
         buttons_layout.addWidget(save_person_btn)
         buttons_layout.addStretch()
 
-        person_layout.addLayout(buttons_layout)
-
-        # Set layout for person tab
-        person_tab_layout = QVBoxLayout(person_tab)
-        person_tab_layout.addWidget(person_group)
-        person_tab_layout.setContentsMargins(0, 0, 0, 0)
+        person_tab_layout.addLayout(buttons_layout)
 
         # ===== TAB 2: Relationship Information =====
         relation_tab = QWidget()
@@ -410,29 +404,21 @@ class PersonDialog(QDialog):
         relation_title.setStyleSheet("font-size: 16px; font-weight: bold; color: #2c3e50;")
         relation_layout.addWidget(relation_title)
 
-        # Relationship info grid
+        # Relationship info grid - 2 columns layout
         relation_grid = QGridLayout()
         relation_grid.setSpacing(15)
         relation_grid.setColumnStretch(0, 1)
         relation_grid.setColumnStretch(1, 1)
-        relation_grid.setColumnStretch(2, 1)
 
-        # Row 0: Contract Type | Relationship Type | Start Date (Right to Left layout)
+        # Row 0: Contract Type | Relationship Type
         row = 0
         contract_type_label = QLabel("نوع العقد")
         contract_type_label.setStyleSheet(label_style)
-       # contract_type_label.setAlignment(Qt.AlignRight)
         relation_grid.addWidget(contract_type_label, row, 0)
 
         rel_type_label = QLabel("نوع العلاقة")
         rel_type_label.setStyleSheet(label_style)
-        #rel_type_label.setAlignment(Qt.AlignRight)
         relation_grid.addWidget(rel_type_label, row, 1)
-
-        start_date_label = QLabel("تاريخ بدء العلاقة")
-        start_date_label.setStyleSheet(label_style)
-        #start_date_label.setAlignment(Qt.AlignRight)
-        relation_grid.addWidget(start_date_label, row, 2)
 
         row += 1
         self.contract_type = QComboBox()
@@ -441,6 +427,7 @@ class PersonDialog(QDialog):
         relation_grid.addWidget(self.contract_type, row, 0)
 
         self.rel_type_combo = QComboBox()
+        self.rel_type_combo.addItem("اختر", None)
         rel_types = [
             ("owner", "مالك"),
             ("co_owner", "شريك في الملكية"),
@@ -455,55 +442,58 @@ class PersonDialog(QDialog):
         self.rel_type_combo.setStyleSheet(self._input_style())
         relation_grid.addWidget(self.rel_type_combo, row, 1)
 
+        # Row 2: Start Date | Ownership Share
+        row += 1
+        start_date_label = QLabel("تاريخ بدء العلاقة")
+        start_date_label.setStyleSheet(label_style)
+        relation_grid.addWidget(start_date_label, row, 0)
+
+        ownership_share_label = QLabel("حصة الملكية")
+        ownership_share_label.setStyleSheet(label_style)
+        relation_grid.addWidget(ownership_share_label, row, 1)
+
+        row += 1
         self.start_date = QDateEdit()
         self.start_date.setCalendarPopup(True)
         self.start_date.setDate(QDate.currentDate())
         self.start_date.setDisplayFormat("yyyy-MM-dd")
         self.start_date.setStyleSheet(self._date_input_style())
-        relation_grid.addWidget(self.start_date, row, 2)
+        relation_grid.addWidget(self.start_date, row, 0)
 
-        # Row 2: Ownership Share | Evidence Type | Evidence Description (Right to Left layout)
-        row += 1
-        ownership_share_label = QLabel("حصة الملكية")
-        ownership_share_label.setStyleSheet(label_style)
-        #ownership_share_label.setAlignment(Qt.AlignRight)
-        relation_grid.addWidget(ownership_share_label, row, 0)
-
-        evidence_type_label = QLabel("نوع الدليل")
-        evidence_type_label.setStyleSheet(label_style)
-        #evidence_type_label.setAlignment(Qt.AlignRight)
-        relation_grid.addWidget(evidence_type_label, row, 1)
-
-        evidence_desc_label = QLabel("وصف الدليل")
-        evidence_desc_label.setStyleSheet(label_style)
-       # evidence_desc_label.setAlignment(Qt.AlignRight)
-        relation_grid.addWidget(evidence_desc_label, row, 2)
-
-        row += 1
         self.ownership_share = QDoubleSpinBox()
         self.ownership_share.setRange(0, 100)
         self.ownership_share.setDecimals(2)
         self.ownership_share.setSuffix(" %")
         self.ownership_share.setValue(0)
         self.ownership_share.setStyleSheet(self._input_style())
-        relation_grid.addWidget(self.ownership_share, row, 0)
+        relation_grid.addWidget(self.ownership_share, row, 1)
 
+        # Row 4: Evidence Type | Evidence Description
+        row += 1
+        evidence_type_label = QLabel("نوع الدليل")
+        evidence_type_label.setStyleSheet(label_style)
+        relation_grid.addWidget(evidence_type_label, row, 0)
+
+        evidence_desc_label = QLabel("وصف الدليل")
+        evidence_desc_label.setStyleSheet(label_style)
+        relation_grid.addWidget(evidence_desc_label, row, 1)
+
+        row += 1
         self.evidence_type = QComboBox()
         self.evidence_type.addItems(["اختر", "صك", "عقد", "وكالة", "إقرار"])
         self.evidence_type.setStyleSheet(self._input_style())
-        relation_grid.addWidget(self.evidence_type, row, 1)
+        relation_grid.addWidget(self.evidence_type, row, 0)
 
         self.evidence_desc = QLineEdit()
         self.evidence_desc.setPlaceholderText("ادخل وصف الدليل")
         self.evidence_desc.setStyleSheet(self._input_style())
-        relation_grid.addWidget(self.evidence_desc, row, 2)
+        relation_grid.addWidget(self.evidence_desc, row, 1)
 
-        # Row: Notes
+        # Row 6: Notes
         row += 1
         notes_label = QLabel("ادخل ملاحظاتك")
         notes_label.setStyleSheet(label_style)
-       # notes_label.setAlignment(Qt.AlignRight)
-        relation_grid.addWidget(notes_label, row, 0, 1, 3)
+        relation_grid.addWidget(notes_label, row, 0, 1, 2)
 
         row += 1
         self.notes = QTextEdit()
@@ -522,14 +512,13 @@ class PersonDialog(QDialog):
                 border: 1px solid #4a90e2;
             }
         """)
-        relation_grid.addWidget(self.notes, row, 0, 1, 3)
+        relation_grid.addWidget(self.notes, row, 0, 1, 2)
 
-        # Row: Document upload
+        # Row 8: Document upload
         row += 1
         doc_label2 = QLabel("المستندات")
         doc_label2.setStyleSheet(label_style)
-        #doc_label2.setAlignment(Qt.AlignRight)
-        relation_grid.addWidget(doc_label2, row, 0, 1, 3)
+        relation_grid.addWidget(doc_label2, row, 0, 1, 2)
 
         row += 1
         # File upload frame matching photo layout
@@ -588,11 +577,17 @@ class PersonDialog(QDialog):
         rel_upload_layout.addWidget(rel_upload_icon)
         rel_upload_layout.addWidget(self.rel_doc_upload_btn)
 
-        relation_grid.addWidget(rel_upload_frame, row, 0, 1, 3)
+        relation_grid.addWidget(rel_upload_frame, row, 0, 1, 2)
 
         relation_layout.addLayout(relation_grid)
 
-        # Buttons layout (Save and Cancel)
+        # Set layout for relation tab
+        relation_tab_layout = QVBoxLayout(relation_tab)
+        relation_tab_layout.setContentsMargins(0, 0, 0, 0)
+        relation_tab_layout.setSpacing(15)
+        relation_tab_layout.addWidget(relation_group)
+
+        # Buttons layout (Save and Cancel) - below the frame
         relation_buttons_layout = QHBoxLayout()
         relation_buttons_layout.setSpacing(10)
 
@@ -638,12 +633,7 @@ class PersonDialog(QDialog):
         relation_buttons_layout.addWidget(save_relation_btn)
         relation_buttons_layout.addStretch()
 
-        relation_layout.addLayout(relation_buttons_layout)
-
-        # Set layout for relation tab
-        relation_tab_layout = QVBoxLayout(relation_tab)
-        relation_tab_layout.addWidget(relation_group)
-        relation_tab_layout.setContentsMargins(0, 0, 0, 0)
+        relation_tab_layout.addLayout(relation_buttons_layout)
 
         # Add tabs to tab widget
         self.tab_widget.addTab(person_tab, "بيانات الشخص")
@@ -674,6 +664,8 @@ class PersonDialog(QDialog):
                 background-color: #F8FAFC;
                 color: #333;
                 font-size: 14px;
+                min-height: 23px;
+                max-height: 23px;
             }
             QLineEdit:focus, QComboBox:focus, QDateEdit:focus, QDoubleSpinBox:focus {
                 border: 1px solid #2D9CDB;
@@ -691,6 +683,8 @@ class PersonDialog(QDialog):
                 background-color: #F8FAFC;
                 color: #333;
                 font-size: 14px;
+                min-height: 23px;
+                max-height: 23px;
             }
             QDateEdit:focus {
                 border: 1px solid #2D9CDB;
@@ -723,6 +717,8 @@ class PersonDialog(QDialog):
                 background-color: #F8FAFC;
                 color: #333;
                 font-size: 14px;
+                min-height: 23px;
+                max-height: 23px;
             }
             QLineEdit:focus {
                 border: 1px solid #2D9CDB;
