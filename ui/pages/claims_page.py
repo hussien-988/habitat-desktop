@@ -8,7 +8,7 @@ from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
     QPushButton, QComboBox, QTableView, QHeaderView,
     QFrame, QDialog, QFormLayout, QTextEdit, QTabWidget,
-    QAbstractItemView, QGraphicsDropShadowEffect, QMessageBox,
+    QAbstractItemView, QGraphicsDropShadowEffect,
     QListWidget, QListWidgetItem, QSplitter, QScrollArea,
     QFileDialog, QGroupBox, QDateEdit
 )
@@ -18,6 +18,7 @@ from PyQt5.QtGui import QColor
 from app.config import Config, Vocabularies
 from repositories.database import Database
 from ui.components.dialogs.base_dialog import BaseDialog
+from ui.components.dialogs import MessageDialog
 from controllers.claim_controller import ClaimController
 from repositories.unit_repository import UnitRepository
 from repositories.person_repository import PersonRepository
@@ -282,13 +283,13 @@ class ClaimDialog(QDialog):
         # Validate unit selection
         selected_unit = self.unit_list.selectedItems()
         if not selected_unit:
-            QMessageBox.warning(self, "خطأ", "يجب اختيار وحدة عقارية")
+            MessageDialog.show_warning(parent=self, title="خطأ", message="يجب اختيار وحدة عقارية")
             return
 
         # Validate person selection
         selected_persons = self.person_list.selectedItems()
         if not selected_persons:
-            QMessageBox.warning(self, "خطأ", "يجب اختيار شخص واحد على الأقل")
+            MessageDialog.show_warning(parent=self, title="خطأ", message="يجب اختيار شخص واحد على الأقل")
             return
 
         self.accept()
@@ -707,7 +708,7 @@ class ClaimDetailsDialog(QDialog):
                     self.doc_repo.store_attachment(dialog.selected_file, doc)
                 except Exception as e:
                     logger.error(f"Failed to store attachment: {e}")
-                    QMessageBox.warning(self, "خطأ", f"فشل في حفظ الملف: {str(e)}")
+                    MessageDialog.show_warning(parent=self, title="خطأ", message=f"فشل في حفظ الملف: {str(e)}")
                     return
 
             self.pending_docs.append(doc)
@@ -719,7 +720,7 @@ class ClaimDetailsDialog(QDialog):
         # Get reason for modification (mandatory per UC-006 S08)
         reason, ok = self._get_modification_reason()
         if not ok or not reason.strip():
-            QMessageBox.warning(self, "خطأ", "يجب إدخال سبب التعديل")
+            MessageDialog.show_warning(parent=self, title="خطأ", message="يجب إدخال سبب التعديل")
             return
 
         # Update claim fields
@@ -756,11 +757,11 @@ class ClaimDetailsDialog(QDialog):
                 Toast.show(self, "تم حفظ التعديلات بنجاح", Toast.SUCCESS)
                 self._toggle_edit_mode()
             else:
-                QMessageBox.critical(self, "خطأ", f"فشل في حفظ التعديلات: {result.message}")
+                MessageDialog.show_error(parent=self, title="خطأ", message=f"فشل في حفظ التعديلات: {result.message}")
 
         except Exception as e:
             logger.error(f"Failed to save claim changes: {e}")
-            QMessageBox.critical(self, "خطأ", f"فشل في حفظ التعديلات: {str(e)}")
+            MessageDialog.show_error(parent=self, title="خطأ", message=f"فشل في حفظ التعديلات: {str(e)}")
 
     def _get_modification_reason(self):
         """Get modification reason from user (UC-006 S08)."""
@@ -781,7 +782,7 @@ class ClaimDetailsDialog(QDialog):
             self.accept()
         except Exception as e:
             logger.error(f"Transition failed: {e}")
-            QMessageBox.warning(self, "خطأ", str(e))
+            MessageDialog.show_warning(parent=self, title="خطأ", message=str(e))
 
 
 class AddDocumentDialog(BaseDialog):

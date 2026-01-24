@@ -47,6 +47,10 @@ class Colors:
     TEXT_ON_DARK = "#FFFFFF"  # White text on dark backgrounds
     TEXT_ON_PRIMARY = "#FFFFFF"  # White text on primary blue
 
+    # Wizard-specific text colors (from Figma)
+    WIZARD_TITLE = "#1A1F1D"  # Card titles, labels (14px, weight:600)
+    WIZARD_SUBTITLE = "#86909B"  # Card subtitles (14px, weight:400)
+
     # Border & Divider Colors
     BORDER_DEFAULT = "#E1E8ED"  # Light border
     BORDER_FOCUS = "#00B2E3"  # Primary blue for focused inputs
@@ -72,6 +76,10 @@ class Colors:
     INPUT_BORDER_FOCUS = "#00B2E3"
     INPUT_BORDER_ERROR = "#E74C3C"
     INPUT_PLACEHOLDER = "#95A5A6"
+
+    # Wizard Search Bar (from Figma)
+    SEARCH_BAR_BG = "#F8FAFF"  # Search bar background
+    SEARCH_BAR_BORDER = "#E5EAF6"  # Search bar border
 
     # Table Colors
     TABLE_HEADER_BG = "#F8F9FA"
@@ -483,6 +491,54 @@ class ButtonDimensions:
     NAV_BUTTON_GAP = 748                   # Gap between navigation buttons (Figma: 1512-130*2-252*2 = 748px)
     NAV_BUTTON_BORDER_RADIUS = 8           # Border radius for navigation buttons (Figma: 8px)
     NAV_BUTTON_FONT_SIZE = 12              # Font size for navigation buttons (Figma: 16px → 12pt Qt)
+
+    # Dialog Dimensions (Figma specs)
+    DIALOG_WIDTH = 400                     # Dialog width (Figma screenshot: 400px)
+    DIALOG_MIN_HEIGHT = 294                # Dialog minimum height (Figma screenshot: 294px)
+    DIALOG_BORDER_RADIUS = 12              # Dialog border-radius (Figma: 12px)
+    DIALOG_PADDING = 24                    # Dialog internal padding (Figma: 24px)
+
+    # Dialog Icon
+    DIALOG_ICON_SIZE = 48                  # Icon size (Figma: 48px)
+    DIALOG_ICON_BORDER_RADIUS = 24         # Icon container border-radius (circular: 48/2 = 24px)
+
+    # Dialog Buttons
+    DIALOG_BUTTON_HEIGHT = 48              # Button height (Figma: 48px)
+    DIALOG_BUTTON_MIN_WIDTH = 120          # Button minimum width (Figma: 120px)
+    DIALOG_BUTTON_GAP = 16                 # Gap between buttons (Figma: 16px)
+    DIALOG_BUTTON_BORDER_RADIUS = 8        # Button border-radius (Figma: 8px)
+    DIALOG_BUTTON_FONT_SIZE = 10           # Button font size (Figma: 14px → 10pt Qt)
+
+    # Dialog Spacing (from Figma screenshot)
+    DIALOG_TITLE_GAP = 16                  # Gap between icon and title (Figma: 16px)
+    DIALOG_MESSAGE_GAP = 8                 # Gap between title and details (Figma: 8px)
+    DIALOG_BUTTON_TOP_GAP = 24             # Gap between message and buttons (Figma: 24px)
+
+
+class DialogColors:
+    """
+    Dialog type-specific colors
+    Based on Figma design specifications
+    """
+
+    # Icon Background Colors (light backgrounds for icons)
+    WARNING_BG = "#FFF4E5"                 # Warning icon background (light orange)
+    ERROR_BG = "#FFE7E7"                   # Error icon background (light red)
+    SUCCESS_BG = "#E7F7EF"                 # Success icon background (light green)
+    INFO_BG = "#E3F2FD"                    # Info icon background (light blue)
+
+    # Icon Colors (main colors)
+    WARNING_ICON = "#FFC72C"               # Warning icon color (yellow from Figma)
+    ERROR_ICON = "#E53935"                 # Error icon color (red)
+    SUCCESS_ICON = "#43A047"               # Success icon color (green)
+    INFO_ICON = "#1E88E5"                  # Info icon color (blue)
+
+    # Button Colors
+    WARNING_BUTTON_BG = "#FFC72C"          # Warning button background (yellow)
+    WARNING_BUTTON_HOVER = "#FFD454"       # Warning button hover (lighter yellow)
+
+    # Overlay
+    OVERLAY_BG = "rgba(45, 45, 45, 0.95)"  # Very dark gray overlay (95% opacity)
 
 
 class ComponentStyles:

@@ -14,17 +14,18 @@ from PyQt5.QtWidgets import (
     QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton,
     QTableWidget, QTableWidgetItem, QHeaderView, QMessageBox,
     QGroupBox, QFrame, QListWidget, QListWidgetItem, QToolButton,
-    QSizePolicy, QLayout
+    QSizePolicy, QLayout, QWidget
 )
-from PyQt5.QtCore import Qt
-from PyQt5.QtGui import QColor
+from PyQt5.QtCore import Qt, QSize
+from PyQt5.QtGui import QColor, QPixmap, QIcon
 
 from ui.wizards.framework import BaseStep, StepValidationResult
 from ui.wizards.office_survey.survey_context import SurveyContext
 from controllers.building_controller import BuildingController
 from models.building import Building
 from utils.logger import get_logger
-from ui.font_utils import FontManager
+from ui.font_utils import FontManager, create_font
+from ui.design_system import Colors
 
 logger = get_logger(__name__)
 
@@ -66,8 +67,9 @@ class BuildingSelectionStep(BaseStep):
         layout = self.main_layout
         # No horizontal padding - wizard applies 131px (DRY principle)
         # Only vertical spacing between elements
-        layout.setContentsMargins(0, 16, 0, 16)  # Top: 16px, Bottom: 16px
-        layout.setSpacing(16)
+        # Top gap: 15px (reduced to accommodate multiple cards)
+        layout.setContentsMargins(0, 15, 0, 16)  # Top: 15px, Bottom: 16px
+        layout.setSpacing(15)  # Unified spacing: 15px between cards
 
         # ===== Card: Building Data =====
         card = QFrame()
@@ -79,11 +81,16 @@ class BuildingSelectionStep(BaseStep):
                 border-radius: 12px;
             }
         """)
-        card_layout = QVBoxLayout(card)
-        card_layout.setContentsMargins(16, 16, 16, 16)
-        card_layout.setSpacing(12)
+
+        # Card dimensions: Fixed height 151px (from Figma)
+        card.setFixedHeight(151)
         card.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        card_layout.setSizeConstraint(QLayout.SetMinimumSize)
+
+        card_layout = QVBoxLayout(card)
+        # Padding: 12px from all sides (from Figma)
+        card_layout.setContentsMargins(12, 12, 12, 12)
+        # No default spacing - we'll control gaps manually for precision
+        card_layout.setSpacing(0)
 
         # Header (title + subtitle)
         header_row = QHBoxLayout()
@@ -92,14 +99,20 @@ class BuildingSelectionStep(BaseStep):
         header_text_col = QVBoxLayout()
         header_text_col.setSpacing(1)
         title = QLabel("بيانات البناء")
-        title.setStyleSheet("background: transparent;font-family:'IBM Plex Sans Arabic'; font-size: 8pt; font-weight: 900; color:#1F2D3D;")
+        # Title: 14px from Figma = 10pt, weight 600, color WIZARD_TITLE
+        title.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
+        title.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent;")
+
         subtitle = QLabel("ابحث عن معلومات البناء والموقع الجغرافي")
-        subtitle.setStyleSheet("background: transparent;font-family:'IBM Plex Sans Arabic'; font-size: 8pt; color:#7F8C9B;")
+        # Subtitle: 14px from Figma = 10pt, weight 400, color WIZARD_SUBTITLE
+        subtitle.setFont(create_font(size=10, weight=FontManager.WEIGHT_REGULAR))
+        subtitle.setStyleSheet(f"color: {Colors.WIZARD_SUBTITLE}; background: transparent;")
 
         header_text_col.addWidget(title)
         header_text_col.addWidget(subtitle)
 
-        icon_lbl = QLabel("📄")
+        # Icon: blue.png
+        icon_lbl = QLabel()
         icon_lbl.setFixedSize(40, 40)
         icon_lbl.setAlignment(Qt.AlignCenter)
         icon_lbl.setStyleSheet("""
@@ -107,9 +120,17 @@ class BuildingSelectionStep(BaseStep):
                 background-color: #ffffff;
                 border: 1px solid #DBEAFE;
                 border-radius: 10px;
-                font-size: 16px;
             }
         """)
+        # Load blue.png icon
+        icon_pixmap = QPixmap("assets/images/blue.png")
+        if not icon_pixmap.isNull():
+            # Scale to fit (keep aspect ratio)
+            icon_lbl.setPixmap(icon_pixmap.scaled(24, 24, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+        else:
+            # Fallback if image not found
+            icon_lbl.setText("📄")
+            icon_lbl.setStyleSheet(icon_lbl.styleSheet() + "font-size: 16px;")
 
         header_row.addWidget(icon_lbl)
         header_row.addLayout(header_text_col)
@@ -117,43 +138,62 @@ class BuildingSelectionStep(BaseStep):
 
         card_layout.addLayout(header_row)
 
-        # Label: building code
+        # Gap: 12px between header and code label (from Figma)
+        card_layout.addSpacing(12)
+
+        # Label: building code (same as title - 14px = 10pt, weight 600, color WIZARD_TITLE)
         code_label = QLabel("رمز البناء")
-        code_label.setStyleSheet("background: transparent;font-family:'IBM Plex Sans Arabic'; font-size: 8pt; color:#1F2D3D; font-weight:800;")
+        code_label.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
+        code_label.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent;")
         card_layout.addWidget(code_label)
 
-        # Search bar (one row)
+        # Gap: 8px between code label and search bar
+        card_layout.addSpacing(8)
+
+        # Search bar (one row) - Figma specs:
+        # Height: 42px, padding: 14px left/right & 8px top/bottom
+        # Border-radius: 8px, Background & Border from design system
         search_bar = QFrame()
         search_bar.setObjectName("searchBar")
-        search_bar.setStyleSheet("""
-            QFrame#searchBar {
-                background-color: #F0F7FF;
-                border: 1px solid #E6EEF8;
-                border-radius: 18px;
-            }
+        search_bar.setFixedHeight(42)  # Height from Figma
+        search_bar.setStyleSheet(f"""
+            QFrame#searchBar {{
+                background-color: {Colors.SEARCH_BAR_BG};
+                border: 1px solid {Colors.SEARCH_BAR_BORDER};
+                border-radius: 8px;
+            }}
         """)
         search_bar.setLayoutDirection(Qt.LeftToRight)
 
         sb = QHBoxLayout(search_bar)
-        sb.setContentsMargins(10, 4, 10, 4)
+        # Padding: 14px left/right, 8px top/bottom (from Figma)
+        sb.setContentsMargins(14, 8, 14, 8)
         sb.setSpacing(8)
 
         # Search icon button
         search_icon_btn = QToolButton()
-        search_icon_btn.setText("🔍")
         search_icon_btn.setCursor(Qt.PointingHandCursor)
         search_icon_btn.setFixedSize(30, 30)
         search_icon_btn.setStyleSheet("""
             QToolButton {
                 border: none;
                 background: transparent;
-                font-size: 14px;
             }
             QToolButton:hover {
                 background-color: #EEF6FF;
                 border-radius: 8px;
             }
         """)
+        # Load search.png icon
+        search_icon = QIcon("assets/images/search.png")
+        if not search_icon.isNull():
+            search_icon_btn.setIcon(search_icon)
+            search_icon_btn.setIconSize(QSize(20, 20))
+        else:
+            # Fallback if image not found
+            search_icon_btn.setText("🔍")
+            search_icon_btn.setStyleSheet(search_icon_btn.styleSheet() + "font-size: 14px;")
+
         search_icon_btn.clicked.connect(self._search_buildings)
 
         # Input
@@ -209,168 +249,313 @@ class BuildingSelectionStep(BaseStep):
         # Add bar to card
         card_layout.addWidget(search_bar)
 
-        # Suggestions list (dropdown look)
+        # Add card to main layout
+        layout.addWidget(card)
+
+        # Suggestions list (dropdown look) - Flows from search bar, centered, overlaps card
+        # Figma specs: width 1225px, height 179px, border-radius 8px, no scrollbar
+        # Floats above card by 12px (overlaps with card's bottom padding)
         self.buildings_list = QListWidget()
         self.buildings_list.setVisible(False)
-        self.buildings_list.setMaximumHeight(170)
-        self.buildings_list.setStyleSheet("""
-            QListWidget {
-                border: 1px solid #E1E8ED;
-                border-radius: 10px;
-                background-color: #FFFFFF;
-            }
-            QListWidget::item {
+        self.buildings_list.setFixedHeight(179)  # Height from Figma
+        self.buildings_list.setFixedWidth(1225)  # Width from Figma
+
+        # Hide scrollbar but keep scrolling enabled with mouse wheel
+        self.buildings_list.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.buildings_list.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+
+        # DRY: Using Colors constants and removing border-bottom separator
+        # Border-radius only on bottom corners (flows from search bar)
+        self.buildings_list.setStyleSheet(f"""
+            QListWidget {{
+                border: 1px solid {Colors.BORDER_DEFAULT};
+                border-top-left-radius: 0px;
+                border-top-right-radius: 0px;
+                border-bottom-left-radius: 8px;
+                border-bottom-right-radius: 8px;
+                background-color: {Colors.SURFACE};
+            }}
+            QListWidget::item {{
                 padding: 10px 12px;
-                border-bottom: 1px solid #F1F5F9;
-                color: #2C3E50;
-                font-family: 'IBM Plex Sans Arabic';
-                font-size: 9pt;
-            }
-            QListWidget::item:selected {
+                border-bottom: none;
+            }}
+            QListWidget::item:selected {{
                 background-color: #EFF6FF;
-            }
+            }}
         """)
         self.buildings_list.itemClicked.connect(self._on_building_selected)
         self.buildings_list.itemDoubleClicked.connect(self._on_building_confirmed)
-        card_layout.addWidget(self.buildings_list)
 
-        layout.addWidget(card)
-        layout.addStretch(1)
+        # Position list: overlaps with card's bottom padding (12px) and centered horizontally
+        # Calculation: -(layout spacing 15px + card bottom padding 12px) = -27px
+        layout.addSpacing(-27)  # Negative spacing: overlaps card by 12px (cancels 15px spacing + 12px padding)
 
-        # ===== Selected building details (New UI blocks) =====
-        self.selected_building_frame = QFrame()
-        self.selected_building_frame.setObjectName("selectedBuildingFrame")
-        self.selected_building_frame.setStyleSheet("""
-            QFrame#selectedBuildingFrame {
-                background-color: #FFFFFF;
-                border: 1px solid #E1E8ED;
+        # Center the list horizontally using a container layout
+        list_container = QHBoxLayout()
+        list_container.addStretch(1)  # Left stretch
+        list_container.addWidget(self.buildings_list)
+        list_container.addStretch(1)  # Right stretch
+
+        layout.addLayout(list_container)
+
+        # Correct spacing before stats card (professional calculation):
+        # - Cancel the negative spacing effect: +27px
+        # - Add desired spacing between cards: +15px
+        # - Total: +42px
+        layout.addSpacing(42)  # Restores normal flow + adds 15px spacing
+
+        # ===== Selected building stats card (Separate card) =====
+        # Figma specs: height 73px, padding 12px all sides, 5 sections without dividers
+        self.stats_card = QFrame()
+        self.stats_card.setObjectName("statsCard")
+        self.stats_card.setVisible(False)  # Hidden initially
+        self.stats_card.setFixedHeight(73)  # Height from Figma
+
+        # DRY: Using Colors constants
+        self.stats_card.setStyleSheet(f"""
+            QFrame#statsCard {{
+                background-color: {Colors.SURFACE};
+                border: 1px solid {Colors.BORDER_DEFAULT};
                 border-radius: 12px;
-            }
+            }}
         """)
-        self.selected_building_frame.hide()
 
-        sb = QVBoxLayout(self.selected_building_frame)
-        sb.setContentsMargins(14, 6, 14, 6)
-        sb.setSpacing(12)
-
-        # 1) General info line
-        info_bar = QFrame()
-        info_bar.setStyleSheet("""
-            QFrame {
-                background-color: #F5FAFF;
-                border: 1px solid #DCE7F5;
-                border-radius: 10px;
-            }
-        """)
-        info_layout = QHBoxLayout(info_bar)
-        info_layout.setContentsMargins(12, 10, 12, 10)
-
-        self.selected_building_label = QLabel("")
-        self.selected_building_label.setStyleSheet("color: #2C3E50; font-weight: 600;")
-        self.selected_building_label.setWordWrap(True)
-
-        info_icon = QLabel("🏢")
-        info_icon.setStyleSheet("font-size: 16px; color: #3890DF;")
-        info_layout.addWidget(info_icon)
-        info_layout.addWidget(self.selected_building_label, stretch=1)
-
-        sb.addWidget(info_bar)
-
-        # 2) Stats row
-        stats = QFrame()
-        stats.setStyleSheet("""
-            QFrame {
-                background-color: #FFFFFF;
-                border: 1px solid #E1E8ED;
-                border-radius: 10px;
-            }
-        """)
-        stats_layout = QHBoxLayout(stats)
+        stats_layout = QHBoxLayout(self.stats_card)
+        # Padding: 12px from all sides (from Figma)
         stats_layout.setContentsMargins(12, 12, 12, 12)
-        stats_layout.setSpacing(12)
+        stats_layout.setSpacing(0)  # No spacing - sections will be separated by stretch
 
-        def _stat_block(title_text, value_text="-"):
-            box = QFrame()
-            box.setStyleSheet("QFrame { background: transparent; }")
-            v = QVBoxLayout(box)
-            v.setSpacing(4)
-            t = QLabel(title_text)
-            t.setStyleSheet("font-size: 12px; color: #7F8C9B; font-weight: 600;")
-            val = QLabel(value_text)
-            val.setStyleSheet("font-size: 13px; color: #2C3E50; font-weight: 700;")
-            v.addWidget(t, alignment=Qt.AlignHCenter)
-            v.addWidget(val, alignment=Qt.AlignHCenter)
-            return box, val
+        # Helper function to create stat section (label on top, value below)
+        def _create_stat_section(label_text, value_text="-"):
+            """Create a stat section with label on top and value below."""
+            section = QWidget()
+            section.setStyleSheet("background: transparent;")
 
-        box_status, self.ui_building_status = _stat_block("حالة البناء")
-        box_type, self.ui_building_type = _stat_block("نوع البناء")
-        box_units, self.ui_units_count = _stat_block("عدد الوحدات")
-        box_parcels, self.ui_parcels_count = _stat_block("عدد المقاسم")
-        box_shops, self.ui_shops_count = _stat_block("عدد المحلات")
+            section_layout = QVBoxLayout(section)
+            section_layout.setContentsMargins(0, 0, 0, 0)
+            section_layout.setSpacing(4)  # Small gap between label and value
+            section_layout.setAlignment(Qt.AlignCenter)
 
-        for b in [box_status, box_type, box_units, box_parcels, box_shops]:
-            stats_layout.addWidget(b, stretch=1)
+            # Label (top text) - darker color (swapped)
+            label = QLabel(label_text)
+            label.setAlignment(Qt.AlignCenter)
+            # DRY: Using create_font + Colors (swapped to WIZARD_TITLE)
+            label.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
+            label.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent;")
 
-        sb.addWidget(stats)
+            # Value (bottom text/number) - lighter color (swapped)
+            value = QLabel(value_text)
+            value.setAlignment(Qt.AlignCenter)
+            # DRY: Using create_font + Colors (swapped to WIZARD_SUBTITLE)
+            value.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
+            value.setStyleSheet(f"color: {Colors.WIZARD_SUBTITLE}; background: transparent;")
 
-        # 3) Location card with thumbnail
-        loc = QFrame()
-        loc.setStyleSheet("""
-            QFrame {
-                background-color: #FFFFFF;
-                border: 1px solid #E1E8ED;
-                border-radius: 10px;
-            }
+            section_layout.addWidget(label)
+            section_layout.addWidget(value)
+
+            return section, value
+
+        # Create 5 stat sections (from Figma order)
+        section_type, self.ui_building_type = _create_stat_section("نوع البناء")
+        section_status, self.ui_building_status = _create_stat_section("حالة البناء")
+        section_units, self.ui_units_count = _create_stat_section("عدد الوحدات")
+        section_parcels, self.ui_parcels_count = _create_stat_section("عدد المقاسم")
+        section_shops, self.ui_shops_count = _create_stat_section("عدد المحلات")
+
+        # Add sections with equal spacing (no dividers)
+        sections = [section_type, section_status, section_units, section_parcels, section_shops]
+        for i, section in enumerate(sections):
+            stats_layout.addWidget(section, stretch=1)
+            # No separator lines - just equal distribution
+
+        layout.addWidget(self.stats_card)
+
+        # Spacing between stats card and location card: 15px
+        layout.addSpacing(15)
+
+        # ===== Location card (Third section) =====
+        # Figma specs: height 187px, padding 12px all sides, gap 12px, border-radius 8px
+        self.location_card = QFrame()
+        self.location_card.setObjectName("locationCard")
+        self.location_card.setVisible(False)  # Hidden initially
+        self.location_card.setFixedHeight(187)  # Height from Figma
+
+        # DRY: Using Colors constants
+        self.location_card.setStyleSheet(f"""
+            QFrame#locationCard {{
+                background-color: {Colors.SURFACE};
+                border: 1px solid {Colors.BORDER_DEFAULT};
+                border-radius: 8px;
+            }}
         """)
-        loc_layout = QHBoxLayout(loc)
-        loc_layout.setContentsMargins(12, 12, 12, 12)
-        loc_layout.setSpacing(12)
 
-        loc_text_col = QVBoxLayout()
-        loc_title = QLabel("موقع البناء")
-        loc_title.setStyleSheet("font-size: 12px; color: #2C3E50; font-weight: 700;")
-        loc_desc = QLabel("وصف الموقع")
-        loc_desc.setStyleSheet("font-size: 12px; color: #7F8C9B;")
-        loc_text_col.addWidget(loc_title)
-        loc_text_col.addWidget(loc_desc)
-        loc_text_col.addStretch()
+        location_layout = QVBoxLayout(self.location_card)
+        # Padding: 12px from all sides (from Figma)
+        location_layout.setContentsMargins(12, 12, 12, 12)
+        location_layout.setSpacing(0)  # Manual spacing control
 
-        loc_layout.addLayout(loc_text_col, stretch=1)
+        # Row 1: Header only - "موقع البناء"
+        header = QLabel("موقع البناء")
+        header.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
+        header.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent;")
+        location_layout.addWidget(header)
 
-        thumb_col = QVBoxLayout()
-        self.map_thumbnail = QLabel("خريطة مصغّرة")
-        self.map_thumbnail.setAlignment(Qt.AlignCenter)
-        self.map_thumbnail.setFixedSize(280, 120)
-        self.map_thumbnail.setStyleSheet("""
-            QLabel {
-                background-color: #F8FAFC;
-                border: 1px solid #E1E8ED;
-                border-radius: 10px;
-                color: #7F8C9B;
-            }
+        # Gap: 12px between header and content
+        location_layout.addSpacing(12)
+
+        # Row 2: Three equal sections with 24px gap between them
+        content_row = QHBoxLayout()
+        content_row.setSpacing(24)  # Gap: 24px between sections
+
+        # Helper function for info section (DRY)
+        def _create_info_section(label_text, value_text="-"):
+            """Create info section with label and value."""
+            section = QVBoxLayout()
+            section.setSpacing(4)  # Small gap between label and value
+
+            # Label (top)
+            label = QLabel(label_text)
+            label.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
+            label.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent;")
+
+            # Value (bottom)
+            value = QLabel(value_text)
+            value.setFont(create_font(size=10, weight=FontManager.WEIGHT_REGULAR))
+            value.setStyleSheet(f"color: {Colors.WIZARD_SUBTITLE}; background: transparent;")
+            value.setWordWrap(True)
+
+            section.addWidget(label)
+            section.addWidget(value)
+            section.addStretch(1)  # Push content to top
+
+            return section, value
+
+        # Section 1: Map (left)
+        map_section = QVBoxLayout()
+        map_section.setSpacing(0)  # No spacing - manual control
+
+        # Map container (QLabel to support QPixmap)
+        map_container = QLabel()
+        map_container.setFixedSize(400, 130)  # Width: 400px, Height: 130px (from Figma)
+        map_container.setAlignment(Qt.AlignCenter)
+        map_container.setObjectName("mapContainer")
+
+        # Load background map image using Icon component (absolute paths)
+        from ui.components.icon import Icon
+
+        # Try to load map image (image-40.png or map-placeholder.png)
+        map_bg_pixmap = Icon.load_pixmap("image-40", size=None)
+        if not map_bg_pixmap or map_bg_pixmap.isNull():
+            # Fallback to map-placeholder
+            map_bg_pixmap = Icon.load_pixmap("map-placeholder", size=None)
+
+        if map_bg_pixmap and not map_bg_pixmap.isNull():
+            # Scale to exact size while maintaining quality
+            scaled_bg = map_bg_pixmap.scaled(400, 130, Qt.IgnoreAspectRatio, Qt.SmoothTransformation)
+            map_container.setPixmap(scaled_bg)
+
+        # Styling with border-radius (works with QLabel)
+        map_container.setStyleSheet(f"""
+            QLabel#mapContainer {{
+                background-color: #E8E8E8;
+                border-radius: 8px;
+            }}
         """)
 
-        self.open_map_btn = QPushButton("قم بفتح الخريطة")
-        self.open_map_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #FFFFFF;
-                border: 1px solid #DCE7F5;
-                border-radius: 10px;
-                padding: 8px 10px;
-                color: #3890DF;
-                font-weight: 700;
-            }
-            QPushButton:hover { background-color: #EEF6FF; }
+        # Layout for map container (no automatic layout - manual positioning)
+        # We'll use absolute positioning for button and icon
+
+        # White button in top-left corner (opposite to title)
+        # Dimensions: 94×20px, border-radius: 5px, padding: 4px
+        map_button = QPushButton(map_container)
+        map_button.setFixedSize(94, 20)  # Width: 94px, Height: 20px (from Figma)
+        map_button.move(8, 8)  # Position in top-left corner with small margin
+        map_button.setCursor(Qt.PointingHandCursor)
+
+        # Icon: pill.png with PRIMARY_BLUE color
+        icon_pixmap = QPixmap("assets/images/pill.png")
+        if not icon_pixmap.isNull():
+            # Scale icon to appropriate size (12px based on font size)
+            scaled_icon = icon_pixmap.scaled(12, 12, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+            map_button.setIcon(QIcon(scaled_icon))
+            map_button.setIconSize(QSize(12, 12))
+
+        # Text: "فتح الخريطة" - 12px Figma = 9pt PyQt5, PRIMARY_BLUE color
+        map_button.setText("فتح الخريطة")
+        map_button.setFont(create_font(size=9, weight=FontManager.WEIGHT_REGULAR))
+
+        # DRY: Using Colors.PRIMARY_BLUE
+        # Professional shadow effect for floating appearance
+        map_button.setStyleSheet(f"""
+            QPushButton {{
+                background-color: white;
+                color: {Colors.PRIMARY_BLUE};
+                border: none;
+                border-radius: 5px;
+                padding: 4px;
+                text-align: center;
+            }}
+            QPushButton:hover {{
+                background-color: #F5F5F5;
+            }}
         """)
-        self.open_map_btn.setEnabled(False)
 
-        thumb_col.addWidget(self.map_thumbnail)
-        thumb_col.addWidget(self.open_map_btn, alignment=Qt.AlignLeft)
-        loc_layout.addLayout(thumb_col)
+        # Apply shadow effect using QGraphicsDropShadowEffect for professional floating look
+        from PyQt5.QtWidgets import QGraphicsDropShadowEffect
+        shadow = QGraphicsDropShadowEffect()
+        shadow.setBlurRadius(8)  # Soft blur
+        shadow.setXOffset(0)  # Centered shadow
+        shadow.setYOffset(2)  # Slight offset downward
+        shadow.setColor(QColor(0, 0, 0, 60))  # Semi-transparent black (alpha: 60/255)
+        map_button.setGraphicsEffect(shadow)
 
-        sb.addWidget(loc)
+        map_button.clicked.connect(self._open_map_dialog)
 
-        layout.addWidget(self.selected_building_frame)
+        # Location icon in center of map
+        # carbon_location-filled.png - larger size for better visibility
+        location_icon = QLabel(map_container)
+        location_pixmap = QPixmap("assets/images/carbon_location-filled.png")
+        if not location_pixmap.isNull():
+            # Professional size: 56×56px for clear visibility (like a pin drop)
+            scaled_location = location_pixmap.scaled(56, 56, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+            location_icon.setPixmap(scaled_location)
+            location_icon.setFixedSize(56, 56)
+            # Position in center: (400-56)/2 = 172, (130-56)/2 = 37
+            location_icon.move(172, 37)
+
+            # Professional design: Add drop shadow effect for depth
+            location_icon.setStyleSheet("""
+                background: transparent;
+                filter: drop-shadow(0px 2px 4px rgba(0, 0, 0, 0.2));
+            """)
+        else:
+            # Fallback: use text emoji with larger size
+            location_icon.setText("📍")
+            location_icon.setFont(create_font(size=32, weight=FontManager.WEIGHT_REGULAR))
+            location_icon.setStyleSheet("background: transparent;")
+            location_icon.setAlignment(Qt.AlignCenter)
+            location_icon.setFixedSize(56, 56)
+            location_icon.move(172, 37)
+
+        map_section.addWidget(map_container)
+        map_section.addStretch(1)  # Push content to top
+
+        content_row.addLayout(map_section, stretch=1)
+
+        # Section 2: وصف الموقع (center)
+        section_location, self.ui_location_desc = _create_info_section("وصف الموقع", "وصف الموقع")
+        content_row.addLayout(section_location, stretch=1)
+
+        # Section 3: الوصف العام (right)
+        section_general, self.ui_general_desc = _create_info_section("الوصف العام", "الوصف العام للموقع")
+        content_row.addLayout(section_general, stretch=1)
+
+        location_layout.addLayout(content_row)
+
+        layout.addWidget(self.location_card)
+
+        # Add stretch after location card to push remaining content down
+        layout.addStretch(1)
 
         # Load initial buildings
         self._load_buildings()
@@ -384,10 +569,17 @@ class BuildingSelectionStep(BaseStep):
         self.buildings_list.setVisible(bool(text))
 
     def _open_map_search_dialog(self):
-        """Open map search dialog using shared BuildingMapWidget component (DRY principle)."""
+        """
+        Open professional map search dialog for building selection.
+
+        Uses BuildingMapWidget (DRY principle) - reusable component with:
+        - Interactive map with building selection
+        - Color-coded building status
+        - Proven stable implementation
+        """
         from ui.components.building_map_widget import BuildingMapWidget
 
-        # Use shared component instead of duplicating code
+        # Use shared component (DRY)
         map_widget = BuildingMapWidget(self.context.db, self)
 
         # Show dialog and get selected building
@@ -398,14 +590,67 @@ class BuildingSelectionStep(BaseStep):
             self.context.building = selected_building
             self.selected_building = selected_building
 
-            self.selected_building_label.setText(
-                f"✅ المبنى المحدد: {selected_building.building_id}\n"
-                f"النوع: {selected_building.building_type_display} | "
-                f"الحالة: {selected_building.building_status_display}"
-            )
-            self.selected_building_frame.show()
+            # Update stats card with building data
+            self.ui_building_type.setText(selected_building.building_type_display or "-")
+            self.ui_building_status.setText(selected_building.building_status_display or "-")
+            self.ui_units_count.setText(str(selected_building.number_of_units))
+            self.ui_parcels_count.setText(str(getattr(selected_building, 'number_of_apartments', 0)))
+            self.ui_shops_count.setText(str(selected_building.number_of_shops))
+
+            # Show stats card
+            self.stats_card.setVisible(True)
+
+            # Update location card with building data
+            self.ui_general_desc.setText(getattr(selected_building, 'general_description', 'الوصف العام للموقع'))
+            self.ui_location_desc.setText(getattr(selected_building, 'location_description', 'وصف الموقع'))
+
+            # Show location card
+            self.location_card.setVisible(True)
 
             # Hide suggestions list
+            self.buildings_list.setVisible(False)
+
+            # Emit validation changed
+            self.emit_validation_changed(True)
+
+    def _open_map_dialog(self):
+        """
+        Open professional map dialog for building search and selection.
+
+        Uses BuildingMapWidget (DRY principle) - reusable component with:
+        - Interactive map with building selection
+        - Color-coded building status
+        - Proven stable implementation
+        """
+        from ui.components.building_map_widget import BuildingMapWidget
+
+        # Use shared component (DRY)
+        map_widget = BuildingMapWidget(self.context.db, self)
+
+        # Show dialog and get selected building
+        selected_building = map_widget.show_dialog()
+
+        if selected_building:
+            # Update context and UI
+            self.context.building = selected_building
+            self.selected_building = selected_building
+
+            # Update stats card
+            self.ui_building_type.setText(selected_building.building_type_display or "-")
+            self.ui_building_status.setText(selected_building.building_status_display or "-")
+            self.ui_units_count.setText(str(selected_building.number_of_units))
+            self.ui_parcels_count.setText(str(getattr(selected_building, 'number_of_apartments', 0)))
+            self.ui_shops_count.setText(str(selected_building.number_of_shops))
+
+            # Update location card
+            self.ui_general_desc.setText(getattr(selected_building, 'general_description', 'الوصف العام للموقع'))
+            self.ui_location_desc.setText(getattr(selected_building, 'location_description', 'وصف الموقع'))
+
+            # Show cards
+            self.stats_card.setVisible(True)
+            self.location_card.setVisible(True)
+
+            # Hide suggestions list after selection
             self.buildings_list.setVisible(False)
 
             # Emit validation changed
@@ -422,11 +667,24 @@ class BuildingSelectionStep(BaseStep):
 
         buildings = result.data
         for building in buildings:
-            item = QListWidgetItem(
-                f"🏢 {building.building_id} | "
+            # Create item with building info
+            item_text = (
+                f"{building.building_id} | "
                 f"النوع: {building.building_type_display} | "
                 f"الحالة: {building.building_status_display}"
             )
+            item = QListWidgetItem(item_text)
+
+            # Add blue.png icon (DRY: same icon as card header)
+            icon_pixmap = QPixmap("assets/images/blue.png")
+            if not icon_pixmap.isNull():
+                item.setIcon(QIcon(icon_pixmap))
+
+            # Apply font: same as subtitle (DRY: create_font + Colors.WIZARD_SUBTITLE)
+            font = create_font(size=10, weight=FontManager.WEIGHT_REGULAR)
+            item.setFont(font)
+            item.setForeground(QColor(Colors.WIZARD_SUBTITLE))
+
             item.setData(Qt.UserRole, building)
             self.buildings_list.addItem(item)
 
@@ -454,10 +712,23 @@ class BuildingSelectionStep(BaseStep):
 
         buildings = result.data
         for building in buildings:
-            item = QListWidgetItem(
-                f"🏢 {building.building_id} | "
+            # Create item with building info
+            item_text = (
+                f"{building.building_id} | "
                 f"النوع: {building.building_type_display}"
             )
+            item = QListWidgetItem(item_text)
+
+            # Add blue.png icon (DRY: same icon as card header)
+            icon_pixmap = QPixmap("assets/images/blue.png")
+            if not icon_pixmap.isNull():
+                item.setIcon(QIcon(icon_pixmap))
+
+            # Apply font: same as subtitle (DRY: create_font + Colors.WIZARD_SUBTITLE)
+            font = create_font(size=10, weight=FontManager.WEIGHT_REGULAR)
+            item.setFont(font)
+            item.setForeground(QColor(Colors.WIZARD_SUBTITLE))
+
             item.setData(Qt.UserRole, building)
             self.buildings_list.addItem(item)
 
@@ -467,14 +738,30 @@ class BuildingSelectionStep(BaseStep):
         self.context.building = building
         self.selected_building = building
 
-        self.selected_building_label.setText(
-            f"✅ المبنى المحدد: {building.building_id}\n"
-            f"النوع: {building.building_type_display} | "
-            f"الحالة: {building.building_status_display}"
-        )
-        self.selected_building_frame.show()
+        # Update stats card with building data
+        self.ui_building_type.setText(building.building_type_display or "-")
+        self.ui_building_status.setText(building.building_status_display or "-")
+        # TODO: Get actual counts from building object
+        self.ui_units_count.setText(str(building.number_of_units))
+        self.ui_parcels_count.setText(str(getattr(building, 'number_of_apartments', 0)))
+        self.ui_shops_count.setText(str(building.number_of_shops))
 
-        # Hide suggestions list after selection - exact copy from old wizard
+        # Show stats card
+        self.stats_card.setVisible(True)
+
+        # Update location card with building data
+        self.ui_general_desc.setText(getattr(building, 'general_description', 'الوصف العام للموقع'))
+        self.ui_location_desc.setText(getattr(building, 'location_description', 'وصف الموقع'))
+
+        # Update map thumbnail if coordinates are available
+        if hasattr(building, 'latitude') and hasattr(building, 'longitude'):
+            # TODO: Load actual map thumbnail from coordinates
+            pass
+
+        # Show location card
+        self.location_card.setVisible(True)
+
+        # Hide suggestions list after selection
         self.buildings_list.setVisible(False)
 
         # Emit validation changed
@@ -520,12 +807,19 @@ class BuildingSelectionStep(BaseStep):
                 self.context.building = building
                 self.selected_building = building
 
-                self.selected_building_label.setText(
-                    f"✅ المبنى المحدد: {building.building_id}\n"
-                    f"النوع: {building.building_type_display} | "
-                    f"الحالة: {building.building_status_display}"
-                )
-                self.selected_building_frame.show()
+                # Update stats card
+                self.ui_building_type.setText(building.building_type_display or "-")
+                self.ui_building_status.setText(building.building_status_display or "-")
+                self.ui_units_count.setText(str(building.number_of_units))
+                self.ui_parcels_count.setText(str(getattr(building, 'number_of_apartments', 0)))
+                self.ui_shops_count.setText(str(building.number_of_shops))
+                self.stats_card.setVisible(True)
+
+                # Update location card
+                self.ui_general_desc.setText(getattr(building, 'general_description', 'الوصف العام للموقع'))
+                self.ui_location_desc.setText(getattr(building, 'location_description', 'وصف الموقع'))
+                self.location_card.setVisible(True)
+
                 self.buildings_list.setVisible(False)
                 self.emit_validation_changed(True)
 
@@ -674,12 +968,19 @@ class BuildingSelectionStep(BaseStep):
                 self.context.building = building
                 self.selected_building = building
 
-                self.selected_building_label.setText(
-                    f"✅ المبنى المحدد: {building.building_id}\n"
-                    f"النوع: {building.building_type_display} | "
-                    f"الحالة: {building.building_status_display}"
-                )
-                self.selected_building_frame.show()
+                # Update stats card
+                self.ui_building_type.setText(building.building_type_display or "-")
+                self.ui_building_status.setText(building.building_status_display or "-")
+                self.ui_units_count.setText(str(building.number_of_units))
+                self.ui_parcels_count.setText(str(getattr(building, 'number_of_apartments', 0)))
+                self.ui_shops_count.setText(str(building.number_of_shops))
+                self.stats_card.setVisible(True)
+
+                # Update location card
+                self.ui_general_desc.setText(getattr(building, 'general_description', 'الوصف العام للموقع'))
+                self.ui_location_desc.setText(getattr(building, 'location_description', 'وصف الموقع'))
+                self.location_card.setVisible(True)
+
                 self.buildings_list.setVisible(False)
                 self.emit_validation_changed(True)
 
@@ -708,13 +1009,20 @@ class BuildingSelectionStep(BaseStep):
             # Set search text and trigger search
             self.building_search.setText(self.context.building.building_id)
             self._search_buildings()
-            # Show selected building frame
-            self.selected_building_label.setText(
-                f"✅ المبنى المحدد: {self.context.building.building_id}\n"
-                f"النوع: {self.context.building.building_type_display} | "
-                f"الحالة: {self.context.building.building_status_display}"
-            )
-            self.selected_building_frame.show()
+
+            # Update stats card
+            self.ui_building_type.setText(self.context.building.building_type_display or "-")
+            self.ui_building_status.setText(self.context.building.building_status_display or "-")
+            self.ui_units_count.setText(str(self.context.building.number_of_units))
+            self.ui_parcels_count.setText(str(getattr(self.context.building, 'number_of_apartments', 0)))
+            self.ui_shops_count.setText(str(self.context.building.number_of_shops))
+            self.stats_card.setVisible(True)
+
+            # Update location card
+            self.ui_general_desc.setText(getattr(self.context.building, 'general_description', 'الوصف العام للموقع'))
+            self.ui_location_desc.setText(getattr(self.context.building, 'location_description', 'وصف الموقع'))
+            self.location_card.setVisible(True)
+
             # Emit validation
             self.emit_validation_changed(True)
 

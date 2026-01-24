@@ -1,71 +1,449 @@
 # -*- coding: utf-8 -*-
 """
-BaseDialog - Minimal base class for standardized dialog initialization.
-Provides only structural foundation without any styling or UI components.
+BaseDialog - Unified dialog component with overlay
+
+Provides a consistent, Figma-spec dialog with:
+- Modal overlay (dark transparent background)
+- Icon with colored background
+- Title and message
+- Customizable buttons
+- Centered positioning
+- Clean animations
+
+Based on Figma design specifications.
 """
 
-from PyQt5.QtWidgets import QDialog, QVBoxLayout
-from typing import Optional, Tuple, TYPE_CHECKING
+from PyQt5.QtWidgets import (
+    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QFrame,
+    QGraphicsOpacityEffect, QSizePolicy
+)
+from PyQt5.QtCore import Qt, QPropertyAnimation, QEasingCurve, pyqtSignal
+from PyQt5.QtGui import QFont, QPixmap, QPainter, QColor
 
-if TYPE_CHECKING:
-    from repositories.database import Database
-    from utils.i18n import I18n
+from ui.design_system import Colors, ButtonDimensions, DialogColors
+from ui.font_utils import create_font
+from ui.style_manager import StyleManager
+from utils.logger import get_logger
+
+logger = get_logger(__name__)
 
 
-class BaseDialog(QDialog):
+class DialogType:
+    """Dialog type constants."""
+    SUCCESS = "success"
+    ERROR = "error"
+    WARNING = "warning"
+    INFO = "info"
+    QUESTION = "question"
+
+
+class BaseDialog(QWidget):
     """
-    Minimal base dialog with standardized initialization.
+    Base dialog component with overlay.
 
-    Provides:
-    - Window title setup via i18n
-    - Minimum size configuration
-    - Standard main layout container
-    - i18n helper method
+    Features:
+    - Modal overlay that blocks interaction with parent
+    - Centered dialog card
+    - Icon with colored background based on type
+    - Title and message
+    - Customizable buttons
+    - Follows Figma design specifications
 
-    Does NOT provide:
-    - Styling/stylesheets
-    - Buttons (OK/Cancel)
-    - Any UI components
+    Usage:
+        dialog = BaseDialog(
+            parent=self,
+            dialog_type=DialogType.SUCCESS,
+            title="نجح",
+            message="تم حفظ البيانات بنجاح",
+            buttons=[("حسناً", self.on_ok)]
+        )
+        dialog.show()
     """
 
-    def __init__(self,
-                 db: 'Database',
-                 i18n: 'I18n',
-                 title_key: str,
-                 parent: Optional[QDialog] = None,
-                 size: Tuple[int, int] = (700, 500)):
+    # Signals
+    closed = pyqtSignal()  # Emitted when dialog is closed
+
+    def __init__(
+        self,
+        parent: QWidget,
+        dialog_type: str,
+        title: str,
+        message: str,
+        buttons: list = None,
+        icon_path: str = None
+    ):
         """
         Initialize base dialog.
 
         Args:
-            db: Database instance
-            i18n: Internationalization instance
-            title_key: Translation key for window title
             parent: Parent widget
-            size: Minimum size as (width, height) tuple
+            dialog_type: Dialog type (success, error, warning, info, question)
+            title: Dialog title
+            message: Dialog message
+            buttons: List of tuples [(label, callback), ...]
+            icon_path: Optional custom icon path (48x48px PNG)
         """
         super().__init__(parent)
-        self.db = db
-        self.i18n = i18n
 
-        # Set window title via i18n
-        if title_key:
-            self.setWindowTitle(i18n.t(title_key))
+        self.dialog_type = dialog_type
+        self.title_text = title
+        self.message_text = message
+        self.buttons_config = buttons or []
+        self.icon_path = icon_path
+        self.result = None  # Store button result
 
-        # Set minimum size only (no styling)
-        self.setMinimumSize(*size)
+        # CRITICAL: Use Qt.Tool to remove ALL window decorations (no title bar, no X button)
+        # This is the most reliable way on Windows
+        self.setWindowFlags(
+            Qt.Tool |                           # Tool window (no taskbar, no decorations)
+            Qt.FramelessWindowHint |            # No frame/title bar
+            Qt.WindowStaysOnTopHint |           # Stay on top
+            Qt.CustomizeWindowHint              # Allow customization
+        )
+        self.setAttribute(Qt.WA_TranslucentBackground)  # Transparent background for overlay
+        self.setAttribute(Qt.WA_DeleteOnClose)          # Clean up when closed
 
-        # Create main layout container
-        self.main_layout = QVBoxLayout(self)
+        # Cover parent completely
+        if parent:
+            self.setGeometry(parent.geometry())
 
-    def t(self, key: str) -> str:
+        # Modal behavior - blocks interaction with parent
+        self.setWindowModality(Qt.ApplicationModal)
+
+        # Setup UI
+        self._setup_ui()
+
+        # Apply fade-in animation
+        self._animate_show()
+
+    def _setup_ui(self):
+        """Setup dialog UI with overlay and card."""
+        # Main layout (overlay)
+        main_layout = QVBoxLayout(self)
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        main_layout.setSpacing(0)
+
+        # ========== OVERLAY (Dark Background) ==========
+        # This is the semi-transparent VERY DARK gray background that covers the page
+        overlay = QFrame()
+        overlay.setObjectName("DialogOverlay")
+        # Apply dark gray overlay directly (rgba(45, 45, 45, 0.95))
+        overlay.setStyleSheet(f"""
+            QFrame#DialogOverlay {{
+                background-color: rgba(45, 45, 45, 0.95);
+            }}
+        """)
+        overlay.mousePressEvent = lambda e: self._handle_overlay_click()
+
+        overlay_layout = QVBoxLayout(overlay)
+        overlay_layout.setAlignment(Qt.AlignCenter)
+
+        # ========== DIALOG CARD ==========
+        # The white card that contains the dialog content
+        self.dialog_card = QFrame()
+        self.dialog_card.setObjectName("DialogCard")
+        self.dialog_card.setFixedWidth(400)  # 400px from Figma screenshot
+        # Apply card style directly
+        self.dialog_card.setStyleSheet(f"""
+            QFrame#DialogCard {{
+                background-color: #FFFFFF;
+                border: 1px solid #E1E8ED;
+                border-radius: 12px;
+            }}
+        """)
+
+        # Stop click propagation to overlay
+        self.dialog_card.mousePressEvent = lambda e: e.accept()
+
+        card_layout = QVBoxLayout(self.dialog_card)
+        card_layout.setContentsMargins(24, 24, 24, 24)  # 24px padding
+        card_layout.setSpacing(0)
+
+        # ========== ICON ==========
+        icon_container = self._create_icon()
+        card_layout.addWidget(icon_container, alignment=Qt.AlignCenter)
+
+        # Gap after icon
+        card_layout.addSpacing(16)  # 16px
+
+        # ========== TITLE ==========
+        title_label = QLabel(self.title_text)
+        title_label.setAlignment(Qt.AlignCenter)
+        title_label.setWordWrap(True)
+
+        # Title font: Bold, 16pt
+        title_font = create_font(
+            size=16,  # 16pt
+            weight=QFont.Bold,
+            letter_spacing=0
+        )
+        title_label.setFont(title_font)
+        # Title: Near black color (#1A1A1A)
+        title_label.setStyleSheet("color: #1A1A1A; background: transparent;")
+        card_layout.addWidget(title_label)
+
+        # Gap after title
+        card_layout.addSpacing(8)  # 8px
+
+        # ========== MESSAGE ==========
+        message_label = QLabel(self.message_text)
+        message_label.setAlignment(Qt.AlignCenter)
+        message_label.setWordWrap(True)
+
+        # Message font: Light weight (300), 11pt (Figma: 14px)
+        message_font = create_font(
+            size=11,  # 11pt (~14px in Figma)
+            weight=QFont.Light,  # Weight 300
+            letter_spacing=0
+        )
+        message_label.setFont(message_font)
+        # Details: Gray color
+        message_label.setStyleSheet(f"color: {Colors.TEXT_SECONDARY}; background: transparent;")
+        card_layout.addWidget(message_label)
+
+        # Gap before buttons
+        card_layout.addSpacing(24)  # 24px (from Figma requirement)
+
+        # ========== BUTTONS ==========
+        if self.buttons_config:
+            buttons_row = self._create_buttons()
+            card_layout.addLayout(buttons_row)
+
+        # Add card to overlay
+        overlay_layout.addWidget(self.dialog_card)
+
+        # Add overlay to main layout
+        main_layout.addWidget(overlay)
+
+    def _create_icon(self) -> QWidget:
         """
-        Helper method for translation.
-
-        Args:
-            key: Translation key
+        Create icon with colored circular background.
 
         Returns:
-            Translated string
+            QWidget containing the icon
         """
-        return self.i18n.t(key)
+        # Icon container
+        icon_widget = QWidget()
+        icon_widget.setFixedSize(48, 48)  # 48px from Figma
+
+        # Get colors based on dialog type
+        bg_color, icon_color = self._get_icon_colors()
+
+        # Set circular background
+        icon_widget.setStyleSheet(f"""
+            QWidget {{
+                background-color: {bg_color};
+                border-radius: 24px;
+            }}
+        """)
+
+        # Icon label
+        icon_layout = QVBoxLayout(icon_widget)
+        icon_layout.setContentsMargins(0, 0, 0, 0)
+        icon_layout.setAlignment(Qt.AlignCenter)
+
+        icon_label = QLabel()
+        icon_label.setAlignment(Qt.AlignCenter)
+
+        # Load icon if provided, otherwise use default symbol
+        if self.icon_path:
+            pixmap = QPixmap(self.icon_path).scaled(
+                32, 32,  # Icon size inside the circle
+                Qt.KeepAspectRatio,
+                Qt.SmoothTransformation
+            )
+            icon_label.setPixmap(pixmap)
+        else:
+            # Use text symbol as fallback
+            symbol = self._get_icon_symbol()
+            icon_label.setText(symbol)
+            icon_label.setStyleSheet(f"""
+                color: {icon_color};
+                font-size: 24pt;
+                font-weight: bold;
+                background: transparent;
+            """)
+
+        icon_layout.addWidget(icon_label)
+
+        return icon_widget
+
+    def _get_icon_colors(self) -> tuple:
+        """
+        Get background and icon colors based on dialog type.
+
+        Returns:
+            Tuple of (background_color, icon_color)
+        """
+        type_colors = {
+            DialogType.SUCCESS: ("#E7F7EF", "#43A047"),  # Light green bg, green icon
+            DialogType.ERROR: ("#FFE7E7", "#E53935"),    # Light red bg, red icon
+            DialogType.WARNING: ("#FFF4E5", "#FFC72C"),  # Light orange bg, YELLOW icon from Figma
+            DialogType.INFO: ("#E3F2FD", "#1E88E5"),     # Light blue bg, blue icon
+            DialogType.QUESTION: ("#E3F2FD", "#1E88E5"), # Light blue bg, blue icon
+        }
+
+        return type_colors.get(self.dialog_type, ("#E3F2FD", "#1E88E5"))
+
+    def _get_icon_symbol(self) -> str:
+        """
+        Get default icon symbol based on dialog type.
+
+        Returns:
+            Icon symbol string
+        """
+        symbols = {
+            DialogType.SUCCESS: "✓",
+            DialogType.ERROR: "✕",
+            DialogType.WARNING: "!",
+            DialogType.INFO: "i",
+            DialogType.QUESTION: "?",
+        }
+
+        return symbols.get(self.dialog_type, "i")
+
+    def _get_button_style(self) -> str:
+        """
+        Get button stylesheet based on dialog type.
+
+        Returns:
+            Button stylesheet string
+        """
+        # Type-specific button colors
+        # WARNING: Yellow (#FFC72C) - from Figma
+        # ERROR: Red
+        # SUCCESS: Green
+        # INFO/QUESTION: Blue
+        type_button_colors = {
+            DialogType.WARNING: ("#FFC72C", "#FFD454"),  # Yellow + lighter yellow hover
+            DialogType.ERROR: ("#E53935", "#EF5350"),    # Red + lighter red hover
+            DialogType.SUCCESS: ("#43A047", "#66BB6A"),  # Green + lighter green hover
+            DialogType.INFO: ("#3890DF", "#2A7BC9"),     # Blue + darker blue hover
+            DialogType.QUESTION: ("#3890DF", "#2A7BC9"), # Blue + darker blue hover
+        }
+
+        bg_color, hover_color = type_button_colors.get(
+            self.dialog_type,
+            ("#3890DF", "#2A7BC9")  # Default to blue
+        )
+
+        return f"""
+            QPushButton {{
+                background-color: {bg_color};
+                color: white;
+                border: none;
+                border-radius: 8px;
+                padding: 12px 24px;
+                font-family: 'IBM Plex Sans Arabic';
+                font-size: 10pt;
+                font-weight: 300;
+            }}
+            QPushButton:hover {{
+                background-color: {hover_color};
+            }}
+            QPushButton:pressed {{
+                background-color: {bg_color};
+            }}
+        """
+
+    def _create_buttons(self) -> QHBoxLayout:
+        """
+        Create button row.
+
+        Returns:
+            QHBoxLayout containing buttons
+        """
+        buttons_layout = QHBoxLayout()
+        buttons_layout.setSpacing(16)  # 16px gap
+        buttons_layout.setContentsMargins(0, 0, 0, 0)
+
+        # Add stretch before buttons (for RTL alignment)
+        buttons_layout.addStretch()
+
+        for label, callback in self.buttons_config:
+            btn = self._create_button(label, callback)
+            buttons_layout.addWidget(btn)
+
+        return buttons_layout
+
+    def _create_button(self, label: str, callback) -> QPushButton:
+        """
+        Create styled button.
+
+        Args:
+            label: Button text
+            callback: Click callback function
+
+        Returns:
+            QPushButton with styling
+        """
+        btn = QPushButton(label)
+        btn.setCursor(Qt.PointingHandCursor)
+
+        # Button dimensions
+        btn.setFixedHeight(48)  # 48px from Figma
+        btn.setMinimumWidth(120)  # 120px minimum from Figma
+        btn.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Fixed)
+
+        # Button font (weight 300 for consistency)
+        btn_font = create_font(
+            size=10,  # 10pt (14px Figma)
+            weight=QFont.Light,  # Weight 300
+            letter_spacing=0
+        )
+        btn.setFont(btn_font)
+
+        # Apply type-specific button style
+        btn.setStyleSheet(self._get_button_style())
+
+        # Connect callback
+        def on_click():
+            self.result = label  # Store which button was clicked
+            if callback:
+                callback()
+            self.close_dialog()
+
+        btn.clicked.connect(on_click)
+
+        return btn
+
+    def _animate_show(self):
+        """Animate dialog appearance with fade-in effect."""
+        # Start transparent
+        self.opacity_effect = QGraphicsOpacityEffect(self)
+        self.setGraphicsEffect(self.opacity_effect)
+        self.opacity_effect.setOpacity(0)
+
+        # Animate to opaque
+        self.animation = QPropertyAnimation(self.opacity_effect, b"opacity")
+        self.animation.setDuration(200)  # 200ms
+        self.animation.setStartValue(0)
+        self.animation.setEndValue(1)
+        self.animation.setEasingCurve(QEasingCurve.OutCubic)
+        self.animation.start()
+
+    def _handle_overlay_click(self):
+        """Handle click on overlay (outside dialog card)."""
+        # Optional: Close dialog when clicking outside
+        # Uncomment the following line if you want this behavior:
+        # self.close_dialog()
+        pass
+
+    def close_dialog(self):
+        """Close dialog with fade-out animation."""
+        # Animate to transparent
+        self.animation = QPropertyAnimation(self.opacity_effect, b"opacity")
+        self.animation.setDuration(150)  # 150ms
+        self.animation.setStartValue(1)
+        self.animation.setEndValue(0)
+        self.animation.setEasingCurve(QEasingCurve.InCubic)
+        self.animation.finished.connect(self.close)
+        self.animation.start()
+
+        # Emit closed signal
+        self.closed.emit()
+
+    def closeEvent(self, event):
+        """Handle close event."""
+        self.closed.emit()
+        super().closeEvent(event)
