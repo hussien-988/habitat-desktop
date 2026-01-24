@@ -122,11 +122,11 @@ class BuildingSelectionStep(BaseStep):
                 border-radius: 10px;
             }
         """)
-        # Load blue.png icon
-        icon_pixmap = QPixmap("assets/images/blue.png")
-        if not icon_pixmap.isNull():
-            # Scale to fit (keep aspect ratio)
-            icon_lbl.setPixmap(icon_pixmap.scaled(24, 24, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+        # Load blue.png icon using Icon.load_pixmap for absolute path resolution
+        from ui.components.icon import Icon
+        icon_pixmap = Icon.load_pixmap("blue", size=24)
+        if icon_pixmap and not icon_pixmap.isNull():
+            icon_lbl.setPixmap(icon_pixmap)
         else:
             # Fallback if image not found
             icon_lbl.setText("📄")
@@ -184,10 +184,11 @@ class BuildingSelectionStep(BaseStep):
                 border-radius: 8px;
             }
         """)
-        # Load search.png icon
-        search_icon = QIcon("assets/images/search.png")
-        if not search_icon.isNull():
-            search_icon_btn.setIcon(search_icon)
+        # Load search.png icon using Icon.load_pixmap for absolute path resolution
+        from ui.components.icon import Icon
+        search_pixmap = Icon.load_pixmap("search", size=20)
+        if search_pixmap and not search_pixmap.isNull():
+            search_icon_btn.setIcon(QIcon(search_pixmap))
             search_icon_btn.setIconSize(QSize(20, 20))
         else:
             # Fallback if image not found
@@ -472,12 +473,11 @@ class BuildingSelectionStep(BaseStep):
         map_button.move(8, 8)  # Position in top-left corner with small margin
         map_button.setCursor(Qt.PointingHandCursor)
 
-        # Icon: pill.png with PRIMARY_BLUE color
-        icon_pixmap = QPixmap("assets/images/pill.png")
-        if not icon_pixmap.isNull():
-            # Scale icon to appropriate size (12px based on font size)
-            scaled_icon = icon_pixmap.scaled(12, 12, Qt.KeepAspectRatio, Qt.SmoothTransformation)
-            map_button.setIcon(QIcon(scaled_icon))
+        # Icon: pill.png with PRIMARY_BLUE color using Icon.load_pixmap
+        from ui.components.icon import Icon
+        icon_pixmap = Icon.load_pixmap("pill", size=12)
+        if icon_pixmap and not icon_pixmap.isNull():
+            map_button.setIcon(QIcon(icon_pixmap))
             map_button.setIconSize(QSize(12, 12))
 
         # Text: "فتح الخريطة" - 12px Figma = 9pt PyQt5, PRIMARY_BLUE color
@@ -514,11 +514,10 @@ class BuildingSelectionStep(BaseStep):
         # Location icon in center of map
         # carbon_location-filled.png - larger size for better visibility
         location_icon = QLabel(map_container)
-        location_pixmap = QPixmap("assets/images/carbon_location-filled.png")
-        if not location_pixmap.isNull():
-            # Professional size: 56×56px for clear visibility (like a pin drop)
-            scaled_location = location_pixmap.scaled(56, 56, Qt.KeepAspectRatio, Qt.SmoothTransformation)
-            location_icon.setPixmap(scaled_location)
+        from ui.components.icon import Icon
+        location_pixmap = Icon.load_pixmap("carbon_location-filled", size=56)
+        if location_pixmap and not location_pixmap.isNull():
+            location_icon.setPixmap(location_pixmap)
             location_icon.setFixedSize(56, 56)
             # Position in center: (400-56)/2 = 172, (130-56)/2 = 37
             location_icon.move(172, 37)
@@ -576,14 +575,20 @@ class BuildingSelectionStep(BaseStep):
         - Interactive map with building selection
         - Color-coded building status
         - Proven stable implementation
+        - Focus on previously selected building if exists
         """
         from ui.components.building_map_widget import BuildingMapWidget
 
         # Use shared component (DRY)
         map_widget = BuildingMapWidget(self.context.db, self)
 
-        # Show dialog and get selected building
-        selected_building = map_widget.show_dialog()
+        # If we already have a selected building, focus on it
+        current_building_id = None
+        if hasattr(self, 'selected_building') and self.selected_building:
+            current_building_id = self.selected_building.building_id
+
+        # Show dialog and get selected building (with optional focus)
+        selected_building = map_widget.show_dialog(selected_building_id=current_building_id)
 
         if selected_building:
             # Update context and UI
@@ -621,14 +626,20 @@ class BuildingSelectionStep(BaseStep):
         - Interactive map with building selection
         - Color-coded building status
         - Proven stable implementation
+        - Focus on currently selected building if exists
         """
         from ui.components.building_map_widget import BuildingMapWidget
 
         # Use shared component (DRY)
         map_widget = BuildingMapWidget(self.context.db, self)
 
-        # Show dialog and get selected building
-        selected_building = map_widget.show_dialog()
+        # If we already have a selected building, focus on it when opening map
+        current_building_id = None
+        if hasattr(self, 'selected_building') and self.selected_building:
+            current_building_id = self.selected_building.building_id
+
+        # Show dialog and get selected building (with optional focus on current selection)
+        selected_building = map_widget.show_dialog(selected_building_id=current_building_id)
 
         if selected_building:
             # Update context and UI
@@ -676,8 +687,9 @@ class BuildingSelectionStep(BaseStep):
             item = QListWidgetItem(item_text)
 
             # Add blue.png icon (DRY: same icon as card header)
-            icon_pixmap = QPixmap("assets/images/blue.png")
-            if not icon_pixmap.isNull():
+            from ui.components.icon import Icon
+            icon_pixmap = Icon.load_pixmap("blue", size=24)
+            if icon_pixmap and not icon_pixmap.isNull():
                 item.setIcon(QIcon(icon_pixmap))
 
             # Apply font: same as subtitle (DRY: create_font + Colors.WIZARD_SUBTITLE)
@@ -720,8 +732,9 @@ class BuildingSelectionStep(BaseStep):
             item = QListWidgetItem(item_text)
 
             # Add blue.png icon (DRY: same icon as card header)
-            icon_pixmap = QPixmap("assets/images/blue.png")
-            if not icon_pixmap.isNull():
+            from ui.components.icon import Icon
+            icon_pixmap = Icon.load_pixmap("blue", size=24)
+            if icon_pixmap and not icon_pixmap.isNull():
                 item.setIcon(QIcon(icon_pixmap))
 
             # Apply font: same as subtitle (DRY: create_font + Colors.WIZARD_SUBTITLE)
