@@ -315,12 +315,30 @@ class LeafletHTMLGenerator:
         // Initialize map centered on Aleppo
         var map = L.map('map').setView([{center_lat}, {center_lon}], {zoom});
 
-        // Add tile layer from local server
-        L.tileLayer('{tile_server_url}/tiles/{{z}}/{{x}}/{{y}}.png', {{
+        // Add tile layer from local server with debugging
+        console.log('Tile server URL: {tile_server_url}');
+        console.log('Loading tiles from: {tile_server_url}/tiles/{{z}}/{{x}}/{{y}}.png');
+
+        var tileLayer = L.tileLayer('{tile_server_url}/tiles/{{z}}/{{x}}/{{y}}.png', {{
             maxZoom: 16,
             minZoom: 10,
-            attribution: 'Map data &copy; OpenStreetMap | UN-Habitat Syria'
-        }}).addTo(map);
+            attribution: 'Map data &copy; OpenStreetMap | UN-Habitat Syria',
+            errorTileUrl: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=='
+        }});
+
+        tileLayer.on('loading', function() {{
+            console.log('🔄 Tiles loading started...');
+        }});
+
+        tileLayer.on('load', function() {{
+            console.log('✅ Tiles loaded successfully!');
+        }});
+
+        tileLayer.on('tileerror', function(error) {{
+            console.error('❌ Tile load error:', error);
+        }});
+
+        tileLayer.addTo(map);
 
         // Status colors and labels
         var statusColors = {status_colors};

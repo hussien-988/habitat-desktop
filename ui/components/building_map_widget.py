@@ -131,9 +131,12 @@ class BuildingMapWidget(QObject):
         self._dialog = None
         self._map_view = None
 
-    def show_dialog(self) -> Optional[Building]:
+    def show_dialog(self, selected_building_id: Optional[str] = None) -> Optional[Building]:
         """
         Show the map selection dialog.
+
+        Args:
+            selected_building_id: Optional building ID to focus on when map loads
 
         Returns:
             Selected Building object, or None if cancelled
@@ -164,8 +167,8 @@ class BuildingMapWidget(QObject):
         if self._dialog is None:
             self._dialog = self._create_dialog()
 
-        # Load/reload map
-        self._load_map()
+        # Load/reload map with optional building focus
+        self._load_map(selected_building_id=selected_building_id)
 
         # Show dialog (modal)
         result = self._dialog.exec_()
@@ -400,7 +403,7 @@ class BuildingMapWidget(QObject):
 
         # Search input
         self.search_input = QLineEdit()
-        self.search_input.setPlaceholderText("بحث عن اسم المنطقة")
+        self.search_input.setPlaceholderText("بحث عن اسم المنطقة (مثال: Al-Jamiliyah)")
         self.search_input.setAlignment(Qt.AlignRight)  # RTL alignment
         self.search_input.setFont(create_font(size=10, weight=FontManager.WEIGHT_REGULAR))
         self.search_input.setStyleSheet(f"""
@@ -505,6 +508,8 @@ class BuildingMapWidget(QObject):
 
             # Find buildings in matching neighborhoods
             matching_buildings = []
+            matched_neighborhoods = set()
+
             for building in buildings:
                 # Search in both Arabic and English names
                 neighborhood_ar = (building.neighborhood_name_ar or "").lower()
@@ -513,8 +518,10 @@ class BuildingMapWidget(QObject):
 
                 if search_lower in neighborhood_ar or search_lower in neighborhood_en:
                     matching_buildings.append(building)
+                    # Track which neighborhood matched
+                    matched_neighborhoods.add(building.neighborhood_name or building.neighborhood_name_ar)
 
-            logger.info(f"Found {len(matching_buildings)} matching buildings")
+            logger.info(f"Found {len(matching_buildings)} matching buildings in neighborhoods: {matched_neighborhoods}")
 
             if matching_buildings:
                 # Get center point of matching buildings
@@ -528,18 +535,24 @@ class BuildingMapWidget(QObject):
                     logger.info(f"Flying to center: ({center_lat}, {center_lon})")
 
                     # Fly to location on map using JavaScript
+                    # Zoom level increased to 17 for better focus
                     js_code = f"""
-                    console.log('Flying to: [{center_lat}, {center_lon}]');
+                    console.log('🔍 SEARCH: Flying to [{center_lat}, {center_lon}] with {len(matching_buildings)} buildings');
                     if (typeof map !== 'undefined') {{
-                        map.flyTo([{center_lat}, {center_lon}], 15, {{
-                            duration: 1.5,
-                            easeLinearity: 0.5
+                        map.flyTo([{center_lat}, {center_lon}], 17, {{
+                            duration: 2.0,
+                            easeLinearity: 0.25
                         }});
+                        console.log('✅ Map flyTo executed successfully');
                     }} else {{
-                        console.error('Map object not found!');
+                        console.error('❌ Map object not found!');
                     }}
                     """
-                    self._map_view.page().runJavaScript(js_code)
+
+                    def log_js_result(result):
+                        logger.info(f"JavaScript execution completed: {result}")
+
+                    self._map_view.page().runJavaScript(js_code, log_js_result)
 
                     logger.info(f"✅ Search successful: {len(matching_buildings)} buildings in '{search_text}'")
 
@@ -632,8 +645,13 @@ class BuildingMapWidget(QObject):
             logger.error(f"Failed to parse WKT: {e}")
             return None
 
-    def _load_map(self):
-        """Load the interactive map with building markers and polygons - استخدام LeafletHTMLGenerator الموحد."""
+    def _load_map(self, selected_building_id: Optional[str] = None):
+        """
+        Load the interactive map with building markers and polygons.
+
+        Args:
+            selected_building_id: Optional building ID to focus on when map loads
+        """
         if not self._map_view:
             return
 
@@ -642,6 +660,8 @@ class BuildingMapWidget(QObject):
         import json
 
         tile_server_url = get_tile_server_url()
+        logger.info(f"Tile server URL: {tile_server_url}")
+
         if not tile_server_url.endswith('/'):
             tile_server_url += '/'
 
@@ -684,22 +704,57 @@ class BuildingMapWidget(QObject):
             "features": features
         })
 
+        # If we have a selected building, focus on it
+        center_lat = 36.2021
+        center_lon = 37.1343
+        zoom = 13
+        focus_building_id = None
+
+        if selected_building_id:
+            # Find the selected building to focus on it
+            focus_building = next((b for b in buildings if b.building_id == selected_building_id), None)
+            if focus_building and focus_building.latitude and focus_building.longitude:
+                center_lat = focus_building.latitude
+                center_lon = focus_building.longitude
+                zoom = 17  # Closer zoom for selected building
+                focus_building_id = selected_building_id
+                logger.info(f"Focusing on building {selected_building_id} at ({center_lat}, {center_lon})")
+
         # استخدام LeafletHTMLGenerator الموحد مع تفعيل زر الاختيار
         # الـ popup يفتح تلقائياً عند النقر، والزر داخل الـ popup
         html = generate_leaflet_html(
             tile_server_url=tile_server_url.rstrip('/'),
             buildings_geojson=buildings_geojson,
-            center_lat=36.2021,
-            center_lon=37.1343,
-            zoom=13,
+            center_lat=center_lat,
+            center_lon=center_lon,
+            zoom=zoom,
             show_legend=True,
             show_layer_control=False,
             enable_selection=True,
             enable_drawing=False
         )
 
-        # LeafletHTMLGenerator يتعامل مع كل شيء - لا حاجة لإضافة JavaScript إضافي
+        # LeafletHTMLGenerator يتعامل مع كل شيء
         self._map_view.setHtml(html, base_url)
+
+        # If we focused on a building, open its popup after map loads
+        if focus_building_id:
+            def open_building_popup():
+                js = f"""
+                if (typeof buildingsLayer !== 'undefined') {{
+                    buildingsLayer.eachLayer(function(layer) {{
+                        if (layer.feature && layer.feature.properties.building_id === '{focus_building_id}') {{
+                            layer.openPopup();
+                            console.log('Opened popup for building {focus_building_id}');
+                        }}
+                    }});
+                }}
+                """
+                self._map_view.page().runJavaScript(js)
+
+            # Open popup after a short delay to ensure map is fully loaded
+            from PyQt5.QtCore import QTimer
+            QTimer.singleShot(1500, open_building_popup)
 
 
     def _on_building_selected_from_map(self, building_id: str):
