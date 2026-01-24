@@ -19,12 +19,15 @@ from PyQt5.QtWidgets import (
     QSizePolicy, QDialog
 )
 from PyQt5.QtCore import Qt
+from PyQt5.QtGui import QPixmap
 
 from ui.wizards.framework import BaseStep, StepValidationResult
 from ui.wizards.office_survey.survey_context import SurveyContext
 from ui.wizards.office_survey.dialogs.person_dialog import PersonDialog
 from app.config import Config
 from utils.logger import get_logger
+from ui.font_utils import FontManager, create_font
+from ui.design_system import Colors
 
 logger = get_logger(__name__)
 
@@ -45,66 +48,106 @@ class PersonStep(BaseStep):
         super().__init__(context, parent)
 
     def setup_ui(self):
-        """Setup the step's UI - exact copy from old wizard."""
+        """Setup the step's UI - matching Step 1 styling."""
         widget = self
         widget.setLayoutDirection(Qt.RightToLeft)
-        widget.setStyleSheet("background-color: #F8FAFC;")
-        layout = self.main_layout
-        layout.setContentsMargins(50, 30, 50, 30)
-        layout.setSpacing(16)
+        # Set main window background color
+        widget.setStyleSheet(f"background-color: {Colors.BACKGROUND};")
 
-        # Main Card Container
+        layout = self.main_layout
+        # Match Step 1 margins: No horizontal padding - wizard handles it (131px)
+        # Only vertical spacing for step content
+        layout.setContentsMargins(0, 15, 0, 16)  # Top: 15px, Bottom: 16px
+        layout.setSpacing(15)  # Unified spacing: 15px between cards
+
+        # Main Card Container - matching Step 1 card styling
         table_frame = QFrame()
+        table_frame.setObjectName("personsCard")
         table_frame.setLayoutDirection(Qt.RightToLeft)
-        table_frame.setStyleSheet("""
-            QFrame {
-                background-color: white;
+        table_frame.setStyleSheet(f"""
+            QFrame#personsCard {{
+                background-color: {Colors.SURFACE};
                 border-radius: 12px;
-                border: 1px solid #E1E8ED;
-            }
+                border: 1px solid {Colors.BORDER_DEFAULT};
+            }}
         """)
         table_layout = QVBoxLayout(table_frame)
-        table_layout.setContentsMargins(20, 20, 20, 20)
-        table_layout.setSpacing(10)
+        table_layout.setContentsMargins(12, 12, 12, 12)  # Match Step 1: 12px padding
+        table_layout.setSpacing(12)  # Match Step 1: 12px spacing
 
         # Header with Title on right and Add Button on left (RTL layout)
         persons_header = QHBoxLayout()
 
-        # Title on the right (appears first in RTL)
+        # Title group with icon and text (appears first in RTL)
+        title_group = QHBoxLayout()
+        title_group.setSpacing(8)
+
+        # Title text container
         title_vbox = QVBoxLayout()
+        title_vbox.setSpacing(1)  # Match Step 1 spacing
         title_label = QLabel("بيانات الأشخاص")
-        title_label.setStyleSheet("font-weight: bold; font-size: 16px; border: none; color: #1A202C;")
-        title_label.setAlignment(Qt.AlignRight)
+        # Title: 14px from Figma = 10pt, weight 600, color WIZARD_TITLE (matching Step 1)
+        title_label.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
+        title_label.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent;")
+       # title_label.setAlignment(Qt.AlignRight)
         subtitle_label = QLabel("قائمة الأشخاص المسجلين")
-        subtitle_label.setStyleSheet("color: #A0AEC0; font-size: 12px; border: none;")
+        # Subtitle: 14px from Figma = 10pt, weight 400, color WIZARD_SUBTITLE (matching Step 1)
+        subtitle_label.setFont(create_font(size=10, weight=FontManager.WEIGHT_REGULAR))
+        subtitle_label.setStyleSheet(f"color: {Colors.WIZARD_SUBTITLE}; background: transparent;")
         subtitle_label.setAlignment(Qt.AlignRight)
         title_vbox.addWidget(title_label)
         title_vbox.addWidget(subtitle_label)
 
-        # Add button on the left (appears last in RTL)
+        # Icon for title
+        title_icon = QLabel()
+        title_icon.setFixedSize(40, 40)
+        title_icon.setAlignment(Qt.AlignCenter)
+        title_icon.setStyleSheet("""
+            QLabel {
+                background-color: #ffffff;
+                border: 1px solid #DBEAFE;
+                border-radius: 10px;
+            }
+        """)
+        # Load user.png icon using Icon.load_pixmap for absolute path resolution
+        from ui.components.icon import Icon
+        user_icon_pixmap = Icon.load_pixmap("user", size=24)
+        if user_icon_pixmap and not user_icon_pixmap.isNull():
+            title_icon.setPixmap(user_icon_pixmap)
+        else:
+            # Fallback if image not found
+            title_icon.setText("👤")
+            title_icon.setStyleSheet(title_icon.styleSheet() + "font-size: 16px;")
+
+        # Assemble title group (icon first in code = rightmost visually in RTL)
+        title_group.addWidget(title_icon)
+        title_group.addLayout(title_vbox)
+
+        # Add button on the left (appears last in RTL) - matching Step 1 styling
         add_person_btn = QPushButton("+ اضافة شخص جديد")
         add_person_btn.setLayoutDirection(Qt.RightToLeft)
-        add_person_btn.setStyleSheet("""
-            QPushButton {
-                background-color: white;
-                color: #3182CE;
-                border: 1px solid #3182CE;
+        add_person_btn.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
+        add_person_btn.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {Colors.SURFACE};
+                color: {Colors.PRIMARY_BLUE};
+                border: 1px solid {Colors.PRIMARY_BLUE};
                 border-radius: 6px;
                 padding: 8px 16px;
-                font-weight: bold;
-            }
-            QPushButton:hover {
+            }}
+            QPushButton:hover {{
                 background-color: #EBF8FF;
-            }
+            }}
         """)
         add_person_btn.clicked.connect(self._add_person)
 
-        persons_header.addLayout(title_vbox)
+        persons_header.addLayout(title_group)
         persons_header.addStretch()
         persons_header.addWidget(add_person_btn)
 
         table_layout.addLayout(persons_header)
-        table_layout.addSpacing(10)
+        # Gap: 12px between header and content (matching Step 1)
+        table_layout.addSpacing(12)
 
         # Scroll area for person cards
         scroll_area = QScrollArea()
@@ -145,16 +188,20 @@ class PersonStep(BaseStep):
             logger.info(f"Person added: {person_data['first_name']} {person_data['last_name']}")
 
     def _create_person_row_card(self, person: dict, index: int = 0) -> QFrame:
-        """Create a person row card matching the new design layout - exact copy from old wizard."""
+        """Create a person row card matching the photo design."""
         card = QFrame()
         card.setLayoutDirection(Qt.RightToLeft)
         card.setFixedHeight(80)
-        card.setStyleSheet("""
-            QFrame {
-                background-color: #FFFFFF;
+        # Use main window background color - same for all rows
+        card.setStyleSheet(f"""
+            QFrame {{
+                background-color: {Colors.BACKGROUND};
                 border: 1px solid #F0F0F0;
                 border-radius: 8px;
-            }
+            }}
+            QLabel {{
+                border: none;
+            }}
         """)
 
         # Main row layout (RTL: items added left-to-right appear right-to-left)
@@ -165,7 +212,7 @@ class PersonStep(BaseStep):
         right_group = QHBoxLayout()
         right_group.setSpacing(12)
 
-        # Icon
+        # Icon - using user.png
         icon_lbl = QLabel()
         icon_lbl.setFixedSize(36, 36)
         icon_lbl.setAlignment(Qt.AlignCenter)
@@ -174,23 +221,31 @@ class PersonStep(BaseStep):
                 background-color: #F4F8FF;
                 color: #3182CE;
                 border-radius: 18px;
-                font-size: 16px;
                 border: none;
             }
         """)
-        icon_lbl.setText("👤")
+        # Load user.png icon using Icon.load_pixmap for absolute path resolution
+        from ui.components.icon import Icon
+        user_pixmap = Icon.load_pixmap("user", size=20)
+        if user_pixmap and not user_pixmap.isNull():
+            icon_lbl.setPixmap(user_pixmap)
+        else:
+            # Fallback if image not found
+            icon_lbl.setText("👤")
+            icon_lbl.setStyleSheet(icon_lbl.styleSheet() + "font-size: 16px;")
 
         # Text Container (Name and Role)
         text_vbox = QVBoxLayout()
         text_vbox.setSpacing(2)
 
-        # Person name
+        # Person name - matching Step 1 title font
         full_name = f"{person['first_name']} {person.get('father_name', '')} {person['last_name']}".strip()
         name_lbl = QLabel(full_name)
-        name_lbl.setStyleSheet("font-weight: bold; color: #333333; font-size: 14px; border: none;")
+        name_lbl.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
+        name_lbl.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent;")
         name_lbl.setAlignment(Qt.AlignRight)
 
-        # Person role/status
+        # Person role/status - matching Step 1 subtitle font
         rel_type_map = {
             "owner": "مالك",
             "tenant": "مستأجر",
@@ -202,13 +257,14 @@ class PersonStep(BaseStep):
         }
         role_text = rel_type_map.get(person.get('relationship_type'), "ساكن")
         role_lbl = QLabel(role_text)
-        role_lbl.setStyleSheet("color: #8C8C8C; font-size: 12px; border: none;")
-        role_lbl.setAlignment(Qt.AlignRight)
+        role_lbl.setFont(create_font(size=10, weight=FontManager.WEIGHT_REGULAR))
+        role_lbl.setStyleSheet(f"color: {Colors.WIZARD_SUBTITLE}; background: transparent;")
+        #role_lbl.setAlignment(Qt.AlignRight)
 
         text_vbox.addWidget(name_lbl)
         text_vbox.addWidget(role_lbl)
 
-        # Assemble the Right Group (Icon first, then text in RTL)
+        # Assemble the Right Group (Icon first in code = rightmost visually in RTL)
         right_group.addWidget(icon_lbl)
         right_group.addLayout(text_vbox)
 
