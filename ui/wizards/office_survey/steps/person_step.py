@@ -89,7 +89,7 @@ class PersonStep(BaseStep):
         # Title: 14px from Figma = 10pt, weight 600, color WIZARD_TITLE (matching Step 1)
         title_label.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
         title_label.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent;")
-        title_label.setAlignment(Qt.AlignRight)
+       # title_label.setAlignment(Qt.AlignRight)
         subtitle_label = QLabel("قائمة الأشخاص المسجلين")
         # Subtitle: 14px from Figma = 10pt, weight 400, color WIZARD_SUBTITLE (matching Step 1)
         subtitle_label.setFont(create_font(size=10, weight=FontManager.WEIGHT_REGULAR))
@@ -192,13 +192,15 @@ class PersonStep(BaseStep):
         card = QFrame()
         card.setLayoutDirection(Qt.RightToLeft)
         card.setFixedHeight(80)
-        # Use alternating background for visual separation
-        bg_color = Colors.SURFACE if index % 2 == 0 else Colors.TABLE_ROW_EVEN
+        # Use main window background color - same for all rows
         card.setStyleSheet(f"""
             QFrame {{
-                background-color: {bg_color};
+                background-color: {Colors.BACKGROUND};
                 border: 1px solid #F0F0F0;
                 border-radius: 8px;
+            }}
+            QLabel {{
+                border: none;
             }}
         """)
 
@@ -257,7 +259,7 @@ class PersonStep(BaseStep):
         role_lbl = QLabel(role_text)
         role_lbl.setFont(create_font(size=10, weight=FontManager.WEIGHT_REGULAR))
         role_lbl.setStyleSheet(f"color: {Colors.WIZARD_SUBTITLE}; background: transparent;")
-        role_lbl.setAlignment(Qt.AlignRight)
+        #role_lbl.setAlignment(Qt.AlignRight)
 
         text_vbox.addWidget(name_lbl)
         text_vbox.addWidget(role_lbl)
