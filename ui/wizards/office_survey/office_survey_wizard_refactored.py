@@ -734,11 +734,11 @@ class OfficeSurveyWizard(BaseWizard):
                     font-weight: 600;
                 """)
             else:
-                # Inactive tabs (Figma: white bg, gray text, no border, padding 10×16)
+                # Inactive tabs (Same color as title: WIZARD_TITLE)
                 # Completed and Pending use same style
                 label.setStyleSheet(f"""
                     background-color: {Colors.SURFACE};
-                    color: {Colors.TEXT_SECONDARY};
+                    color: {Colors.WIZARD_TITLE};
                     border: none;
                     border-radius: {ButtonDimensions.STEP_TAB_BORDER_RADIUS}px;
                     padding: {ButtonDimensions.STEP_TAB_PADDING_V}px {ButtonDimensions.STEP_TAB_PADDING_H}px;

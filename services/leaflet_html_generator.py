@@ -254,6 +254,12 @@ class LeafletHTMLGenerator:
             box-shadow: 0 0 2px rgba(0,0,0,0.3);
         }}
 
+        /* Pin Icon Styling */
+        .building-pin-icon {{
+            background: transparent !important;
+            border: none !important;
+        }}
+
         /* Offline Badge */
         .offline-badge {{
             position: absolute;
@@ -347,20 +353,27 @@ class LeafletHTMLGenerator:
                 }};
             }},
 
-            // pointToLayer for Point features
+            // pointToLayer for Point features - استخدام Markers بدلاً من CircleMarkers
             // Reference: https://leafletjs.com/reference.html#geojson-pointtolayer
             pointToLayer: function(feature, latlng) {{
                 var status = feature.properties.status || 'intact';
                 var color = statusColors[status] || '#0072BC';
 
-                return L.circleMarker(latlng, {{
-                    radius: 8,
-                    fillColor: color,
-                    color: '#fff',
-                    weight: 2,
-                    opacity: 1,
-                    fillOpacity: 0.9
+                // إنشاء أيقونة دبوس ملونة بنفس ألوان الحالة
+                var pinIcon = L.divIcon({{
+                    className: 'building-pin-icon',
+                    html: '<div style="position: relative; width: 24px; height: 36px;">' +
+                          '<svg width="24" height="36" viewBox="0 0 24 36" xmlns="http://www.w3.org/2000/svg">' +
+                          '<path d="M12 0C5.4 0 0 5.4 0 12c0 8 12 24 12 24s12-16 12-24c0-6.6-5.4-12-12-12z" ' +
+                          'fill="' + color + '" stroke="#fff" stroke-width="2"/>' +
+                          '<circle cx="12" cy="12" r="4" fill="#fff"/>' +
+                          '</svg></div>',
+                    iconSize: [24, 36],
+                    iconAnchor: [12, 36],
+                    popupAnchor: [0, -36]
                 }});
+
+                return L.marker(latlng, {{ icon: pinIcon }});
             }},
 
             // onEachFeature for popups and events
@@ -386,7 +399,7 @@ class LeafletHTMLGenerator:
                 }}
 
                 // إضافة زر الاختيار إذا كان مفعلاً
-                {'if (props.building_id) { popup += \'<button class="select-building-btn" onclick="selectBuilding(\\\'\" + props.building_id + \"\\\')"><span style=\"font-size:16px\">✓</span> اختيار هذا المبنى</button>\'; }' if enable_selection else '// Selection disabled'}
+                {'if (props.building_id) { popup += "<button class=\\"select-building-btn\\" onclick=\\"selectBuilding(\'" + props.building_id + "\')\\\"><span style=\\"font-size:16px\\">✓</span> اختيار هذا المبنى</button>"; }' if enable_selection else '// Selection disabled'}
 
                 popup += '</div>';
 

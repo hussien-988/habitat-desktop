@@ -754,6 +754,143 @@ class StyleManager:
             }}
         """
 
+    # ==================== DIALOGS ====================
+
+    @staticmethod
+    def dialog_overlay() -> str:
+        """
+        Get dialog overlay stylesheet (semi-transparent dark background).
+
+        Usage: Fullscreen overlay that covers the page when dialog is shown
+
+        Figma Specs:
+        - Background: rgba(0, 0, 0, 0.5) - 50% opacity black
+        - Full screen coverage
+        - Blocks interaction with underlying content
+
+        Returns:
+            Complete QSS stylesheet string
+        """
+        from ui.design_system import DialogColors
+
+        return f"""
+            QFrame#DialogOverlay {{
+                background-color: {DialogColors.OVERLAY_BG};
+            }}
+        """
+
+    @staticmethod
+    def dialog_card() -> str:
+        """
+        Get dialog card stylesheet (white card containing dialog content).
+
+        Usage: The white card that contains icon, title, message, and buttons
+
+        Figma Specs:
+        - Width: 480px (fixed)
+        - Background: White (#FFFFFF)
+        - Border-radius: 12px
+        - Shadow: 0px 8px 16px rgba(0, 0, 0, 0.15)
+        - Padding: 32px (all sides)
+
+        Returns:
+            Complete QSS stylesheet string
+        """
+        from ui.design_system import ButtonDimensions
+
+        return f"""
+            QFrame#DialogCard {{
+                background-color: {Colors.SURFACE};
+                border: 1px solid {Colors.BORDER_DEFAULT};
+                border-radius: {ButtonDimensions.DIALOG_BORDER_RADIUS}px;
+            }}
+        """
+
+    @staticmethod
+    def dialog_button_primary() -> str:
+        """
+        Get primary button stylesheet for dialogs.
+
+        Usage: Buttons inside dialogs (OK, Yes, Confirm, etc.)
+
+        Figma Specs:
+        - Height: 48px
+        - Min-width: 120px
+        - Background: Primary Blue (#3890DF)
+        - Text: White
+        - Border-radius: 8px
+        - Font: 16px (12pt Qt), Normal weight
+
+        Returns:
+            Complete QSS stylesheet string
+        """
+        from ui.design_system import ButtonDimensions
+
+        return f"""
+            QPushButton {{
+                background-color: {Colors.PRIMARY_BLUE};
+                color: white;
+                border: none;
+                border-radius: {ButtonDimensions.DIALOG_BUTTON_BORDER_RADIUS}px;
+                padding: 12px 24px;
+                font-family: 'IBM Plex Sans Arabic';
+                font-size: {ButtonDimensions.DIALOG_BUTTON_FONT_SIZE}pt;
+            }}
+            QPushButton:hover {{
+                background-color: {ButtonDimensions.PRIMARY_HOVER_BG};
+            }}
+            QPushButton:pressed {{
+                background-color: {Colors.PRIMARY_PRESSED};
+            }}
+            QPushButton:disabled {{
+                background-color: {Colors.BORDER_DEFAULT};
+                color: {Colors.TEXT_DISABLED};
+            }}
+        """
+
+    @staticmethod
+    def dialog_button_secondary() -> str:
+        """
+        Get secondary button stylesheet for dialogs.
+
+        Usage: Secondary buttons inside dialogs (Cancel, No, etc.)
+
+        Figma Specs:
+        - Height: 48px
+        - Min-width: 120px
+        - Background: Transparent/White
+        - Text: Primary Blue
+        - Border: 1px solid Border color
+        - Border-radius: 8px
+
+        Returns:
+            Complete QSS stylesheet string
+        """
+        from ui.design_system import ButtonDimensions
+
+        return f"""
+            QPushButton {{
+                background-color: {Colors.SURFACE};
+                color: {Colors.PRIMARY_BLUE};
+                border: 1px solid {Colors.BORDER_DEFAULT};
+                border-radius: {ButtonDimensions.DIALOG_BUTTON_BORDER_RADIUS}px;
+                padding: 12px 24px;
+                font-family: 'IBM Plex Sans Arabic';
+                font-size: {ButtonDimensions.DIALOG_BUTTON_FONT_SIZE}pt;
+            }}
+            QPushButton:hover {{
+                background-color: {Colors.BACKGROUND_LIGHT};
+            }}
+            QPushButton:pressed {{
+                background-color: {Colors.BORDER_DEFAULT};
+            }}
+            QPushButton:disabled {{
+                background-color: {Colors.SURFACE};
+                border: 1px solid {Colors.BORDER_DEFAULT};
+                color: {Colors.TEXT_DISABLED};
+            }}
+        """
+
 
 # Convenience functions for backward compatibility
 def get_button_style(variant: str = "primary") -> str:
