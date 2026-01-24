@@ -285,24 +285,53 @@ class PersonDialog(QDialog):
 
         person_layout.addLayout(person_grid)
 
-        # Save person button
+        # Buttons layout (Save and Cancel)
+        buttons_layout = QHBoxLayout()
+        buttons_layout.setSpacing(10)
+
+        # Cancel button (on the right in RTL)
+        cancel_person_btn = QPushButton("إلغاء")
+        cancel_person_btn.setStyleSheet("""
+            QPushButton {
+                background-color: white;
+                color: #4a90e2;
+                border: 1px solid #e0e6ed;
+                border-radius: 8px;
+                padding: 10px 30px;
+                font-weight: bold;
+                font-size: 14px;
+                min-width: 120px;
+            }
+            QPushButton:hover {
+                background-color: #f5f7fa;
+            }
+        """)
+        cancel_person_btn.clicked.connect(self.reject)
+
+        # Save person button (on the left in RTL)
         save_person_btn = QPushButton("حفظ")
         save_person_btn.setStyleSheet("""
             QPushButton {
                 background-color: #4a90e2;
                 color: white;
                 border-radius: 8px;
-                padding: 10px;
+                padding: 10px 30px;
                 font-weight: bold;
                 font-size: 14px;
-                max-width: 200px;
+                min-width: 120px;
             }
             QPushButton:hover {
                 background-color: #357ABD;
             }
         """)
         save_person_btn.clicked.connect(self._save_person_and_switch_tab)
-        person_layout.addWidget(save_person_btn, alignment=Qt.AlignCenter)
+
+        buttons_layout.addStretch()
+        buttons_layout.addWidget(cancel_person_btn)
+        buttons_layout.addWidget(save_person_btn)
+        buttons_layout.addStretch()
+
+        person_layout.addLayout(buttons_layout)
 
         # Set layout for person tab
         person_tab_layout = QVBoxLayout(person_tab)
@@ -451,24 +480,53 @@ class PersonDialog(QDialog):
 
         relation_layout.addLayout(relation_grid)
 
-        # Save relationship button
+        # Buttons layout (Save and Cancel)
+        relation_buttons_layout = QHBoxLayout()
+        relation_buttons_layout.setSpacing(10)
+
+        # Cancel button (on the right in RTL)
+        cancel_relation_btn = QPushButton("إلغاء")
+        cancel_relation_btn.setStyleSheet("""
+            QPushButton {
+                background-color: white;
+                color: #4a90e2;
+                border: 1px solid #e0e6ed;
+                border-radius: 8px;
+                padding: 10px 30px;
+                font-weight: bold;
+                font-size: 14px;
+                min-width: 120px;
+            }
+            QPushButton:hover {
+                background-color: #f5f7fa;
+            }
+        """)
+        cancel_relation_btn.clicked.connect(self.reject)
+
+        # Save relationship button (on the left in RTL)
         save_relation_btn = QPushButton("حفظ")
         save_relation_btn.setStyleSheet("""
             QPushButton {
                 background-color: #4a90e2;
                 color: white;
                 border-radius: 8px;
-                padding: 10px;
+                padding: 10px 30px;
                 font-weight: bold;
                 font-size: 14px;
-                max-width: 150px;
+                min-width: 120px;
             }
             QPushButton:hover {
                 background-color: #357ABD;
             }
         """)
         save_relation_btn.clicked.connect(self.accept)
-        relation_layout.addWidget(save_relation_btn, alignment=Qt.AlignCenter)
+
+        relation_buttons_layout.addStretch()
+        relation_buttons_layout.addWidget(cancel_relation_btn)
+        relation_buttons_layout.addWidget(save_relation_btn)
+        relation_buttons_layout.addStretch()
+
+        relation_layout.addLayout(relation_buttons_layout)
 
         # Set layout for relation tab
         relation_tab_layout = QVBoxLayout(relation_tab)
