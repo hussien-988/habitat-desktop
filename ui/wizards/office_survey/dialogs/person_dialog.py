@@ -43,6 +43,7 @@ class PersonDialog(QDialog):
         self.existing_persons = existing_persons or []
         self.editing_mode = person_data is not None
         self.validation_service = ValidationService()
+        self.uploaded_files = []  # Store uploaded file paths
 
         self.setWindowTitle("تعديل بيانات الشخص" if self.editing_mode else "إضافة شخص جديد")
         self.setModal(True)
@@ -178,7 +179,7 @@ class PersonDialog(QDialog):
         self.birth_date.setCalendarPopup(True)
         self.birth_date.setDate(QDate(1980, 1, 1))
         self.birth_date.setDisplayFormat("yyyy-MM-dd")
-        self.birth_date.setStyleSheet(self._input_style())
+        self.birth_date.setStyleSheet(self._date_input_style())
         person_grid.addWidget(self.birth_date, row, 1)
 
         self.national_id = QLineEdit()
@@ -246,42 +247,101 @@ class PersonDialog(QDialog):
         person_grid.addWidget(mobile_label, row, 0)
 
         row += 1
-        # Mobile with country code
+        # Mobile with country code - matching photo layout
         mobile_widget = QWidget()
         mobile_layout = QHBoxLayout(mobile_widget)
         mobile_layout.setContentsMargins(0, 0, 0, 0)
-        mobile_layout.setSpacing(8)
+        mobile_layout.setSpacing(0)  # No spacing for merged appearance
 
         self.phone = QLineEdit()
         self.phone.setPlaceholderText("09")
-        self.phone.setStyleSheet(self._input_style())
+        self.phone.setStyleSheet(self._mobile_input_style())
 
-        separator_label = QLabel("|")
-        separator_label.setStyleSheet("color: #999; font-size: 16px;")
-
-        country_code = QLineEdit()
-        country_code.setText("+963")
-        country_code.setReadOnly(True)
-        country_code.setMaximumWidth(60)
-        country_code.setStyleSheet(self._input_style())
+        # Prefix label with separator
+        prefix_label = QLabel("| +963")
+        prefix_label.setFixedWidth(70)
+        prefix_label.setAlignment(Qt.AlignCenter)
+        prefix_label.setStyleSheet("""
+            QLabel {
+                background-color: #F8FAFC;
+                border: 1px solid #E0E6ED;
+                border-left: none;
+                border-top-left-radius: 8px;
+                border-bottom-left-radius: 8px;
+                color: #333;
+                padding: 10px;
+                font-size: 14px;
+            }
+        """)
 
         mobile_layout.addWidget(self.phone)
-        mobile_layout.addWidget(separator_label)
-        mobile_layout.addWidget(country_code)
+        mobile_layout.addWidget(prefix_label)
         person_grid.addWidget(mobile_widget, row, 0)
 
         # Row: Document upload placeholder
         row += 1
-        doc_label = QLabel("ارفع المستندات والصور")
+        doc_label = QLabel("المستندات")
         doc_label.setStyleSheet(label_style)
-        person_grid.addWidget(doc_label, row, 1)
+        person_grid.addWidget(doc_label, row, 0, 1, 3)
 
         row += 1
-        self.doc_upload_placeholder = QLineEdit()
-        self.doc_upload_placeholder.setReadOnly(True)
-        self.doc_upload_placeholder.setPlaceholderText("اختر الملفات...")
-        self.doc_upload_placeholder.setStyleSheet(self._input_style())
-        person_grid.addWidget(self.doc_upload_placeholder, row, 0, 1, 3)
+        # File upload frame matching photo layout
+        upload_frame = QFrame()
+        upload_frame.setObjectName("UploadFrame")
+        upload_frame.setCursor(Qt.PointingHandCursor)
+        upload_frame.setStyleSheet("""
+            QFrame#UploadFrame {
+                background-color: #F0F7FF;
+                border: 2px dashed #BEE3F8;
+                border-radius: 10px;
+                min-height: 100px;
+            }
+            QFrame#UploadFrame:hover {
+                background-color: #E6F2FF;
+            }
+        """)
+
+        upload_layout = QVBoxLayout(upload_frame)
+        upload_layout.setContentsMargins(20, 20, 20, 20)
+        upload_layout.setAlignment(Qt.AlignCenter)
+        upload_layout.setSpacing(8)
+
+        # Upload icon
+        upload_icon = QLabel()
+        upload_icon.setFixedSize(40, 40)
+        upload_icon.setAlignment(Qt.AlignCenter)
+        upload_icon.setStyleSheet("border: none;")
+
+        # Load upload icon using Icon component
+        from ui.components.icon import Icon
+        upload_pixmap = Icon.load_pixmap("upload_file", size=40)
+        if upload_pixmap and not upload_pixmap.isNull():
+            upload_icon.setPixmap(upload_pixmap)
+        else:
+            # Fallback emoji
+            upload_icon.setText("📁")
+            upload_icon.setStyleSheet("border: none; font-size: 32px;")
+
+        # Upload button
+        self.doc_upload_btn = QPushButton("ارفع صور المستندات")
+        self.doc_upload_btn.setStyleSheet("""
+            QPushButton {
+                color: #2D9CDB;
+                font-weight: bold;
+                border: none;
+                background: transparent;
+                text-decoration: underline;
+            }
+            QPushButton:hover {
+                color: #1E7BB0;
+            }
+        """)
+        self.doc_upload_btn.clicked.connect(self._browse_files)
+
+        upload_layout.addWidget(upload_icon)
+        upload_layout.addWidget(self.doc_upload_btn)
+
+        person_grid.addWidget(upload_frame, row, 0, 1, 3)
 
         person_layout.addLayout(person_grid)
 
@@ -399,7 +459,7 @@ class PersonDialog(QDialog):
         self.start_date.setCalendarPopup(True)
         self.start_date.setDate(QDate.currentDate())
         self.start_date.setDisplayFormat("yyyy-MM-dd")
-        self.start_date.setStyleSheet(self._input_style())
+        self.start_date.setStyleSheet(self._date_input_style())
         relation_grid.addWidget(self.start_date, row, 2)
 
         # Row 2: Ownership Share | Evidence Type | Evidence Description (Right to Left layout)
@@ -466,17 +526,69 @@ class PersonDialog(QDialog):
 
         # Row: Document upload
         row += 1
-        doc_label2 = QLabel("ارفع صور المستندات")
+        doc_label2 = QLabel("المستندات")
         doc_label2.setStyleSheet(label_style)
         #doc_label2.setAlignment(Qt.AlignRight)
         relation_grid.addWidget(doc_label2, row, 0, 1, 3)
 
         row += 1
-        self.rel_doc_upload_placeholder = QLineEdit()
-        self.rel_doc_upload_placeholder.setReadOnly(True)
-        self.rel_doc_upload_placeholder.setPlaceholderText("اختر الملفات...")
-        self.rel_doc_upload_placeholder.setStyleSheet(self._input_style())
-        relation_grid.addWidget(self.rel_doc_upload_placeholder, row, 0, 1, 3)
+        # File upload frame matching photo layout
+        rel_upload_frame = QFrame()
+        rel_upload_frame.setObjectName("RelUploadFrame")
+        rel_upload_frame.setCursor(Qt.PointingHandCursor)
+        rel_upload_frame.setStyleSheet("""
+            QFrame#RelUploadFrame {
+                background-color: #F0F7FF;
+                border: 2px dashed #BEE3F8;
+                border-radius: 10px;
+                min-height: 100px;
+            }
+            QFrame#RelUploadFrame:hover {
+                background-color: #E6F2FF;
+            }
+        """)
+
+        rel_upload_layout = QVBoxLayout(rel_upload_frame)
+        rel_upload_layout.setContentsMargins(20, 20, 20, 20)
+        rel_upload_layout.setAlignment(Qt.AlignCenter)
+        rel_upload_layout.setSpacing(8)
+
+        # Upload icon
+        rel_upload_icon = QLabel()
+        rel_upload_icon.setFixedSize(40, 40)
+        rel_upload_icon.setAlignment(Qt.AlignCenter)
+        rel_upload_icon.setStyleSheet("border: none;")
+
+        # Load upload icon using Icon component
+        from ui.components.icon import Icon
+        rel_upload_pixmap = Icon.load_pixmap("upload_file", size=40)
+        if rel_upload_pixmap and not rel_upload_pixmap.isNull():
+            rel_upload_icon.setPixmap(rel_upload_pixmap)
+        else:
+            # Fallback emoji
+            rel_upload_icon.setText("📁")
+            rel_upload_icon.setStyleSheet("border: none; font-size: 32px;")
+
+        # Upload button
+        self.rel_doc_upload_btn = QPushButton("ارفع صور المستندات")
+        self.rel_doc_upload_btn.setStyleSheet("""
+            QPushButton {
+                color: #2D9CDB;
+                font-weight: bold;
+                border: none;
+                background: transparent;
+                text-decoration: underline;
+            }
+            QPushButton:hover {
+                color: #1E7BB0;
+            }
+        """)
+        self.rel_doc_upload_btn.clicked.connect(self._browse_relation_files)
+
+        rel_upload_layout.addWidget(rel_upload_icon)
+        rel_upload_layout.addWidget(self.rel_doc_upload_btn)
+
+        relation_grid.addWidget(rel_upload_frame, row, 0, 1, 3)
 
         relation_layout.addLayout(relation_grid)
 
@@ -559,15 +671,97 @@ class PersonDialog(QDialog):
                 border: 1px solid #e0e6ed;
                 border-radius: 8px;
                 padding: 10px;
-                background-color: white;
+                background-color: #F8FAFC;
                 color: #333;
                 font-size: 14px;
             }
             QLineEdit:focus, QComboBox:focus, QDateEdit:focus, QDoubleSpinBox:focus {
-                border: 1px solid #4a90e2;
+                border: 1px solid #2D9CDB;
                 background-color: white;
             }
         """
+
+    def _date_input_style(self) -> str:
+        """Return date input style with calendar icon."""
+        return """
+            QDateEdit {
+                border: 1px solid #e0e6ed;
+                border-radius: 8px;
+                padding: 10px;
+                background-color: #F8FAFC;
+                color: #333;
+                font-size: 14px;
+            }
+            QDateEdit:focus {
+                border: 1px solid #2D9CDB;
+                background-color: white;
+            }
+            QDateEdit::drop-down {
+                subcontrol-origin: padding;
+                subcontrol-position: center left;
+                width: 30px;
+                border: none;
+            }
+            QDateEdit::down-arrow {
+                image: url(assets/images/calender.png);
+                width: 20px;
+                height: 20px;
+            }
+        """
+
+    def _mobile_input_style(self) -> str:
+        """Return mobile input style (merged left side with prefix)."""
+        return """
+            QLineEdit {
+                border: 1px solid #E0E6ED;
+                border-right: none;
+                border-top-right-radius: 8px;
+                border-bottom-right-radius: 8px;
+                border-top-left-radius: 0px;
+                border-bottom-left-radius: 0px;
+                padding: 10px;
+                background-color: #F8FAFC;
+                color: #333;
+                font-size: 14px;
+            }
+            QLineEdit:focus {
+                border: 1px solid #2D9CDB;
+                border-right: none;
+                background-color: white;
+            }
+        """
+
+    def _browse_files(self):
+        """Browse for files to upload."""
+        from PyQt5.QtWidgets import QFileDialog
+        file_paths, _ = QFileDialog.getOpenFileNames(
+            self,
+            "اختر ملفات",
+            "",
+            "Images (*.png *.jpg *.jpeg *.pdf)"
+        )
+        if file_paths:
+            file_names = [f.split("/")[-1] for f in file_paths]
+            self.doc_upload_btn.setText(f"تم اختيار {len(file_names)} ملف")
+            # Store file paths for later use
+            self.uploaded_files = file_paths
+
+    def _browse_relation_files(self):
+        """Browse for relation files to upload."""
+        from PyQt5.QtWidgets import QFileDialog
+        file_paths, _ = QFileDialog.getOpenFileNames(
+            self,
+            "اختر ملفات",
+            "",
+            "Images (*.png *.jpg *.jpeg *.pdf)"
+        )
+        if file_paths:
+            file_names = [f.split("/")[-1] for f in file_paths]
+            self.rel_doc_upload_btn.setText(f"تم اختيار {len(file_names)} ملف")
+            # Store file paths for later use
+            if not hasattr(self, 'relation_uploaded_files'):
+                self.relation_uploaded_files = []
+            self.relation_uploaded_files = file_paths
 
     def _validate_national_id(self):
         """Validate national ID."""
