@@ -47,7 +47,7 @@ class PersonDialog(QDialog):
 
         self.setWindowTitle("تعديل بيانات الشخص" if self.editing_mode else "إضافة شخص جديد")
         self.setModal(True)
-        self.setFixedSize(595, 691)  # Fixed size matching photo
+        self.setFixedSize(650, 750)  # Increased size for better spacing
         self.setStyleSheet("""
             QDialog {
                 background-color: #f5f7fa;
@@ -114,7 +114,8 @@ class PersonDialog(QDialog):
 
         # Person info grid - 2 columns layout
         person_grid = QGridLayout()
-        person_grid.setSpacing(15)
+        person_grid.setHorizontalSpacing(15)
+        person_grid.setVerticalSpacing(5)  # Smaller vertical spacing between label and input
         person_grid.setColumnStretch(0, 1)
         person_grid.setColumnStretch(1, 1)
 
@@ -346,7 +347,7 @@ class PersonDialog(QDialog):
 
         # Buttons layout (Save and Cancel) - below the frame
         buttons_layout = QHBoxLayout()
-        buttons_layout.setSpacing(10)
+        buttons_layout.setSpacing(15)
 
         # Cancel button (on the right in RTL)
         cancel_person_btn = QPushButton("إلغاء")
@@ -356,10 +357,10 @@ class PersonDialog(QDialog):
                 color: #4a90e2;
                 border: 1px solid #e0e6ed;
                 border-radius: 8px;
-                padding: 10px 30px;
+                padding: 12px 40px;
                 font-weight: bold;
                 font-size: 14px;
-                min-width: 120px;
+                min-width: 200px;
             }
             QPushButton:hover {
                 background-color: #f5f7fa;
@@ -374,10 +375,10 @@ class PersonDialog(QDialog):
                 background-color: #4a90e2;
                 color: white;
                 border-radius: 8px;
-                padding: 10px 30px;
+                padding: 12px 40px;
                 font-weight: bold;
                 font-size: 14px;
-                min-width: 120px;
+                min-width: 200px;
             }
             QPushButton:hover {
                 background-color: #357ABD;
@@ -406,7 +407,8 @@ class PersonDialog(QDialog):
 
         # Relationship info grid - 2 columns layout
         relation_grid = QGridLayout()
-        relation_grid.setSpacing(15)
+        relation_grid.setHorizontalSpacing(15)
+        relation_grid.setVerticalSpacing(5)  # Smaller vertical spacing between label and input
         relation_grid.setColumnStretch(0, 1)
         relation_grid.setColumnStretch(1, 1)
 
@@ -589,7 +591,7 @@ class PersonDialog(QDialog):
 
         # Buttons layout (Save and Cancel) - below the frame
         relation_buttons_layout = QHBoxLayout()
-        relation_buttons_layout.setSpacing(10)
+        relation_buttons_layout.setSpacing(15)
 
         # Cancel button (on the right in RTL)
         cancel_relation_btn = QPushButton("إلغاء")
@@ -599,10 +601,10 @@ class PersonDialog(QDialog):
                 color: #4a90e2;
                 border: 1px solid #e0e6ed;
                 border-radius: 8px;
-                padding: 10px 30px;
+                padding: 12px 40px;
                 font-weight: bold;
                 font-size: 14px;
-                min-width: 120px;
+                min-width: 200px;
             }
             QPushButton:hover {
                 background-color: #f5f7fa;
@@ -617,10 +619,10 @@ class PersonDialog(QDialog):
                 background-color: #4a90e2;
                 color: white;
                 border-radius: 8px;
-                padding: 10px 30px;
+                padding: 12px 40px;
                 font-weight: bold;
                 font-size: 14px;
-                min-width: 120px;
+                min-width: 200px;
             }
             QPushButton:hover {
                 background-color: #357ABD;
