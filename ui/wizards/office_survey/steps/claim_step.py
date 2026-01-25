@@ -29,7 +29,10 @@ class ClaimStep(BaseStep):
         super().__init__(context, parent)
 
     def setup_ui(self):
-        """Setup the step's UI - exact copy from old wizard."""
+        """Setup the step's UI - using StyleManager for consistent styling."""
+        # Import StyleManager for shared styles
+        from ui.style_manager import StyleManager
+
         widget = self
         widget.setLayoutDirection(Qt.RightToLeft)
         widget.setStyleSheet("""
@@ -37,16 +40,6 @@ class ClaimStep(BaseStep):
                 color: #444;
                 font-weight: bold;
                 font-size: 13px;
-            }
-            QLineEdit, QComboBox, QDateEdit, QTextEdit {
-                background-color: #ffffff;
-                border: 1px solid #dcdfe6;
-                border-radius: 6px;
-                padding: 10px;
-                color: #606266;
-            }
-            QLineEdit:focus, QComboBox:focus, QTextEdit:focus {
-                border: 1px solid #409eff;
             }
         """)
 
@@ -109,10 +102,12 @@ class ClaimStep(BaseStep):
         # Row 1 (RTL): معرف المطالب | معرف الوحدة المطالب بها | نوع الحالة | طبيعة الأعمال
         self.claim_person_search = QLineEdit()
         self.claim_person_search.setPlaceholderText("اسم الشخص")
+        self.claim_person_search.setStyleSheet(StyleManager.form_input())
         add_field("معرف المطالب", self.claim_person_search, 0, 0)
 
         self.claim_unit_search = QLineEdit()
         self.claim_unit_search.setPlaceholderText("رقم الوحدة")
+        self.claim_unit_search.setStyleSheet(StyleManager.form_input())
         add_field("معرف الوحدة المطالب بها", self.claim_unit_search, 0, 1)
 
         self.claim_type_combo = QComboBox()
@@ -120,6 +115,7 @@ class ClaimStep(BaseStep):
         self.claim_type_combo.addItem("ملكية", "ownership")
         self.claim_type_combo.addItem("إشغال", "occupancy")
         self.claim_type_combo.addItem("إيجار", "tenancy")
+        self.claim_type_combo.setStyleSheet(StyleManager.form_input())
         add_field("نوع الحالة", self.claim_type_combo, 0, 2)
 
         self.claim_business_nature = QComboBox()
@@ -127,6 +123,7 @@ class ClaimStep(BaseStep):
         self.claim_business_nature.addItem("سكني", "residential")
         self.claim_business_nature.addItem("تجاري", "commercial")
         self.claim_business_nature.addItem("زراعي", "agricultural")
+        self.claim_business_nature.setStyleSheet(StyleManager.form_input())
         add_field("طبيعة الأعمال", self.claim_business_nature, 0, 3)
 
         # Row 2 (RTL): حالة الحالة | المصدر | تاريخ المسح | الأولوية
@@ -136,6 +133,7 @@ class ClaimStep(BaseStep):
         self.claim_status_combo.addItem("قيد المراجعة", "under_review")
         self.claim_status_combo.addItem("مكتمل", "completed")
         self.claim_status_combo.addItem("معلق", "pending")
+        self.claim_status_combo.setStyleSheet(StyleManager.form_input())
         add_field("حالة الحالة", self.claim_status_combo, 1, 0)
 
         self.claim_source_combo = QComboBox()
@@ -143,12 +141,14 @@ class ClaimStep(BaseStep):
         self.claim_source_combo.addItem("مسح ميداني", "field_survey")
         self.claim_source_combo.addItem("طلب مباشر", "direct_request")
         self.claim_source_combo.addItem("إحالة", "referral")
+        self.claim_source_combo.setStyleSheet(StyleManager.form_input())
         add_field("المصدر", self.claim_source_combo, 1, 1)
 
         self.claim_survey_date = QDateEdit()
         self.claim_survey_date.setCalendarPopup(True)
-        self.claim_survey_date.setDisplayFormat("dd-MM-yyyy")
+        self.claim_survey_date.setDisplayFormat("yyyy-MM-dd")
         self.claim_survey_date.setDate(QDate.currentDate())
+        self.claim_survey_date.setStyleSheet(StyleManager.date_input())
         add_field("تاريخ المسح", self.claim_survey_date, 1, 2)
 
         self.claim_priority_combo = QComboBox()
@@ -158,6 +158,7 @@ class ClaimStep(BaseStep):
         self.claim_priority_combo.addItem("عالي", "high")
         self.claim_priority_combo.addItem("عاجل", "urgent")
         self.claim_priority_combo.setCurrentIndex(2)  # Default to normal
+        self.claim_priority_combo.setStyleSheet(StyleManager.form_input())
         add_field("الأولوية", self.claim_priority_combo, 1, 3)
 
         card_layout.addLayout(grid)
@@ -177,8 +178,8 @@ class ClaimStep(BaseStep):
         next_date_container = QHBoxLayout()
         self.claim_next_action_date = QDateEdit()
         self.claim_next_action_date.setCalendarPopup(True)
-        self.claim_next_action_date.setDisplayFormat("dd-MM-yyyy")
-        self.claim_next_action_date.setMinimumHeight(45)
+        self.claim_next_action_date.setDisplayFormat("yyyy-MM-dd")
+        self.claim_next_action_date.setStyleSheet(StyleManager.date_input())
         next_date_container.addWidget(self.claim_next_action_date)
         card_layout.addLayout(next_date_container)
 
