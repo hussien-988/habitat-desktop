@@ -240,37 +240,49 @@ class PersonDialog(QDialog):
         self.landline.setStyleSheet(self._input_style())
         person_grid.addWidget(self.landline, row, 0)
 
-        # Mobile with country code - matching photo layout
-        mobile_widget = QWidget()
-        mobile_layout = QHBoxLayout(mobile_widget)
+        # Mobile with country code - matching example code layout
+        mobile_container = QFrame()
+        mobile_container.setStyleSheet("""
+            QFrame {
+                background-color: #F8FAFC;
+                border: 1px solid #E0E6ED;
+                border-radius: 8px;
+            }
+        """)
+        mobile_layout = QHBoxLayout(mobile_container)
         mobile_layout.setContentsMargins(0, 0, 0, 0)
-        mobile_layout.setSpacing(0)  # No spacing for merged appearance
+        mobile_layout.setSpacing(0)
+        mobile_layout.setDirection(QHBoxLayout.RightToLeft)
 
-        self.phone = QLineEdit()
-        self.phone.setPlaceholderText("09")
-        self.phone.setStyleSheet(self._mobile_input_style())
-
-        # Prefix label with separator
-        prefix_label = QLabel("| +963")
-        prefix_label.setFixedWidth(70)
-        prefix_label.setFixedHeight(23)
+        # Country Code Label
+        prefix_label = QLabel("+963 | 09")
+        prefix_label.setFixedWidth(90)
         prefix_label.setAlignment(Qt.AlignCenter)
         prefix_label.setStyleSheet("""
             QLabel {
-                background-color: #F8FAFC;
-                border: 1px solid #E0E6ED;
-                border-left: none;
-                border-top-left-radius: 8px;
-                border-bottom-left-radius: 8px;
-                color: #333;
-                padding: 10px;
-                font-size: 14px;
+                color: #4A5568;
+                font-weight: bold;
+                border: none;
+                padding-left: 10px;
             }
         """)
 
-        mobile_layout.addWidget(self.phone)
+        # Phone Number Entry
+        self.phone = QLineEdit()
+        self.phone.setPlaceholderText("00000000")
+        self.phone.setAlignment(Qt.AlignRight)
+        self.phone.setStyleSheet("""
+            QLineEdit {
+                background: transparent;
+                border: none;
+                padding: 10px;
+                color: #333;
+            }
+        """)
+
         mobile_layout.addWidget(prefix_label)
-        person_grid.addWidget(mobile_widget, row, 1)
+        mobile_layout.addWidget(self.phone)
+        person_grid.addWidget(mobile_container, row, 1)
 
         # Row 11: Document upload
         row += 1
@@ -660,7 +672,7 @@ class PersonDialog(QDialog):
         """Return standard input style."""
         return """
             QLineEdit, QComboBox, QDateEdit, QDoubleSpinBox {
-                border: 1px solid #e0e6ed;
+                border: 1px solid #E0E6ED;
                 border-radius: 8px;
                 padding: 10px;
                 background-color: #F8FAFC;
@@ -673,16 +685,27 @@ class PersonDialog(QDialog):
                 border: 1px solid #2D9CDB;
                 background-color: white;
             }
+            QComboBox::drop-down {
+                border: none;
+                width: 30px;
+                background-image: url(assets/images/down.png);
+                background-repeat: no-repeat;
+                background-position: center;
+            }
+            QComboBox::down-arrow {
+                width: 0px;
+                height: 0px;
+            }
         """
 
     def _date_input_style(self) -> str:
-        """Return date input style with calendar icon."""
+        """Return date input style with calendar icon on the left - matching example code."""
         return """
             QDateEdit {
-                border: 1px solid #e0e6ed;
+                background-color: #F8FAFC;
+                border: 1px solid #E0E6ED;
                 border-radius: 8px;
                 padding: 10px;
-                background-color: #F8FAFC;
                 color: #333;
                 font-size: 14px;
                 min-height: 23px;
@@ -693,15 +716,10 @@ class PersonDialog(QDialog):
                 background-color: white;
             }
             QDateEdit::drop-down {
-                subcontrol-origin: padding;
-                subcontrol-position: center left;
-                width: 30px;
-                border: none;
-            }
-            QDateEdit::down-arrow {
                 image: url(assets/images/calender.png);
-                width: 20px;
-                height: 20px;
+                width: 25px;
+                border: none;
+                padding-left: 10px;
             }
         """
 
