@@ -944,6 +944,134 @@ class StyleManager:
             }
         """
 
+    @staticmethod
+    def numeric_input() -> str:
+        """
+        Get numeric input stylesheet with percentage icon.
+
+        Usage: QDoubleSpinBox for ownership share (حصة الملكية)
+
+        Figma Specs:
+        - Background: #F8FAFC
+        - Border: 1px solid #E0E6ED
+        - Border-radius: 8px
+        - Height: 23px (min/max)
+        - Icon: assets/images/percent.png on the left
+
+        Returns:
+            Complete QSS stylesheet string
+        """
+        return """
+            QDoubleSpinBox {
+                background-color: #F8FAFC;
+                border: 1px solid #E0E6ED;
+                border-radius: 8px;
+                padding: 10px;
+                padding-left: 35px;
+                color: #333;
+                font-size: 14px;
+                min-height: 23px;
+                max-height: 23px;
+            }
+            QDoubleSpinBox:focus {
+                border: 1px solid #2D9CDB;
+                background-color: white;
+            }
+            QDoubleSpinBox::up-button {
+                subcontrol-origin: padding;
+                subcontrol-position: right center;
+                width: 0px;
+                border: none;
+            }
+            QDoubleSpinBox::down-button {
+                subcontrol-origin: padding;
+                subcontrol-position: left center;
+                width: 25px;
+                border: none;
+                image: url(assets/images/percent.png);
+                padding-left: 10px;
+            }
+            QDoubleSpinBox::up-arrow, QDoubleSpinBox::down-arrow {
+                width: 0px;
+                height: 0px;
+            }
+        """
+
+    @staticmethod
+    def spinbox_input_container() -> str:
+        """
+        Get spinbox input container stylesheet with stacked arrows.
+
+        Usage: QFrame wrapping QLineEdit + stacked up/down arrow buttons
+
+        Figma Specs:
+        - Background: #F8FAFC
+        - Border: 1px solid #E0E6ED
+        - Border-radius: 8px
+        - Height: 40px
+        - Contains: stacked arrows (left) + value input (center)
+
+        Returns:
+            Complete QSS stylesheet string
+        """
+        return """
+            QFrame {
+                background-color: #F8FAFC;
+                border: 1px solid #E0E6ED;
+                border-radius: 8px;
+            }
+        """
+
+    @staticmethod
+    def spinbox_input_field() -> str:
+        """
+        Get spinbox input field stylesheet.
+
+        Usage: QLineEdit for numeric value (inside spinbox container)
+
+        Figma Specs:
+        - Background: transparent
+        - No border
+        - Color: #999
+        - Font-size: 16px
+        - Alignment: Center
+
+        Returns:
+            Complete QSS stylesheet string
+        """
+        return """
+            QLineEdit {
+                background: transparent;
+                border: none;
+                color: #999;
+                font-size: 16px;
+            }
+        """
+
+    @staticmethod
+    def spinbox_arrow_button() -> str:
+        """
+        Get spinbox arrow button stylesheet.
+
+        Usage: QPushButton for up/down arrows (inside spinbox container)
+
+        Figma Specs:
+        - Background: transparent
+        - No border
+        - Size: 20x15 each
+        - Icons: assets/images/^.png and assets/images/down.png
+
+        Returns:
+            Complete QSS stylesheet string
+        """
+        return """
+            QPushButton {
+                background: transparent;
+                border: none;
+                padding: 0px;
+            }
+        """
+
     # ==================== FOOTER ====================
 
     @staticmethod
