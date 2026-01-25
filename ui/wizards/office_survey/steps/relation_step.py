@@ -39,26 +39,85 @@ class RelationStep(BaseStep):
         self._person_cards = []  # Store references to person card widgets
 
     def setup_ui(self):
-        """Setup the step's UI with scrollable person cards."""
+        """Setup the step's UI - matching person_step styling."""
+        from ui.font_utils import FontManager, create_font
+        from ui.design_system import Colors
+        from ui.components.icon import Icon
+
         widget = self
         widget.setLayoutDirection(Qt.RightToLeft)
-        outer = self.main_layout
-        outer.setContentsMargins(18, 18, 18, 18)
-        outer.setSpacing(12)
+        # Set main window background color
+        widget.setStyleSheet(f"background-color: {Colors.BACKGROUND};")
 
-        # Header (title + subtitle)
-        title_box = QVBoxLayout()
-        title = QLabel("العلاقة والأدلة")
-        title.setStyleSheet("color: #111827; font-weight: 700; font-size: 16px;")
-        subtitle = QLabel("نوع العلاقة")
-        subtitle.setStyleSheet("color: #6B7280; font-size: 12px;")
-        title_box.addWidget(title)
-        title_box.addWidget(subtitle)
+        layout = self.main_layout
+        # Match person_step margins: No horizontal padding - wizard handles it
+        # Only vertical spacing for step content
+        layout.setContentsMargins(0, 15, 0, 16)  # Top: 15px, Bottom: 16px
+        layout.setSpacing(15)  # Unified spacing: 15px between cards
 
+        # --- The Main Card (QFrame) - matching person_step card styling ---
+        main_card = QFrame()
+        main_card.setObjectName("relationsCard")
+        main_card.setLayoutDirection(Qt.RightToLeft)
+        main_card.setStyleSheet(f"""
+            QFrame#relationsCard {{
+                background-color: {Colors.SURFACE};
+                border-radius: 12px;
+                border: 1px solid {Colors.BORDER_DEFAULT};
+            }}
+        """)
+        main_card_layout = QVBoxLayout(main_card)
+        main_card_layout.setContentsMargins(12, 12, 12, 12)  # Match person_step: 12px padding
+        main_card_layout.setSpacing(12)  # Match person_step: 12px spacing
+
+        # --- Header with Title and Icon (inside the card) ---
         header_layout = QHBoxLayout()
-        header_layout.addLayout(title_box)
-        header_layout.addStretch(1)
-        outer.addLayout(header_layout)
+        header_layout.setSpacing(8)
+
+        # Title text container
+        title_vbox = QVBoxLayout()
+        title_vbox.setSpacing(1)  # Match person_step spacing
+        title_label = QLabel("العلاقة والأدلة")
+        # Title: 14px from Figma = 10pt, weight 600, color WIZARD_TITLE
+        title_label.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
+        title_label.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent;")
+
+        subtitle_label = QLabel("تسجيل تفاصيل ملكية شخص للوحدة عقارية")
+        # Subtitle: 14px from Figma = 10pt, weight 400, color WIZARD_SUBTITLE
+        subtitle_label.setFont(create_font(size=10, weight=FontManager.WEIGHT_REGULAR))
+        subtitle_label.setStyleSheet(f"color: {Colors.WIZARD_SUBTITLE}; background: transparent;")
+        subtitle_label.setAlignment(Qt.AlignRight)
+        title_vbox.addWidget(title_label)
+        title_vbox.addWidget(subtitle_label)
+
+        # Icon for title
+        title_icon = QLabel()
+        title_icon.setFixedSize(40, 40)
+        title_icon.setAlignment(Qt.AlignCenter)
+        title_icon.setStyleSheet("""
+            QLabel {
+                background-color: #ffffff;
+                border: 1px solid #DBEAFE;
+                border-radius: 10px;
+            }
+        """)
+        # Load user-account.png icon using Icon.load_pixmap
+        relation_icon_pixmap = Icon.load_pixmap("user-account", size=24)
+        if relation_icon_pixmap and not relation_icon_pixmap.isNull():
+            title_icon.setPixmap(relation_icon_pixmap)
+        else:
+            # Fallback if image not found
+            title_icon.setText("👥")
+            title_icon.setStyleSheet(title_icon.styleSheet() + "font-size: 16px;")
+
+        # Assemble title group (icon first in code = rightmost visually in RTL)
+        header_layout.addWidget(title_icon)
+        header_layout.addLayout(title_vbox)
+        header_layout.addStretch()
+
+        main_card_layout.addLayout(header_layout)
+        # Gap: 12px between header and content
+        main_card_layout.addSpacing(12)
 
         # Scroll Area for person cards
         scroll_area = QScrollArea()
@@ -67,7 +126,7 @@ class RelationStep(BaseStep):
         scroll_area.setStyleSheet("""
             QScrollArea {
                 border: none;
-                background-color: #f4f7f9;
+                background-color: transparent;
             }
             QScrollBar:vertical {
                 border: none;
@@ -87,13 +146,17 @@ class RelationStep(BaseStep):
 
         # Container widget for cards
         scroll_widget = QWidget()
-        scroll_widget.setStyleSheet("background-color: #f4f7f9;")
+        scroll_widget.setLayoutDirection(Qt.RightToLeft)
+        scroll_widget.setStyleSheet("background-color: transparent;")
         self.cards_layout = QVBoxLayout(scroll_widget)
-        self.cards_layout.setSpacing(15)
+        self.cards_layout.setSpacing(10)
         self.cards_layout.setContentsMargins(0, 0, 0, 0)
 
         scroll_area.setWidget(scroll_widget)
-        outer.addWidget(scroll_area)
+        main_card_layout.addWidget(scroll_area)
+
+        layout.addWidget(main_card)
+        layout.addStretch()
 
         # Initially populate with persons from context
         self._populate_person_cards()
@@ -129,17 +192,21 @@ class RelationStep(BaseStep):
 
     def _create_person_card(self, person: Dict[str, Any]) -> QFrame:
         """Create a single person relation card based on the provided design."""
-        # Main card container
+        from ui.design_system import Colors
+
+        # Main card container - matching person_step card background
         card = QFrame()
-        card.setStyleSheet("""
-            QFrame {
-                background-color: white;
-                border-radius: 4px;
-            }
+        card.setLayoutDirection(Qt.RightToLeft)
+        card.setStyleSheet(f"""
+            QFrame {{
+                background-color: {Colors.BACKGROUND};
+                border: 1px solid #F0F0F0;
+                border-radius: 8px;
+            }}
         """)
         card_layout = QVBoxLayout(card)
-        card_layout.setContentsMargins(30, 20, 30, 30)
-        card_layout.setSpacing(10)
+        card_layout.setContentsMargins(20, 15, 20, 15)
+        card_layout.setSpacing(12)
 
         # Header with person info and icon
         header_layout = QHBoxLayout()
