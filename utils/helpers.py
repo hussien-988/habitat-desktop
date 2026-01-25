@@ -220,3 +220,74 @@ def is_aleppo_region(lat: float, lon: float) -> bool:
     """
     # Approximate bounds for Aleppo Governorate
     return 35.5 <= lat <= 37.0 and 36.5 <= lon <= 38.0
+
+
+def build_hierarchical_address(
+    building_obj=None,
+    unit_obj=None,
+    separator: str = " - ",
+    include_unit: bool = True
+) -> str:
+    """
+    Build hierarchical address from building and unit objects.
+
+    DRY + SOLID Principle:
+    - Single Source of Truth for address formatting
+    - Reusable across all components (cards, steps, forms)
+    - Consistent format: "حلب - المنطقة - الناحية - الحي - رقم البناء - رقم الوحدة"
+
+    Args:
+        building_obj: Building model object with location attributes
+        unit_obj: Optional unit model object for unit number
+        separator: Separator between address parts (default: " - ")
+        include_unit: Whether to include unit number (default: True)
+
+    Returns:
+        Formatted hierarchical address string
+
+    Example:
+        >>> build_hierarchical_address(building, unit)
+        "حلب - مدينة حلب - حلب المركز - الجميلية - 01-01-01-001-001-00001 - 12"
+    """
+    address_parts = []
+
+    if building_obj:
+        # Add governorate (حلب) - code 01
+        if hasattr(building_obj, 'governorate_name_ar') and building_obj.governorate_name_ar:
+            address_parts.append(building_obj.governorate_name_ar)
+
+        # Add district (المنطقة) - code 01
+        if hasattr(building_obj, 'district_name_ar') and building_obj.district_name_ar:
+            address_parts.append(building_obj.district_name_ar)
+
+        # Add subdistrict (الناحية) - code 01
+        if hasattr(building_obj, 'subdistrict_name_ar') and building_obj.subdistrict_name_ar:
+            address_parts.append(building_obj.subdistrict_name_ar)
+
+        # Add neighborhood (الحي) - code 001
+        if hasattr(building_obj, 'neighborhood_name_ar') and building_obj.neighborhood_name_ar:
+            address_parts.append(building_obj.neighborhood_name_ar)
+
+        # Add building NUMBER only (last 5 digits: 00001) - NOT full building_id
+        # Because we converted codes to names, only show the unique building number
+        if hasattr(building_obj, 'building_number') and building_obj.building_number:
+            address_parts.append(building_obj.building_number)
+        elif hasattr(building_obj, 'building_id') and building_obj.building_id:
+            # Fallback: extract last part from building_id (format: GG-DD-SS-CCC-NNN-BBBBB)
+            # Extract only the last 5 digits after the last dash
+            building_number = building_obj.building_id.split('-')[-1] if '-' in building_obj.building_id else building_obj.building_id
+            address_parts.append(building_number)
+
+    # Add unit number if requested and available (رقم الوحدة)
+    if include_unit and unit_obj:
+        unit_number = None
+        if hasattr(unit_obj, 'unit_number') and unit_obj.unit_number:
+            unit_number = unit_obj.unit_number
+        elif hasattr(unit_obj, 'apartment_number') and unit_obj.apartment_number:
+            unit_number = unit_obj.apartment_number
+
+        if unit_number:
+            address_parts.append(str(unit_number))
+
+    # Join with separator or return fallback
+    return separator.join(address_parts) if address_parts else "عنوان البناء"

@@ -92,20 +92,24 @@ class BaseDialog(QWidget):
         self.icon_path = icon_path
         self.result = None  # Store button result
 
-        # CRITICAL: Use Qt.Tool to remove ALL window decorations (no title bar, no X button)
-        # This is the most reliable way on Windows
+        # CRITICAL: Use Qt.Dialog to keep dialog within application window
+        # Removed Qt.WindowStaysOnTopHint to prevent showing over entire screen
         self.setWindowFlags(
-            Qt.Tool |                           # Tool window (no taskbar, no decorations)
+            Qt.Dialog |                         # Dialog type (stays within parent window)
             Qt.FramelessWindowHint |            # No frame/title bar
-            Qt.WindowStaysOnTopHint |           # Stay on top
             Qt.CustomizeWindowHint              # Allow customization
         )
         self.setAttribute(Qt.WA_TranslucentBackground)  # Transparent background for overlay
         self.setAttribute(Qt.WA_DeleteOnClose)          # Clean up when closed
 
-        # Cover parent completely
+        # Cover parent completely - use main window geometry for correct positioning
         if parent:
-            self.setGeometry(parent.geometry())
+            # Get the main application window
+            main_window = parent.window()
+            if main_window:
+                self.setGeometry(main_window.geometry())
+            else:
+                self.setGeometry(parent.geometry())
 
         # Modal behavior - blocks interaction with parent
         self.setWindowModality(Qt.ApplicationModal)
@@ -421,6 +425,21 @@ class BaseDialog(QWidget):
         self.animation.setEndValue(1)
         self.animation.setEasingCurve(QEasingCurve.OutCubic)
         self.animation.start()
+
+    def showEvent(self, event):
+        """
+        Handle show event - update geometry to cover parent window.
+
+        Ensures dialog covers parent window correctly on first show.
+        """
+        super().showEvent(event)
+        # Update geometry when dialog is shown to ensure correct positioning
+        if self.parent():
+            main_window = self.parent().window()
+            if main_window:
+                self.setGeometry(main_window.geometry())
+            else:
+                self.setGeometry(self.parent().geometry())
 
     def _handle_overlay_click(self):
         """Handle click on overlay (outside dialog card)."""

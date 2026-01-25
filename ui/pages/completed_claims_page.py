@@ -78,10 +78,13 @@ class CompletedClaimsPage(QWidget):
         self.header = self._create_header()
         main_layout.addWidget(self.header)
 
-        # Content area (scrollable)
+        # Content area (scrollable with hidden scrollbar)
+        # Best Practice: Hide scrollbar for cleaner UI while maintaining scroll functionality
         self.content_area = QScrollArea()
         self.content_area.setWidgetResizable(True)
         self.content_area.setFrameShape(QFrame.NoFrame)
+        self.content_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.content_area.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.content_area.setStyleSheet(f"""
             QScrollArea {{
                 background-color: {Colors.BACKGROUND};
@@ -258,6 +261,7 @@ class CompletedClaimsPage(QWidget):
 
                 self.claims_data = []
                 for claim in claims:
+                    # Get claimant name (DRY: consistent pattern)
                     claimant_name = 'غير محدد'
                     if claim.person_ids:
                         try:
@@ -269,8 +273,10 @@ class CompletedClaimsPage(QWidget):
                         except:
                             pass
 
-                    location = 'غير محدد'
-                    building_id = ''
+                    # Get building and unit objects (Best Practice: pass complete objects)
+                    building_obj = None
+                    unit_obj = None
+
                     if claim.unit_id:
                         try:
                             from repositories.unit_repository import UnitRepository
@@ -278,15 +284,31 @@ class CompletedClaimsPage(QWidget):
                             unit_repo = UnitRepository(self.db)
                             building_repo = BuildingRepository(self.db)
 
-                            unit = unit_repo.find_by_id(claim.unit_id)
-                            if unit and unit.building_id:
-                                building_id = unit.building_id
-                                building = building_repo.find_by_id(unit.building_id)
-                                if building:
-                                    location = building.neighborhood_name_ar or building.neighborhood_name or 'غير محدد'
-                        except:
-                            pass
+                            # Load complete unit object
+                            # Fix: Use get_by_id() instead of find_by_id()
+                            unit_obj = unit_repo.get_by_id(claim.unit_id)
 
+                            # Load complete building object with all address fields
+                            if unit_obj and unit_obj.building_id:
+                                # Fix: Use get_by_id() instead of find_by_id()
+                                building_obj = building_repo.get_by_id(unit_obj.building_id)
+
+                                # DEBUG: Print building details to verify data
+                                if building_obj:
+                                    print(f"🏢 Building loaded: {building_obj.building_id}")
+                                    print(f"  Governorate: {building_obj.governorate_name_ar}")
+                                    print(f"  District: {building_obj.district_name_ar}")
+                                    print(f"  Subdistrict: {building_obj.subdistrict_name_ar}")
+                                    print(f"  Neighborhood: {building_obj.neighborhood_name_ar}")
+                                    print(f"  Building Number: {getattr(building_obj, 'building_number', 'N/A')}")
+                                else:
+                                    print(f"❌ Building NOT found for ID: {unit_obj.building_id}")
+                        except Exception as e:
+                            import traceback
+                            print(f"Error loading building/unit: {e}")
+                            print(traceback.format_exc())
+
+                    # Format date (DRY: consistent date formatting)
                     date_str = '2025-01-01'
                     if claim.submission_date:
                         if isinstance(claim.submission_date, str):
@@ -294,14 +316,19 @@ class CompletedClaimsPage(QWidget):
                         else:
                             date_str = claim.submission_date.strftime('%Y-%m-%d')
 
+                    # Best Practice: Pass complete objects instead of individual fields
+                    # This enables build_hierarchical_address() to work correctly
                     self.claims_data.append({
                         'claim_id': claim.claim_id or claim.case_number or 'N/A',
                         'claimant_name': claimant_name,
                         'date': date_str,
                         'status': claim.case_status or 'draft',
-                        'location': location,
+                        # Pass complete objects (DRY + SOLID)
+                        'building': building_obj,  # Complete Building model object
+                        'unit': unit_obj,          # Complete Unit model object
+                        # Keep IDs for backward compatibility
                         'unit_id': claim.unit_id or '',
-                        'building_id': building_id if claim.unit_id else ''
+                        'building_id': building_obj.building_id if building_obj else ''
                     })
             except Exception as e:
                 import traceback
