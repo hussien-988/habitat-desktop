@@ -212,19 +212,26 @@ class RelationStep(BaseStep):
         header_layout = QHBoxLayout()
         header_layout.setSpacing(10)
 
-        # Icon
-        icon_label = QLabel("👤")
+        # Icon - using user.png
+        from ui.components.icon import Icon
+        icon_label = QLabel()
         icon_label.setFixedSize(38, 38)
         icon_label.setAlignment(Qt.AlignCenter)
         icon_label.setStyleSheet("""
             QLabel {
-                background-color: #f0f7ff;
+                background-color: #F4F8FF;
                 border-radius: 19px;
                 border: 1px solid #d1e3f8;
-                color: #3498db;
-                font-size: 18px;
             }
         """)
+        # Load user.png icon using Icon.load_pixmap for absolute path resolution
+        person_icon_pixmap = Icon.load_pixmap("user", size=20)
+        if person_icon_pixmap and not person_icon_pixmap.isNull():
+            icon_label.setPixmap(person_icon_pixmap)
+        else:
+            # Fallback if image not found
+            icon_label.setText("👤")
+            icon_label.setStyleSheet(icon_label.styleSheet() + "color: #3498db; font-size: 18px;")
 
         # Person name and status
         text_vbox = QVBoxLayout()
