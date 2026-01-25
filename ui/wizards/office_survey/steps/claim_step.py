@@ -93,8 +93,8 @@ class ClaimStep(BaseStep):
                 border-radius: 10px;
             }
         """)
-        # Load icon using Icon.load_pixmap
-        claim_icon_pixmap = Icon.load_pixmap("claim", size=24)
+        # Load elements.png icon using Icon.load_pixmap
+        claim_icon_pixmap = Icon.load_pixmap("elements", size=24)
         if claim_icon_pixmap and not claim_icon_pixmap.isNull():
             title_icon.setPixmap(claim_icon_pixmap)
         else:
