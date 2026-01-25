@@ -155,20 +155,20 @@ class UnitSelectionStep(BaseStep):
             section.setStyleSheet("background: transparent;")
 
             section_layout = QVBoxLayout(section)
-            section_layout.setContentsMargins(0, 0, 0, 0)
+            section_layout.setContentsMargins(8, 0, 8, 0)  # Padding for better spacing
             section_layout.setSpacing(4)
-            section_layout.setAlignment(Qt.AlignCenter)
+            section_layout.setAlignment(Qt.AlignLeft)  # Start from same point (right in RTL)
 
-            # Label (top text)
+            # Label (top text) - smaller font, left aligned (starts from right in RTL)
             label = QLabel(label_text)
-            label.setAlignment(Qt.AlignCenter)
-            label.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
+            label.setAlignment(Qt.AlignLeft)  # Start from same point
+            label.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))  # Smaller: 9pt
             label.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent;")
 
-            # Value (bottom text)
+            # Value (bottom text) - smaller font, RIGHT aligned
             value = QLabel(value_text)
-            value.setAlignment(Qt.AlignCenter)
-            value.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
+            value.setAlignment(Qt.AlignRight)  # Right alignment for values
+            value.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))  # Smaller: 9pt
             value.setStyleSheet(f"color: {Colors.WIZARD_SUBTITLE}; background: transparent;")
 
             section_layout.addWidget(label)
@@ -436,15 +436,16 @@ class UnitSelectionStep(BaseStep):
         label = QLabel(text)
 
         if is_title:
-            # Title style - same as "اختر الوحدة العقارية"
-            label.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
+            # Title style - smaller font, left aligned (appears right in RTL)
+            label.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))  # Smaller: 9pt
             label.setStyleSheet("color: #1A1F1D;")
+            label.setAlignment(Qt.AlignLeft)  # Left in RTL = Right visually
         else:
-            # Value style - same as subtitle
-            label.setFont(create_font(size=10, weight=FontManager.WEIGHT_REGULAR))
+            # Value style - smaller font, left aligned (appears right in RTL)
+            label.setFont(create_font(size=9, weight=FontManager.WEIGHT_REGULAR))  # Smaller: 9pt
             label.setStyleSheet("color: #86909B;")
+            label.setAlignment(Qt.AlignLeft)  # Left in RTL = Right visually
 
-        label.setAlignment(Qt.AlignCenter)
         return label
 
     def _create_unit_card(self, unit) -> QFrame:
@@ -536,9 +537,12 @@ class UnitSelectionStep(BaseStep):
 
         # Format area with 2 decimal places in English numerals
         if unit.area_sqm:
-            area_val = f"{float(unit.area_sqm):.2f} م²"
+            try:
+                area_val = f"{float(unit.area_sqm):.2f} م²"
+            except (ValueError, TypeError):
+                area_val = "-"
         else:
-            area_val = "120.00 م²"
+            area_val = "-"
 
         # Top Row (Data Grid) - reversed order and evenly distributed
         grid_layout = QHBoxLayout()
@@ -560,6 +564,7 @@ class UnitSelectionStep(BaseStep):
         for label_text, value_text in data_points:
             col = QVBoxLayout()
             col.setSpacing(2)  # Small gap between title and value
+            col.setContentsMargins(8, 0, 8, 0)  # Padding for better spacing
 
             # DRY: Create labels using helper method
             lbl_title = self._create_field_label(label_text, is_title=True)
@@ -592,17 +597,17 @@ class UnitSelectionStep(BaseStep):
 
         # Title: وصف العقار
         desc_title = QLabel("وصف العقار")
-        desc_title.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
+        desc_title.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))  # Smaller: 9pt
         desc_title.setStyleSheet("color: #1A1F1D;")
-        desc_title.setAlignment(Qt.AlignVCenter)
-        
+        desc_title.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)  # Left in RTL = Right visually
+
 
         # Description text (user-entered OR placeholder)
         desc_text_content = unit.property_description if unit.property_description else "وصف تفصيلي يشمل: عدد الغرف وأنواعها، المساحة التقريبية، الاتجاهات والحدود، وأي ميزات مميزة."
         desc_text = QLabel(desc_text_content)
-        desc_text.setFont(create_font(size=10, weight=FontManager.WEIGHT_REGULAR))
+        desc_text.setFont(create_font(size=9, weight=FontManager.WEIGHT_REGULAR))  # Smaller: 9pt
         desc_text.setStyleSheet("color: #86909B;")
-        desc_text.setAlignment(Qt.AlignTop)
+        desc_text.setAlignment(Qt.AlignLeft | Qt.AlignTop)  # Left in RTL = Right visually
         
         desc_text.setWordWrap(True)
         desc_text.setMaximumHeight(40)
