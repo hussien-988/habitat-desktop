@@ -29,71 +29,93 @@ class ClaimStep(BaseStep):
         super().__init__(context, parent)
 
     def setup_ui(self):
-        """Setup the step's UI - exact copy from old wizard."""
+        """Setup the step's UI - matching person_step styling."""
+        # Import StyleManager and other components
+        from ui.style_manager import StyleManager
+        from ui.font_utils import FontManager, create_font
+        from ui.design_system import Colors
+        from ui.components.icon import Icon
+
         widget = self
         widget.setLayoutDirection(Qt.RightToLeft)
-        widget.setStyleSheet("""
+        # Set main window background color
+        widget.setStyleSheet(f"background-color: {Colors.BACKGROUND};")
+
+        layout = self.main_layout
+        # Match person_step margins: No horizontal padding - wizard handles it
+        # Only vertical spacing for step content
+        layout.setContentsMargins(0, 15, 0, 16)  # Top: 15px, Bottom: 16px
+        layout.setSpacing(15)  # Unified spacing: 15px between cards
+
+        # --- The Main Card (QFrame) - matching person_step card styling ---
+        card = QFrame()
+        card.setObjectName("ClaimCard")
+        card.setLayoutDirection(Qt.RightToLeft)
+        card.setStyleSheet(f"""
+            QFrame#ClaimCard {{
+                background-color: {Colors.SURFACE};
+                border-radius: 12px;
+                border: 1px solid {Colors.BORDER_DEFAULT};
+            }}
+        """)
+        card_layout = QVBoxLayout(card)
+        card_layout.setContentsMargins(12, 12, 12, 12)  # Match person_step: 12px padding
+        card_layout.setSpacing(12)  # Match person_step: 12px spacing
+
+        # --- Header with Title and Icon (inside the card) ---
+        header_layout = QHBoxLayout()
+        header_layout.setSpacing(8)
+
+        # Title text container
+        title_vbox = QVBoxLayout()
+        title_vbox.setSpacing(1)  # Match person_step spacing
+        title_label = QLabel("تسجيل الحالة")
+        # Title: 14px from Figma = 10pt, weight 600, color WIZARD_TITLE
+        title_label.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
+        title_label.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent;")
+
+        subtitle_label = QLabel("ربط المطالبين بالوحدات العقارية وتتبع مطالبات تسجيل حقوق الحيازة")
+        # Subtitle: 14px from Figma = 10pt, weight 400, color WIZARD_SUBTITLE
+        subtitle_label.setFont(create_font(size=10, weight=FontManager.WEIGHT_REGULAR))
+        subtitle_label.setStyleSheet(f"color: {Colors.WIZARD_SUBTITLE}; background: transparent;")
+        subtitle_label.setAlignment(Qt.AlignRight)
+        title_vbox.addWidget(title_label)
+        title_vbox.addWidget(subtitle_label)
+
+        # Icon for title
+        title_icon = QLabel()
+        title_icon.setFixedSize(40, 40)
+        title_icon.setAlignment(Qt.AlignCenter)
+        title_icon.setStyleSheet("""
             QLabel {
-                color: #444;
-                font-weight: bold;
-                font-size: 13px;
-            }
-            QLineEdit, QComboBox, QDateEdit, QTextEdit {
                 background-color: #ffffff;
-                border: 1px solid #dcdfe6;
-                border-radius: 6px;
-                padding: 10px;
-                color: #606266;
-            }
-            QLineEdit:focus, QComboBox:focus, QTextEdit:focus {
-                border: 1px solid #409eff;
+                border: 1px solid #DBEAFE;
+                border-radius: 10px;
             }
         """)
+        # Load elements.png icon using Icon.load_pixmap
+        claim_icon_pixmap = Icon.load_pixmap("elements", size=24)
+        if claim_icon_pixmap and not claim_icon_pixmap.isNull():
+            title_icon.setPixmap(claim_icon_pixmap)
+        else:
+            # Fallback if image not found
+            title_icon.setText("📋")
+            title_icon.setStyleSheet(title_icon.styleSheet() + "font-size: 16px;")
 
-        main_layout = self.main_layout
-        main_layout.setContentsMargins(40, 20, 40, 40)
-        main_layout.setSpacing(10)
-
-        # --- Header Section (Outside the Card) ---
-        header_layout = QHBoxLayout()
-
-        title_vbox = QVBoxLayout()
-        title_lbl = QLabel("تسجيل الحالة")
-        title_lbl.setStyleSheet("font-size: 22px; color: #2c3e50; font-weight: bold;")
-        sub_lbl = QLabel("ربط المطالبين بالوحدات العقارية وتتبع مطالبات تسجيل حقوق الحيازة")
-        sub_lbl.setStyleSheet("font-weight: normal; color: #909399; font-size: 14px;")
-        sub_lbl.setAlignment(Qt.AlignRight)
-        title_vbox.addWidget(title_lbl)
-        title_vbox.addWidget(sub_lbl)
-
-        icon_label = QLabel()
-        icon_label.setFixedSize(50, 50)
-        icon_label.setAlignment(Qt.AlignCenter)
-        icon_label.setStyleSheet("font-size: 24px; background: #ffffff; border-radius: 10px; border: 1px solid #ebeef5;")
-
-        header_layout.addWidget(icon_label)
+        # Assemble title group (icon first in code = rightmost visually in RTL)
+        header_layout.addWidget(title_icon)
         header_layout.addLayout(title_vbox)
         header_layout.addStretch()
-        main_layout.addLayout(header_layout)
-        main_layout.addSpacing(10)
 
-        # --- The Main Card (QFrame) ---
-        card = QFrame()
-        card.setStyleSheet("""
-            QFrame#ClaimCard {
-                background-color: white;
-                border-radius: 12px;
-                border: 1px solid #E1E8ED;
-            }
-        """)
-        card.setObjectName("ClaimCard")
-        card_layout = QVBoxLayout(card)
-        card_layout.setContentsMargins(25, 25, 25, 25)
-        card_layout.setSpacing(20)
+        card_layout.addLayout(header_layout)
+        # Gap: 12px between header and content
+        card_layout.addSpacing(12)
 
         # 1. Grid Layout for top fields (RTL order: right to left)
         grid = QGridLayout()
-        grid.setSpacing(15)
+        # Reduced spacing for tighter layout
+        grid.setHorizontalSpacing(8)  # Horizontal gap between columns
+        grid.setVerticalSpacing(8)    # Vertical gap between rows
 
         # Ensure columns stretch to fill full width
         for i in range(4):
@@ -101,7 +123,11 @@ class ClaimStep(BaseStep):
 
         def add_field(label_text, field_widget, row, col):
             v = QVBoxLayout()
+            v.setSpacing(4)  # Small gap between label and input
             lbl = QLabel(label_text)
+            # Match label styling from person_step
+            lbl.setFont(create_font(size=9, weight=FontManager.WEIGHT_REGULAR))
+            lbl.setStyleSheet(f"color: {Colors.WIZARD_SUBTITLE}; background: transparent;")
             v.addWidget(lbl)
             v.addWidget(field_widget)
             grid.addLayout(v, row, col)
@@ -109,10 +135,12 @@ class ClaimStep(BaseStep):
         # Row 1 (RTL): معرف المطالب | معرف الوحدة المطالب بها | نوع الحالة | طبيعة الأعمال
         self.claim_person_search = QLineEdit()
         self.claim_person_search.setPlaceholderText("اسم الشخص")
+        self.claim_person_search.setStyleSheet(StyleManager.form_input())
         add_field("معرف المطالب", self.claim_person_search, 0, 0)
 
         self.claim_unit_search = QLineEdit()
         self.claim_unit_search.setPlaceholderText("رقم الوحدة")
+        self.claim_unit_search.setStyleSheet(StyleManager.form_input())
         add_field("معرف الوحدة المطالب بها", self.claim_unit_search, 0, 1)
 
         self.claim_type_combo = QComboBox()
@@ -120,6 +148,7 @@ class ClaimStep(BaseStep):
         self.claim_type_combo.addItem("ملكية", "ownership")
         self.claim_type_combo.addItem("إشغال", "occupancy")
         self.claim_type_combo.addItem("إيجار", "tenancy")
+        self.claim_type_combo.setStyleSheet(StyleManager.form_input())
         add_field("نوع الحالة", self.claim_type_combo, 0, 2)
 
         self.claim_business_nature = QComboBox()
@@ -127,6 +156,7 @@ class ClaimStep(BaseStep):
         self.claim_business_nature.addItem("سكني", "residential")
         self.claim_business_nature.addItem("تجاري", "commercial")
         self.claim_business_nature.addItem("زراعي", "agricultural")
+        self.claim_business_nature.setStyleSheet(StyleManager.form_input())
         add_field("طبيعة الأعمال", self.claim_business_nature, 0, 3)
 
         # Row 2 (RTL): حالة الحالة | المصدر | تاريخ المسح | الأولوية
@@ -136,6 +166,7 @@ class ClaimStep(BaseStep):
         self.claim_status_combo.addItem("قيد المراجعة", "under_review")
         self.claim_status_combo.addItem("مكتمل", "completed")
         self.claim_status_combo.addItem("معلق", "pending")
+        self.claim_status_combo.setStyleSheet(StyleManager.form_input())
         add_field("حالة الحالة", self.claim_status_combo, 1, 0)
 
         self.claim_source_combo = QComboBox()
@@ -143,12 +174,14 @@ class ClaimStep(BaseStep):
         self.claim_source_combo.addItem("مسح ميداني", "field_survey")
         self.claim_source_combo.addItem("طلب مباشر", "direct_request")
         self.claim_source_combo.addItem("إحالة", "referral")
+        self.claim_source_combo.setStyleSheet(StyleManager.form_input())
         add_field("المصدر", self.claim_source_combo, 1, 1)
 
         self.claim_survey_date = QDateEdit()
         self.claim_survey_date.setCalendarPopup(True)
-        self.claim_survey_date.setDisplayFormat("dd-MM-yyyy")
+        self.claim_survey_date.setDisplayFormat("yyyy-MM-dd")
         self.claim_survey_date.setDate(QDate.currentDate())
+        self.claim_survey_date.setStyleSheet(StyleManager.date_input())
         add_field("تاريخ المسح", self.claim_survey_date, 1, 2)
 
         self.claim_priority_combo = QComboBox()
@@ -158,45 +191,65 @@ class ClaimStep(BaseStep):
         self.claim_priority_combo.addItem("عالي", "high")
         self.claim_priority_combo.addItem("عاجل", "urgent")
         self.claim_priority_combo.setCurrentIndex(2)  # Default to normal
+        self.claim_priority_combo.setStyleSheet(StyleManager.form_input())
         add_field("الأولوية", self.claim_priority_combo, 1, 3)
 
         card_layout.addLayout(grid)
+        card_layout.addSpacing(8)  # Gap between grid and notes section
 
         # 2. Notes Section
         notes_label = QLabel("ملاحظات المراجعة")
+        notes_label.setFont(create_font(size=9, weight=FontManager.WEIGHT_REGULAR))
+        notes_label.setStyleSheet(f"color: {Colors.WIZARD_SUBTITLE}; background: transparent;")
         card_layout.addWidget(notes_label)
         self.claim_notes = QTextEdit()
         self.claim_notes.setPlaceholderText("ملاحظات إضافية")
         self.claim_notes.setMinimumHeight(100)
         self.claim_notes.setMaximumHeight(120)
+        self.claim_notes.setStyleSheet(f"""
+            QTextEdit {{
+                background-color: {Colors.INPUT_BG};
+                border: 1px solid {Colors.BORDER_DEFAULT};
+                border-radius: 8px;
+                padding: 8px;
+                color: {Colors.TEXT_PRIMARY};
+                font-size: 13px;
+            }}
+            QTextEdit:focus {{
+                border: 1px solid {Colors.PRIMARY_BLUE};
+            }}
+        """)
         card_layout.addWidget(self.claim_notes)
+        card_layout.addSpacing(8)  # Gap between sections
 
         # 3. Next Action Date Section
         next_date_label = QLabel("تاريخ الإجراء التالي")
+        next_date_label.setFont(create_font(size=9, weight=FontManager.WEIGHT_REGULAR))
+        next_date_label.setStyleSheet(f"color: {Colors.WIZARD_SUBTITLE}; background: transparent;")
         card_layout.addWidget(next_date_label)
-        next_date_container = QHBoxLayout()
         self.claim_next_action_date = QDateEdit()
         self.claim_next_action_date.setCalendarPopup(True)
-        self.claim_next_action_date.setDisplayFormat("dd-MM-yyyy")
-        self.claim_next_action_date.setMinimumHeight(45)
-        next_date_container.addWidget(self.claim_next_action_date)
-        card_layout.addLayout(next_date_container)
+        self.claim_next_action_date.setDisplayFormat("yyyy-MM-dd")
+        self.claim_next_action_date.setStyleSheet(StyleManager.date_input())
+        card_layout.addWidget(self.claim_next_action_date)
+        card_layout.addSpacing(8)  # Gap between sections
 
         # 4. Status Bar (Inside Card) - Evidence available indicator
         self.claim_eval_label = QLabel("الأدلة متوفرة")
         self.claim_eval_label.setAlignment(Qt.AlignCenter)
         self.claim_eval_label.setFixedHeight(50)
+        self.claim_eval_label.setFont(create_font(size=11, weight=FontManager.WEIGHT_SEMIBOLD))
         self.claim_eval_label.setStyleSheet("""
-            background-color: #e1f7ef;
-            color: #10b981;
-            border-radius: 8px;
-            font-weight: bold;
-            font-size: 15px;
+            QLabel {
+                background-color: #e1f7ef;
+                color: #10b981;
+                border-radius: 8px;
+            }
         """)
         card_layout.addWidget(self.claim_eval_label)
 
-        main_layout.addWidget(card)
-        main_layout.addStretch()
+        layout.addWidget(card)
+        layout.addStretch()
 
     def _evaluate_for_claim(self):
         """Evaluate relations for claim creation - exact copy from old wizard."""
@@ -240,20 +293,20 @@ class ClaimStep(BaseStep):
         if total_evidences > 0:
             self.claim_eval_label.setText(f"الأدلة متوفرة ({total_evidences})")
             self.claim_eval_label.setStyleSheet("""
-                background-color: #e1f7ef;
-                color: #10b981;
-                border-radius: 8px;
-                font-weight: bold;
-                font-size: 15px;
+                QLabel {
+                    background-color: #e1f7ef;
+                    color: #10b981;
+                    border-radius: 8px;
+                }
             """)
         else:
             self.claim_eval_label.setText("لا توجد أدلة مرفقة")
             self.claim_eval_label.setStyleSheet("""
-                background-color: #fef3c7;
-                color: #f59e0b;
-                border-radius: 8px;
-                font-weight: bold;
-                font-size: 15px;
+                QLabel {
+                    background-color: #fef3c7;
+                    color: #f59e0b;
+                    border-radius: 8px;
+                }
             """)
 
     def on_show(self):
