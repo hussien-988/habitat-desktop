@@ -188,26 +188,20 @@ class RelationStep(BaseStep):
         grid.setColumnStretch(1, 1)
         grid.setColumnStretch(2, 1)
 
+        # Import StyleManager for shared styles
+        from ui.style_manager import StyleManager
+
         label_style = "color: #333; font-size: 12px; font-weight: 600;"
-        input_style = """
-            QLineEdit, QComboBox, QDateEdit {
-                border: 1px solid #dfe6e9;
-                border-radius: 4px;
-                padding: 8px;
-                background-color: #ffffff;
-                color: #2d3436;
-            }
-        """
 
         # Row 1 - Labels
         grid.addWidget(self._create_label("نوع العقد", label_style), 0, 0)
         grid.addWidget(self._create_label("نوع العلاقة", label_style), 0, 1)
         grid.addWidget(self._create_label("تاريخ بدء العلاقة", label_style), 0, 2)
 
-        # Row 1 - Inputs
+        # Row 1 - Inputs - Using StyleManager for consistent styling
         contract_type = QComboBox()
         contract_type.addItems(["اختر", "عقد إيجار", "عقد بيع", "عقد شراكة"])
-        contract_type.setStyleSheet(input_style)
+        contract_type.setStyleSheet(StyleManager.form_input())
         grid.addWidget(contract_type, 1, 0)
 
         relation_type = QComboBox()
@@ -223,13 +217,14 @@ class RelationStep(BaseStep):
         relation_type.addItem("اختر", None)
         for code, ar in rel_types:
             relation_type.addItem(ar, code)
-        relation_type.setStyleSheet(input_style)
+        relation_type.setStyleSheet(StyleManager.form_input())
         grid.addWidget(relation_type, 1, 1)
 
         start_date = QDateEdit()
         start_date.setCalendarPopup(True)
         start_date.setDate(QDate.currentDate())
-        start_date.setStyleSheet(input_style)
+        start_date.setDisplayFormat("yyyy-MM-dd")
+        start_date.setStyleSheet(StyleManager.date_input())
         grid.addWidget(start_date, 1, 2)
 
         # Row 2 - Labels
@@ -237,18 +232,18 @@ class RelationStep(BaseStep):
         grid.addWidget(self._create_label("نوع الدليل", label_style), 2, 1)
         grid.addWidget(self._create_label("وصف الدليل", label_style), 2, 2)
 
-        # Row 2 - Inputs
+        # Row 2 - Inputs - Using StyleManager for consistent styling
         ownership_share = QLineEdit("0")
-        ownership_share.setStyleSheet(input_style)
+        ownership_share.setStyleSheet(StyleManager.form_input())
         grid.addWidget(ownership_share, 3, 0)
 
         evidence_type = QComboBox()
         evidence_type.addItems(["اختر", "صك", "عقد", "وكالة", "إقرار"])
-        evidence_type.setStyleSheet(input_style)
+        evidence_type.setStyleSheet(StyleManager.form_input())
         grid.addWidget(evidence_type, 3, 1)
 
         evidence_desc = QLineEdit("-")
-        evidence_desc.setStyleSheet(input_style)
+        evidence_desc.setStyleSheet(StyleManager.form_input())
         grid.addWidget(evidence_desc, 3, 2)
 
         card_layout.addLayout(grid)
@@ -326,21 +321,34 @@ class RelationStep(BaseStep):
         radio_layout.addStretch()
         card_layout.addLayout(radio_layout)
 
-        # Upload box
+        # Upload box - Using StyleManager for consistent styling
         upload_box = QFrame()
-        upload_box.setStyleSheet("""
-            QFrame {
-                border: 1px dashed #b2bec3;
-                border-radius: 6px;
-                background-color: #fdfdfd;
-                min-height: 60px;
-            }
-        """)
+        upload_box.setCursor(Qt.PointingHandCursor)
+        upload_box.setStyleSheet(StyleManager.file_upload_frame())
+
         upload_layout = QVBoxLayout(upload_box)
-        upload_text = QLabel("ارفع صور المستندات")
-        upload_text.setAlignment(Qt.AlignCenter)
-        upload_text.setStyleSheet("color: #3498db; font-weight: bold; background: transparent;")
-        upload_layout.addWidget(upload_text)
+        upload_layout.setContentsMargins(20, 15, 20, 15)
+        upload_layout.setAlignment(Qt.AlignCenter)
+        upload_layout.setSpacing(5)
+
+        # Upload icon
+        from ui.components.icon import Icon
+        upload_icon = QLabel()
+        upload_icon.setAlignment(Qt.AlignCenter)
+        upload_icon.setStyleSheet("border: none;")
+        upload_pixmap = Icon.load_pixmap("upload_file", size=24)
+        if upload_pixmap and not upload_pixmap.isNull():
+            upload_icon.setPixmap(upload_pixmap)
+        else:
+            upload_icon.setText("📁")
+            upload_icon.setStyleSheet("border: none; font-size: 20px;")
+        upload_layout.addWidget(upload_icon)
+
+        # Upload button
+        upload_btn = QPushButton("ارفع صور المستندات")
+        upload_btn.setStyleSheet(StyleManager.file_upload_button())
+        upload_layout.addWidget(upload_btn)
+
         card_layout.addWidget(upload_box)
 
         # Store references to widgets for data retrieval
