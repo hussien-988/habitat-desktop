@@ -134,7 +134,6 @@ class RelationStep(BaseStep):
         card.setStyleSheet("""
             QFrame {
                 background-color: white;
-                border-top: 2px solid #3498db;
                 border-radius: 4px;
             }
         """)
