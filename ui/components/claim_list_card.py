@@ -181,42 +181,50 @@ class ClaimListCard(QFrame):
         details_layout.setSpacing(PageDimensions.CARD_DETAILS_GAP)
 
         # Details icon using reusable Icon component (DRY + SOLID)
-        # Use "dec" icon instead of text icon
+        # Use "dec" icon (same as unit selection step - DRY principle)
         folder_icon = Icon("dec", size=14, fallback_text="▣")
         details_layout.addWidget(folder_icon)
 
-        # Build detailed title from claim data (Figma: show full address details)
-        location = self.claim_data.get('location', 'غير محدد')
-        street_name = self.claim_data.get('street_name', '')
-        complex_number = self.claim_data.get('complex_number', '')
-        building_id = self.claim_data.get('building_id', '')
-        unit_id_initial = self.claim_data.get('unit_id_initial', '')
-        unit_id_final = self.claim_data.get('unit_id_final', '')
+        # Build hierarchical address using DRY helper function
+        # Format: "حلب - المنطقة - الناحية - الحي - رقم البناء - رقم الوحدة"
+        # SOLID: Single Responsibility - helper function builds address
+        from utils.helpers import build_hierarchical_address
 
-        # Format: "حلب - الجميلية - اسم الشارع - رقم المجمع - رقم البناء - رقم الوحدة الأولية - رقم الوحدة النهائية"
-        details_parts = []
-        if location and location != 'غير محدد':
-            details_parts.append(location)
-        if street_name:
-            details_parts.append(street_name)
-        if complex_number:
-            details_parts.append(f"مجمع {complex_number}")
-        if building_id:
-            details_parts.append(f"بناء {building_id}")
-        if unit_id_initial:
-            details_parts.append(f"وحدة {unit_id_initial}")
-        if unit_id_final and unit_id_final != unit_id_initial:
-            details_parts.append(f"إلى {unit_id_final}")
+        # Get building and unit objects from claim_data (if available)
+        building_obj = self.claim_data.get('building')  # Building model object
+        unit_obj = self.claim_data.get('unit')          # Unit model object
 
-        # Fallback to unit_id if no detailed parts available
-        if not details_parts:
-            unit_id = self.claim_data.get('unit_id', '')
-            if unit_id:
-                details_parts.append(f"رقم الوحدة: {unit_id}")
-            else:
-                details_parts.append("لا توجد تفاصيل إضافية")
+        # If objects not available, create simple namespace with available data
+        if not building_obj:
+            # Create a simple object-like structure from dict data
+            class SimpleNamespace:
+                def __init__(self, **kwargs):
+                    self.__dict__.update(kwargs)
 
-        details_text = " - ".join(details_parts)
+            building_obj = SimpleNamespace(
+                governorate_name_ar=self.claim_data.get('governorate_name_ar', 'حلب'),
+                district_name_ar=self.claim_data.get('district_name_ar'),
+                subdistrict_name_ar=self.claim_data.get('subdistrict_name_ar'),
+                neighborhood_name_ar=self.claim_data.get('neighborhood_name_ar'),
+                building_id=self.claim_data.get('building_id')
+            )
+
+        if not unit_obj and self.claim_data.get('unit_number'):
+            class SimpleNamespace:
+                def __init__(self, **kwargs):
+                    self.__dict__.update(kwargs)
+
+            unit_obj = SimpleNamespace(
+                unit_number=self.claim_data.get('unit_number')
+            )
+
+        # Use DRY helper to build address (Single Source of Truth)
+        details_text = build_hierarchical_address(
+            building_obj=building_obj,
+            unit_obj=unit_obj,
+            separator=" - ",
+            include_unit=True
+        )
 
         # Apply Figma styling with constants (DRY principle)
         details_label = QLabel(details_text)

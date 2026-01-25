@@ -47,11 +47,18 @@ class UnitDialog(QDialog):
         self.unit_controller = UnitController(db)
         self.validation_service = ValidationService()
 
-        self.setWindowTitle("إضافة وحدة عقارية" if not unit_data else "تعديل وحدة عقارية")
-        self.setMinimumWidth(550)
+        # إزالة الشريط العلوي (title bar)
+        self.setWindowFlags(Qt.FramelessWindowHint | Qt.Dialog)
+
+        # CRITICAL: جعل الخلفية شفافة حتى تظهر فقط الزوايا المنحنية
+        self.setAttribute(Qt.WA_TranslucentBackground)
+
+        # الأبعاد حسب Figma: 574×589
+        self.setFixedSize(574, 589)
+
         self.setStyleSheet("""
             QDialog {
-                background-color: #F9FAFB;
+                background-color: transparent;
             }
         """)
 
@@ -61,21 +68,30 @@ class UnitDialog(QDialog):
 
     def _setup_ui(self):
         """Setup the dialog UI."""
-        layout = QVBoxLayout(self)
-        layout.setSpacing(20)
-        layout.setContentsMargins(24, 24, 24, 24)
+        main_layout = QVBoxLayout(self)
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        main_layout.setSpacing(0)
 
-        # Content frame
+        # إنشاء frame أبيض مع زوايا منحنية
         content_frame = QFrame()
+        content_frame.setObjectName("ContentFrame")
         content_frame.setStyleSheet("""
-            QFrame {
-                background-color: white;
-                border-radius: 8px;
-                padding: 20px;
+            QFrame#ContentFrame {
+                background-color: #FFFFFF;
+                border: 1px solid #E1E8ED;
+                border-radius: 24px;
             }
         """)
-        content_layout = QVBoxLayout(content_frame)
-        content_layout.setSpacing(16)
+
+        layout = QVBoxLayout(content_frame)
+        layout.setSpacing(24)
+        layout.setContentsMargins(24, 24, 24, 24)
+
+        # العنوان (Header)
+        header_label = QLabel("إضافة وحدة عقارية" if not self.unit_data else "تعديل وحدة عقارية")
+        header_label.setAlignment(Qt.AlignCenter)
+        header_label.setStyleSheet("font-size: 16px; font-weight: 600; color: #1A1F1D; background: transparent;")
+        layout.addWidget(header_label)
 
         # Row 1: Unit Type and Unit Status
         row1 = QHBoxLayout()
@@ -120,7 +136,7 @@ class UnitDialog(QDialog):
         status_container.addWidget(self.unit_status_combo)
         row1.addLayout(status_container, 1)
 
-        content_layout.addLayout(row1)
+        layout.addLayout(row1)
 
         # Row 2: Floor Number and Unit Number
         row2 = QHBoxLayout()
@@ -150,12 +166,12 @@ class UnitDialog(QDialog):
         unit_num_container.addWidget(self.unit_number_input)
         row2.addLayout(unit_num_container, 1)
 
-        content_layout.addLayout(row2)
+        layout.addLayout(row2)
 
         # Uniqueness validation label
         self.uniqueness_label = QLabel("")
         self.uniqueness_label.setStyleSheet("font-size: 11px; margin-top: -8px;")
-        content_layout.addWidget(self.uniqueness_label)
+        layout.addWidget(self.uniqueness_label)
 
         # Row 3: Number of Rooms and Area
         row3 = QHBoxLayout()
@@ -184,7 +200,7 @@ class UnitDialog(QDialog):
         area_container.addWidget(self.area_input)
         row3.addLayout(area_container, 1)
 
-        content_layout.addLayout(row3)
+        layout.addLayout(row3)
 
         # Description
         desc_label = QLabel("وصف العقار")
@@ -204,10 +220,8 @@ class UnitDialog(QDialog):
                 color: #6B7280;
             }
         """)
-        content_layout.addWidget(desc_label)
-        content_layout.addWidget(self.description_edit)
-
-        layout.addWidget(content_frame)
+        layout.addWidget(desc_label)
+        layout.addWidget(self.description_edit)
 
         # Buttons
         buttons_layout = QHBoxLayout()
@@ -253,6 +267,9 @@ class UnitDialog(QDialog):
         buttons_layout.addWidget(cancel_btn)
         buttons_layout.addWidget(self.save_btn)
         layout.addLayout(buttons_layout)
+
+        # إضافة الـ frame الأبيض للـ layout الرئيسي
+        main_layout.addWidget(content_frame)
 
     def _combo_style(self) -> str:
         """Get combobox stylesheet."""

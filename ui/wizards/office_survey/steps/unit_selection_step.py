@@ -13,10 +13,11 @@ from typing import Dict, Any, Optional, List
 from PyQt5.QtWidgets import (
     QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton,
     QFrame, QScrollArea, QWidget, QMessageBox, QGroupBox,
-    QComboBox, QSpinBox, QTextEdit, QDialog, QFormLayout
+    QComboBox, QSpinBox, QTextEdit, QDialog, QFormLayout,
+    QGraphicsDropShadowEffect
 )
 from PyQt5.QtCore import Qt
-from PyQt5.QtGui import QCursor, QIcon
+from PyQt5.QtGui import QCursor, QIcon, QColor
 
 from ui.wizards.framework import BaseStep, StepValidationResult
 from ui.wizards.office_survey.survey_context import SurveyContext
@@ -24,6 +25,11 @@ from controllers.unit_controller import UnitController
 from models.unit import PropertyUnit as Unit
 from app.config import Config
 from utils.logger import get_logger
+from utils.helpers import build_hierarchical_address
+from ui.design_system import Colors
+from ui.components.icon import Icon
+from ui.components.action_button import ActionButton
+from ui.font_utils import create_font, FontManager
 
 logger = get_logger(__name__)
 
@@ -55,129 +61,237 @@ class UnitSelectionStep(BaseStep):
         layout = self.main_layout
         # No horizontal padding - wizard applies 131px (DRY principle)
         # Only vertical spacing between elements
-        layout.setContentsMargins(0, 16, 0, 16)  # Top: 16px, Bottom: 16px
-        layout.setSpacing(16)
+        # Best Practice: Adjusted top margin to match visual spacing of building_selection_step
+        layout.setContentsMargins(0, 8, 0, 16)  # Top: 8px (reduced for visual consistency), Bottom: 16px
+        layout.setSpacing(10)  # Reduced spacing: 10px between cards (was 15px)
 
-        # Selected building info card (search + metrics layout)
+        # Selected building info card - same design as building_selection_step stats card
+        # Height: 113px, includes address row + stats sections
         self.unit_building_frame = QFrame()
         self.unit_building_frame.setObjectName("unitBuildingInfoCard")
-        self.unit_building_frame.setStyleSheet("""
-            QFrame#unitBuildingInfoCard {
-                background-color: white;
-                border: 1px solid #E1E8ED;
+        self.unit_building_frame.setFixedHeight(113)  # Height: 113px total
+        self.unit_building_frame.setStyleSheet(f"""
+            QFrame#unitBuildingInfoCard {{
+                background-color: {Colors.SURFACE};
+                border: 1px solid {Colors.BORDER_DEFAULT};
+                border-radius: 12px;
+            }}
+        """)
+
+        # Apply subtle shadow effect for visual separation from tabs
+        # Best Practice: Consistent shadow across all wizard steps
+        shadow = QGraphicsDropShadowEffect()
+        shadow.setBlurRadius(8)  # Soft blur
+        shadow.setXOffset(0)  # Centered shadow
+        shadow.setYOffset(2)  # Slight offset downward
+        shadow.setColor(QColor(0, 0, 0, 30))  # Lighter shadow (alpha: 30 - reduced from 60)
+        self.unit_building_frame.setGraphicsEffect(shadow)
+
+        # Main card layout
+        card_layout = QVBoxLayout(self.unit_building_frame)
+        card_layout.setContentsMargins(12, 12, 12, 12)  # Padding: 12px all sides
+        card_layout.setSpacing(12)  # Gap between rows
+
+        # ===== ROW 1: Building Address =====
+        # Height: 28px, full width, border-radius 8px (suitable for 28px height), background #F8FAFF
+        # Best Practice: border-radius should be proportional to height (28/3.5 ≈ 8px)
+        address_container = QFrame()
+        address_container.setFixedHeight(28)
+        address_container.setStyleSheet("""
+            QFrame {
+                background-color: #F8FAFF;
+                border: none;
                 border-radius: 8px;
             }
         """)
 
-        # Card layout
-        self.unit_building_layout = QVBoxLayout(self.unit_building_frame)
-        self.unit_building_layout.setSpacing(14)
-        self.unit_building_layout.setContentsMargins(14, 14, 14, 14)
-
-        # Building address row with icon (centered with border)
-        address_container = QFrame()
-        address_container.setStyleSheet("""
-            QFrame {
-                background-color: white;
-                border: 1px solid #E1E8ED;
-                border-radius: 6px;
-                padding: 8px 12px;
-            }
-        """)
-
+        # DRY: Centered layout with icon + text
         address_row = QHBoxLayout(address_container)
+        address_row.setContentsMargins(12, 0, 12, 0)
         address_row.setSpacing(8)
-        address_row.setContentsMargins(8, 8, 8, 8)
 
-        # Add stretch to center the content
+        # Center the content
         address_row.addStretch()
 
-        # Building icon
-        building_icon = QLabel("🏢")
-        building_icon.setStyleSheet("""
-            QLabel {
-                font-size: 16px;
-                border: none;
-                background-color: transparent;
-            }
-        """)
-        building_icon.setAlignment(Qt.AlignCenter)
-        address_row.addWidget(building_icon)
+        # Icon: dec.png
+        from ui.components.icon import Icon
+        address_icon = QLabel()
+        address_icon_pixmap = Icon.load_pixmap("dec", size=16)
+        if address_icon_pixmap and not address_icon_pixmap.isNull():
+            address_icon.setPixmap(address_icon_pixmap)
+        else:
+            address_icon.setText("📍")  # Fallback emoji
+        address_icon.setStyleSheet("background: transparent; border: none;")
+        address_row.addWidget(address_icon)
 
-        # Building address label
-        self.unit_building_address = QLabel("حلب الحميدية")
+        # Building address text - centered, color #667281
+        # SOLID: Single Responsibility - displays building address only
+        self.unit_building_address = QLabel("عنوان البناء")
         self.unit_building_address.setAlignment(Qt.AlignCenter)
+        self.unit_building_address.setFont(create_font(size=10, weight=FontManager.WEIGHT_REGULAR))
         self.unit_building_address.setStyleSheet("""
             QLabel {
                 border: none;
                 background-color: transparent;
-                font-size: 12px;
-                color: #6B7280;
-                font-weight: 500;
+                color: #667281;
             }
         """)
         address_row.addWidget(self.unit_building_address)
 
-        # Add stretch to center the content
+        # Center the content
         address_row.addStretch()
 
-        self.unit_building_layout.addWidget(address_container)
+        card_layout.addWidget(address_container)
 
-        # Metrics row container
-        self.unit_building_metrics_layout = QHBoxLayout()
-        self.unit_building_metrics_layout.setSpacing(22)
-        self.unit_building_layout.addLayout(self.unit_building_metrics_layout)
+        # ===== ROW 2: Building Stats (5 sections) =====
+        # Same design as building_selection_step stats sections
+        stats_row = QHBoxLayout()
+        stats_row.setSpacing(0)  # Equal distribution
+
+        # Helper function to create stat section (label on top, value below)
+        def _create_stat_section(label_text, value_text="-"):
+            """Create a stat section with label on top and value below."""
+            section = QWidget()
+            section.setStyleSheet("background: transparent;")
+
+            section_layout = QVBoxLayout(section)
+            section_layout.setContentsMargins(0, 0, 0, 0)
+            section_layout.setSpacing(4)
+            section_layout.setAlignment(Qt.AlignCenter)
+
+            # Label (top text)
+            label = QLabel(label_text)
+            label.setAlignment(Qt.AlignCenter)
+            label.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
+            label.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent;")
+
+            # Value (bottom text)
+            value = QLabel(value_text)
+            value.setAlignment(Qt.AlignCenter)
+            value.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
+            value.setStyleSheet(f"color: {Colors.WIZARD_SUBTITLE}; background: transparent;")
+
+            section_layout.addWidget(label)
+            section_layout.addWidget(value)
+
+            return section, value
+
+        # Create 5 stat sections
+        section_type, self.ui_building_type = _create_stat_section("نوع البناء")
+        section_status, self.ui_building_status = _create_stat_section("حالة البناء")
+        section_units, self.ui_units_count = _create_stat_section("عدد الوحدات")
+        section_parcels, self.ui_parcels_count = _create_stat_section("عدد المقاسم")
+        section_shops, self.ui_shops_count = _create_stat_section("عدد المحلات")
+
+        # Add sections with equal spacing
+        sections = [section_type, section_status, section_units, section_parcels, section_shops]
+        for section in sections:
+            stats_row.addWidget(section, stretch=1)
+
+        card_layout.addLayout(stats_row)
 
         layout.addWidget(self.unit_building_frame)
 
-        # White container frame for all units
+        # Figma: Units Container Card (Card 2)
+        # Dimensions: 1249×372 (width×height), border-radius: 8px, padding: 12px
+        # Gap from Card 1: 15px (handled by layout.setSpacing(15))
         units_main_frame = QFrame()
+        units_main_frame.setObjectName("unitsContainerCard")
+        # DRY: Fixed dimensions from Figma (width × height)
+        units_main_frame.setFixedSize(1249, 372)
+        # SOLID: Separation of concerns - styling in stylesheet, spacing in layout
         units_main_frame.setStyleSheet("""
-            QFrame {
+            QFrame#unitsContainerCard {
                 background-color: white;
                 border: 1px solid #E1E8ED;
                 border-radius: 8px;
-                padding: 16px;
             }
         """)
+
+        # Apply subtle shadow effect for visual depth
+        # Best Practice: Consistent shadow across all cards
+        shadow2 = QGraphicsDropShadowEffect()
+        shadow2.setBlurRadius(8)
+        shadow2.setXOffset(0)
+        shadow2.setYOffset(2)
+        shadow2.setColor(QColor(0, 0, 0, 30))  # Lighter shadow (alpha: 30 - reduced from 60)
+        units_main_frame.setGraphicsEffect(shadow2)
+
+        # Best Practice: Use layout margins instead of CSS padding (more predictable)
         units_main_layout = QVBoxLayout(units_main_frame)
         units_main_layout.setSpacing(12)
-        units_main_layout.setContentsMargins(16, 16, 16, 16)
+        # Adjusted: Internal padding 11px all sides (reduced to prevent card clipping)
+        units_main_layout.setContentsMargins(11, 11, 11, 11)
 
-        # Header with title/subtitle on right and button on left
+        # Figma: Header with title/subtitle on right and button on left
         header_layout = QHBoxLayout()
+        header_layout.setSpacing(0)  # No spacing, manual control
+        header_layout.setContentsMargins(0, 0, 0, 0)
 
-        # Right side: Icon + Title and subtitle
+        # Right side: Icon container + Title and subtitle
         right_header = QHBoxLayout()
-        right_header.setSpacing(8)
+        right_header.setSpacing(8)  # Gap between icon container and text
 
-        # Icon
-        icon_label = QLabel("🏘️")
-        icon_label.setStyleSheet("font-size: 20px; border: none; background: transparent;")
-        right_header.addWidget(icon_label)
+        # DRY: Icon container (48×48, background #F0F7FF, small border-radius)
+        # Best Practice: Reusable pattern for icon containers
+        icon_container = QFrame()
+        icon_container.setFixedSize(48, 48)
+        icon_container.setStyleSheet(f"""
+            QFrame {{
+                background-color: {Colors.BACKGROUND};
+                border: none;
+                border-radius: 6px;
+            }}
+        """)
 
-        # Title and subtitle
+        # Center icon inside container
+        icon_container_layout = QHBoxLayout(icon_container)
+        icon_container_layout.setContentsMargins(0, 0, 0, 0)
+        icon_container_layout.setAlignment(Qt.AlignCenter)
+
+        # Load move.png icon
+        icon_label = QLabel()
+        icon_pixmap = Icon.load_pixmap("move", size=24)  # Reasonable size for 48×48 container
+        if icon_pixmap and not icon_pixmap.isNull():
+            icon_label.setPixmap(icon_pixmap)
+        else:
+            icon_label.setText("🏘️")  # Fallback emoji
+        icon_label.setStyleSheet("background: transparent; border: none;")
+        icon_container_layout.addWidget(icon_label)
+
+        right_header.addWidget(icon_container)
+
+        # Title and subtitle (Figma: 14px → 10.5pt)
         title_subtitle_layout = QVBoxLayout()
         title_subtitle_layout.setSpacing(2)
+        title_subtitle_layout.setContentsMargins(0, 0, 0, 0)
 
+        # DRY: Use FontManager for consistent font sizing
+        # Figma: 14px × 0.75 = 10.5pt (rounded to 10pt for cleaner rendering)
+        # Increased weight to emphasize title (SemiBold instead of Regular)
+        # RTL: Text ends at the same point as subtitle, but starts further right
         title_label = QLabel("اختر الوحدة العقارية")
+        title_label.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
         title_label.setStyleSheet("""
-            font-size: 12px;
-            font-weight: 200;
-            color: #111827;
-            border: none;
-            background: transparent;
+            QLabel {
+                color: #1A1F1D;
+                border: none;
+                background: transparent;
+            }
         """)
-        title_label.setAlignment(Qt.AlignRight)
+        # Fix RTL alignment: AlignLeft makes RTL text end at the same point as subtitle
+        title_label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
         title_subtitle_layout.addWidget(title_label)
 
+        # Subtitle with same font size, different color
         subtitle_label = QLabel("اختر أو أضف معلومات الوحدة العقارية")
+        subtitle_label.setFont(create_font(size=10, weight=FontManager.WEIGHT_REGULAR))
         subtitle_label.setStyleSheet("""
-            font-size: 9px;
-            font-weight: 100;
-            color: #6B7280;
-            border: none;
-            background: transparent;
+            QLabel {
+                color: #86909B;
+                border: none;
+                background: transparent;
+            }
         """)
         subtitle_label.setAlignment(Qt.AlignRight)
         title_subtitle_layout.addWidget(subtitle_label)
@@ -186,23 +300,16 @@ class UnitSelectionStep(BaseStep):
         header_layout.addLayout(right_header)
         header_layout.addStretch()
 
-        # Left side: Add unit button
-        self.add_unit_btn = QPushButton("أضف وحدة")
-        self.add_unit_btn.setIcon(QIcon.fromTheme("list-add"))
-        self.add_unit_btn.setStyleSheet(f"""
-            QPushButton {{
-                background-color: {Config.PRIMARY_COLOR};
-                border: none;
-                border-radius: 6px;
-                padding: 8px 16px;
-                color: white;
-                font-weight: 600;
-                font-size: 13px;
-            }}
-            QPushButton:hover {{
-                background-color: #005A9C;
-            }}
-        """)
+        # Left side: Add unit button (Figma: 125×44, outline variant)
+        # DRY: Use ActionButton component (Single Source of Truth)
+        # Figma specs: background #F0F7FF, border #3890DF, border-radius 8px
+        self.add_unit_btn = ActionButton(
+            text="أضف وحدة",
+            variant="outline",
+            icon_name="icon",
+            width=125,
+            height=44
+        )
         self.add_unit_btn.clicked.connect(self._show_add_unit_dialog)
         header_layout.addWidget(self.add_unit_btn)
 
@@ -214,10 +321,12 @@ class UnitSelectionStep(BaseStep):
         self.units_layout.setSpacing(10)
         self.units_layout.setContentsMargins(0, 0, 0, 0)
 
-        # Scroll area for units
+        # Scroll area for units (hidden scrollbar)
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setWidget(self.units_container)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         scroll.setStyleSheet("""
             QScrollArea {
                 border: none;
@@ -229,15 +338,35 @@ class UnitSelectionStep(BaseStep):
         layout.addWidget(units_main_frame, 1)
 
     def _load_units(self):
-        """Load units for the selected building and display as cards - exact copy from old wizard."""
+        """Load units for the selected building and display as cards."""
         if not self.context.building:
             return
 
-        # Populate building info (simple text display)
-        if hasattr(self, 'unit_building_label'):
-            self.unit_building_label.setText(
-                f"🏢 المبنى المحدد: {self.context.building.building_id}"
-            )
+        # Populate building info card
+        # SOLID: Single Responsibility - each field displays one piece of data
+        # DRY: Reuse building object instead of repeating property access
+        building = self.context.building
+
+        # Update address using DRY helper function (Single Source of Truth)
+        # Format: "حلب - المنطقة - الناحية - الحي - رقم البناء"
+        # Best Practice: Use centralized helper instead of duplicating logic
+        address = build_hierarchical_address(
+            building_obj=building,
+            unit_obj=None,  # Don't include unit number in building info card
+            separator=" - ",
+            include_unit=False
+        )
+        self.unit_building_address.setText(address)
+
+        # Update stats - DRY: consistent pattern for all fields
+        self.ui_building_type.setText(building.building_type_display or "-")
+        self.ui_building_status.setText(building.building_status_display or "-")
+        self.ui_units_count.setText(str(building.number_of_units or 0))
+        self.ui_parcels_count.setText(str(getattr(building, 'number_of_apartments', 0)))
+        self.ui_shops_count.setText(str(building.number_of_shops or 0))
+
+        # Show the card after populating data
+        self.unit_building_frame.setVisible(True)
 
         # Clear existing unit cards
         while self.units_layout.count():
@@ -277,17 +406,67 @@ class UnitSelectionStep(BaseStep):
 
         self.units_layout.addStretch()
 
+    def _to_arabic_numerals(self, text: str) -> str:
+        """
+        DRY: Convert English/Latin numerals to Arabic-Indic numerals.
+
+        Args:
+            text: Text containing numerals
+
+        Returns:
+            Text with Arabic numerals
+        """
+        arabic_digits = '٠١٢٣٤٥٦٧٨٩'
+        english_digits = '0123456789'
+        translation_table = str.maketrans(english_digits, arabic_digits)
+        return str(text).translate(translation_table)
+
+    def _create_field_label(self, text: str, is_title: bool = True) -> QLabel:
+        """
+        DRY: Create a label with consistent styling.
+
+        Args:
+            text: Label text
+            is_title: True for title style (like "اختر الوحدة العقارية"),
+                     False for value style (like subtitle)
+
+        Returns:
+            Configured QLabel
+        """
+        label = QLabel(text)
+
+        if is_title:
+            # Title style - same as "اختر الوحدة العقارية"
+            label.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
+            label.setStyleSheet("color: #1A1F1D;")
+        else:
+            # Value style - same as subtitle
+            label.setFont(create_font(size=10, weight=FontManager.WEIGHT_REGULAR))
+            label.setStyleSheet("color: #86909B;")
+
+        label.setAlignment(Qt.AlignCenter)
+        return label
+
     def _create_unit_card(self, unit) -> QFrame:
-        """Create a unit card widget matching the exact photo layout - exact copy from old wizard."""
+        """
+        Create a unit card widget with Figma specifications.
+
+        Figma specs:
+        - Dimensions: 1225×138 (width×height)
+        - Padding: 12px all sides
+        - Border-radius: 10px
+        - Gap between top and bottom sections: 8px
+        """
         # Determine unit display number (from unit_number or apartment_number)
         unit_display_num = unit.unit_number or unit.apartment_number or "?"
 
         # Check if this is the selected unit
         is_selected = self.context.unit and self.context.unit.unit_id == unit.unit_id
 
-        # Create card frame
+        # Create card frame - Figma: 1225×138
         card = QFrame()
         card.setObjectName("unitCard")
+        card.setFixedSize(1225, 138)
 
         # Different styles for selected and normal cards
         if is_selected:
@@ -299,7 +478,6 @@ class UnitSelectionStep(BaseStep):
                 }
                 QFrame#unitCard QLabel {
                     border: none;
-                    color: #2c3e50;
                 }
             """)
         else:
@@ -315,76 +493,117 @@ class UnitSelectionStep(BaseStep):
                 }
                 QFrame#unitCard QLabel {
                     border: none;
-                    color: #2c3e50;
                 }
             """)
+
+        # Apply subtle shadow effect for depth
+        # Best Practice: Consistent shadow like other cards
+        card_shadow = QGraphicsDropShadowEffect()
+        card_shadow.setBlurRadius(8)
+        card_shadow.setXOffset(0)
+        card_shadow.setYOffset(2)
+        card_shadow.setColor(QColor(0, 0, 0, 30))  # Subtle shadow
+        card.setGraphicsEffect(card_shadow)
 
         card.setCursor(Qt.PointingHandCursor)
         card.mousePressEvent = lambda _: self._on_unit_card_clicked(unit)
         card.setLayoutDirection(Qt.RightToLeft)
 
-        # Main layout
+        # Main layout - Figma: padding 12px all sides
         main_layout = QVBoxLayout(card)
-        main_layout.setSpacing(0)
-        main_layout.setContentsMargins(0, 0, 0, 0)
+        main_layout.setSpacing(8)  # Gap between top and bottom: 8px
+        main_layout.setContentsMargins(12, 12, 12, 12)  # Padding: 12px
 
-        # Get unit data
-        unit_type_val = unit.unit_type_display if hasattr(unit, 'unit_type_display') else unit.unit_type
-        status_val = unit.apartment_status_display if hasattr(unit, 'apartment_status_display') else unit.apartment_status or "جيدة"
+        # Get unit data with Arabic text
+        # DRY: Use Arabic display properties from model
+        unit_type_val = unit.unit_type_display_ar if hasattr(unit, 'unit_type_display_ar') else (unit.unit_type or "-")
+
+        # Get Arabic status (use property if exists, otherwise translate manually)
+        if hasattr(unit, 'apartment_status'):
+            status_mappings = {
+                "occupied": "مشغولة",
+                "vacant": "شاغرة",
+                "unknown": "غير معروف"
+            }
+            status_val = status_mappings.get(unit.apartment_status, unit.apartment_status)
+        else:
+            status_val = "جيدة"
+
+        # Keep numerals in English (0-9) for consistency with the app
         floor_val = str(unit.floor_number) if unit.floor_number is not None else "-"
         rooms_val = str(getattr(unit, 'number_of_rooms', 0)) if hasattr(unit, 'number_of_rooms') else "-"
-        area_val = f"{unit.area_sqm}" if unit.area_sqm else "120"
+        unit_display_num = str(unit_display_num)
 
-        # Top Row (Data Grid)
+        # Format area with 2 decimal places in English numerals
+        if unit.area_sqm:
+            area_val = f"{float(unit.area_sqm):.2f} م²"
+        else:
+            area_val = "120.00 م²"
+
+        # Top Row (Data Grid) - reversed order and evenly distributed
         grid_layout = QHBoxLayout()
-        grid_layout.setContentsMargins(20, 15, 20, 15)
-        grid_layout.setSpacing(10)
+        grid_layout.setContentsMargins(0, 0, 0, 0)
+        grid_layout.setSpacing(0)
 
-        # Column Data (In order for RTL)
+        # Column Data - REVERSED ORDER (was right-to-left, now left-to-right in code)
+        # All values converted to Arabic
         data_points = [
-            ("حالة الوحدة", status_val),
-            ("نوع الوحدة", unit_type_val),
-            ("مساحة القسم", f"{area_val} (م²)"),
-            ("عدد الغرف", rooms_val),
+            ("رقم الوحدة", unit_display_num),
             ("رقم الطابق", floor_val),
-            ("رقم الوحدة", str(unit_display_num)),
+            ("عدد الغرف", rooms_val),
+            ("مساحة القسم", area_val),
+            ("نوع الوحدة", unit_type_val),
+            ("حالة الوحدة", status_val),
         ]
 
+        # DRY: Use helper method for consistent label styling
         for label_text, value_text in data_points:
             col = QVBoxLayout()
-            col.setSpacing(4)
+            col.setSpacing(2)  # Small gap between title and value
 
-            lbl_title = QLabel(label_text)
-            lbl_title.setStyleSheet("font-weight: bold; color: #333; font-size: 11px;")
-            lbl_title.setAlignment(Qt.AlignCenter)
-
-            lbl_val = QLabel(str(value_text))
-            lbl_val.setStyleSheet("color: #666; font-size: 11px;")
-            lbl_val.setAlignment(Qt.AlignCenter)
+            # DRY: Create labels using helper method
+            lbl_title = self._create_field_label(label_text, is_title=True)
+            lbl_val = self._create_field_label(str(value_text), is_title=False)
 
             col.addWidget(lbl_title)
             col.addWidget(lbl_val)
-            grid_layout.addLayout(col)
+            grid_layout.addLayout(col, stretch=1)  # Evenly distribute columns
 
         main_layout.addLayout(grid_layout)
 
-        # Divider line
-        line = QFrame()
-        line.setFrameShape(QFrame.HLine)
-        line.setStyleSheet("background-color: #eeeeee; border: none; max-height: 1px;")
-        main_layout.addWidget(line)
+        # Dotted divider line - subtle separator
+        # Best Practice: Use dotted style for visual separation without being intrusive
+        divider = QFrame()
+        divider.setFixedHeight(1)
+        divider.setStyleSheet("""
+            QFrame {
+                border: none;
+                border-top: 1px dotted #D1D5DB;
+                background: transparent;
+            }
+        """)
+        main_layout.addWidget(divider)
 
         # Bottom Section (Description)
         desc_layout = QVBoxLayout()
-        desc_layout.setContentsMargins(20, 12, 20, 15)
-        desc_layout.setSpacing(6)
+        desc_layout.setContentsMargins(0, 0, 0, 0)
+        desc_layout.setSpacing(2)
+        desc_layout.setDirection(QVBoxLayout.TopToBottom)  # Ensure top-to-bottom flow
 
+        # Title: وصف العقار
         desc_title = QLabel("وصف العقار")
-        desc_title.setStyleSheet("font-weight: bold; color: #333; font-size: 11px;")
+        desc_title.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
+        desc_title.setStyleSheet("color: #1A1F1D;")
+        desc_title.setAlignment(Qt.AlignVCenter)
+        
 
+        # Description text (user-entered OR placeholder)
         desc_text_content = unit.property_description if unit.property_description else "وصف تفصيلي يشمل: عدد الغرف وأنواعها، المساحة التقريبية، الاتجاهات والحدود، وأي ميزات مميزة."
         desc_text = QLabel(desc_text_content)
-        desc_text.setStyleSheet("color: #7f8c8d; font-size: 10px;")
+        desc_text.setFont(create_font(size=10, weight=FontManager.WEIGHT_REGULAR))
+        desc_text.setStyleSheet("color: #86909B;")
+        desc_text.setAlignment(Qt.AlignTop)
+        
         desc_text.setWordWrap(True)
         desc_text.setMaximumHeight(40)
 
@@ -402,17 +621,28 @@ class UnitSelectionStep(BaseStep):
         return card
 
     def _on_unit_card_clicked(self, unit):
-        """Handle unit card click - exact copy from old wizard."""
-        self.context.unit = unit
-        self.context.is_new_unit = False
-        self.selected_unit = unit
-        # Refresh cards to show selection
-        self._load_units()
-
-        # Emit validation changed
-        self.emit_validation_changed(True)
-
-        logger.info(f"Unit selected: {unit.unit_id}")
+        """Handle unit card click with toggle functionality."""
+        # Toggle functionality: if clicking on already selected unit, deselect it
+        if self.context.unit and self.context.unit.unit_id == unit.unit_id:
+            # Deselect the unit
+            self.context.unit = None
+            self.context.is_new_unit = False
+            self.selected_unit = None
+            # Refresh cards to remove selection highlight
+            self._load_units()
+            # Emit validation changed (no unit selected = invalid)
+            self.emit_validation_changed(False)
+            logger.info(f"Unit deselected: {unit.unit_id}")
+        else:
+            # Select the unit
+            self.context.unit = unit
+            self.context.is_new_unit = False
+            self.selected_unit = unit
+            # Refresh cards to show selection
+            self._load_units()
+            # Emit validation changed (unit selected = valid)
+            self.emit_validation_changed(True)
+            logger.info(f"Unit selected: {unit.unit_id}")
 
     def _show_add_unit_dialog(self):
         """Show dialog to add a new unit - exact copy from old wizard."""

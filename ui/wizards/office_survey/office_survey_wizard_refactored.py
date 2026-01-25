@@ -479,7 +479,9 @@ class OfficeSurveyWizard(BaseWizard):
 
         # Horizontal layout for step indicators (DRY: respecting main_layout padding)
         steps_layout = QHBoxLayout(steps_frame)
-        steps_layout.setContentsMargins(0, 0, 0, 0)  # No additional margins - rely on main_layout
+        # Add vertical margins to accommodate shadow effect (prevent clipping)
+        # Top: 2px, Bottom: 4px to prevent shadow from being cut off
+        steps_layout.setContentsMargins(0, 2, 0, 4)
         # DRY: Using ButtonDimensions.STEP_TAB_GAP (20px from Figma)
         steps_layout.setSpacing(ButtonDimensions.STEP_TAB_GAP)  # 20px gap between tabs
 
@@ -505,6 +507,18 @@ class OfficeSurveyWizard(BaseWizard):
                 padding: {ButtonDimensions.STEP_TAB_PADDING_V}px {ButtonDimensions.STEP_TAB_PADDING_H}px;
                 font-size: {ButtonDimensions.STEP_TAB_FONT_SIZE}pt;
             """)
+
+            # Apply subtle shadow effect for visual depth
+            # Best Practice: Consistent shadow across step tabs
+            from PyQt5.QtWidgets import QGraphicsDropShadowEffect
+            from PyQt5.QtGui import QColor
+            tab_shadow = QGraphicsDropShadowEffect()
+            tab_shadow.setBlurRadius(6)  # Softer blur for tabs
+            tab_shadow.setXOffset(0)
+            tab_shadow.setYOffset(1)  # Very slight offset
+            tab_shadow.setColor(QColor(0, 0, 0, 40))  # More subtle alpha
+            step_widget.setGraphicsEffect(tab_shadow)
+
             self.step_labels.append(step_widget)
             steps_layout.addWidget(step_widget)
 

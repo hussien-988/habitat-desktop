@@ -23,6 +23,7 @@ from PyQt5.QtGui import QFont
 from .base_step import BaseStep, StepValidationResult
 from .wizard_context import WizardContext
 from .step_navigator import StepNavigator
+from ui.components.action_button import ActionButton
 
 
 # Combine PyQt5 metaclass with ABC metaclass
@@ -236,70 +237,40 @@ class BaseWizard(QWidget, metaclass=ABCQWidgetMeta):
         layout.setContentsMargins(20, 16, 20, 16)
         layout.setSpacing(12)
 
+        # DRY: Use ActionButton component for all footer buttons
         # Left buttons (Cancel, Save Draft)
-        self.btn_cancel = QPushButton("إلغاء")
-        self.btn_cancel.setStyleSheet(self._button_style("secondary"))
+        self.btn_cancel = ActionButton("إلغاء", variant="secondary", width=114, height=44)
         self.btn_cancel.clicked.connect(self._handle_cancel)
         layout.addWidget(self.btn_cancel)
 
-        self.btn_save_draft = QPushButton("حفظ كمسودة")
-        self.btn_save_draft.setStyleSheet(self._button_style("secondary"))
+        self.btn_save_draft = ActionButton(
+            text="حفظ كمسودة",
+            variant="secondary",
+            icon_name="save",
+            width=140,  # Wider to accommodate text
+            height=44
+        )
         self.btn_save_draft.clicked.connect(self._handle_save_draft)
         layout.addWidget(self.btn_save_draft)
 
         layout.addStretch()
 
         # Right buttons (Previous, Next/Finish)
-        self.btn_previous = QPushButton("السابق")
-        self.btn_previous.setStyleSheet(self._button_style("secondary"))
+        self.btn_previous = ActionButton("السابق", variant="secondary", width=114, height=44)
         self.btn_previous.clicked.connect(self._handle_previous)
         layout.addWidget(self.btn_previous)
 
-        self.btn_next = QPushButton("التالي")
-        self.btn_next.setStyleSheet(self._button_style("primary"))
+        self.btn_next = ActionButton(
+            text="التالي",
+            variant="primary",
+            icon_name="icon",
+            width=114,
+            height=44
+        )
         self.btn_next.clicked.connect(self._handle_next)
         layout.addWidget(self.btn_next)
 
         return footer
-
-    def _button_style(self, variant: str) -> str:
-        """Get button stylesheet."""
-        if variant == "primary":
-            return """
-                QPushButton {
-                    background-color: #0d6efd;
-                    color: white;
-                    border: none;
-                    padding: 8px 20px;
-                    border-radius: 4px;
-                    font-size: 13px;
-                    min-width: 100px;
-                }
-                QPushButton:hover {
-                    background-color: #0b5ed7;
-                }
-                QPushButton:disabled {
-                    background-color: #6c757d;
-                }
-            """
-        else:  # secondary
-            return """
-                QPushButton {
-                    background-color: #6c757d;
-                    color: white;
-                    border: none;
-                    padding: 8px 20px;
-                    border-radius: 4px;
-                    font-size: 13px;
-                    min-width: 100px;
-                }
-                QPushButton:hover {
-                    background-color: #5c636a;
-                }
-                QPushButton:disabled {
-                    background-color: #adb5bd;
-                }
-            """
 
     # =========================================================================
     # Navigation Handlers

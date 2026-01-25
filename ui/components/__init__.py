@@ -11,6 +11,7 @@ from .validation_error_dialog import ValidationErrorDialog
 from .vocabulary_incompatibility_dialog import VocabularyIncompatibilityDialog
 from .commit_report_dialog import CommitReportDialog
 from .primary_button import PrimaryButton
+from .action_button import ActionButton
 from .icon import Icon, IconSize
 
 __all__ = [
@@ -24,6 +25,7 @@ __all__ = [
     "VocabularyIncompatibilityDialog",
     "CommitReportDialog",
     "PrimaryButton",
+    "ActionButton",
     "Icon",
     "IconSize",
 ]

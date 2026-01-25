@@ -376,7 +376,8 @@ class PageDimensions:
     CARD_DETAILS_BORDER_WIDTH = 1    # Border width (Figma: 1px, Inside)
 
     # Card details text styling (text inside details container - from Figma)
-    CARD_DETAILS_TEXT_COLOR = "#757575"                          # Text color (Figma: #757575)
+    # Updated to match unit selection address color for consistency (DRY principle)
+    CARD_DETAILS_TEXT_COLOR = "#667281"                          # Text color (Updated: #667281)
     CARD_DETAILS_TEXT_SIZE = 6                                   # Font size (PyQt5: 6pt - adjusted for smaller display)
     # DRY: Use primary Arabic font (IBM Plex Sans Arabic) from Typography
     # Fallback: Calibri (system fallback only)
