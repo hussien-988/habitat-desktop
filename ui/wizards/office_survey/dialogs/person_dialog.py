@@ -308,25 +308,25 @@ class PersonDialog(QDialog):
         """)
 
         upload_layout = QVBoxLayout(upload_frame)
-        upload_layout.setContentsMargins(20, 20, 20, 20)
+        upload_layout.setContentsMargins(20, 15, 20, 15)
         upload_layout.setAlignment(Qt.AlignCenter)
-        upload_layout.setSpacing(8)
+        upload_layout.setSpacing(5)
 
-        # Upload icon
+        # Upload icon - smaller and centered
         upload_icon = QLabel()
-        upload_icon.setFixedSize(40, 40)
+        upload_icon.setFixedSize(30, 30)
         upload_icon.setAlignment(Qt.AlignCenter)
         upload_icon.setStyleSheet("border: none;")
 
         # Load upload icon using Icon component
         from ui.components.icon import Icon
-        upload_pixmap = Icon.load_pixmap("upload_file", size=40)
+        upload_pixmap = Icon.load_pixmap("upload_file", size=24)
         if upload_pixmap and not upload_pixmap.isNull():
             upload_icon.setPixmap(upload_pixmap)
         else:
             # Fallback emoji
             upload_icon.setText("📁")
-            upload_icon.setStyleSheet("border: none; font-size: 32px;")
+            upload_icon.setStyleSheet("border: none; font-size: 20px;")
 
         # Upload button
         self.doc_upload_btn = QPushButton("ارفع صور المستندات")
@@ -552,25 +552,25 @@ class PersonDialog(QDialog):
         """)
 
         rel_upload_layout = QVBoxLayout(rel_upload_frame)
-        rel_upload_layout.setContentsMargins(20, 20, 20, 20)
+        rel_upload_layout.setContentsMargins(20, 15, 20, 15)
         rel_upload_layout.setAlignment(Qt.AlignCenter)
-        rel_upload_layout.setSpacing(8)
+        rel_upload_layout.setSpacing(5)
 
-        # Upload icon
+        # Upload icon - smaller and centered
         rel_upload_icon = QLabel()
-        rel_upload_icon.setFixedSize(40, 40)
+        rel_upload_icon.setFixedSize(30, 30)
         rel_upload_icon.setAlignment(Qt.AlignCenter)
         rel_upload_icon.setStyleSheet("border: none;")
 
         # Load upload icon using Icon component
         from ui.components.icon import Icon
-        rel_upload_pixmap = Icon.load_pixmap("upload_file", size=40)
+        rel_upload_pixmap = Icon.load_pixmap("upload_file", size=24)
         if rel_upload_pixmap and not rel_upload_pixmap.isNull():
             rel_upload_icon.setPixmap(rel_upload_pixmap)
         else:
             # Fallback emoji
             rel_upload_icon.setText("📁")
-            rel_upload_icon.setStyleSheet("border: none; font-size: 32px;")
+            rel_upload_icon.setStyleSheet("border: none; font-size: 20px;")
 
         # Upload button
         self.rel_doc_upload_btn = QPushButton("ارفع صور المستندات")
