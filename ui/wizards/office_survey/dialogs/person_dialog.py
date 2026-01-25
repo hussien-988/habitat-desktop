@@ -439,7 +439,7 @@ class PersonDialog(QDialog):
         self.ownership_share.setDecimals(2)
         self.ownership_share.setSuffix(" %")
         self.ownership_share.setValue(0)
-        self.ownership_share.setStyleSheet(self._input_style())
+        self.ownership_share.setStyleSheet(StyleManager.numeric_input())
         relation_grid.addWidget(self.ownership_share, row, 1)
 
         # Row 4: Evidence Type | Evidence Description

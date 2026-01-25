@@ -17,6 +17,7 @@ from PyQt5.QtWidgets import (
     QPushButton, QComboBox, QSpinBox, QTextEdit, QFrame, QMessageBox
 )
 from PyQt5.QtCore import Qt
+from PyQt5.QtGui import QIcon
 
 from app.config import Config
 from models.building import Building
@@ -142,16 +143,64 @@ class UnitDialog(QDialog):
         row2 = QHBoxLayout()
         row2.setSpacing(16)
 
-        # Floor Number
+        # Floor Number - Custom spinbox with stacked arrows
+        from ui.style_manager import StyleManager
+        from ui.components.icon import Icon
+
         floor_container = QVBoxLayout()
         floor_label = QLabel("رقم الطابق")
         floor_label.setStyleSheet("font-size: 13px; font-weight: 600; color: #374151;")
-        self.floor_spin = QSpinBox()
-        self.floor_spin.setRange(-3, 100)
-        self.floor_spin.setValue(0)
-        self.floor_spin.setStyleSheet(self._spinbox_style())
+
+        # Create custom spinbox frame
+        floor_frame = QFrame()
+        floor_frame.setStyleSheet(StyleManager.spinbox_input_container())
+        floor_frame.setFixedHeight(40)
+
+        floor_layout = QHBoxLayout(floor_frame)
+        floor_layout.setContentsMargins(5, 0, 10, 0)
+        floor_layout.setSpacing(0)
+
+        # Stacked arrows layout
+        floor_arrows_layout = QVBoxLayout()
+        floor_arrows_layout.setContentsMargins(0, 0, 0, 0)
+        floor_arrows_layout.setSpacing(0)
+
+        # Up arrow button
+        self.floor_up_btn = QPushButton()
+        self.floor_up_btn.setFixedSize(20, 15)
+        self.floor_up_btn.setStyleSheet(StyleManager.spinbox_arrow_button())
+        floor_up_pixmap = Icon.load_pixmap("^", size=16)
+        if floor_up_pixmap and not floor_up_pixmap.isNull():
+            self.floor_up_btn.setIcon(QIcon(floor_up_pixmap))
+
+        # Down arrow button
+        self.floor_down_btn = QPushButton()
+        self.floor_down_btn.setFixedSize(20, 15)
+        self.floor_down_btn.setStyleSheet(StyleManager.spinbox_arrow_button())
+        floor_down_pixmap = Icon.load_pixmap("down", size=16)
+        if floor_down_pixmap and not floor_down_pixmap.isNull():
+            self.floor_down_btn.setIcon(QIcon(floor_down_pixmap))
+
+        floor_arrows_layout.addWidget(self.floor_up_btn)
+        floor_arrows_layout.addWidget(self.floor_down_btn)
+
+        # Value input field
+        self.floor_input = QLineEdit()
+        self.floor_input.setText("0")
+        self.floor_input.setAlignment(Qt.AlignCenter)
+        self.floor_input.setStyleSheet(StyleManager.spinbox_input_field())
+
+        # Connect button clicks
+        self.floor_up_btn.clicked.connect(lambda: self._increment_floor())
+        self.floor_down_btn.clicked.connect(lambda: self._decrement_floor())
+
+        floor_layout.addLayout(floor_arrows_layout)
+        floor_layout.addStretch()
+        floor_layout.addWidget(self.floor_input)
+        floor_layout.addStretch()
+
         floor_container.addWidget(floor_label)
-        floor_container.addWidget(self.floor_spin)
+        floor_container.addWidget(floor_frame)
         row2.addLayout(floor_container, 1)
 
         # Unit Number
@@ -177,16 +226,61 @@ class UnitDialog(QDialog):
         row3 = QHBoxLayout()
         row3.setSpacing(16)
 
-        # Number of Rooms
+        # Number of Rooms - Custom spinbox with stacked arrows
         rooms_container = QVBoxLayout()
         rooms_label = QLabel("عدد الغرف")
         rooms_label.setStyleSheet("font-size: 13px; font-weight: 600; color: #374151;")
-        self.rooms_spin = QSpinBox()
-        self.rooms_spin.setRange(0, 20)
-        self.rooms_spin.setValue(0)
-        self.rooms_spin.setStyleSheet(self._spinbox_style())
+
+        # Create custom spinbox frame
+        rooms_frame = QFrame()
+        rooms_frame.setStyleSheet(StyleManager.spinbox_input_container())
+        rooms_frame.setFixedHeight(40)
+
+        rooms_layout = QHBoxLayout(rooms_frame)
+        rooms_layout.setContentsMargins(5, 0, 10, 0)
+        rooms_layout.setSpacing(0)
+
+        # Stacked arrows layout
+        rooms_arrows_layout = QVBoxLayout()
+        rooms_arrows_layout.setContentsMargins(0, 0, 0, 0)
+        rooms_arrows_layout.setSpacing(0)
+
+        # Up arrow button
+        self.rooms_up_btn = QPushButton()
+        self.rooms_up_btn.setFixedSize(20, 15)
+        self.rooms_up_btn.setStyleSheet(StyleManager.spinbox_arrow_button())
+        rooms_up_pixmap = Icon.load_pixmap("^", size=16)
+        if rooms_up_pixmap and not rooms_up_pixmap.isNull():
+            self.rooms_up_btn.setIcon(QIcon(rooms_up_pixmap))
+
+        # Down arrow button
+        self.rooms_down_btn = QPushButton()
+        self.rooms_down_btn.setFixedSize(20, 15)
+        self.rooms_down_btn.setStyleSheet(StyleManager.spinbox_arrow_button())
+        rooms_down_pixmap = Icon.load_pixmap("down", size=16)
+        if rooms_down_pixmap and not rooms_down_pixmap.isNull():
+            self.rooms_down_btn.setIcon(QIcon(rooms_down_pixmap))
+
+        rooms_arrows_layout.addWidget(self.rooms_up_btn)
+        rooms_arrows_layout.addWidget(self.rooms_down_btn)
+
+        # Value input field
+        self.rooms_input = QLineEdit()
+        self.rooms_input.setText("0")
+        self.rooms_input.setAlignment(Qt.AlignCenter)
+        self.rooms_input.setStyleSheet(StyleManager.spinbox_input_field())
+
+        # Connect button clicks
+        self.rooms_up_btn.clicked.connect(lambda: self._increment_rooms())
+        self.rooms_down_btn.clicked.connect(lambda: self._decrement_rooms())
+
+        rooms_layout.addLayout(rooms_arrows_layout)
+        rooms_layout.addStretch()
+        rooms_layout.addWidget(self.rooms_input)
+        rooms_layout.addStretch()
+
         rooms_container.addWidget(rooms_label)
-        rooms_container.addWidget(self.rooms_spin)
+        rooms_container.addWidget(rooms_frame)
         row3.addLayout(rooms_container, 1)
 
         # Area
@@ -316,10 +410,49 @@ class UnitDialog(QDialog):
             }
         """
 
+    def _increment_floor(self):
+        """Increment floor value when up arrow is clicked."""
+        try:
+            current = int(self.floor_input.text())
+            if current < 100:  # Max value
+                self.floor_input.setText(str(current + 1))
+        except ValueError:
+            self.floor_input.setText("0")
+
+    def _decrement_floor(self):
+        """Decrement floor value when down arrow is clicked."""
+        try:
+            current = int(self.floor_input.text())
+            if current > -3:  # Min value
+                self.floor_input.setText(str(current - 1))
+        except ValueError:
+            self.floor_input.setText("0")
+
+    def _increment_rooms(self):
+        """Increment rooms value when up arrow is clicked."""
+        try:
+            current = int(self.rooms_input.text())
+            if current < 20:  # Max value
+                self.rooms_input.setText(str(current + 1))
+        except ValueError:
+            self.rooms_input.setText("0")
+
+    def _decrement_rooms(self):
+        """Decrement rooms value when down arrow is clicked."""
+        try:
+            current = int(self.rooms_input.text())
+            if current > 0:  # Min value
+                self.rooms_input.setText(str(current - 1))
+        except ValueError:
+            self.rooms_input.setText("0")
+
     def _check_uniqueness(self):
         """Check if unit number is unique within the building."""
         unit_number = self.unit_number_input.text().strip()
-        floor = self.floor_spin.value()
+        try:
+            floor = int(self.floor_input.text())
+        except ValueError:
+            floor = 0
 
         if not unit_number:
             self.uniqueness_label.setText("")
@@ -413,7 +546,7 @@ class UnitDialog(QDialog):
 
         # Floor number
         if 'floor_number' in unit_data and unit_data['floor_number'] is not None:
-            self.floor_spin.setValue(unit_data['floor_number'])
+            self.floor_input.setText(str(unit_data['floor_number']))
 
         # Unit number
         unit_num = unit_data.get('unit_number') or unit_data.get('apartment_number')
@@ -422,7 +555,7 @@ class UnitDialog(QDialog):
 
         # Number of rooms
         if 'number_of_rooms' in unit_data:
-            self.rooms_spin.setValue(unit_data['number_of_rooms'] or 0)
+            self.rooms_input.setText(str(unit_data['number_of_rooms'] or 0))
 
         # Area
         if 'area_sqm' in unit_data and unit_data['area_sqm']:
@@ -443,16 +576,27 @@ class UnitDialog(QDialog):
             except ValueError:
                 pass
 
+        # Parse floor and rooms values
+        try:
+            floor_value = int(self.floor_input.text())
+        except ValueError:
+            floor_value = 0
+
+        try:
+            rooms_value = int(self.rooms_input.text())
+        except ValueError:
+            rooms_value = 0
+
         unit_data = {
             'unit_uuid': self.unit_data.get('unit_uuid') if self.unit_data else str(uuid.uuid4()),
             'building_id': self.building.building_id,
             'building_uuid': self.building.building_uuid,
             'unit_type': self.unit_type_combo.currentData(),
             'apartment_status': self.unit_status_combo.currentData() or 'intact',
-            'floor_number': self.floor_spin.value(),
+            'floor_number': floor_value,
             'unit_number': self.unit_number_input.text().strip(),
             'apartment_number': self.unit_number_input.text().strip(),  # Compatibility
-            'number_of_rooms': self.rooms_spin.value(),
+            'number_of_rooms': rooms_value,
             'area_sqm': area_value,
             'property_description': self.description_edit.toPlainText().strip() or None
         }
