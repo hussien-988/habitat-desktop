@@ -727,6 +727,351 @@ class StyleManager:
             }}
         """
 
+    # ==================== FORM INPUTS ====================
+
+    @staticmethod
+    def form_input() -> str:
+        """
+        Get standard form input stylesheet (matching person dialog design).
+
+        Usage: QLineEdit, QComboBox, QDateEdit, QDoubleSpinBox in forms
+
+        Figma Specs:
+        - Background: #F8FAFC
+        - Border: 1px solid #E0E6ED
+        - Border-radius: 8px
+        - Height: 23px (min/max)
+        - Focus border: #2D9CDB
+
+        Returns:
+            Complete QSS stylesheet string
+        """
+        return """
+            QLineEdit, QComboBox, QDateEdit, QDoubleSpinBox {
+                border: 1px solid #E0E6ED;
+                border-radius: 8px;
+                padding: 10px;
+                background-color: #F8FAFC;
+                color: #333;
+                font-size: 14px;
+                min-height: 23px;
+                max-height: 23px;
+            }
+            QLineEdit:focus, QComboBox:focus, QDateEdit:focus, QDoubleSpinBox:focus {
+                border: 1px solid #2D9CDB;
+                background-color: white;
+            }
+            QComboBox::drop-down {
+                border: none;
+                width: 30px;
+                background-image: url(assets/images/down.png);
+                background-repeat: no-repeat;
+                background-position: center;
+            }
+            QComboBox::down-arrow {
+                width: 0px;
+                height: 0px;
+            }
+        """
+
+    @staticmethod
+    def date_input() -> str:
+        """
+        Get date input stylesheet with calendar icon on the left.
+
+        Usage: QDateEdit in forms
+
+        Figma Specs:
+        - Background: #F8FAFC
+        - Border: 1px solid #E0E6ED
+        - Calendar icon: Left side, 25px width
+        - Icon: assets/images/calender.png
+
+        Returns:
+            Complete QSS stylesheet string
+        """
+        return """
+            QDateEdit {
+                background-color: #F8FAFC;
+                border: 1px solid #E0E6ED;
+                border-radius: 8px;
+                padding: 10px;
+                color: #333;
+                font-size: 14px;
+                min-height: 23px;
+                max-height: 23px;
+            }
+            QDateEdit:focus {
+                border: 1px solid #2D9CDB;
+                background-color: white;
+            }
+            QDateEdit::drop-down {
+                image: url(assets/images/calender.png);
+                width: 25px;
+                border: none;
+                padding-left: 10px;
+            }
+        """
+
+    @staticmethod
+    def mobile_input_container() -> str:
+        """
+        Get mobile number input container stylesheet.
+
+        Usage: QFrame wrapping mobile input with prefix
+
+        Figma Specs:
+        - Background: #F8FAFC
+        - Border: 1px solid #E0E6ED
+        - Border-radius: 8px
+        - Contains: prefix label + input field
+
+        Returns:
+            Complete QSS stylesheet string
+        """
+        return """
+            QFrame {
+                background-color: #F8FAFC;
+                border: 1px solid #E0E6ED;
+                border-radius: 8px;
+            }
+        """
+
+    @staticmethod
+    def mobile_input_prefix() -> str:
+        """
+        Get mobile number prefix label stylesheet.
+
+        Usage: QLabel showing "+963 | 09"
+
+        Figma Specs:
+        - Color: #4A5568 (bold)
+        - Width: 90px
+        - No border
+
+        Returns:
+            Complete QSS stylesheet string
+        """
+        return """
+            QLabel {
+                color: #4A5568;
+                font-weight: bold;
+                border: none;
+                padding-left: 10px;
+            }
+        """
+
+    @staticmethod
+    def mobile_input_field() -> str:
+        """
+        Get mobile number input field stylesheet.
+
+        Usage: QLineEdit for phone number (inside container)
+
+        Figma Specs:
+        - Background: transparent
+        - No border
+        - Padding: 10px
+
+        Returns:
+            Complete QSS stylesheet string
+        """
+        return """
+            QLineEdit {
+                background: transparent;
+                border: none;
+                padding: 10px;
+                color: #333;
+            }
+        """
+
+    @staticmethod
+    def file_upload_frame() -> str:
+        """
+        Get file upload frame stylesheet.
+
+        Usage: QFrame for file upload area
+
+        Figma Specs:
+        - Background: #F0F7FF
+        - Border: 2px dashed #BEE3F8
+        - Border-radius: 10px
+        - Min-height: 100px
+        - Hover: #E6F2FF
+
+        Returns:
+            Complete QSS stylesheet string
+        """
+        return """
+            QFrame {
+                background-color: #F0F7FF;
+                border: 2px dashed #BEE3F8;
+                border-radius: 10px;
+                min-height: 100px;
+            }
+            QFrame:hover {
+                background-color: #E6F2FF;
+            }
+        """
+
+    @staticmethod
+    def file_upload_button() -> str:
+        """
+        Get file upload button stylesheet.
+
+        Usage: QPushButton for "ارفع صور المستندات"
+
+        Figma Specs:
+        - Color: #2D9CDB (blue)
+        - Font-weight: bold
+        - Background: transparent
+        - Text-decoration: underline
+        - Hover: #1E7BB0
+
+        Returns:
+            Complete QSS stylesheet string
+        """
+        return """
+            QPushButton {
+                color: #2D9CDB;
+                font-weight: bold;
+                border: none;
+                background: transparent;
+                text-decoration: underline;
+            }
+            QPushButton:hover {
+                color: #1E7BB0;
+            }
+        """
+
+    @staticmethod
+    def numeric_input() -> str:
+        """
+        Get numeric input stylesheet with percentage icon.
+
+        Usage: QDoubleSpinBox for ownership share (حصة الملكية)
+
+        Figma Specs:
+        - Background: #F8FAFC
+        - Border: 1px solid #E0E6ED
+        - Border-radius: 8px
+        - Height: 23px (min/max)
+        - Icon: assets/images/percent.png on the left
+
+        Returns:
+            Complete QSS stylesheet string
+        """
+        return """
+            QDoubleSpinBox {
+                background-color: #F8FAFC;
+                border: 1px solid #E0E6ED;
+                border-radius: 8px;
+                padding: 10px;
+                padding-left: 35px;
+                color: #333;
+                font-size: 14px;
+                min-height: 23px;
+                max-height: 23px;
+            }
+            QDoubleSpinBox:focus {
+                border: 1px solid #2D9CDB;
+                background-color: white;
+            }
+            QDoubleSpinBox::up-button {
+                subcontrol-origin: padding;
+                subcontrol-position: right center;
+                width: 0px;
+                border: none;
+            }
+            QDoubleSpinBox::down-button {
+                subcontrol-origin: padding;
+                subcontrol-position: left center;
+                width: 25px;
+                border: none;
+                image: url(assets/images/percent.png);
+                padding-left: 10px;
+            }
+            QDoubleSpinBox::up-arrow, QDoubleSpinBox::down-arrow {
+                width: 0px;
+                height: 0px;
+            }
+        """
+
+    @staticmethod
+    def spinbox_input_container() -> str:
+        """
+        Get spinbox input container stylesheet with stacked arrows.
+
+        Usage: QFrame wrapping QLineEdit + stacked up/down arrow buttons
+
+        Figma Specs:
+        - Background: #F8FAFC
+        - Border: 1px solid #E0E6ED
+        - Border-radius: 8px
+        - Height: 40px
+        - Contains: stacked arrows (left) + value input (center)
+
+        Returns:
+            Complete QSS stylesheet string
+        """
+        return """
+            QFrame {
+                background-color: #F8FAFC;
+                border: 1px solid #E0E6ED;
+                border-radius: 8px;
+            }
+        """
+
+    @staticmethod
+    def spinbox_input_field() -> str:
+        """
+        Get spinbox input field stylesheet.
+
+        Usage: QLineEdit for numeric value (inside spinbox container)
+
+        Figma Specs:
+        - Background: transparent
+        - No border
+        - Color: #999
+        - Font-size: 16px
+        - Alignment: Center
+
+        Returns:
+            Complete QSS stylesheet string
+        """
+        return """
+            QLineEdit {
+                background: transparent;
+                border: none;
+                color: #999;
+                font-size: 16px;
+            }
+        """
+
+    @staticmethod
+    def spinbox_arrow_button() -> str:
+        """
+        Get spinbox arrow button stylesheet.
+
+        Usage: QPushButton for up/down arrows (inside spinbox container)
+
+        Figma Specs:
+        - Background: transparent
+        - No border
+        - Size: 20x15 each
+        - Icons: assets/images/^.png and assets/images/down.png
+
+        Returns:
+            Complete QSS stylesheet string
+        """
+        return """
+            QPushButton {
+                background: transparent;
+                border: none;
+                padding: 0px;
+            }
+        """
+
     # ==================== FOOTER ====================
 
     @staticmethod
