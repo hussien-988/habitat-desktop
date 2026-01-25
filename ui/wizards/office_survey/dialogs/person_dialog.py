@@ -240,15 +240,11 @@ class PersonDialog(QDialog):
         self.landline.setStyleSheet(self._input_style())
         person_grid.addWidget(self.landline, row, 0)
 
-        # Mobile with country code - matching example code layout
+        # Mobile with country code - using StyleManager
+        from ui.style_manager import StyleManager
+
         mobile_container = QFrame()
-        mobile_container.setStyleSheet("""
-            QFrame {
-                background-color: #F8FAFC;
-                border: 1px solid #E0E6ED;
-                border-radius: 8px;
-            }
-        """)
+        mobile_container.setStyleSheet(StyleManager.mobile_input_container())
         mobile_layout = QHBoxLayout(mobile_container)
         mobile_layout.setContentsMargins(0, 0, 0, 0)
         mobile_layout.setSpacing(0)
@@ -258,27 +254,13 @@ class PersonDialog(QDialog):
         prefix_label = QLabel("+963 | 09")
         prefix_label.setFixedWidth(90)
         prefix_label.setAlignment(Qt.AlignCenter)
-        prefix_label.setStyleSheet("""
-            QLabel {
-                color: #4A5568;
-                font-weight: bold;
-                border: none;
-                padding-left: 10px;
-            }
-        """)
+        prefix_label.setStyleSheet(StyleManager.mobile_input_prefix())
 
         # Phone Number Entry
         self.phone = QLineEdit()
         self.phone.setPlaceholderText("00000000")
         self.phone.setAlignment(Qt.AlignRight)
-        self.phone.setStyleSheet("""
-            QLineEdit {
-                background: transparent;
-                border: none;
-                padding: 10px;
-                color: #333;
-            }
-        """)
+        self.phone.setStyleSheet(StyleManager.mobile_input_field())
 
         mobile_layout.addWidget(prefix_label)
         mobile_layout.addWidget(self.phone)
@@ -291,21 +273,11 @@ class PersonDialog(QDialog):
         person_grid.addWidget(doc_label, row, 0, 1, 2)
 
         row += 1
-        # File upload frame matching photo layout
+        # File upload frame - using StyleManager
         upload_frame = QFrame()
         upload_frame.setObjectName("UploadFrame")
         upload_frame.setCursor(Qt.PointingHandCursor)
-        upload_frame.setStyleSheet("""
-            QFrame#UploadFrame {
-                background-color: #F0F7FF;
-                border: 2px dashed #BEE3F8;
-                border-radius: 10px;
-                min-height: 100px;
-            }
-            QFrame#UploadFrame:hover {
-                background-color: #E6F2FF;
-            }
-        """)
+        upload_frame.setStyleSheet(StyleManager.file_upload_frame())
 
         upload_layout = QVBoxLayout(upload_frame)
         upload_layout.setContentsMargins(20, 15, 20, 15)
@@ -314,7 +286,6 @@ class PersonDialog(QDialog):
 
         # Upload icon - smaller and centered
         upload_icon = QLabel()
-        upload_icon.setFixedSize(30, 30)
         upload_icon.setAlignment(Qt.AlignCenter)
         upload_icon.setStyleSheet("border: none;")
 
@@ -328,20 +299,9 @@ class PersonDialog(QDialog):
             upload_icon.setText("📁")
             upload_icon.setStyleSheet("border: none; font-size: 20px;")
 
-        # Upload button
+        # Upload button - using StyleManager
         self.doc_upload_btn = QPushButton("ارفع صور المستندات")
-        self.doc_upload_btn.setStyleSheet("""
-            QPushButton {
-                color: #2D9CDB;
-                font-weight: bold;
-                border: none;
-                background: transparent;
-                text-decoration: underline;
-            }
-            QPushButton:hover {
-                color: #1E7BB0;
-            }
-        """)
+        self.doc_upload_btn.setStyleSheet(StyleManager.file_upload_button())
         self.doc_upload_btn.clicked.connect(self._browse_files)
 
         upload_layout.addWidget(upload_icon)
@@ -535,21 +495,11 @@ class PersonDialog(QDialog):
         relation_grid.addWidget(doc_label2, row, 0, 1, 2)
 
         row += 1
-        # File upload frame matching photo layout
+        # File upload frame - using StyleManager
         rel_upload_frame = QFrame()
         rel_upload_frame.setObjectName("RelUploadFrame")
         rel_upload_frame.setCursor(Qt.PointingHandCursor)
-        rel_upload_frame.setStyleSheet("""
-            QFrame#RelUploadFrame {
-                background-color: #F0F7FF;
-                border: 2px dashed #BEE3F8;
-                border-radius: 10px;
-                min-height: 100px;
-            }
-            QFrame#RelUploadFrame:hover {
-                background-color: #E6F2FF;
-            }
-        """)
+        rel_upload_frame.setStyleSheet(StyleManager.file_upload_frame())
 
         rel_upload_layout = QVBoxLayout(rel_upload_frame)
         rel_upload_layout.setContentsMargins(20, 15, 20, 15)
@@ -558,7 +508,6 @@ class PersonDialog(QDialog):
 
         # Upload icon - smaller and centered
         rel_upload_icon = QLabel()
-        rel_upload_icon.setFixedSize(30, 30)
         rel_upload_icon.setAlignment(Qt.AlignCenter)
         rel_upload_icon.setStyleSheet("border: none;")
 
@@ -572,20 +521,9 @@ class PersonDialog(QDialog):
             rel_upload_icon.setText("📁")
             rel_upload_icon.setStyleSheet("border: none; font-size: 20px;")
 
-        # Upload button
+        # Upload button - using StyleManager
         self.rel_doc_upload_btn = QPushButton("ارفع صور المستندات")
-        self.rel_doc_upload_btn.setStyleSheet("""
-            QPushButton {
-                color: #2D9CDB;
-                font-weight: bold;
-                border: none;
-                background: transparent;
-                text-decoration: underline;
-            }
-            QPushButton:hover {
-                color: #1E7BB0;
-            }
-        """)
+        self.rel_doc_upload_btn.setStyleSheet(StyleManager.file_upload_button())
         self.rel_doc_upload_btn.clicked.connect(self._browse_relation_files)
 
         rel_upload_layout.addWidget(rel_upload_icon)
@@ -669,83 +607,14 @@ class PersonDialog(QDialog):
         self.is_contact.hide()
 
     def _input_style(self) -> str:
-        """Return standard input style."""
-        return """
-            QLineEdit, QComboBox, QDateEdit, QDoubleSpinBox {
-                border: 1px solid #E0E6ED;
-                border-radius: 8px;
-                padding: 10px;
-                background-color: #F8FAFC;
-                color: #333;
-                font-size: 14px;
-                min-height: 23px;
-                max-height: 23px;
-            }
-            QLineEdit:focus, QComboBox:focus, QDateEdit:focus, QDoubleSpinBox:focus {
-                border: 1px solid #2D9CDB;
-                background-color: white;
-            }
-            QComboBox::drop-down {
-                border: none;
-                width: 30px;
-                background-image: url(assets/images/down.png);
-                background-repeat: no-repeat;
-                background-position: center;
-            }
-            QComboBox::down-arrow {
-                width: 0px;
-                height: 0px;
-            }
-        """
+        """Return standard input style from StyleManager."""
+        from ui.style_manager import StyleManager
+        return StyleManager.form_input()
 
     def _date_input_style(self) -> str:
-        """Return date input style with calendar icon on the left - matching example code."""
-        return """
-            QDateEdit {
-                background-color: #F8FAFC;
-                border: 1px solid #E0E6ED;
-                border-radius: 8px;
-                padding: 10px;
-                color: #333;
-                font-size: 14px;
-                min-height: 23px;
-                max-height: 23px;
-            }
-            QDateEdit:focus {
-                border: 1px solid #2D9CDB;
-                background-color: white;
-            }
-            QDateEdit::drop-down {
-                image: url(assets/images/calender.png);
-                width: 25px;
-                border: none;
-                padding-left: 10px;
-            }
-        """
-
-    def _mobile_input_style(self) -> str:
-        """Return mobile input style (merged left side with prefix)."""
-        return """
-            QLineEdit {
-                border: 1px solid #E0E6ED;
-                border-right: none;
-                border-top-right-radius: 8px;
-                border-bottom-right-radius: 8px;
-                border-top-left-radius: 0px;
-                border-bottom-left-radius: 0px;
-                padding: 10px;
-                background-color: #F8FAFC;
-                color: #333;
-                font-size: 14px;
-                min-height: 23px;
-                max-height: 23px;
-            }
-            QLineEdit:focus {
-                border: 1px solid #2D9CDB;
-                border-right: none;
-                background-color: white;
-            }
-        """
+        """Return date input style from StyleManager."""
+        from ui.style_manager import StyleManager
+        return StyleManager.date_input()
 
     def _browse_files(self):
         """Browse for files to upload."""
