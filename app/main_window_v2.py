@@ -324,6 +324,14 @@ class MainWindow(QMainWindow):
         self.current_user = user
         logger.info(f"User logged in: {user.username} ({user.role})")
 
+        # Pass API token to BuildingController if using API backend
+        token = getattr(user, '_api_token', None)
+        logger.info(f"User API token available: {bool(token)}")
+        if token:
+            self._set_api_token_for_controllers(token)
+        else:
+            logger.warning("No API token found in user object - API calls may fail with 401")
+
         # Show navbar
         self.navbar.setVisible(True)
 
@@ -333,6 +341,17 @@ class MainWindow(QMainWindow):
         # Navigate to first tab (Completed Claims / Dashboard)
         self.navbar.set_current_tab(0)
         self._on_tab_changed(0)
+
+    def _set_api_token_for_controllers(self, token: str):
+        """Pass API token to all controllers that use API backend."""
+        logger.info(f"Setting API token for controllers (token length: {len(token)})")
+
+        # Pass token to BuildingsPage controller
+        if Pages.BUILDINGS in self.pages:
+            buildings_page = self.pages[Pages.BUILDINGS]
+            if hasattr(buildings_page, 'building_controller'):
+                buildings_page.building_controller.set_auth_token(token)
+                logger.info("API token set for BuildingController")
 
     def _handle_logout(self):
         """Handle logout request."""

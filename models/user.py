@@ -77,6 +77,9 @@ class User:
     updated_at: datetime = field(default_factory=datetime.now)
     created_by: Optional[str] = None
 
+    # API token (set when authenticating via API backend)
+    _api_token: Optional[str] = None
+
     @staticmethod
     def hash_password(password: str, salt: Optional[str] = None) -> tuple:
         """

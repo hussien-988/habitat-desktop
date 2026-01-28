@@ -78,7 +78,9 @@ class ApiAuthService:
                 data = json.loads(body)
 
             logger.info(f"API login successful for: {username}")
+            logger.debug(f"API login response keys: {list(data.keys())}")
             user = self._build_user(data)
+            logger.debug(f"User token set: {bool(user._api_token)}")
             return user, ""
 
         except urllib.error.HTTPError as e:
@@ -109,17 +111,28 @@ class ApiAuthService:
     def _build_user(data: dict) -> User:
         """Build a User model from the API response JSON."""
         user = User()
-        user.user_id = data.get("user_id", "")
-        user.username = data.get("username", "")
-        user.full_name = data.get("full_name", "")
-        user.full_name_ar = data.get("full_name_ar", "")
-        user.role = data.get("role", "analyst")
+        user.user_id = data.get("user_id") or data.get("userId") or data.get("id") or ""
+        user.username = data.get("username") or data.get("userName") or ""
+        user.full_name = data.get("full_name") or data.get("fullName") or ""
+        user.full_name_ar = data.get("full_name_ar") or data.get("fullNameAr") or ""
+        user.role = data.get("role") or "analyst"
         user.email = data.get("email")
-        user.is_active = data.get("is_active", True)
-        user.is_locked = data.get("is_locked", False)
+        user.is_active = data.get("is_active", data.get("isActive", True))
+        user.is_locked = data.get("is_locked", data.get("isLocked", False))
 
-        # Store token if provided (useful for subsequent API calls)
-        if "token" in data:
-            user._api_token = data["token"]
+        # Store token if provided (handle various field names)
+        # Common token field names: token, accessToken, access_token, jwtToken, jwt
+        token = (
+            data.get("token") or
+            data.get("accessToken") or
+            data.get("access_token") or
+            data.get("jwtToken") or
+            data.get("jwt") or
+            data.get("bearerToken") or
+            data.get("authToken")
+        )
+        if token:
+            user._api_token = token
+            logger.info(f"API token received for user: {user.username}")
 
         return user

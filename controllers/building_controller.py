@@ -9,6 +9,8 @@ Handles:
 - Building search and filtering
 - Building validation
 - Building statistics
+
+Supports both API and local database backends based on Config.DATA_PROVIDER.
 """
 
 from dataclasses import dataclass
@@ -17,6 +19,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from PyQt5.QtCore import pyqtSignal
 
+from app.config import Config
 from controllers.base_controller import BaseController, OperationResult
 from models.building import Building
 from repositories.building_repository import BuildingRepository
@@ -55,10 +58,29 @@ class BuildingController(BaseController):
     buildings_loaded = pyqtSignal(list)  # list of buildings
     building_selected = pyqtSignal(object)  # Building object
 
-    def __init__(self, db: Database, parent=None):
+    def __init__(self, db: Database = None, parent=None, use_api: bool = None):
         super().__init__(parent)
         self.db = db
-        self.repository = BuildingRepository(db)
+
+        # Determine whether to use API or local database
+        # Priority: explicit parameter > Config setting
+        if use_api is not None:
+            self._use_api = use_api
+        else:
+            # Check if DATA_PROVIDER is set to "http" in config
+            self._use_api = getattr(Config, 'DATA_PROVIDER', 'local_db') == 'http'
+
+        # Initialize appropriate backend
+        if self._use_api:
+            from services.building_api_service import BuildingApiService
+            self._api_service = BuildingApiService()
+            self.repository = None
+            logger.info("BuildingController using API backend")
+        else:
+            self.repository = BuildingRepository(db) if db else None
+            self._api_service = None
+            logger.info("BuildingController using local database backend")
+
         self.validation_service = ValidationService()
 
         self._current_building: Optional[Building] = None
@@ -76,6 +98,37 @@ class BuildingController(BaseController):
     def buildings(self) -> List[Building]:
         """Get cached buildings list."""
         return self._buildings_cache
+
+    @property
+    def is_using_api(self) -> bool:
+        """Check if controller is using API backend."""
+        return self._use_api
+
+    def set_auth_token(self, token: str):
+        """
+        Set authentication token for API calls.
+
+        Args:
+            token: JWT/Bearer token
+        """
+        if self._api_service:
+            self._api_service.set_auth_token(token)
+
+    def switch_to_api(self):
+        """Switch to API backend."""
+        if not self._use_api:
+            from services.building_api_service import BuildingApiService
+            self._api_service = BuildingApiService()
+            self._use_api = True
+            logger.info("BuildingController switched to API backend")
+
+    def switch_to_local_db(self):
+        """Switch to local database backend."""
+        if self._use_api:
+            if self.db:
+                self.repository = BuildingRepository(self.db)
+            self._use_api = False
+            logger.info("BuildingController switched to local database backend")
 
     # ==================== CRUD Operations ====================
 
@@ -104,9 +157,12 @@ class BuildingController(BaseController):
             if not data.get("building_id"):
                 data["building_id"] = self._generate_building_id(data)
 
-            # Create building
-            building = Building(**data)
-            saved_building = self.repository.create(building)
+            # Create building via API or local database
+            if self._use_api and self._api_service:
+                saved_building = self._api_service.create_building(data)
+            else:
+                building = Building(**data)
+                saved_building = self.repository.create(building)
 
             if saved_building:
                 self._emit_completed("create_building", True)
@@ -146,7 +202,11 @@ class BuildingController(BaseController):
             self._emit_started("update_building")
 
             # Get existing building
-            existing = self.repository.get_by_uuid(building_uuid)
+            if self._use_api and self._api_service:
+                existing = self._api_service.get_building_by_id(building_uuid)
+            else:
+                existing = self.repository.get_by_uuid(building_uuid)
+
             if not existing:
                 self._emit_error("update_building", "Building not found")
                 return OperationResult.fail(
@@ -160,14 +220,20 @@ class BuildingController(BaseController):
                 self._emit_error("update_building", validation_result.message)
                 return validation_result
 
-            # Update building
-            for key, value in data.items():
-                if hasattr(existing, key):
-                    setattr(existing, key, value)
+            # Update building via API or local database
+            if self._use_api and self._api_service:
+                # Merge existing data with new data
+                merged_data = existing.to_dict()
+                merged_data.update(data)
+                updated_building = self._api_service.update_building(building_uuid, merged_data)
+            else:
+                # Update building locally
+                for key, value in data.items():
+                    if hasattr(existing, key):
+                        setattr(existing, key, value)
 
-            existing.updated_at = datetime.now()
-
-            updated_building = self.repository.update(existing)
+                existing.updated_at = datetime.now()
+                updated_building = self.repository.update(existing)
 
             if updated_building:
                 self._emit_completed("update_building", True)
@@ -211,7 +277,11 @@ class BuildingController(BaseController):
             self._emit_started("delete_building")
 
             # Check if building exists
-            existing = self.repository.get_by_uuid(building_uuid)
+            if self._use_api and self._api_service:
+                existing = self._api_service.get_building_by_id(building_uuid)
+            else:
+                existing = self.repository.get_by_uuid(building_uuid)
+
             if not existing:
                 self._emit_error("delete_building", "Building not found")
                 return OperationResult.fail(
@@ -219,16 +289,19 @@ class BuildingController(BaseController):
                     message_ar="المبنى غير موجود"
                 )
 
-            # Check if building has dependencies
-            if self._has_dependencies(building_uuid):
+            # Check if building has dependencies (only for local database)
+            if not self._use_api and self._has_dependencies(building_uuid):
                 self._emit_error("delete_building", "Building has related records")
                 return OperationResult.fail(
                     message="Cannot delete building with related claims or units",
                     message_ar="لا يمكن حذف مبنى له مطالبات أو وحدات مرتبطة"
                 )
 
-            # Delete building
-            success = self.repository.delete(building_uuid)
+            # Delete building via API or local database
+            if self._use_api and self._api_service:
+                success = self._api_service.delete_building(building_uuid)
+            else:
+                success = self.repository.delete(building_uuid)
 
             if success:
                 self._emit_completed("delete_building", True)
@@ -267,7 +340,10 @@ class BuildingController(BaseController):
             OperationResult with Building or error
         """
         try:
-            building = self.repository.get_by_uuid(building_uuid)
+            if self._use_api and self._api_service:
+                building = self._api_service.get_building_by_id(building_uuid)
+            else:
+                building = self.repository.get_by_uuid(building_uuid)
 
             if building:
                 return OperationResult.ok(data=building)
@@ -291,7 +367,10 @@ class BuildingController(BaseController):
             OperationResult with Building or error
         """
         try:
-            building = self.repository.get_by_building_id(building_id)
+            if self._use_api and self._api_service:
+                building = self._api_service.get_building_by_id(building_id)
+            else:
+                building = self.repository.get_by_building_id(building_id)
 
             if building:
                 return OperationResult.ok(data=building)
@@ -347,8 +426,14 @@ class BuildingController(BaseController):
 
             filter_ = filter_ or self._current_filter
 
-            # Build query based on filter
-            buildings = self._query_buildings(filter_)
+            # Use API or local database based on configuration
+            if self._use_api and self._api_service:
+                buildings = self._api_service.get_all_buildings(
+                    search_text=filter_.search_text if filter_ else None
+                )
+            else:
+                # Build query based on filter
+                buildings = self._query_buildings(filter_)
 
             self._buildings_cache = buildings
             self._current_filter = filter_

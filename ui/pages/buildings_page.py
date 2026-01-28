@@ -1713,16 +1713,19 @@ class BuildingsListPage(QWidget):
 class BuildingsPage(QWidget):
     """
     Main Buildings Page - QStackedWidget container
+
+    Supports both API and local database backends based on Config.DATA_PROVIDER.
+    Set DATA_PROVIDER = "http" in config to use API backend.
     """
 
     view_building = pyqtSignal(str)
 
-    def __init__(self, db: Database, i18n: I18n, parent=None):
+    def __init__(self, db: Database = None, i18n: I18n = None, parent=None, use_api: bool = None):
         super().__init__(parent)
         self.db = db
         self.i18n = i18n
-        self.building_controller = BuildingController(db)
-        self.export_service = ExportService(db)
+        self.building_controller = BuildingController(db, use_api=use_api)
+        self.export_service = ExportService(db) if db else None
 
         self._setup_ui()
 

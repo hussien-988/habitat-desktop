@@ -40,9 +40,9 @@ class Config:
     # Data Provider Configuration
     # Options: "mock", "http", "local_db"
     # - mock: Uses in-memory mock data for development (no backend required)
-    # - http: Connects to a REST API backend
-    # - local_db: Uses local SQLite/PostgreSQL database (current default)
-    DATA_PROVIDER: str = "local_db"
+    # - http: Connects to a REST API backend (uses /api/Buildings endpoint)
+    # - local_db: Uses local SQLite/PostgreSQL database
+    DATA_PROVIDER: str = "http"  # Changed to use API backend
 
     # Mock Data Provider Settings
     MOCK_SIMULATE_DELAY: bool = True
@@ -50,6 +50,8 @@ class Config:
     MOCK_PERSIST_TO_FILE: bool = False
 
     # HTTP API Backend Settings
+    #
+    #API_BASE_URL: str = "http://localhost:8081/api"
     API_BASE_URL: str = "https://localhost:7204/api"
     API_VERSION: str = "v1"
     API_TIMEOUT: int = 30
