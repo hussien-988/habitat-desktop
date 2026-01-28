@@ -167,7 +167,7 @@ class MainWindow(QMainWindow):
         self.pages = {}
 
         # Login page
-        self.pages[Pages.LOGIN] = LoginPage(self.db, self.i18n, self)
+        self.pages[Pages.LOGIN] = LoginPage(self.i18n, self)
         self.stack.addWidget(self.pages[Pages.LOGIN])
 
         # Dashboard page
