@@ -42,19 +42,30 @@ class SurveyRepository:
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """
 
+        # Helper function to convert datetime to ISO string
+        def _to_isoformat(value):
+            """Convert datetime/date to ISO format string, or return as-is if already a string."""
+            if value is None:
+                return datetime.now().isoformat()
+            if isinstance(value, str):
+                return value
+            if isinstance(value, (datetime, date)):
+                return value.isoformat()
+            return str(value)
+
         params = (
             survey_id,
             survey_data.get('building', {}).get('building_id') if survey_data.get('building') else None,
             survey_data.get('unit', {}).get('unit_id') if survey_data.get('unit') else None,
             survey_data.get('clerk_id'),
-            survey_data.get('survey_date', datetime.now().date()).isoformat() if survey_data.get('survey_date') else datetime.now().date().isoformat(),
+            _to_isoformat(survey_data.get('survey_date')) if survey_data.get('survey_date') else datetime.now().date().isoformat(),
             survey_data.get('survey_type', 'office'),
             survey_data.get('status', 'draft'),
             survey_data.get('reference_number'),
             survey_data.get('source', 'office'),
             survey_data.get('notes', ''),
-            survey_data.get('created_at', datetime.now()).isoformat() if survey_data.get('created_at') else datetime.now().isoformat(),
-            survey_data.get('updated_at', datetime.now()).isoformat() if survey_data.get('updated_at') else datetime.now().isoformat(),
+            _to_isoformat(survey_data.get('created_at')),
+            _to_isoformat(survey_data.get('updated_at')),
             json.dumps(survey_data, ensure_ascii=False, default=str)
         )
 

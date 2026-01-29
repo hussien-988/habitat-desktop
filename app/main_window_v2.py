@@ -366,7 +366,53 @@ class MainWindow(QMainWindow):
         self.navigate_to(Pages.SEARCH, search_text)
 
     def navigate_to(self, page_id: str, data=None):
-        """Navigate to a specific page."""
+        """
+        Navigate to a specific page.
+
+        Best Practice: Prevents data loss by showing save confirmation dialog
+        when leaving wizard with unsaved data.
+        """
+        # Check if currently in wizard with unsaved data
+        current_widget = self.stack.currentWidget()
+        if current_widget == self.office_survey_wizard and page_id != "office_survey_wizard":
+            # User is trying to leave wizard - check for unsaved data
+            if self._has_unsaved_wizard_data():
+                from ui.components.dialogs.confirmation_dialog import ConfirmationDialog
+
+                # Show save draft confirmation
+                result = ConfirmationDialog.save_draft_confirmation(
+                    parent=self,
+                    title="هل تريد الحفظ؟",
+                    message="لديك تغييرات غير محفوظة.\nهل تريد حفظها كمسودة؟"
+                )
+
+                if result == ConfirmationDialog.SAVE:
+                    # Save as draft
+                    draft_id = self.office_survey_wizard.on_save_draft()
+                    if draft_id:
+                        from ui.components.toast import Toast
+                        Toast.show_toast(self, "✅ تم حفظ المسودة بنجاح!", Toast.SUCCESS)
+                        # Refresh drafts page
+                        if Pages.DRAFT_OFFICE_SURVEYS in self.pages:
+                            self.pages[Pages.DRAFT_OFFICE_SURVEYS].refresh()
+                    else:
+                        # Save failed - stay in wizard
+                        logger.warning("Failed to save draft")
+                        return
+
+                elif result == ConfirmationDialog.DISCARD:
+                    # User chose to discard - continue navigation
+                    logger.info("User discarded wizard changes")
+
+                else:
+                    # User cancelled - stay in wizard
+                    logger.debug("User cancelled navigation")
+                    return
+
+                # Reset wizard for next time
+                self._reset_wizard()
+
+        # Proceed with navigation
         if page_id not in self.pages:
             # Handle special case: office survey wizard
             if page_id == "office_survey_wizard":
@@ -384,6 +430,34 @@ class MainWindow(QMainWindow):
         # Show page
         self.stack.setCurrentWidget(page)
         logger.debug(f"Navigated to: {page_id}")
+
+    def _has_unsaved_wizard_data(self) -> bool:
+        """
+        Check if wizard has unsaved data.
+
+        Best Practice: Only warn if user has progressed beyond first step
+        or selected a building.
+        """
+        # Check if beyond step 1 (step 2+)
+        if self.office_survey_wizard.navigator.current_index >= 1:
+            return True
+
+        # Check if building selected in step 1
+        if hasattr(self.office_survey_wizard.context, 'building') and self.office_survey_wizard.context.building:
+            return True
+
+        return False
+
+    def _reset_wizard(self):
+        """Reset wizard to clean state (Best Practice: DRY)."""
+        new_context = self.office_survey_wizard.create_context()
+        self.office_survey_wizard.context = new_context
+
+        for step in self.office_survey_wizard.steps:
+            step.context = new_context
+
+        self.office_survey_wizard.navigator.context = new_context
+        self.office_survey_wizard.navigator.reset()
 
     def _on_view_building(self, building_id: str):
         """Handle view building request from buildings list."""
@@ -437,10 +511,8 @@ class MainWindow(QMainWindow):
         """
         logger.info("Starting new office survey")
 
-        # Reset wizard to initial state (NEW wizard framework)
-        from ui.wizards.office_survey.survey_context import SurveyContext
-        self.office_survey_wizard.context = SurveyContext(db=self.db)
-        self.office_survey_wizard.navigator.reset()
+        # Reset wizard (DRY: use centralized method)
+        self._reset_wizard()
 
         # Navigate to wizard
         self.stack.setCurrentWidget(self.office_survey_wizard)

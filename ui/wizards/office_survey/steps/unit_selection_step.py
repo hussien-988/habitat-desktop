@@ -340,6 +340,16 @@ class UnitSelectionStep(BaseStep):
     def _load_units(self):
         """Load units for the selected building and display as cards."""
         if not self.context.building:
+            # Clear all units when no building is selected (new wizard)
+            self.unit_building_frame.setVisible(False)
+            # Clear existing unit cards
+            while self.units_layout.count():
+                child = self.units_layout.takeAt(0)
+                if child.widget():
+                    child.widget().deleteLater()
+            # Clear selected unit
+            self.selected_unit = None
+            self.emit_validation_changed(False)
             return
 
         # Populate building info card

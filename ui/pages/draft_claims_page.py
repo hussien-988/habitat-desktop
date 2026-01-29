@@ -193,8 +193,8 @@ class DraftClaimsPage(QWidget):
             row = index // PageDimensions.CARD_COLUMNS  # Integer division for row
             col = index % PageDimensions.CARD_COLUMNS   # Modulo for column (0 or 1)
 
-            # DRY: Use ClaimListCard with yellow icon for drafts
-            card = ClaimListCard(claim, icon_name="yellow")
+            # DRY: Use ClaimListCard with yelow icon for drafts
+            card = ClaimListCard(claim, icon_name="yelow")
             card.clicked.connect(self._on_card_clicked)
             self.content_layout.addWidget(card, row, col)
 
@@ -258,8 +258,8 @@ class DraftClaimsPage(QWidget):
                 claim_repo = ClaimRepository(self.db)
 
                 all_claims = claim_repo.get_all(limit=100)
-                # Filter for draft claims only
-                claims = [c for c in all_claims if c.case_status == 'draft']
+                # Filter for draft claims only (includes awaiting_documents per UC-001 S23)
+                claims = [c for c in all_claims if c.case_status in ['draft', 'awaiting_documents']]
 
                 self.claims_data = []
                 for claim in claims:
@@ -269,10 +269,14 @@ class DraftClaimsPage(QWidget):
                         try:
                             from repositories.person_repository import PersonRepository
                             person_repo = PersonRepository(self.db)
-                            person = person_repo.find_by_id(claim.person_ids.split(',')[0])
-                            if person:
-                                claimant_name = person.full_name_ar or person.full_name or 'غير محدد'
-                        except:
+                            first_person_id = claim.person_ids.split(',')[0].strip()
+                            if first_person_id:
+                                person = person_repo.get_by_id(first_person_id)
+                                if person:
+                                    claimant_name = person.full_name_ar or person.full_name
+                                    if not claimant_name or not claimant_name.strip():
+                                        claimant_name = 'غير محدد'
+                        except Exception:
                             pass
 
                     # Get building and unit objects (Best Practice: pass complete objects)
