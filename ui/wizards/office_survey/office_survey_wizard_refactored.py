@@ -185,8 +185,9 @@ class OfficeSurveyWizard(BaseWizard):
             # Get draft data
             draft_data = self.context.to_dict()
 
-            # Save draft to database
-            draft_id = self.survey_repo.save_draft(draft_data)
+            # Save draft to database (using create method)
+            # UC-005: Office surveys are saved as drafts with status='draft'
+            draft_id = self.survey_repo.create(draft_data)
 
             logger.info(f"Draft saved: {draft_id}")
 

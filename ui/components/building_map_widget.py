@@ -212,8 +212,8 @@ class BuildingMapWidget(QObject):
         """
         Create the map dialog UI.
 
-        Figma Specifications:
-        - Size: 744×424px (width × height)
+        Enhanced Specifications (Senior PyQt5 Best Practice):
+        - Size: 1100×700px (width × height) - Larger for better map visibility
         - Border-radius: 32px (زيادة للشكل الخارجي)
         - Internal padding: 24px
         - Title: "بحث على الخريطة" with 12px gap below
@@ -228,8 +228,8 @@ class BuildingMapWidget(QObject):
         # إزالة شريط العنوان القياسي (الجزء العلوي المشار إليه)
         dialog.setWindowFlags(Qt.Dialog | Qt.FramelessWindowHint)
 
-        # Figma size: 744×424px
-        dialog.setFixedSize(744, 424)
+        # Enhanced size: 1100×700px (much larger for better map interaction)
+        dialog.setFixedSize(1100, 700)
 
         # Enable transparency for rounded corners
         dialog.setAttribute(Qt.WA_TranslucentBackground, True)
@@ -258,13 +258,13 @@ class BuildingMapWidget(QObject):
         dialog.search_input = self.search_input
 
         # Map view (remaining space)
-        # Calculate: 424 - 48 (padding top+bottom) = 376
-        # 376 - title_bar - 12 (gap) - search_bar (42) - 12 (gap) = space for map
-        # Approximately: 376 - 60 - 12 - 42 - 12 = 250px height
-        # Width: 744 - 48 (padding) = 696px
+        # Calculate: 700 - 48 (padding top+bottom) = 652
+        # 652 - title_bar (60) - 12 (gap) - search_bar (42) - 12 (gap) = space for map
+        # Approximately: 652 - 60 - 12 - 42 - 12 = 526px height
+        # Width: 1100 - 48 (padding) = 1052px
         if HAS_WEBENGINE:
             self._map_view = QWebEngineView(dialog)
-            self._map_view.setFixedSize(696, 250)
+            self._map_view.setFixedSize(1052, 526)
 
             # Enable settings
             settings = self._map_view.settings()
@@ -280,7 +280,7 @@ class BuildingMapWidget(QObject):
 
             # Loading indicator
             self._loading_label = QLabel("⏳ جاري تحميل الخريطة...")
-            self._loading_label.setFixedSize(696, 250)
+            self._loading_label.setFixedSize(1052, 526)
             self._loading_label.setAlignment(Qt.AlignCenter)
             self._loading_label.setFont(create_font(size=10, weight=FontManager.WEIGHT_REGULAR))
             self._loading_label.setStyleSheet(f"""
@@ -304,7 +304,7 @@ class BuildingMapWidget(QObject):
             content_layout.addWidget(map_container)
         else:
             placeholder = QLabel("🗺️ الخريطة غير متاحة (QtWebEngine غير مثبت)")
-            placeholder.setFixedSize(696, 250)
+            placeholder.setFixedSize(1052, 526)
             placeholder.setAlignment(Qt.AlignCenter)
             placeholder.setFont(create_font(size=10, weight=FontManager.WEIGHT_REGULAR))
             placeholder.setStyleSheet(f"""

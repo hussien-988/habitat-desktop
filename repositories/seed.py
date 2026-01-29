@@ -77,6 +77,9 @@ def seed_database(db: Database, force_reseed: bool = False):
         db: Database instance
         force_reseed: If True, clear existing data and re-seed from GeoJSON
     """
+    # Set random seed for consistent data generation
+    random.seed(42)
+
     # Always seed fresh data (database is cleaned on startup)
     logger.info("Seeding database with demo data from GeoJSON...")
 

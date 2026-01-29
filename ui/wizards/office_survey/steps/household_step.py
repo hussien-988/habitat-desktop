@@ -866,6 +866,19 @@ class HouseholdStep(BaseStep):
             self.hh_disabled_males.setValue(household.get("disabled_males", 0))
             self.hh_disabled_females.setValue(household.get("disabled_females", 0))
             self.hh_notes.setPlainText(household.get("notes", ""))
+        else:
+            # Clear all household data when context is reset (new wizard)
+            self.hh_head_name.clear()
+            self.hh_total_members.setValue(0)
+            self.hh_adult_males.setValue(0)
+            self.hh_adult_females.setValue(0)
+            self.hh_male_children_under18.setValue(0)
+            self.hh_female_children_under18.setValue(0)
+            self.hh_male_elderly_over65.setValue(0)
+            self.hh_female_elderly_over65.setValue(0)
+            self.hh_disabled_males.setValue(0)
+            self.hh_disabled_females.setValue(0)
+            self.hh_notes.clear()
 
     def get_step_title(self) -> str:
         """Get step title."""

@@ -615,6 +615,9 @@ class BuildingSelectionStep(BaseStep):
             # Hide suggestions list
             self.buildings_list.setVisible(False)
 
+            # UX Enhancement: Clear search field to allow searching again
+            self.building_search.clear()
+
             # Emit validation changed
             self.emit_validation_changed(True)
 
@@ -663,6 +666,9 @@ class BuildingSelectionStep(BaseStep):
 
             # Hide suggestions list after selection
             self.buildings_list.setVisible(False)
+
+            # UX Enhancement: Clear search field to allow searching again
+            self.building_search.clear()
 
             # Emit validation changed
             self.emit_validation_changed(True)
@@ -777,6 +783,10 @@ class BuildingSelectionStep(BaseStep):
         # Hide suggestions list after selection
         self.buildings_list.setVisible(False)
 
+        # UX Enhancement: Clear search field to allow searching again
+        # This allows user to easily search for a different building if they made a mistake
+        self.building_search.clear()
+
         # Emit validation changed
         self.emit_validation_changed(True)
 
@@ -834,6 +844,10 @@ class BuildingSelectionStep(BaseStep):
                 self.location_card.setVisible(True)
 
                 self.buildings_list.setVisible(False)
+
+                # UX Enhancement: Clear search field to allow searching again
+                self.building_search.clear()
+
                 self.emit_validation_changed(True)
 
                 logger.info(f"Building auto-selected from polygon: {building.building_id}")
@@ -995,6 +1009,10 @@ class BuildingSelectionStep(BaseStep):
                 self.location_card.setVisible(True)
 
                 self.buildings_list.setVisible(False)
+
+                # UX Enhancement: Clear search field to allow searching again
+                self.building_search.clear()
+
                 self.emit_validation_changed(True)
 
                 logger.info(f"Building selected from polygon list: {building.building_id}")
@@ -1038,6 +1056,12 @@ class BuildingSelectionStep(BaseStep):
 
             # Emit validation
             self.emit_validation_changed(True)
+        else:
+            # Clear all UI when no building selected (new survey)
+            self.selected_building = None
+            self.stats_card.setVisible(False)
+            self.location_card.setVisible(False)
+            self.emit_validation_changed(False)
 
     def get_step_title(self) -> str:
         """Get step title."""

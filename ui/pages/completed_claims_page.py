@@ -257,7 +257,7 @@ class CompletedClaimsPage(QWidget):
                 claim_repo = ClaimRepository(self.db)
 
                 all_claims = claim_repo.get_all(limit=100)
-                claims = [c for c in all_claims if c.case_status in ['completed', 'approved', 'verified', 'closed']]
+                claims = [c for c in all_claims if c.case_status in ['approved', 'rejected']]
 
                 self.claims_data = []
                 for claim in claims:
@@ -267,10 +267,14 @@ class CompletedClaimsPage(QWidget):
                         try:
                             from repositories.person_repository import PersonRepository
                             person_repo = PersonRepository(self.db)
-                            person = person_repo.find_by_id(claim.person_ids.split(',')[0])
-                            if person:
-                                claimant_name = person.full_name_ar or person.full_name or 'غير محدد'
-                        except:
+                            first_person_id = claim.person_ids.split(',')[0].strip()
+                            if first_person_id:
+                                person = person_repo.get_by_id(first_person_id)
+                                if person:
+                                    claimant_name = person.full_name_ar or person.full_name
+                                    if not claimant_name or not claimant_name.strip():
+                                        claimant_name = 'غير محدد'
+                        except Exception:
                             pass
 
                     # Get building and unit objects (Best Practice: pass complete objects)
