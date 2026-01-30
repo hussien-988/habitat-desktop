@@ -59,6 +59,7 @@ class LeafletHTMLGenerator:
         show_layer_control: bool = True,
         enable_drawing: bool = False,
         enable_selection: bool = False,
+        enable_multiselect: bool = False,  # NEW: Enable multi-select clicking mode
         drawing_mode: str = 'both',  # 'point', 'polygon', 'both'
         existing_polygons_geojson: str = None  # GeoJSON for existing polygons (blue)
     ) -> str:
@@ -75,6 +76,7 @@ class LeafletHTMLGenerator:
             show_layer_control: Show layer toggle control
             enable_drawing: Enable polygon drawing tools
             enable_selection: Enable building selection button in popup
+            enable_multiselect: Enable multi-select clicking mode (select multiple buildings by clicking)
             drawing_mode: Drawing mode ('point', 'polygon', 'both')
             existing_polygons_geojson: GeoJSON for existing polygons (displayed in blue)
 
@@ -97,10 +99,9 @@ class LeafletHTMLGenerator:
     <script src="{tile_server_url}/leaflet.js"></script>
     {drawing_js}
     <script src="qrc:///qtwebchannel/qwebchannel.js"></script>
-    {LeafletHTMLGenerator._get_styles(enable_selection, enable_drawing)}
+    {LeafletHTMLGenerator._get_styles(enable_selection, enable_drawing, enable_multiselect)}
 </head>
 <body>
-    <div class="offline-badge">وضع Offline</div>
     <div id="map"></div>
     {LeafletHTMLGenerator._get_javascript(
         tile_server_url,
@@ -112,6 +113,7 @@ class LeafletHTMLGenerator:
         show_layer_control,
         enable_drawing,
         enable_selection,
+        enable_multiselect,
         drawing_mode,
         existing_polygons_geojson
     )}
@@ -120,7 +122,7 @@ class LeafletHTMLGenerator:
 '''
 
     @staticmethod
-    def _get_styles(enable_selection: bool = False, enable_drawing: bool = False) -> str:
+    def _get_styles(enable_selection: bool = False, enable_drawing: bool = False, enable_multiselect: bool = False) -> str:
         """Get CSS styles for map."""
         selection_styles = '''
         /* Selection Button */
@@ -167,7 +169,88 @@ class LeafletHTMLGenerator:
             color: #0072BC;
             display: none;
         }
+
+        /* إصلاح أيقونات أدوات الرسم - استخدام SVG مضمنة بدلاً من الصور */
+        .leaflet-draw-toolbar a {
+            background-image: none !important;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+            font-weight: bold;
+            color: #333;
+        }
+
+        /* أيقونة رسم المضلع */
+        .leaflet-draw-draw-polygon::before {
+            content: "⬡";
+            font-size: 20px;
+        }
+
+        /* أيقونة رسم النقطة/العلامة */
+        .leaflet-draw-draw-marker::before {
+            content: "📍";
+            font-size: 18px;
+        }
+
+        /* أيقونة التعديل */
+        .leaflet-draw-edit-edit::before {
+            content: "✏️";
+            font-size: 16px;
+        }
+
+        /* أيقونة الحذف */
+        .leaflet-draw-edit-remove::before {
+            content: "🗑️";
+            font-size: 16px;
+        }
+
+        /* تحسين مظهر أزرار الأدوات */
+        .leaflet-draw-toolbar .leaflet-draw-draw-polygon,
+        .leaflet-draw-toolbar .leaflet-draw-draw-marker,
+        .leaflet-draw-toolbar .leaflet-draw-edit-edit,
+        .leaflet-draw-toolbar .leaflet-draw-edit-remove {
+            background-color: white !important;
+            border: 2px solid #ccc !important;
+            border-radius: 4px;
+        }
+
+        .leaflet-draw-toolbar a:hover {
+            background-color: #f0f0f0 !important;
+        }
+
+        .leaflet-draw-toolbar .leaflet-draw-toolbar-button-enabled {
+            background-color: #0072BC !important;
+        }
         ''' if enable_drawing else ''
+
+        multiselect_styles = '''
+        /* Multi-Select Mode Styles */
+        .selected-building {
+            cursor: pointer !important;
+        }
+
+        .selected-pin {
+            filter: drop-shadow(0 4px 8px rgba(255, 107, 0, 0.6));
+            animation: pulse-selection 1.5s ease-in-out infinite;
+        }
+
+        @keyframes pulse-selection {
+            0%, 100% {
+                transform: scale(1);
+            }
+            50% {
+                transform: scale(1.1);
+            }
+        }
+
+        /* Hover effect for selectable buildings */
+        .building-polygon:hover,
+        .building-point:hover {
+            cursor: pointer;
+            opacity: 0.9;
+        }
+        ''' if enable_multiselect else ''
 
         return f'''
     <style>
@@ -263,21 +346,6 @@ class LeafletHTMLGenerator:
             border: none !important;
         }}
 
-        /* Offline Badge */
-        .offline-badge {{
-            position: absolute;
-            top: 10px;
-            left: 10px;
-            z-index: 1000;
-            background: #28a745;
-            color: white;
-            padding: 4px 12px;
-            border-radius: 12px;
-            font-size: 11px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
-            font-weight: 600;
-        }}
-
         /* Polygon Styles */
         .leaflet-interactive {{
             cursor: pointer;
@@ -290,6 +358,7 @@ class LeafletHTMLGenerator:
 
         {selection_styles}
         {drawing_styles}
+        {multiselect_styles}
     </style>
 '''
 
@@ -304,6 +373,7 @@ class LeafletHTMLGenerator:
         show_layer_control: bool,
         enable_drawing: bool = False,
         enable_selection: bool = False,
+        enable_multiselect: bool = False,
         drawing_mode: str = 'both',
         existing_polygons_geojson: str = None
     ) -> str:
@@ -350,6 +420,18 @@ class LeafletHTMLGenerator:
 
         // Buildings GeoJSON
         var buildingsData = {buildings_geojson};
+
+        // تشخيص: طباعة معلومات عن البيانات المحملة
+        console.log('📊 Buildings Data Loaded:');
+        console.log('  - Type:', buildingsData.type);
+        console.log('  - Features count:', buildingsData.features ? buildingsData.features.length : 0);
+        if (buildingsData.features && buildingsData.features.length > 0) {{
+            console.log('  - First feature:', buildingsData.features[0]);
+            console.log('  - Sample geometry:', buildingsData.features[0].geometry);
+            console.log('  - Sample properties:', buildingsData.features[0].properties);
+        }} else {{
+            console.warn('⚠️ No buildings found in GeoJSON data!');
+        }}
 
         // Create separate layers for points and polygons
         var pointsLayer = L.featureGroup();
@@ -407,6 +489,9 @@ class LeafletHTMLGenerator:
                 var statusClass = 'status-' + status;
                 var geomType = props.geometry_type || 'Point';
 
+                // تشخيص: طباعة معلومات عن كل مبنى يتم إضافته
+                console.log('🏢 Adding building:', props.building_id, '(Type:', geomType + ')');
+
                 // Build popup content
                 var popup = '<div class="building-popup">' +
                     '<h4>' + (props.building_id || 'مبنى') + ' ' +
@@ -456,10 +541,18 @@ class LeafletHTMLGenerator:
         // Fit to buildings if any
         if (buildingsData.features && buildingsData.features.length > 0) {{
             try {{
-                map.fitBounds(buildingsLayer.getBounds(), {{ padding: [50, 50] }});
+                var bounds = buildingsLayer.getBounds();
+                console.log('📍 Buildings bounds:', bounds);
+                console.log('   - SouthWest:', bounds.getSouthWest());
+                console.log('   - NorthEast:', bounds.getNorthEast());
+                map.fitBounds(bounds, {{ padding: [50, 50] }});
+                console.log('✅ Map fitted to buildings bounds');
             }} catch(e) {{
-                console.log('Could not fit bounds:', e);
+                console.error('❌ Could not fit bounds:', e);
+                console.log('   Using default center instead');
             }}
+        }} else {{
+            console.warn('⚠️ No buildings to fit bounds to');
         }}
 
         {LeafletHTMLGenerator._get_legend_js() if show_legend else ''}
@@ -508,10 +601,29 @@ class LeafletHTMLGenerator:
 
         {LeafletHTMLGenerator._get_drawing_js(drawing_mode) if enable_drawing else '// Drawing disabled'}
 
+        {LeafletHTMLGenerator._get_multiselect_js() if enable_multiselect else '// Multi-select disabled'}
+
         // Log statistics
         var pointCount = pointsLayer.getLayers().length;
         var polygonCount = polygonsLayer.getLayers().length;
-        console.log('Map loaded:', pointCount, 'points,', polygonCount, 'polygons');
+        var totalBuildings = buildingsLayer.getLayers().length;
+        console.log('═══════════════════════════════════════');
+        console.log('📊 Map Statistics:');
+        console.log('  - Total buildings on map:', totalBuildings);
+        console.log('  - Points:', pointCount);
+        console.log('  - Polygons:', polygonCount);
+        console.log('  - GeoJSON features:', buildingsData.features.length);
+        console.log('═══════════════════════════════════════');
+
+        if (totalBuildings === 0) {{
+            console.error('❌ ERROR: No buildings rendered on map!');
+            console.error('   This indicates a problem with GeoJSON data or layer rendering');
+        }} else if (totalBuildings !== buildingsData.features.length) {{
+            console.warn('⚠️ WARNING: Mismatch between features and rendered buildings');
+            console.warn('   Expected:', buildingsData.features.length, 'Got:', totalBuildings);
+        }} else {{
+            console.log('✅ All buildings rendered successfully!');
+        }}
     </script>
 '''
 
@@ -670,6 +782,16 @@ class LeafletHTMLGenerator:
                   .replace('__ENABLE_POLYGON__', enable_polygon))
 
         return result
+
+    @staticmethod
+    def _get_multiselect_js() -> str:
+        """
+        Get JavaScript for multi-select clicking mode.
+
+        Allows users to click on buildings to select/deselect them.
+        """
+        from services.leaflet_multiselect_template import MULTISELECT_JS_TEMPLATE
+        return MULTISELECT_JS_TEMPLATE
 # Export convenience function
 def generate_leaflet_html(
     tile_server_url: str,

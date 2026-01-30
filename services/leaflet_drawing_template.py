@@ -2,6 +2,19 @@
 """Template for Leaflet drawing JavaScript - يتم استيراده من leaflet_html_generator.py"""
 
 DRAWING_JS_TEMPLATE = """
+        // QWebChannel setup for drawing (CRITICAL!)
+        var bridge = null;
+
+        if (typeof QWebChannel !== 'undefined') {
+            new QWebChannel(qt.webChannelTransport, function(channel) {
+                bridge = channel.objects.buildingBridge || channel.objects.bridge;
+                console.log('✅ QWebChannel initialized for drawing');
+                console.log('   Available bridge methods:', bridge ? Object.keys(bridge) : 'none');
+            });
+        } else {
+            console.error('❌ QWebChannel not available!');
+        }
+
         // Drawing layer for new shapes
         var drawnItems = new L.FeatureGroup();
         map.addLayer(drawnItems);
@@ -31,16 +44,23 @@ DRAWING_JS_TEMPLATE = """
                             iconUrl: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjUiIGhlaWdodD0iNDEiIHZpZXdCb3g9IjAgMCAyNSA0MSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cGF0aCBkPSJNMTIuNSAwQzUuNiAwIDAgNS42IDAgMTIuNWMwIDEuOC40IDMuNSAxLjIgNS4xTDEyLjUgNDEgMjMuOCAxNy42Yy44LTEuNiAxLjItMy4zIDEuMi01LjFDMjUgNS42IDE5LjQgMCAxMi41IDB6IiBmaWxsPSIjMDA3MkJDIi8+PGNpcmNsZSBjeD0iMTIuNSIgY3k9IjEyLjUiIHI9IjUiIGZpbGw9IndoaXRlIi8+PC9zdmc+',
                             iconSize: [25, 41],
                             iconAnchor: [12, 41]
-                        })
+                        }),
+                        repeatMode: false  // لا تستمر في وضع الرسم بعد إضافة نقطة
                     } : false,
                     polygon: enablePolygon ? {
                         allowIntersection: false,
                         showArea: true,
+                        drawError: {
+                            color: '#e1e100',
+                            message: '<strong>لا يمكن رسم مضلع متقاطع!</strong>'
+                        },
                         shapeOptions: {
                             color: '#0072BC',
                             weight: 3,
                             fillOpacity: 0.4
-                        }
+                        },
+                        repeatMode: false,  // لا تستمر في وضع الرسم بعد إكمال المضلع
+                        showLength: true    // عرض طول الحافة أثناء الرسم
                     } : false
                 },
                 edit: {
@@ -50,43 +70,93 @@ DRAWING_JS_TEMPLATE = """
             });
             map.addControl(drawControl);
 
+            // إضافة مربع تعليمات للرسم
+            var drawingInstructions = L.control({position: 'topright'});
+            drawingInstructions.onAdd = function(map) {
+                var div = L.DomUtil.create('div', 'drawing-instructions-box');
+                div.style.cssText = 'background: white; padding: 12px 16px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.25); font-size: 13px; direction: rtl; max-width: 280px; display: none; margin-top: 10px;';
+                div.id = 'drawingInstructions';
+                return div;
+            };
+            drawingInstructions.addTo(map);
+
+            // دالة لتحديث التعليمات حسب نوع الرسم
+            function updateDrawingInstructions(layerType) {
+                var instructionsBox = document.getElementById('drawingInstructions');
+                if (!instructionsBox) return;
+
+                if (layerType === 'polygon') {
+                    instructionsBox.innerHTML = '<div style="font-weight: 600; color: #0072BC; margin-bottom: 6px;">📐 تعليمات رسم المضلع:</div>' +
+                                               '<div style="color: #333; line-height: 1.6; font-size: 12px;">' +
+                                               '1️⃣ اضغط على الخريطة لإضافة نقاط<br>' +
+                                               '2️⃣ <strong style="color:#28a745">اضغط مرتين متتاليتين</strong> لإنهاء الرسم (أسهل طريقة!)<br>' +
+                                               '3️⃣ أو اضغط على النقطة الأولى لإغلاق المضلع<br>' +
+                                               '4️⃣ أو اضغط زر <strong style="color:#0072BC">FINISH</strong> في الأعلى<br>' +
+                                               '❌ اضغط ESC للإلغاء</div>';
+                } else if (layerType === 'marker') {
+                    instructionsBox.innerHTML = '<div style="font-weight: 600; color: #0072BC; margin-bottom: 6px;">📍 تعليمات إضافة نقطة:</div>' +
+                                               '<div style="color: #333; line-height: 1.6; font-size: 12px;">' +
+                                               '✓ اضغط على الخريطة لإضافة نقطة<br>' +
+                                               '❌ اضغط ESC للإلغاء</div>';
+                }
+            }
+
+            // إظهار/إخفاء التعليمات عند بدء/إنهاء الرسم
+            map.on(L.Draw.Event.DRAWSTART, function(e) {
+                var instructionsBox = document.getElementById('drawingInstructions');
+                if (instructionsBox) {
+                    updateDrawingInstructions(e.layerType);
+                    instructionsBox.style.display = 'block';
+                }
+            });
+
+            map.on(L.Draw.Event.DRAWSTOP, function(e) {
+                var instructionsBox = document.getElementById('drawingInstructions');
+                if (instructionsBox) {
+                    instructionsBox.style.display = 'none';
+                }
+            });
+
             // Handle drawing created
             map.on(L.Draw.Event.CREATED, function(e) {
                 var type = e.layerType;
                 var layer = e.layer;
 
+                // إزالة جميع الأشكال السابقة (نريد رسم واحد فقط في كل مرة)
+                drawnItems.clearLayers();
+
+                // إضافة الشكل الجديد
                 drawnItems.addLayer(layer);
 
-                // Get geometry
-                var geometry = null;
+                // Get geometry and convert to WKT
+                var geomType = null;
+                var wkt = null;
+
                 if (type === 'marker') {
                     var latlng = layer.getLatLng();
-                    geometry = {
-                        type: 'Point',
-                        coordinates: [latlng.lng, latlng.lat]
-                    };
+                    geomType = 'Point';
+                    wkt = 'POINT(' + latlng.lng + ' ' + latlng.lat + ')';
                 } else if (type === 'polygon') {
                     var latlngs = layer.getLatLngs()[0];
-                    var coordinates = latlngs.map(function(ll) {
-                        return [ll.lng, ll.lat];
-                    });
+                    var coords = latlngs.map(function(ll) {
+                        return ll.lng + ' ' + ll.lat;
+                    }).join(', ');
                     // Close the polygon
-                    coordinates.push(coordinates[0]);
-                    geometry = {
-                        type: 'Polygon',
-                        coordinates: [coordinates]
-                    };
+                    var firstPoint = latlngs[0];
+                    coords += ', ' + firstPoint.lng + ' ' + firstPoint.lat;
+                    geomType = 'Polygon';
+                    wkt = 'POLYGON((' + coords + '))';
                 }
 
-                console.log('Shape created:', type, geometry);
+                console.log('✅ Shape created:', geomType, wkt);
 
-                // Send to Python via QWebChannel
-                if (bridge && bridge.shapeDrawn) {
-                    bridge.shapeDrawn(JSON.stringify(geometry));
-                } else if (bridge && bridge.geometryDrawn) {
-                    bridge.geometryDrawn(JSON.stringify(geometry));
+                // Send to Python via QWebChannel (using onGeometryDrawn signature)
+                if (bridge && bridge.onGeometryDrawn) {
+                    console.log('📡 Sending to Python via bridge.onGeometryDrawn');
+                    bridge.onGeometryDrawn(geomType, wkt);
                 } else {
-                    console.warn('Bridge method for drawing not found');
+                    console.error('❌ Bridge not found! Cannot send geometry to Python');
+                    console.log('   Available bridge methods:', bridge ? Object.keys(bridge) : 'bridge is null');
                 }
             });
 
@@ -125,21 +195,18 @@ DRAWING_JS_TEMPLATE = """
 
                 drawnItems.addLayer(currentMarker);
 
-                // Create geometry
-                var geometry = {
-                    type: 'Point',
-                    coordinates: [e.latlng.lng, e.latlng.lat]
-                };
+                // Create WKT
+                var geomType = 'Point';
+                var wkt = 'POINT(' + e.latlng.lng + ' ' + e.latlng.lat + ')';
 
-                console.log('Point created (fallback mode):', geometry);
+                console.log('✅ Point created (fallback mode):', geomType, wkt);
 
                 // Send to Python via QWebChannel
-                if (bridge && bridge.shapeDrawn) {
-                    bridge.shapeDrawn(JSON.stringify(geometry));
-                } else if (bridge && bridge.geometryDrawn) {
-                    bridge.geometryDrawn(JSON.stringify(geometry));
+                if (bridge && bridge.onGeometryDrawn) {
+                    console.log('📡 Sending to Python via bridge.onGeometryDrawn (fallback)');
+                    bridge.onGeometryDrawn(geomType, wkt);
                 } else {
-                    console.warn('Bridge method for drawing not found');
+                    console.error('❌ Bridge not found! Cannot send geometry to Python');
                 }
             });
 
