@@ -59,7 +59,8 @@ class LeafletHTMLGenerator:
         show_layer_control: bool = True,
         enable_drawing: bool = False,
         enable_selection: bool = False,
-        drawing_mode: str = 'both'  # 'point', 'polygon', 'both'
+        drawing_mode: str = 'both',  # 'point', 'polygon', 'both'
+        existing_polygons_geojson: str = None  # GeoJSON for existing polygons (blue)
     ) -> str:
         """
         Generate Leaflet HTML with unified geometry display.
@@ -75,6 +76,7 @@ class LeafletHTMLGenerator:
             enable_drawing: Enable polygon drawing tools
             enable_selection: Enable building selection button in popup
             drawing_mode: Drawing mode ('point', 'polygon', 'both')
+            existing_polygons_geojson: GeoJSON for existing polygons (displayed in blue)
 
         Returns:
             Complete HTML string ready for QWebEngineView
@@ -110,7 +112,8 @@ class LeafletHTMLGenerator:
         show_layer_control,
         enable_drawing,
         enable_selection,
-        drawing_mode
+        drawing_mode,
+        existing_polygons_geojson
     )}
 </body>
 </html>
@@ -301,7 +304,8 @@ class LeafletHTMLGenerator:
         show_layer_control: bool,
         enable_drawing: bool = False,
         enable_selection: bool = False,
-        drawing_mode: str = 'both'
+        drawing_mode: str = 'both',
+        existing_polygons_geojson: str = None
     ) -> str:
         """Get JavaScript code for map initialization."""
         status_colors = LeafletHTMLGenerator.STATUS_COLORS
@@ -446,6 +450,9 @@ class LeafletHTMLGenerator:
             }}
         }}).addTo(map);
 
+        // Add existing polygons layer (displayed in blue)
+        {LeafletHTMLGenerator._get_existing_polygons_js(existing_polygons_geojson) if existing_polygons_geojson else '// No existing polygons'}
+
         // Fit to buildings if any
         if (buildingsData.features && buildingsData.features.length > 0) {{
             try {{
@@ -528,6 +535,73 @@ class LeafletHTMLGenerator:
             return div;
         };
         legend.addTo(map);
+'''
+
+    @staticmethod
+    def _get_existing_polygons_js(existing_polygons_geojson: str) -> str:
+        """
+        Get JavaScript for displaying existing polygons in blue.
+
+        Args:
+            existing_polygons_geojson: GeoJSON string containing existing building polygons
+
+        Returns:
+            JavaScript code to add existing polygons layer
+        """
+        return f'''
+        // Existing polygons layer (displayed in blue)
+        var existingPolygonsData = {existing_polygons_geojson};
+
+        if (existingPolygonsData && existingPolygonsData.features && existingPolygonsData.features.length > 0) {{
+            var existingPolygonsLayer = L.geoJSON(existingPolygonsData, {{
+                style: function(feature) {{
+                    return {{
+                        color: '#0056A3',        // Border: dark blue
+                        weight: 2,
+                        fillColor: '#0072BC',    // Fill: blue
+                        fillOpacity: 0.3,
+                        className: 'existing-polygon'
+                    }};
+                }},
+                onEachFeature: function(feature, layer) {{
+                    var props = feature.properties;
+
+                    // Build popup content
+                    var popup = '<div class="building-popup">' +
+                        '<h4>' + (props.building_id || 'مبنى موجود') + '</h4>' +
+                        '<p><span class="label">الحالة:</span> ' + (props.status || 'غير محدد') + '</p>' +
+                        '<p class="note">مضلع موجود مسبقاً</p>' +
+                        '</div>';
+
+                    layer.bindPopup(popup);
+
+                    // Hover effects
+                    layer.on('mouseover', function(e) {{
+                        this.setStyle({{
+                            fillOpacity: 0.5,
+                            weight: 3
+                        }});
+                    }});
+
+                    layer.on('mouseout', function(e) {{
+                        this.setStyle({{
+                            fillOpacity: 0.3,
+                            weight: 2
+                        }});
+                    }});
+
+                    // Click event - emit to Python via QWebChannel
+                    layer.on('click', function(e) {{
+                        if (typeof qt !== 'undefined' && qt.webChannelTransport) {{
+                            // Emit polygon clicked event to Python
+                            console.log('Existing polygon clicked:', props.building_id);
+                        }}
+                    }});
+                }}
+            }}).addTo(map);
+
+            console.log('Loaded', existingPolygonsData.features.length, 'existing polygons');
+        }}
 '''
 
     @staticmethod

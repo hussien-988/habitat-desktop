@@ -1228,6 +1228,7 @@ class BuildingsListPage(QWidget):
     view_building = pyqtSignal(str)
     edit_building = pyqtSignal(object)
     add_building = pyqtSignal()
+    prepare_field_work = pyqtSignal()
 
     def __init__(self, building_controller, export_service, i18n, parent=None):
         super().__init__(parent)
@@ -1292,6 +1293,7 @@ class BuildingsListPage(QWidget):
 
         # زر تجهيز العمل الميداني (شفاف مع بوردر أزرق)
         btn_field = CustomButton.secondary("تجهيز العمل الميداني", self, width=180, height=45)
+        btn_field.clicked.connect(self.prepare_field_work.emit)
 
         # زر إضافة بناء جديد (أزرق solid)
         btn_add = CustomButton.primary("إضافة بناء جديد", self, width=160, height=45, icon="+")
@@ -1747,10 +1749,14 @@ class BuildingsPage(QWidget):
         self.list_page.view_building.connect(self.view_building.emit)
         self.list_page.edit_building.connect(self._on_edit_building)
         self.list_page.add_building.connect(self._on_add_building)
+        self.list_page.prepare_field_work.connect(self._on_prepare_field_work)
         self.stacked.addWidget(self.list_page)
 
         # Page 1: Add/Edit (created on demand)
         self.form_page = None
+
+        # Page 2: Field Work Preparation (created on demand)
+        self.field_work_page = None
 
         layout.addWidget(self.stacked)
 
@@ -1793,6 +1799,32 @@ class BuildingsPage(QWidget):
         self.form_page.cancelled.connect(self._on_form_cancelled)
         self.stacked.addWidget(self.form_page)
         self.stacked.setCurrentWidget(self.form_page)
+
+    def _on_prepare_field_work(self):
+        """Open field work preparation wizard."""
+        if self.field_work_page:
+            self.stacked.removeWidget(self.field_work_page)
+            self.field_work_page.deleteLater()
+
+        from ui.pages.field_work_preparation_page import FieldWorkPreparationStep1
+        self.field_work_page = FieldWorkPreparationStep1(
+            self.building_controller,
+            self.i18n,
+            parent=self
+        )
+        self.field_work_page.next_clicked.connect(self._on_field_work_next)
+        self.field_work_page.cancelled.connect(self._on_field_work_cancelled)
+        self.stacked.addWidget(self.field_work_page)
+        self.stacked.setCurrentWidget(self.field_work_page)
+
+    def _on_field_work_next(self):
+        """Handle field work next step."""
+        # TODO: Navigate to next step
+        logger.debug("Field work next step")
+
+    def _on_field_work_cancelled(self):
+        """Handle field work cancellation."""
+        self.stacked.setCurrentWidget(self.list_page)
 
     def _on_form_saved(self):
         """Form saved."""
