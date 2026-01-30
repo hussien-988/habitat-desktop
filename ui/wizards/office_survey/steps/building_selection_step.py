@@ -571,24 +571,21 @@ class BuildingSelectionStep(BaseStep):
         """
         Open professional map search dialog for building selection.
 
-        Uses BuildingMapWidget (DRY principle) - reusable component with:
-        - Interactive map with building selection
-        - Color-coded building status
-        - Proven stable implementation
-        - Focus on previously selected building if exists
+        Uses BuildingMapDialog V2 (DRY principle) - unified component with:
+        - Clean design (no clutter, matches screenshot 2)
+        - Live coordinate updates
+        - PostGIS-compatible WKT output
+        - Always in selection mode (user can search again)
         """
-        from ui.components.building_map_widget import BuildingMapWidget
+        from ui.components.building_map_dialog_v2 import show_building_map_dialog
 
-        # Use shared component (DRY)
-        map_widget = BuildingMapWidget(self.context.db, self)
-
-        # If we already have a selected building, focus on it
-        current_building_id = None
-        if hasattr(self, 'selected_building') and self.selected_building:
-            current_building_id = self.selected_building.building_id
-
-        # Show dialog and get selected building (with optional focus)
-        selected_building = map_widget.show_dialog(selected_building_id=current_building_id)
+        # Always open in selection mode (not view-only)
+        # User can search and select building even if already selected
+        selected_building = show_building_map_dialog(
+            db=self.context.db,
+            selected_building_id=None,  # Always selection mode
+            parent=self
+        )
 
         if selected_building:
             # Update context and UI

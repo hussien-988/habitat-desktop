@@ -130,6 +130,11 @@ class BuildingMapWidget(QObject):
         self.building_repo = BuildingRepository(db)
         self._dialog = None
         self._map_view = None
+        self._is_view_only = False  # Track if we're in view-only mode
+
+        # Smart zoom configuration - adaptive to tile server maxZoom
+        # Default: 16 for local MBTiles (safe max), can be overridden for external servers
+        self.MAX_SAFE_ZOOM = 16  # Will be read from tile server if available
 
     def show_dialog(self, selected_building_id: Optional[str] = None) -> Optional[Building]:
         """
@@ -137,6 +142,10 @@ class BuildingMapWidget(QObject):
 
         Args:
             selected_building_id: Optional building ID to focus on when map loads
+                                 If provided, dialog enters VIEW-ONLY mode:
+                                 - Search bar disabled
+                                 - No selection button
+                                 - Larger marker for selected building
 
         Returns:
             Selected Building object, or None if cancelled
@@ -153,6 +162,9 @@ class BuildingMapWidget(QObject):
         # Clear previous selection
         self._selected_building = None
 
+        # Set view-only mode if we're showing a specific building
+        self._is_view_only = bool(selected_building_id)
+
         # Create overlay on parent (gray transparent layer)
         parent_widget = None
         if self.parent() and hasattr(self.parent(), 'rect'):
@@ -166,6 +178,9 @@ class BuildingMapWidget(QObject):
         # Create dialog if not exists (reuse for performance)
         if self._dialog is None:
             self._dialog = self._create_dialog()
+
+        # Update search bar state based on mode
+        self._update_search_bar_state()
 
         # Load/reload map with optional building focus
         self._load_map(selected_building_id=selected_building_id)
@@ -447,6 +462,77 @@ class BuildingMapWidget(QObject):
 
         return search_frame
 
+    def _update_search_bar_state(self):
+        """
+        Update search bar state based on view mode.
+
+        View-only mode (showing selected building):
+        - Disable search input
+        - Change to light gray background
+        - Add visual indicator
+        """
+        if not hasattr(self, 'search_input') or not self.search_input:
+            return
+
+        if self._is_view_only:
+            # Disable search in view-only mode
+            self.search_input.setEnabled(False)
+            self.search_input.setPlaceholderText("عرض المبنى المحدد على الخريطة")
+            self.search_input.setStyleSheet(f"""
+                QLineEdit {{
+                    border: none;
+                    background: transparent;
+                    color: {Colors.TEXT_DISABLED};
+                    padding: 0px;
+                    text-align: right;
+                }}
+                QLineEdit::placeholder {{
+                    color: {Colors.TEXT_DISABLED};
+                    text-align: right;
+                }}
+            """)
+
+            # Update search frame background
+            if hasattr(self, '_dialog'):
+                search_frame = self._dialog.findChild(QFrame, "searchBar")
+                if search_frame:
+                    search_frame.setStyleSheet(f"""
+                        QFrame#searchBar {{
+                            background-color: #F3F4F6;
+                            border: 1px solid {Colors.BORDER_DEFAULT};
+                            border-radius: 8px;
+                        }}
+                    """)
+        else:
+            # Enable search in selection mode
+            self.search_input.setEnabled(True)
+            self.search_input.setPlaceholderText("بحث عن اسم المنطقة (مثال: Al-Jamiliyah)")
+            self.search_input.setStyleSheet(f"""
+                QLineEdit {{
+                    border: none;
+                    background: transparent;
+                    color: {Colors.TEXT_PRIMARY};
+                    padding: 0px;
+                    text-align: right;
+                }}
+                QLineEdit::placeholder {{
+                    color: {Colors.TEXT_SECONDARY};
+                    text-align: right;
+                }}
+            """)
+
+            # Restore search frame background
+            if hasattr(self, '_dialog'):
+                search_frame = self._dialog.findChild(QFrame, "searchBar")
+                if search_frame:
+                    search_frame.setStyleSheet(f"""
+                        QFrame#searchBar {{
+                            background-color: {Colors.SEARCH_BAR_BG};
+                            border: 1px solid {Colors.SEARCH_BAR_BORDER};
+                            border-radius: 8px;
+                        }}
+                    """)
+
     def _center_dialog(self, dialog: QDialog):
         """Center dialog on screen."""
         from PyQt5.QtWidgets import QApplication
@@ -535,15 +621,19 @@ class BuildingMapWidget(QObject):
                     logger.info(f"Flying to center: ({center_lat}, {center_lon})")
 
                     # Fly to location on map using JavaScript
-                    # Zoom level increased to 17 for better focus
+                    # Smart zoom: Use MAX_SAFE_ZOOM to avoid gray tiles (exceeding tile resolution)
+                    # For local MBTiles: typically 16 max
+                    # For external servers: can be higher (will be auto-detected)
+                    safe_zoom = min(self.MAX_SAFE_ZOOM, 16)  # Never exceed 16 for local tiles
+
                     js_code = f"""
                     console.log('🔍 SEARCH: Flying to [{center_lat}, {center_lon}] with {len(matching_buildings)} buildings');
                     if (typeof map !== 'undefined') {{
-                        map.flyTo([{center_lat}, {center_lon}], 17, {{
+                        map.flyTo([{center_lat}, {center_lon}], {safe_zoom}, {{
                             duration: 2.0,
                             easeLinearity: 0.25
                         }});
-                        console.log('✅ Map flyTo executed successfully');
+                        console.log('✅ Map flyTo executed successfully (zoom: {safe_zoom})');
                     }} else {{
                         console.error('❌ Map object not found!');
                     }}
@@ -716,12 +806,17 @@ class BuildingMapWidget(QObject):
             if focus_building and focus_building.latitude and focus_building.longitude:
                 center_lat = focus_building.latitude
                 center_lon = focus_building.longitude
-                zoom = 17  # Closer zoom for selected building
-                focus_building_id = selected_building_id
-                logger.info(f"Focusing on building {selected_building_id} at ({center_lat}, {center_lon})")
 
-        # استخدام LeafletHTMLGenerator الموحد مع تفعيل زر الاختيار
-        # الـ popup يفتح تلقائياً عند النقر، والزر داخل الـ popup
+                # Smart zoom: respect MAX_SAFE_ZOOM to avoid gray tiles
+                # For view-only mode (showing selected building), use safe zoom
+                zoom = min(self.MAX_SAFE_ZOOM, 16)
+
+                focus_building_id = selected_building_id
+                logger.info(f"Focusing on building {selected_building_id} at ({center_lat}, {center_lon}) with zoom {zoom}")
+
+        # استخدام LeafletHTMLGenerator الموحد
+        # View-only mode: disable selection, use simple popup
+        # Selection mode: enable selection button in popup
         html = generate_leaflet_html(
             tile_server_url=tile_server_url.rstrip('/'),
             buildings_geojson=buildings_geojson,
@@ -730,31 +825,115 @@ class BuildingMapWidget(QObject):
             zoom=zoom,
             show_legend=True,
             show_layer_control=False,
-            enable_selection=True,
+            enable_selection=(not self._is_view_only),  # Disable selection in view-only mode
             enable_drawing=False
         )
 
         # LeafletHTMLGenerator يتعامل مع كل شيء
         self._map_view.setHtml(html, base_url)
 
-        # If we focused on a building, open its popup after map loads
+        # If we focused on a building, center it perfectly and open popup
         if focus_building_id:
-            def open_building_popup():
+            # Store coordinates for centering (instance variables)
+            self._focus_lat = center_lat
+            self._focus_lon = center_lon
+            self._focus_zoom = zoom
+            self._focus_building_id = focus_building_id
+
+            def center_and_open_popup():
+                """
+                Center building perfectly in middle of viewport and open popup.
+
+                Best Practice: Force map to center on building AFTER initial load
+                to ensure building appears exactly in the middle of the screen.
+
+                Steps:
+                1. Force center map using setView() for instant positioning
+                2. Find and enhance building marker/polygon
+                3. Open popup after centering completes
+                """
                 js = f"""
-                if (typeof buildingsLayer !== 'undefined') {{
-                    buildingsLayer.eachLayer(function(layer) {{
-                        if (layer.feature && layer.feature.properties.building_id === '{focus_building_id}') {{
-                            layer.openPopup();
-                            console.log('Opened popup for building {focus_building_id}');
-                        }}
+                console.log('🎯 Centering building {self._focus_building_id} at [{self._focus_lat}, {self._focus_lon}]');
+
+                if (typeof map !== 'undefined') {{
+                    // Step 1: Force center the map on building (instant, no animation for precision)
+                    // setView ensures building is exactly in the center of the viewport
+                    map.setView([{self._focus_lat}, {self._focus_lon}], {self._focus_zoom}, {{
+                        animate: true,
+                        duration: 0.8,
+                        easeLinearity: 0.25
                     }});
+
+                    console.log('✅ Map centered on building coordinates');
+
+                    // Step 2: Find and enhance the building marker/polygon
+                    if (typeof buildingsLayer !== 'undefined') {{
+                        buildingsLayer.eachLayer(function(layer) {{
+                            if (layer.feature && layer.feature.properties.building_id === '{self._focus_building_id}') {{
+                                console.log('✅ Found building layer');
+
+                                // In view-only mode, enhance marker for better visibility
+                                if ({str(self._is_view_only).lower()}) {{
+                                    if (layer.setIcon) {{
+                                        // For point markers - create 1.5x larger icon
+                                        var status = layer.feature.properties.status || 'intact';
+                                        var statusColors = {{
+                                            'intact': '#28a745',
+                                            'minor_damage': '#ffc107',
+                                            'major_damage': '#fd7e14',
+                                            'destroyed': '#dc3545'
+                                        }};
+                                        var color = statusColors[status] || '#0072BC';
+
+                                        var largeIcon = L.divIcon({{
+                                            className: 'building-pin-icon-large',
+                                            html: '<div style="position: relative; width: 36px; height: 54px;">' +
+                                                  '<svg width="36" height="54" viewBox="0 0 24 36" xmlns="http://www.w3.org/2000/svg">' +
+                                                  '<path d="M12 0C5.4 0 0 5.4 0 12c0 8 12 24 12 24s12-16 12-24c0-6.6-5.4-12-12-12z" ' +
+                                                  'fill="' + color + '" stroke="#fff" stroke-width="3"/>' +
+                                                  '<circle cx="12" cy="12" r="5" fill="#fff"/>' +
+                                                  '</svg></div>',
+                                            iconSize: [36, 54],
+                                            iconAnchor: [18, 54],
+                                            popupAnchor: [0, -54]
+                                        }});
+                                        layer.setIcon(largeIcon);
+                                        console.log('✅ Enhanced point marker (1.5x size)');
+                                    }} else if (layer.setStyle) {{
+                                        // For polygon markers - enhance style
+                                        layer.setStyle({{
+                                            weight: 4,
+                                            fillOpacity: 0.8,
+                                            color: '#0072BC'
+                                        }});
+                                        console.log('✅ Enhanced polygon style');
+                                    }}
+                                }}
+
+                                // Step 3: Open popup after centering animation completes
+                                setTimeout(function() {{
+                                    layer.openPopup();
+                                    console.log('✅ Popup opened for building {self._focus_building_id}');
+
+                                    // Ensure popup is visible by panning if needed
+                                    map.panTo([{self._focus_lat}, {self._focus_lon}], {{
+                                        animate: false
+                                    }});
+                                }}, 500); // Wait for setView animation to complete
+                            }}
+                        }});
+                    }} else {{
+                        console.warn('⚠️ buildingsLayer not found');
+                    }}
+                }} else {{
+                    console.error('❌ Map object not found!');
                 }}
                 """
                 self._map_view.page().runJavaScript(js)
 
-            # Open popup after a short delay to ensure map is fully loaded
+            # Execute after map fully loads (2 seconds to ensure everything is ready)
             from PyQt5.QtCore import QTimer
-            QTimer.singleShot(1500, open_building_popup)
+            QTimer.singleShot(2000, center_and_open_popup)
 
 
     def _on_building_selected_from_map(self, building_id: str):
