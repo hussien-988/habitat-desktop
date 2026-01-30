@@ -87,14 +87,11 @@ class BuildingMapDialog(BaseMapDialog):
             # Get tile server URL
             tile_server_url = get_tile_server_url()
 
-            # Get all buildings
-            buildings = self.building_repo.get_all(limit=200)
+            # Load buildings using shared method (DRY principle)
+            buildings_geojson = self.load_buildings_geojson(self.db, limit=200)
 
-            # Convert buildings to GeoJSON
-            buildings_geojson = GeoJSONConverter.buildings_to_geojson(
-                buildings,
-                prefer_polygons=True
-            )
+            # Get buildings for focusing (if needed)
+            buildings = self.building_repo.get_all(limit=200)
 
             # Determine center and zoom
             center_lat = 36.2021
