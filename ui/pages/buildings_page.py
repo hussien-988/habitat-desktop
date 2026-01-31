@@ -920,10 +920,10 @@ class AddBuildingPage(QWidget):
     def _update_building_id(self):
         """Generate building ID in format: GG-DD-SS-CCC-NNN-BBBBB"""
         # GG: Governorate (محافظة) - 2 digits
-        gov = self.governorate_combo.currentData() or "01"
+        gov = self.governorate_combo.text().strip() or "01"
 
         # DD: District (منطقة) - 2 digits
-        dist = self.district_combo.currentData() or "01"
+        dist = self.district_combo.text().strip() or "01"
 
         # SS: Subdistrict (منطقة فرعية) - 2 digits
         subdist = self.subdistrict_code.text().strip() or "01"
@@ -932,7 +932,7 @@ class AddBuildingPage(QWidget):
         comm = self.community_code.text().strip() or "001"
 
         # NNN: Neighborhood (حي/قرية) - 3 digits
-        neigh = self.neighborhood_combo.currentData() or "001"
+        neigh = self.neighborhood_combo.text().strip() or "001"
 
         # BBBBB: Building Number - 5 digits
         bldg_num = self.building_number.text().strip().zfill(5)
@@ -964,11 +964,11 @@ class AddBuildingPage(QWidget):
             return
 
         # Generate the complete building ID
-        gov = self.governorate_combo.currentData() or "01"
-        dist = self.district_combo.currentData() or "01"
+        gov = self.governorate_combo.text().strip() or "01"
+        dist = self.district_combo.text().strip() or "01"
         subdist = self.subdistrict_code.text().strip() or "01"
         comm = self.community_code.text().strip() or "001"
-        neigh = self.neighborhood_combo.currentData() or "001"
+        neigh = self.neighborhood_combo.text().strip() or "001"
         bldg_num = building_num.zfill(5)
 
         building_id = f"{gov}-{dist}-{subdist}-{comm}-{neigh}-{bldg_num}"
