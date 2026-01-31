@@ -176,15 +176,29 @@ class BuildingApiService:
 
         data = response.get("data", [])
 
+        # Log the raw response for debugging
+        logger.info(f"API Response type: {type(data)}")
+        if isinstance(data, dict):
+            logger.info(f"API Response keys: {list(data.keys())}")
+        elif isinstance(data, list):
+            logger.info(f"API Response: list with {len(data)} items")
+            if data:
+                logger.info(f"First item keys: {list(data[0].keys()) if isinstance(data[0], dict) else 'not a dict'}")
+                logger.info(f"First item: {data[0]}")
+
         # Handle case where API returns a wrapper object
         if isinstance(data, dict):
             # Check for common wrapper patterns
+            logger.info(f"Response is dict, checking for wrapper patterns...")
             if "data" in data:
                 data = data["data"]
+                logger.info(f"Unwrapped 'data' key, now have {type(data)}")
             elif "buildings" in data:
                 data = data["buildings"]
+                logger.info(f"Unwrapped 'buildings' key, now have {type(data)}")
             elif "items" in data:
                 data = data["items"]
+                logger.info(f"Unwrapped 'items' key, now have {type(data)}")
 
         if not isinstance(data, list):
             logger.warning(f"Unexpected data format: {type(data)}")
@@ -197,6 +211,7 @@ class BuildingApiService:
                 buildings.append(building)
             except Exception as e:
                 logger.warning(f"Failed to parse building: {e}")
+                logger.warning(f"Building item that failed: {item}")
                 continue
 
         logger.info(f"Fetched {len(buildings)} buildings from API")
@@ -400,6 +415,29 @@ class BuildingApiService:
             if model_key in Building.__dataclass_fields__:
                 mapped_data[model_key] = value
 
+        # Handle building_type - keep as integer (API returns 1, 2, 3, 4)
+        # The UI now uses integer codes matching the API
+        if "building_type" in mapped_data:
+            bt = mapped_data["building_type"]
+            # Ensure it's an integer
+            if isinstance(bt, int):
+                mapped_data["building_type"] = bt
+            elif isinstance(bt, str) and bt.isdigit():
+                mapped_data["building_type"] = int(bt)
+            else:
+                # Default to 1 (Residential) if invalid
+                mapped_data["building_type"] = 1
+
+        # Handle building_status - keep as integer
+        if "building_status" in mapped_data:
+            bs = mapped_data["building_status"]
+            if isinstance(bs, int):
+                mapped_data["building_status"] = bs
+            elif isinstance(bs, str) and bs.isdigit():
+                mapped_data["building_status"] = int(bs)
+            else:
+                mapped_data["building_status"] = 1
+
         # Handle datetime fields
         for dt_field in ["created_at", "updated_at"]:
             if dt_field in mapped_data and isinstance(mapped_data[dt_field], str):
@@ -449,22 +487,21 @@ class BuildingApiService:
             "notes": "notes",
         }
 
-        # Building type enum mapping (Python value -> API integer)
+        # Building type enum mapping (Python string value -> API integer)
+        # Used for backward compatibility with old string codes
         # 1 = Residential, 2 = Commercial, 3 = MixedUse, 4 = Industrial
-        building_type_mapping = {
+        building_type_string_mapping = {
             "residential": 1,
             "commercial": 2,
             "mixed_use": 3,
             "mixed": 3,
             "industrial": 4,
             "public": 1,  # Map to residential as fallback
-            None: 1,  # Default to Residential
-            "": 1,
         }
 
-        # Building status enum mapping (Python value -> API integer)
+        # Building status enum mapping (Python string value -> API integer)
         # Assuming: 1 = Intact, 2 = MinorDamage, 3 = MajorDamage, 4 = Destroyed, etc.
-        building_status_mapping = {
+        building_status_string_mapping = {
             "intact": 1,
             "standing": 1,
             "minor_damage": 2,
@@ -476,8 +513,6 @@ class BuildingApiService:
             "demolished": 4,
             "rubble": 4,
             "under_construction": 5,
-            None: 1,  # Default to Intact
-            "": 1,
         }
 
         api_data = {}
@@ -489,13 +524,27 @@ class BuildingApiService:
 
             api_key = field_mapping[key]
 
-            # Handle building_type enum -> integer
+            # Handle building_type - accept both integer and string values
             if key == "building_type":
-                value = building_type_mapping.get(value, 1)
+                if isinstance(value, int) and 1 <= value <= 4:
+                    # Already an integer, use it directly
+                    pass
+                elif isinstance(value, str):
+                    # Convert string to integer
+                    value = building_type_string_mapping.get(value, 1)
+                else:
+                    value = 1  # Default to Residential
 
-            # Handle building_status enum -> integer
+            # Handle building_status - accept both integer and string values
             if key == "building_status":
-                value = building_status_mapping.get(value, 1)
+                if isinstance(value, int) and 1 <= value <= 5:
+                    # Already an integer, use it directly
+                    pass
+                elif isinstance(value, str):
+                    # Convert string to integer
+                    value = building_status_string_mapping.get(value, 1)
+                else:
+                    value = 1  # Default to Intact
 
             # Skip None values for optional fields
             if value is not None:

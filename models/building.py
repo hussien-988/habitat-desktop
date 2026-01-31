@@ -4,7 +4,7 @@ Building entity model.
 """
 
 from dataclasses import dataclass, field
-from typing import Optional
+from typing import Optional, Union
 from datetime import datetime
 import uuid
 
@@ -52,8 +52,10 @@ class Building:
     building_number: str = "00001"
 
     # Building attributes
-    building_type: str = "residential"  # residential, commercial, mixed_use
-    building_status: str = "intact"  # intact, minor_damage, major_damage, destroyed
+    # building_type: 1=Residential, 2=Commercial, 3=MixedUse, 4=Industrial (or string for legacy)
+    building_type: Union[int, str] = 1
+    # building_status: 1=Intact, 2=MinorDamage, 3=MajorDamage, 4=Destroyed, etc. (or string for legacy)
+    building_status: Union[int, str] = 1
 
     number_of_units: int = 0
     number_of_apartments: int = 0
@@ -103,19 +105,36 @@ class Building:
     @property
     def building_type_display(self) -> str:
         """Get display name for building type (Arabic)."""
-        types = {
+        # Support both integer (API) and string (legacy) values
+        types_int = {
+            1: "سكني",
+            2: "تجاري",
+            3: "مختلط (سكني وتجاري)",
+            4: "صناعي",
+        }
+        types_str = {
             "residential": "سكني",
             "commercial": "تجاري",
-            "mixed_use": "متعدد الاستخدامات",
+            "mixed_use": "مختلط (سكني وتجاري)",
             "industrial": "صناعي",
             "public": "عام",
         }
-        return types.get(self.building_type, self.building_type)
+        if isinstance(self.building_type, int):
+            return types_int.get(self.building_type, str(self.building_type))
+        return types_str.get(self.building_type, str(self.building_type))
 
     @property
     def building_status_display(self) -> str:
         """Get display name for building status (Arabic)."""
-        statuses = {
+        # Support both integer (API) and string (legacy) values
+        statuses_int = {
+            1: "سليم",
+            2: "ضرر طفيف",
+            3: "ضرر كبير",
+            4: "مدمر",
+            5: "قيد البناء",
+        }
+        statuses_str = {
             "intact": "سليم",
             "standing": "سليم",
             "minor_damage": "ضرر طفيف",
@@ -128,7 +147,9 @@ class Building:
             "rubble": "ركام",
             "under_construction": "قيد البناء",
         }
-        return statuses.get(self.building_status, self.building_status)
+        if isinstance(self.building_status, int):
+            return statuses_int.get(self.building_status, str(self.building_status))
+        return statuses_str.get(self.building_status, str(self.building_status))
 
     def to_dict(self) -> dict:
         """Convert to dictionary for serialization."""

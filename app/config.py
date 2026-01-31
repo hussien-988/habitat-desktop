@@ -223,20 +223,24 @@ class Roles:
 
 # Controlled vocabularies
 class Vocabularies:
+    # Building types matching API values (integer codes)
+    # Value (code), Name (English), Name (Arabic)
+    # API: 1 = Residential, 2 = Commercial, 3 = MixedUse, 4 = Industrial
     BUILDING_TYPES = [
-        ("residential", "Residential", "سكني"),
-        ("commercial", "Commercial", "تجاري"),
-        ("mixed_use", "Mixed Use", "متعدد الاستخدامات"),
-        ("industrial", "Industrial", "صناعي"),
-        ("public", "Public", "عام"),
+        (1, "Residential", "سكني"),
+        (2, "Commercial", "تجاري"),
+        (3, "MixedUse", "مختلط (سكني وتجاري)"),
+        (4, "Industrial", "صناعي"),
     ]
 
+    # Building status matching API values (integer codes)
+    # Value (code), Name (English), Name (Arabic)
     BUILDING_STATUS = [
-        ("intact", "Intact", "سليم"),
-        ("minor_damage", "Minor Damage", "ضرر طفيف"),
-        ("major_damage", "Major Damage", "ضرر كبير"),
-        ("destroyed", "Destroyed", "مدمر"),
-        ("under_construction", "Under Construction", "قيد البناء"),
+        (1, "Intact", "سليم"),
+        (2, "MinorDamage", "ضرر طفيف"),
+        (3, "MajorDamage", "ضرر كبير"),
+        (4, "Destroyed", "مدمر"),
+        (5, "UnderConstruction", "قيد البناء"),
     ]
 
     UNIT_TYPES = [
