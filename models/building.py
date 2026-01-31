@@ -127,25 +127,39 @@ class Building:
     def building_status_display(self) -> str:
         """Get display name for building status (Arabic)."""
         # Support both integer (API) and string (legacy) values
+        # API: 1=Intact, 2=MinorDamage, 3=ModerateDamage, 4=MajorDamage, 5=SeverelyDamaged,
+        #      6=Destroyed, 7=UnderConstruction, 8=Abandoned, 99=Unknown
         statuses_int = {
             1: "سليم",
-            2: "ضرر طفيف",
-            3: "ضرر كبير",
-            4: "مدمر",
-            5: "قيد البناء",
+            2: "أضرار طفيفة",
+            3: "أضرار متوسطة",
+            4: "أضرار كبيرة",
+            5: "أضرار شديدة",
+            6: "مدمر",
+            7: "قيد الإنشاء",
+            8: "مهجور",
+            99: "غير معروف",
         }
         statuses_str = {
             "intact": "سليم",
             "standing": "سليم",
-            "minor_damage": "ضرر طفيف",
-            "damaged": "متضرر",
-            "partially_damaged": "متضرر جزئياً",
-            "major_damage": "ضرر كبير",
-            "severely_damaged": "متضرر بشدة",
+            "minordamage": "أضرار طفيفة",
+            "minor_damage": "أضرار طفيفة",
+            "moderatedamage": "أضرار متوسطة",
+            "moderate_damage": "أضرار متوسطة",
+            "damaged": "أضرار متوسطة",
+            "partially_damaged": "أضرار متوسطة",
+            "majordamage": "أضرار كبيرة",
+            "major_damage": "أضرار كبيرة",
+            "severelydamaged": "أضرار شديدة",
+            "severely_damaged": "أضرار شديدة",
             "destroyed": "مدمر",
-            "demolished": "مهدم",
-            "rubble": "ركام",
-            "under_construction": "قيد البناء",
+            "demolished": "مدمر",
+            "rubble": "مدمر",
+            "underconstruction": "قيد الإنشاء",
+            "under_construction": "قيد الإنشاء",
+            "abandoned": "مهجور",
+            "unknown": "غير معروف",
         }
         if isinstance(self.building_status, int):
             return statuses_int.get(self.building_status, str(self.building_status))

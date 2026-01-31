@@ -461,20 +461,25 @@ class BuildingApiService:
                 mapped_data["building_type"] = 1
 
         # Building status mapping from API string values to integer codes
-        # API returns: "Intact", "MinorDamage", "MajorDamage", "Destroyed", "UnderConstruction"
-        # UI expects: 1, 2, 3, 4, 5
+        # API returns: "Intact", "MinorDamage", "ModerateDamage", "MajorDamage", "SeverelyDamaged",
+        #              "Destroyed", "UnderConstruction", "Abandoned", "Unknown"
+        # UI expects: 1, 2, 3, 4, 5, 6, 7, 8, 99
         building_status_str_to_int = {
             "intact": 1,
             "minordamage": 2,
-            "majordamage": 3,
-            "destroyed": 4,
-            "underconstruction": 5,
+            "moderatedamage": 3,
+            "majordamage": 4,
+            "severelydamaged": 5,
+            "destroyed": 6,
+            "underconstruction": 7,
+            "abandoned": 8,
+            "unknown": 99,
         }
 
         # Handle building_status - convert API string to integer
         if "building_status" in mapped_data:
             bs = mapped_data["building_status"]
-            if isinstance(bs, int) and 1 <= bs <= 5:
+            if isinstance(bs, int) and (1 <= bs <= 8 or bs == 99):
                 # Already an integer, keep it
                 pass
             elif isinstance(bs, str):
@@ -546,19 +551,28 @@ class BuildingApiService:
         }
 
         # Building status enum mapping (Python string value -> API integer)
-        # Assuming: 1 = Intact, 2 = MinorDamage, 3 = MajorDamage, 4 = Destroyed, etc.
+        # API: 1=Intact, 2=MinorDamage, 3=ModerateDamage, 4=MajorDamage, 5=SeverelyDamaged,
+        #      6=Destroyed, 7=UnderConstruction, 8=Abandoned, 99=Unknown
         building_status_string_mapping = {
             "intact": 1,
             "standing": 1,
             "minor_damage": 2,
-            "damaged": 2,
-            "partially_damaged": 2,
-            "major_damage": 3,
-            "severely_damaged": 3,
-            "destroyed": 4,
-            "demolished": 4,
-            "rubble": 4,
-            "under_construction": 5,
+            "minordamage": 2,
+            "moderate_damage": 3,
+            "moderatedamage": 3,
+            "damaged": 3,
+            "partially_damaged": 3,
+            "major_damage": 4,
+            "majordamage": 4,
+            "severely_damaged": 5,
+            "severelydamaged": 5,
+            "destroyed": 6,
+            "demolished": 6,
+            "rubble": 6,
+            "under_construction": 7,
+            "underconstruction": 7,
+            "abandoned": 8,
+            "unknown": 99,
         }
 
         api_data = {}
@@ -583,12 +597,12 @@ class BuildingApiService:
 
             # Handle building_status - accept both integer and string values
             if key == "building_status":
-                if isinstance(value, int) and 1 <= value <= 5:
+                if isinstance(value, int) and (1 <= value <= 8 or value == 99):
                     # Already an integer, use it directly
                     pass
                 elif isinstance(value, str):
                     # Convert string to integer
-                    value = building_status_string_mapping.get(value, 1)
+                    value = building_status_string_mapping.get(value.lower().replace("_", "").replace(" ", ""), 1)
                 else:
                     value = 1  # Default to Intact
 
