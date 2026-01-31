@@ -40,9 +40,9 @@ class Config:
     # Data Provider Configuration
     # Options: "mock", "http", "local_db"
     # - mock: Uses in-memory mock data for development (no backend required)
-    # - http: Connects to a REST API backend
-    # - local_db: Uses local SQLite/PostgreSQL database (current default)
-    DATA_PROVIDER: str = "local_db"
+    # - http: Connects to a REST API backend (uses /api/Buildings endpoint)
+    # - local_db: Uses local SQLite/PostgreSQL database
+    DATA_PROVIDER: str = "http"  # Changed to use API backend
 
     # Mock Data Provider Settings
     MOCK_SIMULATE_DELAY: bool = True
@@ -50,7 +50,9 @@ class Config:
     MOCK_PERSIST_TO_FILE: bool = False
 
     # HTTP API Backend Settings
-    API_BASE_URL: str = "http://localhost:8080"
+    #
+    #API_BASE_URL: str = "http://localhost:8081/api"
+    API_BASE_URL: str = "https://localhost:7204/api"
     API_VERSION: str = "v1"
     API_TIMEOUT: int = 30
     API_MAX_RETRIES: int = 3
@@ -221,20 +223,24 @@ class Roles:
 
 # Controlled vocabularies
 class Vocabularies:
+    # Building types matching API values (integer codes)
+    # Value (code), Name (English), Name (Arabic)
+    # API: 1 = Residential, 2 = Commercial, 3 = MixedUse, 4 = Industrial
     BUILDING_TYPES = [
-        ("residential", "Residential", "سكني"),
-        ("commercial", "Commercial", "تجاري"),
-        ("mixed_use", "Mixed Use", "متعدد الاستخدامات"),
-        ("industrial", "Industrial", "صناعي"),
-        ("public", "Public", "عام"),
+        (1, "Residential", "سكني"),
+        (2, "Commercial", "تجاري"),
+        (3, "MixedUse", "مختلط (سكني وتجاري)"),
+        (4, "Industrial", "صناعي"),
     ]
 
+    # Building status matching API values (integer codes)
+    # Value (code), Name (English), Name (Arabic)
     BUILDING_STATUS = [
-        ("intact", "Intact", "سليم"),
-        ("minor_damage", "Minor Damage", "ضرر طفيف"),
-        ("major_damage", "Major Damage", "ضرر كبير"),
-        ("destroyed", "Destroyed", "مدمر"),
-        ("under_construction", "Under Construction", "قيد البناء"),
+        (1, "Intact", "سليم"),
+        (2, "MinorDamage", "ضرر طفيف"),
+        (3, "MajorDamage", "ضرر كبير"),
+        (4, "Destroyed", "مدمر"),
+        (5, "UnderConstruction", "قيد البناء"),
     ]
 
     UNIT_TYPES = [

@@ -14,8 +14,7 @@ from PyQt5.QtGui import QCursor, QIcon
 import os
 import re
 from app.config import Config
-from repositories.database import Database
-from services.auth_service import AuthService
+from services.api_auth_service import ApiAuthService
 from utils.i18n import I18n
 from utils.logger import get_logger
 from ui.font_utils import create_font, FontManager
@@ -29,11 +28,10 @@ class LoginPage(QWidget):
 
     login_successful = pyqtSignal(object)
 
-    def __init__(self, db: Database, i18n: I18n, parent=None):
+    def __init__(self, i18n: I18n, parent=None):
         super().__init__(parent)
-        self.db = db
         self.i18n = i18n
-        self.auth_service = AuthService(db)
+        self.auth_service = ApiAuthService()
         self.password_visible = False
         self._arabic_re = re.compile(r"[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF]")
 
