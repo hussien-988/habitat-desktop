@@ -1038,14 +1038,11 @@ class AddBuildingPage(QWidget):
 
         # GG: تحميل رمز المحافظة (Governorate)
         if hasattr(self.building, 'governorate_code') and self.building.governorate_code:
-            idx = self.governorate_combo.findData(self.building.governorate_code)
-            if idx >= 0:
-                self.governorate_combo.setCurrentIndex(idx)
+            self.governorate_combo.setText(self.building.governorate_code)
 
         # DD: تحميل رمز المنطقة (District)
-        idx = self.district_combo.findData(self.building.district_code)
-        if idx >= 0:
-            self.district_combo.setCurrentIndex(idx)
+        if hasattr(self.building, 'district_code') and self.building.district_code:
+            self.district_combo.setText(self.building.district_code)
 
         # SS: تحميل المنطقة الفرعية (Subdistrict)
         if hasattr(self.building, 'subdistrict_code') and self.building.subdistrict_code:
@@ -1056,9 +1053,8 @@ class AddBuildingPage(QWidget):
             self.community_code.setText(self.building.community_code)
 
         # NNN: تحميل رمز الحي/القرية (Neighborhood)
-        idx = self.neighborhood_combo.findData(self.building.neighborhood_code)
-        if idx >= 0:
-            self.neighborhood_combo.setCurrentIndex(idx)
+        if hasattr(self.building, 'neighborhood_code') and self.building.neighborhood_code:
+            self.neighborhood_combo.setText(self.building.neighborhood_code)
 
         # BBBBB: تحميل رقم البناء (Building Number - آخر 5 أرقام من building_id)
         if self.building.building_id and len(self.building.building_id) >= 5:
