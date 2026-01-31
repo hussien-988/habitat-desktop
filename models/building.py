@@ -26,7 +26,8 @@ class Building:
 
     # Primary identifiers
     building_uuid: str = field(default_factory=lambda: str(uuid.uuid4()))
-    building_id: str = ""  # 17-digit UN-Habitat code
+    building_id: str = ""  # 17-digit UN-Habitat code (no dashes)
+    building_id_formatted: str = ""  # Formatted ID with dashes (e.g., 01-01-01-003-002-00001)
 
     # Administrative hierarchy
     governorate_code: str = "01"
@@ -170,6 +171,7 @@ class Building:
         return {
             "building_uuid": self.building_uuid,
             "building_id": self.building_id,
+            "building_id_formatted": self.building_id_formatted,
             "governorate_code": self.governorate_code,
             "governorate_name": self.governorate_name,
             "governorate_name_ar": self.governorate_name_ar,

@@ -331,6 +331,8 @@ class BuildingApiService:
             # Building ID
             "buildingId": "building_id",
             "building_id": "building_id",
+            "buildingIdFormatted": "building_id_formatted",
+            "building_id_formatted": "building_id_formatted",
 
             # Administrative codes
             "governorateCode": "governorate_code",

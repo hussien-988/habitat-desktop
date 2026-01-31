@@ -1897,8 +1897,9 @@ class BuildingsListPage(QWidget):
 
         # Populate table with current page data
         for idx, building in enumerate(page_buildings):
-            # رمز البناء
-            self.table.setItem(idx, 0, QTableWidgetItem(building.building_id or ""))
+            # رمز البناء (use formatted ID if available, fallback to building_id)
+            display_id = building.building_id_formatted or building.building_id or ""
+            self.table.setItem(idx, 0, QTableWidgetItem(display_id))
 
             # تاريخ الادخال
             date_str = building.created_at.strftime("%d/%m/%Y") if building.created_at else ""
