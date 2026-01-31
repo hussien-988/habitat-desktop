@@ -74,9 +74,9 @@ class CustomButton(QPushButton):
                 background-color: {bg_color};
                 color: {text_color};
                 {border_style}
-                border-radius: 6px;
-                font-size: 14px;
-                font-weight: bold;
+                border-radius: 8px;
+                font-size: 10pt;
+                font-weight: 600;
                 padding: 0px 15px;
             }}
             QPushButton:hover {{

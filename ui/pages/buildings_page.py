@@ -6,14 +6,14 @@ Buildings page with modern UI design - QStackedWidget implementation.
 import json
 from pathlib import Path
 from PyQt5.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
+    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QTextEdit,
     QPushButton, QComboBox, QTableView, QTableWidget, QTableWidgetItem, QHeaderView,
     QFrame, QFileDialog, QAbstractItemView, QGraphicsDropShadowEffect,
     QDialog, QDoubleSpinBox, QSpinBox, QMessageBox, QScrollArea,
-    QMenu, QAction, QTabWidget, QStackedWidget
+    QMenu, QAction, QTabWidget, QStackedWidget, QStyleOptionHeader, QStyle
 )
-from PyQt5.QtCore import Qt, pyqtSignal, QPoint
-from PyQt5.QtGui import QColor, QCursor
+from PyQt5.QtCore import Qt, pyqtSignal, QPoint, QRect, QSize, QLocale
+from PyQt5.QtGui import QColor, QCursor, QPainter, QFont, QIcon, QPixmap
 
 # Try to import WebEngine for map
 try:
@@ -33,6 +33,10 @@ from ui.components.toast import Toast
 from ui.components.dialogs import ExportDialog
 from ui.components.message_dialog import MessageDialog
 from ui.components.custom_button import CustomButton
+from ui.components.primary_button import PrimaryButton
+from ui.design_system import PageDimensions, Colors, ButtonDimensions
+from ui.style_manager import StyleManager
+from ui.font_utils import create_font, FontManager
 from utils.i18n import I18n
 from utils.logger import get_logger
 
@@ -84,136 +88,346 @@ class AddBuildingPage(QWidget):
     def _setup_ui(self):
         """Setup the add/edit building UI with 3 cards."""
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(40, 20, 40, 40)
+        # Apply unified padding from PageDimensions (DRY principle)
+        layout.setContentsMargins(
+            PageDimensions.CONTENT_PADDING_H,        # Left: 131px
+            PageDimensions.CONTENT_PADDING_V_TOP,    # Top: 32px
+            PageDimensions.CONTENT_PADDING_H,        # Right: 131px
+            PageDimensions.CONTENT_PADDING_V_BOTTOM  # Bottom: 0px
+        )
         layout.setSpacing(12)
 
-        # الخلفية العامة
-        self.setStyleSheet("background-color: #f4f7f9;")
+        # Background color from Figma via StyleManager (DRY principle)
+        self.setStyleSheet(StyleManager.page_background())
 
-        # Header
-        header_layout = QHBoxLayout()
-        header_layout.setSpacing(16)
+        # Header - matching wizard style (DRY: Using design system constants)
+        title_row = QHBoxLayout()
+        title_row.setSpacing(16)
+        title_row.setContentsMargins(0, 0, 0, 0)
 
-        # زر الرجوع (سهم بدون عنوان)
-        back_btn = QPushButton("←")
-        back_btn.setFixedSize(42, 42)
-        back_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #f0f0f0;
-                color: #333;
-                border: none;
-                border-radius: 6px;
-                font-size: 20px;
-                font-weight: bold;
-            }
-            QPushButton:hover {
-                background-color: #e0e0e0;
-            }
+        # Title/Subtitle container (vertical) - RIGHT SIDE
+        title_subtitle_container = QVBoxLayout()
+        title_subtitle_container.setSpacing(4)
+
+        # Title: "إضافة بناء جديد" or "تعديل بناء"
+        # Figma: Desktop/H4 24px = 18pt Bold (DRY: Using FontManager)
+        title_label = QLabel("إضافة بناء جديد" if not self.building else "تعديل بناء")
+        title_font = create_font(
+            size=FontManager.SIZE_TITLE,  # 18pt (24px Figma)
+            weight=QFont.Bold,
+            letter_spacing=0
+        )
+        title_label.setFont(title_font)
+        title_label.setStyleSheet(f"color: {Colors.TEXT_PRIMARY}; border: none; background: transparent;")
+        title_subtitle_container.addWidget(title_label)
+
+        # Subtitle: "المباني  •  إضافة بناء جديد"
+        # Desktop/Body2 (DRY: Using FontManager)
+        subtitle_layout = QHBoxLayout()
+        subtitle_layout.setSpacing(8)
+        subtitle_layout.setContentsMargins(0, 0, 0, 0)
+
+        subtitle_part1 = QLabel("المباني")
+        subtitle_font = create_font(
+            size=FontManager.SIZE_BODY,  # 9pt (12px Figma)
+            weight=QFont.Normal,
+            letter_spacing=0
+        )
+        subtitle_part1.setFont(subtitle_font)
+        subtitle_part1.setStyleSheet(f"color: {Colors.TEXT_SECONDARY}; border: none; background: transparent;")
+        subtitle_layout.addWidget(subtitle_part1)
+
+        # Dot separator
+        dot_label = QLabel("•")
+        dot_label.setFont(subtitle_font)
+        dot_label.setStyleSheet(f"color: {Colors.TEXT_SECONDARY}; border: none; background: transparent;")
+        subtitle_layout.addWidget(dot_label)
+
+        # Part 2
+        subtitle_part2 = QLabel("إضافة بناء جديد" if not self.building else "تعديل بناء")
+        subtitle_part2.setFont(subtitle_font)
+        subtitle_part2.setStyleSheet(f"color: {Colors.TEXT_SECONDARY}; border: none; background: transparent;")
+        subtitle_layout.addWidget(subtitle_part2)
+
+        subtitle_layout.addStretch()
+        title_subtitle_container.addLayout(subtitle_layout)
+
+        title_row.addLayout(title_subtitle_container)
+        title_row.addStretch()
+
+        # Close button (X) - LEFT SIDE FIRST (DRY: Using ButtonDimensions and Colors)
+        # Figma specs: 52×48px, White background
+        close_btn = QPushButton("✕")
+        close_btn.setCursor(Qt.PointingHandCursor)
+        close_btn.setFixedSize(ButtonDimensions.CLOSE_WIDTH, ButtonDimensions.CLOSE_HEIGHT)
+
+        close_btn_font = create_font(
+            size=ButtonDimensions.CLOSE_FONT_SIZE,
+            weight=QFont.Normal,
+            letter_spacing=0
+        )
+        close_btn.setFont(close_btn_font)
+
+        close_btn.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {Colors.SURFACE};
+                color: {Colors.PRIMARY_BLUE};
+                border: 1px solid {Colors.BORDER_DEFAULT};
+                border-radius: {ButtonDimensions.CLOSE_BORDER_RADIUS}px;
+                padding: {ButtonDimensions.CLOSE_PADDING_V}px {ButtonDimensions.CLOSE_PADDING_H}px;
+            }}
+            QPushButton:hover {{
+                background-color: {Colors.BACKGROUND_LIGHT};
+            }}
         """)
-        back_btn.setCursor(Qt.PointingHandCursor)
-        back_btn.clicked.connect(self.cancelled.emit)
-        back_btn.setToolTip("رجوع إلى قائمة المباني")
-        header_layout.addWidget(back_btn)
+        close_btn.clicked.connect(self.cancelled.emit)
+        title_row.addWidget(close_btn)
 
-        # معلومات العنوان (يمين)
-        title_vbox = QVBoxLayout()
-        title = QLabel("إضافة بناء جديد" if not self.building else "تعديل بناء")
-        title.setStyleSheet("font-size: 26px; font-weight: bold; color: #1a2b3c; border: none;")
+        # Save button with icon - LEFT SIDE SECOND (DRY: Using ButtonDimensions)
+        # Figma specs: 114×48px
+        save_btn = QPushButton(" حفظ")
+        save_btn.setCursor(Qt.PointingHandCursor)
+        save_btn.setFixedSize(ButtonDimensions.SAVE_WIDTH, ButtonDimensions.SAVE_HEIGHT)
 
-        breadcrumb = QLabel("المباني  •  إضافة بناء جديد")
-        breadcrumb.setStyleSheet("color: #909399; font-size: 13px; border: none;")
+        # Load save icon
+        import os
+        save_icon_path = os.path.join("assets", "images", "save.png")
+        if os.path.exists(save_icon_path):
+            save_btn.setIcon(QIcon(save_icon_path))
+            save_btn.setIconSize(QSize(ButtonDimensions.SAVE_ICON_SIZE, ButtonDimensions.SAVE_ICON_SIZE))
 
-        title_vbox.addWidget(title)
-        title_vbox.addWidget(breadcrumb)
-        header_layout.addLayout(title_vbox)
+        save_btn_font = create_font(
+            size=ButtonDimensions.SAVE_FONT_SIZE,
+            weight=QFont.Normal,
+            letter_spacing=0
+        )
+        save_btn.setFont(save_btn_font)
 
-        header_layout.addStretch()
-
-        # زر الحفظ (يسار)
-        save_btn = CustomButton.success("حفظ", self, width=110, height=42, icon="✓")
+        save_btn.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {Colors.PRIMARY_BLUE};
+                color: white;
+                border: none;
+                padding: {ButtonDimensions.SAVE_PADDING_V}px {ButtonDimensions.SAVE_PADDING_H}px;
+                border-radius: {ButtonDimensions.SAVE_BORDER_RADIUS}px;
+                font-family: 'IBM Plex Sans Arabic';
+                icon-size: {ButtonDimensions.SAVE_ICON_SIZE}px;
+            }}
+            QPushButton:hover {{
+                background-color: {ButtonDimensions.PRIMARY_HOVER_BG};
+            }}
+        """)
         save_btn.clicked.connect(self._on_save)
-        header_layout.addWidget(save_btn)
+        title_row.addWidget(save_btn)
 
-        layout.addLayout(header_layout)
+        layout.addLayout(title_row)
+
+        # مسافة بعد الهيدر قبل الكاردات
+        layout.addSpacing(24)
 
         # === CARD 1: بيانات البناء ===
+        # DRY: Using same card style as wizard (building_selection_step.py)
         card1 = QFrame()
-        card1.setStyleSheet(self._get_card_style())
+        card1.setObjectName("buildingCard")
+        card1.setStyleSheet("""
+            QFrame#buildingCard {
+                background-color: #FFFFFF;
+                border: 1px solid #E1E8ED;
+                border-radius: 12px;
+            }
+        """)
+
         card1_layout = QVBoxLayout(card1)
-        card1_layout.setContentsMargins(20, 15, 20, 15)
-        card1_layout.setSpacing(12)
+        # Padding: 12px from all sides (matching wizard - DRY principle)
+        card1_layout.setContentsMargins(12, 12, 12, 12)
+        # No default spacing - we'll control gaps manually for precision
+        card1_layout.setSpacing(0)
 
-        # رأس البطاقة
+        # Header (title + subtitle) - DRY: Same structure as wizard
         card_header = QHBoxLayout()
-        info_vbox = QVBoxLayout()
-        info_title = QLabel("بيانات البناء")
-        info_title.setStyleSheet("font-weight: bold; font-size: 15px; color: #303133; border: none;")
-        info_sub = QLabel("أدخل معلومات البناء والموقع الجغرافي")
-        info_sub.setStyleSheet("color: #909399; font-size: 12px; border: none;")
-        info_vbox.addWidget(info_title)
-        info_vbox.addWidget(info_sub)
+        card_header.setSpacing(8)
 
-        icon_label = QLabel("🏢")
-        icon_label.setFixedSize(45, 45)
+        # Icon FIRST (left side in RTL) - DRY: Using Icon.load_pixmap
+        from ui.components.icon import Icon
+        icon_label = QLabel()
+        icon_label.setFixedSize(40, 40)  # Wizard spec: 40×40px
         icon_label.setAlignment(Qt.AlignCenter)
-        icon_label.setStyleSheet("background-color: #ecf5ff; border-radius: 22px; font-size: 20px; border: none;")
+        icon_label.setStyleSheet("""
+            QLabel {
+                background-color: #ffffff;
+                border: 1px solid #DBEAFE;
+                border-radius: 10px;
+            }
+        """)
+        # Load blue.png icon (DRY: reusing wizard's icon loading pattern)
+        icon_pixmap = Icon.load_pixmap("blue", size=24)
+        if icon_pixmap and not icon_pixmap.isNull():
+            icon_label.setPixmap(icon_pixmap)
+        else:
+            # Fallback if image not found
+            icon_label.setText("🏢")
+            icon_label.setStyleSheet(icon_label.styleSheet() + "font-size: 16px;")
 
-        card_header.addLayout(info_vbox)
-        card_header.addStretch()
         card_header.addWidget(icon_label)
+
+        # Text column (title + subtitle) SECOND (right side in RTL)
+        header_text_col = QVBoxLayout()
+        header_text_col.setSpacing(1)
+
+        # Title: "بيانات البناء" - DRY: Using create_font and Colors
+        info_title = QLabel("بيانات البناء")
+        # Title: 14px from Figma = 10pt, weight 600, color WIZARD_TITLE (matching wizard)
+        info_title.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
+        info_title.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent;")
+
+        # Subtitle: "ادخل معلومات البناء والموقع الجغرافي"
+        # Changed from "ابحث عن" to "ادخل" as requested
+        info_sub = QLabel("ادخل معلومات البناء والموقع الجغرافي")
+        # Subtitle: 14px from Figma = 10pt, weight 400, color WIZARD_SUBTITLE (matching wizard)
+        info_sub.setFont(create_font(size=10, weight=FontManager.WEIGHT_REGULAR))
+        info_sub.setStyleSheet(f"color: {Colors.WIZARD_SUBTITLE}; background: transparent;")
+
+        header_text_col.addWidget(info_title)
+        header_text_col.addWidget(info_sub)
+
+        card_header.addLayout(header_text_col)
+        card_header.addStretch(1)
+
         card1_layout.addLayout(card_header)
 
-        # شبكة الحقول - 5 في صف واحد
+        # Gap: 12px between header and fields (matching wizard - DRY principle)
+        card1_layout.addSpacing(12)
+
+        # شبكة الحقول - 6 في صف واحد (بدون containers)
         fields_row = QHBoxLayout()
         fields_row.setSpacing(12)
 
-        # GG: رمز المحافظة (Governorate)
-        self.governorate_combo = self._create_simple_field("محافظة", QComboBox(), "01")
-        self.governorate_combo.addItem("حلب", "01")
-        self.governorate_combo.currentIndexChanged.connect(self._update_building_id)
-        self.governorate_combo.currentIndexChanged.connect(self._validate_building_id_realtime)
-        fields_row.addWidget(self.governorate_combo._parent_container, 1)
+        # Shared label font (DRY: same as card title)
+        label_font = create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD)
 
-        # DD: رمز المنطقة (District)
-        self.district_combo = self._create_simple_field("مدينة", QComboBox(), "01")
-        for code, name, name_ar in AleppoDivisions.DISTRICTS:
-            self.district_combo.addItem(code, code)
-        self.district_combo.currentIndexChanged.connect(self._update_building_id)
-        self.district_combo.currentIndexChanged.connect(self._validate_building_id_realtime)
-        fields_row.addWidget(self.district_combo._parent_container, 1)
+        # Shared input style (DRY: background #F8FAFF, border-radius 8px, height 45px)
+        input_style = """
+            QLineEdit {
+                background-color: #F8FAFF;
+                border: 1px solid #dcdfe6;
+                border-radius: 8px;
+                padding: 8px 12px;
+                color: #606266;
+                font-size: 10pt;
+            }
+            QLineEdit:focus {
+                border: 1px solid #3890DF;
+            }
+        """
 
-        # SS: منطقة فرعية (Subdistrict) - ثابت 01
-        self.subdistrict_code = self._create_simple_field("بلدة", QLineEdit(), "01")
+        # Field 1: رمز المحافظة (Governorate)
+        gov_container = QVBoxLayout()
+        gov_container.setSpacing(6)
+        gov_label = QLabel("رمز المحافظة")
+        gov_label.setFont(label_font)
+        gov_label.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent;")
+        self.governorate_combo = QLineEdit()
+        self.governorate_combo.setText("01")
+        self.governorate_combo.setMaxLength(2)
+        self.governorate_combo.setStyleSheet(input_style)
+        self.governorate_combo.setFixedHeight(45)  # توحيد الارتفاع
+        self.governorate_combo.setAlignment(Qt.AlignRight)  # محاذاة لليمين
+        self.governorate_combo.textChanged.connect(self._update_building_id)
+        self.governorate_combo.textChanged.connect(self._validate_building_id_realtime)
+        gov_container.addWidget(gov_label)
+        gov_container.addWidget(self.governorate_combo)
+        fields_row.addLayout(gov_container, 1)
+
+        # Field 2: رمز المنطقة (District)
+        dist_container = QVBoxLayout()
+        dist_container.setSpacing(6)
+        dist_label = QLabel("رمز المنطقة")
+        dist_label.setFont(label_font)
+        dist_label.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent;")
+        self.district_combo = QLineEdit()
+        self.district_combo.setText("01")
+        self.district_combo.setMaxLength(2)
+        self.district_combo.setStyleSheet(input_style)
+        self.district_combo.setFixedHeight(45)  # توحيد الارتفاع
+        self.district_combo.setAlignment(Qt.AlignRight)  # محاذاة لليمين
+        self.district_combo.textChanged.connect(self._update_building_id)
+        self.district_combo.textChanged.connect(self._validate_building_id_realtime)
+        dist_container.addWidget(dist_label)
+        dist_container.addWidget(self.district_combo)
+        fields_row.addLayout(dist_container, 1)
+
+        # Field 3: رمز البلدة (Subdistrict)
+        sub_container = QVBoxLayout()
+        sub_container.setSpacing(6)
+        sub_label = QLabel("رمز البلدة")
+        sub_label.setFont(label_font)
+        sub_label.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent;")
+        self.subdistrict_code = QLineEdit()
         self.subdistrict_code.setText("01")
         self.subdistrict_code.setMaxLength(2)
+        self.subdistrict_code.setStyleSheet(input_style)
+        self.subdistrict_code.setFixedHeight(45)  # توحيد الارتفاع
+        self.subdistrict_code.setAlignment(Qt.AlignRight)  # محاذاة لليمين
         self.subdistrict_code.textChanged.connect(self._update_building_id)
         self.subdistrict_code.textChanged.connect(self._validate_building_id_realtime)
-        fields_row.addWidget(self.subdistrict_code._parent_container, 1)
+        sub_container.addWidget(sub_label)
+        sub_container.addWidget(self.subdistrict_code)
+        fields_row.addLayout(sub_container, 1)
 
-        # CCC: رمز المجتمع/المدينة (Community)
-        self.community_code = self._create_simple_field("قرية", QLineEdit(), "001")
+        # Field 4: رمز القرية (Community)
+        comm_container = QVBoxLayout()
+        comm_container.setSpacing(6)
+        comm_label = QLabel("رمز القرية")
+        comm_label.setFont(label_font)
+        comm_label.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent;")
+        self.community_code = QLineEdit()
         self.community_code.setPlaceholderText("001")
         self.community_code.setMaxLength(3)
+        self.community_code.setStyleSheet(input_style)
+        self.community_code.setFixedHeight(45)  # توحيد الارتفاع
+        self.community_code.setAlignment(Qt.AlignRight)  # محاذاة لليمين
         self.community_code.textChanged.connect(self._update_building_id)
         self.community_code.textChanged.connect(self._validate_building_id_realtime)
-        fields_row.addWidget(self.community_code._parent_container, 1)
+        comm_container.addWidget(comm_label)
+        comm_container.addWidget(self.community_code)
+        fields_row.addLayout(comm_container, 1)
 
-        # NNN: رمز الحي/القرية (Neighborhood)
-        self.neighborhood_combo = self._create_simple_field("حي", QComboBox(), "001")
-        for code, name, name_ar in AleppoDivisions.NEIGHBORHOODS_ALEPPO:
-            self.neighborhood_combo.addItem(code, code)
-        self.neighborhood_combo.currentIndexChanged.connect(self._update_building_id)
-        self.neighborhood_combo.currentIndexChanged.connect(self._validate_building_id_realtime)
-        fields_row.addWidget(self.neighborhood_combo._parent_container, 1)
+        # Field 5: رمز الحي (Neighborhood)
+        neigh_container = QVBoxLayout()
+        neigh_container.setSpacing(6)
+        neigh_label = QLabel("رمز الحي")
+        neigh_label.setFont(label_font)
+        neigh_label.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent;")
+        self.neighborhood_combo = QLineEdit()
+        self.neighborhood_combo.setPlaceholderText("001")
+        self.neighborhood_combo.setMaxLength(3)
+        self.neighborhood_combo.setStyleSheet(input_style)
+        self.neighborhood_combo.setFixedHeight(45)  # توحيد الارتفاع
+        self.neighborhood_combo.setAlignment(Qt.AlignRight)  # محاذاة لليمين
+        self.neighborhood_combo.textChanged.connect(self._update_building_id)
+        self.neighborhood_combo.textChanged.connect(self._validate_building_id_realtime)
+        neigh_container.addWidget(neigh_label)
+        neigh_container.addWidget(self.neighborhood_combo)
+        fields_row.addLayout(neigh_container, 1)
 
-        # BBBBB: رقم البناء (Building Number)
-        self.building_number = self._create_simple_field("رقم البناء", QLineEdit(), "00001")
+        # Field 6: رمز البناء (Building Number)
+        build_container = QVBoxLayout()
+        build_container.setSpacing(6)
+        build_label = QLabel("رمز البناء")
+        build_label.setFont(label_font)
+        build_label.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent;")
+        self.building_number = QLineEdit()
         self.building_number.setPlaceholderText("00001")
         self.building_number.setMaxLength(5)
+        self.building_number.setStyleSheet(input_style)
+        self.building_number.setFixedHeight(45)  # توحيد الارتفاع
+        self.building_number.setAlignment(Qt.AlignRight)  # محاذاة لليمين
         self.building_number.textChanged.connect(self._update_building_id)
         self.building_number.textChanged.connect(self._validate_building_id_realtime)
         self.building_number.returnPressed.connect(self._validate_building_number_on_enter)
-        fields_row.addWidget(self.building_number._parent_container, 1)
+        build_container.addWidget(build_label)
+        build_container.addWidget(self.building_number)
+        fields_row.addLayout(build_container, 1)
 
         card1_layout.addLayout(fields_row)
 
@@ -251,357 +465,321 @@ class AddBuildingPage(QWidget):
         card2 = QFrame()
         card2.setStyleSheet(self._get_card_style())
         card2_layout = QHBoxLayout(card2)
-        card2_layout.setContentsMargins(20, 12, 20, 12)
+        card2_layout.setContentsMargins(12, 12, 12, 12)  # توحيد padding مع الكاردات الأخرى
         card2_layout.setSpacing(15)
+
+        # Shared label font for card 2 (DRY: same as card 1)
+        card2_label_font = create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD)
+
+        # Shared combobox style (نسخة طبق الأصل 100% من unit_dialog.py - فقط الارتفاع 45px)
+        combo_style = """
+            QComboBox {
+                padding: 6px 40px 6px 12px;
+                padding-right: 12px;
+                border: 1px solid #E1E8ED;
+                border-radius: 8px;
+                background-color: #F8FAFF;
+                font-size: 14px;
+                font-weight: 600;
+                color: #9CA3AF;
+            }
+            QComboBox:focus {
+                border-color: #3890DF;
+                border-width: 2px;
+            }
+            QComboBox::drop-down {
+                subcontrol-origin: border;
+                subcontrol-position: center left;
+                width: 35px;
+                border: none;
+                border-left-width: 0px;
+                margin-left: 5px;
+            }
+            QComboBox::down-arrow {
+                image: url(assets/images/v.png);
+                width: 12px;
+                height: 12px;
+                border: none;
+                border-width: 0px;
+            }
+            QComboBox QAbstractItemView {
+                font-size: 14px;
+            }
+        """
 
         # حالة البناء
         vbox_status = QVBoxLayout()
         vbox_status.setSpacing(6)
         lbl_status = QLabel("حالة البناء")
-        lbl_status.setStyleSheet("font-size: 12px; color: #606266;")
+        lbl_status.setFont(card2_label_font)
+        lbl_status.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent;")
         vbox_status.addWidget(lbl_status)
         self.status_combo = QComboBox()
         self.status_combo.addItem("اختر")
         for code, en, ar in Vocabularies.BUILDING_STATUS:
             self.status_combo.addItem(ar, code)
-        self.status_combo.setFixedHeight(36)
+        self.status_combo.setStyleSheet(combo_style)
+        self.status_combo.setFixedHeight(45)  # توحيد الارتفاع مع باقي الحقول
+        self.status_combo.setLayoutDirection(Qt.RightToLeft)  # محاذاة لليمين
         vbox_status.addWidget(self.status_combo)
-        card2_layout.addLayout(vbox_status)
+        card2_layout.addLayout(vbox_status, 1)  # توحيد العرض - stretch factor
 
         # نوع البناء
         vbox_type = QVBoxLayout()
         vbox_type.setSpacing(6)
         lbl_type = QLabel("نوع البناء")
-        lbl_type.setStyleSheet("font-size: 12px; color: #606266;")
+        lbl_type.setFont(card2_label_font)
+        lbl_type.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent;")
         vbox_type.addWidget(lbl_type)
         self.type_combo = QComboBox()
         self.type_combo.addItem("اختر")
         for code, en, ar in Vocabularies.BUILDING_TYPES:
             self.type_combo.addItem(ar, code)
-        self.type_combo.setFixedHeight(36)
+        self.type_combo.setStyleSheet(combo_style)
+        self.type_combo.setFixedHeight(45)  # توحيد الارتفاع مع باقي الحقول
+        self.type_combo.setLayoutDirection(Qt.RightToLeft)  # محاذاة لليمين
         vbox_type.addWidget(self.type_combo)
-        card2_layout.addLayout(vbox_type)
+        card2_layout.addLayout(vbox_type, 1)  # توحيد العرض - stretch factor
 
-        # عدد الوحدات
+        # عدد الوحدات (DRY: using _create_spinbox_with_arrows)
         vbox_units = QVBoxLayout()
         vbox_units.setSpacing(6)
         lbl_units = QLabel("عدد الوحدات")
-        lbl_units.setStyleSheet("font-size: 12px; color: #606266;")
+        lbl_units.setFont(card2_label_font)
+        lbl_units.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent;")
         vbox_units.addWidget(lbl_units)
         self.apartments_spin = QSpinBox()
-        self.apartments_spin.setFixedHeight(40)
-        self.apartments_spin.setAlignment(Qt.AlignCenter)
         self.apartments_spin.setRange(0, 200)
-        self.apartments_spin.setButtonSymbols(QSpinBox.PlusMinus)
-        self.apartments_spin.setReadOnly(True)
-        self.apartments_spin.setFocusPolicy(Qt.StrongFocus)
-        self.apartments_spin.setStyleSheet("""
-            QSpinBox {
-                border: 1px solid #ddd;
-                border-radius: 6px;
-                padding: 4px 12px;
-                font-size: 14px;
-                background: white;
-            }
-            QSpinBox::up-button, QSpinBox::down-button {
-                subcontrol-origin: border;
-                width: 32px;
-                border-left: 1px solid #ddd;
-                background: #3498db;
-            }
-            QSpinBox::up-button:hover, QSpinBox::down-button:hover {
-                background: #2980b9;
-            }
-            QSpinBox::up-button:pressed, QSpinBox::down-button:pressed {
-                background: #1f6ca0;
-            }
-            QSpinBox::up-button {
-                subcontrol-position: top right;
-                border-top-right-radius: 5px;
-            }
-            QSpinBox::down-button {
-                subcontrol-position: bottom right;
-                border-bottom-right-radius: 5px;
-            }
-            QSpinBox::up-arrow {
-                image: none;
-                width: 0px;
-                height: 0px;
-                border-left: 5px solid transparent;
-                border-right: 5px solid transparent;
-                border-bottom: 6px solid white;
-            }
-            QSpinBox::down-arrow {
-                image: none;
-                width: 0px;
-                height: 0px;
-                border-left: 5px solid transparent;
-                border-right: 5px solid transparent;
-                border-top: 6px solid white;
-            }
-        """)
-        vbox_units.addWidget(self.apartments_spin)
-        card2_layout.addLayout(vbox_units)
+        self.apartments_spin.setValue(0)
+        self.apartments_spin.setAlignment(Qt.AlignRight)
+        self.apartments_spin.setLocale(QLocale(QLocale.English, QLocale.UnitedStates))
+        self.apartments_spin.setButtonSymbols(QSpinBox.NoButtons)
+        apartments_widget = self._create_spinbox_with_arrows(self.apartments_spin)
+        vbox_units.addWidget(apartments_widget)
+        card2_layout.addLayout(vbox_units, 1)  # توحيد العرض - stretch factor
 
-        # عدد المقاسم
+        # عدد المقاسم (DRY: using _create_spinbox_with_arrows)
         vbox_floors = QVBoxLayout()
         vbox_floors.setSpacing(6)
         lbl_floors = QLabel("عدد المقاسم")
-        lbl_floors.setStyleSheet("font-size: 12px; color: #606266;")
+        lbl_floors.setFont(card2_label_font)
+        lbl_floors.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent;")
         vbox_floors.addWidget(lbl_floors)
         self.floors_spin = QSpinBox()
-        self.floors_spin.setFixedHeight(40)
-        self.floors_spin.setAlignment(Qt.AlignCenter)
         self.floors_spin.setRange(1, 50)
         self.floors_spin.setValue(1)
-        self.floors_spin.setButtonSymbols(QSpinBox.PlusMinus)
-        self.floors_spin.setReadOnly(True)
-        self.floors_spin.setFocusPolicy(Qt.StrongFocus)
-        self.floors_spin.setStyleSheet("""
-            QSpinBox {
-                border: 1px solid #ddd;
-                border-radius: 6px;
-                padding: 4px 12px;
-                font-size: 14px;
-                background: white;
-            }
-            QSpinBox::up-button, QSpinBox::down-button {
-                subcontrol-origin: border;
-                width: 32px;
-                border-left: 1px solid #ddd;
-                background: #3498db;
-            }
-            QSpinBox::up-button:hover, QSpinBox::down-button:hover {
-                background: #2980b9;
-            }
-            QSpinBox::up-button:pressed, QSpinBox::down-button:pressed {
-                background: #1f6ca0;
-            }
-            QSpinBox::up-button {
-                subcontrol-position: top right;
-                border-top-right-radius: 5px;
-            }
-            QSpinBox::down-button {
-                subcontrol-position: bottom right;
-                border-bottom-right-radius: 5px;
-            }
-            QSpinBox::up-arrow {
-                image: none;
-                width: 0px;
-                height: 0px;
-                border-left: 5px solid transparent;
-                border-right: 5px solid transparent;
-                border-bottom: 6px solid white;
-            }
-            QSpinBox::down-arrow {
-                image: none;
-                width: 0px;
-                height: 0px;
-                border-left: 5px solid transparent;
-                border-right: 5px solid transparent;
-                border-top: 6px solid white;
-            }
-        """)
-        vbox_floors.addWidget(self.floors_spin)
-        card2_layout.addLayout(vbox_floors)
+        self.floors_spin.setAlignment(Qt.AlignRight)
+        self.floors_spin.setLocale(QLocale(QLocale.English, QLocale.UnitedStates))
+        self.floors_spin.setButtonSymbols(QSpinBox.NoButtons)
+        floors_widget = self._create_spinbox_with_arrows(self.floors_spin)
+        vbox_floors.addWidget(floors_widget)
+        card2_layout.addLayout(vbox_floors, 1)  # توحيد العرض - stretch factor
 
-        # عدد المحلات
+        # عدد المحلات (DRY: using _create_spinbox_with_arrows)
         vbox_shops = QVBoxLayout()
         vbox_shops.setSpacing(6)
         lbl_shops = QLabel("عدد المحلات")
-        lbl_shops.setStyleSheet("font-size: 12px; color: #606266;")
+        lbl_shops.setFont(card2_label_font)
+        lbl_shops.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent;")
         vbox_shops.addWidget(lbl_shops)
         self.shops_spin = QSpinBox()
-        self.shops_spin.setFixedHeight(40)
-        self.shops_spin.setAlignment(Qt.AlignCenter)
         self.shops_spin.setRange(0, 50)
-        self.shops_spin.setButtonSymbols(QSpinBox.PlusMinus)
-        self.shops_spin.setReadOnly(True)
-        self.shops_spin.setFocusPolicy(Qt.StrongFocus)
-        self.shops_spin.setStyleSheet("""
-            QSpinBox {
-                border: 1px solid #ddd;
-                border-radius: 6px;
-                padding: 4px 12px;
-                font-size: 14px;
-                background: white;
-            }
-            QSpinBox::up-button, QSpinBox::down-button {
-                subcontrol-origin: border;
-                width: 32px;
-                border-left: 1px solid #ddd;
-                background: #3498db;
-            }
-            QSpinBox::up-button:hover, QSpinBox::down-button:hover {
-                background: #2980b9;
-            }
-            QSpinBox::up-button:pressed, QSpinBox::down-button:pressed {
-                background: #1f6ca0;
-            }
-            QSpinBox::up-button {
-                subcontrol-position: top right;
-                border-top-right-radius: 5px;
-            }
-            QSpinBox::down-button {
-                subcontrol-position: bottom right;
-                border-bottom-right-radius: 5px;
-            }
-            QSpinBox::up-arrow {
-                image: none;
-                width: 0px;
-                height: 0px;
-                border-left: 5px solid transparent;
-                border-right: 5px solid transparent;
-                border-bottom: 6px solid white;
-            }
-            QSpinBox::down-arrow {
-                image: none;
-                width: 0px;
-                height: 0px;
-                border-left: 5px solid transparent;
-                border-right: 5px solid transparent;
-                border-top: 6px solid white;
-            }
-        """)
-        vbox_shops.addWidget(self.shops_spin)
-        card2_layout.addLayout(vbox_shops)
+        self.shops_spin.setValue(0)
+        self.shops_spin.setAlignment(Qt.AlignRight)
+        self.shops_spin.setLocale(QLocale(QLocale.English, QLocale.UnitedStates))
+        self.shops_spin.setButtonSymbols(QSpinBox.NoButtons)
+        shops_widget = self._create_spinbox_with_arrows(self.shops_spin)
+        vbox_shops.addWidget(shops_widget)
+        card2_layout.addLayout(vbox_shops, 1)  # توحيد العرض - stretch factor
 
         layout.addWidget(card2)
 
-        # === CARD 3: موقع البناء ===
+        # === CARD 3: موقع البناء === (DRY: نفس تنسيق building_selection_step.py بالضبط)
         card3 = QFrame()
         card3.setStyleSheet(self._get_card_style())
         card3_layout = QVBoxLayout(card3)
-        card3_layout.setContentsMargins(20, 15, 20, 15)
-        card3_layout.setSpacing(12)
+        card3_layout.setContentsMargins(12, 12, 12, 12)
+        card3_layout.setSpacing(0)  # Manual spacing control
 
-        title = QLabel("موقع البناء")
-        title.setStyleSheet("font-weight: bold; margin-bottom: 10px; border: none;")
-        card3_layout.addWidget(title)
+        # Row 1: Header only - "موقع البناء"
+        header = QLabel("موقع البناء")
+        header.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
+        header.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent;")
+        card3_layout.addWidget(header)
 
-        body_layout = QHBoxLayout()
-        body_layout.setSpacing(20)
+        # Gap: 12px between header and content
+        card3_layout.addSpacing(12)
 
-        # الوصف العام
-        vbox_gen = QVBoxLayout()
-        lbl_gen = QLabel("الوصف العام")
-        self.general_desc = QLineEdit()
-        self.general_desc.setPlaceholderText("ادخل وصفاً عاماً...")
-        self.general_desc.setFixedHeight(40)
-        vbox_gen.addWidget(lbl_gen)
-        vbox_gen.addWidget(self.general_desc)
+        # Row 2: Three equal sections with 24px gap between them
+        content_row = QHBoxLayout()
+        content_row.setSpacing(24)  # Gap: 24px between sections
 
-        # وصف الموقع
-        vbox_desc = QVBoxLayout()
-        lbl_site = QLabel("وصف الموقع")
-        self.site_desc = QLineEdit()
-        self.site_desc.setPlaceholderText("ادخل وصفاً تفصيلياً...")
-        self.site_desc.setFixedHeight(40)
-        vbox_desc.addWidget(lbl_site)
-        vbox_desc.addWidget(self.site_desc)
+        # Section 1: Map (left)
+        map_section = QVBoxLayout()
+        map_section.setSpacing(4)  # Same spacing as other sections
 
-        # الخريطة - Container with coordinates above
-        map_container = QWidget()
-        map_container_layout = QVBoxLayout(map_container)
-        map_container_layout.setContentsMargins(0, 0, 0, 0)
-        map_container_layout.setSpacing(8)
+        # Empty label for alignment (same height as other sections' labels)
+        map_label = QLabel("")  # Empty to maintain alignment
+        map_label.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
+        map_label.setFixedHeight(16)  # Same as label height
+        map_section.addWidget(map_label)
 
-        # Coordinates label (shows after selecting location) - ABOVE the map
-        self.coordinates_label = QLabel("")
-        self.coordinates_label.setStyleSheet("""
-            color: #27ae60;
-            font-size: 11px;
-            font-weight: 600;
-            padding: 2px;
-        """)
-        self.coordinates_label.setAlignment(Qt.AlignCenter)
-        self.coordinates_label.setWordWrap(True)
-        self.coordinates_label.hide()
-        map_container_layout.addWidget(self.coordinates_label)
+        # Map container (QLabel to support QPixmap)
+        map_container = QLabel()
+        map_container.setFixedSize(400, 130)  # Width: 400px, Height: 130px (from Figma)
+        map_container.setAlignment(Qt.AlignCenter)
+        map_container.setObjectName("mapContainer")
 
-        # Map preview frame with actual Leaflet mini-map
-        map_frame = QFrame()
-        map_frame.setFixedSize(320, 100)
-        map_frame.setStyleSheet("""
-            QFrame {
+        # Load background map image using Icon component (absolute paths)
+        from ui.components.icon import Icon
+
+        # Try to load map image (image-40.png or map-placeholder.png)
+        map_bg_pixmap = Icon.load_pixmap("image-40", size=None)
+        if not map_bg_pixmap or map_bg_pixmap.isNull():
+            # Fallback to map-placeholder
+            map_bg_pixmap = Icon.load_pixmap("map-placeholder", size=None)
+
+        if map_bg_pixmap and not map_bg_pixmap.isNull():
+            # Scale to exact size while maintaining quality
+            scaled_bg = map_bg_pixmap.scaled(400, 130, Qt.IgnoreAspectRatio, Qt.SmoothTransformation)
+            map_container.setPixmap(scaled_bg)
+
+        # Styling with border-radius (works with QLabel)
+        map_container.setStyleSheet(f"""
+            QLabel#mapContainer {{
+                background-color: #E8E8E8;
                 border-radius: 8px;
-                border: 2px solid #3498db;
-                background: white;
-            }
+            }}
         """)
 
-        map_inner = QVBoxLayout(map_frame)
-        map_inner.setContentsMargins(0, 0, 0, 0)
-        map_inner.setSpacing(0)
+        # White button in top-left corner
+        map_button = QPushButton(map_container)
+        map_button.setFixedSize(94, 20)  # Width: 94px, Height: 20px (from Figma)
+        map_button.move(8, 8)  # Position in top-left corner with small margin
+        map_button.setCursor(Qt.PointingHandCursor)
 
-        # Create mini Leaflet map preview
-        if HAS_WEBENGINE:
-            self.mini_map = QWebEngineView()
-            self.mini_map.setFixedSize(316, 96)
+        # Icon: pill.png
+        icon_pixmap = Icon.load_pixmap("pill", size=12)
+        if icon_pixmap and not icon_pixmap.isNull():
+            map_button.setIcon(QIcon(icon_pixmap))
+            map_button.setIconSize(QSize(12, 12))
 
-            # Simple Leaflet HTML
-            mini_map_html = """
-            <!DOCTYPE html>
-            <html>
-            <head>
-                <meta charset="utf-8">
-                <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
-                <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-                <style>
-                    body { margin: 0; padding: 0; }
-                    #map { width: 100%; height: 96px; }
-                </style>
-            </head>
-            <body>
-                <div id="map"></div>
-                <script>
-                    var map = L.map('map', {
-                        zoomControl: false,
-                        attributionControl: false,
-                        dragging: false,
-                        scrollWheelZoom: false,
-                        doubleClickZoom: false,
-                        boxZoom: false,
-                        keyboard: false,
-                        tap: false,
-                        touchZoom: false
-                    }).setView([36.2, 37.15], 13);
+        # Text: "فتح الخريطة" - 12px Figma = 9pt PyQt5
+        map_button.setText("فتح الخريطة")
+        map_button.setFont(create_font(size=9, weight=FontManager.WEIGHT_REGULAR))
 
-                    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
-                </script>
-            </body>
-            </html>
-            """
-            self.mini_map.setHtml(mini_map_html)
-            map_inner.addWidget(self.mini_map)
-        else:
-            # Fallback: simple label
-            fallback_label = QLabel("🗺️ خريطة")
-            fallback_label.setAlignment(Qt.AlignCenter)
-            fallback_label.setStyleSheet("color: #3498db; font-size: 24px;")
-            map_inner.addWidget(fallback_label)
-
-        map_container_layout.addWidget(map_frame)
-
-        # Map link button (below the map preview)
-        map_btn = QPushButton("فتح الخريطة")
-        map_btn.setStyleSheet("""
-            QPushButton {
-                background: transparent;
+        # DRY: Using Colors.PRIMARY_BLUE
+        map_button.setStyleSheet(f"""
+            QPushButton {{
+                background-color: white;
+                color: {Colors.PRIMARY_BLUE};
                 border: none;
-                color: #3498db;
-                text-decoration: underline;
-                font-size: 13px;
-                font-weight: 600;
+                border-radius: 5px;
                 padding: 4px;
+                text-align: center;
+            }}
+            QPushButton:hover {{
+                background-color: #F5F5F5;
+            }}
+        """)
+
+        # Apply shadow effect
+        from PyQt5.QtWidgets import QGraphicsDropShadowEffect
+        shadow = QGraphicsDropShadowEffect()
+        shadow.setBlurRadius(8)
+        shadow.setXOffset(0)
+        shadow.setYOffset(2)
+        shadow.setColor(QColor(0, 0, 0, 60))
+        map_button.setGraphicsEffect(shadow)
+
+        map_button.clicked.connect(self._on_pick_from_map)
+
+        # Location icon in center of map
+        location_icon = QLabel(map_container)
+        location_pixmap = Icon.load_pixmap("carbon_location-filled", size=56)
+        if location_pixmap and not location_pixmap.isNull():
+            location_icon.setPixmap(location_pixmap)
+            location_icon.setFixedSize(56, 56)
+            # Position in center: (400-56)/2 = 172, (130-56)/2 = 37
+            location_icon.move(172, 37)
+            location_icon.setStyleSheet("background: transparent;")
+        else:
+            # Fallback: use text emoji
+            location_icon.setText("📍")
+            location_icon.setFont(create_font(size=32, weight=FontManager.WEIGHT_REGULAR))
+            location_icon.setStyleSheet("background: transparent;")
+            location_icon.setAlignment(Qt.AlignCenter)
+            location_icon.setFixedSize(56, 56)
+            location_icon.move(172, 37)
+
+        map_section.addWidget(map_container)
+        map_section.addStretch(1)  # Push content to top
+
+        content_row.addLayout(map_section, stretch=1)
+
+        # Section 2: وصف الموقع (center) - QLineEdit for input
+        section_location = QVBoxLayout()
+        section_location.setSpacing(4)
+
+        lbl_location = QLabel("وصف الموقع")
+        lbl_location.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
+        lbl_location.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent;")
+
+        self.site_desc = QTextEdit()
+        self.site_desc.setPlaceholderText("ادخل وصفاً تفصيلياً...")
+        self.site_desc.setFixedHeight(130)  # نفس ارتفاع الخريطة
+        self.site_desc.setStyleSheet("""
+            QTextEdit {
+                background-color: #F8FAFF;
+                border: 1px solid #dcdfe6;
+                border-radius: 8px;
+                padding: 8px 12px;
+                color: #606266;
+                font-size: 10pt;
             }
-            QPushButton:hover {
-                color: #2980b9;
+            QTextEdit:focus {
+                border: 1px solid #3890DF;
             }
         """)
-        map_btn.setCursor(Qt.PointingHandCursor)
-        map_btn.clicked.connect(self._on_pick_from_map)
-        map_container_layout.addWidget(map_btn, alignment=Qt.AlignCenter)
+
+        section_location.addWidget(lbl_location)
+        section_location.addWidget(self.site_desc)
+        section_location.addStretch(1)  # Push content to top
+
+        content_row.addLayout(section_location, stretch=1)
+
+        # Section 3: الوصف العام (right) - QLineEdit for input
+        section_general = QVBoxLayout()
+        section_general.setSpacing(4)
+
+        lbl_general = QLabel("الوصف العام")
+        lbl_general.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
+        lbl_general.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent;")
+
+        self.general_desc = QTextEdit()
+        self.general_desc.setPlaceholderText("ادخل وصفاً عاماً...")
+        self.general_desc.setFixedHeight(130)  # نفس ارتفاع الخريطة
+        self.general_desc.setStyleSheet("""
+            QTextEdit {
+                background-color: #F8FAFF;
+                border: 1px solid #dcdfe6;
+                border-radius: 8px;
+                padding: 8px 12px;
+                color: #606266;
+                font-size: 10pt;
+            }
+            QTextEdit:focus {
+                border: 1px solid #3890DF;
+            }
+        """)
+
+        section_general.addWidget(lbl_general)
+        section_general.addWidget(self.general_desc)
+        section_general.addStretch(1)  # Push content to top
+
+        content_row.addLayout(section_general, stretch=1)
+
+        card3_layout.addLayout(content_row)
 
         # Store lat/lon (hidden)
         self.latitude_spin = QDoubleSpinBox()
@@ -618,18 +796,6 @@ class AddBuildingPage(QWidget):
 
         self.location_status_label = QLabel("")
         self.geometry_type_label = QLabel("")
-
-        body_layout.addLayout(vbox_gen)
-        body_layout.addLayout(vbox_desc)
-        body_layout.addWidget(map_container)
-
-        card3_layout.addLayout(body_layout)
-
-        # Error label
-        self.error_label = QLabel("")
-        self.error_label.setStyleSheet("color: #f56c6c; font-weight: 600; font-size: 10pt; border: none;")
-        self.error_label.setWordWrap(True)
-        card3_layout.addWidget(self.error_label)
 
         layout.addWidget(card3)
         layout.addStretch()
@@ -1100,6 +1266,98 @@ class AddBuildingPage(QWidget):
         self.cancelled.emit()
         # يمكن إضافة منطق للبحث عن البناء وعرضه
 
+    def _create_spinbox_with_arrows(self, spinbox: QSpinBox) -> QFrame:
+        """
+        Create a spinbox widget with icon arrows on the RIGHT side.
+        DRY: Same pattern as unit_dialog.py
+
+        Args:
+            spinbox: The QSpinBox to wrap with custom arrows
+
+        Returns:
+            QFrame containing the spinbox with custom arrow controls
+        """
+        # Container frame - توحيد الحجم 45px height
+        container = QFrame()
+        container.setFixedHeight(45)
+        container.setStyleSheet("""
+            QFrame {
+                border: 1px solid #E1E8ED;
+                border-radius: 8px;
+                background-color: #F8FAFF;
+            }
+        """)
+
+        layout = QHBoxLayout(container)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
+
+        # Spinbox styling - يسار
+        spinbox.setStyleSheet("""
+            QSpinBox {
+                padding: 6px 12px;
+                padding-right: 35px;
+                border: none;
+                background: transparent;
+                font-size: 10pt;
+                color: #606266;
+            }
+        """)
+        layout.addWidget(spinbox, 1)
+
+        # Arrow column (RIGHT side) - يمين
+        arrow_container = QFrame()
+        arrow_container.setFixedWidth(30)
+        arrow_container.setStyleSheet("""
+            QFrame {
+                border: none;
+                border-left: 1px solid #E1E8ED;
+                background: transparent;
+                border-top-right-radius: 8px;
+                border-bottom-right-radius: 8px;
+            }
+        """)
+        arrow_layout = QVBoxLayout(arrow_container)
+        arrow_layout.setContentsMargins(0, 0, 0, 0)
+        arrow_layout.setSpacing(0)  # صفر تماماً
+
+        # Load arrow icons
+        from ui.components.icon import Icon
+
+        # Up arrow icon (^.png)
+        up_label = QLabel()
+        up_label.setFixedSize(30, 22)
+        up_label.setAlignment(Qt.AlignCenter)
+        up_pixmap = Icon.load_pixmap("^", size=10)
+        if up_pixmap and not up_pixmap.isNull():
+            up_label.setPixmap(up_pixmap)
+        else:
+            # Fallback to text if icon not found
+            up_label.setText("^")
+            up_label.setStyleSheet("color: #9CA3AF; font-size: 10px; font-weight: bold; background: transparent;")
+        up_label.setCursor(Qt.PointingHandCursor)
+        up_label.mousePressEvent = lambda _: spinbox.stepUp()
+        arrow_layout.addWidget(up_label)
+
+        # Down arrow icon (v.png)
+        down_label = QLabel()
+        down_label.setFixedSize(30, 22)
+        down_label.setAlignment(Qt.AlignCenter)
+        down_pixmap = Icon.load_pixmap("v", size=10)
+        if down_pixmap and not down_pixmap.isNull():
+            down_label.setPixmap(down_pixmap)
+        else:
+            # Fallback to text if icon not found
+            down_label.setText("v")
+            down_label.setStyleSheet("color: #9CA3AF; font-size: 10px; font-weight: bold; background: transparent;")
+        down_label.setCursor(Qt.PointingHandCursor)
+        down_label.mousePressEvent = lambda _: spinbox.stepDown()
+        arrow_layout.addWidget(down_label)
+
+        layout.addWidget(arrow_container)
+
+        return container
+
     def _on_save(self):
         """Validate and save."""
         data = self.get_data()
@@ -1162,10 +1420,7 @@ class AddBuildingPage(QWidget):
             self._show_validation_error_dialog([f"فشل في حفظ المبنى: {str(e)}"])
 
     def get_data(self):
-        """Get form data."""
-        dist_idx = self.district_combo.currentIndex()
-        neigh_idx = self.neighborhood_combo.currentIndex()
-
+        """Get form data (DRY: adapted for manual entry fields)."""
         # استخراج building_id من الـ label (بعد "رمز البناء: ")
         building_id_text = self.building_id_label.text()
         if ":" in building_id_text:
@@ -1175,14 +1430,14 @@ class AddBuildingPage(QWidget):
 
         data = {
             "building_id": building_id,
-            # GG: Governorate
-            "governorate_code": self.governorate_combo.currentData(),
+            # GG: Governorate (manual entry now)
+            "governorate_code": self.governorate_combo.text().strip() or "01",
             "governorate_name": "Aleppo",
             "governorate_name_ar": "حلب",
-            # DD: District
-            "district_code": self.district_combo.currentData(),
-            "district_name": AleppoDivisions.DISTRICTS[dist_idx][1] if dist_idx >= 0 else "",
-            "district_name_ar": AleppoDivisions.DISTRICTS[dist_idx][2] if dist_idx >= 0 else "",
+            # DD: District (manual entry now)
+            "district_code": self.district_combo.text().strip() or "01",
+            "district_name": "",  # Manual entry - no lookup
+            "district_name_ar": "",
             # SS: Subdistrict
             "subdistrict_code": self.subdistrict_code.text().strip() or "01",
             "subdistrict_name": "",
@@ -1191,10 +1446,10 @@ class AddBuildingPage(QWidget):
             "community_code": self.community_code.text().strip() or "001",
             "community_name": "",
             "community_name_ar": "",
-            # NNN: Neighborhood
-            "neighborhood_code": self.neighborhood_combo.currentData(),
-            "neighborhood_name": AleppoDivisions.NEIGHBORHOODS_ALEPPO[neigh_idx][1] if neigh_idx >= 0 else "",
-            "neighborhood_name_ar": AleppoDivisions.NEIGHBORHOODS_ALEPPO[neigh_idx][2] if neigh_idx >= 0 else "",
+            # NNN: Neighborhood (manual entry now)
+            "neighborhood_code": self.neighborhood_combo.text().strip() or "001",
+            "neighborhood_name": "",  # Manual entry - no lookup
+            "neighborhood_name_ar": "",
             # BBBBB: Building Number
             "building_number": self.building_number.text().strip(),
             # Building Details
@@ -1207,13 +1462,78 @@ class AddBuildingPage(QWidget):
             # Coordinates
             "latitude": self.latitude_spin.value() if self.latitude_spin.value() != 0 else None,
             "longitude": self.longitude_spin.value() if self.longitude_spin.value() != 0 else None,
-            # Note: general_description and site_description are UI-only fields, not saved to Building model
+            # Location descriptions (QTextEdit uses toPlainText())
+            "general_description": self.general_desc.toPlainText().strip(),
+            "location_description": self.site_desc.toPlainText().strip(),
         }
 
         if self._polygon_wkt:
             data["geo_location"] = self._polygon_wkt
 
         return data
+
+
+class FilterableHeaderView(QHeaderView):
+    """
+    Custom header view that displays down.png icon AFTER text (RTL-compatible).
+
+    DRY Principle: Reusable header for any table with filterable columns.
+    """
+
+    def __init__(self, orientation, parent=None):
+        super().__init__(orientation, parent)
+        self._down_pixmap = None
+        self._filterable_columns = []  # Columns that show down icon
+        self._load_down_icon()
+
+    def _load_down_icon(self):
+        """Load down.png icon."""
+        from pathlib import Path
+        import sys
+        from PyQt5.QtGui import QPixmap
+
+        if hasattr(sys, '_MEIPASS'):
+            base_path = Path(sys._MEIPASS)
+        else:
+            base_path = Path(__file__).parent.parent.parent
+
+        search_paths = [
+            base_path / "assets" / "images" / "down.png",
+            base_path / "assets" / "icons" / "down.png",
+            base_path / "assets" / "down.png",
+        ]
+
+        for path in search_paths:
+            if path.exists():
+                self._down_pixmap = QPixmap(str(path))
+                if not self._down_pixmap.isNull():
+                    self._down_pixmap = self._down_pixmap.scaled(
+                        10, 10, Qt.KeepAspectRatio, Qt.SmoothTransformation
+                    )
+                    return
+
+        self._down_pixmap = None
+
+    def set_filterable_columns(self, columns: list):
+        """Set which columns should show the down icon."""
+        self._filterable_columns = columns
+
+    def paintSection(self, painter: QPainter, rect: QRect, logical_index: int):
+        """Simple paintSection - draw default then add icon at fixed position."""
+        # Draw default header (background, border, text)
+        super().paintSection(painter, rect, logical_index)
+
+        # Add icon for filterable columns
+        if logical_index in self._filterable_columns and self._down_pixmap and not self._down_pixmap.isNull():
+            painter.save()
+
+            # Simple fixed position: left side of the section (after text in RTL)
+            # This works because text is right-aligned in RTL
+            icon_x = rect.left() + 15
+            icon_y = rect.center().y() - self._down_pixmap.height() // 2
+
+            painter.drawPixmap(icon_x, icon_y, self._down_pixmap)
+            painter.restore()
 
 
 class BuildingsListPage(QWidget):
@@ -1233,80 +1553,69 @@ class BuildingsListPage(QWidget):
         self.i18n = i18n
         self.map_view = None
         self._buildings = []  # Store buildings list
+        self._all_buildings = []  # Store unfiltered buildings (DRY principle)
         self._current_page = 1
         self._rows_per_page = 11
         self._total_pages = 1
+
+        # Active filters (DRY - same as field_work_preparation_page)
+        self._active_filters = {
+            'area': None,           # المنطقة (column 2)
+            'building_type': None,  # نوع البناء (column 3)
+            'building_status': None # حالة البناء (column 4)
+        }
 
         self._setup_ui()
 
     def _setup_ui(self):
         """Setup buildings list UI."""
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(40, 30, 40, 30)
-        layout.setSpacing(20)
+        # Apply unified padding from PageDimensions (DRY principle)
+        # Same as completed_claims_page.py and draft_claims_page.py
+        layout.setContentsMargins(
+            PageDimensions.CONTENT_PADDING_H,        # Left: 131px
+            PageDimensions.CONTENT_PADDING_V_TOP,    # Top: 32px
+            PageDimensions.CONTENT_PADDING_H,        # Right: 131px
+            PageDimensions.CONTENT_PADDING_V_BOTTOM  # Bottom: 0px
+        )
+        layout.setSpacing(15)  # 15px gap between header and table card
 
         # سطر العنوان والأزرار - المباني على اليسار والأزرار على اليمين
         top_row = QHBoxLayout()
         top_row.setSpacing(20)
 
-        # العنوان + حقل البحث
-        title_search_layout = QHBoxLayout()
-        title_search_layout.setSpacing(25)
-
+        # العنوان
         title = QLabel("المباني")
         title.setStyleSheet("font-size: 32px; font-weight: bold; color: #333;")
-        title_search_layout.addWidget(title)
+        top_row.addWidget(title)
 
-        # حقل البحث الناعم (بدون بوردر - فقط خط سفلي)
-        self.search_input = QLineEdit()
-        self.search_input.setPlaceholderText("🔍 البحث في المباني...")
-        self.search_input.setFixedWidth(280)
-        self.search_input.setFixedHeight(40)
-        self.search_input.setStyleSheet("""
-            QLineEdit {
-                border: none;
-                border-bottom: 2px solid #ddd;
-                background: transparent;
-                padding: 8px 12px;
-                font-size: 14px;
-                color: #333;
-            }
-            QLineEdit:focus {
-                border-bottom: 2px solid #3498db;
-                outline: none;
-            }
-            QLineEdit::placeholder {
-                color: #999;
-            }
-        """)
-        title_search_layout.addWidget(self.search_input)
-
-        # ربط البحث بالتغييرات الفورية
-        self.search_input.textChanged.connect(self._on_search_text_changed)
+        top_row.addStretch()
 
         # الأزرار
         btn_layout = QHBoxLayout()
+        btn_layout.setSpacing(16)
 
         # زر تجهيز العمل الميداني (شفاف مع بوردر أزرق)
-        btn_field = CustomButton.secondary("تجهيز العمل الميداني", self, width=180, height=45)
+        # DRY: Apply unified button dimensions from Figma (199×48px, border-radius 8px)
+        btn_field = CustomButton.secondary("تجهيز العمل الميداني", self, width=199, height=48)
         btn_field.clicked.connect(self.prepare_field_work.emit)
 
         # زر إضافة بناء جديد (أزرق solid)
-        btn_add = CustomButton.primary("إضافة بناء جديد", self, width=160, height=45, icon="+")
-        btn_add.clicked.connect(self.add_building.emit)
+        # DRY: Exact copy of "Add New Case" button from claims pages (PrimaryButton component)
+        add_btn = PrimaryButton("إضافة بناء جديد", icon_name="icon")
+        add_btn.clicked.connect(self.add_building.emit)
 
         btn_layout.addWidget(btn_field)
-        btn_layout.addWidget(btn_add)
+        btn_layout.addWidget(add_btn)
 
-        top_row.addLayout(title_search_layout)
-        top_row.addStretch()
         top_row.addLayout(btn_layout)
 
         layout.addLayout(top_row)
 
         # البطاقة البيضاء للجدول
         table_card = QFrame()
-        table_card.setStyleSheet("background-color: white; border-radius: 12px;")
+        table_card.setFixedHeight(708)  # Figma spec: 708px height
+        table_card.setStyleSheet("background-color: white; border-radius: 16px;")
         card_layout = QVBoxLayout(table_card)
         card_layout.setContentsMargins(10, 10, 10, 10)
 
@@ -1314,7 +1623,28 @@ class BuildingsListPage(QWidget):
         self.table.setColumnCount(6)
         self.table.setRowCount(11)  # Fixed 11 rows
         self.table.setLayoutDirection(Qt.RightToLeft)
-        self.table.setHorizontalHeaderLabels(["رمز البناء", "تاريخ الادخال", "المنطقة", "نوع البناء", "حالة البناء", ""])
+
+        # Get down.png icon path
+        from pathlib import Path
+        import sys
+        from PyQt5.QtGui import QIcon
+
+        if hasattr(sys, '_MEIPASS'):
+            base_path = Path(sys._MEIPASS)
+        else:
+            base_path = Path(__file__).parent.parent.parent
+
+        icon_path = base_path / "assets" / "images" / "down.png"
+
+        # Set headers with icons for filterable columns
+        headers = ["رمز البناء", "تاريخ الادخال", "المنطقة", "نوع البناء", "حالة البناء", ""]
+        for i, text in enumerate(headers):
+            item = QTableWidgetItem(text)
+            # Add icon to filterable columns (2, 3, 4)
+            if i in [2, 3, 4] and icon_path.exists():
+                icon = QIcon(str(icon_path))
+                item.setIcon(icon)
+            self.table.setHorizontalHeaderItem(i, item)
 
         # Disable scroll bars
         self.table.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
@@ -1324,50 +1654,207 @@ class BuildingsListPage(QWidget):
         self.table.setShowGrid(False)
         self.table.setFocusPolicy(Qt.NoFocus)
         self.table.setSelectionMode(QTableWidget.NoSelection)
-        self.table.setStyleSheet("""
-            QTableWidget { border: none; background-color: white; }
-            QTableWidget::item { padding: 15px; border-bottom: 1px solid #f0f0f0; color: #555; }
-            QHeaderView::section {
-                background-color: white; padding: 12px; border: none;
-                border-bottom: 2px solid #f0f0f0; color: #888; font-weight: bold; font-size: 13px;
-            }
+        self.table.setStyleSheet(f"""
+            QTableWidget {{
+                border: none;
+                background-color: white;
+                font-size: 10.5pt;
+                font-weight: 400;
+                color: #212B36;
+            }}
+            QTableWidget::item {{
+                padding: 8px 15px;
+                border-bottom: 1px solid #F0F0F0;
+                color: #212B36;
+                font-size: 10.5pt;
+                font-weight: 400;
+            }}
+            QTableWidget::item:hover {{
+                background-color: #FAFBFC;
+            }}
+            QHeaderView {{
+                border-top-left-radius: 16px;
+                border-top-right-radius: 16px;
+            }}
+            QHeaderView::section {{
+                background-color: #F8F9FA;
+                padding: 12px;
+                padding-left: 30px;
+                border: none;
+                color: #637381;
+                font-weight: 600;
+                font-size: 11pt;
+                height: 56px;
+            }}
+            QHeaderView::section:hover {{
+                background-color: #EBEEF2;
+            }}
         """)
 
         # ضبط المحاذاة والعرض
         header = self.table.horizontalHeader()
-        header.setSectionResizeMode(QHeaderView.Stretch)
         header.setDefaultAlignment(Qt.AlignRight | Qt.AlignVCenter)
-        self.table.verticalHeader().setVisible(False)
+        header.setFixedHeight(56)  # Figma spec: 56px header height
+        header.setStretchLastSection(True)  # آخر عمود يأخذ المساحة المتبقية
+        header.setMouseTracking(True)  # Enable mouse tracking for cursor change
+
+        # Connect hover event for cursor change on filterable columns
+        header.sectionEntered.connect(self._on_header_hover)
+
+        # تحديد عرض الأعمدة حسب Figma
+        header.setSectionResizeMode(0, QHeaderView.Fixed)  # رمز البناء
+        header.resizeSection(0, 298)
+
+        header.setSectionResizeMode(1, QHeaderView.Fixed)  # تاريخ الإدخال
+        header.resizeSection(1, 220)
+
+        header.setSectionResizeMode(2, QHeaderView.Fixed)  # المنطقة
+        header.resizeSection(2, 206)
+
+        header.setSectionResizeMode(3, QHeaderView.Fixed)  # نوع البناء
+        header.resizeSection(3, 195)
+
+        header.setSectionResizeMode(4, QHeaderView.Fixed)  # حالة البناء
+        header.resizeSection(4, 195)
+
+        header.setSectionResizeMode(5, QHeaderView.Stretch)  # أيقونة الثلاث نقاط (الباقي)
+
+        # ضبط ارتفاع الصفوف بالتساوي
+        # الارتفاع المتاح: 708 (card) - 10 (top) - 10 (bottom) - 56 (header) - 58 (footer) = 574px
+        # لكل صف: 574 / 11 = 52px تقريباً
+        vertical_header = self.table.verticalHeader()
+        vertical_header.setVisible(False)
+        vertical_header.setDefaultSectionSize(52)  # ارتفاع موحد لكل الصفوف
 
         # Enable cell click for actions button
         self.table.cellClicked.connect(self._on_cell_clicked)
         self.table.cellDoubleClicked.connect(self._on_cell_double_click)
 
+        # Connect header click for filtering (DRY - same pattern as field_work_preparation)
+        header.sectionClicked.connect(self._on_header_clicked)
+
         card_layout.addWidget(self.table)
 
-        # التذييل
-        footer = QHBoxLayout()
-        footer.setContentsMargins(20, 10, 20, 10)
-        dense_label = QLabel("Dense")
-        self.page_label = QLabel("Rows per page: 11  |  1-11 of 11")
-        self.page_label.setStyleSheet("color: #666;")
+        # التذييل - Footer with gray background like header
+        footer_frame = QFrame()
+        footer_frame.setStyleSheet("""
+            QFrame {
+                background-color: #F8F9FA;
+                border-top: 1px solid #E1E8ED;
+                border-bottom-left-radius: 16px;
+                border-bottom-right-radius: 16px;
+            }
+        """)
+        footer_frame.setFixedHeight(58)  # Footer height: 58px
 
-        footer.addWidget(dense_label)
-        footer.addStretch()
+        footer = QHBoxLayout(footer_frame)
+        footer.setContentsMargins(10, 10, 10, 10)  # Padding 10px from all sides
+
+        # Navigation arrows > < (أول شي من اليمين)
+        nav_container = QWidget()
+        nav_container.setStyleSheet("background: transparent;")
+        nav_layout = QHBoxLayout(nav_container)
+        nav_layout.setContentsMargins(0, 0, 0, 0)
+        nav_layout.setSpacing(8)
+
+        # Previous button (>) - للصفحة السابقة
+        self.prev_btn = QPushButton(">")
+        self.prev_btn.setFixedSize(32, 32)
+        self.prev_btn.setStyleSheet("""
+            QPushButton {
+                background: transparent;
+                border: 1px solid #E1E8ED;
+                border-radius: 4px;
+                color: #637381;
+                font-size: 14pt;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #EBEEF2;
+            }
+            QPushButton:disabled {
+                color: #C1C7CD;
+            }
+        """)
+        self.prev_btn.clicked.connect(self._go_to_previous_page)
+        nav_layout.addWidget(self.prev_btn)
+
+        # Next button (<) - للصفحة التالية
+        self.next_btn = QPushButton("<")
+        self.next_btn.setFixedSize(32, 32)
+        self.next_btn.setStyleSheet("""
+            QPushButton {
+                background: transparent;
+                border: 1px solid #E1E8ED;
+                border-radius: 4px;
+                color: #637381;
+                font-size: 14pt;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #EBEEF2;
+            }
+            QPushButton:disabled {
+                color: #C1C7CD;
+            }
+        """)
+        self.next_btn.clicked.connect(self._go_to_next_page)
+        nav_layout.addWidget(self.next_btn)
+
+        footer.addWidget(nav_container)
+
+        # Counter label "1-11 of 50" (ثاني شي)
+        self.page_label = QLabel("1-11 of 11")
+        self.page_label.setStyleSheet("color: #637381; font-size: 10pt; font-weight: 400;")
         footer.addWidget(self.page_label)
 
-        # أزرار التنقل بين الصفحات
-        self.pagination_container = QWidget()
-        pagination_layout = QHBoxLayout(self.pagination_container)
-        pagination_layout.setContentsMargins(0, 0, 0, 0)
-        pagination_layout.setSpacing(5)
+        # Rows number with down icon (ثالث شي) - Clickable page selector
+        from PyQt5.QtGui import QPixmap
+        rows_container = QFrame()
+        rows_container.setStyleSheet("""
+            QFrame {
+                background: transparent;
+                border: 1px solid #E1E8ED;
+                border-radius: 4px;
+                padding: 4px 8px;
+            }
+            QFrame:hover {
+                background-color: #EBEEF2;
+            }
+        """)
+        rows_container.setCursor(Qt.PointingHandCursor)
+        rows_layout = QHBoxLayout(rows_container)
+        rows_layout.setContentsMargins(4, 2, 4, 2)
+        rows_layout.setSpacing(4)
 
-        # سيتم إنشاء الأزرار ديناميكياً في _update_pagination()
-        self.page_buttons = []
+        # Down icon - أولاً (نجرب نبدل المكان)
+        down_icon_label = QLabel()
+        if icon_path.exists():
+            down_pixmap = QPixmap(str(icon_path))
+            if not down_pixmap.isNull():
+                down_pixmap = down_pixmap.scaled(10, 10, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+                down_icon_label.setPixmap(down_pixmap)
+        down_icon_label.setStyleSheet("background: transparent; border: none;")
+        rows_layout.addWidget(down_icon_label)
 
-        footer.addWidget(self.pagination_container)
+        # Number (11) - ثانياً
+        self.rows_number = QLabel("11")
+        self.rows_number.setStyleSheet("color: #637381; font-size: 10pt; font-weight: 400; background: transparent; border: none;")
+        rows_layout.addWidget(self.rows_number)
 
-        card_layout.addLayout(footer)
+        # Make clickable to show page selection menu
+        rows_container.mousePressEvent = lambda e: self._show_page_selection_menu(rows_container)
+
+        footer.addWidget(rows_container)
+
+        # "Rows per page:" label (رابع شي)
+        rows_label = QLabel("Rows per page:")
+        rows_label.setStyleSheet("color: #637381; font-size: 10pt; font-weight: 400;")
+        footer.addWidget(rows_label)
+
+        footer.addStretch()
+
+        card_layout.addWidget(footer_frame)
 
         layout.addWidget(table_card)
 
@@ -1382,17 +1869,10 @@ class BuildingsListPage(QWidget):
         logger.debug("Refreshing buildings list")
         self._load_buildings()
 
-    def _load_buildings(self, search_text: str = ""):
-        """Load buildings from repository and populate table.
-
-        Args:
-            search_text: Optional search text to filter buildings
-        """
-        # Load buildings with search filter using controller
-        if search_text:
-            result = self.building_controller.search_buildings(search_text)
-        else:
-            result = self.building_controller.load_buildings()
+    def _load_buildings(self):
+        """Load buildings from repository and populate table."""
+        # Load buildings using controller
+        result = self.building_controller.load_buildings()
 
         if result.success:
             all_buildings = result.data
@@ -1400,16 +1880,19 @@ class BuildingsListPage(QWidget):
             logger.error(f"Failed to load buildings: {result.message}")
             all_buildings = []
 
-        self._buildings = all_buildings  # Store for later access
+        self._all_buildings = all_buildings  # Store unfiltered buildings (DRY)
 
-        # Calculate pagination
-        total = len(all_buildings)
+        # Apply filters (CRITICAL: Filter BEFORE pagination)
+        self._buildings = self._apply_filters(all_buildings)
+
+        # Calculate pagination from FILTERED buildings (not all_buildings)
+        total = len(self._buildings)
         self._total_pages = (total + self._rows_per_page - 1) // self._rows_per_page if total > 0 else 1
 
-        # Get buildings for current page
+        # Get buildings for current page from FILTERED buildings
         start_idx = (self._current_page - 1) * self._rows_per_page
         end_idx = min(start_idx + self._rows_per_page, total)
-        page_buildings = all_buildings[start_idx:end_idx]
+        page_buildings = self._buildings[start_idx:end_idx]
 
         # Clear all table cells
         for row in range(11):
@@ -1425,10 +1908,8 @@ class BuildingsListPage(QWidget):
             date_str = building.created_at.strftime("%d/%m/%Y") if building.created_at else ""
             self.table.setItem(idx, 1, QTableWidgetItem(date_str))
 
-            # المنطقة
-            area = f"{building.neighborhood_name_ar or building.neighborhood_name or ''}"
-            if building.district_name_ar:
-                area = f"{building.district_name_ar} - {area}"
+            # المنطقة (neighborhood only - no district prefix)
+            area = (building.neighborhood_name_ar or building.neighborhood_name or '').strip()
             self.table.setItem(idx, 2, QTableWidgetItem(area))
 
             # نوع البناء
@@ -1447,86 +1928,237 @@ class BuildingsListPage(QWidget):
                     break
             self.table.setItem(idx, 4, QTableWidgetItem(building_status))
 
-            # زر الثلاث نقاط
+            # زر الثلاث نقاط - أكبر وأغمق
             actions_item = QTableWidgetItem("⋮")
             actions_item.setTextAlignment(Qt.AlignCenter)
+
+            # خط أكبر وأغمق للثلاث نقاط
+            from PyQt5.QtGui import QFont, QColor
+            dots_font = QFont()
+            dots_font.setPointSize(18)  # أكبر من النص العادي (10.5pt)
+            dots_font.setWeight(QFont.Bold)
+            actions_item.setFont(dots_font)
+            actions_item.setForeground(QColor("#637381"))  # لون أغمق
+
             self.table.setItem(idx, 5, actions_item)
 
-        # Update pagination info
+        # Update pagination info (counter only: "1-11 of 50")
         if total > 0:
-            self.page_label.setText(f"Rows per page: 11  |  {start_idx + 1}-{end_idx} of {total}")
+            self.page_label.setText(f"{start_idx + 1}-{end_idx} of {total}")
         else:
-            self.page_label.setText("Rows per page: 11  |  0-0 of 0")
+            self.page_label.setText("0-0 of 0")
 
-        # Update pagination buttons
-        self._update_pagination()
+        # Update navigation buttons state
+        self.prev_btn.setEnabled(self._current_page > 1)
+        self.next_btn.setEnabled(self._current_page < self._total_pages)
 
-    def _on_search_text_changed(self, text: str):
-        """Handle search input changes with smart filtering."""
-        search_query = text.strip()
+    def _get_down_icon_path(self) -> str:
+        """
+        Get absolute path to down.png icon (DRY - reused from field_work_preparation_page).
 
-        # Reset to first page when searching
-        self._current_page = 1
+        Best Practice: Single source of truth for icon paths.
+        """
+        from pathlib import Path
+        import sys
 
-        # Reload buildings with search filter
-        self._load_buildings(search_text=search_query)
+        if hasattr(sys, '_MEIPASS'):
+            base_path = Path(sys._MEIPASS)
+        else:
+            base_path = Path(__file__).parent.parent.parent
 
-        logger.debug(f"Search: '{search_query}' -> {len(self._buildings)} results")
+        # Try multiple locations
+        search_paths = [
+            base_path / "assets" / "images" / "down.png",
+            base_path / "assets" / "icons" / "down.png",
+            base_path / "assets" / "down.png",
+        ]
 
-    def _update_pagination(self):
-        """Update pagination buttons."""
-        # Clear existing buttons
-        layout = self.pagination_container.layout()
-        while layout.count():
-            child = layout.takeAt(0)
-            if child.widget():
-                child.widget().deleteLater()
+        for path in search_paths:
+            if path.exists():
+                return str(path).replace("\\", "/")
 
-        self.page_buttons = []
+        return ""
 
-        # Create page buttons (1, 2, 3, 4...)
-        for page_num in range(1, self._total_pages + 1):
-            btn = QPushButton(str(page_num))
-            btn.setFixedSize(35, 35)
+    def _on_header_hover(self, logical_index: int):
+        """
+        Change cursor to pointer only on filterable columns (DRY principle).
 
-            if page_num == self._current_page:
-                # Current page - highlighted
-                btn.setStyleSheet("""
-                    QPushButton {
-                        background-color: #3498db;
-                        color: white;
-                        border: none;
-                        border-radius: 4px;
-                        font-weight: bold;
-                        font-size: 13px;
-                    }
-                """)
+        Args:
+            logical_index: Column index being hovered
+        """
+        header = self.table.horizontalHeader()
+
+        # Pointer cursor only for filterable columns (2, 3, 4)
+        if logical_index in [2, 3, 4]:
+            header.setCursor(Qt.PointingHandCursor)
+        else:
+            header.setCursor(Qt.ArrowCursor)
+
+    def _on_header_clicked(self, logical_index: int):
+        """
+        Handle header click to show filter menu (DRY - same pattern as field_work_preparation).
+
+        Filterable columns:
+        - Column 2: المنطقة (Area)
+        - Column 3: نوع البناء (Building Type)
+        - Column 4: حالة البناء (Building Status)
+        """
+        # Only columns 2, 3, 4 are filterable
+        if logical_index not in [2, 3, 4]:
+            return
+
+        self._show_filter_menu(logical_index)
+
+    def _show_filter_menu(self, column_index: int):
+        """
+        Show filter menu for the clicked column (DRY principle).
+
+        Args:
+            column_index: Index of the column (2=Area, 3=Type, 4=Status)
+        """
+        # Get unique values for this column from all buildings
+        unique_values = set()
+        filter_key = None
+
+        if column_index == 2:  # المنطقة (neighborhood only, no district)
+            filter_key = 'area'
+            for building in self._all_buildings:
+                area = (building.neighborhood_name_ar or building.neighborhood_name or '').strip()
+                if area:
+                    unique_values.add(area)
+        elif column_index == 3:  # نوع البناء
+            filter_key = 'building_type'
+            for building in self._all_buildings:
+                for code, en, ar in Vocabularies.BUILDING_TYPES:
+                    if code == building.building_type:
+                        unique_values.add((code, ar))
+                        break
+        elif column_index == 4:  # حالة البناء
+            filter_key = 'building_status'
+            for building in self._all_buildings:
+                for code, en, ar in Vocabularies.BUILDING_STATUS:
+                    if code == building.building_status:
+                        unique_values.add((code, ar))
+                        break
+
+        if not unique_values:
+            return
+
+        # Create menu
+        from PyQt5.QtWidgets import QMenu, QAction
+        menu = QMenu(self)
+        menu.setLayoutDirection(Qt.RightToLeft)
+        menu.setStyleSheet("""
+            QMenu {
+                background-color: white;
+                border: 1px solid #E1E8ED;
+                border-radius: 8px;
+                padding: 8px;
+            }
+            QMenu::item {
+                padding: 10px 20px;
+                border-radius: 4px;
+                font-size: 10pt;
+                color: #637381;
+            }
+            QMenu::item:selected {
+                background-color: #EFF6FF;
+                color: #3890DF;
+            }
+        """)
+
+        # Add "عرض الكل" (Show All) option
+        clear_action = QAction("عرض الكل", self)
+        clear_action.triggered.connect(lambda: self._apply_filter(filter_key, None))
+        menu.addAction(clear_action)
+
+        menu.addSeparator()
+
+        # Add filter options
+        sorted_values = sorted(unique_values, key=lambda x: x[1] if isinstance(x, tuple) else x)
+        for value in sorted_values:
+            if isinstance(value, tuple):
+                code, display = value
+                action = QAction(display, self)
+                action.triggered.connect(lambda checked, c=code: self._apply_filter(filter_key, c))
             else:
-                # Other pages
-                btn.setStyleSheet("""
-                    QPushButton {
-                        background-color: white;
-                        color: #666;
-                        border: 1px solid #ddd;
-                        border-radius: 4px;
-                        font-weight: normal;
-                        font-size: 13px;
-                    }
-                    QPushButton:hover {
-                        background-color: #f0f0f0;
-                    }
-                """)
-                btn.setCursor(Qt.PointingHandCursor)
-                btn.clicked.connect(lambda checked, p=page_num: self._go_to_page(p))
+                action = QAction(value, self)
+                action.triggered.connect(lambda checked, v=value: self._apply_filter(filter_key, v))
 
-            layout.addWidget(btn)
-            self.page_buttons.append(btn)
+            # Mark active filter
+            if column_index == 2 and self._active_filters['area'] == value:
+                action.setCheckable(True)
+                action.setChecked(True)
+            elif column_index == 3 and self._active_filters['building_type'] == (value if isinstance(value, str) else value[0]):
+                action.setCheckable(True)
+                action.setChecked(True)
+            elif column_index == 4 and self._active_filters['building_status'] == (value if isinstance(value, str) else value[0]):
+                action.setCheckable(True)
+                action.setChecked(True)
 
-    def _go_to_page(self, page_num):
-        """Go to specific page."""
-        if 1 <= page_num <= self._total_pages:
-            self._current_page = page_num
-            self._load_buildings()
+            menu.addAction(action)
+
+        # Show menu below the specific column header (RTL-compatible positioning)
+        header = self.table.horizontalHeader()
+
+        # Get the visual position of the column (works correctly in RTL)
+        x_pos = header.sectionViewportPosition(column_index)
+
+        # Y position: below the header
+        y_pos = header.height()
+
+        # Map to global coordinates (relative to table widget, not header)
+        pos = self.table.mapToGlobal(QPoint(x_pos, y_pos))
+        menu.exec_(pos)
+
+    def _apply_filter(self, filter_key: str, filter_value):
+        """
+        Apply filter and reload table (DRY principle).
+
+        Args:
+            filter_key: Key in _active_filters dict
+            filter_value: Value to filter by (None to clear filter)
+        """
+        self._active_filters[filter_key] = filter_value
+        self._current_page = 1  # Reset to first page
+        self._load_buildings()
+
+    def _apply_filters(self, buildings: list) -> list:
+        """
+        Apply active filters to buildings list (DRY principle).
+
+        Returns:
+            Filtered list of buildings
+        """
+        filtered = buildings
+
+        # Apply area filter
+        if self._active_filters['area']:
+            filtered = [
+                b for b in filtered
+                if self._get_building_area(b) == self._active_filters['area']
+            ]
+
+        # Apply building type filter
+        if self._active_filters['building_type']:
+            filtered = [
+                b for b in filtered
+                if b.building_type == self._active_filters['building_type']
+            ]
+
+        # Apply building status filter
+        if self._active_filters['building_status']:
+            filtered = [
+                b for b in filtered
+                if b.building_status == self._active_filters['building_status']
+            ]
+
+        return filtered
+
+    def _get_building_area(self, building) -> str:
+        """Get formatted area string for building (DRY helper) - neighborhood name only."""
+        # Return neighborhood name only (not district + neighborhood)
+        return (building.neighborhood_name_ar or building.neighborhood_name or '').strip()
 
     def _on_cell_double_click(self, row, col):
         """Handle cell double click."""
@@ -1571,55 +2203,61 @@ class BuildingsListPage(QWidget):
         rect = self.table.visualItemRect(item)
         position = QPoint(rect.right() - 10, rect.bottom())
 
-        # إنشاء القائمة
+        # إنشاء القائمة - 3 صفوف فقط
         menu = QMenu(self)
-        menu.setStyleSheet("""
-            QMenu {
-                background-color: white;
-                border: 1px solid #ddd;
-                border-radius: 8px;
-                padding: 6px;
-            }
-            QMenu::item {
-                padding: 10px 30px 10px 20px;
-                border-radius: 4px;
-                font-size: 13px;
-                color: #333;
-            }
-            QMenu::item:selected {
-                background-color: #e3f2fd;
-                color: #1976d2;
-            }
-            QMenu::separator {
-                height: 1px;
-                background-color: #e0e0e0;
-                margin: 4px 8px;
-            }
-        """)
+        menu.setFixedSize(200, 149)  # Figma: 200×149
 
-        # عرض التفاصيل
-        view_action = QAction("👁  عرض التفاصيل", self)
-        view_action.triggered.connect(lambda: self.view_building.emit(building.building_id))
+        # Load icons
+        from ui.components.icon import Icon
+
+        # 1. عرض - لون #212B36
+        view_icon = Icon.load_qicon("eye-open", size=18)
+        view_action = QAction("  عرض", self)
+        if view_icon:
+            view_action.setIcon(view_icon)
         menu.addAction(view_action)
 
-        # تعديل
-        edit_action = QAction("✏️  تعديل البناء", self)
+        # 2. تعديل - لون #212B36
+        edit_icon = Icon.load_qicon("edit-01", size=18)
+        edit_action = QAction("  تعديل", self)
+        if edit_icon:
+            edit_action.setIcon(edit_icon)
         edit_action.triggered.connect(lambda: self.edit_building.emit(building))
         menu.addAction(edit_action)
 
-        menu.addSeparator()
-
-        # عرض على الخريطة
-        map_action = QAction("🗺️  عرض على الخريطة", self)
-        map_action.triggered.connect(lambda: self._show_on_map(building))
-        menu.addAction(map_action)
-
-        menu.addSeparator()
-
-        # حذف
-        delete_action = QAction("🗑️  حذف البناء", self)
+        # 3. حذف - لون #FF4842
+        delete_icon = Icon.load_qicon("delete", size=18)
+        delete_action = QAction("  حذف", self)
+        if delete_icon:
+            delete_action.setIcon(delete_icon)
         delete_action.triggered.connect(lambda: self._on_delete_building(building))
         menu.addAction(delete_action)
+
+        # Apply styles
+        menu.setStyleSheet("""
+            QMenu {
+                background-color: white;
+                border: 1px solid #E1E8ED;
+                border-radius: 8px;
+                padding: 8px;
+            }
+            QMenu::item {
+                padding: 10px;
+                border-radius: 4px;
+                color: #212B36;
+                font-size: 11pt;
+                font-weight: 400;
+            }
+            QMenu::item:selected {
+                background-color: #F6F6F7;
+            }
+            QMenu::item:nth-child(3) {
+                color: #FF4842;
+            }
+            QMenu::item:nth-child(3):selected {
+                color: #FF4842;
+            }
+        """)
 
         # عرض القائمة تحت زر الثلاث نقاط
         menu.exec_(self.table.viewport().mapToGlobal(position))
@@ -1702,6 +2340,58 @@ class BuildingsListPage(QWidget):
                     f"حدث خطأ أثناء حذف المبنى:<br>{str(e)}"
                 )
 
+    def _go_to_previous_page(self):
+        """Go to previous page."""
+        if self._current_page > 1:
+            self._current_page -= 1
+            self._load_buildings()
+
+    def _go_to_next_page(self):
+        """Go to next page."""
+        if self._current_page < self._total_pages:
+            self._current_page += 1
+            self._load_buildings()
+
+    def _show_page_selection_menu(self, parent_widget):
+        """Show dropdown menu to select page number."""
+        from PyQt5.QtWidgets import QMenu
+
+        menu = QMenu(self)
+        menu.setStyleSheet("""
+            QMenu {
+                background-color: white;
+                border: 1px solid #E1E8ED;
+                border-radius: 4px;
+                padding: 4px;
+            }
+            QMenu::item {
+                padding: 6px 20px;
+                color: #637381;
+                font-size: 10pt;
+            }
+            QMenu::item:selected {
+                background-color: #E3F2FD;
+                color: #3498db;
+            }
+        """)
+
+        # Add page numbers to menu
+        for page_num in range(1, self._total_pages + 1):
+            action = menu.addAction(f"Page {page_num}")
+            if page_num == self._current_page:
+                action.setEnabled(False)  # Disable current page
+            else:
+                action.triggered.connect(lambda checked, p=page_num: self._go_to_page(p))
+
+        # Show menu below the widget
+        menu.exec_(parent_widget.mapToGlobal(parent_widget.rect().bottomLeft()))
+
+    def _go_to_page(self, page_num):
+        """Go to specific page."""
+        if 1 <= page_num <= self._total_pages:
+            self._current_page = page_num
+            self._load_buildings()
+
     def update_language(self, is_arabic: bool):
         """Update language."""
         # Reload buildings to update language
@@ -1726,7 +2416,8 @@ class BuildingsPage(QWidget):
 
     def _setup_ui(self):
         """Setup UI."""
-        self.setStyleSheet(f"background-color: {Config.BACKGROUND_COLOR};")
+        # Background color from Figma via StyleManager (DRY principle)
+        self.setStyleSheet(StyleManager.page_background())
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
