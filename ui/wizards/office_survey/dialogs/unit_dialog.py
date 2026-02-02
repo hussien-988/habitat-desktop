@@ -18,10 +18,11 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtCore import Qt, QLocale
 
-from app.config import Config
+from app.config import Config, Vocabularies
 from models.building import Building
 from controllers.unit_controller import UnitController
 from services.validation_service import ValidationService
+from services.property_unit_api_service import PropertyUnitApiService
 from ui.components.toast import Toast
 from utils.logger import get_logger
 
@@ -31,7 +32,7 @@ logger = get_logger(__name__)
 class UnitDialog(QDialog):
     """Dialog for creating or editing a property unit."""
 
-    def __init__(self, building: Building, db, unit_data: Optional[Dict] = None, parent=None):
+    def __init__(self, building: Building, db, unit_data: Optional[Dict] = None, parent=None, auth_token: Optional[str] = None):
         """
         Initialize the dialog.
 
@@ -40,12 +41,17 @@ class UnitDialog(QDialog):
             db: Database instance
             unit_data: Optional existing unit data for editing
             parent: Parent widget
+            auth_token: Optional JWT token for API calls
         """
         super().__init__(parent)
         self.building = building
         self.unit_data = unit_data
         self.unit_controller = UnitController(db)
         self.validation_service = ValidationService()
+
+        # Initialize API service for creating units
+        self._api_service = PropertyUnitApiService(auth_token)
+        self._use_api = getattr(Config, 'DATA_PROVIDER', 'local_db') == 'http'
 
         # إزالة الشريط العلوي (title bar)
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.Dialog)
@@ -99,33 +105,22 @@ class UnitDialog(QDialog):
         row1 = QHBoxLayout()
         row1.setSpacing(16)  # مسافات متساوية بين الحقول
 
-        # Unit Type - DRY
+        # Unit Type - Using API integer codes from Vocabularies
+        # API: 1=Apartment, 2=Shop, 3=Office, 4=Warehouse, 5=Other
         self.unit_type_combo = QComboBox()
         self.unit_type_combo.setStyleSheet(self._combo_style())
-        unit_types = [
-            ("", "اختر"),
-            ("apartment", "شقة"),
-            ("shop", "محل تجاري"),
-            ("office", "مكتب"),
-            ("warehouse", "مستودع"),
-            ("garage", "مرآب"),
-            ("other", "أخرى")
-        ]
-        for code, ar in unit_types:
-            self.unit_type_combo.addItem(ar, code)
+        self.unit_type_combo.addItem("اختر", 0)  # Default selection
+        for code, name_en, name_ar in Vocabularies.UNIT_TYPES:
+            self.unit_type_combo.addItem(name_ar, code)
         row1.addLayout(self._create_field_container("نوع الوحدة", self.unit_type_combo), 1)
 
-        # Unit Status - DRY
+        # Unit Status - Using API integer codes from Vocabularies
+        # API: 1=Occupied, 2=Vacant, 3=Damaged, 4=UnderRenovation, 5=Uninhabitable, 6=Locked, 99=Unknown
         self.unit_status_combo = QComboBox()
         self.unit_status_combo.setStyleSheet(self._combo_style())
-        unit_statuses = [
-            ("", "اختر"),
-            ("intact", "جيدة"),
-            ("damaged", "متضررة"),
-            ("destroyed", "مدمرة")
-        ]
-        for code, ar in unit_statuses:
-            self.unit_status_combo.addItem(ar, code)
+        self.unit_status_combo.addItem("اختر", 0)  # Default selection
+        for code, name_en, name_ar in Vocabularies.UNIT_STATUS:
+            self.unit_status_combo.addItem(name_ar, code)
         row1.addLayout(self._create_field_container("حالة الوحدة", self.unit_status_combo), 1)
 
         layout.addLayout(row1)
@@ -564,21 +559,58 @@ class UnitDialog(QDialog):
 
     def _on_save(self):
         """Handle save button click."""
-        if self._validate():
-            self.accept()
+        if not self._validate():
+            return
+
+        # If using API and creating new unit, call API first
+        if self._use_api and not self.unit_data:
+            unit_data = self.get_unit_data()
+            logger.info(f"Creating property unit via API: {unit_data}")
+
+            response = self._api_service.create_property_unit(unit_data)
+
+            if not response.get("success"):
+                error_msg = response.get("error", "Unknown error")
+                details = response.get("details", "")
+                logger.error(f"Failed to create unit via API: {error_msg} - {details}")
+                QMessageBox.critical(
+                    self,
+                    "خطأ",
+                    f"فشل في إنشاء الوحدة:\n{error_msg}"
+                )
+                return
+
+            logger.info("Property unit created successfully via API")
+            # Store the created unit data from API response
+            if response.get("data"):
+                self._created_unit_data = response.get("data")
+
+        self.accept()
 
     def _load_unit_data(self, unit_data: Dict):
         """Load existing unit data into form."""
-        # Unit type
+        # Unit type - handle both integer codes and string values
         unit_type = unit_data.get('unit_type')
-        if unit_type:
+        if unit_type is not None:
+            # If it's a string, try to find matching integer code
+            if isinstance(unit_type, str):
+                type_map = {"apartment": 1, "shop": 2, "office": 3, "warehouse": 4, "other": 5}
+                unit_type = type_map.get(unit_type.lower(), 0)
             idx = self.unit_type_combo.findData(unit_type)
             if idx >= 0:
                 self.unit_type_combo.setCurrentIndex(idx)
 
-        # Unit status
-        status = unit_data.get('apartment_status')
-        if status:
+        # Unit status - handle both integer codes and string values
+        status = unit_data.get('apartment_status') or unit_data.get('status')
+        if status is not None:
+            # If it's a string, try to find matching integer code
+            if isinstance(status, str):
+                status_map = {
+                    "occupied": 1, "vacant": 2, "damaged": 3,
+                    "underrenovation": 4, "uninhabitable": 5, "locked": 6, "unknown": 99,
+                    "intact": 1, "destroyed": 3  # Legacy mappings
+                }
+                status = status_map.get(status.lower().replace("_", ""), 0)
             idx = self.unit_status_combo.findData(status)
             if idx >= 0:
                 self.unit_status_combo.setCurrentIndex(idx)
@@ -608,7 +640,7 @@ class UnitDialog(QDialog):
             self.description_edit.setPlainText(unit_data['property_description'])
 
     def get_unit_data(self) -> Dict[str, Any]:
-        """Get unit data from form."""
+        """Get unit data from form with integer codes for API."""
         # Parse area
         area_value = None
         area_text = self.area_input.text().strip()
@@ -618,12 +650,17 @@ class UnitDialog(QDialog):
             except ValueError:
                 pass
 
+        # Get integer codes from dropdowns (API expects integers)
+        unit_type_code = self.unit_type_combo.currentData() or 1  # Default to Apartment
+        status_code = self.unit_status_combo.currentData() or 1  # Default to Occupied
+
         unit_data = {
             'unit_uuid': self.unit_data.get('unit_uuid') if self.unit_data else str(uuid.uuid4()),
             'building_id': self.building.building_id,
             'building_uuid': self.building.building_uuid,
-            'unit_type': self.unit_type_combo.currentData(),
-            'apartment_status': self.unit_status_combo.currentData() or 'intact',
+            'unit_type': unit_type_code,  # Integer code for API
+            'status': status_code,  # Integer code for API
+            'apartment_status': status_code,  # Compatibility
             'floor_number': self.floor_spin.value(),
             'unit_number': str(self.unit_number_spin.value()),
             'apartment_number': str(self.unit_number_spin.value()),  # Compatibility
@@ -633,3 +670,8 @@ class UnitDialog(QDialog):
         }
 
         return unit_data
+
+    def set_auth_token(self, token: str):
+        """Set authentication token for API calls."""
+        if self._api_service:
+            self._api_service.set_auth_token(token)

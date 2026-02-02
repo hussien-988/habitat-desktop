@@ -521,14 +521,34 @@ class BuildingController(BaseController):
         """
         Search buildings by text.
 
+        When using API backend, calls POST /v1/Buildings/search with {"buildingId": "..."}
+        When using local database, filters buildings by building_id or address.
+
         Args:
-            search_text: Text to search for
+            search_text: Text to search for (building ID)
 
         Returns:
             OperationResult with list of matching Buildings
         """
-        filter_ = BuildingFilter(search_text=search_text)
-        return self.load_buildings(filter_)
+        try:
+            self._emit_started("search_buildings")
+
+            if self._use_api and self._api_service:
+                # Use dedicated search API endpoint
+                buildings = self._api_service.search_buildings(search_text)
+                self._buildings_cache = buildings
+                self._emit_completed("search_buildings", True)
+                self.buildings_loaded.emit(buildings)
+                return OperationResult.ok(data=buildings)
+            else:
+                # Use local database filter
+                filter_ = BuildingFilter(search_text=search_text)
+                return self.load_buildings(filter_)
+
+        except Exception as e:
+            error_msg = f"Error searching buildings: {str(e)}"
+            self._emit_error("search_buildings", error_msg)
+            return OperationResult.fail(message=error_msg)
 
     def filter_by_neighborhood(self, neighborhood_code: str) -> OperationResult[List[Building]]:
         """

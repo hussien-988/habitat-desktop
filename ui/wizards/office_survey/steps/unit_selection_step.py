@@ -51,6 +51,11 @@ class UnitSelectionStep(BaseStep):
         self.unit_controller = UnitController(self.context.db)
         self.selected_unit: Optional[Unit] = None
 
+        # Set auth token for API calls if available
+        main_window = self.window()
+        if main_window and hasattr(main_window, '_api_token') and main_window._api_token:
+            self.unit_controller.set_auth_token(main_window._api_token)
+
     def setup_ui(self):
         """
         Setup the step's UI.
@@ -660,13 +665,25 @@ class UnitSelectionStep(BaseStep):
             logger.info(f"Unit selected: {unit.unit_id}")
 
     def _show_add_unit_dialog(self):
-        """Show dialog to add a new unit - exact copy from old wizard."""
+        """Show dialog to add a new unit - uses API to create unit."""
         from ui.wizards.office_survey.dialogs.unit_dialog import UnitDialog
 
-        dialog = UnitDialog(self.context.building, self.context.db, parent=self)
+        # Get auth token from main window if available
+        auth_token = None
+        main_window = self.window()
+        if main_window and hasattr(main_window, '_api_token'):
+            auth_token = main_window._api_token
+
+        dialog = UnitDialog(
+            self.context.building,
+            self.context.db,
+            parent=self,
+            auth_token=auth_token
+        )
 
         if dialog.exec_() == QDialog.Accepted:
-            # Create new unit (will be saved when moving forward)
+            # Unit was created via API (if using API mode)
+            # Store the unit data in context
             self.context.is_new_unit = True
             self.context.new_unit_data = dialog.get_unit_data()
 
@@ -677,7 +694,8 @@ class UnitSelectionStep(BaseStep):
             # Enable next button by emitting validation changed
             self.emit_validation_changed(True)
 
-            QMessageBox.information(self, "تم", "سيتم إضافة الوحدة عند إتمام الاستمارة")
+            # Refresh units list to show the newly created unit
+            self._load_units()
 
     def validate(self) -> StepValidationResult:
         """Validate the step."""
@@ -715,6 +733,12 @@ class UnitSelectionStep(BaseStep):
     def on_show(self):
         """Called when step is shown."""
         super().on_show()
+
+        # Set auth token for API calls if available (may not be set in __init__)
+        main_window = self.window()
+        if main_window and hasattr(main_window, '_api_token') and main_window._api_token:
+            self.unit_controller.set_auth_token(main_window._api_token)
+
         # Reload units when step is shown
         self._load_units()
 

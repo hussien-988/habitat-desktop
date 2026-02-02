@@ -2,7 +2,7 @@
 """
 Building API Service - Fetches buildings from REST API.
 
-Connects to /api/Buildings endpoint to get all buildings instead of SQLite.
+Connects to /api/v1/Buildings endpoint to get all buildings instead of SQLite.
 """
 
 import json
@@ -24,7 +24,7 @@ class BuildingApiService:
     """
     Service for fetching buildings from REST API.
 
-    Uses the API_BASE_URL from Config to connect to /api/Buildings endpoint.
+    Uses the API_BASE_URL from Config to connect to /api/v1/Buildings endpoint.
     """
 
     def __init__(self, auth_token: Optional[str] = None):
@@ -73,7 +73,7 @@ class BuildingApiService:
 
         Args:
             method: HTTP method (GET, POST, PUT, DELETE)
-            endpoint: API endpoint (e.g., "/Buildings")
+            endpoint: API endpoint (e.g., "/v1/Buildings")
             data: Request body data (for POST/PUT)
             params: Query parameters
 
@@ -372,6 +372,56 @@ class BuildingApiService:
 
         # Fetch and return the updated building
         return self.get_building_by_id(building_id)
+    def search_buildings(self, building_id: str) -> List[Building]:
+        """
+        Search for buildings by building ID using the search API.
+
+        POST /v1/Buildings/search
+        Body: {"buildingId": "01010"}
+
+        Args:
+            building_id: Building ID to search for (partial match)
+
+        Returns:
+            List of matching Building objects
+        """
+        if not building_id or not building_id.strip():
+            return []
+
+        search_data = {"buildingId": building_id.strip()}
+
+        response = self._make_request("POST", "/v1/Buildings/search", data=search_data)
+
+        if not response.get("success"):
+            logger.error(f"Failed to search buildings: {response.get('error')}")
+            return []
+
+        data = response.get("data", [])
+
+        # Handle case where API returns a wrapper object
+        if isinstance(data, dict):
+            if "data" in data:
+                data = data["data"]
+            elif "buildings" in data:
+                data = data["buildings"]
+            elif "items" in data:
+                data = data["items"]
+
+        if not isinstance(data, list):
+            logger.warning(f"Unexpected search response format: {type(data)}")
+            return []
+
+        buildings = []
+        for item in data:
+            try:
+                building = self._api_response_to_building(item)
+                buildings.append(building)
+            except Exception as e:
+                logger.warning(f"Failed to parse building from search: {e}")
+                continue
+
+        logger.info(f"Search found {len(buildings)} buildings for query: {building_id}")
+        return buildings
 
     def _api_response_to_building(self, data: Dict[str, Any]) -> Building:
         """
