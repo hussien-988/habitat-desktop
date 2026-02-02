@@ -9,6 +9,8 @@ Handles:
 - Unit search and filtering
 - Unit validation
 - Unit-building relationships
+
+Supports both API and local database backends based on Config.DATA_PROVIDER.
 """
 
 from dataclasses import dataclass
@@ -17,6 +19,7 @@ from typing import Any, Dict, List, Optional
 
 from PyQt5.QtCore import pyqtSignal
 
+from app.config import Config
 from controllers.base_controller import BaseController, OperationResult
 from models.unit import PropertyUnit
 from repositories.unit_repository import UnitRepository
@@ -44,6 +47,7 @@ class UnitController(BaseController):
     Controller for property unit management.
 
     Provides a clean interface between UI and data layer for unit operations.
+    Supports both API and local database backends based on Config.DATA_PROVIDER.
     """
 
     # Signals
@@ -53,14 +57,36 @@ class UnitController(BaseController):
     units_loaded = pyqtSignal(list)  # list of units
     unit_selected = pyqtSignal(object)  # Unit object
 
-    def __init__(self, db: Database, parent=None):
+    def __init__(self, db: Database = None, parent=None, use_api: bool = None):
         super().__init__(parent)
         self.db = db
-        self.repository = UnitRepository(db)
+
+        # Determine whether to use API or local database
+        if use_api is not None:
+            self._use_api = use_api
+        else:
+            self._use_api = getattr(Config, 'DATA_PROVIDER', 'local_db') == 'http'
+
+        # Initialize appropriate backend
+        if self._use_api:
+            from services.property_unit_api_service import PropertyUnitApiService
+            self._api_service = PropertyUnitApiService()
+            self.repository = None
+            logger.info("UnitController using API backend")
+        else:
+            self.repository = UnitRepository(db) if db else None
+            self._api_service = None
+            logger.info("UnitController using local database backend")
 
         self._current_unit: Optional[PropertyUnit] = None
         self._units_cache: List[PropertyUnit] = []
         self._current_filter = UnitFilter()
+
+    def set_auth_token(self, token: str):
+        """Set authentication token for API calls."""
+        if self._api_service:
+            self._api_service.set_auth_token(token)
+            logger.info("API token set for UnitController")
 
     # ==================== Properties ====================
 
@@ -345,8 +371,25 @@ class UnitController(BaseController):
         Returns:
             OperationResult with list of Units
         """
-        filter_ = UnitFilter(building_uuid=building_uuid)
-        return self.load_units(filter_)
+        try:
+            self._emit_started("get_units_for_building")
+
+            if self._use_api and self._api_service:
+                # Use API to fetch units
+                units = self._api_service.get_units_for_building(building_uuid)
+                self._units_cache = units
+                self._emit_completed("get_units_for_building", True)
+                self.units_loaded.emit(units)
+                return OperationResult.ok(data=units)
+            else:
+                # Use local database filter
+                filter_ = UnitFilter(building_uuid=building_uuid)
+                return self.load_units(filter_)
+
+        except Exception as e:
+            error_msg = f"Error getting units for building: {str(e)}"
+            self._emit_error("get_units_for_building", error_msg)
+            return OperationResult.fail(message=error_msg)
 
     def search_units(self, search_text: str) -> OperationResult[List[PropertyUnit]]:
         """
