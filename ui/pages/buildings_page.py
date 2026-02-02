@@ -994,38 +994,33 @@ class AddBuildingPage(QWidget):
         self.units_label.setText(str(total))
 
     def _on_pick_from_map(self):
-        """Open map picker - V2 unified design (matches BuildingMapWidget)."""
+        """
+        Open map picker to select building location (Point only).
+
+        UC-000: Point selection for Add Building.
+        Note: Polygon drawing remains available in other UCs (Field Work Preparation).
+        """
         try:
             from ui.components.map_picker_dialog_v2 import show_map_picker_dialog
 
-            # Use unified map picker with consistent design (DRY BEST PRACTICE!)
+            # UC-000: Point selection only (polygon used in Field Work Preparation)
             result = show_map_picker_dialog(
                 initial_lat=self.latitude_spin.value(),
                 initial_lon=self.longitude_spin.value(),
-                allow_polygon=True,
-                db=self.building_controller.db,  # Pass DB to show buildings!
+                allow_polygon=False,  # Point only for Add Building (YAGNI principle)
+                db=self.building_controller.db,
                 parent=self
             )
 
             if result:
+                # Set coordinates
                 self.latitude_spin.setValue(result["latitude"])
                 self.longitude_spin.setValue(result["longitude"])
 
-                # Show coordinates in the label above the map button
+                # Show success message
                 lat = result["latitude"]
                 lon = result["longitude"]
-                self.coordinates_label.setText(f"✓ الإحداثيات: {lat:.6f}, {lon:.6f}")
-                self.coordinates_label.show()
-
-                if result.get("polygon_wkt"):
-                    self._polygon_wkt = result["polygon_wkt"]
-                    self.geometry_type_label.setText("نوع الإحداثيات: مضلع")
-                    self.location_status_label.setText("✓ تم تحديد الموقع من الخريطة")
-                else:
-                    self._polygon_wkt = None
-                    self.geometry_type_label.setText("نوع الإحداثيات: نقطة")
-                    self.location_status_label.setText("✓ تم تحديد الموقع")
-
+                self.location_status_label.setText(f"✓ تم تحديد الموقع ({lat:.6f}, {lon:.6f})")
                 self.location_status_label.setStyleSheet(f"color: {Config.SUCCESS_COLOR}; font-size: 10pt;")
 
         except ImportError:
@@ -2260,7 +2255,13 @@ class BuildingsListPage(QWidget):
         menu.exec_(self.table.viewport().mapToGlobal(position))
 
     def _show_on_map(self, building: Building):
-        """Show on map."""
+        """
+        Show building location on map (read-only view).
+
+        NOTE: Currently using V1 (map_picker_dialog) because V2 doesn't support
+        read_only mode yet. This should be migrated to V2 after adding read_only feature.
+        TODO: Migrate to map_picker_dialog_v2 when read_only mode is implemented.
+        """
         if building.latitude and building.longitude:
             from ui.components.map_picker_dialog import MapPickerDialog
             dialog = MapPickerDialog.get_instance(

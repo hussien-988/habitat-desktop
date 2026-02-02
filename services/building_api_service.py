@@ -314,6 +314,64 @@ class BuildingApiService:
         response = self._make_request("DELETE", f"/v1/Buildings/{building_id}")
         return response.get("success", False)
 
+    def update_building_geometry(
+        self,
+        building_id: str,
+        latitude: Optional[float] = None,
+        longitude: Optional[float] = None,
+        building_geometry_wkt: Optional[str] = None
+    ) -> Optional[Building]:
+        """
+        Update building geometry using dedicated geometry endpoint.
+
+        This method updates only the geographic location data of a building
+        without affecting other properties.
+
+        Args:
+            building_id: Building UUID
+            latitude: GPS latitude coordinate
+            longitude: GPS longitude coordinate
+            building_geometry_wkt: WKT polygon string for building footprint
+
+        Returns:
+            Updated Building object or None if failed
+
+        Example:
+            >>> service = BuildingApiService()
+            >>> building = service.update_building_geometry(
+            ...     building_id="uuid-here",
+            ...     latitude=36.2021,
+            ...     longitude=37.1343,
+            ...     building_geometry_wkt="POLYGON((...))"
+            ... )
+        """
+        payload = {}
+
+        if latitude is not None:
+            payload["latitude"] = latitude
+
+        if longitude is not None:
+            payload["longitude"] = longitude
+
+        if building_geometry_wkt is not None:
+            payload["buildingGeometryWkt"] = building_geometry_wkt
+
+        if not payload:
+            logger.warning("No geometry data provided for update")
+            return None
+
+        response = self._make_request(
+            "PUT",
+            f"/v1/Buildings/{building_id}/geometry",
+            data=payload
+        )
+
+        if not response.get("success"):
+            logger.error(f"Failed to update geometry: {response.get('error')}")
+            return None
+
+        # Fetch and return the updated building
+        return self.get_building_by_id(building_id)
     def search_buildings(self, building_id: str) -> List[Building]:
         """
         Search for buildings by building ID using the search API.

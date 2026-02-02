@@ -329,6 +329,75 @@ class BuildingController(BaseController):
             self._emit_error("delete_building", error_msg)
             return OperationResult.fail(message=error_msg)
 
+    def update_geometry(
+        self,
+        building_uuid: str,
+        latitude: Optional[float] = None,
+        longitude: Optional[float] = None,
+        polygon_wkt: Optional[str] = None
+    ) -> OperationResult[Building]:
+        """
+        Update building geometry (location and/or polygon footprint).
+
+        Args:
+            building_uuid: UUID of building to update
+            latitude: GPS latitude coordinate (optional)
+            longitude: GPS longitude coordinate (optional)
+            polygon_wkt: WKT polygon string for building footprint (optional)
+
+        Returns:
+            OperationResult with updated Building or error
+        """
+        try:
+            # Validate that at least one geometry field is provided
+            if latitude is None and longitude is None and polygon_wkt is None:
+                return OperationResult.fail(
+                    message="At least one geometry field must be provided",
+                    message_ar="يجب توفير حقل هندسي واحد على الأقل"
+                )
+
+            if self._use_api and self._api_service:
+                # Use API service
+                building = self._api_service.update_building_geometry(
+                    building_id=building_uuid,
+                    latitude=latitude,
+                    longitude=longitude,
+                    building_geometry_wkt=polygon_wkt
+                )
+            else:
+                # Use local repository
+                building = self.repository.update_geometry(
+                    building_uuid=building_uuid,
+                    latitude=latitude,
+                    longitude=longitude,
+                    polygon_wkt=polygon_wkt
+                )
+
+            if building:
+                # Emit signals
+                self.building_updated.emit(building)
+
+                # Trigger callbacks
+                if self._on_building_updated:
+                    self._on_building_updated(building)
+
+                return OperationResult.ok(
+                    data=building,
+                    message="Building geometry updated successfully",
+                    message_ar="تم تحديث موقع المبنى بنجاح"
+                )
+            else:
+                self._emit_error("update_geometry", "Failed to update building geometry")
+                return OperationResult.fail(
+                    message="Failed to update building geometry",
+                    message_ar="فشل في تحديث موقع المبنى"
+                )
+
+        except Exception as e:
+            error_msg = f"Error updating building geometry: {str(e)}"
+            self._emit_error("update_geometry", error_msg)
+            return OperationResult.fail(message=error_msg)
+
     def get_building(self, building_uuid: str) -> OperationResult[Building]:
         """
         Get a building by UUID.

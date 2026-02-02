@@ -136,6 +136,28 @@ DRAWING_JS_TEMPLATE = """
                     var latlng = layer.getLatLng();
                     geomType = 'Point';
                     wkt = 'POINT(' + latlng.lng + ' ' + latlng.lat + ')';
+
+                    // ✨ تحسين UX: جعل النقطة draggable مع popup للحذف
+                    layer.dragging.enable();
+
+                    // إضافة popup مع زر حذف
+                    var popupContent = '<div style="text-align: center; direction: rtl; padding: 4px;">' +
+                                      '<button onclick="deleteCurrentMarker()" style="background: #dc3545; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 500; box-shadow: 0 2px 4px rgba(0,0,0,0.2);">🗑️ حذف النقطة</button>' +
+                                      '<div style="margin-top: 8px; font-size: 11px; color: #666;">💡 يمكنك سحب النقطة لتغيير موقعها</div>' +
+                                      '</div>';
+                    layer.bindPopup(popupContent);
+
+                    // تحديث الموقع عند السحب
+                    layer.on('dragend', function(e) {
+                        var newLatLng = e.target.getLatLng();
+                        var newWkt = 'POINT(' + newLatLng.lng + ' ' + newLatLng.lat + ')';
+                        console.log('✅ Marker dragged to new position:', newWkt);
+
+                        if (bridge && bridge.onGeometryDrawn) {
+                            bridge.onGeometryDrawn('Point', newWkt);
+                        }
+                    });
+
                 } else if (type === 'polygon') {
                     var latlngs = layer.getLatLngs()[0];
                     var coords = latlngs.map(function(ll) {
@@ -160,6 +182,17 @@ DRAWING_JS_TEMPLATE = """
                 }
             });
 
+            // دالة لحذف النقطة الحالية (يتم استدعاؤها من popup)
+            window.deleteCurrentMarker = function() {
+                drawnItems.clearLayers();
+                console.log('✅ Marker deleted by user');
+
+                // إخطار Python بأن الهندسة تم حذفها
+                if (bridge && bridge.onGeometryDrawn) {
+                    bridge.onGeometryDrawn(null, null);
+                }
+            };
+
             // Handle editing
             map.on(L.Draw.Event.EDITED, function(e) {
                 var layers = e.layers;
@@ -183,17 +216,35 @@ DRAWING_JS_TEMPLATE = """
                     map.removeLayer(currentMarker);
                 }
 
-                // Add new marker
+                // Add new marker (draggable)
                 currentMarker = L.marker(e.latlng, {
                     icon: L.icon({
                         iconUrl: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjUiIGhlaWdodD0iNDEiIHZpZXdCb3g9IjAgMCAyNSA0MSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cGF0aCBkPSJNMTIuNSAwQzUuNiAwIDAgNS42IDAgMTIuNWMwIDEuOC40IDMuNSAxLjIgNS4xTDEyLjUgNDEgMjMuOCAxNy42Yy44LTEuNiAxLjItMy4zIDEuMi01LjFDMjUgNS42IDE5LjQgMCAxMi41IDB6IiBmaWxsPSIjRkYwMDAwIi8+PGNpcmNsZSBjeD0iMTIuNSIgY3k9IjEyLjUiIHI9IjUiIGZpbGw9IndoaXRlIi8+PC9zdmc+',
                         iconSize: [25, 41],
                         iconAnchor: [12, 41]
                     }),
-                    draggable: false
+                    draggable: true  // ✨ تحسين UX: draggable في fallback mode أيضاً
                 }).addTo(map);
 
                 drawnItems.addLayer(currentMarker);
+
+                // إضافة popup مع زر حذف
+                var popupContent = '<div style="text-align: center; direction: rtl; padding: 4px;">' +
+                                  '<button onclick="deleteCurrentMarkerFallback()" style="background: #dc3545; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 500; box-shadow: 0 2px 4px rgba(0,0,0,0.2);">🗑️ حذف النقطة</button>' +
+                                  '<div style="margin-top: 8px; font-size: 11px; color: #666;">💡 يمكنك سحب النقطة لتغيير موقعها</div>' +
+                                  '</div>';
+                currentMarker.bindPopup(popupContent);
+
+                // تحديث الموقع عند السحب
+                currentMarker.on('dragend', function(e) {
+                    var newLatLng = e.target.getLatLng();
+                    var newWkt = 'POINT(' + newLatLng.lng + ' ' + newLatLng.lat + ')';
+                    console.log('✅ Marker dragged to new position (fallback):', newWkt);
+
+                    if (bridge && bridge.onGeometryDrawn) {
+                        bridge.onGeometryDrawn('Point', newWkt);
+                    }
+                });
 
                 // Create WKT
                 var geomType = 'Point';
@@ -209,6 +260,20 @@ DRAWING_JS_TEMPLATE = """
                     console.error('❌ Bridge not found! Cannot send geometry to Python');
                 }
             });
+
+            // دالة لحذف النقطة في fallback mode
+            window.deleteCurrentMarkerFallback = function() {
+                if (currentMarker) {
+                    map.removeLayer(currentMarker);
+                    currentMarker = null;
+                    console.log('✅ Marker deleted by user (fallback)');
+
+                    // إخطار Python بأن الهندسة تم حذفها
+                    if (bridge && bridge.onGeometryDrawn) {
+                        bridge.onGeometryDrawn(null, null);
+                    }
+                }
+            };
 
             // Add instructions
             var instructions = L.control({position: 'topright'});

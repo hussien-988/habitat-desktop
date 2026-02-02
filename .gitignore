@@ -3,6 +3,7 @@ __pycache__/
 *.pyc
 *.pyo
 *.pyd
+
 # local runtime files
 data/trrcms.db
 logs/app.log
@@ -11,3 +12,30 @@ logs/app.log
 logs/
 *.log
 *.db
+
+# Environment configuration (local settings)
+.env
+.env.local
+.env.*.local
+.env.development
+.env.production
+
+# Docker local overrides
+docker-compose.override.yml
+docker-compose.*.yml
+
+# Tile server data (large files)
+*.mbtiles
+tileserver/data/
+tileserver/*.mbtiles
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db

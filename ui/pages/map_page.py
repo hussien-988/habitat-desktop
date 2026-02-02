@@ -25,7 +25,7 @@ except ImportError:
 
 from app.config import Config
 from repositories.database import Database
-from repositories.building_repository import BuildingRepository
+from controllers.map_controller import MapController
 from utils.i18n import I18n
 from utils.logger import get_logger
 
@@ -504,7 +504,9 @@ class MapPage(QWidget):
         super().__init__(parent)
         self.db = db
         self.i18n = i18n
-        self.building_repo = BuildingRepository(db)
+        # DRY + SOLID: Use MapController (single source of truth for map data)
+        # MapController automatically selects API or local DB based on configuration
+        self.map_controller = MapController(db)
         self.buildings = []
 
         self._setup_ui()
@@ -771,9 +773,32 @@ class MapPage(QWidget):
         """تحديث بيانات الخريطة."""
         logger.debug("Refreshing map page")
 
-        # Load buildings
-        self.buildings = self.building_repo.get_all(limit=500)
-        geo_buildings = [b for b in self.buildings if b.latitude and b.longitude]
+        # Load buildings using MapController (DRY + SOLID)
+        # Aleppo bounding box (same as MapServiceAPI)
+        bbox = (36.0, 36.8, 36.5, 37.5)  # min_lat, min_lon, max_lat, max_lon
+        logger.info(f"[MAP_PAGE] Requesting buildings with bbox: {bbox}")
+        result = self.map_controller.get_buildings_in_view(bbox)
+        logger.info(f"[MAP_PAGE] Result success: {result.success}, data count: {len(result.data) if result.success else 0}")
+
+        if result.success:
+            # Convert BuildingGeoData to Building objects (for compatibility with UI)
+            from models.building import Building
+            self.buildings = []
+            for geo_data in result.data:
+                building = Building()
+                building.building_uuid = geo_data.building_id
+                building.building_id = geo_data.building_id
+                building.latitude = geo_data.point.latitude if geo_data.point else None
+                building.longitude = geo_data.point.longitude if geo_data.point else None
+                building.building_status = geo_data.status
+                building.building_type = geo_data.building_type
+                self.buildings.append(building)
+            geo_buildings = [b for b in self.buildings if b.latitude and b.longitude]
+            logger.info(f"✅ Loaded {len(geo_buildings)} buildings from MapController")
+        else:
+            logger.error(f"❌ Failed to load buildings: {result.message}")
+            self.buildings = []
+            geo_buildings = []
 
         self.side_panel.set_buildings(self.buildings)
 

@@ -83,12 +83,26 @@ class MapPickerDialog(BaseMapDialog):
             buildings_geojson = '{"type":"FeatureCollection","features":[]}'  # Default empty
             if self.db:
                 logger.info("Loading buildings for map picker...")
-                buildings_geojson = self.load_buildings_geojson(self.db, limit=200)
+
+                # Get auth token from parent window if available
+                auth_token = None
+                try:
+                    if self.parent():
+                        main_window = self.parent()
+                        while main_window and not hasattr(main_window, 'current_user'):
+                            main_window = main_window.parent()
+                        if main_window and hasattr(main_window, 'current_user') and main_window.current_user:
+                            auth_token = getattr(main_window.current_user, '_api_token', None)
+                            logger.debug(f"Got auth token from MainWindow: {bool(auth_token)}")
+                except Exception as e:
+                    logger.warning(f"Could not get auth token from parent: {e}")
+
+                buildings_geojson = self.load_buildings_geojson(self.db, limit=200, auth_token=auth_token)
             else:
                 logger.warning("No database provided - map will not show existing buildings")
 
             # Determine drawing mode
-            drawing_mode = 'both' if self.allow_polygon else 'marker'
+            drawing_mode = 'both' if self.allow_polygon else 'point'
 
             # Generate map HTML using LeafletHTMLGenerator
             html = generate_leaflet_html(

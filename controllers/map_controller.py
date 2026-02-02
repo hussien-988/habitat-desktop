@@ -22,8 +22,10 @@ from PyQt5.QtCore import pyqtSignal
 from controllers.base_controller import BaseController, OperationResult
 from repositories.database import Database
 from services.map_service import MapService, GeoPoint, GeoPolygon, BuildingGeoData
+from services.map_service_api import MapServiceAPI
 from services.gps_service import GPSService, GPSPosition, GPSConfig, GPSStatus
 from utils.logger import get_logger
+from app.api_config import get_api_settings
 
 logger = get_logger(__name__)
 
@@ -85,7 +87,21 @@ class MapController(BaseController):
     def __init__(self, db: Database, parent=None):
         super().__init__(parent)
         self.db = db
-        self.map_service = MapService(db)
+
+        # Initialize map service based on configuration (API or local)
+        api_settings = get_api_settings()
+        if api_settings.is_api_mode():
+            try:
+                self.map_service = MapServiceAPI()
+                logger.info("✅ MapController initialized in API mode")
+            except Exception as e:
+                logger.error(f"❌ Failed to initialize MapServiceAPI: {e}")
+                logger.warning("Falling back to local database mode")
+                self.map_service = MapService(db)
+        else:
+            self.map_service = MapService(db)
+            logger.info("MapController initialized in local database mode")
+
         self.gps_service: Optional[GPSService] = None
 
         self._state = MapState()
