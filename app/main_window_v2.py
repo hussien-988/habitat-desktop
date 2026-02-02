@@ -346,12 +346,20 @@ class MainWindow(QMainWindow):
         """Pass API token to all controllers that use API backend."""
         logger.info(f"Setting API token for controllers (token length: {len(token)})")
 
+        # Store token for later use (e.g., when wizard is reset)
+        self._api_token = token
+
         # Pass token to BuildingsPage controller
         if Pages.BUILDINGS in self.pages:
             buildings_page = self.pages[Pages.BUILDINGS]
             if hasattr(buildings_page, 'building_controller'):
                 buildings_page.building_controller.set_auth_token(token)
                 logger.info("API token set for BuildingController")
+
+        # Pass token to OfficeSurveyWizard controller
+        if hasattr(self, 'office_survey_wizard') and self.office_survey_wizard:
+            self.office_survey_wizard.set_auth_token(token)
+            logger.info("API token set for OfficeSurveyWizard")
 
     def _handle_logout(self):
         """Handle logout request."""
@@ -477,6 +485,10 @@ class MainWindow(QMainWindow):
 
         self.office_survey_wizard.navigator.context = new_context
         self.office_survey_wizard.navigator.reset()
+
+        # Re-set API token after reset (steps may have new controllers)
+        if hasattr(self, '_api_token') and self._api_token:
+            self.office_survey_wizard.set_auth_token(self._api_token)
 
     def _on_view_building(self, building_id: str):
         """Handle view building request from buildings list."""
