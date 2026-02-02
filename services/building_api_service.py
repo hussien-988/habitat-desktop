@@ -211,7 +211,6 @@ class BuildingApiService:
                 buildings.append(building)
             except Exception as e:
                 logger.warning(f"Failed to parse building: {e}")
-                logger.warning(f"Building item that failed: {item}")
                 continue
 
         logger.info(f"Fetched {len(buildings)} buildings from API")
@@ -332,6 +331,8 @@ class BuildingApiService:
             # Building ID
             "buildingId": "building_id",
             "building_id": "building_id",
+            "buildingIdFormatted": "building_id_formatted",
+            "building_id_formatted": "building_id_formatted",
 
             # Administrative codes
             "governorateCode": "governorate_code",
@@ -377,6 +378,7 @@ class BuildingApiService:
             "building_type": "building_type",
             "buildingStatus": "building_status",
             "building_status": "building_status",
+            "status": "building_status",  # API uses "status" not "buildingStatus"
 
             "numberOfUnits": "number_of_units",
             "number_of_units": "number_of_units",
@@ -395,8 +397,10 @@ class BuildingApiService:
 
             # Metadata
             "createdAt": "created_at",
+            "createdAtUtc": "created_at",  # API uses this format
             "created_at": "created_at",
             "updatedAt": "updated_at",
+            "lastModifiedAtUtc": "updated_at",  # API uses this format
             "updated_at": "updated_at",
             "createdBy": "created_by",
             "created_by": "created_by",
@@ -408,6 +412,13 @@ class BuildingApiService:
             "legacy_stdm_id": "legacy_stdm_id",
         }
 
+        # Check for building type in API response with various key names
+        bt_value = None
+        for key in ["buildingType", "building_type", "BuildingType", "type"]:
+            if key in data:
+                bt_value = data[key]
+                break
+
         # Map the data
         mapped_data = {}
         for api_key, value in data.items():
@@ -415,26 +426,68 @@ class BuildingApiService:
             if model_key in Building.__dataclass_fields__:
                 mapped_data[model_key] = value
 
-        # Handle building_type - keep as integer (API returns 1, 2, 3, 4)
-        # The UI now uses integer codes matching the API
+        # Building type mapping from API string values to integer codes
+        # API returns: "Residential", "Commercial", "MixedUse", "Industrial"
+        # UI expects: 1, 2, 3, 4
+        building_type_str_to_int = {
+            "residential": 1,
+            "commercial": 2,
+            "mixeduse": 3,
+            "mixed": 3,
+            "industrial": 4,
+        }
+
+        # Handle building_type - convert API string to integer
         if "building_type" in mapped_data:
             bt = mapped_data["building_type"]
-            # Ensure it's an integer
-            if isinstance(bt, int):
-                mapped_data["building_type"] = bt
-            elif isinstance(bt, str) and bt.isdigit():
-                mapped_data["building_type"] = int(bt)
+
+            if isinstance(bt, int) and 1 <= bt <= 4:
+                # Already an integer, keep it
+                pass
+            elif isinstance(bt, str):
+                # API returns string like "Commercial", "Residential", etc.
+                bt_lower = bt.lower().replace("_", "").replace(" ", "")
+                mapped_data["building_type"] = building_type_str_to_int.get(bt_lower, 1)
             else:
                 # Default to 1 (Residential) if invalid
+                logger.warning(f"Invalid building_type value: {bt}, defaulting to 1")
+                mapped_data["building_type"] = 1
+        elif bt_value is not None:
+            # Building type not found in mapped data, use the value we found earlier
+            if isinstance(bt_value, int) and 1 <= bt_value <= 4:
+                mapped_data["building_type"] = bt_value
+            elif isinstance(bt_value, str):
+                bt_lower = bt_value.lower().replace("_", "").replace(" ", "")
+                mapped_data["building_type"] = building_type_str_to_int.get(bt_lower, 1)
+            else:
                 mapped_data["building_type"] = 1
 
-        # Handle building_status - keep as integer
+        # Building status mapping from API string values to integer codes
+        # API returns: "Intact", "MinorDamage", "ModerateDamage", "MajorDamage", "SeverelyDamaged",
+        #              "Destroyed", "UnderConstruction", "Abandoned", "Unknown"
+        # UI expects: 1, 2, 3, 4, 5, 6, 7, 8, 99
+        building_status_str_to_int = {
+            "intact": 1,
+            "minordamage": 2,
+            "moderatedamage": 3,
+            "majordamage": 4,
+            "severelydamaged": 5,
+            "destroyed": 6,
+            "underconstruction": 7,
+            "abandoned": 8,
+            "unknown": 99,
+        }
+
+        # Handle building_status - convert API string to integer
         if "building_status" in mapped_data:
             bs = mapped_data["building_status"]
-            if isinstance(bs, int):
-                mapped_data["building_status"] = bs
-            elif isinstance(bs, str) and bs.isdigit():
-                mapped_data["building_status"] = int(bs)
+            if isinstance(bs, int) and (1 <= bs <= 8 or bs == 99):
+                # Already an integer, keep it
+                pass
+            elif isinstance(bs, str):
+                # API returns string like "Intact", "MinorDamage", etc.
+                bs_lower = bs.lower().replace("_", "").replace(" ", "")
+                mapped_data["building_status"] = building_status_str_to_int.get(bs_lower, 1)
             else:
                 mapped_data["building_status"] = 1
 
@@ -500,19 +553,28 @@ class BuildingApiService:
         }
 
         # Building status enum mapping (Python string value -> API integer)
-        # Assuming: 1 = Intact, 2 = MinorDamage, 3 = MajorDamage, 4 = Destroyed, etc.
+        # API: 1=Intact, 2=MinorDamage, 3=ModerateDamage, 4=MajorDamage, 5=SeverelyDamaged,
+        #      6=Destroyed, 7=UnderConstruction, 8=Abandoned, 99=Unknown
         building_status_string_mapping = {
             "intact": 1,
             "standing": 1,
             "minor_damage": 2,
-            "damaged": 2,
-            "partially_damaged": 2,
-            "major_damage": 3,
-            "severely_damaged": 3,
-            "destroyed": 4,
-            "demolished": 4,
-            "rubble": 4,
-            "under_construction": 5,
+            "minordamage": 2,
+            "moderate_damage": 3,
+            "moderatedamage": 3,
+            "damaged": 3,
+            "partially_damaged": 3,
+            "major_damage": 4,
+            "majordamage": 4,
+            "severely_damaged": 5,
+            "severelydamaged": 5,
+            "destroyed": 6,
+            "demolished": 6,
+            "rubble": 6,
+            "under_construction": 7,
+            "underconstruction": 7,
+            "abandoned": 8,
+            "unknown": 99,
         }
 
         api_data = {}
@@ -537,12 +599,12 @@ class BuildingApiService:
 
             # Handle building_status - accept both integer and string values
             if key == "building_status":
-                if isinstance(value, int) and 1 <= value <= 5:
+                if isinstance(value, int) and (1 <= value <= 8 or value == 99):
                     # Already an integer, use it directly
                     pass
                 elif isinstance(value, str):
                     # Convert string to integer
-                    value = building_status_string_mapping.get(value, 1)
+                    value = building_status_string_mapping.get(value.lower().replace("_", "").replace(" ", ""), 1)
                 else:
                     value = 1  # Default to Intact
 

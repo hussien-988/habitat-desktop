@@ -920,10 +920,10 @@ class AddBuildingPage(QWidget):
     def _update_building_id(self):
         """Generate building ID in format: GG-DD-SS-CCC-NNN-BBBBB"""
         # GG: Governorate (محافظة) - 2 digits
-        gov = self.governorate_combo.currentData() or "01"
+        gov = self.governorate_combo.text().strip() or "01"
 
         # DD: District (منطقة) - 2 digits
-        dist = self.district_combo.currentData() or "01"
+        dist = self.district_combo.text().strip() or "01"
 
         # SS: Subdistrict (منطقة فرعية) - 2 digits
         subdist = self.subdistrict_code.text().strip() or "01"
@@ -932,7 +932,7 @@ class AddBuildingPage(QWidget):
         comm = self.community_code.text().strip() or "001"
 
         # NNN: Neighborhood (حي/قرية) - 3 digits
-        neigh = self.neighborhood_combo.currentData() or "001"
+        neigh = self.neighborhood_combo.text().strip() or "001"
 
         # BBBBB: Building Number - 5 digits
         bldg_num = self.building_number.text().strip().zfill(5)
@@ -964,11 +964,11 @@ class AddBuildingPage(QWidget):
             return
 
         # Generate the complete building ID
-        gov = self.governorate_combo.currentData() or "01"
-        dist = self.district_combo.currentData() or "01"
+        gov = self.governorate_combo.text().strip() or "01"
+        dist = self.district_combo.text().strip() or "01"
         subdist = self.subdistrict_code.text().strip() or "01"
         comm = self.community_code.text().strip() or "001"
-        neigh = self.neighborhood_combo.currentData() or "001"
+        neigh = self.neighborhood_combo.text().strip() or "001"
         bldg_num = building_num.zfill(5)
 
         building_id = f"{gov}-{dist}-{subdist}-{comm}-{neigh}-{bldg_num}"
@@ -1038,14 +1038,11 @@ class AddBuildingPage(QWidget):
 
         # GG: تحميل رمز المحافظة (Governorate)
         if hasattr(self.building, 'governorate_code') and self.building.governorate_code:
-            idx = self.governorate_combo.findData(self.building.governorate_code)
-            if idx >= 0:
-                self.governorate_combo.setCurrentIndex(idx)
+            self.governorate_combo.setText(self.building.governorate_code)
 
         # DD: تحميل رمز المنطقة (District)
-        idx = self.district_combo.findData(self.building.district_code)
-        if idx >= 0:
-            self.district_combo.setCurrentIndex(idx)
+        if hasattr(self.building, 'district_code') and self.building.district_code:
+            self.district_combo.setText(self.building.district_code)
 
         # SS: تحميل المنطقة الفرعية (Subdistrict)
         if hasattr(self.building, 'subdistrict_code') and self.building.subdistrict_code:
@@ -1056,9 +1053,8 @@ class AddBuildingPage(QWidget):
             self.community_code.setText(self.building.community_code)
 
         # NNN: تحميل رمز الحي/القرية (Neighborhood)
-        idx = self.neighborhood_combo.findData(self.building.neighborhood_code)
-        if idx >= 0:
-            self.neighborhood_combo.setCurrentIndex(idx)
+        if hasattr(self.building, 'neighborhood_code') and self.building.neighborhood_code:
+            self.neighborhood_combo.setText(self.building.neighborhood_code)
 
         # BBBBB: تحميل رقم البناء (Building Number - آخر 5 أرقام من building_id)
         if self.building.building_id and len(self.building.building_id) >= 5:
@@ -1901,8 +1897,9 @@ class BuildingsListPage(QWidget):
 
         # Populate table with current page data
         for idx, building in enumerate(page_buildings):
-            # رمز البناء
-            self.table.setItem(idx, 0, QTableWidgetItem(building.building_id or ""))
+            # رمز البناء (use formatted ID if available, fallback to building_id)
+            display_id = building.building_id_formatted or building.building_id or ""
+            self.table.setItem(idx, 0, QTableWidgetItem(display_id))
 
             # تاريخ الادخال
             date_str = building.created_at.strftime("%d/%m/%Y") if building.created_at else ""

@@ -235,12 +235,18 @@ class Vocabularies:
 
     # Building status matching API values (integer codes)
     # Value (code), Name (English), Name (Arabic)
+    # API: 1=Intact, 2=MinorDamage, 3=ModerateDamage, 4=MajorDamage, 5=SeverelyDamaged,
+    #      6=Destroyed, 7=UnderConstruction, 8=Abandoned, 99=Unknown
     BUILDING_STATUS = [
         (1, "Intact", "سليم"),
-        (2, "MinorDamage", "ضرر طفيف"),
-        (3, "MajorDamage", "ضرر كبير"),
-        (4, "Destroyed", "مدمر"),
-        (5, "UnderConstruction", "قيد البناء"),
+        (2, "MinorDamage", "أضرار طفيفة"),
+        (3, "ModerateDamage", "أضرار متوسطة"),
+        (4, "MajorDamage", "أضرار كبيرة"),
+        (5, "SeverelyDamaged", "أضرار شديدة"),
+        (6, "Destroyed", "مدمر"),
+        (7, "UnderConstruction", "قيد الإنشاء"),
+        (8, "Abandoned", "مهجور"),
+        (99, "Unknown", "غير معروف"),
     ]
 
     UNIT_TYPES = [
