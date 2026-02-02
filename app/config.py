@@ -35,7 +35,7 @@ class Config:
     DEV_MODE: bool = True
     DEV_AUTO_LOGIN: bool = True  # Auto-fill login credentials in dev mode
     DEV_USERNAME: str = "admin"
-    DEV_PASSWORD: str = "admin123"
+    DEV_PASSWORD: str = "Admin@123"
 
     # Data Provider Configuration
     # Options: "mock", "http", "local_db"

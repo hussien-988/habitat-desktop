@@ -21,7 +21,7 @@ from PyQt5.QtWidgets import QMessageBox
 from PyQt5.QtCore import QTimer
 
 from repositories.database import Database
-from repositories.building_repository import BuildingRepository
+from controllers.building_controller import BuildingController, BuildingFilter
 from models.building import Building
 from ui.components.base_map_dialog import BaseMapDialog
 from services.leaflet_html_generator import generate_leaflet_html
@@ -51,10 +51,27 @@ class BuildingMapDialog(BaseMapDialog):
             parent: Parent widget
         """
         self.db = db
-        self.building_repo = BuildingRepository(db)
+        self.building_controller = BuildingController(db)
         self._selected_building = None
         self._selected_building_id = selected_building_id
         self._is_view_only = bool(selected_building_id)
+        self._buildings_cache = []  # Cache loaded buildings for quick lookup
+
+        # Get auth token from parent window if available
+        self._auth_token = None
+        try:
+            if parent:
+                main_window = parent
+                while main_window and not hasattr(main_window, 'current_user'):
+                    main_window = main_window.parent()
+                if main_window and hasattr(main_window, 'current_user') and main_window.current_user:
+                    self._auth_token = getattr(main_window.current_user, '_api_token', None)
+                    # Set auth token for BuildingController
+                    if self._auth_token and self.building_controller.is_using_api:
+                        self.building_controller.set_auth_token(self._auth_token)
+                        logger.debug("Auth token set for BuildingController")
+        except Exception as e:
+            logger.warning(f"Could not get auth token from parent: {e}")
 
         # Determine mode based on whether we're viewing or selecting
         if self._is_view_only:
@@ -87,11 +104,26 @@ class BuildingMapDialog(BaseMapDialog):
             # Get tile server URL
             tile_server_url = get_tile_server_url()
 
+            # Get auth token from parent window if available
+            auth_token = None
+            try:
+                if self.parent():
+                    main_window = self.parent()
+                    while main_window and not hasattr(main_window, 'current_user'):
+                        main_window = main_window.parent()
+                    if main_window and hasattr(main_window, 'current_user') and main_window.current_user:
+                        auth_token = getattr(main_window.current_user, '_api_token', None)
+                        logger.debug(f"Got auth token from MainWindow: {bool(auth_token)}")
+            except Exception as e:
+                logger.warning(f"Could not get auth token from parent: {e}")
+
             # Load buildings using shared method (DRY principle)
-            buildings_geojson = self.load_buildings_geojson(self.db, limit=200)
+            buildings_geojson = self.load_buildings_geojson(self.db, limit=200, auth_token=auth_token)
 
             # Get buildings for focusing (if needed)
-            buildings = self.building_repo.get_all(limit=200)
+            building_filter = BuildingFilter(limit=200)
+            result = self.building_controller.load_buildings(building_filter)
+            buildings = result.data if result.success else []
 
             # Determine center and zoom
             center_lat = 36.2021
@@ -217,8 +249,9 @@ class BuildingMapDialog(BaseMapDialog):
         logger.info(f"Building selected from map: {building_id}")
 
         try:
-            # Find building in database
-            building = self.building_repo.get_by_id(building_id)
+            # Find building using BuildingController by 17-digit building_id (API or Local DB)
+            result = self.building_controller.get_building_by_id(building_id)
+            building = result.data if result.success else None
 
             if building:
                 self._selected_building = building

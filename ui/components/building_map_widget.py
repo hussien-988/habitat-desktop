@@ -25,6 +25,8 @@ from models.building import Building
 from utils.logger import get_logger
 from ui.design_system import Colors
 from ui.font_utils import FontManager, create_font
+from app.api_config import get_api_settings
+from services.map_service_api import MapServiceAPI
 
 logger = get_logger(__name__)
 
@@ -135,6 +137,19 @@ class BuildingMapWidget(QObject):
         # Smart zoom configuration - adaptive to tile server maxZoom
         # Default: 16 for local MBTiles (safe max), can be overridden for external servers
         self.MAX_SAFE_ZOOM = 16  # Will be read from tile server if available
+
+        # Initialize API settings and map service
+        self.api_settings = get_api_settings()
+        self.map_service_api = None
+        if self.api_settings.is_api_mode():
+            try:
+                self.map_service_api = MapServiceAPI()
+                logger.info("✅ BuildingMapWidget initialized in API mode")
+            except Exception as e:
+                logger.error(f"❌ Failed to initialize MapServiceAPI: {e}")
+                logger.warning("Falling back to local database mode")
+        else:
+            logger.info("BuildingMapWidget initialized in local database mode")
 
     def show_dialog(self, selected_building_id: Optional[str] = None) -> Optional[Building]:
         """
@@ -758,7 +773,42 @@ class BuildingMapWidget(QObject):
         base_url = QUrl(tile_server_url)
 
         # تحويل المباني إلى GeoJSON باستخدام نفس منطق map_page.py
-        buildings = self.building_repo.get_all(limit=200)
+        # Use API or local database based on configuration
+        if self.api_settings.is_api_mode() and self.map_service_api:
+            # Fetch buildings from Backend API using Aleppo bounds
+            print("\n" + "="*60)
+            print("[DEBUG] Fetching buildings from Backend API")
+            print(f"[DEBUG] API Mode: {self.api_settings.is_api_mode()}")
+            print(f"[DEBUG] Base URL: {self.api_settings.base_url}")
+            print(f"[DEBUG] Request: POST /api/v1/Buildings/map")
+            print(f"[DEBUG] BBox: NE(36.5, 37.5) - SW(36.0, 36.8)")
+            print("="*60)
+
+            logger.info("Fetching buildings from Backend API...")
+            buildings = self.map_service_api.get_buildings_in_bbox(
+                north_east_lat=36.5,
+                north_east_lng=37.5,
+                south_west_lat=36.0,
+                south_west_lng=36.8
+            )
+
+            print(f"\n[DEBUG] Response received:")
+            print(f"[DEBUG] Total buildings: {len(buildings)}")
+            if buildings:
+                print(f"[DEBUG] Sample building:")
+                b = buildings[0]
+                print(f"  - ID: {b.buildingId}")
+                print(f"  - UUID: {b.uuid}")
+                print(f"  - Location: ({b.latitude}, {b.longitude})")
+                print(f"  - Has Polygon: {bool(b.building_geometry_wkt)}")
+            print("="*60 + "\n")
+
+            logger.info(f"✅ Fetched {len(buildings)} buildings from API")
+        else:
+            # Fetch from local database
+            print("\n[DEBUG] Fetching buildings from LOCAL DATABASE")
+            logger.info("Fetching buildings from local database...")
+            buildings = self.building_repo.get_all(limit=200)
 
         features = []
         for building in buildings:

@@ -15,6 +15,7 @@ from http.server import HTTPServer, BaseHTTPRequestHandler
 from typing import Optional
 
 from app.config import Config
+from app.api_config import get_active_tile_server_url, get_tile_server_settings
 from utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -359,14 +360,20 @@ class TileServerManager:
         if not hasattr(self, '_initialized'):
             self._initialized = True
 
-            # Check for production URL: Config first, then environment variable
-            production_url = Config.TILE_SERVER_URL or os.getenv('TILE_SERVER_URL')
+            # Use smart tile server URL with health check and fallback
+            # get_active_tile_server_url() returns None for embedded tiles
+            production_url = get_active_tile_server_url()
             if production_url:
-                logger.info(f"Using production tile server: {production_url}")
+                print(f"\n[DEBUG] Tile Server: DOCKER/EXTERNAL")
+                print(f"[DEBUG] URL: {production_url}")
+                print(f"[DEBUG] Health Check: PASSED\n")
+                logger.info(f"✅ Using external tile server: {production_url}")
                 self._is_production = True
                 self._production_url = production_url
             else:
-                logger.info("Using local tile server")
+                print(f"\n[DEBUG] Tile Server: EMBEDDED/LOCAL")
+                print(f"[DEBUG] Starting local tile server on random port\n")
+                logger.info("📦 Using embedded local tile server")
                 self._is_production = False
 
     def get_tile_server_url(self) -> str:

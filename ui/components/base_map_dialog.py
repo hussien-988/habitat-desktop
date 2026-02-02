@@ -761,26 +761,41 @@ class BaseMapDialog(QDialog):
         logger.info("Map HTML loaded")
 
     @staticmethod
-    def load_buildings_geojson(db, limit: int = 200) -> str:
+    def load_buildings_geojson(db, limit: int = 200, auth_token: Optional[str] = None) -> str:
         """
-        Load buildings from database and convert to GeoJSON.
+        Load buildings from API/database and convert to GeoJSON.
 
         SINGLE SOURCE OF TRUTH for building loading (DRY principle).
+        Uses BuildingController which automatically selects API or local DB.
 
         Args:
             db: Database instance
             limit: Maximum number of buildings to load
+            auth_token: Optional authentication token for API calls
 
         Returns:
             GeoJSON string with buildings
         """
-        from repositories.building_repository import BuildingRepository
+        from controllers.building_controller import BuildingController
         from services.geojson_converter import GeoJSONConverter
         import json
 
         try:
-            building_repo = BuildingRepository(db)
-            buildings = building_repo.get_all(limit=limit)
+            # Use BuildingController (DRY + SOLID) - automatically selects API or DB
+            building_controller = BuildingController(db)
+
+            # Set auth token if provided (required for API calls)
+            if auth_token and building_controller.is_using_api:
+                building_controller.set_auth_token(auth_token)
+                logger.debug(f"Auth token set for BuildingController (length: {len(auth_token)})")
+
+            result = building_controller.load_buildings()
+
+            if not result.success:
+                logger.error(f"Failed to load buildings: {result.message}")
+                buildings = []
+            else:
+                buildings = result.data[:limit]  # Apply limit after fetching
 
             logger.info(f"📊 Retrieved {len(buildings)} buildings from database")
 
