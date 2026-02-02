@@ -102,6 +102,27 @@ class OfficeSurveyWizard(BaseWizard):
         ]
         return steps
 
+    def set_auth_token(self, token: str):
+        """
+        Set authentication token for API calls.
+
+        Passes the token to the BuildingController in the building selection step.
+
+        Args:
+            token: JWT/Bearer token from user login
+        """
+        if not token:
+            logger.warning("No token provided to wizard")
+            return
+
+        # Find the building selection step and set the token on its controller
+        for step in self.steps:
+            if isinstance(step, BuildingSelectionStep):
+                if hasattr(step, 'building_controller') and step.building_controller:
+                    step.building_controller.set_auth_token(token)
+                    logger.info("API token set for wizard's BuildingController")
+                break
+
     def get_wizard_title(self) -> str:
         """Get wizard title."""
         return "معالج المسح المكتبي - Office Survey"

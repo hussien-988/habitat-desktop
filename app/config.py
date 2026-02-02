@@ -249,13 +249,26 @@ class Vocabularies:
         (99, "Unknown", "غير معروف"),
     ]
 
+    # Property Unit Type matching API values (integer codes)
+    # API: 1=Apartment, 2=Shop, 3=Office, 4=Warehouse, 5=Other
     UNIT_TYPES = [
-        ("apartment", "Apartment", "شقة"),
-        ("shop", "Shop", "محل"),
-        ("office", "Office", "مكتب"),
-        ("warehouse", "Warehouse", "مستودع"),
-        ("garage", "Garage", "كراج"),
-        ("other", "Other", "آخر"),
+        (1, "Apartment", "شقة سكنية"),
+        (2, "Shop", "محل تجاري"),
+        (3, "Office", "مكتب"),
+        (4, "Warehouse", "مستودع"),
+        (5, "Other", "أخرى"),
+    ]
+
+    # Property Unit Status matching API values (integer codes)
+    # API: 1=Occupied, 2=Vacant, 3=Damaged, 4=UnderRenovation, 5=Uninhabitable, 6=Locked, 99=Unknown
+    UNIT_STATUS = [
+        (1, "Occupied", "مشغول"),
+        (2, "Vacant", "شاغر"),
+        (3, "Damaged", "متضرر"),
+        (4, "UnderRenovation", "قيد الترميم"),
+        (5, "Uninhabitable", "غير صالح للسكن"),
+        (6, "Locked", "مغلق"),
+        (99, "Unknown", "غير معروف"),
     ]
 
     RELATION_TYPES = [

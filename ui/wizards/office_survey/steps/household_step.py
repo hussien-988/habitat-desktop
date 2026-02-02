@@ -8,7 +8,7 @@ Allows user to:
 - Add notes about the household
 """
 
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 import uuid
 
 from PyQt5.QtWidgets import (
@@ -22,6 +22,7 @@ from PyQt5.QtGui import QColor
 from ui.wizards.framework import BaseStep, StepValidationResult
 from ui.wizards.office_survey.survey_context import SurveyContext
 from app.config import Config
+from services.household_api_service import HouseholdApiService
 from utils.logger import get_logger
 from ui.design_system import Colors
 from ui.components.icon import Icon
@@ -44,6 +45,10 @@ class HouseholdStep(BaseStep):
     def __init__(self, context: SurveyContext, parent=None):
         """Initialize the step."""
         super().__init__(context, parent)
+
+        # Initialize API service for creating households
+        self._api_service = HouseholdApiService()
+        self._use_api = getattr(Config, 'DATA_PROVIDER', 'local_db') == 'http'
 
     def setup_ui(self):
         """
@@ -741,9 +746,19 @@ class HouseholdStep(BaseStep):
 
         # Auto-save household data when clicking "Next"
         if self.hh_head_name.text().strip():
-            # Save current data
+            # Get the property unit ID from context
+            # This should be set from step 2 (unit selection)
+            property_unit_id = None
+            if self.context.unit:
+                property_unit_id = getattr(self.context.unit, 'unit_uuid', None)
+            elif self.context.new_unit_data:
+                property_unit_id = self.context.new_unit_data.get('unit_uuid')
+
+            # Build household data
             household = {
                 "household_id": str(uuid.uuid4()),
+                "property_unit_id": property_unit_id,
+                "unit_uuid": property_unit_id,  # Alias for API
                 "head_name": self.hh_head_name.text().strip(),
                 "size": self.hh_total_members.value(),
                 "adult_males": self.hh_adult_males.value(),
@@ -757,6 +772,25 @@ class HouseholdStep(BaseStep):
                 "notes": self.hh_notes.toPlainText().strip()
             }
 
+            # Save via API if using API mode
+            if self._use_api:
+                # Set auth token before API call
+                self._set_auth_token()
+
+                logger.info(f"Creating household via API: {household}")
+                response = self._api_service.create_household(household)
+
+                if not response.get("success"):
+                    error_msg = response.get("error", "Unknown error")
+                    logger.error(f"Failed to create household via API: {error_msg}")
+                    result.add_error(f"فشل في حفظ بيانات الأسرة: {error_msg}")
+                    return result
+
+                logger.info("Household created successfully via API")
+                # Store the API response data
+                if response.get("data"):
+                    household["api_id"] = response["data"].get("id")
+
             # Clear old household data and add new one
             self.context.households.clear()
             self.context.households.append(household)
@@ -766,6 +800,12 @@ class HouseholdStep(BaseStep):
             result.add_error("يجب إدخال بيانات الأسرة")
 
         return result
+
+    def _set_auth_token(self):
+        """Set auth token for API service from main window."""
+        main_window = self.window()
+        if main_window and hasattr(main_window, '_api_token') and main_window._api_token:
+            self._api_service.set_auth_token(main_window._api_token)
 
     def collect_data(self) -> Dict[str, Any]:
         """Collect data from the step."""

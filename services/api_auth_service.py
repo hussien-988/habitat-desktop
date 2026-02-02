@@ -24,7 +24,7 @@ class ApiAuthService:
 
     def __init__(self):
         self.base_url = Config.API_BASE_URL.rstrip("/")
-        self.login_url = f"{self.base_url}/Auth/login"
+        self.login_url = f"{self.base_url}/v1/Auth/login"
         self.timeout = Config.API_TIMEOUT
 
         # SSL context that skips verification for localhost self-signed certs
