@@ -298,21 +298,8 @@ class DraftClaimsPage(QWidget):
                             if unit_obj and unit_obj.building_id:
                                 # Fix: Use get_by_id() instead of find_by_id()
                                 building_obj = building_repo.get_by_id(unit_obj.building_id)
-
-                                # DEBUG: Print building details to verify data
-                                if building_obj:
-                                    print(f"🏢 Building loaded: {building_obj.building_id}")
-                                    print(f"  Governorate: {building_obj.governorate_name_ar}")
-                                    print(f"  District: {building_obj.district_name_ar}")
-                                    print(f"  Subdistrict: {building_obj.subdistrict_name_ar}")
-                                    print(f"  Neighborhood: {building_obj.neighborhood_name_ar}")
-                                    print(f"  Building Number: {getattr(building_obj, 'building_number', 'N/A')}")
-                                else:
-                                    print(f"❌ Building NOT found for ID: {unit_obj.building_id}")
                         except Exception as e:
-                            import traceback
-                            print(f"Error loading building/unit: {e}")
-                            print(traceback.format_exc())
+                            pass
 
                     # Format date (DRY: consistent date formatting)
                     date_str = '2025-01-01'

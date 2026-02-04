@@ -21,7 +21,7 @@ from PyQt5.QtGui import QColor, QPixmap, QIcon
 
 from ui.wizards.framework import BaseStep, StepValidationResult
 from ui.wizards.office_survey.survey_context import SurveyContext
-from controllers.building_controller import BuildingController
+from controllers.building_controller import BuildingController, BuildingFilter
 from models.building import Building
 from utils.logger import get_logger
 from ui.font_utils import FontManager, create_font
@@ -522,10 +522,10 @@ class BuildingSelectionStep(BaseStep):
             # Position in center: (400-56)/2 = 172, (130-56)/2 = 37
             location_icon.move(172, 37)
 
-            # Professional design: Add drop shadow effect for depth
+            # Professional design: transparent background
+            # Note: Qt doesn't support CSS filter property, removed to prevent warnings
             location_icon.setStyleSheet("""
                 background: transparent;
-                filter: drop-shadow(0px 2px 4px rgba(0, 0, 0, 0.2));
             """)
         else:
             # Fallback: use text emoji with larger size
@@ -556,8 +556,9 @@ class BuildingSelectionStep(BaseStep):
         # Add stretch after location card to push remaining content down
         layout.addStretch(1)
 
-        # Load initial buildings
-        self._load_buildings()
+        # Lazy loading: Don't load buildings until needed (when user searches or opens map)
+        # This speeds up wizard initialization significantly
+        # self._load_buildings()  # Removed - will load on first search
 
     def _on_building_code_changed(self):
         """UI behavior: filter + show/hide suggestions."""
@@ -672,7 +673,9 @@ class BuildingSelectionStep(BaseStep):
 
     def _load_buildings(self):
         """Load buildings into the list."""
-        result = self.building_controller.load_buildings()
+        # Load first 100 buildings only for performance (use search for specific buildings)
+        building_filter = BuildingFilter(limit=100)
+        result = self.building_controller.load_buildings(building_filter)
         self.buildings_list.clear()
 
         if not result.success:
@@ -704,7 +707,11 @@ class BuildingSelectionStep(BaseStep):
             self.buildings_list.addItem(item)
 
     def _filter_buildings(self):
-        """Filter buildings list based on search text."""
+        """Filter buildings list based on search text (with lazy loading)."""
+        # Lazy load: Load buildings on first search if not already loaded
+        if self.buildings_list.count() == 0:
+            self._load_buildings()
+
         search_text = self.building_search.text().lower()
         for i in range(self.buildings_list.count()):
             item = self.buildings_list.item(i)
@@ -717,7 +724,9 @@ class BuildingSelectionStep(BaseStep):
         if search:
             result = self.building_controller.search_buildings(search)
         else:
-            result = self.building_controller.load_buildings()
+            # Load first 100 buildings only
+            building_filter = BuildingFilter(limit=100)
+            result = self.building_controller.load_buildings(building_filter)
 
         self.buildings_list.clear()
 

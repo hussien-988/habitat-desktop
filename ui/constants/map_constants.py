@@ -29,7 +29,7 @@ class MapConstants:
     # ===== Default Map Center (Aleppo, Syria) =====
     DEFAULT_CENTER_LAT = 36.2021  # Latitude
     DEFAULT_CENTER_LON = 37.1343  # Longitude
-    DEFAULT_ZOOM = 13  # Zoom level
+    DEFAULT_ZOOM = 15  # Zoom level (Professional: Higher zoom = fewer initial buildings = better performance)
 
     # ===== Coordinate Bounds (Aleppo region) =====
     MIN_LAT = 36.0
@@ -40,6 +40,7 @@ class MapConstants:
     # ===== Zoom Levels =====
     MIN_ZOOM = 10
     MAX_ZOOM = 18
+    MIN_ZOOM_FOR_LOADING = 12  # Professional: Don't load buildings below this zoom (performance)
 
     # ===== Status Colors (Building Status) =====
     # نفس الألوان المستخدمة في LeafletHTMLGenerator
@@ -78,6 +79,13 @@ class MapConstants:
 
     DRAWN_POLYGON_COLOR = '#28a745'  # أخضر - للمضلع المرسوم الجديد
     DRAWN_POLYGON_OPACITY = 0.4
+
+    # ===== Performance Limits =====
+    MAX_MARKERS_PER_VIEWPORT = 1000  # Professional: Limit markers per viewport for performance
+
+    # ===== Clustering Configuration =====
+    CLUSTER_MAX_RADIUS = 80  # Cluster radius in pixels
+    DISABLE_CLUSTERING_AT_ZOOM = 17  # Disable clustering at this zoom level
 
     # ===== Overlay =====
     OVERLAY_COLOR = 'rgba(45, 45, 45, 0.6)'  # رمادي شفاف

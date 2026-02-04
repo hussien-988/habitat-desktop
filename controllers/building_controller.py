@@ -498,7 +498,8 @@ class BuildingController(BaseController):
             # Use API or local database based on configuration
             if self._use_api and self._api_service:
                 buildings = self._api_service.get_all_buildings(
-                    search_text=filter_.search_text if filter_ else None
+                    search_text=filter_.search_text if filter_ else None,
+                    limit=filter_.limit if filter_ else None
                 )
             else:
                 # Build query based on filter
@@ -581,9 +582,10 @@ class BuildingController(BaseController):
             params.append(filter_.building_status)
 
         if filter_.search_text:
-            query += " AND (building_id LIKE ? OR address LIKE ?)"
+            # Search in building_id, address, AND neighborhood names (Best Practice)
+            query += " AND (building_id LIKE ? OR address LIKE ? OR neighborhood_name_ar LIKE ? OR neighborhood_name LIKE ?)"
             search_param = f"%{filter_.search_text}%"
-            params.extend([search_param, search_param])
+            params.extend([search_param, search_param, search_param, search_param])
 
         if filter_.has_coordinates is not None:
             if filter_.has_coordinates:
