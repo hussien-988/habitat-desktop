@@ -84,16 +84,18 @@ class BuildingMapDialog(BaseMapDialog):
             show_search = True
 
         # Initialize base dialog (clean design)
+        # SIMPLIFIED: No viewport loading - load once like un-1 (more reliable!)
         super().__init__(
             title=title,
             show_search=show_search,
+            enable_viewport_loading=False,  # Disabled for reliability (like un-1)
             parent=parent
         )
 
         # Connect building selection signal (from map clicks)
         self.building_selected.connect(self._on_building_selected_from_map)
 
-        # Load map
+        # SIMPLE: Load map with buildings directly (like old working version!)
         self._load_map()
 
     def _load_map(self):
@@ -118,17 +120,38 @@ class BuildingMapDialog(BaseMapDialog):
                 logger.warning(f"Could not get auth token from parent: {e}")
 
             # Load buildings using shared method (DRY principle)
+            # SIMPLIFIED: Load more buildings initially like un-1 (200 buildings)
+            # No viewport loading - single load for reliability
             buildings_geojson = self.load_buildings_geojson(self.db, limit=200, auth_token=auth_token)
 
-            # Get buildings for focusing (if needed)
-            building_filter = BuildingFilter(limit=200)
-            result = self.building_controller.load_buildings(building_filter)
-            buildings = result.data if result.success else []
+            # DEBUG: Check if buildings were loaded
+            import json
+            geojson_data = json.loads(buildings_geojson) if isinstance(buildings_geojson, str) else buildings_geojson
+            num_features = len(geojson_data.get('features', []))
+            logger.info(f"📊 Loaded {num_features} buildings into GeoJSON")
+
+            if num_features == 0:
+                logger.error("❌ NO BUILDINGS LOADED! GeoJSON is empty!")
+            else:
+                # Check if buildings have coordinates
+                features_with_coords = sum(
+                    1 for f in geojson_data['features']
+                    if f.get('geometry') and f['geometry'].get('coordinates')
+                )
+                logger.info(f"📍 Buildings with coordinates: {features_with_coords}/{num_features}")
+
+            # Only load buildings if in view-only mode (for focusing on specific building)
+            buildings = []
+            if self._is_view_only and self._selected_building_id:
+                building_filter = BuildingFilter(search_text=self._selected_building_id)
+                result = self.building_controller.load_buildings(building_filter)
+                buildings = result.data if result.success else []
 
             # Determine center and zoom
+            # CLOSER zoom - avoid gray tiles!
             center_lat = 36.2021
             center_lon = 37.1343
-            zoom = 13
+            zoom = 16  # Closer zoom - shows buildings clearly, no gray areas!
             focus_building_id = None
 
             # If view-only mode, focus on the selected building
@@ -140,27 +163,28 @@ class BuildingMapDialog(BaseMapDialog):
                 if focus_building and focus_building.latitude and focus_building.longitude:
                     center_lat = focus_building.latitude
                     center_lon = focus_building.longitude
-                    zoom = 16  # Closer zoom for single building
+                    zoom = 17  # Close zoom for single building
                     focus_building_id = self._selected_building_id
                     logger.info(f"View-only mode: Focusing on building {focus_building_id}")
 
             # Generate map HTML using LeafletHTMLGenerator
+            # SIMPLIFIED: No viewport loading like un-1 (more reliable for selection!)
             html = generate_leaflet_html(
                 tile_server_url=tile_server_url.rstrip('/'),
-                buildings_geojson=buildings_geojson,
+                buildings_geojson=buildings_geojson,  # Full load (200 buildings)
                 center_lat=center_lat,
                 center_lon=center_lon,
                 zoom=zoom,
+                max_zoom=17,  # CRITICAL: Limit max zoom to available tiles (prevents gray areas)
                 show_legend=True,
                 show_layer_control=False,
                 enable_selection=(not self._is_view_only),  # Enable selection in selection mode
+                enable_viewport_loading=False,  # Disabled for reliability (like un-1)
                 enable_drawing=False  # No drawing for building selection
             )
 
             # Load into web view
             self.load_map_html(html)
-
-            logger.info(f"Loaded {len(buildings)} buildings into map (mode: {'view' if self._is_view_only else 'select'})")
 
             # If view-only mode, open popup for focused building
             if self._is_view_only and focus_building_id:
@@ -244,20 +268,22 @@ class BuildingMapDialog(BaseMapDialog):
         Handle building selection from map click.
 
         Args:
-            building_id: Building ID clicked
+            building_id: Building ID clicked (17-digit code, NOT UUID!)
         """
         logger.info(f"Building selected from map: {building_id}")
 
         try:
-            # Find building using BuildingController by 17-digit building_id (API or Local DB)
-            result = self.building_controller.get_building_by_id(building_id)
-            building = result.data if result.success else None
+            # CRITICAL FIX: Use BuildingFilter to search by building_id (17-digit code)
+            # NOT get_building_by_id() which expects UUID!
+            building_filter = BuildingFilter(search_text=building_id)
+            result = self.building_controller.load_buildings(building_filter)
 
-            if building:
+            if result.success and result.data:
+                building = result.data[0]  # Get first match
                 self._selected_building = building
 
                 # Close dialog and proceed to next step (no confirmation message needed)
-                logger.info(f"Building {building.building_id} selected, closing dialog")
+                logger.info(f"✅ Building {building.building_id} selected, closing dialog")
                 self.accept()
             else:
                 logger.error(f"Building not found: {building_id}")
@@ -276,65 +302,144 @@ class BuildingMapDialog(BaseMapDialog):
             )
 
     def _on_search_submitted(self):
-        """Handle search submission - search for neighborhood."""
+        """Handle search submission - search using backend API."""
         if not self.show_search or not hasattr(self, 'search_input'):
             return
 
         search_text = self.search_input.text().strip()
 
         if not search_text:
-            logger.info("Search submitted but text is empty - ignoring")
             return
 
-        logger.info(f"🔍 SEARCH TRIGGERED: '{search_text}'")
+        # Show loading indicator
+        if hasattr(self, 'search_input'):
+            self.search_input.setEnabled(False)
+            self.search_input.setPlaceholderText("⏳ جاري البحث...")
 
         try:
-            buildings = self.building_repo.get_all(limit=500)
-            logger.info(f"Loaded {len(buildings)} buildings for search")
+            from app.config import AleppoDivisions
 
-            # Find buildings in matching neighborhoods
-            matching_buildings = []
+            logger.info(f"🔍 Searching for: '{search_text}'")
+
+            # PROFESSIONAL FIX: Convert neighborhood name → code (API requires code!)
+            # API search_buildings() accepts neighborhood_code, NOT name
+            neighborhood_code = None
+            matched_name = None
+
+            for code, name_en, name_ar in AleppoDivisions.NEIGHBORHOODS_ALEPPO:
+                if (search_text.lower() in name_ar.lower() or
+                    search_text.lower() in name_en.lower()):
+                    neighborhood_code = code
+                    matched_name = name_ar
+                    logger.info(f"✅ Matched '{search_text}' → code: {code} ({name_ar})")
+                    break
+
+            if not neighborhood_code:
+                logger.warning(f"⚠️ No neighborhood match for: '{search_text}'")
+                from ui.components.toast import Toast
+                Toast.show_toast(self, f"لم يتم العثور على الحي: {search_text}", "warning")
+                return
+
+            # Get buildings from API using neighborhood_code (CORRECT!)
+            from services.api_client import get_api_client
+            api_client = get_api_client()
+
+            # PROFESSIONAL FIX: Update auth token before API call (prevent 401!)
+            if self._auth_token:
+                api_client.set_access_token(self._auth_token)
+                logger.debug("Auth token synchronized before search")
+
+            response = api_client.search_buildings(
+                neighborhood_code=neighborhood_code,
+                page_size=200  # Get all buildings in neighborhood
+            )
+
+            # Extract buildings from paginated response
+            buildings_data = response.get('buildings', response.get('data', []))
+
+            if not buildings_data:
+                logger.warning(f"⚠️ No buildings found for neighborhood code: {neighborhood_code}")
+                from ui.components.toast import Toast
+                Toast.show_toast(self, f"لا توجد مباني في: {matched_name}", "info")
+                return
+
+            # Convert API data to Building objects
+            buildings = []
+            for b_data in buildings_data:
+                building = Building.from_dict(b_data)
+                buildings.append(building)
+
+            logger.info(f"✅ Found {len(buildings)} buildings in {matched_name}")
+
+            # Calculate center from buildings with coordinates
+            lats = []
+            lons = []
 
             for building in buildings:
-                neighborhood_ar = (building.neighborhood_name_ar or "").lower()
-                neighborhood_en = (building.neighborhood_name or "").lower()
-                search_lower = search_text.lower()
+                if building.latitude and building.longitude:
+                    lats.append(building.latitude)
+                    lons.append(building.longitude)
 
-                if search_lower in neighborhood_ar or search_lower in neighborhood_en:
-                    matching_buildings.append(building)
+            logger.info(f"📍 Buildings with coordinates: {len(lats)}/{len(buildings)}")
 
-            logger.info(f"Found {len(matching_buildings)} matching buildings")
+            if lats and lons:
+                center_lat = sum(lats) / len(lats)
+                center_lon = sum(lons) / len(lons)
 
-            if matching_buildings:
-                # Get center point of matching buildings
-                lats = [b.latitude for b in matching_buildings if b.latitude]
-                lons = [b.longitude for b in matching_buildings if b.longitude]
+                # Dynamic zoom based on number of buildings (Best Practice)
+                # CLOSER ZOOM - avoid gray tiles, show buildings clearly
+                if len(lats) <= 5:
+                    safe_zoom = 17  # Very few buildings - very close zoom
+                elif len(lats) <= 15:
+                    safe_zoom = 16  # Small area - close zoom
+                else:
+                    safe_zoom = 16  # Large area - still close! (avoid gray tiles)
 
-                if lats and lons:
-                    center_lat = sum(lats) / len(lats)
-                    center_lon = sum(lons) / len(lons)
+                logger.info(f"🎯 Navigating to: ({center_lat:.6f}, {center_lon:.6f}) with zoom {safe_zoom}")
 
-                    logger.info(f"Flying to center: ({center_lat}, {center_lon})")
+                # PROFESSIONAL FIX: Smooth navigation without "jitter"
+                # Problem: viewport loading adds buildings during flyTo causing jitter
+                # Solution: Disable viewport loading events during flyTo
+                js_code = f"""
+                console.log('🔍 SEARCH: Flying to [{center_lat}, {center_lon}], zoom {safe_zoom}');
 
-                    # Fly to location on map
-                    js_code = f"""
-                    console.log('🔍 SEARCH: Flying to [{center_lat}, {center_lon}]');
-                    if (typeof map !== 'undefined') {{
-                        map.flyTo([{center_lat}, {center_lon}], 16, {{
-                            duration: 2.0,
-                            easeLinearity: 0.25
-                        }});
-                        console.log('✅ Map flyTo executed successfully');
-                    }}
-                    """
-                    self.web_view.page().runJavaScript(js_code)
+                // Disable viewport loading events during flyTo (prevents jitter!)
+                if (typeof window._isFlying === 'undefined') {{
+                    window._isFlying = false;
+                }}
 
-                    logger.info(f"✅ Search successful: {len(matching_buildings)} buildings")
+                if (typeof map !== 'undefined') {{
+                    window._isFlying = true;  // Set flag to skip viewport events
+
+                    map.flyTo([{center_lat}, {center_lon}], {safe_zoom}, {{
+                        duration: 2.0,      // Smooth & professional (2 seconds)
+                        easeLinearity: 0.25 // Smooth easing
+                    }});
+
+                    // Re-enable viewport events after flyTo completes (2.2s = 2.0s + buffer)
+                    setTimeout(function() {{
+                        window._isFlying = false;
+                        console.log('✅ FlyTo completed - viewport events re-enabled');
+                    }}, 2200);
+
+                    console.log('✅ FlyTo started smoothly');
+                }}
+                """
+
+                self.web_view.page().runJavaScript(js_code)
             else:
-                logger.warning(f"❌ No buildings found for neighborhood: '{search_text}'")
+                logger.error(f"❌ No buildings with coordinates in '{search_text}'!")
+                from ui.components.toast import Toast
+                Toast.show_toast(self, f"المباني في {search_text} ليس لديها إحداثيات", "warning")
 
         except Exception as e:
-            logger.error(f"❌ Error searching for neighborhood: {e}", exc_info=True)
+            logger.error(f"❌ Error searching: {e}", exc_info=True)
+
+        finally:
+            # Re-enable search input
+            if hasattr(self, 'search_input'):
+                self.search_input.setEnabled(True)
+                self.search_input.setPlaceholderText("البحث عن منطقة (مثال: الجميلية)")
 
     def get_selected_building(self) -> Optional[Building]:
         """
