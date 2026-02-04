@@ -154,12 +154,13 @@ class BuildingApiService:
                 "error_code": "E500"
             }
 
-    def get_all_buildings(self, search_text: str = None) -> List[Building]:
+    def get_all_buildings(self, search_text: str = None, limit: int = None) -> List[Building]:
         """
         Get all buildings from the API.
 
         Args:
             search_text: Optional search text to filter buildings
+            limit: Optional limit on number of buildings to return
 
         Returns:
             List of Building objects
@@ -167,6 +168,8 @@ class BuildingApiService:
         params = {}
         if search_text:
             params["search"] = search_text
+        if limit:
+            params["limit"] = limit
 
         response = self._make_request("GET", "/v1/Buildings", params=params if params else None)
 
@@ -176,32 +179,16 @@ class BuildingApiService:
 
         data = response.get("data", [])
 
-        # Log the raw response for debugging
-        logger.info(f"API Response type: {type(data)}")
-        if isinstance(data, dict):
-            logger.info(f"API Response keys: {list(data.keys())}")
-        elif isinstance(data, list):
-            logger.info(f"API Response: list with {len(data)} items")
-            if data:
-                logger.info(f"First item keys: {list(data[0].keys()) if isinstance(data[0], dict) else 'not a dict'}")
-                logger.info(f"First item: {data[0]}")
-
         # Handle case where API returns a wrapper object
         if isinstance(data, dict):
-            # Check for common wrapper patterns
-            logger.info(f"Response is dict, checking for wrapper patterns...")
             if "data" in data:
                 data = data["data"]
-                logger.info(f"Unwrapped 'data' key, now have {type(data)}")
             elif "buildings" in data:
                 data = data["buildings"]
-                logger.info(f"Unwrapped 'buildings' key, now have {type(data)}")
             elif "items" in data:
                 data = data["items"]
-                logger.info(f"Unwrapped 'items' key, now have {type(data)}")
 
         if not isinstance(data, list):
-            logger.warning(f"Unexpected data format: {type(data)}")
             return []
 
         buildings = []
@@ -210,10 +197,13 @@ class BuildingApiService:
                 building = self._api_response_to_building(item)
                 buildings.append(building)
             except Exception as e:
-                logger.warning(f"Failed to parse building: {e}")
                 continue
 
-        logger.info(f"Fetched {len(buildings)} buildings from API")
+        # CRITICAL FIX: API doesn't respect limit parameter!
+        # Apply limit on frontend as workaround
+        if limit and len(buildings) > limit:
+            buildings = buildings[:limit]
+
         return buildings
 
     def get_building_by_id(self, building_id: str) -> Optional[Building]:

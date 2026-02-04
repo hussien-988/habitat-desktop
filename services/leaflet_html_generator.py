@@ -18,8 +18,10 @@ References:
 - https://github.com/skylarkdrones/pyqtlet
 """
 
+import json
 from typing import Dict, Optional
 from utils.logger import get_logger
+from ui.constants.map_constants import MapConstants
 
 logger = get_logger(__name__)
 
@@ -31,22 +33,16 @@ class LeafletHTMLGenerator:
     Design Pattern: Builder Pattern
     - Builds complex HTML structure step by step
     - Allows customization while maintaining consistency
+
+    Best Practices:
+    - DRY: Uses MapConstants for colors (Single Source of Truth)
+    - Professional clustering for handling thousands of buildings
+    - Optimized for performance and scalability
     """
 
-    # Status color mapping (shared across all maps)
-    STATUS_COLORS = {
-        'intact': '#28a745',
-        'minor_damage': '#ffc107',
-        'major_damage': '#fd7e14',
-        'destroyed': '#dc3545'
-    }
-
-    STATUS_LABELS_AR = {
-        'intact': 'سليم',
-        'minor_damage': 'ضرر طفيف',
-        'major_damage': 'ضرر كبير',
-        'destroyed': 'مدمر'
-    }
+    # Import status colors from MapConstants (DRY principle)
+    STATUS_COLORS = MapConstants.STATUS_COLORS
+    STATUS_LABELS_AR = MapConstants.STATUS_LABELS_AR
 
     @staticmethod
     def generate(
@@ -55,11 +51,13 @@ class LeafletHTMLGenerator:
         center_lat: float = 36.2021,
         center_lon: float = 37.1343,
         zoom: int = 14,
+        max_zoom: int = 17,  # NEW: Maximum zoom level (based on available tiles)
         show_legend: bool = True,
         show_layer_control: bool = True,
         enable_drawing: bool = False,
         enable_selection: bool = False,
         enable_multiselect: bool = False,  # NEW: Enable multi-select clicking mode
+        enable_viewport_loading: bool = False,  # NEW: Enable viewport-based loading
         drawing_mode: str = 'both',  # 'point', 'polygon', 'both'
         existing_polygons_geojson: str = None  # GeoJSON for existing polygons (blue)
     ) -> str:
@@ -77,6 +75,7 @@ class LeafletHTMLGenerator:
             enable_drawing: Enable polygon drawing tools
             enable_selection: Enable building selection button in popup
             enable_multiselect: Enable multi-select clicking mode (select multiple buildings by clicking)
+            enable_viewport_loading: Enable viewport-based loading for millions of buildings
             drawing_mode: Drawing mode ('point', 'polygon', 'both')
             existing_polygons_geojson: GeoJSON for existing polygons (displayed in blue)
 
@@ -87,7 +86,13 @@ class LeafletHTMLGenerator:
         drawing_css = f'<link rel="stylesheet" href="{tile_server_url}/leaflet-draw.css" />' if enable_drawing else ''
         drawing_js = f'<script src="{tile_server_url}/leaflet-draw.js"></script>' if enable_drawing else ''
 
-        return f'''
+        # إضافة Leaflet.markercluster للـ clustering (best practice for thousands of buildings)
+        clustering_css = '''
+    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" />'''
+        clustering_js = '<script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>'
+
+        html = f'''
 <!DOCTYPE html>
 <html dir="rtl">
 <head>
@@ -95,8 +100,10 @@ class LeafletHTMLGenerator:
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>خريطة حلب - UN-Habitat</title>
     <link rel="stylesheet" href="{tile_server_url}/leaflet.css" />
+    {clustering_css}
     {drawing_css}
     <script src="{tile_server_url}/leaflet.js"></script>
+    {clustering_js}
     {drawing_js}
     <script src="qrc:///qtwebchannel/qwebchannel.js"></script>
     {LeafletHTMLGenerator._get_styles(enable_selection, enable_drawing, enable_multiselect)}
@@ -109,17 +116,21 @@ class LeafletHTMLGenerator:
         center_lat,
         center_lon,
         zoom,
+        max_zoom,
         show_legend,
         show_layer_control,
         enable_drawing,
         enable_selection,
         enable_multiselect,
+        enable_viewport_loading,
         drawing_mode,
         existing_polygons_geojson
     )}
 </body>
 </html>
 '''
+
+        return html
 
     @staticmethod
     def _get_styles(enable_selection: bool = False, enable_drawing: bool = False, enable_multiselect: bool = False) -> str:
@@ -369,69 +380,110 @@ class LeafletHTMLGenerator:
         center_lat: float,
         center_lon: float,
         zoom: int,
+        max_zoom: int,
         show_legend: bool,
         show_layer_control: bool,
         enable_drawing: bool = False,
         enable_selection: bool = False,
         enable_multiselect: bool = False,
+        enable_viewport_loading: bool = False,
         drawing_mode: str = 'both',
         existing_polygons_geojson: str = None
     ) -> str:
         """Get JavaScript code for map initialization."""
+        import json
+
         status_colors = LeafletHTMLGenerator.STATUS_COLORS
         status_labels = LeafletHTMLGenerator.STATUS_LABELS_AR
+
+        # Convert Python dicts to JSON strings for JavaScript
+        status_colors_json = json.dumps(status_colors)
+        status_labels_json = json.dumps(status_labels)
+
+        # Parse buildings GeoJSON string to dict, then embed directly in JavaScript
+        try:
+            buildings_dict = json.loads(buildings_geojson)
+            buildings_json = json.dumps(buildings_dict)
+        except:
+            buildings_json = '{"type":"FeatureCollection","features":[]}'
+
+        # Parse existing polygons if provided
+        if existing_polygons_geojson:
+            try:
+                existing_polygons_dict = json.loads(existing_polygons_geojson)
+                existing_polygons_json = json.dumps(existing_polygons_dict)
+            except:
+                existing_polygons_json = None
+        else:
+            existing_polygons_json = None
 
         return f'''
     <script>
         // Fix Leaflet icon paths for local serving
         L.Icon.Default.imagePath = '{tile_server_url}/images/';
 
-        // Initialize map centered on Aleppo
-        var map = L.map('map').setView([{center_lat}, {center_lon}], {zoom});
+        // Initialize map centered on Aleppo with zoom constraints
+        // PERFORMANCE: preferCanvas for 10x faster rendering (Canvas vs SVG/DOM)
+        // Reference: https://leafletjs.com/reference.html#map-prefercanvas
+        var map = L.map('map', {{
+            preferCanvas: true,   // CRITICAL: Use Canvas renderer (10x faster!)
+            maxZoom: {max_zoom},  // Prevent zooming beyond available tiles
+            minZoom: 10
+        }}).setView([{center_lat}, {center_lon}], {zoom});
 
-        // Add tile layer from local server with debugging
-        console.log('Tile server URL: {tile_server_url}');
-        console.log('Loading tiles from: {tile_server_url}/tiles/{{z}}/{{x}}/{{y}}.png');
-
+        // Add tile layer from local server
         var tileLayer = L.tileLayer('{tile_server_url}/tiles/{{z}}/{{x}}/{{y}}.png', {{
-            maxZoom: 16,
-            minZoom: 10,
+            maxZoom: {max_zoom},  // Maximum zoom (prevents gray tiles beyond available zoom levels)
+            minZoom: 10,  // Allow zooming out to see full city
             attribution: 'Map data &copy; OpenStreetMap | UN-Habitat Syria',
             errorTileUrl: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=='
-        }});
-
-        tileLayer.on('loading', function() {{
-            console.log('🔄 Tiles loading started...');
-        }});
-
-        tileLayer.on('load', function() {{
-            console.log('✅ Tiles loaded successfully!');
-        }});
-
-        tileLayer.on('tileerror', function(error) {{
-            console.error('❌ Tile load error:', error);
         }});
 
         tileLayer.addTo(map);
 
         // Status colors and labels
-        var statusColors = {status_colors};
-        var statusLabels = {status_labels};
+        var statusColors = {status_colors_json};
+        var statusLabels = {status_labels_json};
 
-        // Buildings GeoJSON
-        var buildingsData = {buildings_geojson};
+        // Status mapping from numeric codes to string keys
+        // API returns: 1=Intact, 2=MinorDamage, 3=ModerateDamage, 4=MajorDamage, 5=SeverelyDamaged, 6=Destroyed, 7=UnderConstruction, 8=Abandoned
+        var statusMapping = {{
+            1: 'intact',
+            2: 'minor_damage',
+            3: 'major_damage',
+            4: 'major_damage',
+            5: 'severely_damaged',
+            6: 'destroyed',
+            7: 'under_construction',
+            8: 'demolished',
+            99: 'intact'  // Unknown -> default to intact
+        }};
 
-        // تشخيص: طباعة معلومات عن البيانات المحملة
-        console.log('📊 Buildings Data Loaded:');
-        console.log('  - Type:', buildingsData.type);
-        console.log('  - Features count:', buildingsData.features ? buildingsData.features.length : 0);
-        if (buildingsData.features && buildingsData.features.length > 0) {{
-            console.log('  - First feature:', buildingsData.features[0]);
-            console.log('  - Sample geometry:', buildingsData.features[0].geometry);
-            console.log('  - Sample properties:', buildingsData.features[0].properties);
-        }} else {{
-            console.warn('⚠️ No buildings found in GeoJSON data!');
+        // Helper function to get status string from numeric code
+        function getStatusKey(status) {{
+            return typeof status === 'number' ? (statusMapping[status] || 'intact') : status;
         }}
+
+        // Buildings GeoJSON - Direct embedding (Simple & Works)
+        var buildingsData = {buildings_json};
+
+        // =========================================================
+        // Professional Marker Clustering Configuration
+        // =========================================================
+        // Best Practice: Use marker clustering for handling thousands of buildings
+        // Reference: https://github.com/Leaflet/Leaflet.markercluster
+
+        var markers = L.markerClusterGroup({{
+            maxClusterRadius: 80,           // Cluster radius in pixels
+            spiderfyOnMaxZoom: true,        // Expand clusters at max zoom
+            showCoverageOnHover: false,     // Don't show cluster area on hover
+            zoomToBoundsOnClick: true,      // Zoom to cluster bounds on click
+            disableClusteringAtZoom: 17,    // Disable clustering at zoom 17+ (detailed view)
+            spiderfyDistanceMultiplier: 1.5, // Space between spiderfied markers
+            chunkedLoading: true,           // Load markers in chunks for performance
+            chunkInterval: 200,             // Chunk interval in ms
+            chunkDelay: 50                  // Delay between chunks in ms
+        }});
 
         // Create separate layers for points and polygons
         var pointsLayer = L.featureGroup();
@@ -444,7 +496,7 @@ class LeafletHTMLGenerator:
             // Style function for Polygon/MultiPolygon features
             // Reference: https://leafletjs.com/reference.html#geojson-style
             style: function(feature) {{
-                var status = feature.properties.status || 'intact';
+                var status = getStatusKey(feature.properties.status || 1);
                 var color = statusColors[status] || '#0072BC';
 
                 return {{
@@ -457,27 +509,23 @@ class LeafletHTMLGenerator:
                 }};
             }},
 
-            // pointToLayer for Point features - استخدام Markers بدلاً من CircleMarkers
-            // Reference: https://leafletjs.com/reference.html#geojson-pointtolayer
+            // pointToLayer for Point features - استخدام CircleMarkers (Canvas-rendered)
+            // PERFORMANCE: CircleMarker uses Canvas (10x faster than divIcon/SVG)
+            // Reference: https://leafletjs.com/reference.html#circlemarker
             pointToLayer: function(feature, latlng) {{
-                var status = feature.properties.status || 'intact';
+                var status = getStatusKey(feature.properties.status || 1);
                 var color = statusColors[status] || '#0072BC';
 
-                // إنشاء أيقونة دبوس ملونة بنفس ألوان الحالة
-                var pinIcon = L.divIcon({{
-                    className: 'building-pin-icon',
-                    html: '<div style="position: relative; width: 24px; height: 36px;">' +
-                          '<svg width="24" height="36" viewBox="0 0 24 36" xmlns="http://www.w3.org/2000/svg">' +
-                          '<path d="M12 0C5.4 0 0 5.4 0 12c0 8 12 24 12 24s12-16 12-24c0-6.6-5.4-12-12-12z" ' +
-                          'fill="' + color + '" stroke="#fff" stroke-width="2"/>' +
-                          '<circle cx="12" cy="12" r="4" fill="#fff"/>' +
-                          '</svg></div>',
-                    iconSize: [24, 36],
-                    iconAnchor: [12, 36],
-                    popupAnchor: [0, -36]
+                // Use CircleMarker instead of L.marker for Canvas rendering (much faster!)
+                // CircleMarker renders on Canvas layer (no DOM bloat)
+                return L.circleMarker(latlng, {{
+                    radius: 8,                // Size of marker
+                    fillColor: color,         // Status color
+                    color: '#fff',            // White border
+                    weight: 2,                // Border width
+                    opacity: 1,
+                    fillOpacity: 0.9
                 }});
-
-                return L.marker(latlng, {{ icon: pinIcon }});
             }},
 
             // onEachFeature for popups and events
@@ -506,15 +554,17 @@ class LeafletHTMLGenerator:
                 }}
 
                 // إضافة زر الاختيار إذا كان مفعلاً
-                {'if (props.building_id) { popup += "<button class=\\"select-building-btn\\" onclick=\\"selectBuilding(\'" + props.building_id + "\')\\\"><span style=\\"font-size:16px\\">✓</span> اختيار هذا المبنى</button>"; }' if enable_selection else '// Selection disabled'}
+                {'if (props.building_id) { popup += "<button class=\\"select-building-btn\\" onclick=\\"selectBuilding(&apos;" + props.building_id + "&apos;)\\\"><span style=\\"font-size:16px\\">✓</span> اختيار هذا المبنى</button>"; }' if enable_selection else '// Selection disabled'}
 
                 popup += '</div>';
 
                 layer.bindPopup(popup);
 
                 // Add to appropriate layer group
+                // Points go to marker cluster, polygons go directly to map
                 if (geomType === 'Point') {{
                     pointsLayer.addLayer(layer);
+                    markers.addLayer(layer);  // Add point markers to cluster
                 }} else {{
                     polygonsLayer.addLayer(layer);
                 }}
@@ -533,7 +583,17 @@ class LeafletHTMLGenerator:
                     }});
                 }}
             }}
-        }}).addTo(map);
+        }});
+
+        // Add marker cluster group to map (contains all point markers)
+        map.addLayer(markers);
+
+        // Add polygons layer to map (bypasses clustering)
+        polygonsLayer.addTo(map);
+
+        console.log('✅ Buildings layer created with clustering support');
+        console.log('   - Markers in cluster:', markers.getLayers().length);
+        console.log('   - Polygons on map:', polygonsLayer.getLayers().length);
 
         // Add existing polygons layer (displayed in blue)
         {LeafletHTMLGenerator._get_existing_polygons_js(existing_polygons_geojson) if existing_polygons_geojson else '// No existing polygons'}
@@ -603,27 +663,7 @@ class LeafletHTMLGenerator:
 
         {LeafletHTMLGenerator._get_multiselect_js() if enable_multiselect else '// Multi-select disabled'}
 
-        // Log statistics
-        var pointCount = pointsLayer.getLayers().length;
-        var polygonCount = polygonsLayer.getLayers().length;
-        var totalBuildings = buildingsLayer.getLayers().length;
-        console.log('═══════════════════════════════════════');
-        console.log('📊 Map Statistics:');
-        console.log('  - Total buildings on map:', totalBuildings);
-        console.log('  - Points:', pointCount);
-        console.log('  - Polygons:', polygonCount);
-        console.log('  - GeoJSON features:', buildingsData.features.length);
-        console.log('═══════════════════════════════════════');
-
-        if (totalBuildings === 0) {{
-            console.error('❌ ERROR: No buildings rendered on map!');
-            console.error('   This indicates a problem with GeoJSON data or layer rendering');
-        }} else if (totalBuildings !== buildingsData.features.length) {{
-            console.warn('⚠️ WARNING: Mismatch between features and rendered buildings');
-            console.warn('   Expected:', buildingsData.features.length, 'Got:', totalBuildings);
-        }} else {{
-            console.log('✅ All buildings rendered successfully!');
-        }}
+        {LeafletHTMLGenerator._get_viewport_loading_js() if enable_viewport_loading else '// Viewport loading disabled'}
     </script>
 '''
 
@@ -660,9 +700,16 @@ class LeafletHTMLGenerator:
         Returns:
             JavaScript code to add existing polygons layer
         """
+        # Parse and embed directly
+        try:
+            existing_polygons_dict = json.loads(existing_polygons_geojson)
+            existing_polygons_json = json.dumps(existing_polygons_dict)
+        except:
+            existing_polygons_json = '{"type":"FeatureCollection","features":[]}'
+
         return f'''
         // Existing polygons layer (displayed in blue)
-        var existingPolygonsData = {existing_polygons_geojson};
+        var existingPolygonsData = {existing_polygons_json};
 
         if (existingPolygonsData && existingPolygonsData.features && existingPolygonsData.features.length > 0) {{
             var existingPolygonsLayer = L.geoJSON(existingPolygonsData, {{
@@ -735,28 +782,28 @@ class LeafletHTMLGenerator:
         // QWebChannel setup for building selection
         var bridge = null;
 
-        if (typeof QWebChannel !== 'undefined') {
-            new QWebChannel(qt.webChannelTransport, function(channel) {
+        if (typeof QWebChannel !== 'undefined') {{
+            new QWebChannel(qt.webChannelTransport, function(channel) {{
                 bridge = channel.objects.buildingBridge || channel.objects.bridge;
                 console.log('QWebChannel initialized for selection');
-            });
-        }
+            }});
+        }}
 
         // Function to select building (called from popup button)
-        function selectBuilding(buildingId) {
+        function selectBuilding(buildingId) {{
             console.log('Selecting building:', buildingId);
 
-            if (bridge && bridge.selectBuilding) {
+            if (bridge && bridge.selectBuilding) {{
                 bridge.selectBuilding(buildingId);
                 map.closePopup();
-            } else if (bridge && bridge.buildingSelected) {
+            }} else if (bridge && bridge.buildingSelected) {{
                 bridge.buildingSelected(buildingId);
                 map.closePopup();
-            } else {
+            }} else {{
                 console.error('Bridge not initialized or selectBuilding method not found');
                 alert('خطأ: لا يمكن اختيار المبنى. جسر الاتصال غير متاح.');
-            }
-        }
+            }}
+        }}
 
         window.selectBuilding = selectBuilding;
 '''
@@ -792,6 +839,19 @@ class LeafletHTMLGenerator:
         """
         from services.leaflet_multiselect_template import MULTISELECT_JS_TEMPLATE
         return MULTISELECT_JS_TEMPLATE
+
+    @staticmethod
+    def _get_viewport_loading_js() -> str:
+        """
+        Get JavaScript for viewport-based loading.
+
+        Implements industry best practices for handling millions of buildings:
+        - Only loads buildings in current viewport
+        - Debounces requests during rapid pan/zoom
+        - Updates markers dynamically without page reload
+        """
+        from services.leaflet_viewport_template import VIEWPORT_LOADING_JS_TEMPLATE
+        return VIEWPORT_LOADING_JS_TEMPLATE
 # Export convenience function
 def generate_leaflet_html(
     tile_server_url: str,

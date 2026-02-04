@@ -25,6 +25,8 @@ from PyQt5.QtGui import QPainter, QColor, QPainterPath, QIcon
 from ui.design_system import Colors
 from ui.font_utils import create_font, FontManager
 from utils.logger import get_logger
+from services.viewport_map_loader import ViewportMapLoader
+from services.building_cache_service import get_building_cache
 
 logger = get_logger(__name__)
 
@@ -85,6 +87,8 @@ class MapBridge(QObject):
     building_selected = pyqtSignal(str)  # building_id
     buildings_multiselected = pyqtSignal(str)  # JSON string of building IDs
     selection_count_updated = pyqtSignal(int)  # count
+    viewport_changed = pyqtSignal(float, float, float, float, int)  # (ne_lat, ne_lng, sw_lat, sw_lng, zoom)
+    bridge_ready = pyqtSignal()  # Emitted when QWebChannel bridge is fully initialized
 
     @pyqtSlot(str, str)
     def onGeometryDrawn(self, geom_type: str, wkt: str):
@@ -113,6 +117,27 @@ class MapBridge(QObject):
     def updateSelectionCount(self, count: int):
         """Called from JavaScript to update selection count."""
         self.selection_count_updated.emit(count)
+
+    @pyqtSlot(float, float, float, float, int)
+    def onViewportChanged(self, ne_lat: float, ne_lng: float, sw_lat: float, sw_lng: float, zoom: int):
+        """
+        Called from JavaScript when map viewport changes (pan/zoom).
+
+        Args:
+            ne_lat: North-East latitude
+            ne_lng: North-East longitude
+            sw_lat: South-West latitude
+            sw_lng: South-West longitude
+            zoom: Current zoom level
+        """
+        logger.debug(f"Viewport changed: NE({ne_lat:.6f}, {ne_lng:.6f}), SW({sw_lat:.6f}, {sw_lng:.6f}), Zoom={zoom}")
+        self.viewport_changed.emit(ne_lat, ne_lng, sw_lat, sw_lng, zoom)
+
+    @pyqtSlot()
+    def onBridgeReady(self):
+        """Called from JavaScript when QWebChannel bridge is fully initialized and ready."""
+        logger.info("✅ QWebChannel bridge confirmed ready by JavaScript")
+        self.bridge_ready.emit()
 
 
 class BaseMapDialog(QDialog):
@@ -147,6 +172,7 @@ class BaseMapDialog(QDialog):
         show_search: bool = True,
         show_confirm_button: bool = False,
         show_multiselect_ui: bool = False,
+        enable_viewport_loading: bool = False,
         parent=None
     ):
         """
@@ -157,6 +183,7 @@ class BaseMapDialog(QDialog):
             show_search: Show search bar
             show_confirm_button: Show confirm button and coordinates display
             show_multiselect_ui: Show multi-select UI (counter, list, clear button)
+            enable_viewport_loading: Enable viewport-based loading for millions of buildings
             parent: Parent widget
         """
         super().__init__(parent)
@@ -165,11 +192,29 @@ class BaseMapDialog(QDialog):
         self.show_search = show_search
         self.show_confirm_button = show_confirm_button
         self.show_multiselect_ui = show_multiselect_ui
+        self.enable_viewport_loading = enable_viewport_loading
         self.web_view = None
         self._bridge = None
         self._overlay = None
         self._current_coordinates = None  # Store current selected coordinates
         self._selected_building_ids = []  # Store selected building IDs
+        self._viewport_loader = None  # ViewportMapLoader instance
+
+        # Initialize viewport loader if enabled (Best Practice: with cache + spatial sampling)
+        if self.enable_viewport_loading:
+            # Get application-wide cache service (Singleton)
+            # NOTE: BuildingCacheService disabled for now - Database.get_instance() not available
+            # TODO: Pass db instance from parent to enable caching
+            building_cache = None
+
+            self._viewport_loader = ViewportMapLoader(
+                cache_enabled=True,
+                cache_max_size=50,
+                cache_max_age_minutes=10,
+                building_cache_service=building_cache,  # Disabled - needs db instance
+                use_spatial_sampling=True  # Grid-based sampling (Best Practice!)
+            )
+            logger.info("✅ Viewport loading enabled (cache disabled - needs db instance)")
 
         # Create overlay (gray transparent layer)
         if parent:
@@ -551,6 +596,11 @@ class BaseMapDialog(QDialog):
         self._bridge.buildings_multiselected.connect(self._on_buildings_multiselected)
         self._bridge.selection_count_updated.connect(self._on_selection_count_updated)
 
+        # Connect viewport changed signal if viewport loading enabled
+        if self.enable_viewport_loading:
+            self._bridge.viewport_changed.connect(self._on_viewport_changed)
+            logger.debug("Viewport changed signal connected")
+
         channel = QWebChannel(self.web_view.page())
         # Register as 'buildingBridge' to match LeafletHTMLGenerator JavaScript
         channel.registerObject('buildingBridge', self._bridge)
@@ -592,15 +642,32 @@ class BaseMapDialog(QDialog):
         self.move(x, y)
 
     def _on_map_loaded(self, success: bool):
-        """Called when map finishes loading."""
+        """Called when map finishes loading - WAIT for QWebChannel bridge ready."""
         if success:
-            logger.info("Map loaded successfully")
+            logger.info("✅ Map HTML loaded - checking QWebChannel bridge status...")
+
+            # Check if QWebChannel is ready using proper async check
+            # Reference: https://doc.qt.io/qt-6/qtwebchannel-javascript.html
+            check_js = """
+            console.log('🔍 Checking QWebChannel bridge after map load...');
+            console.log('  - qt:', typeof qt);
+            console.log('  - qt.webChannelTransport:', typeof qt !== 'undefined' ? typeof qt.webChannelTransport : 'N/A');
+            console.log('  - QWebChannel:', typeof QWebChannel);
+            console.log('  - bridge:', typeof bridge);
+            console.log('  - bridgeReady:', typeof bridgeReady !== 'undefined' ? bridgeReady : 'undefined');
+
+            // The bridge should be initializing now via QWebChannel callback
+            // We just log status - the callback in leaflet_html_generator will notify Python
+            """
+            self.web_view.page().runJavaScript(check_js)
+
+            # Show map immediately (hide loading indicator)
             if hasattr(self, '_loading_label'):
                 self._loading_label.hide()
             if self.web_view:
                 self.web_view.show()
         else:
-            logger.error("Map failed to load")
+            logger.error("❌ Map failed to load")
             if hasattr(self, '_loading_label'):
                 self._loading_label.setText("❌ فشل تحميل الخريطة")
                 self._loading_label.setStyleSheet(f"""
@@ -656,6 +723,58 @@ class BaseMapDialog(QDialog):
                 self.selection_counter_label.setText(f"{count} مبنى محدد")
                 self.clear_all_btn.setEnabled(True)
 
+    def _on_viewport_changed(self, ne_lat: float, ne_lng: float, sw_lat: float, sw_lng: float, zoom: int):
+        """
+        Handle viewport changed event from JavaScript.
+
+        Loads buildings for the new viewport and updates the map.
+
+        Args:
+            ne_lat: North-East latitude
+            ne_lng: North-East longitude
+            sw_lat: South-West latitude
+            sw_lng: South-West longitude
+            zoom: Current zoom level
+        """
+        if not self._viewport_loader:
+            return
+
+        try:
+            # Get auth token from parent if available
+            auth_token = None
+            try:
+                if self.parent():
+                    main_window = self.parent()
+                    while main_window and not hasattr(main_window, 'current_user'):
+                        main_window = main_window.parent()
+                    if main_window and hasattr(main_window, 'current_user') and main_window.current_user:
+                        auth_token = getattr(main_window.current_user, '_api_token', None)
+            except Exception as e:
+                logger.debug(f"Could not get auth token: {e}")
+
+            # Load buildings for viewport (with cache + spatial sampling)
+            buildings = self._viewport_loader.load_buildings_for_viewport(
+                north_east_lat=ne_lat,
+                north_east_lng=ne_lng,
+                south_west_lat=sw_lat,
+                south_west_lng=sw_lng,
+                zoom_level=zoom,
+                auth_token=auth_token
+            )
+
+            # Convert to GeoJSON
+            from services.geojson_converter import GeoJSONConverter
+            buildings_geojson = GeoJSONConverter.buildings_to_geojson(
+                buildings,
+                prefer_polygons=True
+            )
+
+            # Update map via JavaScript
+            self._update_map_buildings(buildings_geojson)
+
+        except Exception as e:
+            logger.error(f"Error loading viewport buildings: {e}", exc_info=True)
+
     def _update_buildings_list(self, building_ids: List[str]):
         """Update the buildings list widget with selected building IDs."""
         if not hasattr(self, 'buildings_list_widget'):
@@ -672,6 +791,35 @@ class BaseMapDialog(QDialog):
         if self.web_view:
             self.web_view.page().runJavaScript("if (typeof clearAllSelections === 'function') { clearAllSelections(); }")
             logger.info("Cleared all selections")
+
+    def _update_map_buildings(self, buildings_geojson: str):
+        """
+        Update buildings on map dynamically via JavaScript.
+
+        Args:
+            buildings_geojson: GeoJSON string with new buildings
+        """
+        if not self.web_view:
+            logger.warning("WebView not available for updating buildings")
+            return
+
+        try:
+            import json
+
+            # Parse and re-stringify to ensure valid JSON
+            geojson_obj = json.loads(buildings_geojson)
+
+            # Direct JSON injection (no escaping needed - json.dumps produces valid JavaScript)
+            # This is the same approach used in initial map load (leaflet_html_generator.py:439)
+            geojson_json = json.dumps(geojson_obj)
+
+            # Call JavaScript function to update buildings
+            js_code = f"if (typeof updateBuildingsOnMap === 'function') {{ updateBuildingsOnMap({geojson_json}); }}"
+
+            self.web_view.page().runJavaScript(js_code)
+
+        except Exception as e:
+            logger.error(f"Error updating map buildings: {e}", exc_info=True)
 
     def _on_search_submitted(self):
         """Handle search submission - subclass should override."""
@@ -776,50 +924,35 @@ class BaseMapDialog(QDialog):
         Returns:
             GeoJSON string with buildings
         """
-        from controllers.building_controller import BuildingController
+        from controllers.building_controller import BuildingController, BuildingFilter
         from services.geojson_converter import GeoJSONConverter
         import json
 
         try:
-            # Use BuildingController (DRY + SOLID) - automatically selects API or DB
+            # Use BuildingController (DRY + SOLID) - automatically selects API or local DB
             building_controller = BuildingController(db)
 
-            # Set auth token if provided (required for API calls)
+            # CRITICAL FIX: Set auth token BEFORE any operations!
             if auth_token and building_controller.is_using_api:
                 building_controller.set_auth_token(auth_token)
-                logger.debug(f"Auth token set for BuildingController (length: {len(auth_token)})")
+                logger.info(f"✅ Auth token set for BuildingController before load")
 
-            result = building_controller.load_buildings()
+            # PROFESSIONAL FIX: Pass limit to API via BuildingFilter (no over-fetching!)
+            building_filter = BuildingFilter(limit=limit)
+            result = building_controller.load_buildings(building_filter)
 
             if not result.success:
                 logger.error(f"Failed to load buildings: {result.message}")
                 buildings = []
             else:
-                buildings = result.data[:limit]  # Apply limit after fetching
-
-            logger.info(f"📊 Retrieved {len(buildings)} buildings from database")
-
-            # Log diagnostics
-            buildings_with_coords = [b for b in buildings if b.latitude and b.longitude]
-            buildings_with_polygons = [b for b in buildings if b.geo_location]
-            logger.info(f"  - Buildings with lat/lon: {len(buildings_with_coords)}")
-            logger.info(f"  - Buildings with polygons: {len(buildings_with_polygons)}")
+                buildings = result.data
+                logger.info(f"✅ Loaded {len(buildings)} buildings from {'API' if building_controller.is_using_api else 'DB'}")
 
             # Convert to GeoJSON
             buildings_geojson = GeoJSONConverter.buildings_to_geojson(
                 buildings,
                 prefer_polygons=True
             )
-
-            # Validate
-            geojson_data = json.loads(buildings_geojson)
-            feature_count = len(geojson_data.get('features', []))
-            logger.info(f"  - GeoJSON features: {feature_count}")
-
-            if feature_count == 0:
-                logger.warning("⚠️ No buildings with valid geometry!")
-            else:
-                logger.info(f"✅ GeoJSON generated successfully with {feature_count} features")
 
             return buildings_geojson
 

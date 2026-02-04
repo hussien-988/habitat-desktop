@@ -18,7 +18,7 @@ logger = get_logger(__name__)
 @dataclass
 class ApiConfig:
     """تكوين الاتصال بالـ API"""
-    base_url: str = "http://localhost:8081"
+    base_url: str = "http://localhost:8080"  # Fixed: Changed from 8081 to 8080 (Docker Backend port)
     username: str = "admin"
     password: str = "Admin@123"
     timeout: int = 30
@@ -90,6 +90,20 @@ class TRRCMSApiClient:
         except requests.exceptions.RequestException as e:
             logger.error(f"❌ Login failed: {e}")
             raise
+
+    def set_access_token(self, token: str, expires_in: int = 3600):
+        """
+        Set access token from external source (e.g., current_user._api_token).
+
+        Professional Best Practice: Allow setting token from authenticated user session.
+
+        Args:
+            token: Access token to use
+            expires_in: Token expiration time in seconds (default: 3600 = 1 hour)
+        """
+        self.access_token = token
+        self.token_expires_at = datetime.now() + timedelta(seconds=expires_in)
+        logger.debug(f"✅ Access token updated externally (expires in {expires_in}s)")
 
     def refresh_access_token(self) -> bool:
         """
@@ -235,6 +249,60 @@ class TRRCMSApiClient:
         logger.debug(f"Fetching buildings for map: bbox={payload}")
         buildings = self._request("POST", "/api/v1/Buildings/map", json_data=payload)
         logger.info(f"✅ Fetched {len(buildings)} buildings from API")
+
+        return buildings
+
+    def get_buildings_in_polygon(
+        self,
+        polygon_wkt: str,
+        status: Optional[str] = None,
+        building_type: Optional[int] = None,
+        damage_level: Optional[int] = None,
+        page: int = 1,
+        page_size: int = 100
+    ) -> List[Dict[str, Any]]:
+        """
+        الحصول على المباني داخل polygon (محسّن للأداء مع PostGIS).
+
+        Args:
+            polygon_wkt: Polygon في صيغة WKT
+            status: فلتر حسب حالة المبنى (optional)
+            building_type: فلتر حسب نوع المبنى (optional)
+            damage_level: فلتر حسب مستوى الضرر (optional)
+            page: رقم الصفحة
+            page_size: عدد النتائج في الصفحة
+
+        Returns:
+            قائمة بـ BuildingDto
+
+        Example:
+            buildings = client.get_buildings_in_polygon(
+                polygon_wkt="POLYGON((37.0 36.1, 37.3 36.1, 37.3 36.3, 37.0 36.3, 37.0 36.1))",
+                page=1,
+                page_size=100
+            )
+        """
+        payload = {
+            "polygonWkt": polygon_wkt,
+            "page": page,
+            "pageSize": page_size
+        }
+
+        if status:
+            payload["status"] = status
+        if building_type is not None:
+            payload["buildingType"] = building_type
+        if damage_level is not None:
+            payload["damageLevel"] = damage_level
+
+        logger.debug(f"Fetching buildings in polygon: page={page}, pageSize={page_size}")
+        response = self._request("POST", "/api/v1/Buildings/polygon", json_data=payload)
+
+        # API returns: {"buildings": [...], "totalCount": N, "page": 1, ...}
+        buildings = response.get("buildings", [])
+        total_count = response.get("totalCount", 0)
+
+        logger.info(f"✅ Fetched {len(buildings)} buildings (total: {total_count}) from polygon API")
 
         return buildings
 

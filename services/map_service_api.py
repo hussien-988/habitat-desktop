@@ -53,6 +53,20 @@ class MapServiceAPI:
         print(f"[DEBUG] API Base URL: {self.api.base_url}")
         logger.info("✅ MapServiceAPI initialized with Backend API")
 
+    def set_auth_token(self, token: str, expires_in: int = 3600):
+        """
+        Update API client auth token from external source.
+
+        Professional Best Practice: Sync token with current user session.
+
+        Args:
+            token: Access token from current user
+            expires_in: Token expiration time in seconds
+        """
+        if token:
+            self.api.set_access_token(token, expires_in)
+            logger.debug("✅ MapServiceAPI: Auth token synchronized")
+
     # ==================== Building Location ====================
 
     def get_building_location(self, building_uuid: str) -> Optional[BuildingGeoData]:
@@ -144,10 +158,17 @@ class MapServiceAPI:
         north_east_lng: float,
         south_west_lat: float,
         south_west_lng: float,
-        status_filter: Optional[str] = None
+        status_filter: Optional[str] = None,
+        page_size: int = 1000
     ) -> List[Building]:
         """
         الحصول على المباني ضمن bounding box من الـ API.
+
+        Uses /Buildings/polygon endpoint with PostGIS spatial filtering.
+
+        Professional Best Practice:
+        - Default page_size increased to 1000 for better coverage
+        - Configurable for different use cases
 
         Args:
             north_east_lat: حد الشمال الشرقي (latitude)
@@ -155,6 +176,7 @@ class MapServiceAPI:
             south_west_lat: حد الجنوب الغربي (latitude)
             south_west_lng: حد الجنوب الغربي (longitude)
             status_filter: فلتر حسب حالة المبنى
+            page_size: Maximum number of buildings to load (default: 1000)
 
         Returns:
             قائمة بـ Building objects
@@ -162,14 +184,19 @@ class MapServiceAPI:
         try:
             print(f"\n[DEBUG] MapServiceAPI.get_buildings_in_bbox() called")
             print(f"[DEBUG] BBox: NE({north_east_lat}, {north_east_lng}) - SW({south_west_lat}, {south_west_lng})")
-            print(f"[DEBUG] Calling: POST /api/v1/Buildings/map")
+            print(f"[DEBUG] Page Size: {page_size}")
+            print(f"[DEBUG] Calling: POST /api/v1/Buildings/polygon")
 
-            buildings_data = self.api.get_buildings_for_map(
-                north_east_lat=north_east_lat,
-                north_east_lng=north_east_lng,
-                south_west_lat=south_west_lat,
-                south_west_lng=south_west_lng,
-                status=status_filter
+            # Convert bounding box to polygon WKT
+            # Polygon: SW corner → SE corner → NE corner → NW corner → SW corner (close)
+            polygon_wkt = f"POLYGON(({south_west_lng} {south_west_lat}, {north_east_lng} {south_west_lat}, {north_east_lng} {north_east_lat}, {south_west_lng} {north_east_lat}, {south_west_lng} {south_west_lat}))"
+            print(f"[DEBUG] Polygon WKT: {polygon_wkt}")
+
+            buildings_data = self.api.get_buildings_in_polygon(
+                polygon_wkt=polygon_wkt,
+                status=status_filter,
+                page=1,
+                page_size=page_size  # Professional: Configurable page size
             )
 
             print(f"[DEBUG] API Response: {len(buildings_data)} buildings received")
@@ -180,7 +207,7 @@ class MapServiceAPI:
                 buildings.append(building)
 
             print(f"[DEBUG] Converted to {len(buildings)} Building objects\n")
-            logger.info(f"✅ Fetched {len(buildings)} buildings from API")
+            logger.info(f"✅ Fetched {len(buildings)} buildings from API (polygon filter)")
             return buildings
 
         except Exception as e:

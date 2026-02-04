@@ -547,6 +547,7 @@ class MainWindow(QMainWindow):
 
         # Navigate to wizard
         self.stack.setCurrentWidget(self.office_survey_wizard)
+
         logger.debug("New office survey wizard opened")
 
     def _on_survey_completed(self, survey_id: str):
