@@ -167,6 +167,64 @@ class SurveyApiService:
             logger.error(f"Failed to create office survey: {response.get('error')}")
             return response
 
+    def finalize_office_survey(self, survey_id: str, finalize_options: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """
+        Finalize an office survey and optionally create a claim.
+
+        POST /v1/Surveys/office/{id}/finalize
+        Body: {
+            "surveyId": "uuid",
+            "finalNotes": "string",
+            "durationMinutes": 0,
+            "autoCreateClaim": true
+        }
+
+        Args:
+            survey_id: UUID of the survey to finalize
+            finalize_options: Optional dictionary with finalization options
+                - finalNotes: Final notes for the survey
+                - durationMinutes: Survey duration in minutes
+                - autoCreateClaim: Whether to automatically create a claim
+
+        Returns:
+            Dict with success status and response data or error
+        """
+        if not survey_id:
+            logger.error("Survey ID is required for finalization")
+            return {"success": False, "error": "Survey ID is required", "error_code": "E_PARAM"}
+
+        # Default finalization options
+        api_data = {
+            "surveyId": survey_id,
+            "finalNotes": "",
+            "durationMinutes": 0,
+            "autoCreateClaim": True
+        }
+
+        # Override with provided options
+        if finalize_options:
+            if 'finalNotes' in finalize_options:
+                api_data['finalNotes'] = finalize_options['finalNotes'] or ""
+            if 'durationMinutes' in finalize_options:
+                api_data['durationMinutes'] = finalize_options['durationMinutes'] or 0
+            if 'autoCreateClaim' in finalize_options:
+                api_data['autoCreateClaim'] = finalize_options['autoCreateClaim']
+
+        endpoint = f"/v1/Surveys/office/{survey_id}/finalize"
+        logger.info(f"Finalizing office survey {survey_id} via POST {endpoint}")
+        logger.info(f"Finalization options: {json.dumps(api_data, ensure_ascii=False, indent=2)}")
+
+        response = self._make_request("POST", endpoint, data=api_data)
+
+        if response.get("success"):
+            logger.info(f"Office survey {survey_id} finalized successfully")
+            return response
+        else:
+            error_details = response.get('details', '')
+            logger.error(f"Failed to finalize office survey: {response.get('error')}")
+            logger.error(f"Error details: {error_details}")
+            return response
+
     def _to_api_format(self, survey_data: Dict[str, Any]) -> Dict[str, Any]:
         """
         Convert app survey data format to API format.
