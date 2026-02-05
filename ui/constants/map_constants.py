@@ -81,11 +81,13 @@ class MapConstants:
     DRAWN_POLYGON_OPACITY = 0.4
 
     # ===== Performance Limits =====
-    MAX_MARKERS_PER_VIEWPORT = 1000  # Professional: Limit markers per viewport for performance
+    MAX_MARKERS_PER_VIEWPORT = 2000  # ✅ محسّن: زيادة من 1000 إلى 2000 للأداء الأفضل
 
     # ===== Clustering Configuration =====
-    CLUSTER_MAX_RADIUS = 80  # Cluster radius in pixels
-    DISABLE_CLUSTERING_AT_ZOOM = 17  # Disable clustering at this zoom level
+    CLUSTER_MAX_RADIUS = 60  # ✅ محسّن: تقليل من 80 إلى 60 (أقل تداخل)
+    DISABLE_CLUSTERING_AT_ZOOM = 15  # ✅ محسّن: تغيير من 17 إلى 15 (تفاصيل أبكر)
+    CHUNK_INTERVAL = 100  # ✅ جديد: Chunk loading interval (ms)
+    CHUNK_DELAY = 25  # ✅ جديد: Delay between chunks (ms)
 
     # ===== Overlay =====
     OVERLAY_COLOR = 'rgba(45, 45, 45, 0.6)'  # رمادي شفاف

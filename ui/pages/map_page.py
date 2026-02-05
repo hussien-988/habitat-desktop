@@ -19,6 +19,7 @@ from PyQt5.QtGui import QColor
 try:
     from PyQt5.QtWebEngineWidgets import QWebEngineView
     from PyQt5.QtWebChannel import QWebChannel
+    from ui.components.viewport_bridge import ViewportBridge  # ✅ جديد
     HAS_WEBENGINE = True
 except ImportError:
     HAS_WEBENGINE = False
@@ -509,6 +510,10 @@ class MapPage(QWidget):
         self.map_controller = MapController(db)
         self.buildings = []
 
+        # ✅ جديد: Viewport-based loading (المرحلة 2)
+        self.viewport_bridge: Optional['ViewportBridge'] = None
+        self.web_channel: Optional['QWebChannel'] = None
+
         self._setup_ui()
 
     def _setup_ui(self):
@@ -585,6 +590,9 @@ class MapPage(QWidget):
             self.web_view = QWebEngineView()
             self.web_view.setMinimumSize(600, 400)
             map_layout.addWidget(self.web_view)
+
+            # ✅ جديد: Setup ViewportBridge for dynamic loading
+            self._setup_viewport_bridge()
         else:
             # Fallback message
             fallback_label = QLabel(
@@ -770,14 +778,21 @@ class MapPage(QWidget):
         return rings if rings else None
 
     def refresh(self, data=None):
-        """تحديث بيانات الخريطة."""
-        logger.debug("Refreshing map page")
+        """تحديث بيانات الخريطة بأداء محسّن."""
+        logger.debug("Refreshing map page with optimized performance")
 
         # Load buildings using MapController (DRY + SOLID)
         # Aleppo bounding box (same as MapServiceAPI)
         bbox = (36.0, 36.8, 36.5, 37.5)  # min_lat, min_lon, max_lat, max_lon
-        logger.info(f"[MAP_PAGE] Requesting buildings with bbox: {bbox}")
-        result = self.map_controller.get_buildings_in_view(bbox)
+
+        # ✅ استخدام page_size محسّن = 2000 (زيادة من 1000)
+        # ✅ تمرير zoom_level للتحسينات المستقبلية
+        logger.info(f"[MAP_PAGE] Requesting buildings with bbox: {bbox} | page_size=2000")
+        result = self.map_controller.get_buildings_in_view(
+            bbox=bbox,
+            page_size=2000,  # ⚡ محسّن: 2000 بدلاً من الافتراضي
+            zoom_level=15    # ⚡ للتحسينات المستقبلية (polygon simplification)
+        )
         logger.info(f"[MAP_PAGE] Result success: {result.success}, data count: {len(result.data) if result.success else 0}")
 
         if result.success:
@@ -850,6 +865,95 @@ class MapPage(QWidget):
             # Call JavaScript to highlight building
             js = f"highlightBuilding('{building.building_id}')"
             self.web_view.page().runJavaScript(js)
+
+    def _setup_viewport_bridge(self):
+        """
+        ✅ المرحلة 2: إعداد ViewportBridge للتحميل الديناميكي.
+
+        Professional Best Practice:
+        - QWebChannel للتواصل بين JavaScript و Python
+        - Debouncing في ViewportBridge (300ms)
+        - Dynamic loading عند تغيير viewport
+        """
+        if not HAS_WEBENGINE or not self.web_view:
+            logger.warning("⚠️ WebEngine not available, viewport loading disabled")
+            return
+
+        try:
+            # إنشاء ViewportBridge
+            self.viewport_bridge = ViewportBridge(debounce_ms=300, parent=self)
+            self.viewport_bridge.viewportChanged.connect(self._on_viewport_changed)
+
+            # إنشاء QWebChannel
+            self.web_channel = QWebChannel(self.web_view.page())
+            self.web_channel.registerObject('viewportBridge', self.viewport_bridge)
+
+            # ربط channel مع web page
+            self.web_view.page().setWebChannel(self.web_channel)
+
+            logger.info("✅ ViewportBridge setup complete (debounce=300ms)")
+
+        except Exception as e:
+            logger.error(f"❌ Failed to setup ViewportBridge: {e}")
+            self.viewport_bridge = None
+            self.web_channel = None
+
+    def _on_viewport_changed(self, viewport_data: dict):
+        """
+        معالجة تغيير viewport - تحميل المباني في المنطقة الجديدة.
+
+        Professional Best Practice:
+        - يُستدعى بعد debouncing (300ms)
+        - يُحمّل فقط المباني في viewport الحالي
+        - يُحدّث الخريطة ديناميكياً بدون reload
+
+        Args:
+            viewport_data: dict with keys:
+                - ne_lat, ne_lng: North-East corner
+                - sw_lat, sw_lng: South-West corner
+                - zoom: Current zoom level
+                - center_lat, center_lng: Map center
+        """
+        try:
+            logger.info(f"🗺️ Loading buildings for viewport (zoom={viewport_data['zoom']})")
+
+            # تحويل viewport إلى bbox
+            bbox = (
+                viewport_data['sw_lat'],
+                viewport_data['sw_lng'],
+                viewport_data['ne_lat'],
+                viewport_data['ne_lng']
+            )
+
+            # تحميل المباني في viewport
+            result = self.map_controller.get_buildings_in_view(
+                bbox=bbox,
+                page_size=2000,  # ⚡ محسّن من المرحلة 1
+                zoom_level=viewport_data['zoom']
+            )
+
+            if result.success and result.data:
+                # تحويل BuildingGeoData إلى GeoJSON
+                from services.geojson_converter import buildings_to_geojson
+                geojson_data = buildings_to_geojson(result.data)
+                geojson_str = json.dumps(geojson_data, ensure_ascii=False)
+
+                # إرسال للخريطة عبر JavaScript
+                if self.web_view:
+                    js_code = f"if (typeof updateBuildingsOnMap === 'function') {{ updateBuildingsOnMap({geojson_str}); }}"
+                    self.web_view.page().runJavaScript(js_code)
+
+                    logger.info(f"✅ Updated map with {len(result.data)} buildings")
+
+                # تحديث الـ status
+                self.info_label.setText(f"تم تحميل {len(result.data)} مبنى في المنطقة الحالية")
+            else:
+                logger.warning(f"⚠️ No buildings found in viewport")
+                self.info_label.setText("لا توجد مبانٍ في المنطقة الحالية")
+
+        except Exception as e:
+            logger.error(f"❌ Error loading viewport buildings: {e}", exc_info=True)
+            self.info_label.setText("خطأ في تحميل البيانات")
 
     def update_language(self, is_arabic: bool):
         """تحديث اللغة."""

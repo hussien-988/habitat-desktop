@@ -580,11 +580,18 @@ class BuildingSelectionStep(BaseStep):
         """
         from ui.components.building_map_dialog_v2 import show_building_map_dialog
 
+        # ✅ FIX: Get auth token from building_controller
+        auth_token = None
+        if hasattr(self.building_controller, 'api_client') and self.building_controller.api_client:
+            auth_token = getattr(self.building_controller.api_client, 'access_token', None)
+            logger.debug(f"Got auth token from BuildingController: {bool(auth_token)}")
+
         # Always open in selection mode (not view-only)
         # User can search and select building even if already selected
         selected_building = show_building_map_dialog(
             db=self.context.db,
             selected_building_id=None,  # Always selection mode
+            auth_token=auth_token,  # ✅ Pass auth token
             parent=self
         )
 

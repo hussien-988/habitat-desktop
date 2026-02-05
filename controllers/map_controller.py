@@ -313,13 +313,17 @@ class MapController(BaseController):
 
     def get_buildings_in_view(
         self,
-        bbox: Optional[Tuple[float, float, float, float]] = None
+        bbox: Optional[Tuple[float, float, float, float]] = None,
+        page_size: int = 2000,
+        zoom_level: Optional[int] = None
     ) -> OperationResult[List[BuildingGeoData]]:
         """
         Get buildings visible in current map view.
 
         Args:
             bbox: Optional bounding box (min_lat, min_lng, max_lat, max_lng)
+            page_size: Maximum buildings to load (default: 2000) ✅ محسّن للأداء
+            zoom_level: Optional zoom level for optimization
 
         Returns:
             OperationResult with list of BuildingGeoData
@@ -338,26 +342,75 @@ class MapController(BaseController):
                 min_lng = self._state.center_lng - lng_range
                 max_lng = self._state.center_lng + lng_range
 
-            # Query buildings
-            polygon = GeoPolygon(coordinates=[[
-                (min_lng, min_lat),
-                (max_lng, min_lat),
-                (max_lng, max_lat),
-                (min_lng, max_lat),
-                (min_lng, min_lat)
-            ]])
+            zoom = zoom_level if zoom_level is not None else self._state.zoom
 
-            buildings = self.map_service.search_buildings_in_polygon(polygon)
+            # Query buildings with optimized parameters
+            # ✅ استخدام MapServiceAPI إذا كان مُفعّل (يدعم page_size)
+            if isinstance(self.map_service, MapServiceAPI):
+                # Use API optimized method with page_size
+                buildings = self.map_service.get_buildings_in_bbox_optimized(
+                    north_east_lat=max_lat,
+                    north_east_lng=max_lng,
+                    south_west_lat=min_lat,
+                    south_west_lng=min_lng,
+                    page_size=page_size,
+                    zoom_level=zoom
+                )
+                # Convert Building to BuildingGeoData
+                buildings_geodata = [self._building_to_geodata(b) for b in buildings]
+            else:
+                # Fallback: Use local MapService
+                polygon = GeoPolygon(coordinates=[[
+                    (min_lng, min_lat),
+                    (max_lng, min_lat),
+                    (max_lng, max_lat),
+                    (min_lng, max_lat),
+                    (min_lng, min_lat)
+                ]])
+                buildings_geodata = self.map_service.search_buildings_in_polygon(polygon)
 
-            self._cached_features["buildings"] = buildings
+            self._cached_features["buildings"] = buildings_geodata
             self._emit_completed("get_buildings_in_view", True)
-            self.buildings_in_view.emit(buildings)
+            self.buildings_in_view.emit(buildings_geodata)
 
-            return OperationResult.ok(data=buildings)
+            logger.info(f"✅ Loaded {len(buildings_geodata)} buildings (page_size={page_size}, zoom={zoom})")
+            return OperationResult.ok(data=buildings_geodata)
 
         except Exception as e:
+            logger.error(f"❌ Error getting buildings in view: {e}")
             self._emit_error("get_buildings_in_view", str(e))
             return OperationResult.fail(message=str(e))
+
+    def _building_to_geodata(self, building) -> BuildingGeoData:
+        """Convert Building model to BuildingGeoData."""
+        point = None
+        polygon = None
+
+        if building.latitude and building.longitude:
+            point = GeoPoint(
+                latitude=building.latitude,
+                longitude=building.longitude
+            )
+
+        if building.geo_location and 'POLYGON' in building.geo_location.upper():
+            try:
+                polygon = GeoPolygon.from_wkt(building.geo_location)
+            except:
+                pass
+
+        return BuildingGeoData(
+            building_uuid=building.building_uuid,
+            building_id=building.building_id,
+            geometry_type="polygon" if polygon else "point",
+            point=point,
+            polygon=polygon,
+            neighborhood_code=getattr(building, 'neighborhood_code', ''),
+            status=building.building_status or '',
+            building_type=building.building_type or '',
+            properties={
+                "number_of_units": building.number_of_units or 0
+            }
+        )
 
     def search_buildings_by_radius(
         self,

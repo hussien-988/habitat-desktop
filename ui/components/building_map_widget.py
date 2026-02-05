@@ -797,10 +797,11 @@ class BuildingMapWidget(QObject):
             if buildings:
                 print(f"[DEBUG] Sample building:")
                 b = buildings[0]
-                print(f"  - ID: {b.buildingId}")
-                print(f"  - UUID: {b.uuid}")
+                # ✅ FIX: Use correct attribute names (snake_case)
+                print(f"  - ID: {b.building_id}")
+                print(f"  - UUID: {b.building_uuid}")
                 print(f"  - Location: ({b.latitude}, {b.longitude})")
-                print(f"  - Has Polygon: {bool(b.building_geometry_wkt)}")
+                print(f"  - Has Polygon: {bool(getattr(b, 'geo_location', None))}")
             print("="*60 + "\n")
 
             logger.info(f"✅ Fetched {len(buildings)} buildings from API")
@@ -847,7 +848,7 @@ class BuildingMapWidget(QObject):
         # If we have a selected building, focus on it
         center_lat = 36.2021
         center_lon = 37.1343
-        zoom = 13
+        zoom = 16  # ✅ محسّن: زوم أعلى (16 بدلاً من 13) - خريطة أقرب وأوضح
         focus_building_id = None
 
         if selected_building_id:

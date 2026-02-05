@@ -50,7 +50,7 @@ class LeafletHTMLGenerator:
         buildings_geojson: str,
         center_lat: float = 36.2021,
         center_lon: float = 37.1343,
-        zoom: int = 14,
+        zoom: int = 16,  # ✅ محسّن: زوم أعلى (16 بدلاً من 14) للوضوح الأفضل
         max_zoom: int = 17,  # NEW: Maximum zoom level (based on available tiles)
         show_legend: bool = True,
         show_layer_control: bool = True,
@@ -351,10 +351,20 @@ class LeafletHTMLGenerator:
             box-shadow: 0 0 2px rgba(0,0,0,0.3);
         }}
 
-        /* Pin Icon Styling */
+        /* ✅ SVG Pin Icon Styling */
         .building-pin-icon {{
             background: transparent !important;
             border: none !important;
+        }}
+
+        .building-pin-icon svg {{
+            transition: transform 0.2s ease-in-out;
+            filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3));
+        }}
+
+        .building-pin-icon:hover svg {{
+            transform: scale(1.1);
+            filter: drop-shadow(0 3px 6px rgba(0,0,0,0.4));
         }}
 
         /* Polygon Styles */
@@ -428,7 +438,7 @@ class LeafletHTMLGenerator:
         var map = L.map('map', {{
             preferCanvas: true,   // CRITICAL: Use Canvas renderer (10x faster!)
             maxZoom: {max_zoom},  // Prevent zooming beyond available tiles
-            minZoom: 10
+            minZoom: 13
         }}).setView([{center_lat}, {center_lon}], {zoom});
 
         // Add tile layer from local server
@@ -473,16 +483,20 @@ class LeafletHTMLGenerator:
         // Best Practice: Use marker clustering for handling thousands of buildings
         // Reference: https://github.com/Leaflet/Leaflet.markercluster
 
+        // ✅ إعدادات Clustering محسّنة للأداء العالي (10,000+ مبنى)
         var markers = L.markerClusterGroup({{
-            maxClusterRadius: 80,           // Cluster radius in pixels
-            spiderfyOnMaxZoom: true,        // Expand clusters at max zoom
-            showCoverageOnHover: false,     // Don't show cluster area on hover
-            zoomToBoundsOnClick: true,      // Zoom to cluster bounds on click
-            disableClusteringAtZoom: 17,    // Disable clustering at zoom 17+ (detailed view)
-            spiderfyDistanceMultiplier: 1.5, // Space between spiderfied markers
-            chunkedLoading: true,           // Load markers in chunks for performance
-            chunkInterval: 200,             // Chunk interval in ms
-            chunkDelay: 50                  // Delay between chunks in ms
+            maxClusterRadius: 60,              // ✅ تقليل من 80 إلى 60 (أقل تداخل)
+            spiderfyOnMaxZoom: true,          // Expand clusters at max zoom
+            showCoverageOnHover: false,       // Don't show cluster area on hover
+            zoomToBoundsOnClick: true,        // Zoom to cluster bounds on click
+            disableClusteringAtZoom: 15,      // ✅ تغيير من 17 إلى 15 (تفاصيل أبكر)
+            spiderfyDistanceMultiplier: 1.5,  // Space between spiderfied markers
+            chunkedLoading: true,             // Load markers in chunks for performance
+            chunkInterval: 100,                // ✅ تقليل من 200 إلى 100ms (أسرع)
+            chunkDelay: 25,                    // ✅ تقليل من 50 إلى 25ms (أسرع)
+            removeOutsideVisibleBounds: true,  // ✅ جديد: إزالة markers خارج viewport
+            animate: true,                     // Smooth animations
+            animateAddingMarkers: false        // ✅ جديد: تعطيل animation عند الإضافة (أسرع)
         }});
 
         // Create separate layers for points and polygons
@@ -509,23 +523,28 @@ class LeafletHTMLGenerator:
                 }};
             }},
 
-            // pointToLayer for Point features - استخدام CircleMarkers (Canvas-rendered)
-            // PERFORMANCE: CircleMarker uses Canvas (10x faster than divIcon/SVG)
-            // Reference: https://leafletjs.com/reference.html#circlemarker
+            // pointToLayer for Point features - استخدام Pin Markers (أجمل وأوضح)
+            // ✅ محسّن: SVG Pin marker بدلاً من Circle (أكثر وضوحاً وأداء أفضل)
+            // Reference: https://leafletjs.com/reference.html#marker
             pointToLayer: function(feature, latlng) {{
                 var status = getStatusKey(feature.properties.status || 1);
                 var color = statusColors[status] || '#0072BC';
 
-                // Use CircleMarker instead of L.marker for Canvas rendering (much faster!)
-                // CircleMarker renders on Canvas layer (no DOM bloat)
-                return L.circleMarker(latlng, {{
-                    radius: 8,                // Size of marker
-                    fillColor: color,         // Status color
-                    color: '#fff',            // White border
-                    weight: 2,                // Border width
-                    opacity: 1,
-                    fillOpacity: 0.9
+                // ✅ استخدام SVG Pin Marker (Professional + Fast Rendering)
+                var pinIcon = L.divIcon({{
+                    className: 'building-pin-icon',
+                    html: '<div style="position: relative; width: 24px; height: 36px;">' +
+                          '<svg width="24" height="36" viewBox="0 0 24 36" xmlns="http://www.w3.org/2000/svg">' +
+                          '<path d="M12 0C5.4 0 0 5.4 0 12c0 8 12 24 12 24s12-16 12-24c0-6.6-5.4-12-12-12z" ' +
+                          'fill="' + color + '" stroke="#fff" stroke-width="2"/>' +  // ✅ Color from status
+                          '<circle cx="12" cy="12" r="4" fill="#fff"/>' +
+                          '</svg></div>',
+                    iconSize: [24, 36],
+                    iconAnchor: [12, 36],      // نقطة الارتكاز (طرف الدبوس)
+                    popupAnchor: [0, -36]      // موقع الـpopup فوق الدبوس
                 }});
+
+                return L.marker(latlng, {{icon: pinIcon}});
             }},
 
             // onEachFeature for popups and events
@@ -657,7 +676,7 @@ class LeafletHTMLGenerator:
         // Expose functions to Python
         window.highlightBuilding = highlightBuilding;
 
-        {LeafletHTMLGenerator._get_selection_js() if enable_selection else '// Selection disabled'}
+        {LeafletHTMLGenerator._get_selection_js() if (enable_selection or enable_viewport_loading) else '// Selection disabled'}
 
         {LeafletHTMLGenerator._get_drawing_js(drawing_mode) if enable_drawing else '// Drawing disabled'}
 
@@ -781,27 +800,50 @@ class LeafletHTMLGenerator:
         return '''
         // QWebChannel setup for building selection
         var bridge = null;
+        var bridgeReady = false;
 
         if (typeof QWebChannel !== 'undefined') {{
             new QWebChannel(qt.webChannelTransport, function(channel) {{
                 bridge = channel.objects.buildingBridge || channel.objects.bridge;
-                console.log('QWebChannel initialized for selection');
+                bridgeReady = true;
+                console.log('✅ QWebChannel bridge ready for selection');
             }});
         }}
 
         // Function to select building (called from popup button)
+        // ✅ FIX: Wait for bridge or retry with timeout
         function selectBuilding(buildingId) {{
-            console.log('Selecting building:', buildingId);
+            console.log('🏢 Selecting building:', buildingId);
 
-            if (bridge && bridge.selectBuilding) {{
-                bridge.selectBuilding(buildingId);
+            // ✅ Check if bridge is ready
+            if (bridgeReady && bridge && (bridge.selectBuilding || bridge.buildingSelected)) {{
+                // Bridge ready - select immediately
+                if (bridge.selectBuilding) {{
+                    bridge.selectBuilding(buildingId);
+                }} else {{
+                    bridge.buildingSelected(buildingId);
+                }}
                 map.closePopup();
-            }} else if (bridge && bridge.buildingSelected) {{
-                bridge.buildingSelected(buildingId);
-                map.closePopup();
+                console.log('✅ Building selected via bridge');
+            }} else if (!bridgeReady) {{
+                // Bridge not ready yet - wait 500ms and retry
+                console.warn('⏳ Bridge not ready, waiting 500ms...');
+                setTimeout(function() {{
+                    if (bridgeReady && bridge && (bridge.selectBuilding || bridge.buildingSelected)) {{
+                        if (bridge.selectBuilding) {{
+                            bridge.selectBuilding(buildingId);
+                        }} else {{
+                            bridge.buildingSelected(buildingId);
+                        }}
+                        map.closePopup();
+                        console.log('✅ Building selected after retry');
+                    }} else {{
+                        console.error('❌ Bridge still not ready after 500ms');
+                        // Don't show alert - just log error (user can try again)
+                    }}
+                }}, 500);
             }} else {{
-                console.error('Bridge not initialized or selectBuilding method not found');
-                alert('خطأ: لا يمكن اختيار المبنى. جسر الاتصال غير متاح.');
+                console.error('❌ Bridge initialized but methods not found');
             }}
         }}
 

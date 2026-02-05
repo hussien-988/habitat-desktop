@@ -159,7 +159,7 @@ class MapServiceAPI:
         south_west_lat: float,
         south_west_lng: float,
         status_filter: Optional[str] = None,
-        page_size: int = 1000
+        page_size: int = 2000
     ) -> List[Building]:
         """
         الحصول على المباني ضمن bounding box من الـ API.
@@ -167,7 +167,7 @@ class MapServiceAPI:
         Uses /Buildings/polygon endpoint with PostGIS spatial filtering.
 
         Professional Best Practice:
-        - Default page_size increased to 1000 for better coverage
+        - ✅ Default page_size increased to 2000 for better coverage (محسّن)
         - Configurable for different use cases
 
         Args:
@@ -212,6 +212,125 @@ class MapServiceAPI:
 
         except Exception as e:
             logger.error(f"❌ Error fetching buildings from API: {e}", exc_info=True)
+            return []
+
+    def get_buildings_in_bbox_optimized(
+        self,
+        north_east_lat: float,
+        north_east_lng: float,
+        south_west_lat: float,
+        south_west_lng: float,
+        page_size: int = 2000,
+        zoom_level: int = 15,
+        status_filter: Optional[str] = None
+    ) -> List[Building]:
+        """
+        ✅ النسخة المحسّنة: الحصول على المباني مع page_size أكبر وتحسينات للأداء.
+
+        Professional Optimizations:
+        - ✅ page_size = 2000 (زيادة من 1000)
+        - ✅ Support zoom_level for future simplification
+        - ✅ Uses PostGIS ST_Contains() in backend
+        - ✅ Lightweight data transfer
+
+        Args:
+            north_east_lat: حد الشمال الشرقي (latitude)
+            north_east_lng: حد الشمال الشرقي (longitude)
+            south_west_lat: حد الجنوب الغربي (latitude)
+            south_west_lng: حد الجنوب الغربي (longitude)
+            page_size: Maximum buildings to load (default: 2000) ⚡
+            zoom_level: Zoom level (for future simplification optimization)
+            status_filter: فلتر حسب حالة المبنى
+
+        Returns:
+            قائمة بـ Building objects
+        """
+        try:
+            logger.info(f"🗺️ MapServiceAPI.get_buildings_in_bbox_optimized()")
+            logger.info(f"   BBox: NE({north_east_lat:.4f}, {north_east_lng:.4f}) - SW({south_west_lat:.4f}, {south_west_lng:.4f})")
+            logger.info(f"   Page Size: {page_size} | Zoom: {zoom_level}")
+
+            # Convert bounding box to polygon WKT
+            polygon_wkt = f"POLYGON(({south_west_lng} {south_west_lat}, {north_east_lng} {south_west_lat}, {north_east_lng} {north_east_lat}, {south_west_lng} {north_east_lat}, {south_west_lng} {south_west_lat}))"
+
+            # Call API with optimized page_size
+            buildings_data = self.api.get_buildings_in_polygon(
+                polygon_wkt=polygon_wkt,
+                status=status_filter,
+                page=1,
+                page_size=page_size  # ✅ 2000 بدلاً من 1000
+            )
+
+            buildings = []
+            for data in buildings_data:
+                building = self._convert_api_building_to_model(data)
+                buildings.append(building)
+
+            logger.info(f"✅ Fetched {len(buildings)} buildings from API (optimized)")
+            return buildings
+
+        except Exception as e:
+            logger.error(f"❌ Error fetching buildings (optimized): {e}", exc_info=True)
+            return []
+
+    def get_buildings_for_map_lightweight(
+        self,
+        north_east_lat: float,
+        north_east_lng: float,
+        south_west_lat: float,
+        south_west_lng: float,
+        status_filter: Optional[str] = None
+    ) -> List[Building]:
+        """
+        ✅ Lightweight: يستخدم /Buildings/map endpoint (BuildingMapDto بدلاً من BuildingDto الكامل).
+
+        Professional Optimization:
+        - 📦 حجم أقل بـ 50-70% (لا يحتوي على polygons/details)
+        - ⚡ أسرع في النقل والمعالجة
+        - 🎯 مخصص لعرض الخرائط فقط
+
+        Args:
+            north_east_lat: حد الشمال الشرقي (latitude)
+            north_east_lng: حد الشمال الشرقي (longitude)
+            south_west_lat: حد الجنوب الغربي (latitude)
+            south_west_lng: حد الجنوب الغربي (longitude)
+            status_filter: فلتر حسب حالة المبنى
+
+        Returns:
+            قائمة بـ Building objects (lightweight - points only)
+        """
+        try:
+            logger.info(f"📍 MapServiceAPI.get_buildings_for_map_lightweight()")
+            logger.info(f"   BBox: NE({north_east_lat:.4f}, {north_east_lng:.4f}) - SW({south_west_lat:.4f}, {south_west_lng:.4f})")
+
+            # استدعاء /Buildings/map endpoint (Lightweight DTO)
+            map_dtos = self.api.get_buildings_for_map(
+                north_east_lat=north_east_lat,
+                north_east_lng=north_east_lng,
+                south_west_lat=south_west_lat,
+                south_west_lng=south_west_lng,
+                status=status_filter
+            )
+
+            # تحويل MapDto إلى Building objects
+            buildings = []
+            for dto in map_dtos:
+                building = Building()
+                building.building_uuid = dto.get("id")
+                building.building_id = dto.get("buildingId")
+                building.latitude = dto.get("latitude")
+                building.longitude = dto.get("longitude")
+                building.building_status = dto.get("status")
+                building.building_type = dto.get("buildingType")
+                building.number_of_units = dto.get("numberOfPropertyUnits", 0)
+                # لا نضيف polygon - lightweight
+                buildings.append(building)
+
+            logger.info(f"✅ Fetched {len(buildings)} buildings (lightweight DTO)")
+            return buildings
+
+        except Exception as e:
+            logger.error(f"❌ Error fetching buildings (lightweight): {e}", exc_info=True)
             return []
 
     def search_buildings_by_location(
