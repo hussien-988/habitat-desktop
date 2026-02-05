@@ -777,8 +777,12 @@ class HouseholdStep(BaseStep):
                 # Set auth token before API call
                 self._set_auth_token()
 
+                # Get survey_id from context (set in step 1)
+                survey_id = self.context.get_data("survey_id")
+
                 logger.info(f"Creating household via API: {household}")
-                response = self._api_service.create_household(household)
+                print(f"[HOUSEHOLD] Creating household for survey_id: {survey_id}")
+                response = self._api_service.create_household(household, survey_id=survey_id)
 
                 if not response.get("success"):
                     error_msg = response.get("error", "Unknown error")
