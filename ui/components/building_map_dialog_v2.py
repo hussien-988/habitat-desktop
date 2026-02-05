@@ -41,13 +41,14 @@ class BuildingMapDialog(BaseMapDialog):
         Building: Selected building
     """
 
-    def __init__(self, db: Database, selected_building_id: Optional[str] = None, parent=None):
+    def __init__(self, db: Database, selected_building_id: Optional[str] = None, auth_token: Optional[str] = None, parent=None):
         """
         Initialize building map dialog.
 
         Args:
             db: Database instance
             selected_building_id: Optional building ID to show (view-only mode)
+            auth_token: Optional API authentication token
             parent: Parent widget
         """
         self.db = db
@@ -57,21 +58,25 @@ class BuildingMapDialog(BaseMapDialog):
         self._is_view_only = bool(selected_building_id)
         self._buildings_cache = []  # Cache loaded buildings for quick lookup
 
-        # Get auth token from parent window if available
-        self._auth_token = None
-        try:
-            if parent:
-                main_window = parent
-                while main_window and not hasattr(main_window, 'current_user'):
-                    main_window = main_window.parent()
-                if main_window and hasattr(main_window, 'current_user') and main_window.current_user:
-                    self._auth_token = getattr(main_window.current_user, '_api_token', None)
-                    # Set auth token for BuildingController
-                    if self._auth_token and self.building_controller.is_using_api:
-                        self.building_controller.set_auth_token(self._auth_token)
-                        logger.debug("Auth token set for BuildingController")
-        except Exception as e:
-            logger.warning(f"Could not get auth token from parent: {e}")
+        # ✅ FIX: Use provided auth token first, fallback to parent window
+        self._auth_token = auth_token
+        if not self._auth_token:
+            try:
+                if parent:
+                    main_window = parent
+                    while main_window and not hasattr(main_window, 'current_user'):
+                        main_window = main_window.parent()
+                    if main_window and hasattr(main_window, 'current_user') and main_window.current_user:
+                        self._auth_token = getattr(main_window.current_user, '_api_token', None)
+            except Exception as e:
+                logger.warning(f"Could not get auth token from parent: {e}")
+
+        # Set auth token for BuildingController
+        if self._auth_token and self.building_controller.is_using_api:
+            self.building_controller.set_auth_token(self._auth_token)
+            logger.info("✅ Auth token set for BuildingController in dialog")
+        else:
+            logger.warning("⚠️ No auth token available for BuildingMapDialog")
 
         # Determine mode based on whether we're viewing or selecting
         if self._is_view_only:
@@ -83,14 +88,22 @@ class BuildingMapDialog(BaseMapDialog):
             title = "بحث على الخريطة"
             show_search = True
 
+        # ✅ FIX: Store auth token temporarily (BaseMapDialog.__init__ will overwrite it)
+        temp_auth_token = self._auth_token
+
         # Initialize base dialog (clean design)
-        # SIMPLIFIED: No viewport loading - load once like un-1 (more reliable!)
+        # ✅ PHASE 2: Enable viewport loading for 9000+ buildings (dynamic loading)
         super().__init__(
             title=title,
             show_search=show_search,
-            enable_viewport_loading=False,  # Disabled for reliability (like un-1)
+            enable_viewport_loading=True,  # ✅ Enabled: Load buildings dynamically as user pans/zooms
             parent=parent
         )
+
+        # ✅ FIX: Restore auth token (BaseMapDialog.__init__ sets _auth_token = None)
+        # Now self._auth_token exists (from BaseMapDialog) - set it to our stored token
+        self._auth_token = temp_auth_token
+        logger.debug(f"✅ Auth token set in BaseMapDialog: {bool(self._auth_token)}")
 
         # Connect building selection signal (from map clicks)
         self.building_selected.connect(self._on_building_selected_from_map)
@@ -106,23 +119,13 @@ class BuildingMapDialog(BaseMapDialog):
             # Get tile server URL
             tile_server_url = get_tile_server_url()
 
-            # Get auth token from parent window if available
-            auth_token = None
-            try:
-                if self.parent():
-                    main_window = self.parent()
-                    while main_window and not hasattr(main_window, 'current_user'):
-                        main_window = main_window.parent()
-                    if main_window and hasattr(main_window, 'current_user') and main_window.current_user:
-                        auth_token = getattr(main_window.current_user, '_api_token', None)
-                        logger.debug(f"Got auth token from MainWindow: {bool(auth_token)}")
-            except Exception as e:
-                logger.warning(f"Could not get auth token from parent: {e}")
+            # ✅ Use self._auth_token (already set in __init__)
+            logger.debug(f"Using auth token for loading buildings: {bool(self._auth_token)}")
 
             # Load buildings using shared method (DRY principle)
             # SIMPLIFIED: Load more buildings initially like un-1 (200 buildings)
             # No viewport loading - single load for reliability
-            buildings_geojson = self.load_buildings_geojson(self.db, limit=200, auth_token=auth_token)
+            buildings_geojson = self.load_buildings_geojson(self.db, limit=200, auth_token=self._auth_token)
 
             # DEBUG: Check if buildings were loaded
             import json
@@ -148,10 +151,10 @@ class BuildingMapDialog(BaseMapDialog):
                 buildings = result.data if result.success else []
 
             # Determine center and zoom
-            # CLOSER zoom - avoid gray tiles!
+            # ✅ محسّن: زوم متوسط يملأ النافذة بشكل جيد
             center_lat = 36.2021
             center_lon = 37.1343
-            zoom = 16  # Closer zoom - shows buildings clearly, no gray areas!
+            zoom = 13  # ✅ محسّن: زوم 13 - يملأ النافذة (1100×700) بشكل ممتاز
             focus_building_id = None
 
             # If view-only mode, focus on the selected building
@@ -163,23 +166,23 @@ class BuildingMapDialog(BaseMapDialog):
                 if focus_building and focus_building.latitude and focus_building.longitude:
                     center_lat = focus_building.latitude
                     center_lon = focus_building.longitude
-                    zoom = 17  # Close zoom for single building
+                    zoom = 16  # ✅ محسّن: زوم 16 للمبنى المحدد (أقصى zoom آمن)
                     focus_building_id = self._selected_building_id
                     logger.info(f"View-only mode: Focusing on building {focus_building_id}")
 
             # Generate map HTML using LeafletHTMLGenerator
-            # SIMPLIFIED: No viewport loading like un-1 (more reliable for selection!)
+            # ✅ PHASE 2: Enable viewport loading for 9000+ buildings!
             html = generate_leaflet_html(
                 tile_server_url=tile_server_url.rstrip('/'),
-                buildings_geojson=buildings_geojson,  # Full load (200 buildings)
+                buildings_geojson=buildings_geojson,  # Initial load (200 buildings)
                 center_lat=center_lat,
                 center_lon=center_lon,
-                zoom=zoom,
-                max_zoom=17,  # CRITICAL: Limit max zoom to available tiles (prevents gray areas)
+                zoom=zoom,  # ✅ محسّن: استخدام متغير zoom (15 للوضوح الأفضل، 16 لـview-only)
+                max_zoom=16,  # ✅ محسّن: تخفيض من 17 لتجنب gray tiles (التايلز حتى 16 فقط)
                 show_legend=True,
                 show_layer_control=False,
                 enable_selection=(not self._is_view_only),  # Enable selection in selection mode
-                enable_viewport_loading=False,  # Disabled for reliability (like un-1)
+                enable_viewport_loading=True,  # ✅ مفعّل: تحميل ديناميكي عند Pan/Zoom
                 enable_drawing=False  # No drawing for building selection
             )
 
@@ -273,25 +276,56 @@ class BuildingMapDialog(BaseMapDialog):
         logger.info(f"Building selected from map: {building_id}")
 
         try:
-            # CRITICAL FIX: Use BuildingFilter to search by building_id (17-digit code)
-            # NOT get_building_by_id() which expects UUID!
-            building_filter = BuildingFilter(search_text=building_id)
-            result = self.building_controller.load_buildings(building_filter)
+            # ✅ FIX: Use search_buildings() instead of load_buildings()
+            # search_buildings() searches globally in API without bbox limitations!
+            logger.debug(f"Searching for building globally: {building_id}")
+            result = self.building_controller.search_buildings(building_id)
 
             if result.success and result.data:
-                building = result.data[0]  # Get first match
-                self._selected_building = building
+                logger.info(f"🔍 Search returned {len(result.data)} buildings")
+                logger.debug(f"Results: {[b.building_id for b in result.data[:5]]}")
 
-                # Close dialog and proceed to next step (no confirmation message needed)
-                logger.info(f"✅ Building {building.building_id} selected, closing dialog")
-                self.accept()
+                # Find exact match by building_id
+                matching_building = None
+                for b in result.data:
+                    if b.building_id == building_id:
+                        matching_building = b
+                        break
+
+                if matching_building:
+                    self._selected_building = matching_building
+                    # Close dialog and proceed to next step (no confirmation message needed)
+                    logger.info(f"✅ Building {matching_building.building_id} selected, closing dialog")
+                    self.accept()
+                else:
+                    logger.warning(f"⚠️ Building found in search but no exact match: {building_id}")
+                    logger.warning(f"Searched for: '{building_id}'")
+                    logger.warning(f"Got results: {[b.building_id for b in result.data[:10]]}")
+                    # ✅ Better error message with styling
+                    msg = QMessageBox(self)
+                    msg.setIcon(QMessageBox.Warning)
+                    msg.setWindowTitle("لم يتم العثور على المبنى")
+                    msg.setText(f"<h3 style='color: #d32f2f;'>المبنى غير موجود</h3>")
+                    msg.setInformativeText(
+                        f"<p>رمز المبنى: <b>{building_id}</b></p>"
+                        f"<p>لم يتم العثور على تطابق دقيق في قاعدة البيانات.</p>"
+                    )
+                    msg.setStandardButtons(QMessageBox.Ok)
+                    msg.exec_()
             else:
-                logger.error(f"Building not found: {building_id}")
-                QMessageBox.warning(
-                    self,
-                    "خطأ",
-                    f"لم يتم العثور على المبنى: {building_id}"
+                logger.error(f"❌ Building not found in API: {building_id}")
+                # ✅ Better error message with styling
+                msg = QMessageBox(self)
+                msg.setIcon(QMessageBox.Warning)
+                msg.setWindowTitle("لم يتم العثور على المبنى")
+                msg.setText(f"<h3 style='color: #d32f2f;'>المبنى غير موجود</h3>")
+                msg.setInformativeText(
+                    f"<p>رمز المبنى: <b>{building_id}</b></p>"
+                    f"<p>لم يتم العثور على هذا المبنى في قاعدة البيانات.</p>"
+                    f"<p style='color: #666;'>قد يكون المبنى محذوفاً أو غير مسجّل.</p>"
                 )
+                msg.setStandardButtons(QMessageBox.Ok)
+                msg.exec_()
 
         except Exception as e:
             logger.error(f"Error getting building: {e}", exc_info=True)
@@ -454,6 +488,7 @@ class BuildingMapDialog(BaseMapDialog):
 def show_building_map_dialog(
     db: Database,
     selected_building_id: Optional[str] = None,
+    auth_token: Optional[str] = None,
     parent=None
 ) -> Optional[Building]:
     """
@@ -462,12 +497,13 @@ def show_building_map_dialog(
     Args:
         db: Database instance
         selected_building_id: Optional building ID to show (view-only mode)
+        auth_token: Optional API authentication token
         parent: Parent widget
 
     Returns:
         Selected building, or None if cancelled
     """
-    dialog = BuildingMapDialog(db, selected_building_id, parent)
+    dialog = BuildingMapDialog(db, selected_building_id, auth_token, parent)
     result = dialog.exec_()
 
     if result == dialog.Accepted:

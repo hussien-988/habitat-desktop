@@ -121,7 +121,7 @@ class ApiSettings:
     """
 
     # Connection
-    base_url: str = "http://localhost:8081"
+    base_url: str = "http://localhost:8080"
     timeout: int = 30
 
     # Authentication
@@ -161,7 +161,7 @@ class ApiSettings:
             config_provider = EnvironmentConfigProvider()
 
         return cls(
-            base_url=config_provider.get_value("API_BASE_URL", "http://localhost:8081"),
+            base_url=config_provider.get_value("API_BASE_URL", "http://localhost:8080"),
             timeout=config_provider.get_int("API_TIMEOUT", 30),
             username=config_provider.get_value("API_USERNAME", "admin"),
             password=config_provider.get_value("API_PASSWORD", "Admin@123"),
@@ -367,7 +367,7 @@ def get_api_settings() -> ApiSettings:
     Example:
         >>> settings = get_api_settings()
         >>> print(settings.base_url)
-        http://localhost:8081
+        http://localhost:8080
     """
     return SettingsManager.get_settings().api
 

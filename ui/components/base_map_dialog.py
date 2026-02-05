@@ -118,8 +118,8 @@ class MapBridge(QObject):
         """Called from JavaScript to update selection count."""
         self.selection_count_updated.emit(count)
 
-    @pyqtSlot(float, float, float, float, int)
-    def onViewportChanged(self, ne_lat: float, ne_lng: float, sw_lat: float, sw_lng: float, zoom: int):
+    @pyqtSlot(float, float, float, float, int, float, float)
+    def onViewportChanged(self, ne_lat: float, ne_lng: float, sw_lat: float, sw_lng: float, zoom: int, center_lat: float, center_lng: float):
         """
         Called from JavaScript when map viewport changes (pan/zoom).
 
@@ -129,8 +129,10 @@ class MapBridge(QObject):
             sw_lat: South-West latitude
             sw_lng: South-West longitude
             zoom: Current zoom level
+            center_lat: Map center latitude
+            center_lng: Map center longitude
         """
-        logger.debug(f"Viewport changed: NE({ne_lat:.6f}, {ne_lng:.6f}), SW({sw_lat:.6f}, {sw_lng:.6f}), Zoom={zoom}")
+        logger.debug(f"Viewport changed: NE({ne_lat:.6f}, {ne_lng:.6f}), SW({sw_lat:.6f}, {sw_lng:.6f}), Center({center_lat:.6f}, {center_lng:.6f}), Zoom={zoom}")
         self.viewport_changed.emit(ne_lat, ne_lng, sw_lat, sw_lng, zoom)
 
     @pyqtSlot()
@@ -199,6 +201,7 @@ class BaseMapDialog(QDialog):
         self._current_coordinates = None  # Store current selected coordinates
         self._selected_building_ids = []  # Store selected building IDs
         self._viewport_loader = None  # ViewportMapLoader instance
+        self._auth_token = None  # ✅ Store auth token for API calls (set by subclass)
 
         # Initialize viewport loader if enabled (Best Practice: with cache + spatial sampling)
         if self.enable_viewport_loading:
@@ -740,17 +743,25 @@ class BaseMapDialog(QDialog):
             return
 
         try:
-            # Get auth token from parent if available
-            auth_token = None
-            try:
-                if self.parent():
-                    main_window = self.parent()
-                    while main_window and not hasattr(main_window, 'current_user'):
-                        main_window = main_window.parent()
-                    if main_window and hasattr(main_window, 'current_user') and main_window.current_user:
-                        auth_token = getattr(main_window.current_user, '_api_token', None)
-            except Exception as e:
-                logger.debug(f"Could not get auth token: {e}")
+            # ✅ FIX: Use stored auth token first, fallback to parent
+            auth_token = self._auth_token
+
+            # Fallback: Get auth token from parent if not set
+            if not auth_token:
+                try:
+                    if self.parent():
+                        main_window = self.parent()
+                        while main_window and not hasattr(main_window, 'current_user'):
+                            main_window = main_window.parent()
+                        if main_window and hasattr(main_window, 'current_user') and main_window.current_user:
+                            auth_token = getattr(main_window.current_user, '_api_token', None)
+                except Exception as e:
+                    logger.debug(f"Could not get auth token from parent: {e}")
+
+            if auth_token:
+                logger.debug("✅ Using auth token for viewport loading")
+            else:
+                logger.warning("⚠️ No auth token available for viewport loading")
 
             # Load buildings for viewport (with cache + spatial sampling)
             buildings = self._viewport_loader.load_buildings_for_viewport(

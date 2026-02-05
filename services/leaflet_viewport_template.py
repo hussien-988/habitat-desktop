@@ -22,9 +22,9 @@ VIEWPORT_LOADING_JS_TEMPLATE = '''
         // Viewport-Based Loading (Professional Best Practice)
         // =========================================================
 
-        // Professional Configuration
+        // Professional Configuration (✅ محدّث من MapConstants)
         var MIN_ZOOM_FOR_LOADING = 12;      // Don't load buildings below this zoom (performance)
-        var MAX_MARKERS_PER_VIEWPORT = 1000; // Limit markers per viewport (performance)
+        var MAX_MARKERS_PER_VIEWPORT = 2000; // ✅ محسّن: زيادة من 1000 إلى 2000
 
         // Viewport loading state
         var viewportLoadingEnabled = true;
@@ -34,14 +34,33 @@ VIEWPORT_LOADING_JS_TEMPLATE = '''
         var currentMarkersCluster = null;
         var isLoadingViewport = false;
 
-        // Initialize WebChannel bridge for viewport loading
-        var viewportBridge = null;
-        if (typeof QWebChannel !== 'undefined') {
-            new QWebChannel(qt.webChannelTransport, function(channel) {
-                viewportBridge = channel.objects.buildingBridge || channel.objects.bridge;
-                console.log('✅ Viewport WebChannel bridge initialized');
-            });
-        }
+        // ✅ IMPORTANT: Reuse bridge from selection JS (already initialized)
+        // Don't create a new QWebChannel - use the existing 'bridge' variable
+        // The selection JS (loaded before this) already created 'bridge' and 'bridgeReady'
+
+        // Wait for bridge to be ready before enabling viewport loading
+        var viewportBridgeCheckInterval = setInterval(function() {
+            if (typeof bridgeReady !== 'undefined' && bridgeReady && typeof bridge !== 'undefined' && bridge) {
+                clearInterval(viewportBridgeCheckInterval);
+                console.log('✅ Viewport loading: Reusing existing bridge (ready)');
+
+                // Trigger initial viewport load after bridge is confirmed ready
+                if (viewportLoadingEnabled) {
+                    console.log('🔄 Triggering initial viewport load');
+                    setTimeout(function() {
+                        loadBuildingsForViewport();
+                    }, 100);
+                }
+            }
+        }, 50); // Check every 50ms
+
+        // Timeout after 5 seconds
+        setTimeout(function() {
+            clearInterval(viewportBridgeCheckInterval);
+            if (typeof bridgeReady === 'undefined' || !bridgeReady) {
+                console.error('❌ Bridge not ready after 5 seconds - viewport loading disabled');
+            }
+        }, 5000);
 
         /**
          * Load buildings for current viewport bounds.
@@ -85,30 +104,39 @@ VIEWPORT_LOADING_JS_TEMPLATE = '''
             var bounds = map.getBounds();
             var northEast = bounds.getNorthEast();
             var southWest = bounds.getSouthWest();
+            var center = map.getCenter();  // ✅ إضافة center للتوافق مع ViewportBridge
 
             console.log('📍 Viewport bounds:', {
                 northEast: northEast,
                 southWest: southWest,
+                center: center,  // ✅ جديد
                 zoom: currentZoom,
                 minZoom: MIN_ZOOM_FOR_LOADING,
                 maxMarkers: MAX_MARKERS_PER_VIEWPORT
             });
 
             // Send bounds to Python via WebChannel
-            if (viewportBridge && viewportBridge.onViewportChanged) {
+            // ✅ Use shared 'bridge' variable from selection JS
+            if (typeof bridgeReady !== 'undefined' && bridgeReady && bridge && bridge.onViewportChanged) {
                 isLoadingViewport = true;
 
-                viewportBridge.onViewportChanged(
+                bridge.onViewportChanged(
                     northEast.lat,
                     northEast.lng,
                     southWest.lat,
                     southWest.lng,
-                    currentZoom
+                    currentZoom,
+                    center.lat,     // ✅ 7 parameters
+                    center.lng
                 );
 
                 console.log('📡 Requesting buildings for viewport (max: ' + MAX_MARKERS_PER_VIEWPORT + ')...');
+            } else if (typeof bridgeReady === 'undefined' || !bridgeReady) {
+                console.warn('⚠️ Bridge not ready yet, skipping viewport load');
+                isLoadingViewport = false;
             } else {
-                console.warn('⚠️ Viewport bridge not available');
+                console.error('❌ Bridge not available or missing onViewportChanged method');
+                isLoadingViewport = false;
             }
         }
 
@@ -152,15 +180,19 @@ VIEWPORT_LOADING_JS_TEMPLATE = '''
                 }
 
                 // Create marker cluster group for points
+                // ✅ محدّث: نفس إعدادات المرحلة 1 (محسّنة)
                 currentMarkersCluster = L.markerClusterGroup({
-                    maxClusterRadius: 80,
+                    maxClusterRadius: 60,              // ✅ محسّن: 80 → 60
                     spiderfyOnMaxZoom: true,
                     showCoverageOnHover: false,
                     zoomToBoundsOnClick: true,
-                    disableClusteringAtZoom: 17,
+                    disableClusteringAtZoom: 15,      // ✅ محسّن: 17 → 15
                     chunkedLoading: true,
-                    chunkInterval: 200,
-                    chunkDelay: 50
+                    chunkInterval: 100,                // ✅ محسّن: 200 → 100ms
+                    chunkDelay: 25,                    // ✅ محسّن: 50 → 25ms
+                    removeOutsideVisibleBounds: true,  // ✅ جديد
+                    animate: true,
+                    animateAddingMarkers: false        // ✅ جديد
                 });
 
                 // Separate polygons layer
