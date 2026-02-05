@@ -23,6 +23,8 @@ from ui.wizards.framework import BaseStep, StepValidationResult
 from ui.wizards.office_survey.survey_context import SurveyContext
 from controllers.building_controller import BuildingController, BuildingFilter
 from models.building import Building
+from app.config import Config
+from services.survey_api_service import SurveyApiService
 from utils.logger import get_logger
 from ui.font_utils import FontManager, create_font
 from ui.design_system import Colors
@@ -53,6 +55,10 @@ class BuildingSelectionStep(BaseStep):
         super().__init__(context, parent)
         self.building_controller = BuildingController(self.context.db)
         self.selected_building: Optional[Building] = None
+
+        # Initialize survey API service
+        self._survey_api_service = SurveyApiService()
+        self._use_api = getattr(Config, 'DATA_PROVIDER', 'local_db') == 'http'
 
     def setup_ui(self):
         """
@@ -1031,13 +1037,44 @@ class BuildingSelectionStep(BaseStep):
                 logger.info(f"Building selected from polygon list: {building.building_id}")
 
     def validate(self) -> StepValidationResult:
-        """Validate the step."""
+        """Validate the step and create survey via API."""
         result = self.create_validation_result()
 
         if not self.selected_building:
             result.add_error("يجب اختيار مبنى للمتابعة")
+            return result
+
+        # Create survey via API when clicking Next
+        if self._use_api:
+            # Set auth token
+            self._set_auth_token()
+
+            building_uuid = getattr(self.selected_building, 'building_uuid', '') or ''
+            survey_data = {"building_uuid": building_uuid}
+
+            logger.info(f"Creating office survey for building: {building_uuid}")
+            response = self._survey_api_service.create_office_survey(survey_data)
+
+            if response.get("success"):
+                survey_response = response.get("data", {})
+                survey_id = survey_response.get("id") or survey_response.get("surveyId", "")
+                self.context.update_data("survey_id", survey_id)
+                self.context.update_data("survey_data", survey_response)
+                print(f"[SURVEY] Survey created successfully, survey_id: {survey_id}")
+                logger.info(f"Survey created successfully, survey_id: {survey_id}")
+            else:
+                error_msg = response.get("error", "Unknown error")
+                logger.error(f"Failed to create survey: {error_msg}")
+                result.add_error(f"فشل في إنشاء المسح: {error_msg}")
+                return result
 
         return result
+
+    def _set_auth_token(self):
+        """Set auth token for API service from main window."""
+        main_window = self.window()
+        if main_window and hasattr(main_window, '_api_token') and main_window._api_token:
+            self._survey_api_service.set_auth_token(main_window._api_token)
 
     def collect_data(self) -> Dict[str, Any]:
         """Collect data from the step."""

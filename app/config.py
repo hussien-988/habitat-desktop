@@ -51,8 +51,8 @@ class Config:
 
     # HTTP API Backend Settings
     # Note: Override this in .env file for your local environment
-    API_BASE_URL: str = "http://localhost:8080/api"
-    #API_BASE_URL: str = "https://localhost:7204/api"  # Team's development server
+    #API_BASE_URL: str = "http://localhost:8080/api"
+    API_BASE_URL: str = "https://localhost:7204/api"  # Team's development server
     API_VERSION: str = "v1"
     API_TIMEOUT: int = 30
     API_MAX_RETRIES: int = 3

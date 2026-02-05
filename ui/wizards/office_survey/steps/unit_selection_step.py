@@ -674,11 +674,15 @@ class UnitSelectionStep(BaseStep):
         if main_window and hasattr(main_window, '_api_token'):
             auth_token = main_window._api_token
 
+        # Get survey_id from context (created in step 1)
+        survey_id = self.context.get_data("survey_id")
+
         dialog = UnitDialog(
             self.context.building,
             self.context.db,
             parent=self,
-            auth_token=auth_token
+            auth_token=auth_token,
+            survey_id=survey_id
         )
 
         if dialog.exec_() == QDialog.Accepted:

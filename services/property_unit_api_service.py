@@ -144,13 +144,13 @@ class PropertyUnitApiService:
                 "error_code": "E500"
             }
 
-    def create_property_unit(self, unit_data: Dict[str, Any]) -> Dict[str, Any]:
+    def create_property_unit(self, unit_data: Dict[str, Any], survey_id: str = None) -> Dict[str, Any]:
         """
         Create a new property unit via API.
 
-        POST /v1/PropertyUnits
+        POST /v1/Surveys/{surveyId}/property-units
         Body: {
-            "buildingId": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+            "surveyId": "uuid",
             "unitIdentifier": "string",
             "floorNumber": 0,
             "unitType": 0,
@@ -162,16 +162,23 @@ class PropertyUnitApiService:
 
         Args:
             unit_data: Dictionary with unit data (snake_case keys)
+            survey_id: Survey UUID (required for the survey-scoped endpoint)
 
         Returns:
             Dict with success status and created unit data or error
         """
         # Convert from app format to API format
-        api_data = self._to_api_format(unit_data)
+        api_data = self._to_api_format(unit_data, survey_id=survey_id)
 
-        logger.info(f"Creating property unit: {api_data}")
+        # Use survey-scoped endpoint if survey_id is provided
+        if survey_id:
+            endpoint = f"/v1/Surveys/{survey_id}/property-units"
+        else:
+            endpoint = "/v1/PropertyUnits"
 
-        response = self._make_request("POST", "/v1/PropertyUnits", data=api_data)
+        logger.info(f"Creating property unit via {endpoint}: {api_data}")
+
+        response = self._make_request("POST", endpoint, data=api_data)
 
         if response.get("success"):
             logger.info(f"Property unit created successfully")
@@ -233,7 +240,7 @@ class PropertyUnitApiService:
 
         return units
 
-    def _to_api_format(self, unit_data: Dict[str, Any]) -> Dict[str, Any]:
+    def _to_api_format(self, unit_data: Dict[str, Any], survey_id: str = None) -> Dict[str, Any]:
         """
         Convert app unit data format to API format.
 
@@ -293,7 +300,6 @@ class PropertyUnitApiService:
 
         # Build API format
         api_data = {
-            "buildingId": unit_data.get('building_uuid') or unit_data.get('buildingId', ''),
             "unitIdentifier": unit_data.get('unit_number') or unit_data.get('apartment_number') or unit_data.get('unitIdentifier', ''),
             "floorNumber": int(unit_data.get('floor_number', 0)),
             "unitType": unit_type,
@@ -302,6 +308,12 @@ class PropertyUnitApiService:
             "numberOfRooms": rooms,
             "description": unit_data.get('property_description') or unit_data.get('description', '')
         }
+
+        # Use surveyId for survey-scoped endpoint, buildingId for legacy endpoint
+        if survey_id:
+            api_data["surveyId"] = survey_id
+        else:
+            api_data["buildingId"] = unit_data.get('building_uuid') or unit_data.get('buildingId', '')
 
         return api_data
 
