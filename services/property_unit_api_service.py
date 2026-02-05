@@ -187,6 +187,35 @@ class PropertyUnitApiService:
             logger.error(f"Failed to create property unit: {response.get('error')}")
             return response
 
+    def link_unit_to_survey(self, survey_id: str, unit_id: str) -> Dict[str, Any]:
+        """
+        Link an existing property unit to a survey.
+
+        POST /v1/Surveys/{surveyId}/property-units/{unitId}/link
+
+        Args:
+            survey_id: Survey UUID
+            unit_id: Property Unit UUID
+
+        Returns:
+            Dict with success status and updated survey data or error
+        """
+        if not survey_id or not unit_id:
+            logger.warning(f"Missing survey_id ({survey_id}) or unit_id ({unit_id}) for link")
+            return {"success": False, "error": "Missing surveyId or unitId", "error_code": "E_PARAM"}
+
+        endpoint = f"/v1/Surveys/{survey_id}/property-units/{unit_id}/link"
+        logger.info(f"Linking unit {unit_id} to survey {survey_id} via POST {endpoint}")
+
+        response = self._make_request("POST", endpoint)
+
+        if response.get("success"):
+            logger.info(f"Unit {unit_id} linked to survey {survey_id} successfully")
+            return response
+        else:
+            logger.error(f"Failed to link unit to survey: {response.get('error')}")
+            return response
+
     def get_units_for_building(self, building_id: str) -> List[PropertyUnit]:
         """
         Get all property units for a building.
