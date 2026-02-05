@@ -743,6 +743,9 @@ class UnitSelectionStep(BaseStep):
                     return result
 
                 logger.info(f"Unit {unit_id} linked to survey {survey_id}")
+                print(f"[UNIT-LINK] Unit {unit_id} linked to survey {survey_id} successfully")
+                if response.get("data"):
+                    print(f"[UNIT-LINK] Full API response: {response['data']}")
             else:
                 logger.warning(f"Missing survey_id ({survey_id}) or unit_id ({unit_id}), skipping link")
 

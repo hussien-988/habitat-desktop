@@ -1061,6 +1061,7 @@ class BuildingSelectionStep(BaseStep):
                 self.context.update_data("survey_id", survey_id)
                 self.context.update_data("survey_data", survey_response)
                 print(f"[SURVEY] Survey created successfully, survey_id: {survey_id}")
+                print(f"[SURVEY] Full API response: {survey_response}")
                 logger.info(f"Survey created successfully, survey_id: {survey_id}")
             else:
                 error_msg = response.get("error", "Unknown error")

@@ -793,7 +793,11 @@ class HouseholdStep(BaseStep):
                 logger.info("Household created successfully via API")
                 # Store the API response data
                 if response.get("data"):
-                    household["api_id"] = response["data"].get("id")
+                    household_id = response["data"].get("id") or response["data"].get("householdId", "")
+                    household["api_id"] = household_id
+                    self.context.update_data("household_id", household_id)
+                    print(f"[HOUSEHOLD] Household created successfully, household_id: {household_id}")
+                    print(f"[HOUSEHOLD] Full API response: {response['data']}")
 
             # Clear old household data and add new one
             self.context.households.clear()
