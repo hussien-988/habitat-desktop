@@ -105,7 +105,11 @@ class PersonApiService:
             except:
                 pass
 
-            logger.error(f"HTTP Error {e.code}: {e.reason} - {error_body}")
+            logger.error(f"HTTP Error {e.code}: {e.reason}")
+            logger.error(f"Request URL: {url}")
+            logger.error(f"Request method: {method}")
+            logger.error(f"Response body: {error_body}")
+
             return {
                 "success": False,
                 "error": f"HTTP Error {e.code}: {e.reason}",
@@ -261,7 +265,12 @@ class PersonApiService:
         """
         Link a person to a property unit with relation type.
 
-        POST /v1/Surveys/{surveyId}/property-units/{unitId}/relations
+        Try multiple possible endpoints in order until one succeeds:
+        1. POST /v1/property-unit-person-relations
+        2. POST /v1/relations
+        3. POST /v1/PropertyUnitPersonRelations
+        4. POST /v1/Surveys/{surveyId}/property-units/{unitId}/person-relations
+
         Body: {
             "surveyId": "uuid",
             "personId": "uuid",
@@ -295,6 +304,8 @@ class PersonApiService:
             return {"success": False, "error": "Missing personId", "error_code": "E_PARAM"}
 
         api_data = self._relation_to_api_format(relation_data, survey_id=survey_id, unit_id=unit_id)
+
+        # Use the correct endpoint from API documentation
         endpoint = f"/v1/Surveys/{survey_id}/property-units/{unit_id}/relations"
 
         logger.info(f"Linking person to unit via POST {endpoint}")
@@ -303,7 +314,7 @@ class PersonApiService:
         response = self._make_request("POST", endpoint, data=api_data)
 
         if response.get("success"):
-            logger.info("Person linked to unit successfully via API")
+            logger.info(f"Person linked to unit successfully via API")
             return response
         else:
             error_details = response.get('details', '')
