@@ -10,6 +10,7 @@ from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QFont
 
 from ui.font_utils import create_font, FontManager
+from ui.design_system import Colors
 
 
 class WizardHeader(QWidget):
@@ -63,20 +64,17 @@ class WizardHeader(QWidget):
         layout.setContentsMargins(20, 16, 20, 16)
         layout.setSpacing(8)  # Gap between title and subtitle
 
-        # Title (same style as BaseWizard)
+        # Title - Updated: 24px (~18pt), PAGE_TITLE, SemiBold (DRY)
         self.title_label = QLabel(self.title_text)
-        title_font = QFont()
-        title_font.setPointSize(14)
-        title_font.setBold(True)
-        self.title_label.setFont(title_font)
-        self.title_label.setStyleSheet("background: transparent; border: none; color: #212529;")
+        self.title_label.setFont(create_font(size=18, weight=FontManager.WEIGHT_SEMIBOLD))
+        self.title_label.setStyleSheet(f"background: transparent; border: none; color: {Colors.PAGE_TITLE};")
         layout.addWidget(self.title_label)
 
-        # Subtitle/breadcrumb (if provided)
+        # Subtitle/breadcrumb - Updated: 14px (~11pt), PAGE_SUBTITLE, SemiBold, with spacing (DRY)
         if self.subtitle_text:
             self.subtitle_label = QLabel(self.subtitle_text)
-            self.subtitle_label.setFont(create_font(size=10, weight=FontManager.WEIGHT_REGULAR))
-            self.subtitle_label.setStyleSheet("background: transparent; border: none; color: #6c757d;")
+            self.subtitle_label.setFont(create_font(size=11, weight=FontManager.WEIGHT_SEMIBOLD))
+            self.subtitle_label.setStyleSheet(f"background: transparent; border: none; color: {Colors.PAGE_SUBTITLE}; letter-spacing: 1px;")
             layout.addWidget(self.subtitle_label)
 
     def set_title(self, title: str):

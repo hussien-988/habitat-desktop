@@ -17,11 +17,35 @@ logger = get_logger(__name__)
 
 @dataclass
 class ApiConfig:
-    """تكوين الاتصال بالـ API"""
-    base_url: str = "http://localhost:8080"  # Fixed: Changed from 8081 to 8080 (Docker Backend port)
-    username: str = "admin"
-    password: str = "Admin@123"
+    """
+    تكوين الاتصال بالـ API.
+
+    ✅ DYNAMIC: Reads from .env file via app.api_config
+    🔧 TEAM READY: Each member sets their own API_BASE_URL in .env
+
+    Example .env:
+        API_BASE_URL=http://192.168.100.221:8080  # Team member's .env
+        API_USERNAME=admin
+        API_PASSWORD=Admin@123
+    """
+    base_url: str = None  # Will be loaded from .env
+    username: str = None  # Will be loaded from .env
+    password: str = None  # Will be loaded from .env
     timeout: int = 30
+
+    def __post_init__(self):
+        """Load from environment if not provided."""
+        # ✅ Load from app.api_config (which reads from .env)
+        if self.base_url is None or self.username is None or self.password is None:
+            from app.api_config import get_api_settings
+            settings = get_api_settings()
+
+            if self.base_url is None:
+                self.base_url = settings.base_url
+            if self.username is None:
+                self.username = settings.username
+            if self.password is None:
+                self.password = settings.password
 
 
 class TRRCMSApiClient:
@@ -305,6 +329,99 @@ class TRRCMSApiClient:
         logger.info(f"✅ Fetched {len(buildings)} buildings (total: {total_count}) from polygon API")
 
         return buildings
+
+    def search_buildings_for_assignment(
+        self,
+        polygon_wkt: str,
+        has_active_assignment: Optional[bool] = None,
+        page: int = 1,
+        page_size: int = 100
+    ) -> Dict[str, Any]:
+        """
+        البحث عن المباني داخل polygon لـ Building Assignment (API الصحيح).
+
+        ✅ CORRECT API: /api/v1/BuildingAssignments/buildings/search
+        هذا هو الـ endpoint الصحيح لـ Building Assignment workflow!
+
+        Args:
+            polygon_wkt: Polygon في صيغة WKT
+                        Example: "POLYGON((37.13 36.20, 37.14 36.20, 37.14 36.21, 37.13 36.21, 37.13 36.20))"
+            has_active_assignment: فلتر حسب وجود assignment نشط (optional)
+                                  True: فقط المباني المُعيّنة
+                                  False: فقط المباني غير المُعيّنة
+                                  None: جميع المباني
+            page: رقم الصفحة (default: 1)
+            page_size: عدد النتائج في الصفحة (default: 100)
+
+        Returns:
+            {
+                "items": [...],  # List of BuildingDto
+                "totalCount": int,
+                "page": int,
+                "pageSize": int,
+                "totalPages": int,
+                "polygonWkt": str,
+                "polygonAreaSquareMeters": float
+            }
+
+        Example:
+            # البحث عن مباني غير مُعيّنة في polygon
+            result = client.search_buildings_for_assignment(
+                polygon_wkt="POLYGON((37.0 36.1, 37.3 36.1, 37.3 36.3, 37.0 36.3, 37.0 36.1))",
+                has_active_assignment=False,
+                page=1,
+                page_size=100
+            )
+            buildings = result.get("items", [])
+        """
+        # Parse WKT to coordinates array [[lng, lat], ...]
+        # WKT format: "POLYGON((lon1 lat1, lon2 lat2, ...))"
+        try:
+            # Extract coordinates from WKT
+            coords_str = polygon_wkt.replace("POLYGON((", "").replace("))", "")
+            coord_pairs = coords_str.split(", ")
+            coordinates = []
+            for pair in coord_pairs:
+                lon, lat = pair.split(" ")
+                coordinates.append([float(lon), float(lat)])
+
+            logger.debug(f"Parsed {len(coordinates)} coordinates from WKT")
+        except Exception as e:
+            logger.error(f"Failed to parse polygon WKT: {e}")
+            raise ValueError(f"Invalid polygon WKT format: {polygon_wkt}")
+
+        payload = {
+            "coordinates": coordinates,
+            "governorateCode": "01",  # ✅ FIX: Required parameter (Aleppo governorate code)
+            "page": page,
+            "pageSize": page_size
+        }
+
+        # Add optional filter
+        if has_active_assignment is not None:
+            payload["hasActiveAssignment"] = has_active_assignment
+
+        # ✅ DETAILED LOGGING: Print full request payload
+        print(f"\n{'='*80}")
+        print(f"🔍 POLYGON SEARCH API CALL (BuildingAssignments)")
+        print(f"{'='*80}")
+        print(f"📊 Parsed {len(coordinates)} coordinates from WKT")
+        print(f"📐 Coordinates array (first 3): {coordinates[:3]}")
+        print(f"📋 Full Request Payload:")
+        import json
+        print(json.dumps(payload, indent=2, ensure_ascii=False))
+        print(f"{'='*80}\n")
+
+        logger.debug(f"Searching buildings for assignment: governorateCode=01, page={page}, pageSize={page_size}, hasActiveAssignment={has_active_assignment}")
+        response = self._request("POST", "/api/v1/BuildingAssignments/buildings/search", json_data=payload)
+
+        # API returns paginated response
+        items = response.get("items", [])
+        total_count = response.get("totalCount", 0)
+
+        logger.info(f"✅ Found {len(items)} buildings for assignment (total: {total_count}) using BuildingAssignments API")
+
+        return response
 
     def get_building_by_id(self, building_id: str) -> Dict[str, Any]:
         """

@@ -206,11 +206,31 @@ class Building:
 
     @classmethod
     def from_dict(cls, data: dict) -> "Building":
-        """Create Building from dictionary."""
-        # Handle datetime fields
-        if isinstance(data.get("created_at"), str):
-            data["created_at"] = datetime.fromisoformat(data["created_at"])
-        if isinstance(data.get("updated_at"), str):
-            data["updated_at"] = datetime.fromisoformat(data["updated_at"])
+        """
+        Create Building from dictionary.
 
-        return cls(**{k: v for k, v in data.items() if k in cls.__dataclass_fields__})
+        ✅ SOLID: Handles API field name mapping (DRY principle)
+        Maps API response field names to Building dataclass field names.
+        """
+        # ✅ Field mapping: API → Building dataclass
+        # This ensures compatibility with BuildingAssignments API response
+        field_mapping = {
+            "id": "building_uuid",  # API uses "id" for UUID
+            "buildingCode": "building_id",  # API uses "buildingCode" for formatted ID
+        }
+
+        # Apply field name mapping
+        mapped_data = {}
+        for api_field, value in data.items():
+            # Use mapped field name if exists, otherwise use original
+            dataclass_field = field_mapping.get(api_field, api_field)
+            mapped_data[dataclass_field] = value
+
+        # Handle datetime fields
+        if isinstance(mapped_data.get("created_at"), str):
+            mapped_data["created_at"] = datetime.fromisoformat(mapped_data["created_at"])
+        if isinstance(mapped_data.get("updated_at"), str):
+            mapped_data["updated_at"] = datetime.fromisoformat(mapped_data["updated_at"])
+
+        # ✅ SOLID: Only use fields that exist in dataclass (prevents errors)
+        return cls(**{k: v for k, v in mapped_data.items() if k in cls.__dataclass_fields__})

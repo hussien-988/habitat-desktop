@@ -59,13 +59,13 @@ class DraftClaimsPage(QWidget):
         Note: Navbar is managed by MainWindow
         """
         main_layout = QVBoxLayout(self)
-        # Apply padding from Figma:
+        # Apply unified padding (DRY - using PageDimensions constants):
         # - Horizontal: 131px each side
-        # - Top: 43px (gap between navbar and content: 982-109-830=43px)
+        # - Top: 32px (gap between navbar and content - unified across all pages)
         # - Bottom: 0px
         main_layout.setContentsMargins(
             PageDimensions.CONTENT_PADDING_H,        # Left: 131px
-            PageDimensions.CONTENT_PADDING_V_TOP,    # Top: 43px
+            PageDimensions.CONTENT_PADDING_V_TOP,    # Top: 32px (unified)
             PageDimensions.CONTENT_PADDING_H,        # Right: 131px
             PageDimensions.CONTENT_PADDING_V_BOTTOM  # Bottom: 0px
         )
@@ -144,7 +144,7 @@ class DraftClaimsPage(QWidget):
         )
         self.title_label.setFont(title_font)
 
-        self.title_label.setStyleSheet(f"color: {Colors.TEXT_PRIMARY}; border: none;")
+        self.title_label.setStyleSheet(f"color: {Colors.PAGE_TITLE}; border: none;")
         layout.addWidget(self.title_label)
 
         # Spacer
