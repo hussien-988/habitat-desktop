@@ -485,23 +485,72 @@ class PolygonMapDialog(BaseMapDialog):
             logger.error(f"Error in fallback query: {e}", exc_info=True)
             return []
 
+    def _fetch_building_from_api(self, building_id: str) -> Optional[Building]:
+        """
+        Fetch single building using BuildingController (SAME AS POLYGON PATTERN).
+
+        ✅ CORRECT: Uses BuildingController.get_building_by_id (API or DB)
+
+        Args:
+            building_id: Building ID to fetch (e.g., "01-01-01-001-001-00001")
+
+        Returns:
+            Building object if found, None otherwise
+        """
+        try:
+            from controllers.building_controller import BuildingController
+
+            # Create controller (will use API if available)
+            controller = BuildingController(self.db)
+
+            # Set auth token if available
+            if hasattr(self, '_auth_token') and self._auth_token:
+                controller.set_auth_token(self._auth_token)
+
+            # ✅ Use get_building_by_id (searches in API/DB)
+            result = controller.get_building_by_id(building_id)
+
+            if result.success and result.data:
+                logger.info(f"✅ Found building via controller: {building_id}")
+                return result.data
+            else:
+                logger.warning(f"Building {building_id} not found: {result.message}")
+                return None
+
+        except Exception as e:
+            logger.error(f"Error fetching building: {e}", exc_info=True)
+            return None
+
     def _on_buildings_clicked(self, building_ids: List[str]):
         """
         Handle buildings selected by clicking directly on map.
 
+        ✅ SAME AS POLYGON: If building not in cache, fetch from BuildingAssignments API!
+
         Args:
             building_ids: List of building IDs selected by clicking
         """
-        logger.info(f"Buildings clicked: {building_ids}")
+        logger.info(f"🖱️ Buildings clicked: {building_ids}")
 
         # Convert building IDs to Building objects
         selected_buildings = []
         for building_id in building_ids:
             building = self._building_id_to_building.get(building_id)
-            if building:
-                selected_buildings.append(building)
-            else:
-                logger.warning(f"Building ID {building_id} not found in buildings list")
+
+            if not building:
+                # ✅ SAME AS POLYGON: Fetch from BuildingAssignments API
+                logger.info(f"🔍 Building {building_id} not in cache - fetching from API...")
+                building = self._fetch_building_from_api(building_id)
+
+                if building:
+                    # ✅ SAME AS POLYGON: Store in dictionary for future use
+                    self._building_id_to_building[building.building_id] = building
+                    logger.info(f"✅ Fetched and cached building {building_id}")
+                else:
+                    logger.warning(f"❌ Building {building_id} not found in API")
+                    continue
+
+            selected_buildings.append(building)
 
         # Update selected buildings
         self._selected_buildings = selected_buildings
@@ -510,7 +559,7 @@ class PolygonMapDialog(BaseMapDialog):
         if hasattr(self, 'confirm_selection_btn'):
             self.confirm_selection_btn.setEnabled(len(self._selected_buildings) > 0)
 
-        logger.info(f"Selected {len(self._selected_buildings)} buildings via clicking")
+        logger.info(f"✅ Selected {len(self._selected_buildings)} buildings via clicking")
 
     def _highlight_selected_buildings(self):
         """

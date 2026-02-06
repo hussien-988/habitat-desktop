@@ -28,6 +28,13 @@ from utils.logger import get_logger
 
 logger = get_logger(__name__)
 
+# Optional: API client for Backend sync
+try:
+    from services.api_client import get_api_client
+    API_CLIENT_AVAILABLE = True
+except ImportError:
+    API_CLIENT_AVAILABLE = False
+
 
 class BuildingsTableModel(BaseTableModel):
     """Table model for buildings available for assignment."""
@@ -257,7 +264,10 @@ class FieldAssignmentPage(QWidget):
         self.i18n = i18n
         self.building_repo = BuildingRepository(db)
         self.unit_repo = UnitRepository(db)
-        self.assignment_service = AssignmentService(db)
+
+        # Initialize AssignmentService with optional API client for Backend sync
+        api_client = get_api_client() if API_CLIENT_AVAILABLE else None
+        self.assignment_service = AssignmentService(db, api_client=api_client)
 
         self._setup_ui()
 
