@@ -7,10 +7,14 @@ TRRCMS API Client - للاتصال بالـ Backend API
 """
 
 import requests
+import urllib3
 from typing import Optional, Dict, List, Any
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from utils.logger import get_logger
+
+# Suppress SSL warnings for self-signed certificates in development
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 logger = get_logger(__name__)
 
@@ -94,9 +98,10 @@ class TRRCMSApiClient:
         """
         try:
             response = requests.post(
-                f"{self.base_url}/api/v1/Auth/login",
+                f"{self.base_url}/v1/Auth/login",
                 json={"username": username, "password": password},
-                timeout=self.config.timeout
+                timeout=self.config.timeout,
+                verify=False  # Allow self-signed certificates in development
             )
             response.raise_for_status()
 
@@ -142,9 +147,10 @@ class TRRCMSApiClient:
 
         try:
             response = requests.post(
-                f"{self.base_url}/api/v1/Auth/refresh",
+                f"{self.base_url}/v1/Auth/refresh",
                 json={"refreshToken": self.refresh_token},
-                timeout=self.config.timeout
+                timeout=self.config.timeout,
+                verify=False  # Allow self-signed certificates in development
             )
             response.raise_for_status()
 
@@ -213,7 +219,8 @@ class TRRCMSApiClient:
                 json=json_data,
                 params=params,
                 headers=self._headers(),
-                timeout=self.config.timeout
+                timeout=self.config.timeout,
+                verify=False  # Allow self-signed certificates in development
             )
             response.raise_for_status()
 
