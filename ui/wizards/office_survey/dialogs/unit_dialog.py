@@ -32,7 +32,7 @@ logger = get_logger(__name__)
 class UnitDialog(QDialog):
     """Dialog for creating or editing a property unit."""
 
-    def __init__(self, building: Building, db, unit_data: Optional[Dict] = None, parent=None, auth_token: Optional[str] = None):
+    def __init__(self, building: Building, db, unit_data: Optional[Dict] = None, parent=None, auth_token: Optional[str] = None, survey_id: Optional[str] = None):
         """
         Initialize the dialog.
 
@@ -42,10 +42,12 @@ class UnitDialog(QDialog):
             unit_data: Optional existing unit data for editing
             parent: Parent widget
             auth_token: Optional JWT token for API calls
+            survey_id: Survey UUID for creating units under a survey
         """
         super().__init__(parent)
         self.building = building
         self.unit_data = unit_data
+        self._survey_id = survey_id
         self.unit_controller = UnitController(db)
         self.validation_service = ValidationService()
 
@@ -567,7 +569,7 @@ class UnitDialog(QDialog):
             unit_data = self.get_unit_data()
             logger.info(f"Creating property unit via API: {unit_data}")
 
-            response = self._api_service.create_property_unit(unit_data)
+            response = self._api_service.create_property_unit(unit_data, survey_id=self._survey_id)
 
             if not response.get("success"):
                 error_msg = response.get("error", "Unknown error")

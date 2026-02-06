@@ -24,6 +24,7 @@ from ui.wizards.office_survey.survey_context import SurveyContext
 from controllers.unit_controller import UnitController
 from models.unit import PropertyUnit as Unit
 from app.config import Config
+from services.property_unit_api_service import PropertyUnitApiService
 from utils.logger import get_logger
 from utils.helpers import build_hierarchical_address
 from ui.design_system import Colors
@@ -50,6 +51,10 @@ class UnitSelectionStep(BaseStep):
         super().__init__(context, parent)
         self.unit_controller = UnitController(self.context.db)
         self.selected_unit: Optional[Unit] = None
+
+        # Initialize API service for linking units to survey
+        self._api_service = PropertyUnitApiService()
+        self._use_api = getattr(Config, 'DATA_PROVIDER', 'local_db') == 'http'
 
         # Set auth token for API calls if available
         main_window = self.window()
@@ -674,11 +679,15 @@ class UnitSelectionStep(BaseStep):
         if main_window and hasattr(main_window, '_api_token'):
             auth_token = main_window._api_token
 
+        # Get survey_id from context (created in step 1)
+        survey_id = self.context.get_data("survey_id")
+
         dialog = UnitDialog(
             self.context.building,
             self.context.db,
             parent=self,
-            auth_token=auth_token
+            auth_token=auth_token,
+            survey_id=survey_id
         )
 
         if dialog.exec_() == QDialog.Accepted:
@@ -698,17 +707,55 @@ class UnitSelectionStep(BaseStep):
             self._load_units()
 
     def validate(self) -> StepValidationResult:
-        """Validate the step."""
+        """Validate the step and link unit to survey via API."""
         result = self.create_validation_result()
 
         if not self.context.building:
             result.add_error("لا يوجد مبنى مختار! يرجى العودة للخطوة السابقة")
+            return result
 
         # Check if unit is selected OR new unit is being created
         if not self.selected_unit and not self.context.is_new_unit:
             result.add_error("يجب اختيار وحدة أو إنشاء وحدة جديدة للمتابعة")
+            return result
+
+        # Link selected unit to survey via API
+        if self._use_api:
+            self._set_auth_token()
+
+            survey_id = self.context.get_data("survey_id")
+
+            # Get unit_id from selected unit or newly created unit
+            unit_id = None
+            if self.selected_unit and self.selected_unit != "new_unit":
+                unit_id = getattr(self.selected_unit, 'unit_uuid', None)
+            elif self.context.new_unit_data:
+                unit_id = self.context.new_unit_data.get('unit_uuid')
+
+            if survey_id and unit_id:
+                print(f"[UNIT-LINK] Linking unit {unit_id} to survey {survey_id}")
+                response = self._api_service.link_unit_to_survey(survey_id, unit_id)
+
+                if not response.get("success"):
+                    error_msg = response.get("error", "Unknown error")
+                    logger.error(f"Failed to link unit to survey: {error_msg}")
+                    result.add_error(f"فشل في ربط الوحدة بالمسح: {error_msg}")
+                    return result
+
+                logger.info(f"Unit {unit_id} linked to survey {survey_id}")
+                print(f"[UNIT-LINK] Unit {unit_id} linked to survey {survey_id} successfully")
+                if response.get("data"):
+                    print(f"[UNIT-LINK] Full API response: {response['data']}")
+            else:
+                logger.warning(f"Missing survey_id ({survey_id}) or unit_id ({unit_id}), skipping link")
 
         return result
+
+    def _set_auth_token(self):
+        """Set auth token for API service from main window."""
+        main_window = self.window()
+        if main_window and hasattr(main_window, '_api_token') and main_window._api_token:
+            self._api_service.set_auth_token(main_window._api_token)
 
     def collect_data(self) -> Dict[str, Any]:
         """Collect data from the step."""

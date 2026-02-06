@@ -25,6 +25,7 @@ from ui.wizards.framework import BaseStep, StepValidationResult
 from ui.wizards.office_survey.survey_context import SurveyContext
 from ui.wizards.office_survey.dialogs.person_dialog import PersonDialog
 from app.config import Config
+from services.person_api_service import PersonApiService
 from utils.logger import get_logger
 from ui.font_utils import FontManager, create_font
 from ui.design_system import Colors
@@ -46,6 +47,10 @@ class PersonStep(BaseStep):
     def __init__(self, context: SurveyContext, parent=None):
         """Initialize the step."""
         super().__init__(context, parent)
+
+        # Initialize API service for fetching persons
+        self._api_service = PersonApiService()
+        self._use_api = getattr(Config, 'DATA_PROVIDER', 'local_db') == 'http'
 
     def setup_ui(self):
         """Setup the step's UI - matching Step 1 styling."""
@@ -173,11 +178,32 @@ class PersonStep(BaseStep):
         layout.addWidget(table_frame)
 
     def _add_person(self):
-        """Show dialog to add a new person - exact copy from old wizard."""
+        """Show dialog to add a new person."""
+        # Get auth token from main window
+        auth_token = None
+        main_window = self.window()
+        if main_window and hasattr(main_window, '_api_token'):
+            auth_token = main_window._api_token
+
+        # Get survey_id, household_id, and unit_id from context
+        survey_id = self.context.get_data("survey_id")
+        household_id = self.context.get_data("household_id")
+
+        # Get unit_id from selected unit or newly created unit
+        unit_id = None
+        if self.context.unit:
+            unit_id = getattr(self.context.unit, 'unit_uuid', None)
+        elif self.context.new_unit_data:
+            unit_id = self.context.new_unit_data.get('unit_uuid')
+
         dialog = PersonDialog(
             person_data=None,
             existing_persons=self.context.persons,
-            parent=self
+            parent=self,
+            auth_token=auth_token,
+            survey_id=survey_id,
+            household_id=household_id,
+            unit_id=unit_id
         )
 
         if dialog.exec_() == QDialog.Accepted:
@@ -348,10 +374,30 @@ class PersonStep(BaseStep):
                 break
 
         if person_data:
+            # Get auth token from main window
+            auth_token = None
+            main_window = self.window()
+            if main_window and hasattr(main_window, '_api_token'):
+                auth_token = main_window._api_token
+
+            survey_id = self.context.get_data("survey_id")
+            household_id = self.context.get_data("household_id")
+
+            # Get unit_id from selected unit or newly created unit
+            unit_id = None
+            if self.context.unit:
+                unit_id = getattr(self.context.unit, 'unit_uuid', None)
+            elif self.context.new_unit_data:
+                unit_id = self.context.new_unit_data.get('unit_uuid')
+
             dialog = PersonDialog(
                 person_data=person_data,
                 existing_persons=self.context.persons,
-                parent=self
+                parent=self,
+                auth_token=auth_token,
+                survey_id=survey_id,
+                household_id=household_id,
+                unit_id=unit_id
             )
 
             if dialog.exec_() == QDialog.Accepted:
@@ -420,9 +466,36 @@ class PersonStep(BaseStep):
         self._refresh_persons_list()
 
     def on_show(self):
-        """Called when step is shown."""
+        """Called when step is shown. Fetches persons from API if available."""
         super().on_show()
+
+        if self._use_api:
+            self._fetch_persons_from_api()
+
         self._refresh_persons_list()
+
+    def _fetch_persons_from_api(self):
+        """Fetch persons from API and update context."""
+        # Set auth token
+        main_window = self.window()
+        if main_window and hasattr(main_window, '_api_token') and main_window._api_token:
+            self._api_service.set_auth_token(main_window._api_token)
+
+        survey_id = self.context.get_data("survey_id")
+        household_id = self.context.get_data("household_id")
+
+        if not survey_id or not household_id:
+            logger.warning(f"Missing survey_id ({survey_id}) or household_id ({household_id}), skipping fetch")
+            return
+
+        logger.info(f"Fetching persons for survey {survey_id}, household {household_id}")
+        persons = self._api_service.get_persons_for_household(survey_id, household_id)
+
+        if persons:
+            self.context.persons = persons
+            logger.info(f"Loaded {len(persons)} persons from API")
+        else:
+            logger.info("No persons found from API (or empty list)")
 
     def get_step_title(self) -> str:
         """Get step title."""

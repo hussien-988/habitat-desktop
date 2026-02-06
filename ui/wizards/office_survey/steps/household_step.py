@@ -777,8 +777,12 @@ class HouseholdStep(BaseStep):
                 # Set auth token before API call
                 self._set_auth_token()
 
+                # Get survey_id from context (set in step 1)
+                survey_id = self.context.get_data("survey_id")
+
                 logger.info(f"Creating household via API: {household}")
-                response = self._api_service.create_household(household)
+                print(f"[HOUSEHOLD] Creating household for survey_id: {survey_id}")
+                response = self._api_service.create_household(household, survey_id=survey_id)
 
                 if not response.get("success"):
                     error_msg = response.get("error", "Unknown error")
@@ -789,7 +793,11 @@ class HouseholdStep(BaseStep):
                 logger.info("Household created successfully via API")
                 # Store the API response data
                 if response.get("data"):
-                    household["api_id"] = response["data"].get("id")
+                    household_id = response["data"].get("id") or response["data"].get("householdId", "")
+                    household["api_id"] = household_id
+                    self.context.update_data("household_id", household_id)
+                    print(f"[HOUSEHOLD] Household created successfully, household_id: {household_id}")
+                    print(f"[HOUSEHOLD] Full API response: {response['data']}")
 
             # Clear old household data and add new one
             self.context.households.clear()

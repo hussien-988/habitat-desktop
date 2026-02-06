@@ -142,38 +142,46 @@ class HouseholdApiService:
                 "error_code": "E500"
             }
 
-    def create_household(self, household_data: Dict[str, Any]) -> Dict[str, Any]:
+    def create_household(self, household_data: Dict[str, Any], survey_id: str = None) -> Dict[str, Any]:
         """
         Create a new household via API.
 
-        POST /v1/Households
+        POST /v1/Surveys/{surveyId}/households
         Body: {
-            "propertyUnitId": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
-            "headOfHouseholdName": "أحمد محمد علي الخالد",
-            "householdSize": 6,
-            "maleCount": 1,
-            "femaleCount": 1,
-            "maleChildCount": 2,
-            "femaleChildCount": 1,
-            "maleElderlyCount": 1,
+            "surveyId": "uuid",
+            "propertyUnitId": "uuid",
+            "headOfHouseholdName": "string",
+            "householdSize": 0,
+            "notes": "string",
+            "maleCount": 0,
+            "femaleCount": 0,
+            "maleChildCount": 0,
+            "femaleChildCount": 0,
+            "maleElderlyCount": 0,
             "femaleElderlyCount": 0,
             "maleDisabledCount": 0,
-            "femaleDisabledCount": 0,
-            "notes": "أسرة مكونة من الأب والأم وثلاثة أطفال والجد"
+            "femaleDisabledCount": 0
         }
 
         Args:
             household_data: Dictionary with household data (snake_case keys)
+            survey_id: Survey UUID (required for the survey-scoped endpoint)
 
         Returns:
             Dict with success status and created household data or error
         """
         # Convert from app format to API format
-        api_data = self._to_api_format(household_data)
+        api_data = self._to_api_format(household_data, survey_id=survey_id)
 
-        logger.info(f"Creating household via API: {api_data}")
+        # Use survey-scoped endpoint if survey_id is provided
+        if survey_id:
+            endpoint = f"/v1/Surveys/{survey_id}/households"
+        else:
+            endpoint = "/v1/Households"
 
-        response = self._make_request("POST", "/v1/Households", data=api_data)
+        logger.info(f"Creating household via {endpoint}: {api_data}")
+
+        response = self._make_request("POST", endpoint, data=api_data)
 
         if response.get("success"):
             logger.info("Household created successfully via API")
@@ -221,7 +229,7 @@ class HouseholdApiService:
         logger.info(f"Found {len(data)} households for unit {unit_id}")
         return data
 
-    def _to_api_format(self, household_data: Dict[str, Any]) -> Dict[str, Any]:
+    def _to_api_format(self, household_data: Dict[str, Any], survey_id: str = None) -> Dict[str, Any]:
         """
         Convert app household data format to API format.
 
@@ -232,6 +240,7 @@ class HouseholdApiService:
             "propertyUnitId": household_data.get('property_unit_id') or household_data.get('unit_uuid') or household_data.get('propertyUnitId', ''),
             "headOfHouseholdName": household_data.get('head_name') or household_data.get('headOfHouseholdName', ''),
             "householdSize": int(household_data.get('size') or household_data.get('householdSize', 0)),
+            "notes": household_data.get('notes') or household_data.get('notes', ''),
             "maleCount": int(household_data.get('adult_males') or household_data.get('maleCount', 0)),
             "femaleCount": int(household_data.get('adult_females') or household_data.get('femaleCount', 0)),
             "maleChildCount": int(household_data.get('male_children_under18') or household_data.get('maleChildCount', 0)),
@@ -240,8 +249,10 @@ class HouseholdApiService:
             "femaleElderlyCount": int(household_data.get('female_elderly_over65') or household_data.get('femaleElderlyCount', 0)),
             "maleDisabledCount": int(household_data.get('disabled_males') or household_data.get('maleDisabledCount', 0)),
             "femaleDisabledCount": int(household_data.get('disabled_females') or household_data.get('femaleDisabledCount', 0)),
-            "notes": household_data.get('notes') or household_data.get('notes', '')
         }
+
+        if survey_id:
+            api_data["surveyId"] = survey_id
 
         return api_data
 

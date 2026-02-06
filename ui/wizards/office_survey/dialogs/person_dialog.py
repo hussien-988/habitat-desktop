@@ -20,6 +20,7 @@ from PyQt5.QtCore import Qt, QDate
 
 from app.config import Config
 from services.validation_service import ValidationService
+from services.person_api_service import PersonApiService
 from ui.components.toast import Toast
 from utils.logger import get_logger
 
@@ -29,7 +30,9 @@ logger = get_logger(__name__)
 class PersonDialog(QDialog):
     """Dialog for creating or editing a person."""
 
-    def __init__(self, person_data: Optional[Dict] = None, existing_persons: List[Dict] = None, parent=None):
+    def __init__(self, person_data: Optional[Dict] = None, existing_persons: List[Dict] = None, parent=None,
+                 auth_token: Optional[str] = None, survey_id: Optional[str] = None,
+                 household_id: Optional[str] = None, unit_id: Optional[str] = None):
         """
         Initialize the dialog.
 
@@ -37,6 +40,10 @@ class PersonDialog(QDialog):
             person_data: Optional existing person data for editing
             existing_persons: List of existing persons for validation
             parent: Parent widget
+            auth_token: Optional JWT token for API calls
+            survey_id: Survey UUID for creating persons under a survey
+            household_id: Household UUID for creating persons under a household
+            unit_id: Property Unit UUID for linking person to unit relation
         """
         super().__init__(parent)
         self.person_data = person_data
@@ -44,6 +51,13 @@ class PersonDialog(QDialog):
         self.editing_mode = person_data is not None
         self.validation_service = ValidationService()
         self.uploaded_files = []  # Store uploaded file paths
+
+        # API integration
+        self._survey_id = survey_id
+        self._household_id = household_id
+        self._unit_id = unit_id
+        self._api_service = PersonApiService(auth_token)
+        self._use_api = getattr(Config, 'DATA_PROVIDER', 'local_db') == 'http'
 
         self.setWindowTitle("تعديل بيانات الشخص" if self.editing_mode else "إضافة شخص جديد")
         self.setModal(True)
@@ -578,7 +592,7 @@ class PersonDialog(QDialog):
                 background-color: #357ABD;
             }
         """)
-        save_relation_btn.clicked.connect(self.accept)
+        save_relation_btn.clicked.connect(self._on_final_save)
 
         relation_buttons_layout.addStretch()
         relation_buttons_layout.addWidget(cancel_relation_btn)
@@ -744,6 +758,104 @@ class PersonDialog(QDialog):
         # Validate national ID
         if self.national_id.text().strip() and not self._validate_national_id():
             return
+
+        self.accept()
+
+    def _on_final_save(self):
+        """Handle final save (from relation tab) - create person via API, then link to unit, then accept."""
+        if self._use_api and not self.editing_mode:
+            person_data = self.get_person_data()
+            logger.info(f"Creating person via API: {person_data.get('first_name')} {person_data.get('last_name')}")
+            print(f"[PERSON] Creating person for survey_id: {self._survey_id}, household_id: {self._household_id}")
+
+            # Step 1: Create person in household
+            response = self._api_service.create_person(
+                person_data,
+                survey_id=self._survey_id,
+                household_id=self._household_id
+            )
+
+            if not response.get("success"):
+                error_msg = response.get("error", "Unknown error")
+                details = response.get("details", "")
+                logger.error(f"Failed to create person via API: {error_msg} - {details}")
+                from PyQt5.QtWidgets import QMessageBox
+                QMessageBox.critical(
+                    self,
+                    "خطأ",
+                    f"فشل في إنشاء الشخص:\n{error_msg}"
+                )
+                return
+
+            logger.info("Person created successfully via API")
+            person_id = ""
+            if response.get("data"):
+                self._created_person_data = response.get("data")
+                # Try multiple possible field names for person ID
+                person_id = (
+                    response["data"].get("id") or
+                    response["data"].get("personId") or
+                    response["data"].get("Id") or
+                    response["data"].get("PersonId") or
+                    ""
+                )
+                print(f"[PERSON] Person created successfully, person_id: {person_id}")
+                print(f"[PERSON] Full API response: {response['data']}")
+
+                if not person_id:
+                    logger.error(f"Could not find person ID in response. Available keys: {list(response['data'].keys())}")
+                    from PyQt5.QtWidgets import QMessageBox
+                    QMessageBox.critical(
+                        self,
+                        "خطأ",
+                        f"تم إنشاء الشخص ولكن لم نتمكن من الحصول على معرف الشخص من الاستجابة"
+                    )
+                    return
+
+            # Step 2: Link person to property unit with relation type
+            if self._survey_id and self._unit_id and person_id:
+                relation_data = person_data.get('relation_data', {})
+                relation_data['person_id'] = person_id
+                # Also pass the relationship_type from tab 1 if rel_type not set in tab 2
+                if not relation_data.get('rel_type'):
+                    relation_data['rel_type'] = person_data.get('relationship_type')
+
+                print(f"[RELATION] Linking person {person_id} to unit {self._unit_id} in survey {self._survey_id}")
+                relation_response = self._api_service.link_person_to_unit(
+                    self._survey_id,
+                    self._unit_id,
+                    relation_data
+                )
+
+                if not relation_response.get("success"):
+                    error_msg = relation_response.get("error", "Unknown error")
+                    error_details = relation_response.get("details", "")
+                    error_code = relation_response.get("error_code", "")
+
+                    logger.error(f"Failed to link person to unit: {error_msg}")
+                    logger.error(f"Error code: {error_code}")
+                    logger.error(f"Error details: {error_details}")
+
+                    # Warning only - person was already created
+                    from PyQt5.QtWidgets import QMessageBox
+
+                    full_error = f"تم إنشاء الشخص ولكن فشل ربطه بالوحدة:\n\n{error_msg}"
+                    if error_details:
+                        # Truncate long error messages
+                        if len(error_details) > 300:
+                            error_details = error_details[:300] + "..."
+                        full_error += f"\n\nتفاصيل: {error_details}"
+
+                    QMessageBox.warning(
+                        self,
+                        "تحذير",
+                        full_error
+                    )
+                else:
+                    logger.info(f"Person {person_id} linked to unit {self._unit_id} successfully")
+                    print(f"[RELATION] Person {person_id} linked to unit {self._unit_id} successfully")
+                    if relation_response.get("data"):
+                        print(f"[RELATION] Full API response: {relation_response['data']}")
 
         self.accept()
 
