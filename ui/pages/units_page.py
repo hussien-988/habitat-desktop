@@ -8,7 +8,7 @@ from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
     QPushButton, QComboBox, QTableWidget, QTableWidgetItem, QHeaderView,
     QFrame, QDialog, QFormLayout, QSpinBox, QTextEdit,
-    QAbstractItemView, QGraphicsDropShadowEffect, QMessageBox
+    QAbstractItemView, QGraphicsDropShadowEffect, QMessageBox, QSizePolicy
 )
 from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtGui import QColor, QIcon, QCursor
@@ -28,7 +28,7 @@ logger = get_logger(__name__)
 
 
 class UnitDialog(QDialog):
-    """Dialog for creating/editing a property unit."""
+    """Dialog for creating/editing a property unit - modern card-based style."""
 
     def __init__(self, db: Database, i18n: I18n, unit: PropertyUnit = None, parent=None):
         super().__init__(parent)
@@ -39,8 +39,21 @@ class UnitDialog(QDialog):
         self.unit_repo = UnitRepository(db)
         self._is_edit_mode = unit is not None
 
-        self.setWindowTitle(i18n.t("edit_unit") if unit else i18n.t("add_unit"))
-        self.setMinimumWidth(500)
+        # Remove title bar for modern look
+        self.setWindowFlags(Qt.FramelessWindowHint | Qt.Dialog)
+
+        # Make background transparent for rounded corners
+        self.setAttribute(Qt.WA_TranslucentBackground)
+
+        # Fixed size matching the design from step 2
+        self.setFixedSize(560, 580)
+
+        self.setStyleSheet("""
+            QDialog {
+                background-color: transparent;
+            }
+        """)
+
         self._setup_ui()
 
         if unit:
@@ -49,112 +62,303 @@ class UnitDialog(QDialog):
             # Auto-suggest first unit number for selected building
             self._on_building_changed()
 
+    def _create_field_widget(self, label_text: str, widget, placeholder: str = None) -> QWidget:
+        """Create a field container with label above the input."""
+        container = QWidget()
+        container.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        layout = QVBoxLayout(container)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(6)
+
+        # Label
+        label = QLabel(label_text)
+        label.setStyleSheet("color: #6B7280; font-size: 13px; font-weight: 500; border: none; background: transparent;")
+        label.setAlignment(Qt.AlignRight)
+        layout.addWidget(label)
+
+        # Style the widget
+        if isinstance(widget, QComboBox):
+            widget.setStyleSheet(f"""
+                QComboBox {{
+                    background-color: #FFFFFF;
+                    border: 1px solid #E5E7EB;
+                    border-radius: 8px;
+                    padding: 10px 12px;
+                    font-size: 14px;
+                    min-height: 20px;
+                }}
+                QComboBox:focus {{
+                    border: 2px solid {Config.PRIMARY_COLOR};
+                }}
+                QComboBox::drop-down {{
+                    border: none;
+                    width: 30px;
+                }}
+                QComboBox::down-arrow {{
+                    image: none;
+                    border-left: 5px solid transparent;
+                    border-right: 5px solid transparent;
+                    border-top: 6px solid #6B7280;
+                    margin-right: 10px;
+                }}
+                QComboBox QAbstractItemView {{
+                    background-color: white;
+                    border: 1px solid #E5E7EB;
+                    border-radius: 8px;
+                    selection-background-color: #EBF5FF;
+                }}
+            """)
+            if placeholder:
+                widget.setPlaceholderText(placeholder)
+        elif isinstance(widget, QSpinBox):
+            # Style spinbox with stacked up/down buttons on left side like in step 2 photo
+            widget.setStyleSheet(f"""
+                QSpinBox {{
+                    background-color: #FFFFFF;
+                    border: 1px solid #E5E7EB;
+                    border-radius: 8px;
+                    padding: 8px 12px 8px 32px;
+                    font-size: 14px;
+                    min-height: 24px;
+                }}
+                QSpinBox:focus {{
+                    border: 1px solid {Config.PRIMARY_COLOR};
+                }}
+                QSpinBox::up-button {{
+                    subcontrol-origin: border;
+                    subcontrol-position: center left;
+                    width: 24px;
+                    height: 12px;
+                    border: none;
+                    border-right: 1px solid #E5E7EB;
+                    border-top-left-radius: 7px;
+                    background: transparent;
+                    margin-bottom: 0px;
+                }}
+                QSpinBox::up-button:hover {{
+                    background: #F3F4F6;
+                }}
+                QSpinBox::up-arrow {{
+                    image: none;
+                    border-left: 4px solid transparent;
+                    border-right: 4px solid transparent;
+                    border-bottom: 5px solid #9CA3AF;
+                    width: 0;
+                    height: 0;
+                }}
+                QSpinBox::down-button {{
+                    subcontrol-origin: border;
+                    subcontrol-position: center left;
+                    width: 24px;
+                    height: 12px;
+                    border: none;
+                    border-right: 1px solid #E5E7EB;
+                    border-bottom-left-radius: 7px;
+                    background: transparent;
+                    margin-top: 12px;
+                }}
+                QSpinBox::down-button:hover {{
+                    background: #F3F4F6;
+                }}
+                QSpinBox::down-arrow {{
+                    image: none;
+                    border-left: 4px solid transparent;
+                    border-right: 4px solid transparent;
+                    border-top: 5px solid #9CA3AF;
+                    width: 0;
+                    height: 0;
+                }}
+            """)
+        elif isinstance(widget, QLineEdit):
+            widget.setStyleSheet(f"""
+                QLineEdit {{
+                    background-color: #FFFFFF;
+                    border: 1px solid #E5E7EB;
+                    border-radius: 8px;
+                    padding: 10px 12px;
+                    font-size: 14px;
+                    min-height: 20px;
+                }}
+                QLineEdit:focus {{
+                    border: 2px solid {Config.PRIMARY_COLOR};
+                }}
+            """)
+            if placeholder:
+                widget.setPlaceholderText(placeholder)
+        elif isinstance(widget, QTextEdit):
+            widget.setStyleSheet(f"""
+                QTextEdit {{
+                    background-color: #FFFFFF;
+                    border: 1px solid #E5E7EB;
+                    border-radius: 8px;
+                    padding: 10px 12px;
+                    font-size: 14px;
+                }}
+                QTextEdit:focus {{
+                    border: 2px solid {Config.PRIMARY_COLOR};
+                }}
+            """)
+            if placeholder:
+                widget.setPlaceholderText(placeholder)
+
+        layout.addWidget(widget)
+        return container
+
     def _setup_ui(self):
-        layout = QVBoxLayout(self)
-        layout.setSpacing(16)
-        layout.setContentsMargins(24, 24, 24, 24)
+        # Main layout
+        main_layout = QVBoxLayout(self)
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        main_layout.setSpacing(0)
 
-        form = QFormLayout()
-        form.setSpacing(12)
+        # Card container with white background and rounded corners
+        card = QFrame()
+        card.setStyleSheet("""
+            QFrame {
+                background-color: white;
+                border-radius: 16px;
+                border: none;
+            }
+        """)
 
-        # Building selection
+        # Add shadow to card
+        shadow = QGraphicsDropShadowEffect()
+        shadow.setBlurRadius(20)
+        shadow.setColor(QColor(0, 0, 0, 40))
+        shadow.setOffset(0, 4)
+        card.setGraphicsEffect(shadow)
+
+        card_layout = QVBoxLayout(card)
+        card_layout.setContentsMargins(32, 24, 32, 24)
+        card_layout.setSpacing(20)
+
+        # Title header - right aligned like in photo
+        title_label = QLabel("أضف معلومات الوحدة العقارية" if not self._is_edit_mode else "تعديل معلومات الوحدة العقارية")
+        title_label.setStyleSheet("""
+            font-size: 16px;
+            font-weight: 600;
+            color: #1F2937;
+            background: transparent;
+            border: none;
+            padding: 0px;
+        """)
+        title_label.setAlignment(Qt.AlignRight)
+        card_layout.addWidget(title_label)
+
+        # Form content
+        form_container = QWidget()
+        form_layout = QVBoxLayout(form_container)
+        form_layout.setContentsMargins(0, 0, 0, 0)
+        form_layout.setSpacing(16)
+
+        # Row 1: حالة الوحدة (Status - left) | نوع الوحدة (Type - right) - RTL order
+        row1 = QHBoxLayout()
+        row1.setSpacing(16)
+
+        # Unit Type (right side visually in RTL - added first)
+        self.type_combo = QComboBox()
+        self.type_combo.addItem("اختر", "")
+        for code, en, ar in Vocabularies.UNIT_TYPES:
+            self.type_combo.addItem(ar, code)
+        row1.addWidget(self._create_field_widget("نوع الوحدة", self.type_combo, "اختر"))
+
+        # Status (left side visually in RTL - added second)
+        self.status_combo = QComboBox()
+        self.status_combo.addItem("اختر", "")
+        statuses = [("occupied", "مشغول"), ("vacant", "شاغر"), ("unknown", "غير معروف")]
+        for code, ar in statuses:
+            self.status_combo.addItem(ar, code)
+        row1.addWidget(self._create_field_widget("حالة الوحدة", self.status_combo, "اختر"))
+
+        form_layout.addLayout(row1)
+
+        # Row 2: رقم الوحدة (Unit Number - left) | رقم الطابق (Floor - right) - RTL order
+        row2 = QHBoxLayout()
+        row2.setSpacing(16)
+
+        # Floor number (right side visually in RTL - added first)
+        self.floor_spin = QSpinBox()
+        self.floor_spin.setRange(-3, 50)
+        self.floor_spin.setValue(0)
+        self.floor_spin.setAlignment(Qt.AlignCenter)
+        row2.addWidget(self._create_field_widget("رقم الطابق", self.floor_spin))
+
+        # Unit number (left side visually in RTL - added second)
+        self.unit_number_input = QSpinBox()
+        self.unit_number_input.setRange(0, 999)
+        self.unit_number_input.setValue(0)
+        self.unit_number_input.setAlignment(Qt.AlignCenter)
+        row2.addWidget(self._create_field_widget("رقم الوحدة", self.unit_number_input))
+
+        form_layout.addLayout(row2)
+
+        # Error label for unit number (hidden by default)
+        self.unit_number_error = QLabel("")
+        self.unit_number_error.setStyleSheet("color: #DC2626; font-size: 11px;")
+        self.unit_number_error.setVisible(False)
+        self.unit_number_error.setAlignment(Qt.AlignRight)
+        form_layout.addWidget(self.unit_number_error)
+
+        # Row 3: مساحة الوحدة (Area - left) | عدد الغرف (Rooms - right) - RTL order
+        row3 = QHBoxLayout()
+        row3.setSpacing(16)
+
+        # Rooms count (right side visually in RTL - added first)
+        self.apt_number = QSpinBox()
+        self.apt_number.setRange(0, 20)
+        self.apt_number.setValue(0)
+        self.apt_number.setAlignment(Qt.AlignCenter)
+        row3.addWidget(self._create_field_widget("عدد الغرف", self.apt_number))
+
+        # Area (left side visually in RTL - added second)
+        self.area_input = QLineEdit()
+        self.area_input.setAlignment(Qt.AlignRight)
+        self.area_input.setPlaceholderText("المساحة التقريبية أو المقاسة (م²)")
+        row3.addWidget(self._create_field_widget("مساحة الوحدة", self.area_input))
+
+        form_layout.addLayout(row3)
+
+        # Row 4: وصف العقار (Description) - full width
+        self.description = QTextEdit()
+        self.description.setFixedHeight(80)
+        desc_widget = self._create_field_widget("وصف العقار", self.description,
+            "وصف تفصيلي يشمل: عدد الغرف وأنواعها، المساحة التقريبية، الاتجاهات والحدود، وأي ميزات مميزة")
+        form_layout.addWidget(desc_widget)
+
+        card_layout.addWidget(form_container)
+
+        # Hidden building combo (for internal use)
         self.building_combo = QComboBox()
+        self.building_combo.hide()
         buildings = self.building_repo.get_all(limit=500)
         for b in buildings:
             display = f"{b.building_id} - {b.neighborhood_name_ar}"
             self.building_combo.addItem(display, b.building_id)
         self.building_combo.currentIndexChanged.connect(self._on_building_changed)
-        form.addRow(self.i18n.t("building") + ":", self.building_combo)
+        card_layout.addWidget(self.building_combo)
 
-        # Unit number (3-digit suffix)
-        unit_number_container = QWidget()
-        unit_number_layout = QVBoxLayout(unit_number_container)
-        unit_number_layout.setContentsMargins(0, 0, 0, 0)
-        unit_number_layout.setSpacing(4)
+        # Hint label (hidden)
+        self.unit_number_hint = QLabel("")
+        self.unit_number_hint.hide()
 
-        self.unit_number_input = QLineEdit()
-        self.unit_number_input.setPlaceholderText("001")
-        self.unit_number_input.setMaxLength(3)
-        self.unit_number_input.setStyleSheet(f"""
-            QLineEdit {{
-                background-color: #F8FAFC;
-                border: 1px solid {Config.INPUT_BORDER};
-                border-radius: 6px;
-                padding: 8px 12px;
-                font-size: 14px;
-            }}
-            QLineEdit:focus {{
-                border: 2px solid {Config.PRIMARY_COLOR};
-            }}
-        """)
-        self.unit_number_input.textChanged.connect(self._validate_unit_number)
-        unit_number_layout.addWidget(self.unit_number_input)
+        # Spacer
+        card_layout.addStretch()
 
-        self.unit_number_hint = QLabel("رقم الوحدة: 3 أرقام (001-999)")
-        self.unit_number_hint.setStyleSheet(f"color: {Config.TEXT_LIGHT}; font-size: 11px;")
-        unit_number_layout.addWidget(self.unit_number_hint)
-
-        self.unit_number_error = QLabel("")
-        self.unit_number_error.setStyleSheet("color: #DC2626; font-size: 11px;")
-        self.unit_number_error.setVisible(False)
-        unit_number_layout.addWidget(self.unit_number_error)
-
-        form.addRow("رقم الوحدة:", unit_number_container)
-
-        # Unit type
-        self.type_combo = QComboBox()
-        for code, en, ar in Vocabularies.UNIT_TYPES:
-            self.type_combo.addItem(ar, code)
-        form.addRow(self.i18n.t("unit_type") + ":", self.type_combo)
-
-        # Floor number
-        self.floor_spin = QSpinBox()
-        self.floor_spin.setRange(-3, 50)
-        self.floor_spin.setValue(0)
-        form.addRow(self.i18n.t("floor") + ":", self.floor_spin)
-
-        # Apartment number
-        self.apt_number = QLineEdit()
-        self.apt_number.setPlaceholderText("مثال: 101")
-        form.addRow(self.i18n.t("apartment_number") + ":", self.apt_number)
-
-        # Status
-        self.status_combo = QComboBox()
-        statuses = [("occupied", "مشغول"), ("vacant", "شاغر"), ("unknown", "غير معروف")]
-        for code, ar in statuses:
-            self.status_combo.addItem(ar, code)
-        form.addRow(self.i18n.t("status") + ":", self.status_combo)
-
-        # Area
-        self.area_spin = QSpinBox()
-        self.area_spin.setRange(0, 10000)
-        self.area_spin.setSuffix(" م²")
-        form.addRow(self.i18n.t("area") + ":", self.area_spin)
-
-        # Description
-        self.description = QTextEdit()
-        self.description.setMaximumHeight(80)
-        self.description.setPlaceholderText("وصف الوحدة...")
-        form.addRow(self.i18n.t("description") + ":", self.description)
-
-        layout.addLayout(form)
-
-        # Buttons
+        # Buttons row - حفظ (Save - blue, left) | إلغاء (Cancel - outline, right)
         btn_layout = QHBoxLayout()
-        btn_layout.addStretch()
+        btn_layout.setSpacing(12)
 
-        cancel_btn = QPushButton(self.i18n.t("cancel"))
-        cancel_btn.clicked.connect(self.reject)
-        btn_layout.addWidget(cancel_btn)
-
-        save_btn = QPushButton(self.i18n.t("save"))
+        # Save button (primary - blue) - appears on LEFT in RTL
+        save_btn = QPushButton("حفظ")
+        save_btn.setFixedHeight(45)
+        save_btn.setCursor(Qt.PointingHandCursor)
         save_btn.setStyleSheet(f"""
             QPushButton {{
                 background-color: {Config.PRIMARY_COLOR};
                 color: white;
                 border: none;
-                border-radius: 6px;
-                padding: 8px 24px;
+                border-radius: 8px;
+                padding: 12px 32px;
+                font-size: 14px;
                 font-weight: 600;
             }}
             QPushButton:hover {{
@@ -164,7 +368,31 @@ class UnitDialog(QDialog):
         save_btn.clicked.connect(self.accept)
         btn_layout.addWidget(save_btn)
 
-        layout.addLayout(btn_layout)
+        # Cancel button (secondary - outline) - appears on RIGHT in RTL
+        cancel_btn = QPushButton("إلغاء")
+        cancel_btn.setFixedHeight(45)
+        cancel_btn.setCursor(Qt.PointingHandCursor)
+        cancel_btn.setStyleSheet("""
+            QPushButton {
+                background-color: white;
+                color: #6B7280;
+                border: 1px solid #E5E7EB;
+                border-radius: 8px;
+                padding: 12px 32px;
+                font-size: 14px;
+                font-weight: 500;
+            }
+            QPushButton:hover {
+                background-color: #F9FAFB;
+                border-color: #D1D5DB;
+            }
+        """)
+        cancel_btn.clicked.connect(self.reject)
+        btn_layout.addWidget(cancel_btn)
+
+        card_layout.addLayout(btn_layout)
+
+        main_layout.addWidget(card)
 
     def _populate_data(self):
         """Populate form with existing unit data."""
@@ -178,8 +406,12 @@ class UnitDialog(QDialog):
             self.building_combo.setCurrentIndex(idx)
         self.building_combo.blockSignals(False)
 
-        # Unit number
-        self.unit_number_input.setText(self.unit.unit_number or "001")
+        # Unit number (now a QSpinBox)
+        if self.unit.unit_number:
+            try:
+                self.unit_number_input.setValue(int(self.unit.unit_number))
+            except (ValueError, TypeError):
+                self.unit_number_input.setValue(0)
 
         # Unit type
         idx = self.type_combo.findData(self.unit.unit_type)
@@ -187,14 +419,21 @@ class UnitDialog(QDialog):
             self.type_combo.setCurrentIndex(idx)
 
         self.floor_spin.setValue(self.unit.floor_number)
-        self.apt_number.setText(self.unit.apartment_number)
+
+        # Apartment number / rooms count (QSpinBox)
+        if self.unit.apartment_number:
+            try:
+                self.apt_number.setValue(int(self.unit.apartment_number))
+            except (ValueError, TypeError):
+                self.apt_number.setValue(0)
 
         idx = self.status_combo.findData(self.unit.apartment_status)
         if idx >= 0:
             self.status_combo.setCurrentIndex(idx)
 
+        # Area (now a QLineEdit)
         if self.unit.area_sqm:
-            self.area_spin.setValue(int(self.unit.area_sqm))
+            self.area_input.setText(str(int(self.unit.area_sqm)))
 
         self.description.setPlainText(self.unit.property_description or "")
 
@@ -206,32 +445,24 @@ class UnitDialog(QDialog):
         building_id = self.building_combo.currentData()
         if building_id:
             next_number = self.unit_repo.get_next_unit_number(building_id)
-            self.unit_number_input.setText(next_number)
+            try:
+                self.unit_number_input.setValue(int(next_number))
+            except (ValueError, TypeError):
+                self.unit_number_input.setValue(1)
             self.unit_number_hint.setText(f"رقم الوحدة التالي المتاح: {next_number}")
 
     def _validate_unit_number(self):
         """Validate unit number format and uniqueness."""
-        text = self.unit_number_input.text().strip()
+        num = self.unit_number_input.value()
 
-        # Check if empty
-        if not text:
-            self._show_unit_number_error("رقم الوحدة مطلوب")
-            return False
-
-        # Check if numeric
-        if not text.isdigit():
-            self._show_unit_number_error("يجب أن يكون رقم الوحدة أرقاماً فقط")
-            return False
-
-        # Check range (001-999)
-        num = int(text)
+        # Check range (1-999)
         if num < 1 or num > 999:
             self._show_unit_number_error("يجب أن يكون الرقم بين 001 و 999")
             return False
 
         # Check uniqueness
         building_id = self.building_combo.currentData()
-        padded_number = text.zfill(3)
+        padded_number = str(num).zfill(3)
         exclude_uuid = self.unit.unit_uuid if self.unit else None
 
         if self.unit_repo.unit_number_exists(building_id, padded_number, exclude_uuid):
@@ -246,37 +477,119 @@ class UnitDialog(QDialog):
         """Show unit number validation error."""
         self.unit_number_error.setText(message)
         self.unit_number_error.setVisible(True)
-        self.unit_number_input.setStyleSheet(f"""
-            QLineEdit {{
+        self.unit_number_input.setStyleSheet("""
+            QSpinBox {
                 background-color: #FEF2F2;
                 border: 2px solid #DC2626;
-                border-radius: 6px;
-                padding: 8px 12px;
+                border-radius: 8px;
+                padding: 8px 12px 8px 32px;
                 font-size: 14px;
-            }}
+                min-height: 24px;
+            }
+            QSpinBox::up-button {
+                subcontrol-origin: border;
+                subcontrol-position: center left;
+                width: 24px;
+                height: 12px;
+                border: none;
+                border-right: 1px solid #DC2626;
+                border-top-left-radius: 7px;
+                background: transparent;
+            }
+            QSpinBox::up-arrow {
+                image: none;
+                border-left: 4px solid transparent;
+                border-right: 4px solid transparent;
+                border-bottom: 5px solid #DC2626;
+                width: 0;
+                height: 0;
+            }
+            QSpinBox::down-button {
+                subcontrol-origin: border;
+                subcontrol-position: center left;
+                width: 24px;
+                height: 12px;
+                border: none;
+                border-right: 1px solid #DC2626;
+                border-bottom-left-radius: 7px;
+                background: transparent;
+                margin-top: 12px;
+            }
+            QSpinBox::down-arrow {
+                image: none;
+                border-left: 4px solid transparent;
+                border-right: 4px solid transparent;
+                border-top: 5px solid #DC2626;
+                width: 0;
+                height: 0;
+            }
         """)
 
     def _hide_unit_number_error(self):
         """Hide unit number validation error."""
         self.unit_number_error.setVisible(False)
         self.unit_number_input.setStyleSheet(f"""
-            QLineEdit {{
-                background-color: #F8FAFC;
-                border: 1px solid {Config.INPUT_BORDER};
-                border-radius: 6px;
-                padding: 8px 12px;
+            QSpinBox {{
+                background-color: #FFFFFF;
+                border: 1px solid #E5E7EB;
+                border-radius: 8px;
+                padding: 8px 12px 8px 32px;
                 font-size: 14px;
+                min-height: 24px;
             }}
-            QLineEdit:focus {{
-                border: 2px solid {Config.PRIMARY_COLOR};
+            QSpinBox:focus {{
+                border: 1px solid {Config.PRIMARY_COLOR};
+            }}
+            QSpinBox::up-button {{
+                subcontrol-origin: border;
+                subcontrol-position: center left;
+                width: 24px;
+                height: 12px;
+                border: none;
+                border-right: 1px solid #E5E7EB;
+                border-top-left-radius: 7px;
+                background: transparent;
+            }}
+            QSpinBox::up-button:hover {{
+                background: #F3F4F6;
+            }}
+            QSpinBox::up-arrow {{
+                image: none;
+                border-left: 4px solid transparent;
+                border-right: 4px solid transparent;
+                border-bottom: 5px solid #9CA3AF;
+                width: 0;
+                height: 0;
+            }}
+            QSpinBox::down-button {{
+                subcontrol-origin: border;
+                subcontrol-position: center left;
+                width: 24px;
+                height: 12px;
+                border: none;
+                border-right: 1px solid #E5E7EB;
+                border-bottom-left-radius: 7px;
+                background: transparent;
+                margin-top: 12px;
+            }}
+            QSpinBox::down-button:hover {{
+                background: #F3F4F6;
+            }}
+            QSpinBox::down-arrow {{
+                image: none;
+                border-left: 4px solid transparent;
+                border-right: 4px solid transparent;
+                border-top: 5px solid #9CA3AF;
+                width: 0;
+                height: 0;
             }}
         """)
 
     def _get_padded_unit_number(self) -> str:
         """Get unit number padded to 3 digits."""
-        text = self.unit_number_input.text().strip()
-        if text.isdigit():
-            return text.zfill(3)
+        num = self.unit_number_input.value()
+        if num > 0:
+            return str(num).zfill(3)
         return "001"
 
     def accept(self):
@@ -297,15 +610,24 @@ class UnitDialog(QDialog):
         # Generate unit_id from building_id + unit_number
         unit_id = f"{building_id}-{unit_number}"
 
+        # Parse area from text input
+        area_text = self.area_input.text().strip()
+        area_sqm = None
+        if area_text:
+            try:
+                area_sqm = float(area_text)
+            except ValueError:
+                area_sqm = None
+
         return {
             "building_id": building_id,
             "unit_number": unit_number,
             "unit_id": unit_id,
-            "unit_type": self.type_combo.currentData(),
+            "unit_type": self.type_combo.currentData() or None,
             "floor_number": self.floor_spin.value(),
-            "apartment_number": self.apt_number.text().strip(),
-            "apartment_status": self.status_combo.currentData(),
-            "area_sqm": float(self.area_spin.value()) if self.area_spin.value() > 0 else None,
+            "apartment_number": str(self.apt_number.value()) if self.apt_number.value() > 0 else "",
+            "apartment_status": self.status_combo.currentData() or None,
+            "area_sqm": area_sqm,
             "property_description": self.description.toPlainText().strip(),
         }
 
