@@ -119,7 +119,7 @@ class ApiSettings:
 
     SOLID: Single Responsibility - only API configuration
     """
-
+    #BASE_URL: str = "http://localhost:8080/api"
     # Connection - default from Config.API_BASE_URL
     base_url: str = "https://localhost:7204/api"
     timeout: int = 30
