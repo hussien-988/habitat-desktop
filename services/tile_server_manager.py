@@ -408,8 +408,10 @@ class TileServerManager:
         TileServer.mbtiles_path = base_path / "data" / "aleppo_tiles.mbtiles"
         TileServer.assets_path = base_path / "assets" / "leaflet"
 
-        # Create server
-        self._server = HTTPServer(('127.0.0.1', self._port), TileServer)
+        # Create server - listen on all interfaces (0.0.0.0) to allow network access
+        # ✅ NETWORK ACCESS: 0.0.0.0 allows other team members to connect
+        # 🔒 SECURITY: Only use on trusted networks (not public Wi-Fi!)
+        self._server = HTTPServer(('0.0.0.0', self._port), TileServer)
 
         # Start server in background thread
         self._server_thread = threading.Thread(

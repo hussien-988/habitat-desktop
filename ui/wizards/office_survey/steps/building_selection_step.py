@@ -580,11 +580,17 @@ class BuildingSelectionStep(BaseStep):
         """
         from ui.components.building_map_dialog_v2 import show_building_map_dialog
 
-        # ✅ FIX: Get auth token from building_controller
+        # ✅ FIX: Get auth token from parent window (MainWindow has current_user with token)
         auth_token = None
-        if hasattr(self.building_controller, 'api_client') and self.building_controller.api_client:
-            auth_token = getattr(self.building_controller.api_client, 'access_token', None)
-            logger.debug(f"Got auth token from BuildingController: {bool(auth_token)}")
+        try:
+            main_window = self
+            while main_window and not hasattr(main_window, 'current_user'):
+                main_window = main_window.parent()
+            if main_window and hasattr(main_window, 'current_user') and main_window.current_user:
+                auth_token = getattr(main_window.current_user, '_api_token', None)
+                logger.debug(f"✅ Got auth token from MainWindow.current_user: {bool(auth_token)}")
+        except Exception as e:
+            logger.warning(f"Could not get auth token from parent: {e}")
 
         # Always open in selection mode (not view-only)
         # User can search and select building even if already selected
@@ -628,26 +634,44 @@ class BuildingSelectionStep(BaseStep):
 
     def _open_map_dialog(self):
         """
-        Open professional map dialog for building search and selection.
+        Open map dialog to VIEW the currently selected building.
 
-        Uses BuildingMapWidget (DRY principle) - reusable component with:
-        - Interactive map with building selection
-        - Color-coded building status
-        - Proven stable implementation
-        - Focus on currently selected building if exists
+        ✅ DRY: Uses show_building_map_dialog helper (unified across app)
+        ✅ View-only mode: Shows selected building with focus (no re-selection)
         """
-        from ui.components.building_map_widget import BuildingMapWidget
+        from ui.components.building_map_dialog_v2 import show_building_map_dialog
 
-        # Use shared component (DRY)
-        map_widget = BuildingMapWidget(self.context.db, self)
+        # Get auth token
+        auth_token = None
+        try:
+            main_window = self
+            while main_window and not hasattr(main_window, 'current_user'):
+                main_window = main_window.parent()
+            if main_window and hasattr(main_window, 'current_user') and main_window.current_user:
+                auth_token = getattr(main_window.current_user, '_api_token', None)
+        except Exception as e:
+            logger.warning(f"Could not get auth token: {e}")
 
-        # If we already have a selected building, focus on it when opening map
-        current_building_id = None
+        # If we already have a selected building, open in VIEW-ONLY mode
         if hasattr(self, 'selected_building') and self.selected_building:
-            current_building_id = self.selected_building.building_id
+            # ✅ VIEW-ONLY MODE: Just show the building, don't allow re-selection
+            show_building_map_dialog(
+                db=self.context.db,
+                selected_building_id=self.selected_building.building_id,
+                auth_token=auth_token,
+                read_only=True,  # ✅ View-only: focus on building
+                parent=self
+            )
+            return  # ✅ Don't process result (view-only, not selection)
 
-        # Show dialog and get selected building (with optional focus on current selection)
-        selected_building = map_widget.show_dialog(selected_building_id=current_building_id)
+        # If no building selected yet, open in SELECTION mode
+        selected_building = show_building_map_dialog(
+            db=self.context.db,
+            selected_building_id=None,
+            auth_token=auth_token,
+            read_only=False,  # Selection mode
+            parent=self
+        )
 
         if selected_building:
             # Update context and UI

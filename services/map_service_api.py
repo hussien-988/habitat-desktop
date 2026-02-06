@@ -182,23 +182,28 @@ class MapServiceAPI:
             قائمة بـ Building objects
         """
         try:
-            print(f"\n[DEBUG] MapServiceAPI.get_buildings_in_bbox() called")
+            print(f"\n[DEBUG] ========== VIEWPORT LOADING (get_buildings_in_bbox) ==========")
             print(f"[DEBUG] BBox: NE({north_east_lat}, {north_east_lng}) - SW({south_west_lat}, {south_west_lng})")
             print(f"[DEBUG] Page Size: {page_size}")
-            print(f"[DEBUG] Calling: POST /api/v1/Buildings/polygon")
+            print(f"[DEBUG] Calling: POST /api/v1/BuildingAssignments/buildings/search (CORRECT API)")
 
             # Convert bounding box to polygon WKT
             # Polygon: SW corner → SE corner → NE corner → NW corner → SW corner (close)
             polygon_wkt = f"POLYGON(({south_west_lng} {south_west_lat}, {north_east_lng} {south_west_lat}, {north_east_lng} {north_east_lat}, {south_west_lng} {north_east_lat}, {south_west_lng} {south_west_lat}))"
-            print(f"[DEBUG] Polygon WKT: {polygon_wkt}")
+            print(f"[DEBUG] 📐 VIEWPORT WKT (FULL):")
+            print(f"[DEBUG]    {polygon_wkt}")
+            print(f"[DEBUG]    WKT length: {len(polygon_wkt)} characters")
 
-            buildings_data = self.api.get_buildings_in_polygon(
+            # ✅ FIX: Use BuildingAssignments API (correct API with full PostGIS support)
+            result = self.api.search_buildings_for_assignment(
                 polygon_wkt=polygon_wkt,
-                status=status_filter,
+                has_active_assignment=None,  # Get all buildings (assigned + unassigned)
                 page=1,
-                page_size=page_size  # Professional: Configurable page size
+                page_size=page_size
             )
 
+            # Extract buildings from paginated response
+            buildings_data = result.get("items", [])
             print(f"[DEBUG] API Response: {len(buildings_data)} buildings received")
 
             buildings = []

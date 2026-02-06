@@ -93,8 +93,11 @@ class MapBridge(QObject):
     @pyqtSlot(str, str)
     def onGeometryDrawn(self, geom_type: str, wkt: str):
         """Called from JavaScript when geometry is drawn."""
-        logger.info(f"Geometry drawn: {geom_type} - {wkt[:100]}...")
+        logger.info(f"🎨 MapBridge.onGeometryDrawn called from JavaScript!")
+        logger.info(f"   geom_type: {geom_type}")
+        logger.info(f"   wkt: {wkt[:100] if wkt else 'None'}...")
         self.geometry_drawn.emit(geom_type, wkt)
+        logger.info(f"   ✅ geometry_drawn signal emitted")
 
     @pyqtSlot(float, float, int)
     def onCoordinatesUpdate(self, lat: float, lon: float, zoom: int):
@@ -219,6 +222,10 @@ class BaseMapDialog(QDialog):
             )
             logger.info("✅ Viewport loading enabled (cache disabled - needs db instance)")
 
+        # ✅ UNIFIED: Get auth token if not provided (DRY principle)
+        if not self._auth_token and parent:
+            self._auth_token = self._get_auth_token_from_parent(parent)
+
         # Create overlay (gray transparent layer)
         if parent:
             self._overlay = self._create_overlay(parent)
@@ -277,6 +284,10 @@ class BaseMapDialog(QDialog):
             settings = self.web_view.settings()
             settings.setAttribute(QWebEngineSettings.JavascriptEnabled, True)
             settings.setAttribute(QWebEngineSettings.LocalContentCanAccessRemoteUrls, True)
+            settings.setAttribute(QWebEngineSettings.LocalContentCanAccessFileUrls, True)
+            settings.setAttribute(QWebEngineSettings.LocalStorageEnabled, True)
+            settings.setAttribute(QWebEngineSettings.JavascriptCanAccessClipboard, True)
+            settings.setAttribute(QWebEngineSettings.JavascriptCanOpenWindows, True)
 
             # Setup WebChannel
             if HAS_WEBCHANNEL:
@@ -681,11 +692,17 @@ class BaseMapDialog(QDialog):
 
     def _on_geometry_drawn(self, geom_type: str, wkt: str):
         """Handle geometry drawn - emit signal."""
+        logger.info(f"📍 BaseMapDialog._on_geometry_drawn called")
+        logger.info(f"   geom_type: {geom_type}")
+        logger.info(f"   wkt: {wkt[:100] if wkt else 'None'}...")
+
         # Update coordinates display if enabled
         if self.show_confirm_button:
             self._update_coordinates_display(geom_type, wkt)
 
+        logger.info(f"   Emitting geometry_selected signal...")
         self.geometry_selected.emit(geom_type, wkt)
+        logger.info(f"   ✅ geometry_selected signal emitted")
 
     def _on_coordinates_update(self, lat: float, lon: float, zoom: int):
         """Handle coordinates update - emit signal."""
@@ -944,9 +961,14 @@ class BaseMapDialog(QDialog):
             building_controller = BuildingController(db)
 
             # CRITICAL FIX: Set auth token BEFORE any operations!
+            logger.info(f"🔍 load_buildings_geojson: auth_token={bool(auth_token)}, is_using_api={building_controller.is_using_api}")
             if auth_token and building_controller.is_using_api:
                 building_controller.set_auth_token(auth_token)
-                logger.info(f"✅ Auth token set for BuildingController before load")
+                logger.info(f"✅ Auth token set for BuildingController (token length: {len(auth_token)})")
+            elif not auth_token:
+                logger.error(f"❌ NO AUTH TOKEN provided to load_buildings_geojson!")
+            elif not building_controller.is_using_api:
+                logger.info(f"ℹ️ BuildingController using local DB (auth token not needed)")
 
             # PROFESSIONAL FIX: Pass limit to API via BuildingFilter (no over-fetching!)
             building_filter = BuildingFilter(limit=limit)
@@ -971,6 +993,36 @@ class BaseMapDialog(QDialog):
             logger.error(f"Error loading buildings: {e}", exc_info=True)
             # Return empty GeoJSON on error
             return '{"type":"FeatureCollection","features":[]}'
+
+    def _get_auth_token_from_parent(self, parent) -> Optional[str]:
+        """
+        Get auth token from parent window (MainWindow.current_user).
+
+        ✅ DRY: Single source of truth for auth_token retrieval (Best Practice).
+
+        Args:
+            parent: Parent widget
+
+        Returns:
+            Auth token string or None
+        """
+        if not parent:
+            return None
+
+        try:
+            main_window = parent
+            while main_window and not hasattr(main_window, 'current_user'):
+                main_window = main_window.parent()
+
+            if main_window and hasattr(main_window, 'current_user') and main_window.current_user:
+                token = getattr(main_window.current_user, '_api_token', None)
+                if token:
+                    logger.debug(f"✅ Auth token retrieved from MainWindow (length: {len(token)})")
+                return token
+        except Exception as e:
+            logger.warning(f"Could not get auth token from parent: {e}")
+
+        return None
 
     def _cleanup_overlay(self):
         """Remove overlay from screen."""

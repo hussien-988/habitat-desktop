@@ -37,6 +37,7 @@ class MapPickerDialog(BaseMapDialog):
         self,
         initial_lat: float = 36.2021,
         initial_lon: float = 37.1343,
+        initial_zoom: int = 13,
         allow_polygon: bool = True,
         db = None,
         parent=None
@@ -47,12 +48,14 @@ class MapPickerDialog(BaseMapDialog):
         Args:
             initial_lat: Initial map center latitude
             initial_lon: Initial map center longitude
+            initial_zoom: Initial map zoom level (default: 13)
             allow_polygon: Allow polygon drawing (not just point)
             db: Database instance (optional, for loading buildings)
             parent: Parent widget
         """
         self.initial_lat = initial_lat
         self.initial_lon = initial_lon
+        self.initial_zoom = initial_zoom
         self.allow_polygon = allow_polygon
         self.db = db
         self._result = None
@@ -97,6 +100,7 @@ class MapPickerDialog(BaseMapDialog):
                 except Exception as e:
                     logger.warning(f"Could not get auth token from parent: {e}")
 
+                # ✅ OPTIMIZED: 200 is sufficient for initial load with viewport loading
                 buildings_geojson = self.load_buildings_geojson(self.db, limit=200, auth_token=auth_token)
             else:
                 logger.warning("No database provided - map will not show existing buildings")
@@ -110,7 +114,9 @@ class MapPickerDialog(BaseMapDialog):
                 buildings_geojson=buildings_geojson,  # Now with buildings!
                 center_lat=self.initial_lat,
                 center_lon=self.initial_lon,
-                zoom=14,
+                zoom=self.initial_zoom,  # ✅ Smart zoom on neighborhood
+                min_zoom=self.initial_zoom,  # ✅ "اجبرو بلا مايحس" - prevent zoom out!
+                max_zoom=18,  # Allow zoom in for precision
                 show_legend=True,  # Show legend for building status
                 show_layer_control=False,
                 enable_selection=False,  # Don't allow selecting buildings

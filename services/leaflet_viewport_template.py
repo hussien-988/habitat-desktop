@@ -22,6 +22,26 @@ VIEWPORT_LOADING_JS_TEMPLATE = '''
         // Viewport-Based Loading (Professional Best Practice)
         // =========================================================
 
+        // ✅ CRITICAL: Define getStatusKey if not already defined (for viewport loading)
+        if (typeof getStatusKey === 'undefined') {
+            var statusMapping = {
+                1: 'intact',
+                2: 'minor_damage',
+                3: 'major_damage',
+                4: 'major_damage',
+                5: 'severely_damaged',
+                6: 'destroyed',
+                7: 'under_construction',
+                8: 'demolished',
+                99: 'intact'
+            };
+
+            function getStatusKey(status) {
+                return typeof status === 'number' ? (statusMapping[status] || 'intact') : status;
+            }
+            console.log('✅ getStatusKey defined for viewport loading');
+        }
+
         // Professional Configuration (✅ محدّث من MapConstants)
         var MIN_ZOOM_FOR_LOADING = 12;      // Don't load buildings below this zoom (performance)
         var MAX_MARKERS_PER_VIEWPORT = 2000; // ✅ محسّن: زيادة من 1000 إلى 2000
@@ -202,7 +222,7 @@ VIEWPORT_LOADING_JS_TEMPLATE = '''
                 currentBuildingsLayer = L.geoJSON(newBuildingsData, {
                     // Style function for Polygon/MultiPolygon features
                     style: function(feature) {
-                        var status = feature.properties.status || 'intact';
+                        var status = getStatusKey(feature.properties.status || 1);  // ✅ FIX: استخدام getStatusKey
                         var color = statusColors[status] || '#0072BC';
 
                         return {

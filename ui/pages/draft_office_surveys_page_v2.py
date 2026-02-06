@@ -274,8 +274,11 @@ class DraftOfficeSurveysPage(QWidget):
         header_layout = QHBoxLayout()
         header_layout.setSpacing(Spacing.MD)
 
-        # Title
-        title = Heading("المسودة", level=1)
+        # Title - DRY: Using unified page title styling (18pt, PAGE_TITLE color)
+        from ui.font_utils import create_font, FontManager
+        title = QLabel("المسودة")
+        title.setFont(create_font(size=FontManager.SIZE_TITLE, weight=FontManager.WEIGHT_SEMIBOLD))
+        title.setStyleSheet(f"color: {Colors.PAGE_TITLE}; background: transparent; border: none;")
         header_layout.addWidget(title)
 
         header_layout.addSpacerItem(

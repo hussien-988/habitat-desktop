@@ -41,7 +41,14 @@ class BuildingMapDialog(BaseMapDialog):
         Building: Selected building
     """
 
-    def __init__(self, db: Database, selected_building_id: Optional[str] = None, auth_token: Optional[str] = None, parent=None):
+    def __init__(
+        self,
+        db: Database,
+        selected_building_id: Optional[str] = None,
+        auth_token: Optional[str] = None,
+        read_only: bool = False,
+        parent=None
+    ):
         """
         Initialize building map dialog.
 
@@ -49,13 +56,14 @@ class BuildingMapDialog(BaseMapDialog):
             db: Database instance
             selected_building_id: Optional building ID to show (view-only mode)
             auth_token: Optional API authentication token
+            read_only: If True, map is read-only (no selection allowed)
             parent: Parent widget
         """
         self.db = db
         self.building_controller = BuildingController(db)
         self._selected_building = None
         self._selected_building_id = selected_building_id
-        self._is_view_only = bool(selected_building_id)
+        self._is_view_only = read_only or bool(selected_building_id)  # ✅ Support explicit read_only
         self._buildings_cache = []  # Cache loaded buildings for quick lookup
 
         # ✅ FIX: Use provided auth token first, fallback to parent window
@@ -105,6 +113,11 @@ class BuildingMapDialog(BaseMapDialog):
         self._auth_token = temp_auth_token
         logger.debug(f"✅ Auth token set in BaseMapDialog: {bool(self._auth_token)}")
 
+        # ✅ FIX: Set token in viewport loader to prevent 401 errors
+        if hasattr(self, '_viewport_loader') and self._viewport_loader and self._viewport_loader.map_service and self._auth_token:
+            self._viewport_loader.map_service.set_auth_token(self._auth_token)
+            logger.info(f"✅ Auth token set in viewport loader")
+
         # Connect building selection signal (from map clicks)
         self.building_selected.connect(self._on_building_selected_from_map)
 
@@ -123,9 +136,15 @@ class BuildingMapDialog(BaseMapDialog):
             logger.debug(f"Using auth token for loading buildings: {bool(self._auth_token)}")
 
             # Load buildings using shared method (DRY principle)
-            # SIMPLIFIED: Load more buildings initially like un-1 (200 buildings)
-            # No viewport loading - single load for reliability
-            buildings_geojson = self.load_buildings_geojson(self.db, limit=200, auth_token=self._auth_token)
+            # ✅ VIEW-ONLY MODE: Load ONLY the selected building (no others!)
+            # ✅ SELECTION MODE: 200 buildings for initial load
+            if self._is_view_only and self._selected_building_id:
+                # View-only: Empty initial load (will add selected building below)
+                buildings_geojson = '{"type": "FeatureCollection", "features": []}'
+                logger.info("🎯 View-only mode: Loading ONLY selected building (no initial 200)")
+            else:
+                # Selection mode: Load 200 buildings for browsing
+                buildings_geojson = self.load_buildings_geojson(self.db, limit=200, auth_token=self._auth_token)
 
             # DEBUG: Check if buildings were loaded
             import json
@@ -146,9 +165,54 @@ class BuildingMapDialog(BaseMapDialog):
             # Only load buildings if in view-only mode (for focusing on specific building)
             buildings = []
             if self._is_view_only and self._selected_building_id:
-                building_filter = BuildingFilter(search_text=self._selected_building_id)
-                result = self.building_controller.load_buildings(building_filter)
+                logger.info(f"🔍 Focus mode: Looking for building_id = {self._selected_building_id}")
+                # ✅ Use search_buildings for exact building_id search
+                result = self.building_controller.search_buildings(self._selected_building_id)
                 buildings = result.data if result.success else []
+                logger.info(f"🔍 Search result: success={result.success}, found {len(buildings)} buildings")
+
+                # ✅ FIX: Add selected building to GeoJSON if not already present
+                if buildings and len(buildings) > 0:
+                    from services.geojson_converter import GeoJSONConverter
+                    selected_building_geojson = GeoJSONConverter.buildings_to_geojson(
+                        buildings,
+                        prefer_polygons=True
+                    )
+
+                    # Merge selected building into buildings_geojson
+                    selected_data = json.loads(selected_building_geojson)
+                    if selected_data.get('features'):
+                        # Check if building already exists in geojson_data
+                        existing_ids = {
+                            f.get('properties', {}).get('building_id')
+                            for f in geojson_data.get('features', [])
+                        }
+
+                        # Add selected building if not present
+                        for feature in selected_data['features']:
+                            building_id = feature.get('properties', {}).get('building_id')
+                            if building_id not in existing_ids:
+                                geojson_data['features'].append(feature)
+                                logger.info(f"✅ Added selected building {building_id} to GeoJSON")
+
+                        # Update buildings_geojson with merged data
+                        buildings_geojson = json.dumps(geojson_data)
+
+            # DEBUG: Check if buildings were loaded
+            import json
+            geojson_data = json.loads(buildings_geojson) if isinstance(buildings_geojson, str) else buildings_geojson
+            num_features = len(geojson_data.get('features', []))
+            logger.info(f"📊 Loaded {num_features} buildings into GeoJSON")
+
+            if num_features == 0:
+                logger.error("❌ NO BUILDINGS LOADED! GeoJSON is empty!")
+            else:
+                # Check if buildings have coordinates
+                features_with_coords = sum(
+                    1 for f in geojson_data['features']
+                    if f.get('geometry') and f['geometry'].get('coordinates')
+                )
+                logger.info(f"📍 Buildings with coordinates: {features_with_coords}/{num_features}")
 
             # Determine center and zoom
             # ✅ محسّن: زوم متوسط يملأ النافذة بشكل جيد
@@ -159,39 +223,52 @@ class BuildingMapDialog(BaseMapDialog):
 
             # If view-only mode, focus on the selected building
             if self._is_view_only and self._selected_building_id:
+                logger.info(f"🎯 Focus mode: self._selected_building_id = {self._selected_building_id}")
+                logger.info(f"🎯 Focus mode: buildings list has {len(buildings)} buildings")
+                if buildings:
+                    logger.info(f"🎯 Buildings IDs in list: {[b.building_id for b in buildings]}")
+
                 focus_building = next(
                     (b for b in buildings if b.building_id == self._selected_building_id),
                     None
                 )
+
+                if focus_building:
+                    logger.info(f"✅ Found focus_building: {focus_building.building_id} at ({focus_building.latitude}, {focus_building.longitude})")
+                else:
+                    logger.error(f"❌ Could NOT find focus_building with ID {self._selected_building_id} in buildings list!")
+
                 if focus_building and focus_building.latitude and focus_building.longitude:
                     center_lat = focus_building.latitude
                     center_lon = focus_building.longitude
                     zoom = 16  # ✅ محسّن: زوم 16 للمبنى المحدد (أقصى zoom آمن)
                     focus_building_id = self._selected_building_id
-                    logger.info(f"View-only mode: Focusing on building {focus_building_id}")
+                    logger.info(f"🎯 Focusing on building {focus_building_id} at ({center_lat}, {center_lon}) with zoom {zoom}")
+                else:
+                    logger.error(f"❌ Focus building missing coordinates or not found!")
 
             # Generate map HTML using LeafletHTMLGenerator
-            # ✅ PHASE 2: Enable viewport loading for 9000+ buildings!
             html = generate_leaflet_html(
                 tile_server_url=tile_server_url.rstrip('/'),
-                buildings_geojson=buildings_geojson,  # Initial load (200 buildings)
+                buildings_geojson=buildings_geojson,  # View-only: 1 building, Selection: 200
                 center_lat=center_lat,
                 center_lon=center_lon,
-                zoom=zoom,  # ✅ محسّن: استخدام متغير zoom (15 للوضوح الأفضل، 16 لـview-only)
-                max_zoom=16,  # ✅ محسّن: تخفيض من 17 لتجنب gray tiles (التايلز حتى 16 فقط)
+                zoom=zoom,
+                max_zoom=16,
                 show_legend=True,
                 show_layer_control=False,
-                enable_selection=(not self._is_view_only),  # Enable selection in selection mode
-                enable_viewport_loading=True,  # ✅ مفعّل: تحميل ديناميكي عند Pan/Zoom
-                enable_drawing=False  # No drawing for building selection
+                enable_selection=(not self._is_view_only),
+                enable_viewport_loading=(not self._is_view_only),  # ✅ Disabled in view-only (no need!)
+                enable_drawing=False
             )
 
             # Load into web view
             self.load_map_html(html)
 
-            # If view-only mode, open popup for focused building
+            # If view-only mode, open popup for focused building immediately (no delay)
             if self._is_view_only and focus_building_id:
-                self._open_building_popup(focus_building_id, center_lat, center_lon)
+                logger.info(f"📍 Opening popup for building {focus_building_id}")
+                self._open_building_popup_immediate(focus_building_id, center_lat, center_lon)
 
         except Exception as e:
             logger.error(f"Error loading map: {e}", exc_info=True)
@@ -201,9 +278,97 @@ class BuildingMapDialog(BaseMapDialog):
                 f"حدث خطأ أثناء تحميل الخريطة:\n{str(e)}"
             )
 
+    def _open_building_popup_immediate(self, building_id: str, lat: float, lon: float):
+        """
+        Open popup for focused building IMMEDIATELY when map loads (no flicker).
+
+        ✅ FIX: Uses map.whenReady() to open popup as soon as map is ready.
+        No gray screen, no center transition - direct focus on building!
+
+        Args:
+            building_id: Building ID to focus on
+            lat: Latitude
+            lon: Longitude
+        """
+        js = f"""
+        (function() {{
+            console.log('🎯 Focus mode: Opening building {building_id} immediately');
+
+            // Wait for map to be fully loaded and ready
+            if (typeof map !== 'undefined' && map) {{
+                map.whenReady(function() {{
+                    console.log('✅ Map ready, focusing on building {building_id}');
+
+                    // Find and enhance building marker
+                    if (typeof buildingsLayer !== 'undefined' && buildingsLayer) {{
+                        buildingsLayer.eachLayer(function(layer) {{
+                            if (layer.feature && layer.feature.properties.building_id === '{building_id}') {{
+                                console.log('✅ Found building marker');
+
+                                // Enhanced marker for visibility
+                                if (layer.setIcon) {{
+                                    // ✅ FIX: Convert status from int to string key if needed
+                                    var rawStatus = layer.feature.properties.status || 1;
+                                    var status = (typeof rawStatus === 'number' && typeof getStatusKey === 'function')
+                                        ? getStatusKey(rawStatus)
+                                        : (typeof rawStatus === 'string' ? rawStatus : 'intact');
+
+                                    var statusColors = {{
+                                        'intact': '#28a745',
+                                        'minor_damage': '#ffc107',
+                                        'major_damage': '#fd7e14',
+                                        'severely_damaged': '#dc3545',
+                                        'destroyed': '#dc3545',
+                                        'under_construction': '#17a2b8',
+                                        'demolished': '#6c757d'
+                                    }};
+                                    var color = statusColors[status] || '#0072BC';
+
+                                    // ✅ HUGE ICON: 2x size (72×108) - "الشاطر" 😎
+                                    var largeIcon = L.divIcon({{
+                                        className: 'building-pin-icon-huge',
+                                        html: '<div style="width: 72px; height: 108px;">' +
+                                              '<svg width="72" height="108" viewBox="0 0 24 36" xmlns="http://www.w3.org/2000/svg">' +
+                                              '<path d="M12 0C5.4 0 0 5.4 0 12c0 8 12 24 12 24s12-16 12-24c0-6.6-5.4-12-12-12z" ' +
+                                              'fill="' + color + '" stroke="#fff" stroke-width="3"/>' +
+                                              '<circle cx="12" cy="12" r="5" fill="#fff"/>' +
+                                              '</svg></div>',
+                                        iconSize: [72, 108],
+                                        iconAnchor: [36, 108],
+                                        popupAnchor: [0, -108]
+                                    }});
+                                    layer.setIcon(largeIcon);
+
+                                    // ✅ Bring marker to front (above all other buildings)
+                                    if (layer.setZIndexOffset) {{
+                                        layer.setZIndexOffset(10000);  // Very high z-index
+                                    }}
+
+                                    console.log('✅ Enhanced icon set with color: ' + color);
+                                }}
+
+                                // ✅ Bring layer to front
+                                if (layer.bringToFront) {{
+                                    layer.bringToFront();
+                                }}
+
+                                // Open popup immediately (no delay!)
+                                setTimeout(function() {{
+                                    layer.openPopup();
+                                    console.log('✅ Popup opened');
+                                }}, 100);  // Minimal delay for rendering
+                            }}
+                        }});
+                    }}
+                }});
+            }}
+        }})();
+        """
+        self.web_view.page().runJavaScript(js)
+
     def _open_building_popup(self, building_id: str, lat: float, lon: float):
         """
-        Open popup for focused building in view-only mode.
+        Open popup for focused building in view-only mode (legacy method).
 
         Args:
             building_id: Building ID to focus on
@@ -227,12 +392,20 @@ class BuildingMapDialog(BaseMapDialog):
                         if (layer.feature && layer.feature.properties.building_id === '{building_id}') {{
                             // Enhanced marker for visibility
                             if (layer.setIcon) {{
-                                var status = layer.feature.properties.status || 'intact';
+                                // ✅ FIX: Convert status from int to string key if needed
+                                var rawStatus = layer.feature.properties.status || 1;
+                                var status = (typeof rawStatus === 'number' && typeof getStatusKey === 'function')
+                                    ? getStatusKey(rawStatus)
+                                    : (typeof rawStatus === 'string' ? rawStatus : 'intact');
+
                                 var statusColors = {{
                                     'intact': '#28a745',
                                     'minor_damage': '#ffc107',
                                     'major_damage': '#fd7e14',
-                                    'destroyed': '#dc3545'
+                                    'severely_damaged': '#dc3545',
+                                    'destroyed': '#dc3545',
+                                    'under_construction': '#17a2b8',
+                                    'demolished': '#6c757d'
                                 }};
                                 var color = statusColors[status] || '#0072BC';
 
@@ -489,6 +662,7 @@ def show_building_map_dialog(
     db: Database,
     selected_building_id: Optional[str] = None,
     auth_token: Optional[str] = None,
+    read_only: bool = False,
     parent=None
 ) -> Optional[Building]:
     """
@@ -503,7 +677,7 @@ def show_building_map_dialog(
     Returns:
         Selected building, or None if cancelled
     """
-    dialog = BuildingMapDialog(db, selected_building_id, auth_token, parent)
+    dialog = BuildingMapDialog(db, selected_building_id, auth_token, read_only, parent)
     result = dialog.exec_()
 
     if result == dialog.Accepted:

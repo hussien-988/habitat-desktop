@@ -51,6 +51,7 @@ class LeafletHTMLGenerator:
         center_lat: float = 36.2021,
         center_lon: float = 37.1343,
         zoom: int = 16,  # ✅ محسّن: زوم أعلى (16 بدلاً من 14) للوضوح الأفضل
+        min_zoom: int = None,  # NEW: Minimum zoom level (prevents zooming out)
         max_zoom: int = 17,  # NEW: Maximum zoom level (based on available tiles)
         show_legend: bool = True,
         show_layer_control: bool = True,
@@ -116,6 +117,7 @@ class LeafletHTMLGenerator:
         center_lat,
         center_lon,
         zoom,
+        min_zoom,
         max_zoom,
         show_legend,
         show_layer_control,
@@ -390,6 +392,7 @@ class LeafletHTMLGenerator:
         center_lat: float,
         center_lon: float,
         zoom: int,
+        min_zoom: int,
         max_zoom: int,
         show_legend: bool,
         show_layer_control: bool,
@@ -438,7 +441,7 @@ class LeafletHTMLGenerator:
         var map = L.map('map', {{
             preferCanvas: true,   // CRITICAL: Use Canvas renderer (10x faster!)
             maxZoom: {max_zoom},  // Prevent zooming beyond available tiles
-            minZoom: 13
+            minZoom: {min_zoom if min_zoom is not None else 13}  // ✅ Smart constraint: prevent zoom out beyond neighborhood!
         }}).setView([{center_lat}, {center_lon}], {zoom});
 
         // Add tile layer from local server
@@ -676,7 +679,7 @@ class LeafletHTMLGenerator:
         // Expose functions to Python
         window.highlightBuilding = highlightBuilding;
 
-        {LeafletHTMLGenerator._get_selection_js() if (enable_selection or enable_viewport_loading) else '// Selection disabled'}
+        {LeafletHTMLGenerator._get_selection_js() if (enable_selection or enable_viewport_loading or enable_drawing or enable_multiselect) else '// Selection disabled'}
 
         {LeafletHTMLGenerator._get_drawing_js(drawing_mode) if enable_drawing else '// Drawing disabled'}
 
@@ -801,14 +804,70 @@ class LeafletHTMLGenerator:
         // QWebChannel setup for building selection
         var bridge = null;
         var bridgeReady = false;
+        var initAttempts = 0;
+        var maxInitAttempts = 100;  // 5 seconds max (100 × 50ms)
 
-        if (typeof QWebChannel !== 'undefined') {{
-            new QWebChannel(qt.webChannelTransport, function(channel) {{
-                bridge = channel.objects.buildingBridge || channel.objects.bridge;
-                bridgeReady = true;
-                console.log('✅ QWebChannel bridge ready for selection');
-            }});
+        // ✅ FIX: Wait for qt.webChannelTransport to be ready (prevents timing issues)
+        function initializeQWebChannel() {{
+            initAttempts++;
+
+            // Check for max attempts
+            if (initAttempts > maxInitAttempts) {{
+                console.error('❌ QWebChannel initialization failed after ' + (maxInitAttempts * 50) + 'ms');
+                console.error('   typeof QWebChannel:', typeof QWebChannel);
+                console.error('   typeof qt:', typeof qt);
+                console.error('   qt.webChannelTransport:', typeof qt !== 'undefined' ? qt.webChannelTransport : 'N/A');
+                return;
+            }}
+
+            if (typeof QWebChannel === 'undefined') {{
+                console.log('⏳ QWebChannel not loaded yet (attempt ' + initAttempts + '), waiting...');
+                setTimeout(initializeQWebChannel, 50);
+                return;
+            }}
+
+            if (typeof qt === 'undefined' || !qt.webChannelTransport) {{
+                if (initAttempts % 20 === 0) {{  // Log every second
+                    console.log('⏳ Waiting for qt.webChannelTransport (attempt ' + initAttempts + ')...');
+                }}
+                setTimeout(initializeQWebChannel, 50);  // Retry in 50ms
+                return;
+            }}
+
+            try {{
+                console.log('🔄 Initializing QWebChannel (attempt ' + initAttempts + ')...');
+                new QWebChannel(qt.webChannelTransport, function(channel) {{
+                    bridge = channel.objects.buildingBridge || channel.objects.bridge;
+                    if (!bridge) {{
+                        console.error('❌ Bridge object not found in channel!');
+                        console.error('   Available objects:', Object.keys(channel.objects));
+                        return;
+                    }}
+
+                    window.bridge = bridge;  // Make bridge globally accessible
+                    bridgeReady = true;
+                    window.bridgeReady = true;  // Make bridgeReady globally accessible
+                    console.log('✅ QWebChannel bridge ready for selection (attempt ' + initAttempts + ')');
+                    console.log('   Bridge methods:', Object.keys(bridge));
+
+                    // Notify Python that bridge is ready
+                    if (bridge && bridge.onBridgeReady) {{
+                        bridge.onBridgeReady();
+                    }}
+
+                    // Notify any waiting code that bridge is ready
+                    if (typeof window.onBridgeReady === 'function') {{
+                        window.onBridgeReady();
+                    }}
+                }});
+            }} catch (error) {{
+                console.error('❌ Failed to initialize QWebChannel:', error);
+                console.error('   Error details:', error.message, error.stack);
+            }}
         }}
+
+        // Start initialization after a small delay to ensure DOM is ready
+        setTimeout(initializeQWebChannel, 100);
 
         // Function to select building (called from popup button)
         // ✅ FIX: Wait for bridge or retry with timeout

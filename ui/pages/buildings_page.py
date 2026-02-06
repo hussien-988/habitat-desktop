@@ -5,6 +5,7 @@ Buildings page with modern UI design - QStackedWidget implementation.
 
 import json
 from pathlib import Path
+from typing import Optional
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QTextEdit,
     QPushButton, QComboBox, QTableView, QTableWidget, QTableWidgetItem, QHeaderView,
@@ -993,38 +994,212 @@ class AddBuildingPage(QWidget):
         total = self.apartments_spin.value() + self.shops_spin.value()
         self.units_label.setText(str(total))
 
-    def _on_pick_from_map(self):
+    def _get_auth_token(self) -> Optional[str]:
         """
-        Open map picker to select building location (Point only).
+        Get auth token from main window.
 
-        UC-000: Point selection for Add Building.
-        Note: Polygon drawing remains available in other UCs (Field Work Preparation).
+        ✅ DRY: Helper method for auth token retrieval (Best Practice).
+
+        Returns:
+            Auth token string or None
         """
         try:
-            from ui.components.map_picker_dialog_v2 import show_map_picker_dialog
+            main_window = self.window()
+            if hasattr(main_window, 'current_user') and main_window.current_user:
+                return getattr(main_window.current_user, '_api_token', None)
+        except Exception as e:
+            logger.warning(f"Could not get auth token: {e}")
+        return None
 
-            # UC-000: Point selection only (polygon used in Field Work Preparation)
-            result = show_map_picker_dialog(
-                initial_lat=self.latitude_spin.value(),
-                initial_lon=self.longitude_spin.value(),
-                allow_polygon=False,  # Point only for Add Building (YAGNI principle)
+    def _get_status_color(self, status: str) -> str:
+        """
+        Get marker color based on building status.
+
+        Args:
+            status: Building status key (intact, minor_damage, etc.)
+
+        Returns:
+            Hex color code for the status
+        """
+        status_colors = {
+            'intact': '#28a745',           # Green
+            'minor_damage': '#ffc107',     # Yellow
+            'major_damage': '#fd7e14',     # Orange
+            'severely_damaged': '#dc3545', # Red
+            'destroyed': '#dc3545',        # Red
+            'under_construction': '#17a2b8', # Cyan
+            'demolished': '#6c757d'        # Gray
+        }
+        return status_colors.get(status, '#0072BC')  # Default: Blue
+
+    def _calculate_area_center(self, district_code: str = None, neighborhood_code: str = None):
+        """
+        Calculate map center and zoom based on district/neighborhood code.
+
+        Smart focus: Uses building data to calculate bbox for the specified area.
+
+        Args:
+            district_code: District code (e.g., "01")
+            neighborhood_code: Neighborhood code (e.g., "001")
+
+        Returns:
+            Tuple[float, float, int]: (center_lat, center_lon, zoom)
+        """
+        try:
+            # Build filter for area
+            from controllers.building_controller import BuildingFilter
+
+            filter_params = BuildingFilter(limit=100)  # Sample size for bbox calculation
+
+            # Filter by district/neighborhood if provided
+            if neighborhood_code and neighborhood_code.strip():
+                filter_params.neighborhood_code = neighborhood_code.strip()
+                logger.info(f"📍 Calculating center for neighborhood: {neighborhood_code}")
+            elif district_code and district_code.strip():
+                filter_params.district_code = district_code.strip()
+                logger.info(f"📍 Calculating center for district: {district_code}")
+            else:
+                # No filter - use default
+                logger.info("📍 No area specified, using default center (Aleppo)")
+                return 36.2021, 37.1343, 13
+
+            # Fetch buildings in area
+            result = self.building_controller.load_buildings(filter_params)
+
+            if result.success and result.data and len(result.data) > 0:
+                buildings = result.data
+
+                # Calculate bbox from buildings
+                lats = [b.latitude for b in buildings if b.latitude]
+                lons = [b.longitude for b in buildings if b.longitude]
+
+                if lats and lons:
+                    min_lat, max_lat = min(lats), max(lats)
+                    min_lon, max_lon = min(lons), max(lons)
+
+                    # Center of bbox
+                    center_lat = (min_lat + max_lat) / 2
+                    center_lon = (min_lon + max_lon) / 2
+
+                    # Calculate zoom based on bbox size
+                    lat_diff = max_lat - min_lat
+                    lon_diff = max_lon - max_lon
+
+                    # Heuristic zoom calculation
+                    if lat_diff < 0.01 or lon_diff < 0.01:
+                        zoom = 15  # Small area (neighborhood)
+                    elif lat_diff < 0.05 or lon_diff < 0.05:
+                        zoom = 14  # Medium area (district)
+                    else:
+                        zoom = 13  # Large area
+
+                    logger.info(f"✅ Area center calculated: ({center_lat:.6f}, {center_lon:.6f}) zoom={zoom}")
+                    logger.info(f"   Based on {len(buildings)} buildings in area")
+                    return center_lat, center_lon, zoom
+
+            # Fallback: No buildings found in area
+            logger.warning(f"⚠️ No buildings found in specified area, using default center")
+            return 36.2021, 37.1343, 13
+
+        except Exception as e:
+            logger.error(f"Failed to calculate area center: {e}")
+            # Fallback to default
+            return 36.2021, 37.1343, 13
+
+    def _on_pick_from_map(self):
+        """
+        Open map picker to DRAW a point for new building location.
+
+        ✅ UX Best Practice: Validates required fields before opening map.
+        ✅ Smart Focus: Centers on district/neighborhood from form fields.
+        ✅ Status Color: Marker uses color from building status.
+
+        UC-000: Building location selection for Add Building.
+        """
+        # ✅ UX VALIDATION: Check location codes (first 12 digits only)
+        focus_widget = None
+
+        # Check in order: governorate → district → subdistrict → community → neighborhood
+        if not self.governorate_combo.text().strip():
+            focus_widget = self.governorate_combo
+        elif not self.district_combo.text().strip():
+            focus_widget = self.district_combo
+        elif not self.subdistrict_code.text().strip():
+            focus_widget = self.subdistrict_code
+        elif not self.community_code.text().strip():
+            focus_widget = self.community_code
+        elif not self.neighborhood_combo.text().strip():
+            focus_widget = self.neighborhood_combo
+
+        # If any field missing, show simple warning and focus
+        if focus_widget:
+            from PyQt5.QtWidgets import QMessageBox
+
+            QMessageBox.warning(
+                self,
+                "بيانات ناقصة",
+                "يرجى إكمال رموز الموقع أولاً\n(المحافظة، المنطقة، البلدة، المجتمع، الحي)",
+                QMessageBox.Ok
+            )
+
+            # ✅ Focus on first empty field
+            focus_widget.setFocus()
+            return  # Don't open map
+
+        try:
+            from ui.components.map_picker_dialog_v2 import MapPickerDialog
+
+            # ✅ SMART CENTER: Calculate from district/neighborhood codes
+            district_code = self.district_combo.text().strip()
+            neighborhood_code = self.neighborhood_combo.text().strip()
+
+            # If coordinates already set, use them; otherwise calculate from area
+            if self.latitude_spin.value() != 0 and self.longitude_spin.value() != 0:
+                initial_lat = self.latitude_spin.value()
+                initial_lon = self.longitude_spin.value()
+                initial_zoom = 16  # Close zoom if coords already set
+                logger.info(f"📍 Using existing coordinates: ({initial_lat}, {initial_lon})")
+            else:
+                # Calculate center from district/neighborhood
+                initial_lat, initial_lon, initial_zoom = self._calculate_area_center(
+                    district_code,
+                    neighborhood_code
+                )
+
+            # ✅ Use MapPickerDialog for drawing point (not polygon)
+            dialog = MapPickerDialog(
+                initial_lat=initial_lat,
+                initial_lon=initial_lon,
+                initial_zoom=initial_zoom,  # ✅ Smart zoom from area!
+                allow_polygon=False,  # Point only (not polygon)
                 db=self.building_controller.db,
                 parent=self
             )
 
-            if result:
-                # Set coordinates
-                self.latitude_spin.setValue(result["latitude"])
-                self.longitude_spin.setValue(result["longitude"])
+            if dialog.exec_():
+                result = dialog.get_result()
+                if result and 'latitude' in result and 'longitude' in result:
+                    # Update coordinates from drawn point
+                    lat = result['latitude']
+                    lon = result['longitude']
 
-                # Show success message
-                lat = result["latitude"]
-                lon = result["longitude"]
-                self.location_status_label.setText(f"✓ تم تحديد الموقع ({lat:.6f}, {lon:.6f})")
-                self.location_status_label.setStyleSheet(f"color: {Config.SUCCESS_COLOR}; font-size: 10pt;")
+                    self.latitude_spin.setValue(lat)
+                    self.longitude_spin.setValue(lon)
+
+                    # Show success message
+                    self.location_status_label.setText(
+                        f"✓ تم تحديد الموقع ({lat:.6f}, {lon:.6f})"
+                    )
+                    self.location_status_label.setStyleSheet(
+                        f"color: {Config.SUCCESS_COLOR}; font-size: 10pt;"
+                    )
 
         except ImportError:
-            QMessageBox.information(self, "اختيار الموقع", "يرجى إدخال الإحداثيات يدوياً.")
+            QMessageBox.information(
+                self,
+                "اختيار الموقع",
+                "يرجى إدخال الإحداثيات يدوياً."
+            )
 
     def _populate_data(self):
         """Populate form with existing building data."""
@@ -1575,9 +1750,10 @@ class BuildingsListPage(QWidget):
         top_row = QHBoxLayout()
         top_row.setSpacing(20)
 
-        # العنوان
+        # العنوان - DRY: Using unified page title styling (18pt, PAGE_TITLE color)
         title = QLabel("المباني")
-        title.setStyleSheet("font-size: 32px; font-weight: bold; color: #333;")
+        title.setFont(create_font(size=FontManager.SIZE_TITLE, weight=FontManager.WEIGHT_SEMIBOLD))
+        title.setStyleSheet(f"color: {Colors.PAGE_TITLE}; background: transparent; border: none;")
         top_row.addWidget(title)
 
         top_row.addStretch()
@@ -2258,22 +2434,23 @@ class BuildingsListPage(QWidget):
         """
         Show building location on map (read-only view).
 
-        NOTE: Currently using V1 (map_picker_dialog) because V2 doesn't support
-        read_only mode yet. This should be migrated to V2 after adding read_only feature.
-        TODO: Migrate to map_picker_dialog_v2 when read_only mode is implemented.
+        ✅ MIGRATED: Now uses building_map_dialog_v2 with read_only=True (DRY principle).
+        Previously used V1 (map_picker_dialog) - now unified with wizard.
         """
         if building.latitude and building.longitude:
-            from ui.components.map_picker_dialog import MapPickerDialog
-            dialog = MapPickerDialog.get_instance(
-                initial_lat=building.latitude,
-                initial_lon=building.longitude,
-                allow_polygon=False,
-                read_only=True,
-                highlight_location=True,
+            from ui.components.building_map_dialog_v2 import show_building_map_dialog
+
+            # Get auth token (Best Practice)
+            auth_token = self._get_auth_token()
+
+            # ✅ UNIFIED: Use V2 with read_only mode (same as wizard)
+            show_building_map_dialog(
+                db=self.building_controller.db,
+                selected_building_id=building.building_id,
+                auth_token=auth_token,
+                read_only=True,  # ✅ View-only mode
                 parent=self
             )
-            dialog.setWindowTitle(f"موقع المبنى: {building.building_id}")
-            dialog.exec_()
         else:
             Toast.show_toast(self, "لا تتوفر إحداثيات لهذا المبنى", Toast.WARNING)
 
@@ -2494,21 +2671,28 @@ class BuildingsPage(QWidget):
             self.stacked.removeWidget(self.field_work_page)
             self.field_work_page.deleteLater()
 
-        from ui.pages.field_work_preparation_page import FieldWorkPreparationStep1
-        self.field_work_page = FieldWorkPreparationStep1(
+        from ui.pages.field_work_preparation_page import FieldWorkPreparationPage
+        self.field_work_page = FieldWorkPreparationPage(
             self.building_controller,
             self.i18n,
             parent=self
         )
-        self.field_work_page.next_clicked.connect(self._on_field_work_next)
+        self.field_work_page.completed.connect(self._on_field_work_completed)
         self.field_work_page.cancelled.connect(self._on_field_work_cancelled)
         self.stacked.addWidget(self.field_work_page)
         self.stacked.setCurrentWidget(self.field_work_page)
 
-    def _on_field_work_next(self):
-        """Handle field work next step."""
-        # TODO: Navigate to next step
-        logger.debug("Field work next step")
+    def _on_field_work_completed(self, workflow_data):
+        """Handle field work workflow completion."""
+        buildings = workflow_data.get('buildings', [])
+        researcher = workflow_data.get('researcher', {})
+        logger.debug(
+            f"Field work assignment complete: {len(buildings)} buildings "
+            f"assigned to {researcher.get('name', 'N/A')}"
+        )
+        # Return to list page
+        self.list_page.refresh()
+        self.stacked.setCurrentWidget(self.list_page)
 
     def _on_field_work_cancelled(self):
         """Handle field work cancellation."""

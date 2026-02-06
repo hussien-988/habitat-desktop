@@ -47,6 +47,10 @@ class Colors:
     TEXT_ON_DARK = "#FFFFFF"  # White text on dark backgrounds
     TEXT_ON_PRIMARY = "#FFFFFF"  # White text on primary blue
 
+    # Page Title Colors (Unified across all pages - DRY)
+    PAGE_TITLE = "#212B36"  # Unified color for all page titles (24px/18pt, SemiBold)
+    PAGE_SUBTITLE = "#7F8C9B"  # Unified color for all page subtitles (14px/10pt, SemiBold)
+
     # Wizard-specific text colors (from Figma)
     WIZARD_TITLE = "#1A1F1D"  # Card titles, labels (14px, weight:600)
     WIZARD_SUBTITLE = "#86909B"  # Card subtitles (14px, weight:400)

@@ -346,29 +346,55 @@ class AssignmentService:
 
     def get_field_teams(self) -> List[Dict[str, str]]:
         """
-        Get list of configured field teams.
-        In production, this would come from a teams table.
-        For now, return static list.
+        Get list of field researchers from users table.
+        Returns users with role='field_researcher'.
         """
-        return [
-            {"team_id": "team_1", "team_name": "فريق حلب 1", "supervisor": "مشرف 1"},
-            {"team_id": "team_2", "team_name": "فريق حلب 2", "supervisor": "مشرف 2"},
-            {"team_id": "team_3", "team_name": "فريق حلب 3", "supervisor": "مشرف 3"},
-            {"team_id": "team_4", "team_name": "فريق عفرين", "supervisor": "مشرف 4"},
-            {"team_id": "team_5", "team_name": "فريق الباب", "supervisor": "مشرف 5"},
-        ]
+        query = """
+            SELECT user_id, username, full_name, full_name_ar
+            FROM users
+            WHERE role = 'field_researcher' AND is_active = 1
+            ORDER BY full_name_ar, full_name
+        """
+        rows = self.db.fetch_all(query)
+
+        teams = []
+        for row in rows:
+            display_name = row.get("full_name_ar") or row.get("full_name") or row.get("username")
+            teams.append({
+                "team_id": row["user_id"],
+                "team_name": display_name,
+                "researcher_id": row["user_id"]
+            })
+
+        # Fallback: if no field_researchers, return empty list with message
+        if not teams:
+            logger.warning("No field researchers found in database")
+
+        return teams
 
     def get_available_tablets(self) -> List[Dict[str, str]]:
         """
         Get list of available tablet devices.
-        In production, this would detect LAN-connected tablets.
-        For now, return simulated list.
+
+        TODO: Implement LAN device discovery (mDNS/Bonjour).
+        For now, returns simulated list + manual IP entry option.
         """
-        return [
-            {"device_id": "tablet_001", "device_name": "Tablet 001", "status": "connected"},
-            {"device_id": "tablet_002", "device_name": "Tablet 002", "status": "connected"},
-            {"device_id": "tablet_003", "device_name": "Tablet 003", "status": "disconnected"},
+        # Simulated tablets for development
+        tablets = [
+            {"device_id": "tablet_001", "device_name": "Tablet 001 (192.168.1.50)", "status": "connected", "ip": "192.168.1.50"},
+            {"device_id": "tablet_002", "device_name": "Tablet 002 (192.168.1.51)", "status": "connected", "ip": "192.168.1.51"},
+            {"device_id": "manual", "device_name": "إدخال IP يدوياً...", "status": "manual", "ip": None},
         ]
+
+        # TODO: Add real LAN discovery using zeroconf/mDNS
+        # try:
+        #     from services.sync_server_service import SyncServerService
+        #     discovered = SyncServerService.discover_tablets_on_lan()
+        #     tablets.extend(discovered)
+        # except Exception as e:
+        #     logger.warning(f"Failed to discover tablets: {e}")
+
+        return tablets
 
     # ========== Statistics ==========
 
