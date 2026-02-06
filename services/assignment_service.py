@@ -15,6 +15,14 @@ from utils.logger import get_logger
 
 logger = get_logger(__name__)
 
+# Import API client (optional - for Backend sync)
+try:
+    from services.api_client import TRRCMSApiClient, get_api_client
+    API_CLIENT_AVAILABLE = True
+except ImportError:
+    API_CLIENT_AVAILABLE = False
+    logger.warning("API client not available - assignments will be local only")
+
 
 @dataclass
 class BuildingAssignment:
@@ -59,8 +67,22 @@ class AssignmentService:
     Implements UC-012 Assign Buildings to Field Teams.
     """
 
-    def __init__(self, db: Database):
+    def __init__(self, db: Database, api_client: Optional['TRRCMSApiClient'] = None):
+        """
+        Initialize assignment service.
+
+        Args:
+            db: Local database connection
+            api_client: Optional API client for Backend sync
+        """
         self.db = db
+        self.api = api_client or (get_api_client() if API_CLIENT_AVAILABLE else None)
+        self.sync_enabled = self.api is not None
+
+        if self.sync_enabled:
+            logger.info("✅ AssignmentService: Backend sync enabled")
+        else:
+            logger.info("⚠️ AssignmentService: Local-only mode (no Backend sync)")
 
     # ========== Assignment Management ==========
 
@@ -164,7 +186,52 @@ class AssignmentService:
         if errors:
             logger.warning(f"Batch assignment completed with {len(errors)} errors")
 
+        # Sync to Backend API if enabled
+        if self.sync_enabled and assignments:
+            try:
+                self.sync_assignments_to_backend(assignments)
+            except Exception as e:
+                logger.warning(f"Failed to sync assignments to Backend (will remain local): {e}")
+
         return assignments
+
+    def sync_assignments_to_backend(self, assignments: List[BuildingAssignment]) -> bool:
+        """
+        مزامنة التعيينات مع Backend API.
+
+        Args:
+            assignments: قائمة التعيينات المراد مزامنتها
+
+        Returns:
+            True إذا نجحت المزامنة
+        """
+        if not self.sync_enabled:
+            logger.warning("Backend sync is disabled")
+            return False
+
+        try:
+            # Group assignments by researcher
+            by_researcher = {}
+            for assignment in assignments:
+                researcher = assignment.field_team_name or "unknown"
+                if researcher not in by_researcher:
+                    by_researcher[researcher] = []
+                by_researcher[researcher].append(assignment.building_id)
+
+            # Create assignments in Backend
+            for researcher_id, building_ids in by_researcher.items():
+                response = self.api.create_assignment(
+                    building_ids=building_ids,
+                    assigned_to=researcher_id,
+                    notes=assignments[0].notes if assignments else None
+                )
+                logger.info(f"✅ Synced {len(building_ids)} buildings to Backend for researcher: {researcher_id}")
+
+            return True
+
+        except Exception as e:
+            logger.error(f"Failed to sync to Backend: {e}", exc_info=True)
+            return False
 
     def get_assignment(self, assignment_id: str) -> Optional[BuildingAssignment]:
         """Get assignment by ID."""

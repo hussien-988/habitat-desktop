@@ -703,19 +703,13 @@ class FieldWorkPreparationStep1(QWidget):
             }
             self._subdistricts = sorted(subdistricts_set, key=lambda x: x[1])
 
-            # Building statuses from Building model (SOLID - using model as single source of truth)
-            self._building_statuses = [
-                ("intact", "سليم"),
-                ("standing", "سليم"),
-                ("minor_damage", "ضرر طفيف"),
-                ("damaged", "متضرر"),
-                ("partially_damaged", "متضرر جزئياً"),
-                ("major_damage", "ضرر كبير"),
-                ("severely_damaged", "متضرر بشدة"),
-                ("destroyed", "مدمر"),
-                ("demolished", "مهدم"),
-                ("rubble", "ركام"),
-                ("under_construction", "قيد البناء"),
+            # ✅ Survey Status (حالة المسح الميداني) - from Backend API
+            # Used for BuildingAssignment API filtering (UC-012)
+            self._survey_statuses = [
+                ("not_surveyed", "لم يتم المسح"),
+                ("in_progress", "جاري المسح"),
+                ("completed", "تم المسح"),
+                ("verified", "تم التحقق"),
             ]
 
             # Populate combo boxes
@@ -734,9 +728,9 @@ class FieldWorkPreparationStep1(QWidget):
         for code, name_ar in self._subdistricts:
             self.subdistrict_combo.addItem(name_ar, code)
 
-        # Populate survey statuses (TODO: populate after reviewing use case)
-        # for status_code, status_name_ar in self._building_statuses:
-        #     self.building_status_combo.addItem(status_name_ar, status_code)
+        # ✅ Populate survey statuses (حالة المسح)
+        for status_code, status_name_ar in self._survey_statuses:
+            self.building_status_combo.addItem(status_name_ar, status_code)
 
     def _load_buildings(self):
         """Load buildings into the list."""
@@ -1033,8 +1027,76 @@ class FieldWorkPreparationStep1(QWidget):
         # Update selected card visibility (depends on suggestions visibility)
         self._update_selected_card_visibility()
 
+    def _load_buildings_from_api(self):
+        """
+        ✅ Load buildings from Backend API with filters (Best Practice).
+
+        Reduces load on local database by fetching directly from Backend.
+        Implements UC-012 field assignment workflow.
+        """
+        filters = self.get_filters()
+
+        try:
+            # ✅ Call Backend API with filters (no polygon needed!)
+            result = self.building_controller.search_for_assignment_by_filters(
+                governorate_code=filters['governorate'],
+                subdistrict_code=filters['subdistrict'],
+                survey_status=filters['building_status'],  # This is survey_status in API
+                has_active_assignment=False,  # Only show unassigned buildings
+                page=1,
+                page_size=500
+            )
+
+            if not result.success:
+                logger.error(f"Failed to load buildings from API: {result.message}")
+                # Fallback to local filtering if API fails
+                self._filter_buildings()
+                return
+
+            # ✅ Clear and repopulate list with API results
+            self.buildings_list.clear()
+            buildings = result.data
+
+            # Apply search text filter locally (if any)
+            search_text = self.building_search.text().lower()
+            if search_text:
+                buildings = [
+                    b for b in buildings
+                    if search_text in (b.building_id.lower() if b.building_id else "")
+                ]
+
+            logger.info(f"✅ Loaded {len(buildings)} buildings from API with filters")
+
+            # Add buildings to list
+            for building in buildings:
+                item = QListWidgetItem(self.buildings_list)
+                widget = BuildingCheckboxItem(building, self)
+
+                # Connect checkbox
+                widget.checkbox.stateChanged.connect(
+                    lambda state, b=building: self._on_checkbox_changed(b, state)
+                )
+
+                # Check if already selected
+                if building.building_id in self._selected_building_ids:
+                    widget.checkbox.setChecked(True)
+
+                item.setSizeHint(widget.sizeHint())
+                self.buildings_list.addItem(item)
+                self.buildings_list.setItemWidget(item, widget)
+
+        except Exception as e:
+            logger.error(f"Error loading buildings from API: {e}", exc_info=True)
+            # Fallback to local filtering
+            self._filter_buildings()
+
     def _filter_buildings(self):
-        """Filter buildings list based on search text and filters (DRY principle)."""
+        """
+        Filter buildings list based on search text and filters (DRY principle).
+
+        NOTE: This is the FALLBACK method for local filtering.
+        Prefer _load_buildings_from_api() for better performance.
+        """
         search_text = self.building_search.text().lower()
         filters = self.get_filters()
 
@@ -1069,12 +1131,13 @@ class FieldWorkPreparationStep1(QWidget):
 
     def _on_filter_changed(self):
         """
-        Handle filter change - apply filters to buildings list.
+        ✅ Handle filter change - uses Backend API for efficient search (Best Practice).
 
         Rules:
         - Show suggestions if: filters applied OR search text
         - Hide suggestions if: no filters AND no search text
         - Update selected card visibility
+        - ✅ NEW: Calls Backend API instead of local filtering
         """
         filters = self.get_filters()
         logger.debug(f"Filters changed: {filters}")
@@ -1088,18 +1151,37 @@ class FieldWorkPreparationStep1(QWidget):
 
         if has_active_filter or filters['search_text']:
             self._set_suggestions_visible(True)
-            self._filter_buildings()
+            # ✅ BEST PRACTICE: Load from Backend API with filters
+            self._load_buildings_from_api()
         else:
             self._set_suggestions_visible(False)
+            self.buildings_list.clear()  # Clear list when no filters
 
         # Update selected card visibility
         self._update_selected_card_visibility()
 
     def _on_search(self):
-        """Handle search action."""
+        """
+        ✅ Handle search action - uses Backend API with filters (Best Practice).
+
+        If filters are applied, loads from API. Otherwise uses local search.
+        """
         search_text = self.building_search.text().strip()
         logger.debug(f"Searching for: {search_text}")
-        self._filter_buildings()
+
+        filters = self.get_filters()
+        has_active_filter = any([
+            filters['subdistrict'],
+            filters['governorate'],
+            filters['building_status']
+        ])
+
+        if has_active_filter:
+            # ✅ Use API if filters are active
+            self._load_buildings_from_api()
+        else:
+            # Fallback to local search if no filters
+            self._filter_buildings()
 
     def _on_open_map(self):
         """

@@ -334,6 +334,9 @@ class TRRCMSApiClient:
         self,
         polygon_wkt: str,
         has_active_assignment: Optional[bool] = None,
+        survey_status: Optional[str] = None,
+        governorate_code: Optional[str] = None,
+        subdistrict_code: Optional[str] = None,
         page: int = 1,
         page_size: int = 100
     ) -> Dict[str, Any]:
@@ -350,6 +353,10 @@ class TRRCMSApiClient:
                                   True: فقط المباني المُعيّنة
                                   False: فقط المباني غير المُعيّنة
                                   None: جميع المباني
+            survey_status: فلتر حالة المسح (optional)
+                          not_surveyed, in_progress, completed, verified, etc.
+            governorate_code: كود المحافظة (optional)
+            subdistrict_code: كود المنطقة الفرعية (optional)
             page: رقم الصفحة (default: 1)
             page_size: عدد النتائج في الصفحة (default: 100)
 
@@ -392,14 +399,20 @@ class TRRCMSApiClient:
 
         payload = {
             "coordinates": coordinates,
-            "governorateCode": "01",  # ✅ FIX: Required parameter (Aleppo governorate code)
+            "governorateCode": governorate_code or "01",  # Default: Aleppo
             "page": page,
             "pageSize": page_size
         }
 
-        # Add optional filter
+        # Add optional filters
         if has_active_assignment is not None:
             payload["hasActiveAssignment"] = has_active_assignment
+
+        if survey_status:
+            payload["surveyStatus"] = survey_status
+
+        if subdistrict_code:
+            payload["subdistrictCode"] = subdistrict_code
 
         # ✅ DETAILED LOGGING: Print full request payload
         print(f"\n{'='*80}")
@@ -420,6 +433,92 @@ class TRRCMSApiClient:
         total_count = response.get("totalCount", 0)
 
         logger.info(f"✅ Found {len(items)} buildings for assignment (total: {total_count}) using BuildingAssignments API")
+
+        return response
+
+    def get_buildings_for_assignment(
+        self,
+        governorate_code: Optional[str] = None,
+        subdistrict_code: Optional[str] = None,
+        survey_status: Optional[str] = None,
+        has_active_assignment: Optional[bool] = None,
+        page: int = 1,
+        page_size: int = 100
+    ) -> Dict[str, Any]:
+        """
+        ✅ الحصول على المباني للتعيين مع دعم الفلاتر (بدون polygon).
+
+        هذا هو الـ endpoint المُخصص لـ Field Assignment مع فلاتر!
+        لا يحتاج polygon - مناسب تماماً للـ Step 1 filters.
+
+        Args:
+            governorate_code: كود المحافظة (optional)
+            subdistrict_code: كود المنطقة الفرعية (optional)
+            survey_status: فلتر حالة المسح (optional)
+                          not_surveyed, in_progress, completed, verified, etc.
+            has_active_assignment: فلتر حسب وجود assignment نشط (optional)
+                                  True: فقط المباني المُعيّنة
+                                  False: فقط المباني غير المُعيّنة
+                                  None: جميع المباني
+            page: رقم الصفحة (default: 1)
+            page_size: عدد النتائج في الصفحة (default: 100)
+
+        Returns:
+            {
+                "items": [...],  # List of BuildingDto
+                "totalCount": int,
+                "page": int,
+                "pageSize": int,
+                "totalPages": int
+            }
+
+        Example:
+            # بحث عن مباني غير مُعيّنة في محافظة حلب
+            result = client.get_buildings_for_assignment(
+                governorate_code="01",
+                has_active_assignment=False,
+                page=1,
+                page_size=100
+            )
+            buildings = result.get("items", [])
+
+        Endpoint: GET /api/v1/BuildingAssignment/buildings
+        """
+        params = {
+            "page": page,
+            "pageSize": page_size
+        }
+
+        # Add optional filters
+        if governorate_code:
+            params["governorateCode"] = governorate_code
+
+        if subdistrict_code:
+            params["subdistrictCode"] = subdistrict_code
+
+        if survey_status:
+            params["surveyStatus"] = survey_status
+
+        if has_active_assignment is not None:
+            params["hasActiveAssignment"] = str(has_active_assignment).lower()
+
+        # ✅ DETAILED LOGGING
+        print(f"\n{'='*80}")
+        print(f"🔍 FILTER-BASED SEARCH API CALL (BuildingAssignment/buildings)")
+        print(f"{'='*80}")
+        print(f"📋 Query Parameters:")
+        import json
+        print(json.dumps(params, indent=2, ensure_ascii=False))
+        print(f"{'='*80}\n")
+
+        logger.debug(f"Fetching buildings for assignment with filters: {params}")
+        response = self._request("GET", "/api/v1/BuildingAssignment/buildings", params=params)
+
+        # API returns paginated response
+        items = response.get("items", [])
+        total_count = response.get("totalCount", 0)
+
+        logger.info(f"✅ Found {len(items)} buildings for assignment (total: {total_count}) using filter API")
 
         return response
 
@@ -574,6 +673,120 @@ class TRRCMSApiClient:
     def get_current_user(self) -> Dict[str, Any]:
         """الحصول على معلومات المستخدم الحالي."""
         return self._request("GET", "/api/v1/Auth/me")
+
+    # ==================== Building Assignments API ====================
+
+    def create_assignment(
+        self,
+        building_ids: List[str],
+        assigned_to: str,
+        notes: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """
+        إنشاء تعيين مباني لباحث ميداني.
+
+        Args:
+            building_ids: قائمة UUIDs للمباني
+            assigned_to: User ID للباحث الميداني
+            notes: ملاحظات إضافية
+
+        Returns:
+            Assignment response من API
+
+        Endpoint: POST /api/v1/BuildingAssignments
+        """
+        payload = {
+            "buildingIds": building_ids,
+            "assignedTo": assigned_to,
+            "notes": notes
+        }
+
+        logger.info(f"Creating assignment for {len(building_ids)} buildings → researcher: {assigned_to}")
+        return self._request("POST", "/api/v1/BuildingAssignments", json_data=payload)
+
+    def get_assignment(self, assignment_id: str) -> Dict[str, Any]:
+        """
+        جلب تفاصيل تعيين محدد.
+
+        Args:
+            assignment_id: UUID للتعيين
+
+        Returns:
+            Assignment details
+
+        Endpoint: GET /api/v1/BuildingAssignments/{id}
+        """
+        return self._request("GET", f"/api/v1/BuildingAssignments/{assignment_id}")
+
+    def get_pending_assignments(
+        self,
+        researcher_id: Optional[str] = None,
+        page: int = 1,
+        page_size: int = 50
+    ) -> Dict[str, Any]:
+        """
+        جلب التعيينات المعلقة (جاهزة للنقل).
+
+        Args:
+            researcher_id: User ID للباحث (optional - لجلب مهام باحث محدد)
+            page: رقم الصفحة
+            page_size: عدد النتائج
+
+        Returns:
+            Paginated list of pending assignments
+
+        Endpoint: GET /api/v1/BuildingAssignments/pending
+        """
+        params = {
+            "page": page,
+            "pageSize": page_size
+        }
+        if researcher_id:
+            params["researcherId"] = researcher_id
+
+        return self._request("GET", "/api/v1/BuildingAssignments/pending", params=params)
+
+    def update_assignment_transfer_status(
+        self,
+        assignment_id: str,
+        transfer_status: str,
+        device_id: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """
+        تحديث حالة نقل التعيين.
+
+        Args:
+            assignment_id: UUID للتعيين
+            transfer_status: الحالة (not_transferred, transferring, transferred, failed)
+            device_id: Device/Tablet ID (optional)
+
+        Returns:
+            Updated assignment
+
+        Endpoint: PUT /api/v1/BuildingAssignments/{id}/transfer-status
+        """
+        payload = {
+            "transferStatus": transfer_status,
+            "deviceId": device_id
+        }
+
+        logger.info(f"Updating assignment {assignment_id} transfer status → {transfer_status}")
+        return self._request(
+            "PUT",
+            f"/api/v1/BuildingAssignments/{assignment_id}/transfer-status",
+            json_data=payload
+        )
+
+    def get_assignment_statistics(self) -> Dict[str, Any]:
+        """
+        جلب إحصائيات التعيينات.
+
+        Returns:
+            Statistics object {total, pending, transferred, by_researcher, etc.}
+
+        Endpoint: GET /api/v1/BuildingAssignments/statistics
+        """
+        return self._request("GET", "/api/v1/BuildingAssignments/statistics")
 
 
 # ==================== Singleton Instance ====================

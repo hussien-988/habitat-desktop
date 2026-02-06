@@ -29,6 +29,13 @@ from utils.logger import get_logger
 
 logger = get_logger(__name__)
 
+# Optional: API client for Backend search
+try:
+    from services.api_client import get_api_client
+    API_CLIENT_AVAILABLE = True
+except ImportError:
+    API_CLIENT_AVAILABLE = False
+
 
 @dataclass
 class BuildingFilter:
@@ -563,6 +570,173 @@ class BuildingController(BaseController):
         """
         filter_ = BuildingFilter(neighborhood_code=neighborhood_code)
         return self.load_buildings(filter_)
+
+    def search_for_assignment(
+        self,
+        polygon_wkt: str,
+        governorate_code: Optional[str] = None,
+        subdistrict_code: Optional[str] = None,
+        survey_status: Optional[str] = None,
+        has_active_assignment: Optional[bool] = None
+    ) -> OperationResult[List[Building]]:
+        """
+        البحث عن مباني للتعيين باستخدام Backend API (أفضل ممارسة).
+
+        يستخدم BuildingAssignments API بدلاً من البحث المحلي - يقلل الحمل على قاعدة البيانات المحلية.
+
+        Args:
+            polygon_wkt: Polygon في صيغة WKT
+            governorate_code: كود المحافظة (optional)
+            subdistrict_code: كود المنطقة الفرعية (optional)
+            survey_status: حالة المسح (optional) - not_surveyed, in_progress, completed
+            has_active_assignment: فلتر حسب assignment (optional)
+
+        Returns:
+            OperationResult with list of Buildings from API
+        """
+        try:
+            if not API_CLIENT_AVAILABLE:
+                logger.warning("API client not available - falling back to local search")
+                return OperationResult.fail(message="API client not available")
+
+            self._emit_started("search_for_assignment")
+
+            # Call Backend API
+            api_client = get_api_client()
+            response = api_client.search_buildings_for_assignment(
+                polygon_wkt=polygon_wkt,
+                governorate_code=governorate_code,
+                subdistrict_code=subdistrict_code,
+                survey_status=survey_status,
+                has_active_assignment=has_active_assignment,
+                page=1,
+                page_size=500  # Get more results
+            )
+
+            # Convert API response to Building objects
+            buildings = []
+            for item in response.get("items", []):
+                building = self._api_dto_to_building(item)
+                buildings.append(building)
+
+            logger.info(f"✅ Found {len(buildings)} buildings via API (total: {response.get('totalCount', 0)})")
+            self._emit_completed("search_for_assignment", True)
+
+            return OperationResult.ok(data=buildings)
+
+        except Exception as e:
+            error_msg = f"Error searching buildings for assignment: {str(e)}"
+            logger.error(error_msg, exc_info=True)
+            self._emit_error("search_for_assignment", error_msg)
+            return OperationResult.fail(message=error_msg)
+
+    def search_for_assignment_by_filters(
+        self,
+        governorate_code: Optional[str] = None,
+        subdistrict_code: Optional[str] = None,
+        survey_status: Optional[str] = None,
+        has_active_assignment: Optional[bool] = None,
+        page: int = 1,
+        page_size: int = 100
+    ) -> OperationResult[List[Building]]:
+        """
+        ✅ البحث عن مباني للتعيين باستخدام الفلاتر فقط (بدون polygon).
+
+        أفضل ممارسة: يقلل الحمل على قاعدة البيانات المحلية بالبحث مباشرة في Backend.
+        مثالي لـ Step 1 حيث يستخدم المستخدم الفلاتر بدون رسم polygon.
+
+        Args:
+            governorate_code: كود المحافظة (optional)
+            subdistrict_code: كود المنطقة الفرعية (optional)
+            survey_status: حالة المسح (optional) - not_surveyed, in_progress, completed
+            has_active_assignment: فلتر حسب assignment (optional)
+            page: رقم الصفحة
+            page_size: عدد النتائج في الصفحة
+
+        Returns:
+            OperationResult with list of Buildings from API
+
+        Example:
+            # البحث عن مباني غير مُعيّنة في محافظة حلب
+            result = controller.search_for_assignment_by_filters(
+                governorate_code="01",
+                has_active_assignment=False
+            )
+        """
+        try:
+            if not API_CLIENT_AVAILABLE:
+                logger.warning("API client not available for filter-based search")
+                return OperationResult.fail(
+                    message="API client not available",
+                    message_ar="عميل API غير متوفر"
+                )
+
+            self._emit_started("search_for_assignment_by_filters")
+
+            # Call Backend API with filters only (no polygon needed!)
+            api_client = get_api_client()
+            response = api_client.get_buildings_for_assignment(
+                governorate_code=governorate_code,
+                subdistrict_code=subdistrict_code,
+                survey_status=survey_status,
+                has_active_assignment=has_active_assignment,
+                page=page,
+                page_size=page_size
+            )
+
+            # Convert API response to Building objects
+            buildings = []
+            for item in response.get("items", []):
+                building = self._api_dto_to_building(item)
+                buildings.append(building)
+
+            logger.info(f"✅ Found {len(buildings)} buildings via filter API (total: {response.get('totalCount', 0)})")
+            self._emit_completed("search_for_assignment_by_filters", True)
+
+            return OperationResult.ok(
+                data=buildings,
+                message=f"Found {len(buildings)} buildings",
+                message_ar=f"تم العثور على {len(buildings)} مبنى"
+            )
+
+        except Exception as e:
+            error_msg = f"Error searching buildings by filters: {str(e)}"
+            logger.error(error_msg, exc_info=True)
+            self._emit_error("search_for_assignment_by_filters", error_msg)
+            return OperationResult.fail(message=error_msg)
+
+    def _api_dto_to_building(self, dto: Dict[str, Any]) -> Building:
+        """تحويل BuildingDto من API إلى Building object."""
+        return Building(
+            building_uuid=dto.get("buildingUuid", ""),
+            building_id=dto.get("buildingId", ""),
+            building_id_formatted=dto.get("buildingIdFormatted", ""),
+            governorate_code=dto.get("governorateCode", ""),
+            governorate_name=dto.get("governorateName", ""),
+            governorate_name_ar=dto.get("governorateNameAr", ""),
+            district_code=dto.get("districtCode", ""),
+            district_name=dto.get("districtName", ""),
+            district_name_ar=dto.get("districtNameAr", ""),
+            subdistrict_code=dto.get("subdistrictCode", ""),
+            subdistrict_name=dto.get("subdistrictName", ""),
+            subdistrict_name_ar=dto.get("subdistrictNameAr", ""),
+            community_code=dto.get("communityCode", ""),
+            community_name=dto.get("communityName", ""),
+            community_name_ar=dto.get("communityNameAr", ""),
+            neighborhood_code=dto.get("neighborhoodCode", ""),
+            neighborhood_name=dto.get("neighborhoodName", ""),
+            neighborhood_name_ar=dto.get("neighborhoodNameAr", ""),
+            building_number=dto.get("buildingNumber", ""),
+            building_type=dto.get("buildingType", 1),
+            building_status=dto.get("buildingStatus", 1),
+            number_of_units=dto.get("numberOfUnits", 0),
+            number_of_apartments=dto.get("numberOfApartments", 0),
+            number_of_shops=dto.get("numberOfShops", 0),
+            number_of_floors=dto.get("numberOfFloors", 1),
+            latitude=dto.get("latitude"),
+            longitude=dto.get("longitude"),
+            geo_location=dto.get("geoLocation")
+        )
 
     def _query_buildings(self, filter_: BuildingFilter) -> List[Building]:
         """Execute building query with filter."""
