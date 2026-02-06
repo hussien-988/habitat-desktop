@@ -1038,15 +1038,75 @@ class UnitsPage(QWidget):
         dialog = UnitDialog(self.db, self.i18n, parent=self)
         if dialog.exec_() == QDialog.Accepted:
             data = dialog.get_data()
-            unit = PropertyUnit(**data)
 
             try:
-                self.unit_repo.create(unit)
-                Toast.show_toast(self, "تم إضافة الوحدة بنجاح", Toast.SUCCESS)
-                self._load_units()
+                if self._use_api:
+                    # Create via API: POST /api/v1/PropertyUnits
+                    logger.info("Creating unit via API")
+
+                    # Set auth token if available
+                    main_window = self.window()
+                    if main_window and hasattr(main_window, '_api_token') and main_window._api_token:
+                        self._api_service.set_auth_token(main_window._api_token)
+
+                    # Prepare API data format
+                    api_data = {
+                        "buildingId": data.get("building_id", ""),
+                        "unitIdentifier": data.get("unit_number", ""),
+                        "floorNumber": data.get("floor_number", 0),
+                        "unitType": self._get_unit_type_code(data.get("unit_type")),
+                        "status": self._get_status_code(data.get("apartment_status")),
+                        "areaSquareMeters": data.get("area_sqm") or 0,
+                        "numberOfRooms": int(data.get("apartment_number") or 0) if data.get("apartment_number") else 0,
+                        "description": data.get("property_description", "")
+                    }
+
+                    response = self._api_service.create_property_unit(api_data)
+
+                    if response.get("success"):
+                        Toast.show_toast(self, "تم إضافة الوحدة بنجاح", Toast.SUCCESS)
+                        self._load_units()
+                    else:
+                        error_msg = response.get("error", "Unknown error")
+                        logger.error(f"Failed to create unit via API: {error_msg}")
+                        Toast.show_toast(self, f"فشل في إضافة الوحدة: {error_msg}", Toast.ERROR)
+                else:
+                    # Create via local repository
+                    unit = PropertyUnit(**data)
+                    self.unit_repo.create(unit)
+                    Toast.show_toast(self, "تم إضافة الوحدة بنجاح", Toast.SUCCESS)
+                    self._load_units()
             except Exception as e:
                 logger.error(f"Failed to create unit: {e}")
                 Toast.show_toast(self, f"فشل في إضافة الوحدة: {str(e)}", Toast.ERROR)
+
+    def _get_unit_type_code(self, unit_type: str) -> int:
+        """Convert unit type string to API code."""
+        type_map = {
+            "apartment": 0,
+            "shop": 1,
+            "office": 2,
+            "warehouse": 3,
+            "other": 4,
+        }
+        if unit_type:
+            return type_map.get(unit_type.lower(), 0)
+        return 0
+
+    def _get_status_code(self, status: str) -> int:
+        """Convert status string to API code."""
+        status_map = {
+            "occupied": 0,
+            "vacant": 1,
+            "damaged": 2,
+            "under_renovation": 3,
+            "uninhabitable": 4,
+            "locked": 5,
+            "unknown": 6,
+        }
+        if status:
+            return status_map.get(status.lower(), 0)
+        return 0
 
     def _edit_unit(self, unit: PropertyUnit):
         """Edit existing unit."""
