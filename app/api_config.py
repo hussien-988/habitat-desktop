@@ -119,9 +119,9 @@ class ApiSettings:
 
     SOLID: Single Responsibility - only API configuration
     """
-
-    # Connection
-    base_url: str = "http://localhost:8080"
+    #BASE_URL: str = "http://localhost:8080/api"
+    # Connection - default from Config.API_BASE_URL
+    base_url: str = "https://localhost:7204/api"
     timeout: int = 30
 
     # Authentication
@@ -160,8 +160,12 @@ class ApiSettings:
         if config_provider is None:
             config_provider = EnvironmentConfigProvider()
 
+        # Import Config to get the default API_BASE_URL
+        from app.config import Config
+        default_base_url = Config.API_BASE_URL
+
         return cls(
-            base_url=config_provider.get_value("API_BASE_URL", "http://localhost:8080"),
+            base_url=config_provider.get_value("API_BASE_URL", default_base_url),
             timeout=config_provider.get_int("API_TIMEOUT", 30),
             username=config_provider.get_value("API_USERNAME", "admin"),
             password=config_provider.get_value("API_PASSWORD", "Admin@123"),
