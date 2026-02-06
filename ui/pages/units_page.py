@@ -18,6 +18,7 @@ from repositories.database import Database
 from repositories.unit_repository import UnitRepository
 from repositories.building_repository import BuildingRepository
 from models.unit import PropertyUnit
+from services.property_unit_api_service import PropertyUnitApiService
 from ui.components.toast import Toast
 from ui.components.primary_button import PrimaryButton
 from utils.i18n import I18n
@@ -644,6 +645,10 @@ class UnitsPage(QWidget):
         self.unit_repo = UnitRepository(db)
         self.building_repo = BuildingRepository(db)
 
+        # API service for fetching units
+        self._api_service = PropertyUnitApiService()
+        self._use_api = getattr(Config, 'DATA_PROVIDER', 'local_db') == 'http'
+
         # Pagination
         self._all_units = []
         self._units = []
@@ -872,8 +877,20 @@ class UnitsPage(QWidget):
         self._load_units()
 
     def _load_units(self):
-        """Load all units without filters."""
-        units = self.unit_repo.get_all(limit=1000)
+        """Load all units from API or local repository."""
+        # Set auth token if available
+        main_window = self.window()
+        if main_window and hasattr(main_window, '_api_token') and main_window._api_token:
+            self._api_service.set_auth_token(main_window._api_token)
+
+        if self._use_api:
+            # Load from API: GET /api/v1/PropertyUnits
+            logger.info("Loading units from API")
+            units = self._api_service.get_all(limit=1000)
+        else:
+            # Load from local database
+            logger.info("Loading units from local database")
+            units = self.unit_repo.get_all(limit=1000)
 
         self._all_units = units
         self._units = units
@@ -896,27 +913,50 @@ class UnitsPage(QWidget):
             for col in range(7):
                 self.table.setItem(row, col, QTableWidgetItem(""))
 
+        # Mapping for unit type to Arabic
+        type_ar_map = {
+            "apartment": "شقة",
+            "shop": "محل تجاري",
+            "office": "مكتب",
+            "warehouse": "مستودع",
+            "other": "أخرى",
+        }
+
+        # Mapping for status to Arabic
+        status_ar_map = {
+            "occupied": "مشغول",
+            "vacant": "شاغر",
+            "damaged": "متضرر",
+            "under_renovation": "قيد التجديد",
+            "uninhabitable": "غير صالح للسكن",
+            "locked": "مغلق",
+            "unknown": "غير معروف",
+        }
+
         # Populate table
         for row, unit in enumerate(page_units):
             # Unit ID
-            self.table.setItem(row, 0, QTableWidgetItem(unit.unit_id))
+            self.table.setItem(row, 0, QTableWidgetItem(unit.unit_id or ""))
 
             # Building ID (truncated)
-            building_id_display = unit.building_id[:20] + "..." if len(unit.building_id) > 20 else unit.building_id
+            building_id = unit.building_id or ""
+            building_id_display = building_id[:20] + "..." if len(building_id) > 20 else building_id
             self.table.setItem(row, 1, QTableWidgetItem(building_id_display))
 
-            # Type
-            type_display = unit.unit_type_display_ar if hasattr(unit, 'unit_type_display_ar') else unit.unit_type
+            # Type - map to Arabic
+            unit_type = unit.unit_type or "other"
+            type_display = type_ar_map.get(unit_type.lower(), unit_type)
             self.table.setItem(row, 2, QTableWidgetItem(type_display))
 
             # Floor
-            self.table.setItem(row, 3, QTableWidgetItem(str(unit.floor_number)))
+            self.table.setItem(row, 3, QTableWidgetItem(str(unit.floor_number or 0)))
 
-            # Apartment number
+            # Apartment number (shows number of rooms from API)
             self.table.setItem(row, 4, QTableWidgetItem(unit.apartment_number or "-"))
 
-            # Status
-            status_display = unit.status_display if hasattr(unit, 'status_display') else unit.apartment_status
+            # Status - map to Arabic
+            status = unit.apartment_status or "unknown"
+            status_display = status_ar_map.get(status.lower(), status)
             self.table.setItem(row, 5, QTableWidgetItem(status_display))
 
             # Actions button

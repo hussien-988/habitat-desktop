@@ -216,6 +216,55 @@ class PropertyUnitApiService:
             logger.error(f"Failed to link unit to survey: {response.get('error')}")
             return response
 
+    def get_all(self, limit: int = 1000) -> List[PropertyUnit]:
+        """
+        Get all property units.
+
+        GET /v1/PropertyUnits
+
+        Args:
+            limit: Maximum number of units to return (not used by API but kept for compatibility)
+
+        Returns:
+            List of PropertyUnit objects
+        """
+        logger.info("Fetching all property units from API")
+        response = self._make_request("GET", "/v1/PropertyUnits")
+
+        if not response.get("success"):
+            logger.error(f"Failed to fetch property units: {response.get('error')}")
+            return []
+
+        data = response.get("data", [])
+        logger.debug(f"API response data type: {type(data)}")
+
+        # Handle wrapper object
+        if isinstance(data, dict):
+            logger.debug(f"Response is dict with keys: {list(data.keys())}")
+            if "data" in data:
+                data = data["data"]
+            elif "units" in data:
+                data = data["units"]
+            elif "items" in data:
+                data = data["items"]
+
+        if not isinstance(data, list):
+            logger.warning(f"Unexpected response format: {type(data)}")
+            return []
+
+        logger.info(f"Found {len(data)} property units")
+
+        units = []
+        for item in data:
+            try:
+                unit = self._api_response_to_unit(item)
+                units.append(unit)
+            except Exception as e:
+                logger.warning(f"Failed to parse unit: {e}")
+                continue
+
+        return units
+
     def get_units_for_building(self, building_id: str) -> List[PropertyUnit]:
         """
         Get all property units for a building.
@@ -349,9 +398,31 @@ class PropertyUnitApiService:
     def _api_response_to_unit(self, data: Dict[str, Any]) -> PropertyUnit:
         """
         Convert API response to PropertyUnit object.
+
+        API response format:
+        {
+            "id": "uuid",
+            "buildingId": "uuid",
+            "buildingNumber": "00001",
+            "unitIdentifier": "1A",
+            "floorNumber": 1,
+            "unitType": "Apartment",
+            "status": "Occupied",
+            "areaSquareMeters": 85.5,
+            "numberOfRooms": 3,
+            "description": "شقة سكنية",
+            "createdAtUtc": "2026-01-29T12:00:00Z"
+        }
         """
-        # Unit type mapping (int to string)
-        unit_type_map = {
+        # Unit type mapping (string or int to app format)
+        unit_type_map_str = {
+            "apartment": "apartment",
+            "shop": "shop",
+            "office": "office",
+            "warehouse": "warehouse",
+            "other": "other",
+        }
+        unit_type_map_int = {
             1: "apartment",
             2: "shop",
             3: "office",
@@ -359,8 +430,18 @@ class PropertyUnitApiService:
             5: "other",
         }
 
-        # Unit status mapping (int to string)
-        unit_status_map = {
+        # Unit status mapping (string or int to app format)
+        unit_status_map_str = {
+            "occupied": "occupied",
+            "vacant": "vacant",
+            "damaged": "damaged",
+            "underrenovation": "under_renovation",
+            "under_renovation": "under_renovation",
+            "uninhabitable": "uninhabitable",
+            "locked": "locked",
+            "unknown": "unknown",
+        }
+        unit_status_map_int = {
             1: "occupied",
             2: "vacant",
             3: "damaged",
@@ -370,28 +451,43 @@ class PropertyUnitApiService:
             99: "unknown",
         }
 
-        # Get unit type
-        unit_type_int = data.get('unitType') or data.get('unit_type', 1)
-        if isinstance(unit_type_int, str):
-            unit_type = unit_type_int.lower()
+        # Get unit type - handle string (from API) or int
+        unit_type_raw = data.get('unitType') or data.get('unit_type', 'other')
+        if isinstance(unit_type_raw, str):
+            unit_type = unit_type_map_str.get(unit_type_raw.lower(), "other")
         else:
-            unit_type = unit_type_map.get(unit_type_int, "other")
+            unit_type = unit_type_map_int.get(unit_type_raw, "other")
 
-        # Get status
-        status_int = data.get('status') or data.get('apartment_status', 1)
-        if isinstance(status_int, str):
-            status = status_int.lower()
+        # Get status - handle string (from API) or int
+        status_raw = data.get('status') or data.get('apartment_status', 'unknown')
+        if isinstance(status_raw, str):
+            status = unit_status_map_str.get(status_raw.lower().replace(" ", ""), "unknown")
         else:
-            status = unit_status_map.get(status_int, "unknown")
+            status = unit_status_map_int.get(status_raw, "unknown")
+
+        # Get number of rooms
+        rooms = data.get('numberOfRooms') or data.get('number_of_rooms')
+        rooms_str = str(rooms) if rooms else ""
+
+        # Build unit_id from buildingNumber + unitIdentifier if not present
+        unit_identifier = data.get('unitIdentifier') or data.get('unit_number', '')
+        building_number = data.get('buildingNumber') or ''
+        building_id = data.get('buildingId') or data.get('building_id', '')
+
+        # Create a display unit_id
+        if building_number and unit_identifier:
+            unit_id = f"{building_number}-{unit_identifier}"
+        else:
+            unit_id = data.get('unit_id') or unit_identifier
 
         unit = PropertyUnit(
             unit_uuid=data.get('id') or data.get('unit_uuid') or data.get('unitId', ''),
-            unit_id=data.get('unitIdentifier') or data.get('unit_id', ''),
-            building_id=data.get('buildingId') or data.get('building_id', ''),
+            unit_id=unit_id,
+            building_id=building_id,
             unit_type=unit_type,
-            unit_number=data.get('unitIdentifier') or data.get('unit_number', ''),
+            unit_number=unit_identifier,
             floor_number=data.get('floorNumber') or data.get('floor_number', 0),
-            apartment_number=data.get('unitIdentifier') or data.get('apartment_number', ''),
+            apartment_number=rooms_str,  # Using numberOfRooms as apartment_number for display
             apartment_status=status,
             property_description=data.get('description') or data.get('property_description', ''),
             area_sqm=data.get('areaSquareMeters') or data.get('area_sqm'),
