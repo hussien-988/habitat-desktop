@@ -186,9 +186,9 @@ class SurveyApiService:
 
     def finalize_office_survey(self, survey_id: str, finalize_options: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """
-        Finalize an office survey and optionally create a claim.
+        Process claims for an office survey.
 
-        POST /v1/Surveys/office/{id}/finalize
+        POST /v1/Surveys/office/{id}/process-claims
         Body: {
             "surveyId": "uuid",
             "finalNotes": "string",
@@ -196,9 +196,22 @@ class SurveyApiService:
             "autoCreateClaim": true
         }
 
+        Response structure:
+        {
+            "survey": { ... survey details ... },
+            "claimCreated": true,
+            "claimId": "uuid",
+            "claimNumber": "string",
+            "claimsCreatedCount": 0,
+            "createdClaims": [ ... list of claim objects ... ],
+            "claimNotCreatedReason": "string",
+            "warnings": ["string"],
+            "dataSummary": { ... counts ... }
+        }
+
         Args:
-            survey_id: UUID of the survey to finalize
-            finalize_options: Optional dictionary with finalization options
+            survey_id: UUID of the survey to process claims for
+            finalize_options: Optional dictionary with processing options
                 - finalNotes: Final notes for the survey
                 - durationMinutes: Survey duration in minutes
                 - autoCreateClaim: Whether to automatically create a claim
@@ -207,10 +220,10 @@ class SurveyApiService:
             Dict with success status and response data or error
         """
         if not survey_id:
-            logger.error("Survey ID is required for finalization")
+            logger.error("Survey ID is required for processing claims")
             return {"success": False, "error": "Survey ID is required", "error_code": "E_PARAM"}
 
-        # Default finalization options
+        # Request body is required for process-claims API
         api_data = {
             "surveyId": survey_id,
             "finalNotes": "",
@@ -227,18 +240,18 @@ class SurveyApiService:
             if 'autoCreateClaim' in finalize_options:
                 api_data['autoCreateClaim'] = finalize_options['autoCreateClaim']
 
-        endpoint = f"/v1/Surveys/office/{survey_id}/finalize"
-        logger.info(f"Finalizing office survey {survey_id} via POST {endpoint}")
-        logger.info(f"Finalization options: {json.dumps(api_data, ensure_ascii=False, indent=2)}")
+        endpoint = f"/v1/Surveys/office/{survey_id}/process-claims"
+        logger.info(f"Processing claims for office survey {survey_id} via POST {endpoint}")
+        logger.info(f"Request body: {json.dumps(api_data, ensure_ascii=False, indent=2)}")
 
         response = self._make_request("POST", endpoint, data=api_data)
 
         if response.get("success"):
-            logger.info(f"Office survey {survey_id} finalized successfully")
+            logger.info(f"Office survey {survey_id} claims processed successfully")
             return response
         else:
             error_details = response.get('details', '')
-            logger.error(f"Failed to finalize office survey: {response.get('error')}")
+            logger.error(f"Failed to process claims for office survey: {response.get('error')}")
             logger.error(f"Error details: {error_details}")
             return response
 
