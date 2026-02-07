@@ -52,11 +52,11 @@ class ClaimStep(BaseStep):
         layout.setSpacing(15)
 
         # Create scroll area for claim cards
-        scroll_area = QScrollArea()
-        scroll_area.setWidgetResizable(True)
-        scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
-        scroll_area.setStyleSheet(f"""
+        self.scroll_area = QScrollArea()
+        self.scroll_area.setWidgetResizable(True)
+        self.scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        self.scroll_area.setStyleSheet(f"""
             QScrollArea {{
                 background-color: {Colors.BACKGROUND};
                 border: none;
@@ -82,8 +82,91 @@ class ClaimStep(BaseStep):
 
         self.cards_layout.addStretch()
 
-        scroll_area.setWidget(scroll_content)
-        layout.addWidget(scroll_area)
+        self.scroll_area.setWidget(scroll_content)
+        layout.addWidget(self.scroll_area)
+
+        # Create empty state widget (hidden by default)
+        self.empty_state_widget = self._create_empty_state_widget()
+        self.empty_state_widget.hide()
+        layout.addWidget(self.empty_state_widget)
+
+    def _create_empty_state_widget(self) -> QWidget:
+        """Create empty state widget shown when no claims are created."""
+        from ui.font_utils import FontManager, create_font
+        from ui.design_system import Colors
+        from ui.components.icon import Icon
+        from PyQt5.QtGui import QPixmap
+
+        container = QWidget()
+        container.setStyleSheet(f"background-color: {Colors.BACKGROUND};")
+
+        # Main layout to center everything
+        main_layout = QHBoxLayout(container)
+        main_layout.setContentsMargins(0, 0, 0, 0)
+
+        # Center container
+        center_container = QWidget()
+        center_container.setStyleSheet("background: transparent;")
+        center_layout = QVBoxLayout(center_container)
+        center_layout.setAlignment(Qt.AlignCenter)
+        center_layout.setSpacing(15)
+
+        # 1. Icon with orange circle background
+        icon_container = QLabel()
+        icon_container.setFixedSize(70, 70)
+        icon_container.setAlignment(Qt.AlignCenter)
+        icon_container.setStyleSheet("""
+            background-color: #ffcc33;
+            border-radius: 35px;
+        """)
+
+        # Load icon from assets
+        import os
+        icon_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))),
+                                  "assets", "images", "tdesign_no-result.png")
+        if os.path.exists(icon_path):
+            pixmap = QPixmap(icon_path)
+            icon_container.setPixmap(pixmap.scaled(40, 40, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+        else:
+            # Fallback: try Icon loader
+            no_result_pixmap = Icon.load_pixmap("tdesign_no-result", size=40)
+            if no_result_pixmap and not no_result_pixmap.isNull():
+                icon_container.setPixmap(no_result_pixmap)
+            else:
+                icon_container.setText("⚠")
+                icon_container.setStyleSheet(icon_container.styleSheet() + "font-size: 28px; color: #1a1a1a;")
+
+        # 2. Main Title (Arabic Text)
+        title_label = QLabel("لا توجد مطالبة ملكية على هذه الوحدة")
+        title_label.setAlignment(Qt.AlignCenter)
+        title_label.setFont(create_font(size=14, weight=FontManager.WEIGHT_BOLD))
+        title_label.setStyleSheet(f"""
+            color: {Colors.WIZARD_TITLE};
+            background: transparent;
+        """)
+
+        # 3. Description (Arabic Text)
+        desc_label = QLabel(
+            "لم يتم العثور على أي علاقة ملكية، لذلك لن يتم إنشاء\n"
+            "مطالبة، وسيُعتبر العقار بدون أي مطالبات معلّقة"
+        )
+        desc_label.setAlignment(Qt.AlignCenter)
+        desc_label.setFont(create_font(size=11, weight=FontManager.WEIGHT_REGULAR))
+        desc_label.setStyleSheet(f"""
+            color: {Colors.WIZARD_SUBTITLE};
+            background: transparent;
+            line-height: 1.5;
+        """)
+
+        # Add widgets to the center layout
+        center_layout.addWidget(icon_container, alignment=Qt.AlignCenter)
+        center_layout.addWidget(title_label)
+        center_layout.addWidget(desc_label)
+
+        # Add the center container to the main layout
+        main_layout.addWidget(center_container)
+
+        return container
 
     def _create_claim_card_widget(self, claim_data: Dict[str, Any] = None) -> QFrame:
         """Create a single claim card widget matching the main card design."""
@@ -391,12 +474,24 @@ class ClaimStep(BaseStep):
         claims_count = response.get('claimsCreatedCount', 0)
         created_claims = response.get('createdClaims', [])
         data_summary = response.get('dataSummary', {})
+        claim_created = response.get('claimCreated', False)
 
         # Clear existing cards except the first one
         while len(self._claim_cards) > 1:
             card = self._claim_cards.pop()
             self.cards_layout.removeWidget(card)
             card.deleteLater()
+
+        # Check if claimCreated is false - show empty state
+        if not claim_created:
+            logger.info("No claims created - showing empty state")
+            self.scroll_area.hide()
+            self.empty_state_widget.show()
+            return
+
+        # Claims were created - show claim cards
+        self.empty_state_widget.hide()
+        self.scroll_area.show()
 
         # If we have created claims, populate cards
         if created_claims and len(created_claims) > 0:
@@ -503,6 +598,10 @@ class ClaimStep(BaseStep):
 
     def _populate_from_context(self):
         """Original logic to populate from context when no API response is available."""
+        # Ensure scroll area is visible and empty state is hidden
+        self.empty_state_widget.hide()
+        self.scroll_area.show()
+
         first_card = self._claim_cards[0]
 
         owners = [r for r in self.context.relations if r.get('relation_type') in ('owner', 'co_owner')]
@@ -563,6 +662,10 @@ class ClaimStep(BaseStep):
     def validate(self) -> StepValidationResult:
         result = self.create_validation_result()
 
+        # Skip validation if empty state is shown (no claims created)
+        if hasattr(self, 'empty_state_widget') and self.empty_state_widget.isVisible():
+            return result
+
         # Validate at least the first card has claim type selected
         if self._claim_cards:
             first_card = self._claim_cards[0]
@@ -574,6 +677,10 @@ class ClaimStep(BaseStep):
 
     def collect_data(self) -> Dict[str, Any]:
         """Collect claim data from all cards."""
+        # Return empty data if empty state is shown (no claims created)
+        if hasattr(self, 'empty_state_widget') and self.empty_state_widget.isVisible():
+            return {"claims": [], "claim_data": None, "no_claims_created": True}
+
         claims_data = []
 
         for card in self._claim_cards:
