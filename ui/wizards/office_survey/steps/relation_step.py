@@ -524,26 +524,26 @@ class RelationStep(BaseStep):
         return "تسجيل تفاصيل ملكية شخص للوحدة عقارية"
 
     def on_next(self):
-        """Called when user clicks Next - finalize the survey via API."""
+        """Called when user clicks Next - process claims via API."""
         import sys
         print("\n" + "="*80)
-        print("[STEP 5] on_next() called - Starting finalize process")
+        print("[STEP 5] on_next() called - Starting process-claims")
         print("="*80)
         sys.stdout.flush()
 
         if self._use_api:
-            self._finalize_survey_via_api()
+            self._process_claims_via_api()
         else:
-            print("[STEP 5] API mode is OFF, skipping finalize")
+            print("[STEP 5] API mode is OFF, skipping process-claims")
             sys.stdout.flush()
 
-    def _finalize_survey_via_api(self):
-        """Finalize the survey by calling the API and store response for Step 6."""
+    def _process_claims_via_api(self):
+        """Process claims for the survey by calling the API and store response for Step 6."""
         import sys
         import json
         from PyQt5.QtWidgets import QMessageBox
 
-        print("\n[FINALIZE] Starting _finalize_survey_via_api()")
+        print("\n[PROCESS-CLAIMS] Starting _process_claims_via_api()")
         sys.stdout.flush()
 
         # Set auth token
@@ -552,47 +552,46 @@ class RelationStep(BaseStep):
         if main_window and hasattr(main_window, '_api_token') and main_window._api_token:
             auth_token = main_window._api_token
             self._api_service.set_auth_token(auth_token)
-            print(f"[FINALIZE] Auth token set: {auth_token[:20]}...")
+            print(f"[PROCESS-CLAIMS] Auth token set: {auth_token[:20]}...")
         else:
-            print("[FINALIZE] WARNING: No auth token available!")
+            print("[PROCESS-CLAIMS] WARNING: No auth token available!")
         sys.stdout.flush()
 
         survey_id = self.context.get_data("survey_id")
-        print(f"[FINALIZE] Survey ID from context: {survey_id}")
+        print(f"[PROCESS-CLAIMS] Survey ID from context: {survey_id}")
         sys.stdout.flush()
 
         if not survey_id:
-            logger.warning("No survey_id found in context. Skipping finalize.")
-            print("[FINALIZE] ERROR: No survey_id found in context!")
+            logger.warning("No survey_id found in context. Skipping process-claims.")
+            print("[PROCESS-CLAIMS] ERROR: No survey_id found in context!")
             sys.stdout.flush()
             QMessageBox.warning(self, "Error", "No survey_id found in context!")
             return
 
-        logger.info(f"Finalizing survey {survey_id} from Step 5")
+        logger.info(f"Processing claims for survey {survey_id} from Step 5")
 
-        # Prepare finalization options
-        finalize_options = {
+        # Prepare processing options (required by API)
+        process_options = {
             "finalNotes": "Survey completed from office wizard",
             "durationMinutes": 10,
             "autoCreateClaim": True
         }
-        print(f"[FINALIZE] Options: {json.dumps(finalize_options, indent=2)}")
+        print(f"[PROCESS-CLAIMS] Options: {json.dumps(process_options, indent=2)}")
+
+        # Call the process-claims API
+        print(f"[PROCESS-CLAIMS] Calling API: POST /v1/Surveys/office/{survey_id}/process-claims")
         sys.stdout.flush()
 
-        # Call the finalize API
-        print(f"[FINALIZE] Calling API: POST /v1/Surveys/office/{survey_id}/finalize")
-        sys.stdout.flush()
+        response = self._api_service.finalize_office_survey(survey_id, process_options)
 
-        response = self._api_service.finalize_office_survey(survey_id, finalize_options)
-
-        print(f"\n[FINALIZE] Response received:")
+        print(f"\n[PROCESS-CLAIMS] Response received:")
         print(f"  success={response.get('success')}")
         print(f"  keys={list(response.keys())}")
         print(f"  Full response: {json.dumps(response, indent=2, ensure_ascii=False, default=str)}")
         sys.stdout.flush()
 
         if response.get("success"):
-            logger.info(f"Survey {survey_id} finalized successfully")
+            logger.info(f"Survey {survey_id} claims processed successfully")
 
             # Store the full API response in context for Step 6 (ClaimStep)
             api_data = response.get("data", {})
@@ -600,29 +599,46 @@ class RelationStep(BaseStep):
 
             # Print full API response for debugging
             print(f"\n{'='*60}")
-            print(f"[FINALIZE SUCCESS] POST /api/v1/Surveys/office/{survey_id}/finalize")
+            print(f"[PROCESS-CLAIMS SUCCESS] POST /api/v1/Surveys/office/{survey_id}/process-claims")
             print(f"{'='*60}")
             print(json.dumps(api_data, indent=2, ensure_ascii=False, default=str))
             print(f"{'='*60}\n")
             sys.stdout.flush()
 
-            # Log the response details
-            if api_data.get("claimCreated"):
-                logger.info(f"Claim created with ID: {api_data.get('claimId')}, Number: {api_data.get('claimNumber')}")
-                print(f"[CLAIM] Created: {api_data.get('claimNumber')} (ID: {api_data.get('claimId')})")
-                # Show success message box
-                QMessageBox.information(
-                    self,
-                    "Finalize Success",
-                    f"Claim Created!\n\nClaim Number: {api_data.get('claimNumber')}\nClaim ID: {api_data.get('claimId')}"
-                )
+            # Log the response details - now using claimsCreatedCount and createdClaims
+            claims_count = api_data.get("claimsCreatedCount", 0)
+            created_claims = api_data.get("createdClaims", [])
+
+            if api_data.get("claimCreated") or claims_count > 0:
+                logger.info(f"Claims created: {claims_count}")
+                print(f"[CLAIMS] Created count: {claims_count}")
+
+                # Build message with all created claims
+                claims_info = []
+                for claim in created_claims:
+                    claim_num = claim.get('claimNumber', 'N/A')
+                    claim_id = claim.get('claimId', 'N/A')
+                    claimant = claim.get('fullNameArabic', 'N/A')
+                    relation_type = claim.get('relationType', 'N/A')
+                    claims_info.append(f"- {claim_num}: {claimant} ({relation_type})")
+                    print(f"[CLAIM] {claim_num}: {claimant} (ID: {claim_id})")
+
+                # Show success message box with all claims
+                msg = f"Claims Created: {claims_count}\n\n"
+                if claims_info:
+                    msg += "\n".join(claims_info[:5])  # Show first 5 claims
+                    if len(claims_info) > 5:
+                        msg += f"\n... and {len(claims_info) - 5} more"
+
+                QMessageBox.information(self, "Process Claims Success", msg)
             else:
-                logger.warning(f"Claim not created. Reason: {api_data.get('claimNotCreatedReason')}")
-                print(f"[CLAIM] Not created. Reason: {api_data.get('claimNotCreatedReason')}")
+                reason = api_data.get('claimNotCreatedReason', 'Unknown')
+                logger.warning(f"Claim not created. Reason: {reason}")
+                print(f"[CLAIMS] Not created. Reason: {reason}")
                 QMessageBox.information(
                     self,
-                    "Finalize Success",
-                    f"Survey finalized but claim not created.\n\nReason: {api_data.get('claimNotCreatedReason', 'Unknown')}"
+                    "Process Claims",
+                    f"Survey processed but no claims created.\n\nReason: {reason}"
                 )
             sys.stdout.flush()
 
@@ -638,16 +654,16 @@ class RelationStep(BaseStep):
                 print(f"  - Evidence Count: {data_summary.get('evidenceCount', 0)}")
                 sys.stdout.flush()
 
-            Toast.show_toast(self, "تم إنهاء المسح بنجاح", Toast.SUCCESS)
+            Toast.show_toast(self, "تم معالجة المطالبات بنجاح", Toast.SUCCESS)
         else:
             error_msg = response.get("error", "Unknown error")
             error_details = response.get("details", "")
-            logger.error(f"Failed to finalize survey: {error_msg}")
+            logger.error(f"Failed to process claims: {error_msg}")
             logger.error(f"Error details: {error_details}")
 
             # Print error response for debugging
             print(f"\n{'='*60}")
-            print(f"[FINALIZE ERROR] POST /api/v1/Surveys/office/{survey_id}/finalize")
+            print(f"[PROCESS-CLAIMS ERROR] POST /api/v1/Surveys/office/{survey_id}/process-claims")
             print(f"{'='*60}")
             print(f"Error: {error_msg}")
             print(f"Details: {error_details}")
@@ -658,12 +674,12 @@ class RelationStep(BaseStep):
             # Show error message box
             QMessageBox.warning(
                 self,
-                "Finalize Error",
-                f"Failed to finalize survey!\n\nError: {error_msg}\nDetails: {error_details}"
+                "Process Claims Error",
+                f"Failed to process claims!\n\nError: {error_msg}\nDetails: {error_details}"
             )
 
-            # Clear any previous finalize response
+            # Clear any previous response
             self.context.finalize_response = None
 
             # Show warning but allow to continue to step 6
-            Toast.show_toast(self, f"تحذير: فشل إنهاء المسح - {error_msg}", Toast.WARNING)
+            Toast.show_toast(self, f"تحذير: فشل معالجة المطالبات - {error_msg}", Toast.WARNING)
