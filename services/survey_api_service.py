@@ -256,3 +256,361 @@ class SurveyApiService:
         }
 
         return api_data
+
+    def upload_identification_evidence(
+        self,
+        survey_id: str,
+        person_id: str,
+        file_path: str,
+        description: str = "",
+        document_issued_date: Optional[str] = None,
+        document_expiry_date: Optional[str] = None,
+        issuing_authority: str = "",
+        document_reference_number: str = ""
+    ) -> Dict[str, Any]:
+        """
+        Upload identification evidence for a person in a survey.
+
+        POST /v1/Surveys/{surveyId}/evidence/identification
+
+        Args:
+            survey_id: Survey UUID
+            person_id: Person UUID
+            file_path: Path to the file to upload
+            description: Document description
+            document_issued_date: Document issued date (ISO format)
+            document_expiry_date: Document expiry date (ISO format)
+            issuing_authority: Issuing authority name
+            document_reference_number: Document reference number
+
+        Returns:
+            Dict with success status and response data or error
+        """
+        import os
+        import mimetypes
+        from datetime import datetime, timezone
+
+        if not survey_id or not person_id:
+            logger.error("Survey ID and Person ID are required")
+            return {"success": False, "error": "Survey ID and Person ID are required", "error_code": "E_PARAM"}
+
+        if not file_path or not os.path.exists(file_path):
+            logger.error(f"File not found: {file_path}")
+            return {"success": False, "error": f"File not found: {file_path}", "error_code": "E_FILE"}
+
+        # Generate default dates if not provided
+        # Expiry date must be AFTER issue date per API validation
+        now = datetime.now(timezone.utc)
+        one_year_later = now.replace(year=now.year + 1)
+        now_str = now.strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
+        expiry_str = one_year_later.strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
+
+        if not document_issued_date:
+            document_issued_date = now_str
+        if not document_expiry_date:
+            document_expiry_date = expiry_str
+
+        endpoint = f"/v1/Surveys/{survey_id}/evidence/identification"
+        url = f"{self.base_url}{endpoint}"
+
+        # Prepare multipart form data
+        boundary = f"----WebKitFormBoundary{os.urandom(16).hex()}"
+
+        # Get file info
+        file_name = os.path.basename(file_path)
+        mime_type, _ = mimetypes.guess_type(file_path)
+        if not mime_type:
+            mime_type = "application/octet-stream"
+
+        # Read file content
+        with open(file_path, 'rb') as f:
+            file_content = f.read()
+
+        # Build multipart body
+        body_parts = []
+
+        # SurveyId field
+        body_parts.append(f'--{boundary}\r\n'.encode())
+        body_parts.append(f'Content-Disposition: form-data; name="SurveyId"\r\n\r\n'.encode())
+        body_parts.append(f'{survey_id}\r\n'.encode())
+
+        # PersonId field
+        body_parts.append(f'--{boundary}\r\n'.encode())
+        body_parts.append(f'Content-Disposition: form-data; name="PersonId"\r\n\r\n'.encode())
+        body_parts.append(f'{person_id}\r\n'.encode())
+
+        # File field
+        body_parts.append(f'--{boundary}\r\n'.encode())
+        body_parts.append(f'Content-Disposition: form-data; name="File"; filename="{file_name}"\r\n'.encode())
+        body_parts.append(f'Content-Type: {mime_type}\r\n\r\n'.encode())
+        body_parts.append(file_content)
+        body_parts.append(b'\r\n')
+
+        # Description field
+        body_parts.append(f'--{boundary}\r\n'.encode())
+        body_parts.append(f'Content-Disposition: form-data; name="Description"\r\n\r\n'.encode())
+        body_parts.append(f'{description}\r\n'.encode())
+
+        # DocumentIssuedDate field
+        body_parts.append(f'--{boundary}\r\n'.encode())
+        body_parts.append(f'Content-Disposition: form-data; name="DocumentIssuedDate"\r\n\r\n'.encode())
+        body_parts.append(f'{document_issued_date}\r\n'.encode())
+
+        # DocumentExpiryDate field
+        body_parts.append(f'--{boundary}\r\n'.encode())
+        body_parts.append(f'Content-Disposition: form-data; name="DocumentExpiryDate"\r\n\r\n'.encode())
+        body_parts.append(f'{document_expiry_date}\r\n'.encode())
+
+        # IssuingAuthority field
+        body_parts.append(f'--{boundary}\r\n'.encode())
+        body_parts.append(f'Content-Disposition: form-data; name="IssuingAuthority"\r\n\r\n'.encode())
+        body_parts.append(f'{issuing_authority}\r\n'.encode())
+
+        # DocumentReferenceNumber field
+        body_parts.append(f'--{boundary}\r\n'.encode())
+        body_parts.append(f'Content-Disposition: form-data; name="DocumentReferenceNumber"\r\n\r\n'.encode())
+        body_parts.append(f'{document_reference_number}\r\n'.encode())
+
+        # End boundary
+        body_parts.append(f'--{boundary}--\r\n'.encode())
+
+        body = b''.join(body_parts)
+
+        # Prepare headers
+        headers = {
+            "Content-Type": f"multipart/form-data; boundary={boundary}",
+            "Accept": "application/json",
+            "User-Agent": "TRRCMS-Desktop/1.0"
+        }
+        if self._auth_token:
+            headers["Authorization"] = f"Bearer {self._auth_token}"
+
+        try:
+            print(f"\n[UPLOAD EVIDENCE] POST {url}")
+            print(f"[UPLOAD EVIDENCE] SurveyId: {survey_id}, PersonId: {person_id}")
+            print(f"[UPLOAD EVIDENCE] File: {file_name} ({mime_type})")
+
+            request = urllib.request.Request(url, data=body, headers=headers, method="POST")
+
+            with urllib.request.urlopen(request, timeout=self.timeout, context=self._ssl_context) as response:
+                response_data = response.read().decode('utf-8')
+                print(f"[UPLOAD EVIDENCE] Response status: {response.status}")
+
+                if response_data:
+                    result = json.loads(response_data)
+                    print(f"[UPLOAD EVIDENCE] Success: {result}")
+                    return {"success": True, "data": result}
+                else:
+                    return {"success": True, "data": None}
+
+        except urllib.error.HTTPError as e:
+            error_body = ""
+            try:
+                error_body = e.read().decode('utf-8') if e.fp else ""
+            except:
+                pass
+
+            print(f"[UPLOAD EVIDENCE] HTTP Error: {e.code} - {e.reason}")
+            print(f"[UPLOAD EVIDENCE] Error body: {error_body}")
+            logger.error(f"HTTP Error {e.code}: {e.reason} - {error_body}")
+            return {
+                "success": False,
+                "error": f"HTTP Error {e.code}: {e.reason}",
+                "error_code": f"E{e.code}",
+                "details": error_body
+            }
+
+        except Exception as e:
+            print(f"[UPLOAD EVIDENCE] Error: {e}")
+            logger.error(f"Upload evidence error: {e}", exc_info=True)
+            return {
+                "success": False,
+                "error": str(e),
+                "error_code": "E500"
+            }
+
+    def upload_tenure_evidence(
+        self,
+        survey_id: str,
+        relation_id: str,
+        file_path: str,
+        evidence_type: int = 0,
+        description: str = "",
+        document_issued_date: Optional[str] = None,
+        document_expiry_date: Optional[str] = None,
+        issuing_authority: str = "",
+        document_reference_number: str = "",
+        notes: str = ""
+    ) -> Dict[str, Any]:
+        """
+        Upload tenure evidence for a person-property relation.
+
+        POST /v1/Surveys/{surveyId}/evidence/tenure
+
+        Args:
+            survey_id: Survey UUID
+            relation_id: Person Property Relation UUID
+            file_path: Path to the file to upload
+            evidence_type: Evidence type (integer)
+            description: Document description
+            document_issued_date: Document issued date (ISO format)
+            document_expiry_date: Document expiry date (ISO format)
+            issuing_authority: Issuing authority name
+            document_reference_number: Document reference number
+            notes: Additional notes
+
+        Returns:
+            Dict with success status and response data or error
+        """
+        import os
+        import mimetypes
+        from datetime import datetime, timezone
+
+        if not survey_id or not relation_id:
+            logger.error("Survey ID and Relation ID are required")
+            return {"success": False, "error": "Survey ID and Relation ID are required", "error_code": "E_PARAM"}
+
+        if not file_path or not os.path.exists(file_path):
+            logger.error(f"File not found: {file_path}")
+            return {"success": False, "error": f"File not found: {file_path}", "error_code": "E_FILE"}
+
+        # Generate default dates if not provided
+        # Expiry date must be AFTER issue date per API validation
+        now = datetime.now(timezone.utc)
+        one_year_later = now.replace(year=now.year + 1)
+        now_str = now.strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
+        expiry_str = one_year_later.strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
+
+        if not document_issued_date:
+            document_issued_date = now_str
+        if not document_expiry_date:
+            document_expiry_date = expiry_str
+
+        endpoint = f"/v1/Surveys/{survey_id}/evidence/tenure"
+        url = f"{self.base_url}{endpoint}"
+
+        # Prepare multipart form data
+        boundary = f"----WebKitFormBoundary{os.urandom(16).hex()}"
+
+        # Get file info
+        file_name = os.path.basename(file_path)
+        mime_type, _ = mimetypes.guess_type(file_path)
+        if not mime_type:
+            mime_type = "application/octet-stream"
+
+        # Read file content
+        with open(file_path, 'rb') as f:
+            file_content = f.read()
+
+        # Build multipart body
+        body_parts = []
+
+        # SurveyId field
+        body_parts.append(f'--{boundary}\r\n'.encode())
+        body_parts.append(f'Content-Disposition: form-data; name="SurveyId"\r\n\r\n'.encode())
+        body_parts.append(f'{survey_id}\r\n'.encode())
+
+        # PersonPropertyRelationId field
+        body_parts.append(f'--{boundary}\r\n'.encode())
+        body_parts.append(f'Content-Disposition: form-data; name="PersonPropertyRelationId"\r\n\r\n'.encode())
+        body_parts.append(f'{relation_id}\r\n'.encode())
+
+        # File field
+        body_parts.append(f'--{boundary}\r\n'.encode())
+        body_parts.append(f'Content-Disposition: form-data; name="File"; filename="{file_name}"\r\n'.encode())
+        body_parts.append(f'Content-Type: {mime_type}\r\n\r\n'.encode())
+        body_parts.append(file_content)
+        body_parts.append(b'\r\n')
+
+        # EvidenceType field
+        body_parts.append(f'--{boundary}\r\n'.encode())
+        body_parts.append(f'Content-Disposition: form-data; name="EvidenceType"\r\n\r\n'.encode())
+        body_parts.append(f'{evidence_type}\r\n'.encode())
+
+        # Description field
+        body_parts.append(f'--{boundary}\r\n'.encode())
+        body_parts.append(f'Content-Disposition: form-data; name="Description"\r\n\r\n'.encode())
+        body_parts.append(f'{description}\r\n'.encode())
+
+        # DocumentIssuedDate field
+        body_parts.append(f'--{boundary}\r\n'.encode())
+        body_parts.append(f'Content-Disposition: form-data; name="DocumentIssuedDate"\r\n\r\n'.encode())
+        body_parts.append(f'{document_issued_date}\r\n'.encode())
+
+        # DocumentExpiryDate field
+        body_parts.append(f'--{boundary}\r\n'.encode())
+        body_parts.append(f'Content-Disposition: form-data; name="DocumentExpiryDate"\r\n\r\n'.encode())
+        body_parts.append(f'{document_expiry_date}\r\n'.encode())
+
+        # IssuingAuthority field
+        body_parts.append(f'--{boundary}\r\n'.encode())
+        body_parts.append(f'Content-Disposition: form-data; name="IssuingAuthority"\r\n\r\n'.encode())
+        body_parts.append(f'{issuing_authority}\r\n'.encode())
+
+        # DocumentReferenceNumber field
+        body_parts.append(f'--{boundary}\r\n'.encode())
+        body_parts.append(f'Content-Disposition: form-data; name="DocumentReferenceNumber"\r\n\r\n'.encode())
+        body_parts.append(f'{document_reference_number}\r\n'.encode())
+
+        # Notes field
+        body_parts.append(f'--{boundary}\r\n'.encode())
+        body_parts.append(f'Content-Disposition: form-data; name="Notes"\r\n\r\n'.encode())
+        body_parts.append(f'{notes}\r\n'.encode())
+
+        # End boundary
+        body_parts.append(f'--{boundary}--\r\n'.encode())
+
+        body = b''.join(body_parts)
+
+        # Prepare headers
+        headers = {
+            "Content-Type": f"multipart/form-data; boundary={boundary}",
+            "Accept": "application/json",
+            "User-Agent": "TRRCMS-Desktop/1.0"
+        }
+        if self._auth_token:
+            headers["Authorization"] = f"Bearer {self._auth_token}"
+
+        try:
+            print(f"\n[UPLOAD TENURE EVIDENCE] POST {url}")
+            print(f"[UPLOAD TENURE EVIDENCE] SurveyId: {survey_id}, RelationId: {relation_id}")
+            print(f"[UPLOAD TENURE EVIDENCE] File: {file_name} ({mime_type})")
+
+            request = urllib.request.Request(url, data=body, headers=headers, method="POST")
+
+            with urllib.request.urlopen(request, timeout=self.timeout, context=self._ssl_context) as response:
+                response_data = response.read().decode('utf-8')
+                print(f"[UPLOAD TENURE EVIDENCE] Response status: {response.status}")
+
+                if response_data:
+                    result = json.loads(response_data)
+                    print(f"[UPLOAD TENURE EVIDENCE] Success: {result}")
+                    return {"success": True, "data": result}
+                else:
+                    return {"success": True, "data": None}
+
+        except urllib.error.HTTPError as e:
+            error_body = ""
+            try:
+                error_body = e.read().decode('utf-8') if e.fp else ""
+            except:
+                pass
+
+            print(f"[UPLOAD TENURE EVIDENCE] HTTP Error: {e.code} - {e.reason}")
+            print(f"[UPLOAD TENURE EVIDENCE] Error body: {error_body}")
+            logger.error(f"HTTP Error {e.code}: {e.reason} - {error_body}")
+            return {
+                "success": False,
+                "error": f"HTTP Error {e.code}: {e.reason}",
+                "error_code": f"E{e.code}",
+                "details": error_body
+            }
+
+        except Exception as e:
+            print(f"[UPLOAD TENURE EVIDENCE] Error: {e}")
+            logger.error(f"Upload tenure evidence error: {e}", exc_info=True)
+            return {
+                "success": False,
+                "error": str(e),
+                "error_code": "E500"
+            }
