@@ -84,18 +84,28 @@ class SurveyApiService:
                 method=method
             )
 
+            # Debug print for tracing
+            print(f"\n[API REQUEST] {method} {url}")
+            print(f"[HEADERS] {headers}")
+            if data:
+                print(f"[BODY] {json.dumps(data, ensure_ascii=False, indent=2)}")
+
             logger.debug(f"API Request: {method} {url}")
             if data:
                 logger.debug(f"Request body: {json.dumps(data, ensure_ascii=False)}")
 
             with urllib.request.urlopen(request, timeout=self.timeout, context=self._ssl_context) as response:
                 response_data = response.read().decode('utf-8')
+                print(f"[API RESPONSE STATUS] {response.status}")
+                print(f"[API RESPONSE DATA] {response_data[:500] if response_data else 'EMPTY'}...")
 
                 if response_data:
                     result = json.loads(response_data)
                     logger.debug(f"API Response: {type(result)}")
+                    print(f"[API PARSED] success=True, data keys: {list(result.keys()) if isinstance(result, dict) else type(result)}")
                     return {"success": True, "data": result}
                 else:
+                    print(f"[API PARSED] success=True, data=None (empty response)")
                     return {"success": True, "data": None}
 
         except urllib.error.HTTPError as e:
@@ -105,6 +115,8 @@ class SurveyApiService:
             except:
                 pass
 
+            print(f"[API HTTP ERROR] {e.code}: {e.reason}")
+            print(f"[API ERROR BODY] {error_body}")
             logger.error(f"HTTP Error {e.code}: {e.reason} - {error_body}")
             return {
                 "success": False,
@@ -114,6 +126,7 @@ class SurveyApiService:
             }
 
         except urllib.error.URLError as e:
+            print(f"[API URL ERROR] {e.reason}")
             logger.error(f"Connection error: {e.reason}")
             return {
                 "success": False,
@@ -122,6 +135,7 @@ class SurveyApiService:
             }
 
         except json.JSONDecodeError as e:
+            print(f"[API JSON ERROR] {e}")
             logger.error(f"Invalid JSON response: {e}")
             return {
                 "success": False,
@@ -130,6 +144,9 @@ class SurveyApiService:
             }
 
         except Exception as e:
+            print(f"[API UNEXPECTED ERROR] {e}")
+            import traceback
+            traceback.print_exc()
             logger.error(f"Unexpected error: {e}", exc_info=True)
             return {
                 "success": False,
@@ -197,7 +214,7 @@ class SurveyApiService:
         api_data = {
             "surveyId": survey_id,
             "finalNotes": "",
-            "durationMinutes": 0,
+            "durationMinutes": 10,
             "autoCreateClaim": True
         }
 

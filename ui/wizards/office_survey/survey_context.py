@@ -47,6 +47,9 @@ class SurveyContext(WizardContext):
         # Claim data
         self.claim_data: Optional[Dict] = None
 
+        # Finalize survey API response (from Step 5 -> Step 6 transition)
+        self.finalize_response: Optional[Dict] = None
+
         # Clerk information
         self.clerk_id: Optional[str] = None
 
@@ -71,6 +74,7 @@ class SurveyContext(WizardContext):
             "persons": self.persons,
             "relations": self.relations,
             "claim_data": self.claim_data,
+            "finalize_response": self.finalize_response,
             "clerk_id": self.clerk_id
         }
 
@@ -93,6 +97,7 @@ class SurveyContext(WizardContext):
         ctx.persons = data.get("persons", [])
         ctx.relations = data.get("relations", [])
         ctx.claim_data = data.get("claim_data")
+        ctx.finalize_response = data.get("finalize_response")
         ctx.clerk_id = data.get("clerk_id")
 
         # Note: Building and Unit objects would need to be restored from repository

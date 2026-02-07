@@ -105,6 +105,11 @@ class StepNavigator(QObject):
                 # Mark step as completed
                 self.context.mark_step_completed(self.current_index)
 
+                # Call on_next() hook if the step has it
+                if hasattr(current_step, 'on_next') and callable(current_step.on_next):
+                    logger.debug(f"Calling on_next() for step {self.current_index}")
+                    current_step.on_next()
+
         # Move to next step
         result = self._navigate_to(self.current_index + 1)
         if result:
