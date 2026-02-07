@@ -427,7 +427,12 @@ class ReviewStep(BaseStep):
         return self.context.get_summary()
 
     def on_next(self):
-        """Called when user clicks Next/Submit button. Finalize the survey via API."""
+        """Called when user clicks Next/Submit button. Finalize the survey via API if not already done."""
+        # Skip finalize if already done in Step 5 (RelationStep)
+        if hasattr(self.context, 'finalize_response') and self.context.finalize_response:
+            logger.info("Survey already finalized in Step 5, skipping duplicate finalize")
+            return
+
         if self._use_api:
             self._finalize_survey_via_api()
 

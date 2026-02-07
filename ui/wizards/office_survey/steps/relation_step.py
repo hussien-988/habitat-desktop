@@ -22,6 +22,7 @@ from PyQt5.QtCore import Qt, QDate
 from ui.wizards.framework import BaseStep, StepValidationResult
 from ui.wizards.office_survey.survey_context import SurveyContext
 from app.config import Config
+from services.survey_api_service import SurveyApiService
 from utils.logger import get_logger
 from ui.components.toast import Toast
 
@@ -37,6 +38,10 @@ class RelationStep(BaseStep):
         self._current_relation_evidences = []
         self._relation_file_paths = []
         self._person_cards = []  # Store references to person card widgets
+
+        # Initialize API service for finalizing survey
+        self._api_service = SurveyApiService()
+        self._use_api = getattr(Config, 'DATA_PROVIDER', 'local_db') == 'http'
 
     def setup_ui(self):
         """Setup the step's UI - matching person_step styling."""
@@ -517,3 +522,148 @@ class RelationStep(BaseStep):
     def get_step_description(self) -> str:
         """Get step description."""
         return "تسجيل تفاصيل ملكية شخص للوحدة عقارية"
+
+    def on_next(self):
+        """Called when user clicks Next - finalize the survey via API."""
+        import sys
+        print("\n" + "="*80)
+        print("[STEP 5] on_next() called - Starting finalize process")
+        print("="*80)
+        sys.stdout.flush()
+
+        if self._use_api:
+            self._finalize_survey_via_api()
+        else:
+            print("[STEP 5] API mode is OFF, skipping finalize")
+            sys.stdout.flush()
+
+    def _finalize_survey_via_api(self):
+        """Finalize the survey by calling the API and store response for Step 6."""
+        import sys
+        import json
+        from PyQt5.QtWidgets import QMessageBox
+
+        print("\n[FINALIZE] Starting _finalize_survey_via_api()")
+        sys.stdout.flush()
+
+        # Set auth token
+        main_window = self.window()
+        auth_token = None
+        if main_window and hasattr(main_window, '_api_token') and main_window._api_token:
+            auth_token = main_window._api_token
+            self._api_service.set_auth_token(auth_token)
+            print(f"[FINALIZE] Auth token set: {auth_token[:20]}...")
+        else:
+            print("[FINALIZE] WARNING: No auth token available!")
+        sys.stdout.flush()
+
+        survey_id = self.context.get_data("survey_id")
+        print(f"[FINALIZE] Survey ID from context: {survey_id}")
+        sys.stdout.flush()
+
+        if not survey_id:
+            logger.warning("No survey_id found in context. Skipping finalize.")
+            print("[FINALIZE] ERROR: No survey_id found in context!")
+            sys.stdout.flush()
+            QMessageBox.warning(self, "Error", "No survey_id found in context!")
+            return
+
+        logger.info(f"Finalizing survey {survey_id} from Step 5")
+
+        # Prepare finalization options
+        finalize_options = {
+            "finalNotes": "Survey completed from office wizard",
+            "durationMinutes": 10,
+            "autoCreateClaim": True
+        }
+        print(f"[FINALIZE] Options: {json.dumps(finalize_options, indent=2)}")
+        sys.stdout.flush()
+
+        # Call the finalize API
+        print(f"[FINALIZE] Calling API: POST /v1/Surveys/office/{survey_id}/finalize")
+        sys.stdout.flush()
+
+        response = self._api_service.finalize_office_survey(survey_id, finalize_options)
+
+        print(f"\n[FINALIZE] Response received:")
+        print(f"  success={response.get('success')}")
+        print(f"  keys={list(response.keys())}")
+        print(f"  Full response: {json.dumps(response, indent=2, ensure_ascii=False, default=str)}")
+        sys.stdout.flush()
+
+        if response.get("success"):
+            logger.info(f"Survey {survey_id} finalized successfully")
+
+            # Store the full API response in context for Step 6 (ClaimStep)
+            api_data = response.get("data", {})
+            self.context.finalize_response = api_data
+
+            # Print full API response for debugging
+            print(f"\n{'='*60}")
+            print(f"[FINALIZE SUCCESS] POST /api/v1/Surveys/office/{survey_id}/finalize")
+            print(f"{'='*60}")
+            print(json.dumps(api_data, indent=2, ensure_ascii=False, default=str))
+            print(f"{'='*60}\n")
+            sys.stdout.flush()
+
+            # Log the response details
+            if api_data.get("claimCreated"):
+                logger.info(f"Claim created with ID: {api_data.get('claimId')}, Number: {api_data.get('claimNumber')}")
+                print(f"[CLAIM] Created: {api_data.get('claimNumber')} (ID: {api_data.get('claimId')})")
+                # Show success message box
+                QMessageBox.information(
+                    self,
+                    "Finalize Success",
+                    f"Claim Created!\n\nClaim Number: {api_data.get('claimNumber')}\nClaim ID: {api_data.get('claimId')}"
+                )
+            else:
+                logger.warning(f"Claim not created. Reason: {api_data.get('claimNotCreatedReason')}")
+                print(f"[CLAIM] Not created. Reason: {api_data.get('claimNotCreatedReason')}")
+                QMessageBox.information(
+                    self,
+                    "Finalize Success",
+                    f"Survey finalized but claim not created.\n\nReason: {api_data.get('claimNotCreatedReason', 'Unknown')}"
+                )
+            sys.stdout.flush()
+
+            # Print data summary
+            data_summary = api_data.get('dataSummary', {})
+            if data_summary:
+                print(f"[DATA SUMMARY]")
+                print(f"  - Property Units: {data_summary.get('propertyUnitsCount', 0)}")
+                print(f"  - Households: {data_summary.get('householdsCount', 0)}")
+                print(f"  - Persons: {data_summary.get('personsCount', 0)}")
+                print(f"  - Relations: {data_summary.get('relationsCount', 0)}")
+                print(f"  - Ownership Relations: {data_summary.get('ownershipRelationsCount', 0)}")
+                print(f"  - Evidence Count: {data_summary.get('evidenceCount', 0)}")
+                sys.stdout.flush()
+
+            Toast.show_toast(self, "تم إنهاء المسح بنجاح", Toast.SUCCESS)
+        else:
+            error_msg = response.get("error", "Unknown error")
+            error_details = response.get("details", "")
+            logger.error(f"Failed to finalize survey: {error_msg}")
+            logger.error(f"Error details: {error_details}")
+
+            # Print error response for debugging
+            print(f"\n{'='*60}")
+            print(f"[FINALIZE ERROR] POST /api/v1/Surveys/office/{survey_id}/finalize")
+            print(f"{'='*60}")
+            print(f"Error: {error_msg}")
+            print(f"Details: {error_details}")
+            print(json.dumps(response, indent=2, ensure_ascii=False, default=str))
+            print(f"{'='*60}\n")
+            sys.stdout.flush()
+
+            # Show error message box
+            QMessageBox.warning(
+                self,
+                "Finalize Error",
+                f"Failed to finalize survey!\n\nError: {error_msg}\nDetails: {error_details}"
+            )
+
+            # Clear any previous finalize response
+            self.context.finalize_response = None
+
+            # Show warning but allow to continue to step 6
+            Toast.show_toast(self, f"تحذير: فشل إنهاء المسح - {error_msg}", Toast.WARNING)

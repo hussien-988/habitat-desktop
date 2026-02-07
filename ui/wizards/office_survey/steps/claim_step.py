@@ -252,11 +252,119 @@ class ClaimStep(BaseStep):
         layout.addStretch()
 
     def _evaluate_for_claim(self):
-        """Evaluate relations for claim creation - exact copy from old wizard."""
-        owners = [r for r in self.context.relations if r['relation_type'] in ('owner', 'co_owner')]
-        tenants = [r for r in self.context.relations if r['relation_type'] == 'tenant']
-        occupants = [r for r in self.context.relations if r['relation_type'] == 'occupant']
-        heirs = [r for r in self.context.relations if r['relation_type'] == 'heir']
+        """Evaluate relations for claim creation and populate from API response if available."""
+        # Check if we have finalize response from Step 5
+        if hasattr(self.context, 'finalize_response') and self.context.finalize_response:
+            self._populate_from_api_response(self.context.finalize_response)
+            return
+
+        # Fallback to original logic if no API response
+        self._populate_from_context()
+
+    def _populate_from_api_response(self, response: Dict[str, Any]):
+        """Populate claim card from finalize survey API response."""
+        logger.info("Populating claim card from API response")
+
+        # Extract data from response
+        survey_data = response.get('survey', {})
+        claim_created = response.get('claimCreated', False)
+        claim_id = response.get('claimId', '')
+        claim_number = response.get('claimNumber', '')
+        data_summary = response.get('dataSummary', {})
+        warnings = response.get('warnings', [])
+
+        # Populate unit identifier from survey
+        unit_identifier = survey_data.get('unitIdentifier', '')
+        if unit_identifier:
+            self.claim_unit_search.setText(unit_identifier)
+        elif self.context.unit:
+            self.claim_unit_search.setText(str(self.context.unit.unit_id or ""))
+
+        # Populate claimant name from first person in context
+        if self.context.persons:
+            first_person = self.context.persons[0]
+            full_name = f"{first_person.get('first_name', '')} {first_person.get('last_name', '')}"
+            self.claim_person_search.setText(full_name.strip())
+
+        # Set survey date from API response
+        survey_date_str = survey_data.get('surveyDate', '')
+        if survey_date_str:
+            # Parse ISO date format
+            try:
+                from datetime import datetime
+                survey_date = datetime.fromisoformat(survey_date_str.replace('Z', '+00:00'))
+                self.claim_survey_date.setDate(QDate(survey_date.year, survey_date.month, survey_date.day))
+            except Exception as e:
+                logger.warning(f"Failed to parse survey date: {e}")
+
+        # Auto-select claim type based on relations
+        owners = [r for r in self.context.relations if r.get('relation_type') in ('owner', 'co_owner')]
+        tenants = [r for r in self.context.relations if r.get('relation_type') == 'tenant']
+        occupants = [r for r in self.context.relations if r.get('relation_type') == 'occupant']
+        heirs = [r for r in self.context.relations if r.get('relation_type') == 'heir']
+
+        if owners or heirs:
+            for i in range(self.claim_type_combo.count()):
+                if self.claim_type_combo.itemData(i) == "ownership":
+                    self.claim_type_combo.setCurrentIndex(i)
+                    break
+        elif tenants:
+            for i in range(self.claim_type_combo.count()):
+                if self.claim_type_combo.itemData(i) == "tenancy":
+                    self.claim_type_combo.setCurrentIndex(i)
+                    break
+        elif occupants:
+            for i in range(self.claim_type_combo.count()):
+                if self.claim_type_combo.itemData(i) == "occupancy":
+                    self.claim_type_combo.setCurrentIndex(i)
+                    break
+
+        # Update status bar based on claim creation and data summary
+        evidence_count = data_summary.get('evidenceCount', 0)
+
+        if claim_created:
+            self.claim_eval_label.setText(f"تم إنشاء المطالبة: {claim_number}")
+            self.claim_eval_label.setStyleSheet("""
+                QLabel {
+                    background-color: #e1f7ef;
+                    color: #10b981;
+                    border-radius: 8px;
+                }
+            """)
+
+            # Store claim info in context
+            self.context.update_data("claim_id", claim_id)
+            self.context.update_data("claim_number", claim_number)
+        elif evidence_count > 0:
+            self.claim_eval_label.setText(f"الأدلة متوفرة ({evidence_count})")
+            self.claim_eval_label.setStyleSheet("""
+                QLabel {
+                    background-color: #e1f7ef;
+                    color: #10b981;
+                    border-radius: 8px;
+                }
+            """)
+        else:
+            reason = response.get('claimNotCreatedReason', 'لا توجد أدلة مرفقة')
+            self.claim_eval_label.setText(reason if reason else "لا توجد أدلة مرفقة")
+            self.claim_eval_label.setStyleSheet("""
+                QLabel {
+                    background-color: #fef3c7;
+                    color: #f59e0b;
+                    border-radius: 8px;
+                }
+            """)
+
+        # Show warnings if any
+        if warnings:
+            logger.warning(f"Finalize survey warnings: {warnings}")
+
+    def _populate_from_context(self):
+        """Original logic to populate from context when no API response is available."""
+        owners = [r for r in self.context.relations if r.get('relation_type') in ('owner', 'co_owner')]
+        tenants = [r for r in self.context.relations if r.get('relation_type') == 'tenant']
+        occupants = [r for r in self.context.relations if r.get('relation_type') == 'occupant']
+        heirs = [r for r in self.context.relations if r.get('relation_type') == 'heir']
 
         # Count total evidences
         total_evidences = sum(len(r.get('evidences', [])) for r in self.context.relations)
@@ -273,7 +381,6 @@ class ClaimStep(BaseStep):
 
         # Auto-select claim type based on relations
         if owners or heirs:
-            # Find index for "ownership"
             for i in range(self.claim_type_combo.count()):
                 if self.claim_type_combo.itemData(i) == "ownership":
                     self.claim_type_combo.setCurrentIndex(i)

@@ -408,6 +408,10 @@ class PersonApiService:
             logger.error("Missing unit_id")
             raise ValueError("unit_id is required for linking person to unit")
 
+        # Convert ownership share from percentage (0-100) to decimal (0-1)
+        ownership_share_pct = relation_data.get('ownership_share', 0)
+        ownership_share_decimal = ownership_share_pct / 100.0 if ownership_share_pct else 0
+
         api_data = {
             "surveyId": survey_id,
             "personId": person_id,
@@ -416,7 +420,7 @@ class PersonApiService:
             "relationTypeOtherDesc": relation_type_other,
             "contractType": contract_type_int,
             "contractTypeOtherDesc": contract_type_other,
-            "ownershipShare": relation_data.get('ownership_share', 0),
+            "ownershipShare": ownership_share_decimal,
             "contractDetails": contract_details,
             "startDate": start_date,
             "endDate": None,
