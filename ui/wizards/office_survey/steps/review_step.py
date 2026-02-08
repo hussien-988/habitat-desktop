@@ -137,19 +137,19 @@ class ReviewStep(BaseStep):
         header_layout.setContentsMargins(0, 0, 0, 0)
         header_layout.setSpacing(12)
 
-        # Icon
+        # Icon container (circular, light blue background)
         icon_label = QLabel()
-        icon_label.setFixedSize(40, 40)
+        icon_label.setFixedSize(48, 48)
         icon_label.setAlignment(Qt.AlignCenter)
-        icon_label.setStyleSheet(f"""
-            QLabel {{
-                background-color: {Colors.SURFACE};
-                border: none;
-                border-radius: 10px;
-            }}
+        icon_label.setStyleSheet("""
+            QLabel {
+                background-color: #e8f4fd;
+                border: 1px solid #d0e8f7;
+                border-radius: 24px;
+            }
         """)
 
-        icon_pixmap = Icon.load_pixmap(icon_name, size=24)
+        icon_pixmap = Icon.load_pixmap(icon_name, size=28)
         if icon_pixmap and not icon_pixmap.isNull():
             icon_label.setPixmap(icon_pixmap)
 
@@ -484,7 +484,7 @@ class ReviewStep(BaseStep):
 
     def _create_household_card(self) -> QFrame:
         """Create household information summary card (Step 3)."""
-        card, content_layout = self._create_card_base("person-group", "تسجيل الأسرة", "بيانات الأسرة والتركيبة السكانية")
+        card, content_layout = self._create_card_base("user-group", "تسجيل الأسرة", "تسجيل الأسرة التي تشغل الوحدات العقارية وتفاصيل الإشغال")
         self.household_content = content_layout
         return card
 
@@ -799,8 +799,51 @@ class ReviewStep(BaseStep):
             no_data.setAlignment(Qt.AlignCenter)
             self.unit_content.addWidget(no_data)
 
+    def _create_demographic_card(self, items: list) -> QFrame:
+        """Create a demographic data card with label/value rows and separators."""
+        frame = QFrame()
+        frame.setStyleSheet(f"""
+            QFrame {{
+                background-color: {Colors.SURFACE};
+                border: 1px solid {Colors.BORDER_DEFAULT};
+                border-radius: 12px;
+            }}
+        """)
+        card_layout = QVBoxLayout(frame)
+        card_layout.setContentsMargins(20, 20, 20, 20)
+        card_layout.setSpacing(18)
+
+        ALIGN_ABS_RIGHT = Qt.AlignRight | Qt.AlignAbsolute
+
+        for i, (text, value) in enumerate(items):
+            item_block = QVBoxLayout()
+            item_block.setSpacing(4)
+
+            txt_lbl = QLabel(text)
+            txt_lbl.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
+            txt_lbl.setStyleSheet(f"color: #1e293b; background: transparent; border: none;")
+            txt_lbl.setAlignment(ALIGN_ABS_RIGHT)
+
+            val_lbl = QLabel(str(value))
+            val_lbl.setFont(create_font(size=10, weight=FontManager.WEIGHT_REGULAR))
+            val_lbl.setStyleSheet(f"color: #94a3b8; background: transparent; border: none;")
+            val_lbl.setAlignment(ALIGN_ABS_RIGHT)
+
+            item_block.addWidget(txt_lbl)
+            item_block.addWidget(val_lbl)
+            card_layout.addLayout(item_block)
+
+            if i < len(items) - 1:
+                separator = QFrame()
+                separator.setFrameShape(QFrame.HLine)
+                separator.setFixedHeight(1)
+                separator.setStyleSheet(f"background-color: #f1f5f9; border: none;")
+                card_layout.addWidget(separator)
+
+        return frame
+
     def _populate_household_card(self):
-        """Populate household information card."""
+        """Populate household information card - matching screenshot layout."""
         self._clear_layout(self.household_content)
 
         if not self.context.households:
@@ -815,53 +858,80 @@ class ReviewStep(BaseStep):
         total_size = sum(h.get('size', 0) for h in self.context.households)
         head_name = self.context.households[0].get('head_name', '-') if self.context.households else "-"
 
-        # Header info row
-        header_container = QWidget()
-        header_container.setStyleSheet("background: transparent; border: none;")
-        header_layout = QHBoxLayout(header_container)
-        header_layout.setContentsMargins(0, 0, 0, 0)
-        header_layout.setSpacing(16)
+        # --- Summary Row: Head name (right) + Member count (center) ---
+        summary_container = QWidget()
+        summary_container.setStyleSheet("background: transparent; border: none;")
+        summary_layout = QHBoxLayout(summary_container)
+        summary_layout.setContentsMargins(0, 0, 0, 0)
+        summary_layout.setSpacing(0)
 
-        # Family count stat
-        count_stat = self._create_stat_item(str(len(self.context.households)), "عدد الأسر", "#3B82F6")
-        size_stat = self._create_stat_item(str(total_size), "إجمالي الأفراد", "#22C55E")
+        # Right block: head of household name
+        name_block = QVBoxLayout()
+        name_block.setSpacing(4)
+        name_title = QLabel("اسم رب الأسرة")
+        name_title.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
+        name_title.setStyleSheet(f"color: #1e293b; background: transparent; border: none;")
+        name_title.setAlignment(Qt.AlignRight)
+        name_val = QLabel(head_name)
+        name_val.setFont(create_font(size=10, weight=FontManager.WEIGHT_REGULAR))
+        name_val.setStyleSheet(f"color: #94a3b8; background: transparent; border: none;")
+        name_val.setAlignment(Qt.AlignRight)
+        name_block.addWidget(name_title)
+        name_block.addWidget(name_val)
 
-        # Head name
-        head_container = QWidget()
-        head_container.setStyleSheet("background: transparent; border: none;")
-        head_layout = QVBoxLayout(head_container)
-        head_layout.setContentsMargins(0, 0, 0, 0)
-        head_layout.setSpacing(4)
+        # Center block: member count
+        count_block = QVBoxLayout()
+        count_block.setSpacing(4)
+        count_title = QLabel("عدد أفراد الأسرة")
+        count_title.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
+        count_title.setStyleSheet(f"color: #1e293b; background: transparent; border: none;")
+        count_title.setAlignment(Qt.AlignCenter)
+        count_val = QLabel(str(total_size))
+        count_val.setFont(create_font(size=10, weight=FontManager.WEIGHT_REGULAR))
+        count_val.setStyleSheet(f"color: #94a3b8; background: transparent; border: none;")
+        count_val.setAlignment(Qt.AlignCenter)
+        count_block.addWidget(count_title)
+        count_block.addWidget(count_val)
 
-        head_label = QLabel("رب الأسرة")
-        head_label.setFont(create_font(size=9))
-        head_label.setStyleSheet(f"color: {Colors.TEXT_SECONDARY}; background: transparent; border: none;")
-        head_label.setAlignment(Qt.AlignRight)
+        summary_layout.addLayout(name_block)
+        summary_layout.addStretch()
+        summary_layout.addLayout(count_block)
+        summary_layout.addStretch()
 
-        head_value = QLabel(head_name)
-        head_value.setFont(create_font(size=10, weight=FontManager.WEIGHT_MEDIUM))
-        head_value.setStyleSheet(f"color: {Colors.TEXT_PRIMARY}; background: transparent; border: none;")
-        head_value.setAlignment(Qt.AlignRight)
+        self.household_content.addWidget(summary_container)
 
-        head_layout.addWidget(head_label)
-        head_layout.addWidget(head_value)
-
-        header_layout.addWidget(count_stat)
-        header_layout.addWidget(size_stat)
-        header_layout.addStretch()
-        header_layout.addWidget(head_container)
-
-        self.household_content.addWidget(header_container)
-
-        # Demographics grid
+        # --- Aggregate demographics ---
         demographics = {}
         for h in self.context.households:
             for key in ['adult_male', 'adult_female', 'minor_male', 'minor_female',
                         'elderly_male', 'elderly_female', 'disabled_male', 'disabled_female']:
                 demographics[key] = demographics.get(key, 0) + h.get(key, 0)
 
-        demographics_grid = self._create_demographics_grid(demographics)
-        self.household_content.addWidget(demographics_grid)
+        # --- Two cards side by side: Males (right) + Females (left) ---
+        male_items = [
+            ("عدد البالغين الذكور", demographics.get('adult_male', 0)),
+            ("عدد الأطفال الذكور (أقل من 18)", demographics.get('minor_male', 0)),
+            ("عدد كبار السن الذكور (أكثر من 65)", demographics.get('elderly_male', 0)),
+            ("عدد المعاقين الذكور", demographics.get('disabled_male', 0)),
+        ]
+
+        female_items = [
+            ("عدد البالغين الإناث", demographics.get('adult_female', 0)),
+            ("عدد الأطفال الإناث (أقل من 18)", demographics.get('minor_female', 0)),
+            ("عدد كبار السن الإناث (أكثر من 65)", demographics.get('elderly_female', 0)),
+            ("عدد المعاقين الإناث", demographics.get('disabled_female', 0)),
+        ]
+
+        cards_container = QWidget()
+        cards_container.setStyleSheet("background: transparent; border: none;")
+        cards_layout = QHBoxLayout(cards_container)
+        cards_layout.setContentsMargins(0, 0, 0, 0)
+        cards_layout.setSpacing(20)
+
+        cards_layout.addWidget(self._create_demographic_card(male_items))
+        cards_layout.addWidget(self._create_demographic_card(female_items))
+
+        self.household_content.addWidget(cards_container)
 
     def _populate_persons_card(self):
         """Populate persons list card."""
