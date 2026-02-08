@@ -477,8 +477,8 @@ class ReviewStep(BaseStep):
         return card
 
     def _create_unit_card(self) -> QFrame:
-        """Create unit information summary card (Step 2)."""
-        card, content_layout = self._create_card_base("property", "بيانات الوحدة", "معلومات الوحدة العقارية")
+        """Create unit information summary card (Step 2) - matching step 2 header."""
+        card, content_layout = self._create_card_base("move", "اختر الوحدة العقارية", "اختر أو أضف معلومات الوحدة العقارية")
         self.unit_content = content_layout
         return card
 
@@ -670,40 +670,128 @@ class ReviewStep(BaseStep):
             no_data.setAlignment(Qt.AlignCenter)
             self.building_content.addWidget(no_data)
 
+    def _create_unit_stat_section(self, label_text: str, value_text: str = "-"):
+        """Create a stat section matching step 3 unit card style (label top, value below, both centered)."""
+        section = QWidget()
+        section.setStyleSheet("background: transparent;")
+
+        section_layout = QVBoxLayout(section)
+        section_layout.setContentsMargins(8, 0, 8, 0)
+        section_layout.setSpacing(4)
+        section_layout.setAlignment(Qt.AlignCenter)
+
+        label = QLabel(label_text)
+        label.setAlignment(Qt.AlignCenter)
+        label.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
+        label.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent; border: none;")
+
+        value = QLabel(value_text)
+        value.setAlignment(Qt.AlignCenter)
+        value.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
+        value.setStyleSheet(f"color: {Colors.WIZARD_SUBTITLE}; background: transparent; border: none;")
+
+        section_layout.addWidget(label)
+        section_layout.addWidget(value)
+
+        return section, value
+
     def _populate_unit_card(self):
-        """Populate unit information card."""
+        """Populate unit information card - same layout as step 3 unit info row."""
         self._clear_layout(self.unit_content)
 
         unit = self.context.unit
         new_unit_data = self.context.new_unit_data if self.context.is_new_unit else None
 
         if unit or new_unit_data:
+            # Extract values
             if unit:
-                unit_num = str(unit.unit_id) if hasattr(unit, 'unit_id') and unit.unit_id else "-"
-                floor = str(unit.floor_number) if hasattr(unit, 'floor_number') and unit.floor_number else "-"
-                rooms = str(unit.rooms_count) if hasattr(unit, 'rooms_count') and unit.rooms_count else "-"
-                area = str(unit.area) + " م²" if hasattr(unit, 'area') and unit.area else "-"
-                unit_type = unit.unit_type_display if hasattr(unit, 'unit_type_display') else "-"
-                status = unit.status_display if hasattr(unit, 'status_display') else "-"
+                unit_num = str(unit.unit_number or unit.apartment_number or "-")
+                floor = str(unit.floor_number) if unit.floor_number is not None else "-"
+                rooms = str(unit.apartment_number) if unit.apartment_number else "-"
+                if unit.area_sqm:
+                    try:
+                        area = f"{float(unit.area_sqm):.2f} م²"
+                    except (ValueError, TypeError):
+                        area = "-"
+                else:
+                    area = "-"
+                unit_type = unit.unit_type_display_ar if hasattr(unit, 'unit_type_display_ar') else "-"
+                status_mappings = {
+                    "occupied": "مشغولة", "vacant": "شاغرة", "unknown": "غير معروف"
+                }
+                status = status_mappings.get(getattr(unit, 'apartment_status', ''), getattr(unit, 'apartment_status', '-'))
             else:
-                unit_num = "جديد"
+                unit_num = str(new_unit_data.get('unit_number', 'جديد'))
                 floor = str(new_unit_data.get('floor_number', '-'))
-                rooms = str(new_unit_data.get('rooms_count', '-'))
-                area = str(new_unit_data.get('area', '-')) + " م²" if new_unit_data.get('area') else "-"
+                rooms = str(new_unit_data.get('number_of_rooms', '-'))
+                area_raw = new_unit_data.get('area_sqm')
+                area = f"{float(area_raw):.2f} م²" if area_raw else "-"
                 unit_type = new_unit_data.get('unit_type', '-')
                 status = "جديد"
 
-            # Stats row with 6 items
-            stats = [
-                {'value': unit_num, 'label': 'رقم الوحدة', 'color': '#3B82F6'},
-                {'value': floor, 'label': 'الطابق'},
-                {'value': rooms, 'label': 'الغرف'},
-                {'value': area, 'label': 'المساحة'},
-                {'value': unit_type, 'label': 'النوع'},
-                {'value': status, 'label': 'الحالة'},
+            # Build unit info container matching step 3 style
+            unit_info_container = QFrame()
+            unit_info_container.setFixedHeight(73)
+            unit_info_container.setStyleSheet(f"""
+                QFrame {{
+                    background-color: #F8FAFF;
+                    border: 1px solid {Colors.BORDER_DEFAULT};
+                    border-radius: 8px;
+                }}
+            """)
+
+            unit_info_row = QHBoxLayout(unit_info_container)
+            unit_info_row.setSpacing(0)
+            unit_info_row.setContentsMargins(8, 8, 8, 8)
+
+            # 6 sections in same order as step 2/3
+            data_points = [
+                ("رقم الوحدة", unit_num),
+                ("رقم الطابق", floor),
+                ("عدد الغرف", rooms),
+                ("مساحة القسم", area),
+                ("نوع الوحدة", unit_type),
+                ("حالة الوحدة", status),
             ]
-            stats_row = self._create_stat_row(stats)
-            self.unit_content.addWidget(stats_row)
+
+            for label_text, value_text in data_points:
+                section, _ = self._create_unit_stat_section(label_text, value_text)
+                unit_info_row.addWidget(section, stretch=1)
+
+            self.unit_content.addWidget(unit_info_container)
+
+            # وصف العقار section (matching step 2 unit card)
+            desc_layout = QVBoxLayout()
+            desc_layout.setContentsMargins(0, 0, 0, 0)
+            desc_layout.setSpacing(2)
+
+            desc_title = QLabel("وصف العقار")
+            desc_title.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
+            desc_title.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent; border: none;")
+           # desc_title.setAlignment(Qt.AlignRight)
+
+            desc_text_content = ""
+            if unit and hasattr(unit, 'property_description') and unit.property_description:
+                desc_text_content = unit.property_description
+            elif new_unit_data and new_unit_data.get('property_description'):
+                desc_text_content = new_unit_data.get('property_description')
+            else:
+                desc_text_content = "وصف تفصيلي يشمل: عدد الغرف وأنواعها، المساحة التقريبية، الاتجاهات والحدود، وأي ميزات مميزة."
+
+            desc_text = QLabel(desc_text_content)
+            desc_text.setFont(create_font(size=9, weight=FontManager.WEIGHT_REGULAR))
+            desc_text.setStyleSheet(f"color: {Colors.WIZARD_SUBTITLE}; background: transparent; border: none;")
+           # desc_text.setAlignment(Qt.AlignRight)
+            desc_text.setWordWrap(True)
+            desc_text.setMaximumHeight(40)
+
+            desc_layout.addWidget(desc_title)
+            desc_layout.addWidget(desc_text)
+
+            desc_widget = QWidget()
+            desc_widget.setStyleSheet("background: transparent; border: none;")
+            desc_widget.setLayout(desc_layout)
+            self.unit_content.addWidget(desc_widget)
         else:
             no_data = QLabel("لم يتم اختيار وحدة")
             no_data.setFont(create_font(size=10))
