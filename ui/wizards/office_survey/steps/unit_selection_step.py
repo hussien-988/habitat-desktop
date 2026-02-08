@@ -456,15 +456,15 @@ class UnitSelectionStep(BaseStep):
         label = QLabel(text)
 
         if is_title:
-            # Title style - smaller font, left aligned (appears right in RTL)
+            # Title style - center-aligned
             label.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))  # Smaller: 9pt
             label.setStyleSheet("color: #1A1F1D;")
-            label.setAlignment(Qt.AlignLeft)  # Left in RTL = Right visually
+            label.setAlignment(Qt.AlignCenter)
         else:
-            # Value style - smaller font, left aligned (appears right in RTL)
+            # Value style - center-aligned (directly under label)
             label.setFont(create_font(size=9, weight=FontManager.WEIGHT_REGULAR))  # Smaller: 9pt
             label.setStyleSheet("color: #86909B;")
-            label.setAlignment(Qt.AlignLeft)  # Left in RTL = Right visually
+            label.setAlignment(Qt.AlignCenter)
 
         return label
 
@@ -552,7 +552,7 @@ class UnitSelectionStep(BaseStep):
 
         # Keep numerals in English (0-9) for consistency with the app
         floor_val = str(unit.floor_number) if unit.floor_number is not None else "-"
-        rooms_val = str(getattr(unit, 'number_of_rooms', 0)) if hasattr(unit, 'number_of_rooms') else "-"
+        rooms_val = str(unit.apartment_number) if unit.apartment_number else "-"
         unit_display_num = str(unit_display_num)
 
         # Format area with 2 decimal places in English numerals
@@ -585,6 +585,7 @@ class UnitSelectionStep(BaseStep):
             col = QVBoxLayout()
             col.setSpacing(2)  # Small gap between title and value
             col.setContentsMargins(8, 0, 8, 0)  # Padding for better spacing
+            col.setAlignment(Qt.AlignCenter)  # Center labels and values in column
 
             # DRY: Create labels using helper method
             lbl_title = self._create_field_label(label_text, is_title=True)

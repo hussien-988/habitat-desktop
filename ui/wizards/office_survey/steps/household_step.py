@@ -867,7 +867,7 @@ class HouseholdStep(BaseStep):
 
             floor_number = getattr(unit, 'floor_number', None)
             unit_number = getattr(unit, 'unit_number', None) or getattr(unit, 'apartment_number', None)
-            rooms_count = getattr(unit, 'number_of_rooms', None)
+            rooms_count = getattr(unit, 'apartment_number', None)
             area = getattr(unit, 'area_sqm', None)
         elif self.context.new_unit_data:
             unit_type_raw = self.context.new_unit_data.get('unit_type')
