@@ -255,6 +255,47 @@ class SurveyApiService:
             logger.error(f"Error details: {error_details}")
             return response
 
+    def finalize_survey_status(self, survey_id: str) -> Dict[str, Any]:
+        """
+        Finalize an office survey - transitions status from Draft to Finalized.
+
+        POST /v1/Surveys/office/{id}/finalize
+
+        Use Case: UC-004 S21 - Mark office survey as finalized
+        Purpose: Transitions the survey status from Draft to Finalized.
+                 Does NOT create claims - use process-claims endpoint for that.
+
+        What it does:
+        - Validates survey is an office survey in Draft status
+        - Marks the survey as Finalized via domain method
+        - Logs the status change in audit trail
+
+        Required permissions: CanFinalizeSurveys
+
+        Args:
+            survey_id: UUID of the survey to finalize
+
+        Returns:
+            Dict with success status and response data or error
+        """
+        if not survey_id:
+            logger.error("Survey ID is required for finalizing survey")
+            return {"success": False, "error": "Survey ID is required", "error_code": "E_PARAM"}
+
+        endpoint = f"/v1/Surveys/office/{survey_id}/finalize"
+        logger.info(f"Finalizing office survey {survey_id} via POST {endpoint}")
+
+        response = self._make_request("POST", endpoint)
+
+        if response.get("success"):
+            logger.info(f"Office survey {survey_id} finalized successfully")
+            return response
+        else:
+            error_details = response.get('details', '')
+            logger.error(f"Failed to finalize office survey: {response.get('error')}")
+            logger.error(f"Error details: {error_details}")
+            return response
+
     def _to_api_format(self, survey_data: Dict[str, Any]) -> Dict[str, Any]:
         """
         Convert app survey data format to API format.

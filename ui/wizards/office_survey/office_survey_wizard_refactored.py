@@ -39,6 +39,7 @@ from repositories.database import Database
 from ui.design_system import PageDimensions, Colors, ButtonDimensions
 from ui.style_manager import StyleManager
 from ui.font_utils import create_font, FontManager
+from ui.components.success_popup import SuccessPopup
 from utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -78,6 +79,7 @@ class OfficeSurveyWizard(BaseWizard):
         self.db = db or Database()
         self.survey_repo = SurveyRepository(self.db)
         self.step_labels = []  # For step indicators
+        self._finalization_complete = False  # Flag to track successful finalization
         super().__init__(parent)
 
         # Connect base wizard signals to survey-specific signals
@@ -135,35 +137,114 @@ class OfficeSurveyWizard(BaseWizard):
         """
         Handle wizard submission.
 
-        Saves the survey data to the database.
+        Calls the finalize API to transition the survey from Draft to Finalized status.
+
+        POST /api/v1/Surveys/office/{id}/finalize
 
         Returns:
             True if submission was successful
         """
+        from services.survey_api_service import SurveyApiService
+        from app.config import Config
+        import json
+
         try:
-            # Get all collected data
-            survey_data = self.context.to_dict()
+            # Check if API mode is enabled
+            use_api = getattr(Config, 'DATA_PROVIDER', 'local_db') == 'http'
 
-            # Save to database
-            survey_id = self.survey_repo.create_survey(survey_data)
+            if use_api:
+                # Get survey_id from context
+                survey_id = self.context.get_data("survey_id")
 
-            # Update context status
-            self.context.status = "completed"
+                if not survey_id:
+                    logger.error("No survey_id found in context for finalization")
+                    QMessageBox.warning(
+                        self,
+                        "خطأ",
+                        "لم يتم العثور على معرف المسح.\nيرجى التأكد من إنشاء المسح أولاً."
+                    )
+                    return False
 
-            logger.info(f"Survey completed successfully: {survey_id}")
+                # Initialize API service and set auth token
+                api_service = SurveyApiService()
 
-            QMessageBox.information(
-                self,
-                "نجح",
-                f"تم حفظ المسح بنجاح\n"
-                f"رقم المرجع: {self.context.reference_number}\n"
-                f"معرف المسح: {survey_id}"
-            )
+                # Get auth token from main window
+                main_window = self.window()
+                if main_window and hasattr(main_window, '_api_token') and main_window._api_token:
+                    api_service.set_auth_token(main_window._api_token)
+                    logger.info(f"Auth token set for finalize API call")
 
-            return True
+                # Call the finalize API
+                logger.info(f"Calling finalize API for survey {survey_id}")
+                print(f"\n[FINALIZE] POST /api/v1/Surveys/office/{survey_id}/finalize")
+
+                response = api_service.finalize_survey_status(survey_id)
+
+                print(f"[FINALIZE] Response: {json.dumps(response, indent=2, ensure_ascii=False, default=str)}")
+
+                if response.get("success"):
+                    # Update context status
+                    self.context.status = "finalized"
+
+                    logger.info(f"Survey {survey_id} finalized successfully via API")
+
+                    # Get claim number from context or response
+                    claim_number = self.context.reference_number or survey_id
+
+                    # Show success popup with claim number
+                    SuccessPopup.show_success(
+                        claim_number=claim_number,
+                        title="تمت الإضافة بنجاح",
+                        description="تم حفظ جميع المعلومات،\nويمكنك الآن المتابعة أو إضافة عنصر جديد",
+                        auto_close_ms=0,  # No auto-close, user must click
+                        parent=self
+                    )
+
+                    # Mark finalization as complete to prevent "save draft" dialog
+                    self._finalization_complete = True
+
+                    return True
+                else:
+                    error_msg = response.get("error", "Unknown error")
+                    error_details = response.get("details", "")
+                    logger.error(f"Failed to finalize survey: {error_msg}")
+
+                    QMessageBox.critical(
+                        self,
+                        "خطأ",
+                        f"فشل في إنهاء المسح:\n{error_msg}\n{error_details}"
+                    )
+                    return False
+            else:
+                # Local database mode - use original logic
+                survey_data = self.context.to_dict()
+                survey_id = self.survey_repo.create_survey(survey_data)
+
+                self.context.status = "completed"
+
+                logger.info(f"Survey completed successfully: {survey_id}")
+
+                # Get claim number from context
+                claim_number = self.context.reference_number or survey_id
+
+                # Show success popup with claim number
+                SuccessPopup.show_success(
+                    claim_number=claim_number,
+                    title="تمت الإضافة بنجاح",
+                    description="تم حفظ جميع المعلومات،\nويمكنك الآن المتابعة أو إضافة عنصر جديد",
+                    auto_close_ms=0,  # No auto-close, user must click
+                    parent=self
+                )
+
+                # Mark finalization as complete to prevent "save draft" dialog
+                self._finalization_complete = True
+
+                return True
 
         except Exception as e:
             logger.error(f"Error submitting survey: {e}", exc_info=True)
+            import traceback
+            traceback.print_exc()
             QMessageBox.critical(
                 self,
                 "خطأ",
@@ -714,6 +795,47 @@ class OfficeSurveyWizard(BaseWizard):
         self.btn_next.clicked.connect(self._handle_next)
         layout.addWidget(self.btn_next)
 
+        # ========== "حفظ" Button (Save - Left side, shown only on final step) ==========
+        # Figma: Same dimensions as next button, Primary blue background, white text
+        from PyQt5.QtGui import QIcon
+        import os
+
+        self.btn_final_save = QPushButton("حفظ")
+        self.btn_final_save.setCursor(Qt.PointingHandCursor)
+
+        # Fixed dimensions from Figma (same as next button)
+        self.btn_final_save.setFixedSize(
+            ButtonDimensions.NAV_BUTTON_WIDTH,   # 252px
+            ButtonDimensions.NAV_BUTTON_HEIGHT   # 50px
+        )
+
+        # Apply font
+        self.btn_final_save.setFont(nav_btn_font)
+
+        # Load save icon
+        save_icon_path = os.path.join("assets", "images", "save.png")
+        if os.path.exists(save_icon_path):
+            self.btn_final_save.setIcon(QIcon(save_icon_path))
+            self.btn_final_save.setIconSize(QSize(16, 16))
+
+        # Figma styling: Primary blue background, white text
+        self.btn_final_save.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {Colors.PRIMARY_BLUE};
+                color: white;
+                border: none;
+                border-radius: {ButtonDimensions.NAV_BUTTON_BORDER_RADIUS}px;
+                font-family: 'IBM Plex Sans Arabic';
+                font-size: {ButtonDimensions.NAV_BUTTON_FONT_SIZE}pt;
+            }}
+            QPushButton:hover {{
+                background-color: #2980b9;
+            }}
+        """)
+        self.btn_final_save.clicked.connect(self._handle_submit)
+        self.btn_final_save.hide()  # Hidden by default, shown only on final step
+        layout.addWidget(self.btn_final_save)
+
         # Push everything to the right (RTL)
         layout.addStretch()
 
@@ -784,11 +906,15 @@ class OfficeSurveyWizard(BaseWizard):
         self.step_container.setCurrentIndex(current_step)
         self.btn_previous.setEnabled(current_step > 0)
 
-        # Update next button for final step
+        # Update next/save buttons for final step
         if current_step == len(self.steps) - 1:
             self.btn_next.hide()
+            if hasattr(self, 'btn_final_save'):
+                self.btn_final_save.show()
         else:
             self.btn_next.show()
+            if hasattr(self, 'btn_final_save'):
+                self.btn_final_save.hide()
 
     def _update_navigation_buttons(self):
         """
@@ -825,10 +951,14 @@ class OfficeSurveyWizard(BaseWizard):
         # ========== Next Button Logic ==========
         # Hide on last step, show on all other steps (with validation check)
         if current_step == len(self.steps) - 1:
-            # Last step: hide next button (removed from layout)
+            # Last step: hide next button, show save button
             self.btn_next.hide()
+            if hasattr(self, 'btn_final_save'):
+                self.btn_final_save.show()
         else:
-            # Other steps: show next button, enable based on step validation
+            # Other steps: show next button, hide save button
             self.btn_next.show()
+            if hasattr(self, 'btn_final_save'):
+                self.btn_final_save.hide()
             # Enable next button based on can_go_next from navigator
             self.btn_next.setEnabled(self.navigator.can_go_next())

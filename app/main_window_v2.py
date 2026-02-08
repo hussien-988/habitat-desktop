@@ -465,6 +465,10 @@ class MainWindow(QMainWindow):
         Best Practice: Only warn if user has progressed beyond first step
         or selected a building.
         """
+        # If finalization was completed, no need to show save dialog
+        if hasattr(self.office_survey_wizard, '_finalization_complete') and self.office_survey_wizard._finalization_complete:
+            return False
+
         # Check if beyond step 1 (step 2+)
         if self.office_survey_wizard.navigator.current_index >= 1:
             return True
@@ -485,6 +489,9 @@ class MainWindow(QMainWindow):
 
         self.office_survey_wizard.navigator.context = new_context
         self.office_survey_wizard.navigator.reset()
+
+        # Reset finalization flag for next survey
+        self.office_survey_wizard._finalization_complete = False
 
         # Re-set API token after reset (steps may have new controllers)
         if hasattr(self, '_api_token') and self._api_token:
