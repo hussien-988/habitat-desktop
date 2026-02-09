@@ -25,7 +25,7 @@ from models.building import Building
 from utils.logger import get_logger
 from ui.design_system import Colors
 from ui.font_utils import FontManager, create_font
-from app.api_config import get_api_settings
+from app.config import Config
 from services.map_service_api import MapServiceAPI
 
 logger = get_logger(__name__)
@@ -139,9 +139,9 @@ class BuildingMapWidget(QObject):
         self.MAX_SAFE_ZOOM = 16  # Will be read from tile server if available
 
         # Initialize API settings and map service
-        self.api_settings = get_api_settings()
+        self.api_settings = Config
         self.map_service_api = None
-        if self.api_settings.is_api_mode():
+        if self.api_settings.DATA_PROVIDER == "http":
             try:
                 self.map_service_api = MapServiceAPI()
                 logger.info("✅ BuildingMapWidget initialized in API mode")
@@ -774,12 +774,12 @@ class BuildingMapWidget(QObject):
 
         # تحويل المباني إلى GeoJSON باستخدام نفس منطق map_page.py
         # Use API or local database based on configuration
-        if self.api_settings.is_api_mode() and self.map_service_api:
+        if self.api_settings.DATA_PROVIDER == "http" and self.map_service_api:
             # Fetch buildings from Backend API using Aleppo bounds
             print("\n" + "="*60)
             print("[DEBUG] Fetching buildings from Backend API")
-            print(f"[DEBUG] API Mode: {self.api_settings.is_api_mode()}")
-            print(f"[DEBUG] Base URL: {self.api_settings.base_url}")
+            print(f"[DEBUG] API Mode: {self.api_settings.DATA_PROVIDER == "http"}")
+            print(f"[DEBUG] Base URL: {self.api_settings.API_BASE_URL}")
             print(f"[DEBUG] Request: POST /api/v1/Buildings/map")
             print(f"[DEBUG] BBox: NE(36.5, 37.5) - SW(36.0, 36.8)")
             print("="*60)
@@ -848,7 +848,7 @@ class BuildingMapWidget(QObject):
         # If we have a selected building, focus on it
         center_lat = 36.2021
         center_lon = 37.1343
-        zoom = 16  # ✅ محسّن: زوم أعلى (16 بدلاً من 13) - خريطة أقرب وأوضح
+        zoom = 15  #
         focus_building_id = None
 
         if selected_building_id:

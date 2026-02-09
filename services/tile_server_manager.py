@@ -15,7 +15,7 @@ from http.server import HTTPServer, BaseHTTPRequestHandler
 from typing import Optional
 
 from app.config import Config
-from app.api_config import get_active_tile_server_url, get_tile_server_settings
+from app.config import Config
 from utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -361,8 +361,8 @@ class TileServerManager:
             self._initialized = True
 
             # Use smart tile server URL with health check and fallback
-            # get_active_tile_server_url() returns None for embedded tiles
-            production_url = get_active_tile_server_url()
+            # Get tile server URL from Config
+            production_url = Config.TILE_SERVER_URL if Config.USE_DOCKER_TILES else None
             if production_url:
                 print(f"\n[DEBUG] Tile Server: DOCKER/EXTERNAL")
                 print(f"[DEBUG] URL: {production_url}")

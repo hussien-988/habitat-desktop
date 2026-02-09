@@ -586,7 +586,7 @@ class MapPickerDialog(QDialog):
             buildings_geojson=buildings_geojson,
             center_lat=self.initial_lat,
             center_lon=self.initial_lon,
-            zoom=17,
+            zoom=16,  #
             show_legend=True,
             show_layer_control=False,
             enable_selection=False,  # هذا للاختيار من خريطة، ليس لاختيار مبنى موجود

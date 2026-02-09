@@ -25,7 +25,7 @@ from services.map_service import MapService, GeoPoint, GeoPolygon, BuildingGeoDa
 from services.map_service_api import MapServiceAPI
 from services.gps_service import GPSService, GPSPosition, GPSConfig, GPSStatus
 from utils.logger import get_logger
-from app.api_config import get_api_settings
+from app.config import Config
 
 logger = get_logger(__name__)
 
@@ -48,7 +48,7 @@ class MapState:
     """Current state of the map."""
     center_lat: float = 36.2
     center_lng: float = 37.15
-    zoom: int = 12
+    zoom: int = 15  #
     active_layers: List[str] = None
     selected_feature_id: Optional[str] = None
     drawing_mode: Optional[str] = None  # None, 'point', 'polygon'
@@ -89,8 +89,7 @@ class MapController(BaseController):
         self.db = db
 
         # Initialize map service based on configuration (API or local)
-        api_settings = get_api_settings()
-        if api_settings.is_api_mode():
+        if Config.DATA_PROVIDER == "http":  # API mode
             try:
                 self.map_service = MapServiceAPI()
                 logger.info("✅ MapController initialized in API mode")

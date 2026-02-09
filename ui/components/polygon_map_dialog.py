@@ -354,7 +354,7 @@ class PolygonMapDialog(QDialog):
             buildings_geojson=buildings_geojson,
             center_lat=36.2021,
             center_lon=37.1343,
-            zoom=14,
+            zoom=15,  #
             show_legend=True,
             show_layer_control=False,
             enable_selection=False,

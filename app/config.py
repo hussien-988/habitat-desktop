@@ -1,22 +1,33 @@
 # -*- coding: utf-8 -*-
-"""
-Application configuration and constants.
 
-Server Configuration Quick Guide:
-----------------------------------
-1. Map Tiles: Set TILE_SERVER_URL (line 44)
-2. REST API: Set API_BASE_URL (line 35) + DATA_PROVIDER="http" (line 26)
-3. Database: Set DB_TYPE (line 55) for SQLite or PostgreSQL
-
-Example for Production:
-    TILE_SERVER_URL = "https://tiles.yourserver.com/{z}/{x}/{y}.png"
-    API_BASE_URL = "https://api.yourserver.com"
-    DATA_PROVIDER = "http"
-"""
 
 from pathlib import Path
 from dataclasses import dataclass
 from typing import Dict, Any, Optional
+import os
+
+# ============================================================================
+# Load .env file for local environment configuration
+# ============================================================================
+try:
+    from dotenv import load_dotenv
+    load_dotenv()  # Load from .env file in project root
+except ImportError:
+    pass  # dotenv not installed - will use defaults
+
+# ============================================================================
+# Read settings from environment variables (from .env or system)
+# ============================================================================
+# API Settings
+_API_BASE_URL = os.getenv("API_BASE_URL", "https://localhost:7204/api")
+_API_TIMEOUT = int(os.getenv("API_TIMEOUT", "30"))
+_API_MAX_RETRIES = int(os.getenv("API_MAX_RETRIES", "3"))
+_API_USERNAME = os.getenv("API_USERNAME", "admin")
+_API_PASSWORD = os.getenv("API_PASSWORD", "Admin@123")
+
+# Tile Server Settings
+_TILE_SERVER_URL = os.getenv("TILE_SERVER_URL", None)
+_USE_DOCKER_TILES = os.getenv("USE_DOCKER_TILES", "false").lower() in ("true", "1", "yes")
 
 
 @dataclass
@@ -50,18 +61,20 @@ class Config:
     MOCK_PERSIST_TO_FILE: bool = False
 
     # HTTP API Backend Settings
-    # Note: Override this in .env file for your local environment
-    #API_BASE_URL: str = "http://localhost:8080/api"
-    API_BASE_URL: str = "https://localhost:7204/api"  # Team's development server
+    # ✅ DYNAMIC: Reads from .env file (API_BASE_URL, API_TIMEOUT, API_MAX_RETRIES, etc.)
+    # If .env not found, uses team default (https://localhost:7204/api)
+    API_BASE_URL: str = _API_BASE_URL  # From .env or default
     API_VERSION: str = "v1"
-    API_TIMEOUT: int = 30
-    API_MAX_RETRIES: int = 3
+    API_TIMEOUT: int = _API_TIMEOUT  # From .env or default (30)
+    API_MAX_RETRIES: int = _API_MAX_RETRIES  # From .env or default (3)
+    API_USERNAME: str = _API_USERNAME  # From .env or default (admin)
+    API_PASSWORD: str = _API_PASSWORD  # From .env or default (Admin@123)
 
     # Map Tile Server Configuration
-    # None = use local tile server (development)
-    # For production: set to external tile server URL
-    # Example: "https://tiles.yourserver.com/{z}/{x}/{y}.png"
-    TILE_SERVER_URL: Optional[str] = None
+    TILE_SERVER_URL: Optional[str] = _TILE_SERVER_URL
+    USE_DOCKER_TILES: bool = _USE_DOCKER_TILES
+    USE_EMBEDDED_TILES_FALLBACK: bool = True
+    TILE_SERVER_HEALTH_TIMEOUT: int = 2
 
     # Paths
     PROJECT_ROOT: Path = Path(__file__).parent.parent

@@ -24,7 +24,7 @@ class ApiConfig:
     """
     تكوين الاتصال بالـ API.
 
-    ✅ DYNAMIC: Reads from .env file via app.api_config
+    ✅ DYNAMIC: Reads from .env file via Config
     🔧 TEAM READY: Each member sets their own API_BASE_URL in .env
 
     Example .env:
@@ -32,24 +32,25 @@ class ApiConfig:
         API_USERNAME=admin
         API_PASSWORD=Admin@123
     """
-    base_url: str = None  # Will be loaded from .env
-    username: str = None  # Will be loaded from .env
-    password: str = None  # Will be loaded from .env
+    base_url: str = None  # Will be loaded from Config
+    username: str = None  # Will be loaded from Config
+    password: str = None  # Will be loaded from Config
     timeout: int = 30
 
     def __post_init__(self):
-        """Load from environment if not provided."""
-        # ✅ Load from app.api_config (which reads from .env)
+        """Load from Config if not provided."""
+        # ✅ Load from Config (which reads from .env)
         if self.base_url is None or self.username is None or self.password is None:
-            from app.api_config import get_api_settings
-            settings = get_api_settings()
+            from app.config import Config
 
             if self.base_url is None:
-                self.base_url = settings.base_url
+                self.base_url = Config.API_BASE_URL
             if self.username is None:
-                self.username = settings.username
+                self.username = Config.API_USERNAME
             if self.password is None:
-                self.password = settings.password
+                self.password = Config.API_PASSWORD
+            if self.timeout == 30:  # if default
+                self.timeout = Config.API_TIMEOUT
 
 
 class TRRCMSApiClient:
@@ -203,7 +204,7 @@ class TRRCMSApiClient:
 
         Args:
             method: HTTP method (GET, POST, PUT, DELETE)
-            endpoint: API endpoint (e.g., "/api/v1/Buildings/map")
+            endpoint: API endpoint (e.g., "/v1/Buildings/map")
             json_data: JSON payload
             params: Query parameters
 
@@ -278,7 +279,7 @@ class TRRCMSApiClient:
             payload["status"] = status
 
         logger.debug(f"Fetching buildings for map: bbox={payload}")
-        buildings = self._request("POST", "/api/v1/Buildings/map", json_data=payload)
+        buildings = self._request("POST", "/v1/Buildings/map", json_data=payload)
         logger.info(f"✅ Fetched {len(buildings)} buildings from API")
 
         return buildings
@@ -327,7 +328,7 @@ class TRRCMSApiClient:
             payload["damageLevel"] = damage_level
 
         logger.debug(f"Fetching buildings in polygon: page={page}, pageSize={page_size}")
-        response = self._request("POST", "/api/v1/Buildings/polygon", json_data=payload)
+        response = self._request("POST", "/v1/Buildings/polygon", json_data=payload)
 
         # API returns: {"buildings": [...], "totalCount": N, "page": 1, ...}
         buildings = response.get("buildings", [])
@@ -433,7 +434,7 @@ class TRRCMSApiClient:
         print(f"{'='*80}\n")
 
         logger.debug(f"Searching buildings for assignment: governorateCode=01, page={page}, pageSize={page_size}, hasActiveAssignment={has_active_assignment}")
-        response = self._request("POST", "/api/v1/BuildingAssignments/buildings/search", json_data=payload)
+        response = self._request("POST", "/v1/BuildingAssignments/buildings/search", json_data=payload)
 
         # API returns paginated response
         items = response.get("items", [])
@@ -519,7 +520,7 @@ class TRRCMSApiClient:
         print(f"{'='*80}\n")
 
         logger.debug(f"Fetching buildings for assignment with filters: {params}")
-        response = self._request("GET", "/api/v1/BuildingAssignment/buildings", params=params)
+        response = self._request("GET", "/v1/BuildingAssignment/buildings", params=params)
 
         # API returns paginated response
         items = response.get("items", [])
@@ -539,7 +540,7 @@ class TRRCMSApiClient:
         Returns:
             BuildingDto
         """
-        return self._request("GET", f"/api/v1/Buildings/{building_id}")
+        return self._request("GET", f"/v1/Buildings/{building_id}")
 
     def update_building_geometry(
         self,
@@ -589,7 +590,7 @@ class TRRCMSApiClient:
         logger.info(f"Updating geometry for building {building_id}")
         result = self._request(
             "PUT",
-            f"/api/v1/Buildings/{building_id}/geometry",
+            f"/v1/Buildings/{building_id}/geometry",
             json_data=payload
         )
         logger.info(f"✅ Geometry updated for building {building_id}")
@@ -629,7 +630,7 @@ class TRRCMSApiClient:
         if building_status:
             payload["buildingStatus"] = building_status
 
-        return self._request("POST", "/api/v1/Buildings/search", json_data=payload)
+        return self._request("POST", "/v1/Buildings/search", json_data=payload)
 
     def create_building(self, building_data: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -641,7 +642,7 @@ class TRRCMSApiClient:
         Returns:
             BuildingDto المُنشأ
         """
-        result = self._request("POST", "/api/v1/Buildings", json_data=building_data)
+        result = self._request("POST", "/v1/Buildings", json_data=building_data)
         logger.info(f"✅ Created building: {result.get('buildingId')}")
         return result
 
@@ -657,7 +658,7 @@ class TRRCMSApiClient:
         Returns:
             قائمة بالوحدات العقارية
         """
-        return self._request("GET", f"/api/v1/PropertyUnits/building/{building_id}")
+        return self._request("GET", f"/v1/PropertyUnits/building/{building_id}")
 
     # ==================== Utility ====================
 
@@ -670,7 +671,7 @@ class TRRCMSApiClient:
         """
         try:
             # Try to get current user info as health check
-            self._request("GET", "/api/v1/Auth/me")
+            self._request("GET", "/v1/Auth/me")
             logger.info("✅ API health check passed")
             return True
         except Exception as e:
@@ -679,7 +680,7 @@ class TRRCMSApiClient:
 
     def get_current_user(self) -> Dict[str, Any]:
         """الحصول على معلومات المستخدم الحالي."""
-        return self._request("GET", "/api/v1/Auth/me")
+        return self._request("GET", "/v1/Auth/me")
 
     # ==================== Building Assignments API ====================
 
@@ -709,7 +710,7 @@ class TRRCMSApiClient:
         }
 
         logger.info(f"Creating assignment for {len(building_ids)} buildings → researcher: {assigned_to}")
-        return self._request("POST", "/api/v1/BuildingAssignments", json_data=payload)
+        return self._request("POST", "/v1/BuildingAssignments", json_data=payload)
 
     def get_assignment(self, assignment_id: str) -> Dict[str, Any]:
         """
@@ -723,7 +724,7 @@ class TRRCMSApiClient:
 
         Endpoint: GET /api/v1/BuildingAssignments/{id}
         """
-        return self._request("GET", f"/api/v1/BuildingAssignments/{assignment_id}")
+        return self._request("GET", f"/v1/BuildingAssignments/{assignment_id}")
 
     def get_pending_assignments(
         self,
@@ -751,7 +752,7 @@ class TRRCMSApiClient:
         if researcher_id:
             params["researcherId"] = researcher_id
 
-        return self._request("GET", "/api/v1/BuildingAssignments/pending", params=params)
+        return self._request("GET", "/v1/BuildingAssignments/pending", params=params)
 
     def update_assignment_transfer_status(
         self,
@@ -780,7 +781,7 @@ class TRRCMSApiClient:
         logger.info(f"Updating assignment {assignment_id} transfer status → {transfer_status}")
         return self._request(
             "PUT",
-            f"/api/v1/BuildingAssignments/{assignment_id}/transfer-status",
+            f"/v1/BuildingAssignments/{assignment_id}/transfer-status",
             json_data=payload
         )
 
@@ -793,7 +794,7 @@ class TRRCMSApiClient:
 
         Endpoint: GET /api/v1/BuildingAssignments/statistics
         """
-        return self._request("GET", "/api/v1/BuildingAssignments/statistics")
+        return self._request("GET", "/v1/BuildingAssignments/statistics")
 
 
 # ==================== Singleton Instance ====================
