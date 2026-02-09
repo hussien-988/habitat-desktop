@@ -310,58 +310,92 @@ class ReviewStep(BaseStep):
 
         return container
 
-    def _create_person_row(self, name: str, role: str, icon_name: str = "user-account") -> QWidget:
-        """Create a person row with icon, name and role (like in person_step)."""
+    def _create_person_row(self, person: dict) -> QWidget:
+        """Create a person row card matching step 4 layout."""
         row = QFrame()
+        row.setLayoutDirection(Qt.RightToLeft)
+        row.setFixedHeight(80)
         row.setStyleSheet(f"""
             QFrame {{
-                background-color: {Colors.INPUT_BG};
-                border: 1px solid {Colors.BORDER_DEFAULT};
+                background-color: {Colors.BACKGROUND};
+                border: 1px solid #F0F0F0;
                 border-radius: 8px;
             }}
-        """)
-        layout = QHBoxLayout(row)
-        layout.setContentsMargins(12, 10, 12, 10)
-        layout.setSpacing(12)
-
-        # Role on left (RTL)
-        role_label = QLabel(role)
-        role_label.setFont(create_font(size=9, weight=FontManager.WEIGHT_REGULAR))
-        role_label.setStyleSheet(f"""
             QLabel {{
-                color: {Colors.TEXT_SECONDARY};
-                background-color: {Colors.SURFACE};
-                border: 1px solid {Colors.BORDER_DEFAULT};
-                border-radius: 4px;
-                padding: 4px 8px;
+                border: none;
             }}
         """)
 
-        # Name
-        name_label = QLabel(name)
-        name_label.setFont(create_font(size=10, weight=FontManager.WEIGHT_MEDIUM))
-        name_label.setStyleSheet(f"color: {Colors.TEXT_PRIMARY}; background: transparent; border: none;")
-        name_label.setAlignment(Qt.AlignRight)
+        card_layout = QHBoxLayout(row)
+        card_layout.setContentsMargins(15, 0, 15, 0)
 
-        # Icon
-        icon_label = QLabel()
-        icon_label.setFixedSize(32, 32)
-        icon_label.setAlignment(Qt.AlignCenter)
-        icon_label.setStyleSheet(f"""
-            QLabel {{
-                background-color: {Colors.SURFACE};
-                border: 1px solid {Colors.BORDER_DEFAULT};
-                border-radius: 16px;
-            }}
+        # Right side: Icon + Text
+        right_group = QHBoxLayout()
+        right_group.setSpacing(12)
+
+        # Circular icon
+        icon_lbl = QLabel()
+        icon_lbl.setFixedSize(36, 36)
+        icon_lbl.setAlignment(Qt.AlignCenter)
+        icon_lbl.setStyleSheet("""
+            QLabel {
+                background-color: #F4F8FF;
+                color: #3182CE;
+                border-radius: 18px;
+                border: none;
+            }
         """)
-        icon_pixmap = Icon.load_pixmap(icon_name, size=20)
-        if icon_pixmap and not icon_pixmap.isNull():
-            icon_label.setPixmap(icon_pixmap)
+        user_pixmap = Icon.load_pixmap("user", size=20)
+        if user_pixmap and not user_pixmap.isNull():
+            icon_lbl.setPixmap(user_pixmap)
 
-        layout.addWidget(role_label)
-        layout.addStretch()
-        layout.addWidget(name_label)
-        layout.addWidget(icon_label)
+        # Name and role
+        text_vbox = QVBoxLayout()
+        text_vbox.setSpacing(2)
+
+        full_name = f"{person.get('first_name', '')} {person.get('father_name', '')} {person.get('last_name', '')}".strip()
+        if not full_name:
+            full_name = person.get('full_name', person.get('name', '-'))
+        name_lbl = QLabel(full_name)
+        name_lbl.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
+        name_lbl.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent;")
+        name_lbl.setAlignment(Qt.AlignRight)
+
+        rel_type_map = {
+            "owner": "مالك",
+            "tenant": "مستأجر",
+            "occupant": "ساكن",
+            "co_owner": "شريك في الملكية",
+            "heir": "وارث",
+            "guardian": "ولي/وصي",
+            "head": "رب الأسرة",
+            "spouse": "الزوج/ة",
+            "child": "ابن/ابنة",
+            "relative": "قريب",
+            "worker": "عامل",
+            "other": "أخرى"
+        }
+        role_key = person.get('relationship_type', person.get('role', ''))
+        role_text = rel_type_map.get(role_key, role_key or "ساكن")
+        role_lbl = QLabel(role_text)
+        role_lbl.setFont(create_font(size=10, weight=FontManager.WEIGHT_REGULAR))
+        role_lbl.setStyleSheet(f"color: {Colors.WIZARD_SUBTITLE}; background: transparent;")
+
+        text_vbox.addWidget(name_lbl)
+        text_vbox.addWidget(role_lbl)
+
+        right_group.addWidget(icon_lbl)
+        right_group.addLayout(text_vbox)
+
+        # Left side: "عرض المعلومات الشخصية" link
+        view_lbl = QLabel("عرض المعلومات الشخصية")
+        view_lbl.setFont(create_font(size=9, weight=FontManager.WEIGHT_MEDIUM))
+        view_lbl.setStyleSheet("color: #3B82F6; background: transparent; border: none;")
+        view_lbl.setCursor(Qt.PointingHandCursor)
+
+        card_layout.addLayout(right_group)
+        card_layout.addStretch()
+        card_layout.addWidget(view_lbl)
 
         return row
 
@@ -934,7 +968,7 @@ class ReviewStep(BaseStep):
         self.household_content.addWidget(cards_container)
 
     def _populate_persons_card(self):
-        """Populate persons list card."""
+        """Populate persons list card matching step 4 layout."""
         self._clear_layout(self.persons_content)
 
         if not self.context.persons:
@@ -945,28 +979,10 @@ class ReviewStep(BaseStep):
             self.persons_content.addWidget(no_data)
             return
 
-        # Persons count header
-        count_label = QLabel(f"عدد الأشخاص: {len(self.context.persons)}")
-        count_label.setFont(create_font(size=10, weight=FontManager.WEIGHT_MEDIUM))
-        count_label.setStyleSheet(f"color: {Colors.TEXT_PRIMARY}; background: transparent; border: none;")
-        count_label.setAlignment(Qt.AlignRight)
-        self.persons_content.addWidget(count_label)
-
-        # Person rows
-        role_map = {
-            "head": "رب الأسرة",
-            "spouse": "الزوج/ة",
-            "child": "ابن/ابنة",
-            "relative": "قريب",
-            "tenant": "مستأجر",
-            "worker": "عامل",
-            "other": "آخر"
-        }
+        self.persons_content.setSpacing(10)
 
         for person in self.context.persons:
-            name = person.get('full_name', person.get('name', '-'))
-            role = role_map.get(person.get('role', ''), person.get('role', '-'))
-            row = self._create_person_row(name, role)
+            row = self._create_person_row(person)
             self.persons_content.addWidget(row)
 
     def _populate_relations_card(self):
@@ -980,14 +996,6 @@ class ReviewStep(BaseStep):
             no_data.setAlignment(Qt.AlignCenter)
             self.relations_content.addWidget(no_data)
             return
-
-        rel_type_map = {
-            "owner": "مالك",
-            "co_owner": "شريك",
-            "tenant": "مستأجر",
-            "occupant": "شاغل",
-            "heir": "وارث"
-        }
 
         # Stats row
         num_relations = len(self.context.relations)
@@ -1006,9 +1014,11 @@ class ReviewStep(BaseStep):
 
         # Relations list
         for relation in self.context.relations:
-            person_name = relation.get('person_name', '-')
-            relation_type = rel_type_map.get(relation.get('relation_type', ''), '-')
-            row = self._create_person_row(person_name, relation_type, "elements")
+            person_dict = {
+                'full_name': relation.get('person_name', '-'),
+                'relationship_type': relation.get('relation_type', ''),
+            }
+            row = self._create_person_row(person_dict)
             self.relations_content.addWidget(row)
 
     def _populate_claim_card(self):
