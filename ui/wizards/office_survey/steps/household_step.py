@@ -849,11 +849,13 @@ class HouseholdStep(BaseStep):
             "garage": "مرآب",
             "other": "أخرى"
         }
-        # Correct unit status mapping (occupied/vacant/unknown, NOT intact/damaged/destroyed)
+        # Unit status mapping - string keys and integer keys
         unit_status_map = {
-            "occupied": "مشغولة",
-            "vacant": "شاغرة",
-            "unknown": "غير معروف"
+            "occupied": "مشغول", "vacant": "شاغر", "damaged": "متضرر",
+            "under_renovation": "قيد الترميم", "uninhabitable": "غير صالح للسكن",
+            "locked": "مغلق", "unknown": "غير معروف",
+            1: "مشغول", 2: "شاغر", 3: "متضرر", 4: "قيد الترميم",
+            5: "غير صالح للسكن", 6: "مغلق", 99: "غير معروف",
         }
 
         # Get unit data from context

@@ -539,16 +539,33 @@ class UnitSelectionStep(BaseStep):
         # DRY: Use Arabic display properties from model
         unit_type_val = unit.unit_type_display_ar if hasattr(unit, 'unit_type_display_ar') else (unit.unit_type or "-")
 
-        # Get Arabic status (use property if exists, otherwise translate manually)
-        if hasattr(unit, 'apartment_status'):
-            status_mappings = {
-                "occupied": "مشغولة",
-                "vacant": "شاغرة",
-                "unknown": "غير معروف"
+        # Get Arabic status from API response (string or integer code)
+        if hasattr(unit, 'apartment_status') and unit.apartment_status is not None:
+            status_mappings_str = {
+                "occupied": "مشغول",
+                "vacant": "شاغر",
+                "damaged": "متضرر",
+                "under_renovation": "قيد الترميم",
+                "uninhabitable": "غير صالح للسكن",
+                "locked": "مغلق",
+                "unknown": "غير معروف",
             }
-            status_val = status_mappings.get(unit.apartment_status, unit.apartment_status)
+            status_mappings_int = {
+                1: "مشغول",
+                2: "شاغر",
+                3: "متضرر",
+                4: "قيد الترميم",
+                5: "غير صالح للسكن",
+                6: "مغلق",
+                99: "غير معروف",
+            }
+            status_raw = unit.apartment_status
+            if isinstance(status_raw, int):
+                status_val = status_mappings_int.get(status_raw, str(status_raw))
+            else:
+                status_val = status_mappings_str.get(str(status_raw).lower(), str(status_raw))
         else:
-            status_val = "جيدة"
+            status_val = "-"
 
         # Keep numerals in English (0-9) for consistency with the app
         floor_val = str(unit.floor_number) if unit.floor_number is not None else "-"

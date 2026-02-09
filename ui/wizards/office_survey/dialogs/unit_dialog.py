@@ -17,6 +17,7 @@ from PyQt5.QtWidgets import (
     QPushButton, QComboBox, QSpinBox, QTextEdit, QFrame, QMessageBox
 )
 from PyQt5.QtCore import Qt, QLocale
+from PyQt5.QtGui import QDoubleValidator
 
 from app.config import Config, Vocabularies
 from models.building import Building
@@ -179,11 +180,24 @@ class UnitDialog(QDialog):
         rooms_widget = self._create_spinbox_with_arrows(self.rooms_spin)
         row3.addLayout(self._create_field_container("عدد الغرف", rooms_widget), 1)
 
-        # Area - DRY
+        # Area - with numeric validator and inline error
         self.area_input = QLineEdit()
         self.area_input.setPlaceholderText("المساحة التقريبية أو المقاسة (م²)")
         self.area_input.setStyleSheet(self._input_style())
-        row3.addLayout(self._create_field_container("مساحة الوحدة", self.area_input), 1)
+
+        # Allow only numbers (with decimal point)
+        area_validator = QDoubleValidator(0.0, 999999.99, 2, self.area_input)
+        area_validator.setLocale(QLocale(QLocale.English, QLocale.UnitedStates))
+        area_validator.setNotation(QDoubleValidator.StandardNotation)
+        self.area_input.setValidator(area_validator)
+
+        # Inline error label
+        self.area_error_label = QLabel("")
+        self.area_error_label.setStyleSheet("color: #e74c3c; font-size: 11px; background: transparent;")
+        self.area_error_label.setVisible(False)
+        self.area_input.textChanged.connect(self._validate_area_input)
+
+        row3.addLayout(self._create_field_container_with_validation("مساحة الوحدة", self.area_input, self.area_error_label), 1)
 
         layout.addLayout(row3)
 
@@ -485,6 +499,73 @@ class UnitDialog(QDialog):
             }
         """
 
+    def _input_error_style(self) -> str:
+        """Get input stylesheet for error state (red border)."""
+        return """
+            QLineEdit {
+                padding: 6px 12px;
+                border: 2px solid #e74c3c;
+                border-radius: 8px;
+                background-color: #FFF5F5;
+                font-size: 13px;
+                min-height: 40px;
+                max-height: 40px;
+            }
+            QLineEdit:focus {
+                border-color: #e74c3c;
+                border-width: 2px;
+            }
+        """
+
+    def _show_styled_message(self, title: str, message: str, is_error: bool = False):
+        """Show a styled message box with white background (avoids transparent parent issue)."""
+        msg = QMessageBox(self)
+        msg.setWindowTitle(title)
+        msg.setText(message)
+        msg.setIcon(QMessageBox.Critical if is_error else QMessageBox.Warning)
+        msg.setStandardButtons(QMessageBox.Ok)
+        msg.setStyleSheet("""
+            QMessageBox {
+                background-color: #FFFFFF;
+            }
+            QMessageBox QLabel {
+                color: #374151;
+                font-size: 13px;
+                min-width: 250px;
+            }
+            QMessageBox QPushButton {
+                background-color: #3890DF;
+                color: white;
+                border: none;
+                border-radius: 6px;
+                padding: 6px 20px;
+                font-size: 13px;
+                font-weight: 600;
+                min-width: 80px;
+            }
+            QMessageBox QPushButton:hover {
+                background-color: #2A7BC9;
+            }
+        """)
+        msg.exec_()
+
+    def _validate_area_input(self, text: str):
+        """Real-time validation for area field - numbers only."""
+        if not text.strip():
+            # Empty is OK (field is optional)
+            self.area_error_label.setVisible(False)
+            self.area_input.setStyleSheet(self._input_style())
+            return
+
+        try:
+            float(text.strip())
+            self.area_error_label.setVisible(False)
+            self.area_input.setStyleSheet(self._input_style())
+        except ValueError:
+            self.area_error_label.setText("المساحة يجب أن تكون أرقام فقط")
+            self.area_error_label.setVisible(True)
+            self.area_input.setStyleSheet(self._input_error_style())
+
     def _check_uniqueness(self):
         """Check if unit number is unique within the building."""
         unit_number = str(self.unit_number_spin.value())
@@ -540,12 +621,12 @@ class UnitDialog(QDialog):
         """Validate form data."""
         # Unit type is required
         if not self.unit_type_combo.currentData():
-            QMessageBox.warning(self, "تحذير", "يرجى اختيار نوع الوحدة")
+            self._show_styled_message("تحذير", "يرجى اختيار نوع الوحدة")
             return False
 
         # Unit number is required
         if self.unit_number_spin.value() == 0:
-            QMessageBox.warning(self, "تحذير", "يرجى إدخال رقم الوحدة")
+            self._show_styled_message("تحذير", "يرجى إدخال رقم الوحدة")
             return False
 
         # Area should be numeric if provided
@@ -553,8 +634,13 @@ class UnitDialog(QDialog):
         if area_text:
             try:
                 float(area_text)
+                self.area_error_label.setVisible(False)
+                self.area_input.setStyleSheet(self._input_style())
             except ValueError:
-                QMessageBox.warning(self, "تحذير", "المساحة يجب أن تكون رقماً")
+                self.area_error_label.setText("المساحة يجب أن تكون أرقام فقط")
+                self.area_error_label.setVisible(True)
+                self.area_input.setStyleSheet(self._input_error_style())
+                self.area_input.setFocus()
                 return False
 
         return True
@@ -575,11 +661,7 @@ class UnitDialog(QDialog):
                 error_msg = response.get("error", "Unknown error")
                 details = response.get("details", "")
                 logger.error(f"Failed to create unit via API: {error_msg} - {details}")
-                QMessageBox.critical(
-                    self,
-                    "خطأ",
-                    f"فشل في إنشاء الوحدة:\n{error_msg}"
-                )
+                self._show_styled_message("خطأ", f"فشل في إنشاء الوحدة:\n{error_msg}", is_error=True)
                 return
 
             logger.info("Property unit created successfully via API")

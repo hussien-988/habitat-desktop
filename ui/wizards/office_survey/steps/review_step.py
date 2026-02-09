@@ -750,10 +750,20 @@ class ReviewStep(BaseStep):
                 else:
                     area = "-"
                 unit_type = unit.unit_type_display_ar if hasattr(unit, 'unit_type_display_ar') else "-"
-                status_mappings = {
-                    "occupied": "مشغولة", "vacant": "شاغرة", "unknown": "غير معروف"
+                status_mappings_str = {
+                    "occupied": "مشغول", "vacant": "شاغر", "damaged": "متضرر",
+                    "under_renovation": "قيد الترميم", "uninhabitable": "غير صالح للسكن",
+                    "locked": "مغلق", "unknown": "غير معروف",
                 }
-                status = status_mappings.get(getattr(unit, 'apartment_status', ''), getattr(unit, 'apartment_status', '-'))
+                status_mappings_int = {
+                    1: "مشغول", 2: "شاغر", 3: "متضرر", 4: "قيد الترميم",
+                    5: "غير صالح للسكن", 6: "مغلق", 99: "غير معروف",
+                }
+                status_raw = getattr(unit, 'apartment_status', '-')
+                if isinstance(status_raw, int):
+                    status = status_mappings_int.get(status_raw, str(status_raw))
+                else:
+                    status = status_mappings_str.get(str(status_raw).lower(), str(status_raw) if status_raw else "-")
             else:
                 unit_num = str(new_unit_data.get('unit_number', 'جديد'))
                 floor = str(new_unit_data.get('floor_number', '-'))
