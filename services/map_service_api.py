@@ -98,9 +98,12 @@ class MapServiceAPI:
             if building_data.get("buildingGeometryWkt"):
                 polygon = GeoPolygon.from_wkt(building_data["buildingGeometryWkt"])
 
+            # ✅ CRITICAL FIX: Try 'buildingCode' first (BuildingAssignments API), then 'buildingId'
+            building_id = building_data.get("buildingCode") or building_data.get("buildingId", "")
+
             return BuildingGeoData(
                 building_uuid=building_data["id"],
-                building_id=building_data.get("buildingId", ""),
+                building_id=building_id,
                 geometry_type="polygon" if polygon else "point",
                 point=point,
                 polygon=polygon,
@@ -322,7 +325,8 @@ class MapServiceAPI:
             for dto in map_dtos:
                 building = Building()
                 building.building_uuid = dto.get("id")
-                building.building_id = dto.get("buildingId")
+                # ✅ CRITICAL FIX: Try 'buildingCode' first (BuildingAssignments API), then 'buildingId'
+                building.building_id = dto.get("buildingCode") or dto.get("buildingId")
                 building.latitude = dto.get("latitude")
                 building.longitude = dto.get("longitude")
                 building.building_status = dto.get("status")
@@ -548,10 +552,17 @@ class MapServiceAPI:
     # ==================== Helper Methods ====================
 
     def _convert_api_building_to_model(self, data: Dict[str, Any]) -> Building:
-        """تحويل API response إلى Building model."""
+        """
+        تحويل API response إلى Building model.
+
+        ✅ FIX: BuildingAssignments API uses 'buildingCode' not 'buildingId'!
+        """
+        # ✅ CRITICAL FIX: Try 'buildingCode' first (BuildingAssignments API), then 'buildingId'
+        building_id = data.get("buildingCode") or data.get("buildingId", "")
+
         return Building(
             building_uuid=data["id"],
-            building_id=data.get("buildingId", ""),
+            building_id=building_id,
             latitude=data.get("latitude"),
             longitude=data.get("longitude"),
             building_status=data.get("status"),
@@ -561,7 +572,11 @@ class MapServiceAPI:
         )
 
     def _convert_api_building_to_geodata(self, data: Dict[str, Any]) -> BuildingGeoData:
-        """تحويل API response إلى BuildingGeoData."""
+        """
+        تحويل API response إلى BuildingGeoData.
+
+        ✅ FIX: BuildingAssignments API uses 'buildingCode' not 'buildingId'!
+        """
         point = None
         polygon = None
 
@@ -574,9 +589,12 @@ class MapServiceAPI:
         if data.get("buildingGeometryWkt"):
             polygon = GeoPolygon.from_wkt(data["buildingGeometryWkt"])
 
+        # ✅ CRITICAL FIX: Try 'buildingCode' first (BuildingAssignments API), then 'buildingId'
+        building_id = data.get("buildingCode") or data.get("buildingId", "")
+
         return BuildingGeoData(
             building_uuid=data["id"],
-            building_id=data.get("buildingId", ""),
+            building_id=building_id,
             geometry_type="polygon" if polygon else "point",
             point=point,
             polygon=polygon,
