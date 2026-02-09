@@ -530,7 +530,7 @@ class ReviewStep(BaseStep):
 
     def _create_relations_card(self) -> QFrame:
         """Create relations information summary card (Step 5)."""
-        card, content_layout = self._create_card_base("elements", "العلاقات والأدلة", "علاقات الأشخاص بالوحدة")
+        card, content_layout = self._create_card_base("user-account", "العلاقة والأدلة", "تسجيل تفاصيل ملكية شخص للوحدة عقارية")
         self.relations_content = content_layout
         return card
 
@@ -985,8 +985,151 @@ class ReviewStep(BaseStep):
             row = self._create_person_row(person)
             self.persons_content.addWidget(row)
 
+    def _create_relation_person_card(self, relation: dict) -> QFrame:
+        """Create a read-only relation card for a person, matching step 5 layout."""
+        card = QFrame()
+        card.setLayoutDirection(Qt.RightToLeft)
+        card.setStyleSheet(f"""
+            QFrame {{
+                background-color: {Colors.BACKGROUND};
+                border: 1px solid #F0F0F0;
+                border-radius: 8px;
+            }}
+            QLabel {{
+                border: none;
+            }}
+        """)
+        card_layout = QVBoxLayout(card)
+        card_layout.setContentsMargins(20, 15, 20, 15)
+        card_layout.setSpacing(12)
+
+        # --- Person header: icon + name + role ---
+        header_layout = QHBoxLayout()
+        header_layout.setSpacing(10)
+
+        icon_label = QLabel()
+        icon_label.setFixedSize(38, 38)
+        icon_label.setAlignment(Qt.AlignCenter)
+        icon_label.setStyleSheet("""
+            QLabel {
+                background-color: #F4F8FF;
+                border-radius: 19px;
+                border: 1px solid #d1e3f8;
+            }
+        """)
+        person_icon = Icon.load_pixmap("user", size=20)
+        if person_icon and not person_icon.isNull():
+            icon_label.setPixmap(person_icon)
+
+        text_vbox = QVBoxLayout()
+        text_vbox.setSpacing(0)
+
+        person_name = relation.get('person_name', '-')
+        name_label = QLabel(person_name)
+        name_label.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
+        name_label.setStyleSheet(f"color: #2c3e50; background: transparent;")
+
+        rel_type_map = {
+            "owner": "مالك",
+            "co_owner": "شريك في الملكية",
+            "tenant": "مستأجر",
+            "occupant": "شاغل",
+            "heir": "وارث",
+            "guardian": "ولي/وصي",
+            "other": "أخرى"
+        }
+        role_text = rel_type_map.get(relation.get('relation_type', ''), relation.get('relation_type', '-'))
+        role_label = QLabel(role_text)
+        role_label.setFont(create_font(size=9, weight=FontManager.WEIGHT_REGULAR))
+        role_label.setStyleSheet("color: #7f8c8d; background: transparent;")
+
+        text_vbox.addWidget(name_label)
+        text_vbox.addWidget(role_label)
+
+        header_layout.addWidget(icon_label)
+        header_layout.addLayout(text_vbox)
+        header_layout.addStretch()
+        card_layout.addLayout(header_layout)
+
+        # --- Form fields (read-only) in grid ---
+        label_style = "color: #333; font-size: 12px; font-weight: 600; background: transparent;"
+        value_style = f"""
+            QLabel {{
+                background-color: #ffffff;
+                border: 1px solid #dfe6e9;
+                border-radius: 4px;
+                padding: 8px 12px;
+                color: #2d3436;
+                font-size: 12px;
+            }}
+        """
+
+        grid = QGridLayout()
+        grid.setSpacing(10)
+        grid.setColumnStretch(0, 1)
+        grid.setColumnStretch(1, 1)
+        grid.setColumnStretch(2, 1)
+
+        # Row 0 - Labels
+        lbl_contract = QLabel("نوع العقد")
+        lbl_contract.setStyleSheet(label_style)
+        grid.addWidget(lbl_contract, 0, 0)
+
+        lbl_date = QLabel("تاريخ بدء العلاقة")
+        lbl_date.setStyleSheet(label_style)
+        grid.addWidget(lbl_date, 0, 1)
+
+        lbl_share = QLabel("حصة الملكية")
+        lbl_share.setStyleSheet(label_style)
+        grid.addWidget(lbl_share, 0, 2)
+
+        # Row 1 - Values
+        contract_val = QLabel(relation.get('contract_type') or "-")
+        contract_val.setStyleSheet(value_style)
+        grid.addWidget(contract_val, 1, 0)
+
+        date_val = QLabel(relation.get('start_date') or "-")
+        date_val.setStyleSheet(value_style)
+        grid.addWidget(date_val, 1, 1)
+
+        share = relation.get('ownership_share', 0)
+        share_val = QLabel(f"{share} %")
+        share_val.setStyleSheet(value_style)
+        grid.addWidget(share_val, 1, 2)
+
+        card_layout.addLayout(grid)
+
+        # --- Notes ---
+        notes_text = relation.get('notes')
+        if notes_text:
+            notes_title = QLabel("ملاحظات")
+            notes_title.setStyleSheet(label_style)
+            card_layout.addWidget(notes_title)
+
+            notes_val = QLabel(notes_text)
+            notes_val.setWordWrap(True)
+            notes_val.setStyleSheet(value_style)
+            card_layout.addWidget(notes_val)
+
+        # --- Evidence ---
+        evidence_type = relation.get('evidence_type')
+        evidence_desc = relation.get('evidence_description')
+        if evidence_type or evidence_desc:
+            docs_title = QLabel("صور المستندات")
+            docs_title.setStyleSheet(label_style)
+            card_layout.addWidget(docs_title)
+
+            doc_text = evidence_type or ""
+            if evidence_desc:
+                doc_text += f" - {evidence_desc}" if doc_text else evidence_desc
+            docs_val = QLabel(doc_text)
+            docs_val.setStyleSheet(value_style)
+            card_layout.addWidget(docs_val)
+
+        return card
+
     def _populate_relations_card(self):
-        """Populate relations information card."""
+        """Populate relations card matching step 5 layout - one card per person."""
         self._clear_layout(self.relations_content)
 
         if not self.context.relations:
@@ -997,29 +1140,11 @@ class ReviewStep(BaseStep):
             self.relations_content.addWidget(no_data)
             return
 
-        # Stats row
-        num_relations = len(self.context.relations)
-        total_evidences = sum(len(r.get('evidences', [])) for r in self.context.relations)
-        owners = len([r for r in self.context.relations if r.get('relation_type') in ('owner', 'co_owner')])
-        tenants = len([r for r in self.context.relations if r.get('relation_type') == 'tenant'])
+        self.relations_content.setSpacing(10)
 
-        stats = [
-            {'value': str(num_relations), 'label': 'عدد العلاقات', 'color': '#3B82F6'},
-            {'value': str(total_evidences), 'label': 'الوثائق'},
-            {'value': str(owners), 'label': 'الملاك'},
-            {'value': str(tenants), 'label': 'المستأجرين'},
-        ]
-        stats_row = self._create_stat_row(stats)
-        self.relations_content.addWidget(stats_row)
-
-        # Relations list
         for relation in self.context.relations:
-            person_dict = {
-                'full_name': relation.get('person_name', '-'),
-                'relationship_type': relation.get('relation_type', ''),
-            }
-            row = self._create_person_row(person_dict)
-            self.relations_content.addWidget(row)
+            card = self._create_relation_person_card(relation)
+            self.relations_content.addWidget(card)
 
     def _populate_claim_card(self):
         """Populate claim information card."""
