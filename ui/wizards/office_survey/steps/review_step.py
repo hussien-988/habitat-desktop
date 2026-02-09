@@ -536,7 +536,7 @@ class ReviewStep(BaseStep):
 
     def _create_claim_card(self) -> QFrame:
         """Create claim information summary card (Step 6)."""
-        card, content_layout = self._create_card_base("clipboard-list", "حالة التسجيل", "بيانات الحالة والمطالبة")
+        card, content_layout = self._create_card_base("elements", "تسجيل الحالة", "ربط المطالبين بالوحدات العقارية وتتبع مطالبات تسجيل حقوق الحيازة")
         self.claim_content = content_layout
         return card
 
@@ -1146,11 +1146,165 @@ class ReviewStep(BaseStep):
             card = self._create_relation_person_card(relation)
             self.relations_content.addWidget(card)
 
+    def _create_claim_data_card(self, claim_data: dict) -> QFrame:
+        """Create a single read-only claim card matching step 6 layout."""
+        claim_types = {
+            "ownership": "ملكية", "occupancy": "إشغال", "tenancy": "إيجار"
+        }
+        priorities = {
+            "low": "منخفض", "normal": "عادي", "high": "عالي", "urgent": "عاجل"
+        }
+        business_types = {
+            "residential": "سكني", "commercial": "تجاري", "agricultural": "زراعي"
+        }
+        sources = {
+            "field_survey": "مسح ميداني", "direct_request": "طلب مباشر",
+            "referral": "إحالة", "OFFICE_SUBMISSION": "تقديم مكتبي"
+        }
+        statuses = {
+            "new": "جديد", "under_review": "قيد المراجعة",
+            "completed": "مكتمل", "pending": "معلق", "draft": "مسودة"
+        }
+
+        card = QFrame()
+        card.setLayoutDirection(Qt.RightToLeft)
+        card.setStyleSheet(f"""
+            QFrame {{
+                background-color: {Colors.BACKGROUND};
+                border: 1px solid #F0F0F0;
+                border-radius: 8px;
+            }}
+            QLabel {{
+                border: none;
+            }}
+        """)
+        card_layout = QVBoxLayout(card)
+        card_layout.setContentsMargins(20, 15, 20, 15)
+        card_layout.setSpacing(12)
+
+        label_style = f"color: {Colors.WIZARD_SUBTITLE}; background: transparent;"
+        value_style = f"""
+            QLabel {{
+                background-color: {Colors.INPUT_BG};
+                border: 1px solid {Colors.BORDER_DEFAULT};
+                border-radius: 8px;
+                padding: 8px 12px;
+                color: {Colors.TEXT_PRIMARY};
+                font-size: 13px;
+            }}
+        """
+
+        # --- Grid: Row 1 & 2 ---
+        grid = QGridLayout()
+        grid.setHorizontalSpacing(8)
+        grid.setVerticalSpacing(8)
+        for i in range(4):
+            grid.setColumnStretch(i, 1)
+
+        def add_field(label_text, value_text, row, col):
+            v = QVBoxLayout()
+            v.setSpacing(4)
+            lbl = QLabel(label_text)
+            lbl.setFont(create_font(size=9, weight=FontManager.WEIGHT_REGULAR))
+            lbl.setStyleSheet(label_style)
+            v.addWidget(lbl)
+            val = QLabel(str(value_text) if value_text else "-")
+            val.setStyleSheet(value_style)
+            v.addWidget(val)
+            grid.addLayout(v, row, col)
+
+        # Claimant name - use per-card person_name first
+        claimant_name = claim_data.get('person_name', '').strip()
+        if not claimant_name:
+            claimant_ids = claim_data.get('claimant_person_ids', [])
+            if claimant_ids and self.context.persons:
+                for p in self.context.persons:
+                    if p.get('person_id') in claimant_ids:
+                        claimant_name = f"{p.get('first_name', '')} {p.get('father_name', '')} {p.get('last_name', '')}".strip()
+                        break
+            if not claimant_name and self.context.persons:
+                p = self.context.persons[0]
+                claimant_name = f"{p.get('first_name', '')} {p.get('father_name', '')} {p.get('last_name', '')}".strip()
+        if not claimant_name:
+            claimant_name = "-"
+
+        # Unit display ID - use per-card value first
+        unit_display = claim_data.get('unit_display_id', '').strip()
+        if not unit_display:
+            unit_display = claim_data.get('unit_id', '-') or "-"
+
+        add_field("معرف المطالب", claimant_name, 0, 0)
+        add_field("معرف الوحدة المطالب بها", unit_display, 0, 1)
+        add_field("نوع الحالة", claim_types.get(claim_data.get('claim_type'), '-'), 0, 2)
+        add_field("طبيعة الأعمال", business_types.get(claim_data.get('business_nature'), '-'), 0, 3)
+
+        add_field("حالة الحالة", statuses.get(claim_data.get('case_status', 'new'), '-'), 1, 0)
+        add_field("المصدر", sources.get(claim_data.get('source'), '-'), 1, 1)
+        add_field("تاريخ المسح", str(claim_data.get('survey_date', '-') or '-'), 1, 2)
+        add_field("الأولوية", priorities.get(claim_data.get('priority'), '-'), 1, 3)
+
+        card_layout.addLayout(grid)
+
+        # --- Notes ---
+        notes_text = claim_data.get('notes', '')
+        notes_title = QLabel("ملاحظات المراجعة")
+        notes_title.setFont(create_font(size=9, weight=FontManager.WEIGHT_REGULAR))
+        notes_title.setStyleSheet(label_style)
+        card_layout.addWidget(notes_title)
+
+        notes_val = QLabel(notes_text if notes_text else "ملاحظات إضافية")
+        notes_val.setWordWrap(True)
+        notes_val.setMinimumHeight(60)
+        notes_val.setStyleSheet(f"""
+            QLabel {{
+                background-color: {Colors.INPUT_BG};
+                border: 1px solid {Colors.BORDER_DEFAULT};
+                border-radius: 8px;
+                padding: 8px 12px;
+                color: {Colors.TEXT_SECONDARY if not notes_text else Colors.TEXT_PRIMARY};
+                font-size: 13px;
+            }}
+        """)
+        card_layout.addWidget(notes_val)
+
+        # --- Next Action Date ---
+        next_date_title = QLabel("تاريخ الإجراء التالي")
+        next_date_title.setFont(create_font(size=9, weight=FontManager.WEIGHT_REGULAR))
+        next_date_title.setStyleSheet(label_style)
+        card_layout.addWidget(next_date_title)
+
+        next_date = claim_data.get('next_action_date', '00-00-0000') or '00-00-0000'
+        next_date_val = QLabel(next_date)
+        next_date_val.setStyleSheet(value_style)
+        card_layout.addWidget(next_date_val)
+
+        # --- Evidence Status Bar ---
+        eval_label = QLabel()
+        eval_label.setAlignment(Qt.AlignCenter)
+        eval_label.setFixedHeight(50)
+        eval_label.setFont(create_font(size=11, weight=FontManager.WEIGHT_SEMIBOLD))
+        eval_label.setText("  \u2714  الأدلة متوفرة")
+        eval_label.setStyleSheet("""
+            QLabel {
+                background-color: #e1f7ef;
+                color: #10b981;
+                border-radius: 8px;
+            }
+        """)
+        card_layout.addWidget(eval_label)
+
+        return card
+
     def _populate_claim_card(self):
-        """Populate claim information card."""
+        """Populate claim information card - show all claims from step 6."""
         self._clear_layout(self.claim_content)
 
-        if not self.context.claim_data:
+        # Use claims list (all claims), fallback to single claim_data
+        claims = getattr(self.context, 'claims', [])
+        if not claims and self.context.claim_data:
+            claims = [self.context.claim_data]
+
+        if not claims:
             no_data = QLabel("لم يتم إنشاء مطالبة")
             no_data.setFont(create_font(size=10))
             no_data.setStyleSheet(f"color: {Colors.TEXT_SECONDARY}; background: transparent; border: none;")
@@ -1158,68 +1312,11 @@ class ReviewStep(BaseStep):
             self.claim_content.addWidget(no_data)
             return
 
-        claim_types = {
-            "ownership": "ملكية",
-            "occupancy": "إشغال",
-            "tenancy": "إيجار"
-        }
-        priorities = {
-            "low": "منخفض",
-            "normal": "عادي",
-            "high": "عالي",
-            "urgent": "عاجل"
-        }
-        business_types = {
-            "residential": "سكني",
-            "commercial": "تجاري",
-            "agricultural": "زراعي"
-        }
-        sources = {
-            "field_survey": "مسح ميداني",
-            "direct_request": "طلب مباشر",
-            "referral": "إحالة",
-            "OFFICE_SUBMISSION": "تقديم مكتبي"
-        }
-        statuses = {
-            "new": "جديد",
-            "under_review": "قيد المراجعة",
-            "completed": "مكتمل",
-            "pending": "معلق",
-            "draft": "مسودة"
-        }
+        self.claim_content.setSpacing(10)
 
-        claim_data = self.context.claim_data
-        status_key = claim_data.get('case_status', 'new')
-        status_display = statuses.get(status_key, status_key)
-
-        # Status bar at top
-        status_bar = self._create_status_bar(status_key, status_display)
-        self.claim_content.addWidget(status_bar)
-
-        # Fields grid
-        fields_container = QWidget()
-        fields_container.setStyleSheet("background: transparent; border: none;")
-        fields_grid = QGridLayout(fields_container)
-        fields_grid.setContentsMargins(0, 0, 0, 0)
-        fields_grid.setHorizontalSpacing(12)
-        fields_grid.setVerticalSpacing(12)
-
-        claim_type = claim_types.get(claim_data.get('claim_type'), '-')
-        priority = priorities.get(claim_data.get('priority'), '-')
-        business = business_types.get(claim_data.get('business_nature'), '-')
-        source = sources.get(claim_data.get('source'), '-')
-        survey_date = str(claim_data.get('survey_date', '-') or '-')
-
-        # Row 1
-        fields_grid.addWidget(self._create_field("نوع الحالة", claim_type), 0, 0)
-        fields_grid.addWidget(self._create_field("طبيعة الأعمال", business), 0, 1)
-        fields_grid.addWidget(self._create_field("الأولوية", priority), 0, 2)
-        fields_grid.addWidget(self._create_field("المصدر", source), 0, 3)
-
-        # Row 2
-        fields_grid.addWidget(self._create_field("تاريخ المسح", survey_date), 1, 0, 1, 2)
-
-        self.claim_content.addWidget(fields_container)
+        for claim_data in claims:
+            claim_card = self._create_claim_data_card(claim_data)
+            self.claim_content.addWidget(claim_card)
 
     def validate(self) -> StepValidationResult:
         """Validate that all required data is present."""
