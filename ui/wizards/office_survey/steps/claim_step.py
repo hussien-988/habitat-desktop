@@ -673,6 +673,11 @@ class ClaimStep(BaseStep):
             if not claim_type:
                 result.add_error("يجب اختيار نوع الحالة")
 
+        # Store claims data to context during validation
+        # (collect_data() is never called by the framework during navigation)
+        if result.is_valid and self._claim_cards:
+            self.collect_data()
+
         return result
 
     def collect_data(self) -> Dict[str, Any]:
@@ -705,6 +710,8 @@ class ClaimStep(BaseStep):
                 "next_action_date": card.claim_next_action_date.date().toString("yyyy-MM-dd"),
                 "notes": card.claim_notes.toPlainText().strip(),
                 "status": "draft",
+                "person_name": card.claim_person_search.text().strip(),
+                "unit_display_id": card.claim_unit_search.text().strip(),
                 "claimant_person_ids": claimant_ids,
                 "evidence_ids": [e['evidence_id'] for e in all_evidences],
                 "unit_id": self.context.unit.unit_id if self.context.unit else None,
@@ -712,6 +719,8 @@ class ClaimStep(BaseStep):
             }
             claims_data.append(claim_data)
 
+        # Store all claims in context
+        self.context.claims = claims_data
         # Store first claim as the main claim_data for backward compatibility
         if claims_data:
             self.context.claim_data = claims_data[0]

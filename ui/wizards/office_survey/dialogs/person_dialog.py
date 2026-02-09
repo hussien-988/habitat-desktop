@@ -61,12 +61,16 @@ class PersonDialog(QDialog):
         self._survey_api_service = SurveyApiService(auth_token)
         self._use_api = getattr(Config, 'DATA_PROVIDER', 'local_db') == 'http'
 
-        self.setWindowTitle("تعديل بيانات الشخص" if self.editing_mode else "إضافة شخص جديد")
         self.setModal(True)
-        self.setFixedSize(650, 750)  # Increased size for better spacing
+        self.setFixedSize(650, 750)
+
+        # Remove system title bar (same as unit dialog)
+        self.setWindowFlags(Qt.FramelessWindowHint | Qt.Dialog)
+        self.setAttribute(Qt.WA_TranslucentBackground)
+
         self.setStyleSheet("""
             QDialog {
-                background-color: #f5f7fa;
+                background-color: transparent;
             }
         """)
 
@@ -79,7 +83,23 @@ class PersonDialog(QDialog):
         """Setup dialog UI."""
         self.setLayoutDirection(Qt.RightToLeft)
 
-        main_layout = QVBoxLayout(self)
+        outer_layout = QVBoxLayout(self)
+        outer_layout.setContentsMargins(0, 0, 0, 0)
+        outer_layout.setSpacing(0)
+
+        # White rounded content frame (same as unit dialog)
+        content_frame = QFrame()
+        content_frame.setObjectName("ContentFrame")
+        content_frame.setStyleSheet("""
+            QFrame#ContentFrame {
+                background-color: #f5f7fa;
+                border: 1px solid #E1E8ED;
+                border-radius: 24px;
+            }
+        """)
+        outer_layout.addWidget(content_frame)
+
+        main_layout = QVBoxLayout(content_frame)
         main_layout.setSpacing(15)
         main_layout.setContentsMargins(20, 20, 20, 20)
 

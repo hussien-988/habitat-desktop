@@ -456,15 +456,15 @@ class UnitSelectionStep(BaseStep):
         label = QLabel(text)
 
         if is_title:
-            # Title style - smaller font, left aligned (appears right in RTL)
+            # Title style - center-aligned
             label.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))  # Smaller: 9pt
             label.setStyleSheet("color: #1A1F1D;")
-            label.setAlignment(Qt.AlignLeft)  # Left in RTL = Right visually
+            label.setAlignment(Qt.AlignCenter)
         else:
-            # Value style - smaller font, left aligned (appears right in RTL)
+            # Value style - center-aligned (directly under label)
             label.setFont(create_font(size=9, weight=FontManager.WEIGHT_REGULAR))  # Smaller: 9pt
             label.setStyleSheet("color: #86909B;")
-            label.setAlignment(Qt.AlignLeft)  # Left in RTL = Right visually
+            label.setAlignment(Qt.AlignCenter)
 
         return label
 
@@ -539,20 +539,37 @@ class UnitSelectionStep(BaseStep):
         # DRY: Use Arabic display properties from model
         unit_type_val = unit.unit_type_display_ar if hasattr(unit, 'unit_type_display_ar') else (unit.unit_type or "-")
 
-        # Get Arabic status (use property if exists, otherwise translate manually)
-        if hasattr(unit, 'apartment_status'):
-            status_mappings = {
-                "occupied": "مشغولة",
-                "vacant": "شاغرة",
-                "unknown": "غير معروف"
+        # Get Arabic status from API response (string or integer code)
+        if hasattr(unit, 'apartment_status') and unit.apartment_status is not None:
+            status_mappings_str = {
+                "occupied": "مشغول",
+                "vacant": "شاغر",
+                "damaged": "متضرر",
+                "under_renovation": "قيد الترميم",
+                "uninhabitable": "غير صالح للسكن",
+                "locked": "مغلق",
+                "unknown": "غير معروف",
             }
-            status_val = status_mappings.get(unit.apartment_status, unit.apartment_status)
+            status_mappings_int = {
+                1: "مشغول",
+                2: "شاغر",
+                3: "متضرر",
+                4: "قيد الترميم",
+                5: "غير صالح للسكن",
+                6: "مغلق",
+                99: "غير معروف",
+            }
+            status_raw = unit.apartment_status
+            if isinstance(status_raw, int):
+                status_val = status_mappings_int.get(status_raw, str(status_raw))
+            else:
+                status_val = status_mappings_str.get(str(status_raw).lower(), str(status_raw))
         else:
-            status_val = "جيدة"
+            status_val = "-"
 
         # Keep numerals in English (0-9) for consistency with the app
         floor_val = str(unit.floor_number) if unit.floor_number is not None else "-"
-        rooms_val = str(getattr(unit, 'number_of_rooms', 0)) if hasattr(unit, 'number_of_rooms') else "-"
+        rooms_val = str(unit.apartment_number) if unit.apartment_number else "-"
         unit_display_num = str(unit_display_num)
 
         # Format area with 2 decimal places in English numerals
@@ -585,6 +602,7 @@ class UnitSelectionStep(BaseStep):
             col = QVBoxLayout()
             col.setSpacing(2)  # Small gap between title and value
             col.setContentsMargins(8, 0, 8, 0)  # Padding for better spacing
+            col.setAlignment(Qt.AlignCenter)  # Center labels and values in column
 
             # DRY: Create labels using helper method
             lbl_title = self._create_field_label(label_text, is_title=True)

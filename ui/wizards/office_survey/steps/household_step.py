@@ -849,11 +849,13 @@ class HouseholdStep(BaseStep):
             "garage": "مرآب",
             "other": "أخرى"
         }
-        # Correct unit status mapping (occupied/vacant/unknown, NOT intact/damaged/destroyed)
+        # Unit status mapping - string keys and integer keys
         unit_status_map = {
-            "occupied": "مشغولة",
-            "vacant": "شاغرة",
-            "unknown": "غير معروف"
+            "occupied": "مشغول", "vacant": "شاغر", "damaged": "متضرر",
+            "under_renovation": "قيد الترميم", "uninhabitable": "غير صالح للسكن",
+            "locked": "مغلق", "unknown": "غير معروف",
+            1: "مشغول", 2: "شاغر", 3: "متضرر", 4: "قيد الترميم",
+            5: "غير صالح للسكن", 6: "مغلق", 99: "غير معروف",
         }
 
         # Get unit data from context
@@ -867,7 +869,7 @@ class HouseholdStep(BaseStep):
 
             floor_number = getattr(unit, 'floor_number', None)
             unit_number = getattr(unit, 'unit_number', None) or getattr(unit, 'apartment_number', None)
-            rooms_count = getattr(unit, 'number_of_rooms', None)
+            rooms_count = getattr(unit, 'apartment_number', None)
             area = getattr(unit, 'area_sqm', None)
         elif self.context.new_unit_data:
             unit_type_raw = self.context.new_unit_data.get('unit_type')
