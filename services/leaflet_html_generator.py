@@ -50,9 +50,9 @@ class LeafletHTMLGenerator:
         buildings_geojson: str,
         center_lat: float = 36.2021,
         center_lon: float = 37.1343,
-        zoom: int = 16,  # ✅ محسّن: زوم أعلى (16 بدلاً من 14) للوضوح الأفضل
-        min_zoom: int = None,  # NEW: Minimum zoom level (prevents zooming out)
-        max_zoom: int = 17,  # NEW: Maximum zoom level (based on available tiles)
+        zoom: int = 15,  #
+        min_zoom: int = None,  # Minimum zoom level (prevents zooming out)
+        max_zoom: int = 20,  #
         show_legend: bool = True,
         show_layer_control: bool = True,
         enable_drawing: bool = False,
@@ -440,13 +440,13 @@ class LeafletHTMLGenerator:
         // Reference: https://leafletjs.com/reference.html#map-prefercanvas
         var map = L.map('map', {{
             preferCanvas: true,   // CRITICAL: Use Canvas renderer (10x faster!)
-            maxZoom: {max_zoom},  // Prevent zooming beyond available tiles
-            minZoom: {min_zoom if min_zoom is not None else 13}  // ✅ Smart constraint: prevent zoom out beyond neighborhood!
+            maxZoom: {max_zoom},  //
+            minZoom: {min_zoom if min_zoom is not None else 10}  // Allow zooming out to city level
         }}).setView([{center_lat}, {center_lon}], {zoom});
 
         // Add tile layer from local server
         var tileLayer = L.tileLayer('{tile_server_url}/tiles/{{z}}/{{x}}/{{y}}.png', {{
-            maxZoom: {max_zoom},  // Maximum zoom (prevents gray tiles beyond available zoom levels)
+            maxZoom: {max_zoom},  //
             minZoom: 10,  // Allow zooming out to see full city
             attribution: 'Map data &copy; OpenStreetMap | UN-Habitat Syria',
             errorTileUrl: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=='
@@ -486,7 +486,7 @@ class LeafletHTMLGenerator:
         // Best Practice: Use marker clustering for handling thousands of buildings
         // Reference: https://github.com/Leaflet/Leaflet.markercluster
 
-        // ✅ إعدادات Clustering محسّنة للأداء العالي (10,000+ مبنى)
+        //
         var markers = L.markerClusterGroup({{
             maxClusterRadius: 60,              // ✅ تقليل من 80 إلى 60 (أقل تداخل)
             spiderfyOnMaxZoom: true,          // Expand clusters at max zoom
@@ -527,7 +527,7 @@ class LeafletHTMLGenerator:
             }},
 
             // pointToLayer for Point features - استخدام Pin Markers (أجمل وأوضح)
-            // ✅ محسّن: SVG Pin marker بدلاً من Circle (أكثر وضوحاً وأداء أفضل)
+            //
             // Reference: https://leafletjs.com/reference.html#marker
             pointToLayer: function(feature, latlng) {{
                 var status = getStatusKey(feature.properties.status || 1);

@@ -246,8 +246,8 @@ class PolygonMapDialog(BaseMapDialog):
                 buildings_geojson=buildings_geojson,
                 center_lat=36.2021,
                 center_lon=37.1343,
-                zoom=13,
-                max_zoom=16,
+                zoom=15,  #
+                max_zoom=20,  #
                 show_legend=True,
                 show_layer_control=False,
                 enable_selection=False,  # No popup selection button

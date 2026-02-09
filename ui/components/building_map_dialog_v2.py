@@ -215,10 +215,10 @@ class BuildingMapDialog(BaseMapDialog):
                 logger.info(f"📍 Buildings with coordinates: {features_with_coords}/{num_features}")
 
             # Determine center and zoom
-            # ✅ محسّن: زوم متوسط يملأ النافذة بشكل جيد
+            #
             center_lat = 36.2021
             center_lon = 37.1343
-            zoom = 13  # ✅ محسّن: زوم 13 - يملأ النافذة (1100×700) بشكل ممتاز
+            zoom = 15  #
             focus_building_id = None
 
             # If view-only mode, focus on the selected building
@@ -241,7 +241,7 @@ class BuildingMapDialog(BaseMapDialog):
                 if focus_building and focus_building.latitude and focus_building.longitude:
                     center_lat = focus_building.latitude
                     center_lon = focus_building.longitude
-                    zoom = 16  # ✅ محسّن: زوم 16 للمبنى المحدد (أقصى zoom آمن)
+                    zoom = 18  #
                     focus_building_id = self._selected_building_id
                     logger.info(f"🎯 Focusing on building {focus_building_id} at ({center_lat}, {center_lon}) with zoom {zoom}")
                 else:
@@ -254,7 +254,7 @@ class BuildingMapDialog(BaseMapDialog):
                 center_lat=center_lat,
                 center_lon=center_lon,
                 zoom=zoom,
-                max_zoom=16,
+                max_zoom=20,  #
                 show_legend=True,
                 show_layer_control=False,
                 enable_selection=(not self._is_view_only),
@@ -594,13 +594,13 @@ class BuildingMapDialog(BaseMapDialog):
                 center_lon = sum(lons) / len(lons)
 
                 # Dynamic zoom based on number of buildings (Best Practice)
-                # CLOSER ZOOM - avoid gray tiles, show buildings clearly
+                #
                 if len(lats) <= 5:
-                    safe_zoom = 17  # Very few buildings - very close zoom
+                    safe_zoom = 19  # Very few buildings - very close zoom
                 elif len(lats) <= 15:
-                    safe_zoom = 16  # Small area - close zoom
+                    safe_zoom = 18  # Small area - close zoom
                 else:
-                    safe_zoom = 16  # Large area - still close! (avoid gray tiles)
+                    safe_zoom = 17  # Large area - moderate zoom
 
                 logger.info(f"🎯 Navigating to: ({center_lat:.6f}, {center_lon:.6f}) with zoom {safe_zoom}")
 

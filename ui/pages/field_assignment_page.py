@@ -266,7 +266,18 @@ class FieldAssignmentPage(QWidget):
         self.unit_repo = UnitRepository(db)
 
         # Initialize AssignmentService with optional API client for Backend sync
-        api_client = get_api_client() if API_CLIENT_AVAILABLE else None
+        # Only create API client if DATA_SOURCE is set to 'api' mode
+        api_client = None
+        if API_CLIENT_AVAILABLE:
+            try:
+                from app.config import Config
+                settings = Config
+                if settings.DATA_PROVIDER == "http":
+                    api_client = get_api_client()
+            except Exception as e:
+                logger.warning(f"Failed to initialize API client: {e}")
+                api_client = None
+
         self.assignment_service = AssignmentService(db, api_client=api_client)
 
         self._setup_ui()
