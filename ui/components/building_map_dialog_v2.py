@@ -144,7 +144,32 @@ class BuildingMapDialog(BaseMapDialog):
                 logger.info("🎯 View-only mode: Loading ONLY selected building (no initial 200)")
             else:
                 # Selection mode: Load 200 buildings for browsing
-                buildings_geojson = self.load_buildings_geojson(self.db, limit=200, auth_token=self._auth_token)
+                # ✅ IMPORTANT: Load buildings AND cache them for selection!
+                from services.map_service_api import MapServiceAPI
+                from services.geojson_converter import GeoJSONConverter
+
+                map_service = MapServiceAPI()
+                if self._auth_token:
+                    map_service.set_auth_token(self._auth_token)
+
+                # Load buildings from BuildingAssignments API
+                buildings = map_service.get_buildings_in_bbox(
+                    north_east_lat=36.5,
+                    north_east_lng=37.5,
+                    south_west_lat=36.0,
+                    south_west_lng=36.8,
+                    page_size=200
+                )
+
+                # ✅ CRITICAL: Cache buildings for selection lookup!
+                self._buildings_cache = buildings
+                logger.info(f"✅ Cached {len(buildings)} buildings for selection")
+
+                # Convert to GeoJSON
+                buildings_geojson = GeoJSONConverter.buildings_to_geojson(
+                    buildings,
+                    prefer_polygons=True
+                )
 
             # DEBUG: Check if buildings were loaded
             import json
@@ -443,70 +468,76 @@ class BuildingMapDialog(BaseMapDialog):
         """
         Handle building selection from map click.
 
+        ✅ FIX: Use cached buildings from map (loaded from BuildingAssignments API)
+        instead of searching in Buildings API (which has different data)!
+
         Args:
-            building_id: Building ID clicked (17-digit code, NOT UUID!)
+            building_id: Building ID clicked (17-digit code from BuildingAssignments API)
         """
         logger.info(f"Building selected from map: {building_id}")
 
         try:
-            # ✅ FIX: Use search_buildings() instead of load_buildings()
-            # search_buildings() searches globally in API without bbox limitations!
-            logger.debug(f"Searching for building globally: {building_id}")
-            result = self.building_controller.search_buildings(building_id)
+            # ✅ BEST PRACTICE: Use cached buildings from dialog (loaded from BuildingAssignments API)
+            # These are the SAME buildings shown on the map!
+            cached_buildings = self._buildings_cache or []
 
-            if result.success and result.data:
-                logger.info(f"🔍 Search returned {len(result.data)} buildings")
-                logger.debug(f"Results: {[b.building_id for b in result.data[:5]]}")
+            logger.debug(f"🔍 Searching in {len(cached_buildings)} cached buildings from dialog")
 
-                # Find exact match by building_id
-                matching_building = None
-                for b in result.data:
-                    if b.building_id == building_id:
-                        matching_building = b
-                        break
+            # Find exact match by building_id in cached data
+            matching_building = None
+            for b in cached_buildings:
+                if b.building_id == building_id:
+                    matching_building = b
+                    logger.info(f"✅ Found building in cache: {building_id}")
+                    break
 
-                if matching_building:
-                    self._selected_building = matching_building
-                    # Close dialog and proceed to next step (no confirmation message needed)
-                    logger.info(f"✅ Building {matching_building.building_id} selected, closing dialog")
-                    self.accept()
-                else:
-                    logger.warning(f"⚠️ Building found in search but no exact match: {building_id}")
-                    logger.warning(f"Searched for: '{building_id}'")
-                    logger.warning(f"Got results: {[b.building_id for b in result.data[:10]]}")
-                    # ✅ Better error message with styling
-                    msg = QMessageBox(self)
-                    msg.setIcon(QMessageBox.Warning)
-                    msg.setWindowTitle("لم يتم العثور على المبنى")
-                    msg.setText(f"<h3 style='color: #d32f2f;'>المبنى غير موجود</h3>")
-                    msg.setInformativeText(
-                        f"<p>رمز المبنى: <b>{building_id}</b></p>"
-                        f"<p>لم يتم العثور على تطابق دقيق في قاعدة البيانات.</p>"
-                    )
-                    msg.setStandardButtons(QMessageBox.Ok)
-                    msg.exec_()
+            if matching_building:
+                self._selected_building = matching_building
+                # Close dialog and proceed to next step (no confirmation message needed)
+                logger.info(f"✅ Building {matching_building.building_id} selected, closing dialog")
+                self.accept()
             else:
-                logger.error(f"❌ Building not found in API: {building_id}")
-                # ✅ Better error message with styling
-                msg = QMessageBox(self)
-                msg.setIcon(QMessageBox.Warning)
-                msg.setWindowTitle("لم يتم العثور على المبنى")
-                msg.setText(f"<h3 style='color: #d32f2f;'>المبنى غير موجود</h3>")
-                msg.setInformativeText(
-                    f"<p>رمز المبنى: <b>{building_id}</b></p>"
-                    f"<p>لم يتم العثور على هذا المبنى في قاعدة البيانات.</p>"
-                    f"<p style='color: #666;'>قد يكون المبنى محذوفاً أو غير مسجّل.</p>"
-                )
-                msg.setStandardButtons(QMessageBox.Ok)
-                msg.exec_()
+                # Fallback: Try searching in API (in case cache is empty)
+                logger.warning(f"⚠️ Building not in cache, trying API search...")
+                result = self.building_controller.search_buildings(building_id)
+
+                if result.success and result.data:
+                    logger.info(f"🔍 Search returned {len(result.data)} buildings")
+
+                    # Find exact match by building_id
+                    for b in result.data:
+                        if b.building_id == building_id:
+                            matching_building = b
+                            break
+
+                    if matching_building:
+                        self._selected_building = matching_building
+                        logger.info(f"✅ Building {matching_building.building_id} selected, closing dialog")
+                        self.accept()
+                    else:
+                        logger.warning(f"⚠️ No exact match found for: {building_id}")
+                        self._show_building_not_found_error(building_id)
+                else:
+                    logger.error(f"❌ Building not found in API: {building_id}")
+                    self._show_building_not_found_error(building_id)
 
         except Exception as e:
-            logger.error(f"Error getting building: {e}", exc_info=True)
-            QMessageBox.critical(
-                self,
-                "خطأ",
-                f"حدث خطأ أثناء جلب بيانات المبنى:\n{str(e)}"
-            )
+            logger.error(f"Error selecting building: {e}", exc_info=True)
+            self._show_building_not_found_error(building_id)
+
+    def _show_building_not_found_error(self, building_id: str):
+        """Show error message when building is not found."""
+        msg = QMessageBox(self)
+        msg.setIcon(QMessageBox.Warning)
+        msg.setWindowTitle("لم يتم العثور على المبنى")
+        msg.setText(f"<h3 style='color: #d32f2f;'>المبنى غير موجود</h3>")
+        msg.setInformativeText(
+            f"<p>رمز المبنى: <b>{building_id}</b></p>"
+            f"<p>لم يتم العثور على هذا المبنى في قاعدة البيانات.</p>"
+            f"<p style='color: #666;'>قد يكون المبنى محذوفاً أو غير مسجّل.</p>"
+        )
+        msg.setStandardButtons(QMessageBox.Ok)
+        msg.exec_()
 
     def _on_search_submitted(self):
         """Handle search submission - search using backend API."""

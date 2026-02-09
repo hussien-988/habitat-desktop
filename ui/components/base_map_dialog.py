@@ -939,47 +939,46 @@ class BaseMapDialog(QDialog):
     @staticmethod
     def load_buildings_geojson(db, limit: int = 200, auth_token: Optional[str] = None) -> str:
         """
-        Load buildings from API/database and convert to GeoJSON.
+        Load buildings from BuildingAssignments API and convert to GeoJSON.
 
-        SINGLE SOURCE OF TRUTH for building loading (DRY principle).
-        Uses BuildingController which automatically selects API or local DB.
+        ✅ FIX: Uses MapServiceAPI → api_client → BuildingAssignments API (PostGIS-enabled)
+        Same approach as Field Assignment page (DRY principle).
 
         Args:
-            db: Database instance
+            db: Database instance (not used, kept for compatibility)
             limit: Maximum number of buildings to load
-            auth_token: Optional authentication token for API calls
+            auth_token: Authentication token for API calls (REQUIRED!)
 
         Returns:
             GeoJSON string with buildings
         """
-        from controllers.building_controller import BuildingController, BuildingFilter
+        from services.map_service_api import MapServiceAPI
         from services.geojson_converter import GeoJSONConverter
         import json
 
         try:
-            # Use BuildingController (DRY + SOLID) - automatically selects API or local DB
-            building_controller = BuildingController(db)
+            # ✅ Use MapServiceAPI (same as Field Assignment!)
+            # MapServiceAPI → api_client → BuildingAssignments API (PostGIS-enabled)
+            map_service = MapServiceAPI()
 
-            # CRITICAL FIX: Set auth token BEFORE any operations!
-            logger.info(f"🔍 load_buildings_geojson: auth_token={bool(auth_token)}, is_using_api={building_controller.is_using_api}")
-            if auth_token and building_controller.is_using_api:
-                building_controller.set_auth_token(auth_token)
-                logger.info(f"✅ Auth token set for BuildingController (token length: {len(auth_token)})")
-            elif not auth_token:
-                logger.error(f"❌ NO AUTH TOKEN provided to load_buildings_geojson!")
-            elif not building_controller.is_using_api:
-                logger.info(f"ℹ️ BuildingController using local DB (auth token not needed)")
-
-            # PROFESSIONAL FIX: Pass limit to API via BuildingFilter (no over-fetching!)
-            building_filter = BuildingFilter(limit=limit)
-            result = building_controller.load_buildings(building_filter)
-
-            if not result.success:
-                logger.error(f"Failed to load buildings: {result.message}")
-                buildings = []
+            # ✅ CRITICAL: Set auth token BEFORE any API operations!
+            if auth_token:
+                map_service.set_auth_token(auth_token)
+                logger.info(f"✅ Auth token set for MapServiceAPI (token length: {len(auth_token)})")
             else:
-                buildings = result.data
-                logger.info(f"✅ Loaded {len(buildings)} buildings from {'API' if building_controller.is_using_api else 'DB'}")
+                logger.warning(f"⚠️ NO AUTH TOKEN provided to load_buildings_geojson - API calls may fail!")
+
+            # ✅ Load buildings from BuildingAssignments API using viewport
+            # Use Aleppo approximate bounds for initial load
+            buildings = map_service.get_buildings_in_bbox(
+                north_east_lat=36.5,
+                north_east_lng=37.5,
+                south_west_lat=36.0,
+                south_west_lng=36.8,
+                page_size=limit
+            )
+
+            logger.info(f"✅ Loaded {len(buildings)} buildings from BuildingAssignments API (PostGIS)")
 
             # Convert to GeoJSON
             buildings_geojson = GeoJSONConverter.buildings_to_geojson(
