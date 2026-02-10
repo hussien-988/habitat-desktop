@@ -176,28 +176,7 @@ class PolygonMapDialog(QDialog):
         """)
         mode_layout = QVBoxLayout(mode_group)
 
-        # Radio buttons
-        radio_layout = QHBoxLayout()
-        radio_layout.setDirection(QHBoxLayout.RightToLeft)
-
-        self.polygon_radio = QRadioButton("مضلع (Polygon)")
-        self.polygon_radio.setChecked(True)
-        self.polygon_radio.setFont(create_font(size=10))
-
-        self.point_radio = QRadioButton("نقطة (Point)")
-        self.point_radio.setFont(create_font(size=10))
-
-        self.mode_group = QButtonGroup()
-        self.mode_group.addButton(self.point_radio, 0)
-        self.mode_group.addButton(self.polygon_radio, 1)
-        self.mode_group.buttonClicked.connect(self._on_mode_changed)
-
-        radio_layout.addWidget(self.polygon_radio)
-        radio_layout.addWidget(self.point_radio)
-        radio_layout.addStretch()
-        mode_layout.addLayout(radio_layout)
-
-        # Orange instruction label (same as MapPickerDialog)
+        # Instruction label (Polygon mode only)
         self.mode_instruction = QLabel("👉 اضغط على أيقونة المضلع في الصندوق الأبيض يسار الخريطة، ثم ارسم مضلعاً حول المباني")
         self.mode_instruction.setStyleSheet("""
             color: #e67e22;
@@ -365,17 +344,12 @@ class PolygonMapDialog(QDialog):
         return html
 
     def _on_mode_changed(self, button):
-        """Handle mode change between point and polygon."""
-        if self.point_radio.isChecked():
-            drawing_mode = 'point'
-            self.mode_instruction.setText("👉 اضغط على أيقونة النقطة في الصندوق الأبيض يسار الخريطة")
-            logger.info("Drawing mode changed to: Point")
-        else:
-            drawing_mode = 'polygon'
-            self.mode_instruction.setText("👉 اضغط على أيقونة المضلع في الصندوق الأبيض يسار الخريطة، ثم ارسم مضلعاً حول المباني")
-            logger.info("Drawing mode changed to: Polygon")
+        """Handle mode change (Polygon only)."""
+        # Always polygon mode
+        drawing_mode = 'polygon'
+        logger.info("Drawing mode: Polygon")
 
-        # Reload map with new mode
+        # Reload map with polygon mode
         self._load_map(drawing_mode=drawing_mode)
 
     def _on_polygon_drawn(self, wkt: str):
@@ -461,10 +435,8 @@ class PolygonMapDialog(QDialog):
         self.status_label.setVisible(False)
         self.confirm_btn.setEnabled(False)
 
-        # Reload map to clear drawn shapes
-        self._load_map(
-            drawing_mode='polygon' if self.polygon_radio.isChecked() else 'point'
-        )
+        # Reload map to clear drawn shapes (Polygon only)
+        self._load_map(drawing_mode='polygon')
 
         logger.info("Selection cleared")
 

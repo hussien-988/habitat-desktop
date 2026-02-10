@@ -551,14 +551,81 @@ class MapServiceAPI:
 
     # ==================== Helper Methods ====================
 
+    def get_building_with_polygon(self, building_id: str) -> Optional[Building]:
+        """
+        Get single building with polygon geometry from BuildingAssignments API.
+
+        Uses BuildingAssignments API to ensure polygon geometry is included.
+
+        Args:
+            building_id: Building ID (17-digit code)
+
+        Returns:
+            Building object with polygon or None
+        """
+        try:
+            logger.info(f"Getting building with polygon: {building_id}")
+
+            response = self.api.get_building_by_id(building_id)
+
+            if not response or not response.get("success"):
+                logger.error(f"Failed to get building {building_id}")
+                return None
+
+            data = response.get("data")
+            if not data:
+                logger.warning(f"No data returned for building {building_id}")
+                return None
+
+            building_uuid = data.get("buildingUuid", "")
+            building_code = data.get("buildingCode") or data.get("buildingId", "")
+            geo_location = data.get("geoLocation") or data.get("buildingGeometryWkt")
+
+            building = Building(
+                building_uuid=building_uuid,
+                building_id=building_code,
+                geo_location=geo_location,
+                latitude=data.get("latitude"),
+                longitude=data.get("longitude"),
+                governorate_code=data.get("governorateCode", ""),
+                district_code=data.get("districtCode", ""),
+                subdistrict_code=data.get("subdistrictCode", ""),
+                community_code=data.get("communityCode", ""),
+                neighborhood_code=data.get("neighborhoodCode", ""),
+                building_number=data.get("buildingNumber", ""),
+                building_type=data.get("buildingType", 1),
+                building_status=data.get("buildingStatus", 1),
+                number_of_units=data.get("numberOfUnits", 0),
+                number_of_shops=data.get("numberOfShops", 0),
+                number_of_apartments=data.get("numberOfApartments", 0),
+                number_of_floors=data.get("numberOfFloors", 0)
+            )
+
+            logger.info(f"Successfully retrieved building {building_id} with polygon")
+            return building
+
+        except Exception as e:
+            logger.error(f"Error getting building with polygon: {e}", exc_info=True)
+            return None
+
     def _convert_api_building_to_model(self, data: Dict[str, Any]) -> Building:
         """
         تحويل API response إلى Building model.
 
-        ✅ FIX: BuildingAssignments API uses 'buildingCode' not 'buildingId'!
+        SOLID Principle: Single Responsibility - converts API data to domain model
+        DRY Principle: Centralized conversion logic
         """
-        # ✅ CRITICAL FIX: Try 'buildingCode' first (BuildingAssignments API), then 'buildingId'
         building_id = data.get("buildingCode") or data.get("buildingId", "")
+        geo_location = data.get("buildingGeometryWkt")
+
+        logger.warning(f"[API→Model] Building {building_id}:")
+        logger.warning(f"   API response keys: {list(data.keys())[:15]}")
+        logger.warning(f"   has 'buildingGeometryWkt': {geo_location is not None}")
+
+        if geo_location:
+            logger.warning(f"   WKT preview: {str(geo_location)[:100]}...")
+        else:
+            logger.error(f"   ❌ NO buildingGeometryWkt in API response!")
 
         return Building(
             building_uuid=data["id"],
@@ -568,7 +635,7 @@ class MapServiceAPI:
             building_status=data.get("status"),
             building_type=data.get("buildingType", 1),
             number_of_units=data.get("numberOfPropertyUnits", 0),
-            # Add more fields as needed
+            geo_location=geo_location
         )
 
     def _convert_api_building_to_geodata(self, data: Dict[str, Any]) -> BuildingGeoData:

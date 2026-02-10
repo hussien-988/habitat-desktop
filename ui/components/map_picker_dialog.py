@@ -426,24 +426,8 @@ class MapPickerDialog(QDialog):
             mode_group = QGroupBox("نوع التحديد")
             mode_layout = QVBoxLayout(mode_group)
 
-            # Radio buttons
-            radio_layout = QHBoxLayout()
-            self.point_radio = QRadioButton("نقطة (Point)")
-            self.point_radio.setChecked(True)
-            self.polygon_radio = QRadioButton("مضلع (Polygon)")
-
-            self.mode_group = QButtonGroup()
-            self.mode_group.addButton(self.point_radio, 0)
-            self.mode_group.addButton(self.polygon_radio, 1)
-            self.mode_group.buttonClicked.connect(self._on_mode_changed)
-
-            radio_layout.addWidget(self.point_radio)
-            radio_layout.addWidget(self.polygon_radio)
-            radio_layout.addStretch()
-            mode_layout.addLayout(radio_layout)
-
-            # Instruction label (below radio buttons)
-            self.mode_instruction = QLabel("👉 اضغط على الأيقونة في الصندوق الأبيض يسار الخريطة")
+            # Instruction label (Polygon only)
+            self.mode_instruction = QLabel("👉 اضغط على أيقونة المضلع في الصندوق الأبيض يسار الخريطة، ثم ارسم مضلعاً حول المبنى")
             self.mode_instruction.setStyleSheet("""
                 color: #e67e22;
                 font-size: 12px;
@@ -620,16 +604,12 @@ class MapPickerDialog(QDialog):
         }
 
     def _on_mode_changed(self, button):
-        """Handle mode change between point and polygon."""
-        # تحديد الوضع بناءً على الزر المختار
-        if self.point_radio.isChecked():
-            drawing_mode = 'point'
-            logger.info("Drawing mode changed to: Point")
-        else:
-            drawing_mode = 'polygon'
-            logger.info("Drawing mode changed to: Polygon")
+        """Handle mode change (Polygon only)."""
+        # Always polygon mode
+        drawing_mode = 'polygon'
+        logger.info("Drawing mode: Polygon")
 
-        # إعادة تحميل الخريطة مع الوضع الجديد
+        # Reload map with polygon mode
         self._load_map(drawing_mode=drawing_mode)
 
     def _clear_selection(self):

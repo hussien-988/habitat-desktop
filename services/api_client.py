@@ -336,6 +336,14 @@ class TRRCMSApiClient:
 
         logger.info(f"✅ Fetched {len(buildings)} buildings (total: {total_count}) from polygon API")
 
+        if buildings:
+            sample = buildings[0]
+            has_geometry_wkt = "buildingGeometryWkt" in sample
+            logger.debug(f"[API Response] Sample building keys: {list(sample.keys())[:10]}")
+            logger.debug(f"[API Response] Has 'buildingGeometryWkt': {has_geometry_wkt}")
+            if has_geometry_wkt and sample.get("buildingGeometryWkt"):
+                logger.debug(f"[API Response] Sample WKT: {sample.get('buildingGeometryWkt')[:80]}...")
+
         return buildings
 
     def search_buildings_for_assignment(
@@ -582,7 +590,7 @@ class TRRCMSApiClient:
         if longitude is not None:
             payload["longitude"] = longitude
         if building_geometry_wkt is not None:
-            payload["geometryWkt"] = building_geometry_wkt
+            payload["buildingGeometryWkt"] = building_geometry_wkt
 
         if not payload:
             raise ValueError("At least one geometry field must be provided")

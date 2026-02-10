@@ -103,43 +103,35 @@ class GeoJSONConverter:
         """
         Convert single building to GeoJSON Feature.
 
-        Strategy Pattern: Selects appropriate conversion strategy based on
-        available geometry data.
+        Polygons only - buildings without polygon geometry are skipped.
 
-        Priority (when prefer_polygons=True):
+        Priority:
         1. Polygon from geo_location field
         2. Polygon from building_geometry field
-        3. Point from latitude/longitude
 
         Returns:
-            GeoJSON Feature dict or None if no valid geometry
+            GeoJSON Feature dict or None if no polygon geometry
         """
         geometry = None
         geometry_type = None
 
         # Strategy 1: Try polygon from geo_location
-        if prefer_polygons and building.geo_location:
+        if building.geo_location:
             geometry, geometry_type = GeoJSONConverter._parse_geo_location(
                 building.geo_location
             )
+            logger.debug(f"Building {building.building_id}: geo_location parsed -> geometry_type={geometry_type}, has_geometry={geometry is not None}")
 
         # Strategy 2: Fallback to building_geometry if available
-        if prefer_polygons and not geometry and hasattr(building, 'building_geometry') and building.building_geometry:
+        if not geometry and hasattr(building, 'building_geometry') and building.building_geometry:
             geometry, geometry_type = GeoJSONConverter._parse_geo_location(
                 building.building_geometry
             )
+            logger.debug(f"Building {building.building_id}: building_geometry parsed -> geometry_type={geometry_type}, has_geometry={geometry is not None}")
 
-        # Strategy 3: Fallback to point coordinates
-        if not geometry and building.latitude and building.longitude:
-            geometry = {
-                "type": "Point",
-                "coordinates": [building.longitude, building.latitude]
-            }
-            geometry_type = GeometryType.POINT
-
-        # No valid geometry found
+        # No valid polygon geometry found
         if not geometry:
-            logger.debug(f"Building {building.building_id} has no valid geometry")
+            logger.debug(f"Building {building.building_id} has no polygon geometry - skipping")
             return None
 
         # Build properties
@@ -148,6 +140,8 @@ class GeoJSONConverter:
             include_properties,
             geometry_type
         )
+
+        logger.debug(f"Building {building.building_id}: Final feature -> geometry.type={geometry.get('type')}, properties.geometry_type={properties.get('geometry_type')}")
 
         return {
             "type": "Feature",
@@ -193,17 +187,18 @@ class GeoJSONConverter:
         if geo_location.upper().startswith('MULTIPOLYGON'):
             geometry = GeoJSONConverter._wkt_multipolygon_to_geojson(geo_location)
             if geometry:
+                logger.debug(f"Parsed MULTIPOLYGON: {geo_location[:80]}...")
                 return geometry, GeometryType.MULTI_POLYGON
 
         elif geo_location.upper().startswith('POLYGON'):
             geometry = GeoJSONConverter._wkt_polygon_to_geojson(geo_location)
             if geometry:
+                logger.debug(f"Parsed POLYGON: {geo_location[:80]}... -> coordinates count: {len(geometry.get('coordinates', [[]])[0])}")
                 return geometry, GeometryType.POLYGON
 
         elif geo_location.upper().startswith('POINT'):
-            geometry = GeoJSONConverter._wkt_point_to_geojson(geo_location)
-            if geometry:
-                return geometry, GeometryType.POINT
+            logger.debug(f"Skipping POINT geometry (polygons only): {geo_location[:80]}...")
+            return None, None
 
         logger.warning(f"Unable to parse geo_location: {geo_location[:50]}...")
         return None, None

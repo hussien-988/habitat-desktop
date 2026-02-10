@@ -652,41 +652,16 @@ class MapPage(QWidget):
         return True
 
     def _buildings_to_geojson(self, buildings) -> str:
-        """تحويل المباني إلى تنسيق GeoJSON - يدعم النقاط والمضلعات"""
-        features = []
+        """
+        Convert buildings to GeoJSON format - polygons only.
 
-        for building in buildings:
-            geometry = None
-
-            # أولوية للمضلع إذا كان موجوداً
-            if building.geo_location and 'POLYGON' in building.geo_location.upper():
-                # تحليل WKT إلى GeoJSON
-                geometry = self._parse_wkt_to_geojson(building.geo_location)
-
-            # إذا لم يكن هناك مضلع، استخدم النقطة
-            if not geometry and building.latitude and building.longitude:
-                geometry = {
-                    "type": "Point",
-                    "coordinates": [building.longitude, building.latitude]
-                }
-
-            if geometry:
-                features.append({
-                    "type": "Feature",
-                    "geometry": geometry,
-                    "properties": {
-                        "building_id": building.building_id or "",
-                        "neighborhood": building.neighborhood_name_ar or building.neighborhood_name or "",
-                        "status": building.building_status or "intact",
-                        "units": building.number_of_units or 0,
-                        "geometry_type": geometry["type"]
-                    }
-                })
-
-        return json.dumps({
-            "type": "FeatureCollection",
-            "features": features
-        })
+        Uses GeoJSONConverter for unified conversion logic.
+        """
+        from services.geojson_converter import GeoJSONConverter
+        return GeoJSONConverter.buildings_to_geojson(
+            buildings,
+            prefer_polygons=True
+        )
 
     def _parse_wkt_to_geojson(self, wkt: str) -> dict:
         """تحليل WKT (POLYGON/MULTIPOLYGON) إلى GeoJSON"""
@@ -796,9 +771,10 @@ class MapPage(QWidget):
         logger.info(f"[MAP_PAGE] Result success: {result.success}, data count: {len(result.data) if result.success else 0}")
 
         if result.success:
-            # Convert BuildingGeoData to Building objects (for compatibility with UI)
             from models.building import Building
             self.buildings = []
+            polygon_count = 0
+            point_count = 0
             for geo_data in result.data:
                 building = Building()
                 building.building_uuid = geo_data.building_id
@@ -807,9 +783,21 @@ class MapPage(QWidget):
                 building.longitude = geo_data.point.longitude if geo_data.point else None
                 building.building_status = geo_data.status
                 building.building_type = geo_data.building_type
+
+                if geo_data.polygon:
+                    building.geo_location = geo_data.polygon.to_wkt()
+                    polygon_count += 1
+                    logger.debug(f"Building {building.building_id}: Has polygon WKT (length={len(building.geo_location)})")
+                elif geo_data.point:
+                    point_count += 1
+
                 self.buildings.append(building)
-            geo_buildings = [b for b in self.buildings if b.latitude and b.longitude]
-            logger.info(f"✅ Loaded {len(geo_buildings)} buildings from MapController")
+
+            logger.info(f"Buildings summary: {polygon_count} with polygons, {point_count} with points only")
+
+            buildings_with_geometry = [b for b in self.buildings if b.geo_location or (b.latitude and b.longitude)]
+            logger.info(f"✅ Loaded {len(buildings_with_geometry)} buildings with geometry from MapController")
+            geo_buildings = buildings_with_geometry
         else:
             logger.error(f"❌ Failed to load buildings: {result.message}")
             self.buildings = []
@@ -846,6 +834,21 @@ class MapPage(QWidget):
             # Generate and load HTML
             tile_url = f"http://127.0.0.1:{self.tile_server_port}"
             geojson = self._buildings_to_geojson(geo_buildings)
+
+            # Log GeoJSON summary
+            import json
+            try:
+                geojson_data = json.loads(geojson)
+                features = geojson_data.get('features', [])
+                polygon_features = [f for f in features if f.get('geometry', {}).get('type') in ['Polygon', 'MultiPolygon']]
+                point_features = [f for f in features if f.get('geometry', {}).get('type') == 'Point']
+                logger.info(f"GeoJSON summary: {len(polygon_features)} Polygon features, {len(point_features)} Point features, {len(features)} total")
+                if polygon_features:
+                    sample = polygon_features[0]
+                    logger.debug(f"Sample polygon feature: building_id={sample.get('properties', {}).get('building_id')}, geometry_type={sample.get('properties', {}).get('geometry_type')}")
+            except:
+                pass
+
             html = get_leaflet_html(tile_url, geojson)
 
             self.web_view.setHtml(html)

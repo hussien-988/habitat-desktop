@@ -480,6 +480,26 @@ class LeafletHTMLGenerator:
         // Buildings GeoJSON - Direct embedding (Simple & Works)
         var buildingsData = {buildings_json};
 
+        // Diagnostic: Log GeoJSON structure
+        console.log('========================================');
+        console.log('GeoJSON Loaded - Total Features:', buildingsData.features.length);
+        if (buildingsData.features.length > 0) {{
+            var sample = buildingsData.features[0];
+            console.log('Sample Feature:');
+            console.log('  - ID:', sample.id);
+            console.log('  - Geometry Type:', sample.geometry.type);
+            console.log('  - Properties geometry_type:', sample.properties.geometry_type);
+            console.log('  - Has coordinates:', sample.geometry.coordinates ? 'Yes' : 'No');
+
+            // Count by geometry type
+            var polygonCount = buildingsData.features.filter(f => f.geometry.type === 'Polygon' || f.geometry.type === 'MultiPolygon').length;
+            var pointCount = buildingsData.features.filter(f => f.geometry.type === 'Point').length;
+            console.log('Feature Types:');
+            console.log('  - Polygons:', polygonCount);
+            console.log('  - Points:', pointCount);
+        }}
+        console.log('========================================');
+
         // =========================================================
         // Professional Marker Clustering Configuration
         // =========================================================
@@ -558,9 +578,13 @@ class LeafletHTMLGenerator:
                 var statusLabel = statusLabels[status] || status;
                 var statusClass = 'status-' + status;
                 var geomType = props.geometry_type || 'Point';
+                var actualGeomType = feature.geometry.type;
 
-                // تشخيص: طباعة معلومات عن كل مبنى يتم إضافته
-                console.log('🏢 Adding building:', props.building_id, '(Type:', geomType + ')');
+                // Diagnostic: Print detailed info about each building
+                console.log('🏢 Adding building:', props.building_id);
+                console.log('   - Actual Geometry Type (from GeoJSON):', actualGeomType);
+                console.log('   - Property geometry_type:', geomType);
+                console.log('   - MISMATCH:', actualGeomType !== geomType ? 'YES ⚠️' : 'No');
 
                 // ✅ Use building_id_display (with dashes) for UI, building_id (no dashes) for API
                 var buildingIdDisplay = props.building_id_display || props.building_id || 'مبنى';
@@ -587,12 +611,15 @@ class LeafletHTMLGenerator:
                 layer.bindPopup(popup);
 
                 // Add to appropriate layer group
-                // Points go to marker cluster, polygons go directly to map
-                if (geomType === 'Point') {{
+                // IMPORTANT: We should use actualGeomType (from geometry) not geomType (from properties)
+                // to ensure correct rendering
+                if (actualGeomType === 'Point') {{
                     pointsLayer.addLayer(layer);
                     markers.addLayer(layer);  // Add point markers to cluster
+                    console.log('   → Added to POINTS layer (marker)');
                 }} else {{
                     polygonsLayer.addLayer(layer);
+                    console.log('   → Added to POLYGONS layer');
                 }}
 
                 // Highlight on hover (polygons only)

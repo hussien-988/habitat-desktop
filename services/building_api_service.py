@@ -652,10 +652,9 @@ class BuildingApiService:
             "longitude": "longitude",
             "location_description": "locationDescription",
             "notes": "notes",
-            # ✅ PostGIS support for polygon geometry
-            "geo_location": "geometryWkt",  # For polygon/geometry data
-            "building_geometry": "geometryWkt",  # Alternative field name
-            "geometry_wkt": "geometryWkt",  # Direct WKT format
+            "geo_location": "buildingGeometryWkt",
+            "building_geometry": "buildingGeometryWkt",
+            "geometry_wkt": "buildingGeometryWkt",
         }
 
         # Building type enum mapping (Python string value -> API integer)
