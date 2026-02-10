@@ -264,9 +264,13 @@ VIEWPORT_LOADING_JS_TEMPLATE = '''
                         var statusClass = 'status-' + status;
                         var geomType = props.geometry_type || 'Point';
 
+                        // ✅ Use building_id_display (with dashes) for UI, building_id (no dashes) for API
+                        var buildingIdDisplay = props.building_id_display || props.building_id || 'مبنى';
+                        var buildingIdForApi = props.building_id;  // ✅ NO dashes for API
+
                         // Build popup content
                         var popup = '<div class="building-popup">' +
-                            '<h4>' + (props.building_id || 'مبنى') + ' ' +
+                            '<h4>' + buildingIdDisplay + ' ' +
                             '<span class="geometry-badge">' + geomType + '</span></h4>' +
                             '<p><span class="label">الحي:</span> ' + (props.neighborhood || 'غير محدد') + '</p>' +
                             '<p><span class="label">الحالة:</span> ' +
@@ -278,8 +282,9 @@ VIEWPORT_LOADING_JS_TEMPLATE = '''
                         }
 
                         // Add selection button if selectBuilding function exists (selection mode)
-                        if (typeof window.selectBuilding === 'function' && props.building_id) {
-                            popup += "<button class=\\"select-building-btn\\" onclick=\\"selectBuilding(&apos;" + props.building_id + "&apos;)\\\"><span style=\\"font-size:16px\\">✓</span> اختيار هذا المبنى</button>";
+                        // ✅ Use building_id without dashes for API call
+                        if (typeof window.selectBuilding === 'function' && buildingIdForApi) {
+                            popup += "<button class=\\"select-building-btn\\" onclick=\\"selectBuilding(&apos;" + buildingIdForApi + "&apos;)\\\"><span style=\\"font-size:16px\\">✓</span> اختيار هذا المبنى</button>";
                         }
 
                         popup += '</div>';

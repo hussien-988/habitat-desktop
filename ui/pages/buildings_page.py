@@ -88,7 +88,22 @@ class AddBuildingPage(QWidget):
 
     def _setup_ui(self):
         """Setup the add/edit building UI with 3 cards."""
-        layout = QVBoxLayout(self)
+        # ✅ FIX: Wrap content in scroll area to show all cards including radio buttons
+        main_layout = QVBoxLayout(self)
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        main_layout.setSpacing(0)
+
+        # Create scroll area for the form content
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.NoFrame)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        scroll.setStyleSheet("QScrollArea { border: none; background: transparent; }")
+
+        # Container widget for scroll area
+        container = QWidget()
+        layout = QVBoxLayout(container)
         # Apply unified padding from PageDimensions (DRY principle)
         layout.setContentsMargins(
             PageDimensions.CONTENT_PADDING_H,        # Left: 131px
@@ -99,7 +114,7 @@ class AddBuildingPage(QWidget):
         layout.setSpacing(12)
 
         # Background color from Figma via StyleManager (DRY principle)
-        self.setStyleSheet(StyleManager.page_background())
+        container.setStyleSheet(StyleManager.page_background())
 
         # Header - matching wizard style (DRY: Using design system constants)
         title_row = QHBoxLayout()
@@ -723,6 +738,37 @@ class AddBuildingPage(QWidget):
             location_icon.move(172, 37)
 
         map_section.addWidget(map_container)
+
+        # ✅ Add geometry type selector below map
+        geometry_type_row = QHBoxLayout()
+        geometry_type_row.setSpacing(12)
+        geometry_type_row.setContentsMargins(0, 8, 0, 0)
+
+        geometry_label = QLabel("نوع الموقع:")
+        geometry_label.setFont(create_font(size=9, weight=FontManager.WEIGHT_REGULAR))
+        geometry_label.setStyleSheet(f"color: {Colors.TEXT_SECONDARY}; background: transparent;")
+        geometry_type_row.addWidget(geometry_label)
+
+        # Radio buttons for Point/Polygon
+        from PyQt5.QtWidgets import QRadioButton, QButtonGroup
+        self.geometry_button_group = QButtonGroup(self)
+
+        self.point_radio = QRadioButton("نقطة (GPS)")
+        self.point_radio.setFont(create_font(size=9, weight=FontManager.WEIGHT_REGULAR))
+        self.point_radio.setStyleSheet(f"color: {Colors.TEXT_PRIMARY}; background: transparent;")
+        self.point_radio.setChecked(True)  # Default: Point
+        self.geometry_button_group.addButton(self.point_radio, 1)
+        geometry_type_row.addWidget(self.point_radio)
+
+        self.polygon_radio = QRadioButton("مضلع (Polygon)")
+        self.polygon_radio.setFont(create_font(size=9, weight=FontManager.WEIGHT_REGULAR))
+        self.polygon_radio.setStyleSheet(f"color: {Colors.TEXT_PRIMARY}; background: transparent;")
+        self.geometry_button_group.addButton(self.polygon_radio, 2)
+        geometry_type_row.addWidget(self.polygon_radio)
+
+        geometry_type_row.addStretch()
+        map_section.addLayout(geometry_type_row)
+
         map_section.addStretch(1)  # Push content to top
 
         content_row.addLayout(map_section, stretch=1)
@@ -809,6 +855,10 @@ class AddBuildingPage(QWidget):
 
         layout.addWidget(card3)
         layout.addStretch()
+
+        # ✅ FIX: Set container in scroll area and add to main layout
+        scroll.setWidget(container)
+        main_layout.addWidget(scroll)
 
     def _get_card_style(self):
         """Get card stylesheet."""
@@ -1163,23 +1213,28 @@ class AddBuildingPage(QWidget):
                     initial_lon = 37.1343
                     initial_zoom = 13
 
+            allow_polygon = self.polygon_radio.isChecked()
+
             dialog = MapPickerDialog(
                 initial_lat=initial_lat,
                 initial_lon=initial_lon,
                 initial_zoom=initial_zoom,
-                allow_polygon=True,
+                allow_polygon=allow_polygon,
                 db=self.building_controller.db,
                 parent=self
             )
 
             if dialog.exec_():
                 result = dialog.get_result()
+
+                # Handle Point geometry
                 if result and 'latitude' in result and 'longitude' in result:
                     lat = result['latitude']
                     lon = result['longitude']
 
                     self.latitude_spin.setValue(lat)
                     self.longitude_spin.setValue(lon)
+                    self._polygon_wkt = None  # Clear polygon data
 
                     geometry_wkt = result.get('wkt') or f"POINT({lon} {lat})"
                     self._auto_detect_neighborhood(geometry_wkt)
@@ -1190,6 +1245,28 @@ class AddBuildingPage(QWidget):
                     self.location_status_label.setStyleSheet(
                         f"color: {Config.SUCCESS_COLOR}; font-size: 10pt;"
                     )
+                    self.geometry_type_label.setText("📍 نقطة")
+
+                # Handle Polygon geometry
+                elif result and 'polygon_wkt' in result:
+                    polygon_wkt = result['polygon_wkt']
+                    self._polygon_wkt = polygon_wkt
+
+                    # Calculate centroid for lat/lon (for backward compatibility)
+                    centroid_lat = result.get('centroid_lat', 36.2)
+                    centroid_lon = result.get('centroid_lon', 37.15)
+                    self.latitude_spin.setValue(centroid_lat)
+                    self.longitude_spin.setValue(centroid_lon)
+
+                    # Show success message
+                    self.location_status_label.setText(
+                        f"✓ تم رسم المضلع (مركزه: {centroid_lat:.6f}, {centroid_lon:.6f})"
+                    )
+                    self.location_status_label.setStyleSheet(
+                        f"color: {Config.SUCCESS_COLOR}; font-size: 10pt;"
+                    )
+                    self.geometry_type_label.setText("🔷 مضلع")
+                    logger.info(f"✅ Polygon drawn: {polygon_wkt[:100]}...")
 
         except ImportError:
             QMessageBox.information(

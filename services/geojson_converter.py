@@ -346,8 +346,11 @@ class GeoJSONConverter:
         """
         Extract building properties for GeoJSON feature.
 
+        ✅ FIXED: Separated building_id (for API) from building_id_display (for UI).
+
         Default properties (always included):
-        - building_id
+        - building_id: NO dashes (for API calls) ← CRITICAL!
+        - building_id_display: WITH dashes (for UI display only)
         - building_uuid
         - status
         - neighborhood
@@ -359,7 +362,9 @@ class GeoJSONConverter:
             geometry_type: Type of geometry (for styling hints)
         """
         properties = {
-            "building_id": building.building_id,
+            # ✅ CRITICAL FIX: Separate API format from display format
+            "building_id": building.building_id,  # ✅ For API (NO dashes): 01010010010000001
+            "building_id_display": building.building_id_display,  # ✅ For UI (WITH dashes): 01-01-01-001-001-00001
             "building_uuid": building.building_uuid or building.building_id,
             "status": building.building_status or "intact",
             "neighborhood": building.neighborhood_name_ar or building.neighborhood_name or "",

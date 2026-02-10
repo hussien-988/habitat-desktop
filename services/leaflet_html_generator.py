@@ -562,9 +562,13 @@ class LeafletHTMLGenerator:
                 // تشخيص: طباعة معلومات عن كل مبنى يتم إضافته
                 console.log('🏢 Adding building:', props.building_id, '(Type:', geomType + ')');
 
+                // ✅ Use building_id_display (with dashes) for UI, building_id (no dashes) for API
+                var buildingIdDisplay = props.building_id_display || props.building_id || 'مبنى';
+                var buildingIdForApi = props.building_id;  // ✅ NO dashes for API
+
                 // Build popup content
                 var popup = '<div class="building-popup">' +
-                    '<h4>' + (props.building_id || 'مبنى') + ' ' +
+                    '<h4>' + buildingIdDisplay + ' ' +
                     '<span class="geometry-badge">' + geomType + '</span></h4>' +
                     '<p><span class="label">الحي:</span> ' + (props.neighborhood || 'غير محدد') + '</p>' +
                     '<p><span class="label">الحالة:</span> ' +
@@ -575,8 +579,8 @@ class LeafletHTMLGenerator:
                     popup += '<p><span class="label">النوع:</span> ' + props.type + '</p>';
                 }}
 
-                // إضافة زر الاختيار إذا كان مفعلاً
-                {'if (props.building_id) { popup += "<button class=\\"select-building-btn\\" onclick=\\"selectBuilding(&apos;" + props.building_id + "&apos;)\\\"><span style=\\"font-size:16px\\">✓</span> اختيار هذا المبنى</button>"; }' if enable_selection else '// Selection disabled'}
+                // إضافة زر الاختيار إذا كان مفعلاً (✅ Use building_id without dashes for API)
+                {'if (buildingIdForApi) { popup += "<button class=\\"select-building-btn\\" onclick=\\"selectBuilding(&apos;" + buildingIdForApi + "&apos;)\\\"><span style=\\"font-size:16px\\">✓</span> اختيار هذا المبنى</button>"; }' if enable_selection else '// Selection disabled'}
 
                 popup += '</div>';
 
@@ -747,9 +751,13 @@ class LeafletHTMLGenerator:
                 onEachFeature: function(feature, layer) {{
                     var props = feature.properties;
 
+                    // ✅ Use building_id_display for UI, building_id for API
+                    var buildingIdDisplay = props.building_id_display || props.building_id || 'مبنى موجود';
+                    var buildingIdForApi = props.building_id;
+
                     // Build popup content
                     var popup = '<div class="building-popup">' +
-                        '<h4>' + (props.building_id || 'مبنى موجود') + '</h4>' +
+                        '<h4>' + buildingIdDisplay + '</h4>' +
                         '<p><span class="label">الحالة:</span> ' + (props.status || 'غير محدد') + '</p>' +
                         '<p class="note">مضلع موجود مسبقاً</p>' +
                         '</div>';
@@ -775,7 +783,7 @@ class LeafletHTMLGenerator:
                     layer.on('click', function(e) {{
                         if (typeof qt !== 'undefined' && qt.webChannelTransport) {{
                             // Emit polygon clicked event to Python
-                            console.log('Existing polygon clicked:', props.building_id);
+                            console.log('Existing polygon clicked:', buildingIdForApi);
                         }}
                     }});
                 }}

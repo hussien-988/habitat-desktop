@@ -26,8 +26,8 @@ class Building:
 
     # Primary identifiers
     building_uuid: str = field(default_factory=lambda: str(uuid.uuid4()))
-    building_id: str = ""  # 17-digit UN-Habitat code (no dashes)
-    building_id_formatted: str = ""  # Formatted ID with dashes (e.g., 01-01-01-003-002-00001)
+    building_id: str = ""  # ✅ 17-digit numeric ID (NO dashes): 01010010010000001
+    building_id_formatted: str = ""  # ✅ Display format (WITH dashes): 01-01-01-001-001-00001
 
     # Administrative hierarchy
     governorate_code: str = "01"
@@ -78,20 +78,74 @@ class Building:
     legacy_stdm_id: Optional[str] = None
 
     def __post_init__(self):
-        """Generate building_id if not provided."""
+        """
+        Generate building_id if not provided and ensure no dashes.
+
+        ✅ FIXED: Clean existing data by removing dashes for API compatibility.
+        """
         if not self.building_id:
             self.building_id = self.generate_building_id()
+        else:
+            # ✅ FIX: Remove dashes if present (clean existing data)
+            self.building_id = self.building_id.replace("-", "")
+
+        # ✅ Ensure building_id_formatted is set (for backward compatibility)
+        if not self.building_id_formatted and self.building_id:
+            self.building_id_formatted = self.building_id_display
 
     def generate_building_id(self) -> str:
-        """Generate the 17-digit UN-Habitat building ID."""
+        """
+        Generate the 17-digit UN-Habitat building ID (NO dashes).
+
+        ✅ FIXED: Removed dashes for API compatibility.
+        Format: 01010010010000001 (17 digits)
+        Example: governorate(01) + district(01) + subdistrict(01) +
+                 community(001) + neighborhood(001) + building(00001)
+        """
         return (
-            f"{self.governorate_code}-"
-            f"{self.district_code}-"
-            f"{self.subdistrict_code}-"
-            f"{self.community_code}-"
-            f"{self.neighborhood_code}-"
+            f"{self.governorate_code}"
+            f"{self.district_code}"
+            f"{self.subdistrict_code}"
+            f"{self.community_code}"
+            f"{self.neighborhood_code}"
             f"{self.building_number}"
         )
+
+    @property
+    def building_id_display(self) -> str:
+        """
+        Get formatted building ID with dashes for display (UI only).
+
+        ✅ Best Practice: Separate storage format (no dashes) from display format (with dashes).
+        This property is for UI display only - NEVER use it for API calls!
+
+        Returns:
+            Formatted ID with dashes: 01-01-01-001-001-00001
+        """
+        if not self.building_id:
+            # Generate formatted version from components
+            return (
+                f"{self.governorate_code}-"
+                f"{self.district_code}-"
+                f"{self.subdistrict_code}-"
+                f"{self.community_code}-"
+                f"{self.neighborhood_code}-"
+                f"{self.building_number}"
+            )
+
+        # Format existing building_id (if stored without dashes)
+        if len(self.building_id) == 17 and "-" not in self.building_id:
+            return (
+                f"{self.building_id[0:2]}-"
+                f"{self.building_id[2:4]}-"
+                f"{self.building_id[4:6]}-"
+                f"{self.building_id[6:9]}-"
+                f"{self.building_id[9:12]}-"
+                f"{self.building_id[12:17]}"
+            )
+
+        # Already formatted or invalid - return as-is
+        return self.building_id
 
     @property
     def full_address(self) -> str:

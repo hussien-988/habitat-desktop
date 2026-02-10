@@ -211,19 +211,24 @@ class BuildingApiService:
         Get a building by its ID.
 
         Args:
-            building_id: The building ID
+            building_id: The building ID (can have dashes, will be cleaned)
 
         Returns:
             Building object or None
         """
-        response = self._make_request("GET", f"/v1/Buildings/{building_id}")
+        # ✅ CRITICAL FIX: Remove dashes before sending to API
+        cleaned_id = building_id.strip().replace("-", "")
+
+        logger.debug(f"GET /v1/Buildings/{cleaned_id}")
+        response = self._make_request("GET", f"/v1/Buildings/{cleaned_id}")
 
         if not response.get("success"):
-            logger.error(f"Failed to fetch building {building_id}: {response.get('error')}")
+            logger.error(f"Failed to fetch building {cleaned_id}: {response.get('error')}")
             return None
 
         data = response.get("data")
         if not data:
+            logger.warning(f"No data returned for building {cleaned_id}")
             return None
 
         try:
@@ -242,14 +247,22 @@ class BuildingApiService:
         Returns:
             Created Building object or None
         """
+        logger.info(f"🏗️ Creating building via API backend...")
+        logger.debug(f"Building data keys: {list(building_data.keys())}")
+
         # Convert to API format
         api_data = self._building_data_to_api_format(building_data)
 
+        logger.info(f"📤 API Request: POST /v1/Buildings")
+        logger.debug(f"API data: {api_data}")
         response = self._make_request("POST", "/v1/Buildings", data=api_data)
 
         if not response.get("success"):
-            logger.error(f"Failed to create building: {response.get('error')}")
+            logger.error(f"❌ Failed to create building via API: {response.get('error')}")
+            logger.error(f"Error details: {response.get('details', 'No details')}")
             return None
+
+        logger.info(f"✅ Building created successfully in API backend")
 
         data = response.get("data")
         if not data:
@@ -364,13 +377,13 @@ class BuildingApiService:
         return self.get_building_by_id(building_id)
     def search_buildings(self, building_id: str) -> List[Building]:
         """
-        Search for buildings by building ID using the search API.
+        Search for buildings by building code.
 
-        POST /v1/Buildings/search
-        Body: {"buildingId": "01010"}
+        ✅ FIX: Use POST /v1/Buildings/search with buildingId parameter
+        This endpoint accepts buildingCode (17-digit ID), not UUID!
 
         Args:
-            building_id: Building ID to search for (partial match)
+            building_id: Building code to search for (17-digit, can have dashes)
 
         Returns:
             List of matching Building objects
@@ -378,39 +391,40 @@ class BuildingApiService:
         if not building_id or not building_id.strip():
             return []
 
-        search_data = {"buildingId": building_id.strip()}
+        # ✅ CRITICAL FIX: Remove dashes before sending to API
+        cleaned_id = building_id.strip().replace("-", "")
 
-        response = self._make_request("POST", "/v1/Buildings/search", data=search_data)
+        logger.info(f"🔍 Searching building via POST /v1/Buildings/search: '{cleaned_id}'")
+
+        # ✅ FIX: Use POST /v1/Buildings/search endpoint (accepts buildingCode!)
+        payload = {
+            "buildingId": cleaned_id,  # This is buildingCode (17 digits)
+            "page": 1,
+            "pageSize": 10
+        }
+
+        logger.info(f"📤 API Request: POST /v1/Buildings/search with payload: {payload}")
+        response = self._make_request("POST", "/v1/Buildings/search", data=payload)
 
         if not response.get("success"):
-            logger.error(f"Failed to search buildings: {response.get('error')}")
+            logger.error(f"❌ Search failed: {response.get('error')}")
             return []
 
-        data = response.get("data", [])
+        # Extract items from paginated response
+        data = response.get("data", {})
+        items = data.get("items", [])
 
-        # Handle case where API returns a wrapper object
-        if isinstance(data, dict):
-            if "data" in data:
-                data = data["data"]
-            elif "buildings" in data:
-                data = data["buildings"]
-            elif "items" in data:
-                data = data["items"]
+        logger.info(f"✅ Search returned {len(items)} buildings")
 
-        if not isinstance(data, list):
-            logger.warning(f"Unexpected search response format: {type(data)}")
-            return []
-
+        # Convert to Building objects
         buildings = []
-        for item in data:
+        for item in items:
             try:
                 building = self._api_response_to_building(item)
                 buildings.append(building)
             except Exception as e:
-                logger.warning(f"Failed to parse building from search: {e}")
-                continue
+                logger.error(f"Error converting building: {e}")
 
-        logger.info(f"Search found {len(buildings)} buildings for query: {building_id}")
         return buildings
 
     def _api_response_to_building(self, data: Dict[str, Any]) -> Building:
@@ -621,6 +635,7 @@ class BuildingApiService:
         """
         # Map snake_case to camelCase
         field_mapping = {
+            "building_id": "buildingId",  # ✅ Building ID (will be cleaned of dashes)
             "governorate_code": "governorateCode",
             "district_code": "districtCode",
             "subdistrict_code": "subDistrictCode",  # Note: API uses subDistrictCode
@@ -637,6 +652,10 @@ class BuildingApiService:
             "longitude": "longitude",
             "location_description": "locationDescription",
             "notes": "notes",
+            # ✅ PostGIS support for polygon geometry
+            "geo_location": "geometryWkt",  # For polygon/geometry data
+            "building_geometry": "geometryWkt",  # Alternative field name
+            "geometry_wkt": "geometryWkt",  # Direct WKT format
         }
 
         # Building type enum mapping (Python string value -> API integer)
@@ -684,6 +703,11 @@ class BuildingApiService:
                 continue  # Skip fields not in mapping
 
             api_key = field_mapping[key]
+
+            # ✅ Handle building_id - remove dashes before sending to API
+            if key == "building_id" and value:
+                value = str(value).replace("-", "")  # ✅ Clean dashes
+                logger.debug(f"Cleaned building_id for API: {value}")
 
             # Handle building_type - accept both integer and string values
             if key == "building_type":

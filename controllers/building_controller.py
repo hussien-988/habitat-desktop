@@ -166,8 +166,10 @@ class BuildingController(BaseController):
 
             # Create building via API or local database
             if self._use_api and self._api_service:
+                logger.info(f"🌐 Using API backend for building creation (Config.DATA_PROVIDER={Config.DATA_PROVIDER})")
                 saved_building = self._api_service.create_building(data)
             else:
+                logger.info(f"💾 Using local DB for building creation (Config.DATA_PROVIDER={Config.DATA_PROVIDER})")
                 building = Building(**data)
                 saved_building = self.repository.create(building)
 
@@ -543,13 +545,16 @@ class BuildingController(BaseController):
 
             if self._use_api and self._api_service:
                 # Use dedicated search API endpoint
+                logger.info(f"🌐 Using API backend for building search (Config.DATA_PROVIDER={Config.DATA_PROVIDER})")
                 buildings = self._api_service.search_buildings(search_text)
+                logger.info(f"Search found {len(buildings)} buildings for query: {search_text}")
                 self._buildings_cache = buildings
                 self._emit_completed("search_buildings", True)
                 self.buildings_loaded.emit(buildings)
                 return OperationResult.ok(data=buildings)
             else:
                 # Use local database filter
+                logger.info(f"💾 Using local DB for building search (Config.DATA_PROVIDER={Config.DATA_PROVIDER})")
                 filter_ = BuildingFilter(search_text=search_text)
                 return self.load_buildings(filter_)
 
@@ -706,10 +711,19 @@ class BuildingController(BaseController):
             return OperationResult.fail(message=error_msg)
 
     def _api_dto_to_building(self, dto: Dict[str, Any]) -> Building:
-        """تحويل BuildingDto من API إلى Building object."""
+        """
+        تحويل BuildingDto من API إلى Building object.
+
+        ✅ FIX: BuildingAssignments API uses 'buildingCode' not 'buildingId'!
+        """
+        # ✅ CRITICAL FIX: Try 'buildingCode' first (BuildingAssignments API), then 'buildingId'
+        building_id = dto.get("buildingCode") or dto.get("buildingId", "")
+
+        logger.debug(f"API DTO building_id: {building_id} (from buildingCode={dto.get('buildingCode')}, buildingId={dto.get('buildingId')})")
+
         return Building(
             building_uuid=dto.get("buildingUuid", ""),
-            building_id=dto.get("buildingId", ""),
+            building_id=building_id,
             building_id_formatted=dto.get("buildingIdFormatted", ""),
             governorate_code=dto.get("governorateCode", ""),
             governorate_name=dto.get("governorateName", ""),
