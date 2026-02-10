@@ -115,7 +115,7 @@ class MapPickerDialog(BaseMapDialog):
                 center_lat=self.initial_lat,
                 center_lon=self.initial_lon,
                 zoom=self.initial_zoom,  # ✅ Smart zoom on neighborhood
-                min_zoom=self.initial_zoom,  # ✅ "اجبرو بلا مايحس" - prevent zoom out!
+                min_zoom=12,  # Allow zooming out to see context
                 max_zoom=20,  #
                 show_legend=True,  # Show legend for building status
                 show_layer_control=False,
