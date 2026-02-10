@@ -422,18 +422,12 @@ class AddBuildingPage(QWidget):
         self.neighborhood_code_input.setFixedHeight(45)
         self.neighborhood_code_input.setAlignment(Qt.AlignRight)
 
-        self.neighborhood_code_input.textChanged.connect(self._on_neighborhood_code_changed)
         self.neighborhood_code_input.textChanged.connect(self._update_building_id)
         self.neighborhood_code_input.textChanged.connect(self._validate_building_id_realtime)
 
         neigh_container.addWidget(neigh_label)
         neigh_container.addWidget(self.neighborhood_code_input)
         fields_row.addLayout(neigh_container, 1)
-
-        self.neighborhood_name_label = QLabel("")
-        self.neighborhood_name_label.setFont(create_font(9))
-        self.neighborhood_name_label.setStyleSheet("color: #666; padding: 2px;")
-        neigh_container.addWidget(self.neighborhood_name_label)
 
         # Field 6: رمز البناء (Building Number)
         build_container = QVBoxLayout()
@@ -739,7 +733,7 @@ class AddBuildingPage(QWidget):
 
         map_section.addWidget(map_container)
 
-        # ✅ Add geometry type selector below map
+        # Polygon-only mode
         geometry_type_row = QHBoxLayout()
         geometry_type_row.setSpacing(12)
         geometry_type_row.setContentsMargins(0, 8, 0, 0)
@@ -749,20 +743,21 @@ class AddBuildingPage(QWidget):
         geometry_label.setStyleSheet(f"color: {Colors.TEXT_SECONDARY}; background: transparent;")
         geometry_type_row.addWidget(geometry_label)
 
-        # Radio buttons for Point/Polygon
         from PyQt5.QtWidgets import QRadioButton, QButtonGroup
         self.geometry_button_group = QButtonGroup(self)
 
+        # Point radio hidden
         self.point_radio = QRadioButton("نقطة (GPS)")
         self.point_radio.setFont(create_font(size=9, weight=FontManager.WEIGHT_REGULAR))
         self.point_radio.setStyleSheet(f"color: {Colors.TEXT_PRIMARY}; background: transparent;")
-        self.point_radio.setChecked(True)  # Default: Point
+        self.point_radio.setChecked(False)
+        self.point_radio.setVisible(False)
         self.geometry_button_group.addButton(self.point_radio, 1)
-        geometry_type_row.addWidget(self.point_radio)
 
         self.polygon_radio = QRadioButton("مضلع (Polygon)")
         self.polygon_radio.setFont(create_font(size=9, weight=FontManager.WEIGHT_REGULAR))
         self.polygon_radio.setStyleSheet(f"color: {Colors.TEXT_PRIMARY}; background: transparent;")
+        self.polygon_radio.setChecked(True)
         self.geometry_button_group.addButton(self.polygon_radio, 2)
         geometry_type_row.addWidget(self.polygon_radio)
 
@@ -977,21 +972,6 @@ class AddBuildingPage(QWidget):
         widget._parent_container = container
         return widget
 
-    def _on_neighborhood_code_changed(self):
-        """Auto-fill neighborhood names when code is entered."""
-        code = self.neighborhood_code_input.text().strip()
-
-        if len(code) == 3:
-            from app.config import AleppoDivisions
-            for c, name_en, name_ar in AleppoDivisions.NEIGHBORHOODS_ALEPPO:
-                if c == code:
-                    self.neighborhood_name_label.setText(f"{name_ar}")
-                    return
-
-            self.neighborhood_name_label.setText("")
-        else:
-            self.neighborhood_name_label.setText("")
-
     def _update_building_id(self):
         """Generate building ID in format: GG-DD-SS-CCC-NNN-BBBBB"""
         # GG: Governorate (محافظة) - 2 digits
@@ -1202,8 +1182,8 @@ class AddBuildingPage(QWidget):
                     center = self._get_neighborhood_center(neighborhood_code)
                     if center:
                         initial_lat, initial_lon = center
-                        initial_zoom = 15
-                        logger.info(f"Focusing on neighborhood {neighborhood_code}: ({initial_lat}, {initial_lon})")
+                        initial_zoom = 19
+                        logger.info(f"Focusing on neighborhood {neighborhood_code}: ({initial_lat}, {initial_lon}) zoom={initial_zoom}")
                     else:
                         initial_lat = 36.2021
                         initial_lon = 37.1343
@@ -1227,8 +1207,29 @@ class AddBuildingPage(QWidget):
             if dialog.exec_():
                 result = dialog.get_result()
 
-                # Handle Point geometry
-                if result and 'latitude' in result and 'longitude' in result:
+                # Handle Polygon geometry FIRST (before checking point)
+                if result and 'polygon_wkt' in result and result['polygon_wkt']:
+                    polygon_wkt = result['polygon_wkt']
+                    self._polygon_wkt = polygon_wkt
+
+                    # Get centroid for lat/lon
+                    centroid_lat = result.get('latitude', 36.2)
+                    centroid_lon = result.get('longitude', 37.15)
+                    self.latitude_spin.setValue(centroid_lat)
+                    self.longitude_spin.setValue(centroid_lon)
+
+                    # Show success message
+                    self.location_status_label.setText(
+                        f"✓ تم رسم المضلع (مركزه: {centroid_lat:.6f}, {centroid_lon:.6f})"
+                    )
+                    self.location_status_label.setStyleSheet(
+                        f"color: {Config.SUCCESS_COLOR}; font-size: 10pt;"
+                    )
+                    self.geometry_type_label.setText("🔷 مضلع")
+                    logger.info(f"✅ Polygon drawn and saved: {polygon_wkt[:100]}...")
+
+                # Handle Point geometry (only if NOT polygon)
+                elif result and 'latitude' in result and 'longitude' in result:
                     lat = result['latitude']
                     lon = result['longitude']
 
@@ -1246,27 +1247,6 @@ class AddBuildingPage(QWidget):
                         f"color: {Config.SUCCESS_COLOR}; font-size: 10pt;"
                     )
                     self.geometry_type_label.setText("📍 نقطة")
-
-                # Handle Polygon geometry
-                elif result and 'polygon_wkt' in result:
-                    polygon_wkt = result['polygon_wkt']
-                    self._polygon_wkt = polygon_wkt
-
-                    # Calculate centroid for lat/lon (for backward compatibility)
-                    centroid_lat = result.get('centroid_lat', 36.2)
-                    centroid_lon = result.get('centroid_lon', 37.15)
-                    self.latitude_spin.setValue(centroid_lat)
-                    self.longitude_spin.setValue(centroid_lon)
-
-                    # Show success message
-                    self.location_status_label.setText(
-                        f"✓ تم رسم المضلع (مركزه: {centroid_lat:.6f}, {centroid_lon:.6f})"
-                    )
-                    self.location_status_label.setStyleSheet(
-                        f"color: {Config.SUCCESS_COLOR}; font-size: 10pt;"
-                    )
-                    self.geometry_type_label.setText("🔷 مضلع")
-                    logger.info(f"✅ Polygon drawn: {polygon_wkt[:100]}...")
 
         except ImportError:
             QMessageBox.information(
@@ -1795,6 +1775,7 @@ class AddBuildingPage(QWidget):
             neighborhood = geocoder.get_neighborhood_by_code(neighborhood_code)
 
             if neighborhood:
+                logger.info(f"Found neighborhood: {neighborhood.name_ar} ({neighborhood.code})")
                 import json
                 data_file = geocoder._data_file
                 with open(data_file, 'r', encoding='utf-8') as f:
@@ -1809,12 +1790,14 @@ class AddBuildingPage(QWidget):
                             count = len(polygon)
                             center_lng = lng_sum / count
                             center_lat = lat_sum / count
+                            logger.info(f"Calculated center: lat={center_lat}, lng={center_lng}")
                             return center_lat, center_lng
 
+            logger.warning(f"Neighborhood not found: {neighborhood_code}")
             return None
 
         except Exception as e:
-            logger.error(f"Failed to get neighborhood center: {e}")
+            logger.error(f"Failed to get neighborhood center: {e}", exc_info=True)
             return None
 
 

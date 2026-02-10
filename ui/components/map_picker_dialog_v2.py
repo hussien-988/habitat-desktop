@@ -105,8 +105,8 @@ class MapPickerDialog(BaseMapDialog):
             else:
                 logger.warning("No database provided - map will not show existing buildings")
 
-            # Determine drawing mode
-            drawing_mode = 'both' if self.allow_polygon else 'point'
+            # Always use polygon drawing mode (no points/pins)
+            drawing_mode = 'polygon'
 
             # Generate map HTML using LeafletHTMLGenerator
             html = generate_leaflet_html(

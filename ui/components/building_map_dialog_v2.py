@@ -63,10 +63,10 @@ class BuildingMapDialog(BaseMapDialog):
         self.building_controller = BuildingController(db)
         self._selected_building = None
         self._selected_building_id = selected_building_id
-        self._is_view_only = read_only or bool(selected_building_id)  # ✅ Support explicit read_only
+        self._is_view_only = read_only or bool(selected_building_id)  # Support explicit read_only
         self._buildings_cache = []  # Cache loaded buildings for quick lookup
 
-        # ✅ FIX: Use provided auth token first, fallback to parent window
+        # FIX: Use provided auth token first, fallback to parent window
         self._auth_token = auth_token
         if not self._auth_token:
             try:
@@ -82,9 +82,9 @@ class BuildingMapDialog(BaseMapDialog):
         # Set auth token for BuildingController
         if self._auth_token and self.building_controller.is_using_api:
             self.building_controller.set_auth_token(self._auth_token)
-            logger.info("✅ Auth token set for BuildingController in dialog")
+            logger.info("Auth token set for BuildingController in dialog")
         else:
-            logger.warning("⚠️ No auth token available for BuildingMapDialog")
+            logger.warning("No auth token available for BuildingMapDialog")
 
         # Determine mode based on whether we're viewing or selecting
         if self._is_view_only:
@@ -96,27 +96,27 @@ class BuildingMapDialog(BaseMapDialog):
             title = "بحث على الخريطة"
             show_search = True
 
-        # ✅ FIX: Store auth token temporarily (BaseMapDialog.__init__ will overwrite it)
+        # FIX: Store auth token temporarily (BaseMapDialog.__init__ will overwrite it)
         temp_auth_token = self._auth_token
 
         # Initialize base dialog (clean design)
-        # ✅ PHASE 2: Enable viewport loading for 9000+ buildings (dynamic loading)
+        # PHASE 2: Enable viewport loading for 9000+ buildings (dynamic loading)
         super().__init__(
             title=title,
             show_search=show_search,
-            enable_viewport_loading=True,  # ✅ Enabled: Load buildings dynamically as user pans/zooms
+            enable_viewport_loading=True,  # Enabled: Load buildings dynamically as user pans/zooms
             parent=parent
         )
 
-        # ✅ FIX: Restore auth token (BaseMapDialog.__init__ sets _auth_token = None)
+        # FIX: Restore auth token (BaseMapDialog.__init__ sets _auth_token = None)
         # Now self._auth_token exists (from BaseMapDialog) - set it to our stored token
         self._auth_token = temp_auth_token
-        logger.debug(f"✅ Auth token set in BaseMapDialog: {bool(self._auth_token)}")
+        logger.debug(f"Auth token set in BaseMapDialog: {bool(self._auth_token)}")
 
-        # ✅ FIX: Set token in viewport loader to prevent 401 errors
+        # FIX: Set token in viewport loader to prevent 401 errors
         if hasattr(self, '_viewport_loader') and self._viewport_loader and self._viewport_loader.map_service and self._auth_token:
             self._viewport_loader.map_service.set_auth_token(self._auth_token)
-            logger.info(f"✅ Auth token set in viewport loader")
+            logger.info(f"Auth token set in viewport loader")
 
         # Connect building selection signal (from map clicks)
         self.building_selected.connect(self._on_building_selected_from_map)
@@ -132,19 +132,19 @@ class BuildingMapDialog(BaseMapDialog):
             # Get tile server URL
             tile_server_url = get_tile_server_url()
 
-            # ✅ Use self._auth_token (already set in __init__)
+            # Use self._auth_token (already set in __init__)
             logger.debug(f"Using auth token for loading buildings: {bool(self._auth_token)}")
 
             # Load buildings using shared method (DRY principle)
-            # ✅ VIEW-ONLY MODE: Load ONLY the selected building (no others!)
-            # ✅ SELECTION MODE: 200 buildings for initial load
+            # VIEW-ONLY MODE: Load ONLY the selected building (no others!)
+            # SELECTION MODE: 200 buildings for initial load
             if self._is_view_only and self._selected_building_id:
                 # View-only: Empty initial load (will add selected building below)
                 buildings_geojson = '{"type": "FeatureCollection", "features": []}'
-                logger.info("🎯 View-only mode: Loading ONLY selected building (no initial 200)")
+                logger.info("View-only mode: Loading ONLY selected building (no initial 200)")
             else:
                 # Selection mode: Load 200 buildings for browsing
-                # ✅ IMPORTANT: Load buildings AND cache them for selection!
+                # IMPORTANT: Load buildings AND cache them for selection!
                 from services.map_service_api import MapServiceAPI
                 from services.geojson_converter import GeoJSONConverter
 
@@ -161,9 +161,9 @@ class BuildingMapDialog(BaseMapDialog):
                     page_size=200
                 )
 
-                # ✅ CRITICAL: Cache buildings for selection lookup!
+                # CRITICAL: Cache buildings for selection lookup!
                 self._buildings_cache = buildings
-                logger.info(f"✅ Cached {len(buildings)} buildings for selection")
+                logger.info(f"Cached {len(buildings)} buildings for selection")
 
                 # Convert to GeoJSON
                 buildings_geojson = GeoJSONConverter.buildings_to_geojson(
@@ -175,28 +175,33 @@ class BuildingMapDialog(BaseMapDialog):
             import json
             geojson_data = json.loads(buildings_geojson) if isinstance(buildings_geojson, str) else buildings_geojson
             num_features = len(geojson_data.get('features', []))
-            logger.info(f"📊 Loaded {num_features} buildings into GeoJSON")
+            logger.info(f"Loaded {num_features} buildings into GeoJSON")
 
             if num_features == 0:
-                logger.error("❌ NO BUILDINGS LOADED! GeoJSON is empty!")
+                logger.error("NO BUILDINGS LOADED! GeoJSON is empty!")
             else:
                 # Check if buildings have coordinates
                 features_with_coords = sum(
                     1 for f in geojson_data['features']
                     if f.get('geometry') and f['geometry'].get('coordinates')
                 )
-                logger.info(f"📍 Buildings with coordinates: {features_with_coords}/{num_features}")
+                logger.info(f"Buildings with coordinates: {features_with_coords}/{num_features}")
 
             # Only load buildings if in view-only mode (for focusing on specific building)
             buildings = []
             if self._is_view_only and self._selected_building_id:
-                logger.info(f"🔍 Focus mode: Looking for building_id = {self._selected_building_id}")
-                # ✅ Use search_buildings for exact building_id search
-                result = self.building_controller.search_buildings(self._selected_building_id)
-                buildings = result.data if result.success else []
-                logger.info(f"🔍 Search result: success={result.success}, found {len(buildings)} buildings")
+                logger.info(f"Focus mode: Looking for building_id = {self._selected_building_id}")
 
-                # ✅ FIX: Add selected building to GeoJSON if not already present
+                from services.map_service_api import MapServiceAPI
+                map_service = MapServiceAPI()
+                if self._auth_token:
+                    map_service.set_auth_token(self._auth_token)
+
+                building = map_service.get_building_with_polygon(self._selected_building_id)
+                buildings = [building] if building else []
+                logger.info(f"Retrieved building with polygon: found {len(buildings)} buildings")
+
+                # FIX: Add selected building to GeoJSON if not already present
                 if buildings and len(buildings) > 0:
                     from services.geojson_converter import GeoJSONConverter
                     selected_building_geojson = GeoJSONConverter.buildings_to_geojson(
@@ -218,7 +223,7 @@ class BuildingMapDialog(BaseMapDialog):
                             building_id = feature.get('properties', {}).get('building_id')
                             if building_id not in existing_ids:
                                 geojson_data['features'].append(feature)
-                                logger.info(f"✅ Added selected building {building_id} to GeoJSON")
+                                logger.info(f"Added selected building {building_id} to GeoJSON")
 
                         # Update buildings_geojson with merged data
                         buildings_geojson = json.dumps(geojson_data)
@@ -227,17 +232,17 @@ class BuildingMapDialog(BaseMapDialog):
             import json
             geojson_data = json.loads(buildings_geojson) if isinstance(buildings_geojson, str) else buildings_geojson
             num_features = len(geojson_data.get('features', []))
-            logger.info(f"📊 Loaded {num_features} buildings into GeoJSON")
+            logger.info(f"Loaded {num_features} buildings into GeoJSON")
 
             if num_features == 0:
-                logger.error("❌ NO BUILDINGS LOADED! GeoJSON is empty!")
+                logger.error("NO BUILDINGS LOADED! GeoJSON is empty!")
             else:
                 # Check if buildings have coordinates
                 features_with_coords = sum(
                     1 for f in geojson_data['features']
                     if f.get('geometry') and f['geometry'].get('coordinates')
                 )
-                logger.info(f"📍 Buildings with coordinates: {features_with_coords}/{num_features}")
+                logger.info(f"Buildings with coordinates: {features_with_coords}/{num_features}")
 
             # Determine center and zoom
             #
@@ -248,10 +253,10 @@ class BuildingMapDialog(BaseMapDialog):
 
             # If view-only mode, focus on the selected building
             if self._is_view_only and self._selected_building_id:
-                logger.info(f"🎯 Focus mode: self._selected_building_id = {self._selected_building_id}")
-                logger.info(f"🎯 Focus mode: buildings list has {len(buildings)} buildings")
+                logger.info(f"Focus mode: self._selected_building_id = {self._selected_building_id}")
+                logger.info(f"Focus mode: buildings list has {len(buildings)} buildings")
                 if buildings:
-                    logger.info(f"🎯 Buildings IDs in list: {[b.building_id for b in buildings]}")
+                    logger.info(f"Buildings IDs in list: {[b.building_id for b in buildings]}")
 
                 focus_building = next(
                     (b for b in buildings if b.building_id == self._selected_building_id),
@@ -259,18 +264,35 @@ class BuildingMapDialog(BaseMapDialog):
                 )
 
                 if focus_building:
-                    logger.info(f"✅ Found focus_building: {focus_building.building_id} at ({focus_building.latitude}, {focus_building.longitude})")
+                    logger.info(f"Found focus_building: {focus_building.building_id}")
                 else:
-                    logger.error(f"❌ Could NOT find focus_building with ID {self._selected_building_id} in buildings list!")
+                    logger.error(f"Could NOT find focus_building with ID {self._selected_building_id} in buildings list")
 
-                if focus_building and focus_building.latitude and focus_building.longitude:
-                    center_lat = focus_building.latitude
-                    center_lon = focus_building.longitude
-                    zoom = 18  #
+                if focus_building:
+                    # Calculate center from polygon geometry if available
+                    if focus_building.geo_location and 'POLYGON' in focus_building.geo_location.upper():
+                        from services.geojson_converter import GeoJSONConverter
+                        geometry, _ = GeoJSONConverter._parse_geo_location(focus_building.geo_location)
+                        if geometry and geometry.get('type') == 'Polygon':
+                            coords = geometry['coordinates'][0]
+                            center_lon = sum(c[0] for c in coords) / len(coords)
+                            center_lat = sum(c[1] for c in coords) / len(coords)
+                        elif focus_building.latitude and focus_building.longitude:
+                            center_lat = focus_building.latitude
+                            center_lon = focus_building.longitude
+                        else:
+                            center_lat = 36.2021
+                            center_lon = 37.1343
+                    elif focus_building.latitude and focus_building.longitude:
+                        center_lat = focus_building.latitude
+                        center_lon = focus_building.longitude
+                    else:
+                        center_lat = 36.2021
+                        center_lon = 37.1343
+
+                    zoom = 20
                     focus_building_id = self._selected_building_id
-                    logger.info(f"🎯 Focusing on building {focus_building_id} at ({center_lat}, {center_lon}) with zoom {zoom}")
-                else:
-                    logger.error(f"❌ Focus building missing coordinates or not found!")
+                    logger.info(f"Focusing on building {focus_building_id} at ({center_lat}, {center_lon}) with max zoom {zoom}")
 
             # Generate map HTML using LeafletHTMLGenerator
             html = generate_leaflet_html(
@@ -283,7 +305,7 @@ class BuildingMapDialog(BaseMapDialog):
                 show_legend=True,
                 show_layer_control=False,
                 enable_selection=(not self._is_view_only),
-                enable_viewport_loading=(not self._is_view_only),  # ✅ Disabled in view-only (no need!)
+                enable_viewport_loading=(not self._is_view_only),  # Disabled in view-only (no need!)
                 enable_drawing=False
             )
 
@@ -292,7 +314,7 @@ class BuildingMapDialog(BaseMapDialog):
 
             # If view-only mode, open popup for focused building immediately (no delay)
             if self._is_view_only and focus_building_id:
-                logger.info(f"📍 Opening popup for building {focus_building_id}")
+                logger.info(f"Opening popup for building {focus_building_id}")
                 self._open_building_popup_immediate(focus_building_id, center_lat, center_lon)
 
         except Exception as e:
@@ -307,7 +329,7 @@ class BuildingMapDialog(BaseMapDialog):
         """
         Open popup for focused building IMMEDIATELY when map loads (no flicker).
 
-        ✅ FIX: Uses map.whenReady() to open popup as soon as map is ready.
+        FIX: Uses map.whenReady() to open popup as soon as map is ready.
         No gray screen, no center transition - direct focus on building!
 
         Args:
@@ -317,22 +339,22 @@ class BuildingMapDialog(BaseMapDialog):
         """
         js = f"""
         (function() {{
-            console.log('🎯 Focus mode: Opening building {building_id} immediately');
+            console.log('Focus mode: Opening building {building_id} immediately');
 
             // Wait for map to be fully loaded and ready
             if (typeof map !== 'undefined' && map) {{
                 map.whenReady(function() {{
-                    console.log('✅ Map ready, focusing on building {building_id}');
+                    console.log('Map ready, focusing on building {building_id}');
 
                     // Find and enhance building marker
                     if (typeof buildingsLayer !== 'undefined' && buildingsLayer) {{
                         buildingsLayer.eachLayer(function(layer) {{
                             if (layer.feature && layer.feature.properties.building_id === '{building_id}') {{
-                                console.log('✅ Found building marker');
+                                console.log('Found building marker');
 
                                 // Enhanced marker for visibility
                                 if (layer.setIcon) {{
-                                    // ✅ FIX: Convert status from int to string key if needed
+                                    // FIX: Convert status from int to string key if needed
                                     var rawStatus = layer.feature.properties.status || 1;
                                     var status = (typeof rawStatus === 'number' && typeof getStatusKey === 'function')
                                         ? getStatusKey(rawStatus)
@@ -349,7 +371,7 @@ class BuildingMapDialog(BaseMapDialog):
                                     }};
                                     var color = statusColors[status] || '#0072BC';
 
-                                    // ✅ HUGE ICON: 2x size (72×108) - "الشاطر" 😎
+                                    // HUGE ICON: 2x size (72×108) - "الشاطر" 😎
                                     var largeIcon = L.divIcon({{
                                         className: 'building-pin-icon-huge',
                                         html: '<div style="width: 72px; height: 108px;">' +
@@ -364,15 +386,15 @@ class BuildingMapDialog(BaseMapDialog):
                                     }});
                                     layer.setIcon(largeIcon);
 
-                                    // ✅ Bring marker to front (above all other buildings)
+                                    // Bring marker to front (above all other buildings)
                                     if (layer.setZIndexOffset) {{
                                         layer.setZIndexOffset(10000);  // Very high z-index
                                     }}
 
-                                    console.log('✅ Enhanced icon set with color: ' + color);
+                                    console.log('Enhanced icon set with color: ' + color);
                                 }}
 
-                                // ✅ Bring layer to front
+                                // Bring layer to front
                                 if (layer.bringToFront) {{
                                     layer.bringToFront();
                                 }}
@@ -380,7 +402,7 @@ class BuildingMapDialog(BaseMapDialog):
                                 // Open popup immediately (no delay!)
                                 setTimeout(function() {{
                                     layer.openPopup();
-                                    console.log('✅ Popup opened');
+                                    console.log('Popup opened');
                                 }}, 100);  // Minimal delay for rendering
                             }}
                         }});
@@ -402,7 +424,7 @@ class BuildingMapDialog(BaseMapDialog):
         """
         def center_and_open():
             js = f"""
-            console.log('🎯 Centering on building {building_id} at [{lat}, {lon}]');
+            console.log('Centering on building {building_id} at [{lat}, {lon}]');
 
             if (typeof map !== 'undefined') {{
                 // Center map on building
@@ -417,7 +439,7 @@ class BuildingMapDialog(BaseMapDialog):
                         if (layer.feature && layer.feature.properties.building_id === '{building_id}') {{
                             // Enhanced marker for visibility
                             if (layer.setIcon) {{
-                                // ✅ FIX: Convert status from int to string key if needed
+                                // FIX: Convert status from int to string key if needed
                                 var rawStatus = layer.feature.properties.status || 1;
                                 var status = (typeof rawStatus === 'number' && typeof getStatusKey === 'function')
                                     ? getStatusKey(rawStatus)
@@ -452,7 +474,7 @@ class BuildingMapDialog(BaseMapDialog):
                             // Open popup
                             setTimeout(function() {{
                                 layer.openPopup();
-                                console.log('✅ Popup opened');
+                                console.log('Popup opened');
                             }}, 500);
                         }}
                     }});
@@ -468,7 +490,7 @@ class BuildingMapDialog(BaseMapDialog):
         """
         Handle building selection from map click.
 
-        ✅ FIX: Use cached buildings from map (loaded from BuildingAssignments API)
+        FIX: Use cached buildings from map (loaded from BuildingAssignments API)
         instead of searching in Buildings API (which has different data)!
 
         Args:
@@ -477,48 +499,42 @@ class BuildingMapDialog(BaseMapDialog):
         logger.info(f"Building selected from map: {building_id}")
 
         try:
-            # ✅ BEST PRACTICE: Use cached buildings from dialog (loaded from BuildingAssignments API)
+            # BEST PRACTICE: Use cached buildings from dialog (loaded from BuildingAssignments API)
             # These are the SAME buildings shown on the map!
             cached_buildings = self._buildings_cache or []
 
-            logger.debug(f"🔍 Searching in {len(cached_buildings)} cached buildings from dialog")
+            logger.debug(f"Searching in {len(cached_buildings)} cached buildings from dialog")
 
             # Find exact match by building_id in cached data
             matching_building = None
             for b in cached_buildings:
                 if b.building_id == building_id:
                     matching_building = b
-                    logger.info(f"✅ Found building in cache: {building_id}")
+                    logger.info(f"Found building in cache: {building_id}")
                     break
 
             if matching_building:
                 self._selected_building = matching_building
                 # Close dialog and proceed to next step (no confirmation message needed)
-                logger.info(f"✅ Building {matching_building.building_id} selected, closing dialog")
+                logger.info(f"Building {matching_building.building_id} selected, closing dialog")
                 self.accept()
             else:
                 # Fallback: Try searching in API (in case cache is empty)
-                logger.warning(f"⚠️ Building not in cache, trying API search...")
-                result = self.building_controller.search_buildings(building_id)
+                logger.warning(f"Building not in cache, trying API search...")
 
-                if result.success and result.data:
-                    logger.info(f"🔍 Search returned {len(result.data)} buildings")
+                from services.map_service_api import MapServiceAPI
+                map_service = MapServiceAPI()
+                if self._auth_token:
+                    map_service.set_auth_token(self._auth_token)
 
-                    # Find exact match by building_id
-                    for b in result.data:
-                        if b.building_id == building_id:
-                            matching_building = b
-                            break
+                matching_building = map_service.get_building_with_polygon(building_id)
 
-                    if matching_building:
-                        self._selected_building = matching_building
-                        logger.info(f"✅ Building {matching_building.building_id} selected, closing dialog")
-                        self.accept()
-                    else:
-                        logger.warning(f"⚠️ No exact match found for: {building_id}")
-                        self._show_building_not_found_error(building_id)
+                if matching_building:
+                    self._selected_building = matching_building
+                    logger.info(f"Building {matching_building.building_id} selected, closing dialog")
+                    self.accept()
                 else:
-                    logger.error(f"❌ Building not found in API: {building_id}")
+                    logger.warning(f"Building not found in API: {building_id}")
                     self._show_building_not_found_error(building_id)
 
         except Exception as e:
@@ -557,7 +573,7 @@ class BuildingMapDialog(BaseMapDialog):
         try:
             from app.config import AleppoDivisions
 
-            logger.info(f"🔍 Searching for: '{search_text}'")
+            logger.info(f"Searching for: '{search_text}'")
 
             # PROFESSIONAL FIX: Convert neighborhood name → code (API requires code!)
             # API search_buildings() accepts neighborhood_code, NOT name
@@ -569,11 +585,11 @@ class BuildingMapDialog(BaseMapDialog):
                     search_text.lower() in name_en.lower()):
                     neighborhood_code = code
                     matched_name = name_ar
-                    logger.info(f"✅ Matched '{search_text}' → code: {code} ({name_ar})")
+                    logger.info(f"Matched '{search_text}' → code: {code} ({name_ar})")
                     break
 
             if not neighborhood_code:
-                logger.warning(f"⚠️ No neighborhood match for: '{search_text}'")
+                logger.warning(f"No neighborhood match for: '{search_text}'")
                 from ui.components.toast import Toast
                 Toast.show_toast(self, f"لم يتم العثور على الحي: {search_text}", "warning")
                 return
@@ -596,7 +612,7 @@ class BuildingMapDialog(BaseMapDialog):
             buildings_data = response.get('buildings', response.get('data', []))
 
             if not buildings_data:
-                logger.warning(f"⚠️ No buildings found for neighborhood code: {neighborhood_code}")
+                logger.warning(f"No buildings found for neighborhood code: {neighborhood_code}")
                 from ui.components.toast import Toast
                 Toast.show_toast(self, f"لا توجد مباني في: {matched_name}", "info")
                 return
@@ -607,7 +623,7 @@ class BuildingMapDialog(BaseMapDialog):
                 building = Building.from_dict(b_data)
                 buildings.append(building)
 
-            logger.info(f"✅ Found {len(buildings)} buildings in {matched_name}")
+            logger.info(f"Found {len(buildings)} buildings in {matched_name}")
 
             # Calculate center from buildings with coordinates
             lats = []
@@ -618,7 +634,7 @@ class BuildingMapDialog(BaseMapDialog):
                     lats.append(building.latitude)
                     lons.append(building.longitude)
 
-            logger.info(f"📍 Buildings with coordinates: {len(lats)}/{len(buildings)}")
+            logger.info(f"Buildings with coordinates: {len(lats)}/{len(buildings)}")
 
             if lats and lons:
                 center_lat = sum(lats) / len(lats)
@@ -633,13 +649,13 @@ class BuildingMapDialog(BaseMapDialog):
                 else:
                     safe_zoom = 17  # Large area - moderate zoom
 
-                logger.info(f"🎯 Navigating to: ({center_lat:.6f}, {center_lon:.6f}) with zoom {safe_zoom}")
+                logger.info(f"Navigating to: ({center_lat:.6f}, {center_lon:.6f}) with zoom {safe_zoom}")
 
                 # PROFESSIONAL FIX: Smooth navigation without "jitter"
                 # Problem: viewport loading adds buildings during flyTo causing jitter
                 # Solution: Disable viewport loading events during flyTo
                 js_code = f"""
-                console.log('🔍 SEARCH: Flying to [{center_lat}, {center_lon}], zoom {safe_zoom}');
+                console.log('SEARCH: Flying to [{center_lat}, {center_lon}], zoom {safe_zoom}');
 
                 // Disable viewport loading events during flyTo (prevents jitter!)
                 if (typeof window._isFlying === 'undefined') {{
@@ -657,21 +673,21 @@ class BuildingMapDialog(BaseMapDialog):
                     // Re-enable viewport events after flyTo completes (2.2s = 2.0s + buffer)
                     setTimeout(function() {{
                         window._isFlying = false;
-                        console.log('✅ FlyTo completed - viewport events re-enabled');
+                        console.log('FlyTo completed - viewport events re-enabled');
                     }}, 2200);
 
-                    console.log('✅ FlyTo started smoothly');
+                    console.log('FlyTo started smoothly');
                 }}
                 """
 
                 self.web_view.page().runJavaScript(js_code)
             else:
-                logger.error(f"❌ No buildings with coordinates in '{search_text}'!")
+                logger.error(f"No buildings with coordinates in '{search_text}'!")
                 from ui.components.toast import Toast
                 Toast.show_toast(self, f"المباني في {search_text} ليس لديها إحداثيات", "warning")
 
         except Exception as e:
-            logger.error(f"❌ Error searching: {e}", exc_info=True)
+            logger.error(f"Error searching: {e}", exc_info=True)
 
         finally:
             # Re-enable search input
