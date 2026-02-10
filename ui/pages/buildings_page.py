@@ -5,7 +5,7 @@ Buildings page with modern UI design - QStackedWidget implementation.
 
 import json
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Tuple
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QTextEdit,
     QPushButton, QComboBox, QTableView, QTableWidget, QTableWidgetItem, QHeaderView,
@@ -414,17 +414,26 @@ class AddBuildingPage(QWidget):
         neigh_label = QLabel("رمز الحي")
         neigh_label.setFont(label_font)
         neigh_label.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent;")
-        self.neighborhood_combo = QLineEdit()
-        self.neighborhood_combo.setPlaceholderText("001")
-        self.neighborhood_combo.setMaxLength(3)
-        self.neighborhood_combo.setStyleSheet(input_style)
-        self.neighborhood_combo.setFixedHeight(45)  # توحيد الارتفاع
-        self.neighborhood_combo.setAlignment(Qt.AlignRight)  # محاذاة لليمين
-        self.neighborhood_combo.textChanged.connect(self._update_building_id)
-        self.neighborhood_combo.textChanged.connect(self._validate_building_id_realtime)
+
+        self.neighborhood_code_input = QLineEdit()
+        self.neighborhood_code_input.setPlaceholderText("001")
+        self.neighborhood_code_input.setMaxLength(3)
+        self.neighborhood_code_input.setStyleSheet(input_style)
+        self.neighborhood_code_input.setFixedHeight(45)
+        self.neighborhood_code_input.setAlignment(Qt.AlignRight)
+
+        self.neighborhood_code_input.textChanged.connect(self._on_neighborhood_code_changed)
+        self.neighborhood_code_input.textChanged.connect(self._update_building_id)
+        self.neighborhood_code_input.textChanged.connect(self._validate_building_id_realtime)
+
         neigh_container.addWidget(neigh_label)
-        neigh_container.addWidget(self.neighborhood_combo)
+        neigh_container.addWidget(self.neighborhood_code_input)
         fields_row.addLayout(neigh_container, 1)
+
+        self.neighborhood_name_label = QLabel("")
+        self.neighborhood_name_label.setFont(create_font(9))
+        self.neighborhood_name_label.setStyleSheet("color: #666; padding: 2px;")
+        neigh_container.addWidget(self.neighborhood_name_label)
 
         # Field 6: رمز البناء (Building Number)
         build_container = QVBoxLayout()
@@ -968,6 +977,21 @@ class AddBuildingPage(QWidget):
         widget._parent_container = container
         return widget
 
+    def _on_neighborhood_code_changed(self):
+        """Auto-fill neighborhood names when code is entered."""
+        code = self.neighborhood_code_input.text().strip()
+
+        if len(code) == 3:
+            from app.config import AleppoDivisions
+            for c, name_en, name_ar in AleppoDivisions.NEIGHBORHOODS_ALEPPO:
+                if c == code:
+                    self.neighborhood_name_label.setText(f"{name_ar}")
+                    return
+
+            self.neighborhood_name_label.setText("")
+        else:
+            self.neighborhood_name_label.setText("")
+
     def _update_building_id(self):
         """Generate building ID in format: GG-DD-SS-CCC-NNN-BBBBB"""
         # GG: Governorate (محافظة) - 2 digits
@@ -982,8 +1006,8 @@ class AddBuildingPage(QWidget):
         # CCC: Community (مجتمع/مدينة) - 3 digits
         comm = self.community_code.text().strip() or "001"
 
-        # NNN: Neighborhood (حي/قرية) - 3 digits
-        neigh = self.neighborhood_combo.text().strip() or "001"
+        # NNN: Neighborhood - 3 digits
+        neigh = self.neighborhood_code_input.text().strip() or "001"
 
         # BBBBB: Building Number - 5 digits
         bldg_num = self.building_number.text().strip().zfill(5)
@@ -1019,7 +1043,7 @@ class AddBuildingPage(QWidget):
         dist = self.district_combo.text().strip() or "01"
         subdist = self.subdistrict_code.text().strip() or "01"
         comm = self.community_code.text().strip() or "001"
-        neigh = self.neighborhood_combo.text().strip() or "001"
+        neigh = self.neighborhood_code_input.text().strip() or "001"
         bldg_num = building_num.zfill(5)
 
         building_id = f"{gov}-{dist}-{subdist}-{comm}-{neigh}-{bldg_num}"
@@ -1048,7 +1072,7 @@ class AddBuildingPage(QWidget):
         """
         Get auth token from main window.
 
-        ✅ DRY: Helper method for auth token retrieval (Best Practice).
+        Helper method for auth token retrieval.
 
         Returns:
             Auth token string or None
@@ -1104,13 +1128,13 @@ class AddBuildingPage(QWidget):
             # Filter by district/neighborhood if provided
             if neighborhood_code and neighborhood_code.strip():
                 filter_params.neighborhood_code = neighborhood_code.strip()
-                logger.info(f"📍 Calculating center for neighborhood: {neighborhood_code}")
+                logger.info(f"Calculating center for neighborhood: {neighborhood_code}")
             elif district_code and district_code.strip():
                 filter_params.district_code = district_code.strip()
-                logger.info(f"📍 Calculating center for district: {district_code}")
+                logger.info(f"Calculating center for district: {district_code}")
             else:
                 # No filter - use default
-                logger.info("📍 No area specified, using default center (Aleppo)")
+                logger.info("No area specified, using default center (Aleppo)")
                 return 36.2021, 37.1343, 13
 
             # Fetch buildings in area
@@ -1143,12 +1167,12 @@ class AddBuildingPage(QWidget):
                     else:
                         zoom = 13  # Large area
 
-                    logger.info(f"✅ Area center calculated: ({center_lat:.6f}, {center_lon:.6f}) zoom={zoom}")
+                    logger.info(f"Area center calculated: ({center_lat:.6f}, {center_lon:.6f}) zoom={zoom}")
                     logger.info(f"   Based on {len(buildings)} buildings in area")
                     return center_lat, center_lon, zoom
 
             # Fallback: No buildings found in area
-            logger.warning(f"⚠️ No buildings found in specified area, using default center")
+            logger.warning(f"No buildings found in specified area, using default center")
             return 36.2021, 37.1343, 13
 
         except Exception as e:
@@ -1158,73 +1182,44 @@ class AddBuildingPage(QWidget):
 
     def _on_pick_from_map(self):
         """
-        Open map picker to DRAW a point for new building location.
+        Open map picker to select building location.
 
-        ✅ UX Best Practice: Validates required fields before opening map.
-        ✅ Smart Focus: Centers on district/neighborhood from form fields.
-        ✅ Status Color: Marker uses color from building status.
-
-        UC-000: Building location selection for Add Building.
+        No validation required - user can open map at any time.
+        Uses existing coordinates or defaults to Aleppo center.
+        Buildings are saved to Backend Database (PostgreSQL).
         """
-        # ✅ UX VALIDATION: Check location codes (first 12 digits only)
-        focus_widget = None
-
-        # Check in order: governorate → district → subdistrict → community → neighborhood
-        if not self.governorate_combo.text().strip():
-            focus_widget = self.governorate_combo
-        elif not self.district_combo.text().strip():
-            focus_widget = self.district_combo
-        elif not self.subdistrict_code.text().strip():
-            focus_widget = self.subdistrict_code
-        elif not self.community_code.text().strip():
-            focus_widget = self.community_code
-        elif not self.neighborhood_combo.text().strip():
-            focus_widget = self.neighborhood_combo
-
-        # If any field missing, show simple warning and focus
-        if focus_widget:
-            from PyQt5.QtWidgets import QMessageBox
-
-            QMessageBox.warning(
-                self,
-                "بيانات ناقصة",
-                "يرجى إكمال رموز الموقع أولاً\n(المحافظة، المنطقة، البلدة، المجتمع، الحي)",
-                QMessageBox.Ok
-            )
-
-            # ✅ Focus on first empty field
-            focus_widget.setFocus()
-            return  # Don't open map
-
         try:
             from ui.components.map_picker_dialog_v2 import MapPickerDialog
 
-            # ✅ SMART CENTER: Calculate from district/neighborhood codes
-            district_code = self.district_combo.text().strip()
-            neighborhood_code = self.neighborhood_combo.text().strip()
-
-            # If coordinates already set, use them; otherwise calculate from area
             if self.latitude_spin.value() != 0 and self.longitude_spin.value() != 0:
                 initial_lat = self.latitude_spin.value()
                 initial_lon = self.longitude_spin.value()
-                initial_zoom = 16  # Close zoom if coords already set
-                logger.info(f"📍 Using existing coordinates: ({initial_lat}, {initial_lon})")
+                initial_zoom = 16
+                logger.info(f"Using existing coordinates: ({initial_lat}, {initial_lon})")
             else:
-                # Calculate center from district/neighborhood
-                initial_lat, initial_lon, initial_zoom = self._calculate_area_center(
-                    district_code,
-                    neighborhood_code
-                )
+                neighborhood_code = self.neighborhood_code_input.text().strip()
+                if neighborhood_code and len(neighborhood_code) == 3:
+                    center = self._get_neighborhood_center(neighborhood_code)
+                    if center:
+                        initial_lat, initial_lon = center
+                        initial_zoom = 15
+                        logger.info(f"Focusing on neighborhood {neighborhood_code}: ({initial_lat}, {initial_lon})")
+                    else:
+                        initial_lat = 36.2021
+                        initial_lon = 37.1343
+                        initial_zoom = 13
+                else:
+                    initial_lat = 36.2021
+                    initial_lon = 37.1343
+                    initial_zoom = 13
 
-            # ✅ Check selected geometry type (Point or Polygon)
             allow_polygon = self.polygon_radio.isChecked()
 
-            # ✅ Use MapPickerDialog with dynamic geometry type
             dialog = MapPickerDialog(
                 initial_lat=initial_lat,
                 initial_lon=initial_lon,
-                initial_zoom=initial_zoom,  # ✅ Smart zoom from area!
-                allow_polygon=allow_polygon,  # ✅ Dynamic: Point or Polygon based on user choice
+                initial_zoom=initial_zoom,
+                allow_polygon=allow_polygon,
                 db=self.building_controller.db,
                 parent=self
             )
@@ -1234,7 +1229,6 @@ class AddBuildingPage(QWidget):
 
                 # Handle Point geometry
                 if result and 'latitude' in result and 'longitude' in result:
-                    # Update coordinates from drawn point
                     lat = result['latitude']
                     lon = result['longitude']
 
@@ -1242,9 +1236,11 @@ class AddBuildingPage(QWidget):
                     self.longitude_spin.setValue(lon)
                     self._polygon_wkt = None  # Clear polygon data
 
-                    # Show success message
+                    geometry_wkt = result.get('wkt') or f"POINT({lon} {lat})"
+                    self._auto_detect_neighborhood(geometry_wkt)
+
                     self.location_status_label.setText(
-                        f"✓ تم تحديد الموقع ({lat:.6f}, {lon:.6f})"
+                        f"تم تحديد الموقع ({lat:.6f}, {lon:.6f})"
                     )
                     self.location_status_label.setStyleSheet(
                         f"color: {Config.SUCCESS_COLOR}; font-size: 10pt;"
@@ -1300,9 +1296,9 @@ class AddBuildingPage(QWidget):
         if hasattr(self.building, 'community_code') and self.building.community_code:
             self.community_code.setText(self.building.community_code)
 
-        # NNN: تحميل رمز الحي/القرية (Neighborhood)
+        # NNN: Load neighborhood code
         if hasattr(self.building, 'neighborhood_code') and self.building.neighborhood_code:
-            self.neighborhood_combo.setText(self.building.neighborhood_code)
+            self.neighborhood_code_input.setText(self.building.neighborhood_code)
 
         # BBBBB: تحميل رقم البناء (Building Number - آخر 5 أرقام من building_id)
         if self.building.building_id and len(self.building.building_id) >= 5:
@@ -1690,10 +1686,10 @@ class AddBuildingPage(QWidget):
             "community_code": self.community_code.text().strip() or "001",
             "community_name": "",
             "community_name_ar": "",
-            # NNN: Neighborhood (manual entry now)
-            "neighborhood_code": self.neighborhood_combo.text().strip() or "001",
-            "neighborhood_name": "",  # Manual entry - no lookup
-            "neighborhood_name_ar": "",
+            # NNN: Neighborhood code
+            "neighborhood_code": self.neighborhood_code_input.text().strip() or "001",
+            "neighborhood_name": self._get_neighborhood_name_en(),
+            "neighborhood_name_ar": self._get_neighborhood_name_ar(),
             # BBBBB: Building Number
             "building_number": self.building_number.text().strip(),
             # Building Details
@@ -1715,6 +1711,111 @@ class AddBuildingPage(QWidget):
             data["geo_location"] = self._polygon_wkt
 
         return data
+
+    def _get_neighborhood_name_ar(self) -> str:
+        """Get Arabic name from neighborhood code."""
+        from app.config import AleppoDivisions
+        code = self.neighborhood_code_input.text().strip()
+        if code:
+            for c, name_en, name_ar in AleppoDivisions.NEIGHBORHOODS_ALEPPO:
+                if c == code:
+                    return name_ar
+        return ""
+
+    def _get_neighborhood_name_en(self) -> str:
+        """Get English name from neighborhood code."""
+        from app.config import AleppoDivisions
+        code = self.neighborhood_code_input.text().strip()
+        if code:
+            for c, name_en, name_ar in AleppoDivisions.NEIGHBORHOODS_ALEPPO:
+                if c == code:
+                    return name_en
+        return ""
+
+    def _auto_detect_neighborhood(self, geometry_wkt: str):
+        """
+        Auto-detect neighborhood from geometry (Point or Polygon).
+
+        Uses NeighborhoodGeocoder service for reverse geocoding.
+        Updates neighborhood code field if found.
+
+        Args:
+            geometry_wkt: WKT geometry string
+        """
+        try:
+            from services.neighborhood_geocoder import NeighborhoodGeocoderFactory
+
+            geocoder = NeighborhoodGeocoderFactory.create(provider="local")
+
+            neighborhood = geocoder.find_neighborhood(geometry_wkt)
+
+            if neighborhood:
+                current_code = self.neighborhood_code_input.text().strip()
+
+                if current_code and current_code != neighborhood.code:
+                    reply = QMessageBox.question(
+                        self,
+                        "تغيير المنطقة",
+                        f"المنطقة المدخلة: {current_code}\n"
+                        f"المنطقة المكتشفة: {neighborhood.name_ar} ({neighborhood.code})\n\n"
+                        f"هل تريد التحديث إلى المنطقة المكتشفة؟",
+                        QMessageBox.Yes | QMessageBox.No
+                    )
+
+                    if reply == QMessageBox.Yes:
+                        self.neighborhood_code_input.setText(neighborhood.code)
+
+                elif not current_code:
+                    self.neighborhood_code_input.setText(neighborhood.code)
+                    Toast.show_success(
+                        self,
+                        f"تم تحديد المنطقة تلقائياً: {neighborhood.name_ar}"
+                    )
+
+            else:
+                logger.debug("No neighborhood detected from geometry")
+
+        except Exception as e:
+            logger.error(f"Failed to auto-detect neighborhood: {e}")
+
+    def _get_neighborhood_center(self, neighborhood_code: str) -> Optional[Tuple[float, float]]:
+        """
+        Get center coordinates of neighborhood from polygon.
+
+        Args:
+            neighborhood_code: Neighborhood code (e.g., "002")
+
+        Returns:
+            (latitude, longitude) tuple or None
+        """
+        try:
+            from services.neighborhood_geocoder import NeighborhoodGeocoderFactory
+
+            geocoder = NeighborhoodGeocoderFactory.create(provider="local")
+            neighborhood = geocoder.get_neighborhood_by_code(neighborhood_code)
+
+            if neighborhood:
+                import json
+                data_file = geocoder._data_file
+                with open(data_file, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+
+                for n in data.get('neighborhoods', []):
+                    if n['code'] == neighborhood_code:
+                        polygon = n.get('polygon', [])
+                        if polygon:
+                            lng_sum = sum(p[0] for p in polygon)
+                            lat_sum = sum(p[1] for p in polygon)
+                            count = len(polygon)
+                            center_lng = lng_sum / count
+                            center_lat = lat_sum / count
+                            return center_lat, center_lng
+
+            return None
+
+        except Exception as e:
+            logger.error(f"Failed to get neighborhood center: {e}")
+            return None
 
 
 class FilterableHeaderView(QHeaderView):
@@ -2202,7 +2303,7 @@ class BuildingsListPage(QWidget):
         """
         Get absolute path to down.png icon (DRY - reused from field_work_preparation_page).
 
-        Best Practice: Single source of truth for icon paths.
+        Single source of truth for icon paths.
         """
         from pathlib import Path
         import sys
@@ -2512,21 +2613,18 @@ class BuildingsListPage(QWidget):
         """
         Show building location on map (read-only view).
 
-        ✅ MIGRATED: Now uses building_map_dialog_v2 with read_only=True (DRY principle).
-        Previously used V1 (map_picker_dialog) - now unified with wizard.
+        Uses building_map_dialog_v2 with read_only mode.
         """
         if building.latitude and building.longitude:
             from ui.components.building_map_dialog_v2 import show_building_map_dialog
 
-            # Get auth token (Best Practice)
             auth_token = self._get_auth_token()
 
-            # ✅ UNIFIED: Use V2 with read_only mode (same as wizard)
             show_building_map_dialog(
                 db=self.building_controller.db,
                 selected_building_id=building.building_id,
                 auth_token=auth_token,
-                read_only=True,  # ✅ View-only mode
+                read_only=True,
                 parent=self
             )
         else:

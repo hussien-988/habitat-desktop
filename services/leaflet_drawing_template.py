@@ -130,9 +130,10 @@ DRAWING_JS_TEMPLATE = """
                             message: '<strong>لا يمكن رسم مضلع متقاطع!</strong>'
                         },
                         shapeOptions: {
-                            color: '#0072BC',
-                            weight: 3,
-                            fillOpacity: 0.4
+                            color: '#4A90E2',
+                            weight: 2,
+                            fillColor: '#4A90E2',
+                            fillOpacity: 0.45
                         },
                         repeatMode: false,  // لا تستمر في وضع الرسم بعد إكمال المضلع
                         showLength: true    // عرض طول الحافة أثناء الرسم
