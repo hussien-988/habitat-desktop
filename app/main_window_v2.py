@@ -282,6 +282,7 @@ class MainWindow(QMainWindow):
         # Navbar signals
         self.navbar.tab_changed.connect(self._on_tab_changed)
         self.navbar.search_requested.connect(self._on_search_requested)
+        self.navbar.logout_requested.connect(self._handle_logout)  # ✅ Connect logout
 
         # Buildings page - view details
         self.pages[Pages.BUILDINGS].view_building.connect(self._on_view_building)

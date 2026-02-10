@@ -1182,13 +1182,15 @@ class AddBuildingPage(QWidget):
                     center = self._get_neighborhood_center(neighborhood_code)
                     if center:
                         initial_lat, initial_lon = center
-                        initial_zoom = 19
-                        logger.info(f"Focusing on neighborhood {neighborhood_code}: ({initial_lat}, {initial_lon}) zoom={initial_zoom}")
+                        initial_zoom = 17  # ✅ Changed from 19 to 17 for better context
+                        logger.info(f"✅ Focusing map on neighborhood {neighborhood_code}: ({initial_lat:.6f}, {initial_lon:.6f}) zoom={initial_zoom}")
                     else:
+                        logger.warning(f"⚠️ Neighborhood {neighborhood_code} not found in neighborhoods.json, using default Aleppo center")
                         initial_lat = 36.2021
                         initial_lon = 37.1343
                         initial_zoom = 13
                 else:
+                    logger.info("No neighborhood code specified, using default Aleppo center")
                     initial_lat = 36.2021
                     initial_lon = 37.1343
                     initial_zoom = 13
@@ -1217,6 +1219,9 @@ class AddBuildingPage(QWidget):
                     centroid_lon = result.get('longitude', 37.15)
                     self.latitude_spin.setValue(centroid_lat)
                     self.longitude_spin.setValue(centroid_lon)
+
+                    # ✅ Verify neighborhood and warn if different
+                    self._verify_and_update_neighborhood_from_polygon(polygon_wkt)
 
                     # Show success message
                     self.location_status_label.setText(
@@ -1799,6 +1804,81 @@ class AddBuildingPage(QWidget):
         except Exception as e:
             logger.error(f"Failed to get neighborhood center: {e}", exc_info=True)
             return None
+
+    def _verify_and_update_neighborhood_from_polygon(self, polygon_wkt: str):
+        """
+        Verify if drawn polygon is in the specified neighborhood.
+
+        If different, show warning and update neighborhood code field.
+
+        Args:
+            polygon_wkt: WKT format polygon string
+        """
+        try:
+            from services.neighborhood_geocoder import NeighborhoodGeocoderFactory
+
+            # Get current neighborhood code from form
+            current_neighborhood_code = self.neighborhood_code_input.text().strip()
+
+            if not current_neighborhood_code:
+                logger.info("No neighborhood code specified, skipping verification")
+                return
+
+            # Detect actual neighborhood from polygon
+            geocoder = NeighborhoodGeocoderFactory.create(provider="local")
+            detected = geocoder.find_neighborhood(polygon_wkt)
+
+            if not detected:
+                logger.warning("Could not detect neighborhood from polygon")
+                QMessageBox.warning(
+                    self,
+                    "تحذير",
+                    "⚠️ لم يتم التعرف على الحي من الموقع المحدد على الخريطة.\n"
+                    "يرجى التأكد من رسم المضلع داخل حدود الحي الصحيح."
+                )
+                return
+
+            # Compare with form value
+            if detected.code != current_neighborhood_code:
+                # Get current neighborhood name for display
+                current_neighborhood = geocoder.get_neighborhood_by_code(current_neighborhood_code)
+                current_name = current_neighborhood.name_ar if current_neighborhood else current_neighborhood_code
+
+                # Show warning dialog
+                reply = QMessageBox.warning(
+                    self,
+                    "تحذير - حي مختلف",
+                    f"⚠️ البوليغون المرسوم يقع في حي مختلف!\n\n"
+                    f"الحي المدخل في الحقل: {current_name} ({current_neighborhood_code})\n"
+                    f"الحي المكتشف من الخريطة: {detected.name_ar} ({detected.code})\n\n"
+                    f"هل تريد تحديث حقل الحي إلى '{detected.name_ar}' ({detected.code})؟",
+                    QMessageBox.Yes | QMessageBox.No,
+                    QMessageBox.Yes
+                )
+
+                if reply == QMessageBox.Yes:
+                    # Update neighborhood code field
+                    self.neighborhood_code_input.setText(detected.code)
+                    self._update_building_id()  # Update building ID
+                    logger.info(f"✅ Updated neighborhood code from {current_neighborhood_code} to {detected.code}")
+
+                    Toast.show_toast(
+                        self,
+                        f"تم تحديث رمز الحي إلى: {detected.name_ar} ({detected.code})",
+                        Toast.INFO
+                    )
+                else:
+                    logger.info(f"User kept original neighborhood code: {current_neighborhood_code}")
+                    Toast.show_toast(
+                        self,
+                        "⚠️ تحذير: البوليغون في حي مختلف عن الحقل المدخل",
+                        Toast.WARNING
+                    )
+            else:
+                logger.info(f"✅ Polygon is correctly within neighborhood {detected.code}")
+
+        except Exception as e:
+            logger.error(f"Failed to verify neighborhood: {e}", exc_info=True)
 
 
 class FilterableHeaderView(QHeaderView):
