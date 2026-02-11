@@ -804,6 +804,321 @@ class TRRCMSApiClient:
         """
         return self._request("GET", "/v1/BuildingAssignments/statistics")
 
+    # ==================== PropertyUnits APIs ====================
+
+    def create_property_unit(self, unit_data: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Create a new property unit via API.
+
+        Args:
+            unit_data: Property unit data (snake_case or camelCase supported)
+                - building_id/buildingId: Building UUID
+                - unit_number/unitNumber: Unit identifier
+                - unit_type/unitType: Type code (1=Apartment, 2=Shop, etc.)
+                - floor_number/floorNumber (optional)
+                - owner_name/ownerName (optional)
+                - occupancy_status/occupancyStatus (optional)
+                - Other fields as needed
+
+        Returns:
+            Created property unit data with id
+        """
+        api_data = self._convert_property_unit_to_api_format(unit_data)
+        logger.info(f"Creating property unit: {api_data.get('unitNumber', 'N/A')}")
+        result = self._request("POST", "/v1/PropertyUnits", json_data=api_data)
+        logger.info(f"Property unit created: {result.get('id', 'N/A')}")
+        return result
+
+    def update_property_unit(self, unit_id: str, unit_data: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Update an existing property unit.
+
+        Args:
+            unit_id: Property unit UUID
+            unit_data: Fields to update
+
+        Returns:
+            Updated property unit data
+        """
+        api_data = self._convert_property_unit_to_api_format(unit_data)
+        result = self._request("PUT", f"/v1/PropertyUnits/{unit_id}", json_data=api_data)
+        logger.info(f"Property unit updated: {unit_id}")
+        return result
+
+    def _convert_property_unit_to_api_format(self, unit_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Convert property unit data to API format (camelCase)."""
+        def get_value(snake_key: str, camel_key: str, default=None):
+            return unit_data.get(snake_key) or unit_data.get(camel_key) or default
+
+        api_data = {
+            "buildingId": get_value('building_id', 'buildingId', ''),
+            "unitNumber": get_value('unit_number', 'unitNumber', ''),
+            "unitType": get_value('unit_type', 'unitType'),
+            "floorNumber": get_value('floor_number', 'floorNumber'),
+            "ownerName": get_value('owner_name', 'ownerName', ''),
+            "ownerNameAr": get_value('owner_name_ar', 'ownerNameAr', ''),
+            "tenantName": get_value('tenant_name', 'tenantName', ''),
+            "occupancyStatus": get_value('occupancy_status', 'occupancyStatus'),
+            "numberOfRooms": get_value('number_of_rooms', 'numberOfRooms'),
+            "areaSquareMeters": get_value('area_square_meters', 'areaSquareMeters'),
+            "hasElectricity": get_value('has_electricity', 'hasElectricity'),
+            "hasWater": get_value('has_water', 'hasWater'),
+            "hasSewage": get_value('has_sewage', 'hasSewage'),
+            "notes": get_value('notes', 'notes', ''),
+            "surveyId": get_value('survey_id', 'surveyId')
+        }
+        return {k: v for k, v in api_data.items() if v is not None}
+
+    # ==================== Households APIs ====================
+
+    def create_household(self, household_data: Dict[str, Any], survey_id: Optional[str] = None) -> Dict[str, Any]:
+        """
+        Create a new household via API.
+
+        Args:
+            household_data: Household data (snake_case or camelCase supported)
+                - property_unit_id/propertyUnitId: Property unit UUID
+                - head_name/headOfHouseholdName: Head of household name
+                - size/householdSize: Number of members
+                - Other demographic fields (optional)
+            survey_id: Optional survey UUID
+
+        Returns:
+            Created household data with id
+        """
+        api_data = self._convert_household_to_api_format(household_data, survey_id)
+        endpoint = f"/v1/Surveys/{survey_id}/households" if survey_id else "/v1/Households"
+
+        logger.info(f"Creating household: {api_data.get('headOfHouseholdName', 'N/A')}")
+        result = self._request("POST", endpoint, json_data=api_data)
+        logger.info(f"Household created: {result.get('id', 'N/A')}")
+        return result
+
+    def get_households_for_unit(self, unit_id: str) -> List[Dict[str, Any]]:
+        """
+        Get all households for a property unit.
+
+        Args:
+            unit_id: Property unit UUID
+
+        Returns:
+            List of household dictionaries
+        """
+        if not unit_id:
+            logger.warning("No unit_id provided")
+            return []
+
+        try:
+            result = self._request("GET", f"/v1/Households/unit/{unit_id}")
+
+            if isinstance(result, list):
+                households = result
+            elif isinstance(result, dict):
+                households = result.get("data") or result.get("households") or result.get("items") or []
+            else:
+                logger.warning(f"Unexpected response format: {type(result)}")
+                return []
+
+            logger.info(f"Found {len(households)} households for unit {unit_id}")
+            return households if isinstance(households, list) else []
+
+        except Exception as e:
+            logger.error(f"Failed to fetch households: {e}")
+            return []
+
+    def _convert_household_to_api_format(self, household_data: Dict[str, Any], survey_id: Optional[str] = None) -> Dict[str, Any]:
+        """Convert household data to API format (camelCase)."""
+        def get_value(snake_key: str, camel_key: str, default=None):
+            return household_data.get(snake_key) or household_data.get(camel_key) or default
+
+        api_data = {
+            "propertyUnitId": get_value('property_unit_id', 'propertyUnitId', ''),
+            "headOfHouseholdName": get_value('head_name', 'headOfHouseholdName', ''),
+            "householdSize": int(get_value('size', 'householdSize', 0)),
+            "maleCount": int(get_value('adult_males', 'maleCount', 0)),
+            "femaleCount": int(get_value('adult_females', 'femaleCount', 0)),
+            "maleChildCount": int(get_value('male_children_under18', 'maleChildCount', 0)),
+            "femaleChildCount": int(get_value('female_children_under18', 'femaleChildCount', 0)),
+            "maleElderlyCount": int(get_value('male_elderly_over65', 'maleElderlyCount', 0)),
+            "femaleElderlyCount": int(get_value('female_elderly_over65', 'femaleElderlyCount', 0)),
+            "maleDisabledCount": int(get_value('disabled_males', 'maleDisabledCount', 0)),
+            "femaleDisabledCount": int(get_value('disabled_females', 'femaleDisabledCount', 0)),
+            "notes": get_value('notes', 'notes', '')
+        }
+        if survey_id:
+            api_data["surveyId"] = survey_id
+        return api_data
+
+    # ==================== Persons APIs ====================
+
+    def create_person(self, person_data: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Create a new person via API.
+
+        Args:
+            person_data: Person data (snake_case or camelCase supported)
+                - full_name/fullName: Person's full name
+                - full_name_ar/fullNameAr: Arabic name
+                - national_id/nationalId: National ID number
+                - household_id/householdId: Link to household (optional)
+                - Other fields as needed
+
+        Returns:
+            Created person data with id
+        """
+        api_data = self._convert_person_to_api_format(person_data)
+        logger.info(f"Creating person: {api_data.get('fullName', 'N/A')}")
+        result = self._request("POST", "/v1/Persons", json_data=api_data)
+        logger.info(f"Person created: {result.get('id', 'N/A')}")
+        return result
+
+    def _convert_person_to_api_format(self, person_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Convert person data to API format (camelCase)."""
+        def get_value(snake_key: str, camel_key: str, default=None):
+            return person_data.get(snake_key) or person_data.get(camel_key) or default
+
+        api_data = {
+            "fullName": get_value('full_name', 'fullName', ''),
+            "fullNameAr": get_value('full_name_ar', 'fullNameAr', ''),
+            "nationalId": get_value('national_id', 'nationalId', ''),
+            "householdId": get_value('household_id', 'householdId'),
+            "dateOfBirth": get_value('date_of_birth', 'dateOfBirth'),
+            "gender": get_value('gender', 'gender'),
+            "relationshipToHead": get_value('relationship_to_head', 'relationshipToHead'),
+            "phoneNumber": get_value('phone_number', 'phoneNumber', ''),
+            "email": get_value('email', 'email', ''),
+            "notes": get_value('notes', 'notes', '')
+        }
+        return {k: v for k, v in api_data.items() if v is not None}
+
+    # ==================== Surveys APIs ====================
+
+    def create_survey(self, survey_data: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Create a new survey via API.
+
+        Args:
+            survey_data: Survey data (snake_case or camelCase supported)
+                - building_id/buildingId: Building UUID
+                - surveyor_id/surveyorId: Surveyor user UUID
+                - survey_date/surveyDate: Date of survey
+                - Other fields as needed
+
+        Returns:
+            Created survey data with id
+        """
+        api_data = self._convert_survey_to_api_format(survey_data)
+        logger.info(f"Creating survey for building: {api_data.get('buildingId', 'N/A')}")
+        result = self._request("POST", "/v1/Surveys", json_data=api_data)
+        logger.info(f"Survey created: {result.get('id', 'N/A')}")
+        return result
+
+    def _convert_survey_to_api_format(self, survey_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Convert survey data to API format (camelCase)."""
+        def get_value(snake_key: str, camel_key: str, default=None):
+            return survey_data.get(snake_key) or survey_data.get(camel_key) or default
+
+        api_data = {
+            "buildingId": get_value('building_id', 'buildingId', ''),
+            "surveyorId": get_value('surveyor_id', 'surveyorId', ''),
+            "surveyDate": get_value('survey_date', 'surveyDate'),
+            "surveyStatus": get_value('survey_status', 'surveyStatus'),
+            "notes": get_value('notes', 'notes', '')
+        }
+        return {k: v for k, v in api_data.items() if v is not None}
+
+    # ==================== Neighborhoods APIs ====================
+
+    def get_neighborhoods_by_bounds(self, sw_lat: float, sw_lng: float, ne_lat: float, ne_lng: float) -> List[Dict[str, Any]]:
+        """
+        Get neighborhoods visible in map viewport.
+
+        Args:
+            sw_lat: Southwest corner latitude
+            sw_lng: Southwest corner longitude
+            ne_lat: Northeast corner latitude
+            ne_lng: Northeast corner longitude
+
+        Returns:
+            List of neighborhoods with boundaries (WKT format)
+        """
+        params = {"swLat": sw_lat, "swLng": sw_lng, "neLat": ne_lat, "neLng": ne_lng}
+        logger.info(f"Fetching neighborhoods in viewport: [{sw_lat:.4f},{sw_lng:.4f} - {ne_lat:.4f},{ne_lng:.4f}]")
+        neighborhoods = self._request("GET", "/v1/Neighborhoods/by-bounds", params=params)
+        logger.info(f"Fetched {len(neighborhoods)} neighborhoods")
+        return neighborhoods
+
+    def get_neighborhood_by_point(self, latitude: float, longitude: float) -> Optional[Dict[str, Any]]:
+        """
+        Get neighborhood containing a given point (reverse geocoding).
+
+        Args:
+            latitude: Point latitude
+            longitude: Point longitude
+
+        Returns:
+            Neighborhood data or None if point is outside all neighborhoods
+        """
+        params = {"latitude": latitude, "longitude": longitude}
+        logger.debug(f"Finding neighborhood at ({latitude:.6f}, {longitude:.6f})")
+
+        try:
+            neighborhood = self._request("GET", "/v1/Neighborhoods/by-point", params=params)
+            if neighborhood:
+                logger.info(f"Found neighborhood: {neighborhood.get('nameArabic', 'N/A')}")
+            return neighborhood
+        except Exception as e:
+            logger.warning(f"No neighborhood found at ({latitude}, {longitude}): {e}")
+            return None
+
+    def get_neighborhoods(self, governorate_code: Optional[str] = None, district_code: Optional[str] = None,
+                         subdistrict_code: Optional[str] = None, community_code: Optional[str] = None) -> List[Dict[str, Any]]:
+        """
+        Get all neighborhoods with optional hierarchy filters.
+
+        Args:
+            governorate_code: Filter by governorate
+            district_code: Filter by district
+            subdistrict_code: Filter by sub-district
+            community_code: Filter by community
+
+        Returns:
+            List of neighborhoods with full details
+        """
+        params = {}
+        if governorate_code:
+            params["governorateCode"] = governorate_code
+        if district_code:
+            params["districtCode"] = district_code
+        if subdistrict_code:
+            params["subDistrictCode"] = subdistrict_code
+        if community_code:
+            params["communityCode"] = community_code
+
+        logger.info(f"Fetching neighborhoods with filters: {params or 'none'}")
+        neighborhoods = self._request("GET", "/v1/Neighborhoods", params=params)
+        logger.info(f"Fetched {len(neighborhoods)} neighborhoods")
+        return neighborhoods
+
+    def get_neighborhood_by_code(self, full_code: str) -> Optional[Dict[str, Any]]:
+        """
+        Get neighborhood by full 12-digit composite code.
+
+        Args:
+            full_code: 12-digit composite code (GGDDSSCCCCNNN)
+
+        Returns:
+            Neighborhood data or None if not found
+        """
+        try:
+            neighborhood = self._request("GET", f"/v1/Neighborhoods/{full_code}")
+            if neighborhood:
+                logger.info(f"Found neighborhood: {neighborhood.get('nameArabic', 'N/A')}")
+            return neighborhood
+        except Exception as e:
+            logger.warning(f"Neighborhood not found: {full_code}")
+            return None
+
 
 # ==================== Singleton Instance ====================
 
