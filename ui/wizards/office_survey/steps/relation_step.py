@@ -22,7 +22,7 @@ from PyQt5.QtCore import Qt, QDate
 from ui.wizards.framework import BaseStep, StepValidationResult
 from ui.wizards.office_survey.survey_context import SurveyContext
 from app.config import Config
-from services.survey_api_service import SurveyApiService
+from services.api_client import get_api_client
 from utils.logger import get_logger
 from ui.components.toast import Toast
 
@@ -40,7 +40,7 @@ class RelationStep(BaseStep):
         self._person_cards = []  # Store references to person card widgets
 
         # Initialize API service for finalizing survey
-        self._api_service = SurveyApiService()
+        self._api_service = get_api_client()
         self._use_api = getattr(Config, 'DATA_PROVIDER', 'local_db') == 'http'
 
     def setup_ui(self):
@@ -551,7 +551,7 @@ class RelationStep(BaseStep):
         auth_token = None
         if main_window and hasattr(main_window, '_api_token') and main_window._api_token:
             auth_token = main_window._api_token
-            self._api_service.set_auth_token(auth_token)
+            self._api_service.set_access_token(auth_token)
             print(f"[PROCESS-CLAIMS] Auth token set: {auth_token[:20]}...")
         else:
             print("[PROCESS-CLAIMS] WARNING: No auth token available!")
@@ -582,19 +582,17 @@ class RelationStep(BaseStep):
         print(f"[PROCESS-CLAIMS] Calling API: POST /v1/Surveys/office/{survey_id}/process-claims")
         sys.stdout.flush()
 
-        response = self._api_service.finalize_office_survey(survey_id, process_options)
+        try:
+            api_data = self._api_service.finalize_office_survey(survey_id, process_options)
 
-        print(f"\n[PROCESS-CLAIMS] Response received:")
-        print(f"  success={response.get('success')}")
-        print(f"  keys={list(response.keys())}")
-        print(f"  Full response: {json.dumps(response, indent=2, ensure_ascii=False, default=str)}")
-        sys.stdout.flush()
+            print(f"\n[PROCESS-CLAIMS] Response received:")
+            print(f"  keys={list(api_data.keys())}")
+            print(f"  Full response: {json.dumps(api_data, indent=2, ensure_ascii=False, default=str)}")
+            sys.stdout.flush()
 
-        if response.get("success"):
             logger.info(f"Survey {survey_id} claims processed successfully")
 
             # Store the full API response in context for Step 6 (ClaimStep)
-            api_data = response.get("data", {})
             self.context.finalize_response = api_data
 
             # Print full API response for debugging
@@ -655,19 +653,16 @@ class RelationStep(BaseStep):
                 sys.stdout.flush()
 
             Toast.show_toast(self, "تم معالجة المطالبات بنجاح", Toast.SUCCESS)
-        else:
-            error_msg = response.get("error", "Unknown error")
-            error_details = response.get("details", "")
+
+        except Exception as e:
+            error_msg = str(e)
             logger.error(f"Failed to process claims: {error_msg}")
-            logger.error(f"Error details: {error_details}")
 
             # Print error response for debugging
             print(f"\n{'='*60}")
             print(f"[PROCESS-CLAIMS ERROR] POST /api/v1/Surveys/office/{survey_id}/process-claims")
             print(f"{'='*60}")
             print(f"Error: {error_msg}")
-            print(f"Details: {error_details}")
-            print(json.dumps(response, indent=2, ensure_ascii=False, default=str))
             print(f"{'='*60}\n")
             sys.stdout.flush()
 
@@ -675,7 +670,7 @@ class RelationStep(BaseStep):
             QMessageBox.warning(
                 self,
                 "Process Claims Error",
-                f"Failed to process claims!\n\nError: {error_msg}\nDetails: {error_details}"
+                f"Failed to process claims!\n\nError: {error_msg}"
             )
 
             # Clear any previous response

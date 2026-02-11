@@ -25,7 +25,7 @@ from ui.wizards.framework import BaseStep, StepValidationResult
 from ui.wizards.office_survey.survey_context import SurveyContext
 from ui.wizards.office_survey.dialogs.person_dialog import PersonDialog
 from app.config import Config
-from services.person_api_service import PersonApiService
+from services.api_client import get_api_client
 from utils.logger import get_logger
 from ui.font_utils import FontManager, create_font
 from ui.design_system import Colors
@@ -49,7 +49,7 @@ class PersonStep(BaseStep):
         super().__init__(context, parent)
 
         # Initialize API service for fetching persons
-        self._api_service = PersonApiService()
+        self._api_service = get_api_client()
         self._use_api = getattr(Config, 'DATA_PROVIDER', 'local_db') == 'http'
 
     def setup_ui(self):
@@ -479,7 +479,7 @@ class PersonStep(BaseStep):
         # Set auth token
         main_window = self.window()
         if main_window and hasattr(main_window, '_api_token') and main_window._api_token:
-            self._api_service.set_auth_token(main_window._api_token)
+            self._api_service.set_access_token(main_window._api_token)
 
         survey_id = self.context.get_data("survey_id")
         household_id = self.context.get_data("household_id")
@@ -489,13 +489,20 @@ class PersonStep(BaseStep):
             return
 
         logger.info(f"Fetching persons for survey {survey_id}, household {household_id}")
-        persons = self._api_service.get_persons_for_household(survey_id, household_id)
 
-        if persons:
-            self.context.persons = persons
-            logger.info(f"Loaded {len(persons)} persons from API")
-        else:
-            logger.info("No persons found from API (or empty list)")
+        try:
+            persons = self._api_service.get_persons_for_household(survey_id, household_id)
+
+            if persons:
+                self.context.persons = persons
+                logger.info(f"Loaded {len(persons)} persons from API")
+            else:
+                logger.info("No persons found from API (or empty list)")
+
+        except Exception as e:
+            error_msg = str(e)
+            logger.error(f"Failed to fetch persons from API: {error_msg}")
+            # Don't block the UI, just log the error
 
     def get_step_title(self) -> str:
         """Get step title."""

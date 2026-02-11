@@ -24,7 +24,7 @@ from ui.wizards.office_survey.survey_context import SurveyContext
 from controllers.building_controller import BuildingController, BuildingFilter
 from models.building import Building
 from app.config import Config
-from services.survey_api_service import SurveyApiService
+from services.api_client import get_api_client
 from utils.logger import get_logger
 from ui.font_utils import FontManager, create_font
 from ui.design_system import Colors
@@ -57,7 +57,7 @@ class BuildingSelectionStep(BaseStep):
         self.selected_building: Optional[Building] = None
 
         # Initialize survey API service
-        self._survey_api_service = SurveyApiService()
+        self._survey_api_service = get_api_client()
         self._use_api = getattr(Config, 'DATA_PROVIDER', 'local_db') == 'http'
 
     def setup_ui(self):
@@ -1077,18 +1077,19 @@ class BuildingSelectionStep(BaseStep):
             survey_data = {"building_uuid": building_uuid}
 
             logger.info(f"Creating office survey for building: {building_uuid}")
-            response = self._survey_api_service.create_office_survey(survey_data)
 
-            if response.get("success"):
-                survey_response = response.get("data", {})
+            try:
+                survey_response = self._survey_api_service.create_office_survey(survey_data)
+
                 survey_id = survey_response.get("id") or survey_response.get("surveyId", "")
                 self.context.update_data("survey_id", survey_id)
                 self.context.update_data("survey_data", survey_response)
                 print(f"[SURVEY] Survey created successfully, survey_id: {survey_id}")
                 print(f"[SURVEY] Full API response: {survey_response}")
                 logger.info(f"Survey created successfully, survey_id: {survey_id}")
-            else:
-                error_msg = response.get("error", "Unknown error")
+
+            except Exception as e:
+                error_msg = str(e)
                 logger.error(f"Failed to create survey: {error_msg}")
                 result.add_error(f"فشل في إنشاء المسح: {error_msg}")
                 return result
@@ -1099,7 +1100,7 @@ class BuildingSelectionStep(BaseStep):
         """Set auth token for API service from main window."""
         main_window = self.window()
         if main_window and hasattr(main_window, '_api_token') and main_window._api_token:
-            self._survey_api_service.set_auth_token(main_window._api_token)
+            self._survey_api_service.set_access_token(main_window._api_token)
 
     def collect_data(self) -> Dict[str, Any]:
         """Collect data from the step."""

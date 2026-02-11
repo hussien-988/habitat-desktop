@@ -18,7 +18,7 @@ from repositories.database import Database
 from repositories.unit_repository import UnitRepository
 from repositories.building_repository import BuildingRepository
 from models.unit import PropertyUnit
-from services.property_unit_api_service import PropertyUnitApiService
+from services.api_client import get_api_client
 from ui.components.toast import Toast
 from ui.components.primary_button import PrimaryButton
 from utils.i18n import I18n
@@ -646,7 +646,7 @@ class UnitsPage(QWidget):
         self.building_repo = BuildingRepository(db)
 
         # API service for fetching units
-        self._api_service = PropertyUnitApiService()
+        self._api_service = get_api_client()
         self._use_api = getattr(Config, 'DATA_PROVIDER', 'local_db') == 'http'
 
         # Pagination
@@ -881,7 +881,7 @@ class UnitsPage(QWidget):
         # Set auth token if available
         main_window = self.window()
         if main_window and hasattr(main_window, '_api_token') and main_window._api_token:
-            self._api_service.set_auth_token(main_window._api_token)
+            self._api_service.set_access_token(main_window._api_token)
 
         if self._use_api:
             # Load from API: GET /api/v1/PropertyUnits
@@ -1047,7 +1047,7 @@ class UnitsPage(QWidget):
                     # Set auth token if available
                     main_window = self.window()
                     if main_window and hasattr(main_window, '_api_token') and main_window._api_token:
-                        self._api_service.set_auth_token(main_window._api_token)
+                        self._api_service.set_access_token(main_window._api_token)
 
                     # Prepare API data format
                     api_data = {
@@ -1061,13 +1061,12 @@ class UnitsPage(QWidget):
                         "description": data.get("property_description", "")
                     }
 
-                    response = self._api_service.create_property_unit(api_data)
-
-                    if response.get("success"):
+                    try:
+                        response = self._api_service.create_property_unit(api_data)
                         Toast.show_toast(self, "تم إضافة الوحدة بنجاح", Toast.SUCCESS)
                         self._load_units()
-                    else:
-                        error_msg = response.get("error", "Unknown error")
+                    except Exception as api_error:
+                        error_msg = str(api_error)
                         logger.error(f"Failed to create unit via API: {error_msg}")
                         Toast.show_toast(self, f"فشل في إضافة الوحدة: {error_msg}", Toast.ERROR)
                 else:

@@ -20,7 +20,7 @@ from PyQt5.QtCore import Qt, QDate
 
 from app.config import Config
 from services.validation_service import ValidationService
-from services.person_api_service import PersonApiService
+from services.api_client import get_api_client
 from services.survey_api_service import SurveyApiService
 from ui.components.toast import Toast
 from utils.logger import get_logger
@@ -57,7 +57,9 @@ class PersonDialog(QDialog):
         self._survey_id = survey_id
         self._household_id = household_id
         self._unit_id = unit_id
-        self._api_service = PersonApiService(auth_token)
+        self._api_service = get_api_client()
+        if auth_token:
+            self._api_service.set_access_token(auth_token)
         self._survey_api_service = SurveyApiService(auth_token)
         self._use_api = getattr(Config, 'DATA_PROVIDER', 'local_db') == 'http'
 
@@ -794,51 +796,54 @@ class PersonDialog(QDialog):
             print(f"[PERSON] Creating person for survey_id: {self._survey_id}, household_id: {self._household_id}")
 
             # Step 1: Create person in household
-            response = self._api_service.create_person(
-                person_data,
-                survey_id=self._survey_id,
-                household_id=self._household_id
-            )
+            try:
+                response = self._api_service.create_person_in_household(
+                    person_data,
+                    self._survey_id,
+                    self._household_id
+                )
 
-            # Show person creation API response
-            response_text = json.dumps(response, indent=2, ensure_ascii=False, default=str)
-            print(f"\n[PERSON API RESPONSE]\n{response_text}")
-            QMessageBox.information(
-                self,
-                "Create Person API Response",
-                f"POST /api/v1/Surveys/{self._survey_id}/households/{self._household_id}/persons\n\n{response_text[:1000]}"
-            )
+                # Show person creation API response
+                response_text = json.dumps(response, indent=2, ensure_ascii=False, default=str)
+                print(f"\n[PERSON API RESPONSE]\n{response_text}")
+                QMessageBox.information(
+                    self,
+                    "Create Person API Response",
+                    f"POST /api/v1/Surveys/{self._survey_id}/households/{self._household_id}/persons\n\n{response_text[:1000]}"
+                )
 
-            if not response.get("success"):
-                error_msg = response.get("error", "Unknown error")
-                details = response.get("details", "")
-                logger.error(f"Failed to create person via API: {error_msg} - {details}")
-                return
+                logger.info("Person created successfully via API")
+                self._created_person_data = response
 
-            logger.info("Person created successfully via API")
-            person_id = ""
-            if response.get("data"):
-                self._created_person_data = response.get("data")
                 # Try multiple possible field names for person ID
                 person_id = (
-                    response["data"].get("id") or
-                    response["data"].get("personId") or
-                    response["data"].get("Id") or
-                    response["data"].get("PersonId") or
+                    response.get("id") or
+                    response.get("personId") or
+                    response.get("Id") or
+                    response.get("PersonId") or
                     ""
                 )
                 print(f"[PERSON] Person created successfully, person_id: {person_id}")
-                print(f"[PERSON] Full API response: {response['data']}")
+                print(f"[PERSON] Full API response: {response}")
 
                 if not person_id:
-                    logger.error(f"Could not find person ID in response. Available keys: {list(response['data'].keys())}")
-                    from PyQt5.QtWidgets import QMessageBox
+                    logger.error(f"Could not find person ID in response. Available keys: {list(response.keys())}")
                     QMessageBox.critical(
                         self,
                         "خطأ",
                         f"تم إنشاء الشخص ولكن لم نتمكن من الحصول على معرف الشخص من الاستجابة"
                     )
                     return
+
+            except Exception as e:
+                error_msg = str(e)
+                logger.error(f"Failed to create person via API: {error_msg}")
+                QMessageBox.critical(
+                    self,
+                    "خطأ",
+                    f"فشل في إنشاء الشخص:\n{error_msg}"
+                )
+                return
 
             # Step 1.5: Upload identification files if any
             if self.uploaded_files and self._survey_id and person_id:
@@ -853,49 +858,46 @@ class PersonDialog(QDialog):
                     relation_data['rel_type'] = person_data.get('relationship_type')
 
                 print(f"[RELATION] Linking person {person_id} to unit {self._unit_id} in survey {self._survey_id}")
-                relation_response = self._api_service.link_person_to_unit(
-                    self._survey_id,
-                    self._unit_id,
-                    relation_data
-                )
 
-                # Show relation linking API response
-                relation_response_text = json.dumps(relation_response, indent=2, ensure_ascii=False, default=str)
-                print(f"\n[RELATION API RESPONSE]\n{relation_response_text}")
-                QMessageBox.information(
-                    self,
-                    "Link Person to Unit API Response",
-                    f"POST /api/v1/Surveys/{self._survey_id}/units/{self._unit_id}/relations\n\n{relation_response_text[:1000]}"
-                )
+                try:
+                    relation_response = self._api_service.link_person_to_unit(
+                        self._survey_id,
+                        self._unit_id,
+                        relation_data
+                    )
 
-                if not relation_response.get("success"):
-                    error_msg = relation_response.get("error", "Unknown error")
-                    error_details = relation_response.get("details", "")
-                    error_code = relation_response.get("error_code", "")
+                    # Show relation linking API response
+                    relation_response_text = json.dumps(relation_response, indent=2, ensure_ascii=False, default=str)
+                    print(f"\n[RELATION API RESPONSE]\n{relation_response_text}")
+                    QMessageBox.information(
+                        self,
+                        "Link Person to Unit API Response",
+                        f"POST /api/v1/Surveys/{self._survey_id}/units/{self._unit_id}/relations\n\n{relation_response_text[:1000]}"
+                    )
 
-                    logger.error(f"Failed to link person to unit: {error_msg}")
-                    logger.error(f"Error code: {error_code}")
-                    logger.error(f"Error details: {error_details}")
-                else:
                     logger.info(f"Person {person_id} linked to unit {self._unit_id} successfully")
                     print(f"[RELATION] Person {person_id} linked to unit {self._unit_id} successfully")
-                    if relation_response.get("data"):
-                        print(f"[RELATION] Full API response: {relation_response['data']}")
+                    print(f"[RELATION] Full API response: {relation_response}")
 
-                        # Get relation ID from response
-                        relation_id = (
-                            relation_response["data"].get("id") or
-                            relation_response["data"].get("relationId") or
-                            relation_response["data"].get("Id") or
-                            relation_response["data"].get("RelationId") or
-                            relation_response["data"].get("personPropertyRelationId") or
-                            relation_response["data"].get("PersonPropertyRelationId") or
-                            ""
-                        )
+                    # Get relation ID from response
+                    relation_id = (
+                        relation_response.get("id") or
+                        relation_response.get("relationId") or
+                        relation_response.get("Id") or
+                        relation_response.get("RelationId") or
+                        relation_response.get("personPropertyRelationId") or
+                        relation_response.get("PersonPropertyRelationId") or
+                        ""
+                    )
 
-                        # Upload tenure files if any
-                        if relation_id and hasattr(self, 'relation_uploaded_files') and self.relation_uploaded_files:
-                            self._upload_tenure_files(relation_id)
+                    # Upload tenure files if any
+                    if relation_id and hasattr(self, 'relation_uploaded_files') and self.relation_uploaded_files:
+                        self._upload_tenure_files(relation_id)
+
+                except Exception as e:
+                    error_msg = str(e)
+                    logger.error(f"Failed to link person to unit: {error_msg}")
+                    Toast.show_toast(self, f"تحذير: فشل في ربط الشخص بالوحدة:\n{error_msg}", Toast.WARNING)
 
         self.accept()
 

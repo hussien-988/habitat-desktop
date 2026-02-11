@@ -22,7 +22,7 @@ from ui.font_utils import FontManager, create_font
 from ui.components.icon import Icon
 from utils.logger import get_logger
 from app.config import Config
-from services.survey_api_service import SurveyApiService
+from services.api_client import get_api_client
 
 logger = get_logger(__name__)
 
@@ -34,7 +34,7 @@ class ReviewStep(BaseStep):
         super().__init__(context, parent)
 
         # Initialize API service for finalizing survey
-        self._api_service = SurveyApiService()
+        self._api_service = get_api_client()
         self._use_api = getattr(Config, 'DATA_PROVIDER', 'local_db') == 'http'
 
     def setup_ui(self):
@@ -1359,7 +1359,7 @@ class ReviewStep(BaseStep):
         # Set auth token
         main_window = self.window()
         if main_window and hasattr(main_window, '_api_token') and main_window._api_token:
-            self._api_service.set_auth_token(main_window._api_token)
+            self._api_service.set_access_token(main_window._api_token)
 
         survey_id = self.context.get_data("survey_id")
         if not survey_id:
@@ -1381,27 +1381,21 @@ class ReviewStep(BaseStep):
         }
 
         # Call the finalize API
-        response = self._api_service.finalize_office_survey(survey_id, finalize_options)
+        try:
+            response = self._api_service.finalize_office_survey(survey_id, finalize_options)
 
-        if response.get("success"):
             logger.info(f"Survey {survey_id} finalized successfully")
             QMessageBox.information(
                 self,
                 "نجح",
                 "تم إنهاء المسح بنجاح!"
             )
-        else:
-            error_msg = response.get("error", "Unknown error")
-            error_details = response.get("details", "")
+
+        except Exception as e:
+            error_msg = str(e)
             logger.error(f"Failed to finalize survey: {error_msg}")
-            logger.error(f"Error details: {error_details}")
 
             full_error = f"فشل في إنهاء المسح:\n\n{error_msg}"
-            if error_details:
-                # Truncate long error messages
-                if len(error_details) > 300:
-                    error_details = error_details[:300] + "..."
-                full_error += f"\n\nتفاصيل: {error_details}"
 
             QMessageBox.critical(
                 self,

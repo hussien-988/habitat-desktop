@@ -1275,6 +1275,25 @@ class TRRCMSApiClient:
         logger.info(f"Survey created: {result.get('id', 'N/A')}")
         return result
 
+    def create_office_survey(self, survey_data: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Create a new office survey via API.
+
+        Args:
+            survey_data: Survey data (snake_case or camelCase supported)
+                - building_uuid/buildingId: Building UUID
+
+        Returns:
+            Created survey data with id
+
+        Endpoint: POST /api/v1/Surveys/office
+        """
+        api_data = self._convert_survey_to_api_format(survey_data)
+        logger.info(f"Creating office survey for building: {api_data.get('buildingId', 'N/A')}")
+        result = self._request("POST", "/v1/Surveys/office", json_data=api_data)
+        logger.info(f"Office survey created: {result.get('id', 'N/A')}")
+        return result
+
     def finalize_office_survey(self, survey_id: str, finalize_options: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """
         Process claims for an office survey.
