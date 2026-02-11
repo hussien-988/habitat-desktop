@@ -21,7 +21,6 @@ from PyQt5.QtCore import Qt, QDate
 from app.config import Config
 from services.validation_service import ValidationService
 from services.api_client import get_api_client
-from services.survey_api_service import SurveyApiService
 from ui.components.toast import Toast
 from utils.logger import get_logger
 
@@ -60,7 +59,6 @@ class PersonDialog(QDialog):
         self._api_service = get_api_client()
         if auth_token:
             self._api_service.set_access_token(auth_token)
-        self._survey_api_service = SurveyApiService(auth_token)
         self._use_api = getattr(Config, 'DATA_PROVIDER', 'local_db') == 'http'
 
         self.setModal(True)
@@ -903,97 +901,23 @@ class PersonDialog(QDialog):
 
     def _upload_identification_files(self, person_id: str):
         """Upload identification files for the created person."""
-        import json
-        from PyQt5.QtWidgets import QMessageBox
-
         if not self.uploaded_files:
             return
 
-        print(f"[PERSON] Uploading {len(self.uploaded_files)} identification file(s) for person {person_id}")
-
-        for file_path in self.uploaded_files:
-            logger.info(f"Uploading identification file: {file_path}")
-            print(f"[PERSON] Uploading file: {file_path}")
-
-            response = self._survey_api_service.upload_identification_evidence(
-                survey_id=self._survey_id,
-                person_id=person_id,
-                file_path=file_path,
-                description=f"Identification document for person",
-                issuing_authority="",
-                document_reference_number=self.national_id.text().strip() or ""
-            )
-
-            # Show identification upload API response
-            import os
-            file_name = os.path.basename(file_path)
-            response_text = json.dumps(response, indent=2, ensure_ascii=False, default=str)
-            print(f"\n[IDENTIFICATION UPLOAD API RESPONSE]\n{response_text}")
-            QMessageBox.information(
-                self,
-                "Upload Identification Evidence API Response",
-                f"POST /api/v1/Surveys/{self._survey_id}/evidence/identification\n\nFile: {file_name}\nPersonId: {person_id}\n\n{response_text[:800]}"
-            )
-
-            if response.get("success"):
-                logger.info(f"File uploaded successfully: {file_path}")
-                print(f"[PERSON] File uploaded successfully: {file_path}")
-            else:
-                error_msg = response.get("error", "Unknown error")
-                logger.warning(f"Failed to upload file {file_path}: {error_msg}")
-                print(f"[PERSON] Failed to upload file: {error_msg}")
-                # Don't fail the whole process, just warn
-                Toast.show_toast(self, f"تحذير: فشل رفع الملف", Toast.WARNING)
+        # TODO: File upload not yet implemented in unified API client
+        logger.warning(f"File upload skipped: {len(self.uploaded_files)} identification file(s) for person {person_id}")
+        print(f"[PERSON] File upload not yet implemented (skipped {len(self.uploaded_files)} files)")
+        # Toast.show_toast(self, "تحذير: رفع الملفات غير متاح حالياً", Toast.WARNING)
 
     def _upload_tenure_files(self, relation_id: str):
         """Upload tenure evidence files for the created relation."""
-        import json
-        import os
-        from PyQt5.QtWidgets import QMessageBox
-
         if not hasattr(self, 'relation_uploaded_files') or not self.relation_uploaded_files:
             return
 
-        print(f"[RELATION] Uploading {len(self.relation_uploaded_files)} tenure file(s) for relation {relation_id}")
-
-        # Get evidence type index from combo box
-        evidence_type_index = self.evidence_type.currentIndex()
-        evidence_type_value = evidence_type_index if evidence_type_index > 0 else 0
-
-        for file_path in self.relation_uploaded_files:
-            logger.info(f"Uploading tenure file: {file_path}")
-            print(f"[RELATION] Uploading file: {file_path}")
-
-            response = self._survey_api_service.upload_tenure_evidence(
-                survey_id=self._survey_id,
-                relation_id=relation_id,
-                file_path=file_path,
-                evidence_type=evidence_type_value,
-                description=self.evidence_desc.text().strip() or "Tenure evidence document",
-                issuing_authority="",
-                document_reference_number="",
-                notes=self.notes.toPlainText().strip() or ""
-            )
-
-            # Show tenure upload API response
-            file_name = os.path.basename(file_path)
-            response_text = json.dumps(response, indent=2, ensure_ascii=False, default=str)
-            print(f"\n[TENURE UPLOAD API RESPONSE]\n{response_text}")
-            QMessageBox.information(
-                self,
-                "Upload Tenure Evidence API Response",
-                f"POST /api/v1/Surveys/{self._survey_id}/evidence/tenure\n\nFile: {file_name}\nRelationId: {relation_id}\n\n{response_text[:800]}"
-            )
-
-            if response.get("success"):
-                logger.info(f"Tenure file uploaded successfully: {file_path}")
-                print(f"[RELATION] Tenure file uploaded successfully: {file_path}")
-            else:
-                error_msg = response.get("error", "Unknown error")
-                logger.warning(f"Failed to upload tenure file {file_path}: {error_msg}")
-                print(f"[RELATION] Failed to upload tenure file: {error_msg}")
-                # Don't fail the whole process, just warn
-                Toast.show_toast(self, f"تحذير: فشل رفع ملف العلاقة", Toast.WARNING)
+        # TODO: File upload not yet implemented in unified API client
+        logger.warning(f"File upload skipped: {len(self.relation_uploaded_files)} tenure file(s) for relation {relation_id}")
+        print(f"[RELATION] File upload not yet implemented (skipped {len(self.relation_uploaded_files)} files)")
+        # Toast.show_toast(self, "تحذير: رفع الملفات غير متاح حالياً", Toast.WARNING)
 
     def get_person_data(self) -> Dict[str, Any]:
         """Get person data from form including relationship data."""
