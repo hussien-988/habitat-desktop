@@ -22,7 +22,7 @@ from PyQt5.QtGui import QColor
 from ui.wizards.framework import BaseStep, StepValidationResult
 from ui.wizards.office_survey.survey_context import SurveyContext
 from app.config import Config
-from services.household_api_service import HouseholdApiService
+from services.api_client import get_api_client
 from utils.logger import get_logger
 from ui.design_system import Colors
 from ui.components.icon import Icon
@@ -46,8 +46,8 @@ class HouseholdStep(BaseStep):
         """Initialize the step."""
         super().__init__(context, parent)
 
-        # Initialize API service for creating households
-        self._api_service = HouseholdApiService()
+        # Initialize API client for creating households
+        self._api_client = get_api_client()
         self._use_api = getattr(Config, 'DATA_PROVIDER', 'local_db') == 'http'
 
     def setup_ui(self):
@@ -782,22 +782,23 @@ class HouseholdStep(BaseStep):
 
                 logger.info(f"Creating household via API: {household}")
                 print(f"[HOUSEHOLD] Creating household for survey_id: {survey_id}")
-                response = self._api_service.create_household(household, survey_id=survey_id)
 
-                if not response.get("success"):
-                    error_msg = response.get("error", "Unknown error")
-                    logger.error(f"Failed to create household via API: {error_msg}")
-                    result.add_error(f"فشل في حفظ بيانات الأسرة: {error_msg}")
-                    return result
+                try:
+                    api_response = self._api_client.create_household(household, survey_id=survey_id)
+                    logger.info("Household created successfully via API")
 
-                logger.info("Household created successfully via API")
-                # Store the API response data
-                if response.get("data"):
-                    household_id = response["data"].get("id") or response["data"].get("householdId", "")
+                    # Store the API response data
+                    household_id = api_response.get("id") or api_response.get("householdId", "")
                     household["api_id"] = household_id
                     self.context.update_data("household_id", household_id)
                     print(f"[HOUSEHOLD] Household created successfully, household_id: {household_id}")
-                    print(f"[HOUSEHOLD] Full API response: {response['data']}")
+                    print(f"[HOUSEHOLD] Full API response: {api_response}")
+
+                except Exception as e:
+                    error_msg = str(e)
+                    logger.error(f"Failed to create household via API: {error_msg}")
+                    result.add_error(f"فشل في حفظ بيانات الأسرة: {error_msg}")
+                    return result
 
             # Clear old household data and add new one
             self.context.households.clear()
@@ -810,10 +811,10 @@ class HouseholdStep(BaseStep):
         return result
 
     def _set_auth_token(self):
-        """Set auth token for API service from main window."""
+        """Set auth token for API client from main window."""
         main_window = self.window()
         if main_window and hasattr(main_window, '_api_token') and main_window._api_token:
-            self._api_service.set_auth_token(main_window._api_token)
+            self._api_client.set_access_token(main_window._api_token)
 
     def collect_data(self) -> Dict[str, Any]:
         """Collect data from the step."""
