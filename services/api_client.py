@@ -869,6 +869,83 @@ class TRRCMSApiClient:
         }
         return {k: v for k, v in api_data.items() if v is not None}
 
+    def link_unit_to_survey(self, survey_id: str, unit_id: str) -> Dict[str, Any]:
+        """
+        Link an existing property unit to a survey.
+
+        Args:
+            survey_id: Survey UUID
+            unit_id: Property Unit UUID
+
+        Returns:
+            Updated survey data
+
+        Endpoint: POST /api/v1/Surveys/{surveyId}/property-units/{unitId}/link
+        """
+        if not survey_id or not unit_id:
+            raise ValueError("survey_id and unit_id are required")
+
+        logger.info(f"Linking unit {unit_id} to survey {survey_id}")
+        result = self._request("POST", f"/v1/Surveys/{survey_id}/property-units/{unit_id}/link")
+        logger.info(f"Unit linked successfully")
+        return result
+
+    def get_all_property_units(self, limit: int = 1000) -> List[Dict[str, Any]]:
+        """
+        Get all property units.
+
+        Args:
+            limit: Maximum number of units to return (not enforced by API)
+
+        Returns:
+            List of property unit dictionaries
+
+        Endpoint: GET /api/v1/PropertyUnits
+        """
+        logger.info("Fetching all property units")
+        result = self._request("GET", "/v1/PropertyUnits")
+
+        if isinstance(result, list):
+            units = result
+        elif isinstance(result, dict):
+            units = result.get("data") or result.get("units") or result.get("items") or []
+        else:
+            logger.warning(f"Unexpected response format: {type(result)}")
+            return []
+
+        logger.info(f"Fetched {len(units)} property units")
+        return units if isinstance(units, list) else []
+
+    def get_units_for_building(self, building_id: str) -> List[Dict[str, Any]]:
+        """
+        Get all property units for a building.
+
+        Args:
+            building_id: Building UUID
+
+        Returns:
+            List of property unit dictionaries
+
+        Endpoint: GET /api/v1/PropertyUnits/building/{buildingId}
+        """
+        if not building_id:
+            logger.warning("No building_id provided")
+            return []
+
+        logger.info(f"Fetching units for building: {building_id}")
+        result = self._request("GET", f"/v1/PropertyUnits/building/{building_id}")
+
+        if isinstance(result, list):
+            units = result
+        elif isinstance(result, dict):
+            units = result.get("data") or result.get("units") or result.get("items") or []
+        else:
+            logger.warning(f"Unexpected response format: {type(result)}")
+            return []
+
+        logger.info(f"Fetched {len(units)} units for building {building_id}")
+        return units if isinstance(units, list) else []
+
     # ==================== Households APIs ====================
 
     def create_household(self, household_data: Dict[str, Any], survey_id: Optional[str] = None) -> Dict[str, Any]:
@@ -972,6 +1049,191 @@ class TRRCMSApiClient:
         logger.info(f"Person created: {result.get('id', 'N/A')}")
         return result
 
+    def create_person_in_household(self, person_data: Dict[str, Any], survey_id: str, household_id: str) -> Dict[str, Any]:
+        """
+        Create a new person in a household via survey-scoped API.
+
+        Args:
+            person_data: Person data (snake_case or camelCase supported)
+            survey_id: Survey UUID
+            household_id: Household UUID
+
+        Returns:
+            Created person data with id
+
+        Endpoint: POST /api/v1/Surveys/{surveyId}/households/{householdId}/persons
+        """
+        if not survey_id or not household_id:
+            raise ValueError("survey_id and household_id are required")
+
+        api_data = self._convert_person_to_api_format_with_household(person_data, survey_id, household_id)
+        endpoint = f"/v1/Surveys/{survey_id}/households/{household_id}/persons"
+
+        logger.info(f"Creating person in household via {endpoint}")
+        result = self._request("POST", endpoint, json_data=api_data)
+        logger.info(f"Person created in household: {result.get('id', 'N/A')}")
+        return result
+
+    def get_persons_for_household(self, survey_id: str, household_id: str) -> List[Dict[str, Any]]:
+        """
+        Get all persons in a household.
+
+        Args:
+            survey_id: Survey UUID
+            household_id: Household UUID
+
+        Returns:
+            List of person dictionaries
+
+        Endpoint: GET /api/v1/Surveys/{surveyId}/households/{householdId}/persons
+        """
+        if not survey_id or not household_id:
+            logger.warning(f"Missing survey_id or household_id")
+            return []
+
+        endpoint = f"/v1/Surveys/{survey_id}/households/{household_id}/persons"
+        logger.info(f"Fetching persons for household: {household_id}")
+
+        try:
+            result = self._request("GET", endpoint)
+
+            if isinstance(result, list):
+                persons = result
+            elif isinstance(result, dict):
+                persons = result.get("data") or result.get("persons") or result.get("items") or []
+            else:
+                logger.warning(f"Unexpected response format: {type(result)}")
+                return []
+
+            logger.info(f"Fetched {len(persons)} persons for household {household_id}")
+            return persons if isinstance(persons, list) else []
+
+        except Exception as e:
+            logger.error(f"Failed to fetch persons: {e}")
+            return []
+
+    def link_person_to_unit(self, survey_id: str, unit_id: str, relation_data: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Link a person to a property unit with relation type.
+
+        Args:
+            survey_id: Survey UUID
+            unit_id: Property Unit UUID
+            relation_data: Relation details (person_id, relation_type, contract_type, etc.)
+
+        Returns:
+            Created relation data
+
+        Endpoint: POST /api/v1/Surveys/{surveyId}/property-units/{unitId}/relations
+        """
+        if not survey_id or not unit_id:
+            raise ValueError("survey_id and unit_id are required")
+
+        person_id = relation_data.get('person_id')
+        if not person_id:
+            raise ValueError("person_id is required in relation_data")
+
+        api_data = self._convert_relation_to_api_format(relation_data, survey_id, unit_id)
+        endpoint = f"/v1/Surveys/{survey_id}/property-units/{unit_id}/relations"
+
+        logger.info(f"Linking person {person_id} to unit {unit_id}")
+        result = self._request("POST", endpoint, json_data=api_data)
+        logger.info(f"Person linked to unit successfully")
+        return result
+
+    def _convert_person_to_api_format_with_household(self, person_data: Dict[str, Any], survey_id: str, household_id: str) -> Dict[str, Any]:
+        """Convert person data to API format for household-scoped endpoint."""
+        from datetime import datetime
+
+        def get_value(snake_key: str, camel_key: str, default=None):
+            return person_data.get(snake_key) or person_data.get(camel_key) or default
+
+        year_of_birth = 0
+        birth_date = get_value('birth_date', 'dateOfBirth', '')
+        if birth_date:
+            try:
+                year_of_birth = int(birth_date.split('-')[0])
+            except (ValueError, IndexError):
+                year_of_birth = 0
+
+        father_name = get_value('father_name', 'fatherNameArabic', '')
+        if not father_name.strip():
+            father_name = '-'
+
+        mother_name = get_value('mother_name', 'motherNameArabic', '')
+        if not mother_name.strip():
+            mother_name = '-'
+
+        api_data = {
+            "surveyId": survey_id,
+            "householdId": household_id,
+            "familyNameArabic": get_value('last_name', 'familyNameArabic', ''),
+            "firstNameArabic": get_value('first_name', 'firstNameArabic', ''),
+            "fatherNameArabic": father_name,
+            "motherNameArabic": mother_name,
+            "nationalId": get_value('national_id', 'nationalId', ''),
+            "yearOfBirth": year_of_birth,
+            "email": get_value('email', 'email', ''),
+            "mobileNumber": get_value('phone', 'mobileNumber', ''),
+            "phoneNumber": get_value('landline', 'phoneNumber', ''),
+            "relationshipToHead": get_value('relationship_type', 'relationshipToHead', '')
+        }
+        return api_data
+
+    def _convert_relation_to_api_format(self, relation_data: Dict[str, Any], survey_id: str, unit_id: str) -> Dict[str, Any]:
+        """Convert relation data to API format for linking person to unit."""
+        from datetime import datetime
+
+        relation_type_map = {
+            "owner": 1, "co_owner": 2, "tenant": 3, "occupant": 4,
+            "heir": 5, "guardian": 6, "other": 99
+        }
+
+        contract_type_map = {
+            "عقد إيجار": 1, "عقد بيع": 2, "عقد شراكة": 3
+        }
+
+        rel_type = relation_data.get('rel_type') or relation_data.get('relationship_type', '')
+        if isinstance(rel_type, str):
+            relation_type_int = relation_type_map.get(rel_type, 99)
+        elif isinstance(rel_type, int):
+            relation_type_int = rel_type
+        else:
+            relation_type_int = 99
+
+        contract_type_str = relation_data.get('contract_type', '')
+        if isinstance(contract_type_str, str):
+            contract_type_int = contract_type_map.get(contract_type_str, 0)
+        elif isinstance(contract_type_str, int):
+            contract_type_int = contract_type_str
+        else:
+            contract_type_int = 0
+
+        start_date = relation_data.get('start_date', '')
+        if not start_date:
+            start_date = datetime.now().strftime("%Y-%m-%dT%H:%M:%S.000Z")
+        elif 'T' not in start_date:
+            start_date = f"{start_date}T00:00:00.000Z"
+
+        ownership_share_pct = relation_data.get('ownership_share', 0)
+        ownership_share_decimal = ownership_share_pct / 100.0 if ownership_share_pct else 0
+
+        api_data = {
+            "surveyId": survey_id,
+            "personId": relation_data.get('person_id', ''),
+            "propertyUnitId": unit_id,
+            "relationType": relation_type_int,
+            "relationTypeOtherDesc": relation_data.get('relation_type_other_desc', ''),
+            "contractType": contract_type_int,
+            "contractTypeOtherDesc": relation_data.get('contract_type_other_desc', ''),
+            "ownershipShare": ownership_share_decimal,
+            "contractDetails": relation_data.get('evidence_desc', ''),
+            "startDate": start_date,
+            "endDate": None,
+            "notes": relation_data.get('notes', '')
+        }
+        return api_data
+
     def _convert_person_to_api_format(self, person_data: Dict[str, Any]) -> Dict[str, Any]:
         """Convert person data to API format (camelCase)."""
         def get_value(snake_key: str, camel_key: str, default=None):
@@ -1011,6 +1273,65 @@ class TRRCMSApiClient:
         logger.info(f"Creating survey for building: {api_data.get('buildingId', 'N/A')}")
         result = self._request("POST", "/v1/Surveys", json_data=api_data)
         logger.info(f"Survey created: {result.get('id', 'N/A')}")
+        return result
+
+    def finalize_office_survey(self, survey_id: str, finalize_options: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """
+        Process claims for an office survey.
+
+        Args:
+            survey_id: Survey UUID
+            finalize_options: Processing options
+                - finalNotes: Final notes for the survey
+                - durationMinutes: Survey duration in minutes
+                - autoCreateClaim: Whether to automatically create a claim
+
+        Returns:
+            Response data with survey details, claim info, warnings, etc.
+
+        Endpoint: POST /api/v1/Surveys/office/{id}/process-claims
+        """
+        if not survey_id:
+            raise ValueError("survey_id is required")
+
+        api_data = {
+            "surveyId": survey_id,
+            "finalNotes": "",
+            "durationMinutes": 10,
+            "autoCreateClaim": True
+        }
+
+        if finalize_options:
+            if 'finalNotes' in finalize_options:
+                api_data['finalNotes'] = finalize_options['finalNotes'] or ""
+            if 'durationMinutes' in finalize_options:
+                api_data['durationMinutes'] = finalize_options['durationMinutes'] or 0
+            if 'autoCreateClaim' in finalize_options:
+                api_data['autoCreateClaim'] = finalize_options['autoCreateClaim']
+
+        logger.info(f"Processing claims for office survey {survey_id}")
+        result = self._request("POST", f"/v1/Surveys/office/{survey_id}/process-claims", json_data=api_data)
+        logger.info(f"Office survey claims processed successfully")
+        return result
+
+    def finalize_survey_status(self, survey_id: str) -> Dict[str, Any]:
+        """
+        Finalize an office survey (transition from Draft to Finalized).
+
+        Args:
+            survey_id: Survey UUID
+
+        Returns:
+            Updated survey data
+
+        Endpoint: POST /api/v1/Surveys/office/{id}/finalize
+        """
+        if not survey_id:
+            raise ValueError("survey_id is required")
+
+        logger.info(f"Finalizing office survey {survey_id}")
+        result = self._request("POST", f"/v1/Surveys/office/{survey_id}/finalize")
+        logger.info(f"Office survey finalized successfully")
         return result
 
     def _convert_survey_to_api_format(self, survey_data: Dict[str, Any]) -> Dict[str, Any]:
