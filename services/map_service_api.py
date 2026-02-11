@@ -12,6 +12,7 @@ import json
 
 from services.api_client import TRRCMSApiClient, get_api_client, ApiConfig
 from services.map_service import GeoPoint, GeoPolygon, BuildingGeoData
+from services.map_data_provider import IMapDataProvider, BuildingsMapProvider, MapBounds
 from models.building import Building
 from utils.logger import get_logger
 
@@ -20,20 +21,11 @@ logger = get_logger(__name__)
 
 class MapServiceAPI:
     """
-    Map service يستخدم Backend API.
+    Map service using Backend API with Strategy Pattern.
 
-    يوفر نفس الوظائف مثل MapService لكن يتصل بالـ API بدلاً من قاعدة البيانات.
-
-    Usage:
-        # Option 1: Using singleton
-        map_service = MapServiceAPI()
-
-        # Option 2: With custom API client
-        api_client = TRRCMSApiClient(ApiConfig(base_url="http://api.example.com"))
-        map_service = MapServiceAPI(api_client)
+    Uses pluggable data providers for different use cases.
     """
 
-    # Aleppo approximate bounding box (same as original MapService)
     ALEPPO_BOUNDS = {
         "min_lat": 36.0,
         "max_lat": 36.5,
@@ -41,31 +33,23 @@ class MapServiceAPI:
         "max_lon": 37.5
     }
 
-    def __init__(self, api_client: Optional[TRRCMSApiClient] = None):
+    def __init__(self, api_client: Optional[TRRCMSApiClient] = None, data_provider: Optional[IMapDataProvider] = None):
         """
         Initialize map service.
 
         Args:
-            api_client: API client instance (يُنشأ تلقائياً إذا لم يُقدّم)
+            api_client: API client instance (created automatically if not provided)
+            data_provider: Data provider implementation (default: BuildingsMapProvider)
         """
-        print("[DEBUG] Initializing MapServiceAPI...")
         self.api = api_client or get_api_client()
-        print(f"[DEBUG] API Base URL: {self.api.base_url}")
-        logger.info("✅ MapServiceAPI initialized with Backend API")
+        self.data_provider = data_provider or BuildingsMapProvider(self.api)
+        logger.info(f"MapServiceAPI initialized with {self.data_provider.__class__.__name__}")
 
     def set_auth_token(self, token: str, expires_in: int = 3600):
-        """
-        Update API client auth token from external source.
-
-        Professional Best Practice: Sync token with current user session.
-
-        Args:
-            token: Access token from current user
-            expires_in: Token expiration time in seconds
-        """
+        """Update API client auth token."""
         if token:
             self.api.set_access_token(token, expires_in)
-            logger.debug("✅ MapServiceAPI: Auth token synchronized")
+            logger.debug("MapServiceAPI: Auth token synchronized")
 
     # ==================== Building Location ====================
 
@@ -185,41 +169,27 @@ class MapServiceAPI:
             قائمة بـ Building objects
         """
         try:
-            print(f"\n[DEBUG] ========== VIEWPORT LOADING (get_buildings_in_bbox) ==========")
-            print(f"[DEBUG] BBox: NE({north_east_lat}, {north_east_lng}) - SW({south_west_lat}, {south_west_lng})")
-            print(f"[DEBUG] Page Size: {page_size}")
-            print(f"[DEBUG] Calling: POST /api/v1/BuildingAssignments/buildings/search (CORRECT API)")
-
-            # Convert bounding box to polygon WKT
-            # Polygon: SW corner → SE corner → NE corner → NW corner → SW corner (close)
-            polygon_wkt = f"POLYGON(({south_west_lng} {south_west_lat}, {north_east_lng} {south_west_lat}, {north_east_lng} {north_east_lat}, {south_west_lng} {north_east_lat}, {south_west_lng} {south_west_lat}))"
-            print(f"[DEBUG] 📐 VIEWPORT WKT (FULL):")
-            print(f"[DEBUG]    {polygon_wkt}")
-            print(f"[DEBUG]    WKT length: {len(polygon_wkt)} characters")
-
-            # ✅ FIX: Use BuildingAssignments API (correct API with full PostGIS support)
-            result = self.api.search_buildings_for_assignment(
-                polygon_wkt=polygon_wkt,
-                has_active_assignment=None,  # Get all buildings (assigned + unassigned)
-                page=1,
-                page_size=page_size
+            bounds = MapBounds(
+                min_lat=south_west_lat,
+                max_lat=north_east_lat,
+                min_lng=south_west_lng,
+                max_lng=north_east_lng
             )
 
-            # Extract buildings from paginated response
-            buildings_data = result.get("items", [])
-            print(f"[DEBUG] API Response: {len(buildings_data)} buildings received")
+            logger.info(f"Loading buildings in viewport: NE({north_east_lat:.3f}, {north_east_lng:.3f}) - SW({south_west_lat:.3f}, {south_west_lng:.3f})")
+
+            buildings_data = self.data_provider.get_buildings_for_viewport(bounds=bounds, max_results=page_size)
 
             buildings = []
             for data in buildings_data:
                 building = self._convert_api_building_to_model(data)
                 buildings.append(building)
 
-            print(f"[DEBUG] Converted to {len(buildings)} Building objects\n")
-            logger.info(f"✅ Fetched {len(buildings)} buildings from API (polygon filter)")
+            logger.info(f"Loaded {len(buildings)} buildings")
             return buildings
 
         except Exception as e:
-            logger.error(f"❌ Error fetching buildings from API: {e}", exc_info=True)
+            logger.error(f"Error loading buildings: {e}", exc_info=True)
             return []
 
     def get_buildings_in_bbox_optimized(
@@ -692,8 +662,63 @@ class MapServiceAPI:
         print(f"[DEBUG] Converted to {len(result)} BuildingGeoData objects")
         return result
 
+    # ==================== Neighborhood Methods ====================
+
+    def get_neighborhoods_in_viewport(self, north_east_lat: float, north_east_lng: float,
+                                     south_west_lat: float, south_west_lng: float) -> List[Dict]:
+        """
+        Get neighborhood boundaries in viewport.
+
+        Args:
+            north_east_lat: Northeast corner latitude
+            north_east_lng: Northeast corner longitude
+            south_west_lat: Southwest corner latitude
+            south_west_lng: Southwest corner longitude
+
+        Returns:
+            List of neighborhoods with boundaries
+        """
+        try:
+            bounds = MapBounds(
+                min_lat=south_west_lat,
+                max_lat=north_east_lat,
+                min_lng=south_west_lng,
+                max_lng=north_east_lng
+            )
+
+            neighborhoods = self.data_provider.get_neighborhoods_in_viewport(bounds)
+            logger.info(f"Loaded {len(neighborhoods)} neighborhoods in viewport")
+            return neighborhoods
+
+        except Exception as e:
+            logger.error(f"Error loading neighborhoods: {e}")
+            return []
+
+    def get_neighborhood_by_coordinates(self, latitude: float, longitude: float) -> Optional[Dict]:
+        """
+        Get neighborhood containing a point (reverse geocoding).
+
+        Args:
+            latitude: Point latitude
+            longitude: Point longitude
+
+        Returns:
+            Neighborhood data or None
+        """
+        try:
+            neighborhood = self.data_provider.get_neighborhood_by_point(lat=latitude, lng=longitude)
+            if neighborhood:
+                logger.info(f"Found neighborhood: {neighborhood.get('nameArabic', 'N/A')}")
+            return neighborhood
+
+        except Exception as e:
+            logger.warning(f"No neighborhood found at ({latitude}, {longitude}): {e}")
+            return None
+
+    # ==================== Helper Methods ====================
+
     def _haversine_distance(self, point1: GeoPoint, point2: GeoPoint) -> float:
-        """حساب المسافة بين نقطتين (Haversine formula)."""
+        """Calculate distance between two points (Haversine formula)."""
         import math
 
         R = 6371000  # Earth radius in meters
