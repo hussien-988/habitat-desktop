@@ -12,7 +12,7 @@ from typing import Dict, Any, Optional
 
 from PyQt5.QtWidgets import (
     QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton,
-    QTableWidget, QTableWidgetItem, QHeaderView, QMessageBox,
+    QTableWidget, QTableWidgetItem, QHeaderView,
     QGroupBox, QFrame, QListWidget, QListWidgetItem, QToolButton,
     QSizePolicy, QLayout, QWidget
 )
@@ -25,6 +25,7 @@ from controllers.building_controller import BuildingController, BuildingFilter
 from models.building import Building
 from app.config import Config
 from services.api_client import get_api_client
+from ui.error_handler import ErrorHandler
 from utils.logger import get_logger
 from ui.font_utils import FontManager, create_font
 from ui.design_system import Colors
@@ -849,11 +850,11 @@ class BuildingSelectionStep(BaseStep):
         Polygon selection is now integrated into the unified map view.
         Use _open_map_search_dialog() instead which provides the same functionality.
         """
-        QMessageBox.information(
+        ErrorHandler.show_warning(
             self,
-            "معلومة - Info",
             "استخدم زر 'البحث على الخريطة' لتحديد المباني.\n"
-            "Please use 'Search on Map' button to select buildings."
+            "Please use 'Search on Map' button to select buildings.",
+            "معلومة - Info"
         )
         return
         try:
@@ -901,10 +902,10 @@ class BuildingSelectionStep(BaseStep):
 
         except Exception as e:
             logger.error(f"Error opening polygon selector: {e}", exc_info=True)
-            QMessageBox.warning(
+            ErrorHandler.show_error(
                 self,
-                "خطأ - Error",
-                f"حدث خطأ أثناء فتح محدد المنطقة:\n{str(e)}"
+                f"حدث خطأ أثناء فتح محدد المنطقة:\n{str(e)}",
+                "خطأ - Error"
             )
 
     def _show_building_selection_dialog(self, buildings):

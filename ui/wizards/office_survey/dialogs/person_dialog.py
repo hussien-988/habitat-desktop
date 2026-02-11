@@ -786,7 +786,7 @@ class PersonDialog(QDialog):
     def _on_final_save(self):
         """Handle final save (from relation tab) - create person via API, then link to unit, then accept."""
         import json
-        from PyQt5.QtWidgets import QMessageBox
+        from ui.error_handler import ErrorHandler
 
         if self._use_api and not self.editing_mode:
             person_data = self.get_person_data()
@@ -804,10 +804,10 @@ class PersonDialog(QDialog):
                 # Show person creation API response
                 response_text = json.dumps(response, indent=2, ensure_ascii=False, default=str)
                 print(f"\n[PERSON API RESPONSE]\n{response_text}")
-                QMessageBox.information(
+                ErrorHandler.show_success(
                     self,
-                    "Create Person API Response",
-                    f"POST /api/v1/Surveys/{self._survey_id}/households/{self._household_id}/persons\n\n{response_text[:1000]}"
+                    f"POST /api/v1/Surveys/{self._survey_id}/households/{self._household_id}/persons\n\n{response_text[:1000]}",
+                    "Create Person API Response"
                 )
 
                 logger.info("Person created successfully via API")
@@ -826,20 +826,20 @@ class PersonDialog(QDialog):
 
                 if not person_id:
                     logger.error(f"Could not find person ID in response. Available keys: {list(response.keys())}")
-                    QMessageBox.critical(
+                    ErrorHandler.show_error(
                         self,
-                        "خطأ",
-                        f"تم إنشاء الشخص ولكن لم نتمكن من الحصول على معرف الشخص من الاستجابة"
+                        f"تم إنشاء الشخص ولكن لم نتمكن من الحصول على معرف الشخص من الاستجابة",
+                        "خطأ"
                     )
                     return
 
             except Exception as e:
                 error_msg = str(e)
                 logger.error(f"Failed to create person via API: {error_msg}")
-                QMessageBox.critical(
+                ErrorHandler.show_error(
                     self,
-                    "خطأ",
-                    f"فشل في إنشاء الشخص:\n{error_msg}"
+                    f"فشل في إنشاء الشخص:\n{error_msg}",
+                    "خطأ"
                 )
                 return
 
@@ -867,10 +867,10 @@ class PersonDialog(QDialog):
                     # Show relation linking API response
                     relation_response_text = json.dumps(relation_response, indent=2, ensure_ascii=False, default=str)
                     print(f"\n[RELATION API RESPONSE]\n{relation_response_text}")
-                    QMessageBox.information(
+                    ErrorHandler.show_success(
                         self,
-                        "Link Person to Unit API Response",
-                        f"POST /api/v1/Surveys/{self._survey_id}/units/{self._unit_id}/relations\n\n{relation_response_text[:1000]}"
+                        f"POST /api/v1/Surveys/{self._survey_id}/units/{self._unit_id}/relations\n\n{relation_response_text[:1000]}",
+                        "Link Person to Unit API Response"
                     )
 
                     logger.info(f"Person {person_id} linked to unit {self._unit_id} successfully")

@@ -12,6 +12,7 @@ from typing import Optional, Dict, List, Any
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from utils.logger import get_logger
+from services.exceptions import ApiException, NetworkException
 
 # Suppress SSL warnings for self-signed certificates in development
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
@@ -221,21 +222,39 @@ class TRRCMSApiClient:
                 params=params,
                 headers=self._headers(),
                 timeout=self.config.timeout,
-                verify=False  # Allow self-signed certificates in development
+                verify=False
             )
             response.raise_for_status()
 
-            # Return JSON if available
             if response.text:
                 return response.json()
             return None
 
         except requests.exceptions.HTTPError as e:
-            logger.error(f"❌ HTTP {e.response.status_code}: {e.response.text}")
-            raise
+            status_code = e.response.status_code if e.response is not None else 0
+            response_data = {}
+            try:
+                response_data = e.response.json() if e.response is not None else {}
+            except (ValueError, AttributeError):
+                pass
+            logger.error(f"HTTP {status_code}: {endpoint}")
+            raise ApiException(
+                message=str(e),
+                status_code=status_code,
+                response_data=response_data
+            )
+        except (requests.exceptions.ConnectionError, requests.exceptions.Timeout) as e:
+            logger.error(f"Network error: {endpoint} - {e}")
+            raise NetworkException(
+                message=str(e),
+                original_error=e
+            )
         except requests.exceptions.RequestException as e:
-            logger.error(f"❌ Request failed: {e}")
-            raise
+            logger.error(f"Request failed: {endpoint} - {e}")
+            raise NetworkException(
+                message=str(e),
+                original_error=e
+            )
 
     # ==================== Buildings - Map APIs ====================
 
