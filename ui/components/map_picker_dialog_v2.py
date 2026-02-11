@@ -131,11 +131,11 @@ class MapPickerDialog(BaseMapDialog):
 
         except Exception as e:
             logger.error(f"Error loading map: {e}", exc_info=True)
-            from PyQt5.QtWidgets import QMessageBox
-            QMessageBox.critical(
+            from ui.error_handler import ErrorHandler
+            ErrorHandler.show_error(
                 self,
-                "خطأ",
-                f"حدث خطأ أثناء تحميل الخريطة:\n{str(e)}"
+                f"حدث خطأ أثناء تحميل الخريطة:\n{str(e)}",
+                "خطأ"
             )
 
     def _on_geometry_selected(self, geom_type: str, wkt: str):
@@ -197,11 +197,11 @@ class MapPickerDialog(BaseMapDialog):
 
         except Exception as e:
             logger.error(f"Error parsing geometry: {e}", exc_info=True)
-            from PyQt5.QtWidgets import QMessageBox
-            QMessageBox.critical(
+            from ui.error_handler import ErrorHandler
+            ErrorHandler.show_error(
                 self,
-                "خطأ",
-                f"حدث خطأ أثناء معالجة الإحداثيات:\n{str(e)}"
+                f"حدث خطأ أثناء معالجة الإحداثيات:\n{str(e)}",
+                "خطأ"
             )
 
     def get_result(self) -> Optional[Dict]:

@@ -166,11 +166,11 @@ class BuildingMapWidget(QObject):
             Selected Building object, or None if cancelled
         """
         if not HAS_WEBENGINE:
-            from PyQt5.QtWidgets import QMessageBox
-            QMessageBox.information(
+            from ui.error_handler import ErrorHandler
+            ErrorHandler.show_success(
                 None,
-                "غير متوفر",
-                "البحث على الخريطة غير متوفر (يتطلب PyQtWebEngine)"
+                "البحث على الخريطة غير متوفر (يتطلب PyQtWebEngine)",
+                "غير متوفر"
             )
             return None
 

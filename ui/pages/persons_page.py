@@ -8,7 +8,7 @@ from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
     QPushButton, QComboBox, QTableView, QHeaderView,
     QFrame, QDialog, QFormLayout, QSpinBox, QFileDialog,
-    QAbstractItemView, QGraphicsDropShadowEffect, QMessageBox, QCheckBox,
+    QAbstractItemView, QGraphicsDropShadowEffect, QCheckBox,
     QGroupBox, QScrollArea
 )
 from PyQt5.QtCore import Qt, pyqtSignal, QModelIndex

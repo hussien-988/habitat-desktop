@@ -24,8 +24,9 @@ import math
 
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
-    QToolButton, QFrame, QMessageBox
+    QToolButton, QFrame
 )
+from ui.error_handler import ErrorHandler
 from PyQt5.QtCore import Qt, pyqtSignal, QUrl, QObject, pyqtSlot
 from PyQt5.QtGui import QColor
 
@@ -441,15 +442,13 @@ class PolygonEditorWidget(QWidget):
     def _delete_polygon(self):
         """Delete current polygon."""
         if HAS_WEBENGINE:
-            reply = QMessageBox.question(
+            confirmed = ErrorHandler.confirm(
                 self,
-                "تأكيد الحذف",
                 "هل أنت متأكد من حذف المضلع؟",
-                QMessageBox.Yes | QMessageBox.No,
-                QMessageBox.No
+                "تأكيد الحذف"
             )
 
-            if reply == QMessageBox.Yes:
+            if confirmed:
                 self.map_view.page().runJavaScript("window.deletePolygon();")
                 self._current_polygon_geojson = None
                 self._current_area = 0.0
@@ -468,7 +467,7 @@ class PolygonEditorWidget(QWidget):
     def _validate_polygon(self):
         """Validate current polygon."""
         if not self._current_polygon_geojson:
-            QMessageBox.warning(self, "تحذير", "لا يوجد مضلع للتحقق منه")
+            ErrorHandler.show_warning(self, "لا يوجد مضلع للتحقق منه", "تحذير")
             return
 
         try:
@@ -488,21 +487,21 @@ class PolygonEditorWidget(QWidget):
             # TODO: Implement more sophisticated algorithm
 
             if errors:
-                QMessageBox.warning(
+                ErrorHandler.show_warning(
                     self,
-                    "أخطاء في المضلع",
-                    "\n".join(f"• {error}" for error in errors)
+                    "\n".join(f"• {error}" for error in errors),
+                    "أخطاء في المضلع"
                 )
             else:
-                QMessageBox.information(
+                ErrorHandler.show_success(
                     self,
-                    "✓ المضلع صحيح",
                     f"المضلع صحيح ويحتوي على {len(coords)} نقطة\n"
-                    f"المساحة: {self._current_area:.2f} متر مربع"
+                    f"المساحة: {self._current_area:.2f} متر مربع",
+                    "✓ المضلع صحيح"
                 )
 
         except Exception as e:
-            QMessageBox.critical(self, "خطأ", f"فشل التحقق: {str(e)}")
+            ErrorHandler.show_error(self, f"فشل التحقق: {str(e)}", "خطأ")
 
     def _on_polygon_updated(self, geojson_str: str):
         """Handle polygon update from bridge."""
@@ -519,7 +518,7 @@ class PolygonEditorWidget(QWidget):
     def _on_error(self, error_msg: str):
         """Handle error from bridge."""
         logger.warning(f"Polygon editor error: {error_msg}")
-        QMessageBox.warning(self, "تحذير", error_msg)
+        ErrorHandler.show_warning(self, error_msg, "تحذير")
 
     def _update_ui_state(self):
         """Update UI button states based on current polygon."""
@@ -569,7 +568,7 @@ class PolygonEditorWidget(QWidget):
 
         except Exception as e:
             logger.error(f"Error loading polygon: {e}")
-            QMessageBox.warning(self, "خطأ", f"فشل تحميل المضلع: {str(e)}")
+            ErrorHandler.show_warning(self, f"فشل تحميل المضلع: {str(e)}", "خطأ")
 
     def get_polygon_geojson(self) -> Optional[str]:
         """Get current polygon as GeoJSON string."""

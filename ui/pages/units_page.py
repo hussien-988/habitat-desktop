@@ -8,7 +8,7 @@ from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
     QPushButton, QComboBox, QTableWidget, QTableWidgetItem, QHeaderView,
     QFrame, QDialog, QFormLayout, QSpinBox, QTextEdit,
-    QAbstractItemView, QGraphicsDropShadowEffect, QMessageBox, QSizePolicy
+    QAbstractItemView, QGraphicsDropShadowEffect, QSizePolicy
 )
 from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtGui import QColor, QIcon, QCursor
@@ -21,6 +21,7 @@ from models.unit import PropertyUnit
 from services.api_client import get_api_client
 from ui.components.toast import Toast
 from ui.components.primary_button import PrimaryButton
+from ui.error_handler import ErrorHandler
 from utils.i18n import I18n
 from utils.logger import get_logger
 from ui.style_manager import StyleManager, PageDimensions
@@ -596,10 +597,10 @@ class UnitDialog(QDialog):
     def accept(self):
         """Override accept to validate before closing."""
         if not self._validate_unit_number():
-            QMessageBox.warning(
+            ErrorHandler.show_warning(
                 self,
-                "خطأ في البيانات",
-                "الرجاء تصحيح رقم الوحدة قبل الحفظ"
+                "الرجاء تصحيح رقم الوحدة قبل الحفظ",
+                "خطأ في البيانات"
             )
             return
         super().accept()
@@ -1125,14 +1126,11 @@ class UnitsPage(QWidget):
 
     def _delete_unit(self, unit: PropertyUnit):
         """Delete unit with confirmation."""
-        reply = QMessageBox.question(
+        if ErrorHandler.confirm(
             self,
-            "تأكيد الحذف",
             f"هل أنت متأكد من حذف الوحدة {unit.unit_id}؟",
-            QMessageBox.Yes | QMessageBox.No
-        )
-
-        if reply == QMessageBox.Yes:
+            "تأكيد الحذف"
+        ):
             try:
                 self.unit_repo.delete(unit.unit_uuid)
                 Toast.show_toast(self, "تم حذف الوحدة بنجاح", Toast.SUCCESS)

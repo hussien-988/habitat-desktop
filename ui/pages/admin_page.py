@@ -8,7 +8,7 @@ from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QComboBox, QTableView, QTabWidget, QFrame, QDialog,
     QFormLayout, QLineEdit, QCheckBox, QAbstractItemView,
-    QGraphicsDropShadowEffect, QMessageBox, QHeaderView,
+    QGraphicsDropShadowEffect, QHeaderView,
     QTableWidget, QTableWidgetItem, QFileDialog, QSpinBox,
     QScrollArea, QGroupBox, QSplitter, QStyle, QToolButton,
     QSizePolicy, QDateEdit
@@ -24,6 +24,7 @@ from services.security_service import SecurityService, SecuritySettings
 from models.user import User
 from ui.components.toast import Toast
 from ui.components.base_table_model import BaseTableModel
+from ui.error_handler import ErrorHandler
 from utils.i18n import I18n
 from utils.logger import get_logger
 
@@ -865,14 +866,11 @@ class AdminPage(QWidget):
 
     def _on_deprecate_term(self, term: VocabularyTerm):
         """Deprecate a vocabulary term."""
-        reply = QMessageBox.question(
+        if ErrorHandler.confirm(
             self,
-            "تأكيد الإيقاف",
             f"هل تريد إيقاف المصطلح '{term.term_label_ar}'؟\nسيظل المصطلح موجوداً ولكن لن يظهر في القوائم الجديدة.",
-            QMessageBox.Yes | QMessageBox.No,
-            QMessageBox.No
-        )
-        if reply == QMessageBox.Yes:
+            "تأكيد الإيقاف"
+        ):
             self.vocab_repo.deprecate_term(term.term_id)
             # Log action
             self.security_service.log_action(
@@ -899,14 +897,11 @@ class AdminPage(QWidget):
 
     def _on_cleanup_test_data(self):
         """Remove non-default vocabulary terms (test data)."""
-        reply = QMessageBox.question(
+        if ErrorHandler.confirm(
             self,
-            "تأكيد تنظيف البيانات",
             "سيتم حذف جميع المصطلحات غير الافتراضية (بيانات الاختبار).\n\nهل تريد المتابعة؟",
-            QMessageBox.Yes | QMessageBox.No,
-            QMessageBox.No
-        )
-        if reply == QMessageBox.Yes:
+            "تأكيد تنظيف البيانات"
+        ):
             try:
                 count = self.vocab_repo.cleanup_test_data()
                 if count > 0:
@@ -1222,7 +1217,7 @@ class AdminPage(QWidget):
             # Refresh audit log to show the new entry
             self._load_audit_logs()
         else:
-            QMessageBox.warning(self, "خطأ في التحقق", "\n".join(errors))
+            ErrorHandler.show_warning(self, "\n".join(errors), "خطأ في التحقق")
 
     def _load_audit_logs(self):
         """Load audit log entries."""
@@ -1389,14 +1384,11 @@ class AdminPage(QWidget):
         if not user:
             return
 
-        reply = QMessageBox.question(
+        if not ErrorHandler.confirm(
             self,
-            "تأكيد قفل الحساب",
             f"هل تريد قفل حساب المستخدم: {user.username}؟",
-            QMessageBox.Yes | QMessageBox.No,
-            QMessageBox.No
-        )
-        if reply != QMessageBox.Yes:
+            "تأكيد قفل الحساب"
+        ):
             return
 
         try:
@@ -1449,14 +1441,11 @@ class AdminPage(QWidget):
         if not user:
             return
 
-        reply = QMessageBox.question(
+        if not ErrorHandler.confirm(
             self,
-            "تأكيد تعطيل الحساب",
             f"هل تريد تعطيل حساب المستخدم: {user.username}؟\nلن يتمكن من تسجيل الدخول.",
-            QMessageBox.Yes | QMessageBox.No,
-            QMessageBox.No
-        )
-        if reply != QMessageBox.Yes:
+            "تأكيد تعطيل الحساب"
+        ):
             return
 
         try:

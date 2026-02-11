@@ -7,7 +7,7 @@ Replaces sidebar with top navbar and tabs
 
 from PyQt5.QtWidgets import (
     QMainWindow, QWidget, QHBoxLayout, QVBoxLayout,
-    QStackedWidget, QShortcut, QMessageBox,
+    QStackedWidget, QShortcut,
     QFrame, QGraphicsDropShadowEffect, QSizeGrip
 )
 
@@ -19,6 +19,7 @@ from .config import Config, Pages
 from repositories.database import Database
 from utils.i18n import I18n
 from utils.logger import get_logger
+from ui.error_handler import ErrorHandler
 
 logger = get_logger(__name__)
 
@@ -365,15 +366,13 @@ class MainWindow(QMainWindow):
     def _handle_logout(self):
         """Handle logout request."""
         if self.current_user:
-            reply = QMessageBox.question(
+            confirmed = ErrorHandler.confirm(
                 self,
-                self.i18n.t("logout_confirm_title"),
                 self.i18n.t("logout_confirm_message"),
-                QMessageBox.Yes | QMessageBox.No,
-                QMessageBox.No
+                self.i18n.t("logout_confirm_title")
             )
 
-            if reply == QMessageBox.Yes:
+            if confirmed:
                 logger.info(f"User logged out: {self.current_user.username}")
                 self.current_user = None
                 self._show_login()
@@ -619,15 +618,13 @@ class MainWindow(QMainWindow):
     def closeEvent(self, event):
         """Handle window close event."""
         if self.current_user:
-            reply = QMessageBox.question(
+            confirmed = ErrorHandler.confirm(
                 self,
-                self.i18n.t("exit_confirm_title"),
                 self.i18n.t("exit_confirm_message"),
-                QMessageBox.Yes | QMessageBox.No,
-                QMessageBox.No
+                self.i18n.t("exit_confirm_title")
             )
 
-            if reply == QMessageBox.No:
+            if not confirmed:
                 event.ignore()
                 return
 
