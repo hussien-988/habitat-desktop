@@ -14,7 +14,7 @@ import uuid
 
 from PyQt5.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
-    QPushButton, QComboBox, QSpinBox, QTextEdit, QFrame, QMessageBox
+    QPushButton, QComboBox, QSpinBox, QTextEdit, QFrame
 )
 from PyQt5.QtCore import Qt, QLocale
 from PyQt5.QtGui import QDoubleValidator
@@ -22,6 +22,7 @@ from PyQt5.QtGui import QDoubleValidator
 from app.config import Config, Vocabularies
 from models.building import Building
 from controllers.unit_controller import UnitController
+from ui.error_handler import ErrorHandler
 from services.validation_service import ValidationService
 from services.api_client import get_api_client
 from ui.components.toast import Toast
@@ -520,36 +521,11 @@ class UnitDialog(QDialog):
         """
 
     def _show_styled_message(self, title: str, message: str, is_error: bool = False):
-        """Show a styled message box with white background (avoids transparent parent issue)."""
-        msg = QMessageBox(self)
-        msg.setWindowTitle(title)
-        msg.setText(message)
-        msg.setIcon(QMessageBox.Critical if is_error else QMessageBox.Warning)
-        msg.setStandardButtons(QMessageBox.Ok)
-        msg.setStyleSheet("""
-            QMessageBox {
-                background-color: #FFFFFF;
-            }
-            QMessageBox QLabel {
-                color: #374151;
-                font-size: 13px;
-                min-width: 250px;
-            }
-            QMessageBox QPushButton {
-                background-color: #3890DF;
-                color: white;
-                border: none;
-                border-radius: 6px;
-                padding: 6px 20px;
-                font-size: 13px;
-                font-weight: 600;
-                min-width: 80px;
-            }
-            QMessageBox QPushButton:hover {
-                background-color: #2A7BC9;
-            }
-        """)
-        msg.exec_()
+        """Show a styled message box."""
+        if is_error:
+            ErrorHandler.show_error(self, message, title)
+        else:
+            ErrorHandler.show_warning(self, message, title)
 
     def _validate_area_input(self, text: str):
         """Real-time validation for area field - numbers only."""

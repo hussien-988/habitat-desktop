@@ -13,10 +13,11 @@ from typing import Optional, Callable
 from functools import wraps
 import traceback
 
-from PyQt5.QtWidgets import QMessageBox, QWidget
+from PyQt5.QtWidgets import QWidget
 from PyQt5.QtCore import pyqtSignal, QObject
 
 from utils.logger import get_logger
+from ui.error_handler import ErrorHandler
 
 logger = get_logger(__name__)
 
@@ -100,11 +101,10 @@ class ErrorBoundary(QObject):
             f"يمكنك المحاولة مرة أخرى أو الاتصال بالدعم الفني."
         )
 
-        QMessageBox.critical(
+        ErrorHandler.show_error(
             self.parent_widget,
-            error_title,
             error_message,
-            QMessageBox.Ok
+            error_title
         )
 
     def get_error_summary(self) -> str:
@@ -156,12 +156,11 @@ def with_error_boundary(step_name: str, operation_name: str = "operation"):
                     parent_window = None
 
                 if parent_window:
-                    QMessageBox.critical(
+                    ErrorHandler.show_error(
                         parent_window,
-                        f"خطأ في {step_name}",
                         f"حدث خطأ أثناء {operation_name}:\n\n{str(e)}\n\n"
                         f"يرجى المحاولة مرة أخرى أو الاتصال بالدعم الفني.",
-                        QMessageBox.Ok
+                        f"خطأ في {step_name}"
                     )
 
                 # Re-raise if critical

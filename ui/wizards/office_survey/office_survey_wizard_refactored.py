@@ -18,9 +18,10 @@ Steps:
 
 from typing import List
 
-from PyQt5.QtWidgets import QMessageBox, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QFrame, QGraphicsDropShadowEffect, QSpacerItem, QSizePolicy
+from PyQt5.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QFrame, QGraphicsDropShadowEffect, QSpacerItem, QSizePolicy
 from PyQt5.QtCore import pyqtSignal, Qt, QSize
 from PyQt5.QtGui import QFont, QColor
+from ui.error_handler import ErrorHandler
 
 from ui.wizards.framework import BaseWizard, BaseStep
 from ui.wizards.office_survey.survey_context import SurveyContext
@@ -158,10 +159,10 @@ class OfficeSurveyWizard(BaseWizard):
 
                 if not survey_id:
                     logger.error("No survey_id found in context for finalization")
-                    QMessageBox.warning(
+                    ErrorHandler.show_warning(
                         self,
-                        "خطأ",
-                        "لم يتم العثور على معرف المسح.\nيرجى التأكد من إنشاء المسح أولاً."
+                        "لم يتم العثور على معرف المسح.\nيرجى التأكد من إنشاء المسح أولاً.",
+                        "خطأ"
                     )
                     return False
 
@@ -209,10 +210,10 @@ class OfficeSurveyWizard(BaseWizard):
                     error_msg = str(api_error)
                     logger.error(f"Failed to finalize survey: {error_msg}")
 
-                    QMessageBox.critical(
+                    ErrorHandler.show_error(
                         self,
-                        "خطأ",
-                        f"فشل في إنهاء المسح:\n{error_msg}"
+                        f"فشل في إنهاء المسح:\n{error_msg}",
+                        "خطأ"
                     )
                     return False
             else:
@@ -245,26 +246,24 @@ class OfficeSurveyWizard(BaseWizard):
             logger.error(f"Error submitting survey: {e}", exc_info=True)
             import traceback
             traceback.print_exc()
-            QMessageBox.critical(
+            ErrorHandler.show_error(
                 self,
-                "خطأ",
-                f"حدث خطأ أثناء حفظ المسح:\n{str(e)}"
+                f"حدث خطأ أثناء حفظ المسح:\n{str(e)}",
+                "خطأ"
             )
             return False
 
     def on_cancel(self) -> bool:
         """Handle wizard cancellation."""
         # Ask for confirmation
-        reply = QMessageBox.question(
+        confirmed = ErrorHandler.confirm(
             self,
-            "تأكيد الإلغاء",
             "هل أنت متأكد من إلغاء المسح؟\n"
             "سيتم فقد جميع البيانات المدخلة.",
-            QMessageBox.Yes | QMessageBox.No,
-            QMessageBox.No
+            "تأكيد الإلغاء"
         )
 
-        if reply == QMessageBox.Yes:
+        if confirmed:
             self.context.status = "cancelled"
             logger.info(f"Survey cancelled: {self.context.reference_number}")
             return True
@@ -297,10 +296,10 @@ class OfficeSurveyWizard(BaseWizard):
 
         except Exception as e:
             logger.error(f"Error saving draft: {e}", exc_info=True)
-            QMessageBox.critical(
+            ErrorHandler.show_error(
                 self,
-                "خطأ",
-                f"حدث خطأ أثناء حفظ المسودة:\n{str(e)}"
+                f"حدث خطأ أثناء حفظ المسودة:\n{str(e)}",
+                "خطأ"
             )
             return None
 
@@ -346,10 +345,10 @@ class OfficeSurveyWizard(BaseWizard):
 
         except Exception as e:
             logger.error(f"Error loading draft: {e}", exc_info=True)
-            QMessageBox.critical(
+            ErrorHandler.show_error(
                 None,
-                "خطأ",
-                f"حدث خطأ أثناء تحميل المسودة:\n{str(e)}"
+                f"حدث خطأ أثناء تحميل المسودة:\n{str(e)}",
+                "خطأ"
             )
             return None
 

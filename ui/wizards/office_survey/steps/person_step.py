@@ -14,7 +14,7 @@ import uuid
 
 from PyQt5.QtWidgets import (
     QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
-    QFrame, QScrollArea, QWidget, QMessageBox, QTableWidget,
+    QFrame, QScrollArea, QWidget, QTableWidget,
     QTableWidgetItem, QHeaderView, QAbstractItemView, QMenu, QSpacerItem,
     QSizePolicy, QDialog
 )
@@ -27,6 +27,7 @@ from ui.wizards.office_survey.dialogs.person_dialog import PersonDialog
 from app.config import Config
 from services.api_client import get_api_client
 from utils.logger import get_logger
+from ui.error_handler import ErrorHandler
 from ui.font_utils import FontManager, create_font
 from ui.design_system import Colors
 
@@ -413,24 +414,20 @@ class PersonStep(BaseStep):
         has_relations = any(r['person_id'] == person_id for r in self.context.relations)
 
         if has_relations:
-            reply = QMessageBox.question(
+            if not ErrorHandler.confirm(
                 self,
-                "تحذير",
                 "هذا الشخص مرتبط بعلاقات. سيتم حذف العلاقات أيضاً.\nهل تريد المتابعة؟",
-                QMessageBox.Yes | QMessageBox.No
-            )
-            if reply == QMessageBox.No:
+                "تحذير"
+            ):
                 return
             # Remove relations
             self.context.relations = [r for r in self.context.relations if r['person_id'] != person_id]
         else:
-            reply = QMessageBox.question(
+            if not ErrorHandler.confirm(
                 self,
-                "تأكيد الحذف",
                 "هل أنت متأكد من حذف هذا الشخص؟",
-                QMessageBox.Yes | QMessageBox.No
-            )
-            if reply == QMessageBox.No:
+                "تأكيد الحذف"
+            ):
                 return
 
         self.context.persons = [p for p in self.context.persons if p['person_id'] != person_id]

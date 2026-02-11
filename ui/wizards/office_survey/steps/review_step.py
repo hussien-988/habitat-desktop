@@ -10,13 +10,14 @@ from datetime import datetime
 
 from PyQt5.QtWidgets import (
     QVBoxLayout, QLabel, QScrollArea, QWidget, QFrame,
-    QHBoxLayout, QGridLayout, QMessageBox, QGraphicsDropShadowEffect
+    QHBoxLayout, QGridLayout, QGraphicsDropShadowEffect
 )
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QColor
 
 from ui.wizards.framework import BaseStep, StepValidationResult
 from ui.wizards.office_survey.survey_context import SurveyContext
+from ui.error_handler import ErrorHandler
 from ui.design_system import Colors
 from ui.font_utils import FontManager, create_font
 from ui.components.icon import Icon
@@ -1364,10 +1365,10 @@ class ReviewStep(BaseStep):
         survey_id = self.context.get_data("survey_id")
         if not survey_id:
             logger.error("No survey_id found in context. Cannot finalize.")
-            QMessageBox.critical(
+            ErrorHandler.show_error(
                 self,
-                "خطأ",
-                "لم يتم العثور على معرف المسح. لا يمكن إنهاء المسح."
+                "لم يتم العثور على معرف المسح. لا يمكن إنهاء المسح.",
+                "خطأ"
             )
             return
 
@@ -1385,10 +1386,10 @@ class ReviewStep(BaseStep):
             response = self._api_service.finalize_office_survey(survey_id, finalize_options)
 
             logger.info(f"Survey {survey_id} finalized successfully")
-            QMessageBox.information(
+            ErrorHandler.show_success(
                 self,
-                "نجح",
-                "تم إنهاء المسح بنجاح!"
+                "تم إنهاء المسح بنجاح!",
+                "نجح"
             )
 
         except Exception as e:
@@ -1397,10 +1398,10 @@ class ReviewStep(BaseStep):
 
             full_error = f"فشل في إنهاء المسح:\n\n{error_msg}"
 
-            QMessageBox.critical(
+            ErrorHandler.show_error(
                 self,
-                "خطأ",
-                full_error
+                full_error,
+                "خطأ"
             )
 
     def on_show(self):

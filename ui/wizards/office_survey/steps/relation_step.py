@@ -25,6 +25,7 @@ from app.config import Config
 from services.api_client import get_api_client
 from utils.logger import get_logger
 from ui.components.toast import Toast
+from ui.error_handler import ErrorHandler
 
 logger = get_logger(__name__)
 
@@ -541,7 +542,6 @@ class RelationStep(BaseStep):
         """Process claims for the survey by calling the API and store response for Step 6."""
         import sys
         import json
-        from PyQt5.QtWidgets import QMessageBox
 
         print("\n[PROCESS-CLAIMS] Starting _process_claims_via_api()")
         sys.stdout.flush()
@@ -565,7 +565,7 @@ class RelationStep(BaseStep):
             logger.warning("No survey_id found in context. Skipping process-claims.")
             print("[PROCESS-CLAIMS] ERROR: No survey_id found in context!")
             sys.stdout.flush()
-            QMessageBox.warning(self, "Error", "No survey_id found in context!")
+            ErrorHandler.show_warning(self, "No survey_id found in context!", "Error")
             return
 
         logger.info(f"Processing claims for survey {survey_id} from Step 5")
@@ -628,15 +628,15 @@ class RelationStep(BaseStep):
                     if len(claims_info) > 5:
                         msg += f"\n... and {len(claims_info) - 5} more"
 
-                QMessageBox.information(self, "Process Claims Success", msg)
+                ErrorHandler.show_success(self, msg, "Process Claims Success")
             else:
                 reason = api_data.get('claimNotCreatedReason', 'Unknown')
                 logger.warning(f"Claim not created. Reason: {reason}")
                 print(f"[CLAIMS] Not created. Reason: {reason}")
-                QMessageBox.information(
+                ErrorHandler.show_warning(
                     self,
-                    "Process Claims",
-                    f"Survey processed but no claims created.\n\nReason: {reason}"
+                    f"Survey processed but no claims created.\n\nReason: {reason}",
+                    "Process Claims"
                 )
             sys.stdout.flush()
 
@@ -667,10 +667,10 @@ class RelationStep(BaseStep):
             sys.stdout.flush()
 
             # Show error message box
-            QMessageBox.warning(
+            ErrorHandler.show_error(
                 self,
-                "Process Claims Error",
-                f"Failed to process claims!\n\nError: {error_msg}"
+                f"Failed to process claims!\n\nError: {error_msg}",
+                "Process Claims Error"
             )
 
             # Clear any previous response

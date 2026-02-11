@@ -13,7 +13,7 @@ import uuid
 
 from PyQt5.QtWidgets import (
     QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton,
-    QFrame, QScrollArea, QWidget, QMessageBox, QGroupBox,
+    QFrame, QScrollArea, QWidget, QGroupBox,
     QSpinBox, QTextEdit, QGridLayout, QGraphicsDropShadowEffect
 )
 from PyQt5.QtCore import Qt, QLocale
