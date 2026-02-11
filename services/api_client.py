@@ -650,9 +650,82 @@ class TRRCMSApiClient:
         Returns:
             BuildingDto المُنشأ
         """
-        result = self._request("POST", "/v1/Buildings", json_data=building_data)
+        api_data = self._convert_building_to_api_format(building_data)
+        logger.info(f"Creating building: {api_data.get('buildingId', 'N/A')}")
+        result = self._request("POST", "/v1/Buildings", json_data=api_data)
         logger.info(f"✅ Created building: {result.get('buildingId')}")
         return result
+
+    def update_building(self, building_id: str, building_data: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        تحديث مبنى موجود.
+
+        Args:
+            building_id: UUID للمبنى
+            building_data: بيانات المبنى المحدثة
+
+        Returns:
+            BuildingDto المحدث
+        """
+        api_data = self._convert_building_to_api_format(building_data)
+        logger.info(f"Updating building: {building_id}")
+        result = self._request("PUT", f"/v1/Buildings/{building_id}", json_data=api_data)
+        logger.info(f"✅ Building updated: {building_id}")
+        return result
+
+    def _convert_building_to_api_format(self, building_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Convert building data to API format (camelCase)."""
+        def get_value(snake_key: str, camel_key: str, default=None):
+            return building_data.get(snake_key) or building_data.get(camel_key) or default
+
+        api_data = {
+            "buildingId": get_value('building_id', 'buildingId', ''),
+            "governorateCode": get_value('governorate_code', 'governorateCode', ''),
+            "governorateName": get_value('governorate_name', 'governorateName', ''),
+            "governorateNameAr": get_value('governorate_name_ar', 'governorateNameAr', ''),
+            "districtCode": get_value('district_code', 'districtCode', ''),
+            "districtName": get_value('district_name', 'districtName', ''),
+            "districtNameAr": get_value('district_name_ar', 'districtNameAr', ''),
+            "subDistrictCode": get_value('subdistrict_code', 'subDistrictCode', ''),
+            "subDistrictName": get_value('subdistrict_name', 'subDistrictName', ''),
+            "subDistrictNameAr": get_value('subdistrict_name_ar', 'subDistrictNameAr', ''),
+            "communityCode": get_value('community_code', 'communityCode', ''),
+            "communityName": get_value('community_name', 'communityName', ''),
+            "communityNameAr": get_value('community_name_ar', 'communityNameAr', ''),
+            "neighborhoodCode": get_value('neighborhood_code', 'neighborhoodCode', ''),
+            "neighborhoodName": get_value('neighborhood_name', 'neighborhoodName', ''),
+            "neighborhoodNameAr": get_value('neighborhood_name_ar', 'neighborhoodNameAr', ''),
+            "buildingNumber": get_value('building_number', 'buildingNumber', ''),
+            "buildingType": get_value('building_type', 'buildingType'),
+            "buildingStatus": get_value('building_status', 'buildingStatus'),
+            "numberOfFloors": get_value('number_of_floors', 'numberOfFloors'),
+            "numberOfApartments": get_value('number_of_apartments', 'numberOfApartments'),
+            "numberOfShops": get_value('number_of_shops', 'numberOfShops'),
+            "numberOfUnits": get_value('number_of_units', 'numberOfUnits'),
+            "latitude": get_value('latitude', 'latitude'),
+            "longitude": get_value('longitude', 'longitude'),
+            "buildingGeometryWkt": get_value('geo_location', 'buildingGeometryWkt'),
+            "generalDescription": get_value('general_description', 'generalDescription', ''),
+            "locationDescription": get_value('location_description', 'locationDescription', ''),
+            "notes": get_value('notes', 'notes', '')
+        }
+        # Remove None values
+        return {k: v for k, v in api_data.items() if v is not None}
+
+    def delete_building(self, building_id: str) -> bool:
+        """
+        حذف مبنى.
+
+        Args:
+            building_id: UUID للمبنى
+
+        Returns:
+            True إذا تم الحذف بنجاح
+        """
+        logger.info(f"Deleting building: {building_id}")
+        self._request("DELETE", f"/v1/Buildings/{building_id}")
+        logger.info(f"✅ Building deleted: {building_id}")
+        return True
 
     # ==================== Property Units ====================
 

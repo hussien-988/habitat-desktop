@@ -79,8 +79,7 @@ class BuildingController(BaseController):
 
         # Initialize appropriate backend
         if self._use_api:
-            from services.building_api_service import BuildingApiService
-            self._api_service = BuildingApiService()
+            self._api_service = get_api_client()
             self.repository = None
             logger.info("BuildingController using API backend")
         else:
@@ -119,13 +118,12 @@ class BuildingController(BaseController):
             token: JWT/Bearer token
         """
         if self._api_service:
-            self._api_service.set_auth_token(token)
+            self._api_service.set_access_token(token)
 
     def switch_to_api(self):
         """Switch to API backend."""
         if not self._use_api:
-            from services.building_api_service import BuildingApiService
-            self._api_service = BuildingApiService()
+            self._api_service = get_api_client()
             self._use_api = True
             logger.info("BuildingController switched to API backend")
 
@@ -167,7 +165,8 @@ class BuildingController(BaseController):
             # Create building via API or local database
             if self._use_api and self._api_service:
                 logger.info(f"🌐 Using API backend for building creation (Config.DATA_PROVIDER={Config.DATA_PROVIDER})")
-                saved_building = self._api_service.create_building(data)
+                response = self._api_service.create_building(data)
+                saved_building = self._api_dto_to_building(response)
             else:
                 logger.info(f"💾 Using local DB for building creation (Config.DATA_PROVIDER={Config.DATA_PROVIDER})")
                 building = Building(**data)
@@ -212,7 +211,8 @@ class BuildingController(BaseController):
 
             # Get existing building
             if self._use_api and self._api_service:
-                existing = self._api_service.get_building_by_id(building_uuid)
+                response = self._api_service.get_building_by_id(building_uuid)
+                existing = self._api_dto_to_building(response) if response else None
             else:
                 existing = self.repository.get_by_uuid(building_uuid)
 
@@ -234,7 +234,8 @@ class BuildingController(BaseController):
                 # Merge existing data with new data
                 merged_data = existing.to_dict()
                 merged_data.update(data)
-                updated_building = self._api_service.update_building(building_uuid, merged_data)
+                response = self._api_service.update_building(building_uuid, merged_data)
+                updated_building = self._api_dto_to_building(response)
             else:
                 # Update building locally
                 for key, value in data.items():
@@ -367,12 +368,13 @@ class BuildingController(BaseController):
 
             if self._use_api and self._api_service:
                 # Use API service
-                building = self._api_service.update_building_geometry(
+                response = self._api_service.update_building_geometry(
                     building_id=building_uuid,
                     latitude=latitude,
                     longitude=longitude,
                     building_geometry_wkt=polygon_wkt
                 )
+                building = self._api_dto_to_building(response) if response else None
             else:
                 # Use local repository
                 building = self.repository.update_geometry(
@@ -419,7 +421,8 @@ class BuildingController(BaseController):
         """
         try:
             if self._use_api and self._api_service:
-                building = self._api_service.get_building_by_id(building_uuid)
+                response = self._api_service.get_building_by_id(building_uuid)
+                building = self._api_dto_to_building(response) if response else None
             else:
                 building = self.repository.get_by_uuid(building_uuid)
 
@@ -446,7 +449,8 @@ class BuildingController(BaseController):
         """
         try:
             if self._use_api and self._api_service:
-                building = self._api_service.get_building_by_id(building_id)
+                response = self._api_service.get_building_by_id(building_id)
+                building = self._api_dto_to_building(response) if response else None
             else:
                 building = self.repository.get_by_building_id(building_id)
 
@@ -506,10 +510,21 @@ class BuildingController(BaseController):
 
             # Use API or local database based on configuration
             if self._use_api and self._api_service:
-                buildings = self._api_service.get_all_buildings(
-                    search_text=filter_.search_text if filter_ else None,
-                    limit=filter_.limit if filter_ else None
-                )
+                try:
+                    # Use search_buildings API with pagination
+                    response = self._api_service.search_buildings(
+                        building_id=filter_.search_text if filter_ and filter_.search_text else None,
+                        neighborhood_code=filter_.neighborhood_code if filter_ else None,
+                        page_size=filter_.limit if filter_ else 100
+                    )
+                    # Convert API response to Building objects
+                    buildings = []
+                    for item in response.get("items", []):
+                        building = self._api_dto_to_building(item)
+                        buildings.append(building)
+                except Exception as e:
+                    logger.error(f"API search failed: {e}")
+                    buildings = []
             else:
                 # Build query based on filter
                 buildings = self._query_buildings(filter_)
@@ -546,7 +561,12 @@ class BuildingController(BaseController):
             if self._use_api and self._api_service:
                 # Use dedicated search API endpoint
                 logger.info(f"🌐 Using API backend for building search (Config.DATA_PROVIDER={Config.DATA_PROVIDER})")
-                buildings = self._api_service.search_buildings(search_text)
+                response = self._api_service.search_buildings(building_id=search_text, page_size=100)
+                # Convert API response to Building objects
+                buildings = []
+                for item in response.get("items", []):
+                    building = self._api_dto_to_building(item)
+                    buildings.append(building)
                 logger.info(f"Search found {len(buildings)} buildings for query: {search_text}")
                 self._buildings_cache = buildings
                 self._emit_completed("search_buildings", True)
