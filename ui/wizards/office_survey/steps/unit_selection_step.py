@@ -24,7 +24,7 @@ from ui.wizards.office_survey.survey_context import SurveyContext
 from controllers.unit_controller import UnitController
 from models.unit import PropertyUnit as Unit
 from app.config import Config
-from services.property_unit_api_service import PropertyUnitApiService
+from services.api_client import get_api_client
 from utils.logger import get_logger
 from utils.helpers import build_hierarchical_address
 from ui.design_system import Colors
@@ -52,8 +52,8 @@ class UnitSelectionStep(BaseStep):
         self.unit_controller = UnitController(self.context.db)
         self.selected_unit: Optional[Unit] = None
 
-        # Initialize API service for linking units to survey
-        self._api_service = PropertyUnitApiService()
+        # Initialize API client for linking units to survey
+        self._api_service = get_api_client()
         self._use_api = getattr(Config, 'DATA_PROVIDER', 'local_db') == 'http'
 
         # Set auth token for API calls if available
@@ -752,18 +752,16 @@ class UnitSelectionStep(BaseStep):
 
             if survey_id and unit_id:
                 print(f"[UNIT-LINK] Linking unit {unit_id} to survey {survey_id}")
-                response = self._api_service.link_unit_to_survey(survey_id, unit_id)
-
-                if not response.get("success"):
-                    error_msg = response.get("error", "Unknown error")
+                try:
+                    response = self._api_service.link_unit_to_survey(survey_id, unit_id)
+                    logger.info(f"Unit {unit_id} linked to survey {survey_id}")
+                    print(f"[UNIT-LINK] Unit {unit_id} linked to survey {survey_id} successfully")
+                    print(f"[UNIT-LINK] Full API response: {response}")
+                except Exception as e:
+                    error_msg = str(e)
                     logger.error(f"Failed to link unit to survey: {error_msg}")
                     result.add_error(f"فشل في ربط الوحدة بالمسح: {error_msg}")
                     return result
-
-                logger.info(f"Unit {unit_id} linked to survey {survey_id}")
-                print(f"[UNIT-LINK] Unit {unit_id} linked to survey {survey_id} successfully")
-                if response.get("data"):
-                    print(f"[UNIT-LINK] Full API response: {response['data']}")
             else:
                 logger.warning(f"Missing survey_id ({survey_id}) or unit_id ({unit_id}), skipping link")
 
@@ -773,7 +771,7 @@ class UnitSelectionStep(BaseStep):
         """Set auth token for API service from main window."""
         main_window = self.window()
         if main_window and hasattr(main_window, '_api_token') and main_window._api_token:
-            self._api_service.set_auth_token(main_window._api_token)
+            self._api_service.set_access_token(main_window._api_token)
 
     def collect_data(self) -> Dict[str, Any]:
         """Collect data from the step."""

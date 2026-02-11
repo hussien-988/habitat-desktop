@@ -23,7 +23,7 @@ from app.config import Config, Vocabularies
 from models.building import Building
 from controllers.unit_controller import UnitController
 from services.validation_service import ValidationService
-from services.property_unit_api_service import PropertyUnitApiService
+from services.api_client import get_api_client
 from ui.components.toast import Toast
 from utils.logger import get_logger
 
@@ -52,8 +52,10 @@ class UnitDialog(QDialog):
         self.unit_controller = UnitController(db)
         self.validation_service = ValidationService()
 
-        # Initialize API service for creating units
-        self._api_service = PropertyUnitApiService(auth_token)
+        # Initialize API client for creating units
+        self._api_service = get_api_client()
+        if auth_token:
+            self._api_service.set_access_token(auth_token)
         self._use_api = getattr(Config, 'DATA_PROVIDER', 'local_db') == 'http'
 
         # إزالة الشريط العلوي (title bar)
@@ -653,21 +655,19 @@ class UnitDialog(QDialog):
         # If using API and creating new unit, call API first
         if self._use_api and not self.unit_data:
             unit_data = self.get_unit_data()
+            if self._survey_id:
+                unit_data['survey_id'] = self._survey_id
             logger.info(f"Creating property unit via API: {unit_data}")
 
-            response = self._api_service.create_property_unit(unit_data, survey_id=self._survey_id)
-
-            if not response.get("success"):
-                error_msg = response.get("error", "Unknown error")
-                details = response.get("details", "")
-                logger.error(f"Failed to create unit via API: {error_msg} - {details}")
+            try:
+                response = self._api_service.create_property_unit(unit_data)
+                logger.info("Property unit created successfully via API")
+                self._created_unit_data = response
+            except Exception as e:
+                error_msg = str(e)
+                logger.error(f"Failed to create unit via API: {error_msg}")
                 self._show_styled_message("خطأ", f"فشل في إنشاء الوحدة:\n{error_msg}", is_error=True)
                 return
-
-            logger.info("Property unit created successfully via API")
-            # Store the created unit data from API response
-            if response.get("data"):
-                self._created_unit_data = response.get("data")
 
         self.accept()
 
@@ -758,4 +758,4 @@ class UnitDialog(QDialog):
     def set_auth_token(self, token: str):
         """Set authentication token for API calls."""
         if self._api_service:
-            self._api_service.set_auth_token(token)
+            self._api_service.set_access_token(token)

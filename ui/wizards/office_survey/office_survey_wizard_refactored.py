@@ -144,7 +144,7 @@ class OfficeSurveyWizard(BaseWizard):
         Returns:
             True if submission was successful
         """
-        from services.survey_api_service import SurveyApiService
+        from services.api_client import get_api_client
         from app.config import Config
         import json
 
@@ -166,23 +166,23 @@ class OfficeSurveyWizard(BaseWizard):
                     return False
 
                 # Initialize API service and set auth token
-                api_service = SurveyApiService()
+                api_service = get_api_client()
 
                 # Get auth token from main window
                 main_window = self.window()
                 if main_window and hasattr(main_window, '_api_token') and main_window._api_token:
-                    api_service.set_auth_token(main_window._api_token)
+                    api_service.set_access_token(main_window._api_token)
                     logger.info(f"Auth token set for finalize API call")
 
                 # Call the finalize API
                 logger.info(f"Calling finalize API for survey {survey_id}")
                 print(f"\n[FINALIZE] POST /api/v1/Surveys/office/{survey_id}/finalize")
 
-                response = api_service.finalize_survey_status(survey_id)
+                try:
+                    response = api_service.finalize_survey_status(survey_id)
 
-                print(f"[FINALIZE] Response: {json.dumps(response, indent=2, ensure_ascii=False, default=str)}")
+                    print(f"[FINALIZE] Response: {json.dumps(response, indent=2, ensure_ascii=False, default=str)}")
 
-                if response.get("success"):
                     # Update context status
                     self.context.status = "finalized"
 
@@ -204,15 +204,15 @@ class OfficeSurveyWizard(BaseWizard):
                     self._finalization_complete = True
 
                     return True
-                else:
-                    error_msg = response.get("error", "Unknown error")
-                    error_details = response.get("details", "")
+
+                except Exception as api_error:
+                    error_msg = str(api_error)
                     logger.error(f"Failed to finalize survey: {error_msg}")
 
                     QMessageBox.critical(
                         self,
                         "خطأ",
-                        f"فشل في إنهاء المسح:\n{error_msg}\n{error_details}"
+                        f"فشل في إنهاء المسح:\n{error_msg}"
                     )
                     return False
             else:

@@ -69,8 +69,8 @@ class UnitController(BaseController):
 
         # Initialize appropriate backend
         if self._use_api:
-            from services.property_unit_api_service import PropertyUnitApiService
-            self._api_service = PropertyUnitApiService()
+            from services.api_client import get_api_client
+            self._api_service = get_api_client()
             self.repository = None
             logger.info("UnitController using API backend")
         else:
@@ -85,7 +85,7 @@ class UnitController(BaseController):
     def set_auth_token(self, token: str):
         """Set authentication token for API calls."""
         if self._api_service:
-            self._api_service.set_auth_token(token)
+            self._api_service.set_access_token(token)
             logger.info("API token set for UnitController")
 
     # ==================== Properties ====================
