@@ -10,7 +10,7 @@ from datetime import datetime
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QComboBox, QFrame, QGridLayout, QFileDialog,
-    QGraphicsDropShadowEffect, QProgressBar, QMessageBox, QDateEdit
+    QGraphicsDropShadowEffect, QProgressBar, QDateEdit
 )
 from PyQt5.QtCore import Qt, QDate
 from PyQt5.QtGui import QColor
@@ -19,6 +19,7 @@ from app.config import Config
 from repositories.database import Database
 from services.export_service import ExportService
 from ui.components.toast import Toast
+from ui.error_handler import ErrorHandler
 from utils.i18n import I18n
 from utils.logger import get_logger
 
@@ -272,7 +273,7 @@ class ReportsPage(QWidget):
 
         except Exception as e:
             logger.error(f"Report generation failed: {e}")
-            QMessageBox.warning(self, "خطأ", f"فشل في إنشاء التقرير: {str(e)}")
+            ErrorHandler.show_warning(self, f"فشل في إنشاء التقرير: {str(e)}", "خطأ")
 
     def _on_export(self):
         """Handle data export."""
@@ -327,7 +328,7 @@ class ReportsPage(QWidget):
 
         except Exception as e:
             logger.error(f"Export failed: {e}")
-            QMessageBox.warning(self, "خطأ", f"فشل في التصدير: {str(e)}")
+            ErrorHandler.show_warning(self, f"فشل في التصدير: {str(e)}", "خطأ")
 
         finally:
             self.progress.setVisible(False)

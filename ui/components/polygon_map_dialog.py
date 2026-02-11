@@ -17,8 +17,9 @@ from typing import List, Optional
 from PyQt5.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QFrame, QLineEdit, QGroupBox, QRadioButton,
-    QButtonGroup, QMessageBox
+    QButtonGroup
 )
+from ui.error_handler import ErrorHandler
 from PyQt5.QtCore import QObject, pyqtSignal, pyqtSlot, QUrl, Qt
 from PyQt5.QtWebEngineWidgets import QWebEngineView, QWebEngineSettings, QWebEnginePage, QWebEngineProfile
 from PyQt5.QtWebChannel import QWebChannel
@@ -386,10 +387,10 @@ class PolygonMapDialog(QDialog):
 
         except Exception as e:
             logger.error(f"Error querying buildings in polygon: {e}", exc_info=True)
-            QMessageBox.critical(
+            ErrorHandler.show_error(
                 self,
-                "خطأ",
-                f"حدث خطأ أثناء البحث عن المباني:\n{str(e)}"
+                f"حدث خطأ أثناء البحث عن المباني:\n{str(e)}",
+                "خطأ"
             )
 
     def _query_buildings_in_polygon(self, polygon_wkt: str) -> List[Building]:
@@ -443,10 +444,10 @@ class PolygonMapDialog(QDialog):
     def _on_confirm(self):
         """Confirm the selection and close dialog."""
         if not self._selected_buildings:
-            QMessageBox.warning(
+            ErrorHandler.show_warning(
                 self,
-                "تنبيه",
-                "لم يتم تحديد أي مباني. يرجى رسم مضلع يحتوي على مباني."
+                "لم يتم تحديد أي مباني. يرجى رسم مضلع يحتوي على مباني.",
+                "تنبيه"
             )
             return
 

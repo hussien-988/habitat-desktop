@@ -11,7 +11,7 @@ from datetime import datetime, date
 
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
-    QFrame, QLineEdit, QDateEdit, QMessageBox,
+    QFrame, QLineEdit, QDateEdit,
     QSpacerItem, QSizePolicy, QScrollArea, QDialog
 )
 from PyQt5.QtCore import Qt, pyqtSignal, QDate

@@ -9,7 +9,7 @@ from PyQt5.QtWidgets import (
     QComboBox, QTableView, QTableWidget, QTableWidgetItem,
     QFrame, QSplitter, QAbstractItemView, QHeaderView,
     QDialog, QFormLayout, QLineEdit, QCheckBox, QTextEdit,
-    QMessageBox, QGroupBox, QListWidget, QListWidgetItem,
+    QGroupBox, QListWidget, QListWidgetItem,
     QProgressDialog
 )
 from PyQt5.QtCore import Qt, QModelIndex, pyqtSignal, QTimer
@@ -24,6 +24,7 @@ from ui.components.toast import Toast
 from ui.components.base_table_model import BaseTableModel
 from ui.components.dialogs.base_dialog import BaseDialog
 from utils.i18n import I18n
+from ui.error_handler import ErrorHandler
 from utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -645,15 +646,11 @@ class FieldAssignmentPage(QWidget):
 
         team_name = self.team_combo.currentText()
 
-        reply = QMessageBox.question(
+        if not ErrorHandler.confirm(
             self,
-            "تأكيد التعيين",
             f"هل تريد تعيين {len(buildings)} مبنى للفريق: {team_name}؟",
-            QMessageBox.Yes | QMessageBox.No,
-            QMessageBox.No
-        )
-
-        if reply != QMessageBox.Yes:
+            "تأكيد التعيين"
+        ):
             return
 
         try:

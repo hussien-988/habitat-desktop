@@ -1264,11 +1264,11 @@ class FieldWorkPreparationStep1(QWidget):
 
         except Exception as e:
             logger.error(f"Error opening map selector: {e}", exc_info=True)
-            from PyQt5.QtWidgets import QMessageBox
-            QMessageBox.warning(
+            from ui.error_handler import ErrorHandler
+            ErrorHandler.show_warning(
                 self,
-                "خطأ - Error",
-                f"حدث خطأ أثناء فتح الخريطة:\n{str(e)}"
+                f"حدث خطأ أثناء فتح الخريطة:\n{str(e)}",
+                "خطأ - Error"
             )
 
     def _on_next(self):

@@ -10,7 +10,7 @@ from pathlib import Path
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QFrame, QListWidget, QListWidgetItem, QComboBox,
-    QLineEdit, QSplitter, QMessageBox
+    QLineEdit, QSplitter
 )
 from PyQt5.QtCore import Qt, pyqtSignal, QUrl
 from PyQt5.QtGui import QColor

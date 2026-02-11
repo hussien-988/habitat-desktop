@@ -10,7 +10,7 @@ from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QTextEdit,
     QPushButton, QComboBox, QTableView, QTableWidget, QTableWidgetItem, QHeaderView,
     QFrame, QFileDialog, QAbstractItemView, QGraphicsDropShadowEffect,
-    QDialog, QDoubleSpinBox, QSpinBox, QMessageBox, QScrollArea,
+    QDialog, QDoubleSpinBox, QSpinBox, QScrollArea,
     QMenu, QAction, QTabWidget, QStackedWidget, QStyleOptionHeader, QStyle
 )
 from PyQt5.QtCore import Qt, pyqtSignal, QPoint, QRect, QSize, QLocale
@@ -33,6 +33,7 @@ from services.validation_service import ValidationService
 from ui.components.toast import Toast
 from ui.components.dialogs import ExportDialog
 from ui.components.message_dialog import MessageDialog
+from ui.error_handler import ErrorHandler
 from ui.components.custom_button import CustomButton
 from ui.components.primary_button import PrimaryButton
 from ui.design_system import PageDimensions, Colors, ButtonDimensions
@@ -1254,10 +1255,10 @@ class AddBuildingPage(QWidget):
                     self.geometry_type_label.setText("📍 نقطة")
 
         except ImportError:
-            QMessageBox.information(
+            ErrorHandler.show_success(
                 self,
-                "اختيار الموقع",
-                "يرجى إدخال الإحداثيات يدوياً."
+                "يرجى إدخال الإحداثيات يدوياً.",
+                "اختيار الموقع"
             )
 
     def _populate_data(self):
@@ -1595,14 +1596,11 @@ class AddBuildingPage(QWidget):
             return
 
         if result.warnings:
-            reply = QMessageBox.warning(
+            if not ErrorHandler.confirm(
                 self,
-                "تحذيرات",
                 "\n".join(result.warnings) + "\n\nهل تريد المتابعة؟",
-                QMessageBox.Yes | QMessageBox.No,
-                QMessageBox.No
-            )
-            if reply != QMessageBox.Yes:
+                "تحذيرات"
+            ):
                 return
 
         try:
@@ -1738,16 +1736,13 @@ class AddBuildingPage(QWidget):
                 current_code = self.neighborhood_code_input.text().strip()
 
                 if current_code and current_code != neighborhood.code:
-                    reply = QMessageBox.question(
+                    if ErrorHandler.confirm(
                         self,
-                        "تغيير المنطقة",
                         f"المنطقة المدخلة: {current_code}\n"
                         f"المنطقة المكتشفة: {neighborhood.name_ar} ({neighborhood.code})\n\n"
                         f"هل تريد التحديث إلى المنطقة المكتشفة؟",
-                        QMessageBox.Yes | QMessageBox.No
-                    )
-
-                    if reply == QMessageBox.Yes:
+                        "تغيير المنطقة"
+                    ):
                         self.neighborhood_code_input.setText(neighborhood.code)
 
                 elif not current_code:
@@ -1830,11 +1825,11 @@ class AddBuildingPage(QWidget):
 
             if not detected:
                 logger.warning("Could not detect neighborhood from polygon")
-                QMessageBox.warning(
+                ErrorHandler.show_warning(
                     self,
-                    "تحذير",
-                    "⚠️ لم يتم التعرف على الحي من الموقع المحدد على الخريطة.\n"
-                    "يرجى التأكد من رسم المضلع داخل حدود الحي الصحيح."
+                    "لم يتم التعرف على الحي من الموقع المحدد على الخريطة.\n"
+                    "يرجى التأكد من رسم المضلع داخل حدود الحي الصحيح.",
+                    "تحذير"
                 )
                 return
 
@@ -1845,18 +1840,14 @@ class AddBuildingPage(QWidget):
                 current_name = current_neighborhood.name_ar if current_neighborhood else current_neighborhood_code
 
                 # Show warning dialog
-                reply = QMessageBox.warning(
+                if ErrorHandler.confirm(
                     self,
-                    "تحذير - حي مختلف",
-                    f"⚠️ البوليغون المرسوم يقع في حي مختلف!\n\n"
+                    f"البوليغون المرسوم يقع في حي مختلف!\n\n"
                     f"الحي المدخل في الحقل: {current_name} ({current_neighborhood_code})\n"
                     f"الحي المكتشف من الخريطة: {detected.name_ar} ({detected.code})\n\n"
                     f"هل تريد تحديث حقل الحي إلى '{detected.name_ar}' ({detected.code})؟",
-                    QMessageBox.Yes | QMessageBox.No,
-                    QMessageBox.Yes
-                )
-
-                if reply == QMessageBox.Yes:
+                    "تحذير - حي مختلف"
+                ):
                     # Update neighborhood code field
                     self.neighborhood_code_input.setText(detected.code)
                     self._update_building_id()  # Update building ID

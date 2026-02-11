@@ -17,7 +17,8 @@ Best Practices (DRY + SOLID):
 """
 
 from typing import List, Optional
-from PyQt5.QtWidgets import QMessageBox, QPushButton, QHBoxLayout, QWidget
+from PyQt5.QtWidgets import QPushButton, QHBoxLayout, QWidget
+from ui.error_handler import ErrorHandler
 from PyQt5.QtCore import Qt
 
 from repositories.database import Database
@@ -180,10 +181,10 @@ class PolygonMapDialog(BaseMapDialog):
             self._cleanup_overlay()
             self.accept()
         else:
-            QMessageBox.warning(
+            ErrorHandler.show_warning(
                 self,
-                "لا توجد مباني محددة",
-                "الرجاء تحديد مباني أولاً (رسم مضلع أو نقر مباشر)"
+                "الرجاء تحديد مباني أولاً (رسم مضلع أو نقر مباشر)",
+                "لا توجد مباني محددة"
             )
 
     def accept(self):
@@ -264,10 +265,10 @@ class PolygonMapDialog(BaseMapDialog):
 
         except Exception as e:
             logger.error(f"Error loading map: {e}", exc_info=True)
-            QMessageBox.critical(
+            ErrorHandler.show_error(
                 self,
-                "خطأ",
-                f"حدث خطأ أثناء تحميل الخريطة:\n{str(e)}"
+                f"حدث خطأ أثناء تحميل الخريطة:\n{str(e)}",
+                "خطأ"
             )
 
     def _on_geometry_selected(self, geom_type: str, wkt: str):
@@ -324,21 +325,21 @@ class PolygonMapDialog(BaseMapDialog):
                 logger.info(f"✅ Found {count} buildings in polygon - shown on map")
             else:
                 logger.warning("No buildings found in polygon")
-                QMessageBox.warning(
+                ErrorHandler.show_warning(
                     self,
-                    "لا توجد مباني",
                     "المضلع المرسوم لا يحتوي على أي مباني\n"
                     "The drawn polygon contains no buildings\n\n"
-                    "الرجاء رسم مضلع يحتوي على مباني"
+                    "الرجاء رسم مضلع يحتوي على مباني",
+                    "لا توجد مباني"
                 )
                 # Don't close - let user redraw
 
         except Exception as e:
             logger.error(f"Error querying buildings: {e}", exc_info=True)
-            QMessageBox.critical(
+            ErrorHandler.show_error(
                 self,
-                "خطأ",
-                f"حدث خطأ أثناء البحث عن المباني:\n{str(e)}"
+                f"حدث خطأ أثناء البحث عن المباني:\n{str(e)}",
+                "خطأ"
             )
 
     def _query_buildings_in_polygon(self, polygon_wkt: str) -> List[Building]:

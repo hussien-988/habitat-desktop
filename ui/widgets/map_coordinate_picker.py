@@ -24,7 +24,7 @@ from typing import Optional, Tuple, List, Callable
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
     QPushButton, QComboBox, QGroupBox, QDoubleSpinBox,
-    QFrame, QSizePolicy, QMessageBox, QMenu, QAction,
+    QFrame, QSizePolicy, QMenu, QAction,
     QToolButton, QButtonGroup, QRadioButton, QDialog,
     QDialogButtonBox, QFormLayout, QTabWidget, QTextEdit
 )
@@ -32,6 +32,7 @@ from PyQt5.QtCore import Qt, pyqtSignal, QTimer, QUrl
 from PyQt5.QtGui import QDoubleValidator, QIcon
 from PyQt5.QtWebEngineWidgets import QWebEngineView
 from PyQt5.QtWebChannel import QWebChannel
+from ui.error_handler import ErrorHandler
 import logging
 
 logger = logging.getLogger(__name__)
@@ -646,11 +647,11 @@ class MapCoordinatePickerWidget(QWidget):
         """Get current GPS location (if available)."""
         # Note: This requires additional implementation for GPS access
         # For now, show a message
-        QMessageBox.information(
+        ErrorHandler.show_success(
             self,
-            "الموقع الحالي",
             "هذه الميزة تتطلب جهاز GPS.\n"
-            "يرجى إدخال الإحداثيات يدوياً أو النقر على الخريطة."
+            "يرجى إدخال الإحداثيات يدوياً أو النقر على الخريطة.",
+            "الموقع الحالي"
         )
 
     def _copy_coordinates(self):

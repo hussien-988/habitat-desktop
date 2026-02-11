@@ -12,8 +12,9 @@ from typing import Dict, Optional
 from PyQt5.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QFrame, QLineEdit, QGroupBox, QRadioButton,
-    QButtonGroup, QMessageBox
+    QButtonGroup
 )
+from ui.error_handler import ErrorHandler
 from PyQt5.QtCore import QObject, pyqtSignal, pyqtSlot, QUrl
 from PyQt5.QtWebEngineWidgets import QWebEngineView, QWebEngineSettings, QWebEnginePage, QWebEngineProfile
 from PyQt5.QtWebEngineCore import QWebEngineUrlRequestInterceptor
@@ -623,10 +624,10 @@ class MapPickerDialog(QDialog):
     def _on_confirm(self):
         """Confirm the selection."""
         if not self._result:
-            QMessageBox.warning(
+            ErrorHandler.show_warning(
                 self,
-                "تنبيه",
-                "يرجى تحديد موقع على الخريطة أولاً"
+                "يرجى تحديد موقع على الخريطة أولاً",
+                "تنبيه"
             )
             return
 

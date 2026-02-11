@@ -8,7 +8,7 @@ Implements UC-008: Resolve Person Duplicates
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QTableWidget, QTableWidgetItem, QHeaderView, QFrame,
-    QTabWidget, QSplitter, QTextEdit, QMessageBox,
+    QTabWidget, QSplitter, QTextEdit,
     QGraphicsDropShadowEffect, QDialog, QFormLayout,
     QRadioButton, QButtonGroup, QScrollArea, QGroupBox
 )
@@ -19,6 +19,7 @@ from app.config import Config
 from repositories.database import Database
 from services.duplicate_service import DuplicateService, DuplicateGroup
 from ui.components.toast import Toast
+from ui.error_handler import ErrorHandler
 from utils.i18n import I18n
 from utils.logger import get_logger
 
@@ -625,7 +626,7 @@ class MergeDialog(QDialog):
     def _on_merge(self):
         justification = self.justification_edit.toPlainText().strip()
         if not justification:
-            QMessageBox.warning(self, "خطأ", "يجب إدخال سبب الدمج")
+            ErrorHandler.show_warning(self, "يجب إدخال سبب الدمج", "خطأ")
             return
 
         selected = self.button_group.checkedButton()

@@ -17,7 +17,7 @@ Best Practices (DRY + SOLID):
 """
 
 from typing import Optional
-from PyQt5.QtWidgets import QMessageBox
+from ui.error_handler import ErrorHandler
 from PyQt5.QtCore import QTimer
 
 from repositories.database import Database
@@ -319,10 +319,10 @@ class BuildingMapDialog(BaseMapDialog):
 
         except Exception as e:
             logger.error(f"Error loading map: {e}", exc_info=True)
-            QMessageBox.critical(
+            ErrorHandler.show_error(
                 self,
-                "خطأ",
-                f"حدث خطأ أثناء تحميل الخريطة:\n{str(e)}"
+                f"حدث خطأ أثناء تحميل الخريطة:\n{str(e)}",
+                "خطأ"
             )
 
     def _open_building_popup_immediate(self, building_id: str, lat: float, lon: float):
@@ -543,17 +543,13 @@ class BuildingMapDialog(BaseMapDialog):
 
     def _show_building_not_found_error(self, building_id: str):
         """Show error message when building is not found."""
-        msg = QMessageBox(self)
-        msg.setIcon(QMessageBox.Warning)
-        msg.setWindowTitle("لم يتم العثور على المبنى")
-        msg.setText(f"<h3 style='color: #d32f2f;'>المبنى غير موجود</h3>")
-        msg.setInformativeText(
-            f"<p>رمز المبنى: <b>{building_id}</b></p>"
-            f"<p>لم يتم العثور على هذا المبنى في قاعدة البيانات.</p>"
-            f"<p style='color: #666;'>قد يكون المبنى محذوفاً أو غير مسجّل.</p>"
+        ErrorHandler.show_warning(
+            self,
+            f"رمز المبنى: {building_id}\n"
+            f"لم يتم العثور على هذا المبنى في قاعدة البيانات.\n"
+            f"قد يكون المبنى محذوفاً أو غير مسجّل.",
+            "لم يتم العثور على المبنى"
         )
-        msg.setStandardButtons(QMessageBox.Ok)
-        msg.exec_()
 
     def _on_search_submitted(self):
         """Handle search submission - search using backend API."""

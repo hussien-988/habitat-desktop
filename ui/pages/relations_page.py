@@ -8,7 +8,7 @@ from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
     QPushButton, QComboBox, QTableView, QHeaderView,
     QFrame, QDialog, QFormLayout, QSpinBox, QTextEdit,
-    QAbstractItemView, QGraphicsDropShadowEffect, QMessageBox,
+    QAbstractItemView, QGraphicsDropShadowEffect,
     QDateEdit, QGroupBox, QFileDialog, QSplitter, QListWidget,
     QListWidgetItem, QStackedWidget
 )
@@ -25,6 +25,7 @@ from models.relation import PersonUnitRelation
 from models.evidence import Evidence
 from ui.components.toast import Toast
 from ui.components.base_table_model import BaseTableModel
+from ui.error_handler import ErrorHandler
 from utils.i18n import I18n
 from utils.logger import get_logger
 
@@ -1135,15 +1136,11 @@ class RelationsPage(QWidget):
         if not relation:
             return
 
-        reply = QMessageBox.question(
+        if ErrorHandler.confirm(
             self,
-            "تأكيد الحذف",
             "هل أنت متأكد من حذف هذه العلاقة؟",
-            QMessageBox.Yes | QMessageBox.No,
-            QMessageBox.No
-        )
-
-        if reply == QMessageBox.Yes:
+            "تأكيد الحذف"
+        ):
             try:
                 self.relation_repo.delete(relation.relation_id)
                 Toast.show_toast(self, "تم حذف العلاقة بنجاح", Toast.SUCCESS)
@@ -1399,15 +1396,11 @@ class RelationsPage(QWidget):
         if not evidence:
             return
 
-        reply = QMessageBox.question(
+        if ErrorHandler.confirm(
             self,
-            "تأكيد الحذف",
             "هل أنت متأكد من حذف هذا الدليل؟",
-            QMessageBox.Yes | QMessageBox.No,
-            QMessageBox.No
-        )
-
-        if reply == QMessageBox.Yes:
+            "تأكيد الحذف"
+        ):
             try:
                 self.evidence_repo.delete(evidence.evidence_id)
                 Toast.show_toast(self, self.i18n.t("evidence_deleted"), Toast.SUCCESS)

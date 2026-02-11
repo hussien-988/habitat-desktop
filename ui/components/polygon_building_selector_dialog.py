@@ -17,7 +17,7 @@ import json
 
 from PyQt5.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
-    QListWidget, QListWidgetItem, QMessageBox, QGroupBox,
+    QListWidget, QListWidgetItem, QGroupBox,
     QSizePolicy
 )
 from PyQt5.QtCore import Qt, pyqtSlot

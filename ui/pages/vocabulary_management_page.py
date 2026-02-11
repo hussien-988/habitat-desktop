@@ -14,7 +14,7 @@ Features:
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QTableWidget, QTableWidgetItem, QComboBox, QLineEdit,
-    QGroupBox, QFormLayout, QMessageBox, QHeaderView,
+    QGroupBox, QFormLayout, QHeaderView,
     QDialogButtonBox, QCheckBox, QSpinBox
 )
 from PyQt5.QtCore import Qt, pyqtSignal
@@ -23,6 +23,7 @@ from PyQt5.QtGui import QIcon
 from utils.i18n import I18n
 from repositories.database import Database
 from ui.components.dialogs.base_dialog import BaseDialog
+from ui.error_handler import ErrorHandler
 from utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -326,10 +327,10 @@ class VocabularyManagementPage(QWidget):
 
         # Check if already exists
         if self.vocab_list.findText(name) != -1:
-            QMessageBox.warning(
+            ErrorHandler.show_warning(
                 self,
-                self.i18n.t("error"),
-                self.i18n.t("vocabulary_exists")
+                self.i18n.t("vocabulary_exists"),
+                self.i18n.t("error")
             )
             return
 
@@ -347,7 +348,7 @@ class VocabularyManagementPage(QWidget):
             data = dialog.get_data()
 
             if not data["code"]:
-                QMessageBox.warning(self, self.i18n.t("error"), self.i18n.t("code_required"))
+                ErrorHandler.show_warning(self, self.i18n.t("code_required"), self.i18n.t("error"))
                 return
 
             try:
@@ -360,10 +361,10 @@ class VocabularyManagementPage(QWidget):
                 """, (self.current_vocabulary, data["code"]))
 
                 if cursor.fetchone()[0] > 0:
-                    QMessageBox.warning(
+                    ErrorHandler.show_warning(
                         self,
-                        self.i18n.t("error"),
-                        self.i18n.t("code_exists")
+                        self.i18n.t("code_exists"),
+                        self.i18n.t("error")
                     )
                     return
 
@@ -385,7 +386,7 @@ class VocabularyManagementPage(QWidget):
 
             except Exception as e:
                 logger.error(f"Failed to add term: {e}")
-                QMessageBox.critical(self, self.i18n.t("error"), str(e))
+                ErrorHandler.show_error(self, str(e), self.i18n.t("error"))
 
     def _edit_term(self):
         """Edit selected term."""
@@ -429,7 +430,7 @@ class VocabularyManagementPage(QWidget):
 
             except Exception as e:
                 logger.error(f"Failed to update term: {e}")
-                QMessageBox.critical(self, self.i18n.t("error"), str(e))
+                ErrorHandler.show_error(self, str(e), self.i18n.t("error"))
 
     def _delete_term(self):
         """Delete selected term."""
@@ -440,15 +441,11 @@ class VocabularyManagementPage(QWidget):
         row = selected[0].row()
         code = self.terms_table.item(row, 0).text()
 
-        reply = QMessageBox.question(
+        if ErrorHandler.confirm(
             self,
-            self.i18n.t("confirm_delete"),
             self.i18n.t("confirm_delete_term").format(code=code),
-            QMessageBox.Yes | QMessageBox.No,
-            QMessageBox.No
-        )
-
-        if reply == QMessageBox.Yes:
+            self.i18n.t("confirm_delete")
+        ):
             try:
                 cursor = self.db.cursor()
                 cursor.execute("""
@@ -462,7 +459,7 @@ class VocabularyManagementPage(QWidget):
 
             except Exception as e:
                 logger.error(f"Failed to delete term: {e}")
-                QMessageBox.critical(self, self.i18n.t("error"), str(e))
+                ErrorHandler.show_error(self, str(e), self.i18n.t("error"))
 
     def _export_vocabularies(self):
         """Export vocabularies for mobile devices (UC-010 S09)."""
@@ -511,12 +508,12 @@ class VocabularyManagementPage(QWidget):
             with open(file_path, "w", encoding="utf-8") as f:
                 json.dump(export_data, f, ensure_ascii=False, indent=2)
 
-            QMessageBox.information(
+            ErrorHandler.show_success(
                 self,
-                self.i18n.t("success"),
-                self.i18n.t("vocabularies_exported")
+                self.i18n.t("vocabularies_exported"),
+                self.i18n.t("success")
             )
 
         except Exception as e:
             logger.error(f"Failed to export vocabularies: {e}")
-            QMessageBox.critical(self, self.i18n.t("error"), str(e))
+            ErrorHandler.show_error(self, str(e), self.i18n.t("error"))
