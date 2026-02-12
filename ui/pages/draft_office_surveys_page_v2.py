@@ -277,24 +277,24 @@ class DraftOfficeSurveysPage(QWidget):
 
         # Title - DRY: Using unified page title styling (18pt, PAGE_TITLE color)
         from ui.font_utils import create_font, FontManager
-        title = QLabel(tr("page.drafts.title"))
-        title.setFont(create_font(size=FontManager.SIZE_TITLE, weight=FontManager.WEIGHT_SEMIBOLD))
-        title.setStyleSheet(f"color: {Colors.PAGE_TITLE}; background: transparent; border: none;")
-        header_layout.addWidget(title)
+        self._title_label = QLabel(tr("page.drafts.title"))
+        self._title_label.setFont(create_font(size=FontManager.SIZE_TITLE, weight=FontManager.WEIGHT_SEMIBOLD))
+        self._title_label.setStyleSheet(f"color: {Colors.PAGE_TITLE}; background: transparent; border: none;")
+        header_layout.addWidget(self._title_label)
 
         header_layout.addSpacerItem(
             QSpacerItem(40, 20, QSizePolicy.Expanding, QSizePolicy.Minimum)
         )
 
         # Add new draft button
-        add_btn = Button(tr("page.drafts.add_new"), variant="primary", size="medium")
-        header_layout.addWidget(add_btn)
+        self._add_btn = Button(tr("page.drafts.add_new"), variant="primary", size="medium")
+        header_layout.addWidget(self._add_btn)
 
         # Refresh button
-        refresh_btn = Button("🔄", variant="secondary", size="medium")
-        refresh_btn.clicked.connect(self._load_drafts)
-        refresh_btn.setToolTip(tr("page.drafts.refresh"))
-        header_layout.addWidget(refresh_btn)
+        self._refresh_btn = Button("🔄", variant="secondary", size="medium")
+        self._refresh_btn.clicked.connect(self._load_drafts)
+        self._refresh_btn.setToolTip(tr("page.drafts.refresh"))
+        header_layout.addWidget(self._refresh_btn)
 
         return header_layout
 
@@ -305,10 +305,10 @@ class DraftOfficeSurveysPage(QWidget):
         layout.setSpacing(Spacing.MD)
 
         # Filter title
-        filter_label = QLabel(tr("page.drafts.filter"))
-        filter_label.setFont(Typography.get_body_font(bold=True))
-        filter_label.setStyleSheet(f"color: {Colors.TEXT_PRIMARY};")
-        layout.addWidget(filter_label)
+        self._filter_label = QLabel(tr("page.drafts.filter"))
+        self._filter_label.setFont(Typography.get_body_font(bold=True))
+        self._filter_label.setStyleSheet(f"color: {Colors.TEXT_PRIMARY};")
+        layout.addWidget(self._filter_label)
 
         # First row: Building code + Address
         row1 = QHBoxLayout()
@@ -317,22 +317,22 @@ class DraftOfficeSurveysPage(QWidget):
         # Building code search
         building_col = QVBoxLayout()
         building_col.setSpacing(Spacing.LABEL_SPACING)
-        building_label = QLabel(tr("page.drafts.building_code"))
-        building_label.setFont(Typography.get_body_font())
+        self._building_label = QLabel(tr("page.drafts.building_code"))
+        self._building_label.setFont(Typography.get_body_font())
         self.building_search = Input(tr("page.drafts.search_placeholder"))
         self.building_search.textChanged.connect(self._apply_filters)
-        building_col.addWidget(building_label)
+        building_col.addWidget(self._building_label)
         building_col.addWidget(self.building_search)
         row1.addLayout(building_col, 1)
 
         # Address search
         address_col = QVBoxLayout()
         address_col.setSpacing(Spacing.LABEL_SPACING)
-        address_label = QLabel(tr("page.drafts.address"))
-        address_label.setFont(Typography.get_body_font())
+        self._address_label = QLabel(tr("page.drafts.address"))
+        self._address_label.setFont(Typography.get_body_font())
         self.address_search = Input(tr("page.drafts.address_placeholder"))
         self.address_search.textChanged.connect(self._apply_filters)
-        address_col.addWidget(address_label)
+        address_col.addWidget(self._address_label)
         address_col.addWidget(self.address_search)
         row1.addLayout(address_col, 1)
 
@@ -345,8 +345,8 @@ class DraftOfficeSurveysPage(QWidget):
         # Date from
         date_from_col = QVBoxLayout()
         date_from_col.setSpacing(Spacing.LABEL_SPACING)
-        date_from_label = QLabel(tr("page.drafts.from_date"))
-        date_from_label.setFont(Typography.get_body_font())
+        self._date_from_label = QLabel(tr("page.drafts.from_date"))
+        self._date_from_label.setFont(Typography.get_body_font())
         self.date_from = QDateEdit()
         self.date_from.setCalendarPopup(True)
         self.date_from.setDate(QDate.currentDate().addMonths(-3))
@@ -361,15 +361,15 @@ class DraftOfficeSurveysPage(QWidget):
             }}
         """)
         self.date_from.dateChanged.connect(self._apply_filters)
-        date_from_col.addWidget(date_from_label)
+        date_from_col.addWidget(self._date_from_label)
         date_from_col.addWidget(self.date_from)
         row2.addLayout(date_from_col, 1)
 
         # Date to
         date_to_col = QVBoxLayout()
         date_to_col.setSpacing(Spacing.LABEL_SPACING)
-        date_to_label = QLabel(tr("page.drafts.to_date"))
-        date_to_label.setFont(Typography.get_body_font())
+        self._date_to_label = QLabel(tr("page.drafts.to_date"))
+        self._date_to_label.setFont(Typography.get_body_font())
         self.date_to = QDateEdit()
         self.date_to.setCalendarPopup(True)
         self.date_to.setDate(QDate.currentDate())
@@ -384,16 +384,16 @@ class DraftOfficeSurveysPage(QWidget):
             }}
         """)
         self.date_to.dateChanged.connect(self._apply_filters)
-        date_to_col.addWidget(date_to_label)
+        date_to_col.addWidget(self._date_to_label)
         date_to_col.addWidget(self.date_to)
         row2.addLayout(date_to_col, 1)
 
         # Apply button
         apply_col = QVBoxLayout()
         apply_col.addSpacerItem(QSpacerItem(20, 23, QSizePolicy.Minimum, QSizePolicy.Fixed))
-        apply_btn = Button(tr("page.drafts.apply"), variant="primary", size="medium")
-        apply_btn.clicked.connect(self._apply_filters)
-        apply_col.addWidget(apply_btn)
+        self._apply_btn = Button(tr("page.drafts.apply"), variant="primary", size="medium")
+        self._apply_btn.clicked.connect(self._apply_filters)
+        apply_col.addWidget(self._apply_btn)
         row2.addLayout(apply_col)
 
         layout.addLayout(row2)
@@ -528,5 +528,21 @@ class DraftOfficeSurveysPage(QWidget):
         self._load_drafts()
 
     def update_language(self, is_arabic: bool):
-        """Update language"""
-        pass
+        """Update all translatable texts when language changes."""
+        # Header
+        self._title_label.setText(tr("page.drafts.title"))
+        self._add_btn.setText(tr("page.drafts.add_new"))
+        self._refresh_btn.setToolTip(tr("page.drafts.refresh"))
+
+        # Filter card
+        self._filter_label.setText(tr("page.drafts.filter"))
+        self._building_label.setText(tr("page.drafts.building_code"))
+        self.building_search.setPlaceholderText(tr("page.drafts.search_placeholder"))
+        self._address_label.setText(tr("page.drafts.address"))
+        self.address_search.setPlaceholderText(tr("page.drafts.address_placeholder"))
+        self._date_from_label.setText(tr("page.drafts.from_date"))
+        self._date_to_label.setText(tr("page.drafts.to_date"))
+        self._apply_btn.setText(tr("page.drafts.apply"))
+
+        # Reload cards to rebuild with new language (also recreates empty state if needed)
+        self._load_drafts()

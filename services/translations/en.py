@@ -54,7 +54,7 @@ EN_TRANSLATIONS = {
     "error.evidence.upload_failed": "Failed to upload document.",
 
     # Error Messages - API
-    "error.api.connection": "Connection error. Please check your internet connection.",
+    "error.api.connection": "Connection error. Please try again.",
     "error.api.timeout": "Connection timeout. Please try again.",
     "error.api.unauthorized": "Unauthorized. Please login again.",
     "error.api.forbidden": "Access forbidden.",
@@ -578,6 +578,28 @@ EN_TRANSLATIONS = {
     "page.buildings.delete_confirm": "Are you sure you want to delete this building?",
     "page.buildings.units_count": "Units Count",
     "page.buildings.floors_count": "Floors Count",
+
+    # ===== Navbar & ID Badge =====
+    "navbar.tab.completed_claims": "Completed Claims",
+    "navbar.tab.drafts": "Drafts",
+    "navbar.tab.buildings": "Buildings",
+    "navbar.tab.residential_units": "Residential Units",
+    "navbar.tab.duplicates": "Duplicates",
+    "navbar.tab.import": "Import",
+    "navbar.search.default": "Search by code or name...",
+    "navbar.search.by_name": "Search by recipient name...",
+    "navbar.search.by_claim_id": "Search by claim number...",
+    "navbar.search.by_building": "Search by building...",
+    "navbar.search.simple": "Search...",
+    "navbar.search_menu.by_name": "🔍 Search by name",
+    "navbar.search_menu.by_claim_id": "🔢 Search by claim number",
+    "navbar.search_menu.by_building": "🏢 Search by building",
+    "navbar.menu.change_language": "🌐  Change Language",
+    "navbar.menu.sync_data": "🔄  Sync & Data",
+    "navbar.menu.change_password": "🔒  Change Password",
+    "navbar.menu.security_policies": "ℹ️  Security Policies",
+    "navbar.menu.data_management": "🗄️  Reference Data Management",
+    "navbar.menu.logout": "➜  Logout",
 
     # ===== Error Boundary =====
     "error_boundary.step_error": "Error in {step_name}",

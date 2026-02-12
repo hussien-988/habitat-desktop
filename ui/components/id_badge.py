@@ -7,6 +7,7 @@ from PyQt5.QtCore import Qt, pyqtSignal, QSize
 from PyQt5.QtGui import QFont, QCursor, QIcon
 
 from ..design_system import NavbarDimensions, Colors, Typography
+from services.translation_manager import tr
 
 
 class IDBadgeWidget(QWidget):
@@ -177,24 +178,24 @@ class IDBadgeWidget(QWidget):
             }}
         """)
 
-        # Add menu items
-        lang_action = self.menu.addAction("🌐  تغيير اللغة")
-        sync_action = self.menu.addAction("🔄  المزامنة والبيانات")
-        password_action = self.menu.addAction("🔒  تغيير كلمة المرور")
-        security_action = self.menu.addAction("ℹ️  سياسات الأمان")
-        data_action = self.menu.addAction("🗄️  إدارة البيانات المرجعية")
+        # Add menu items (translatable)
+        self._lang_action = self.menu.addAction(tr("navbar.menu.change_language"))
+        self._sync_action = self.menu.addAction(tr("navbar.menu.sync_data"))
+        self._password_action = self.menu.addAction(tr("navbar.menu.change_password"))
+        self._security_action = self.menu.addAction(tr("navbar.menu.security_policies"))
+        self._data_action = self.menu.addAction(tr("navbar.menu.data_management"))
 
         self.menu.addSeparator()
 
-        logout_action = self.menu.addAction("➜  تسجيل خروج")
+        self._logout_action = self.menu.addAction(tr("navbar.menu.logout"))
 
         # Connect signals
-        lang_action.triggered.connect(self.language_change_requested.emit)
-        sync_action.triggered.connect(self.sync_requested.emit)
-        password_action.triggered.connect(self.password_change_requested.emit)
-        security_action.triggered.connect(self.security_settings_requested.emit)
-        data_action.triggered.connect(self.data_management_requested.emit)
-        logout_action.triggered.connect(self.logout_requested.emit)
+        self._lang_action.triggered.connect(self.language_change_requested.emit)
+        self._sync_action.triggered.connect(self.sync_requested.emit)
+        self._password_action.triggered.connect(self.password_change_requested.emit)
+        self._security_action.triggered.connect(self.security_settings_requested.emit)
+        self._data_action.triggered.connect(self.data_management_requested.emit)
+        self._logout_action.triggered.connect(self.logout_requested.emit)
 
     def mousePressEvent(self, event):
         if event.button() == Qt.LeftButton:
@@ -208,6 +209,15 @@ class IDBadgeWidget(QWidget):
         widget_rect = self.rect()
         menu_pos = self.mapToGlobal(widget_rect.bottomRight())
         self.menu.exec_(menu_pos)
+
+    def update_language(self, is_arabic: bool):
+        """Update menu item texts when language changes."""
+        self._lang_action.setText(tr("navbar.menu.change_language"))
+        self._sync_action.setText(tr("navbar.menu.sync_data"))
+        self._password_action.setText(tr("navbar.menu.change_password"))
+        self._security_action.setText(tr("navbar.menu.security_policies"))
+        self._data_action.setText(tr("navbar.menu.data_management"))
+        self._logout_action.setText(tr("navbar.menu.logout"))
 
     def set_user_id(self, user_id):
         """

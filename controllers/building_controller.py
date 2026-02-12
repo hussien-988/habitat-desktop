@@ -519,7 +519,7 @@ class BuildingController(BaseController):
                     )
                     # Convert API response to Building objects
                     buildings = []
-                    for item in response.get("items", []):
+                    for item in response.get("buildings", response.get("items", [])):
                         building = self._api_dto_to_building(item)
                         buildings.append(building)
                 except Exception as e:
@@ -564,7 +564,7 @@ class BuildingController(BaseController):
                 response = self._api_service.search_buildings(building_id=search_text, page_size=100)
                 # Convert API response to Building objects
                 buildings = []
-                for item in response.get("items", []):
+                for item in response.get("buildings", response.get("items", [])):
                     building = self._api_dto_to_building(item)
                     buildings.append(building)
                 logger.info(f"Search found {len(buildings)} buildings for query: {search_text}")
@@ -640,7 +640,7 @@ class BuildingController(BaseController):
 
             # Convert API response to Building objects
             buildings = []
-            for item in response.get("items", []):
+            for item in response.get("buildings", response.get("items", [])):
                 building = self._api_dto_to_building(item)
                 buildings.append(building)
 
@@ -711,7 +711,7 @@ class BuildingController(BaseController):
 
             # Convert API response to Building objects
             buildings = []
-            for item in response.get("items", []):
+            for item in response.get("buildings", response.get("items", [])):
                 building = self._api_dto_to_building(item)
                 buildings.append(building)
 
@@ -739,10 +739,13 @@ class BuildingController(BaseController):
         # ✅ CRITICAL FIX: Try 'buildingCode' first (BuildingAssignments API), then 'buildingId'
         building_id = dto.get("buildingCode") or dto.get("buildingId", "")
 
-        logger.debug(f"API DTO building_id: {building_id} (from buildingCode={dto.get('buildingCode')}, buildingId={dto.get('buildingId')})")
+        # ✅ UUID mapping: API may return 'id', 'buildingUuid', or 'BuildingUuid'
+        building_uuid = dto.get("id") or dto.get("buildingUuid") or dto.get("BuildingUuid") or ""
+
+        logger.debug(f"API DTO building_id: {building_id}, building_uuid: {building_uuid}")
 
         return Building(
-            building_uuid=dto.get("buildingUuid", ""),
+            building_uuid=building_uuid,
             building_id=building_id,
             building_id_formatted=dto.get("buildingIdFormatted", ""),
             governorate_code=dto.get("governorateCode", ""),

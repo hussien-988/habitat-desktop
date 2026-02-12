@@ -22,6 +22,7 @@ from PyQt5.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButt
 from PyQt5.QtCore import pyqtSignal, Qt, QSize
 from PyQt5.QtGui import QFont, QColor
 from ui.error_handler import ErrorHandler
+from services.error_mapper import map_exception
 
 from ui.wizards.framework import BaseWizard, BaseStep
 from ui.wizards.office_survey.survey_context import SurveyContext
@@ -251,7 +252,7 @@ class OfficeSurveyWizard(BaseWizard):
             traceback.print_exc()
             ErrorHandler.show_error(
                 self,
-                f"{tr('wizard.error.save_failed')}\n{str(e)}",
+                f"{tr('wizard.error.save_failed')}\n{map_exception(e)}",
                 tr("common.error")
             )
             return False
@@ -300,7 +301,7 @@ class OfficeSurveyWizard(BaseWizard):
             logger.error(f"Error saving draft: {e}", exc_info=True)
             ErrorHandler.show_error(
                 self,
-                f"{tr('wizard.error.draft_save_failed')}\n{str(e)}",
+                f"{tr('wizard.error.draft_save_failed')}\n{map_exception(e)}",
                 tr("common.error")
             )
             return None
@@ -349,10 +350,38 @@ class OfficeSurveyWizard(BaseWizard):
             logger.error(f"Error loading draft: {e}", exc_info=True)
             ErrorHandler.show_error(
                 None,
-                f"{tr('wizard.error.draft_load_failed')}\n{str(e)}",
+                f"{tr('wizard.error.draft_load_failed')}\n{map_exception(e)}",
                 tr("common.error")
             )
             return None
+
+    def update_language(self, is_arabic: bool):
+        """Update all translatable texts when language changes."""
+        # Header
+        self.title_label.setText(tr("wizard.header.title"))
+        self._subtitle_part1.setText(tr("wizard.header.breadcrumb"))
+        self.save_btn.setText(f" {tr('wizard.button.save')}")
+
+        # Step indicator tabs
+        step_names = self.get_step_names()
+        for i, (num, name) in enumerate(step_names):
+            if i < len(self.step_labels):
+                self.step_labels[i].setText(name)
+
+        # Footer buttons
+        self.btn_previous.setText(f"<   {tr('wizard.button.previous')}")
+        self.btn_next.setText(f"{tr('wizard.button.next')}   >")
+        self.btn_final_save.setText(tr("wizard.button.save"))
+
+        # Update current step subtitle
+        current_idx = getattr(self, 'current_step_index', 0)
+        if current_idx < len(step_names):
+            self.subtitle_part2.setText(step_names[current_idx][1])
+
+        # Propagate to all steps
+        for step in self.steps:
+            if hasattr(step, 'update_language'):
+                step.update_language(is_arabic)
 
     # =========================================================================
     # UI Overrides - Exact copy from old wizard
@@ -463,15 +492,15 @@ class OfficeSurveyWizard(BaseWizard):
         subtitle_layout.setContentsMargins(0, 0, 0, 0)
 
         # Part 1: "المطالبات المكتملة" (fixed)
-        subtitle_part1 = QLabel(tr("wizard.header.breadcrumb"))
+        self._subtitle_part1 = QLabel(tr("wizard.header.breadcrumb"))
         subtitle_font = create_font(
             size=FontManager.SIZE_BODY,  # 9pt (12px Figma)
             weight=QFont.Normal,
             letter_spacing=0
         )
-        subtitle_part1.setFont(subtitle_font)
-        subtitle_part1.setStyleSheet(f"color: {Colors.TEXT_SECONDARY}; border: none; background: transparent;")
-        subtitle_layout.addWidget(subtitle_part1)
+        self._subtitle_part1.setFont(subtitle_font)
+        self._subtitle_part1.setStyleSheet(f"color: {Colors.TEXT_SECONDARY}; border: none; background: transparent;")
+        subtitle_layout.addWidget(self._subtitle_part1)
 
         # Dot separator: "•"
         dot_label = QLabel("•")

@@ -259,7 +259,9 @@ class BuildingMapDialog(BaseMapDialog):
                     logger.info(f"Buildings IDs in list: {[b.building_id for b in buildings]}")
 
                 focus_building = next(
-                    (b for b in buildings if b.building_id == self._selected_building_id),
+                    (b for b in buildings
+                     if b.building_id == self._selected_building_id
+                     or b.building_uuid == self._selected_building_id),
                     None
                 )
 

@@ -32,6 +32,7 @@ from ui.font_utils import FontManager, create_font
 from ui.design_system import Colors
 from services.translation_manager import tr
 from services.display_mappings import get_relation_type_display
+from services.error_mapper import map_exception
 
 logger = get_logger(__name__)
 
@@ -93,18 +94,17 @@ class PersonStep(BaseStep):
         # Title text container
         title_vbox = QVBoxLayout()
         title_vbox.setSpacing(1)  # Match Step 1 spacing
-        title_label = QLabel(tr("wizard.person.card_title"))
+        self._title_label = QLabel(tr("wizard.person.card_title"))
         # Title: 14px from Figma = 10pt, weight 600, color WIZARD_TITLE (matching Step 1)
-        title_label.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
-        title_label.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent;")
-       # title_label.setAlignment(Qt.AlignRight)
-        subtitle_label = QLabel(tr("wizard.person.subtitle"))
+        self._title_label.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
+        self._title_label.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent;")
+        self._subtitle_label = QLabel(tr("wizard.person.subtitle"))
         # Subtitle: 14px from Figma = 10pt, weight 400, color WIZARD_SUBTITLE (matching Step 1)
-        subtitle_label.setFont(create_font(size=10, weight=FontManager.WEIGHT_REGULAR))
-        subtitle_label.setStyleSheet(f"color: {Colors.WIZARD_SUBTITLE}; background: transparent;")
-        subtitle_label.setAlignment(Qt.AlignRight)
-        title_vbox.addWidget(title_label)
-        title_vbox.addWidget(subtitle_label)
+        self._subtitle_label.setFont(create_font(size=10, weight=FontManager.WEIGHT_REGULAR))
+        self._subtitle_label.setStyleSheet(f"color: {Colors.WIZARD_SUBTITLE}; background: transparent;")
+        self._subtitle_label.setAlignment(Qt.AlignRight)
+        title_vbox.addWidget(self._title_label)
+        title_vbox.addWidget(self._subtitle_label)
 
         # Icon for title
         title_icon = QLabel()
@@ -132,10 +132,10 @@ class PersonStep(BaseStep):
         title_group.addLayout(title_vbox)
 
         # Add button on the left (appears last in RTL) - matching Step 1 styling
-        add_person_btn = QPushButton(tr("wizard.person.add_button"))
-        add_person_btn.setLayoutDirection(Qt.RightToLeft)
-        add_person_btn.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
-        add_person_btn.setStyleSheet(f"""
+        self._add_person_btn = QPushButton(tr("wizard.person.add_button"))
+        self._add_person_btn.setLayoutDirection(Qt.RightToLeft)
+        self._add_person_btn.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
+        self._add_person_btn.setStyleSheet(f"""
             QPushButton {{
                 background-color: {Colors.SURFACE};
                 color: {Colors.PRIMARY_BLUE};
@@ -147,11 +147,11 @@ class PersonStep(BaseStep):
                 background-color: #EBF8FF;
             }}
         """)
-        add_person_btn.clicked.connect(self._add_person)
+        self._add_person_btn.clicked.connect(self._add_person)
 
         persons_header.addLayout(title_group)
         persons_header.addStretch()
-        persons_header.addWidget(add_person_btn)
+        persons_header.addWidget(self._add_person_btn)
 
         table_layout.addLayout(persons_header)
         # Gap: 12px between header and content (matching Step 1)
@@ -427,6 +427,14 @@ class PersonStep(BaseStep):
         self._refresh_persons_list()
         logger.info("Person deleted")
 
+    def update_language(self, is_arabic: bool):
+        """Update all translatable texts when language changes."""
+        self._title_label.setText(tr("wizard.person.card_title"))
+        self._subtitle_label.setText(tr("wizard.person.subtitle"))
+        self._add_person_btn.setText(tr("wizard.person.add_button"))
+        # Reload person cards with new language
+        self._load_persons()
+
     def validate(self) -> StepValidationResult:
         """Validate the step."""
         result = self.create_validation_result()
@@ -490,8 +498,7 @@ class PersonStep(BaseStep):
                 logger.info("No persons found from API (or empty list)")
 
         except Exception as e:
-            error_msg = str(e)
-            logger.error(f"Failed to fetch persons from API: {error_msg}")
+            logger.error(f"Failed to fetch persons from API: {e}")
             # Don't block the UI, just log the error
 
     def get_step_title(self) -> str:

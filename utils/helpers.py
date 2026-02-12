@@ -273,9 +273,10 @@ def build_hierarchical_address(
         if hasattr(building_obj, 'building_number') and building_obj.building_number:
             address_parts.append(building_obj.building_number)
         elif hasattr(building_obj, 'building_id') and building_obj.building_id:
-            # Fallback: extract last part from building_id (format: GG-DD-SS-CCC-NNN-BBBBB)
-            # Extract only the last 5 digits after the last dash
-            building_number = building_obj.building_id.split('-')[-1] if '-' in building_obj.building_id else building_obj.building_id
+            # Fallback: extract last 5 digits from building_id
+            # building_id format: 17 digits without dashes (01010100200302518)
+            bid = building_obj.building_id.replace("-", "")
+            building_number = bid[-5:] if len(bid) >= 5 else bid
             address_parts.append(building_number)
 
     # Add unit number if requested and available (رقم الوحدة)
