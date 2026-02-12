@@ -938,28 +938,39 @@ class TRRCMSApiClient:
         return result
 
     def _convert_property_unit_to_api_format(self, unit_data: Dict[str, Any]) -> Dict[str, Any]:
-        """Convert property unit data to API format (camelCase)."""
+        """Convert property unit data to API format (camelCase).
+
+        API Schema (CreatePropertyUnitCommand):
+            buildingId: uuid (REQUIRED)
+            unitIdentifier: string max 50 (REQUIRED)
+            unitType: int 1-5 (REQUIRED)
+            status: int 1-6 or 99 (REQUIRED)
+            floorNumber: int -5 to 200 (optional)
+            areaSquareMeters: double > 0 (optional)
+            numberOfRooms: int 0-100 (optional)
+            description: string max 2000 (optional)
+        """
         def get_value(snake_key: str, camel_key: str, default=None):
             return unit_data.get(snake_key) or unit_data.get(camel_key) or default
 
+        # buildingId must be UUID - try multiple field names
+        building_id = get_value('building_uuid', 'buildingId', None)
+        if not building_id:
+            logger.warning("No building UUID found in unit data - buildingId will be missing")
+
         api_data = {
-            "buildingId": get_value('building_id', 'buildingId', ''),
-            "unitNumber": get_value('unit_number', 'unitNumber', ''),
+            "buildingId": building_id,
+            # unitIdentifier: unique within building (was unitNumber)
+            "unitIdentifier": get_value('unit_number', 'unitIdentifier') or get_value('apartment_number', 'unitNumber', ''),
             "unitType": get_value('unit_type', 'unitType'),
+            "status": get_value('status', 'status') or get_value('apartment_status', 'apartmentStatus', 1),
             "floorNumber": get_value('floor_number', 'floorNumber'),
-            "ownerName": get_value('owner_name', 'ownerName', ''),
-            "ownerNameAr": get_value('owner_name_ar', 'ownerNameAr', ''),
-            "tenantName": get_value('tenant_name', 'tenantName', ''),
-            "occupancyStatus": get_value('occupancy_status', 'occupancyStatus'),
+            "areaSquareMeters": get_value('area_sqm', 'areaSquareMeters') or get_value('area_square_meters', 'areaSquareMeters'),
             "numberOfRooms": get_value('number_of_rooms', 'numberOfRooms'),
-            "areaSquareMeters": get_value('area_square_meters', 'areaSquareMeters'),
-            "hasElectricity": get_value('has_electricity', 'hasElectricity'),
-            "hasWater": get_value('has_water', 'hasWater'),
-            "hasSewage": get_value('has_sewage', 'hasSewage'),
-            "notes": get_value('notes', 'notes', ''),
-            "surveyId": get_value('survey_id', 'surveyId')
+            "description": get_value('property_description', 'description') or get_value('notes', 'notes'),
         }
-        return {k: v for k, v in api_data.items() if v is not None}
+        # Filter None and empty strings - don't send invalid values to API
+        return {k: v for k, v in api_data.items() if v is not None and v != ''}
 
     def link_unit_to_survey(self, survey_id: str, unit_id: str) -> Dict[str, Any]:
         """
@@ -1446,18 +1457,34 @@ class TRRCMSApiClient:
         return result
 
     def _convert_survey_to_api_format(self, survey_data: Dict[str, Any]) -> Dict[str, Any]:
-        """Convert survey data to API format (camelCase)."""
+        """Convert survey data to API format (camelCase).
+
+        API Schema (CreateOfficeSurveyCommand):
+            buildingId: uuid (REQUIRED)
+            surveyDate: datetime ISO 8601 (REQUIRED)
+            inPersonVisit: boolean (REQUIRED)
+            propertyUnitId: uuid (optional)
+            intervieweeName, intervieweeRelationship, notes,
+            officeLocation, registrationNumber, appointmentReference,
+            contactPhone, contactEmail: string (optional)
+        """
         def get_value(snake_key: str, camel_key: str, default=None):
             return survey_data.get(snake_key) or survey_data.get(camel_key) or default
 
         api_data = {
-            "buildingId": get_value('building_id', 'buildingId', ''),
-            "surveyorId": get_value('surveyor_id', 'surveyorId', ''),
+            "buildingId": get_value('building_uuid', 'buildingId', None),
             "surveyDate": get_value('survey_date', 'surveyDate'),
-            "surveyStatus": get_value('survey_status', 'surveyStatus'),
-            "notes": get_value('notes', 'notes', '')
+            "inPersonVisit": survey_data.get('inPersonVisit', True),
+            "propertyUnitId": get_value('property_unit_id', 'propertyUnitId'),
+            "intervieweeName": get_value('interviewee_name', 'intervieweeName'),
+            "intervieweeRelationship": get_value('interviewee_relationship', 'intervieweeRelationship'),
+            "notes": get_value('notes', 'notes'),
+            "officeLocation": get_value('office_location', 'officeLocation'),
+            "registrationNumber": get_value('registration_number', 'registrationNumber'),
+            "contactPhone": get_value('contact_phone', 'contactPhone'),
+            "contactEmail": get_value('contact_email', 'contactEmail'),
         }
-        return {k: v for k, v in api_data.items() if v is not None}
+        return {k: v for k, v in api_data.items() if v is not None and v != ''}
 
     # ==================== Neighborhoods APIs ====================
 

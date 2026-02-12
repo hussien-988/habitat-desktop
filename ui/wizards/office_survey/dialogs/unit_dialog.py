@@ -26,6 +26,7 @@ from ui.error_handler import ErrorHandler
 from services.validation_service import ValidationService
 from services.api_client import get_api_client
 from services.translation_manager import tr
+from services.error_mapper import map_exception
 from ui.components.toast import Toast
 from utils.logger import get_logger
 
@@ -402,7 +403,6 @@ class UnitDialog(QDialog):
                 font-size: 16px;
                 font-weight: 700;
                 color: white;
-                box-shadow: 0px 2px 4px rgba(0, 0, 0, 0.1);
             }
             QPushButton:hover {
                 background-color: #2A7BC9;
@@ -436,7 +436,6 @@ class UnitDialog(QDialog):
                 font-size: 16px;
                 font-weight: 700;
                 color: #374151;
-                box-shadow: 0px 2px 4px rgba(0, 0, 0, 0.1);
             }
             QPushButton:hover {
                 background-color: #F8FAFF;
@@ -641,9 +640,8 @@ class UnitDialog(QDialog):
                 logger.info("Property unit created successfully via API")
                 self._created_unit_data = response
             except Exception as e:
-                error_msg = str(e)
-                logger.error(f"Failed to create unit via API: {error_msg}")
-                self._show_styled_message(tr("common.error"), tr("wizard.unit_dialog.create_failed", error_msg=error_msg), is_error=True)
+                logger.error(f"Failed to create unit via API: {e}")
+                self._show_styled_message(tr("common.error"), tr("wizard.unit_dialog.create_failed", error_msg=map_exception(e)), is_error=True)
                 return
 
         self.accept()

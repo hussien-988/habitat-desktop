@@ -33,6 +33,7 @@ from ui.components.action_button import ActionButton
 from ui.font_utils import create_font, FontManager
 from services.translation_manager import tr
 from services.display_mappings import get_unit_status_display
+from services.error_mapper import map_exception
 
 logger = get_logger(__name__)
 
@@ -282,9 +283,9 @@ class UnitSelectionStep(BaseStep):
         # Figma: 14px × 0.75 = 10.5pt (rounded to 10pt for cleaner rendering)
         # Increased weight to emphasize title (SemiBold instead of Regular)
         # RTL: Text ends at the same point as subtitle, but starts further right
-        title_label = QLabel(tr("wizard.unit.select_title"))
-        title_label.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
-        title_label.setStyleSheet("""
+        self._title_label = QLabel(tr("wizard.unit.select_title"))
+        self._title_label.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
+        self._title_label.setStyleSheet("""
             QLabel {
                 color: #1A1F1D;
                 border: none;
@@ -292,21 +293,21 @@ class UnitSelectionStep(BaseStep):
             }
         """)
         # Fix RTL alignment: AlignLeft makes RTL text end at the same point as subtitle
-        title_label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
-        title_subtitle_layout.addWidget(title_label)
+        self._title_label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+        title_subtitle_layout.addWidget(self._title_label)
 
         # Subtitle with same font size, different color
-        subtitle_label = QLabel(tr("wizard.unit.select_subtitle"))
-        subtitle_label.setFont(create_font(size=10, weight=FontManager.WEIGHT_REGULAR))
-        subtitle_label.setStyleSheet("""
+        self._subtitle_label = QLabel(tr("wizard.unit.select_subtitle"))
+        self._subtitle_label.setFont(create_font(size=10, weight=FontManager.WEIGHT_REGULAR))
+        self._subtitle_label.setStyleSheet("""
             QLabel {
                 color: #86909B;
                 border: none;
                 background: transparent;
             }
         """)
-        subtitle_label.setAlignment(Qt.AlignRight)
-        title_subtitle_layout.addWidget(subtitle_label)
+        self._subtitle_label.setAlignment(Qt.AlignRight)
+        title_subtitle_layout.addWidget(self._subtitle_label)
 
         right_header.addLayout(title_subtitle_layout)
         header_layout.addLayout(right_header)
@@ -704,6 +705,15 @@ class UnitSelectionStep(BaseStep):
             # Refresh units list to show the newly created unit
             self._load_units()
 
+    def update_language(self, is_arabic: bool):
+        """Update all translatable texts when language changes."""
+        self._title_label.setText(tr("wizard.unit.select_title"))
+        self._subtitle_label.setText(tr("wizard.unit.select_subtitle"))
+        self.add_unit_btn.setText(tr("wizard.unit.add_button"))
+        # Reload unit cards with new language
+        if self.context.building:
+            self._load_units()
+
     def validate(self) -> StepValidationResult:
         """Validate the step and link unit to survey via API."""
         result = self.create_validation_result()
@@ -738,9 +748,8 @@ class UnitSelectionStep(BaseStep):
                     print(f"[UNIT-LINK] Unit {unit_id} linked to survey {survey_id} successfully")
                     print(f"[UNIT-LINK] Full API response: {response}")
                 except Exception as e:
-                    error_msg = str(e)
-                    logger.error(f"Failed to link unit to survey: {error_msg}")
-                    result.add_error(f"{tr('wizard.unit.link_failed')}: {error_msg}")
+                    logger.error(f"Failed to link unit to survey: {e}")
+                    result.add_error(tr("wizard.unit.link_failed", error_msg=map_exception(e)))
                     return result
             else:
                 logger.warning(f"Missing survey_id ({survey_id}) or unit_id ({unit_id}), skipping link")

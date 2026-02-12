@@ -54,7 +54,7 @@ AR_TRANSLATIONS = {
     "error.evidence.upload_failed": "فشل في رفع الوثيقة.",
 
     # Error Messages - API
-    "error.api.connection": "خطأ في الاتصال بالخادم. يرجى التحقق من الاتصال بالإنترنت.",
+    "error.api.connection": "خطأ في الاتصال. يرجى المحاولة مرة أخرى.",
     "error.api.timeout": "انتهت مهلة الاتصال بالخادم. يرجى المحاولة مرة أخرى.",
     "error.api.unauthorized": "غير مصرح. يرجى تسجيل الدخول مرة أخرى.",
     "error.api.forbidden": "ليس لديك صلاحية للوصول.",
@@ -578,6 +578,28 @@ AR_TRANSLATIONS = {
     "page.buildings.delete_confirm": "هل أنت متأكد من حذف هذا المبنى؟",
     "page.buildings.units_count": "عدد الوحدات",
     "page.buildings.floors_count": "عدد الطوابق",
+
+    # ===== Navbar & ID Badge =====
+    "navbar.tab.completed_claims": "المطالبات المكتملة",
+    "navbar.tab.drafts": "المسودة",
+    "navbar.tab.buildings": "المباني",
+    "navbar.tab.residential_units": "الوحدات السكنية",
+    "navbar.tab.duplicates": "التكرارات",
+    "navbar.tab.import": "استيراد",
+    "navbar.search.default": "ابحث عن الرمز أو الاسم...",
+    "navbar.search.by_name": "ابحث عن اسم المستلم...",
+    "navbar.search.by_claim_id": "ابحث برقم المطالبة...",
+    "navbar.search.by_building": "ابحث عن المبنى...",
+    "navbar.search.simple": "بحث...",
+    "navbar.search_menu.by_name": "🔍 بحث بالاسم",
+    "navbar.search_menu.by_claim_id": "🔢 بحث برقم المطالبة",
+    "navbar.search_menu.by_building": "🏢 بحث بالمبنى",
+    "navbar.menu.change_language": "🌐  تغيير اللغة",
+    "navbar.menu.sync_data": "🔄  المزامنة والبيانات",
+    "navbar.menu.change_password": "🔒  تغيير كلمة المرور",
+    "navbar.menu.security_policies": "ℹ️  سياسات الأمان",
+    "navbar.menu.data_management": "🗄️  إدارة البيانات المرجعية",
+    "navbar.menu.logout": "➜  تسجيل خروج",
 
     # ===== Error Boundary =====
     "error_boundary.step_error": "خطأ في {step_name}",

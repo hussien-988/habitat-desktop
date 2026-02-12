@@ -31,6 +31,7 @@ from ..font_utils import create_font, FontManager
 from ..style_manager import StyleManager
 from .logo import LogoWidget
 from .id_badge import IDBadgeWidget
+from services.translation_manager import tr
 
 
 class DraggableFrame(QFrame):
@@ -96,6 +97,7 @@ class Navbar(QFrame):
     tab_changed = pyqtSignal(int)
     search_requested = pyqtSignal(str)
     logout_requested = pyqtSignal()
+    language_change_requested = pyqtSignal()
 
     def __init__(self, user_id=None, parent=None):
         super().__init__(parent)
@@ -137,6 +139,8 @@ class Navbar(QFrame):
         top_bar.setObjectName("navbar_top")
         top_bar.setAttribute(Qt.WA_StyledBackground, True)
         top_bar.setFixedHeight(NavbarDimensions.TOP_BAR_HEIGHT)
+        # Keep top bar position fixed regardless of language direction
+        top_bar.setLayoutDirection(Qt.RightToLeft)
 
         layout = QHBoxLayout(top_bar)
         layout.setContentsMargins(
@@ -162,6 +166,7 @@ class Navbar(QFrame):
         # ID Badge - Reusable dropdown component
         self.id_badge = IDBadgeWidget(user_id=self.user_id)
         self.id_badge.logout_requested.connect(self._on_logout_requested)
+        self.id_badge.language_change_requested.connect(self._on_language_change_requested)
         layout.addWidget(self.id_badge)
 
         # Divider line between ID and Logo (Figma spec)
@@ -294,7 +299,7 @@ class Navbar(QFrame):
 
         # Search input field
         self.search_input = QLineEdit()
-        self.search_input.setPlaceholderText("ابحث عن الرمز أو الاسم...")
+        self.search_input.setPlaceholderText(tr("navbar.search.default"))
 
         # Figma: IBM Plex Sans Arabic, 10px, Letter spacing 0
         # Font conversion: 10px × 0.75 = 7.5pt ≈ 8pt
@@ -374,15 +379,16 @@ class Navbar(QFrame):
         )
         layout.setSpacing(NavbarDimensions.TAB_GAP)  # 24px gap between tabs (Figma)
 
-        # Tab titles from Figma (RTL order)
-        tab_titles = [
-            "المطالبات المكتملة",  # Completed Claims (active by default)
-            "المسودة",             # Drafts
-            "المباني",             # Buildings
-            "الوحدات السكنية",     # Residential Units
-            "التكرارات",           # Duplicates
-            "استيراد"              # Import
+        # Tab titles (translatable)
+        self._tab_keys = [
+            "navbar.tab.completed_claims",
+            "navbar.tab.drafts",
+            "navbar.tab.buildings",
+            "navbar.tab.residential_units",
+            "navbar.tab.duplicates",
+            "navbar.tab.import",
         ]
+        tab_titles = [tr(key) for key in self._tab_keys]
 
         self.tab_buttons = []
         for index, title in enumerate(tab_titles):
@@ -516,9 +522,9 @@ class Navbar(QFrame):
         """)
 
         # Search mode options
-        name_action = menu.addAction("🔍 بحث بالاسم")
-        id_action = menu.addAction("🔢 بحث برقم المطالبة")
-        building_action = menu.addAction("🏢 بحث بالمبنى")
+        name_action = menu.addAction(tr("navbar.search_menu.by_name"))
+        id_action = menu.addAction(tr("navbar.search_menu.by_claim_id"))
+        building_action = menu.addAction(tr("navbar.search_menu.by_building"))
 
         # Show menu
         action = menu.exec_(
@@ -530,13 +536,13 @@ class Navbar(QFrame):
         # Update search mode
         if action == name_action:
             self.search_mode = "name"
-            self.search_input.setPlaceholderText("ابحث عن اسم المستلم...")
+            self.search_input.setPlaceholderText(tr("navbar.search.by_name"))
         elif action == id_action:
             self.search_mode = "claim_id"
-            self.search_input.setPlaceholderText("ابحث برقم المطالبة...")
+            self.search_input.setPlaceholderText(tr("navbar.search.by_claim_id"))
         elif action == building_action:
             self.search_mode = "building"
-            self.search_input.setPlaceholderText("ابحث عن المبنى...")
+            self.search_input.setPlaceholderText(tr("navbar.search.by_building"))
 
     def _apply_styles(self):
         """Apply navbar background and component styles"""
@@ -599,9 +605,34 @@ class Navbar(QFrame):
         if hasattr(self, 'id_badge'):
             self.id_badge.set_user_id(user_id)
 
+    def update_language(self, is_arabic: bool):
+        """Update all translatable texts when language changes."""
+        # Update tab titles
+        for i, key in enumerate(self._tab_keys):
+            if i < len(self.tab_buttons):
+                self.tab_buttons[i].setText(tr(key))
+
+        # Update search placeholder based on current search mode
+        mode = getattr(self, 'search_mode', 'default')
+        placeholder_map = {
+            'default': "navbar.search.default",
+            'name': "navbar.search.by_name",
+            'claim_id': "navbar.search.by_claim_id",
+            'building': "navbar.search.by_building",
+        }
+        self.search_input.setPlaceholderText(tr(placeholder_map.get(mode, "navbar.search.default")))
+
+        # Update ID badge menu
+        if hasattr(self, 'id_badge'):
+            self.id_badge.update_language(is_arabic)
+
     def _on_logout_requested(self):
         """Handle logout request from ID badge dropdown"""
         self.logout_requested.emit()
+
+    def _on_language_change_requested(self):
+        """Handle language change request from ID badge dropdown"""
+        self.language_change_requested.emit()
 
 
 class SimpleNavbar(QFrame):
@@ -683,7 +714,7 @@ class SimpleNavbar(QFrame):
             search_layout.setContentsMargins(0, 0, 0, 0)
 
             self.search_input = QLineEdit()
-            self.search_input.setPlaceholderText("بحث...")
+            self.search_input.setPlaceholderText(tr("navbar.search.simple"))
 
             # 13px × 0.75 = 9.75pt ≈ 10pt
             simple_search_font = create_font(size=10, weight=QFont.Normal, letter_spacing=0)

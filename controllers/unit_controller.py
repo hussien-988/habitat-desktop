@@ -375,8 +375,9 @@ class UnitController(BaseController):
             self._emit_started("get_units_for_building")
 
             if self._use_api and self._api_service:
-                # Use API to fetch units
-                units = self._api_service.get_units_for_building(building_uuid)
+                # Use API to fetch units, then convert dicts → PropertyUnit objects
+                units_data = self._api_service.get_units_for_building(building_uuid)
+                units = [self._api_dto_to_unit(dto) for dto in units_data]
                 self._units_cache = units
                 self._emit_completed("get_units_for_building", True)
                 self.units_loaded.emit(units)
@@ -416,6 +417,21 @@ class UnitController(BaseController):
         """
         filter_ = UnitFilter(unit_type=unit_type)
         return self.load_units(filter_)
+
+    def _api_dto_to_unit(self, dto: dict) -> PropertyUnit:
+        """Convert API DTO (camelCase dict) to PropertyUnit model object."""
+        return PropertyUnit(
+            unit_uuid=dto.get("id") or dto.get("unitUuid") or "",
+            unit_id=dto.get("unitId") or "",
+            building_id=dto.get("buildingId") or "",
+            unit_type=dto.get("unitType") or "apartment",
+            unit_number=dto.get("unitIdentifier") or dto.get("unitNumber") or "001",
+            floor_number=dto.get("floorNumber") or 0,
+            apartment_number=dto.get("apartmentNumber") or dto.get("unitIdentifier") or "",
+            apartment_status=dto.get("status") or dto.get("apartmentStatus") or "occupied",
+            property_description=dto.get("description") or dto.get("propertyDescription") or "",
+            area_sqm=dto.get("areaSquareMeters") or dto.get("areaSqm"),
+        )
 
     def _query_units(self, filter_: UnitFilter) -> List[PropertyUnit]:
         """Execute unit query with filter."""

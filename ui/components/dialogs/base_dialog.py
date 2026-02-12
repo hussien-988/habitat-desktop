@@ -117,7 +117,8 @@ class BaseDialog(QWidget):
             self.setWindowFlags(
                 Qt.Dialog |
                 Qt.FramelessWindowHint |
-                Qt.CustomizeWindowHint
+                Qt.CustomizeWindowHint |
+                Qt.WindowStaysOnTopHint  # Prevent disappearing on window switch
             )
             self.setAttribute(Qt.WA_TranslucentBackground)
             self.setAttribute(Qt.WA_DeleteOnClose)
@@ -133,8 +134,13 @@ class BaseDialog(QWidget):
         if not self.use_overlay and parent:
             self._center_on_parent()
 
-        # Apply fade-in animation
-        self._animate_show()
+        # Apply fade-in animation (only in overlay mode)
+        # In shadow mode, QGraphicsDropShadowEffect on card conflicts with
+        # QGraphicsOpacityEffect on parent → causes QPainter errors
+        if self.use_overlay:
+            self._animate_show()
+        else:
+            self.opacity_effect = None  # No opacity effect in shadow mode
 
     def _setup_ui(self):
         """Setup dialog UI with overlay or shadow mode."""
@@ -503,15 +509,19 @@ class BaseDialog(QWidget):
         pass
 
     def close_dialog(self):
-        """Close dialog with fade-out animation."""
-        # Animate to transparent
-        self.animation = QPropertyAnimation(self.opacity_effect, b"opacity")
-        self.animation.setDuration(150)  # 150ms
-        self.animation.setStartValue(1)
-        self.animation.setEndValue(0)
-        self.animation.setEasingCurve(QEasingCurve.InCubic)
-        self.animation.finished.connect(self.close)
-        self.animation.start()
+        """Close dialog with fade-out animation (overlay) or immediate close (shadow)."""
+        if self.opacity_effect:
+            # Overlay mode: animate fade-out
+            self.animation = QPropertyAnimation(self.opacity_effect, b"opacity")
+            self.animation.setDuration(150)  # 150ms
+            self.animation.setStartValue(1)
+            self.animation.setEndValue(0)
+            self.animation.setEasingCurve(QEasingCurve.InCubic)
+            self.animation.finished.connect(self.close)
+            self.animation.start()
+        else:
+            # Shadow mode: close immediately (no opacity effect)
+            self.close()
 
         # Emit closed signal
         self.closed.emit()

@@ -9,33 +9,23 @@ logger = get_logger(__name__)
 
 
 def map_api_error(error: ApiException) -> str:
-    """Map API exception to user-friendly translated message."""
-    status = error.status_code
-    context = error.context or ""
+    """Map API exception to generic user-friendly message.
 
+    Technical details are logged only - never shown to the user.
+    User sees only a generic connection/system error message.
+    """
+    status = error.status_code
+
+    # Log technical details for debugging (never shown to user)
     if status == 400:
         details = _extract_validation_details(error.response_data)
         if details:
-            return tr("error.api.validation", details=details)
-        if context:
-            return tr(f"error.{context}.create_failed")
-        return tr("validation.check_data")
+            logger.warning(f"API validation error (400): {details}")
+    elif status:
+        logger.warning(f"API error ({status}): {error}")
 
-    if status == 401:
-        return tr("error.api.unauthorized")
-
-    if status == 403:
-        return tr("error.api.forbidden")
-
-    if status == 404:
-        if context:
-            return tr(f"error.{context}.not_found")
-        return tr("error.api.not_found")
-
-    if status and status >= 500:
-        return tr("error.api.server")
-
-    return tr("error.api.unknown")
+    # Always return generic connection error for user display
+    return tr("error.api.connection")
 
 
 def map_network_error(error: NetworkException) -> str:
@@ -47,7 +37,10 @@ def map_network_error(error: NetworkException) -> str:
 
 
 def map_exception(error: Exception, context: str = None) -> str:
-    """Map any exception to user-friendly translated message."""
+    """Map any exception to generic user-friendly message.
+
+    Technical details are logged only - never shown to the user.
+    """
     if isinstance(error, ApiException):
         if not error.context and context:
             error.context = context
@@ -57,12 +50,14 @@ def map_exception(error: Exception, context: str = None) -> str:
         return map_network_error(error)
 
     if isinstance(error, ValidationException):
+        # Log details for debugging
         if error.errors:
-            details = "\n".join(f"• {e}" for e in error.errors)
-            return tr("error.api.validation", details=details)
-        return error.message
+            logger.warning(f"Validation error: {error.errors}")
+        return tr("error.api.connection")
 
-    return tr("error.unexpected")
+    # Log unexpected errors
+    logger.warning(f"Unexpected error: {error}")
+    return tr("error.api.connection")
 
 
 def _extract_validation_details(response_data: dict) -> str:

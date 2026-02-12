@@ -257,7 +257,7 @@ class MessageDialog:
                 logger.debug(f"Found icon at: {path}")
                 return path
 
-        logger.warning(f"Icon not found: {filename}")
+        logger.debug(f"Icon not found: {filename}, using text symbol fallback")
         return None  # Will fall back to text symbols
 
     @staticmethod

@@ -285,6 +285,7 @@ class MainWindow(QMainWindow):
         self.navbar.tab_changed.connect(self._on_tab_changed)
         self.navbar.search_requested.connect(self._on_search_requested)
         self.navbar.logout_requested.connect(self._handle_logout)  # ✅ Connect logout
+        self.navbar.language_change_requested.connect(self.toggle_language)  # ✅ Connect language toggle
 
         # Buildings page - view details
         self.pages[Pages.BUILDINGS].view_building.connect(self._on_view_building)

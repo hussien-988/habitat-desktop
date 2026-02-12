@@ -25,6 +25,7 @@ from utils.logger import get_logger
 from app.config import Config
 from services.api_client import get_api_client
 from services.translation_manager import tr
+from services.error_mapper import map_exception
 from services.display_mappings import (
     get_relation_type_display, get_unit_status_display,
     get_claim_type_display, get_priority_display,
@@ -1288,6 +1289,10 @@ class ReviewStep(BaseStep):
             claim_card = self._create_claim_data_card(claim_data)
             self.claim_content.addWidget(claim_card)
 
+    def update_language(self, is_arabic: bool):
+        """Update all translatable texts by rebuilding review content."""
+        self._populate_review()
+
     def validate(self) -> StepValidationResult:
         """Validate that all required data is present."""
         result = self.create_validation_result()
@@ -1352,12 +1357,11 @@ class ReviewStep(BaseStep):
             )
 
         except Exception as e:
-            error_msg = str(e)
-            logger.error(f"Failed to finalize survey: {error_msg}")
+            logger.error(f"Failed to finalize survey: {e}")
 
             ErrorHandler.show_error(
                 self,
-                tr("wizard.review.finalize_error", error_msg=error_msg),
+                tr("wizard.review.finalize_error", error_msg=map_exception(e)),
                 tr("common.error")
             )
 

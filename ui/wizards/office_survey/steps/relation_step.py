@@ -27,6 +27,7 @@ from utils.logger import get_logger
 from ui.components.toast import Toast
 from ui.error_handler import ErrorHandler
 from services.translation_manager import tr
+from services.error_mapper import map_exception
 from services.display_mappings import get_relation_type_options, get_contract_type_options, get_evidence_type_options
 
 logger = get_logger(__name__)
@@ -85,18 +86,18 @@ class RelationStep(BaseStep):
         # Title text container
         title_vbox = QVBoxLayout()
         title_vbox.setSpacing(1)  # Match person_step spacing
-        title_label = QLabel(tr("wizard.relation.title"))
+        self._title_label = QLabel(tr("wizard.relation.title"))
         # Title: 14px from Figma = 10pt, weight 600, color WIZARD_TITLE
-        title_label.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
-        title_label.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent;")
+        self._title_label.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
+        self._title_label.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent;")
 
-        subtitle_label = QLabel(tr("wizard.relation.subtitle"))
+        self._subtitle_label = QLabel(tr("wizard.relation.subtitle"))
         # Subtitle: 14px from Figma = 10pt, weight 400, color WIZARD_SUBTITLE
-        subtitle_label.setFont(create_font(size=10, weight=FontManager.WEIGHT_REGULAR))
-        subtitle_label.setStyleSheet(f"color: {Colors.WIZARD_SUBTITLE}; background: transparent;")
-        subtitle_label.setAlignment(Qt.AlignRight)
-        title_vbox.addWidget(title_label)
-        title_vbox.addWidget(subtitle_label)
+        self._subtitle_label.setFont(create_font(size=10, weight=FontManager.WEIGHT_REGULAR))
+        self._subtitle_label.setStyleSheet(f"color: {Colors.WIZARD_SUBTITLE}; background: transparent;")
+        self._subtitle_label.setAlignment(Qt.AlignRight)
+        title_vbox.addWidget(self._title_label)
+        title_vbox.addWidget(self._subtitle_label)
 
         # Icon for title
         title_icon = QLabel()
@@ -473,6 +474,13 @@ class RelationStep(BaseStep):
 
         return relations
 
+    def update_language(self, is_arabic: bool):
+        """Update all translatable texts when language changes."""
+        self._title_label.setText(tr("wizard.relation.title"))
+        self._subtitle_label.setText(tr("wizard.relation.subtitle"))
+        # Reload person panels with new language
+        self._populate_persons()
+
     def validate(self) -> StepValidationResult:
         """Validate the step."""
         result = self.create_validation_result()
@@ -650,22 +658,21 @@ class RelationStep(BaseStep):
             Toast.show_toast(self, tr("wizard.relation.claims_processed"), Toast.SUCCESS)
 
         except Exception as e:
-            error_msg = str(e)
-            logger.error(f"Failed to process claims: {error_msg}")
+            logger.error(f"Failed to process claims: {e}")
 
             # Print error response for debugging
             print(f"\n{'='*60}")
             print(f"[PROCESS-CLAIMS ERROR] POST /api/v1/Surveys/office/{survey_id}/process-claims")
             print(f"{'='*60}")
-            print(f"Error: {error_msg}")
+            print(f"Error: {e}")
             print(f"{'='*60}\n")
             sys.stdout.flush()
 
-            # Show error message box
+            # Show generic error message (no technical details)
             ErrorHandler.show_error(
                 self,
-                f"Failed to process claims!\n\nError: {error_msg}",
-                "Process Claims Error"
+                map_exception(e),
+                tr("common.error")
             )
 
             # Clear any previous response

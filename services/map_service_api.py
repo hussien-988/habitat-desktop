@@ -523,12 +523,10 @@ class MapServiceAPI:
 
     def get_building_with_polygon(self, building_id: str) -> Optional[Building]:
         """
-        Get single building with polygon geometry from BuildingAssignments API.
-
-        Uses BuildingAssignments API to ensure polygon geometry is included.
+        Get single building with polygon geometry from API.
 
         Args:
-            building_id: Building ID (17-digit code)
+            building_id: Building UUID or building code (17-digit)
 
         Returns:
             Building object with polygon or None
@@ -536,6 +534,7 @@ class MapServiceAPI:
         try:
             logger.info(f"Getting building with polygon: {building_id}")
 
+            # API expects UUID - try direct call first
             response = self.api.get_building_by_id(building_id)
 
             if not response or not response.get("success"):

@@ -8,6 +8,7 @@ Allows user to:
 - Select a building to proceed
 """
 
+from datetime import datetime
 from typing import Dict, Any, Optional
 
 from PyQt5.QtWidgets import (
@@ -107,18 +108,18 @@ class BuildingSelectionStep(BaseStep):
 
         header_text_col = QVBoxLayout()
         header_text_col.setSpacing(1)
-        title = QLabel(tr("wizard.building.card_title"))
+        self._title_label = QLabel(tr("wizard.building.card_title"))
         # Title: 14px from Figma = 10pt, weight 600, color WIZARD_TITLE
-        title.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
-        title.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent;")
+        self._title_label.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
+        self._title_label.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent;")
 
-        subtitle = QLabel(tr("wizard.building.card_subtitle"))
+        self._subtitle_label = QLabel(tr("wizard.building.card_subtitle"))
         # Subtitle: 14px from Figma = 10pt, weight 400, color WIZARD_SUBTITLE
-        subtitle.setFont(create_font(size=10, weight=FontManager.WEIGHT_REGULAR))
-        subtitle.setStyleSheet(f"color: {Colors.WIZARD_SUBTITLE}; background: transparent;")
+        self._subtitle_label.setFont(create_font(size=10, weight=FontManager.WEIGHT_REGULAR))
+        self._subtitle_label.setStyleSheet(f"color: {Colors.WIZARD_SUBTITLE}; background: transparent;")
 
-        header_text_col.addWidget(title)
-        header_text_col.addWidget(subtitle)
+        header_text_col.addWidget(self._title_label)
+        header_text_col.addWidget(self._subtitle_label)
 
         # Icon: blue.png
         icon_lbl = QLabel()
@@ -151,10 +152,10 @@ class BuildingSelectionStep(BaseStep):
         card_layout.addSpacing(12)
 
         # Label: building code (same as title - 14px = 10pt, weight 600, color WIZARD_TITLE)
-        code_label = QLabel(tr("wizard.building.code_label"))
-        code_label.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
-        code_label.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent;")
-        card_layout.addWidget(code_label)
+        self._code_label = QLabel(tr("wizard.building.code_label"))
+        self._code_label.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
+        self._code_label.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent;")
+        card_layout.addWidget(self._code_label)
 
         # Gap: 8px between code label and search bar
         card_layout.addSpacing(8)
@@ -666,7 +667,7 @@ class BuildingSelectionStep(BaseStep):
             # ✅ VIEW-ONLY MODE: Just show the building, don't allow re-selection
             show_building_map_dialog(
                 db=self.context.db,
-                selected_building_id=self.selected_building.building_id,
+                selected_building_id=self.selected_building.building_uuid or self.selected_building.building_id,
                 auth_token=auth_token,
                 read_only=True,  # ✅ View-only: focus on building
                 parent=self
@@ -713,6 +714,9 @@ class BuildingSelectionStep(BaseStep):
 
     def _load_buildings(self):
         """Load buildings into the list."""
+        # Ensure auth token is set before API call
+        self._set_building_controller_auth()
+
         # Load first 100 buildings only for performance (use search for specific buildings)
         building_filter = BuildingFilter(limit=100)
         result = self.building_controller.load_buildings(building_filter)
@@ -908,7 +912,7 @@ class BuildingSelectionStep(BaseStep):
             logger.error(f"Error opening polygon selector: {e}", exc_info=True)
             ErrorHandler.show_error(
                 self,
-                tr("wizard.building.polygon_error", details=str(e)),
+                tr("wizard.building.polygon_error", details=map_exception(e)),
                 tr("wizard.building.polygon_error_title")
             )
 
@@ -1065,41 +1069,55 @@ class BuildingSelectionStep(BaseStep):
 
                 logger.info(f"Building selected from polygon list: {building.building_id}")
 
+    def update_language(self, is_arabic: bool):
+        """Update all translatable texts when language changes."""
+        self._title_label.setText(tr("wizard.building.card_title"))
+        self._subtitle_label.setText(tr("wizard.building.card_subtitle"))
+        self._code_label.setText(tr("wizard.building.code_label"))
+        self.building_search.setPlaceholderText(tr("wizard.building.search_placeholder"))
+        self.search_on_map_btn.setText(tr("wizard.building.search_on_map"))
+
     def validate(self) -> StepValidationResult:
-        """Validate the step and create survey via API."""
+        """Validate that a building is selected (Step 1 only validates, no API calls)."""
         result = self.create_validation_result()
 
         if not self.selected_building:
             result.add_error(tr("wizard.building.must_select"))
-            return result
-
-        # Create survey via API when clicking Next
-        if self._use_api:
-            # Set auth token
-            self._set_auth_token()
-
-            building_uuid = getattr(self.selected_building, 'building_uuid', '') or ''
-            survey_data = {"building_uuid": building_uuid}
-
-            logger.info(f"Creating office survey for building: {building_uuid}")
-
-            try:
-                survey_response = self._survey_api_service.create_office_survey(survey_data)
-
-                survey_id = survey_response.get("id") or survey_response.get("surveyId", "")
-                self.context.update_data("survey_id", survey_id)
-                self.context.update_data("survey_data", survey_response)
-                print(f"[SURVEY] Survey created successfully, survey_id: {survey_id}")
-                print(f"[SURVEY] Full API response: {survey_response}")
-                logger.info(f"Survey created successfully, survey_id: {survey_id}")
-
-            except Exception as e:
-                logger.error(f"Failed to create survey: {e}", exc_info=True)
-                user_msg = map_exception(e, context="survey")
-                result.add_error(user_msg)
-                return result
 
         return result
+
+    def on_next(self):
+        """Called when transitioning from Step 1 to Step 2 - create survey via API."""
+        if not self._use_api:
+            return
+
+        self._set_auth_token()
+
+        building_uuid = getattr(self.selected_building, 'building_uuid', '') or ''
+        survey_data = {
+            "building_uuid": building_uuid,
+            "surveyDate": datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "inPersonVisit": True,
+        }
+
+        logger.info(f"Creating office survey for building: {building_uuid}")
+
+        try:
+            survey_response = self._survey_api_service.create_office_survey(survey_data)
+
+            survey_id = survey_response.get("id") or survey_response.get("surveyId", "")
+            self.context.update_data("survey_id", survey_id)
+            self.context.update_data("survey_data", survey_response)
+            print(f"[SURVEY] Survey created successfully, survey_id: {survey_id}")
+            logger.info(f"Survey created successfully, survey_id: {survey_id}")
+
+        except Exception as e:
+            logger.error(f"Failed to create survey: {e}", exc_info=True)
+            ErrorHandler.show_error(
+                self,
+                map_exception(e),
+                tr("common.error")
+            )
 
     def _set_auth_token(self):
         """Set auth token for survey API service from main window."""

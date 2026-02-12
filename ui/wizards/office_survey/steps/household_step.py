@@ -29,6 +29,7 @@ from ui.components.icon import Icon
 from ui.font_utils import create_font, FontManager
 from services.translation_manager import tr
 from services.display_mappings import get_unit_type_display, get_unit_status_display
+from services.error_mapper import map_exception
 
 logger = get_logger(__name__)
 
@@ -277,30 +278,30 @@ class HouseholdStep(BaseStep):
         title_subtitle_layout.setContentsMargins(0, 0, 0, 0)
 
         # Title
-        title_label = QLabel(tr("wizard.household.head_title"))
-        title_label.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
-        title_label.setStyleSheet("""
+        self._title_label = QLabel(tr("wizard.household.head_title"))
+        self._title_label.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
+        self._title_label.setStyleSheet("""
             QLabel {
                 color: #1A1F1D;
                 border: none;
                 background: transparent;
             }
         """)
-        title_label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
-        title_subtitle_layout.addWidget(title_label)
+        self._title_label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+        title_subtitle_layout.addWidget(self._title_label)
 
         # Subtitle
-        subtitle_label = QLabel(tr("wizard.household.subtitle"))
-        subtitle_label.setFont(create_font(size=10, weight=FontManager.WEIGHT_REGULAR))
-        subtitle_label.setStyleSheet("""
+        self._subtitle_label = QLabel(tr("wizard.household.subtitle"))
+        self._subtitle_label.setFont(create_font(size=10, weight=FontManager.WEIGHT_REGULAR))
+        self._subtitle_label.setStyleSheet("""
             QLabel {
                 color: #86909B;
                 border: none;
                 background: transparent;
             }
         """)
-        subtitle_label.setAlignment(Qt.AlignRight)
-        title_subtitle_layout.addWidget(subtitle_label)
+        self._subtitle_label.setAlignment(Qt.AlignRight)
+        title_subtitle_layout.addWidget(self._subtitle_label)
 
         right_header.addLayout(title_subtitle_layout)
         header_layout.addLayout(right_header)
@@ -319,10 +320,10 @@ class HouseholdStep(BaseStep):
         field1_layout = QVBoxLayout()
         field1_layout.setSpacing(4)
 
-        head_name_label = QLabel(tr("wizard.household.head_name_label"))
-        head_name_label.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
-        head_name_label.setStyleSheet("color: #374151; background: transparent;")
-        field1_layout.addWidget(head_name_label)
+        self._head_name_label = QLabel(tr("wizard.household.head_name_label"))
+        self._head_name_label.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
+        self._head_name_label.setStyleSheet("color: #374151; background: transparent;")
+        field1_layout.addWidget(self._head_name_label)
 
         self.hh_head_name = QLineEdit()
         self.hh_head_name.setPlaceholderText(tr("wizard.household.head_name_placeholder"))
@@ -348,10 +349,10 @@ class HouseholdStep(BaseStep):
         field2_layout = QVBoxLayout()
         field2_layout.setSpacing(4)
 
-        total_members_label = QLabel(tr("wizard.household.total_members"))
-        total_members_label.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
-        total_members_label.setStyleSheet("color: #374151; background: transparent;")
-        field2_layout.addWidget(total_members_label)
+        self._total_members_label = QLabel(tr("wizard.household.total_members"))
+        self._total_members_label.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
+        self._total_members_label.setStyleSheet("color: #374151; background: transparent;")
+        field2_layout.addWidget(self._total_members_label)
 
         # Create SpinBox with custom arrows
         self.hh_total_members = QSpinBox()
@@ -376,10 +377,10 @@ class HouseholdStep(BaseStep):
         notes_field_layout = QVBoxLayout()
         notes_field_layout.setSpacing(4)
 
-        notes_label = QLabel(tr("wizard.household.notes_label"))
-        notes_label.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
-        notes_label.setStyleSheet("color: #374151; background: transparent;")
-        notes_field_layout.addWidget(notes_label)
+        self._notes_label = QLabel(tr("wizard.household.notes_label"))
+        self._notes_label.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
+        self._notes_label.setStyleSheet("color: #374151; background: transparent;")
+        notes_field_layout.addWidget(self._notes_label)
 
         self.hh_notes = QTextEdit()
         self.hh_notes.setPlaceholderText(tr("wizard.household.notes_placeholder"))
@@ -742,6 +743,16 @@ class HouseholdStep(BaseStep):
 
         return container
 
+    def update_language(self, is_arabic: bool):
+        """Update all translatable texts when language changes."""
+        self._title_label.setText(tr("wizard.household.head_title"))
+        self._subtitle_label.setText(tr("wizard.household.subtitle"))
+        self._head_name_label.setText(tr("wizard.household.head_name_label"))
+        self.hh_head_name.setPlaceholderText(tr("wizard.household.head_name_placeholder"))
+        self._total_members_label.setText(tr("wizard.household.total_members"))
+        self._notes_label.setText(tr("wizard.household.notes_label"))
+        self.hh_notes.setPlaceholderText(tr("wizard.household.notes_placeholder"))
+
     def validate(self) -> StepValidationResult:
         """Validate the step and save household data automatically."""
         result = self.create_validation_result()
@@ -797,9 +808,8 @@ class HouseholdStep(BaseStep):
                     print(f"[HOUSEHOLD] Full API response: {api_response}")
 
                 except Exception as e:
-                    error_msg = str(e)
-                    logger.error(f"Failed to create household via API: {error_msg}")
-                    result.add_error(f"{tr('wizard.household.save_failed')}: {error_msg}")
+                    logger.error(f"Failed to create household via API: {e}")
+                    result.add_error(tr("wizard.household.save_failed", error_msg=map_exception(e)))
                     return result
 
             # Clear old household data and add new one

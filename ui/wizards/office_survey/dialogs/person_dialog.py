@@ -22,6 +22,7 @@ from app.config import Config
 from services.validation_service import ValidationService
 from services.api_client import get_api_client
 from services.translation_manager import tr
+from services.error_mapper import map_exception
 from services.display_mappings import get_relation_type_options, get_contract_type_options, get_evidence_type_options
 from ui.components.toast import Toast
 from utils.logger import get_logger
@@ -820,11 +821,10 @@ class PersonDialog(QDialog):
                     return
 
             except Exception as e:
-                error_msg = str(e)
-                logger.error(f"Failed to create person via API: {error_msg}")
+                logger.error(f"Failed to create person via API: {e}")
                 ErrorHandler.show_error(
                     self,
-                    tr("wizard.person_dialog.create_failed", error_msg=error_msg),
+                    tr("wizard.person_dialog.create_failed", error_msg=map_exception(e)),
                     tr("common.error")
                 )
                 return
@@ -879,9 +879,8 @@ class PersonDialog(QDialog):
                         self._upload_tenure_files(relation_id)
 
                 except Exception as e:
-                    error_msg = str(e)
-                    logger.error(f"Failed to link person to unit: {error_msg}")
-                    Toast.show_toast(self, tr("wizard.person_dialog.link_failed", error_msg=error_msg), Toast.WARNING)
+                    logger.error(f"Failed to link person to unit: {e}")
+                    Toast.show_toast(self, tr("wizard.person_dialog.link_failed", error_msg=map_exception(e)), Toast.WARNING)
 
         self.accept()
 
