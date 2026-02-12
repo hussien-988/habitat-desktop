@@ -25,6 +25,7 @@ from .wizard_context import WizardContext
 from .step_navigator import StepNavigator
 from ui.components.action_button import ActionButton
 from ui.error_handler import ErrorHandler
+from services.translation_manager import tr
 
 
 # Combine PyQt5 metaclass with ABC metaclass
@@ -302,8 +303,8 @@ class BaseWizard(QWidget, metaclass=ABCQWidgetMeta):
             self.draft_saved.emit(draft_id)
             ErrorHandler.show_success(
                 self,
-                f"تم حفظ المسودة بنجاح\nمعرف المسودة: {draft_id}",
-                "تم الحفظ"
+                f"{tr('success.draft_saved')}\n{tr('info.draft_id')}: {draft_id}",
+                tr("dialog.success")
             )
 
     def _handle_submit(self):
@@ -364,12 +365,14 @@ class BaseWizard(QWidget, metaclass=ABCQWidgetMeta):
 
         message = ""
         if errors:
-            message += f"الأخطاء:\n{errors}\n"
+            message += errors
         if warnings:
-            message += f"\nتحذيرات:\n{warnings}"
+            if message:
+                message += "\n"
+            message += warnings
 
         ErrorHandler.show_warning(
             self,
-            message or "يرجى التحقق من البيانات المدخلة",
-            "خطأ في التحقق من البيانات"
+            message or tr("validation.check_data"),
+            tr("dialog.warning")
         )

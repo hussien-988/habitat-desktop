@@ -17,6 +17,7 @@ from PyQt5.QtGui import QKeySequence, QColor, QMouseEvent
 
 from .config import Config, Pages
 from repositories.database import Database
+from services.translation_manager import set_language as tm_set_language
 from utils.i18n import I18n
 from utils.logger import get_logger
 from ui.error_handler import ErrorHandler
@@ -588,7 +589,9 @@ class MainWindow(QMainWindow):
     def toggle_language(self):
         """Toggle between English and Arabic."""
         self._is_arabic = not self._is_arabic
-        self.i18n.set_language("ar" if self._is_arabic else "en")
+        lang_code = "ar" if self._is_arabic else "en"
+        self.i18n.set_language(lang_code)
+        tm_set_language(lang_code)
 
         # Update layout direction
         if self._is_arabic:

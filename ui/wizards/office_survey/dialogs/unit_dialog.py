@@ -25,6 +25,7 @@ from controllers.unit_controller import UnitController
 from ui.error_handler import ErrorHandler
 from services.validation_service import ValidationService
 from services.api_client import get_api_client
+from services.translation_manager import tr
 from ui.components.toast import Toast
 from utils.logger import get_logger
 
@@ -100,7 +101,7 @@ class UnitDialog(QDialog):
         layout.setContentsMargins(24, 16, 24, 16)  # تخفيف البادينغ العلوي والسفلي
 
         # العنوان (Header) - RTL ياخذ يمين تلقائياً
-        header_label = QLabel("أضف معلومات الوحدة العقارية" if not self.unit_data else "تعديل معلومات الوحدة العقارية")
+        header_label = QLabel(tr("wizard.unit_dialog.title_add") if not self.unit_data else tr("wizard.unit_dialog.title_edit"))
         header_label.setStyleSheet("font-size: 18px; font-weight: 600; color: #1A1F1D; background: transparent;")
         layout.addWidget(header_label)
 
@@ -115,19 +116,19 @@ class UnitDialog(QDialog):
         # API: 1=Apartment, 2=Shop, 3=Office, 4=Warehouse, 5=Other
         self.unit_type_combo = QComboBox()
         self.unit_type_combo.setStyleSheet(self._combo_style())
-        self.unit_type_combo.addItem("اختر", 0)  # Default selection
+        self.unit_type_combo.addItem(tr("wizard.unit_dialog.select"), 0)  # Default selection
         for code, name_en, name_ar in Vocabularies.UNIT_TYPES:
             self.unit_type_combo.addItem(name_ar, code)
-        row1.addLayout(self._create_field_container("نوع الوحدة", self.unit_type_combo), 1)
+        row1.addLayout(self._create_field_container(tr("wizard.unit_dialog.unit_type"), self.unit_type_combo), 1)
 
         # Unit Status - Using API integer codes from Vocabularies
         # API: 1=Occupied, 2=Vacant, 3=Damaged, 4=UnderRenovation, 5=Uninhabitable, 6=Locked, 99=Unknown
         self.unit_status_combo = QComboBox()
         self.unit_status_combo.setStyleSheet(self._combo_style())
-        self.unit_status_combo.addItem("اختر", 0)  # Default selection
+        self.unit_status_combo.addItem(tr("wizard.unit_dialog.select"), 0)  # Default selection
         for code, name_en, name_ar in Vocabularies.UNIT_STATUS:
             self.unit_status_combo.addItem(name_ar, code)
-        row1.addLayout(self._create_field_container("حالة الوحدة", self.unit_status_combo), 1)
+        row1.addLayout(self._create_field_container(tr("wizard.unit_dialog.unit_status"), self.unit_status_combo), 1)
 
         layout.addLayout(row1)
 
@@ -146,7 +147,7 @@ class UnitDialog(QDialog):
         self.floor_spin.setLocale(QLocale(QLocale.English, QLocale.UnitedStates))
         self.floor_spin.setButtonSymbols(QSpinBox.NoButtons)
         floor_widget = self._create_spinbox_with_arrows(self.floor_spin)
-        row2.addLayout(self._create_field_container("رقم الطابق", floor_widget), 1)
+        row2.addLayout(self._create_field_container(tr("wizard.unit_dialog.floor_number"), floor_widget), 1)
 
         # Unit Number with custom arrows
         self.unit_number_spin = QSpinBox()
@@ -157,7 +158,7 @@ class UnitDialog(QDialog):
         self.unit_number_spin.setButtonSymbols(QSpinBox.NoButtons)
         self.unit_number_spin.valueChanged.connect(self._check_uniqueness)
         unit_widget = self._create_spinbox_with_arrows(self.unit_number_spin)
-        row2.addLayout(self._create_field_container("رقم الوحدة", unit_widget), 1)
+        row2.addLayout(self._create_field_container(tr("wizard.unit_dialog.unit_number"), unit_widget), 1)
 
         layout.addLayout(row2)
 
@@ -181,11 +182,11 @@ class UnitDialog(QDialog):
         self.rooms_spin.setLocale(QLocale(QLocale.English, QLocale.UnitedStates))
         self.rooms_spin.setButtonSymbols(QSpinBox.NoButtons)
         rooms_widget = self._create_spinbox_with_arrows(self.rooms_spin)
-        row3.addLayout(self._create_field_container("عدد الغرف", rooms_widget), 1)
+        row3.addLayout(self._create_field_container(tr("wizard.unit_dialog.rooms"), rooms_widget), 1)
 
         # Area - with numeric validator and inline error
         self.area_input = QLineEdit()
-        self.area_input.setPlaceholderText("المساحة التقريبية أو المقاسة (م²)")
+        self.area_input.setPlaceholderText(tr("wizard.unit_dialog.area_placeholder"))
         self.area_input.setStyleSheet(self._input_style())
 
         # Allow only numbers (with decimal point)
@@ -200,7 +201,7 @@ class UnitDialog(QDialog):
         self.area_error_label.setVisible(False)
         self.area_input.textChanged.connect(self._validate_area_input)
 
-        row3.addLayout(self._create_field_container_with_validation("مساحة الوحدة", self.area_input, self.area_error_label), 1)
+        row3.addLayout(self._create_field_container_with_validation(tr("wizard.unit_dialog.area"), self.area_input, self.area_error_label), 1)
 
         layout.addLayout(row3)
 
@@ -212,7 +213,7 @@ class UnitDialog(QDialog):
         self.description_edit.setMinimumHeight(131)
         self.description_edit.setMaximumHeight(131)
         self.description_edit.setPlaceholderText(
-            "وصف تفصيلي يشمل: عدد الغرف وأنواعها، المساحة التقريبية، الاتجاهات والحدود، وأي ميزات مميزة."
+            tr("wizard.unit_dialog.description_placeholder")
         )
         self.description_edit.setStyleSheet("""
             QTextEdit {
@@ -228,7 +229,7 @@ class UnitDialog(QDialog):
                 border-width: 2px;
             }
         """)
-        layout.addLayout(self._create_field_container("وصف العقار", self.description_edit))
+        layout.addLayout(self._create_field_container(tr("wizard.unit_dialog.description"), self.description_edit))
 
         # مسافة قبل الأزرار: 40
         layout.addSpacing(40)
@@ -391,7 +392,7 @@ class UnitDialog(QDialog):
         Returns:
             QPushButton configured as save button
         """
-        btn = QPushButton("حفظ")
+        btn = QPushButton(tr("common.save"))
         btn.setFixedSize(264, 44)
         btn.setStyleSheet("""
             QPushButton {
@@ -425,7 +426,7 @@ class UnitDialog(QDialog):
         Returns:
             QPushButton configured as cancel button
         """
-        btn = QPushButton("إلغاء")
+        btn = QPushButton(tr("common.cancel"))
         btn.setFixedSize(264, 44)
         btn.setStyleSheet("""
             QPushButton {
@@ -540,7 +541,7 @@ class UnitDialog(QDialog):
             self.area_error_label.setVisible(False)
             self.area_input.setStyleSheet(self._input_style())
         except ValueError:
-            self.area_error_label.setText("المساحة يجب أن تكون أرقام فقط")
+            self.area_error_label.setText(tr("wizard.unit_dialog.area_numbers_only"))
             self.area_error_label.setVisible(True)
             self.area_input.setStyleSheet(self._input_error_style())
 
@@ -561,7 +562,7 @@ class UnitDialog(QDialog):
 
             if not result.success:
                 logger.error(f"Failed to check unit uniqueness: {result.message}")
-                self.uniqueness_label.setText("⚠️ خطأ في التحقق من التفرد")
+                self.uniqueness_label.setText(f"⚠️ {tr('wizard.unit_dialog.uniqueness_error')}")
                 self.uniqueness_label.setStyleSheet("color: #e67e22; font-size: 11px;")
                 return
 
@@ -582,11 +583,11 @@ class UnitDialog(QDialog):
                     break
 
             if is_unique:
-                self.uniqueness_label.setText("✅ رقم الوحدة متاح")
+                self.uniqueness_label.setText(f"✅ {tr('wizard.unit_dialog.number_available')}")
                 self.uniqueness_label.setStyleSheet("color: #27ae60; font-size: 11px;")
                 self.save_btn.setEnabled(True)
             else:
-                self.uniqueness_label.setText("❌ يوجد وحدة بنفس الرقم والطابق")
+                self.uniqueness_label.setText(f"❌ {tr('wizard.unit_dialog.number_taken')}")
                 self.uniqueness_label.setStyleSheet("color: #e74c3c; font-size: 11px;")
                 self.save_btn.setEnabled(False)
 
@@ -599,12 +600,12 @@ class UnitDialog(QDialog):
         """Validate form data."""
         # Unit type is required
         if not self.unit_type_combo.currentData():
-            self._show_styled_message("تحذير", "يرجى اختيار نوع الوحدة")
+            self._show_styled_message(tr("common.warning"), tr("wizard.unit_dialog.select_type_warning"))
             return False
 
         # Unit number is required
         if self.unit_number_spin.value() == 0:
-            self._show_styled_message("تحذير", "يرجى إدخال رقم الوحدة")
+            self._show_styled_message(tr("common.warning"), tr("wizard.unit_dialog.enter_number_warning"))
             return False
 
         # Area should be numeric if provided
@@ -615,7 +616,7 @@ class UnitDialog(QDialog):
                 self.area_error_label.setVisible(False)
                 self.area_input.setStyleSheet(self._input_style())
             except ValueError:
-                self.area_error_label.setText("المساحة يجب أن تكون أرقام فقط")
+                self.area_error_label.setText(tr("wizard.unit_dialog.area_numbers_only"))
                 self.area_error_label.setVisible(True)
                 self.area_input.setStyleSheet(self._input_error_style())
                 self.area_input.setFocus()
@@ -642,7 +643,7 @@ class UnitDialog(QDialog):
             except Exception as e:
                 error_msg = str(e)
                 logger.error(f"Failed to create unit via API: {error_msg}")
-                self._show_styled_message("خطأ", f"فشل في إنشاء الوحدة:\n{error_msg}", is_error=True)
+                self._show_styled_message(tr("common.error"), tr("wizard.unit_dialog.create_failed", error_msg=error_msg), is_error=True)
                 return
 
         self.accept()

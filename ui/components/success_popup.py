@@ -187,19 +187,20 @@ class SuccessPopup(QDialog):
 
         # Center on parent window if available
         if parent:
-            # Get the top-level window
             top_window = parent.window()
-            if top_window:
-                # Get window geometry in screen coordinates
-                window_rect = top_window.frameGeometry()
-                # Calculate center position
-                popup_x = window_rect.x() + (window_rect.width() - popup.width()) // 2
-                popup_y = window_rect.y() + (window_rect.height() - popup.height()) // 2
-                popup.move(popup_x, popup_y)
+            target = top_window if top_window else parent
+            # Use geometry() for reliable screen coordinates
+            target_rect = target.geometry()
+            popup_x = target_rect.x() + (target_rect.width() - popup.width()) // 2
+            popup_y = target_rect.y() + (target_rect.height() - popup.height()) // 2
+            # Ensure popup stays within screen bounds
+            popup_x = max(0, popup_x)
+            popup_y = max(0, popup_y)
+            popup.move(popup_x, popup_y)
         else:
             # Center on screen if no parent
             from PyQt5.QtWidgets import QDesktopWidget
-            screen = QDesktopWidget().screenGeometry()
+            screen = QDesktopWidget().availableGeometry()
             popup_x = (screen.width() - popup.width()) // 2
             popup_y = (screen.height() - popup.height()) // 2
             popup.move(popup_x, popup_y)

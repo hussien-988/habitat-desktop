@@ -25,10 +25,12 @@ from controllers.building_controller import BuildingController, BuildingFilter
 from models.building import Building
 from app.config import Config
 from services.api_client import get_api_client
+from services.error_mapper import map_exception
 from ui.error_handler import ErrorHandler
 from utils.logger import get_logger
 from ui.font_utils import FontManager, create_font
 from ui.design_system import Colors
+from services.translation_manager import tr
 
 logger = get_logger(__name__)
 
@@ -105,12 +107,12 @@ class BuildingSelectionStep(BaseStep):
 
         header_text_col = QVBoxLayout()
         header_text_col.setSpacing(1)
-        title = QLabel("بيانات البناء")
+        title = QLabel(tr("wizard.building.card_title"))
         # Title: 14px from Figma = 10pt, weight 600, color WIZARD_TITLE
         title.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
         title.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent;")
 
-        subtitle = QLabel("ابحث عن معلومات البناء والموقع الجغرافي")
+        subtitle = QLabel(tr("wizard.building.card_subtitle"))
         # Subtitle: 14px from Figma = 10pt, weight 400, color WIZARD_SUBTITLE
         subtitle.setFont(create_font(size=10, weight=FontManager.WEIGHT_REGULAR))
         subtitle.setStyleSheet(f"color: {Colors.WIZARD_SUBTITLE}; background: transparent;")
@@ -149,7 +151,7 @@ class BuildingSelectionStep(BaseStep):
         card_layout.addSpacing(12)
 
         # Label: building code (same as title - 14px = 10pt, weight 600, color WIZARD_TITLE)
-        code_label = QLabel("رمز البناء")
+        code_label = QLabel(tr("wizard.building.code_label"))
         code_label.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
         code_label.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent;")
         card_layout.addWidget(code_label)
@@ -206,7 +208,7 @@ class BuildingSelectionStep(BaseStep):
 
         # Input
         self.building_search = QLineEdit()
-        self.building_search.setPlaceholderText("ابحث عن رمز البناء ...")
+        self.building_search.setPlaceholderText(tr("wizard.building.search_placeholder"))
         self.building_search.setLayoutDirection(Qt.RightToLeft)
 
         self.building_search.setStyleSheet("""
@@ -227,7 +229,7 @@ class BuildingSelectionStep(BaseStep):
         left_links_layout = QHBoxLayout()
         left_links_layout.setSpacing(8)
 
-        self.search_on_map_btn = QPushButton("بحث على الخريطة")
+        self.search_on_map_btn = QPushButton(tr("wizard.building.search_on_map"))
         self.search_on_map_btn.setCursor(Qt.PointingHandCursor)
         self.search_on_map_btn.setFlat(True)
         self.search_on_map_btn.setStyleSheet("""
@@ -364,11 +366,11 @@ class BuildingSelectionStep(BaseStep):
             return section, value
 
         # Create 5 stat sections (from Figma order)
-        section_type, self.ui_building_type = _create_stat_section("نوع البناء")
-        section_status, self.ui_building_status = _create_stat_section("حالة البناء")
-        section_units, self.ui_units_count = _create_stat_section("عدد الوحدات")
-        section_parcels, self.ui_parcels_count = _create_stat_section("عدد المقاسم")
-        section_shops, self.ui_shops_count = _create_stat_section("عدد المحلات")
+        section_type, self.ui_building_type = _create_stat_section(tr("wizard.building.type"))
+        section_status, self.ui_building_status = _create_stat_section(tr("wizard.building.status"))
+        section_units, self.ui_units_count = _create_stat_section(tr("wizard.building.units_count"))
+        section_parcels, self.ui_parcels_count = _create_stat_section(tr("wizard.building.parcels_count"))
+        section_shops, self.ui_shops_count = _create_stat_section(tr("wizard.building.shops_count"))
 
         # Add sections with equal spacing (no dividers)
         sections = [section_type, section_status, section_units, section_parcels, section_shops]
@@ -403,7 +405,7 @@ class BuildingSelectionStep(BaseStep):
         location_layout.setSpacing(0)  # Manual spacing control
 
         # Row 1: Header only - "موقع البناء"
-        header = QLabel("موقع البناء")
+        header = QLabel(tr("wizard.building.location_title"))
         header.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
         header.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent;")
         location_layout.addWidget(header)
@@ -488,7 +490,7 @@ class BuildingSelectionStep(BaseStep):
             map_button.setIconSize(QSize(12, 12))
 
         # Text: "فتح الخريطة" - 12px Figma = 9pt PyQt5, PRIMARY_BLUE color
-        map_button.setText("فتح الخريطة")
+        map_button.setText(tr("wizard.building.open_map"))
         map_button.setFont(create_font(size=9, weight=FontManager.WEIGHT_REGULAR))
 
         # DRY: Using Colors.PRIMARY_BLUE
@@ -549,11 +551,11 @@ class BuildingSelectionStep(BaseStep):
         content_row.addLayout(map_section, stretch=1)
 
         # Section 2: وصف الموقع (center)
-        section_location, self.ui_location_desc = _create_info_section("وصف الموقع", "وصف الموقع")
+        section_location, self.ui_location_desc = _create_info_section(tr("wizard.building.location_desc"), tr("wizard.building.location_desc"))
         content_row.addLayout(section_location, stretch=1)
 
         # Section 3: الوصف العام (right)
-        section_general, self.ui_general_desc = _create_info_section("الوصف العام", "الوصف العام للموقع")
+        section_general, self.ui_general_desc = _create_info_section(tr("wizard.building.general_desc"), tr("wizard.building.general_desc_placeholder"))
         content_row.addLayout(section_general, stretch=1)
 
         location_layout.addLayout(content_row)
@@ -624,8 +626,8 @@ class BuildingSelectionStep(BaseStep):
             self.stats_card.setVisible(True)
 
             # Update location card with building data
-            self.ui_general_desc.setText(getattr(selected_building, 'general_description', 'الوصف العام للموقع'))
-            self.ui_location_desc.setText(getattr(selected_building, 'location_description', 'وصف الموقع'))
+            self.ui_general_desc.setText(getattr(selected_building, 'general_description', tr("wizard.building.general_description_fallback")))
+            self.ui_location_desc.setText(getattr(selected_building, 'location_description', tr("wizard.building.location_description")))
 
             # Show location card
             self.location_card.setVisible(True)
@@ -693,8 +695,8 @@ class BuildingSelectionStep(BaseStep):
             self.ui_shops_count.setText(str(selected_building.number_of_shops))
 
             # Update location card
-            self.ui_general_desc.setText(getattr(selected_building, 'general_description', 'الوصف العام للموقع'))
-            self.ui_location_desc.setText(getattr(selected_building, 'location_description', 'وصف الموقع'))
+            self.ui_general_desc.setText(getattr(selected_building, 'general_description', tr("wizard.building.general_description_fallback")))
+            self.ui_location_desc.setText(getattr(selected_building, 'location_description', tr("wizard.building.location_description")))
 
             # Show cards
             self.stats_card.setVisible(True)
@@ -725,8 +727,8 @@ class BuildingSelectionStep(BaseStep):
             # Create item with building info
             item_text = (
                 f"{building.building_id} | "
-                f"النوع: {building.building_type_display} | "
-                f"الحالة: {building.building_status_display}"
+                f"{tr('wizard.building.type_prefix', value=building.building_type_display)} | "
+                f"{tr('wizard.building.status_prefix', value=building.building_status_display)}"
             )
             item = QListWidgetItem(item_text)
 
@@ -756,7 +758,10 @@ class BuildingSelectionStep(BaseStep):
             item.setHidden(search_text not in item.text().lower())
 
     def _search_buildings(self):
-        """Search buildings from database."""
+        """Search buildings via API or local database."""
+        # Ensure auth token is set on building controller
+        self._set_building_controller_auth()
+
         search = self.building_search.text().strip()
 
         if search:
@@ -777,7 +782,7 @@ class BuildingSelectionStep(BaseStep):
             # Create item with building info
             item_text = (
                 f"{building.building_id} | "
-                f"النوع: {building.building_type_display}"
+                f"{tr('wizard.building.type_prefix', value=building.building_type_display)}"
             )
             item = QListWidgetItem(item_text)
 
@@ -813,8 +818,8 @@ class BuildingSelectionStep(BaseStep):
         self.stats_card.setVisible(True)
 
         # Update location card with building data
-        self.ui_general_desc.setText(getattr(building, 'general_description', 'الوصف العام للموقع'))
-        self.ui_location_desc.setText(getattr(building, 'location_description', 'وصف الموقع'))
+        self.ui_general_desc.setText(getattr(building, 'general_description', tr("wizard.building.general_description_fallback")))
+        self.ui_location_desc.setText(getattr(building, 'location_description', tr("wizard.building.location_description")))
 
         # Update map thumbnail if coordinates are available
         if hasattr(building, 'latitude') and hasattr(building, 'longitude'):
@@ -852,9 +857,8 @@ class BuildingSelectionStep(BaseStep):
         """
         ErrorHandler.show_warning(
             self,
-            "استخدم زر 'البحث على الخريطة' لتحديد المباني.\n"
-            "Please use 'Search on Map' button to select buildings.",
-            "معلومة - Info"
+            tr("wizard.building.use_map_search"),
+            tr("wizard.building.info_title")
         )
         return
         try:
@@ -883,8 +887,8 @@ class BuildingSelectionStep(BaseStep):
                 self.stats_card.setVisible(True)
 
                 # Update location card
-                self.ui_general_desc.setText(getattr(building, 'general_description', 'الوصف العام للموقع'))
-                self.ui_location_desc.setText(getattr(building, 'location_description', 'وصف الموقع'))
+                self.ui_general_desc.setText(getattr(building, 'general_description', tr("wizard.building.general_description_fallback")))
+                self.ui_location_desc.setText(getattr(building, 'location_description', tr("wizard.building.location_description")))
                 self.location_card.setVisible(True)
 
                 self.buildings_list.setVisible(False)
@@ -904,8 +908,8 @@ class BuildingSelectionStep(BaseStep):
             logger.error(f"Error opening polygon selector: {e}", exc_info=True)
             ErrorHandler.show_error(
                 self,
-                f"حدث خطأ أثناء فتح محدد المنطقة:\n{str(e)}",
-                "خطأ - Error"
+                tr("wizard.building.polygon_error", details=str(e)),
+                tr("wizard.building.polygon_error_title")
             )
 
     def _show_building_selection_dialog(self, buildings):
@@ -918,7 +922,7 @@ class BuildingSelectionStep(BaseStep):
         from PyQt5.QtWidgets import QDialog, QVBoxLayout, QLabel, QPushButton
 
         dialog = QDialog(self)
-        dialog.setWindowTitle(f"اختر مبنى - Select Building ({len(buildings)} found)")
+        dialog.setWindowTitle(tr("wizard.building.select_dialog_title", count=len(buildings)))
         dialog.setMinimumWidth(500)
         dialog.setLayoutDirection(Qt.RightToLeft)
 
@@ -926,7 +930,7 @@ class BuildingSelectionStep(BaseStep):
         layout.setSpacing(12)
 
         # Instructions
-        info_label = QLabel(f"تم العثور على {len(buildings)} مبنى في المنطقة المحددة. اختر واحداً:")
+        info_label = QLabel(tr("wizard.building.select_dialog_instructions", count=len(buildings)))
         info_label.setStyleSheet("""
             QLabel {
                 font-family: 'IBM Plex Sans Arabic';
@@ -958,8 +962,8 @@ class BuildingSelectionStep(BaseStep):
         for building in buildings:
             item_text = (
                 f"🏢 {building.building_id} | "
-                f"النوع: {building.building_type_display} | "
-                f"الحالة: {building.building_status_display}"
+                f"{tr('wizard.building.type_prefix', value=building.building_type_display)} | "
+                f"{tr('wizard.building.status_prefix', value=building.building_status_display)}"
             )
             item = QListWidgetItem(item_text)
             item.setData(Qt.UserRole, building)
@@ -971,7 +975,7 @@ class BuildingSelectionStep(BaseStep):
         buttons_layout = QHBoxLayout()
         buttons_layout.setSpacing(8)
 
-        select_btn = QPushButton("✓ تحديد - Select")
+        select_btn = QPushButton(f"✓ {tr('wizard.building.select_button')}")
         select_btn.setMinimumHeight(36)
         select_btn.setStyleSheet("""
             QPushButton {
@@ -993,7 +997,7 @@ class BuildingSelectionStep(BaseStep):
         """)
         select_btn.setEnabled(False)
 
-        cancel_btn = QPushButton("✕ إلغاء - Cancel")
+        cancel_btn = QPushButton(f"✕ {tr('wizard.building.cancel_button')}")
         cancel_btn.setMinimumHeight(36)
         cancel_btn.setStyleSheet("""
             QPushButton {
@@ -1048,8 +1052,8 @@ class BuildingSelectionStep(BaseStep):
                 self.stats_card.setVisible(True)
 
                 # Update location card
-                self.ui_general_desc.setText(getattr(building, 'general_description', 'الوصف العام للموقع'))
-                self.ui_location_desc.setText(getattr(building, 'location_description', 'وصف الموقع'))
+                self.ui_general_desc.setText(getattr(building, 'general_description', tr("wizard.building.general_description_fallback")))
+                self.ui_location_desc.setText(getattr(building, 'location_description', tr("wizard.building.location_description")))
                 self.location_card.setVisible(True)
 
                 self.buildings_list.setVisible(False)
@@ -1066,7 +1070,7 @@ class BuildingSelectionStep(BaseStep):
         result = self.create_validation_result()
 
         if not self.selected_building:
-            result.add_error("يجب اختيار مبنى للمتابعة")
+            result.add_error(tr("wizard.building.must_select"))
             return result
 
         # Create survey via API when clicking Next
@@ -1090,18 +1094,24 @@ class BuildingSelectionStep(BaseStep):
                 logger.info(f"Survey created successfully, survey_id: {survey_id}")
 
             except Exception as e:
-                error_msg = str(e)
-                logger.error(f"Failed to create survey: {error_msg}")
-                result.add_error(f"فشل في إنشاء المسح: {error_msg}")
+                logger.error(f"Failed to create survey: {e}", exc_info=True)
+                user_msg = map_exception(e, context="survey")
+                result.add_error(user_msg)
                 return result
 
         return result
 
     def _set_auth_token(self):
-        """Set auth token for API service from main window."""
+        """Set auth token for survey API service from main window."""
         main_window = self.window()
         if main_window and hasattr(main_window, '_api_token') and main_window._api_token:
             self._survey_api_service.set_access_token(main_window._api_token)
+
+    def _set_building_controller_auth(self):
+        """Set auth token for building controller API service."""
+        main_window = self.window()
+        if main_window and hasattr(main_window, '_api_token') and main_window._api_token:
+            self.building_controller.set_auth_token(main_window._api_token)
 
     def collect_data(self) -> Dict[str, Any]:
         """Collect data from the step."""
@@ -1127,8 +1137,8 @@ class BuildingSelectionStep(BaseStep):
             self.stats_card.setVisible(True)
 
             # Update location card
-            self.ui_general_desc.setText(getattr(self.context.building, 'general_description', 'الوصف العام للموقع'))
-            self.ui_location_desc.setText(getattr(self.context.building, 'location_description', 'وصف الموقع'))
+            self.ui_general_desc.setText(getattr(self.context.building, 'general_description', tr("wizard.building.general_description_fallback")))
+            self.ui_location_desc.setText(getattr(self.context.building, 'location_description', tr("wizard.building.location_description")))
             self.location_card.setVisible(True)
 
             # Emit validation
@@ -1142,8 +1152,8 @@ class BuildingSelectionStep(BaseStep):
 
     def get_step_title(self) -> str:
         """Get step title."""
-        return "اختيار المبنى"
+        return tr("wizard.building.step_title")
 
     def get_step_description(self) -> str:
         """Get step description."""
-        return "ابحث عن المبنى المراد مسحه واختره"
+        return tr("wizard.building.step_description")
