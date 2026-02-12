@@ -1215,13 +1215,13 @@ class AddBuildingPage(QWidget):
                     lat_diff = max_lat - min_lat
                     lon_diff = max_lon - max_lon
 
-                    # Heuristic zoom calculation
+                    # Heuristic zoom calculation (tiles exist 15-20)
                     if lat_diff < 0.01 or lon_diff < 0.01:
-                        zoom = 15  # Small area (neighborhood)
+                        zoom = 17  # Small area (neighborhood)
                     elif lat_diff < 0.05 or lon_diff < 0.05:
-                        zoom = 14  # Medium area (district)
+                        zoom = 16  # Medium area (district)
                     else:
-                        zoom = 13  # Large area
+                        zoom = 15  # Large area (city overview)
 
                     logger.info(f"Area center calculated: ({center_lat:.6f}, {center_lon:.6f}) zoom={zoom}")
                     logger.info(f"   Based on {len(buildings)} buildings in area")
@@ -1229,12 +1229,12 @@ class AddBuildingPage(QWidget):
 
             # Fallback: No buildings found in area
             logger.warning(f"No buildings found in specified area, using default center")
-            return 36.2021, 37.1343, 13
+            return 36.2021, 37.1343, 15
 
         except Exception as e:
             logger.error(f"Failed to calculate area center: {e}")
             # Fallback to default
-            return 36.2021, 37.1343, 13
+            return 36.2021, 37.1343, 15
 
     def _on_pick_from_map(self):
         """
@@ -1253,21 +1253,21 @@ class AddBuildingPage(QWidget):
             if self._has_map_coordinates:
                 initial_lat = self.latitude_spin.value()
                 initial_lon = self.longitude_spin.value()
-                initial_zoom = 16
+                initial_zoom = 20
             elif selected_neighborhood_code:
                 center = self._get_neighborhood_center(selected_neighborhood_code)
                 if center:
                     initial_lat, initial_lon = center
-                    initial_zoom = 17
+                    initial_zoom = 18
                     initial_bounds = self._get_neighborhood_bounds(selected_neighborhood_code)
                 else:
                     initial_lat = 36.2021
                     initial_lon = 37.1343
-                    initial_zoom = 13
+                    initial_zoom = 15
             else:
                 initial_lat = 36.2021
                 initial_lon = 37.1343
-                initial_zoom = 13
+                initial_zoom = 15
 
             allow_polygon = self.polygon_radio.isChecked()
 
@@ -1283,6 +1283,7 @@ class AddBuildingPage(QWidget):
                 neighborhoods_geojson=neighborhoods_geojson,
                 selected_neighborhood_code=selected_neighborhood_code,
                 db=self.building_controller.db,
+                skip_fit_bounds=self._has_map_coordinates,
                 parent=self
             )
 
@@ -2043,7 +2044,85 @@ class AddBuildingPage(QWidget):
             return None
 
     def _build_neighborhoods_geojson(self) -> str:
-        """Build GeoJSON FeatureCollection from neighborhoods.json for map overlay."""
+        """Load neighborhoods from Backend API (best practice), fallback to local JSON."""
+        # API-first: get real data from Docker backend
+        try:
+            from services.api_client import get_api_client
+            api = get_api_client()
+
+            # Full Aleppo bounds
+            neighborhoods = api.get_neighborhoods_by_bounds(
+                sw_lat=36.14, sw_lng=37.07,
+                ne_lat=36.26, ne_lng=37.23
+            )
+
+            if neighborhoods:
+                geojson = self._neighborhoods_api_to_geojson(neighborhoods)
+                if geojson:
+                    logger.info(f"Loaded {len(neighborhoods)} neighborhoods from API")
+                    return geojson
+        except Exception as e:
+            logger.warning(f"API neighborhoods failed, using local fallback: {e}")
+
+        # Fallback: local JSON
+        return self._build_neighborhoods_geojson_local()
+
+    def _neighborhoods_api_to_geojson(self, neighborhoods: list) -> str:
+        """Convert API neighborhood response (with WKT boundaries) to GeoJSON."""
+        import json
+        features = []
+        for n in neighborhoods:
+            name_ar = n.get('nameArabic', n.get('name_ar', ''))
+            name_en = n.get('nameEnglish', n.get('name_en', ''))
+            code = n.get('code', '')
+            wkt = n.get('boundaries', '')
+
+            if not wkt:
+                continue
+
+            centroid = self._parse_wkt_centroid(wkt)
+            if not centroid:
+                continue
+
+            center_lat, center_lng = centroid
+            features.append({
+                "type": "Feature",
+                "properties": {
+                    "code": code,
+                    "name_ar": name_ar,
+                    "name_en": name_en,
+                    "center_lat": center_lat,
+                    "center_lng": center_lng
+                },
+                "geometry": {
+                    "type": "Point",
+                    "coordinates": [center_lng, center_lat]
+                }
+            })
+
+        if not features:
+            return None
+        return json.dumps({"type": "FeatureCollection", "features": features})
+
+    def _parse_wkt_centroid(self, wkt: str):
+        """Extract centroid from WKT POLYGON string."""
+        try:
+            coords_str = wkt.replace('POLYGON((', '').replace('))', '').strip()
+            pairs = coords_str.split(',')
+            lngs, lats = [], []
+            for pair in pairs:
+                parts = pair.strip().split()
+                if len(parts) == 2:
+                    lngs.append(float(parts[0]))
+                    lats.append(float(parts[1]))
+            if lats and lngs:
+                return sum(lats) / len(lats), sum(lngs) / len(lngs)
+        except Exception:
+            pass
+        return None
+
+    def _build_neighborhoods_geojson_local(self) -> str:
+        """Fallback: Build GeoJSON from local neighborhoods.json."""
         try:
             import json
             import os
@@ -2076,14 +2155,14 @@ class AddBuildingPage(QWidget):
                         "center_lng": center_lng
                     },
                     "geometry": {
-                        "type": "Polygon",
-                        "coordinates": [polygon]
+                        "type": "Point",
+                        "coordinates": [center_lng, center_lat]
                     }
                 })
 
             return json.dumps({"type": "FeatureCollection", "features": features})
         except Exception as e:
-            logger.error(f"Failed to build neighborhoods GeoJSON: {e}", exc_info=True)
+            logger.error(f"Failed to build local neighborhoods GeoJSON: {e}", exc_info=True)
             return '{"type":"FeatureCollection","features":[]}'
 
 
@@ -2895,6 +2974,7 @@ class BuildingsListPage(QWidget):
                 selected_building_id=building.building_id,
                 auth_token=auth_token,
                 read_only=True,
+                selected_building=building,
                 parent=self
             )
         else:

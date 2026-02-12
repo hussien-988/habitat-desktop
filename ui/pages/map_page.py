@@ -356,12 +356,12 @@ def get_leaflet_html(tile_server_url: str, buildings_geojson: str) -> str:
         L.Icon.Default.imagePath = '{tile_server_url}/images/';
 
         // Initialize map centered on Aleppo
-        var map = L.map('map').setView([36.2021, 37.1343], 14);
+        var map = L.map('map').setView([36.2021, 37.1343], 15);
 
         // Add tile layer from local server
         L.tileLayer('{tile_server_url}/tiles/{{z}}/{{x}}/{{y}}.png', {{
-            maxZoom: 16,
-            minZoom: 10,
+            maxZoom: 20,
+            minZoom: 15,
             attribution: 'Map data &copy; OpenStreetMap | UN-Habitat Syria'
         }}).addTo(map);
 

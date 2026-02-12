@@ -590,7 +590,7 @@ class BuildingSelectionStep(BaseStep):
         """
         from ui.components.building_map_dialog_v2 import show_building_map_dialog
 
-        # ✅ FIX: Get auth token from parent window (MainWindow has current_user with token)
+        # Get auth token from parent window
         auth_token = None
         try:
             main_window = self
@@ -598,7 +598,7 @@ class BuildingSelectionStep(BaseStep):
                 main_window = main_window.parent()
             if main_window and hasattr(main_window, 'current_user') and main_window.current_user:
                 auth_token = getattr(main_window.current_user, '_api_token', None)
-                logger.debug(f"✅ Got auth token from MainWindow.current_user: {bool(auth_token)}")
+                logger.debug(f"Got auth token from MainWindow.current_user: {bool(auth_token)}")
         except Exception as e:
             logger.warning(f"Could not get auth token from parent: {e}")
 
@@ -607,7 +607,7 @@ class BuildingSelectionStep(BaseStep):
         selected_building = show_building_map_dialog(
             db=self.context.db,
             selected_building_id=None,  # Always selection mode
-            auth_token=auth_token,  # ✅ Pass auth token
+            auth_token=auth_token,
             parent=self
         )
 
@@ -646,8 +646,8 @@ class BuildingSelectionStep(BaseStep):
         """
         Open map dialog to VIEW the currently selected building.
 
-        ✅ DRY: Uses show_building_map_dialog helper (unified across app)
-        ✅ View-only mode: Shows selected building with focus (no re-selection)
+        Uses show_building_map_dialog helper (unified across app).
+        View-only mode: Shows selected building with focus (no re-selection).
         """
         from ui.components.building_map_dialog_v2 import show_building_map_dialog
 
@@ -664,15 +664,16 @@ class BuildingSelectionStep(BaseStep):
 
         # If we already have a selected building, open in VIEW-ONLY mode
         if hasattr(self, 'selected_building') and self.selected_building:
-            # ✅ VIEW-ONLY MODE: Just show the building, don't allow re-selection
+            # View-only mode: show the building, don't allow re-selection
             show_building_map_dialog(
                 db=self.context.db,
                 selected_building_id=self.selected_building.building_uuid or self.selected_building.building_id,
                 auth_token=auth_token,
-                read_only=True,  # ✅ View-only: focus on building
+                read_only=True,
+                selected_building=self.selected_building,
                 parent=self
             )
-            return  # ✅ Don't process result (view-only, not selection)
+            return
 
         # If no building selected yet, open in SELECTION mode
         selected_building = show_building_map_dialog(

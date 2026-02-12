@@ -196,10 +196,10 @@ class TileServer(BaseHTTPRequestHandler):
     <script src="/leaflet.js"></script>
     <script src="/leaflet.draw.js"></script>
     <script>
-        var map = L.map('map').setView([{lat}, {lon}], 13);
+        var map = L.map('map').setView([{lat}, {lon}], 15);
         L.tileLayer('/tiles/{{z}}/{{x}}/{{y}}.png', {{
-            maxZoom: 16,
-            minZoom: 10,
+            maxZoom: 20,
+            minZoom: 15,
             attribution: 'UN-Habitat'
         }}).addTo(map);
     </script>
@@ -222,10 +222,10 @@ class TileServer(BaseHTTPRequestHandler):
     <div id="map"></div>
     <script src="/leaflet.js"></script>
     <script>
-        var map = L.map('map').setView([36.2021, 37.1343], 13);
+        var map = L.map('map').setView([36.2021, 37.1343], 15);
         L.tileLayer('/tiles/{{z}}/{{x}}/{{y}}.png', {{
-            maxZoom: 16,
-            minZoom: 10,
+            maxZoom: 20,
+            minZoom: 15,
             attribution: 'UN-Habitat Syria'
         }}).addTo(map);
 
