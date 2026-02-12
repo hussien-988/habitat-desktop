@@ -253,7 +253,7 @@ class LeafletHTMLGenerator:
         }
 
         .selected-pin {
-            filter: drop-shadow(0 4px 8px rgba(255, 107, 0, 0.6));
+            filter: drop-shadow(0 4px 8px rgba(33, 150, 243, 0.5));
             animation: pulse-selection 1.5s ease-in-out infinite;
         }
 
@@ -463,6 +463,56 @@ class LeafletHTMLGenerator:
 
         initial_bounds_js = json.dumps(initial_bounds) if initial_bounds else 'null'
 
+        # Build popup JS block - skip popups in multi-select mode (clicking toggles selection)
+        if enable_multiselect:
+            popup_js_block = '// Multi-select mode: no popups, clicking toggles selection'
+        else:
+            selection_btn_js = (
+                'if (buildingIdForApi) { popup += "<button class=\\"select-building-btn\\" '
+                'onclick=\\"selectBuilding(&apos;" + buildingIdForApi + "&apos;)\\">'
+                '<span style=\\"font-size:16px\\">✓</span> اختيار هذا المبنى</button>"; }'
+            ) if enable_selection else '// Selection disabled'
+
+            popup_js_block = (
+                "var popup = '<div class=\"building-popup\">' +\n"
+                "                    '<h4>' + buildingIdDisplay + ' ' +\n"
+                "                    '<span class=\"geometry-badge\">' + geomType + '</span></h4>' +\n"
+                "                    '<p><span class=\"label\">الحي:</span> ' + (props.neighborhood || 'غير محدد') + '</p>' +\n"
+                "                    '<p><span class=\"label\">الحالة:</span> ' +\n"
+                "                    '<span class=\"status-badge ' + statusClass + '\">' + statusLabel + '</span></p>' +\n"
+                "                    '<p><span class=\"label\">الوحدات:</span> ' + (props.units || 0) + '</p>';\n"
+                "\n"
+                "                if (props.type) {\n"
+                "                    popup += '<p><span class=\"label\">النوع:</span> ' + props.type + '</p>';\n"
+                "                }\n"
+                "\n"
+                "                " + selection_btn_js + "\n"
+                "\n"
+                "                popup += '</div>';\n"
+                "\n"
+                "                layer.bindPopup(popup);"
+            )
+
+        # Build hover JS block - skip in multi-select mode (multiselect template adds its own)
+        if enable_multiselect:
+            hover_js_block = '// Hover handled by multi-select handler'
+        else:
+            hover_js_block = (
+                "// Highlight on hover (polygons only)\n"
+                "                if (geomType !== 'Point') {\n"
+                "                    layer.on('mouseover', function(e) {\n"
+                "                        this.setStyle({\n"
+                "                            fillOpacity: 0.8,\n"
+                "                            weight: 3\n"
+                "                        });\n"
+                "                    });\n"
+                "\n"
+                "                    layer.on('mouseout', function(e) {\n"
+                "                        buildingsLayer.resetStyle(this);\n"
+                "                    });\n"
+                "                }"
+            )
+
         return f'''
     <script>
         // Fix Leaflet icon paths for local serving
@@ -632,25 +682,7 @@ class LeafletHTMLGenerator:
                 var buildingIdDisplay = props.building_id_display || props.building_id || 'مبنى';
                 var buildingIdForApi = props.building_id;  // ✅ NO dashes for API
 
-                // Build popup content
-                var popup = '<div class="building-popup">' +
-                    '<h4>' + buildingIdDisplay + ' ' +
-                    '<span class="geometry-badge">' + geomType + '</span></h4>' +
-                    '<p><span class="label">الحي:</span> ' + (props.neighborhood || 'غير محدد') + '</p>' +
-                    '<p><span class="label">الحالة:</span> ' +
-                    '<span class="status-badge ' + statusClass + '">' + statusLabel + '</span></p>' +
-                    '<p><span class="label">الوحدات:</span> ' + (props.units || 0) + '</p>';
-
-                if (props.type) {{
-                    popup += '<p><span class="label">النوع:</span> ' + props.type + '</p>';
-                }}
-
-                // إضافة زر الاختيار إذا كان مفعلاً (✅ Use building_id without dashes for API)
-                {'if (buildingIdForApi) { popup += "<button class=\\"select-building-btn\\" onclick=\\"selectBuilding(&apos;" + buildingIdForApi + "&apos;)\\\"><span style=\\"font-size:16px\\">✓</span> اختيار هذا المبنى</button>"; }' if enable_selection else '// Selection disabled'}
-
-                popup += '</div>';
-
-                layer.bindPopup(popup);
+                {popup_js_block}
 
                 // Add to appropriate layer group
                 // IMPORTANT: We should use actualGeomType (from geometry) not geomType (from properties)
@@ -664,19 +696,7 @@ class LeafletHTMLGenerator:
                     console.log('   → Added to POLYGONS layer');
                 }}
 
-                // Highlight on hover (polygons only)
-                if (geomType !== 'Point') {{
-                    layer.on('mouseover', function(e) {{
-                        this.setStyle({{
-                            fillOpacity: 0.8,
-                            weight: 3
-                        }});
-                    }});
-
-                    layer.on('mouseout', function(e) {{
-                        buildingsLayer.resetStyle(this);
-                    }});
-                }}
+                {hover_js_block}
             }}
         }});
 

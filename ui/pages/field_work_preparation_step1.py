@@ -1235,24 +1235,25 @@ class FieldWorkPreparationStep1(QWidget):
                 if building.building_id in self._selected_building_ids:
                     continue
 
-                # ✅ CRITICAL FIX: Add to BOTH sets!
-                # _selected_building_ids: buildings in table
-                # _confirmed_building_ids: buildings ready for transfer (checked)
-                self._selected_building_ids.add(building.building_id)
-                self._confirmed_building_ids.add(building.building_id)  # ← Add to confirmed too!
-                self._add_building_to_table(building)
-                added_count += 1
-
-                # Find the corresponding widget and check its checkbox
+                # Check if building exists in suggestions list
+                # If so, checking the checkbox triggers _on_checkbox_changed which adds to table
+                found_in_suggestions = False
                 for i in range(self.buildings_list.count()):
                     item = self.buildings_list.item(i)
                     widget = self.buildings_list.itemWidget(item)
-
                     if widget and hasattr(widget, 'building'):
                         if widget.building.building_id == building.building_id:
-                            # Check the checkbox
                             widget.checkbox.setChecked(True)
+                            found_in_suggestions = True
                             break
+
+                # Only add directly if NOT in suggestions (avoid double-add)
+                if not found_in_suggestions:
+                    self._selected_building_ids.add(building.building_id)
+                    self._confirmed_building_ids.add(building.building_id)
+                    self._add_building_to_table(building)
+
+                added_count += 1
 
             # Update UI
             self._update_selection_count()

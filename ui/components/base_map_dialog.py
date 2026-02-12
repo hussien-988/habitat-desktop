@@ -790,6 +790,13 @@ class BaseMapDialog(QDialog):
                 auth_token=auth_token
             )
 
+            # Cache buildings by building_id for multi-select lookup
+            if not hasattr(self, '_viewport_buildings_cache'):
+                self._viewport_buildings_cache = {}
+            for b in buildings:
+                if b.building_id:
+                    self._viewport_buildings_cache[b.building_id] = b
+
             # Convert to GeoJSON
             from services.geojson_converter import GeoJSONConverter
             buildings_geojson = GeoJSONConverter.buildings_to_geojson(
