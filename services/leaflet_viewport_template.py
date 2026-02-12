@@ -256,7 +256,7 @@ VIEWPORT_LOADING_JS_TEMPLATE = '''
                         return L.marker(latlng, { icon: pinIcon });
                     },
 
-                    // onEachFeature for popups and events
+                    // onEachFeature for popups/multiselect and events
                     onEachFeature: function(feature, layer) {
                         var props = feature.properties;
                         var status = props.status || 'intact';
@@ -264,11 +264,23 @@ VIEWPORT_LOADING_JS_TEMPLATE = '''
                         var statusClass = 'status-' + status;
                         var geomType = props.geometry_type || 'Point';
 
-                        // ✅ Use building_id_display (with dashes) for UI, building_id (no dashes) for API
-                        var buildingIdDisplay = props.building_id_display || props.building_id || 'مبنى';
-                        var buildingIdForApi = props.building_id;  // ✅ NO dashes for API
+                        // Add to appropriate layer (points to cluster, polygons to group)
+                        if (geomType === 'Point') {
+                            currentMarkersCluster.addLayer(layer);
+                        } else {
+                            polygonsGroup.addLayer(layer);
+                        }
 
-                        // Build popup content
+                        // Multi-select mode: attach click handler instead of popup
+                        if (window.multiselectMode && typeof window.attachMultiselectHandler === 'function') {
+                            window.attachMultiselectHandler(layer);
+                            return;
+                        }
+
+                        // Normal mode: build popup
+                        var buildingIdDisplay = props.building_id_display || props.building_id || 'مبنى';
+                        var buildingIdForApi = props.building_id;
+
                         var popup = '<div class="building-popup">' +
                             '<h4>' + buildingIdDisplay + ' ' +
                             '<span class="geometry-badge">' + geomType + '</span></h4>' +
@@ -281,8 +293,6 @@ VIEWPORT_LOADING_JS_TEMPLATE = '''
                             popup += '<p><span class="label">النوع:</span> ' + props.type + '</p>';
                         }
 
-                        // Add selection button if selectBuilding function exists (selection mode)
-                        // ✅ Use building_id without dashes for API call
                         if (typeof window.selectBuilding === 'function' && buildingIdForApi) {
                             popup += "<button class=\\"select-building-btn\\" onclick=\\"selectBuilding(&apos;" + buildingIdForApi + "&apos;)\\\"><span style=\\"font-size:16px\\">✓</span> اختيار هذا المبنى</button>";
                         }
@@ -290,13 +300,6 @@ VIEWPORT_LOADING_JS_TEMPLATE = '''
                         popup += '</div>';
 
                         layer.bindPopup(popup);
-
-                        // Add to appropriate layer (points to cluster, polygons to group)
-                        if (geomType === 'Point') {
-                            currentMarkersCluster.addLayer(layer);
-                        } else {
-                            polygonsGroup.addLayer(layer);
-                        }
 
                         // Highlight on hover (polygons only)
                         if (geomType !== 'Point') {

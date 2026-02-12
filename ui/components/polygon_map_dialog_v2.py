@@ -17,7 +17,7 @@ Best Practices (DRY + SOLID):
 """
 
 from typing import List, Optional
-from PyQt5.QtWidgets import QPushButton, QHBoxLayout, QWidget
+from PyQt5.QtWidgets import QPushButton, QHBoxLayout, QWidget, QLabel
 from ui.error_handler import ErrorHandler
 from PyQt5.QtCore import Qt
 
@@ -74,13 +74,13 @@ class PolygonMapDialog(BaseMapDialog):
             except Exception as e:
                 logger.warning(f"Could not get auth token from parent: {e}")
 
-        # Initialize base dialog with multi-select UI and confirm button
+        # Initialize base dialog - clean map only, no extra panels
         super().__init__(
-            title="اختيار المباني - رسم مضلع أو نقر مباشر",
-            show_search=False,  # Polygon mode doesn't need search
-            show_multiselect_ui=True,  # Enable multi-select UI
-            show_confirm_button=False,  # We'll add custom confirm button
-            enable_viewport_loading=True,  # ✅ Enable for proper QWebChannel initialization (like wizard)
+            title="اختيار المباني على الخريطة",
+            show_search=False,
+            show_multiselect_ui=False,  # No building list panel - clean map
+            show_confirm_button=False,  # Custom confirm button below
+            enable_viewport_loading=True,
             parent=parent
         )
 
@@ -93,8 +93,8 @@ class PolygonMapDialog(BaseMapDialog):
         else:
             logger.warning("⚠️ No auth token - API calls will fail with 401!")
 
-        # Connect signals
-        self.geometry_selected.connect(self._on_geometry_selected)
+        # Connect multi-select signal (polygon drawing disabled)
+        self._clicked_building_ids = []
         self.buildings_multiselected.connect(self._on_buildings_clicked)
 
         # Add custom confirm button for selected buildings
@@ -104,10 +104,7 @@ class PolygonMapDialog(BaseMapDialog):
         self._load_map()
 
     def _add_confirm_button(self):
-        """Add confirm button at the bottom of dialog."""
-        from ui.design_system import Colors
-        from ui.font_utils import create_font, FontManager
-
+        """Add confirm button bar at bottom with selection counter."""
         # Find the main content widget
         if not hasattr(self, 'layout') or self.layout() is None:
             return
@@ -118,11 +115,18 @@ class PolygonMapDialog(BaseMapDialog):
         button_layout = QHBoxLayout(button_container)
         button_layout.setContentsMargins(24, 8, 24, 16)
         button_layout.setSpacing(12)
+
+        # Selection counter (left side)
+        self._selection_label = QLabel("")
+        self._selection_label.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
+        self._selection_label.setStyleSheet(f"color: {Colors.PRIMARY_BLUE}; padding: 4px 8px;")
+        button_layout.addWidget(self._selection_label)
+
         button_layout.addStretch()
 
         # Cancel button
-        cancel_btn = QPushButton("✕ إلغاء")
-        cancel_btn.setFixedSize(120, 40)
+        cancel_btn = QPushButton("إلغاء")
+        cancel_btn.setFixedSize(100, 40)
         cancel_btn.setCursor(Qt.PointingHandCursor)
         cancel_btn.setFont(create_font(size=10, weight=FontManager.WEIGHT_MEDIUM))
         cancel_btn.setStyleSheet(f"""
@@ -142,8 +146,8 @@ class PolygonMapDialog(BaseMapDialog):
         button_layout.addWidget(cancel_btn)
 
         # Confirm button
-        self.confirm_selection_btn = QPushButton("✓ تأكيد الاختيار")
-        self.confirm_selection_btn.setFixedSize(160, 40)
+        self.confirm_selection_btn = QPushButton("تأكيد الاختيار")
+        self.confirm_selection_btn.setFixedSize(140, 40)
         self.confirm_selection_btn.setCursor(Qt.PointingHandCursor)
         self.confirm_selection_btn.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
         self.confirm_selection_btn.setStyleSheet(f"""
@@ -162,29 +166,71 @@ class PolygonMapDialog(BaseMapDialog):
                 color: {Colors.TEXT_SECONDARY};
             }}
         """)
-        self.confirm_selection_btn.setEnabled(False)  # Disabled until buildings selected
+        self.confirm_selection_btn.setEnabled(False)
         self.confirm_selection_btn.clicked.connect(self._on_confirm_selection)
         button_layout.addWidget(self.confirm_selection_btn)
-
-        button_layout.addStretch()
 
         # Add to main layout
         main_widget = self.findChild(QWidget)
         if main_widget and main_widget.layout():
             main_widget.layout().addWidget(button_container)
 
+    def _on_selection_count_updated(self, count: int):
+        """Update selection counter label and confirm button state."""
+        if hasattr(self, '_selection_label'):
+            if count == 0:
+                self._selection_label.setText("")
+            elif count == 1:
+                self._selection_label.setText("مبنى واحد محدد")
+            elif count == 2:
+                self._selection_label.setText("مبنيان محددان")
+            elif count <= 10:
+                self._selection_label.setText(f"{count} مباني محددة")
+            else:
+                self._selection_label.setText(f"{count} مبنى محدد")
+
+        if hasattr(self, 'confirm_selection_btn'):
+            self.confirm_selection_btn.setEnabled(count > 0)
+
     def _on_confirm_selection(self):
-        """Handle confirm button click."""
-        if self._selected_buildings:
-            logger.info(f"Confirmed selection of {len(self._selected_buildings)} buildings")
-            # Explicitly cleanup overlay before accepting
+        """Handle confirm button click. Resolves Building objects from caches."""
+        building_ids = getattr(self, '_clicked_building_ids', [])
+
+        if not building_ids:
+            ErrorHandler.show_warning(
+                self,
+                "الرجاء تحديد مباني على الخريطة أولاً",
+                "لا توجد مباني محددة"
+            )
+            return
+
+        # Resolve Building objects: viewport cache → local cache → API fallback
+        viewport_cache = getattr(self, '_viewport_buildings_cache', {})
+        selected_buildings = []
+
+        for building_id in building_ids:
+            building = (
+                self._building_id_to_building.get(building_id)
+                or viewport_cache.get(building_id)
+                or self._fetch_building_from_api(building_id)
+            )
+            if building:
+                self._building_id_to_building[building.building_id] = building
+                selected_buildings.append(building)
+            else:
+                logger.warning(f"Building {building_id} not found in any cache or API")
+
+        if selected_buildings:
+            self._selected_buildings = selected_buildings
+            logger.info(f"Confirmed selection of {len(selected_buildings)} buildings")
             self._cleanup_overlay()
             self.accept()
         else:
+            logger.warning(f"Could not resolve any of {len(building_ids)} buildings")
             ErrorHandler.show_warning(
                 self,
-                "الرجاء تحديد مباني أولاً (رسم مضلع أو نقر مباشر)",
-                "لا توجد مباني محددة"
+                "لم يتم العثور على تفاصيل المباني المحددة\nالرجاء المحاولة مرة أخرى",
+                "خطأ في جلب البيانات"
             )
 
     def accept(self):
@@ -252,10 +298,9 @@ class PolygonMapDialog(BaseMapDialog):
                 show_legend=True,
                 show_layer_control=False,
                 enable_selection=False,  # No popup selection button
-                enable_multiselect=True,  # Enable multi-select clicking mode
-                enable_viewport_loading=True,  # ✅ CRITICAL: Enable viewport loading (SAME AS BuildingMapDialog!)
-                enable_drawing=True,  # Enable polygon drawing
-                drawing_mode='polygon'  # Only polygon drawing (not point markers)
+                enable_multiselect=True,
+                enable_viewport_loading=True,
+                enable_drawing=False,
             )
 
             # Load into web view
@@ -526,41 +571,26 @@ class PolygonMapDialog(BaseMapDialog):
         """
         Handle buildings selected by clicking directly on map.
 
-        ✅ SAME AS POLYGON: If building not in cache, fetch from BuildingAssignments API!
+        Stores building IDs immediately. Full Building objects are fetched
+        on confirm (deferred) to keep clicking responsive.
 
         Args:
             building_ids: List of building IDs selected by clicking
         """
-        logger.info(f"🖱️ Buildings clicked: {building_ids}")
+        logger.info(f"Buildings clicked: {building_ids}")
 
-        # Convert building IDs to Building objects
-        selected_buildings = []
+        # Store IDs for deferred fetch on confirm
+        self._clicked_building_ids = list(building_ids)
+
+        # Cache any buildings we already have
         for building_id in building_ids:
-            building = self._building_id_to_building.get(building_id)
-
-            if not building:
-                # ✅ SAME AS POLYGON: Fetch from BuildingAssignments API
-                logger.info(f"🔍 Building {building_id} not in cache - fetching from API...")
-                building = self._fetch_building_from_api(building_id)
-
-                if building:
-                    # ✅ SAME AS POLYGON: Store in dictionary for future use
-                    self._building_id_to_building[building.building_id] = building
-                    logger.info(f"✅ Fetched and cached building {building_id}")
-                else:
-                    logger.warning(f"❌ Building {building_id} not found in API")
+            if building_id not in self._building_id_to_building:
+                cached = self._building_id_to_building.get(building_id)
+                if cached:
                     continue
 
-            selected_buildings.append(building)
-
-        # Update selected buildings
-        self._selected_buildings = selected_buildings
-
-        # Enable/disable confirm button based on selection
-        if hasattr(self, 'confirm_selection_btn'):
-            self.confirm_selection_btn.setEnabled(len(self._selected_buildings) > 0)
-
-        logger.info(f"✅ Selected {len(self._selected_buildings)} buildings via clicking")
+        # Button state is controlled by _on_selection_count_updated (from JS count signal)
+        logger.info(f"Stored {len(building_ids)} building IDs for selection")
 
     def _highlight_selected_buildings(self):
         """
