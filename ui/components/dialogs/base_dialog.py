@@ -70,7 +70,8 @@ class BaseDialog(QWidget):
         title: str,
         message: str,
         buttons: list = None,
-        icon_path: str = None
+        icon_path: str = None,
+        use_overlay: bool = False
     ):
         """
         Initialize base dialog.
@@ -82,6 +83,8 @@ class BaseDialog(QWidget):
             message: Dialog message
             buttons: List of tuples [(label, callback), ...]
             icon_path: Optional custom icon path (48x48px PNG)
+            use_overlay: If True, show dark overlay behind dialog (for input/map dialogs).
+                         If False, show dialog card with shadow only (default).
         """
         super().__init__(parent)
 
@@ -90,26 +93,35 @@ class BaseDialog(QWidget):
         self.message_text = message
         self.buttons_config = buttons or []
         self.icon_path = icon_path
+        self.use_overlay = use_overlay
         self.result = None  # Store button result
 
-        # CRITICAL: Use Qt.Dialog to keep dialog within application window
-        # Removed Qt.WindowStaysOnTopHint to prevent showing over entire screen
-        self.setWindowFlags(
-            Qt.Dialog |                         # Dialog type (stays within parent window)
-            Qt.FramelessWindowHint |            # No frame/title bar
-            Qt.CustomizeWindowHint              # Allow customization
-        )
-        self.setAttribute(Qt.WA_TranslucentBackground)  # Transparent background for overlay
-        self.setAttribute(Qt.WA_DeleteOnClose)          # Clean up when closed
+        if self.use_overlay:
+            # Overlay mode: cover entire parent window with dark background
+            self.setWindowFlags(
+                Qt.Dialog |
+                Qt.FramelessWindowHint |
+                Qt.CustomizeWindowHint
+            )
+            self.setAttribute(Qt.WA_TranslucentBackground)
+            self.setAttribute(Qt.WA_DeleteOnClose)
 
-        # Cover parent completely - use main window geometry for correct positioning
-        if parent:
-            # Get the main application window
-            main_window = parent.window()
-            if main_window:
-                self.setGeometry(main_window.geometry())
-            else:
-                self.setGeometry(parent.geometry())
+            if parent:
+                main_window = parent.window()
+                if main_window:
+                    self.setGeometry(main_window.geometry())
+                else:
+                    self.setGeometry(parent.geometry())
+        else:
+            # Shadow mode: floating card centered on parent with elegant shadow
+            self.setWindowFlags(
+                Qt.Dialog |
+                Qt.FramelessWindowHint |
+                Qt.CustomizeWindowHint
+            )
+            self.setAttribute(Qt.WA_TranslucentBackground)
+            self.setAttribute(Qt.WA_DeleteOnClose)
+            # Size will be set after UI setup
 
         # Modal behavior - blocks interaction with parent
         self.setWindowModality(Qt.ApplicationModal)
@@ -117,47 +129,71 @@ class BaseDialog(QWidget):
         # Setup UI
         self._setup_ui()
 
+        # Center on parent for shadow mode (after UI setup so size is known)
+        if not self.use_overlay and parent:
+            self._center_on_parent()
+
         # Apply fade-in animation
         self._animate_show()
 
     def _setup_ui(self):
-        """Setup dialog UI with overlay and card."""
-        # Main layout (overlay)
+        """Setup dialog UI with overlay or shadow mode."""
+        # Main layout
         main_layout = QVBoxLayout(self)
         main_layout.setContentsMargins(0, 0, 0, 0)
         main_layout.setSpacing(0)
 
-        # ========== OVERLAY (Dark Background) ==========
-        # This is the semi-transparent VERY DARK gray background that covers the page
-        overlay = QFrame()
-        overlay.setObjectName("DialogOverlay")
-        # Apply dark gray overlay directly (rgba(45, 45, 45, 0.95))
-        overlay.setStyleSheet(f"""
-            QFrame#DialogOverlay {{
-                background-color: rgba(45, 45, 45, 0.95);
-            }}
-        """)
-        overlay.mousePressEvent = lambda e: self._handle_overlay_click()
+        if self.use_overlay:
+            # ========== OVERLAY MODE (Dark Background) ==========
+            overlay = QFrame()
+            overlay.setObjectName("DialogOverlay")
+            overlay.setStyleSheet(f"""
+                QFrame#DialogOverlay {{
+                    background-color: rgba(45, 45, 45, 0.95);
+                }}
+            """)
+            overlay.mousePressEvent = lambda e: self._handle_overlay_click()
 
-        overlay_layout = QVBoxLayout(overlay)
-        overlay_layout.setAlignment(Qt.AlignCenter)
+            overlay_layout = QVBoxLayout(overlay)
+            overlay_layout.setAlignment(Qt.AlignCenter)
 
-        # ========== DIALOG CARD ==========
-        # The white card that contains the dialog content
-        self.dialog_card = QFrame()
-        self.dialog_card.setObjectName("DialogCard")
-        self.dialog_card.setFixedWidth(400)  # 400px from Figma screenshot
-        # Apply card style directly
-        self.dialog_card.setStyleSheet(f"""
-            QFrame#DialogCard {{
-                background-color: #FFFFFF;
-                border: 1px solid #E1E8ED;
-                border-radius: 12px;
-            }}
-        """)
+            # Dialog card inside overlay
+            self.dialog_card = QFrame()
+            self.dialog_card.setObjectName("DialogCard")
+            self.dialog_card.setFixedWidth(400)
+            self.dialog_card.setStyleSheet(f"""
+                QFrame#DialogCard {{
+                    background-color: #FFFFFF;
+                    border: 1px solid #E1E8ED;
+                    border-radius: 12px;
+                }}
+            """)
+            self.dialog_card.mousePressEvent = lambda e: e.accept()
+        else:
+            # ========== SHADOW MODE (No overlay, elegant shadow) ==========
+            # Add padding around card for shadow to render
+            main_layout.setContentsMargins(24, 24, 24, 24)
 
-        # Stop click propagation to overlay
-        self.dialog_card.mousePressEvent = lambda e: e.accept()
+            # Dialog card with shadow - centered as standalone widget
+            self.dialog_card = QFrame()
+            self.dialog_card.setObjectName("DialogCard")
+            self.dialog_card.setFixedWidth(400)
+            self.dialog_card.setStyleSheet(f"""
+                QFrame#DialogCard {{
+                    background-color: #FFFFFF;
+                    border: 1px solid #E1E8ED;
+                    border-radius: 12px;
+                }}
+            """)
+
+            # Elegant drop shadow
+            from PyQt5.QtWidgets import QGraphicsDropShadowEffect
+            card_shadow = QGraphicsDropShadowEffect()
+            card_shadow.setBlurRadius(32)
+            card_shadow.setXOffset(0)
+            card_shadow.setYOffset(8)
+            card_shadow.setColor(QColor(0, 0, 0, 60))
+            self.dialog_card.setGraphicsEffect(card_shadow)
 
         card_layout = QVBoxLayout(self.dialog_card)
         card_layout.setContentsMargins(24, 24, 24, 24)  # 24px padding
@@ -213,11 +249,12 @@ class BaseDialog(QWidget):
             buttons_row = self._create_buttons()
             card_layout.addLayout(buttons_row)
 
-        # Add card to overlay
-        overlay_layout.addWidget(self.dialog_card)
-
-        # Add overlay to main layout
-        main_layout.addWidget(overlay)
+        # Add card to appropriate container
+        if self.use_overlay:
+            overlay_layout.addWidget(self.dialog_card)
+            main_layout.addWidget(overlay)
+        else:
+            main_layout.addWidget(self.dialog_card, alignment=Qt.AlignCenter)
 
     def _create_icon(self) -> QWidget:
         """
@@ -352,7 +389,7 @@ class BaseDialog(QWidget):
 
     def _create_buttons(self) -> QHBoxLayout:
         """
-        Create button row.
+        Create button row (centered).
 
         Returns:
             QHBoxLayout containing buttons
@@ -361,12 +398,14 @@ class BaseDialog(QWidget):
         buttons_layout.setSpacing(16)  # 16px gap
         buttons_layout.setContentsMargins(0, 0, 0, 0)
 
-        # Add stretch before buttons (for RTL alignment)
+        # Center buttons
         buttons_layout.addStretch()
 
         for label, callback in self.buttons_config:
             btn = self._create_button(label, callback)
             buttons_layout.addWidget(btn)
+
+        buttons_layout.addStretch()
 
         return buttons_layout
 
@@ -426,20 +465,35 @@ class BaseDialog(QWidget):
         self.animation.setEasingCurve(QEasingCurve.OutCubic)
         self.animation.start()
 
-    def showEvent(self, event):
-        """
-        Handle show event - update geometry to cover parent window.
+    def _center_on_parent(self):
+        """Center dialog on parent window (for shadow mode)."""
+        parent = self.parent()
+        if not parent:
+            return
+        main_window = parent.window()
+        target = main_window if main_window else parent
 
-        Ensures dialog covers parent window correctly on first show.
-        """
+        # Ensure dialog has computed its size
+        self.adjustSize()
+
+        # Map parent center to global coordinates
+        parent_rect = target.geometry()
+        cx = parent_rect.x() + (parent_rect.width() - self.width()) // 2
+        cy = parent_rect.y() + (parent_rect.height() - self.height()) // 2
+        self.move(cx, cy)
+
+    def showEvent(self, event):
+        """Handle show event - update geometry for correct positioning."""
         super().showEvent(event)
-        # Update geometry when dialog is shown to ensure correct positioning
         if self.parent():
-            main_window = self.parent().window()
-            if main_window:
-                self.setGeometry(main_window.geometry())
+            if self.use_overlay:
+                main_window = self.parent().window()
+                if main_window:
+                    self.setGeometry(main_window.geometry())
+                else:
+                    self.setGeometry(self.parent().geometry())
             else:
-                self.setGeometry(self.parent().geometry())
+                self._center_on_parent()
 
     def _handle_overlay_click(self):
         """Handle click on overlay (outside dialog card)."""

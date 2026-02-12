@@ -42,6 +42,7 @@ from ui.style_manager import StyleManager
 from ui.font_utils import create_font, FontManager
 from ui.components.success_popup import SuccessPopup
 from utils.logger import get_logger
+from services.translation_manager import tr
 
 logger = get_logger(__name__)
 
@@ -59,16 +60,18 @@ class OfficeSurveyWizard(BaseWizard):
     - Claim creation
     """
 
-    # Step names from Figma (without numbers)
-    STEP_NAMES = [
-        ("1", "تسجيل بناء"),
-        ("2", "الوحدة العقارية"),
-        ("3", "تفاصيل الاشغال"),
-        ("4", "الاشخاص"),
-        ("5", "العلاقة و الادلة"),
-        ("6", "المطالبة"),
-        ("7", "المراجعة النهائية"),
-    ]
+    @classmethod
+    def get_step_names(cls):
+        """Get step names (translated at runtime)."""
+        return [
+            ("1", tr("wizard.step.building_registration")),
+            ("2", tr("wizard.step.property_unit")),
+            ("3", tr("wizard.step.household_details")),
+            ("4", tr("wizard.step.persons")),
+            ("5", tr("wizard.step.relations_evidence")),
+            ("6", tr("wizard.step.claim")),
+            ("7", tr("wizard.step.final_review")),
+        ]
 
     # Signals (aliases for BaseWizard signals for backward compatibility)
     survey_completed = pyqtSignal(dict)
@@ -128,11 +131,11 @@ class OfficeSurveyWizard(BaseWizard):
 
     def get_wizard_title(self) -> str:
         """Get wizard title."""
-        return "معالج المسح المكتبي - Office Survey"
+        return tr("wizard.title")
 
     def get_submit_button_text(self) -> str:
         """Get submit button text."""
-        return "إنهاء المسح"
+        return tr("wizard.button.finish_survey")
 
     def on_submit(self) -> bool:
         """
@@ -161,8 +164,8 @@ class OfficeSurveyWizard(BaseWizard):
                     logger.error("No survey_id found in context for finalization")
                     ErrorHandler.show_warning(
                         self,
-                        "لم يتم العثور على معرف المسح.\nيرجى التأكد من إنشاء المسح أولاً.",
-                        "خطأ"
+                        tr("wizard.error.no_survey_id"),
+                        tr("common.error")
                     )
                     return False
 
@@ -195,8 +198,8 @@ class OfficeSurveyWizard(BaseWizard):
                     # Show success popup with claim number
                     SuccessPopup.show_success(
                         claim_number=claim_number,
-                        title="تمت الإضافة بنجاح",
-                        description="تم حفظ جميع المعلومات،\nويمكنك الآن المتابعة أو إضافة عنصر جديد",
+                        title=tr("wizard.success.title"),
+                        description=tr("wizard.success.description"),
                         auto_close_ms=0,  # No auto-close, user must click
                         parent=self
                     )
@@ -212,8 +215,8 @@ class OfficeSurveyWizard(BaseWizard):
 
                     ErrorHandler.show_error(
                         self,
-                        f"فشل في إنهاء المسح:\n{error_msg}",
-                        "خطأ"
+                        f"{tr('wizard.error.finalize_failed')}\n{error_msg}",
+                        tr("common.error")
                     )
                     return False
             else:
@@ -231,8 +234,8 @@ class OfficeSurveyWizard(BaseWizard):
                 # Show success popup with claim number
                 SuccessPopup.show_success(
                     claim_number=claim_number,
-                    title="تمت الإضافة بنجاح",
-                    description="تم حفظ جميع المعلومات،\nويمكنك الآن المتابعة أو إضافة عنصر جديد",
+                    title=tr("wizard.success.title"),
+                    description=tr("wizard.success.description"),
                     auto_close_ms=0,  # No auto-close, user must click
                     parent=self
                 )
@@ -248,8 +251,8 @@ class OfficeSurveyWizard(BaseWizard):
             traceback.print_exc()
             ErrorHandler.show_error(
                 self,
-                f"حدث خطأ أثناء حفظ المسح:\n{str(e)}",
-                "خطأ"
+                f"{tr('wizard.error.save_failed')}\n{str(e)}",
+                tr("common.error")
             )
             return False
 
@@ -258,9 +261,8 @@ class OfficeSurveyWizard(BaseWizard):
         # Ask for confirmation
         confirmed = ErrorHandler.confirm(
             self,
-            "هل أنت متأكد من إلغاء المسح؟\n"
-            "سيتم فقد جميع البيانات المدخلة.",
-            "تأكيد الإلغاء"
+            tr("wizard.confirm.cancel_message"),
+            tr("wizard.confirm.cancel_title")
         )
 
         if confirmed:
@@ -298,8 +300,8 @@ class OfficeSurveyWizard(BaseWizard):
             logger.error(f"Error saving draft: {e}", exc_info=True)
             ErrorHandler.show_error(
                 self,
-                f"حدث خطأ أثناء حفظ المسودة:\n{str(e)}",
-                "خطأ"
+                f"{tr('wizard.error.draft_save_failed')}\n{str(e)}",
+                tr("common.error")
             )
             return None
 
@@ -347,8 +349,8 @@ class OfficeSurveyWizard(BaseWizard):
             logger.error(f"Error loading draft: {e}", exc_info=True)
             ErrorHandler.show_error(
                 None,
-                f"حدث خطأ أثناء تحميل المسودة:\n{str(e)}",
-                "خطأ"
+                f"{tr('wizard.error.draft_load_failed')}\n{str(e)}",
+                tr("common.error")
             )
             return None
 
@@ -444,7 +446,7 @@ class OfficeSurveyWizard(BaseWizard):
 
         # Title: "إضافة حالة جديدة"
         # Figma: Desktop/H4 24px = 18pt Bold
-        self.title_label = QLabel("إضافة حالة جديدة")
+        self.title_label = QLabel(tr("wizard.header.title"))
         title_font = create_font(
             size=FontManager.SIZE_TITLE,  # 18pt (24px Figma)
             weight=QFont.Bold,
@@ -461,7 +463,7 @@ class OfficeSurveyWizard(BaseWizard):
         subtitle_layout.setContentsMargins(0, 0, 0, 0)
 
         # Part 1: "المطالبات المكتملة" (fixed)
-        subtitle_part1 = QLabel("المطالبات المكتملة")
+        subtitle_part1 = QLabel(tr("wizard.header.breadcrumb"))
         subtitle_font = create_font(
             size=FontManager.SIZE_BODY,  # 9pt (12px Figma)
             weight=QFont.Normal,
@@ -478,7 +480,7 @@ class OfficeSurveyWizard(BaseWizard):
         subtitle_layout.addWidget(dot_label)
 
         # Part 2: Current step name (dynamic)
-        self.subtitle_part2 = QLabel("اختيار المبنى")  # Default: first step
+        self.subtitle_part2 = QLabel(tr("wizard.step.building_registration"))  # Default: first step
         self.subtitle_part2.setFont(subtitle_font)
         self.subtitle_part2.setStyleSheet(f"color: {Colors.TEXT_SECONDARY}; border: none; background: transparent;")
         subtitle_layout.addWidget(self.subtitle_part2)
@@ -525,7 +527,7 @@ class OfficeSurveyWizard(BaseWizard):
 
         # Save button SECOND with icon (DRY: Using ButtonDimensions constants)
         # Figma specs: 114×48px, padding 24×12, icon 14×14, spacing 10px
-        self.save_btn = QPushButton(" حفظ")  # Space for icon
+        self.save_btn = QPushButton(f" {tr('wizard.button.save')}")  # Space for icon
         self.save_btn.setCursor(Qt.PointingHandCursor)
 
         # Fixed dimensions from Figma (DRY: ButtonDimensions)
@@ -590,7 +592,7 @@ class OfficeSurveyWizard(BaseWizard):
         # Create step indicator tabs (Figma: white background, 111×35px, border-radius 14px)
         # No numbers shown, only step names with proper padding
         self.step_labels = []
-        for num, name in self.STEP_NAMES:
+        for num, name in self.get_step_names():
             # Display only the step name (no number) - Figma spec
             step_widget = QLabel(name)
             step_widget.setAlignment(Qt.AlignCenter)
@@ -687,7 +689,7 @@ class OfficeSurveyWizard(BaseWizard):
         # Figma: 252×50px, White background, shadow, border-radius 8px, text color #414D5A
         # Text format: "< السابق" with 10px spacing between arrow and text
         # Note: Button uses transparent state instead of hide() to maintain layout position
-        self.btn_previous = QPushButton("<   السابق")
+        self.btn_previous = QPushButton(f"<   {tr('wizard.button.previous')}")
         self.btn_previous.setCursor(Qt.PointingHandCursor)
 
         # Fixed dimensions from Figma (DRY: ButtonDimensions)
@@ -760,7 +762,7 @@ class OfficeSurveyWizard(BaseWizard):
         # ========== "التالي" Button (Next - Left side) ==========
         # Figma: 252×50px, Light blue background (#F0F7FF), Blue text, Blue border
         # Text format: "التالي >" with 10px spacing between text and arrow
-        self.btn_next = QPushButton("التالي   >")
+        self.btn_next = QPushButton(f"{tr('wizard.button.next')}   >")
         self.btn_next.setCursor(Qt.PointingHandCursor)
 
         # Fixed dimensions from Figma (DRY: ButtonDimensions)
@@ -799,7 +801,7 @@ class OfficeSurveyWizard(BaseWizard):
         from PyQt5.QtGui import QIcon
         import os
 
-        self.btn_final_save = QPushButton("حفظ")
+        self.btn_final_save = QPushButton(tr("wizard.button.save"))
         self.btn_final_save.setCursor(Qt.PointingHandCursor)
 
         # Fixed dimensions from Figma (same as next button)
@@ -854,8 +856,9 @@ class OfficeSurveyWizard(BaseWizard):
         self.step_container.setCurrentIndex(new_index)
 
         # Update subtitle part 2 with current step name (Figma: dynamic subtitle)
-        if hasattr(self, 'subtitle_part2') and 0 <= new_index < len(self.STEP_NAMES):
-            step_name = self.STEP_NAMES[new_index][1]  # Get step name (e.g., "اختيار المبنى")
+        step_names = self.get_step_names()
+        if hasattr(self, 'subtitle_part2') and 0 <= new_index < len(step_names):
+            step_name = step_names[new_index][1]
             self.subtitle_part2.setText(step_name)
 
         # Update step indicators

@@ -26,6 +26,7 @@ from ui.components.ui_components import (
     ConfirmDialog
 )
 from ui.design_system import Colors, Typography, Spacing, BorderRadius
+from services.translation_manager import tr
 from utils.i18n import I18n
 from utils.logger import get_logger
 
@@ -76,13 +77,13 @@ class DraftCard(QFrame):
         persons = context.get('persons', [])
 
         # Find contact person name
-        contact_name = "غير محدد"
+        contact_name = tr("page.drafts.not_specified")
         for person in persons:
             if person.get('is_contact_person'):
-                contact_name = person.get('name', 'غير محدد')
+                contact_name = person.get('name', tr("page.drafts.not_specified"))
                 break
-        if contact_name == "غير محدد" and persons:
-            contact_name = persons[0].get('name', 'غير محدد')
+        if contact_name == tr("page.drafts.not_specified") and persons:
+            contact_name = persons[0].get('name', tr("page.drafts.not_specified"))
 
         # Left section - Date + Status badge
         left_section = QVBoxLayout()
@@ -99,7 +100,7 @@ class DraftCard(QFrame):
         left_section.addWidget(date_label)
 
         # Status badge
-        status_badge = QLabel("مسودة")
+        status_badge = QLabel(tr("page.drafts.status_draft"))
         status_badge.setStyleSheet(f"""
             background-color: {Colors.BADGE_DRAFT};
             color: white;
@@ -128,8 +129,8 @@ class DraftCard(QFrame):
         middle_section.addWidget(name_label)
 
         # Building ID
-        building_id = self.draft_data.get('building_id') or building.get('building_id', 'غير محدد')
-        building_label = QLabel(f"المبنى: {building_id}")
+        building_id = self.draft_data.get('building_id') or building.get('building_id', tr("page.drafts.not_specified"))
+        building_label = QLabel(tr("page.drafts.building_label", building_id=building_id))
         building_label.setStyleSheet(f"""
             color: {Colors.TEXT_SECONDARY};
             font-size: {Typography.SIZE_CAPTION}px;
@@ -138,7 +139,7 @@ class DraftCard(QFrame):
 
         # Reference code
         ref_code = self.draft_data.get('reference_code', 'N/A')
-        ref_label = QLabel(f"الرقم المرجعي: {ref_code}")
+        ref_label = QLabel(tr("page.drafts.reference_label", ref_code=ref_code))
         ref_label.setStyleSheet(f"""
             color: {Colors.TEXT_SECONDARY};
             font-size: {Typography.SIZE_CAPTION}px;
@@ -152,7 +153,7 @@ class DraftCard(QFrame):
         right_section.setSpacing(Spacing.SM)
 
         # Resume button
-        resume_btn = QPushButton("استئناف")
+        resume_btn = QPushButton(tr("page.drafts.resume"))
         resume_btn.setCursor(Qt.PointingHandCursor)
         resume_btn.setStyleSheet(f"""
             QPushButton {{
@@ -172,7 +173,7 @@ class DraftCard(QFrame):
         right_section.addWidget(resume_btn)
 
         # Delete button
-        delete_btn = QPushButton("حذف")
+        delete_btn = QPushButton(tr("page.drafts.delete"))
         delete_btn.setCursor(Qt.PointingHandCursor)
         delete_btn.setStyleSheet(f"""
             QPushButton {{
@@ -263,8 +264,8 @@ class DraftOfficeSurveysPage(QWidget):
         # Empty state (shown when no data)
         self.empty_state = EmptyState(
             icon_text="➕",
-            title="لا توجد مسودات بعد",
-            message="ابدأ بإضافة مسودات المسوحات المكتبية لإظهارها هنا"
+            title=tr("page.drafts.no_drafts_title"),
+            message=tr("page.drafts.no_drafts_message")
         )
         self.empty_state.setVisible(False)
         main_layout.addWidget(self.empty_state)
@@ -276,7 +277,7 @@ class DraftOfficeSurveysPage(QWidget):
 
         # Title - DRY: Using unified page title styling (18pt, PAGE_TITLE color)
         from ui.font_utils import create_font, FontManager
-        title = QLabel("المسودة")
+        title = QLabel(tr("page.drafts.title"))
         title.setFont(create_font(size=FontManager.SIZE_TITLE, weight=FontManager.WEIGHT_SEMIBOLD))
         title.setStyleSheet(f"color: {Colors.PAGE_TITLE}; background: transparent; border: none;")
         header_layout.addWidget(title)
@@ -286,13 +287,13 @@ class DraftOfficeSurveysPage(QWidget):
         )
 
         # Add new draft button
-        add_btn = Button("+ إضافة حالة جديدة", variant="primary", size="medium")
+        add_btn = Button(tr("page.drafts.add_new"), variant="primary", size="medium")
         header_layout.addWidget(add_btn)
 
         # Refresh button
         refresh_btn = Button("🔄", variant="secondary", size="medium")
         refresh_btn.clicked.connect(self._load_drafts)
-        refresh_btn.setToolTip("تحديث")
+        refresh_btn.setToolTip(tr("page.drafts.refresh"))
         header_layout.addWidget(refresh_btn)
 
         return header_layout
@@ -304,7 +305,7 @@ class DraftOfficeSurveysPage(QWidget):
         layout.setSpacing(Spacing.MD)
 
         # Filter title
-        filter_label = QLabel("الفلتر")
+        filter_label = QLabel(tr("page.drafts.filter"))
         filter_label.setFont(Typography.get_body_font(bold=True))
         filter_label.setStyleSheet(f"color: {Colors.TEXT_PRIMARY};")
         layout.addWidget(filter_label)
@@ -316,9 +317,9 @@ class DraftOfficeSurveysPage(QWidget):
         # Building code search
         building_col = QVBoxLayout()
         building_col.setSpacing(Spacing.LABEL_SPACING)
-        building_label = QLabel("رمز المبنى")
+        building_label = QLabel(tr("page.drafts.building_code"))
         building_label.setFont(Typography.get_body_font())
-        self.building_search = Input("ابحث عن رمز المبنى ...")
+        self.building_search = Input(tr("page.drafts.search_placeholder"))
         self.building_search.textChanged.connect(self._apply_filters)
         building_col.addWidget(building_label)
         building_col.addWidget(self.building_search)
@@ -327,9 +328,9 @@ class DraftOfficeSurveysPage(QWidget):
         # Address search
         address_col = QVBoxLayout()
         address_col.setSpacing(Spacing.LABEL_SPACING)
-        address_label = QLabel("العنوان")
+        address_label = QLabel(tr("page.drafts.address"))
         address_label.setFont(Typography.get_body_font())
-        self.address_search = Input("ابحث عن العنوان ...")
+        self.address_search = Input(tr("page.drafts.address_placeholder"))
         self.address_search.textChanged.connect(self._apply_filters)
         address_col.addWidget(address_label)
         address_col.addWidget(self.address_search)
@@ -344,7 +345,7 @@ class DraftOfficeSurveysPage(QWidget):
         # Date from
         date_from_col = QVBoxLayout()
         date_from_col.setSpacing(Spacing.LABEL_SPACING)
-        date_from_label = QLabel("من تاريخ")
+        date_from_label = QLabel(tr("page.drafts.from_date"))
         date_from_label.setFont(Typography.get_body_font())
         self.date_from = QDateEdit()
         self.date_from.setCalendarPopup(True)
@@ -367,7 +368,7 @@ class DraftOfficeSurveysPage(QWidget):
         # Date to
         date_to_col = QVBoxLayout()
         date_to_col.setSpacing(Spacing.LABEL_SPACING)
-        date_to_label = QLabel("إلى تاريخ")
+        date_to_label = QLabel(tr("page.drafts.to_date"))
         date_to_label.setFont(Typography.get_body_font())
         self.date_to = QDateEdit()
         self.date_to.setCalendarPopup(True)
@@ -390,7 +391,7 @@ class DraftOfficeSurveysPage(QWidget):
         # Apply button
         apply_col = QVBoxLayout()
         apply_col.addSpacerItem(QSpacerItem(20, 23, QSizePolicy.Minimum, QSizePolicy.Fixed))
-        apply_btn = Button("تطبيق", variant="primary", size="medium")
+        apply_btn = Button(tr("page.drafts.apply"), variant="primary", size="medium")
         apply_btn.clicked.connect(self._apply_filters)
         apply_col.addWidget(apply_btn)
         row2.addLayout(apply_col)
@@ -427,7 +428,7 @@ class DraftOfficeSurveysPage(QWidget):
 
         except Exception as e:
             logger.error(f"Error loading drafts: {e}")
-            Toast.show_toast(self, f"خطأ في تحميل المسودات: {str(e)}", Toast.ERROR)
+            Toast.show_toast(self, tr("page.drafts.load_error", details=str(e)), Toast.ERROR)
 
     def _populate_cards(self, drafts: List[Dict[str, Any]]):
         """Populate card list with draft data (Figma pages 3-5 design)"""
@@ -447,7 +448,7 @@ class DraftOfficeSurveysPage(QWidget):
     def _update_statistics(self):
         """Update statistics display"""
         total = len(self._draft_data)
-        self.stats_label.setText(f"📊 إجمالي المسودات: {total}")
+        self.stats_label.setText(f"📊 {tr('page.drafts.total_stats', total=total)}")
 
     def _apply_filters(self):
         """Apply search filters (UC-005 S02)"""
@@ -476,11 +477,11 @@ class DraftOfficeSurveysPage(QWidget):
                 filtered_drafts.append(draft)
 
             self._populate_cards(filtered_drafts)
-            self.stats_label.setText(f"📊 عرض {len(filtered_drafts)} من أصل {len(self._draft_data)} مسودة")
+            self.stats_label.setText(f"📊 {tr('page.drafts.stats', shown=len(filtered_drafts), total=len(self._draft_data))}")
 
         except Exception as e:
             logger.error(f"Error applying filters: {e}")
-            Toast.show_toast(self, f"خطأ في تطبيق الفلاتر: {str(e)}", Toast.ERROR)
+            Toast.show_toast(self, tr("page.drafts.filter_error", details=str(e)), Toast.ERROR)
 
     def _resume_draft(self, draft_data: Dict[str, Any]):
         """Resume selected draft (UC-005 S03)"""
@@ -488,8 +489,8 @@ class DraftOfficeSurveysPage(QWidget):
 
         # Use new design confirmation dialog
         dialog = ConfirmDialog(
-            title="تأكيد الاستئناف",
-            message=f"هل تريد استئناف المسح المسودة؟\n\nالرقم المرجعي: {ref_code}",
+            title=tr("page.drafts.confirm_resume_title"),
+            message=tr("page.drafts.confirm_resume_message", ref_code=ref_code),
             icon="❓",
             parent=self
         )
@@ -498,15 +499,15 @@ class DraftOfficeSurveysPage(QWidget):
             context_data = draft_data.get('context', {})
             logger.info(f"Resuming draft survey: {draft_data.get('survey_id')}")
             self.draft_selected.emit(context_data)
-            Toast.show_toast(self, f"جاري استئناف المسح...\n{ref_code}", Toast.INFO)
+            Toast.show_toast(self, tr("page.drafts.resuming", ref_code=ref_code), Toast.INFO)
 
     def _delete_draft(self, draft_data: Dict[str, Any]):
         """Delete selected draft"""
         ref_code = draft_data.get('reference_code', 'N/A')
 
         dialog = ConfirmDialog(
-            title="تأكيد الحذف",
-            message=f"هل أنت متأكد من حذف هذه المسودة؟\n\nالرقم المرجعي: {ref_code}\n\nهذا الإجراء لا يمكن التراجع عنه.",
+            title=tr("page.drafts.confirm_delete_title"),
+            message=tr("page.drafts.confirm_delete_message", ref_code=ref_code),
             icon="⚠️",
             parent=self
         )
@@ -516,11 +517,11 @@ class DraftOfficeSurveysPage(QWidget):
                 survey_id = draft_data.get('survey_id')
                 self.survey_repo.delete_draft(survey_id)
                 logger.info(f"Deleted draft survey: {survey_id}")
-                Toast.show_toast(self, "تم حذف المسودة بنجاح", Toast.SUCCESS)
+                Toast.show_toast(self, tr("page.drafts.delete_success"), Toast.SUCCESS)
                 self._load_drafts()  # Reload
             except Exception as e:
                 logger.error(f"Error deleting draft: {e}")
-                Toast.show_toast(self, f"خطأ في حذف المسودة: {str(e)}", Toast.ERROR)
+                Toast.show_toast(self, tr("page.drafts.delete_error", details=str(e)), Toast.ERROR)
 
     def refresh(self, data=None):
         """Refresh the page"""

@@ -27,6 +27,8 @@ except ImportError:
 from app.config import Config
 from repositories.database import Database
 from controllers.map_controller import MapController
+from services.translation_manager import tr
+from services.display_mappings import get_building_status_display
 from utils.i18n import I18n
 from utils.logger import get_logger
 
@@ -63,7 +65,7 @@ class BuildingListPanel(QFrame):
         layout.setSpacing(10)
 
         # العنوان
-        title = QLabel("قائمة المباني")
+        title = QLabel(tr("page.map.buildings_list"))
         title.setStyleSheet(f"""
             font-size: {Config.FONT_SIZE_H2}pt;
             font-weight: 600;
@@ -73,7 +75,7 @@ class BuildingListPanel(QFrame):
 
         # حقل البحث
         self.search_input = QLineEdit()
-        self.search_input.setPlaceholderText("بحث...")
+        self.search_input.setPlaceholderText(tr("page.map.search"))
         self.search_input.setStyleSheet(f"""
             QLineEdit {{
                 padding: 8px 10px;
@@ -90,16 +92,16 @@ class BuildingListPanel(QFrame):
 
         # فلتر الحالة
         filter_layout = QHBoxLayout()
-        filter_label = QLabel("الحالة:")
+        filter_label = QLabel(tr("page.map.status_label"))
         filter_label.setStyleSheet(f"font-size: {Config.FONT_SIZE_SMALL}pt;")
         filter_layout.addWidget(filter_label)
 
         self.status_filter = QComboBox()
-        self.status_filter.addItem("الكل", "")
-        self.status_filter.addItem("سليم", "intact")
-        self.status_filter.addItem("ضرر طفيف", "minor_damage")
-        self.status_filter.addItem("ضرر كبير", "major_damage")
-        self.status_filter.addItem("مدمر", "destroyed")
+        self.status_filter.addItem(tr("page.map.all"), "")
+        self.status_filter.addItem(get_building_status_display("intact"), "intact")
+        self.status_filter.addItem(get_building_status_display("minor_damage"), "minor_damage")
+        self.status_filter.addItem(get_building_status_display("major_damage"), "major_damage")
+        self.status_filter.addItem(get_building_status_display("destroyed"), "destroyed")
         self.status_filter.setStyleSheet(f"""
             QComboBox {{
                 font-size: {Config.FONT_SIZE_SMALL}pt;
@@ -203,13 +205,6 @@ class BuildingListPanel(QFrame):
                 search_text in (b.neighborhood_name or '').lower()
             ]
 
-        status_ar = {
-            "intact": "سليم",
-            "minor_damage": "ضرر طفيف",
-            "major_damage": "ضرر كبير",
-            "destroyed": "مدمر"
-        }
-
         colors = {
             "intact": "#28a745",
             "minor_damage": "#b8860b",
@@ -230,7 +225,7 @@ class BuildingListPanel(QFrame):
             self.building_list.addItem(item)
 
         total_geo = len([b for b in self.buildings if b.latitude and b.longitude])
-        self.count_label.setText(f"{self.building_list.count()} من {total_geo} مبنى")
+        self.count_label.setText(tr("page.map.count_label", count=self.building_list.count(), total=total_geo))
 
     def _filter_list(self):
         """تصفية القائمة."""
@@ -246,21 +241,16 @@ class BuildingListPanel(QFrame):
     def show_building_details(self, building):
         """عرض تفاصيل المبنى."""
         self.detail_frame.show()
-        self.detail_id.setText(f"المبنى: {building.building_id}")
-        self.detail_neighborhood.setText(f"الحي: {building.neighborhood_name_ar or building.neighborhood_name or 'غير محدد'}")
+        self.detail_id.setText(tr("page.map.building_label", building_id=building.building_id))
+        self.detail_neighborhood.setText(tr("page.map.neighborhood_label", value=building.neighborhood_name_ar or building.neighborhood_name or tr("mapping.not_specified")))
 
-        status_ar = {
-            "intact": "سليم",
-            "minor_damage": "ضرر طفيف",
-            "major_damage": "ضرر كبير",
-            "destroyed": "مدمر"
-        }.get(building.building_status, building.building_status or "غير محدد")
-        self.detail_status.setText(f"الحالة: {status_ar}")
+        status_display = get_building_status_display(building.building_status)
+        self.detail_status.setText(tr("page.map.status_display", status=status_display))
 
         if building.latitude and building.longitude:
             self.detail_coords.setText(f"{building.latitude:.5f}, {building.longitude:.5f}")
         else:
-            self.detail_coords.setText("الإحداثيات: غير متوفرة")
+            self.detail_coords.setText(tr("page.map.coords_unavailable"))
 
 
 def get_leaflet_html(tile_server_url: str, buildings_geojson: str) -> str:
@@ -532,7 +522,7 @@ class MapPage(QWidget):
         header_layout = QHBoxLayout(header)
         header_layout.setContentsMargins(20, 12, 20, 12)
 
-        title_label = QLabel("عرض الخريطة")
+        title_label = QLabel(tr("page.map.title"))
         title_label.setStyleSheet(f"""
             font-size: {Config.FONT_SIZE_H1}pt;
             font-weight: 600;
@@ -541,7 +531,7 @@ class MapPage(QWidget):
         header_layout.addWidget(title_label)
 
         # حالة الوضع
-        self.status_label = QLabel("جارٍ التحميل...")
+        self.status_label = QLabel(tr("page.map.loading"))
         self.status_label.setStyleSheet(f"""
             color: {Config.TEXT_LIGHT};
             font-size: {Config.FONT_SIZE_SMALL}pt;
@@ -554,7 +544,7 @@ class MapPage(QWidget):
         header_layout.addStretch()
 
         # زر تحديث
-        refresh_btn = QPushButton("تحديث")
+        refresh_btn = QPushButton(tr("page.map.refresh"))
         refresh_btn.setStyleSheet(f"""
             QPushButton {{
                 background-color: {Config.PRIMARY_COLOR};
@@ -595,11 +585,7 @@ class MapPage(QWidget):
             self._setup_viewport_bridge()
         else:
             # Fallback message
-            fallback_label = QLabel(
-                "PyQtWebEngine غير متوفر\n\n"
-                "قم بتثبيته باستخدام:\n"
-                "pip install PyQtWebEngine"
-            )
+            fallback_label = QLabel(tr("page.map.webengine_missing"))
             fallback_label.setAlignment(Qt.AlignCenter)
             fallback_label.setStyleSheet(f"""
                 font-size: {Config.FONT_SIZE}pt;
@@ -629,13 +615,13 @@ class MapPage(QWidget):
         info_layout = QHBoxLayout(info_bar)
         info_layout.setContentsMargins(16, 8, 16, 8)
 
-        self.info_label = QLabel("جارٍ تحميل البيانات...")
+        self.info_label = QLabel(tr("page.map.loading_data"))
         self.info_label.setStyleSheet(f"color: {Config.TEXT_LIGHT}; font-size: {Config.FONT_SIZE_SMALL}pt;")
         info_layout.addWidget(self.info_label)
 
         info_layout.addStretch()
 
-        tips_label = QLabel("انقر على مبنى للتفاصيل")
+        tips_label = QLabel(tr("page.map.click_building"))
         tips_label.setStyleSheet(f"color: {Config.TEXT_LIGHT}; font-size: {Config.FONT_SIZE_LABEL}pt;")
         info_layout.addWidget(tips_label)
 
@@ -806,11 +792,11 @@ class MapPage(QWidget):
         self.side_panel.set_buildings(self.buildings)
 
         self.info_label.setText(
-            f"عرض {len(geo_buildings)} مبنى بإحداثيات من أصل {len(self.buildings)} مبنى"
+            tr("page.map.showing_buildings", geo_count=len(geo_buildings), total=len(self.buildings))
         )
 
         if not HAS_WEBENGINE:
-            self.status_label.setText("WebEngine غير متوفر")
+            self.status_label.setText(tr("page.map.webengine_unavailable"))
             self.status_label.setStyleSheet(f"""
                 color: white;
                 font-size: {Config.FONT_SIZE_SMALL}pt;
@@ -822,7 +808,7 @@ class MapPage(QWidget):
 
         # Start tile server
         if self._start_tile_server():
-            self.status_label.setText("وضع Offline")
+            self.status_label.setText(tr("page.map.offline_mode"))
             self.status_label.setStyleSheet(f"""
                 color: white;
                 font-size: {Config.FONT_SIZE_SMALL}pt;
@@ -853,7 +839,7 @@ class MapPage(QWidget):
 
             self.web_view.setHtml(html)
         else:
-            self.status_label.setText("خطأ في تحميل الخريطة")
+            self.status_label.setText(tr("page.map.load_error"))
             self.status_label.setStyleSheet(f"""
                 color: white;
                 font-size: {Config.FONT_SIZE_SMALL}pt;
@@ -949,14 +935,14 @@ class MapPage(QWidget):
                     logger.info(f"✅ Updated map with {len(result.data)} buildings")
 
                 # تحديث الـ status
-                self.info_label.setText(f"تم تحميل {len(result.data)} مبنى في المنطقة الحالية")
+                self.info_label.setText(tr("page.map.loaded_in_viewport", count=len(result.data)))
             else:
                 logger.warning(f"⚠️ No buildings found in viewport")
-                self.info_label.setText("لا توجد مبانٍ في المنطقة الحالية")
+                self.info_label.setText(tr("page.map.no_buildings_viewport"))
 
         except Exception as e:
             logger.error(f"❌ Error loading viewport buildings: {e}", exc_info=True)
-            self.info_label.setText("خطأ في تحميل البيانات")
+            self.info_label.setText(tr("page.map.viewport_load_error"))
 
     def update_language(self, is_arabic: bool):
         """تحديث اللغة."""

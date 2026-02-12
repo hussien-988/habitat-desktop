@@ -7,6 +7,7 @@ from dataclasses import dataclass, field
 from typing import Optional, Union
 from datetime import datetime
 import uuid
+from services.display_mappings import get_building_type_display, get_building_status_display
 
 
 @dataclass
@@ -159,66 +160,13 @@ class Building:
 
     @property
     def building_type_display(self) -> str:
-        """Get display name for building type (Arabic)."""
-        # Support both integer (API) and string (legacy) values
-        types_int = {
-            1: "سكني",
-            2: "تجاري",
-            3: "مختلط (سكني وتجاري)",
-            4: "صناعي",
-        }
-        types_str = {
-            "residential": "سكني",
-            "commercial": "تجاري",
-            "mixed_use": "مختلط (سكني وتجاري)",
-            "industrial": "صناعي",
-            "public": "عام",
-        }
-        if isinstance(self.building_type, int):
-            return types_int.get(self.building_type, str(self.building_type))
-        return types_str.get(self.building_type, str(self.building_type))
+        """Get translated display name for building type."""
+        return get_building_type_display(self.building_type)
 
     @property
     def building_status_display(self) -> str:
-        """Get display name for building status (Arabic)."""
-        # Support both integer (API) and string (legacy) values
-        # API: 1=Intact, 2=MinorDamage, 3=ModerateDamage, 4=MajorDamage, 5=SeverelyDamaged,
-        #      6=Destroyed, 7=UnderConstruction, 8=Abandoned, 99=Unknown
-        statuses_int = {
-            1: "سليم",
-            2: "أضرار طفيفة",
-            3: "أضرار متوسطة",
-            4: "أضرار كبيرة",
-            5: "أضرار شديدة",
-            6: "مدمر",
-            7: "قيد الإنشاء",
-            8: "مهجور",
-            99: "غير معروف",
-        }
-        statuses_str = {
-            "intact": "سليم",
-            "standing": "سليم",
-            "minordamage": "أضرار طفيفة",
-            "minor_damage": "أضرار طفيفة",
-            "moderatedamage": "أضرار متوسطة",
-            "moderate_damage": "أضرار متوسطة",
-            "damaged": "أضرار متوسطة",
-            "partially_damaged": "أضرار متوسطة",
-            "majordamage": "أضرار كبيرة",
-            "major_damage": "أضرار كبيرة",
-            "severelydamaged": "أضرار شديدة",
-            "severely_damaged": "أضرار شديدة",
-            "destroyed": "مدمر",
-            "demolished": "مدمر",
-            "rubble": "مدمر",
-            "underconstruction": "قيد الإنشاء",
-            "under_construction": "قيد الإنشاء",
-            "abandoned": "مهجور",
-            "unknown": "غير معروف",
-        }
-        if isinstance(self.building_status, int):
-            return statuses_int.get(self.building_status, str(self.building_status))
-        return statuses_str.get(self.building_status, str(self.building_status))
+        """Get translated display name for building status."""
+        return get_building_status_display(self.building_status)
 
     def to_dict(self) -> dict:
         """Convert to dictionary for serialization."""

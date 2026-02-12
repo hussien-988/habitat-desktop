@@ -27,6 +27,8 @@ from utils.logger import get_logger
 from ui.design_system import Colors
 from ui.components.icon import Icon
 from ui.font_utils import create_font, FontManager
+from services.translation_manager import tr
+from services.display_mappings import get_unit_type_display, get_unit_status_display
 
 logger = get_logger(__name__)
 
@@ -119,7 +121,7 @@ class HouseholdStep(BaseStep):
         address_row.addWidget(address_icon)
 
         # Building address text
-        self.household_building_address = QLabel("عنوان البناء")
+        self.household_building_address = QLabel(tr("wizard.unit.address_label"))
         self.household_building_address.setAlignment(Qt.AlignCenter)
         self.household_building_address.setFont(create_font(size=10, weight=FontManager.WEIGHT_REGULAR))
         self.household_building_address.setStyleSheet("""
@@ -141,11 +143,11 @@ class HouseholdStep(BaseStep):
         stats_row.setSpacing(0)
 
         # Create 5 stat sections (DRY: using helper method)
-        section_type, self.ui_building_type = self._create_stat_section("نوع البناء")
-        section_status, self.ui_building_status = self._create_stat_section("حالة البناء")
-        section_units, self.ui_units_count = self._create_stat_section("عدد الوحدات")
-        section_parcels, self.ui_parcels_count = self._create_stat_section("عدد المقاسم")
-        section_shops, self.ui_shops_count = self._create_stat_section("عدد المحلات")
+        section_type, self.ui_building_type = self._create_stat_section(tr("wizard.building.type"))
+        section_status, self.ui_building_status = self._create_stat_section(tr("wizard.building.status"))
+        section_units, self.ui_units_count = self._create_stat_section(tr("wizard.building.units_count"))
+        section_parcels, self.ui_parcels_count = self._create_stat_section(tr("wizard.building.parcels_count"))
+        section_shops, self.ui_shops_count = self._create_stat_section(tr("wizard.building.shops_count"))
 
         # Add sections with equal spacing
         sections = [section_type, section_status, section_units, section_parcels, section_shops]
@@ -172,12 +174,12 @@ class HouseholdStep(BaseStep):
 
         # Create 6 unit info sections - SAME ORDER as unit_selection_step
         # Order: رقم الوحدة، رقم الطابق، عدد الغرف، المساحة، نوع الوحدة، حالة الوحدة
-        section_unit_num, self.ui_unit_number = self._create_stat_section("رقم الوحدة")
-        section_floor, self.ui_floor_number = self._create_stat_section("رقم الطابق")
-        section_rooms, self.ui_rooms_count = self._create_stat_section("عدد الغرف")
-        section_area, self.ui_area = self._create_stat_section("المساحة")
-        section_unit_type, self.ui_unit_type = self._create_stat_section("نوع الوحدة")
-        section_unit_status, self.ui_unit_status = self._create_stat_section("حالة الوحدة")
+        section_unit_num, self.ui_unit_number = self._create_stat_section(tr("wizard.unit.number"))
+        section_floor, self.ui_floor_number = self._create_stat_section(tr("wizard.unit.floor_number"))
+        section_rooms, self.ui_rooms_count = self._create_stat_section(tr("wizard.unit.rooms_count"))
+        section_area, self.ui_area = self._create_stat_section(tr("wizard.unit.area"))
+        section_unit_type, self.ui_unit_type = self._create_stat_section(tr("wizard.unit.type"))
+        section_unit_status, self.ui_unit_status = self._create_stat_section(tr("wizard.unit.status"))
 
         # Add sections with equal spacing
         unit_sections = [section_unit_num, section_floor, section_rooms, section_area, section_unit_type, section_unit_status]
@@ -275,7 +277,7 @@ class HouseholdStep(BaseStep):
         title_subtitle_layout.setContentsMargins(0, 0, 0, 0)
 
         # Title
-        title_label = QLabel("رب الأسرة")
+        title_label = QLabel(tr("wizard.household.head_title"))
         title_label.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
         title_label.setStyleSheet("""
             QLabel {
@@ -288,7 +290,7 @@ class HouseholdStep(BaseStep):
         title_subtitle_layout.addWidget(title_label)
 
         # Subtitle
-        subtitle_label = QLabel("تسجيل تفاصيل الاشغال")
+        subtitle_label = QLabel(tr("wizard.household.subtitle"))
         subtitle_label.setFont(create_font(size=10, weight=FontManager.WEIGHT_REGULAR))
         subtitle_label.setStyleSheet("""
             QLabel {
@@ -317,13 +319,13 @@ class HouseholdStep(BaseStep):
         field1_layout = QVBoxLayout()
         field1_layout.setSpacing(4)
 
-        head_name_label = QLabel("رب الأسرة/العائل")
+        head_name_label = QLabel(tr("wizard.household.head_name_label"))
         head_name_label.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
         head_name_label.setStyleSheet("color: #374151; background: transparent;")
         field1_layout.addWidget(head_name_label)
 
         self.hh_head_name = QLineEdit()
-        self.hh_head_name.setPlaceholderText("اسم الشخص")
+        self.hh_head_name.setPlaceholderText(tr("wizard.household.head_name_placeholder"))
         self.hh_head_name.setFixedHeight(45)  # Figma: 45px exact height
         self.hh_head_name.setStyleSheet("""
             QLineEdit {
@@ -346,7 +348,7 @@ class HouseholdStep(BaseStep):
         field2_layout = QVBoxLayout()
         field2_layout.setSpacing(4)
 
-        total_members_label = QLabel("عدد الأفراد")
+        total_members_label = QLabel(tr("wizard.household.total_members"))
         total_members_label.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
         total_members_label.setStyleSheet("color: #374151; background: transparent;")
         field2_layout.addWidget(total_members_label)
@@ -374,13 +376,13 @@ class HouseholdStep(BaseStep):
         notes_field_layout = QVBoxLayout()
         notes_field_layout.setSpacing(4)
 
-        notes_label = QLabel("إضافة ملاحظات")
+        notes_label = QLabel(tr("wizard.household.notes_label"))
         notes_label.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
         notes_label.setStyleSheet("color: #374151; background: transparent;")
         notes_field_layout.addWidget(notes_label)
 
         self.hh_notes = QTextEdit()
-        self.hh_notes.setPlaceholderText("أدخل ملاحظاتك هنا...")
+        self.hh_notes.setPlaceholderText(tr("wizard.household.notes_placeholder"))
         self.hh_notes.setMaximumHeight(80)
         self.hh_notes.setAlignment(Qt.AlignRight | Qt.AlignTop)  # Align placeholder to right
         self.hh_notes.setStyleSheet("""
@@ -428,7 +430,7 @@ class HouseholdStep(BaseStep):
         composition_layout.setContentsMargins(12, 12, 12, 12)  # Padding: 12px
 
         # ===== ROW 1: Title (no icon) =====
-        title_label = QLabel("تكوين الأسرة")
+        title_label = QLabel(tr("wizard.household.composition_title"))
         title_label.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
         title_label.setStyleSheet("color: #1A1F1D; background: transparent;")
         title_label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
@@ -439,20 +441,20 @@ class HouseholdStep(BaseStep):
         cards_row.setSpacing(12)  # Gap between cards: 12px
 
         # Create Male card (LEFT in RTL)
-        male_card = self._create_gender_card("ذكور", [
-            ("عدد البالغين الذكور", "hh_adult_males"),
-            ("عدد الأطفال الذكور (أقل من 18)", "hh_male_children_under18"),
-            ("عدد كبار السن الذكور (أكبر من 65)", "hh_male_elderly_over65"),
-            ("عدد المعاقين الذكور", "hh_disabled_males")
+        male_card = self._create_gender_card(tr("wizard.household.males"), [
+            (tr("wizard.household.adult_males"), "hh_adult_males"),
+            (tr("wizard.household.male_children"), "hh_male_children_under18"),
+            (tr("wizard.household.male_elderly"), "hh_male_elderly_over65"),
+            (tr("wizard.household.disabled_males"), "hh_disabled_males")
         ])
         cards_row.addWidget(male_card, 1)
 
         # Create Female card (RIGHT in RTL)
-        female_card = self._create_gender_card("إناث", [
-            ("عدد البالغين الإناث", "hh_adult_females"),
-            ("عدد الأطفال الإناث (أقل من 18)", "hh_female_children_under18"),
-            ("عدد كبار السن الإناث (أكبر من 65)", "hh_female_elderly_over65"),
-            ("عدد المعاقين الإناث", "hh_disabled_females")
+        female_card = self._create_gender_card(tr("wizard.household.females"), [
+            (tr("wizard.household.adult_females"), "hh_adult_females"),
+            (tr("wizard.household.female_children"), "hh_female_children_under18"),
+            (tr("wizard.household.female_elderly"), "hh_female_elderly_over65"),
+            (tr("wizard.household.disabled_females"), "hh_disabled_females")
         ])
         cards_row.addWidget(female_card, 1)
 
@@ -797,7 +799,7 @@ class HouseholdStep(BaseStep):
                 except Exception as e:
                     error_msg = str(e)
                     logger.error(f"Failed to create household via API: {error_msg}")
-                    result.add_error(f"فشل في حفظ بيانات الأسرة: {error_msg}")
+                    result.add_error(f"{tr('wizard.household.save_failed')}: {error_msg}")
                     return result
 
             # Clear old household data and add new one
@@ -806,7 +808,7 @@ class HouseholdStep(BaseStep):
 
         # Validate that household data exists
         if len(self.context.households) == 0:
-            result.add_error("يجب إدخال بيانات الأسرة")
+            result.add_error(tr("wizard.household.required_error"))
 
         return result
 
@@ -841,32 +843,13 @@ class HouseholdStep(BaseStep):
             self.ui_parcels_count.setText(str(getattr(building, 'number_of_apartments', 0)))
             self.ui_shops_count.setText(str(building.number_of_shops or 0))
 
-        # Update unit information (Row 3)
-        unit_type_map = {
-            "apartment": "شقة",
-            "shop": "محل تجاري",
-            "office": "مكتب",
-            "warehouse": "مستودع",
-            "garage": "مرآب",
-            "other": "أخرى"
-        }
-        # Unit status mapping - string keys and integer keys
-        unit_status_map = {
-            "occupied": "مشغول", "vacant": "شاغر", "damaged": "متضرر",
-            "under_renovation": "قيد الترميم", "uninhabitable": "غير صالح للسكن",
-            "locked": "مغلق", "unknown": "غير معروف",
-            1: "مشغول", 2: "شاغر", 3: "متضرر", 4: "قيد الترميم",
-            5: "غير صالح للسكن", 6: "مغلق", 99: "غير معروف",
-        }
-
+        # Update unit information (Row 3) - DRY: use centralized display_mappings
         # Get unit data from context
         if self.context.unit:
             unit = self.context.unit
-            # Use display property if available, otherwise use mapping
-            unit_type_display = unit.unit_type_display_ar if hasattr(unit, 'unit_type_display_ar') else unit_type_map.get(getattr(unit, 'unit_type', None), "-")
-            # Status mapping
+            unit_type_display = unit.unit_type_display_ar if hasattr(unit, 'unit_type_display_ar') else get_unit_type_display(getattr(unit, 'unit_type', None))
             unit_status_raw = getattr(unit, 'apartment_status', None)
-            unit_status_display = unit_status_map.get(unit_status_raw, unit_status_raw) if unit_status_raw else "-"
+            unit_status_display = get_unit_status_display(unit_status_raw) if unit_status_raw else "-"
 
             floor_number = getattr(unit, 'floor_number', None)
             unit_number = getattr(unit, 'unit_number', None) or getattr(unit, 'apartment_number', None)
@@ -874,10 +857,10 @@ class HouseholdStep(BaseStep):
             area = getattr(unit, 'area_sqm', None)
         elif self.context.new_unit_data:
             unit_type_raw = self.context.new_unit_data.get('unit_type')
-            unit_type_display = unit_type_map.get(unit_type_raw, "-") if unit_type_raw else "-"
+            unit_type_display = get_unit_type_display(unit_type_raw) if unit_type_raw else "-"
 
             unit_status_raw = self.context.new_unit_data.get('apartment_status')
-            unit_status_display = unit_status_map.get(unit_status_raw, unit_status_raw) if unit_status_raw else "-"
+            unit_status_display = get_unit_status_display(unit_status_raw) if unit_status_raw else "-"
 
             floor_number = self.context.new_unit_data.get('floor_number')
             unit_number = self.context.new_unit_data.get('unit_number')
@@ -933,8 +916,8 @@ class HouseholdStep(BaseStep):
 
     def get_step_title(self) -> str:
         """Get step title."""
-        return "معلومات الأسرة"
+        return tr("wizard.household.step_title")
 
     def get_step_description(self) -> str:
         """Get step description."""
-        return "سجل المعلومات الديموغرافية للأسرة القاطنة في الوحدة"
+        return tr("wizard.household.step_description")

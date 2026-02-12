@@ -31,6 +31,8 @@ from ui.design_system import Colors
 from ui.components.icon import Icon
 from ui.components.action_button import ActionButton
 from ui.font_utils import create_font, FontManager
+from services.translation_manager import tr
+from services.display_mappings import get_unit_status_display
 
 logger = get_logger(__name__)
 
@@ -136,7 +138,7 @@ class UnitSelectionStep(BaseStep):
 
         # Building address text - centered, color #667281
         # SOLID: Single Responsibility - displays building address only
-        self.unit_building_address = QLabel("عنوان البناء")
+        self.unit_building_address = QLabel(tr("wizard.unit.address_label"))
         self.unit_building_address.setAlignment(Qt.AlignCenter)
         self.unit_building_address.setFont(create_font(size=10, weight=FontManager.WEIGHT_REGULAR))
         self.unit_building_address.setStyleSheet("""
@@ -187,11 +189,11 @@ class UnitSelectionStep(BaseStep):
             return section, value
 
         # Create 5 stat sections
-        section_type, self.ui_building_type = _create_stat_section("نوع البناء")
-        section_status, self.ui_building_status = _create_stat_section("حالة البناء")
-        section_units, self.ui_units_count = _create_stat_section("عدد الوحدات")
-        section_parcels, self.ui_parcels_count = _create_stat_section("عدد المقاسم")
-        section_shops, self.ui_shops_count = _create_stat_section("عدد المحلات")
+        section_type, self.ui_building_type = _create_stat_section(tr("wizard.building.type"))
+        section_status, self.ui_building_status = _create_stat_section(tr("wizard.building.status"))
+        section_units, self.ui_units_count = _create_stat_section(tr("wizard.building.units_count"))
+        section_parcels, self.ui_parcels_count = _create_stat_section(tr("wizard.building.parcels_count"))
+        section_shops, self.ui_shops_count = _create_stat_section(tr("wizard.building.shops_count"))
 
         # Add sections with equal spacing
         sections = [section_type, section_status, section_units, section_parcels, section_shops]
@@ -280,7 +282,7 @@ class UnitSelectionStep(BaseStep):
         # Figma: 14px × 0.75 = 10.5pt (rounded to 10pt for cleaner rendering)
         # Increased weight to emphasize title (SemiBold instead of Regular)
         # RTL: Text ends at the same point as subtitle, but starts further right
-        title_label = QLabel("اختر الوحدة العقارية")
+        title_label = QLabel(tr("wizard.unit.select_title"))
         title_label.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
         title_label.setStyleSheet("""
             QLabel {
@@ -294,7 +296,7 @@ class UnitSelectionStep(BaseStep):
         title_subtitle_layout.addWidget(title_label)
 
         # Subtitle with same font size, different color
-        subtitle_label = QLabel("اختر أو أضف معلومات الوحدة العقارية")
+        subtitle_label = QLabel(tr("wizard.unit.select_subtitle"))
         subtitle_label.setFont(create_font(size=10, weight=FontManager.WEIGHT_REGULAR))
         subtitle_label.setStyleSheet("""
             QLabel {
@@ -314,7 +316,7 @@ class UnitSelectionStep(BaseStep):
         # DRY: Use ActionButton component (Single Source of Truth)
         # Figma specs: background #F0F7FF, border #3890DF, border-radius 8px
         self.add_unit_btn = ActionButton(
-            text="أضف وحدة",
+            text=tr("wizard.unit.add_button"),
             variant="outline",
             icon_name="icon",
             width=125,
@@ -400,7 +402,7 @@ class UnitSelectionStep(BaseStep):
         if not result.success:
             logger.error(f"Failed to load units: {result.message}")
             # Show empty state
-            empty_label = QLabel("⚠️ خطأ في تحميل الوحدات")
+            empty_label = QLabel(tr("wizard.unit.error_loading"))
             empty_label.setAlignment(Qt.AlignCenter)
             empty_label.setStyleSheet("color: #EF4444; font-size: 14px; padding: 40px;")
             self.units_layout.addWidget(empty_label)
@@ -415,7 +417,7 @@ class UnitSelectionStep(BaseStep):
                 self.units_layout.addWidget(unit_card)
         else:
             # Empty state message
-            empty_label = QLabel("📭 لا توجد وحدات مسجلة. انقر على 'أضف وحدة' لإضافة وحدة جديدة")
+            empty_label = QLabel(tr("wizard.unit.no_units"))
             empty_label.setAlignment(Qt.AlignCenter)
             empty_label.setStyleSheet("""
                 color: #9CA3AF;
@@ -539,31 +541,9 @@ class UnitSelectionStep(BaseStep):
         # DRY: Use Arabic display properties from model
         unit_type_val = unit.unit_type_display_ar if hasattr(unit, 'unit_type_display_ar') else (unit.unit_type or "-")
 
-        # Get Arabic status from API response (string or integer code)
+        # Get status display using centralized mapping (DRY)
         if hasattr(unit, 'apartment_status') and unit.apartment_status is not None:
-            status_mappings_str = {
-                "occupied": "مشغول",
-                "vacant": "شاغر",
-                "damaged": "متضرر",
-                "under_renovation": "قيد الترميم",
-                "uninhabitable": "غير صالح للسكن",
-                "locked": "مغلق",
-                "unknown": "غير معروف",
-            }
-            status_mappings_int = {
-                1: "مشغول",
-                2: "شاغر",
-                3: "متضرر",
-                4: "قيد الترميم",
-                5: "غير صالح للسكن",
-                6: "مغلق",
-                99: "غير معروف",
-            }
-            status_raw = unit.apartment_status
-            if isinstance(status_raw, int):
-                status_val = status_mappings_int.get(status_raw, str(status_raw))
-            else:
-                status_val = status_mappings_str.get(str(status_raw).lower(), str(status_raw))
+            status_val = get_unit_status_display(unit.apartment_status)
         else:
             status_val = "-"
 
@@ -589,12 +569,12 @@ class UnitSelectionStep(BaseStep):
         # Column Data - REVERSED ORDER (was right-to-left, now left-to-right in code)
         # All values converted to Arabic
         data_points = [
-            ("رقم الوحدة", unit_display_num),
-            ("رقم الطابق", floor_val),
-            ("عدد الغرف", rooms_val),
-            ("مساحة القسم", area_val),
-            ("نوع الوحدة", unit_type_val),
-            ("حالة الوحدة", status_val),
+            (tr("wizard.unit.number"), unit_display_num),
+            (tr("wizard.unit.floor_number"), floor_val),
+            (tr("wizard.unit.rooms_count"), rooms_val),
+            (tr("wizard.unit.area"), area_val),
+            (tr("wizard.unit.type"), unit_type_val),
+            (tr("wizard.unit.status"), status_val),
         ]
 
         # DRY: Use helper method for consistent label styling
@@ -634,14 +614,14 @@ class UnitSelectionStep(BaseStep):
         desc_layout.setDirection(QVBoxLayout.TopToBottom)  # Ensure top-to-bottom flow
 
         # Title: وصف العقار
-        desc_title = QLabel("وصف العقار")
+        desc_title = QLabel(tr("wizard.unit.property_description"))
         desc_title.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))  # Smaller: 9pt
         desc_title.setStyleSheet("color: #1A1F1D;")
         desc_title.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)  # Left in RTL = Right visually
 
 
         # Description text (user-entered OR placeholder)
-        desc_text_content = unit.property_description if unit.property_description else "وصف تفصيلي يشمل: عدد الغرف وأنواعها، المساحة التقريبية، الاتجاهات والحدود، وأي ميزات مميزة."
+        desc_text_content = unit.property_description if unit.property_description else tr("wizard.unit.property_description_placeholder")
         desc_text = QLabel(desc_text_content)
         desc_text.setFont(create_font(size=9, weight=FontManager.WEIGHT_REGULAR))  # Smaller: 9pt
         desc_text.setStyleSheet("color: #86909B;")
@@ -729,12 +709,12 @@ class UnitSelectionStep(BaseStep):
         result = self.create_validation_result()
 
         if not self.context.building:
-            result.add_error("لا يوجد مبنى مختار! يرجى العودة للخطوة السابقة")
+            result.add_error(tr("wizard.unit.no_building_error"))
             return result
 
         # Check if unit is selected OR new unit is being created
         if not self.selected_unit and not self.context.is_new_unit:
-            result.add_error("يجب اختيار وحدة أو إنشاء وحدة جديدة للمتابعة")
+            result.add_error(tr("wizard.unit.select_or_create_error"))
             return result
 
         # Link selected unit to survey via API
@@ -760,7 +740,7 @@ class UnitSelectionStep(BaseStep):
                 except Exception as e:
                     error_msg = str(e)
                     logger.error(f"Failed to link unit to survey: {error_msg}")
-                    result.add_error(f"فشل في ربط الوحدة بالمسح: {error_msg}")
+                    result.add_error(f"{tr('wizard.unit.link_failed')}: {error_msg}")
                     return result
             else:
                 logger.warning(f"Missing survey_id ({survey_id}) or unit_id ({unit_id}), skipping link")
@@ -807,8 +787,8 @@ class UnitSelectionStep(BaseStep):
 
     def get_step_title(self) -> str:
         """Get step title."""
-        return "اختيار الوحدة العقارية"
+        return tr("wizard.unit.step_title")
 
     def get_step_description(self) -> str:
         """Get step description."""
-        return "اختر وحدة موجودة أو أنشئ وحدة جديدة في المبنى المختار"
+        return tr("wizard.unit.step_description")

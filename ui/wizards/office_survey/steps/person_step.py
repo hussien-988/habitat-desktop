@@ -30,6 +30,8 @@ from utils.logger import get_logger
 from ui.error_handler import ErrorHandler
 from ui.font_utils import FontManager, create_font
 from ui.design_system import Colors
+from services.translation_manager import tr
+from services.display_mappings import get_relation_type_display
 
 logger = get_logger(__name__)
 
@@ -91,12 +93,12 @@ class PersonStep(BaseStep):
         # Title text container
         title_vbox = QVBoxLayout()
         title_vbox.setSpacing(1)  # Match Step 1 spacing
-        title_label = QLabel("بيانات الأشخاص")
+        title_label = QLabel(tr("wizard.person.card_title"))
         # Title: 14px from Figma = 10pt, weight 600, color WIZARD_TITLE (matching Step 1)
         title_label.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
         title_label.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent;")
        # title_label.setAlignment(Qt.AlignRight)
-        subtitle_label = QLabel("قائمة الأشخاص المسجلين")
+        subtitle_label = QLabel(tr("wizard.person.subtitle"))
         # Subtitle: 14px from Figma = 10pt, weight 400, color WIZARD_SUBTITLE (matching Step 1)
         subtitle_label.setFont(create_font(size=10, weight=FontManager.WEIGHT_REGULAR))
         subtitle_label.setStyleSheet(f"color: {Colors.WIZARD_SUBTITLE}; background: transparent;")
@@ -130,7 +132,7 @@ class PersonStep(BaseStep):
         title_group.addLayout(title_vbox)
 
         # Add button on the left (appears last in RTL) - matching Step 1 styling
-        add_person_btn = QPushButton("+ اضافة شخص جديد")
+        add_person_btn = QPushButton(tr("wizard.person.add_button"))
         add_person_btn.setLayoutDirection(Qt.RightToLeft)
         add_person_btn.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
         add_person_btn.setStyleSheet(f"""
@@ -273,16 +275,7 @@ class PersonStep(BaseStep):
         name_lbl.setAlignment(Qt.AlignRight)
 
         # Person role/status - matching Step 1 subtitle font
-        rel_type_map = {
-            "owner": "مالك",
-            "tenant": "مستأجر",
-            "occupant": "ساكن",
-            "co_owner": "شريك في الملكية",
-            "heir": "وارث",
-            "guardian": "ولي/وصي",
-            "other": "أخرى"
-        }
-        role_text = rel_type_map.get(person.get('relationship_type'), "ساكن")
+        role_text = get_relation_type_display(person.get('relationship_type', ''))
         role_lbl = QLabel(role_text)
         role_lbl.setFont(create_font(size=10, weight=FontManager.WEIGHT_REGULAR))
         role_lbl.setStyleSheet(f"color: {Colors.WIZARD_SUBTITLE}; background: transparent;")
@@ -334,11 +327,11 @@ class PersonStep(BaseStep):
         """)
 
         # View action with icon
-        view_action = menu.addAction("👁 عرض")
+        view_action = menu.addAction(f"👁 {tr('wizard.person.view_action')}")
         view_action.triggered.connect(lambda _, pid=person['person_id']: self._view_person(pid))
 
         # Delete action with icon
-        delete_action = menu.addAction("🗑 حذف")
+        delete_action = menu.addAction(f"🗑 {tr('wizard.person.delete_action')}")
         delete_action.triggered.connect(lambda _, pid=person['person_id']: self._delete_person_by_id(pid))
 
         menu_btn.clicked.connect(lambda: menu.exec_(menu_btn.mapToGlobal(menu_btn.rect().bottomRight())))
@@ -416,8 +409,8 @@ class PersonStep(BaseStep):
         if has_relations:
             if not ErrorHandler.confirm(
                 self,
-                "هذا الشخص مرتبط بعلاقات. سيتم حذف العلاقات أيضاً.\nهل تريد المتابعة؟",
-                "تحذير"
+                tr("wizard.person.delete_with_relations_confirm"),
+                tr("common.warning")
             ):
                 return
             # Remove relations
@@ -425,8 +418,8 @@ class PersonStep(BaseStep):
         else:
             if not ErrorHandler.confirm(
                 self,
-                "هل أنت متأكد من حذف هذا الشخص؟",
-                "تأكيد الحذف"
+                tr("wizard.person.delete_confirm"),
+                tr("wizard.confirm.cancel_title")
             ):
                 return
 
@@ -440,14 +433,14 @@ class PersonStep(BaseStep):
 
         # At least one person must be registered
         if len(self.context.persons) == 0:
-            result.add_error("يجب تسجيل شخص واحد على الأقل")
+            result.add_error(tr("wizard.person.min_one_required"))
 
         # Check if at least one person has a relationship type
         has_relationship = any(
             person.get('relationship_type') for person in self.context.persons
         )
         if not has_relationship:
-            result.add_warning("لا يوجد أشخاص مع نوع علاقة محدد")
+            result.add_warning(tr("wizard.person.no_relation_type_warning"))
 
         return result
 
@@ -503,8 +496,8 @@ class PersonStep(BaseStep):
 
     def get_step_title(self) -> str:
         """Get step title."""
-        return "تسجيل الأشخاص"
+        return tr("wizard.person.step_title")
 
     def get_step_description(self) -> str:
         """Get step description."""
-        return "سجل الأشخاص المرتبطين بالوحدة العقارية"
+        return tr("wizard.person.step_description")

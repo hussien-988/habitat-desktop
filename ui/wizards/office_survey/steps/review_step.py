@@ -24,6 +24,13 @@ from ui.components.icon import Icon
 from utils.logger import get_logger
 from app.config import Config
 from services.api_client import get_api_client
+from services.translation_manager import tr
+from services.display_mappings import (
+    get_relation_type_display, get_unit_status_display,
+    get_claim_type_display, get_priority_display,
+    get_business_type_display, get_source_display,
+    get_claim_status_display
+)
 
 logger = get_logger(__name__)
 
@@ -362,22 +369,8 @@ class ReviewStep(BaseStep):
         name_lbl.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent;")
         name_lbl.setAlignment(Qt.AlignRight)
 
-        rel_type_map = {
-            "owner": "مالك",
-            "tenant": "مستأجر",
-            "occupant": "ساكن",
-            "co_owner": "شريك في الملكية",
-            "heir": "وارث",
-            "guardian": "ولي/وصي",
-            "head": "رب الأسرة",
-            "spouse": "الزوج/ة",
-            "child": "ابن/ابنة",
-            "relative": "قريب",
-            "worker": "عامل",
-            "other": "أخرى"
-        }
         role_key = person.get('relationship_type', person.get('role', ''))
-        role_text = rel_type_map.get(role_key, role_key or "ساكن")
+        role_text = get_relation_type_display(role_key) if role_key else get_relation_type_display('occupant')
         role_lbl = QLabel(role_text)
         role_lbl.setFont(create_font(size=10, weight=FontManager.WEIGHT_REGULAR))
         role_lbl.setStyleSheet(f"color: {Colors.WIZARD_SUBTITLE}; background: transparent;")
@@ -389,7 +382,7 @@ class ReviewStep(BaseStep):
         right_group.addLayout(text_vbox)
 
         # Left side: "عرض المعلومات الشخصية" link
-        view_lbl = QLabel("عرض المعلومات الشخصية")
+        view_lbl = QLabel(tr("wizard.review.view_personal_info"))
         view_lbl.setFont(create_font(size=9, weight=FontManager.WEIGHT_MEDIUM))
         view_lbl.setStyleSheet("color: #3B82F6; background: transparent; border: none;")
         view_lbl.setCursor(Qt.PointingHandCursor)
@@ -415,7 +408,7 @@ class ReviewStep(BaseStep):
         grid.setSpacing(8)
 
         # Header row
-        headers = ["الفئة", "ذكور", "إناث", "المجموع"]
+        headers = [tr("wizard.review.demographics_category"), tr("wizard.review.demographics_male"), tr("wizard.review.demographics_female"), tr("wizard.review.demographics_total")]
         for col, header in enumerate(headers):
             lbl = QLabel(header)
             lbl.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
@@ -425,10 +418,10 @@ class ReviewStep(BaseStep):
 
         # Data rows
         rows = [
-            ("البالغين", data.get('adult_male', 0), data.get('adult_female', 0)),
-            ("القاصرين", data.get('minor_male', 0), data.get('minor_female', 0)),
-            ("المسنين", data.get('elderly_male', 0), data.get('elderly_female', 0)),
-            ("ذوي الاحتياجات", data.get('disabled_male', 0), data.get('disabled_female', 0)),
+            (tr("wizard.review.demographics_adults"), data.get('adult_male', 0), data.get('adult_female', 0)),
+            (tr("wizard.review.demographics_children"), data.get('minor_male', 0), data.get('minor_female', 0)),
+            (tr("wizard.review.demographics_elderly"), data.get('elderly_male', 0), data.get('elderly_female', 0)),
+            (tr("wizard.review.demographics_disabled"), data.get('disabled_male', 0), data.get('disabled_female', 0)),
         ]
 
         for row_idx, (category, male, female) in enumerate(rows, start=1):
@@ -507,37 +500,37 @@ class ReviewStep(BaseStep):
 
     def _create_building_card(self) -> QFrame:
         """Create building information summary card (Step 1)."""
-        card, content_layout = self._create_card_base("blue", "بيانات البناء", "معلومات البناء المختار")
+        card, content_layout = self._create_card_base("blue", tr("wizard.review.building_card_title"), tr("wizard.review.building_card_subtitle"))
         self.building_content = content_layout
         return card
 
     def _create_unit_card(self) -> QFrame:
         """Create unit information summary card (Step 2) - matching step 2 header."""
-        card, content_layout = self._create_card_base("move", "اختر الوحدة العقارية", "اختر أو أضف معلومات الوحدة العقارية")
+        card, content_layout = self._create_card_base("move", tr("wizard.review.unit_card_title"), tr("wizard.review.unit_card_subtitle"))
         self.unit_content = content_layout
         return card
 
     def _create_household_card(self) -> QFrame:
         """Create household information summary card (Step 3)."""
-        card, content_layout = self._create_card_base("user-group", "تسجيل الأسرة", "تسجيل الأسرة التي تشغل الوحدات العقارية وتفاصيل الإشغال")
+        card, content_layout = self._create_card_base("user-group", tr("wizard.review.household_card_title"), tr("wizard.review.household_card_subtitle"))
         self.household_content = content_layout
         return card
 
     def _create_persons_card(self) -> QFrame:
         """Create persons list summary card (Step 4)."""
-        card, content_layout = self._create_card_base("user-account", "الأشخاص المسجلين", "قائمة الأشخاص في الوحدة")
+        card, content_layout = self._create_card_base("user-account", tr("wizard.review.persons_card_title"), tr("wizard.review.persons_card_subtitle"))
         self.persons_content = content_layout
         return card
 
     def _create_relations_card(self) -> QFrame:
         """Create relations information summary card (Step 5)."""
-        card, content_layout = self._create_card_base("user-account", "العلاقة والأدلة", "تسجيل تفاصيل ملكية شخص للوحدة عقارية")
+        card, content_layout = self._create_card_base("user-account", tr("wizard.review.relations_card_title"), tr("wizard.review.relations_card_subtitle"))
         self.relations_content = content_layout
         return card
 
     def _create_claim_card(self) -> QFrame:
         """Create claim information summary card (Step 6)."""
-        card, content_layout = self._create_card_base("elements", "تسجيل الحالة", "ربط المطالبين بالوحدات العقارية وتتبع مطالبات تسجيل حقوق الحيازة")
+        card, content_layout = self._create_card_base("elements", tr("wizard.review.claim_card_title"), tr("wizard.review.claim_card_subtitle"))
         self.claim_content = content_layout
         return card
 
@@ -570,11 +563,11 @@ class ReviewStep(BaseStep):
             units_count = str(building.number_of_units) if hasattr(building, 'number_of_units') else "0"
             parcels_count = str(getattr(building, 'number_of_apartments', 0))
             shops_count = str(building.number_of_shops) if hasattr(building, 'number_of_shops') else "0"
-            location_desc = getattr(building, 'location_description', 'وصف الموقع')
-            general_desc = getattr(building, 'general_description', 'الوصف العام للموقع')
+            location_desc = getattr(building, 'location_description', tr("wizard.building.location_description"))
+            general_desc = getattr(building, 'general_description', tr("wizard.building.general_description_fallback"))
 
             # Row 1: Building code field
-            code_field = self._create_field("رمز البناء", building_code)
+            code_field = self._create_field(tr("wizard.review.building_code"), building_code)
             self.building_content.addWidget(code_field)
 
             # Row 2: Full address path with icon
@@ -607,11 +600,11 @@ class ReviewStep(BaseStep):
 
             # Row 3: Stats row (5 sections like Step 1 - label on top, value below)
             stats = [
-                {'value': status, 'label': 'حالة البناء'},
-                {'value': building_type, 'label': 'نوع البناء'},
-                {'value': units_count, 'label': 'عدد الوحدات'},
-                {'value': parcels_count, 'label': 'عدد المقاسم'},
-                {'value': shops_count, 'label': 'عدد المحلات'},
+                {'value': status, 'label': tr("wizard.building.status")},
+                {'value': building_type, 'label': tr("wizard.building.type")},
+                {'value': units_count, 'label': tr("wizard.building.units_count")},
+                {'value': parcels_count, 'label': tr("wizard.building.parcels_count")},
+                {'value': shops_count, 'label': tr("wizard.building.shops_count")},
             ]
             stats_row = self._create_stat_row(stats, label_on_top=True, with_separators=False)
             self.building_content.addWidget(stats_row)
@@ -630,7 +623,7 @@ class ReviewStep(BaseStep):
             location_main_layout.setSpacing(12)
 
             # Header: "موقع البناء" (like Step 1)
-            location_header = QLabel("موقع البناء")
+            location_header = QLabel(tr("wizard.building.location"))
             location_header.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
             location_header.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent; border: none;")
             location_main_layout.addWidget(location_header)
@@ -668,7 +661,7 @@ class ReviewStep(BaseStep):
             # Location description section
             loc_section = QVBoxLayout()
             loc_section.setSpacing(4)
-            loc_label = QLabel("وصف الموقع")
+            loc_label = QLabel(tr("wizard.building.location_description"))
             loc_label.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
             loc_label.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent; border: none;")
             loc_value = QLabel(location_desc)
@@ -683,7 +676,7 @@ class ReviewStep(BaseStep):
             # General description section
             gen_section = QVBoxLayout()
             gen_section.setSpacing(4)
-            gen_label = QLabel("الوصف العام")
+            gen_label = QLabel(tr("wizard.building.general_description"))
             gen_label.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
             gen_label.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent; border: none;")
             gen_value = QLabel(general_desc)
@@ -699,7 +692,7 @@ class ReviewStep(BaseStep):
 
             self.building_content.addWidget(location_container)
         else:
-            no_data = QLabel("لم يتم اختيار مبنى")
+            no_data = QLabel(tr("wizard.building.not_selected"))
             no_data.setFont(create_font(size=10))
             no_data.setStyleSheet(f"color: {Colors.TEXT_SECONDARY}; background: transparent; border: none;")
             no_data.setAlignment(Qt.AlignCenter)
@@ -745,34 +738,25 @@ class ReviewStep(BaseStep):
                 rooms = str(unit.apartment_number) if unit.apartment_number else "-"
                 if unit.area_sqm:
                     try:
-                        area = f"{float(unit.area_sqm):.2f} م²"
+                        area = tr("wizard.unit.area_format", value=f"{float(unit.area_sqm):.2f}")
                     except (ValueError, TypeError):
                         area = "-"
                 else:
                     area = "-"
                 unit_type = unit.unit_type_display_ar if hasattr(unit, 'unit_type_display_ar') else "-"
-                status_mappings_str = {
-                    "occupied": "مشغول", "vacant": "شاغر", "damaged": "متضرر",
-                    "under_renovation": "قيد الترميم", "uninhabitable": "غير صالح للسكن",
-                    "locked": "مغلق", "unknown": "غير معروف",
-                }
-                status_mappings_int = {
-                    1: "مشغول", 2: "شاغر", 3: "متضرر", 4: "قيد الترميم",
-                    5: "غير صالح للسكن", 6: "مغلق", 99: "غير معروف",
-                }
-                status_raw = getattr(unit, 'apartment_status', '-')
-                if isinstance(status_raw, int):
-                    status = status_mappings_int.get(status_raw, str(status_raw))
+                status_raw = getattr(unit, 'apartment_status', None)
+                if status_raw is not None:
+                    status = get_unit_status_display(status_raw)
                 else:
-                    status = status_mappings_str.get(str(status_raw).lower(), str(status_raw) if status_raw else "-")
+                    status = "-"
             else:
-                unit_num = str(new_unit_data.get('unit_number', 'جديد'))
+                unit_num = str(new_unit_data.get('unit_number', tr("wizard.review.new_unit")))
                 floor = str(new_unit_data.get('floor_number', '-'))
                 rooms = str(new_unit_data.get('number_of_rooms', '-'))
                 area_raw = new_unit_data.get('area_sqm')
-                area = f"{float(area_raw):.2f} م²" if area_raw else "-"
+                area = tr("wizard.unit.area_format", value=f"{float(area_raw):.2f}") if area_raw else "-"
                 unit_type = new_unit_data.get('unit_type', '-')
-                status = "جديد"
+                status = tr("wizard.review.new_unit")
 
             # Build unit info container matching step 3 style
             unit_info_container = QFrame()
@@ -791,12 +775,12 @@ class ReviewStep(BaseStep):
 
             # 6 sections in same order as step 2/3
             data_points = [
-                ("رقم الوحدة", unit_num),
-                ("رقم الطابق", floor),
-                ("عدد الغرف", rooms),
-                ("مساحة القسم", area),
-                ("نوع الوحدة", unit_type),
-                ("حالة الوحدة", status),
+                (tr("wizard.unit.number"), unit_num),
+                (tr("wizard.unit.floor_number"), floor),
+                (tr("wizard.unit.rooms_count"), rooms),
+                (tr("wizard.unit.area"), area),
+                (tr("wizard.unit.type"), unit_type),
+                (tr("wizard.unit.status"), status),
             ]
 
             for label_text, value_text in data_points:
@@ -810,7 +794,7 @@ class ReviewStep(BaseStep):
             desc_layout.setContentsMargins(0, 0, 0, 0)
             desc_layout.setSpacing(2)
 
-            desc_title = QLabel("وصف العقار")
+            desc_title = QLabel(tr("wizard.unit.property_description"))
             desc_title.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
             desc_title.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent; border: none;")
            # desc_title.setAlignment(Qt.AlignRight)
@@ -821,7 +805,7 @@ class ReviewStep(BaseStep):
             elif new_unit_data and new_unit_data.get('property_description'):
                 desc_text_content = new_unit_data.get('property_description')
             else:
-                desc_text_content = "وصف تفصيلي يشمل: عدد الغرف وأنواعها، المساحة التقريبية، الاتجاهات والحدود، وأي ميزات مميزة."
+                desc_text_content = tr("wizard.unit.property_description_placeholder")
 
             desc_text = QLabel(desc_text_content)
             desc_text.setFont(create_font(size=9, weight=FontManager.WEIGHT_REGULAR))
@@ -838,7 +822,7 @@ class ReviewStep(BaseStep):
             desc_widget.setLayout(desc_layout)
             self.unit_content.addWidget(desc_widget)
         else:
-            no_data = QLabel("لم يتم اختيار وحدة")
+            no_data = QLabel(tr("wizard.unit.not_selected"))
             no_data.setFont(create_font(size=10))
             no_data.setStyleSheet(f"color: {Colors.TEXT_SECONDARY}; background: transparent; border: none;")
             no_data.setAlignment(Qt.AlignCenter)
@@ -892,7 +876,7 @@ class ReviewStep(BaseStep):
         self._clear_layout(self.household_content)
 
         if not self.context.households:
-            no_data = QLabel("لم يتم تسجيل أي أسرة")
+            no_data = QLabel(tr("wizard.household.no_data"))
             no_data.setFont(create_font(size=10))
             no_data.setStyleSheet(f"color: {Colors.TEXT_SECONDARY}; background: transparent; border: none;")
             no_data.setAlignment(Qt.AlignCenter)
@@ -913,7 +897,7 @@ class ReviewStep(BaseStep):
         # Right block: head of household name
         name_block = QVBoxLayout()
         name_block.setSpacing(4)
-        name_title = QLabel("اسم رب الأسرة")
+        name_title = QLabel(tr("wizard.household.head_name"))
         name_title.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
         name_title.setStyleSheet(f"color: #1e293b; background: transparent; border: none;")
         name_title.setAlignment(Qt.AlignRight)
@@ -927,7 +911,7 @@ class ReviewStep(BaseStep):
         # Center block: member count
         count_block = QVBoxLayout()
         count_block.setSpacing(4)
-        count_title = QLabel("عدد أفراد الأسرة")
+        count_title = QLabel(tr("wizard.household.family_size"))
         count_title.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
         count_title.setStyleSheet(f"color: #1e293b; background: transparent; border: none;")
         count_title.setAlignment(Qt.AlignCenter)
@@ -954,17 +938,17 @@ class ReviewStep(BaseStep):
 
         # --- Two cards side by side: Males (right) + Females (left) ---
         male_items = [
-            ("عدد البالغين الذكور", demographics.get('adult_male', 0)),
-            ("عدد الأطفال الذكور (أقل من 18)", demographics.get('minor_male', 0)),
-            ("عدد كبار السن الذكور (أكثر من 65)", demographics.get('elderly_male', 0)),
-            ("عدد المعاقين الذكور", demographics.get('disabled_male', 0)),
+            (tr("wizard.household.adult_males"), demographics.get('adult_male', 0)),
+            (tr("wizard.household.male_children"), demographics.get('minor_male', 0)),
+            (tr("wizard.household.male_elderly"), demographics.get('elderly_male', 0)),
+            (tr("wizard.household.disabled_males"), demographics.get('disabled_male', 0)),
         ]
 
         female_items = [
-            ("عدد البالغين الإناث", demographics.get('adult_female', 0)),
-            ("عدد الأطفال الإناث (أقل من 18)", demographics.get('minor_female', 0)),
-            ("عدد كبار السن الإناث (أكثر من 65)", demographics.get('elderly_female', 0)),
-            ("عدد المعاقين الإناث", demographics.get('disabled_female', 0)),
+            (tr("wizard.household.adult_females"), demographics.get('adult_female', 0)),
+            (tr("wizard.household.female_children"), demographics.get('minor_female', 0)),
+            (tr("wizard.household.female_elderly"), demographics.get('elderly_female', 0)),
+            (tr("wizard.household.disabled_females"), demographics.get('disabled_female', 0)),
         ]
 
         cards_container = QWidget()
@@ -983,7 +967,7 @@ class ReviewStep(BaseStep):
         self._clear_layout(self.persons_content)
 
         if not self.context.persons:
-            no_data = QLabel("لم يتم تسجيل أي أشخاص")
+            no_data = QLabel(tr("wizard.person.no_persons"))
             no_data.setFont(create_font(size=10))
             no_data.setStyleSheet(f"color: {Colors.TEXT_SECONDARY}; background: transparent; border: none;")
             no_data.setAlignment(Qt.AlignCenter)
@@ -1040,16 +1024,7 @@ class ReviewStep(BaseStep):
         name_label.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
         name_label.setStyleSheet(f"color: #2c3e50; background: transparent;")
 
-        rel_type_map = {
-            "owner": "مالك",
-            "co_owner": "شريك في الملكية",
-            "tenant": "مستأجر",
-            "occupant": "شاغل",
-            "heir": "وارث",
-            "guardian": "ولي/وصي",
-            "other": "أخرى"
-        }
-        role_text = rel_type_map.get(relation.get('relation_type', ''), relation.get('relation_type', '-'))
+        role_text = get_relation_type_display(relation.get('relation_type', '')) if relation.get('relation_type') else '-'
         role_label = QLabel(role_text)
         role_label.setFont(create_font(size=9, weight=FontManager.WEIGHT_REGULAR))
         role_label.setStyleSheet("color: #7f8c8d; background: transparent;")
@@ -1082,15 +1057,15 @@ class ReviewStep(BaseStep):
         grid.setColumnStretch(2, 1)
 
         # Row 0 - Labels
-        lbl_contract = QLabel("نوع العقد")
+        lbl_contract = QLabel(tr("wizard.relation.contract_type"))
         lbl_contract.setStyleSheet(label_style)
         grid.addWidget(lbl_contract, 0, 0)
 
-        lbl_date = QLabel("تاريخ بدء العلاقة")
+        lbl_date = QLabel(tr("wizard.relation.start_date"))
         lbl_date.setStyleSheet(label_style)
         grid.addWidget(lbl_date, 0, 1)
 
-        lbl_share = QLabel("حصة الملكية")
+        lbl_share = QLabel(tr("wizard.relation.ownership_share"))
         lbl_share.setStyleSheet(label_style)
         grid.addWidget(lbl_share, 0, 2)
 
@@ -1113,7 +1088,7 @@ class ReviewStep(BaseStep):
         # --- Notes ---
         notes_text = relation.get('notes')
         if notes_text:
-            notes_title = QLabel("ملاحظات")
+            notes_title = QLabel(tr("wizard.relation.notes_label"))
             notes_title.setStyleSheet(label_style)
             card_layout.addWidget(notes_title)
 
@@ -1126,7 +1101,7 @@ class ReviewStep(BaseStep):
         evidence_type = relation.get('evidence_type')
         evidence_desc = relation.get('evidence_description')
         if evidence_type or evidence_desc:
-            docs_title = QLabel("صور المستندات")
+            docs_title = QLabel(tr("wizard.relation.documents_label"))
             docs_title.setStyleSheet(label_style)
             card_layout.addWidget(docs_title)
 
@@ -1144,7 +1119,7 @@ class ReviewStep(BaseStep):
         self._clear_layout(self.relations_content)
 
         if not self.context.relations:
-            no_data = QLabel("لم يتم تسجيل أي علاقات")
+            no_data = QLabel(tr("wizard.relation.no_relations"))
             no_data.setFont(create_font(size=10))
             no_data.setStyleSheet(f"color: {Colors.TEXT_SECONDARY}; background: transparent; border: none;")
             no_data.setAlignment(Qt.AlignCenter)
@@ -1159,23 +1134,7 @@ class ReviewStep(BaseStep):
 
     def _create_claim_data_card(self, claim_data: dict) -> QFrame:
         """Create a single read-only claim card matching step 6 layout."""
-        claim_types = {
-            "ownership": "ملكية", "occupancy": "إشغال", "tenancy": "إيجار"
-        }
-        priorities = {
-            "low": "منخفض", "normal": "عادي", "high": "عالي", "urgent": "عاجل"
-        }
-        business_types = {
-            "residential": "سكني", "commercial": "تجاري", "agricultural": "زراعي"
-        }
-        sources = {
-            "field_survey": "مسح ميداني", "direct_request": "طلب مباشر",
-            "referral": "إحالة", "OFFICE_SUBMISSION": "تقديم مكتبي"
-        }
-        statuses = {
-            "new": "جديد", "under_review": "قيد المراجعة",
-            "completed": "مكتمل", "pending": "معلق", "draft": "مسودة"
-        }
+        # Use display_mappings for DRY translations
 
         card = QFrame()
         card.setLayoutDirection(Qt.RightToLeft)
@@ -1244,26 +1203,26 @@ class ReviewStep(BaseStep):
         if not unit_display:
             unit_display = claim_data.get('unit_id', '-') or "-"
 
-        add_field("معرف المطالب", claimant_name, 0, 0)
-        add_field("معرف الوحدة المطالب بها", unit_display, 0, 1)
-        add_field("نوع الحالة", claim_types.get(claim_data.get('claim_type'), '-'), 0, 2)
-        add_field("طبيعة الأعمال", business_types.get(claim_data.get('business_nature'), '-'), 0, 3)
+        add_field(tr("wizard.review.claimant_id"), claimant_name, 0, 0)
+        add_field(tr("wizard.review.unit_claim_id"), unit_display, 0, 1)
+        add_field(tr("wizard.review.claim_type"), get_claim_type_display(claim_data.get('claim_type', '')), 0, 2)
+        add_field(tr("wizard.review.business_nature"), get_business_type_display(claim_data.get('business_nature', '')), 0, 3)
 
-        add_field("حالة الحالة", statuses.get(claim_data.get('case_status', 'new'), '-'), 1, 0)
-        add_field("المصدر", sources.get(claim_data.get('source'), '-'), 1, 1)
-        add_field("تاريخ المسح", str(claim_data.get('survey_date', '-') or '-'), 1, 2)
-        add_field("الأولوية", priorities.get(claim_data.get('priority'), '-'), 1, 3)
+        add_field(tr("wizard.review.case_status"), get_claim_status_display(claim_data.get('case_status', 'new')), 1, 0)
+        add_field(tr("wizard.review.source"), get_source_display(claim_data.get('source', '')), 1, 1)
+        add_field(tr("wizard.review.survey_date"), str(claim_data.get('survey_date', '-') or '-'), 1, 2)
+        add_field(tr("wizard.review.priority"), get_priority_display(claim_data.get('priority', '')), 1, 3)
 
         card_layout.addLayout(grid)
 
         # --- Notes ---
         notes_text = claim_data.get('notes', '')
-        notes_title = QLabel("ملاحظات المراجعة")
+        notes_title = QLabel(tr("wizard.review.review_notes"))
         notes_title.setFont(create_font(size=9, weight=FontManager.WEIGHT_REGULAR))
         notes_title.setStyleSheet(label_style)
         card_layout.addWidget(notes_title)
 
-        notes_val = QLabel(notes_text if notes_text else "ملاحظات إضافية")
+        notes_val = QLabel(notes_text if notes_text else tr("wizard.review.review_notes_placeholder"))
         notes_val.setWordWrap(True)
         notes_val.setMinimumHeight(60)
         notes_val.setStyleSheet(f"""
@@ -1279,7 +1238,7 @@ class ReviewStep(BaseStep):
         card_layout.addWidget(notes_val)
 
         # --- Next Action Date ---
-        next_date_title = QLabel("تاريخ الإجراء التالي")
+        next_date_title = QLabel(tr("wizard.review.next_action_date"))
         next_date_title.setFont(create_font(size=9, weight=FontManager.WEIGHT_REGULAR))
         next_date_title.setStyleSheet(label_style)
         card_layout.addWidget(next_date_title)
@@ -1294,7 +1253,7 @@ class ReviewStep(BaseStep):
         eval_label.setAlignment(Qt.AlignCenter)
         eval_label.setFixedHeight(50)
         eval_label.setFont(create_font(size=11, weight=FontManager.WEIGHT_SEMIBOLD))
-        eval_label.setText("  \u2714  الأدلة متوفرة")
+        eval_label.setText(f"  \u2714  {tr('wizard.review.evidence_available')}")
         eval_label.setStyleSheet("""
             QLabel {
                 background-color: #e1f7ef;
@@ -1316,7 +1275,7 @@ class ReviewStep(BaseStep):
             claims = [self.context.claim_data]
 
         if not claims:
-            no_data = QLabel("لم يتم إنشاء مطالبة")
+            no_data = QLabel(tr("wizard.review.no_claim"))
             no_data.setFont(create_font(size=10))
             no_data.setStyleSheet(f"color: {Colors.TEXT_SECONDARY}; background: transparent; border: none;")
             no_data.setAlignment(Qt.AlignCenter)
@@ -1334,11 +1293,11 @@ class ReviewStep(BaseStep):
         result = self.create_validation_result()
 
         if not self.context.building:
-            result.add_error("لا يوجد مبنى مختار")
+            result.add_error(tr("wizard.review.no_building"))
         if not self.context.unit and not self.context.is_new_unit:
-            result.add_error("لا يوجد وحدة مختارة")
+            result.add_error(tr("wizard.review.no_unit"))
         if len(self.context.persons) == 0:
-            result.add_error("لا يوجد أشخاص مسجلين")
+            result.add_error(tr("wizard.review.no_persons"))
 
         return result
 
@@ -1367,8 +1326,8 @@ class ReviewStep(BaseStep):
             logger.error("No survey_id found in context. Cannot finalize.")
             ErrorHandler.show_error(
                 self,
-                "لم يتم العثور على معرف المسح. لا يمكن إنهاء المسح.",
-                "خطأ"
+                tr("wizard.review.no_survey_id"),
+                tr("common.error")
             )
             return
 
@@ -1388,20 +1347,18 @@ class ReviewStep(BaseStep):
             logger.info(f"Survey {survey_id} finalized successfully")
             ErrorHandler.show_success(
                 self,
-                "تم إنهاء المسح بنجاح!",
-                "نجح"
+                tr("wizard.review.finalize_success"),
+                tr("common.success")
             )
 
         except Exception as e:
             error_msg = str(e)
             logger.error(f"Failed to finalize survey: {error_msg}")
 
-            full_error = f"فشل في إنهاء المسح:\n\n{error_msg}"
-
             ErrorHandler.show_error(
                 self,
-                full_error,
-                "خطأ"
+                tr("wizard.review.finalize_error", error_msg=error_msg),
+                tr("common.error")
             )
 
     def on_show(self):
@@ -1410,7 +1367,7 @@ class ReviewStep(BaseStep):
         self._populate_review()
 
     def get_step_title(self) -> str:
-        return "المراجعة النهائية"
+        return tr("wizard.review.step_title")
 
     def get_step_description(self) -> str:
-        return "راجع جميع البيانات المدخلة قبل الإرسال"
+        return tr("wizard.review.step_description")

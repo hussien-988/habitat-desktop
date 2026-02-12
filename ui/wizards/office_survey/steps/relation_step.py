@@ -26,6 +26,8 @@ from services.api_client import get_api_client
 from utils.logger import get_logger
 from ui.components.toast import Toast
 from ui.error_handler import ErrorHandler
+from services.translation_manager import tr
+from services.display_mappings import get_relation_type_options, get_contract_type_options, get_evidence_type_options
 
 logger = get_logger(__name__)
 
@@ -83,12 +85,12 @@ class RelationStep(BaseStep):
         # Title text container
         title_vbox = QVBoxLayout()
         title_vbox.setSpacing(1)  # Match person_step spacing
-        title_label = QLabel("العلاقة والأدلة")
+        title_label = QLabel(tr("wizard.relation.title"))
         # Title: 14px from Figma = 10pt, weight 600, color WIZARD_TITLE
         title_label.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
         title_label.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent;")
 
-        subtitle_label = QLabel("تسجيل تفاصيل ملكية شخص للوحدة عقارية")
+        subtitle_label = QLabel(tr("wizard.relation.subtitle"))
         # Subtitle: 14px from Figma = 10pt, weight 400, color WIZARD_SUBTITLE
         subtitle_label.setFont(create_font(size=10, weight=FontManager.WEIGHT_REGULAR))
         subtitle_label.setStyleSheet(f"color: {Colors.WIZARD_SUBTITLE}; background: transparent;")
@@ -181,7 +183,7 @@ class RelationStep(BaseStep):
 
         if not persons:
             # Show message if no persons
-            no_person_label = QLabel("لا توجد أشخاص. الرجاء إضافة أشخاص في الخطوة السابقة.")
+            no_person_label = QLabel(tr("wizard.relation.no_persons"))
             no_person_label.setStyleSheet("color: #6B7280; font-size: 14px; padding: 20px;")
             no_person_label.setAlignment(Qt.AlignCenter)
             self.cards_layout.addWidget(no_person_label)
@@ -247,7 +249,7 @@ class RelationStep(BaseStep):
         name_label = QLabel(full_name)
         name_label.setStyleSheet("font-weight: bold; font-size: 13px; color: #2c3e50;")
 
-        status = person.get('relationship_type', 'غير محدد')
+        status = person.get('relationship_type', tr("mapping.not_specified"))
         status_label = QLabel(status)
         status_label.setStyleSheet("color: #7f8c8d; font-size: 11px;")
 
@@ -273,29 +275,21 @@ class RelationStep(BaseStep):
         label_style = "color: #333; font-size: 12px; font-weight: 600;"
 
         # Row 1 - Labels
-        grid.addWidget(self._create_label("نوع العقد", label_style), 0, 0)
-        grid.addWidget(self._create_label("نوع العلاقة", label_style), 0, 1)
-        grid.addWidget(self._create_label("تاريخ بدء العلاقة", label_style), 0, 2)
+        grid.addWidget(self._create_label(tr("wizard.relation.contract_type"), label_style), 0, 0)
+        grid.addWidget(self._create_label(tr("wizard.relation.relation_type"), label_style), 0, 1)
+        grid.addWidget(self._create_label(tr("wizard.relation.start_date"), label_style), 0, 2)
 
         # Row 1 - Inputs - Using StyleManager for consistent styling
         contract_type = QComboBox()
-        contract_type.addItems(["اختر", "عقد إيجار", "عقد بيع", "عقد شراكة"])
+        for code, display in get_contract_type_options():
+            contract_type.addItem(display, code)
         contract_type.setStyleSheet(StyleManager.form_input())
         grid.addWidget(contract_type, 1, 0)
 
         relation_type = QComboBox()
-        rel_types = [
-            ("owner", "مالك"),
-            ("co_owner", "شريك في الملكية"),
-            ("tenant", "مستأجر"),
-            ("occupant", "شاغل"),
-            ("heir", "وارث"),
-            ("guardian", "ولي/وصي"),
-            ("other", "أخرى")
-        ]
-        relation_type.addItem("اختر", None)
-        for code, ar in rel_types:
-            relation_type.addItem(ar, code)
+        relation_type.addItem(tr("mapping.select"), None)
+        for code, display in get_relation_type_options():
+            relation_type.addItem(display, code)
         relation_type.setStyleSheet(StyleManager.form_input())
         grid.addWidget(relation_type, 1, 1)
 
@@ -307,9 +301,9 @@ class RelationStep(BaseStep):
         grid.addWidget(start_date, 1, 2)
 
         # Row 2 - Labels
-        grid.addWidget(self._create_label("حصة الملكية", label_style), 2, 0)
-        grid.addWidget(self._create_label("نوع الدليل", label_style), 2, 1)
-        grid.addWidget(self._create_label("وصف الدليل", label_style), 2, 2)
+        grid.addWidget(self._create_label(tr("wizard.relation.ownership_share"), label_style), 2, 0)
+        grid.addWidget(self._create_label(tr("wizard.relation.evidence_type"), label_style), 2, 1)
+        grid.addWidget(self._create_label(tr("wizard.relation.evidence_desc"), label_style), 2, 2)
 
         # Row 2 - Inputs - Using StyleManager for consistent styling
         ownership_share = QLineEdit("0")
@@ -317,7 +311,8 @@ class RelationStep(BaseStep):
         grid.addWidget(ownership_share, 3, 0)
 
         evidence_type = QComboBox()
-        evidence_type.addItems(["اختر", "صك", "عقد", "وكالة", "إقرار"])
+        for code, display in get_evidence_type_options():
+            evidence_type.addItem(display, code)
         evidence_type.setStyleSheet(StyleManager.form_input())
         grid.addWidget(evidence_type, 3, 1)
 
@@ -365,7 +360,7 @@ class RelationStep(BaseStep):
             evidence_desc.setText(relation_data['evidence_desc'])
 
         # Notes section
-        notes_label = self._create_label("ادخل ملاحظاتك", label_style)
+        notes_label = self._create_label(tr("wizard.relation.notes_label"), label_style)
         card_layout.addWidget(notes_label)
 
         notes = QTextEdit("-")
@@ -387,12 +382,12 @@ class RelationStep(BaseStep):
         card_layout.addWidget(notes)
 
         # Documents section
-        docs_label = self._create_label("صور المستندات", label_style)
+        docs_label = self._create_label(tr("wizard.relation.documents_label"), label_style)
         card_layout.addWidget(docs_label)
 
         radio_layout = QHBoxLayout()
-        rb_has = QRadioButton("يوجد مستندات")
-        rb_none = QRadioButton("لا يوجد مستندات")
+        rb_has = QRadioButton(tr("wizard.relation.has_documents"))
+        rb_none = QRadioButton(tr("wizard.relation.no_documents"))
         rb_has.setChecked(True)
 
         radio_layout.addWidget(rb_has)
@@ -424,7 +419,7 @@ class RelationStep(BaseStep):
         upload_layout.addWidget(upload_icon)
 
         # Upload button
-        upload_btn = QPushButton("ارفع صور المستندات")
+        upload_btn = QPushButton(tr("wizard.relation.upload_documents"))
         upload_btn.setStyleSheet(StyleManager.file_upload_button())
         upload_layout.addWidget(upload_btn)
 
@@ -487,7 +482,7 @@ class RelationStep(BaseStep):
 
         # Check if at least one relation exists
         if len(relations) == 0:
-            result.add_error("يجب تسجيل علاقة واحدة على الأقل")
+            result.add_error(tr("wizard.relation.min_one_required"))
 
         # Store in context
         self.context.relations = relations
@@ -518,11 +513,11 @@ class RelationStep(BaseStep):
 
     def get_step_title(self) -> str:
         """Get step title."""
-        return "العلاقات والأدلة"
+        return tr("wizard.relation.step_title")
 
     def get_step_description(self) -> str:
         """Get step description."""
-        return "تسجيل تفاصيل ملكية شخص للوحدة عقارية"
+        return tr("wizard.relation.step_description")
 
     def on_next(self):
         """Called when user clicks Next - process claims via API."""
@@ -652,7 +647,7 @@ class RelationStep(BaseStep):
                 print(f"  - Evidence Count: {data_summary.get('evidenceCount', 0)}")
                 sys.stdout.flush()
 
-            Toast.show_toast(self, "تم معالجة المطالبات بنجاح", Toast.SUCCESS)
+            Toast.show_toast(self, tr("wizard.relation.claims_processed"), Toast.SUCCESS)
 
         except Exception as e:
             error_msg = str(e)
@@ -677,4 +672,4 @@ class RelationStep(BaseStep):
             self.context.finalize_response = None
 
             # Show warning but allow to continue to step 6
-            Toast.show_toast(self, f"تحذير: فشل معالجة المطالبات - {error_msg}", Toast.WARNING)
+            Toast.show_toast(self, f"{tr('wizard.relation.claims_failed')}: {error_msg}", Toast.WARNING)

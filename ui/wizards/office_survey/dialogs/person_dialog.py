@@ -21,6 +21,8 @@ from PyQt5.QtCore import Qt, QDate
 from app.config import Config
 from services.validation_service import ValidationService
 from services.api_client import get_api_client
+from services.translation_manager import tr
+from services.display_mappings import get_relation_type_options, get_contract_type_options, get_evidence_type_options
 from ui.components.toast import Toast
 from utils.logger import get_logger
 
@@ -144,7 +146,7 @@ class PersonDialog(QDialog):
         person_layout.setSpacing(15)
 
         # Section title
-        person_title = QLabel("اضافة شخص جديد")
+        person_title = QLabel(tr("wizard.person_dialog.title_add"))
         person_title.setStyleSheet("font-size: 16px; font-weight: bold; color: #2c3e50;")
         person_layout.addWidget(person_title)
 
@@ -157,53 +159,53 @@ class PersonDialog(QDialog):
 
         # Row 0: First Name | Last Name (Right to Left layout)
         row = 0
-        first_name_label = QLabel("الاسم الأول")
+        first_name_label = QLabel(tr("wizard.person_dialog.first_name"))
         first_name_label.setStyleSheet(label_style)
         person_grid.addWidget(first_name_label, row, 0)
 
-        last_name_label = QLabel("الكنية")
+        last_name_label = QLabel(tr("wizard.person_dialog.last_name"))
         last_name_label.setStyleSheet(label_style)
         person_grid.addWidget(last_name_label, row, 1)
 
         row += 1
         self.first_name = QLineEdit()
-        self.first_name.setPlaceholderText("ادخل الاسم الأول")
+        self.first_name.setPlaceholderText(tr("wizard.person_dialog.first_name_placeholder"))
         self.first_name.setStyleSheet(self._input_style())
         person_grid.addWidget(self.first_name, row, 0)
 
         self.last_name = QLineEdit()
-        self.last_name.setPlaceholderText("ادخل اسم العائلة")
+        self.last_name.setPlaceholderText(tr("wizard.person_dialog.last_name_placeholder"))
         self.last_name.setStyleSheet(self._input_style())
         person_grid.addWidget(self.last_name, row, 1)
 
         # Row 2: Father Name | Mother Name
         row += 1
-        father_name_label = QLabel("اسم الأب")
+        father_name_label = QLabel(tr("wizard.person_dialog.father_name"))
         father_name_label.setStyleSheet(label_style)
         person_grid.addWidget(father_name_label, row, 0)
 
-        mother_name_label = QLabel("اسم الأم")
+        mother_name_label = QLabel(tr("wizard.person_dialog.mother_name"))
         mother_name_label.setStyleSheet(label_style)
         person_grid.addWidget(mother_name_label, row, 1)
 
         row += 1
         self.father_name = QLineEdit()
-        self.father_name.setPlaceholderText("ادخل اسم الأب")
+        self.father_name.setPlaceholderText(tr("wizard.person_dialog.father_name_placeholder"))
         self.father_name.setStyleSheet(self._input_style())
         person_grid.addWidget(self.father_name, row, 0)
 
         self.mother_name = QLineEdit()
-        self.mother_name.setPlaceholderText("ادخل اسم الأم")
+        self.mother_name.setPlaceholderText(tr("wizard.person_dialog.mother_name_placeholder"))
         self.mother_name.setStyleSheet(self._input_style())
         person_grid.addWidget(self.mother_name, row, 1)
 
         # Row 4: Birth Date | National ID
         row += 1
-        birth_date_label = QLabel("تاريخ الميلاد")
+        birth_date_label = QLabel(tr("wizard.person_dialog.birth_date"))
         birth_date_label.setStyleSheet(label_style)
         person_grid.addWidget(birth_date_label, row, 0)
 
-        national_id_label = QLabel("الرقم الوطني")
+        national_id_label = QLabel(tr("wizard.person_dialog.national_id"))
         national_id_label.setStyleSheet(label_style)
         person_grid.addWidget(national_id_label, row, 1)
 
@@ -230,11 +232,11 @@ class PersonDialog(QDialog):
 
         # Row 7: Email | Relationship
         row += 1
-        email_label = QLabel("البريد الالكتروني")
+        email_label = QLabel(tr("wizard.person_dialog.email"))
         email_label.setStyleSheet(label_style)
         person_grid.addWidget(email_label, row, 0)
 
-        relationship_label = QLabel("علاقة الشخص بوحدة العقار")
+        relationship_label = QLabel(tr("wizard.person_dialog.relation_to_unit"))
         relationship_label.setStyleSheet(label_style)
         person_grid.addWidget(relationship_label, row, 1)
 
@@ -245,28 +247,19 @@ class PersonDialog(QDialog):
         person_grid.addWidget(self.email, row, 0)
 
         self.relationship_combo = QComboBox()
-        self.relationship_combo.addItem("اختر", None)
-        relationship_types = [
-            ("owner", "مالك"),
-            ("co_owner", "شريك في الملكية"),
-            ("tenant", "مستأجر"),
-            ("occupant", "شاغل"),
-            ("heir", "وارث"),
-            ("guardian", "ولي/وصي"),
-            ("other", "أخرى")
-        ]
-        for code, ar_name in relationship_types:
-            self.relationship_combo.addItem(ar_name, code)
+        self.relationship_combo.addItem(tr("wizard.person_dialog.select"), None)
+        for code, display_name in get_relation_type_options():
+            self.relationship_combo.addItem(display_name, code)
         self.relationship_combo.setStyleSheet(self._input_style())
         person_grid.addWidget(self.relationship_combo, row, 1)
 
         # Row 9: Landline | Mobile phone
         row += 1
-        landline_label = QLabel("رقم الهاتف")
+        landline_label = QLabel(tr("wizard.person_dialog.phone"))
         landline_label.setStyleSheet(label_style)
         person_grid.addWidget(landline_label, row, 0)
 
-        mobile_label = QLabel("رقم الموبايل")
+        mobile_label = QLabel(tr("wizard.person_dialog.mobile"))
         mobile_label.setStyleSheet(label_style)
         person_grid.addWidget(mobile_label, row, 1)
 
@@ -304,7 +297,7 @@ class PersonDialog(QDialog):
 
         # Row 11: Document upload
         row += 1
-        doc_label = QLabel("المستندات")
+        doc_label = QLabel(tr("wizard.person_dialog.documents"))
         doc_label.setStyleSheet(label_style)
         person_grid.addWidget(doc_label, row, 0, 1, 2)
 
@@ -336,7 +329,7 @@ class PersonDialog(QDialog):
             upload_icon.setStyleSheet("border: none; font-size: 20px;")
 
         # Upload button - using StyleManager
-        self.doc_upload_btn = QPushButton("ارفع صور المستندات")
+        self.doc_upload_btn = QPushButton(tr("wizard.person_dialog.upload_documents"))
         self.doc_upload_btn.setStyleSheet(StyleManager.file_upload_button())
         self.doc_upload_btn.clicked.connect(self._browse_files)
 
@@ -358,7 +351,7 @@ class PersonDialog(QDialog):
         buttons_layout.setSpacing(15)
 
         # Cancel button (on the right in RTL)
-        cancel_person_btn = QPushButton("إلغاء")
+        cancel_person_btn = QPushButton(tr("common.cancel"))
         cancel_person_btn.setStyleSheet("""
             QPushButton {
                 background-color: white;
@@ -377,7 +370,7 @@ class PersonDialog(QDialog):
         cancel_person_btn.clicked.connect(self.reject)
 
         # Save person button (on the left in RTL)
-        save_person_btn = QPushButton("حفظ")
+        save_person_btn = QPushButton(tr("common.save"))
         save_person_btn.setStyleSheet("""
             QPushButton {
                 background-color: #4a90e2;
@@ -409,7 +402,7 @@ class PersonDialog(QDialog):
         relation_layout.setSpacing(15)
 
         # Section title
-        relation_title = QLabel("العلاقة")
+        relation_title = QLabel(tr("wizard.person_dialog.relation_section"))
         relation_title.setStyleSheet("font-size: 16px; font-weight: bold; color: #2c3e50;")
         relation_layout.addWidget(relation_title)
 
@@ -422,43 +415,35 @@ class PersonDialog(QDialog):
 
         # Row 0: Contract Type | Relationship Type
         row = 0
-        contract_type_label = QLabel("نوع العقد")
+        contract_type_label = QLabel(tr("wizard.person_dialog.contract_type"))
         contract_type_label.setStyleSheet(label_style)
         relation_grid.addWidget(contract_type_label, row, 0)
 
-        rel_type_label = QLabel("نوع العلاقة")
+        rel_type_label = QLabel(tr("wizard.person_dialog.relation_type"))
         rel_type_label.setStyleSheet(label_style)
         relation_grid.addWidget(rel_type_label, row, 1)
 
         row += 1
         self.contract_type = QComboBox()
-        self.contract_type.addItems(["اختر", "عقد إيجار", "عقد بيع", "عقد شراكة"])
+        for code, display_name in get_contract_type_options():
+            self.contract_type.addItem(display_name, code)
         self.contract_type.setStyleSheet(self._input_style())
         relation_grid.addWidget(self.contract_type, row, 0)
 
         self.rel_type_combo = QComboBox()
-        self.rel_type_combo.addItem("اختر", None)
-        rel_types = [
-            ("owner", "مالك"),
-            ("co_owner", "شريك في الملكية"),
-            ("tenant", "مستأجر"),
-            ("occupant", "شاغل"),
-            ("heir", "وارث"),
-            ("guardian", "ولي/وصي"),
-            ("other", "أخرى")
-        ]
-        for code, ar in rel_types:
-            self.rel_type_combo.addItem(ar, code)
+        self.rel_type_combo.addItem(tr("wizard.person_dialog.select"), None)
+        for code, display_name in get_relation_type_options():
+            self.rel_type_combo.addItem(display_name, code)
         self.rel_type_combo.setStyleSheet(self._input_style())
         relation_grid.addWidget(self.rel_type_combo, row, 1)
 
         # Row 2: Start Date | Ownership Share
         row += 1
-        start_date_label = QLabel("تاريخ بدء العلاقة")
+        start_date_label = QLabel(tr("wizard.person_dialog.relation_start_date"))
         start_date_label.setStyleSheet(label_style)
         relation_grid.addWidget(start_date_label, row, 0)
 
-        ownership_share_label = QLabel("حصة الملكية")
+        ownership_share_label = QLabel(tr("wizard.person_dialog.ownership_share"))
         ownership_share_label.setStyleSheet(label_style)
         relation_grid.addWidget(ownership_share_label, row, 1)
 
@@ -480,34 +465,35 @@ class PersonDialog(QDialog):
 
         # Row 4: Evidence Type | Evidence Description
         row += 1
-        evidence_type_label = QLabel("نوع الدليل")
+        evidence_type_label = QLabel(tr("wizard.person_dialog.evidence_type"))
         evidence_type_label.setStyleSheet(label_style)
         relation_grid.addWidget(evidence_type_label, row, 0)
 
-        evidence_desc_label = QLabel("وصف الدليل")
+        evidence_desc_label = QLabel(tr("wizard.person_dialog.evidence_description"))
         evidence_desc_label.setStyleSheet(label_style)
         relation_grid.addWidget(evidence_desc_label, row, 1)
 
         row += 1
         self.evidence_type = QComboBox()
-        self.evidence_type.addItems(["اختر", "صك", "عقد", "وكالة", "إقرار"])
+        for code, display_name in get_evidence_type_options():
+            self.evidence_type.addItem(display_name, code)
         self.evidence_type.setStyleSheet(self._input_style())
         relation_grid.addWidget(self.evidence_type, row, 0)
 
         self.evidence_desc = QLineEdit()
-        self.evidence_desc.setPlaceholderText("ادخل وصف الدليل")
+        self.evidence_desc.setPlaceholderText(tr("wizard.person_dialog.evidence_desc_placeholder"))
         self.evidence_desc.setStyleSheet(self._input_style())
         relation_grid.addWidget(self.evidence_desc, row, 1)
 
         # Row 6: Notes
         row += 1
-        notes_label = QLabel("ادخل ملاحظاتك")
+        notes_label = QLabel(tr("wizard.person_dialog.notes_label"))
         notes_label.setStyleSheet(label_style)
         relation_grid.addWidget(notes_label, row, 0, 1, 2)
 
         row += 1
         self.notes = QTextEdit()
-        self.notes.setPlaceholderText("ادخل ملاحظاتك هنا...")
+        self.notes.setPlaceholderText(tr("wizard.person_dialog.notes_placeholder"))
         self.notes.setMaximumHeight(80)
         self.notes.setStyleSheet("""
             QTextEdit {
@@ -526,7 +512,7 @@ class PersonDialog(QDialog):
 
         # Row 8: Document upload
         row += 1
-        doc_label2 = QLabel("المستندات")
+        doc_label2 = QLabel(tr("wizard.person_dialog.documents"))
         doc_label2.setStyleSheet(label_style)
         relation_grid.addWidget(doc_label2, row, 0, 1, 2)
 
@@ -558,7 +544,7 @@ class PersonDialog(QDialog):
             rel_upload_icon.setStyleSheet("border: none; font-size: 20px;")
 
         # Upload button - using StyleManager
-        self.rel_doc_upload_btn = QPushButton("ارفع صور المستندات")
+        self.rel_doc_upload_btn = QPushButton(tr("wizard.person_dialog.upload_documents"))
         self.rel_doc_upload_btn.setStyleSheet(StyleManager.file_upload_button())
         self.rel_doc_upload_btn.clicked.connect(self._browse_relation_files)
 
@@ -580,7 +566,7 @@ class PersonDialog(QDialog):
         relation_buttons_layout.setSpacing(15)
 
         # Cancel button (on the right in RTL)
-        cancel_relation_btn = QPushButton("إلغاء")
+        cancel_relation_btn = QPushButton(tr("common.cancel"))
         cancel_relation_btn.setStyleSheet("""
             QPushButton {
                 background-color: white;
@@ -599,7 +585,7 @@ class PersonDialog(QDialog):
         cancel_relation_btn.clicked.connect(self.reject)
 
         # Save relationship button (on the left in RTL)
-        save_relation_btn = QPushButton("حفظ")
+        save_relation_btn = QPushButton(tr("common.save"))
         save_relation_btn.setStyleSheet("""
             QPushButton {
                 background-color: #4a90e2;
@@ -624,8 +610,8 @@ class PersonDialog(QDialog):
         relation_tab_layout.addLayout(relation_buttons_layout)
 
         # Add tabs to tab widget
-        self.tab_widget.addTab(person_tab, "بيانات الشخص")
-        self.tab_widget.addTab(relation_tab, "العلاقة")
+        self.tab_widget.addTab(person_tab, tr("wizard.person_dialog.tab_person"))
+        self.tab_widget.addTab(relation_tab, tr("wizard.person_dialog.relation_section"))
 
         # Disable relation tab initially
         self.tab_widget.setTabEnabled(1, False)
@@ -635,11 +621,11 @@ class PersonDialog(QDialog):
 
         # Hidden fields for compatibility
         self.gender = QComboBox()
-        self.gender.addItem("ذكر", "male")
-        self.gender.addItem("أنثى", "female")
+        self.gender.addItem(tr("wizard.person_dialog.gender_male"), "male")
+        self.gender.addItem(tr("wizard.person_dialog.gender_female"), "female")
         self.gender.hide()
 
-        self.is_contact = QCheckBox("شخص التواصل الرئيسي")
+        self.is_contact = QCheckBox(tr("wizard.person_dialog.is_contact"))
         self.is_contact.hide()
 
     def _input_style(self) -> str:
@@ -657,13 +643,13 @@ class PersonDialog(QDialog):
         from PyQt5.QtWidgets import QFileDialog
         file_paths, _ = QFileDialog.getOpenFileNames(
             self,
-            "اختر ملفات",
+            tr("wizard.person_dialog.choose_files"),
             "",
             "Images (*.png *.jpg *.jpeg *.pdf)"
         )
         if file_paths:
             file_names = [f.split("/")[-1] for f in file_paths]
-            self.doc_upload_btn.setText(f"تم اختيار {len(file_names)} ملف")
+            self.doc_upload_btn.setText(tr("wizard.person_dialog.files_selected", count=len(file_names)))
             # Store file paths for later use
             self.uploaded_files = file_paths
 
@@ -672,13 +658,13 @@ class PersonDialog(QDialog):
         from PyQt5.QtWidgets import QFileDialog
         file_paths, _ = QFileDialog.getOpenFileNames(
             self,
-            "اختر ملفات",
+            tr("wizard.person_dialog.choose_files"),
             "",
             "Images (*.png *.jpg *.jpeg *.pdf)"
         )
         if file_paths:
             file_names = [f.split("/")[-1] for f in file_paths]
-            self.rel_doc_upload_btn.setText(f"تم اختيار {len(file_names)} ملف")
+            self.rel_doc_upload_btn.setText(tr("wizard.person_dialog.files_selected", count=len(file_names)))
             # Store file paths for later use
             if not hasattr(self, 'relation_uploaded_files'):
                 self.relation_uploaded_files = []
@@ -693,7 +679,7 @@ class PersonDialog(QDialog):
             return True
 
         if len(nid) != 11 or not nid.isdigit():
-            self.national_id_status.setText("⚠️ يجب أن يكون 11 رقم")
+            self.national_id_status.setText(f"⚠️ {tr('wizard.person_dialog.nid_must_be_11')}")
             self.national_id_status.setStyleSheet(f"color: {Config.WARNING_COLOR};")
             return False
 
@@ -702,11 +688,11 @@ class PersonDialog(QDialog):
             if person.get('national_id') == nid:
                 if self.editing_mode and self.person_data and person.get('person_id') == self.person_data.get('person_id'):
                     continue
-                self.national_id_status.setText("❌ الرقم موجود مسبقاً")
+                self.national_id_status.setText(f"❌ {tr('wizard.person_dialog.nid_exists')}")
                 self.national_id_status.setStyleSheet(f"color: {Config.ERROR_COLOR};")
                 return False
 
-        self.national_id_status.setText("✅ الرقم متاح")
+        self.national_id_status.setText(f"✅ {tr('wizard.person_dialog.nid_available')}")
         self.national_id_status.setStyleSheet(f"color: {Config.SUCCESS_COLOR};")
         return True
 
@@ -750,11 +736,11 @@ class PersonDialog(QDialog):
         """Validate person data and switch to relation tab."""
         # Validation
         if not self.first_name.text().strip():
-            Toast.show_toast(self, "الرجاء إدخال الاسم الأول", Toast.WARNING)
+            Toast.show_toast(self, tr("wizard.person_dialog.enter_first_name"), Toast.WARNING)
             return
 
         if not self.last_name.text().strip():
-            Toast.show_toast(self, "الرجاء إدخال اسم العائلة", Toast.WARNING)
+            Toast.show_toast(self, tr("wizard.person_dialog.enter_last_name"), Toast.WARNING)
             return
 
         # Validate national ID
@@ -764,17 +750,17 @@ class PersonDialog(QDialog):
         # Enable and switch to relation tab
         self.tab_widget.setTabEnabled(1, True)
         self.tab_widget.setCurrentIndex(1)
-        Toast.show_toast(self, "تم حفظ بيانات الشخص بنجاح", Toast.SUCCESS)
+        Toast.show_toast(self, tr("wizard.person_dialog.person_saved"), Toast.SUCCESS)
 
     def _save_person(self):
         """Validate and save person data."""
         # Validation
         if not self.first_name.text().strip():
-            Toast.show_toast(self, "الرجاء إدخال الاسم الأول", Toast.WARNING)
+            Toast.show_toast(self, tr("wizard.person_dialog.enter_first_name"), Toast.WARNING)
             return
 
         if not self.last_name.text().strip():
-            Toast.show_toast(self, "الرجاء إدخال اسم العائلة", Toast.WARNING)
+            Toast.show_toast(self, tr("wizard.person_dialog.enter_last_name"), Toast.WARNING)
             return
 
         # Validate national ID
@@ -828,8 +814,8 @@ class PersonDialog(QDialog):
                     logger.error(f"Could not find person ID in response. Available keys: {list(response.keys())}")
                     ErrorHandler.show_error(
                         self,
-                        f"تم إنشاء الشخص ولكن لم نتمكن من الحصول على معرف الشخص من الاستجابة",
-                        "خطأ"
+                        tr("wizard.person_dialog.created_no_id"),
+                        tr("common.error")
                     )
                     return
 
@@ -838,8 +824,8 @@ class PersonDialog(QDialog):
                 logger.error(f"Failed to create person via API: {error_msg}")
                 ErrorHandler.show_error(
                     self,
-                    f"فشل في إنشاء الشخص:\n{error_msg}",
-                    "خطأ"
+                    tr("wizard.person_dialog.create_failed", error_msg=error_msg),
+                    tr("common.error")
                 )
                 return
 
@@ -895,7 +881,7 @@ class PersonDialog(QDialog):
                 except Exception as e:
                     error_msg = str(e)
                     logger.error(f"Failed to link person to unit: {error_msg}")
-                    Toast.show_toast(self, f"تحذير: فشل في ربط الشخص بالوحدة:\n{error_msg}", Toast.WARNING)
+                    Toast.show_toast(self, tr("wizard.person_dialog.link_failed", error_msg=error_msg), Toast.WARNING)
 
         self.accept()
 
