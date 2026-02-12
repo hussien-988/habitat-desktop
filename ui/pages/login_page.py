@@ -356,7 +356,7 @@ class LoginPage(QWidget):
         card_layout.addWidget(self.login_btn)
 
 
-        
+
 
         return card
 

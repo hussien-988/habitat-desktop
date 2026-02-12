@@ -39,6 +39,9 @@ class MapPickerDialog(BaseMapDialog):
         initial_lon: float = 37.1343,
         initial_zoom: int = 13,
         allow_polygon: bool = True,
+        initial_bounds: list = None,
+        neighborhoods_geojson: str = None,
+        selected_neighborhood_code: str = None,
         db = None,
         parent=None
     ):
@@ -50,6 +53,9 @@ class MapPickerDialog(BaseMapDialog):
             initial_lon: Initial map center longitude
             initial_zoom: Initial map zoom level (default: 13)
             allow_polygon: Allow polygon drawing (not just point)
+            initial_bounds: Bounds to fit on load [[south_lat, west_lng], [north_lat, east_lng]]
+            neighborhoods_geojson: GeoJSON FeatureCollection of neighborhood polygons
+            selected_neighborhood_code: Currently selected neighborhood code for highlighting
             db: Database instance (optional, for loading buildings)
             parent: Parent widget
         """
@@ -57,6 +63,9 @@ class MapPickerDialog(BaseMapDialog):
         self.initial_lon = initial_lon
         self.initial_zoom = initial_zoom
         self.allow_polygon = allow_polygon
+        self.initial_bounds = initial_bounds
+        self.neighborhoods_geojson = neighborhoods_geojson
+        self.selected_neighborhood_code = selected_neighborhood_code
         self.db = db
         self._result = None
 
@@ -111,17 +120,20 @@ class MapPickerDialog(BaseMapDialog):
             # Generate map HTML using LeafletHTMLGenerator
             html = generate_leaflet_html(
                 tile_server_url=tile_server_url.rstrip('/'),
-                buildings_geojson=buildings_geojson,  # Now with buildings!
+                buildings_geojson=buildings_geojson,
                 center_lat=self.initial_lat,
                 center_lon=self.initial_lon,
-                zoom=self.initial_zoom,  # ✅ Smart zoom on neighborhood
-                min_zoom=12,  # Allow zooming out to see context
-                max_zoom=20,  #
-                show_legend=True,  # Show legend for building status
+                zoom=self.initial_zoom,
+                min_zoom=12,
+                max_zoom=20,
+                show_legend=True,
                 show_layer_control=False,
-                enable_selection=False,  # Don't allow selecting buildings
-                enable_drawing=True,  # Enable drawing tools
-                drawing_mode=drawing_mode
+                enable_selection=False,
+                enable_drawing=True,
+                drawing_mode=drawing_mode,
+                initial_bounds=self.initial_bounds,
+                neighborhoods_geojson=self.neighborhoods_geojson,
+                selected_neighborhood_code=self.selected_neighborhood_code
             )
 
             # Load into web view
@@ -235,7 +247,13 @@ def show_map_picker_dialog(
     Returns:
         Dict with location/polygon, or None if cancelled
     """
-    dialog = MapPickerDialog(initial_lat, initial_lon, allow_polygon, db, parent)
+    dialog = MapPickerDialog(
+        initial_lat=initial_lat,
+        initial_lon=initial_lon,
+        allow_polygon=allow_polygon,
+        db=db,
+        parent=parent
+    )
     result = dialog.exec_()
 
     if result == dialog.Accepted:

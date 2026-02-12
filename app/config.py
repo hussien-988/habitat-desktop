@@ -19,7 +19,7 @@ except ImportError:
 # Read settings from environment variables (from .env or system)
 # ============================================================================
 # API Settings
-_API_BASE_URL = os.getenv("API_BASE_URL", "https://localhost:7204/api")
+_API_BASE_URL = os.getenv("API_BASE_URL", "http://localhost:8080/api")
 _API_TIMEOUT = int(os.getenv("API_TIMEOUT", "30"))
 _API_MAX_RETRIES = int(os.getenv("API_MAX_RETRIES", "3"))
 _API_USERNAME = os.getenv("API_USERNAME", "admin")
@@ -62,7 +62,7 @@ class Config:
 
     # HTTP API Backend Settings
     # ✅ DYNAMIC: Reads from .env file (API_BASE_URL, API_TIMEOUT, API_MAX_RETRIES, etc.)
-    # If .env not found, uses team default (https://localhost:7204/api)
+    # If .env not found, uses default (http://localhost:8080/api)
     API_BASE_URL: str = _API_BASE_URL  # From .env or default
     API_VERSION: str = "v1"
     API_TIMEOUT: int = _API_TIMEOUT  # From .env or default (30)
@@ -331,19 +331,8 @@ class Vocabularies:
 
 
 # Aleppo administrative divisions (sample data)
+# NOTE: Districts/subdistricts/communities now come from DivisionsService (data/administrative_divisions.json)
 class AleppoDivisions:
-    DISTRICTS = [
-        ("01", "Aleppo City", "مدينة حلب"),
-        ("02", "Jebel Saman", "جبل سمعان"),
-        ("03", "Al-Bab", "الباب"),
-        ("04", "Manbij", "منبج"),
-        ("05", "Ain al-Arab", "عين العرب"),
-        ("06", "Jarabulus", "جرابلس"),
-        ("07", "Azaz", "أعزاز"),
-        ("08", "Afrin", "عفرين"),
-        ("09", "As-Safira", "السفيرة"),
-    ]
-
     NEIGHBORHOODS_ALEPPO = [
         ("001", "Al-Jamiliyah", "الجميلية"),
         ("002", "Al-Aziziyah", "العزيزية"),
