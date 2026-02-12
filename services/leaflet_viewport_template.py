@@ -43,7 +43,7 @@ VIEWPORT_LOADING_JS_TEMPLATE = '''
         }
 
         // Professional Configuration (✅ محدّث من MapConstants)
-        var MIN_ZOOM_FOR_LOADING = 12;      // Don't load buildings below this zoom (performance)
+        var MIN_ZOOM_FOR_LOADING = 17;      // Don't load buildings below this zoom (buildings appear at 17+)
         var MAX_MARKERS_PER_VIEWPORT = 2000; // ✅ محسّن: زيادة من 1000 إلى 2000
 
         // Viewport loading state

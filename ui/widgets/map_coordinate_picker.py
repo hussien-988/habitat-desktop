@@ -404,8 +404,8 @@ class MapCoordinatePickerWidget(QWidget):
 
         // Use LOCAL tiles from MBTiles
         L.tileLayer('{tile_server_url}/tiles/{{z}}/{{x}}/{{y}}.png', {{
-            maxZoom: 18,
-            minZoom: 12,
+            maxZoom: 20,
+            minZoom: 15,
             attribution: 'UN-Habitat Syria - يعمل بدون اتصال بالإنترنت',
             updateWhenIdle: true,
             keepBuffer: 2,

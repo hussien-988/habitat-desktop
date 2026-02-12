@@ -63,7 +63,8 @@ class LeafletHTMLGenerator:
         existing_polygons_geojson: str = None,  # GeoJSON for existing polygons (blue)
         initial_bounds: list = None,  # [[south_lat, west_lng], [north_lat, east_lng]]
         neighborhoods_geojson: str = None,  # GeoJSON for neighborhood boundaries overlay
-        selected_neighborhood_code: str = None  # Highlight this neighborhood
+        selected_neighborhood_code: str = None,  # Highlight this neighborhood
+        skip_fit_bounds: bool = False  # Skip auto fitBounds (respect zoom param exactly)
     ) -> str:
         """
         Generate Leaflet HTML with unified geometry display.
@@ -133,7 +134,8 @@ class LeafletHTMLGenerator:
         existing_polygons_geojson,
         initial_bounds,
         neighborhoods_geojson,
-        selected_neighborhood_code
+        selected_neighborhood_code,
+        skip_fit_bounds
     )}
 </body>
 </html>
@@ -429,7 +431,8 @@ class LeafletHTMLGenerator:
         existing_polygons_geojson: str = None,
         initial_bounds: list = None,
         neighborhoods_geojson: str = None,
-        selected_neighborhood_code: str = None
+        selected_neighborhood_code: str = None,
+        skip_fit_bounds: bool = False
     ) -> str:
         """Get JavaScript code for map initialization."""
         import json
@@ -471,7 +474,7 @@ class LeafletHTMLGenerator:
         var map = L.map('map', {{
             preferCanvas: true,   // CRITICAL: Use Canvas renderer (10x faster!)
             maxZoom: {max_zoom},  //
-            minZoom: {min_zoom if min_zoom is not None else 12}  // Min zoom where tiles exist
+            minZoom: {min_zoom if min_zoom is not None else 15}  // Min zoom where tiles exist (15-20)
         }}).setView([{center_lat}, {center_lon}], {zoom});
 
         var initialBounds = {initial_bounds_js};
@@ -482,7 +485,7 @@ class LeafletHTMLGenerator:
         // Add tile layer from local server
         var tileLayer = L.tileLayer('{tile_server_url}/tiles/{{z}}/{{x}}/{{y}}.png', {{
             maxZoom: {max_zoom},  //
-            minZoom: 12,  // Min zoom where tiles exist
+            minZoom: 15,  // Min zoom where tiles exist (15-20)
             attribution: 'Map data &copy; OpenStreetMap | UN-Habitat Syria',
             errorTileUrl: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=='
         }});
@@ -547,18 +550,18 @@ class LeafletHTMLGenerator:
 
         //
         var markers = L.markerClusterGroup({{
-            maxClusterRadius: 60,              // ✅ تقليل من 80 إلى 60 (أقل تداخل)
-            spiderfyOnMaxZoom: true,          // Expand clusters at max zoom
-            showCoverageOnHover: false,       // Don't show cluster area on hover
-            zoomToBoundsOnClick: true,        // Zoom to cluster bounds on click
-            disableClusteringAtZoom: 15,      // ✅ تغيير من 17 إلى 15 (تفاصيل أبكر)
-            spiderfyDistanceMultiplier: 1.5,  // Space between spiderfied markers
-            chunkedLoading: true,             // Load markers in chunks for performance
-            chunkInterval: 100,                // ✅ تقليل من 200 إلى 100ms (أسرع)
-            chunkDelay: 25,                    // ✅ تقليل من 50 إلى 25ms (أسرع)
-            removeOutsideVisibleBounds: true,  // ✅ جديد: إزالة markers خارج viewport
-            animate: true,                     // Smooth animations
-            animateAddingMarkers: false        // ✅ جديد: تعطيل animation عند الإضافة (أسرع)
+            maxClusterRadius: 60,
+            spiderfyOnMaxZoom: true,
+            showCoverageOnHover: false,
+            zoomToBoundsOnClick: true,
+            disableClusteringAtZoom: 18,
+            spiderfyDistanceMultiplier: 1.5,
+            chunkedLoading: true,
+            chunkInterval: 100,
+            chunkDelay: 25,
+            removeOutsideVisibleBounds: true,
+            animate: true,
+            animateAddingMarkers: false
         }});
 
         // Create separate layers for points and polygons
@@ -592,7 +595,7 @@ class LeafletHTMLGenerator:
                 var status = getStatusKey(feature.properties.status || 1);
                 var color = statusColors[status] || '#0072BC';
 
-                // ✅ استخدام SVG Pin Marker (Professional + Fast Rendering)
+                // SVG Pin Marker
                 var pinIcon = L.divIcon({{
                     className: 'building-pin-icon',
                     html: '<div style="position: relative; width: 24px; height: 36px;">' +
@@ -693,21 +696,18 @@ class LeafletHTMLGenerator:
         // Neighborhoods overlay layer (zoom-based visibility)
         {LeafletHTMLGenerator._get_neighborhoods_layer_js(neighborhoods_geojson, selected_neighborhood_code) if neighborhoods_geojson else '// No neighborhoods overlay'}
 
-        // Fit to buildings if any (skip when initial_bounds already set)
-        if (!initialBounds && buildingsData.features && buildingsData.features.length > 0) {{
+        // Fit to buildings if any (skip when initial_bounds or skip_fit_bounds set)
+        var skipFitBounds = {'true' if skip_fit_bounds else 'false'};
+        if (!skipFitBounds && !initialBounds && buildingsData.features && buildingsData.features.length > 0) {{
             try {{
                 var bounds = buildingsLayer.getBounds();
-                console.log('📍 Buildings bounds:', bounds);
-                console.log('   - SouthWest:', bounds.getSouthWest());
-                console.log('   - NorthEast:', bounds.getNorthEast());
                 map.fitBounds(bounds, {{ padding: [50, 50] }});
-                console.log('✅ Map fitted to buildings bounds');
+                console.log('Map fitted to buildings bounds');
             }} catch(e) {{
-                console.error('❌ Could not fit bounds:', e);
-                console.log('   Using default center instead');
+                console.log('Using default center (fitBounds failed)');
             }}
-        }} else {{
-            console.warn('⚠️ No buildings to fit bounds to');
+        }} else if (skipFitBounds) {{
+            console.log('fitBounds skipped - using exact zoom:', {zoom});
         }}
 
         {LeafletHTMLGenerator._get_legend_js() if show_legend else ''}
@@ -789,9 +789,11 @@ class LeafletHTMLGenerator:
         """
         Get JavaScript for neighborhood center pins with zoom-based visibility.
 
-        - Zoom < 15: Neighborhood pins with Arabic name labels, buildings hidden
-        - Zoom >= 15: Pins hidden, buildings visible
+        - Zoom 15-16: Neighborhood pins with Arabic name labels, buildings hidden
+        - Zoom >= 17: Pins hidden, buildings visible (polygons + pin markers)
         - NO polygon borders — pins only
+
+        Tile range: 15-20 (below 15 = gray, no tiles)
         """
         try:
             neighborhoods_dict = json.loads(neighborhoods_geojson)
@@ -804,6 +806,9 @@ class LeafletHTMLGenerator:
         return f'''
         // =========================================================
         // Neighborhood Center Pins (zoom-based visibility)
+        // Tiles exist: zoom 15-20
+        // Pins: zoom 15-16 (city overview with neighborhood labels)
+        // Buildings: zoom 17+ (zoomed into a neighborhood)
         // =========================================================
         var neighborhoodsData = {neighborhoods_json};
         var selectedNeighborhoodCode = '{selected_code}';
@@ -838,14 +843,18 @@ class LeafletHTMLGenerator:
 
             neighborhoodPins.addTo(map);
 
-            // Zoom-based: pins at zoom < 15, buildings at zoom >= 15
+            // Zoom-based visibility:
+            // zoom 15-16: neighborhood pins visible, buildings hidden
+            // zoom >= 17: pins hidden, buildings visible
             function updateNeighborhoodVisibility() {{
                 var zoom = map.getZoom();
-                if (zoom >= 15) {{
+                if (zoom >= 17) {{
+                    // Zoomed into neighborhood — show buildings, hide pins
                     if (map.hasLayer(neighborhoodPins)) map.removeLayer(neighborhoodPins);
                     if (!map.hasLayer(markers)) map.addLayer(markers);
                     if (!map.hasLayer(polygonsLayer)) map.addLayer(polygonsLayer);
                 }} else {{
+                    // City overview (zoom 15-16) — show pins, hide buildings
                     if (!map.hasLayer(neighborhoodPins)) map.addLayer(neighborhoodPins);
                     if (map.hasLayer(markers)) map.removeLayer(markers);
                     if (map.hasLayer(polygonsLayer)) map.removeLayer(polygonsLayer);
@@ -855,7 +864,7 @@ class LeafletHTMLGenerator:
             map.on('zoomend', updateNeighborhoodVisibility);
             updateNeighborhoodVisibility();
 
-            console.log('✅ Neighborhood pins loaded:', neighborhoodsData.features.length);
+            console.log('Neighborhood pins loaded:', neighborhoodsData.features.length);
         }}
 '''
 

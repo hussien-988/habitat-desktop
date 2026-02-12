@@ -47,6 +47,7 @@ class BuildingMapDialog(BaseMapDialog):
         selected_building_id: Optional[str] = None,
         auth_token: Optional[str] = None,
         read_only: bool = False,
+        selected_building: Optional[Building] = None,
         parent=None
     ):
         """
@@ -57,10 +58,12 @@ class BuildingMapDialog(BaseMapDialog):
             selected_building_id: Optional building ID to show (view-only mode)
             auth_token: Optional API authentication token
             read_only: If True, map is read-only (no selection allowed)
+            selected_building: Optional Building object (fallback for coordinates if API fails)
             parent: Parent widget
         """
         self.db = db
         self.building_controller = BuildingController(db)
+        self._fallback_building = selected_building
         self._selected_building = None
         self._selected_building_id = selected_building_id
         self._is_view_only = read_only or bool(selected_building_id)  # Support explicit read_only
@@ -201,6 +204,11 @@ class BuildingMapDialog(BaseMapDialog):
                 buildings = [building] if building else []
                 logger.info(f"Retrieved building with polygon: found {len(buildings)} buildings")
 
+                # Fallback: if API didn't find the building, use the passed-in building object
+                if not buildings and self._fallback_building:
+                    buildings = [self._fallback_building]
+                    logger.info(f"Using fallback building object for GeoJSON (lat={self._fallback_building.latitude}, lon={self._fallback_building.longitude})")
+
                 # FIX: Add selected building to GeoJSON if not already present
                 if buildings and len(buildings) > 0:
                     from services.geojson_converter import GeoJSONConverter
@@ -268,7 +276,12 @@ class BuildingMapDialog(BaseMapDialog):
                 if focus_building:
                     logger.info(f"Found focus_building: {focus_building.building_id}")
                 else:
-                    logger.error(f"Could NOT find focus_building with ID {self._selected_building_id} in buildings list")
+                    logger.warning(f"Could NOT find focus_building with ID {self._selected_building_id} in buildings list")
+
+                if not focus_building and self._fallback_building:
+                    # Use fallback building coordinates when API lookup fails
+                    logger.info(f"Using fallback building coordinates for {self._selected_building_id}")
+                    focus_building = self._fallback_building
 
                 if focus_building:
                     # Calculate center from polygon geometry if available
@@ -296,19 +309,63 @@ class BuildingMapDialog(BaseMapDialog):
                     focus_building_id = self._selected_building_id
                     logger.info(f"Focusing on building {focus_building_id} at ({center_lat}, {center_lon}) with max zoom {zoom}")
 
+            # Load neighborhoods GeoJSON for overlay (same as buildings_page)
+            neighborhoods_geojson = None
+            try:
+                from services.api_client import get_api_client
+                api = get_api_client()
+                if self._auth_token:
+                    api.set_access_token(self._auth_token)
+                neighborhoods = api.get_neighborhoods_by_bounds(
+                    sw_lat=36.14, sw_lng=37.07,
+                    ne_lat=36.26, ne_lng=37.23
+                )
+                if neighborhoods:
+                    import json as _json
+                    features = []
+                    for n in neighborhoods:
+                        boundaries = n.get('boundaries', '')
+                        if boundaries and 'POLYGON' in boundaries.upper():
+                            coords_str = boundaries.replace('POLYGON((', '').replace('))', '').strip()
+                            pairs = coords_str.split(',')
+                            lngs, lats = [], []
+                            for pair in pairs:
+                                parts = pair.strip().split()
+                                if len(parts) == 2:
+                                    lngs.append(float(parts[0]))
+                                    lats.append(float(parts[1]))
+                            if lats and lngs:
+                                features.append({
+                                    "type": "Feature",
+                                    "properties": {
+                                        "code": n.get('code', ''),
+                                        "name_ar": n.get('nameArabic', ''),
+                                        "center_lat": sum(lats) / len(lats),
+                                        "center_lng": sum(lngs) / len(lngs)
+                                    },
+                                    "geometry": {"type": "Point", "coordinates": [sum(lngs)/len(lngs), sum(lats)/len(lats)]}
+                                })
+                    if features:
+                        neighborhoods_geojson = _json.dumps({"type": "FeatureCollection", "features": features})
+                        logger.info(f"Loaded {len(features)} neighborhoods for map overlay")
+            except Exception as e:
+                logger.warning(f"Could not load neighborhoods: {e}")
+
             # Generate map HTML using LeafletHTMLGenerator
             html = generate_leaflet_html(
                 tile_server_url=tile_server_url.rstrip('/'),
-                buildings_geojson=buildings_geojson,  # View-only: 1 building, Selection: 200
+                buildings_geojson=buildings_geojson,
                 center_lat=center_lat,
                 center_lon=center_lon,
                 zoom=zoom,
-                max_zoom=20,  #
+                max_zoom=20,
                 show_legend=True,
                 show_layer_control=False,
                 enable_selection=(not self._is_view_only),
-                enable_viewport_loading=(not self._is_view_only),  # Disabled in view-only (no need!)
-                enable_drawing=False
+                enable_viewport_loading=(not self._is_view_only),
+                enable_drawing=False,
+                neighborhoods_geojson=neighborhoods_geojson,
+                skip_fit_bounds=self._is_view_only
             )
 
             # Load into web view
@@ -373,7 +430,7 @@ class BuildingMapDialog(BaseMapDialog):
                                     }};
                                     var color = statusColors[status] || '#0072BC';
 
-                                    // HUGE ICON: 2x size (72×108) - "الشاطر" 😎
+                                    // Large icon: 2x size (72x108)
                                     var largeIcon = L.divIcon({{
                                         className: 'building-pin-icon-huge',
                                         html: '<div style="width: 72px; height: 108px;">' +
@@ -566,7 +623,7 @@ class BuildingMapDialog(BaseMapDialog):
         # Show loading indicator
         if hasattr(self, 'search_input'):
             self.search_input.setEnabled(False)
-            self.search_input.setPlaceholderText("⏳ جاري البحث...")
+            self.search_input.setPlaceholderText("جاري البحث...")
 
         try:
             from app.config import AleppoDivisions
@@ -708,6 +765,7 @@ def show_building_map_dialog(
     selected_building_id: Optional[str] = None,
     auth_token: Optional[str] = None,
     read_only: bool = False,
+    selected_building: Optional[Building] = None,
     parent=None
 ) -> Optional[Building]:
     """
@@ -717,12 +775,14 @@ def show_building_map_dialog(
         db: Database instance
         selected_building_id: Optional building ID to show (view-only mode)
         auth_token: Optional API authentication token
+        read_only: If True, map is read-only (no selection allowed)
+        selected_building: Optional Building object (fallback for coordinates if API fails)
         parent: Parent widget
 
     Returns:
         Selected building, or None if cancelled
     """
-    dialog = BuildingMapDialog(db, selected_building_id, auth_token, read_only, parent)
+    dialog = BuildingMapDialog(db, selected_building_id, auth_token, read_only, selected_building, parent)
     result = dialog.exec_()
 
     if result == dialog.Accepted:

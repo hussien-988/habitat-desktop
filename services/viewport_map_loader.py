@@ -142,7 +142,7 @@ class ViewportMapLoader:
         zoom_level: Optional[int] = None,
         status_filter: Optional[str] = None,
         force_refresh: bool = False,
-        min_zoom_threshold: int = 12,
+        min_zoom_threshold: int = 15,
         max_markers: int = 1000,
         auth_token: Optional[str] = None
     ) -> List[Building]:

@@ -25,7 +25,7 @@ class MapViewerDialog(QDialog):
         latitude: float,
         longitude: float,
         title: str = "عرض الموقع",
-        zoom: int = 17,
+        zoom: int = 20,
         parent=None
     ):
         super().__init__(parent)
@@ -115,8 +115,8 @@ class MapViewerDialog(QDialog):
 
         // Use LOCAL tiles from MBTiles
         L.tileLayer('{tile_server_url}/tiles/{{z}}/{{x}}/{{y}}.png', {{
-            maxZoom: 18,
-            minZoom: 12,
+            maxZoom: 20,
+            minZoom: 15,
             attribution: 'UN-Habitat Syria - يعمل بدون اتصال بالإنترنت',
             updateWhenIdle: true,
             keepBuffer: 2,

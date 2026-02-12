@@ -37,12 +37,13 @@ class MapPickerDialog(BaseMapDialog):
         self,
         initial_lat: float = 36.2021,
         initial_lon: float = 37.1343,
-        initial_zoom: int = 13,
+        initial_zoom: int = 15,
         allow_polygon: bool = True,
         initial_bounds: list = None,
         neighborhoods_geojson: str = None,
         selected_neighborhood_code: str = None,
         db = None,
+        skip_fit_bounds: bool = False,
         parent=None
     ):
         """
@@ -51,12 +52,13 @@ class MapPickerDialog(BaseMapDialog):
         Args:
             initial_lat: Initial map center latitude
             initial_lon: Initial map center longitude
-            initial_zoom: Initial map zoom level (default: 13)
+            initial_zoom: Initial map zoom level (default: 15)
             allow_polygon: Allow polygon drawing (not just point)
             initial_bounds: Bounds to fit on load [[south_lat, west_lng], [north_lat, east_lng]]
             neighborhoods_geojson: GeoJSON FeatureCollection of neighborhood polygons
             selected_neighborhood_code: Currently selected neighborhood code for highlighting
             db: Database instance (optional, for loading buildings)
+            skip_fit_bounds: Skip auto fitBounds (respect initial_zoom exactly)
             parent: Parent widget
         """
         self.initial_lat = initial_lat
@@ -67,6 +69,7 @@ class MapPickerDialog(BaseMapDialog):
         self.neighborhoods_geojson = neighborhoods_geojson
         self.selected_neighborhood_code = selected_neighborhood_code
         self.db = db
+        self._skip_fit_bounds = skip_fit_bounds
         self._result = None
 
         # Initialize base dialog (no search bar, but show confirm button)
@@ -109,7 +112,7 @@ class MapPickerDialog(BaseMapDialog):
                 except Exception as e:
                     logger.warning(f"Could not get auth token from parent: {e}")
 
-                # ✅ OPTIMIZED: 200 is sufficient for initial load with viewport loading
+                # 200 is sufficient for initial load with viewport loading
                 buildings_geojson = self.load_buildings_geojson(self.db, limit=200, auth_token=auth_token)
             else:
                 logger.warning("No database provided - map will not show existing buildings")
@@ -124,7 +127,7 @@ class MapPickerDialog(BaseMapDialog):
                 center_lat=self.initial_lat,
                 center_lon=self.initial_lon,
                 zoom=self.initial_zoom,
-                min_zoom=12,
+                min_zoom=15,
                 max_zoom=20,
                 show_legend=True,
                 show_layer_control=False,
@@ -133,7 +136,8 @@ class MapPickerDialog(BaseMapDialog):
                 drawing_mode=drawing_mode,
                 initial_bounds=self.initial_bounds,
                 neighborhoods_geojson=self.neighborhoods_geojson,
-                selected_neighborhood_code=self.selected_neighborhood_code
+                selected_neighborhood_code=self.selected_neighborhood_code,
+                skip_fit_bounds=self._skip_fit_bounds
             )
 
             # Load into web view
