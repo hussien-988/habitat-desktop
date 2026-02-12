@@ -11,7 +11,8 @@ from PyQt5.QtWidgets import (
     QPushButton, QComboBox, QTableView, QTableWidget, QTableWidgetItem, QHeaderView,
     QFrame, QFileDialog, QAbstractItemView, QGraphicsDropShadowEffect,
     QDialog, QDoubleSpinBox, QSpinBox, QScrollArea,
-    QMenu, QAction, QTabWidget, QStackedWidget, QStyleOptionHeader, QStyle
+    QMenu, QAction, QTabWidget, QStackedWidget, QStyleOptionHeader, QStyle,
+    QStylePainter, QStyleOptionComboBox
 )
 from PyQt5.QtCore import Qt, pyqtSignal, QPoint, QRect, QSize, QLocale
 from PyQt5.QtGui import QColor, QCursor, QPainter, QFont, QIcon, QPixmap
@@ -24,7 +25,9 @@ try:
 except ImportError:
     HAS_WEBENGINE = False
 
-from app.config import Config, Vocabularies, AleppoDivisions
+from app.config import Config, Vocabularies
+from services.divisions_service import DivisionsService
+from services.api_client import get_api_client
 from models.building import Building
 from repositories.database import Database
 from controllers.building_controller import BuildingController
@@ -66,6 +69,36 @@ if HAS_WEBENGINE:
             info.setHttpHeader(b"User-Agent", b"UN-Habitat TRRCMS/1.0")
 
 
+class RtlCombo(QComboBox):
+    """QComboBox with right-aligned text for Arabic RTL support."""
+
+    def paintEvent(self, event):
+        painter = QStylePainter(self)
+        option = QStyleOptionComboBox()
+        self.initStyleOption(option)
+        painter.drawComplexControl(QStyle.CC_ComboBox, option)
+        edit_rect = self.style().subControlRect(
+            QStyle.CC_ComboBox, option, QStyle.SC_ComboBoxEditField, self
+        )
+        painter.drawText(edit_rect.adjusted(4, 0, -4, 0), Qt.AlignRight | Qt.AlignVCenter, option.currentText)
+
+
+class CodeDisplayCombo(RtlCombo):
+    """QComboBox that shows full text in dropdown but only the code in the selected field."""
+
+    def paintEvent(self, event):
+        painter = QStylePainter(self)
+        option = QStyleOptionComboBox()
+        self.initStyleOption(option)
+        painter.drawComplexControl(QStyle.CC_ComboBox, option)
+        code = self.currentData()
+        text = code if code else option.currentText
+        edit_rect = self.style().subControlRect(
+            QStyle.CC_ComboBox, option, QStyle.SC_ComboBoxEditField, self
+        )
+        painter.drawText(edit_rect.adjusted(4, 0, -4, 0), Qt.AlignRight | Qt.AlignVCenter, text)
+
+
 class AddBuildingPage(QWidget):
     """
     Add/Edit Building Form Page - 3 Cards Design
@@ -81,6 +114,8 @@ class AddBuildingPage(QWidget):
         self.building = building
         self.validation_service = ValidationService()
         self._polygon_wkt = None
+        self._neighborhoods_cache = []
+        self._has_map_coordinates = False
 
         self._setup_ui()
 
@@ -322,7 +357,7 @@ class AddBuildingPage(QWidget):
         # Shared label font (DRY: same as card title)
         label_font = create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD)
 
-        # Shared input style (DRY: background #F8FAFF, border-radius 8px, height 45px)
+        # Shared input style for QLineEdit fields
         input_style = """
             QLineEdit {
                 background-color: #F8FAFF;
@@ -337,100 +372,130 @@ class AddBuildingPage(QWidget):
             }
         """
 
-        # Field 1: رمز المحافظة (Governorate)
+        # Shared combo style for dropdown fields (consistent with card 2 combos)
+        # RTL: subcontrol-position uses 'right' so Qt mirrors it to 'left' in RTL mode
+        code_combo_style = """
+            QComboBox {
+                padding: 6px 12px 6px 40px;
+                border: 1px solid #dcdfe6;
+                border-radius: 8px;
+                background-color: #F8FAFF;
+                font-size: 10pt;
+                color: #606266;
+            }
+            QComboBox:focus {
+                border: 1px solid #3890DF;
+            }
+            QComboBox::drop-down {
+                subcontrol-origin: border;
+                subcontrol-position: center right;
+                width: 35px;
+                border: none;
+                margin-right: 5px;
+            }
+            QComboBox::down-arrow {
+                image: url(assets/images/v.png);
+                width: 12px;
+                height: 12px;
+            }
+            QComboBox QAbstractItemView {
+                font-size: 10pt;
+                background-color: white;
+                selection-background-color: #3890DF;
+                selection-color: white;
+            }
+        """
+
+        # DivisionsService for cascading dropdowns
+        self._divisions = DivisionsService()
+
+        # Field 1: رمز المحافظة (Governorate) - Dropdown
         gov_container = QVBoxLayout()
         gov_container.setSpacing(6)
         gov_label = QLabel("رمز المحافظة")
         gov_label.setFont(label_font)
         gov_label.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent;")
-        self.governorate_combo = QLineEdit()
-        self.governorate_combo.setText("01")
-        self.governorate_combo.setMaxLength(2)
-        self.governorate_combo.setStyleSheet(input_style)
-        self.governorate_combo.setFixedHeight(45)  # توحيد الارتفاع
-        self.governorate_combo.setAlignment(Qt.AlignRight)  # محاذاة لليمين
-        self.governorate_combo.textChanged.connect(self._update_building_id)
-        self.governorate_combo.textChanged.connect(self._validate_building_id_realtime)
+        self.governorate_combo = CodeDisplayCombo()
+        self.governorate_combo.addItem("اختر المحافظة", "")
+        for code, en, ar in self._divisions.get_governorates():
+            self.governorate_combo.addItem(f"{code} - {ar}", code)
+        self.governorate_combo.setCurrentIndex(1)  # Default: Aleppo
+        self.governorate_combo.setStyleSheet(code_combo_style)
+        self.governorate_combo.setFixedHeight(45)
+        self.governorate_combo.setLayoutDirection(Qt.RightToLeft)
+        self.governorate_combo.currentIndexChanged.connect(self._on_governorate_changed)
         gov_container.addWidget(gov_label)
         gov_container.addWidget(self.governorate_combo)
         fields_row.addLayout(gov_container, 1)
 
-        # Field 2: رمز المنطقة (District)
+        # Field 2: رمز المنطقة (District) - Dropdown from DivisionsService
         dist_container = QVBoxLayout()
         dist_container.setSpacing(6)
         dist_label = QLabel("رمز المنطقة")
         dist_label.setFont(label_font)
         dist_label.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent;")
-        self.district_combo = QLineEdit()
-        self.district_combo.setText("01")
-        self.district_combo.setMaxLength(2)
-        self.district_combo.setStyleSheet(input_style)
-        self.district_combo.setFixedHeight(45)  # توحيد الارتفاع
-        self.district_combo.setAlignment(Qt.AlignRight)  # محاذاة لليمين
-        self.district_combo.textChanged.connect(self._update_building_id)
-        self.district_combo.textChanged.connect(self._validate_building_id_realtime)
+        self.district_combo = CodeDisplayCombo()
+        self.district_combo.setStyleSheet(code_combo_style)
+        self.district_combo.setFixedHeight(45)
+        self.district_combo.setLayoutDirection(Qt.RightToLeft)
+        self.district_combo.currentIndexChanged.connect(self._on_district_changed)
         dist_container.addWidget(dist_label)
         dist_container.addWidget(self.district_combo)
         fields_row.addLayout(dist_container, 1)
 
-        # Field 3: رمز البلدة (Subdistrict)
+        # Field 3: رمز البلدة (Subdistrict) - Dropdown from DivisionsService
         sub_container = QVBoxLayout()
         sub_container.setSpacing(6)
         sub_label = QLabel("رمز البلدة")
         sub_label.setFont(label_font)
         sub_label.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent;")
-        self.subdistrict_code = QLineEdit()
-        self.subdistrict_code.setText("01")
-        self.subdistrict_code.setMaxLength(2)
-        self.subdistrict_code.setStyleSheet(input_style)
-        self.subdistrict_code.setFixedHeight(45)  # توحيد الارتفاع
-        self.subdistrict_code.setAlignment(Qt.AlignRight)  # محاذاة لليمين
-        self.subdistrict_code.textChanged.connect(self._update_building_id)
-        self.subdistrict_code.textChanged.connect(self._validate_building_id_realtime)
+        self.subdistrict_combo = CodeDisplayCombo()
+        self.subdistrict_combo.setStyleSheet(code_combo_style)
+        self.subdistrict_combo.setFixedHeight(45)
+        self.subdistrict_combo.setLayoutDirection(Qt.RightToLeft)
+        self.subdistrict_combo.currentIndexChanged.connect(self._on_subdistrict_changed)
         sub_container.addWidget(sub_label)
-        sub_container.addWidget(self.subdistrict_code)
+        sub_container.addWidget(self.subdistrict_combo)
         fields_row.addLayout(sub_container, 1)
 
-        # Field 4: رمز القرية (Community)
+        # Field 4: رمز القرية (Community) - Dropdown from DivisionsService
         comm_container = QVBoxLayout()
         comm_container.setSpacing(6)
         comm_label = QLabel("رمز القرية")
         comm_label.setFont(label_font)
         comm_label.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent;")
-        self.community_code = QLineEdit()
-        self.community_code.setPlaceholderText("001")
-        self.community_code.setMaxLength(3)
-        self.community_code.setStyleSheet(input_style)
-        self.community_code.setFixedHeight(45)  # توحيد الارتفاع
-        self.community_code.setAlignment(Qt.AlignRight)  # محاذاة لليمين
-        self.community_code.textChanged.connect(self._update_building_id)
-        self.community_code.textChanged.connect(self._validate_building_id_realtime)
+        self.community_combo = CodeDisplayCombo()
+        self.community_combo.setStyleSheet(code_combo_style)
+        self.community_combo.setFixedHeight(45)
+        self.community_combo.setLayoutDirection(Qt.RightToLeft)
+        self.community_combo.currentIndexChanged.connect(self._update_building_id)
+        self.community_combo.currentIndexChanged.connect(self._validate_building_id_realtime)
         comm_container.addWidget(comm_label)
-        comm_container.addWidget(self.community_code)
+        comm_container.addWidget(self.community_combo)
         fields_row.addLayout(comm_container, 1)
 
-        # Field 5: رمز الحي (Neighborhood)
+        # Field 5: رمز الحي (Neighborhood) - Loaded from API
         neigh_container = QVBoxLayout()
         neigh_container.setSpacing(6)
         neigh_label = QLabel("رمز الحي")
         neigh_label.setFont(label_font)
         neigh_label.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent;")
 
-        self.neighborhood_code_input = QLineEdit()
-        self.neighborhood_code_input.setPlaceholderText("001")
-        self.neighborhood_code_input.setMaxLength(3)
-        self.neighborhood_code_input.setStyleSheet(input_style)
-        self.neighborhood_code_input.setFixedHeight(45)
-        self.neighborhood_code_input.setAlignment(Qt.AlignRight)
+        self.neighborhood_combo = CodeDisplayCombo()
+        self.neighborhood_combo.addItem("اختر الحي", "")
+        self.neighborhood_combo.setStyleSheet(code_combo_style)
+        self.neighborhood_combo.setFixedHeight(45)
+        self.neighborhood_combo.setLayoutDirection(Qt.RightToLeft)
 
-        self.neighborhood_code_input.textChanged.connect(self._update_building_id)
-        self.neighborhood_code_input.textChanged.connect(self._validate_building_id_realtime)
+        self.neighborhood_combo.currentIndexChanged.connect(self._update_building_id)
+        self.neighborhood_combo.currentIndexChanged.connect(self._validate_building_id_realtime)
+        self.neighborhood_combo.currentIndexChanged.connect(self._on_neighborhood_changed_by_user)
 
         neigh_container.addWidget(neigh_label)
-        neigh_container.addWidget(self.neighborhood_code_input)
+        neigh_container.addWidget(self.neighborhood_combo)
         fields_row.addLayout(neigh_container, 1)
 
-        # Field 6: رمز البناء (Building Number)
+        # Field 6: رمز البناء (Building Number) - QLineEdit (unique number)
         build_container = QVBoxLayout()
         build_container.setSpacing(6)
         build_label = QLabel("رمز البناء")
@@ -440,8 +505,8 @@ class AddBuildingPage(QWidget):
         self.building_number.setPlaceholderText("00001")
         self.building_number.setMaxLength(5)
         self.building_number.setStyleSheet(input_style)
-        self.building_number.setFixedHeight(45)  # توحيد الارتفاع
-        self.building_number.setAlignment(Qt.AlignRight)  # محاذاة لليمين
+        self.building_number.setFixedHeight(45)
+        self.building_number.setAlignment(Qt.AlignRight)
         self.building_number.textChanged.connect(self._update_building_id)
         self.building_number.textChanged.connect(self._validate_building_id_realtime)
         self.building_number.returnPressed.connect(self._validate_building_number_on_enter)
@@ -479,6 +544,9 @@ class AddBuildingPage(QWidget):
         """)
         card1_layout.addWidget(self.building_id_label)
 
+        # Trigger initial cascade to fill district → subdistrict → community
+        self._on_governorate_changed()
+
         layout.addWidget(card1)
 
         # === CARD 2: حالة البناء ===
@@ -492,10 +560,10 @@ class AddBuildingPage(QWidget):
         card2_label_font = create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD)
 
         # Shared combobox style (نسخة طبق الأصل 100% من unit_dialog.py - فقط الارتفاع 45px)
+        # RTL: subcontrol-position uses 'right' so Qt mirrors it to 'left' in RTL mode
         combo_style = """
             QComboBox {
-                padding: 6px 40px 6px 12px;
-                padding-right: 12px;
+                padding: 6px 12px 6px 40px;
                 border: 1px solid #E1E8ED;
                 border-radius: 8px;
                 background-color: #F8FAFF;
@@ -509,11 +577,10 @@ class AddBuildingPage(QWidget):
             }
             QComboBox::drop-down {
                 subcontrol-origin: border;
-                subcontrol-position: center left;
+                subcontrol-position: center right;
                 width: 35px;
                 border: none;
-                border-left-width: 0px;
-                margin-left: 5px;
+                margin-right: 5px;
             }
             QComboBox::down-arrow {
                 image: url(assets/images/v.png);
@@ -534,13 +601,13 @@ class AddBuildingPage(QWidget):
         lbl_status.setFont(card2_label_font)
         lbl_status.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent;")
         vbox_status.addWidget(lbl_status)
-        self.status_combo = QComboBox()
+        self.status_combo = RtlCombo()
         self.status_combo.addItem("اختر")
         for code, en, ar in Vocabularies.BUILDING_STATUS:
             self.status_combo.addItem(ar, code)
         self.status_combo.setStyleSheet(combo_style)
-        self.status_combo.setFixedHeight(45)  # توحيد الارتفاع مع باقي الحقول
-        self.status_combo.setLayoutDirection(Qt.RightToLeft)  # محاذاة لليمين
+        self.status_combo.setFixedHeight(45)
+        self.status_combo.setLayoutDirection(Qt.RightToLeft)
         vbox_status.addWidget(self.status_combo)
         card2_layout.addLayout(vbox_status, 1)  # توحيد العرض - stretch factor
 
@@ -551,13 +618,13 @@ class AddBuildingPage(QWidget):
         lbl_type.setFont(card2_label_font)
         lbl_type.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent;")
         vbox_type.addWidget(lbl_type)
-        self.type_combo = QComboBox()
+        self.type_combo = RtlCombo()
         self.type_combo.addItem("اختر")
         for code, en, ar in Vocabularies.BUILDING_TYPES:
             self.type_combo.addItem(ar, code)
         self.type_combo.setStyleSheet(combo_style)
-        self.type_combo.setFixedHeight(45)  # توحيد الارتفاع مع باقي الحقول
-        self.type_combo.setLayoutDirection(Qt.RightToLeft)  # محاذاة لليمين
+        self.type_combo.setFixedHeight(45)
+        self.type_combo.setLayoutDirection(Qt.RightToLeft)
         vbox_type.addWidget(self.type_combo)
         card2_layout.addLayout(vbox_type, 1)  # توحيد العرض - stretch factor
 
@@ -973,27 +1040,35 @@ class AddBuildingPage(QWidget):
         widget._parent_container = container
         return widget
 
+    def _get_gov_code(self) -> str:
+        """Get governorate code from combo or fallback."""
+        return self.governorate_combo.currentData() or "01"
+
+    def _get_district_code(self) -> str:
+        """Get district code from combo or fallback."""
+        return self.district_combo.currentData() or "01"
+
+    def _get_subdistrict_code(self) -> str:
+        """Get subdistrict code from combo or fallback."""
+        return self.subdistrict_combo.currentData() or "01"
+
+    def _get_community_code(self) -> str:
+        """Get community code from combo or fallback."""
+        return self.community_combo.currentData() or "001"
+
+    def _get_neighborhood_code(self) -> str:
+        """Get neighborhood code from combo (empty string if none selected)."""
+        return self.neighborhood_combo.currentData() or ""
+
     def _update_building_id(self):
         """Generate building ID in format: GG-DD-SS-CCC-NNN-BBBBB"""
-        # GG: Governorate (محافظة) - 2 digits
-        gov = self.governorate_combo.text().strip() or "01"
-
-        # DD: District (منطقة) - 2 digits
-        dist = self.district_combo.text().strip() or "01"
-
-        # SS: Subdistrict (منطقة فرعية) - 2 digits
-        subdist = self.subdistrict_code.text().strip() or "01"
-
-        # CCC: Community (مجتمع/مدينة) - 3 digits
-        comm = self.community_code.text().strip() or "001"
-
-        # NNN: Neighborhood - 3 digits
-        neigh = self.neighborhood_code_input.text().strip() or "001"
-
-        # BBBBB: Building Number - 5 digits
+        gov = self._get_gov_code()
+        dist = self._get_district_code()
+        subdist = self._get_subdistrict_code()
+        comm = self._get_community_code()
+        neigh = self._get_neighborhood_code() or "___"
         bldg_num = self.building_number.text().strip().zfill(5)
 
-        # Format: GG-DD-SS-CCC-NNN-BBBBB
         building_id = f"{gov}-{dist}-{subdist}-{comm}-{neigh}-{bldg_num}"
         self.building_id_label.setText(f"رمز البناء: {building_id}")
 
@@ -1020,11 +1095,11 @@ class AddBuildingPage(QWidget):
             return
 
         # Generate the complete building ID
-        gov = self.governorate_combo.text().strip() or "01"
-        dist = self.district_combo.text().strip() or "01"
-        subdist = self.subdistrict_code.text().strip() or "01"
-        comm = self.community_code.text().strip() or "001"
-        neigh = self.neighborhood_code_input.text().strip() or "001"
+        gov = self._get_gov_code()
+        dist = self._get_district_code()
+        subdist = self._get_subdistrict_code()
+        comm = self._get_community_code()
+        neigh = self._get_neighborhood_code()
         bldg_num = building_num.zfill(5)
 
         building_id = f"{gov}-{dist}-{subdist}-{comm}-{neigh}-{bldg_num}"
@@ -1172,37 +1247,41 @@ class AddBuildingPage(QWidget):
         try:
             from ui.components.map_picker_dialog_v2 import MapPickerDialog
 
-            if self.latitude_spin.value() != 0 and self.longitude_spin.value() != 0:
+            initial_bounds = None
+            selected_neighborhood_code = self._get_neighborhood_code()
+
+            if self._has_map_coordinates:
                 initial_lat = self.latitude_spin.value()
                 initial_lon = self.longitude_spin.value()
                 initial_zoom = 16
-                logger.info(f"Using existing coordinates: ({initial_lat}, {initial_lon})")
-            else:
-                neighborhood_code = self.neighborhood_code_input.text().strip()
-                if neighborhood_code and len(neighborhood_code) == 3:
-                    center = self._get_neighborhood_center(neighborhood_code)
-                    if center:
-                        initial_lat, initial_lon = center
-                        initial_zoom = 17  # ✅ Changed from 19 to 17 for better context
-                        logger.info(f"✅ Focusing map on neighborhood {neighborhood_code}: ({initial_lat:.6f}, {initial_lon:.6f}) zoom={initial_zoom}")
-                    else:
-                        logger.warning(f"⚠️ Neighborhood {neighborhood_code} not found in neighborhoods.json, using default Aleppo center")
-                        initial_lat = 36.2021
-                        initial_lon = 37.1343
-                        initial_zoom = 13
+            elif selected_neighborhood_code:
+                center = self._get_neighborhood_center(selected_neighborhood_code)
+                if center:
+                    initial_lat, initial_lon = center
+                    initial_zoom = 17
+                    initial_bounds = self._get_neighborhood_bounds(selected_neighborhood_code)
                 else:
-                    logger.info("No neighborhood code specified, using default Aleppo center")
                     initial_lat = 36.2021
                     initial_lon = 37.1343
                     initial_zoom = 13
+            else:
+                initial_lat = 36.2021
+                initial_lon = 37.1343
+                initial_zoom = 13
 
             allow_polygon = self.polygon_radio.isChecked()
+
+            # Build neighborhoods GeoJSON for overlay layer
+            neighborhoods_geojson = self._build_neighborhoods_geojson()
 
             dialog = MapPickerDialog(
                 initial_lat=initial_lat,
                 initial_lon=initial_lon,
                 initial_zoom=initial_zoom,
                 allow_polygon=allow_polygon,
+                initial_bounds=initial_bounds,
+                neighborhoods_geojson=neighborhoods_geojson,
+                selected_neighborhood_code=selected_neighborhood_code,
                 db=self.building_controller.db,
                 parent=self
             )
@@ -1214,15 +1293,14 @@ class AddBuildingPage(QWidget):
                 if result and 'polygon_wkt' in result and result['polygon_wkt']:
                     polygon_wkt = result['polygon_wkt']
                     self._polygon_wkt = polygon_wkt
+                    self._has_map_coordinates = True
 
-                    # Get centroid for lat/lon
                     centroid_lat = result.get('latitude', 36.2)
                     centroid_lon = result.get('longitude', 37.15)
                     self.latitude_spin.setValue(centroid_lat)
                     self.longitude_spin.setValue(centroid_lon)
 
-                    # ✅ Verify neighborhood and warn if different
-                    self._verify_and_update_neighborhood_from_polygon(polygon_wkt)
+                    self._detect_and_update_neighborhood(polygon_wkt)
 
                     # Show success message
                     self.location_status_label.setText(
@@ -1241,10 +1319,11 @@ class AddBuildingPage(QWidget):
 
                     self.latitude_spin.setValue(lat)
                     self.longitude_spin.setValue(lon)
-                    self._polygon_wkt = None  # Clear polygon data
+                    self._polygon_wkt = None
+                    self._has_map_coordinates = True
 
-                    geometry_wkt = result.get('wkt') or f"POINT({lon} {lat})"
-                    self._auto_detect_neighborhood(geometry_wkt)
+                    geometry_wkt = f"POINT({lon} {lat})"
+                    self._detect_and_update_neighborhood(geometry_wkt)
 
                     self.location_status_label.setText(
                         f"تم تحديد الموقع ({lat:.6f}, {lon:.6f})"
@@ -1266,25 +1345,35 @@ class AddBuildingPage(QWidget):
         if not self.building:
             return
 
-        # GG: تحميل رمز المحافظة (Governorate)
+        # GG: تحميل رمز المحافظة (Governorate) - select in combo by data
         if hasattr(self.building, 'governorate_code') and self.building.governorate_code:
-            self.governorate_combo.setText(self.building.governorate_code)
+            idx = self.governorate_combo.findData(self.building.governorate_code)
+            if idx >= 0:
+                self.governorate_combo.setCurrentIndex(idx)
 
-        # DD: تحميل رمز المنطقة (District)
+        # DD: تحميل رمز المنطقة (District) - select in combo by data
         if hasattr(self.building, 'district_code') and self.building.district_code:
-            self.district_combo.setText(self.building.district_code)
+            idx = self.district_combo.findData(self.building.district_code)
+            if idx >= 0:
+                self.district_combo.setCurrentIndex(idx)
 
-        # SS: تحميل المنطقة الفرعية (Subdistrict)
+        # SS: تحميل المنطقة الفرعية (Subdistrict) - select in combo by data
         if hasattr(self.building, 'subdistrict_code') and self.building.subdistrict_code:
-            self.subdistrict_code.setText(self.building.subdistrict_code)
+            idx = self.subdistrict_combo.findData(self.building.subdistrict_code)
+            if idx >= 0:
+                self.subdistrict_combo.setCurrentIndex(idx)
 
-        # CCC: تحميل رمز المجتمع/المدينة (Community)
+        # CCC: تحميل رمز المجتمع/المدينة (Community) - select in combo by data
         if hasattr(self.building, 'community_code') and self.building.community_code:
-            self.community_code.setText(self.building.community_code)
+            idx = self.community_combo.findData(self.building.community_code)
+            if idx >= 0:
+                self.community_combo.setCurrentIndex(idx)
 
-        # NNN: Load neighborhood code
+        # NNN: Load neighborhood code - select in combo by data
         if hasattr(self.building, 'neighborhood_code') and self.building.neighborhood_code:
-            self.neighborhood_code_input.setText(self.building.neighborhood_code)
+            idx = self.neighborhood_combo.findData(self.building.neighborhood_code)
+            if idx >= 0:
+                self.neighborhood_combo.setCurrentIndex(idx)
 
         # BBBBB: تحميل رقم البناء (Building Number - آخر 5 أرقام من building_id)
         if self.building.building_id and len(self.building.building_id) >= 5:
@@ -1312,15 +1401,15 @@ class AddBuildingPage(QWidget):
         if hasattr(self.building, 'site_description') and self.building.site_description:
             self.site_desc.setText(self.building.site_description)
 
-        # تحميل الإحداثيات
         if self.building.latitude:
             self.latitude_spin.setValue(self.building.latitude)
-            self.location_status_label.setText("✓ تم تحديد الموقع")
+            self.location_status_label.setText("تم تحديد الموقع")
             self.location_status_label.setStyleSheet(f"color: {Config.SUCCESS_COLOR}; font-size: 10pt;")
         if self.building.longitude:
             self.longitude_spin.setValue(self.building.longitude)
+        if self.building.latitude and self.building.longitude:
+            self._has_map_coordinates = True
 
-        # تحميل المضلع إذا كان موجود
         if hasattr(self.building, 'geo_location') and self.building.geo_location:
             self._polygon_wkt = self.building.geo_location
             self.geometry_type_label.setText("نوع الإحداثيات: مضلع")
@@ -1651,28 +1740,42 @@ class AddBuildingPage(QWidget):
         else:
             building_id = building_id_text.strip()
 
+        # Lookup names from selected codes via DivisionsService
+        gov_code = self._get_gov_code()
+        dist_code = self._get_district_code()
+        subdist_code = self._get_subdistrict_code()
+        comm_code = self._get_community_code()
+        neigh_code = self._get_neighborhood_code()
+
+        dist_en, dist_ar = self._divisions.get_district_name(gov_code, dist_code)
+        subdist_en, subdist_ar = self._divisions.get_subdistrict_name(gov_code, dist_code, subdist_code)
+        comm_en, comm_ar = self._divisions.get_community_name(gov_code, dist_code, subdist_code, comm_code)
+
+        neigh_name_en = self._get_neighborhood_name_en()
+        neigh_name_ar = self._get_neighborhood_name_ar()
+
         data = {
             "building_id": building_id,
-            # GG: Governorate (manual entry now)
-            "governorate_code": self.governorate_combo.text().strip() or "01",
+            # GG: Governorate
+            "governorate_code": gov_code,
             "governorate_name": "Aleppo",
             "governorate_name_ar": "حلب",
-            # DD: District (manual entry now)
-            "district_code": self.district_combo.text().strip() or "01",
-            "district_name": "",  # Manual entry - no lookup
-            "district_name_ar": "",
+            # DD: District
+            "district_code": dist_code,
+            "district_name": dist_en,
+            "district_name_ar": dist_ar,
             # SS: Subdistrict
-            "subdistrict_code": self.subdistrict_code.text().strip() or "01",
-            "subdistrict_name": "",
-            "subdistrict_name_ar": "",
+            "subdistrict_code": subdist_code,
+            "subdistrict_name": subdist_en,
+            "subdistrict_name_ar": subdist_ar,
             # CCC: Community
-            "community_code": self.community_code.text().strip() or "001",
-            "community_name": "",
-            "community_name_ar": "",
-            # NNN: Neighborhood code
-            "neighborhood_code": self.neighborhood_code_input.text().strip() or "001",
-            "neighborhood_name": self._get_neighborhood_name_en(),
-            "neighborhood_name_ar": self._get_neighborhood_name_ar(),
+            "community_code": comm_code,
+            "community_name": comm_en,
+            "community_name_ar": comm_ar,
+            # NNN: Neighborhood
+            "neighborhood_code": neigh_code,
+            "neighborhood_name": neigh_name_en,
+            "neighborhood_name_ar": neigh_name_ar,
             # BBBBB: Building Number
             "building_number": self.building_number.text().strip(),
             # Building Details
@@ -1695,68 +1798,182 @@ class AddBuildingPage(QWidget):
 
         return data
 
+    def _set_neighborhood_by_code(self, code: str):
+        """Set neighborhood combo selection by code."""
+        self.neighborhood_combo.blockSignals(True)
+        idx = self.neighborhood_combo.findData(code)
+        if idx >= 0:
+            self.neighborhood_combo.setCurrentIndex(idx)
+        self.neighborhood_combo.blockSignals(False)
+
+    def _on_neighborhood_changed_by_user(self):
+        """Warn if map coordinates already set and don't match new neighborhood."""
+        if not self._has_map_coordinates:
+            return
+
+        new_code = self._get_neighborhood_code()
+        if not new_code:
+            return
+
+        try:
+            from services.neighborhood_geocoder import NeighborhoodGeocoderFactory
+            geocoder = NeighborhoodGeocoderFactory.create(provider="local")
+            lon = self.longitude_spin.value()
+            lat = self.latitude_spin.value()
+            detected = geocoder.find_neighborhood(f"POINT({lon} {lat})")
+
+            if detected and detected.code != new_code:
+                ErrorHandler.show_warning(
+                    self,
+                    f"الموقع المحدد من الخريطة يقع في حي {detected.name_ar} ({detected.code}).\n"
+                    f"يرجى تحديث الموقع من الخريطة ليتوافق مع الحي الجديد.",
+                    "تنبيه"
+                )
+        except Exception:
+            pass
+
+    def _on_governorate_changed(self):
+        """Cascading: governorate → fill districts."""
+        gov_code = self._get_gov_code()
+        self.district_combo.blockSignals(True)
+        self.district_combo.clear()
+        self.district_combo.addItem("اختر المنطقة", "")
+        if gov_code:
+            for code, en, ar in self._divisions.get_districts(gov_code):
+                self.district_combo.addItem(f"{code} - {ar}", code)
+            if self.district_combo.count() > 1:
+                self.district_combo.setCurrentIndex(1)
+        self.district_combo.blockSignals(False)
+        self._on_district_changed()
+
+    def _on_district_changed(self):
+        """Cascading: district → fill subdistricts."""
+        gov_code = self._get_gov_code()
+        dist_code = self._get_district_code()
+        self.subdistrict_combo.blockSignals(True)
+        self.subdistrict_combo.clear()
+        self.subdistrict_combo.addItem("اختر البلدة", "")
+        if gov_code and dist_code:
+            for code, en, ar in self._divisions.get_subdistricts(gov_code, dist_code):
+                self.subdistrict_combo.addItem(f"{code} - {ar}", code)
+            if self.subdistrict_combo.count() > 1:
+                self.subdistrict_combo.setCurrentIndex(1)
+        self.subdistrict_combo.blockSignals(False)
+        self._on_subdistrict_changed()
+
+    def _on_subdistrict_changed(self):
+        """Cascading: subdistrict → fill communities."""
+        gov_code = self._get_gov_code()
+        dist_code = self._get_district_code()
+        subdist_code = self._get_subdistrict_code()
+        self.community_combo.blockSignals(True)
+        self.community_combo.clear()
+        self.community_combo.addItem("اختر القرية", "")
+        if gov_code and dist_code and subdist_code:
+            for code, en, ar in self._divisions.get_communities(gov_code, dist_code, subdist_code):
+                self.community_combo.addItem(f"{code} - {ar}", code)
+            if self.community_combo.count() > 1:
+                self.community_combo.setCurrentIndex(1)
+        self.community_combo.blockSignals(False)
+        self._load_neighborhoods_from_api()
+        self._update_building_id()
+        self._validate_building_id_realtime()
+
+    def _load_neighborhoods_from_api(self):
+        """Load neighborhoods from backend API based on current hierarchy selection."""
+        gov_code = self._get_gov_code()
+        dist_code = self._get_district_code()
+        subdist_code = self._get_subdistrict_code()
+        comm_code = self._get_community_code()
+
+        self.neighborhood_combo.blockSignals(True)
+        self.neighborhood_combo.clear()
+        self.neighborhood_combo.addItem("اختر الحي", "")
+
+        if gov_code and dist_code and subdist_code and comm_code:
+            try:
+                api_client = get_api_client()
+                neighborhoods = api_client.get_neighborhoods(
+                    governorate_code=gov_code,
+                    district_code=dist_code,
+                    subdistrict_code=subdist_code,
+                    community_code=comm_code
+                )
+                self._neighborhoods_cache = neighborhoods
+                for n in neighborhoods:
+                    code = n.get("neighborhoodCode", "")
+                    name_ar = n.get("nameArabic", "")
+                    self.neighborhood_combo.addItem(f"{code} - {name_ar}", code)
+                if self.neighborhood_combo.count() > 1:
+                    self.neighborhood_combo.setCurrentIndex(1)
+            except Exception as e:
+                logger.warning(f"Failed to load neighborhoods from API: {e}")
+                self._neighborhoods_cache = []
+
+        self.neighborhood_combo.blockSignals(False)
+
     def _get_neighborhood_name_ar(self) -> str:
-        """Get Arabic name from neighborhood code."""
-        from app.config import AleppoDivisions
-        code = self.neighborhood_code_input.text().strip()
-        if code:
-            for c, name_en, name_ar in AleppoDivisions.NEIGHBORHOODS_ALEPPO:
-                if c == code:
-                    return name_ar
+        """Get Arabic name from cached API neighborhoods."""
+        code = self._get_neighborhood_code()
+        for n in getattr(self, '_neighborhoods_cache', []):
+            if n.get("neighborhoodCode") == code:
+                return n.get("nameArabic", "")
         return ""
 
     def _get_neighborhood_name_en(self) -> str:
-        """Get English name from neighborhood code."""
-        from app.config import AleppoDivisions
-        code = self.neighborhood_code_input.text().strip()
-        if code:
-            for c, name_en, name_ar in AleppoDivisions.NEIGHBORHOODS_ALEPPO:
-                if c == code:
-                    return name_en
+        """Get English name from cached API neighborhoods."""
+        code = self._get_neighborhood_code()
+        for n in getattr(self, '_neighborhoods_cache', []):
+            if n.get("neighborhoodCode") == code:
+                return n.get("nameEnglish", "")
         return ""
 
-    def _auto_detect_neighborhood(self, geometry_wkt: str):
+    def _detect_and_update_neighborhood(self, geometry_wkt: str):
         """
-        Auto-detect neighborhood from geometry (Point or Polygon).
+        Detect neighborhood from geometry and update form field.
 
-        Uses NeighborhoodGeocoder service for reverse geocoding.
-        Updates neighborhood code field if found.
-
-        Args:
-            geometry_wkt: WKT geometry string
+        Behavior:
+        - No neighborhood selected: silently set detected neighborhood
+        - Same neighborhood: no action
+        - Different neighborhood: confirm dialog before overriding
         """
         try:
             from services.neighborhood_geocoder import NeighborhoodGeocoderFactory
 
             geocoder = NeighborhoodGeocoderFactory.create(provider="local")
+            detected = geocoder.find_neighborhood(geometry_wkt)
 
-            neighborhood = geocoder.find_neighborhood(geometry_wkt)
-
-            if neighborhood:
-                current_code = self.neighborhood_code_input.text().strip()
-
-                if current_code and current_code != neighborhood.code:
-                    if ErrorHandler.confirm(
-                        self,
-                        f"المنطقة المدخلة: {current_code}\n"
-                        f"المنطقة المكتشفة: {neighborhood.name_ar} ({neighborhood.code})\n\n"
-                        f"هل تريد التحديث إلى المنطقة المكتشفة؟",
-                        "تغيير المنطقة"
-                    ):
-                        self.neighborhood_code_input.setText(neighborhood.code)
-
-                elif not current_code:
-                    self.neighborhood_code_input.setText(neighborhood.code)
-                    Toast.show_success(
-                        self,
-                        f"تم تحديد المنطقة تلقائياً: {neighborhood.name_ar}"
-                    )
-
-            else:
+            if not detected:
                 logger.debug("No neighborhood detected from geometry")
+                return
+
+            current_code = self._get_neighborhood_code()
+
+            if not current_code:
+                self._set_neighborhood_by_code(detected.code)
+                self._update_building_id()
+                Toast.show_toast(
+                    self,
+                    f"تم تحديد الحي تلقائيا: {detected.name_ar} ({detected.code})",
+                    Toast.INFO
+                )
+            elif current_code != detected.code:
+                current_neighborhood = geocoder.get_neighborhood_by_code(current_code)
+                current_name = current_neighborhood.name_ar if current_neighborhood else current_code
+
+                if ErrorHandler.confirm(
+                    self,
+                    f"الموقع المحدد يقع في حي مختلف عن الحي المدخل.\n\n"
+                    f"الحي المدخل: {current_name} ({current_code})\n"
+                    f"الحي المكتشف: {detected.name_ar} ({detected.code})\n\n"
+                    f"هل تريد تحديث حقل الحي؟",
+                    "حي مختلف"
+                ):
+                    self._set_neighborhood_by_code(detected.code)
+                    self._update_building_id()
 
         except Exception as e:
-            logger.error(f"Failed to auto-detect neighborhood: {e}")
+            logger.error(f"Failed to detect neighborhood: {e}", exc_info=True)
 
     def _get_neighborhood_center(self, neighborhood_code: str) -> Optional[Tuple[float, float]]:
         """
@@ -1800,76 +2017,75 @@ class AddBuildingPage(QWidget):
             logger.error(f"Failed to get neighborhood center: {e}", exc_info=True)
             return None
 
-    def _verify_and_update_neighborhood_from_polygon(self, polygon_wkt: str):
-        """
-        Verify if drawn polygon is in the specified neighborhood.
-
-        If different, show warning and update neighborhood code field.
-
-        Args:
-            polygon_wkt: WKT format polygon string
-        """
+    def _get_neighborhood_bounds(self, neighborhood_code: str):
+        """Get bounding box for Leaflet fitBounds: [[south_lat, west_lng], [north_lat, east_lng]]."""
         try:
             from services.neighborhood_geocoder import NeighborhoodGeocoderFactory
+            import json
 
-            # Get current neighborhood code from form
-            current_neighborhood_code = self.neighborhood_code_input.text().strip()
-
-            if not current_neighborhood_code:
-                logger.info("No neighborhood code specified, skipping verification")
-                return
-
-            # Detect actual neighborhood from polygon
             geocoder = NeighborhoodGeocoderFactory.create(provider="local")
-            detected = geocoder.find_neighborhood(polygon_wkt)
+            if not geocoder.get_neighborhood_by_code(neighborhood_code):
+                return None
 
-            if not detected:
-                logger.warning("Could not detect neighborhood from polygon")
-                ErrorHandler.show_warning(
-                    self,
-                    "لم يتم التعرف على الحي من الموقع المحدد على الخريطة.\n"
-                    "يرجى التأكد من رسم المضلع داخل حدود الحي الصحيح.",
-                    "تحذير"
-                )
-                return
+            with open(geocoder._data_file, 'r', encoding='utf-8') as f:
+                data = json.load(f)
 
-            # Compare with form value
-            if detected.code != current_neighborhood_code:
-                # Get current neighborhood name for display
-                current_neighborhood = geocoder.get_neighborhood_by_code(current_neighborhood_code)
-                current_name = current_neighborhood.name_ar if current_neighborhood else current_neighborhood_code
-
-                # Show warning dialog
-                if ErrorHandler.confirm(
-                    self,
-                    f"البوليغون المرسوم يقع في حي مختلف!\n\n"
-                    f"الحي المدخل في الحقل: {current_name} ({current_neighborhood_code})\n"
-                    f"الحي المكتشف من الخريطة: {detected.name_ar} ({detected.code})\n\n"
-                    f"هل تريد تحديث حقل الحي إلى '{detected.name_ar}' ({detected.code})؟",
-                    "تحذير - حي مختلف"
-                ):
-                    # Update neighborhood code field
-                    self.neighborhood_code_input.setText(detected.code)
-                    self._update_building_id()  # Update building ID
-                    logger.info(f"✅ Updated neighborhood code from {current_neighborhood_code} to {detected.code}")
-
-                    Toast.show_toast(
-                        self,
-                        f"تم تحديث رمز الحي إلى: {detected.name_ar} ({detected.code})",
-                        Toast.INFO
-                    )
-                else:
-                    logger.info(f"User kept original neighborhood code: {current_neighborhood_code}")
-                    Toast.show_toast(
-                        self,
-                        "⚠️ تحذير: البوليغون في حي مختلف عن الحقل المدخل",
-                        Toast.WARNING
-                    )
-            else:
-                logger.info(f"✅ Polygon is correctly within neighborhood {detected.code}")
-
+            for n in data.get('neighborhoods', []):
+                if n['code'] == neighborhood_code:
+                    polygon = n.get('polygon', [])
+                    if polygon:
+                        lngs = [p[0] for p in polygon]
+                        lats = [p[1] for p in polygon]
+                        return [[min(lats), min(lngs)], [max(lats), max(lngs)]]
+            return None
         except Exception as e:
-            logger.error(f"Failed to verify neighborhood: {e}", exc_info=True)
+            logger.error(f"Failed to get neighborhood bounds: {e}", exc_info=True)
+            return None
+
+    def _build_neighborhoods_geojson(self) -> str:
+        """Build GeoJSON FeatureCollection from neighborhoods.json for map overlay."""
+        try:
+            import json
+            import os
+
+            data_file = os.path.join(
+                os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+                'data', 'neighborhoods.json'
+            )
+            with open(data_file, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+
+            features = []
+            for n in data.get('neighborhoods', []):
+                polygon = n.get('polygon', [])
+                if not polygon:
+                    continue
+
+                lngs = [p[0] for p in polygon]
+                lats = [p[1] for p in polygon]
+                center_lng = sum(lngs) / len(lngs)
+                center_lat = sum(lats) / len(lats)
+
+                features.append({
+                    "type": "Feature",
+                    "properties": {
+                        "code": n['code'],
+                        "name_ar": n.get('name_ar', ''),
+                        "name_en": n.get('name_en', ''),
+                        "center_lat": center_lat,
+                        "center_lng": center_lng
+                    },
+                    "geometry": {
+                        "type": "Polygon",
+                        "coordinates": [polygon]
+                    }
+                })
+
+            return json.dumps({"type": "FeatureCollection", "features": features})
+        except Exception as e:
+            logger.error(f"Failed to build neighborhoods GeoJSON: {e}", exc_info=True)
+            return '{"type":"FeatureCollection","features":[]}'
+
 
 
 class FilterableHeaderView(QHeaderView):

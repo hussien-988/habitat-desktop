@@ -60,7 +60,10 @@ class LeafletHTMLGenerator:
         enable_multiselect: bool = False,  # NEW: Enable multi-select clicking mode
         enable_viewport_loading: bool = False,  # NEW: Enable viewport-based loading
         drawing_mode: str = 'both',  # 'point', 'polygon', 'both'
-        existing_polygons_geojson: str = None  # GeoJSON for existing polygons (blue)
+        existing_polygons_geojson: str = None,  # GeoJSON for existing polygons (blue)
+        initial_bounds: list = None,  # [[south_lat, west_lng], [north_lat, east_lng]]
+        neighborhoods_geojson: str = None,  # GeoJSON for neighborhood boundaries overlay
+        selected_neighborhood_code: str = None  # Highlight this neighborhood
     ) -> str:
         """
         Generate Leaflet HTML with unified geometry display.
@@ -79,6 +82,7 @@ class LeafletHTMLGenerator:
             enable_viewport_loading: Enable viewport-based loading for millions of buildings
             drawing_mode: Drawing mode ('point', 'polygon', 'both')
             existing_polygons_geojson: GeoJSON for existing polygons (displayed in blue)
+            initial_bounds: Bounds to fitBounds on load [[south_lat, west_lng], [north_lat, east_lng]]
 
         Returns:
             Complete HTML string ready for QWebEngineView
@@ -126,7 +130,10 @@ class LeafletHTMLGenerator:
         enable_multiselect,
         enable_viewport_loading,
         drawing_mode,
-        existing_polygons_geojson
+        existing_polygons_geojson,
+        initial_bounds,
+        neighborhoods_geojson,
+        selected_neighborhood_code
     )}
 </body>
 </html>
@@ -382,6 +389,24 @@ class LeafletHTMLGenerator:
         {selection_styles}
         {drawing_styles}
         {multiselect_styles}
+
+        /* Neighborhood Layer Styles */
+        .neighborhood-tooltip {{
+            background: rgba(255, 255, 255, 0.92) !important;
+            border: 1px solid #0072BC !important;
+            border-radius: 6px !important;
+            padding: 4px 10px !important;
+            font-size: 13px !important;
+            font-weight: 600 !important;
+            color: #333 !important;
+            direction: rtl !important;
+            font-family: 'Segoe UI', Tahoma, sans-serif !important;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15) !important;
+            white-space: nowrap !important;
+        }}
+        .neighborhood-tooltip::before {{
+            border-top-color: #0072BC !important;
+        }}
     </style>
 '''
 
@@ -401,7 +426,10 @@ class LeafletHTMLGenerator:
         enable_multiselect: bool = False,
         enable_viewport_loading: bool = False,
         drawing_mode: str = 'both',
-        existing_polygons_geojson: str = None
+        existing_polygons_geojson: str = None,
+        initial_bounds: list = None,
+        neighborhoods_geojson: str = None,
+        selected_neighborhood_code: str = None
     ) -> str:
         """Get JavaScript code for map initialization."""
         import json
@@ -430,6 +458,8 @@ class LeafletHTMLGenerator:
         else:
             existing_polygons_json = None
 
+        initial_bounds_js = json.dumps(initial_bounds) if initial_bounds else 'null'
+
         return f'''
     <script>
         // Fix Leaflet icon paths for local serving
@@ -441,13 +471,18 @@ class LeafletHTMLGenerator:
         var map = L.map('map', {{
             preferCanvas: true,   // CRITICAL: Use Canvas renderer (10x faster!)
             maxZoom: {max_zoom},  //
-            minZoom: {min_zoom if min_zoom is not None else 10}  // Allow zooming out to city level
+            minZoom: {min_zoom if min_zoom is not None else 12}  // Min zoom where tiles exist
         }}).setView([{center_lat}, {center_lon}], {zoom});
+
+        var initialBounds = {initial_bounds_js};
+        if (initialBounds) {{
+            map.fitBounds(initialBounds, {{padding: [50, 50]}});
+        }}
 
         // Add tile layer from local server
         var tileLayer = L.tileLayer('{tile_server_url}/tiles/{{z}}/{{x}}/{{y}}.png', {{
             maxZoom: {max_zoom},  //
-            minZoom: 10,  // Allow zooming out to see full city
+            minZoom: 12,  // Min zoom where tiles exist
             attribution: 'Map data &copy; OpenStreetMap | UN-Habitat Syria',
             errorTileUrl: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=='
         }});
@@ -458,23 +493,27 @@ class LeafletHTMLGenerator:
         var statusColors = {status_colors_json};
         var statusLabels = {status_labels_json};
 
-        // Status mapping from numeric codes to string keys
-        // API returns: 1=Intact, 2=MinorDamage, 3=ModerateDamage, 4=MajorDamage, 5=SeverelyDamaged, 6=Destroyed, 7=UnderConstruction, 8=Abandoned
         var statusMapping = {{
-            1: 'intact',
-            2: 'minor_damage',
-            3: 'major_damage',
-            4: 'major_damage',
-            5: 'severely_damaged',
-            6: 'destroyed',
-            7: 'under_construction',
-            8: 'demolished',
-            99: 'intact'  // Unknown -> default to intact
+            1: 'intact', 2: 'minor_damage', 3: 'major_damage',
+            4: 'major_damage', 5: 'severely_damaged', 6: 'destroyed',
+            7: 'under_construction', 8: 'demolished', 99: 'intact'
         }};
 
-        // Helper function to get status string from numeric code
+        var statusStringMapping = {{
+            'intact': 'intact', 'standing': 'standing',
+            'minordamage': 'minor_damage', 'minor_damage': 'minor_damage', 'damaged': 'damaged',
+            'moderatedamage': 'major_damage', 'majordamage': 'major_damage', 'major_damage': 'major_damage',
+            'partiallydamaged': 'partially_damaged', 'partially_damaged': 'partially_damaged',
+            'severelydamaged': 'severely_damaged', 'severely_damaged': 'severely_damaged',
+            'destroyed': 'destroyed', 'demolished': 'demolished', 'rubble': 'rubble',
+            'underconstruction': 'under_construction', 'under_construction': 'under_construction',
+            'abandoned': 'demolished'
+        }};
+
         function getStatusKey(status) {{
-            return typeof status === 'number' ? (statusMapping[status] || 'intact') : status;
+            if (typeof status === 'number') return statusMapping[status] || 'intact';
+            var key = String(status).toLowerCase().replace(/_/g, '');
+            return statusStringMapping[key] || statusStringMapping[String(status).toLowerCase()] || 'intact';
         }}
 
         // Buildings GeoJSON - Direct embedding (Simple & Works)
@@ -651,8 +690,11 @@ class LeafletHTMLGenerator:
         // Add existing polygons layer (displayed in blue)
         {LeafletHTMLGenerator._get_existing_polygons_js(existing_polygons_geojson) if existing_polygons_geojson else '// No existing polygons'}
 
-        // Fit to buildings if any
-        if (buildingsData.features && buildingsData.features.length > 0) {{
+        // Neighborhoods overlay layer (zoom-based visibility)
+        {LeafletHTMLGenerator._get_neighborhoods_layer_js(neighborhoods_geojson, selected_neighborhood_code) if neighborhoods_geojson else '// No neighborhoods overlay'}
+
+        // Fit to buildings if any (skip when initial_bounds already set)
+        if (!initialBounds && buildingsData.features && buildingsData.features.length > 0) {{
             try {{
                 var bounds = buildingsLayer.getBounds();
                 console.log('📍 Buildings bounds:', bounds);
@@ -740,6 +782,81 @@ class LeafletHTMLGenerator:
             return div;
         };
         legend.addTo(map);
+'''
+
+    @staticmethod
+    def _get_neighborhoods_layer_js(neighborhoods_geojson: str, selected_neighborhood_code: str = None) -> str:
+        """
+        Get JavaScript for neighborhood center pins with zoom-based visibility.
+
+        - Zoom < 15: Neighborhood pins with Arabic name labels, buildings hidden
+        - Zoom >= 15: Pins hidden, buildings visible
+        - NO polygon borders — pins only
+        """
+        try:
+            neighborhoods_dict = json.loads(neighborhoods_geojson)
+            neighborhoods_json = json.dumps(neighborhoods_dict)
+        except:
+            return '// Invalid neighborhoods GeoJSON'
+
+        selected_code = selected_neighborhood_code or ''
+
+        return f'''
+        // =========================================================
+        // Neighborhood Center Pins (zoom-based visibility)
+        // =========================================================
+        var neighborhoodsData = {neighborhoods_json};
+        var selectedNeighborhoodCode = '{selected_code}';
+        var neighborhoodPins = L.featureGroup();
+
+        if (neighborhoodsData && neighborhoodsData.features && neighborhoodsData.features.length > 0) {{
+
+            neighborhoodsData.features.forEach(function(feature) {{
+                var props = feature.properties;
+                var isSelected = props.code === selectedNeighborhoodCode;
+
+                var pin = L.circleMarker(
+                    [props.center_lat, props.center_lng],
+                    {{
+                        radius: isSelected ? 7 : 5,
+                        fillColor: isSelected ? '#0072BC' : '#555',
+                        color: '#fff',
+                        weight: 2,
+                        fillOpacity: 0.9
+                    }}
+                );
+
+                pin.bindTooltip(props.name_ar, {{
+                    permanent: true,
+                    direction: 'top',
+                    className: 'neighborhood-tooltip',
+                    offset: [0, -8]
+                }});
+
+                neighborhoodPins.addLayer(pin);
+            }});
+
+            neighborhoodPins.addTo(map);
+
+            // Zoom-based: pins at zoom < 15, buildings at zoom >= 15
+            function updateNeighborhoodVisibility() {{
+                var zoom = map.getZoom();
+                if (zoom >= 15) {{
+                    if (map.hasLayer(neighborhoodPins)) map.removeLayer(neighborhoodPins);
+                    if (!map.hasLayer(markers)) map.addLayer(markers);
+                    if (!map.hasLayer(polygonsLayer)) map.addLayer(polygonsLayer);
+                }} else {{
+                    if (!map.hasLayer(neighborhoodPins)) map.addLayer(neighborhoodPins);
+                    if (map.hasLayer(markers)) map.removeLayer(markers);
+                    if (map.hasLayer(polygonsLayer)) map.removeLayer(polygonsLayer);
+                }}
+            }}
+
+            map.on('zoomend', updateNeighborhoodVisibility);
+            updateNeighborhoodVisibility();
+
+            console.log('✅ Neighborhood pins loaded:', neighborhoodsData.features.length);
+        }}
 '''
 
     @staticmethod
