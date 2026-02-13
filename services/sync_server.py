@@ -63,21 +63,11 @@ class SyncServer:
     def __init__(
         self,
         db,
-        uhc_importer,
+        uhc_importer=None,
         host: str = "0.0.0.0",
         port: int = DEFAULT_PORT,
         auth_secret: Optional[str] = None
     ):
-        """
-        Initialize sync server.
-
-        Args:
-            db: Database instance
-            uhc_importer: UHC importer service
-            host: Host to bind to
-            port: Port to listen on
-            auth_secret: Secret for HMAC authentication
-        """
         self.db = db
         self.uhc_importer = uhc_importer
         self.host = host

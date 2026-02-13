@@ -585,7 +585,7 @@ EN_TRANSLATIONS = {
     "navbar.tab.buildings": "Buildings",
     "navbar.tab.residential_units": "Residential Units",
     "navbar.tab.duplicates": "Duplicates",
-    "navbar.tab.import": "Import",
+    "navbar.tab.user_management": "User Management",
     "navbar.search.default": "Search by code or name...",
     "navbar.search.by_name": "Search by recipient name...",
     "navbar.search.by_claim_id": "Search by claim number...",

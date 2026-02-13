@@ -122,7 +122,6 @@ class MainWindow(QMainWindow):
         from ui.pages.search_page import SearchPage
         from ui.pages.reports_page import ReportsPage
         from ui.pages.admin_page import AdminPage
-        from ui.pages.import_wizard_page import ImportWizardPage
         from ui.pages.map_page import MapPage
         from ui.pages.duplicates_page import DuplicatesPage
         from ui.pages.field_assignment_page import FieldAssignmentPage
@@ -220,10 +219,6 @@ class MainWindow(QMainWindow):
         self.pages[Pages.ADMIN] = AdminPage(self.db, self.i18n, self)
         self.stack.addWidget(self.pages[Pages.ADMIN])
 
-        # Import wizard page (UC-009)
-        self.pages[Pages.IMPORT_WIZARD] = ImportWizardPage(self.db, self.i18n, self)
-        self.stack.addWidget(self.pages[Pages.IMPORT_WIZARD])
-
         # Map view page (UC-014)
         self.pages[Pages.MAP_VIEW] = MapPage(self.db, self.i18n, self)
         self.stack.addWidget(self.pages[Pages.MAP_VIEW])
@@ -250,14 +245,13 @@ class MainWindow(QMainWindow):
         # Tab 2: المبانى (Buildings)
         # Tab 3: الوحدات السكنية (Units)
         # Tab 4: التكرارات (Duplicates)
-        # Tab 5: استيراد البيانات (Import Data - UC-003)
         self.tab_page_mapping = {
-            0: Pages.CLAIMS,            # المطالبات المكتملة
-            1: Pages.DRAFT_CLAIMS,      # المسودة (Draft Claims)
-            2: Pages.BUILDINGS,         # المبانى
-            3: Pages.UNITS,             # الوحدات السكنية
-            4: Pages.DUPLICATES,        # التكرارات
-            5: Pages.IMPORT_WIZARD,     # استيراد البيانات (UC-003)
+            0: Pages.CLAIMS,
+            1: Pages.DRAFT_CLAIMS,
+            2: Pages.BUILDINGS,
+            3: Pages.UNITS,
+            4: Pages.DUPLICATES,
+            5: Pages.ADMIN,
         }
 
     def _setup_layout(self):
@@ -294,9 +288,6 @@ class MainWindow(QMainWindow):
         self.pages[Pages.BUILDING_DETAILS].back_requested.connect(
             lambda: self.navigate_to(Pages.BUILDINGS)
         )
-
-        # Import wizard completion
-        self.pages[Pages.IMPORT_WIZARD].import_completed.connect(self._on_import_completed)
 
         # Draft Office Surveys - resume draft (UC-005 S03)
         if Pages.DRAFT_OFFICE_SURVEYS in self.pages:
@@ -503,17 +494,6 @@ class MainWindow(QMainWindow):
         """Handle view building request from buildings list."""
         logger.debug(f"Viewing building: {building_id}")
         self.navigate_to(Pages.BUILDING_DETAILS, building_id)
-
-    def _on_import_completed(self, stats: dict):
-        """Handle import wizard completion."""
-        from ui.components.toast import Toast
-        Toast.show_toast(
-            self,
-            self.i18n.t("import_success").format(count=stats.get("imported", 0)),
-            Toast.SUCCESS
-        )
-        # Refresh dashboard
-        self.navigate_to(Pages.DASHBOARD)
 
     def _on_draft_claim_selected(self, claim_id: str):
         """Handle draft claim selection."""
