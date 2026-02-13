@@ -1284,6 +1284,7 @@ class AddBuildingPage(QWidget):
                 selected_neighborhood_code=selected_neighborhood_code,
                 db=self.building_controller.db,
                 skip_fit_bounds=self._has_map_coordinates,
+                existing_polygon_wkt=self._polygon_wkt,
                 parent=self
             )
 
@@ -2608,18 +2609,18 @@ class BuildingsListPage(QWidget):
             area = (building.neighborhood_name_ar or building.neighborhood_name or '').strip()
             self.table.setItem(idx, 2, QTableWidgetItem(area))
 
-            # نوع البناء
+            # نوع البناء - API يرجع رقم (1) أو نص ("Commercial")
             building_type = ""
             for code, en, ar in Vocabularies.BUILDING_TYPES:
-                if code == building.building_type:
+                if building.building_type in (code, en):
                     building_type = ar
                     break
             self.table.setItem(idx, 3, QTableWidgetItem(building_type))
 
-            # حالة البناء
+            # حالة البناء - API يرجع رقم (1) أو نص ("Intact")
             building_status = ""
             for code, en, ar in Vocabularies.BUILDING_STATUS:
-                if code == building.building_status:
+                if building.building_status in (code, en):
                     building_status = ar
                     break
             self.table.setItem(idx, 4, QTableWidgetItem(building_status))
@@ -2726,14 +2727,14 @@ class BuildingsListPage(QWidget):
             filter_key = 'building_type'
             for building in self._all_buildings:
                 for code, en, ar in Vocabularies.BUILDING_TYPES:
-                    if code == building.building_type:
+                    if building.building_type in (code, en):
                         unique_values.add((code, ar))
                         break
         elif column_index == 4:  # حالة البناء
             filter_key = 'building_status'
             for building in self._all_buildings:
                 for code, en, ar in Vocabularies.BUILDING_STATUS:
-                    if code == building.building_status:
+                    if building.building_status in (code, en):
                         unique_values.add((code, ar))
                         break
 
@@ -2837,19 +2838,29 @@ class BuildingsListPage(QWidget):
 
         # Apply building type filter
         if self._active_filters['building_type']:
+            target = self._active_filters['building_type']
             filtered = [
                 b for b in filtered
-                if b.building_type == self._active_filters['building_type']
+                if b.building_type in (target, self._vocab_code_to_name(Vocabularies.BUILDING_TYPES, target))
             ]
 
         # Apply building status filter
         if self._active_filters['building_status']:
+            target = self._active_filters['building_status']
             filtered = [
                 b for b in filtered
-                if b.building_status == self._active_filters['building_status']
+                if b.building_status in (target, self._vocab_code_to_name(Vocabularies.BUILDING_STATUS, target))
             ]
 
         return filtered
+
+    @staticmethod
+    def _vocab_code_to_name(vocab_list, code):
+        """Convert vocabulary integer code to English name. e.g. 1 → 'Residential'"""
+        for c, en, ar in vocab_list:
+            if c == code:
+                return en
+        return None
 
     def _get_building_area(self, building) -> str:
         """Get formatted area string for building (DRY helper) - neighborhood name only."""

@@ -44,6 +44,7 @@ class MapPickerDialog(BaseMapDialog):
         selected_neighborhood_code: str = None,
         db = None,
         skip_fit_bounds: bool = False,
+        existing_polygon_wkt: str = None,
         parent=None
     ):
         """
@@ -59,6 +60,7 @@ class MapPickerDialog(BaseMapDialog):
             selected_neighborhood_code: Currently selected neighborhood code for highlighting
             db: Database instance (optional, for loading buildings)
             skip_fit_bounds: Skip auto fitBounds (respect initial_zoom exactly)
+            existing_polygon_wkt: Existing polygon WKT to display on map (for edit mode)
             parent: Parent widget
         """
         self.initial_lat = initial_lat
@@ -70,6 +72,7 @@ class MapPickerDialog(BaseMapDialog):
         self.selected_neighborhood_code = selected_neighborhood_code
         self.db = db
         self._skip_fit_bounds = skip_fit_bounds
+        self._existing_polygon_wkt = existing_polygon_wkt
         self._result = None
 
         # Initialize base dialog (no search bar, but show confirm button)
@@ -120,6 +123,14 @@ class MapPickerDialog(BaseMapDialog):
             # Always use polygon drawing mode (no points/pins)
             drawing_mode = 'polygon'
 
+            # Convert existing polygon WKT to GeoJSON for display on map
+            existing_polygons_geojson = self._wkt_to_geojson(self._existing_polygon_wkt)
+            if self._existing_polygon_wkt:
+                logger.info(f"Existing polygon WKT: {self._existing_polygon_wkt[:80]}...")
+                logger.info(f"Converted to GeoJSON: {'YES' if existing_polygons_geojson else 'FAILED'}")
+            else:
+                logger.info("No existing polygon (new building)")
+
             # Generate map HTML using LeafletHTMLGenerator
             html = generate_leaflet_html(
                 tile_server_url=tile_server_url.rstrip('/'),
@@ -134,6 +145,7 @@ class MapPickerDialog(BaseMapDialog):
                 enable_selection=False,
                 enable_drawing=True,
                 drawing_mode=drawing_mode,
+                existing_polygons_geojson=existing_polygons_geojson,
                 initial_bounds=self.initial_bounds,
                 neighborhoods_geojson=self.neighborhoods_geojson,
                 selected_neighborhood_code=self.selected_neighborhood_code,
@@ -163,7 +175,13 @@ class MapPickerDialog(BaseMapDialog):
             geom_type: 'Point' or 'Polygon'
             wkt: WKT string (PostGIS-compatible)
         """
-        logger.info(f"Geometry selected: {geom_type} - {wkt[:100]}...")
+        logger.info(f"Geometry selected: {geom_type} - {wkt[:100] if wkt else 'None'}...")
+
+        # Handle deletion (null/empty from JS)
+        if not geom_type or not wkt:
+            self._result = None
+            logger.info("Geometry cleared (deleted by user)")
+            return
 
         try:
             if geom_type == 'Point':
@@ -219,6 +237,73 @@ class MapPickerDialog(BaseMapDialog):
                 f"حدث خطأ أثناء معالجة الإحداثيات:\n{str(e)}",
                 "خطأ"
             )
+
+    @staticmethod
+    def _wkt_to_geojson(geo_location: str) -> Optional[str]:
+        """Convert geo_location (WKT or GeoJSON) to GeoJSON FeatureCollection for map display."""
+        if not geo_location:
+            return None
+
+        try:
+            import json
+            import re
+
+            geometry = None
+
+            # Strategy 1: If it's already GeoJSON (starts with '{')
+            if geo_location.strip().startswith('{'):
+                parsed = json.loads(geo_location)
+                if parsed.get('type') == 'Polygon':
+                    geometry = parsed
+                elif parsed.get('type') == 'Feature':
+                    geometry = parsed.get('geometry')
+                elif parsed.get('type') == 'FeatureCollection':
+                    # Already a FeatureCollection - return as-is
+                    logger.info("Existing polygon is already GeoJSON FeatureCollection")
+                    return geo_location
+
+            # Strategy 2: WKT format - use regex (same as GeoJSONConverter)
+            if not geometry and 'POLYGON' in geo_location.upper():
+                match = re.search(r'POLYGON\s*\(\s*\((.*?)\)\s*\)', geo_location, re.IGNORECASE)
+                if match:
+                    coords_str = match.group(1)
+                    coordinates = []
+                    for pair in coords_str.split(','):
+                        parts = pair.strip().split()
+                        if len(parts) >= 2:
+                            coordinates.append([float(parts[0]), float(parts[1])])
+
+                    if len(coordinates) >= 3:
+                        geometry = {
+                            "type": "Polygon",
+                            "coordinates": [coordinates]
+                        }
+
+            if not geometry:
+                logger.warning(f"Could not parse geo_location: {geo_location[:80]}...")
+                return None
+
+            # Wrap in FeatureCollection
+            geojson = {
+                "type": "FeatureCollection",
+                "features": [{
+                    "type": "Feature",
+                    "properties": {
+                        "building_id": "existing",
+                        "building_id_display": "المضلع الحالي",
+                        "status": "existing"
+                    },
+                    "geometry": geometry
+                }]
+            }
+            coords_count = len(geometry.get('coordinates', [[]])[0])
+            result = json.dumps(geojson)
+            logger.info(f"Converted existing polygon to GeoJSON ({coords_count} points)")
+            return result
+
+        except Exception as e:
+            logger.warning(f"Failed to convert geo_location to GeoJSON: {e}")
+            return None
 
     def get_result(self) -> Optional[Dict]:
         """

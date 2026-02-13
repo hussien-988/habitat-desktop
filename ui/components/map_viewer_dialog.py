@@ -12,6 +12,7 @@ from PyQt5.QtCore import Qt
 from PyQt5.QtWebEngineWidgets import QWebEngineView
 
 from app.config import Config
+from ui.constants.map_constants import MapConstants
 from utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -100,28 +101,61 @@ class MapViewerDialog(QDialog):
     <style>
         body {{ margin: 0; padding: 0; }}
         #map {{ width: 100%; height: 100vh; }}
+        .leaflet-container {{ background: {MapConstants.TILE_PANE_BACKGROUND} !important; }}
+        .leaflet-tile-pane {{ background: {MapConstants.TILE_PANE_BACKGROUND}; }}
+        .leaflet-tile {{ transition: opacity 0.3s ease-in !important; }}
+        #map-loading-overlay {{
+            position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+            background: {MapConstants.TILE_PANE_BACKGROUND}; z-index: 9999;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            transition: opacity 0.6s ease-out;
+        }}
+        #map-loading-overlay.fade-out {{ opacity: 0; pointer-events: none; }}
+        .loading-spinner {{
+            width: 40px; height: 40px;
+            border: 3px solid rgba(255,255,255,0.15); border-top: 3px solid #0072BC;
+            border-radius: 50%; animation: spin 0.8s linear infinite;
+        }}
+        @keyframes spin {{ 0% {{ transform: rotate(0deg); }} 100% {{ transform: rotate(360deg); }} }}
     </style>
 </head>
 <body>
     <div id="map"></div>
+    <div id="map-loading-overlay"><div class="loading-spinner"></div></div>
 
     <script src="{tile_server_url}/leaflet.js"></script>
     <script>
         var map = L.map('map', {{
             preferCanvas: true,
-            zoomAnimation: true,
-            fadeAnimation: false
+            fadeAnimation: {'true' if MapConstants.MAP_FADE_ANIMATION else 'false'},
+            zoomAnimation: {'true' if MapConstants.MAP_ZOOM_ANIMATION else 'false'},
+            zoomAnimationThreshold: {MapConstants.MAP_ZOOM_ANIMATION_THRESHOLD}
         }}).setView([{self.latitude}, {self.longitude}], {self.zoom});
 
         // Use LOCAL tiles from MBTiles
-        L.tileLayer('{tile_server_url}/tiles/{{z}}/{{x}}/{{y}}.png', {{
+        var tileLayer = L.tileLayer('{tile_server_url}/tiles/{{z}}/{{x}}/{{y}}.png', {{
             maxZoom: 20,
             minZoom: 15,
             attribution: 'UN-Habitat Syria - يعمل بدون اتصال بالإنترنت',
-            updateWhenIdle: true,
-            keepBuffer: 2,
+            keepBuffer: {MapConstants.TILE_KEEP_BUFFER},
+            updateWhenZooming: {'true' if MapConstants.TILE_UPDATE_WHEN_ZOOMING else 'false'},
+            updateWhenIdle: {'true' if MapConstants.TILE_UPDATE_WHEN_IDLE else 'false'},
             errorTileUrl: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=='
         }}).addTo(map);
+
+        // Loading overlay removal
+        (function() {{
+            var ov = document.getElementById('map-loading-overlay');
+            if (!ov) return;
+            var done = false;
+            function hide() {{
+                if (done) return; done = true;
+                ov.classList.add('fade-out');
+                setTimeout(function() {{ ov.style.display = 'none'; }}, 600);
+            }}
+            tileLayer.on('load', hide);
+            setTimeout(hide, 3000);
+        }})();
 
         // Add marker
         var marker = L.marker([{self.latitude}, {self.longitude}]).addTo(map);

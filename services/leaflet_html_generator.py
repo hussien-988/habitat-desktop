@@ -116,6 +116,10 @@ class LeafletHTMLGenerator:
 </head>
 <body>
     <div id="map"></div>
+    <div id="map-loading-overlay">
+        <div class="loading-spinner"></div>
+        <div class="loading-text">جاري تحميل الخريطة...</div>
+    </div>
     {LeafletHTMLGenerator._get_javascript(
         tile_server_url,
         buildings_geojson,
@@ -279,6 +283,51 @@ class LeafletHTMLGenerator:
         * {{ margin: 0; padding: 0; box-sizing: border-box; }}
         html, body {{ height: 100%; width: 100%; }}
         #map {{ height: 100%; width: 100%; }}
+
+        /* Dark background - replaces default gray (#ddd) for areas without tiles */
+        .leaflet-container {{ background: {MapConstants.TILE_PANE_BACKGROUND} !important; }}
+        .leaflet-tile-pane {{ background: {MapConstants.TILE_PANE_BACKGROUND}; }}
+
+        /* Smooth tile fade-in during panning (prevents jarring tile pop-in) */
+        .leaflet-tile {{
+            transition: opacity 0.3s ease-in !important;
+        }}
+
+        /* Loading overlay - hides map until tiles are ready */
+        #map-loading-overlay {{
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: {MapConstants.TILE_PANE_BACKGROUND};
+            z-index: 9999;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            transition: opacity 0.6s ease-out;
+        }}
+        #map-loading-overlay.fade-out {{
+            opacity: 0;
+            pointer-events: none;
+        }}
+        .loading-spinner {{
+            width: 48px;
+            height: 48px;
+            border: 4px solid rgba(255,255,255,0.15);
+            border-top: 4px solid #0072BC;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }}
+        .loading-text {{
+            color: rgba(255,255,255,0.7);
+            font-family: 'Segoe UI', Tahoma, sans-serif;
+            font-size: 13px;
+            margin-top: 16px;
+            direction: rtl;
+        }}
+        @keyframes spin {{
+            0% {{ transform: rotate(0deg); }}
+            100% {{ transform: rotate(360deg); }}
+        }}
 
         /* RTL Support */
         .leaflet-popup-content-wrapper {{
@@ -522,9 +571,12 @@ class LeafletHTMLGenerator:
         // PERFORMANCE: preferCanvas for 10x faster rendering (Canvas vs SVG/DOM)
         // Reference: https://leafletjs.com/reference.html#map-prefercanvas
         var map = L.map('map', {{
-            preferCanvas: true,   // CRITICAL: Use Canvas renderer (10x faster!)
-            maxZoom: {max_zoom},  //
-            minZoom: {min_zoom if min_zoom is not None else 15}  // Min zoom where tiles exist (15-20)
+            preferCanvas: true,              // CRITICAL: Use Canvas renderer (10x faster!)
+            maxZoom: {max_zoom},
+            minZoom: {min_zoom if min_zoom is not None else 15},
+            fadeAnimation: {'true' if MapConstants.MAP_FADE_ANIMATION else 'false'},
+            zoomAnimation: {'true' if MapConstants.MAP_ZOOM_ANIMATION else 'false'},
+            zoomAnimationThreshold: {MapConstants.MAP_ZOOM_ANIMATION_THRESHOLD}
         }}).setView([{center_lat}, {center_lon}], {zoom});
 
         var initialBounds = {initial_bounds_js};
@@ -533,14 +585,39 @@ class LeafletHTMLGenerator:
         }}
 
         // Add tile layer from local server
+        // PERFORMANCE: keepBuffer, updateWhenZooming, updateWhenIdle prevent gray areas
+        // Reference: https://leafletjs.com/reference.html#tilelayer
         var tileLayer = L.tileLayer('{tile_server_url}/tiles/{{z}}/{{x}}/{{y}}.png', {{
-            maxZoom: {max_zoom},  //
-            minZoom: 15,  // Min zoom where tiles exist (15-20)
+            maxZoom: {max_zoom},
+            minZoom: 15,
             attribution: 'Map data &copy; OpenStreetMap | UN-Habitat Syria',
+            keepBuffer: {MapConstants.TILE_KEEP_BUFFER},
+            updateWhenZooming: {'true' if MapConstants.TILE_UPDATE_WHEN_ZOOMING else 'false'},
+            updateWhenIdle: {'true' if MapConstants.TILE_UPDATE_WHEN_IDLE else 'false'},
             errorTileUrl: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=='
         }});
 
         tileLayer.addTo(map);
+
+        // Loading overlay removal - hide when initial tiles are loaded
+        (function() {{
+            var overlay = document.getElementById('map-loading-overlay');
+            if (!overlay) return;
+            var removed = false;
+
+            function removeOverlay() {{
+                if (removed) return;
+                removed = true;
+                overlay.classList.add('fade-out');
+                setTimeout(function() {{ overlay.style.display = 'none'; }}, 600);
+            }}
+
+            // Remove when all visible tiles finish loading
+            tileLayer.on('load', removeOverlay);
+
+            // Fallback: remove after 3 seconds max (prevents stuck overlay)
+            setTimeout(removeOverlay, 3000);
+        }})();
 
         // Status colors and labels
         var statusColors = {status_colors_json};
@@ -864,20 +941,27 @@ class LeafletHTMLGenerator:
             neighborhoodPins.addTo(map);
 
             // Zoom-based visibility:
-            // zoom 15-16: neighborhood pins visible, buildings hidden
+            // zoom 15-16: neighborhood pins visible, initial buildings hidden
             // zoom >= 17: pins hidden, buildings visible
+            // When viewport loading is active, DON'T re-add initial markers/polygonsLayer
+            // (viewport loading handles building display at zoom 17+ via its own layers)
             function updateNeighborhoodVisibility() {{
                 var zoom = map.getZoom();
+                var hasViewportLoading = (typeof viewportLoadingEnabled !== 'undefined' && viewportLoadingEnabled);
+
                 if (zoom >= 17) {{
-                    // Zoomed into neighborhood — show buildings, hide pins
+                    // Zoomed into neighborhood — hide pins
                     if (map.hasLayer(neighborhoodPins)) map.removeLayer(neighborhoodPins);
-                    if (!map.hasLayer(markers)) map.addLayer(markers);
-                    if (!map.hasLayer(polygonsLayer)) map.addLayer(polygonsLayer);
+                    // Only add initial buildings if viewport loading is NOT active
+                    if (!hasViewportLoading) {{
+                        if (typeof markers !== 'undefined' && !map.hasLayer(markers)) map.addLayer(markers);
+                        if (typeof polygonsLayer !== 'undefined' && !map.hasLayer(polygonsLayer)) map.addLayer(polygonsLayer);
+                    }}
                 }} else {{
-                    // City overview (zoom 15-16) — show pins, hide buildings
+                    // City overview (zoom 15-16) — show pins, hide initial buildings
                     if (!map.hasLayer(neighborhoodPins)) map.addLayer(neighborhoodPins);
-                    if (map.hasLayer(markers)) map.removeLayer(markers);
-                    if (map.hasLayer(polygonsLayer)) map.removeLayer(polygonsLayer);
+                    if (typeof markers !== 'undefined' && map.hasLayer(markers)) map.removeLayer(markers);
+                    if (typeof polygonsLayer !== 'undefined' && map.hasLayer(polygonsLayer)) map.removeLayer(polygonsLayer);
                 }}
             }}
 
@@ -907,62 +991,46 @@ class LeafletHTMLGenerator:
             existing_polygons_json = '{"type":"FeatureCollection","features":[]}'
 
         return f'''
-        // Existing polygons layer (displayed in blue)
+        // Existing polygons layer (light transparent blue - shows current polygon during edit)
         var existingPolygonsData = {existing_polygons_json};
+        var existingPolygonsLayer = null;
 
         if (existingPolygonsData && existingPolygonsData.features && existingPolygonsData.features.length > 0) {{
-            var existingPolygonsLayer = L.geoJSON(existingPolygonsData, {{
+            existingPolygonsLayer = L.geoJSON(existingPolygonsData, {{
                 style: function(feature) {{
                     return {{
-                        color: '#0056A3',        // Border: dark blue
-                        weight: 2,
-                        fillColor: '#0072BC',    // Fill: blue
-                        fillOpacity: 0.3,
-                        className: 'existing-polygon'
+                        color: '#42A5F5',
+                        weight: 3,
+                        fillColor: '#90CAF9',
+                        fillOpacity: 0.25
                     }};
                 }},
                 onEachFeature: function(feature, layer) {{
-                    var props = feature.properties;
-
-                    // ✅ Use building_id_display for UI, building_id for API
-                    var buildingIdDisplay = props.building_id_display || props.building_id || 'مبنى موجود';
-                    var buildingIdForApi = props.building_id;
-
-                    // Build popup content
-                    var popup = '<div class="building-popup">' +
-                        '<h4>' + buildingIdDisplay + '</h4>' +
-                        '<p><span class="label">الحالة:</span> ' + (props.status || 'غير محدد') + '</p>' +
-                        '<p class="note">مضلع موجود مسبقاً</p>' +
-                        '</div>';
-
-                    layer.bindPopup(popup);
+                    // Tooltip label
+                    layer.bindTooltip('المضلع الحالي - ارسم مضلعاً جديداً للاستبدال', {{
+                        permanent: false,
+                        direction: 'top',
+                        className: 'existing-polygon-tooltip'
+                    }});
 
                     // Hover effects
                     layer.on('mouseover', function(e) {{
                         this.setStyle({{
-                            fillOpacity: 0.5,
+                            fillOpacity: 0.4,
                             weight: 3
                         }});
                     }});
 
                     layer.on('mouseout', function(e) {{
                         this.setStyle({{
-                            fillOpacity: 0.3,
+                            fillOpacity: 0.25,
                             weight: 2
                         }});
-                    }});
-
-                    // Click event - emit to Python via QWebChannel
-                    layer.on('click', function(e) {{
-                        if (typeof qt !== 'undefined' && qt.webChannelTransport) {{
-                            // Emit polygon clicked event to Python
-                            console.log('Existing polygon clicked:', buildingIdForApi);
-                        }}
                     }});
                 }}
             }}).addTo(map);
 
-            console.log('Loaded', existingPolygonsData.features.length, 'existing polygons');
+            console.log('Existing polygon displayed (will be replaced when user draws new one)');
         }}
 '''
 

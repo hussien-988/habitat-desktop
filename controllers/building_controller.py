@@ -65,6 +65,9 @@ class BuildingController(BaseController):
     buildings_loaded = pyqtSignal(list)  # list of buildings
     building_selected = pyqtSignal(object)  # Building object
 
+    # Class-level cache for neighborhood lookup (loaded once from neighborhoods.json)
+    _neighborhoods_cache: Optional[Dict[str, Dict]] = None
+
     def __init__(self, db: Database = None, parent=None, use_api: bool = None):
         super().__init__(parent)
         self.db = db
@@ -92,6 +95,40 @@ class BuildingController(BaseController):
         self._current_building: Optional[Building] = None
         self._buildings_cache: List[Building] = []
         self._current_filter = BuildingFilter()
+
+    @classmethod
+    def _get_neighborhood_name(cls, code: str) -> str:
+        """
+        Lookup neighborhood Arabic name by code from neighborhoods.json.
+
+        Uses class-level cache - loads the file only once.
+        Fallback: returns the code itself if not found.
+        """
+        if not code:
+            return ""
+
+        # Load cache once
+        if cls._neighborhoods_cache is None:
+            cls._neighborhoods_cache = {}
+            try:
+                import json
+                import os
+                json_path = os.path.join(
+                    os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                    "data", "neighborhoods.json"
+                )
+                with open(json_path, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                for n in data.get("neighborhoods", []):
+                    cls._neighborhoods_cache[n["code"]] = n
+                logger.info(f"Loaded {len(cls._neighborhoods_cache)} neighborhoods from JSON")
+            except Exception as e:
+                logger.warning(f"Could not load neighborhoods.json: {e}")
+
+        entry = cls._neighborhoods_cache.get(code)
+        if entry:
+            return entry.get("name_ar", code)
+        return code
 
     # ==================== Properties ====================
 
@@ -511,15 +548,13 @@ class BuildingController(BaseController):
             # Use API or local database based on configuration
             if self._use_api and self._api_service:
                 try:
-                    # Use search_buildings API with pagination
-                    response = self._api_service.search_buildings(
-                        building_id=filter_.search_text if filter_ and filter_.search_text else None,
-                        neighborhood_code=filter_.neighborhood_code if filter_ else None,
+                    # Use BuildingAssignments/buildings API (returns neighborhoodName populated)
+                    response = self._api_service.get_buildings_for_assignment(
                         page_size=filter_.limit if filter_ else 100
                     )
                     # Convert API response to Building objects
                     buildings = []
-                    for item in response.get("buildings", response.get("items", [])):
+                    for item in response.get("items", []):
                         building = self._api_dto_to_building(item)
                         buildings.append(building)
                 except Exception as e:
@@ -742,7 +777,16 @@ class BuildingController(BaseController):
         # ✅ UUID mapping: API may return 'id', 'buildingUuid', or 'BuildingUuid'
         building_uuid = dto.get("id") or dto.get("buildingUuid") or dto.get("BuildingUuid") or ""
 
-        logger.debug(f"API DTO building_id: {building_id}, building_uuid: {building_uuid}")
+        # Neighborhood: API returns empty neighborhoodName, so lookup from local JSON
+        neighborhood_code = dto.get("neighborhoodCode", "")
+        api_neighborhood_name = dto.get("neighborhoodName") or dto.get("neighborhoodNameAr") or ""
+        neighborhood_name_ar = api_neighborhood_name.strip() if api_neighborhood_name else ""
+
+        # If API didn't return a name, lookup from neighborhoods.json
+        if not neighborhood_name_ar and neighborhood_code:
+            neighborhood_name_ar = self._get_neighborhood_name(neighborhood_code)
+
+        logger.debug(f"API DTO: neighborhoodCode='{neighborhood_code}', resolved name='{neighborhood_name_ar}', status='{dto.get('status') or dto.get('buildingStatus')}'")
 
         return Building(
             building_uuid=building_uuid,
@@ -750,29 +794,29 @@ class BuildingController(BaseController):
             building_id_formatted=dto.get("buildingIdFormatted", ""),
             governorate_code=dto.get("governorateCode", ""),
             governorate_name=dto.get("governorateName", ""),
-            governorate_name_ar=dto.get("governorateNameAr", ""),
+            governorate_name_ar=dto.get("governorateNameAr") or dto.get("governorateName", ""),
             district_code=dto.get("districtCode", ""),
-            district_name=dto.get("districtName", ""),
-            district_name_ar=dto.get("districtNameAr", ""),
-            subdistrict_code=dto.get("subdistrictCode", ""),
-            subdistrict_name=dto.get("subdistrictName", ""),
-            subdistrict_name_ar=dto.get("subdistrictNameAr", ""),
+            district_name=dto.get("districtName") or dto.get("districtName", ""),
+            district_name_ar=dto.get("districtNameAr") or dto.get("districtName", ""),
+            subdistrict_code=dto.get("subDistrictCode") or dto.get("subdistrictCode", ""),
+            subdistrict_name=dto.get("subDistrictName") or dto.get("subdistrictName", ""),
+            subdistrict_name_ar=dto.get("subDistrictNameAr") or dto.get("subDistrictName") or dto.get("subdistrictName", ""),
             community_code=dto.get("communityCode", ""),
             community_name=dto.get("communityName", ""),
-            community_name_ar=dto.get("communityNameAr", ""),
-            neighborhood_code=dto.get("neighborhoodCode", ""),
-            neighborhood_name=dto.get("neighborhoodName", ""),
-            neighborhood_name_ar=dto.get("neighborhoodNameAr", ""),
+            community_name_ar=dto.get("communityNameAr") or dto.get("communityName", ""),
+            neighborhood_code=neighborhood_code,
+            neighborhood_name=neighborhood_name_ar or neighborhood_code,
+            neighborhood_name_ar=neighborhood_name_ar,
             building_number=dto.get("buildingNumber", ""),
-            building_type=dto.get("buildingType", 1),
-            building_status=dto.get("buildingStatus", 1),
-            number_of_units=dto.get("numberOfUnits", 0),
+            building_type=dto.get("buildingType") or 1,
+            building_status=dto.get("status") or dto.get("buildingStatus") or 1,
+            number_of_units=dto.get("numberOfUnits") or dto.get("numberOfPropertyUnits", 0),
             number_of_apartments=dto.get("numberOfApartments", 0),
             number_of_shops=dto.get("numberOfShops", 0),
             number_of_floors=dto.get("numberOfFloors", 1),
             latitude=dto.get("latitude"),
             longitude=dto.get("longitude"),
-            geo_location=dto.get("geoLocation")
+            geo_location=dto.get("buildingGeometryWkt") or dto.get("geoLocation")
         )
 
     def _query_buildings(self, filter_: BuildingFilter) -> List[Building]:

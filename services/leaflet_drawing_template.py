@@ -201,6 +201,12 @@ DRAWING_JS_TEMPLATE = """
                 // إزالة جميع الأشكال السابقة (نريد رسم واحد فقط في كل مرة)
                 drawnItems.clearLayers();
 
+                // إزالة المضلع الحالي (القديم) عند رسم شكل جديد
+                if (typeof existingPolygonsLayer !== 'undefined' && existingPolygonsLayer && map.hasLayer(existingPolygonsLayer)) {
+                    map.removeLayer(existingPolygonsLayer);
+                    console.log('✅ Existing polygon removed (replaced by new drawing)');
+                }
+
                 // إضافة الشكل الجديد
                 drawnItems.addLayer(layer);
 
@@ -259,16 +265,43 @@ DRAWING_JS_TEMPLATE = """
                 sendGeometryToPython(null, null);
             };
 
-            // Handle editing
+            // Handle editing - send updated geometry to Python
             map.on(L.Draw.Event.EDITED, function(e) {
                 var layers = e.layers;
                 console.log('Shapes edited:', layers.getLayers().length);
+
+                // Send the updated geometry to Python
+                layers.eachLayer(function(layer) {
+                    var geomType = null;
+                    var wkt = null;
+
+                    if (layer instanceof L.Marker) {
+                        var latlng = layer.getLatLng();
+                        geomType = 'Point';
+                        wkt = 'POINT(' + latlng.lng + ' ' + latlng.lat + ')';
+                    } else if (layer instanceof L.Polygon) {
+                        var latlngs = layer.getLatLngs()[0];
+                        var coords = latlngs.map(function(ll) {
+                            return ll.lng + ' ' + ll.lat;
+                        }).join(', ');
+                        var firstPoint = latlngs[0];
+                        coords += ', ' + firstPoint.lng + ' ' + firstPoint.lat;
+                        geomType = 'Polygon';
+                        wkt = 'POLYGON((' + coords + '))';
+                    }
+
+                    if (geomType && wkt) {
+                        console.log('✅ Edited shape:', geomType, wkt);
+                        sendGeometryToPython(geomType, wkt);
+                    }
+                });
             });
 
-            // Handle deletion
+            // Handle deletion - notify Python that geometry was removed
             map.on(L.Draw.Event.DELETED, function(e) {
                 var layers = e.layers;
                 console.log('Shapes deleted:', layers.getLayers().length);
+                sendGeometryToPython(null, null);
             });
         } else {
             console.warn('⚠️ Leaflet.draw library not loaded. Using fallback: click to add marker');

@@ -56,7 +56,7 @@ class ApiConfig:
 
 class TRRCMSApiClient:
     """
-    عميل API للاتصال بـ TRRCMS Backend.
+API للاتصال بـ TRRCMS Backend.
 
     الميزات:
     - تسجيل دخول تلقائي
@@ -65,7 +65,7 @@ class TRRCMSApiClient:
     - معالجة الأخطاء
 
     Usage:
-        config = ApiConfig(base_url="http://localhost:8081")
+        config = ApiConfig(base_url="http://localhost:8080")
         client = TRRCMSApiClient(config)
         buildings = client.get_buildings_for_map(36.5, 37.5, 36.0, 36.8)
     """
@@ -375,47 +375,7 @@ class TRRCMSApiClient:
         page: int = 1,
         page_size: int = 100
     ) -> Dict[str, Any]:
-        """
-        البحث عن المباني داخل polygon لـ Building Assignment (API الصحيح).
-
-        ✅ CORRECT API: /api/v1/BuildingAssignments/buildings/search
-        هذا هو الـ endpoint الصحيح لـ Building Assignment workflow!
-
-        Args:
-            polygon_wkt: Polygon في صيغة WKT
-                        Example: "POLYGON((37.13 36.20, 37.14 36.20, 37.14 36.21, 37.13 36.21, 37.13 36.20))"
-            has_active_assignment: فلتر حسب وجود assignment نشط (optional)
-                                  True: فقط المباني المُعيّنة
-                                  False: فقط المباني غير المُعيّنة
-                                  None: جميع المباني
-            survey_status: فلتر حالة المسح (optional)
-                          not_surveyed, in_progress, completed, verified, etc.
-            governorate_code: كود المحافظة (optional)
-            subdistrict_code: كود المنطقة الفرعية (optional)
-            page: رقم الصفحة (default: 1)
-            page_size: عدد النتائج في الصفحة (default: 100)
-
-        Returns:
-            {
-                "items": [...],  # List of BuildingDto
-                "totalCount": int,
-                "page": int,
-                "pageSize": int,
-                "totalPages": int,
-                "polygonWkt": str,
-                "polygonAreaSquareMeters": float
-            }
-
-        Example:
-            # البحث عن مباني غير مُعيّنة في polygon
-            result = client.search_buildings_for_assignment(
-                polygon_wkt="POLYGON((37.0 36.1, 37.3 36.1, 37.3 36.3, 37.0 36.3, 37.0 36.1))",
-                has_active_assignment=False,
-                page=1,
-                page_size=100
-            )
-            buildings = result.get("items", [])
-        """
+        
         # Parse WKT to coordinates array [[lng, lat], ...]
         # WKT format: "POLYGON((lon1 lat1, lon2 lat2, ...))"
         try:
@@ -449,13 +409,6 @@ class TRRCMSApiClient:
         if subdistrict_code:
             payload["subdistrictCode"] = subdistrict_code
 
-        # ✅ DETAILED LOGGING: Print full request payload
-        print(f"\n{'='*80}")
-        print(f"🔍 POLYGON SEARCH API CALL (BuildingAssignments)")
-        print(f"{'='*80}")
-        print(f"📊 Parsed {len(coordinates)} coordinates from WKT")
-        print(f"📐 Coordinates array (first 3): {coordinates[:3]}")
-        print(f"📋 Full Request Payload:")
         import json
         print(json.dumps(payload, indent=2, ensure_ascii=False))
         print(f"{'='*80}\n")
@@ -547,7 +500,7 @@ class TRRCMSApiClient:
         print(f"{'='*80}\n")
 
         logger.debug(f"Fetching buildings for assignment with filters: {params}")
-        response = self._request("GET", "/v1/BuildingAssignment/buildings", params=params)
+        response = self._request("GET", "/v1/BuildingAssignments/buildings", params=params)
 
         # API returns paginated response
         items = response.get("items", [])
@@ -609,7 +562,7 @@ class TRRCMSApiClient:
         if longitude is not None:
             payload["longitude"] = longitude
         if building_geometry_wkt is not None:
-            payload["buildingGeometryWkt"] = building_geometry_wkt
+            payload["geometryWkt"] = building_geometry_wkt
 
         if not payload:
             raise ValueError("At least one geometry field must be provided")
@@ -679,21 +632,68 @@ class TRRCMSApiClient:
         """
         تحديث مبنى موجود.
 
-        Args:
-            building_id: UUID للمبنى
-            building_data: بيانات المبنى المحدثة
+        Uses two independent API calls:
+        1. PUT /v1/Buildings/{id} - UpdateBuildingCommand (general data)
+        2. PUT /v1/Buildings/{id}/geometry - UpdateBuildingGeometryCommand (coordinates + polygon)
 
-        Returns:
-            BuildingDto المحدث
+        Both are independent - if one fails, the other still runs.
         """
-        api_data = self._convert_building_to_api_format(building_data)
-        logger.info(f"Updating building: {building_id}")
-        result = self._request("PUT", f"/v1/Buildings/{building_id}", json_data=api_data)
-        logger.info(f"✅ Building updated: {building_id}")
+        result = None
+
+        # Step 1: Update general building data (UpdateBuildingCommand)
+        update_data = self._build_update_command(building_data)
+        if update_data:
+            try:
+                logger.info(f"Step 1: Updating building data: {building_id}")
+                logger.info(f"  Payload: {update_data}")
+                result = self._request("PUT", f"/v1/Buildings/{building_id}", json_data=update_data)
+                logger.info(f"✅ Step 1: Building data updated")
+            except Exception as e:
+                logger.warning(f"Step 1 failed: {e}")
+
+        # Step 2: Update geometry separately (UpdateBuildingGeometryCommand)
+        geo_wkt = building_data.get('geo_location') or building_data.get('buildingGeometryWkt')
+        lat = building_data.get('latitude')
+        lng = building_data.get('longitude')
+
+        if geo_wkt or (lat is not None and lng is not None):
+            try:
+                logger.info(f"Step 2: Updating geometry: lat={lat}, lng={lng}, wkt={'YES' if geo_wkt else 'NO'}")
+                result = self.update_building_geometry(
+                    building_id=building_id,
+                    latitude=lat,
+                    longitude=lng,
+                    building_geometry_wkt=geo_wkt
+                )
+                logger.info(f"✅ Step 2: Geometry updated")
+            except Exception as e:
+                logger.warning(f"Step 2 failed: {e}")
+
+        if result is None:
+            raise Exception(f"Both update steps failed for building {building_id}")
+
         return result
 
+    def _build_update_command(self, building_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Build UpdateBuildingCommand payload matching API schema."""
+        def get_value(snake_key: str, camel_key: str, default=None):
+            return building_data.get(snake_key) or building_data.get(camel_key) or default
+
+        api_data = {
+            "buildingType": get_value('building_type', 'buildingType'),
+            "buildingStatus": get_value('building_status', 'buildingStatus'),
+            "numberOfPropertyUnits": get_value('number_of_units', 'numberOfPropertyUnits'),
+            "numberOfApartments": get_value('number_of_apartments', 'numberOfApartments'),
+            "numberOfShops": get_value('number_of_shops', 'numberOfShops'),
+            "latitude": get_value('latitude', 'latitude'),
+            "longitude": get_value('longitude', 'longitude'),
+            "locationDescription": get_value('location_description', 'locationDescription', ''),
+            "notes": get_value('notes', 'notes', ''),
+        }
+        return {k: v for k, v in api_data.items() if v is not None}
+
     def _convert_building_to_api_format(self, building_data: Dict[str, Any]) -> Dict[str, Any]:
-        """Convert building data to API format (camelCase)."""
+        """Convert building data to API format (camelCase) - used for CREATE."""
         def get_value(snake_key: str, camel_key: str, default=None):
             return building_data.get(snake_key) or building_data.get(camel_key) or default
 
