@@ -137,7 +137,7 @@ class ClaimStep(BaseStep):
                 icon_container.setStyleSheet(icon_container.styleSheet() + "font-size: 28px; color: #1a1a1a;")
 
         # 2. Main Title (Arabic Text)
-        title_label = QLabel("لا توجد مطالبة ملكية على هذه الوحدة")
+        title_label = QLabel("لا توجد مطالبة ملكية على هذا المقسم")
         title_label.setAlignment(Qt.AlignCenter)
         title_label.setFont(create_font(size=14, weight=FontManager.WEIGHT_BOLD))
         title_label.setStyleSheet(f"""
@@ -255,9 +255,9 @@ class ClaimStep(BaseStep):
         add_field("معرف المطالب", claim_person_search, 0, 0)
 
         claim_unit_search = QLineEdit()
-        claim_unit_search.setPlaceholderText("رقم الوحدة")
+        claim_unit_search.setPlaceholderText("رقم المقسم")
         claim_unit_search.setStyleSheet(StyleManager.form_input())
-        add_field("معرف الوحدة المطالب بها", claim_unit_search, 0, 1)
+        add_field("معرف المقسم المطالب به", claim_unit_search, 0, 1)
 
         claim_type_combo = QComboBox()
         claim_type_combo.addItem("اختر", "")

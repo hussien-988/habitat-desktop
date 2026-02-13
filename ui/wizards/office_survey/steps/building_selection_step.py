@@ -1205,9 +1205,6 @@ class BuildingSelectionStep(BaseStep):
         """Populate the step with data from context."""
         if self.context.building:
             self.selected_building = self.context.building
-            # Set search text and trigger search
-            self.building_search.setText(self.context.building.building_id)
-            self._search_buildings()
 
             # Update stats card
             self.ui_building_type.setText(self.context.building.building_type_display or "-")
@@ -1217,16 +1214,26 @@ class BuildingSelectionStep(BaseStep):
             self.ui_shops_count.setText(str(self.context.building.number_of_shops))
             self.stats_card.setVisible(True)
 
+            # Update address
+            self._update_address_display(self.context.building)
+
             # Update location card
             self.ui_general_desc.setText(getattr(self.context.building, 'general_description', tr("wizard.building.general_description_fallback")))
             self.ui_location_desc.setText(getattr(self.context.building, 'location_description', tr("wizard.building.location_description")))
             self.location_card.setVisible(True)
+
+            # حقل البحث فارغ + إخفاء كارد الاقتراحات (البناء مختار بالفعل)
+            self.building_search.clear()
+            self.buildings_list.setVisible(False)
 
             # Emit validation
             self.emit_validation_changed(True)
         else:
             # Clear all UI when no building selected (new survey)
             self.selected_building = None
+            self.building_search.clear()
+            self.buildings_list.setVisible(False)
+            self.address_container.setVisible(False)
             self.stats_card.setVisible(False)
             self.location_card.setVisible(False)
             self.emit_validation_changed(False)

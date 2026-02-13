@@ -438,7 +438,9 @@ def _seed_claims(repo: ClaimRepository, units: List[PropertyUnit], persons: List
         # Select 1-3 persons for this claim
         claim_persons = random.sample(persons, min(random.randint(1, 3), len(persons)))
 
+        year = datetime.now().year
         claim = Claim(
+            claim_id=f"CL-{year}-{str(i + 1).zfill(6)}",
             source=random.choice(["FIELD_COLLECTION", "OFFICE_SUBMISSION"]),
             person_ids=",".join(p.person_id for p in claim_persons),
             unit_id=unit.unit_id,

@@ -237,7 +237,13 @@ API للاتصال بـ TRRCMS Backend.
                 response_data = e.response.json() if e.response is not None else {}
             except (ValueError, AttributeError):
                 pass
-            logger.error(f"HTTP {status_code}: {endpoint}")
+            # Log response body for debugging server errors (especially 500)
+            response_text = ''
+            try:
+                response_text = e.response.text[:500] if e.response is not None else ''
+            except Exception:
+                pass
+            logger.error(f"HTTP {status_code}: {endpoint} | Response: {response_data or response_text}")
             raise ApiException(
                 message=str(e),
                 status_code=status_code,
@@ -1069,7 +1075,7 @@ API للاتصال بـ TRRCMS Backend.
         api_data = self._convert_household_to_api_format(household_data, survey_id)
         endpoint = f"/v1/Surveys/{survey_id}/households" if survey_id else "/v1/Households"
 
-        logger.info(f"Creating household: {api_data.get('headOfHouseholdName', 'N/A')}")
+        logger.info(f"Creating household via {endpoint}: propertyUnitId={api_data.get('propertyUnitId')}, size={api_data.get('householdSize')}")
         result = self._request("POST", endpoint, json_data=api_data)
         logger.info(f"Household created: {result.get('id', 'N/A')}")
         return result
@@ -1111,9 +1117,19 @@ API للاتصال بـ TRRCMS Backend.
         def get_value(snake_key: str, camel_key: str, default=None):
             return household_data.get(snake_key) or household_data.get(camel_key) or default
 
+        # propertyUnitId: UUID field - must be null (not empty string) when no value
+        property_unit_id = get_value('property_unit_id', 'propertyUnitId', None)
+        if property_unit_id == '':
+            property_unit_id = None
+
+        # headOfHouseholdName: nullable string - send null instead of empty string
+        head_name = get_value('head_name', 'headOfHouseholdName', None)
+        if head_name == '':
+            head_name = None
+
         api_data = {
-            "propertyUnitId": get_value('property_unit_id', 'propertyUnitId', ''),
-            "headOfHouseholdName": get_value('head_name', 'headOfHouseholdName', ''),
+            "propertyUnitId": property_unit_id,
+            "headOfHouseholdName": head_name,
             "householdSize": int(get_value('size', 'householdSize', 0)),
             "maleCount": int(get_value('adult_males', 'maleCount', 0)),
             "femaleCount": int(get_value('adult_females', 'femaleCount', 0)),
@@ -1123,10 +1139,12 @@ API للاتصال بـ TRRCMS Backend.
             "femaleElderlyCount": int(get_value('female_elderly_over65', 'femaleElderlyCount', 0)),
             "maleDisabledCount": int(get_value('disabled_males', 'maleDisabledCount', 0)),
             "femaleDisabledCount": int(get_value('disabled_females', 'femaleDisabledCount', 0)),
-            "notes": get_value('notes', 'notes', '')
+            "notes": get_value('notes', 'notes', '') or None
         }
         if survey_id:
             api_data["surveyId"] = survey_id
+
+        logger.info(f"Household API payload: {api_data}")
         return api_data
 
     # ==================== Persons APIs ====================

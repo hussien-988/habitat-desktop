@@ -234,7 +234,7 @@ class UnitDialog(QDialog):
         card_layout.setSpacing(20)
 
         # Title header - right aligned like in photo
-        title_label = QLabel("أضف معلومات الوحدة العقارية" if not self._is_edit_mode else "تعديل معلومات الوحدة العقارية")
+        title_label = QLabel("أضف معلومات المقسم" if not self._is_edit_mode else "تعديل معلومات المقسم")
         title_label.setStyleSheet("""
             font-size: 16px;
             font-weight: 600;
