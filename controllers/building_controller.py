@@ -65,8 +65,9 @@ class BuildingController(BaseController):
     buildings_loaded = pyqtSignal(list)  # list of buildings
     building_selected = pyqtSignal(object)  # Building object
 
-    # Class-level cache for neighborhood lookup (loaded once from neighborhoods.json)
+    # Class-level caches for address lookup (loaded once from JSON files)
     _neighborhoods_cache: Optional[Dict[str, Dict]] = None
+    _admin_divisions_cache: Optional[Dict] = None
 
     def __init__(self, db: Database = None, parent=None, use_api: bool = None):
         super().__init__(parent)
@@ -129,6 +130,69 @@ class BuildingController(BaseController):
         if entry:
             return entry.get("name_ar", code)
         return code
+
+    @classmethod
+    def _resolve_admin_names(cls, gov_code: str, dist_code: str,
+                              subdist_code: str, community_code: str = "") -> Dict[str, str]:
+        """
+        Resolve governorate/district/subdistrict/community names from codes
+        using administrative_divisions.json.
+
+        Returns dict with keys: governorate_name_ar, district_name_ar,
+        subdistrict_name_ar, community_name_ar
+        """
+        result = {
+            "governorate_name_ar": "",
+            "district_name_ar": "",
+            "subdistrict_name_ar": "",
+            "community_name_ar": ""
+        }
+
+        if not gov_code:
+            return result
+
+        # Load admin divisions cache once
+        if cls._admin_divisions_cache is None:
+            cls._admin_divisions_cache = {}
+            try:
+                import json
+                import os
+                json_path = os.path.join(
+                    os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                    "data", "administrative_divisions.json"
+                )
+                with open(json_path, "r", encoding="utf-8") as f:
+                    cls._admin_divisions_cache = json.load(f)
+                logger.info("Loaded administrative_divisions.json for address resolution")
+            except Exception as e:
+                logger.warning(f"Could not load administrative_divisions.json: {e}")
+
+        try:
+            for gov in cls._admin_divisions_cache.get("governorates", []):
+                if gov.get("code") == gov_code:
+                    result["governorate_name_ar"] = gov.get("name_ar", "")
+                    if not dist_code:
+                        break
+                    for dist in gov.get("districts", []):
+                        if dist.get("code") == dist_code:
+                            result["district_name_ar"] = dist.get("name_ar", "")
+                            if not subdist_code:
+                                break
+                            for subdist in dist.get("subdistricts", []):
+                                if subdist.get("code") == subdist_code:
+                                    result["subdistrict_name_ar"] = subdist.get("name_ar", "")
+                                    if community_code:
+                                        for comm in subdist.get("communities", []):
+                                            if comm.get("code") == community_code:
+                                                result["community_name_ar"] = comm.get("name_ar", "")
+                                                break
+                                    break
+                            break
+                    break
+        except Exception as e:
+            logger.warning(f"Error resolving admin division names: {e}")
+
+        return result
 
     # ==================== Properties ====================
 
@@ -769,44 +833,68 @@ class BuildingController(BaseController):
         """
         تحويل BuildingDto من API إلى Building object.
 
-        ✅ FIX: BuildingAssignments API uses 'buildingCode' not 'buildingId'!
+        Strategy: API names first → JSON fallback for missing names.
         """
-        # ✅ CRITICAL FIX: Try 'buildingCode' first (BuildingAssignments API), then 'buildingId'
+        # Building ID & UUID
         building_id = dto.get("buildingCode") or dto.get("buildingId", "")
-
-        # ✅ UUID mapping: API may return 'id', 'buildingUuid', or 'BuildingUuid'
         building_uuid = dto.get("id") or dto.get("buildingUuid") or dto.get("BuildingUuid") or ""
 
-        # Neighborhood: API returns empty neighborhoodName, so lookup from local JSON
+        # Extract codes from API
+        gov_code = dto.get("governorateCode", "")
+        dist_code = dto.get("districtCode", "")
+        subdist_code = dto.get("subDistrictCode") or dto.get("subdistrictCode", "")
+        community_code = dto.get("communityCode", "")
         neighborhood_code = dto.get("neighborhoodCode", "")
-        api_neighborhood_name = dto.get("neighborhoodName") or dto.get("neighborhoodNameAr") or ""
-        neighborhood_name_ar = api_neighborhood_name.strip() if api_neighborhood_name else ""
 
-        # If API didn't return a name, lookup from neighborhoods.json
-        if not neighborhood_name_ar and neighborhood_code:
-            neighborhood_name_ar = self._get_neighborhood_name(neighborhood_code)
+        # Fallback: extract codes from building_id (17 digits: GG-DD-SS-CCC-NNN-BBBBB)
+        if not gov_code and len(building_id) == 17 and building_id.isdigit():
+            gov_code = building_id[0:2]
+            dist_code = dist_code or building_id[2:4]
+            subdist_code = subdist_code or building_id[4:6]
+            community_code = community_code or building_id[6:9]
+            neighborhood_code = neighborhood_code or building_id[9:12]
 
-        logger.debug(f"API DTO: neighborhoodCode='{neighborhood_code}', resolved name='{neighborhood_name_ar}', status='{dto.get('status') or dto.get('buildingStatus')}'")
+        # Try API name fields first
+        gov_name = dto.get("governorateNameAr") or dto.get("governorateName", "")
+        dist_name = dto.get("districtNameAr") or dto.get("districtName", "")
+        subdist_name = dto.get("subDistrictNameAr") or dto.get("subDistrictName") or dto.get("subdistrictName", "")
+        community_name = dto.get("communityNameAr") or dto.get("communityName", "")
+        neighborhood_name = dto.get("neighborhoodName") or dto.get("neighborhoodNameAr") or dto.get("nameArabic") or ""
+        neighborhood_name = neighborhood_name.strip() if neighborhood_name else ""
+
+        # Resolve missing names from local JSON files
+        if not gov_name or not dist_name or not subdist_name:
+            resolved = self._resolve_admin_names(gov_code, dist_code, subdist_code, community_code)
+            gov_name = gov_name or resolved["governorate_name_ar"]
+            dist_name = dist_name or resolved["district_name_ar"]
+            subdist_name = subdist_name or resolved["subdistrict_name_ar"]
+            community_name = community_name or resolved["community_name_ar"]
+
+        # Neighborhood name: API → neighborhoods.json fallback
+        if not neighborhood_name and neighborhood_code:
+            neighborhood_name = self._get_neighborhood_name(neighborhood_code)
+
+        logger.debug(f"API DTO: building={building_id}, gov='{gov_name}', dist='{dist_name}', subdist='{subdist_name}', neighborhood='{neighborhood_name}'")
 
         return Building(
             building_uuid=building_uuid,
             building_id=building_id,
             building_id_formatted=dto.get("buildingIdFormatted", ""),
-            governorate_code=dto.get("governorateCode", ""),
-            governorate_name=dto.get("governorateName", ""),
-            governorate_name_ar=dto.get("governorateNameAr") or dto.get("governorateName", ""),
-            district_code=dto.get("districtCode", ""),
-            district_name=dto.get("districtName") or dto.get("districtName", ""),
-            district_name_ar=dto.get("districtNameAr") or dto.get("districtName", ""),
-            subdistrict_code=dto.get("subDistrictCode") or dto.get("subdistrictCode", ""),
-            subdistrict_name=dto.get("subDistrictName") or dto.get("subdistrictName", ""),
-            subdistrict_name_ar=dto.get("subDistrictNameAr") or dto.get("subDistrictName") or dto.get("subdistrictName", ""),
-            community_code=dto.get("communityCode", ""),
-            community_name=dto.get("communityName", ""),
-            community_name_ar=dto.get("communityNameAr") or dto.get("communityName", ""),
+            governorate_code=gov_code,
+            governorate_name=gov_name,
+            governorate_name_ar=gov_name,
+            district_code=dist_code,
+            district_name=dist_name,
+            district_name_ar=dist_name,
+            subdistrict_code=subdist_code,
+            subdistrict_name=subdist_name,
+            subdistrict_name_ar=subdist_name,
+            community_code=community_code,
+            community_name=community_name,
+            community_name_ar=community_name,
             neighborhood_code=neighborhood_code,
-            neighborhood_name=neighborhood_name_ar or neighborhood_code,
-            neighborhood_name_ar=neighborhood_name_ar,
+            neighborhood_name=neighborhood_name or neighborhood_code,
+            neighborhood_name_ar=neighborhood_name,
             building_number=dto.get("buildingNumber", ""),
             building_type=dto.get("buildingType") or 1,
             building_status=dto.get("status") or dto.get("buildingStatus") or 1,

@@ -534,9 +534,10 @@ class BuildingMapDialog(BaseMapDialog):
                     break
 
             if matching_building:
-                self._selected_building = matching_building
-                # Close dialog and proceed to next step (no confirmation message needed)
-                logger.info(f"Building {matching_building.building_id} selected, closing dialog")
+                # Enrich building with full details (cache may lack address names)
+                enriched = self._enrich_building_data(matching_building)
+                self._selected_building = enriched or matching_building
+                logger.info(f"Building {self._selected_building.building_id} selected, closing dialog")
                 self.accept()
             else:
                 # Fallback: Try searching in API (in case cache is empty)
@@ -560,6 +561,39 @@ class BuildingMapDialog(BaseMapDialog):
         except Exception as e:
             logger.error(f"Error selecting building: {e}", exc_info=True)
             self._show_building_not_found_error(building_id)
+
+    def _enrich_building_data(self, cached_building: Building) -> Optional[Building]:
+        """
+        Enrich a cached building with full address data from the detail API.
+
+        The cache (from /Buildings/map) may lack address names. This calls
+        GET /Buildings/{id} to get full details including address codes,
+        then resolves names from local JSON files.
+        """
+        try:
+            # Use the building UUID to get full details
+            building_uuid = cached_building.building_uuid
+            if not building_uuid:
+                logger.warning("Cannot enrich: no building_uuid")
+                return None
+
+            from services.map_service_api import MapServiceAPI
+            map_service = MapServiceAPI()
+            if self._auth_token:
+                map_service.set_auth_token(self._auth_token)
+
+            enriched = map_service.get_building_with_polygon(building_uuid)
+            if enriched:
+                # Preserve geo_location from cache if enriched doesn't have it
+                if not enriched.geo_location and cached_building.geo_location:
+                    enriched.geo_location = cached_building.geo_location
+                logger.info(f"Enriched building {cached_building.building_id} with full address data")
+                return enriched
+
+        except Exception as e:
+            logger.warning(f"Could not enrich building data: {e}")
+
+        return None
 
     def _show_building_not_found_error(self, building_id: str):
         """Show error message when building is not found."""

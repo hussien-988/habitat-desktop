@@ -13,7 +13,7 @@ import uuid
 
 from PyQt5.QtWidgets import (
     QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton,
-    QFrame, QScrollArea, QWidget, QGroupBox,
+    QFrame, QScrollArea, QWidget, QGroupBox, QComboBox,
     QSpinBox, QTextEdit, QGridLayout, QGraphicsDropShadowEffect
 )
 from PyQt5.QtCore import Qt, QLocale
@@ -309,27 +309,15 @@ class HouseholdStep(BaseStep):
 
         family_info_layout.addLayout(header_layout)
 
-        # ===== ROW 2: Two fields (رب الأسرة/العائل + عدد الأفراد) =====
-        # Gap before row 2: 8px
+        # ===== ROW 2: Three fields (occupancy type + occupancy nature + total members) =====
         family_info_layout.addSpacing(8)
 
         row2_layout = QHBoxLayout()
         row2_layout.setSpacing(12)
 
-        # Field 1: رب الأسرة/العائل (RIGHT in RTL) - SWAPPED
-        field1_layout = QVBoxLayout()
-        field1_layout.setSpacing(4)
-
-        self._head_name_label = QLabel(tr("wizard.household.head_name_label"))
-        self._head_name_label.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
-        self._head_name_label.setStyleSheet("color: #374151; background: transparent;")
-        field1_layout.addWidget(self._head_name_label)
-
-        self.hh_head_name = QLineEdit()
-        self.hh_head_name.setPlaceholderText(tr("wizard.household.head_name_placeholder"))
-        self.hh_head_name.setFixedHeight(45)  # Figma: 45px exact height
-        self.hh_head_name.setStyleSheet("""
-            QLineEdit {
+        # Shared combo style
+        combo_style = """
+            QComboBox {
                 padding: 0px 12px;
                 border: 1px solid #E1E8ED;
                 border-radius: 8px;
@@ -337,24 +325,61 @@ class HouseholdStep(BaseStep):
                 font-size: 14px;
                 color: #1A1A1A;
             }
-            QLineEdit:focus {
+            QComboBox:focus {
                 border-color: #3890DF;
                 border-width: 2px;
             }
-        """)
-        field1_layout.addWidget(self.hh_head_name)
+            QComboBox::drop-down {
+                border: none;
+                width: 30px;
+            }
+        """
+
+        # Field 1: Occupancy Type
+        field1_layout = QVBoxLayout()
+        field1_layout.setSpacing(4)
+
+        self._occupancy_type_label = QLabel(tr("wizard.occupation.type"))
+        self._occupancy_type_label.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
+        self._occupancy_type_label.setStyleSheet("color: #374151; background: transparent;")
+        field1_layout.addWidget(self._occupancy_type_label)
+
+        self.occupancy_type = QComboBox()
+        self.occupancy_type.setFixedHeight(45)
+        self.occupancy_type.addItem(tr("wizard.person_dialog.select"), None)
+        self.occupancy_type.addItem(tr("wizard.occupation.residential"), "residential")
+        self.occupancy_type.addItem(tr("wizard.occupation.non_residential"), "non_residential")
+        self.occupancy_type.setStyleSheet(combo_style)
+        field1_layout.addWidget(self.occupancy_type)
         row2_layout.addLayout(field1_layout, 1)
 
-        # Field 2: عدد الأفراد with custom arrows (LEFT in RTL) - SWAPPED
+        # Field 2: Occupancy Nature
         field2_layout = QVBoxLayout()
         field2_layout.setSpacing(4)
+
+        self._occupancy_nature_label = QLabel(tr("wizard.occupation.nature"))
+        self._occupancy_nature_label.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
+        self._occupancy_nature_label.setStyleSheet("color: #374151; background: transparent;")
+        field2_layout.addWidget(self._occupancy_nature_label)
+
+        self.occupancy_nature = QComboBox()
+        self.occupancy_nature.setFixedHeight(45)
+        self.occupancy_nature.addItem(tr("wizard.person_dialog.select"), None)
+        self.occupancy_nature.addItem(tr("wizard.occupation.ownership"), "ownership")
+        self.occupancy_nature.addItem(tr("wizard.occupation.other"), "other")
+        self.occupancy_nature.setStyleSheet(combo_style)
+        field2_layout.addWidget(self.occupancy_nature)
+        row2_layout.addLayout(field2_layout, 1)
+
+        # Field 3: Total Members
+        field3_layout = QVBoxLayout()
+        field3_layout.setSpacing(4)
 
         self._total_members_label = QLabel(tr("wizard.household.total_members"))
         self._total_members_label.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
         self._total_members_label.setStyleSheet("color: #374151; background: transparent;")
-        field2_layout.addWidget(self._total_members_label)
+        field3_layout.addWidget(self._total_members_label)
 
-        # Create SpinBox with custom arrows
         self.hh_total_members = QSpinBox()
         self.hh_total_members.setRange(0, 50)
         self.hh_total_members.setValue(0)
@@ -362,11 +387,9 @@ class HouseholdStep(BaseStep):
         self.hh_total_members.setLocale(QLocale(QLocale.English, QLocale.UnitedStates))
         self.hh_total_members.setButtonSymbols(QSpinBox.NoButtons)
 
-        # Create container with arrows (same as unit_dialog)
         members_widget = self._create_spinbox_with_arrows(self.hh_total_members)
-
-        field2_layout.addWidget(members_widget)
-        row2_layout.addLayout(field2_layout, 1)
+        field3_layout.addWidget(members_widget)
+        row2_layout.addLayout(field3_layout, 1)
 
         family_info_layout.addLayout(row2_layout)
 
@@ -747,8 +770,8 @@ class HouseholdStep(BaseStep):
         """Update all translatable texts when language changes."""
         self._title_label.setText(tr("wizard.household.head_title"))
         self._subtitle_label.setText(tr("wizard.household.subtitle"))
-        self._head_name_label.setText(tr("wizard.household.head_name_label"))
-        self.hh_head_name.setPlaceholderText(tr("wizard.household.head_name_placeholder"))
+        self._occupancy_type_label.setText(tr("wizard.occupation.type"))
+        self._occupancy_nature_label.setText(tr("wizard.occupation.nature"))
         self._total_members_label.setText(tr("wizard.household.total_members"))
         self._notes_label.setText(tr("wizard.household.notes_label"))
         self.hh_notes.setPlaceholderText(tr("wizard.household.notes_placeholder"))
@@ -758,63 +781,57 @@ class HouseholdStep(BaseStep):
         result = self.create_validation_result()
 
         # Auto-save household data when clicking "Next"
-        if self.hh_head_name.text().strip():
-            # Get the property unit ID from context
-            # This should be set from step 2 (unit selection)
-            property_unit_id = None
-            if self.context.unit:
-                property_unit_id = getattr(self.context.unit, 'unit_uuid', None)
-            elif self.context.new_unit_data:
-                property_unit_id = self.context.new_unit_data.get('unit_uuid')
+        property_unit_id = None
+        if self.context.unit:
+            property_unit_id = getattr(self.context.unit, 'unit_uuid', None)
+        elif self.context.new_unit_data:
+            property_unit_id = self.context.new_unit_data.get('unit_uuid')
 
-            # Build household data
-            household = {
-                "household_id": str(uuid.uuid4()),
-                "property_unit_id": property_unit_id,
-                "unit_uuid": property_unit_id,  # Alias for API
-                "head_name": self.hh_head_name.text().strip(),
-                "size": self.hh_total_members.value(),
-                "adult_males": self.hh_adult_males.value(),
-                "adult_females": self.hh_adult_females.value(),
-                "male_children_under18": self.hh_male_children_under18.value(),
-                "female_children_under18": self.hh_female_children_under18.value(),
-                "male_elderly_over65": self.hh_male_elderly_over65.value(),
-                "female_elderly_over65": self.hh_female_elderly_over65.value(),
-                "disabled_males": self.hh_disabled_males.value(),
-                "disabled_females": self.hh_disabled_females.value(),
-                "notes": self.hh_notes.toPlainText().strip()
-            }
+        # Build household data
+        household = {
+            "household_id": str(uuid.uuid4()),
+            "property_unit_id": property_unit_id,
+            "unit_uuid": property_unit_id,
+            "occupancy_type": self.occupancy_type.currentData(),
+            "occupancy_nature": self.occupancy_nature.currentData(),
+            "size": self.hh_total_members.value(),
+            "adult_males": self.hh_adult_males.value(),
+            "adult_females": self.hh_adult_females.value(),
+            "male_children_under18": self.hh_male_children_under18.value(),
+            "female_children_under18": self.hh_female_children_under18.value(),
+            "male_elderly_over65": self.hh_male_elderly_over65.value(),
+            "female_elderly_over65": self.hh_female_elderly_over65.value(),
+            "disabled_males": self.hh_disabled_males.value(),
+            "disabled_females": self.hh_disabled_females.value(),
+            "notes": self.hh_notes.toPlainText().strip()
+        }
 
-            # Save via API if using API mode
-            if self._use_api:
-                # Set auth token before API call
-                self._set_auth_token()
+        # Save via API if using API mode
+        if self._use_api:
+            self._set_auth_token()
+            survey_id = self.context.get_data("survey_id")
 
-                # Get survey_id from context (set in step 1)
-                survey_id = self.context.get_data("survey_id")
+            logger.info(f"Creating household via API: {household}")
+            print(f"[HOUSEHOLD] Creating household for survey_id: {survey_id}")
 
-                logger.info(f"Creating household via API: {household}")
-                print(f"[HOUSEHOLD] Creating household for survey_id: {survey_id}")
+            try:
+                api_response = self._api_client.create_household(household, survey_id=survey_id)
+                logger.info("Household created successfully via API")
 
-                try:
-                    api_response = self._api_client.create_household(household, survey_id=survey_id)
-                    logger.info("Household created successfully via API")
+                household_id = api_response.get("id") or api_response.get("householdId", "")
+                household["api_id"] = household_id
+                self.context.update_data("household_id", household_id)
+                print(f"[HOUSEHOLD] Household created successfully, household_id: {household_id}")
+                print(f"[HOUSEHOLD] Full API response: {api_response}")
 
-                    # Store the API response data
-                    household_id = api_response.get("id") or api_response.get("householdId", "")
-                    household["api_id"] = household_id
-                    self.context.update_data("household_id", household_id)
-                    print(f"[HOUSEHOLD] Household created successfully, household_id: {household_id}")
-                    print(f"[HOUSEHOLD] Full API response: {api_response}")
+            except Exception as e:
+                logger.error(f"Failed to create household via API: {e}")
+                result.add_error(tr("wizard.household.save_failed", error_msg=map_exception(e)))
+                return result
 
-                except Exception as e:
-                    logger.error(f"Failed to create household via API: {e}")
-                    result.add_error(tr("wizard.household.save_failed", error_msg=map_exception(e)))
-                    return result
-
-            # Clear old household data and add new one
-            self.context.households.clear()
-            self.context.households.append(household)
+        # Clear old household data and add new one
+        self.context.households.clear()
+        self.context.households.append(household)
 
         # Validate that household data exists
         if len(self.context.households) == 0:
@@ -849,7 +866,7 @@ class HouseholdStep(BaseStep):
             # Use display properties directly (they return Arabic text)
             self.ui_building_type.setText(building.building_type_display or "-")
             self.ui_building_status.setText(building.building_status_display or "-")
-            self.ui_units_count.setText(str(building.number_of_units or 0))
+            self.ui_units_count.setText(str(getattr(building, 'number_of_apartments', 0) + (building.number_of_shops or 0)))
             self.ui_parcels_count.setText(str(getattr(building, 'number_of_apartments', 0)))
             self.ui_shops_count.setText(str(building.number_of_shops or 0))
 
@@ -898,8 +915,19 @@ class HouseholdStep(BaseStep):
 
         # Load existing household data if available
         if len(self.context.households) > 0:
-            household = self.context.households[0]  # Load first (and only) household
-            self.hh_head_name.setText(household.get("head_name", ""))
+            household = self.context.households[0]
+            # Occupancy type
+            occ_type = household.get("occupancy_type")
+            if occ_type:
+                idx = self.occupancy_type.findData(occ_type)
+                if idx >= 0:
+                    self.occupancy_type.setCurrentIndex(idx)
+            # Occupancy nature
+            occ_nature = household.get("occupancy_nature")
+            if occ_nature:
+                idx = self.occupancy_nature.findData(occ_nature)
+                if idx >= 0:
+                    self.occupancy_nature.setCurrentIndex(idx)
             self.hh_total_members.setValue(household.get("size", 0))
             self.hh_adult_males.setValue(household.get("adult_males", 0))
             self.hh_adult_females.setValue(household.get("adult_females", 0))
@@ -911,8 +939,8 @@ class HouseholdStep(BaseStep):
             self.hh_disabled_females.setValue(household.get("disabled_females", 0))
             self.hh_notes.setPlainText(household.get("notes", ""))
         else:
-            # Clear all household data when context is reset (new wizard)
-            self.hh_head_name.clear()
+            self.occupancy_type.setCurrentIndex(0)
+            self.occupancy_nature.setCurrentIndex(0)
             self.hh_total_members.setValue(0)
             self.hh_adult_males.setValue(0)
             self.hh_adult_females.setValue(0)

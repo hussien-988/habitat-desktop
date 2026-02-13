@@ -359,15 +359,23 @@ class PolygonBuildingSelectorDialog(QDialog):
                 # Convert to Building objects
                 buildings = []
                 for result in results:
+                    props = result.properties if hasattr(result, 'properties') else {}
                     building = Building(
                         building_uuid=result.feature_id,
-                        building_id=result.properties.get('building_id'),
-                        neighborhood_code=result.properties.get('neighborhood_code'),
-                        building_type=result.properties.get('building_type'),
-                        building_status=result.properties.get('building_status')
+                        building_id=props.get('building_id', ''),
+                        governorate_code=props.get('governorate_code', ''),
+                        district_code=props.get('district_code', ''),
+                        subdistrict_code=props.get('subdistrict_code', ''),
+                        community_code=props.get('community_code', ''),
+                        neighborhood_code=props.get('neighborhood_code', ''),
+                        building_number=props.get('building_number', ''),
+                        building_type=props.get('building_type'),
+                        building_status=props.get('building_status')
                     )
                     buildings.append(building)
 
+                # Resolve address names from JSON files
+                self._resolve_buildings_address_names(buildings)
                 return buildings
 
             else:
@@ -390,12 +398,19 @@ class PolygonBuildingSelectorDialog(QDialog):
                         building = Building(
                             building_uuid=result['building_uuid'],
                             building_id=result['building_id'],
-                            neighborhood_code=result.get('neighborhood_code'),
+                            governorate_code=result.get('governorate_code', ''),
+                            district_code=result.get('district_code', ''),
+                            subdistrict_code=result.get('subdistrict_code', ''),
+                            community_code=result.get('community_code', ''),
+                            neighborhood_code=result.get('neighborhood_code', ''),
+                            building_number=result.get('building_number', ''),
                             building_type=result.get('building_type'),
                             building_status=result.get('building_status')
                         )
                         buildings.append(building)
 
+                    # Resolve address names from JSON files
+                    self._resolve_buildings_address_names(buildings)
                     return buildings
 
             return []
@@ -403,6 +418,46 @@ class PolygonBuildingSelectorDialog(QDialog):
         except Exception as e:
             logger.error(f"Error querying buildings: {e}", exc_info=True)
             return []
+
+    def _resolve_buildings_address_names(self, buildings: List[Building]):
+        """
+        Resolve address names from codes using local JSON files.
+
+        Extracts codes from building_id (17 digits: GG-DD-SS-CCC-NNN-BBBBB)
+        then resolves names from administrative_divisions.json + neighborhoods.json.
+        """
+        from controllers.building_controller import BuildingController
+        for b in buildings:
+            # Extract codes from building_id if spatial query didn't return them
+            bid = b.building_id or ""
+            if len(bid) == 17 and bid.isdigit():
+                b.governorate_code = b.governorate_code or bid[0:2]
+                b.district_code = b.district_code or bid[2:4]
+                b.subdistrict_code = b.subdistrict_code or bid[4:6]
+                b.community_code = b.community_code or bid[6:9]
+                b.neighborhood_code = b.neighborhood_code or bid[9:12]
+                b.building_number = b.building_number or bid[12:17]
+
+            # Always resolve names from JSON (override dataclass defaults)
+            if b.governorate_code:
+                resolved = BuildingController._resolve_admin_names(
+                    b.governorate_code, b.district_code,
+                    b.subdistrict_code, b.community_code
+                )
+                if resolved["governorate_name_ar"]:
+                    b.governorate_name_ar = resolved["governorate_name_ar"]
+                if resolved["district_name_ar"]:
+                    b.district_name_ar = resolved["district_name_ar"]
+                if resolved["subdistrict_name_ar"]:
+                    b.subdistrict_name_ar = resolved["subdistrict_name_ar"]
+                if resolved["community_name_ar"]:
+                    b.community_name_ar = resolved["community_name_ar"]
+
+            # Resolve neighborhood name from neighborhoods.json
+            if b.neighborhood_code:
+                name = BuildingController._get_neighborhood_name(b.neighborhood_code)
+                if name and name != b.neighborhood_code:
+                    b.neighborhood_name_ar = name
 
     def _update_buildings_list(self, buildings: List[Building]):
         """

@@ -14,7 +14,8 @@ import uuid
 
 from PyQt5.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
-    QPushButton, QComboBox, QSpinBox, QTextEdit, QFrame
+    QPushButton, QComboBox, QSpinBox, QTextEdit, QFrame,
+    QStyle, QStyleOptionComboBox, QStylePainter
 )
 from PyQt5.QtCore import Qt, QLocale
 from PyQt5.QtGui import QDoubleValidator
@@ -31,6 +32,20 @@ from ui.components.toast import Toast
 from utils.logger import get_logger
 
 logger = get_logger(__name__)
+
+
+class RtlCombo(QComboBox):
+    """QComboBox with right-aligned text for Arabic RTL support."""
+
+    def paintEvent(self, event):
+        painter = QStylePainter(self)
+        option = QStyleOptionComboBox()
+        self.initStyleOption(option)
+        painter.drawComplexControl(QStyle.CC_ComboBox, option)
+        edit_rect = self.style().subControlRect(
+            QStyle.CC_ComboBox, option, QStyle.SC_ComboBoxEditField, self
+        )
+        painter.drawText(edit_rect.adjusted(4, 0, -4, 0), Qt.AlignRight | Qt.AlignVCenter, option.currentText)
 
 
 class UnitDialog(QDialog):
@@ -89,6 +104,9 @@ class UnitDialog(QDialog):
         # إنشاء frame أبيض مع زوايا منحنية
         content_frame = QFrame()
         content_frame.setObjectName("ContentFrame")
+        # Force LTR to prevent RTL inheritance from flipping internal layouts
+        # (labels are right-aligned manually for Arabic)
+        content_frame.setLayoutDirection(Qt.LeftToRight)
         content_frame.setStyleSheet("""
             QFrame#ContentFrame {
                 background-color: #FFFFFF;
@@ -101,54 +119,18 @@ class UnitDialog(QDialog):
         layout.setSpacing(0)  # نضبط المسافات يدوياً
         layout.setContentsMargins(24, 16, 24, 16)  # تخفيف البادينغ العلوي والسفلي
 
-        # العنوان (Header) - RTL ياخذ يمين تلقائياً
-        header_label = QLabel(tr("wizard.unit_dialog.title_add") if not self.unit_data else tr("wizard.unit_dialog.title_edit"))
+        # العنوان (Header) - محاذاة يمين يدوياً لأن الـ frame مضبوط LTR
+        header_label = QLabel("اضف معلومات المقسم" if not self.unit_data else "تعديل معلومات المقسم")
+        header_label.setAlignment(Qt.AlignRight)
         header_label.setStyleSheet("font-size: 18px; font-weight: 600; color: #1A1F1D; background: transparent;")
         layout.addWidget(header_label)
 
         # مسافة بين العنوان والحقول الأولى: 32 (ضعف المسافة)
         layout.addSpacing(32)
 
-        # Row 1: Unit Type and Unit Status
+        # Row 1: Unit Number and Floor Number
         row1 = QHBoxLayout()
-        row1.setSpacing(16)  # مسافات متساوية بين الحقول
-
-        # Unit Type - Using API integer codes from Vocabularies
-        # API: 1=Apartment, 2=Shop, 3=Office, 4=Warehouse, 5=Other
-        self.unit_type_combo = QComboBox()
-        self.unit_type_combo.setStyleSheet(self._combo_style())
-        self.unit_type_combo.addItem(tr("wizard.unit_dialog.select"), 0)  # Default selection
-        for code, name_en, name_ar in Vocabularies.UNIT_TYPES:
-            self.unit_type_combo.addItem(name_ar, code)
-        row1.addLayout(self._create_field_container(tr("wizard.unit_dialog.unit_type"), self.unit_type_combo), 1)
-
-        # Unit Status - Using API integer codes from Vocabularies
-        # API: 1=Occupied, 2=Vacant, 3=Damaged, 4=UnderRenovation, 5=Uninhabitable, 6=Locked, 99=Unknown
-        self.unit_status_combo = QComboBox()
-        self.unit_status_combo.setStyleSheet(self._combo_style())
-        self.unit_status_combo.addItem(tr("wizard.unit_dialog.select"), 0)  # Default selection
-        for code, name_en, name_ar in Vocabularies.UNIT_STATUS:
-            self.unit_status_combo.addItem(name_ar, code)
-        row1.addLayout(self._create_field_container(tr("wizard.unit_dialog.unit_status"), self.unit_status_combo), 1)
-
-        layout.addLayout(row1)
-
-        # مسافة بين الصفوف: 16
-        layout.addSpacing(16)
-
-        # Row 2: Floor Number and Unit Number
-        row2 = QHBoxLayout()
-        row2.setSpacing(16)  # مسافات متساوية بين الحقول
-
-        # Floor Number with custom arrows
-        self.floor_spin = QSpinBox()
-        self.floor_spin.setRange(-3, 100)
-        self.floor_spin.setValue(0)
-        self.floor_spin.setAlignment(Qt.AlignRight)
-        self.floor_spin.setLocale(QLocale(QLocale.English, QLocale.UnitedStates))
-        self.floor_spin.setButtonSymbols(QSpinBox.NoButtons)
-        floor_widget = self._create_spinbox_with_arrows(self.floor_spin)
-        row2.addLayout(self._create_field_container(tr("wizard.unit_dialog.floor_number"), floor_widget), 1)
+        row1.setSpacing(16)
 
         # Unit Number with custom arrows
         self.unit_number_spin = QSpinBox()
@@ -159,33 +141,61 @@ class UnitDialog(QDialog):
         self.unit_number_spin.setButtonSymbols(QSpinBox.NoButtons)
         self.unit_number_spin.valueChanged.connect(self._check_uniqueness)
         unit_widget = self._create_spinbox_with_arrows(self.unit_number_spin)
-        row2.addLayout(self._create_field_container(tr("wizard.unit_dialog.unit_number"), unit_widget), 1)
+        row1.addLayout(self._create_field_container("رقم المقسم", unit_widget), 1)
 
-        layout.addLayout(row2)
+        # Floor Number with custom arrows
+        self.floor_spin = QSpinBox()
+        self.floor_spin.setRange(-3, 100)
+        self.floor_spin.setValue(0)
+        self.floor_spin.setAlignment(Qt.AlignRight)
+        self.floor_spin.setLocale(QLocale(QLocale.English, QLocale.UnitedStates))
+        self.floor_spin.setButtonSymbols(QSpinBox.NoButtons)
+        floor_widget = self._create_spinbox_with_arrows(self.floor_spin)
+        row1.addLayout(self._create_field_container("رقم الطابق", floor_widget), 1)
+
+        layout.addLayout(row1)
 
         # Uniqueness validation label
         self.uniqueness_label = QLabel("")
+        self.uniqueness_label.setAlignment(Qt.AlignRight)
         self.uniqueness_label.setStyleSheet("font-size: 11px; margin-top: -8px;")
         layout.addWidget(self.uniqueness_label)
 
         # مسافة بين الصفوف: 16
         layout.addSpacing(16)
 
-        # Row 3: Number of Rooms and Area
+        # Row 2: Unit Status and Unit Type
+        row2 = QHBoxLayout()
+        row2.setSpacing(16)
+
+        # Unit Status - Using API integer codes from Vocabularies
+        self.unit_status_combo = RtlCombo()
+        self.unit_status_combo.setStyleSheet(self._combo_style())
+        self.unit_status_combo.setFixedHeight(45)
+        self.unit_status_combo.addItem(tr("wizard.unit_dialog.select"), 0)
+        for code, name_en, name_ar in Vocabularies.UNIT_STATUS:
+            self.unit_status_combo.addItem(name_ar, code)
+        row2.addLayout(self._create_field_container("حالة المقسم", self.unit_status_combo), 1)
+
+        # Unit Type - Using API integer codes from Vocabularies
+        self.unit_type_combo = RtlCombo()
+        self.unit_type_combo.setStyleSheet(self._combo_style())
+        self.unit_type_combo.setFixedHeight(45)
+        self.unit_type_combo.addItem(tr("wizard.unit_dialog.select"), 0)
+        for code, name_en, name_ar in Vocabularies.UNIT_TYPES:
+            self.unit_type_combo.addItem(name_ar, code)
+        row2.addLayout(self._create_field_container("نوع المقسم", self.unit_type_combo), 1)
+
+        layout.addLayout(row2)
+
+        # مسافة بين الصفوف: 16
+        layout.addSpacing(16)
+
+        # Row 3: Area and Number of Rooms (مساحة يسار، غرف يمين)
         row3 = QHBoxLayout()
-        row3.setSpacing(16)  # مسافات متساوية بين الحقول
+        row3.setSpacing(16)
 
-        # Number of Rooms with custom arrows
-        self.rooms_spin = QSpinBox()
-        self.rooms_spin.setRange(0, 20)
-        self.rooms_spin.setValue(0)
-        self.rooms_spin.setAlignment(Qt.AlignRight)
-        self.rooms_spin.setLocale(QLocale(QLocale.English, QLocale.UnitedStates))
-        self.rooms_spin.setButtonSymbols(QSpinBox.NoButtons)
-        rooms_widget = self._create_spinbox_with_arrows(self.rooms_spin)
-        row3.addLayout(self._create_field_container(tr("wizard.unit_dialog.rooms"), rooms_widget), 1)
-
-        # Area - with numeric validator and inline error
+        # Area - with numeric validator and inline error (LEFT side)
         self.area_input = QLineEdit()
         self.area_input.setPlaceholderText(tr("wizard.unit_dialog.area_placeholder"))
         self.area_input.setStyleSheet(self._input_style())
@@ -202,14 +212,24 @@ class UnitDialog(QDialog):
         self.area_error_label.setVisible(False)
         self.area_input.textChanged.connect(self._validate_area_input)
 
-        row3.addLayout(self._create_field_container_with_validation(tr("wizard.unit_dialog.area"), self.area_input, self.area_error_label), 1)
+        row3.addLayout(self._create_field_container_with_validation("مساحة المقسم", self.area_input, self.area_error_label), 1)
+
+        # Number of Rooms with custom arrows (RIGHT side)
+        self.rooms_spin = QSpinBox()
+        self.rooms_spin.setRange(0, 20)
+        self.rooms_spin.setValue(0)
+        self.rooms_spin.setAlignment(Qt.AlignRight)
+        self.rooms_spin.setLocale(QLocale(QLocale.English, QLocale.UnitedStates))
+        self.rooms_spin.setButtonSymbols(QSpinBox.NoButtons)
+        rooms_widget = self._create_spinbox_with_arrows(self.rooms_spin)
+        row3.addLayout(self._create_field_container("عدد الغرف", rooms_widget), 1)
 
         layout.addLayout(row3)
 
         # مسافة بين الصفوف: 16
         layout.addSpacing(16)
 
-        # Description - DRY
+        # Description
         self.description_edit = QTextEdit()
         self.description_edit.setMinimumHeight(131)
         self.description_edit.setMaximumHeight(131)
@@ -230,7 +250,7 @@ class UnitDialog(QDialog):
                 border-width: 2px;
             }
         """)
-        layout.addLayout(self._create_field_container(tr("wizard.unit_dialog.description"), self.description_edit))
+        layout.addLayout(self._create_field_container("وصف المقسم", self.description_edit))
 
         # مسافة قبل الأزرار: 40
         layout.addSpacing(40)
@@ -253,9 +273,12 @@ class UnitDialog(QDialog):
         main_layout.addWidget(content_frame)
 
     def _create_spinbox_with_arrows(self, spinbox: QSpinBox) -> QFrame:
-        """Create a spinbox widget with text arrows on the side."""
-        # Container frame
+        """Create a spinbox widget with icon arrows on the RIGHT side (same as buildings_page)."""
+        from ui.components.icon import Icon
+
+        # Container frame - fixed height 45px
         container = QFrame()
+        container.setFixedHeight(45)
         container.setStyleSheet("""
             QFrame {
                 border: 1px solid #E1E8ED;
@@ -268,69 +291,64 @@ class UnitDialog(QDialog):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
 
-        # Arrow column (left side)
-        arrow_container = QFrame()
-        arrow_container.setStyleSheet("QFrame { border: none; background: transparent; }")
-        arrow_layout = QVBoxLayout(arrow_container)
-        arrow_layout.setContentsMargins(5, 2, 5, 2)
-        arrow_layout.setSpacing(-5)
-
-        # Up arrow
-        up_label = QLabel("^")
-        up_label.setStyleSheet("""
-            QLabel {
-                color: #9CA3AF;
-                font-size: 16px;
-                font-weight: bold;
-                background: transparent;
-                border: none;
-            }
-            QLabel:hover {
-                background: #E1E8ED;
-                border-radius: 3px;
-            }
-        """)
-        up_label.setFixedSize(24, 18)
-        up_label.setAlignment(Qt.AlignCenter)
-        up_label.setCursor(Qt.PointingHandCursor)
-        up_label.mousePressEvent = lambda e: spinbox.stepUp()
-        arrow_layout.addWidget(up_label)
-
-        # Down arrow
-        down_label = QLabel("v")
-        down_label.setStyleSheet("""
-            QLabel {
-                color: #9CA3AF;
-                font-size: 16px;
-                font-weight: bold;
-                background: transparent;
-                border: none;
-            }
-            QLabel:hover {
-                background: #E1E8ED;
-                border-radius: 3px;
-            }
-        """)
-        down_label.setFixedSize(24, 18)
-        down_label.setAlignment(Qt.AlignCenter)
-        down_label.setCursor(Qt.PointingHandCursor)
-        down_label.mousePressEvent = lambda e: spinbox.stepDown()
-        arrow_layout.addWidget(down_label)
-
-        layout.addWidget(arrow_container)
-
         # Spinbox (no border since container has border)
         spinbox.setStyleSheet("""
             QSpinBox {
                 padding: 6px 12px;
+                padding-right: 35px;
                 border: none;
                 background: transparent;
-                font-size: 14px;
-                min-height: 40px;
-                max-height: 40px;
+                font-size: 10pt;
+                color: #606266;
             }
         """)
         layout.addWidget(spinbox, 1)
+
+        # Arrow column (RIGHT side) with left border separator
+        arrow_container = QFrame()
+        arrow_container.setFixedWidth(30)
+        arrow_container.setStyleSheet("""
+            QFrame {
+                border: none;
+                border-left: 1px solid #E1E8ED;
+                background: transparent;
+                border-top-right-radius: 8px;
+                border-bottom-right-radius: 8px;
+            }
+        """)
+        arrow_layout = QVBoxLayout(arrow_container)
+        arrow_layout.setContentsMargins(0, 0, 0, 0)
+        arrow_layout.setSpacing(0)
+
+        # Up arrow icon (^.png)
+        up_label = QLabel()
+        up_label.setFixedSize(30, 22)
+        up_label.setAlignment(Qt.AlignCenter)
+        up_pixmap = Icon.load_pixmap("^", size=10)
+        if up_pixmap and not up_pixmap.isNull():
+            up_label.setPixmap(up_pixmap)
+        else:
+            up_label.setText("^")
+            up_label.setStyleSheet("color: #9CA3AF; font-size: 10px; font-weight: bold; background: transparent;")
+        up_label.setCursor(Qt.PointingHandCursor)
+        up_label.mousePressEvent = lambda _: spinbox.stepUp()
+        arrow_layout.addWidget(up_label)
+
+        # Down arrow icon (v.png)
+        down_label = QLabel()
+        down_label.setFixedSize(30, 22)
+        down_label.setAlignment(Qt.AlignCenter)
+        down_pixmap = Icon.load_pixmap("v", size=10)
+        if down_pixmap and not down_pixmap.isNull():
+            down_label.setPixmap(down_pixmap)
+        else:
+            down_label.setText("v")
+            down_label.setStyleSheet("color: #9CA3AF; font-size: 10px; font-weight: bold; background: transparent;")
+        down_label.setCursor(Qt.PointingHandCursor)
+        down_label.mousePressEvent = lambda _: spinbox.stepDown()
+        arrow_layout.addWidget(down_label)
+
+        layout.addWidget(arrow_container)
 
         return container
 
@@ -351,6 +369,7 @@ class UnitDialog(QDialog):
         container.setSpacing(4)  # مسافة شبه معدومة بين label والحقل
 
         label = QLabel(label_text)
+        label.setAlignment(Qt.AlignRight)
         label.setStyleSheet("font-size: 14px; font-weight: 600; color: #374151;")
 
         container.addWidget(label)
@@ -376,6 +395,7 @@ class UnitDialog(QDialog):
         container.setSpacing(4)
 
         label = QLabel(label_text)
+        label.setAlignment(Qt.AlignRight)
         label.setStyleSheet("font-size: 14px; font-weight: 600; color: #374151;")
 
         container.addWidget(label)
@@ -448,19 +468,16 @@ class UnitDialog(QDialog):
         return btn
 
     def _combo_style(self) -> str:
-        """Get combobox stylesheet with custom dropdown arrow."""
+        """Get combobox stylesheet with custom dropdown arrow (matches buildings_page)."""
         return """
             QComboBox {
-                padding: 6px 40px 6px 12px;
-                padding-right: 12px;
+                padding: 6px 12px 6px 40px;
                 border: 1px solid #E1E8ED;
                 border-radius: 8px;
                 background-color: #F8FAFF;
                 font-size: 14px;
                 font-weight: 600;
                 color: #9CA3AF;
-                min-height: 40px;
-                max-height: 40px;
             }
             QComboBox:focus {
                 border-color: #3890DF;
@@ -468,18 +485,23 @@ class UnitDialog(QDialog):
             }
             QComboBox::drop-down {
                 subcontrol-origin: border;
-                subcontrol-position: center left;
+                subcontrol-position: center right;
                 width: 35px;
                 border: none;
-                margin-left: 5px;
+                margin-right: 5px;
             }
             QComboBox::down-arrow {
                 image: url(assets/images/v.png);
                 width: 12px;
                 height: 12px;
+                border: none;
+                border-width: 0px;
             }
             QComboBox QAbstractItemView {
                 font-size: 14px;
+                background-color: white;
+                selection-background-color: #3890DF;
+                selection-color: white;
             }
         """
 

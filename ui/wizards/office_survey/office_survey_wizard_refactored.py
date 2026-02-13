@@ -9,11 +9,10 @@ This implementation uses the unified Wizard Framework.
 Steps:
 1. Building Selection - Search and select building
 2. Unit Selection/Creation - Select existing or create new unit
-3. Household Information - Record household demographics
-4. Person Registration - Add/edit persons
-5. Relations & Evidence - Link persons to unit with evidence
-6. Claim Creation - Create tenure claim
-7. Review & Submit - Review and submit survey
+3. Occupancy Details - Record occupancy demographics
+4. Occupancy Claims - Add persons with relation data
+5. Claim Creation - Create tenure claim
+6. Review & Submit - Review and submit survey
 """
 
 from typing import List
@@ -30,8 +29,7 @@ from ui.wizards.office_survey.steps import (
     BuildingSelectionStep,
     UnitSelectionStep,
     HouseholdStep,
-    PersonStep,
-    RelationStep,
+    OccupancyClaimsStep,
     ClaimStep,
     ReviewStep
 )
@@ -67,11 +65,10 @@ class OfficeSurveyWizard(BaseWizard):
         return [
             ("1", tr("wizard.step.building_registration")),
             ("2", tr("wizard.step.property_unit")),
-            ("3", tr("wizard.step.household_details")),
-            ("4", tr("wizard.step.persons")),
-            ("5", tr("wizard.step.relations_evidence")),
-            ("6", tr("wizard.step.claim")),
-            ("7", tr("wizard.step.final_review")),
+            ("3", tr("wizard.step.occupation_details")),
+            ("4", tr("wizard.step.occupancy_claims")),
+            ("5", tr("wizard.step.claim")),
+            ("6", tr("wizard.step.final_review")),
         ]
 
     # Signals (aliases for BaseWizard signals for backward compatibility)
@@ -102,8 +99,7 @@ class OfficeSurveyWizard(BaseWizard):
             BuildingSelectionStep(self.context, self),
             UnitSelectionStep(self.context, self),
             HouseholdStep(self.context, self),
-            PersonStep(self.context, self),
-            RelationStep(self.context, self),
+            OccupancyClaimsStep(self.context, self),
             ClaimStep(self.context, self),
             ReviewStep(self.context, self)
         ]

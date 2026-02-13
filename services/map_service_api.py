@@ -33,6 +33,10 @@ class MapServiceAPI:
         "max_lon": 37.5
     }
 
+    # Class-level caches for address lookups (loaded once)
+    _admin_divisions_cache = None
+    _neighborhoods_cache = None
+
     def __init__(self, api_client: Optional[TRRCMSApiClient] = None, data_provider: Optional[IMapDataProvider] = None):
         """
         Initialize map service.
@@ -550,17 +554,55 @@ class MapServiceAPI:
             building_code = data.get("buildingCode") or data.get("buildingId", "")
             geo_location = data.get("geoLocation") or data.get("buildingGeometryWkt")
 
+            # Extract codes
+            gov_code = data.get("governorateCode", "")
+            dist_code = data.get("districtCode", "")
+            subdist_code = data.get("subdistrictCode") or data.get("subDistrictCode", "")
+            community_code = data.get("communityCode", "")
+            neighborhood_code = data.get("neighborhoodCode", "")
+
+            # Fallback: extract codes from building_code (17 digits: GG-DD-SS-CCC-NNN-BBBBB)
+            if not gov_code and len(building_code) == 17 and building_code.isdigit():
+                gov_code = building_code[0:2]
+                dist_code = dist_code or building_code[2:4]
+                subdist_code = subdist_code or building_code[4:6]
+                community_code = community_code or building_code[6:9]
+                neighborhood_code = neighborhood_code or building_code[9:12]
+
+            # Try API name fields first (including nameArabic for neighborhood)
+            gov_name = data.get("governorateNameAr") or data.get("governorateName", "")
+            dist_name = data.get("districtNameAr") or data.get("districtName", "")
+            subdist_name = data.get("subDistrictNameAr") or data.get("subdistrictNameAr") or data.get("subdistrictName", "")
+            community_name = data.get("communityNameAr") or data.get("communityName", "")
+            neighborhood_name = data.get("neighborhoodNameAr") or data.get("neighborhoodName") or data.get("nameArabic", "")
+
+            # Resolve missing names from local JSON files
+            if not gov_name or not dist_name or not subdist_name or not neighborhood_name:
+                resolved = self._resolve_address_names(
+                    gov_code, dist_code, subdist_code, community_code, neighborhood_code
+                )
+                gov_name = gov_name or resolved["governorate_name_ar"]
+                dist_name = dist_name or resolved["district_name_ar"]
+                subdist_name = subdist_name or resolved["subdistrict_name_ar"]
+                community_name = community_name or resolved["community_name_ar"]
+                neighborhood_name = neighborhood_name or resolved["neighborhood_name_ar"]
+
             building = Building(
                 building_uuid=building_uuid,
                 building_id=building_code,
                 geo_location=geo_location,
                 latitude=data.get("latitude"),
                 longitude=data.get("longitude"),
-                governorate_code=data.get("governorateCode", ""),
-                district_code=data.get("districtCode", ""),
-                subdistrict_code=data.get("subdistrictCode", ""),
-                community_code=data.get("communityCode", ""),
-                neighborhood_code=data.get("neighborhoodCode", ""),
+                governorate_code=gov_code,
+                governorate_name_ar=gov_name,
+                district_code=dist_code,
+                district_name_ar=dist_name,
+                subdistrict_code=subdist_code,
+                subdistrict_name_ar=subdist_name,
+                community_code=community_code,
+                community_name_ar=community_name,
+                neighborhood_code=neighborhood_code,
+                neighborhood_name_ar=neighborhood_name,
                 building_number=data.get("buildingNumber", ""),
                 building_type=data.get("buildingType", 1),
                 building_status=data.get("buildingStatus", 1),
@@ -576,6 +618,85 @@ class MapServiceAPI:
         except Exception as e:
             logger.error(f"Error getting building with polygon: {e}", exc_info=True)
             return None
+
+    @classmethod
+    def _resolve_address_names(cls, gov_code: str, dist_code: str, subdist_code: str,
+                                community_code: str, neighborhood_code: str) -> Dict[str, str]:
+        """
+        Resolve address names from codes using local JSON files.
+
+        Uses administrative_divisions.json for governorate/district/subdistrict/community
+        and neighborhoods.json for neighborhood names.
+
+        Returns dict with keys: governorate_name_ar, district_name_ar,
+        subdistrict_name_ar, community_name_ar, neighborhood_name_ar
+        """
+        result = {
+            "governorate_name_ar": "",
+            "district_name_ar": "",
+            "subdistrict_name_ar": "",
+            "community_name_ar": "",
+            "neighborhood_name_ar": ""
+        }
+
+        # Load administrative divisions cache
+        if cls._admin_divisions_cache is None:
+            cls._admin_divisions_cache = {}
+            try:
+                import os
+                json_path = os.path.join(
+                    os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                    "data", "administrative_divisions.json"
+                )
+                with open(json_path, "r", encoding="utf-8") as f:
+                    cls._admin_divisions_cache = json.load(f)
+                logger.info("Loaded administrative_divisions.json for address resolution")
+            except Exception as e:
+                logger.warning(f"Could not load administrative_divisions.json: {e}")
+
+        # Load neighborhoods cache
+        if cls._neighborhoods_cache is None:
+            cls._neighborhoods_cache = {}
+            try:
+                import os
+                json_path = os.path.join(
+                    os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                    "data", "neighborhoods.json"
+                )
+                with open(json_path, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                for n in data.get("neighborhoods", []):
+                    cls._neighborhoods_cache[n["code"]] = n.get("name_ar", "")
+                logger.info(f"Loaded {len(cls._neighborhoods_cache)} neighborhoods from JSON")
+            except Exception as e:
+                logger.warning(f"Could not load neighborhoods.json: {e}")
+
+        # Resolve from administrative divisions hierarchy
+        try:
+            for gov in cls._admin_divisions_cache.get("governorates", []):
+                if gov.get("code") == gov_code:
+                    result["governorate_name_ar"] = gov.get("name_ar", "")
+                    for dist in gov.get("districts", []):
+                        if dist.get("code") == dist_code:
+                            result["district_name_ar"] = dist.get("name_ar", "")
+                            for subdist in dist.get("subdistricts", []):
+                                if subdist.get("code") == subdist_code:
+                                    result["subdistrict_name_ar"] = subdist.get("name_ar", "")
+                                    for comm in subdist.get("communities", []):
+                                        if comm.get("code") == community_code:
+                                            result["community_name_ar"] = comm.get("name_ar", "")
+                                            break
+                                    break
+                            break
+                    break
+        except Exception as e:
+            logger.warning(f"Error resolving admin division names: {e}")
+
+        # Resolve neighborhood from neighborhoods.json
+        if neighborhood_code and cls._neighborhoods_cache:
+            result["neighborhood_name_ar"] = cls._neighborhoods_cache.get(neighborhood_code, "")
+
+        return result
 
     def _convert_api_building_to_model(self, data: Dict[str, Any]) -> Building:
         """
@@ -596,15 +717,64 @@ class MapServiceAPI:
         else:
             logger.error(f"   ❌ NO buildingGeometryWkt in API response!")
 
+        # Extract codes from API response
+        gov_code = data.get("governorateCode", "")
+        dist_code = data.get("districtCode", "")
+        subdist_code = data.get("subDistrictCode") or data.get("subdistrictCode", "")
+        community_code = data.get("communityCode", "")
+        neighborhood_code = data.get("neighborhoodCode", "")
+        building_number = data.get("buildingNumber", "")
+
+        # Fallback: extract codes from building_id (17 digits: GG-DD-SS-CCC-NNN-BBBBB)
+        if not gov_code and len(building_id) == 17 and building_id.isdigit():
+            gov_code = building_id[0:2]
+            dist_code = dist_code or building_id[2:4]
+            subdist_code = subdist_code or building_id[4:6]
+            community_code = community_code or building_id[6:9]
+            neighborhood_code = neighborhood_code or building_id[9:12]
+            building_number = building_number or building_id[12:17]
+
+        # Try API name fields first, fallback to JSON lookup
+        gov_name = data.get("governorateNameAr") or data.get("governorateName", "")
+        dist_name = data.get("districtNameAr") or data.get("districtName", "")
+        subdist_name = data.get("subDistrictNameAr") or data.get("subDistrictName") or data.get("subdistrictName", "")
+        community_name = data.get("communityNameAr") or data.get("communityName", "")
+        neighborhood_name = data.get("neighborhoodNameAr") or data.get("neighborhoodName") or data.get("nameArabic", "")
+
+        # If any name is missing, resolve from local JSON files
+        if not gov_name or not dist_name or not subdist_name or not neighborhood_name:
+            resolved = self._resolve_address_names(
+                gov_code, dist_code, subdist_code, community_code, neighborhood_code
+            )
+            gov_name = gov_name or resolved["governorate_name_ar"]
+            dist_name = dist_name or resolved["district_name_ar"]
+            subdist_name = subdist_name or resolved["subdistrict_name_ar"]
+            community_name = community_name or resolved["community_name_ar"]
+            neighborhood_name = neighborhood_name or resolved["neighborhood_name_ar"]
+
         return Building(
-            building_uuid=data["id"],
+            building_uuid=data.get("id", ""),
             building_id=building_id,
             latitude=data.get("latitude"),
             longitude=data.get("longitude"),
             building_status=data.get("status"),
             building_type=data.get("buildingType", 1),
             number_of_units=data.get("numberOfPropertyUnits", 0),
-            geo_location=geo_location
+            number_of_apartments=data.get("numberOfApartments", 0),
+            number_of_shops=data.get("numberOfShops", 0),
+            number_of_floors=data.get("numberOfFloors", 0),
+            geo_location=geo_location,
+            governorate_code=gov_code,
+            governorate_name_ar=gov_name,
+            district_code=dist_code,
+            district_name_ar=dist_name,
+            subdistrict_code=subdist_code,
+            subdistrict_name_ar=subdist_name,
+            community_code=community_code,
+            community_name_ar=community_name,
+            neighborhood_code=neighborhood_code,
+            neighborhood_name_ar=neighborhood_name,
+            building_number=building_number
         )
 
     def _convert_api_building_to_geodata(self, data: Dict[str, Any]) -> BuildingGeoData:
