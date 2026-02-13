@@ -80,6 +80,18 @@ class MapConstants:
     DRAWN_POLYGON_COLOR = '#28a745'  # أخضر - للمضلع المرسوم الجديد
     DRAWN_POLYGON_OPACITY = 0.4
 
+    # ===== Tile Layer Performance (Prevents gray areas during zoom/pan) =====
+    # Reference: https://leafletjs.com/reference.html#tilelayer
+    TILE_KEEP_BUFFER = 4              # Extra tile rows/cols to keep beyond viewport (default: 2)
+    TILE_UPDATE_WHEN_ZOOMING = False  # Don't update tiles mid-zoom animation (smoother)
+    TILE_UPDATE_WHEN_IDLE = False     # Update tiles during panning too (not just after idle)
+    TILE_PANE_BACKGROUND = '#1a1a2e'  # Dark background for tile pane (matches satellite imagery)
+
+    # ===== Map Animation (Smooth transitions) =====
+    MAP_FADE_ANIMATION = True         # Fade tiles in (hides gray flashes)
+    MAP_ZOOM_ANIMATION = True         # Animate zoom transitions
+    MAP_ZOOM_ANIMATION_THRESHOLD = 4  # Max zoom diff for animation (avoids long animations)
+
     # ===== Performance Limits =====
     MAX_MARKERS_PER_VIEWPORT = 2000  # ✅ محسّن: زيادة من 1000 إلى 2000 للأداء الأفضل
 

@@ -1000,6 +1000,143 @@ class BaseMapDialog(QDialog):
             # Return empty GeoJSON on error
             return '{"type":"FeatureCollection","features":[]}'
 
+    @staticmethod
+    def load_neighborhoods_geojson(auth_token: Optional[str] = None) -> Optional[str]:
+        """
+        Load neighborhoods from API and convert to GeoJSON for map overlay.
+
+        Same approach as buildings_page._build_neighborhoods_geojson() (DRY):
+        1. Try API first (singleton already has auth token from login)
+        2. Fallback to local data/neighborhoods.json
+
+        Returns:
+            GeoJSON string with neighborhood center points, or None
+        """
+        import json as _json
+
+        logger.info("🏘️ load_neighborhoods_geojson: trying API first...")
+
+        # Strategy 1: API (same approach as buildings_page - DON'T re-set auth token)
+        try:
+            from services.api_client import get_api_client
+            api = get_api_client()
+            # DON'T call set_access_token - singleton already has token from login
+            # (re-setting can cause issues if auth_token param is None)
+
+            neighborhoods = api.get_neighborhoods_by_bounds(
+                sw_lat=36.14, sw_lng=37.07,
+                ne_lat=36.26, ne_lng=37.23
+            )
+
+            if neighborhoods:
+                result = BaseMapDialog._neighborhoods_to_geojson(neighborhoods)
+                if result:
+                    logger.info(f"🏘️ ✅ Loaded neighborhoods from API")
+                    return result
+
+        except Exception as e:
+            logger.warning(f"🏘️ API failed, trying local fallback: {e}")
+
+        # Strategy 2: Local JSON fallback (same as buildings_page)
+        logger.info("🏘️ Trying local neighborhoods.json fallback...")
+        try:
+            return BaseMapDialog._load_neighborhoods_local()
+        except Exception as e:
+            logger.error(f"🏘️ ❌ Local fallback also failed: {e}")
+
+        return None
+
+    @staticmethod
+    def _neighborhoods_to_geojson(neighborhoods: list) -> Optional[str]:
+        """Convert API neighborhood response to GeoJSON center points."""
+        import json as _json
+
+        features = []
+        for n in neighborhoods:
+            boundaries = n.get('boundaries', '')
+            if not boundaries or 'POLYGON' not in boundaries.upper():
+                continue
+
+            coords_str = boundaries.replace('POLYGON((', '').replace('))', '').strip()
+            pairs = coords_str.split(',')
+            lngs, lats = [], []
+            for pair in pairs:
+                parts = pair.strip().split()
+                if len(parts) == 2:
+                    lngs.append(float(parts[0]))
+                    lats.append(float(parts[1]))
+
+            if lats and lngs:
+                center_lat = sum(lats) / len(lats)
+                center_lng = sum(lngs) / len(lngs)
+                features.append({
+                    "type": "Feature",
+                    "properties": {
+                        "code": n.get('code', ''),
+                        "name_ar": n.get('nameArabic', ''),
+                        "center_lat": center_lat,
+                        "center_lng": center_lng
+                    },
+                    "geometry": {
+                        "type": "Point",
+                        "coordinates": [center_lng, center_lat]
+                    }
+                })
+
+        if features:
+            logger.info(f"🏘️ Created {len(features)} neighborhood features from API data")
+            return _json.dumps({"type": "FeatureCollection", "features": features})
+        return None
+
+    @staticmethod
+    def _load_neighborhoods_local() -> Optional[str]:
+        """Fallback: Load neighborhoods from local data/neighborhoods.json."""
+        import json as _json
+        import os
+
+        data_file = os.path.join(
+            os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+            'data', 'neighborhoods.json'
+        )
+
+        if not os.path.exists(data_file):
+            logger.warning(f"🏘️ Local neighborhoods file not found: {data_file}")
+            return None
+
+        with open(data_file, 'r', encoding='utf-8') as f:
+            data = _json.load(f)
+
+        features = []
+        for n in data.get('neighborhoods', []):
+            polygon = n.get('polygon', [])
+            if not polygon:
+                continue
+
+            lngs = [p[0] for p in polygon]
+            lats = [p[1] for p in polygon]
+            center_lng = sum(lngs) / len(lngs)
+            center_lat = sum(lats) / len(lats)
+
+            features.append({
+                "type": "Feature",
+                "properties": {
+                    "code": n.get('code', ''),
+                    "name_ar": n.get('name_ar', ''),
+                    "center_lat": center_lat,
+                    "center_lng": center_lng
+                },
+                "geometry": {
+                    "type": "Point",
+                    "coordinates": [center_lng, center_lat]
+                }
+            })
+
+        if features:
+            logger.info(f"🏘️ ✅ Loaded {len(features)} neighborhoods from local JSON")
+            return _json.dumps({"type": "FeatureCollection", "features": features})
+
+        return None
+
     def _get_auth_token_from_parent(self, parent) -> Optional[str]:
         """
         Get auth token from parent window (MainWindow.current_user).

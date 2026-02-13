@@ -262,12 +262,12 @@ class PolygonMapDialog(BaseMapDialog):
 
     def _load_map(self):
         """
-        Load map with polygon drawing tools.
+        Load map with multi-select mode.
 
-        ✅ BEST PRACTICE: Same as BuildingMapDialog!
-        - Start with EMPTY GeoJSON (fast loading!)
-        - Buildings loaded dynamically via viewport loading
-        - NO pre-loading of buildings
+        
+        - Load 200 buildings initially (fast QWebChannel init)
+        - Cache initial buildings for multi-select lookup
+        - More buildings loaded dynamically via viewport loading
         """
         from services.tile_server_manager import get_tile_server_url
 
@@ -275,32 +275,34 @@ class PolygonMapDialog(BaseMapDialog):
             # Get tile server URL
             tile_server_url = get_tile_server_url()
 
-            # ✅ CRITICAL: Log auth token status
+            # CRITICAL: Log auth token status
             if self._auth_token:
                 logger.info(f"✅ _load_map: Auth token available (length: {len(self._auth_token)})")
             else:
                 logger.error(f"❌ _load_map: NO AUTH TOKEN! Viewport loading will fail!")
 
-            # ✅ FIX: Load 200 buildings initially (SAME AS WIZARD!)
-            # This fixes QWebChannel bridge initialization issue
-            buildings_geojson = self.load_buildings_geojson(self.db, limit=200, auth_token=self._auth_token)
-            logger.info(f"🚀 Loading 200 buildings initially (like wizard) - more will load dynamically")
+            #Load initial buildings AND cache them for multi-select lookup
+            buildings_geojson = self._load_and_cache_initial_buildings()
 
-            # ✅ Generate map HTML using LeafletHTMLGenerator
-            # SAME AS BuildingMapDialog but with polygon drawing enabled!
+            # Load neighborhoods for map overlay (DRY - shared helper)
+            neighborhoods_geojson = self.load_neighborhoods_geojson(auth_token=self._auth_token)
+            logger.info(f"🏘️ Neighborhoods result: {'loaded' if neighborhoods_geojson else 'None/failed'}")
+
+            #  Generate map HTML using LeafletHTMLGenerator
             html = generate_leaflet_html(
                 tile_server_url=tile_server_url.rstrip('/'),
                 buildings_geojson=buildings_geojson,
                 center_lat=36.2021,
                 center_lon=37.1343,
-                zoom=15,  #
-                max_zoom=20,  #
+                zoom=15,
+                max_zoom=20,
                 show_legend=True,
                 show_layer_control=False,
-                enable_selection=False,  # No popup selection button
+                enable_selection=False,
                 enable_multiselect=True,
                 enable_viewport_loading=True,
                 enable_drawing=False,
+                neighborhoods_geojson=neighborhoods_geojson,
             )
 
             # Load into web view
@@ -315,6 +317,47 @@ class PolygonMapDialog(BaseMapDialog):
                 f"حدث خطأ أثناء تحميل الخريطة:\n{str(e)}",
                 "خطأ"
             )
+
+    def _load_and_cache_initial_buildings(self) -> str:
+        """
+        Load initial buildings, cache them for multi-select lookup, return GeoJSON.
+
+
+        """
+        from services.map_service_api import MapServiceAPI
+        from services.geojson_converter import GeoJSONConverter
+
+        try:
+            map_service = MapServiceAPI()
+            if self._auth_token:
+                map_service.set_auth_token(self._auth_token)
+
+            # Load buildings from API (same bounds as load_buildings_geojson)
+            buildings = map_service.get_buildings_in_bbox(
+                north_east_lat=36.5,
+                north_east_lng=37.5,
+                south_west_lat=36.0,
+                south_west_lng=36.8,
+                page_size=200
+            )
+
+            logger.info(f"✅ Loaded {len(buildings)} initial buildings from API")
+
+            # ✅ CRITICAL: Cache buildings for multi-select lookup
+            if not hasattr(self, '_viewport_buildings_cache'):
+                self._viewport_buildings_cache = {}
+            for b in buildings:
+                if b.building_id:
+                    self._viewport_buildings_cache[b.building_id] = b
+
+            logger.info(f"✅ Cached {len(self._viewport_buildings_cache)} buildings in viewport cache")
+
+            # Convert to GeoJSON for map display
+            return GeoJSONConverter.buildings_to_geojson(buildings, prefer_polygons=True)
+
+        except Exception as e:
+            logger.error(f"Error loading initial buildings: {e}", exc_info=True)
+            return '{"type":"FeatureCollection","features":[]}'
 
     def _on_geometry_selected(self, geom_type: str, wkt: str):
         """
@@ -336,28 +379,25 @@ class PolygonMapDialog(BaseMapDialog):
                 count = len(self._selected_buildings)
                 logger.info(f"✅ Found {count} buildings in polygon")
 
-                # ✅ SOLID: Single Responsibility - Extract building IDs
+                
                 building_ids = [b.building_id for b in self._selected_buildings]
 
-                # ✅ DRY: Store building lookup (cache for fast access)
+                
                 for building in self._selected_buildings:
                     if building.building_id not in self._building_id_to_building:
                         self._building_id_to_building[building.building_id] = building
 
-                # ✅ CRITICAL FIX: Update BaseMapDialog's selected_building_ids list
-                # This is required for parent class methods to work correctly
+
                 if not hasattr(self, '_selected_building_ids'):
                     self._selected_building_ids = []
                 self._selected_building_ids = building_ids
 
-                # ✅ DRY: Use parent class method to update buildings list UI
-                # This populates the sidebar with building details
                 self._update_buildings_list(building_ids)
 
-                # ✅ Update counter display (uses parent class method)
+                #  Update counter display (uses parent class method)
                 self._on_selection_count_updated(count)
 
-                # ✅ Highlight selected buildings on map
+                # Highlight selected buildings on map
                 self._highlight_selected_buildings()
 
                 # Enable confirm button
@@ -365,8 +405,7 @@ class PolygonMapDialog(BaseMapDialog):
                     self.confirm_selection_btn.setEnabled(True)
                     logger.info(f"✅ Confirm button enabled ({count} buildings selected)")
 
-                # ✅ NO MESSAGE: Buildings are shown directly on map and in counter
-                # User can see them highlighted on map and count in UI
+                
                 logger.info(f"✅ Found {count} buildings in polygon - shown on map")
             else:
                 logger.warning("No buildings found in polygon")
@@ -391,8 +430,8 @@ class PolygonMapDialog(BaseMapDialog):
         """
         Query buildings within polygon using CORRECT BuildingAssignments API.
 
-        ✅ BEST PRACTICE: Uses Backend PostGIS for fast spatial queries
-        ✅ CORRECT API: /api/v1/BuildingAssignments/buildings/search
+        
+        CORRECT API: /api/v1/BuildingAssignments/buildings/search
 
         Args:
             polygon_wkt: WKT string (PostGIS-compatible)
@@ -414,16 +453,14 @@ class PolygonMapDialog(BaseMapDialog):
             # Get API client
             api_client = get_api_client()
 
-            # ✅ CRITICAL: Set auth token before API call
+            # CRITICAL: Set auth token before API call
             if hasattr(self, '_auth_token') and self._auth_token:
                 api_client.set_access_token(self._auth_token)
                 logger.debug("✅ Auth token set for BuildingAssignments API")
             else:
                 logger.warning("⚠️ No auth token available - trying anyway")
 
-            # ✅ CORRECT API: Search buildings for assignment using polygon
-            # has_active_assignment=False means: only buildings without active assignment
-            # has_active_assignment=None means: all buildings (assigned + unassigned)
+            
             result = api_client.search_buildings_for_assignment(
                 polygon_wkt=polygon_wkt,
                 has_active_assignment=None,  # Get all buildings (we'll filter later if needed)

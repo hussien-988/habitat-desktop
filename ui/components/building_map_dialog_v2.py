@@ -309,47 +309,8 @@ class BuildingMapDialog(BaseMapDialog):
                     focus_building_id = self._selected_building_id
                     logger.info(f"Focusing on building {focus_building_id} at ({center_lat}, {center_lon}) with max zoom {zoom}")
 
-            # Load neighborhoods GeoJSON for overlay (same as buildings_page)
-            neighborhoods_geojson = None
-            try:
-                from services.api_client import get_api_client
-                api = get_api_client()
-                if self._auth_token:
-                    api.set_access_token(self._auth_token)
-                neighborhoods = api.get_neighborhoods_by_bounds(
-                    sw_lat=36.14, sw_lng=37.07,
-                    ne_lat=36.26, ne_lng=37.23
-                )
-                if neighborhoods:
-                    import json as _json
-                    features = []
-                    for n in neighborhoods:
-                        boundaries = n.get('boundaries', '')
-                        if boundaries and 'POLYGON' in boundaries.upper():
-                            coords_str = boundaries.replace('POLYGON((', '').replace('))', '').strip()
-                            pairs = coords_str.split(',')
-                            lngs, lats = [], []
-                            for pair in pairs:
-                                parts = pair.strip().split()
-                                if len(parts) == 2:
-                                    lngs.append(float(parts[0]))
-                                    lats.append(float(parts[1]))
-                            if lats and lngs:
-                                features.append({
-                                    "type": "Feature",
-                                    "properties": {
-                                        "code": n.get('code', ''),
-                                        "name_ar": n.get('nameArabic', ''),
-                                        "center_lat": sum(lats) / len(lats),
-                                        "center_lng": sum(lngs) / len(lngs)
-                                    },
-                                    "geometry": {"type": "Point", "coordinates": [sum(lngs)/len(lngs), sum(lats)/len(lats)]}
-                                })
-                    if features:
-                        neighborhoods_geojson = _json.dumps({"type": "FeatureCollection", "features": features})
-                        logger.info(f"Loaded {len(features)} neighborhoods for map overlay")
-            except Exception as e:
-                logger.warning(f"Could not load neighborhoods: {e}")
+            # Load neighborhoods for map overlay (DRY - shared helper from BaseMapDialog)
+            neighborhoods_geojson = self.load_neighborhoods_geojson(auth_token=self._auth_token)
 
             # Generate map HTML using LeafletHTMLGenerator
             html = generate_leaflet_html(
