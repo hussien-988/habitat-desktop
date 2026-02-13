@@ -29,6 +29,7 @@ from services.api_client import get_api_client
 from services.error_mapper import map_exception
 from ui.error_handler import ErrorHandler
 from utils.logger import get_logger
+from utils.helpers import build_hierarchical_address
 from ui.font_utils import FontManager, create_font
 from ui.design_system import Colors
 from services.translation_manager import tr
@@ -92,8 +93,8 @@ class BuildingSelectionStep(BaseStep):
             }
         """)
 
-        # Card dimensions: Fixed height 151px (from Figma)
-        card.setFixedHeight(151)
+        # Card dimensions: 151px base + 40px for address row
+        card.setFixedHeight(191)
         card.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
 
         card_layout = QVBoxLayout(card)
@@ -260,6 +261,52 @@ class BuildingSelectionStep(BaseStep):
         # Add bar to card
         card_layout.addWidget(search_bar)
 
+        # Address row (hidden initially, shown after building selection)
+        card_layout.addSpacing(8)
+
+        self.address_container = QFrame()
+        self.address_container.setFixedHeight(28)
+        self.address_container.setVisible(False)
+        self.address_container.setStyleSheet("""
+            QFrame {
+                background-color: #F8FAFF;
+                border: none;
+                border-radius: 8px;
+            }
+        """)
+
+        address_row = QHBoxLayout(self.address_container)
+        address_row.setContentsMargins(12, 0, 12, 0)
+        address_row.setSpacing(8)
+
+        address_row.addStretch()
+
+        from ui.components.icon import Icon
+        address_icon = QLabel()
+        address_icon_pixmap = Icon.load_pixmap("dec", size=16)
+        if address_icon_pixmap and not address_icon_pixmap.isNull():
+            address_icon.setPixmap(address_icon_pixmap)
+        else:
+            address_icon.setText("📍")
+        address_icon.setStyleSheet("background: transparent; border: none;")
+        address_row.addWidget(address_icon)
+
+        self.ui_building_address = QLabel("")
+        self.ui_building_address.setAlignment(Qt.AlignCenter)
+        self.ui_building_address.setFont(create_font(size=10, weight=FontManager.WEIGHT_REGULAR))
+        self.ui_building_address.setStyleSheet("""
+            QLabel {
+                border: none;
+                background-color: transparent;
+                color: #0F5B95;
+            }
+        """)
+        address_row.addWidget(self.ui_building_address)
+
+        address_row.addStretch()
+
+        card_layout.addWidget(self.address_container)
+
         # Add card to main layout
         layout.addWidget(card)
 
@@ -366,15 +413,15 @@ class BuildingSelectionStep(BaseStep):
 
             return section, value
 
-        # Create 5 stat sections (from Figma order)
-        section_type, self.ui_building_type = _create_stat_section(tr("wizard.building.type"))
-        section_status, self.ui_building_status = _create_stat_section(tr("wizard.building.status"))
-        section_units, self.ui_units_count = _create_stat_section(tr("wizard.building.units_count"))
-        section_parcels, self.ui_parcels_count = _create_stat_section(tr("wizard.building.parcels_count"))
-        section_shops, self.ui_shops_count = _create_stat_section(tr("wizard.building.shops_count"))
+        # Create 5 stat sections
+        section_status, self.ui_building_status = _create_stat_section("حالة البناء")
+        section_type, self.ui_building_type = _create_stat_section("نوع البناء")
+        section_units, self.ui_units_count = _create_stat_section("العدد الكلي للمقاسم")
+        section_parcels, self.ui_parcels_count = _create_stat_section("عدد المقاسم السكنية")
+        section_shops, self.ui_shops_count = _create_stat_section("عدد المقاسم غير السكنية")
 
         # Add sections with equal spacing (no dividers)
-        sections = [section_type, section_status, section_units, section_parcels, section_shops]
+        sections = [section_status, section_type, section_units, section_parcels, section_shops]
         for i, section in enumerate(sections):
             stats_layout.addWidget(section, stretch=1)
             # No separator lines - just equal distribution
@@ -619,11 +666,12 @@ class BuildingSelectionStep(BaseStep):
             # Update stats card with building data
             self.ui_building_type.setText(selected_building.building_type_display or "-")
             self.ui_building_status.setText(selected_building.building_status_display or "-")
-            self.ui_units_count.setText(str(selected_building.number_of_units))
+            self.ui_units_count.setText(str(getattr(selected_building, 'number_of_apartments', 0) + (selected_building.number_of_shops or 0)))
             self.ui_parcels_count.setText(str(getattr(selected_building, 'number_of_apartments', 0)))
             self.ui_shops_count.setText(str(selected_building.number_of_shops))
 
-            # Show stats card
+            # Show stats card + address
+            self._update_address_display(selected_building)
             self.stats_card.setVisible(True)
 
             # Update location card with building data
@@ -692,7 +740,7 @@ class BuildingSelectionStep(BaseStep):
             # Update stats card
             self.ui_building_type.setText(selected_building.building_type_display or "-")
             self.ui_building_status.setText(selected_building.building_status_display or "-")
-            self.ui_units_count.setText(str(selected_building.number_of_units))
+            self.ui_units_count.setText(str(getattr(selected_building, 'number_of_apartments', 0) + (selected_building.number_of_shops or 0)))
             self.ui_parcels_count.setText(str(getattr(selected_building, 'number_of_apartments', 0)))
             self.ui_shops_count.setText(str(selected_building.number_of_shops))
 
@@ -701,6 +749,7 @@ class BuildingSelectionStep(BaseStep):
             self.ui_location_desc.setText(getattr(selected_building, 'location_description', tr("wizard.building.location_description")))
 
             # Show cards
+            self._update_address_display(selected_building)
             self.stats_card.setVisible(True)
             self.location_card.setVisible(True)
 
@@ -815,11 +864,12 @@ class BuildingSelectionStep(BaseStep):
         self.ui_building_type.setText(building.building_type_display or "-")
         self.ui_building_status.setText(building.building_status_display or "-")
         # TODO: Get actual counts from building object
-        self.ui_units_count.setText(str(building.number_of_units))
+        self.ui_units_count.setText(str(getattr(building, 'number_of_apartments', 0) + (building.number_of_shops or 0)))
         self.ui_parcels_count.setText(str(getattr(building, 'number_of_apartments', 0)))
         self.ui_shops_count.setText(str(building.number_of_shops))
 
-        # Show stats card
+        # Show stats card + address
+        self._update_address_display(building)
         self.stats_card.setVisible(True)
 
         # Update location card with building data
@@ -886,9 +936,10 @@ class BuildingSelectionStep(BaseStep):
                 # Update stats card
                 self.ui_building_type.setText(building.building_type_display or "-")
                 self.ui_building_status.setText(building.building_status_display or "-")
-                self.ui_units_count.setText(str(building.number_of_units))
+                self.ui_units_count.setText(str(getattr(building, 'number_of_apartments', 0) + (building.number_of_shops or 0)))
                 self.ui_parcels_count.setText(str(getattr(building, 'number_of_apartments', 0)))
                 self.ui_shops_count.setText(str(building.number_of_shops))
+                self._update_address_display(building)
                 self.stats_card.setVisible(True)
 
                 # Update location card
@@ -1051,7 +1102,7 @@ class BuildingSelectionStep(BaseStep):
                 # Update stats card
                 self.ui_building_type.setText(building.building_type_display or "-")
                 self.ui_building_status.setText(building.building_status_display or "-")
-                self.ui_units_count.setText(str(building.number_of_units))
+                self.ui_units_count.setText(str(getattr(building, 'number_of_apartments', 0) + (building.number_of_shops or 0)))
                 self.ui_parcels_count.setText(str(getattr(building, 'number_of_apartments', 0)))
                 self.ui_shops_count.setText(str(building.number_of_shops))
                 self.stats_card.setVisible(True)
@@ -1120,6 +1171,17 @@ class BuildingSelectionStep(BaseStep):
                 tr("common.error")
             )
 
+    def _update_address_display(self, building):
+        """Update building address bar after selection."""
+        address = build_hierarchical_address(
+            building_obj=building,
+            unit_obj=None,
+            separator=" - ",
+            include_unit=False
+        )
+        self.ui_building_address.setText(address)
+        self.address_container.setVisible(True)
+
     def _set_auth_token(self):
         """Set auth token for survey API service from main window."""
         main_window = self.window()
@@ -1150,7 +1212,7 @@ class BuildingSelectionStep(BaseStep):
             # Update stats card
             self.ui_building_type.setText(self.context.building.building_type_display or "-")
             self.ui_building_status.setText(self.context.building.building_status_display or "-")
-            self.ui_units_count.setText(str(self.context.building.number_of_units))
+            self.ui_units_count.setText(str(getattr(self.context.building, 'number_of_apartments', 0) + (self.context.building.number_of_shops or 0)))
             self.ui_parcels_count.setText(str(getattr(self.context.building, 'number_of_apartments', 0)))
             self.ui_shops_count.setText(str(self.context.building.number_of_shops))
             self.stats_card.setVisible(True)

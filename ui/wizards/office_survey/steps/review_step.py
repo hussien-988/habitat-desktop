@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-Review Step - Step 7 of Office Survey Wizard.
+Review Step - Step 6 of Office Survey Wizard.
 
 Final review and submission step - displays summary cards from all previous steps.
 """
@@ -37,7 +37,7 @@ logger = get_logger(__name__)
 
 
 class ReviewStep(BaseStep):
-    """Step 7: Review & Submit."""
+    """Step 6: Review & Submit."""
 
     def __init__(self, context: SurveyContext, parent=None):
         super().__init__(context, parent)
@@ -370,7 +370,7 @@ class ReviewStep(BaseStep):
         name_lbl.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent;")
         name_lbl.setAlignment(Qt.AlignRight)
 
-        role_key = person.get('relationship_type', person.get('role', ''))
+        role_key = person.get('person_role') or person.get('relationship_type') or person.get('role', '')
         role_text = get_relation_type_display(role_key) if role_key else get_relation_type_display('occupant')
         role_lbl = QLabel(role_text)
         role_lbl.setFont(create_font(size=10, weight=FontManager.WEIGHT_REGULAR))
@@ -886,30 +886,48 @@ class ReviewStep(BaseStep):
 
         # Aggregate data from all households
         total_size = sum(h.get('size', 0) for h in self.context.households)
-        head_name = self.context.households[0].get('head_name', '-') if self.context.households else "-"
+        hh = self.context.households[0] if self.context.households else {}
 
-        # --- Summary Row: Head name (right) + Member count (center) ---
+        # Occupancy type/nature display
+        occ_type_val = hh.get('occupancy_type', '-') or '-'
+        occ_nature_val = hh.get('occupancy_nature', '-') or '-'
+
+        # --- Summary Row: Occupancy Type + Nature + Member count ---
         summary_container = QWidget()
         summary_container.setStyleSheet("background: transparent; border: none;")
         summary_layout = QHBoxLayout(summary_container)
         summary_layout.setContentsMargins(0, 0, 0, 0)
         summary_layout.setSpacing(0)
 
-        # Right block: head of household name
-        name_block = QVBoxLayout()
-        name_block.setSpacing(4)
-        name_title = QLabel(tr("wizard.household.head_name"))
-        name_title.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
-        name_title.setStyleSheet(f"color: #1e293b; background: transparent; border: none;")
-        name_title.setAlignment(Qt.AlignRight)
-        name_val = QLabel(head_name)
-        name_val.setFont(create_font(size=10, weight=FontManager.WEIGHT_REGULAR))
-        name_val.setStyleSheet(f"color: #94a3b8; background: transparent; border: none;")
-        name_val.setAlignment(Qt.AlignRight)
-        name_block.addWidget(name_title)
-        name_block.addWidget(name_val)
+        # Right block: occupancy type
+        type_block = QVBoxLayout()
+        type_block.setSpacing(4)
+        type_title = QLabel(tr("wizard.occupation.type"))
+        type_title.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
+        type_title.setStyleSheet(f"color: #1e293b; background: transparent; border: none;")
+        type_title.setAlignment(Qt.AlignRight)
+        type_val = QLabel(occ_type_val)
+        type_val.setFont(create_font(size=10, weight=FontManager.WEIGHT_REGULAR))
+        type_val.setStyleSheet(f"color: #94a3b8; background: transparent; border: none;")
+        type_val.setAlignment(Qt.AlignRight)
+        type_block.addWidget(type_title)
+        type_block.addWidget(type_val)
 
-        # Center block: member count
+        # Center block: occupancy nature
+        nature_block = QVBoxLayout()
+        nature_block.setSpacing(4)
+        nature_title = QLabel(tr("wizard.occupation.nature"))
+        nature_title.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
+        nature_title.setStyleSheet(f"color: #1e293b; background: transparent; border: none;")
+        nature_title.setAlignment(Qt.AlignCenter)
+        nature_val = QLabel(occ_nature_val)
+        nature_val.setFont(create_font(size=10, weight=FontManager.WEIGHT_REGULAR))
+        nature_val.setStyleSheet(f"color: #94a3b8; background: transparent; border: none;")
+        nature_val.setAlignment(Qt.AlignCenter)
+        nature_block.addWidget(nature_title)
+        nature_block.addWidget(nature_val)
+
+        # Left block: member count
         count_block = QVBoxLayout()
         count_block.setSpacing(4)
         count_title = QLabel(tr("wizard.household.family_size"))
@@ -923,7 +941,9 @@ class ReviewStep(BaseStep):
         count_block.addWidget(count_title)
         count_block.addWidget(count_val)
 
-        summary_layout.addLayout(name_block)
+        summary_layout.addLayout(type_block)
+        summary_layout.addStretch()
+        summary_layout.addLayout(nature_block)
         summary_layout.addStretch()
         summary_layout.addLayout(count_block)
         summary_layout.addStretch()
@@ -1311,7 +1331,7 @@ class ReviewStep(BaseStep):
 
     def on_next(self):
         """Called when user clicks Next/Submit button. Finalize the survey via API if not already done."""
-        # Skip finalize if already done in Step 5 (RelationStep)
+        # Skip finalize if already done in Step 4 (OccupancyClaimsStep)
         if hasattr(self.context, 'finalize_response') and self.context.finalize_response:
             logger.info("Survey already finalized in Step 5, skipping duplicate finalize")
             return

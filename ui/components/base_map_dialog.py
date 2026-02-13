@@ -240,7 +240,7 @@ class BaseMapDialog(QDialog):
         self.setModal(True)
         self.setWindowTitle(self.dialog_title)
         self.setWindowFlags(Qt.Dialog | Qt.FramelessWindowHint)
-        self.setFixedSize(1100, 700)
+        self.setFixedSize(1455, 816)
         self.setAttribute(Qt.WA_TranslucentBackground, True)
 
         # Main layout
@@ -279,7 +279,7 @@ class BaseMapDialog(QDialog):
         # Map view
         if HAS_WEBENGINE:
             self.web_view = QWebEngineView(self)
-            self.web_view.setFixedSize(1052, 526)
+            self.web_view.setFixedSize(1407, 642)
 
             settings = self.web_view.settings()
             settings.setAttribute(QWebEngineSettings.JavascriptEnabled, True)
@@ -297,7 +297,7 @@ class BaseMapDialog(QDialog):
 
             # Loading indicator
             self._loading_label = QLabel("⏳ جاري تحميل الخريطة...")
-            self._loading_label.setFixedSize(1052, 526)
+            self._loading_label.setFixedSize(1407, 642)
             self._loading_label.setAlignment(Qt.AlignCenter)
             self._loading_label.setFont(create_font(size=10, weight=FontManager.WEIGHT_REGULAR))
             self._loading_label.setStyleSheet(f"""
@@ -319,7 +319,7 @@ class BaseMapDialog(QDialog):
             content_layout.addWidget(map_container)
         else:
             placeholder = QLabel("🗺️ الخريطة غير متاحة (QtWebEngine غير مثبت)")
-            placeholder.setFixedSize(1052, 526)
+            placeholder.setFixedSize(1407, 642)
             placeholder.setAlignment(Qt.AlignCenter)
             placeholder.setFont(create_font(size=10, weight=FontManager.WEIGHT_REGULAR))
             placeholder.setStyleSheet(f"""

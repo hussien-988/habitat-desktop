@@ -189,15 +189,15 @@ class UnitSelectionStep(BaseStep):
 
             return section, value
 
-        # Create 5 stat sections
-        section_type, self.ui_building_type = _create_stat_section(tr("wizard.building.type"))
-        section_status, self.ui_building_status = _create_stat_section(tr("wizard.building.status"))
-        section_units, self.ui_units_count = _create_stat_section(tr("wizard.building.units_count"))
-        section_parcels, self.ui_parcels_count = _create_stat_section(tr("wizard.building.parcels_count"))
-        section_shops, self.ui_shops_count = _create_stat_section(tr("wizard.building.shops_count"))
+        # Create 5 stat sections - hardcoded Arabic matching Step 1
+        section_status, self.ui_building_status = _create_stat_section("حالة البناء")
+        section_type, self.ui_building_type = _create_stat_section("نوع البناء")
+        section_units, self.ui_units_count = _create_stat_section("العدد الكلي للمقاسم")
+        section_parcels, self.ui_parcels_count = _create_stat_section("عدد المقاسم السكنية")
+        section_shops, self.ui_shops_count = _create_stat_section("عدد المقاسم غير السكنية")
 
-        # Add sections with equal spacing
-        sections = [section_type, section_status, section_units, section_parcels, section_shops]
+        # Add sections with equal spacing - status first, then type (matching Step 1 order)
+        sections = [section_status, section_type, section_units, section_parcels, section_shops]
         for section in sections:
             stats_row.addWidget(section, stretch=1)
 
@@ -283,7 +283,7 @@ class UnitSelectionStep(BaseStep):
         # Figma: 14px × 0.75 = 10.5pt (rounded to 10pt for cleaner rendering)
         # Increased weight to emphasize title (SemiBold instead of Regular)
         # RTL: Text ends at the same point as subtitle, but starts further right
-        self._title_label = QLabel(tr("wizard.unit.select_title"))
+        self._title_label = QLabel("اختر مقسما")
         self._title_label.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
         self._title_label.setStyleSheet("""
             QLabel {
@@ -297,7 +297,7 @@ class UnitSelectionStep(BaseStep):
         title_subtitle_layout.addWidget(self._title_label)
 
         # Subtitle with same font size, different color
-        self._subtitle_label = QLabel(tr("wizard.unit.select_subtitle"))
+        self._subtitle_label = QLabel("اختر مقسما او سجل معلومات مقسم جديد")
         self._subtitle_label.setFont(create_font(size=10, weight=FontManager.WEIGHT_REGULAR))
         self._subtitle_label.setStyleSheet("""
             QLabel {
@@ -317,7 +317,7 @@ class UnitSelectionStep(BaseStep):
         # DRY: Use ActionButton component (Single Source of Truth)
         # Figma specs: background #F0F7FF, border #3890DF, border-radius 8px
         self.add_unit_btn = ActionButton(
-            text=tr("wizard.unit.add_button"),
+            text="اضف مقسما",
             variant="outline",
             icon_name="icon",
             width=125,
@@ -384,7 +384,7 @@ class UnitSelectionStep(BaseStep):
         # Update stats - DRY: consistent pattern for all fields
         self.ui_building_type.setText(building.building_type_display or "-")
         self.ui_building_status.setText(building.building_status_display or "-")
-        self.ui_units_count.setText(str(building.number_of_units or 0))
+        self.ui_units_count.setText(str(getattr(building, 'number_of_apartments', 0) + (building.number_of_shops or 0)))
         self.ui_parcels_count.setText(str(getattr(building, 'number_of_apartments', 0)))
         self.ui_shops_count.setText(str(building.number_of_shops or 0))
 
@@ -570,12 +570,12 @@ class UnitSelectionStep(BaseStep):
         # Column Data - REVERSED ORDER (was right-to-left, now left-to-right in code)
         # All values converted to Arabic
         data_points = [
-            (tr("wizard.unit.number"), unit_display_num),
-            (tr("wizard.unit.floor_number"), floor_val),
-            (tr("wizard.unit.rooms_count"), rooms_val),
-            (tr("wizard.unit.area"), area_val),
-            (tr("wizard.unit.type"), unit_type_val),
-            (tr("wizard.unit.status"), status_val),
+            ("رقم المقسم", unit_display_num),
+            ("رقم الطابق", floor_val),
+            ("عدد الغرف", rooms_val),
+            ("مساحة المقسم", area_val),
+            ("نوع المقسم", unit_type_val),
+            ("حالة المقسم", status_val),
         ]
 
         # DRY: Use helper method for consistent label styling
@@ -614,8 +614,8 @@ class UnitSelectionStep(BaseStep):
         desc_layout.setSpacing(2)
         desc_layout.setDirection(QVBoxLayout.TopToBottom)  # Ensure top-to-bottom flow
 
-        # Title: وصف العقار
-        desc_title = QLabel(tr("wizard.unit.property_description"))
+        # Title: وصف المقسم
+        desc_title = QLabel("وصف المقسم")
         desc_title.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))  # Smaller: 9pt
         desc_title.setStyleSheet("color: #1A1F1D;")
         desc_title.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)  # Left in RTL = Right visually
