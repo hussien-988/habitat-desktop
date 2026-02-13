@@ -7,7 +7,6 @@ from .login_page import LoginPage
 from .dashboard_page import DashboardPage
 from .buildings_page import BuildingsPage
 from .building_details_page import BuildingDetailsPage
-from .import_wizard_page import ImportWizardPage
 from .map_page import MapPage
 
 __all__ = [
@@ -15,6 +14,5 @@ __all__ = [
     "DashboardPage",
     "BuildingsPage",
     "BuildingDetailsPage",
-    "ImportWizardPage",
     "MapPage",
 ]

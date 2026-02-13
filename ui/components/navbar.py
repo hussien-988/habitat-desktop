@@ -386,7 +386,7 @@ class Navbar(QFrame):
             "navbar.tab.buildings",
             "navbar.tab.residential_units",
             "navbar.tab.duplicates",
-            "navbar.tab.import",
+            "navbar.tab.user_management",
         ]
         tab_titles = [tr(key) for key in self._tab_keys]
 

@@ -7,10 +7,8 @@ TRRCMS Service Layer
 __all__ = [
     "AuthService",
     "ValidationService",
-    "ImportService",
     "ExportService",
     "DashboardService",
-    "UHCImporter",
     "MatchingService",
     "ConflictResolutionService",
     "SyncServer",
@@ -35,18 +33,12 @@ def __getattr__(name):
     elif name == "ValidationService":
         from .validation_service import ValidationService
         return ValidationService
-    elif name == "ImportService":
-        from .import_service import ImportService
-        return ImportService
     elif name == "ExportService":
         from .export_service import ExportService
         return ExportService
     elif name == "DashboardService":
         from .dashboard_service import DashboardService
         return DashboardService
-    elif name == "UHCImporter":
-        from .uhc_importer import UHCImporter
-        return UHCImporter
     elif name == "MatchingService":
         from .matching_service import MatchingService
         return MatchingService

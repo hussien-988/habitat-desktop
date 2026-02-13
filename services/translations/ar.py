@@ -585,7 +585,7 @@ AR_TRANSLATIONS = {
     "navbar.tab.buildings": "المباني",
     "navbar.tab.residential_units": "الوحدات السكنية",
     "navbar.tab.duplicates": "التكرارات",
-    "navbar.tab.import": "استيراد",
+    "navbar.tab.user_management": "إدارة المستخدمين",
     "navbar.search.default": "ابحث عن الرمز أو الاسم...",
     "navbar.search.by_name": "ابحث عن اسم المستلم...",
     "navbar.search.by_claim_id": "ابحث برقم المطالبة...",

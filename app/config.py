@@ -201,7 +201,6 @@ class Pages:
     DOCUMENTS = "documents"
     HOUSEHOLDS = "households"
     RELATIONS = "relations"
-    IMPORT_WIZARD = "import_wizard"
     CONFLICTS = "conflicts"
     DUPLICATES = "duplicates"  # UC-007, UC-008: Property & Person duplicates
     FIELD_ASSIGNMENT = "field_assignment"  # UC-012: Assign buildings to field teams
