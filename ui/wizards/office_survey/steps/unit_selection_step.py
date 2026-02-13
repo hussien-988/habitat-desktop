@@ -168,19 +168,19 @@ class UnitSelectionStep(BaseStep):
             section.setStyleSheet("background: transparent;")
 
             section_layout = QVBoxLayout(section)
-            section_layout.setContentsMargins(8, 0, 8, 0)  # Padding for better spacing
+            section_layout.setContentsMargins(8, 0, 8, 0)
             section_layout.setSpacing(4)
-            section_layout.setAlignment(Qt.AlignLeft)  # Start from same point (right in RTL)
+            section_layout.setAlignment(Qt.AlignCenter)
 
-            # Label (top text) - smaller font, left aligned (starts from right in RTL)
+            # Label (top)
             label = QLabel(label_text)
-            label.setAlignment(Qt.AlignLeft)  # Start from same point
-            label.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))  # Smaller: 9pt
+            label.setAlignment(Qt.AlignCenter)
+            label.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
             label.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent;")
 
-            # Value (bottom text) - smaller font, RIGHT aligned
+            # Value (bottom) - centered under label
             value = QLabel(value_text)
-            value.setAlignment(Qt.AlignRight)  # Right alignment for values
+            value.setAlignment(Qt.AlignCenter)
             value.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))  # Smaller: 9pt
             value.setStyleSheet(f"color: {Colors.WIZARD_SUBTITLE}; background: transparent;")
 
@@ -328,27 +328,123 @@ class UnitSelectionStep(BaseStep):
 
         units_main_layout.addLayout(header_layout)
 
+        # Empty state widget (shown when no units)
+        self._empty_state = self._create_empty_state()
+        units_main_layout.addWidget(self._empty_state)
+
         # Units list container (inside white frame)
         self.units_container = QWidget()
         self.units_layout = QVBoxLayout(self.units_container)
         self.units_layout.setSpacing(10)
         self.units_layout.setContentsMargins(0, 0, 0, 0)
 
-        # Scroll area for units (hidden scrollbar)
+        # Scroll area for units
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setWidget(self.units_container)
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
         scroll.setStyleSheet("""
             QScrollArea {
                 border: none;
                 background-color: white;
             }
+            QScrollBar:vertical {
+                background: transparent;
+                width: 6px;
+                margin: 4px 0px 4px 0px;
+                border-radius: 3px;
+            }
+            QScrollBar::handle:vertical {
+                background: #C4CDD5;
+                min-height: 40px;
+                border-radius: 3px;
+            }
+            QScrollBar::handle:vertical:hover {
+                background: #919EAB;
+            }
+            QScrollBar::handle:vertical:pressed {
+                background: #637381;
+            }
+            QScrollBar::add-line:vertical,
+            QScrollBar::sub-line:vertical {
+                height: 0px;
+                background: none;
+                border: none;
+            }
+            QScrollBar::add-page:vertical,
+            QScrollBar::sub-page:vertical {
+                background: none;
+            }
         """)
+        self._scroll_area = scroll
         units_main_layout.addWidget(scroll, 1)
 
         layout.addWidget(units_main_frame, 1)
+
+    def _create_empty_state(self) -> QWidget:
+        """Create empty state widget shown when no units exist."""
+        import os
+        from PyQt5.QtGui import QPixmap
+
+        container = QWidget()
+        container.setStyleSheet("background-color: transparent;")
+
+        main_layout = QHBoxLayout(container)
+        main_layout.setContentsMargins(0, 40, 0, 40)
+
+        center_widget = QWidget()
+        center_widget.setStyleSheet("background: transparent;")
+        center_layout = QVBoxLayout(center_widget)
+        center_layout.setAlignment(Qt.AlignCenter)
+        center_layout.setSpacing(15)
+
+        # Icon with orange circle background
+        icon_container = QLabel()
+        icon_container.setFixedSize(70, 70)
+        icon_container.setAlignment(Qt.AlignCenter)
+        icon_container.setStyleSheet("""
+            background-color: #ffcc33;
+            border-radius: 35px;
+        """)
+
+        icon_path = os.path.join(
+            os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))),
+            "assets", "images", "tdesign_no-result.png"
+        )
+        if os.path.exists(icon_path):
+            pixmap = QPixmap(icon_path)
+            icon_container.setPixmap(pixmap.scaled(40, 40, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+        else:
+            no_result_pixmap = Icon.load_pixmap("tdesign_no-result", size=40)
+            if no_result_pixmap and not no_result_pixmap.isNull():
+                icon_container.setPixmap(no_result_pixmap)
+            else:
+                icon_container.setText("!")
+                icon_container.setStyleSheet(icon_container.styleSheet() + "font-size: 28px; color: #1a1a1a;")
+
+        # Title
+        title_label = QLabel("لا توجد مقاسم مسجلة بعد")
+        title_label.setAlignment(Qt.AlignCenter)
+        title_label.setFont(create_font(size=14, weight=FontManager.WEIGHT_BOLD))
+        title_label.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent;")
+
+        # Description
+        desc_label = QLabel(
+            "يرجى إضافة مقسم جديد بالضغط على زر\n"
+            "\"اضف مقسما\" أعلاه"
+        )
+        desc_label.setAlignment(Qt.AlignCenter)
+        desc_label.setFont(create_font(size=11, weight=FontManager.WEIGHT_REGULAR))
+        desc_label.setStyleSheet(f"color: {Colors.WIZARD_SUBTITLE}; background: transparent;")
+
+        center_layout.addWidget(icon_container, alignment=Qt.AlignCenter)
+        center_layout.addWidget(title_label)
+        center_layout.addWidget(desc_label)
+
+        main_layout.addWidget(center_widget)
+
+        return container
 
     def _load_units(self):
         """Load units for the selected building and display as cards."""
@@ -360,6 +456,9 @@ class UnitSelectionStep(BaseStep):
                 child = self.units_layout.takeAt(0)
                 if child.widget():
                     child.widget().deleteLater()
+            # Show empty state, hide scroll
+            self._empty_state.setVisible(True)
+            self._scroll_area.setVisible(False)
             # Clear selected unit
             self.selected_unit = None
             self.emit_validation_changed(False)
@@ -397,35 +496,37 @@ class UnitSelectionStep(BaseStep):
             if child.widget():
                 child.widget().deleteLater()
 
-        # Load units from database
-        result = self.unit_controller.get_units_for_building(self.context.building.building_uuid)
+        # Load units for THIS building only
+        building_uuid = self.context.building.building_uuid
+        logger.info(f"Loading units for building: {building_uuid}")
+        result = self.unit_controller.get_units_for_building(building_uuid)
 
         if not result.success:
             logger.error(f"Failed to load units: {result.message}")
-            # Show empty state
-            empty_label = QLabel(tr("wizard.unit.error_loading"))
-            empty_label.setAlignment(Qt.AlignCenter)
-            empty_label.setStyleSheet("color: #EF4444; font-size: 14px; padding: 40px;")
-            self.units_layout.addWidget(empty_label)
-            self.units_layout.addStretch()
+            self._empty_state.setVisible(True)
+            self._scroll_area.setVisible(False)
             return
 
-        units = result.data
+        # Safety filter: ensure only units for THIS building are shown
+        all_units = result.data or []
+        units = []
+        for u in all_units:
+            u_building = getattr(u, 'building_id', None)
+            if not u_building or u_building == building_uuid or u_building == self.context.building.building_id:
+                units.append(u)
+            else:
+                logger.warning(f"Filtered out unit {u.unit_id} - belongs to building {u_building}, not {building_uuid}")
+
+        logger.info(f"Showing {len(units)} units (of {len(all_units)} returned by API) for building {building_uuid}")
+
+        has_units = len(units) > 0
+        self._empty_state.setVisible(not has_units)
+        self._scroll_area.setVisible(has_units)
 
         if units:
             for unit in units:
                 unit_card = self._create_unit_card(unit)
                 self.units_layout.addWidget(unit_card)
-        else:
-            # Empty state message
-            empty_label = QLabel(tr("wizard.unit.no_units"))
-            empty_label.setAlignment(Qt.AlignCenter)
-            empty_label.setStyleSheet("""
-                color: #9CA3AF;
-                font-size: 14px;
-                padding: 40px;
-            """)
-            self.units_layout.addWidget(empty_label)
 
         self.units_layout.addStretch()
 
@@ -450,7 +551,7 @@ class UnitSelectionStep(BaseStep):
 
         Args:
             text: Label text
-            is_title: True for title style (like "اختر الوحدة العقارية"),
+            is_title: True for title style (like "اختر مقسماً"),
                      False for value style (like subtitle)
 
         Returns:
@@ -695,15 +796,36 @@ class UnitSelectionStep(BaseStep):
             self.context.is_new_unit = True
             self.context.new_unit_data = dialog.get_unit_data()
 
-            # Mark as having a selected unit (even though it's new)
-            # This allows validation to pass
-            self.selected_unit = "new_unit"  # Placeholder to indicate new unit
-
-            # Enable next button by emitting validation changed
-            self.emit_validation_changed(True)
+            # CRITICAL: Use API-generated UUID (not the local one)
+            # dialog._created_unit_data contains the API response with the real UUID
+            if hasattr(dialog, '_created_unit_data') and dialog._created_unit_data:
+                api_uuid = dialog._created_unit_data.get('id') or dialog._created_unit_data.get('unitUuid')
+                if api_uuid:
+                    logger.info(f"Using API-generated unit UUID: {api_uuid}")
+                    self.context.new_unit_data['unit_uuid'] = api_uuid
 
             # Refresh units list to show the newly created unit
             self._load_units()
+
+            # Auto-select the newly created unit from the refreshed list
+            # This ensures self.context.unit has the correct API object
+            api_uuid = self.context.new_unit_data.get('unit_uuid')
+            if api_uuid:
+                result = self.unit_controller.get_units_for_building(self.context.building.building_uuid)
+                if result.success and result.data:
+                    for unit in result.data:
+                        if getattr(unit, 'unit_uuid', None) == api_uuid:
+                            self.context.unit = unit
+                            self.context.is_new_unit = False  # Now it's a real API unit
+                            self.selected_unit = unit
+                            logger.info(f"Auto-selected newly created unit: {unit.unit_uuid}")
+                            self._load_units()  # Refresh to show selection highlight
+                            break
+
+            # Enable next button
+            if not self.selected_unit:
+                self.selected_unit = "new_unit"  # Fallback placeholder
+            self.emit_validation_changed(True)
 
     def update_language(self, is_arabic: bool):
         """Update all translatable texts when language changes."""

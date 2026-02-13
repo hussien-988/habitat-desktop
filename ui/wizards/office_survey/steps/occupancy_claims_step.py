@@ -151,9 +151,80 @@ class OccupancyClaimsStep(BaseStep):
         self.persons_table_layout.addStretch()
 
         scroll_area.setWidget(scroll_widget)
+        self._scroll_area = scroll_area
+
+        # Empty state widget (shown when no persons added)
+        self._empty_state = self._create_empty_state()
+
+        table_layout.addWidget(self._empty_state)
         table_layout.addWidget(scroll_area)
 
         layout.addWidget(table_frame)
+
+    def _create_empty_state(self) -> QWidget:
+        """Create empty state widget shown when no persons are added."""
+        from ui.components.icon import Icon
+        from PyQt5.QtGui import QPixmap
+        import os
+
+        container = QWidget()
+        container.setStyleSheet(f"background-color: transparent;")
+
+        main_layout = QHBoxLayout(container)
+        main_layout.setContentsMargins(0, 40, 0, 40)
+
+        center_widget = QWidget()
+        center_widget.setStyleSheet("background: transparent;")
+        center_layout = QVBoxLayout(center_widget)
+        center_layout.setAlignment(Qt.AlignCenter)
+        center_layout.setSpacing(15)
+
+        # Icon with orange circle background (same as claim_step)
+        icon_container = QLabel()
+        icon_container.setFixedSize(70, 70)
+        icon_container.setAlignment(Qt.AlignCenter)
+        icon_container.setStyleSheet("""
+            background-color: #ffcc33;
+            border-radius: 35px;
+        """)
+
+        icon_path = os.path.join(
+            os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))),
+            "assets", "images", "tdesign_no-result.png"
+        )
+        if os.path.exists(icon_path):
+            pixmap = QPixmap(icon_path)
+            icon_container.setPixmap(pixmap.scaled(40, 40, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+        else:
+            no_result_pixmap = Icon.load_pixmap("tdesign_no-result", size=40)
+            if no_result_pixmap and not no_result_pixmap.isNull():
+                icon_container.setPixmap(no_result_pixmap)
+            else:
+                icon_container.setText("!")
+                icon_container.setStyleSheet(icon_container.styleSheet() + "font-size: 28px; color: #1a1a1a;")
+
+        # Title
+        title_label = QLabel("لم يتم إضافة بيانات أفراد بعد")
+        title_label.setAlignment(Qt.AlignCenter)
+        title_label.setFont(create_font(size=14, weight=FontManager.WEIGHT_BOLD))
+        title_label.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent;")
+
+        # Description
+        desc_label = QLabel(
+            "يرجى إضافة بيانات الأفراد الشاغلين لهذا المقسم\n"
+            "بالضغط على زر \"إضافة فرد جديد\" أعلاه"
+        )
+        desc_label.setAlignment(Qt.AlignCenter)
+        desc_label.setFont(create_font(size=11, weight=FontManager.WEIGHT_REGULAR))
+        desc_label.setStyleSheet(f"color: {Colors.WIZARD_SUBTITLE}; background: transparent;")
+
+        center_layout.addWidget(icon_container, alignment=Qt.AlignCenter)
+        center_layout.addWidget(title_label)
+        center_layout.addWidget(desc_label)
+
+        main_layout.addWidget(center_widget)
+
+        return container
 
     def _get_context_ids(self):
         """Get survey_id, household_id, unit_id, and auth_token from context."""
@@ -367,11 +438,17 @@ class OccupancyClaimsStep(BaseStep):
         return card
 
     def _refresh_persons_list(self):
-        """Refresh the persons list display."""
+        """Refresh the persons list display and toggle empty state."""
         while self.persons_table_layout.count() > 1:
             item = self.persons_table_layout.takeAt(0)
             if item.widget():
                 item.widget().deleteLater()
+
+        has_persons = len(self.context.persons) > 0
+
+        # Toggle empty state vs scroll area
+        self._empty_state.setVisible(not has_persons)
+        self._scroll_area.setVisible(has_persons)
 
         for idx, person in enumerate(self.context.persons):
             person_card = self._create_person_row_card(person, idx)

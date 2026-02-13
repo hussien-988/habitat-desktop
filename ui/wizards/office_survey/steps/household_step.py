@@ -13,7 +13,7 @@ import uuid
 
 from PyQt5.QtWidgets import (
     QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton,
-    QFrame, QScrollArea, QWidget, QGroupBox, QComboBox,
+    QFrame, QScrollArea, QWidget, QGroupBox,
     QSpinBox, QTextEdit, QGridLayout, QGraphicsDropShadowEffect
 )
 from PyQt5.QtCore import Qt, QLocale
@@ -173,14 +173,13 @@ class HouseholdStep(BaseStep):
         unit_info_row.setSpacing(0)
         unit_info_row.setContentsMargins(8, 8, 8, 8)  # Add padding inside container
 
-        # Create 6 unit info sections - SAME ORDER as unit_selection_step
-        # Order: رقم الوحدة، رقم الطابق، عدد الغرف، المساحة، نوع الوحدة، حالة الوحدة
-        section_unit_num, self.ui_unit_number = self._create_stat_section(tr("wizard.unit.number"))
-        section_floor, self.ui_floor_number = self._create_stat_section(tr("wizard.unit.floor_number"))
-        section_rooms, self.ui_rooms_count = self._create_stat_section(tr("wizard.unit.rooms_count"))
-        section_area, self.ui_area = self._create_stat_section(tr("wizard.unit.area"))
-        section_unit_type, self.ui_unit_type = self._create_stat_section(tr("wizard.unit.type"))
-        section_unit_status, self.ui_unit_status = self._create_stat_section(tr("wizard.unit.status"))
+        # Create 6 unit info sections - SAME labels as unit_selection_step cards
+        section_unit_num, self.ui_unit_number = self._create_stat_section("رقم المقسم")
+        section_floor, self.ui_floor_number = self._create_stat_section("رقم الطابق")
+        section_rooms, self.ui_rooms_count = self._create_stat_section("عدد الغرف")
+        section_area, self.ui_area = self._create_stat_section("مساحة المقسم")
+        section_unit_type, self.ui_unit_type = self._create_stat_section("نوع المقسم")
+        section_unit_status, self.ui_unit_status = self._create_stat_section("حالة المقسم")
 
         # Add sections with equal spacing
         unit_sections = [section_unit_num, section_floor, section_rooms, section_area, section_unit_type, section_unit_status]
@@ -189,16 +188,43 @@ class HouseholdStep(BaseStep):
 
         card_layout.addWidget(unit_info_container)
 
-        # Create scroll area for ALL cards (hidden scrollbar)
+        # Create scroll area for ALL cards (modern thin scrollbar)
         scroll_area = QScrollArea()
         scroll_area.setWidgetResizable(True)
         scroll_area.setFrameShape(QFrame.NoFrame)
         scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
         scroll_area.setStyleSheet("""
             QScrollArea {
                 background-color: transparent;
                 border: none;
+            }
+            QScrollBar:vertical {
+                background: transparent;
+                width: 6px;
+                margin: 4px 0px 4px 0px;
+                border-radius: 3px;
+            }
+            QScrollBar::handle:vertical {
+                background: #C4CDD5;
+                min-height: 40px;
+                border-radius: 3px;
+            }
+            QScrollBar::handle:vertical:hover {
+                background: #919EAB;
+            }
+            QScrollBar::handle:vertical:pressed {
+                background: #637381;
+            }
+            QScrollBar::add-line:vertical,
+            QScrollBar::sub-line:vertical {
+                height: 0px;
+                background: none;
+                border: none;
+            }
+            QScrollBar::add-page:vertical,
+            QScrollBar::sub-page:vertical {
+                background: none;
             }
         """)
 
@@ -214,7 +240,7 @@ class HouseholdStep(BaseStep):
         # معلومات الاسرة (Family Information) Section - same design as units card
         family_info_frame = QFrame()
         family_info_frame.setObjectName("familyInfoCard")
-        family_info_frame.setFixedHeight(278)  # Height as requested
+        family_info_frame.setFixedHeight(330)  # Header + head_name + total_members + notes
         family_info_frame.setStyleSheet("""
             QFrame#familyInfoCard {
                 background-color: white;
@@ -278,7 +304,7 @@ class HouseholdStep(BaseStep):
         title_subtitle_layout.setContentsMargins(0, 0, 0, 0)
 
         # Title
-        self._title_label = QLabel(tr("wizard.household.head_title"))
+        self._title_label = QLabel("الشاغلين")
         self._title_label.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
         self._title_label.setStyleSheet("""
             QLabel {
@@ -309,15 +335,22 @@ class HouseholdStep(BaseStep):
 
         family_info_layout.addLayout(header_layout)
 
-        # ===== ROW 2: Three fields (occupancy type + occupancy nature + total members) =====
+        # ===== ROW 1.5: Head of Household Name (required by API) =====
         family_info_layout.addSpacing(8)
 
-        row2_layout = QHBoxLayout()
-        row2_layout.setSpacing(12)
+        head_name_layout = QVBoxLayout()
+        head_name_layout.setSpacing(4)
 
-        # Shared combo style
-        combo_style = """
-            QComboBox {
+        self._head_name_label = QLabel(tr("wizard.household.head_name_label"))
+        self._head_name_label.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
+        self._head_name_label.setStyleSheet("color: #374151; background: transparent;")
+        head_name_layout.addWidget(self._head_name_label)
+
+        self.hh_head_name = QLineEdit()
+        self.hh_head_name.setPlaceholderText(tr("wizard.household.head_name_placeholder"))
+        self.hh_head_name.setFixedHeight(45)
+        self.hh_head_name.setStyleSheet("""
+            QLineEdit {
                 padding: 0px 12px;
                 border: 1px solid #E1E8ED;
                 border-radius: 8px;
@@ -325,60 +358,25 @@ class HouseholdStep(BaseStep):
                 font-size: 14px;
                 color: #1A1A1A;
             }
-            QComboBox:focus {
+            QLineEdit:focus {
                 border-color: #3890DF;
                 border-width: 2px;
             }
-            QComboBox::drop-down {
-                border: none;
-                width: 30px;
-            }
-        """
+        """)
+        head_name_layout.addWidget(self.hh_head_name)
 
-        # Field 1: Occupancy Type
-        field1_layout = QVBoxLayout()
-        field1_layout.setSpacing(4)
+        family_info_layout.addLayout(head_name_layout)
 
-        self._occupancy_type_label = QLabel(tr("wizard.occupation.type"))
-        self._occupancy_type_label.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
-        self._occupancy_type_label.setStyleSheet("color: #374151; background: transparent;")
-        field1_layout.addWidget(self._occupancy_type_label)
+        # ===== ROW 2: Total Members (full width) =====
+        family_info_layout.addSpacing(8)
 
-        self.occupancy_type = QComboBox()
-        self.occupancy_type.setFixedHeight(45)
-        self.occupancy_type.addItem(tr("wizard.person_dialog.select"), None)
-        self.occupancy_type.addItem(tr("wizard.occupation.residential"), "residential")
-        self.occupancy_type.addItem(tr("wizard.occupation.non_residential"), "non_residential")
-        self.occupancy_type.setStyleSheet(combo_style)
-        field1_layout.addWidget(self.occupancy_type)
-        row2_layout.addLayout(field1_layout, 1)
-
-        # Field 2: Occupancy Nature
-        field2_layout = QVBoxLayout()
-        field2_layout.setSpacing(4)
-
-        self._occupancy_nature_label = QLabel(tr("wizard.occupation.nature"))
-        self._occupancy_nature_label.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
-        self._occupancy_nature_label.setStyleSheet("color: #374151; background: transparent;")
-        field2_layout.addWidget(self._occupancy_nature_label)
-
-        self.occupancy_nature = QComboBox()
-        self.occupancy_nature.setFixedHeight(45)
-        self.occupancy_nature.addItem(tr("wizard.person_dialog.select"), None)
-        self.occupancy_nature.addItem(tr("wizard.occupation.ownership"), "ownership")
-        self.occupancy_nature.addItem(tr("wizard.occupation.other"), "other")
-        self.occupancy_nature.setStyleSheet(combo_style)
-        field2_layout.addWidget(self.occupancy_nature)
-        row2_layout.addLayout(field2_layout, 1)
-
-        # Field 3: Total Members
-        field3_layout = QVBoxLayout()
-        field3_layout.setSpacing(4)
+        total_members_layout = QVBoxLayout()
+        total_members_layout.setSpacing(4)
 
         self._total_members_label = QLabel(tr("wizard.household.total_members"))
         self._total_members_label.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
         self._total_members_label.setStyleSheet("color: #374151; background: transparent;")
-        field3_layout.addWidget(self._total_members_label)
+        total_members_layout.addWidget(self._total_members_label)
 
         self.hh_total_members = QSpinBox()
         self.hh_total_members.setRange(0, 50)
@@ -388,10 +386,10 @@ class HouseholdStep(BaseStep):
         self.hh_total_members.setButtonSymbols(QSpinBox.NoButtons)
 
         members_widget = self._create_spinbox_with_arrows(self.hh_total_members)
-        field3_layout.addWidget(members_widget)
-        row2_layout.addLayout(field3_layout, 1)
+        members_widget.setFixedHeight(45)
+        total_members_layout.addWidget(members_widget)
 
-        family_info_layout.addLayout(row2_layout)
+        family_info_layout.addLayout(total_members_layout)
 
         # ===== ROW 3: Notes field =====
         # Gap before row 3: 8px
@@ -408,7 +406,7 @@ class HouseholdStep(BaseStep):
         self.hh_notes = QTextEdit()
         self.hh_notes.setPlaceholderText(tr("wizard.household.notes_placeholder"))
         self.hh_notes.setMaximumHeight(80)
-        self.hh_notes.setAlignment(Qt.AlignRight | Qt.AlignTop)  # Align placeholder to right
+        self.hh_notes.setLayoutDirection(Qt.RightToLeft)
         self.hh_notes.setStyleSheet("""
             QTextEdit {
                 padding: 8px 12px;
@@ -506,19 +504,19 @@ class HouseholdStep(BaseStep):
         section.setStyleSheet("background: transparent;")
 
         section_layout = QVBoxLayout(section)
-        section_layout.setContentsMargins(8, 0, 8, 0)  # Padding for better spacing
+        section_layout.setContentsMargins(8, 0, 8, 0)
         section_layout.setSpacing(4)
-        section_layout.setAlignment(Qt.AlignLeft)  # Start from same point (right in RTL)
+        section_layout.setAlignment(Qt.AlignCenter)
 
-        # Label (top) - smaller font, left aligned (starts from right in RTL)
+        # Label (top)
         label = QLabel(label_text)
-        label.setAlignment(Qt.AlignLeft)  # Start from same point
-        label.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))  # Smaller: 9pt
+        label.setAlignment(Qt.AlignCenter)
+        label.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
         label.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent;")
 
-        # Value (bottom) - smaller font, RIGHT aligned
+        # Value (bottom) - centered under label
         value = QLabel(value_text)
-        value.setAlignment(Qt.AlignRight)  # Right alignment for values
+        value.setAlignment(Qt.AlignCenter)
         value.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))  # Smaller: 9pt
         value.setStyleSheet(f"color: {Colors.WIZARD_SUBTITLE}; background: transparent;")
 
@@ -527,89 +525,98 @@ class HouseholdStep(BaseStep):
 
         return section, value
 
-    def _create_spinbox_with_arrows(self, spinbox: QSpinBox) -> QFrame:
+    def _create_spinbox_with_arrows(self, spinbox: QSpinBox, bg_color: str = "#F8FAFF") -> QFrame:
         """
-        Create a spinbox widget with text arrows on the side.
+        Create a spinbox widget with icon arrows (matching unit_dialog style).
 
         Args:
             spinbox: QSpinBox to wrap with custom arrows
+            bg_color: Background color for the container
 
         Returns:
             QFrame container with spinbox and arrows
-
-        Figma specs:
-        - Height: 45px (fixed)
-        - Border: 1px solid #E1E8ED
-        - Border-radius: 8px
-        - Background: #F8FAFF
         """
         container = QFrame()
-        container.setFixedHeight(45)  # Figma: 45px exact height
-        container.setStyleSheet("""
-            QFrame {
+        container.setFixedHeight(45)
+        container.setStyleSheet(f"""
+            QFrame {{
                 border: 1px solid #E1E8ED;
                 border-radius: 8px;
-                background-color: #F8FAFF;
-            }
+                background-color: {bg_color};
+            }}
         """)
 
         layout = QHBoxLayout(container)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
 
-        # Arrow column (right side in LTR, left side in RTL after swap)
-        arrow_container = QFrame()
-        arrow_container.setStyleSheet("background: transparent; border: none;")
-        arrow_layout = QVBoxLayout(arrow_container)
-        arrow_layout.setContentsMargins(5, 2, 5, 2)
-        arrow_layout.setSpacing(-8)  # Very close spacing - almost zero gap
-
-        # Up arrow
-        up_label = QLabel("^")
-        up_label.setStyleSheet("""
-            QLabel {
-                color: #9CA3AF;
-                font-size: 16px;
-                font-weight: bold;
-                background: transparent;
-            }
-        """)
-        up_label.setAlignment(Qt.AlignCenter)
-        up_label.setFixedSize(24, 18)
-        up_label.setCursor(Qt.PointingHandCursor)
-        up_label.mousePressEvent = lambda e: spinbox.stepUp()
-        arrow_layout.addWidget(up_label)
-
-        # Down arrow
-        down_label = QLabel("v")
-        down_label.setStyleSheet("""
-            QLabel {
-                color: #9CA3AF;
-                font-size: 16px;
-                font-weight: bold;
-                background: transparent;
-            }
-        """)
-        down_label.setAlignment(Qt.AlignCenter)
-        down_label.setFixedSize(24, 18)
-        down_label.setCursor(Qt.PointingHandCursor)
-        down_label.mousePressEvent = lambda e: spinbox.stepDown()
-        arrow_layout.addWidget(down_label)
-
-        # SpinBox styling - match QLineEdit exactly
+        # Spinbox (no border since container has border)
         spinbox.setStyleSheet("""
             QSpinBox {
+                padding: 6px 12px;
+                padding-right: 35px;
                 border: none;
-                padding: 0px 12px;
-                background-color: transparent;
-                font-size: 14px;
-                color: #1A1A1A;
+                background: transparent;
+                font-size: 10pt;
+                color: #606266;
+                selection-background-color: transparent;
+                selection-color: #606266;
+            }
+            QSpinBox:focus {
+                border: none;
+                outline: 0;
+            }
+            QSpinBox::up-button, QSpinBox::down-button {
+                width: 0px;
+                border: none;
             }
         """)
-
-        # Add widgets to layout - SWAPPED ORDER (spinbox first, arrows second)
-        # This puts arrows on the opposite side
         layout.addWidget(spinbox, 1)
+
+        # Arrow column (RIGHT side) with left border separator
+        arrow_container = QFrame()
+        arrow_container.setFixedWidth(30)
+        arrow_container.setStyleSheet("""
+            QFrame {
+                border: none;
+                border-left: 1px solid #E1E8ED;
+                background: transparent;
+                border-top-right-radius: 8px;
+                border-bottom-right-radius: 8px;
+            }
+        """)
+        arrow_layout = QVBoxLayout(arrow_container)
+        arrow_layout.setContentsMargins(0, 0, 0, 0)
+        arrow_layout.setSpacing(0)
+
+        # Up arrow icon (^.png)
+        up_label = QLabel()
+        up_label.setFixedSize(30, 22)
+        up_label.setAlignment(Qt.AlignCenter)
+        up_pixmap = Icon.load_pixmap("^", size=10)
+        if up_pixmap and not up_pixmap.isNull():
+            up_label.setPixmap(up_pixmap)
+        else:
+            up_label.setText("^")
+            up_label.setStyleSheet("color: #9CA3AF; font-size: 10px; font-weight: bold; background: transparent;")
+        up_label.setCursor(Qt.PointingHandCursor)
+        up_label.mousePressEvent = lambda _: spinbox.stepUp()
+        arrow_layout.addWidget(up_label)
+
+        # Down arrow icon (v.png)
+        down_label = QLabel()
+        down_label.setFixedSize(30, 22)
+        down_label.setAlignment(Qt.AlignCenter)
+        down_pixmap = Icon.load_pixmap("v", size=10)
+        if down_pixmap and not down_pixmap.isNull():
+            down_label.setPixmap(down_pixmap)
+        else:
+            down_label.setText("v")
+            down_label.setStyleSheet("color: #9CA3AF; font-size: 10px; font-weight: bold; background: transparent;")
+        down_label.setCursor(Qt.PointingHandCursor)
+        down_label.mousePressEvent = lambda _: spinbox.stepDown()
+        arrow_layout.addWidget(down_label)
+
         layout.addWidget(arrow_container)
 
         return container
@@ -688,90 +695,16 @@ class HouseholdStep(BaseStep):
         """
         Create a spinbox widget with arrows for composition fields.
 
-        Same as _create_spinbox_with_arrows but with WHITE background.
-
-        Args:
-            spinbox: QSpinBox to wrap with custom arrows
-
-        Returns:
-            QFrame container with spinbox and arrows
+        Reuses _create_spinbox_with_arrows with WHITE background.
         """
-        container = QFrame()
-        container.setFixedHeight(45)  # Same height as other fields
-        container.setStyleSheet("""
-            QFrame {
-                border: 1px solid #E1E8ED;
-                border-radius: 8px;
-                background-color: #FFFFFF;
-            }
-        """)
-
-        layout = QHBoxLayout(container)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(0)
-
-        # Arrow column
-        arrow_container = QFrame()
-        arrow_container.setStyleSheet("background: transparent; border: none;")
-        arrow_layout = QVBoxLayout(arrow_container)
-        arrow_layout.setContentsMargins(5, 2, 5, 2)
-        arrow_layout.setSpacing(-8)  # Very close spacing
-
-        # Up arrow
-        up_label = QLabel("^")
-        up_label.setStyleSheet("""
-            QLabel {
-                color: #9CA3AF;
-                font-size: 16px;
-                font-weight: bold;
-                background: transparent;
-            }
-        """)
-        up_label.setAlignment(Qt.AlignCenter)
-        up_label.setFixedSize(24, 18)
-        up_label.setCursor(Qt.PointingHandCursor)
-        up_label.mousePressEvent = lambda e: spinbox.stepUp()
-        arrow_layout.addWidget(up_label)
-
-        # Down arrow
-        down_label = QLabel("v")
-        down_label.setStyleSheet("""
-            QLabel {
-                color: #9CA3AF;
-                font-size: 16px;
-                font-weight: bold;
-                background: transparent;
-            }
-        """)
-        down_label.setAlignment(Qt.AlignCenter)
-        down_label.setFixedSize(24, 18)
-        down_label.setCursor(Qt.PointingHandCursor)
-        down_label.mousePressEvent = lambda e: spinbox.stepDown()
-        arrow_layout.addWidget(down_label)
-
-        # SpinBox styling
-        spinbox.setStyleSheet("""
-            QSpinBox {
-                border: none;
-                padding: 0px 12px;
-                background-color: transparent;
-                font-size: 14px;
-                color: #1A1A1A;
-            }
-        """)
-
-        # Add widgets to layout - arrows on the opposite side
-        layout.addWidget(spinbox, 1)
-        layout.addWidget(arrow_container)
-
-        return container
+        return self._create_spinbox_with_arrows(spinbox, bg_color="#FFFFFF")
 
     def update_language(self, is_arabic: bool):
         """Update all translatable texts when language changes."""
-        self._title_label.setText(tr("wizard.household.head_title"))
+        self._title_label.setText("الشاغلين" if is_arabic else "Occupants")
         self._subtitle_label.setText(tr("wizard.household.subtitle"))
-        self._occupancy_type_label.setText(tr("wizard.occupation.type"))
-        self._occupancy_nature_label.setText(tr("wizard.occupation.nature"))
+        self._head_name_label.setText(tr("wizard.household.head_name_label"))
+        self.hh_head_name.setPlaceholderText(tr("wizard.household.head_name_placeholder"))
         self._total_members_label.setText(tr("wizard.household.total_members"))
         self._notes_label.setText(tr("wizard.household.notes_label"))
         self.hh_notes.setPlaceholderText(tr("wizard.household.notes_placeholder"))
@@ -788,12 +721,28 @@ class HouseholdStep(BaseStep):
             property_unit_id = self.context.new_unit_data.get('unit_uuid')
 
         # Build household data
+        head_name = self.hh_head_name.text().strip()
+        if not head_name:
+            result.add_error("يرجى إدخال اسم رب الأسرة/العائل")
+            return result
+
+        # Validate: total members == sum of all male + female fields
+        total_entered = self.hh_total_members.value()
+        sum_details = (
+            self.hh_adult_males.value() + self.hh_adult_females.value()
+            + self.hh_male_children_under18.value() + self.hh_female_children_under18.value()
+            + self.hh_male_elderly_over65.value() + self.hh_female_elderly_over65.value()
+            + self.hh_disabled_males.value() + self.hh_disabled_females.value()
+        )
+        if total_entered != sum_details:
+            result.add_error("تأكد من مطابقة عدد الأفراد")
+            return result
+
         household = {
             "household_id": str(uuid.uuid4()),
             "property_unit_id": property_unit_id,
             "unit_uuid": property_unit_id,
-            "occupancy_type": self.occupancy_type.currentData(),
-            "occupancy_nature": self.occupancy_nature.currentData(),
+            "head_name": head_name,
             "size": self.hh_total_members.value(),
             "adult_males": self.hh_adult_males.value(),
             "adult_females": self.hh_adult_females.value(),
@@ -811,8 +760,8 @@ class HouseholdStep(BaseStep):
             self._set_auth_token()
             survey_id = self.context.get_data("survey_id")
 
-            logger.info(f"Creating household via API: {household}")
-            print(f"[HOUSEHOLD] Creating household for survey_id: {survey_id}")
+            logger.info(f"Creating household via API: property_unit_id={property_unit_id}, survey_id={survey_id}, size={household['size']}")
+            print(f"[HOUSEHOLD] Creating household: survey_id={survey_id}, property_unit_id={property_unit_id}")
 
             try:
                 api_response = self._api_client.create_household(household, survey_id=survey_id)
@@ -916,18 +865,8 @@ class HouseholdStep(BaseStep):
         # Load existing household data if available
         if len(self.context.households) > 0:
             household = self.context.households[0]
-            # Occupancy type
-            occ_type = household.get("occupancy_type")
-            if occ_type:
-                idx = self.occupancy_type.findData(occ_type)
-                if idx >= 0:
-                    self.occupancy_type.setCurrentIndex(idx)
-            # Occupancy nature
-            occ_nature = household.get("occupancy_nature")
-            if occ_nature:
-                idx = self.occupancy_nature.findData(occ_nature)
-                if idx >= 0:
-                    self.occupancy_nature.setCurrentIndex(idx)
+            # Head of household name
+            self.hh_head_name.setText(household.get("head_name", ""))
             self.hh_total_members.setValue(household.get("size", 0))
             self.hh_adult_males.setValue(household.get("adult_males", 0))
             self.hh_adult_females.setValue(household.get("adult_females", 0))
@@ -939,8 +878,7 @@ class HouseholdStep(BaseStep):
             self.hh_disabled_females.setValue(household.get("disabled_females", 0))
             self.hh_notes.setPlainText(household.get("notes", ""))
         else:
-            self.occupancy_type.setCurrentIndex(0)
-            self.occupancy_nature.setCurrentIndex(0)
+            self.hh_head_name.clear()
             self.hh_total_members.setValue(0)
             self.hh_adult_males.setValue(0)
             self.hh_adult_females.setValue(0)

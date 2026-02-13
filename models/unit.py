@@ -60,28 +60,38 @@ class PropertyUnit:
     @property
     def unit_type_display(self) -> str:
         """Get display name for unit type."""
-        types = {
-            "apartment": "Apartment",
-            "shop": "Shop",
-            "office": "Office",
-            "warehouse": "Warehouse",
-            "garage": "Garage",
-            "other": "Other",
+        # Integer codes from API
+        int_types = {1: "Apartment", 2: "Shop", 3: "Office", 4: "Warehouse", 5: "Other"}
+        # String keys from local DB
+        str_types = {
+            "apartment": "Apartment", "shop": "Shop", "office": "Office",
+            "warehouse": "Warehouse", "garage": "Garage", "other": "Other",
         }
-        return types.get(self.unit_type, self.unit_type)
+        try:
+            return int_types.get(int(self.unit_type), str(self.unit_type))
+        except (ValueError, TypeError):
+            pass
+        if isinstance(self.unit_type, str):
+            return str_types.get(self.unit_type.lower(), self.unit_type)
+        return str(self.unit_type) if self.unit_type else "-"
 
     @property
     def unit_type_display_ar(self) -> str:
         """Get Arabic display name for unit type."""
-        types = {
-            "apartment": "شقة",
-            "shop": "محل",
-            "office": "مكتب",
-            "warehouse": "مستودع",
-            "garage": "كراج",
-            "other": "آخر",
+        # Integer codes from API (matching Vocabularies.UNIT_TYPES)
+        int_types = {1: "شقة سكنية", 2: "محل تجاري", 3: "مكتب", 4: "مستودع", 5: "أخرى"}
+        # String keys from local DB
+        str_types = {
+            "apartment": "شقة سكنية", "shop": "محل تجاري", "office": "مكتب",
+            "warehouse": "مستودع", "garage": "كراج", "other": "أخرى",
         }
-        return types.get(self.unit_type, self.unit_type)
+        try:
+            return int_types.get(int(self.unit_type), str(self.unit_type))
+        except (ValueError, TypeError):
+            pass
+        if isinstance(self.unit_type, str):
+            return str_types.get(self.unit_type.lower(), self.unit_type)
+        return str(self.unit_type) if self.unit_type else "-"
 
     @property
     def status_display(self) -> str:

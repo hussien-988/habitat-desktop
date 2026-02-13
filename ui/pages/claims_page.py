@@ -178,7 +178,7 @@ class ClaimDialog(QDialog):
         unit_frame.setStyleSheet("background-color: #F8FAFC; border-radius: 8px;")
         unit_layout = QVBoxLayout(unit_frame)
 
-        unit_label = QLabel("اختر الوحدة العقارية:")
+        unit_label = QLabel("اختر المقسم:")
         unit_label.setStyleSheet("font-weight: 600;")
         unit_layout.addWidget(unit_label)
 

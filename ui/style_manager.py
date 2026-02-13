@@ -972,10 +972,13 @@ class StyleManager:
                 font-size: 14px;
                 min-height: 23px;
                 max-height: 23px;
+                selection-background-color: transparent;
+                selection-color: #333;
             }
             QDoubleSpinBox:focus {
                 border: 1px solid #2D9CDB;
                 background-color: white;
+                outline: 0;
             }
             QDoubleSpinBox::up-button {
                 subcontrol-origin: padding;

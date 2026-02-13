@@ -617,6 +617,8 @@ class OfficeSurveyWizard(BaseWizard):
         # Create step indicator tabs (Figma: white background, 111×35px, border-radius 14px)
         # No numbers shown, only step names with proper padding
         self.step_labels = []
+        # Steps 3,4 (index 2,3) have longer names - use smaller font
+        self._step_font_sizes = []
         for num, name in self.get_step_names():
             # Display only the step name (no number) - Figma spec
             step_widget = QLabel(name)
@@ -624,6 +626,10 @@ class OfficeSurveyWizard(BaseWizard):
 
             # Fixed dimensions from Figma (DRY: ButtonDimensions)
             step_widget.setFixedSize(ButtonDimensions.STEP_TAB_WIDTH, ButtonDimensions.STEP_TAB_HEIGHT)
+
+            # Smaller font for long step names (تفاصيل الإشغال، ادعاءات الإشغال)
+            tab_font_size = 7 if num in ("3", "4") else ButtonDimensions.STEP_TAB_FONT_SIZE
+            self._step_font_sizes.append(tab_font_size)
 
             # Default state: White background, gray text, no border
             # DRY: Using Colors and ButtonDimensions constants
@@ -634,7 +640,7 @@ class OfficeSurveyWizard(BaseWizard):
                 border: none;
                 border-radius: {ButtonDimensions.STEP_TAB_BORDER_RADIUS}px;
                 padding: {ButtonDimensions.STEP_TAB_PADDING_V}px {ButtonDimensions.STEP_TAB_PADDING_H}px;
-                font-size: {ButtonDimensions.STEP_TAB_FONT_SIZE}pt;
+                font-size: {tab_font_size}pt;
             """)
 
             # Apply subtle shadow effect for visual depth
@@ -907,6 +913,7 @@ class OfficeSurveyWizard(BaseWizard):
         current_step = self.navigator.current_index
 
         for i, label in enumerate(self.step_labels):
+            tab_font = self._step_font_sizes[i] if i < len(self._step_font_sizes) else ButtonDimensions.STEP_TAB_FONT_SIZE
             if i == current_step:
                 # Active tab (Figma: white bg, blue text, blue border, padding 10×16)
                 label.setStyleSheet(f"""
@@ -915,7 +922,7 @@ class OfficeSurveyWizard(BaseWizard):
                     border: 1px solid {Colors.PRIMARY_BLUE};
                     border-radius: {ButtonDimensions.STEP_TAB_BORDER_RADIUS}px;
                     padding: {ButtonDimensions.STEP_TAB_PADDING_V}px {ButtonDimensions.STEP_TAB_PADDING_H}px;
-                    font-size: {ButtonDimensions.STEP_TAB_FONT_SIZE}pt;
+                    font-size: {tab_font}pt;
                     font-weight: 600;
                 """)
             else:
@@ -927,7 +934,7 @@ class OfficeSurveyWizard(BaseWizard):
                     border: none;
                     border-radius: {ButtonDimensions.STEP_TAB_BORDER_RADIUS}px;
                     padding: {ButtonDimensions.STEP_TAB_PADDING_V}px {ButtonDimensions.STEP_TAB_PADDING_H}px;
-                    font-size: {ButtonDimensions.STEP_TAB_FONT_SIZE}pt;
+                    font-size: {tab_font}pt;
                 """)
 
         self.step_container.setCurrentIndex(current_step)

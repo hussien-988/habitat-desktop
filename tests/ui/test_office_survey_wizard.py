@@ -64,7 +64,7 @@ class TestWizardInitialization:
         """Test wizard step names are correct."""
         expected_names = [
             "اختيار المبنى",
-            "الوحدة العقارية",
+            "المقاسم",
             "الأسرة والإشغال",
             "تسجيل الأشخاص",
             "العلاقات والأدلة",

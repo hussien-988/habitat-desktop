@@ -74,10 +74,14 @@ class UnitDialog(QDialog):
         self._api_service = get_api_client()
         if auth_token:
             self._api_service.set_access_token(auth_token)
+            self.unit_controller.set_auth_token(auth_token)
         self._use_api = getattr(Config, 'DATA_PROVIDER', 'local_db') == 'http'
 
         # إزالة الشريط العلوي (title bar)
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.Dialog)
+
+        # CRITICAL: ضبط RTL صراحةً - الـ Dialog نافذة مستقلة لا ترث RTL من التطبيق
+        self.setLayoutDirection(Qt.RightToLeft)
 
         # CRITICAL: جعل الخلفية شفافة حتى تظهر فقط الزوايا المنحنية
         self.setAttribute(Qt.WA_TranslucentBackground)
@@ -101,12 +105,9 @@ class UnitDialog(QDialog):
         main_layout.setContentsMargins(0, 0, 0, 0)
         main_layout.setSpacing(0)
 
-        # إنشاء frame أبيض مع زوايا منحنية
+        # إنشاء frame أبيض مع زوايا منحنية (يرث RTL من التطبيق تلقائياً)
         content_frame = QFrame()
         content_frame.setObjectName("ContentFrame")
-        # Force LTR to prevent RTL inheritance from flipping internal layouts
-        # (labels are right-aligned manually for Arabic)
-        content_frame.setLayoutDirection(Qt.LeftToRight)
         content_frame.setStyleSheet("""
             QFrame#ContentFrame {
                 background-color: #FFFFFF;
@@ -116,34 +117,22 @@ class UnitDialog(QDialog):
         """)
 
         layout = QVBoxLayout(content_frame)
-        layout.setSpacing(0)  # نضبط المسافات يدوياً
-        layout.setContentsMargins(24, 16, 24, 16)  # تخفيف البادينغ العلوي والسفلي
+        layout.setSpacing(0)
+        layout.setContentsMargins(24, 16, 24, 16)
 
-        # العنوان (Header) - محاذاة يمين يدوياً لأن الـ frame مضبوط LTR
+        # العنوان (RTL يحاذيه يميناً تلقائياً)
         header_label = QLabel("اضف معلومات المقسم" if not self.unit_data else "تعديل معلومات المقسم")
-        header_label.setAlignment(Qt.AlignRight)
         header_label.setStyleSheet("font-size: 18px; font-weight: 600; color: #1A1F1D; background: transparent;")
         layout.addWidget(header_label)
 
-        # مسافة بين العنوان والحقول الأولى: 32 (ضعف المسافة)
         layout.addSpacing(32)
 
-        # Row 1: Unit Number and Floor Number
+        # Row 1: رقم الطابق (يمين) | رقم المقسم (يسار)
+        # في RTL: أول عنصر يُضاف → يظهر يميناً
         row1 = QHBoxLayout()
         row1.setSpacing(16)
 
-        # Unit Number with custom arrows
-        self.unit_number_spin = QSpinBox()
-        self.unit_number_spin.setRange(0, 9999)
-        self.unit_number_spin.setValue(0)
-        self.unit_number_spin.setAlignment(Qt.AlignRight)
-        self.unit_number_spin.setLocale(QLocale(QLocale.English, QLocale.UnitedStates))
-        self.unit_number_spin.setButtonSymbols(QSpinBox.NoButtons)
-        self.unit_number_spin.valueChanged.connect(self._check_uniqueness)
-        unit_widget = self._create_spinbox_with_arrows(self.unit_number_spin)
-        row1.addLayout(self._create_field_container("رقم المقسم", unit_widget), 1)
-
-        # Floor Number with custom arrows
+        # رقم الطابق (يمين في RTL = أول عنصر)
         self.floor_spin = QSpinBox()
         self.floor_spin.setRange(-3, 100)
         self.floor_spin.setValue(0)
@@ -153,68 +142,53 @@ class UnitDialog(QDialog):
         floor_widget = self._create_spinbox_with_arrows(self.floor_spin)
         row1.addLayout(self._create_field_container("رقم الطابق", floor_widget), 1)
 
+        # رقم المقسم (يسار في RTL = ثاني عنصر)
+        self.unit_number_spin = QSpinBox()
+        self.unit_number_spin.setRange(0, 9999)
+        self.unit_number_spin.setValue(0)
+        self.unit_number_spin.setAlignment(Qt.AlignRight)
+        self.unit_number_spin.setLocale(QLocale(QLocale.English, QLocale.UnitedStates))
+        self.unit_number_spin.setButtonSymbols(QSpinBox.NoButtons)
+        unit_widget = self._create_spinbox_with_arrows(self.unit_number_spin)
+        row1.addLayout(self._create_field_container("رقم المقسم", unit_widget), 1)
+
         layout.addLayout(row1)
 
-        # Uniqueness validation label
-        self.uniqueness_label = QLabel("")
-        self.uniqueness_label.setAlignment(Qt.AlignRight)
-        self.uniqueness_label.setStyleSheet("font-size: 11px; margin-top: -8px;")
-        layout.addWidget(self.uniqueness_label)
-
-        # مسافة بين الصفوف: 16
         layout.addSpacing(16)
 
-        # Row 2: Unit Status and Unit Type
+        # Row 2: نوع المقسم (يمين) | حالة المقسم (يسار)
         row2 = QHBoxLayout()
         row2.setSpacing(16)
 
-        # Unit Status - Using API integer codes from Vocabularies
-        self.unit_status_combo = RtlCombo()
-        self.unit_status_combo.setStyleSheet(self._combo_style())
-        self.unit_status_combo.setFixedHeight(45)
-        self.unit_status_combo.addItem(tr("wizard.unit_dialog.select"), 0)
-        for code, name_en, name_ar in Vocabularies.UNIT_STATUS:
-            self.unit_status_combo.addItem(name_ar, code)
-        row2.addLayout(self._create_field_container("حالة المقسم", self.unit_status_combo), 1)
-
-        # Unit Type - Using API integer codes from Vocabularies
+        # نوع المقسم (يمين في RTL = أول عنصر)
         self.unit_type_combo = RtlCombo()
         self.unit_type_combo.setStyleSheet(self._combo_style())
-        self.unit_type_combo.setFixedHeight(45)
+        self.unit_type_combo.setFixedHeight(40)
+        self.unit_type_combo.setLayoutDirection(Qt.RightToLeft)
         self.unit_type_combo.addItem(tr("wizard.unit_dialog.select"), 0)
         for code, name_en, name_ar in Vocabularies.UNIT_TYPES:
             self.unit_type_combo.addItem(name_ar, code)
         row2.addLayout(self._create_field_container("نوع المقسم", self.unit_type_combo), 1)
 
+        # حالة المقسم (يسار في RTL = ثاني عنصر)
+        self.unit_status_combo = RtlCombo()
+        self.unit_status_combo.setStyleSheet(self._combo_style())
+        self.unit_status_combo.setFixedHeight(40)
+        self.unit_status_combo.setLayoutDirection(Qt.RightToLeft)
+        self.unit_status_combo.addItem(tr("wizard.unit_dialog.select"), 0)
+        for code, name_en, name_ar in Vocabularies.UNIT_STATUS:
+            self.unit_status_combo.addItem(name_ar, code)
+        row2.addLayout(self._create_field_container("حالة المقسم", self.unit_status_combo), 1)
+
         layout.addLayout(row2)
 
-        # مسافة بين الصفوف: 16
         layout.addSpacing(16)
 
-        # Row 3: Area and Number of Rooms (مساحة يسار، غرف يمين)
+        # Row 3: عدد الغرف (يمين) | مساحة المقسم (يسار)
         row3 = QHBoxLayout()
         row3.setSpacing(16)
 
-        # Area - with numeric validator and inline error (LEFT side)
-        self.area_input = QLineEdit()
-        self.area_input.setPlaceholderText(tr("wizard.unit_dialog.area_placeholder"))
-        self.area_input.setStyleSheet(self._input_style())
-
-        # Allow only numbers (with decimal point)
-        area_validator = QDoubleValidator(0.0, 999999.99, 2, self.area_input)
-        area_validator.setLocale(QLocale(QLocale.English, QLocale.UnitedStates))
-        area_validator.setNotation(QDoubleValidator.StandardNotation)
-        self.area_input.setValidator(area_validator)
-
-        # Inline error label
-        self.area_error_label = QLabel("")
-        self.area_error_label.setStyleSheet("color: #e74c3c; font-size: 11px; background: transparent;")
-        self.area_error_label.setVisible(False)
-        self.area_input.textChanged.connect(self._validate_area_input)
-
-        row3.addLayout(self._create_field_container_with_validation("مساحة المقسم", self.area_input, self.area_error_label), 1)
-
-        # Number of Rooms with custom arrows (RIGHT side)
+        # عدد الغرف (يمين في RTL = أول عنصر)
         self.rooms_spin = QSpinBox()
         self.rooms_spin.setRange(0, 20)
         self.rooms_spin.setValue(0)
@@ -224,9 +198,26 @@ class UnitDialog(QDialog):
         rooms_widget = self._create_spinbox_with_arrows(self.rooms_spin)
         row3.addLayout(self._create_field_container("عدد الغرف", rooms_widget), 1)
 
+        # مساحة المقسم (يسار في RTL = ثاني عنصر)
+        self.area_input = QLineEdit()
+        self.area_input.setFixedHeight(40)
+        self.area_input.setPlaceholderText(tr("wizard.unit_dialog.area_placeholder"))
+        self.area_input.setStyleSheet(self._input_style())
+
+        area_validator = QDoubleValidator(0.0, 999999.99, 2, self.area_input)
+        area_validator.setLocale(QLocale(QLocale.English, QLocale.UnitedStates))
+        area_validator.setNotation(QDoubleValidator.StandardNotation)
+        self.area_input.setValidator(area_validator)
+
+        self.area_error_label = QLabel("")
+        self.area_error_label.setStyleSheet("color: #e74c3c; font-size: 11px; background: transparent;")
+        self.area_error_label.setVisible(False)
+        self.area_input.textChanged.connect(self._validate_area_input)
+
+        row3.addLayout(self._create_field_container_with_validation("مساحة المقسم", self.area_input, self.area_error_label), 1)
+
         layout.addLayout(row3)
 
-        # مسافة بين الصفوف: 16
         layout.addSpacing(16)
 
         # Description
@@ -250,35 +241,35 @@ class UnitDialog(QDialog):
                 border-width: 2px;
             }
         """)
+        # Center-align placeholder and text
+        from PyQt5.QtGui import QTextCursor, QTextBlockFormat
+        self.description_edit.setAlignment(Qt.AlignCenter)
         layout.addLayout(self._create_field_container("وصف المقسم", self.description_edit))
 
-        # مسافة قبل الأزرار: 40
         layout.addSpacing(40)
 
-        # Buttons - DRY with helper method
+        # Buttons: في RTL أول عنصر → يمين
         buttons_layout = QHBoxLayout()
         buttons_layout.setSpacing(16)
 
-        # إنشاء الأزرار بترتيب معكوس بسبب RTL
         self.save_btn = self._create_save_button()
         cancel_btn = self._create_cancel_button()
 
-        # إضافة الأزرار (الترتيب سيعكس تلقائياً مع RTL)
-        buttons_layout.addWidget(self.save_btn)
+        # الغاء يمين (أول) | حفظ يسار (ثاني) - تناسب اتجاه القراءة العربية
         buttons_layout.addWidget(cancel_btn)
+        buttons_layout.addWidget(self.save_btn)
 
         layout.addLayout(buttons_layout)
 
-        # إضافة الـ frame الأبيض للـ layout الرئيسي
         main_layout.addWidget(content_frame)
 
     def _create_spinbox_with_arrows(self, spinbox: QSpinBox) -> QFrame:
-        """Create a spinbox widget with icon arrows on the RIGHT side (same as buildings_page)."""
+        """Create a spinbox widget with icon arrows (same as buildings_page)."""
         from ui.components.icon import Icon
 
-        # Container frame - fixed height 45px
+        # Container frame - يرث RTL من التطبيق (مطابق لـ buildings_page)
         container = QFrame()
-        container.setFixedHeight(45)
+        container.setFixedHeight(40)
         container.setStyleSheet("""
             QFrame {
                 border: 1px solid #E1E8ED;
@@ -300,6 +291,16 @@ class UnitDialog(QDialog):
                 background: transparent;
                 font-size: 10pt;
                 color: #606266;
+                selection-background-color: transparent;
+                selection-color: #606266;
+            }
+            QSpinBox:focus {
+                border: none;
+                outline: 0;
+            }
+            QSpinBox::up-button, QSpinBox::down-button {
+                width: 0px;
+                border: none;
             }
         """)
         layout.addWidget(spinbox, 1)
@@ -366,10 +367,9 @@ class UnitDialog(QDialog):
             QVBoxLayout with label and widget
         """
         container = QVBoxLayout()
-        container.setSpacing(4)  # مسافة شبه معدومة بين label والحقل
+        container.setSpacing(4)
 
         label = QLabel(label_text)
-        label.setAlignment(Qt.AlignRight)
         label.setStyleSheet("font-size: 14px; font-weight: 600; color: #374151;")
 
         container.addWidget(label)
@@ -395,7 +395,6 @@ class UnitDialog(QDialog):
         container.setSpacing(4)
 
         label = QLabel(label_text)
-        label.setAlignment(Qt.AlignRight)
         label.setStyleSheet("font-size: 14px; font-weight: 600; color: #374151;")
 
         container.addWidget(label)
@@ -515,8 +514,6 @@ class UnitDialog(QDialog):
                 border-radius: 8px;
                 background-color: #F8FAFF;
                 font-size: 13px;
-                min-height: 40px;
-                max-height: 40px;
             }
             QLineEdit:focus {
                 border-color: #3890DF;
@@ -533,8 +530,6 @@ class UnitDialog(QDialog):
                 border-radius: 8px;
                 background-color: #FFF5F5;
                 font-size: 13px;
-                min-height: 40px;
-                max-height: 40px;
             }
             QLineEdit:focus {
                 border-color: #e74c3c;
@@ -566,59 +561,8 @@ class UnitDialog(QDialog):
             self.area_error_label.setVisible(True)
             self.area_input.setStyleSheet(self._input_error_style())
 
-    def _check_uniqueness(self):
-        """Check if unit number is unique within the building."""
-        unit_number = str(self.unit_number_spin.value())
-        floor = self.floor_spin.value()
-
-        if self.unit_number_spin.value() == 0:
-            self.uniqueness_label.setText("")
-            self.save_btn.setEnabled(True)
-            return
-
-        # Check existing units
-        try:
-            result = self.unit_controller.get_units_for_building(self.building.building_uuid)
-            is_unique = True
-
-            if not result.success:
-                logger.error(f"Failed to check unit uniqueness: {result.message}")
-                self.uniqueness_label.setText(f"⚠️ {tr('wizard.unit_dialog.uniqueness_error')}")
-                self.uniqueness_label.setStyleSheet("color: #e67e22; font-size: 11px;")
-                return
-
-            existing_units = result.data
-            for unit in existing_units:
-                # Skip if editing the same unit
-                if self.unit_data and hasattr(unit, 'unit_id') and unit.unit_id == self.unit_data.get('unit_id'):
-                    continue
-
-                # Check for duplicate
-                if (hasattr(unit, 'apartment_number') and unit.apartment_number == unit_number and
-                    hasattr(unit, 'floor_number') and unit.floor_number == floor):
-                    is_unique = False
-                    break
-                elif (hasattr(unit, 'unit_number') and unit.unit_number == unit_number and
-                      hasattr(unit, 'floor_number') and unit.floor_number == floor):
-                    is_unique = False
-                    break
-
-            if is_unique:
-                self.uniqueness_label.setText(f"✅ {tr('wizard.unit_dialog.number_available')}")
-                self.uniqueness_label.setStyleSheet("color: #27ae60; font-size: 11px;")
-                self.save_btn.setEnabled(True)
-            else:
-                self.uniqueness_label.setText(f"❌ {tr('wizard.unit_dialog.number_taken')}")
-                self.uniqueness_label.setStyleSheet("color: #e74c3c; font-size: 11px;")
-                self.save_btn.setEnabled(False)
-
-        except Exception as e:
-            logger.error(f"Error checking uniqueness: {e}", exc_info=True)
-            self.uniqueness_label.setText("")
-            self.save_btn.setEnabled(True)
-
     def _validate(self) -> bool:
-        """Validate form data."""
+        """Validate form data on save."""
         # Unit type is required
         if not self.unit_type_combo.currentData():
             self._show_styled_message(tr("common.warning"), tr("wizard.unit_dialog.select_type_warning"))
@@ -627,6 +571,11 @@ class UnitDialog(QDialog):
         # Unit number is required
         if self.unit_number_spin.value() == 0:
             self._show_styled_message(tr("common.warning"), tr("wizard.unit_dialog.enter_number_warning"))
+            return False
+
+        # Check uniqueness on save
+        if not self._is_unit_unique():
+            self._show_styled_message(tr("common.warning"), tr("wizard.unit_dialog.number_taken"))
             return False
 
         # Area should be numeric if provided
@@ -644,6 +593,31 @@ class UnitDialog(QDialog):
                 return False
 
         return True
+
+    def _is_unit_unique(self) -> bool:
+        """Check if unit number + floor combination is unique within the building."""
+        unit_number = str(self.unit_number_spin.value())
+        floor = self.floor_spin.value()
+
+        try:
+            result = self.unit_controller.get_units_for_building(self.building.building_uuid)
+            if not result.success:
+                return True  # Allow save if check fails
+
+            for unit in result.data:
+                # Skip if editing the same unit
+                if self.unit_data and hasattr(unit, 'unit_id') and unit.unit_id == self.unit_data.get('unit_id'):
+                    continue
+                # Check for duplicate
+                u_num = getattr(unit, 'apartment_number', None) or getattr(unit, 'unit_number', None)
+                u_floor = getattr(unit, 'floor_number', None)
+                if u_num == unit_number and u_floor == floor:
+                    return False
+
+            return True
+        except Exception as e:
+            logger.error(f"Error checking uniqueness: {e}", exc_info=True)
+            return True  # Allow save if check fails
 
     def _on_save(self):
         """Handle save button click."""
@@ -663,7 +637,15 @@ class UnitDialog(QDialog):
                 self._created_unit_data = response
             except Exception as e:
                 logger.error(f"Failed to create unit via API: {e}")
-                self._show_styled_message(tr("common.error"), tr("wizard.unit_dialog.create_failed", error_msg=map_exception(e)), is_error=True)
+                # رسالة واضحة لخطأ 409 (المقسم موجود مسبقاً)
+                if "409" in str(e):
+                    self._show_styled_message(
+                        tr("common.error"),
+                        "هذا المقسم مسجّل مسبقاً في النظام. يرجى اختياره من القائمة أو تغيير رقم المقسم.",
+                        is_error=True
+                    )
+                else:
+                    self._show_styled_message(tr("common.error"), tr("wizard.unit_dialog.create_failed", error_msg=map_exception(e)), is_error=True)
                 return
 
         self.accept()
