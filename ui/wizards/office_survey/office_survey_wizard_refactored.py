@@ -303,10 +303,49 @@ class OfficeSurveyWizard(BaseWizard):
             return None
 
     def _handle_close(self):
-        """Handle close button click - triggers wizard cancellation."""
-        if self.on_cancel():
+        """Handle close button click - offers save draft before closing."""
+        # If finalization already completed, just close without prompting
+        if self._finalization_complete:
             self.wizard_cancelled.emit()
             self.close()
+            return
+
+        # Check if there's unsaved data worth saving
+        has_data = (
+            self.navigator.current_index >= 1
+            or (hasattr(self.context, 'building') and self.context.building)
+        )
+
+        if has_data:
+            # Show save-draft confirmation dialog
+            from ui.components.dialogs.confirmation_dialog import ConfirmationDialog
+
+            result = ConfirmationDialog.save_draft_confirmation(
+                parent=self,
+                title="هل تريد الحفظ؟",
+                message="لديك تغييرات غير محفوظة.\nهل تريد حفظها كمسودة؟"
+            )
+
+            if result == ConfirmationDialog.SAVE:
+                # Save as draft
+                draft_id = self.on_save_draft()
+                if draft_id:
+                    from ui.components.toast import Toast
+                    Toast.show_toast(self, "تم حفظ المسودة بنجاح!", Toast.SUCCESS)
+                else:
+                    # Save failed - stay in wizard
+                    return
+
+            elif result == ConfirmationDialog.DISCARD:
+                # User chose to discard - continue closing
+                logger.info("User discarded wizard changes on close")
+
+            else:
+                # User cancelled - stay in wizard
+                return
+
+        self.wizard_cancelled.emit()
+        self.close()
 
     @classmethod
     def load_from_draft(cls, draft_id: str, parent=None):
@@ -966,16 +1005,19 @@ class OfficeSurveyWizard(BaseWizard):
         current_step = self.navigator.current_index
 
         # ========== Previous Button Logic ==========
-        # Make transparent on first step, visible on all other steps
-        if current_step == 0:
-            # First step: make button invisible (transparent) but keep in layout
+        # Make transparent on first step and ClaimStep (index 4), visible on other steps
+        # ClaimStep: Going back causes crash because OccupancyClaimsStep.on_show()
+        # replaces local persons with API data (camelCase keys), causing KeyError
+        claim_step_index = 4  # ClaimStep is at index 4
+        if current_step == 0 or current_step == claim_step_index:
+            # First step / ClaimStep: make button invisible (transparent) but keep in layout
             self.btn_previous.setStyleSheet(self.btn_previous_hidden_style)
             self.btn_previous.setEnabled(False)
             self.btn_previous.setCursor(Qt.ArrowCursor)  # Normal cursor when invisible
             # Disable shadow when invisible
             self.prev_shadow.setEnabled(False)
         else:
-            # Steps 2+: make button visible with proper styling
+            # Other steps: make button visible with proper styling
             self.btn_previous.setStyleSheet(self.btn_previous_visible_style)
             self.btn_previous.setEnabled(True)
             self.btn_previous.setCursor(Qt.PointingHandCursor)  # Pointer cursor when visible

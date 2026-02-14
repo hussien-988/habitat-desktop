@@ -53,6 +53,7 @@ class ClaimStep(BaseStep):
 
         # Create scroll area for claim cards
         self.scroll_area = QScrollArea()
+        self.scroll_area.setLayoutDirection(Qt.RightToLeft)
         self.scroll_area.setWidgetResizable(True)
         self.scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
@@ -242,21 +243,81 @@ class ClaimStep(BaseStep):
             v = QVBoxLayout()
             v.setSpacing(4)
             lbl = QLabel(label_text)
-            lbl.setFont(create_font(size=9, weight=FontManager.WEIGHT_REGULAR))
-            lbl.setStyleSheet(f"color: {Colors.WIZARD_SUBTITLE}; background: transparent;")
+            lbl.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
+            lbl.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent;")
             v.addWidget(lbl)
             v.addWidget(field_widget)
             grid.addLayout(v, row, col)
 
+        # Read-only field styles (display only, unified #f0f7ff background)
+        from app.config import Config
+        ro_bg = "#f0f7ff"
+        down_img = str(Config.IMAGES_DIR / "down.png").replace("\\", "/")
+
+        ro_input_style = f"""
+            QLineEdit {{
+                border: 1px solid #E0E6ED;
+                border-radius: 8px;
+                padding: 10px;
+                background-color: {ro_bg};
+                color: #333;
+                font-size: 14px;
+                min-height: 23px;
+                max-height: 23px;
+            }}
+        """
+        ro_combo_style = f"""
+            QComboBox {{
+                border: 1px solid #E0E6ED;
+                border-radius: 8px;
+                padding: 10px;
+                background-color: {ro_bg};
+                color: #333;
+                font-size: 14px;
+                min-height: 23px;
+                max-height: 23px;
+            }}
+            QComboBox::drop-down {{
+                border: none;
+                width: 30px;
+                subcontrol-position: right center;
+            }}
+            QComboBox::down-arrow {{
+                image: url({down_img});
+                width: 12px;
+                height: 12px;
+            }}
+        """
+        ro_date_style = f"""
+            QDateEdit {{
+                border: 1px solid #E0E6ED;
+                border-radius: 8px;
+                padding: 10px;
+                background-color: {ro_bg};
+                color: #333;
+                font-size: 14px;
+                min-height: 23px;
+                max-height: 23px;
+            }}
+        """
+
+        def make_combo_readonly(combo):
+            """Block combo popup and wheel to make it display-only."""
+            combo.showPopup = lambda: None
+            combo.wheelEvent = lambda e: e.ignore()
+            combo.setFocusPolicy(Qt.NoFocus)
+
         # Row 1: معرف المطالب | معرف الوحدة المطالب بها | نوع الحالة | طبيعة الأعمال
         claim_person_search = QLineEdit()
         claim_person_search.setPlaceholderText("اسم الشخص")
-        claim_person_search.setStyleSheet(StyleManager.form_input())
+        claim_person_search.setStyleSheet(ro_input_style)
+        claim_person_search.setReadOnly(True)
         add_field("معرف المطالب", claim_person_search, 0, 0)
 
         claim_unit_search = QLineEdit()
         claim_unit_search.setPlaceholderText("رقم المقسم")
-        claim_unit_search.setStyleSheet(StyleManager.form_input())
+        claim_unit_search.setStyleSheet(ro_input_style)
+        claim_unit_search.setReadOnly(True)
         add_field("معرف المقسم المطالب به", claim_unit_search, 0, 1)
 
         claim_type_combo = QComboBox()
@@ -264,7 +325,8 @@ class ClaimStep(BaseStep):
         claim_type_combo.addItem("ملكية", "ownership")
         claim_type_combo.addItem("إشغال", "occupancy")
         claim_type_combo.addItem("إيجار", "tenancy")
-        claim_type_combo.setStyleSheet(StyleManager.form_input())
+        claim_type_combo.setStyleSheet(ro_combo_style)
+        make_combo_readonly(claim_type_combo)
         add_field("نوع الحالة", claim_type_combo, 0, 2)
 
         claim_business_nature = QComboBox()
@@ -272,7 +334,8 @@ class ClaimStep(BaseStep):
         claim_business_nature.addItem("سكني", "residential")
         claim_business_nature.addItem("تجاري", "commercial")
         claim_business_nature.addItem("زراعي", "agricultural")
-        claim_business_nature.setStyleSheet(StyleManager.form_input())
+        claim_business_nature.setStyleSheet(ro_combo_style)
+        make_combo_readonly(claim_business_nature)
         add_field("طبيعة الأعمال", claim_business_nature, 0, 3)
 
         # Row 2: حالة الحالة | المصدر | تاريخ المسح | الأولوية
@@ -282,7 +345,8 @@ class ClaimStep(BaseStep):
         claim_status_combo.addItem("قيد المراجعة", "under_review")
         claim_status_combo.addItem("مكتمل", "completed")
         claim_status_combo.addItem("معلق", "pending")
-        claim_status_combo.setStyleSheet(StyleManager.form_input())
+        claim_status_combo.setStyleSheet(ro_combo_style)
+        make_combo_readonly(claim_status_combo)
         add_field("حالة الحالة", claim_status_combo, 1, 0)
 
         claim_source_combo = QComboBox()
@@ -290,14 +354,17 @@ class ClaimStep(BaseStep):
         claim_source_combo.addItem("مسح ميداني", "field_survey")
         claim_source_combo.addItem("طلب مباشر", "direct_request")
         claim_source_combo.addItem("إحالة", "referral")
-        claim_source_combo.setStyleSheet(StyleManager.form_input())
+        claim_source_combo.setStyleSheet(ro_combo_style)
+        make_combo_readonly(claim_source_combo)
         add_field("المصدر", claim_source_combo, 1, 1)
 
         claim_survey_date = QDateEdit()
-        claim_survey_date.setCalendarPopup(True)
+        claim_survey_date.setCalendarPopup(False)
+        claim_survey_date.setButtonSymbols(QDateEdit.NoButtons)
         claim_survey_date.setDisplayFormat("yyyy-MM-dd")
         claim_survey_date.setDate(QDate.currentDate())
-        claim_survey_date.setStyleSheet(StyleManager.date_input())
+        claim_survey_date.setReadOnly(True)
+        claim_survey_date.setStyleSheet(ro_date_style)
         add_field("تاريخ المسح", claim_survey_date, 1, 2)
 
         claim_priority_combo = QComboBox()
@@ -307,7 +374,8 @@ class ClaimStep(BaseStep):
         claim_priority_combo.addItem("عالي", "high")
         claim_priority_combo.addItem("عاجل", "urgent")
         claim_priority_combo.setCurrentIndex(2)
-        claim_priority_combo.setStyleSheet(StyleManager.form_input())
+        claim_priority_combo.setStyleSheet(ro_combo_style)
+        make_combo_readonly(claim_priority_combo)
         add_field("الأولوية", claim_priority_combo, 1, 3)
 
         card_layout.addLayout(grid)
@@ -315,25 +383,23 @@ class ClaimStep(BaseStep):
 
         # Notes Section
         notes_label = QLabel("ملاحظات المراجعة")
-        notes_label.setFont(create_font(size=9, weight=FontManager.WEIGHT_REGULAR))
-        notes_label.setStyleSheet(f"color: {Colors.WIZARD_SUBTITLE}; background: transparent;")
+        notes_label.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
+        notes_label.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent;")
         card_layout.addWidget(notes_label)
 
         claim_notes = QTextEdit()
         claim_notes.setPlaceholderText("ملاحظات إضافية")
         claim_notes.setMinimumHeight(100)
         claim_notes.setMaximumHeight(120)
+        claim_notes.setReadOnly(True)
         claim_notes.setStyleSheet(f"""
             QTextEdit {{
-                background-color: {Colors.INPUT_BG};
-                border: 1px solid {Colors.BORDER_DEFAULT};
+                background-color: {ro_bg};
+                border: 1px solid #E0E6ED;
                 border-radius: 8px;
                 padding: 8px;
-                color: {Colors.TEXT_PRIMARY};
+                color: #333;
                 font-size: 13px;
-            }}
-            QTextEdit:focus {{
-                border: 1px solid {Colors.PRIMARY_BLUE};
             }}
         """)
         card_layout.addWidget(claim_notes)
@@ -341,27 +407,29 @@ class ClaimStep(BaseStep):
 
         # Next Action Date Section
         next_date_label = QLabel("تاريخ الإجراء التالي")
-        next_date_label.setFont(create_font(size=9, weight=FontManager.WEIGHT_REGULAR))
-        next_date_label.setStyleSheet(f"color: {Colors.WIZARD_SUBTITLE}; background: transparent;")
+        next_date_label.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
+        next_date_label.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent;")
         card_layout.addWidget(next_date_label)
 
         claim_next_action_date = QDateEdit()
-        claim_next_action_date.setCalendarPopup(True)
+        claim_next_action_date.setCalendarPopup(False)
+        claim_next_action_date.setButtonSymbols(QDateEdit.NoButtons)
         claim_next_action_date.setDisplayFormat("yyyy-MM-dd")
-        claim_next_action_date.setStyleSheet(StyleManager.date_input())
+        claim_next_action_date.setReadOnly(True)
+        claim_next_action_date.setStyleSheet(ro_date_style)
         card_layout.addWidget(claim_next_action_date)
         card_layout.addSpacing(8)
 
-        # Status Bar - Evidence available indicator
-        claim_eval_label = QLabel("الأدلة متوفرة")
+        # Status Bar - Evidence available indicator (pill shape)
+        claim_eval_label = QLabel("✓  الأدلة متوفرة")
         claim_eval_label.setAlignment(Qt.AlignCenter)
-        claim_eval_label.setFixedHeight(50)
+        claim_eval_label.setFixedHeight(36)
         claim_eval_label.setFont(create_font(size=11, weight=FontManager.WEIGHT_SEMIBOLD))
         claim_eval_label.setStyleSheet("""
             QLabel {
                 background-color: #e1f7ef;
                 color: #10b981;
-                border-radius: 8px;
+                border-radius: 18px;
             }
         """)
         card_layout.addWidget(claim_eval_label)
@@ -439,12 +507,12 @@ class ClaimStep(BaseStep):
               #  }
            # """)
         if has_evidence:
-            card.claim_eval_label.setText("الأدلة متوفرة")
+            card.claim_eval_label.setText("✓  الأدلة متوفرة")
             card.claim_eval_label.setStyleSheet("""
                 QLabel {
                     background-color: #e1f7ef;
                     color: #10b981;
-                    border-radius: 8px;
+                    border-radius: 18px;
                 }
             """)
         else:
@@ -453,7 +521,7 @@ class ClaimStep(BaseStep):
                 QLabel {
                     background-color: #fef3c7;
                     color: #f59e0b;
-                    border-radius: 8px;
+                    border-radius: 18px;
                 }
             """)
 
@@ -578,12 +646,12 @@ class ClaimStep(BaseStep):
         reason = response.get('claimNotCreatedReason', '')
 
         if evidence_count > 0:
-            first_card.claim_eval_label.setText(f"الأدلة متوفرة ({evidence_count})")
+            first_card.claim_eval_label.setText(f"✓  الأدلة متوفرة ({evidence_count})")
             first_card.claim_eval_label.setStyleSheet("""
                 QLabel {
                     background-color: #e1f7ef;
                     color: #10b981;
-                    border-radius: 8px;
+                    border-radius: 18px;
                 }
             """)
         else:
@@ -592,7 +660,7 @@ class ClaimStep(BaseStep):
                 QLabel {
                     background-color: #fef3c7;
                     color: #f59e0b;
-                    border-radius: 8px;
+                    border-radius: 18px;
                 }
             """)
 
@@ -636,12 +704,12 @@ class ClaimStep(BaseStep):
                     break
 
         if total_evidences > 0:
-            first_card.claim_eval_label.setText(f"الأدلة متوفرة ({total_evidences})")
+            first_card.claim_eval_label.setText(f"✓  الأدلة متوفرة ({total_evidences})")
             first_card.claim_eval_label.setStyleSheet("""
                 QLabel {
                     background-color: #e1f7ef;
                     color: #10b981;
-                    border-radius: 8px;
+                    border-radius: 18px;
                 }
             """)
         else:
@@ -650,7 +718,7 @@ class ClaimStep(BaseStep):
                 QLabel {
                     background-color: #fef3c7;
                     color: #f59e0b;
-                    border-radius: 8px;
+                    border-radius: 18px;
                 }
             """)
 

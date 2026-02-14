@@ -70,33 +70,27 @@ if HAS_WEBENGINE:
 
 
 class RtlCombo(QComboBox):
-    """QComboBox with right-aligned text for Arabic RTL support."""
+    """QComboBox with right-aligned text for Arabic RTL support.
+    Uses editable + read-only lineEdit to control text alignment without breaking stylesheet arrows."""
 
-    def paintEvent(self, event):
-        painter = QStylePainter(self)
-        option = QStyleOptionComboBox()
-        self.initStyleOption(option)
-        painter.drawComplexControl(QStyle.CC_ComboBox, option)
-        edit_rect = self.style().subControlRect(
-            QStyle.CC_ComboBox, option, QStyle.SC_ComboBoxEditField, self
-        )
-        painter.drawText(edit_rect.adjusted(4, 0, -4, 0), Qt.AlignRight | Qt.AlignVCenter, option.currentText)
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.setEditable(True)
+        self.lineEdit().setReadOnly(True)
+        self.lineEdit().setAlignment(Qt.AlignRight)
 
 
 class CodeDisplayCombo(RtlCombo):
     """QComboBox that shows full text in dropdown but only the code in the selected field."""
 
-    def paintEvent(self, event):
-        painter = QStylePainter(self)
-        option = QStyleOptionComboBox()
-        self.initStyleOption(option)
-        painter.drawComplexControl(QStyle.CC_ComboBox, option)
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.currentIndexChanged.connect(self._update_code_display)
+
+    def _update_code_display(self):
         code = self.currentData()
-        text = code if code else option.currentText
-        edit_rect = self.style().subControlRect(
-            QStyle.CC_ComboBox, option, QStyle.SC_ComboBoxEditField, self
-        )
-        painter.drawText(edit_rect.adjusted(4, 0, -4, 0), Qt.AlignRight | Qt.AlignVCenter, text)
+        if code and self.lineEdit():
+            self.lineEdit().setText(str(code))
 
 
 class AddBuildingPage(QWidget):
@@ -373,37 +367,43 @@ class AddBuildingPage(QWidget):
         """
 
         # Shared combo style for dropdown fields (consistent with card 2 combos)
-        # RTL: subcontrol-position uses 'right' so Qt mirrors it to 'left' in RTL mode
-        code_combo_style = """
-            QComboBox {
+        arrow_img = str(Config.IMAGES_DIR / "v.png").replace("\\", "/")
+        code_combo_style = f"""
+            QComboBox {{
                 padding: 6px 12px 6px 40px;
                 border: 1px solid #dcdfe6;
                 border-radius: 8px;
                 background-color: #F8FAFF;
                 font-size: 10pt;
                 color: #606266;
-            }
-            QComboBox:focus {
+            }}
+            QComboBox:focus {{
                 border: 1px solid #3890DF;
-            }
-            QComboBox::drop-down {
+            }}
+            QComboBox::drop-down {{
                 subcontrol-origin: border;
                 subcontrol-position: center right;
                 width: 35px;
                 border: none;
                 margin-right: 5px;
-            }
-            QComboBox::down-arrow {
-                image: url(assets/images/v.png);
+            }}
+            QComboBox::down-arrow {{
+                image: url({arrow_img});
                 width: 12px;
                 height: 12px;
-            }
-            QComboBox QAbstractItemView {
+            }}
+            QComboBox QLineEdit {{
+                background-color: transparent;
+                border: none;
+                color: #606266;
+                font-size: 10pt;
+            }}
+            QComboBox QAbstractItemView {{
                 font-size: 10pt;
                 background-color: white;
                 selection-background-color: #3890DF;
                 selection-color: white;
-            }
+            }}
         """
 
         # DivisionsService for cascading dropdowns
@@ -559,10 +559,10 @@ class AddBuildingPage(QWidget):
         # Shared label font for card 2 (DRY: same as card 1)
         card2_label_font = create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD)
 
-        # Shared combobox style (نسخة طبق الأصل 100% من unit_dialog.py - فقط الارتفاع 45px)
-        # RTL: subcontrol-position uses 'right' so Qt mirrors it to 'left' in RTL mode
-        combo_style = """
-            QComboBox {
+        # Shared combobox style (same as unit_dialog.py - height 45px)
+        arrow_img2 = str(Config.IMAGES_DIR / "v.png").replace("\\", "/")
+        combo_style = f"""
+            QComboBox {{
                 padding: 6px 12px 6px 40px;
                 border: 1px solid #E1E8ED;
                 border-radius: 8px;
@@ -570,28 +570,33 @@ class AddBuildingPage(QWidget):
                 font-size: 14px;
                 font-weight: 600;
                 color: #9CA3AF;
-            }
-            QComboBox:focus {
+            }}
+            QComboBox:focus {{
                 border-color: #3890DF;
                 border-width: 2px;
-            }
-            QComboBox::drop-down {
+            }}
+            QComboBox::drop-down {{
                 subcontrol-origin: border;
                 subcontrol-position: center right;
                 width: 35px;
                 border: none;
                 margin-right: 5px;
-            }
-            QComboBox::down-arrow {
-                image: url(assets/images/v.png);
+            }}
+            QComboBox::down-arrow {{
+                image: url({arrow_img2});
                 width: 12px;
                 height: 12px;
+            }}
+            QComboBox QLineEdit {{
+                background-color: transparent;
                 border: none;
-                border-width: 0px;
-            }
-            QComboBox QAbstractItemView {
+                color: #9CA3AF;
                 font-size: 14px;
-            }
+                font-weight: 600;
+            }}
+            QComboBox QAbstractItemView {{
+                font-size: 14px;
+            }}
         """
 
         # حالة البناء

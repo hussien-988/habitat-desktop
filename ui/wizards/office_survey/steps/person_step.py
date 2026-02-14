@@ -159,6 +159,7 @@ class PersonStep(BaseStep):
 
         # Scroll area for person cards
         scroll_area = QScrollArea()
+        scroll_area.setLayoutDirection(Qt.RightToLeft)
         scroll_area.setWidgetResizable(True)
         scroll_area.setStyleSheet("""
             QScrollArea {
@@ -220,7 +221,7 @@ class PersonStep(BaseStep):
         """Create a person row card matching the photo design."""
         card = QFrame()
         card.setLayoutDirection(Qt.RightToLeft)
-        card.setFixedHeight(80)
+        card.setFixedHeight(60)
         # Use main window background color - same for all rows
         card.setStyleSheet(f"""
             QFrame {{
@@ -235,7 +236,7 @@ class PersonStep(BaseStep):
 
         # Main row layout (RTL: items added left-to-right appear right-to-left)
         card_layout = QHBoxLayout(card)
-        card_layout.setContentsMargins(15, 0, 15, 0)
+        card_layout.setContentsMargins(12, 0, 12, 0)
 
         # 1. Right Side Group: Icon and Text (appears on right in RTL)
         right_group = QHBoxLayout()
@@ -243,13 +244,13 @@ class PersonStep(BaseStep):
 
         # Icon - using user.png
         icon_lbl = QLabel()
-        icon_lbl.setFixedSize(36, 36)
+        icon_lbl.setFixedSize(32, 32)
         icon_lbl.setAlignment(Qt.AlignCenter)
         icon_lbl.setStyleSheet("""
             QLabel {
                 background-color: #F4F8FF;
                 color: #3182CE;
-                border-radius: 18px;
+                border-radius: 16px;
                 border: none;
             }
         """)
@@ -265,7 +266,8 @@ class PersonStep(BaseStep):
 
         # Text Container (Name and Role)
         text_vbox = QVBoxLayout()
-        text_vbox.setSpacing(2)
+        text_vbox.setSpacing(0)
+        text_vbox.setContentsMargins(0, 0, 0, 0)
 
         # Person name - matching Step 1 title font
         full_name = f"{person['first_name']} {person.get('father_name', '')} {person['last_name']}".strip()
@@ -292,17 +294,20 @@ class PersonStep(BaseStep):
         spacer = QSpacerItem(40, 20, QSizePolicy.Expanding, QSizePolicy.Minimum)
 
         # 3. Left Side: Menu Button (appears on left in RTL)
-        menu_btn = QPushButton("•••")
-        menu_btn.setFixedWidth(40)
+        menu_btn = QPushButton("⋮")
+        menu_btn.setFixedSize(36, 36)
         menu_btn.setStyleSheet("""
             QPushButton {
                 border: none;
-                color: #A0A0A0;
-                font-size: 18px;
+                color: #64748B;
+                font-size: 24px;
+                font-weight: bold;
                 background: transparent;
+                border-radius: 18px;
             }
             QPushButton:hover {
-                color: #333333;
+                color: #1e293b;
+                background-color: #F1F5F9;
             }
         """)
         menu_btn.setCursor(Qt.PointingHandCursor)
@@ -391,15 +396,10 @@ class PersonStep(BaseStep):
                 auth_token=auth_token,
                 survey_id=survey_id,
                 household_id=household_id,
-                unit_id=unit_id
+                unit_id=unit_id,
+                read_only=True
             )
-
-            if dialog.exec_() == QDialog.Accepted:
-                updated_data = dialog.get_person_data()
-                updated_data['person_id'] = person_id  # Keep the same ID
-                self.context.persons[person_index] = updated_data
-                self._refresh_persons_list()
-                logger.info(f"Person updated: {updated_data['first_name']} {updated_data['last_name']}")
+            dialog.exec_()
 
     def _delete_person_by_id(self, person_id: str):
         """Delete person by ID with confirmation - exact copy from old wizard."""

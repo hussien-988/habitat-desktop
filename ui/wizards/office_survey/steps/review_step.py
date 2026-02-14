@@ -32,6 +32,7 @@ from services.display_mappings import (
     get_business_type_display, get_source_display,
     get_claim_status_display
 )
+from utils.helpers import build_hierarchical_address
 
 logger = get_logger(__name__)
 
@@ -62,6 +63,7 @@ class ReviewStep(BaseStep):
 
         # --- Main Scroll Area ---
         scroll = QScrollArea()
+        scroll.setLayoutDirection(Qt.RightToLeft)
         scroll.setWidgetResizable(True)
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         scroll.setStyleSheet(f"""
@@ -88,11 +90,20 @@ class ReviewStep(BaseStep):
         scroll_content.setLayoutDirection(Qt.RightToLeft)
         scroll_layout = QVBoxLayout(scroll_content)
         scroll_layout.setContentsMargins(0, 0, 0, 0)
-        scroll_layout.setSpacing(16)
+        scroll_layout.setSpacing(20)  # Increased spacing for clear card separation
 
-        # Create summary cards for each step
-        self.building_card = self._create_building_card()
-        scroll_layout.addWidget(self.building_card)
+        # Create summary cards — building split into 3 separate cards
+        # Building Card 1: Header + code + address
+        self.building_info_card = self._create_building_info_card()
+        scroll_layout.addWidget(self.building_info_card)
+
+        # Building Card 2: Stats row
+        self.building_stats_card, self.building_stats_content = self._create_simple_card()
+        scroll_layout.addWidget(self.building_stats_card)
+
+        # Building Card 3: Location section
+        self.building_location_card, self.building_location_content = self._create_simple_card()
+        scroll_layout.addWidget(self.building_location_card)
 
         self.unit_card = self._create_unit_card()
         scroll_layout.addWidget(self.unit_card)
@@ -103,15 +114,24 @@ class ReviewStep(BaseStep):
         self.persons_card = self._create_persons_card()
         scroll_layout.addWidget(self.persons_card)
 
-        self.relations_card = self._create_relations_card()
-        scroll_layout.addWidget(self.relations_card)
-
         self.claim_card = self._create_claim_card()
         scroll_layout.addWidget(self.claim_card)
 
         scroll_layout.addStretch()
         scroll.setWidget(scroll_content)
         layout.addWidget(scroll)
+
+    # =========================================================================
+    # DRY: Shared Styles & Helpers
+    # =========================================================================
+
+    def _create_section_label(self, text: str) -> QLabel:
+        """DRY: Create section label with WIZARD_TITLE style (reused across all cards)."""
+        lbl = QLabel(text)
+        lbl.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
+        lbl.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent; border: none;")
+        lbl.setAlignment(Qt.AlignRight)
+        return lbl
 
     def _add_shadow(self, widget: QWidget):
         """Add drop shadow effect to a widget."""
@@ -144,21 +164,21 @@ class ReviewStep(BaseStep):
         header_container.setStyleSheet("background: transparent; border: none;")
         header_layout = QHBoxLayout(header_container)
         header_layout.setContentsMargins(0, 0, 0, 0)
-        header_layout.setSpacing(12)
+        header_layout.setSpacing(10)
 
-        # Icon container (circular, light blue background)
+        # Icon container (compact: 28×28, radius 7px)
         icon_label = QLabel()
-        icon_label.setFixedSize(48, 48)
+        icon_label.setFixedSize(28, 28)
         icon_label.setAlignment(Qt.AlignCenter)
         icon_label.setStyleSheet("""
             QLabel {
-                background-color: #e8f4fd;
-                border: 1px solid #d0e8f7;
-                border-radius: 24px;
+                background-color: #ffffff;
+                border: 1px solid #DBEAFE;
+                border-radius: 7px;
             }
         """)
 
-        icon_pixmap = Icon.load_pixmap(icon_name, size=28)
+        icon_pixmap = Icon.load_pixmap(icon_name, size=14)
         if icon_pixmap and not icon_pixmap.isNull():
             icon_label.setPixmap(icon_pixmap)
 
@@ -167,7 +187,7 @@ class ReviewStep(BaseStep):
         title_container.setStyleSheet("background: transparent; border: none;")
         title_layout = QVBoxLayout(title_container)
         title_layout.setContentsMargins(0, 0, 0, 0)
-        title_layout.setSpacing(4)
+        title_layout.setSpacing(2)
 
         title_label = QLabel(title)
         title_label.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
@@ -175,7 +195,7 @@ class ReviewStep(BaseStep):
         title_label.setAlignment(Qt.AlignRight)
 
         subtitle_label = QLabel(subtitle)
-        subtitle_label.setFont(create_font(size=10, weight=FontManager.WEIGHT_REGULAR))
+        subtitle_label.setFont(create_font(size=9, weight=FontManager.WEIGHT_REGULAR))
         subtitle_label.setStyleSheet(f"color: {Colors.WIZARD_SUBTITLE}; background: transparent; border: none;")
         subtitle_label.setAlignment(Qt.AlignRight)
 
@@ -191,6 +211,7 @@ class ReviewStep(BaseStep):
 
         # Content container
         content_widget = QWidget()
+        content_widget.setLayoutDirection(Qt.RightToLeft)
         content_widget.setStyleSheet("background: transparent; border: none;")
         content_layout = QVBoxLayout(content_widget)
         content_layout.setContentsMargins(0, 0, 0, 0)
@@ -200,127 +221,37 @@ class ReviewStep(BaseStep):
 
         return card, content_layout
 
-    def _create_stat_item(self, value: str, label: str, color: str = None, label_on_top: bool = False) -> QWidget:
-        """Create a stat item with value and label (like in building_selection_step).
-
-        Args:
-            value: The stat value
-            label: The stat label
-            color: Optional color for value
-            label_on_top: If True, label is on top and value below (Step 1 style)
-        """
-        container = QWidget()
-        container.setStyleSheet("background: transparent; border: none;")
-        layout = QVBoxLayout(container)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(4)
-        layout.setAlignment(Qt.AlignCenter)
-
-        if label_on_top:
-            # Step 1 style: Label on top (darker), Value below (lighter)
-            label_widget = QLabel(label)
-            label_widget.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
-            label_widget.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent; border: none;")
-            label_widget.setAlignment(Qt.AlignCenter)
-
-            value_label = QLabel(str(value))
-            value_label.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
-            value_label.setStyleSheet(f"color: {Colors.WIZARD_SUBTITLE}; background: transparent; border: none;")
-            value_label.setAlignment(Qt.AlignCenter)
-
-            layout.addWidget(label_widget)
-            layout.addWidget(value_label)
-        else:
-            # Default style: Value on top (bold, colored), Label below
-            value_label = QLabel(str(value))
-            value_label.setFont(create_font(size=14, weight=FontManager.WEIGHT_BOLD))
-            value_color = color if color else Colors.TEXT_PRIMARY
-            value_label.setStyleSheet(f"color: {value_color}; background: transparent; border: none;")
-            value_label.setAlignment(Qt.AlignCenter)
-
-            label_widget = QLabel(label)
-            label_widget.setFont(create_font(size=9, weight=FontManager.WEIGHT_REGULAR))
-            label_widget.setStyleSheet(f"color: {Colors.TEXT_SECONDARY}; background: transparent; border: none;")
-            label_widget.setAlignment(Qt.AlignCenter)
-
-            layout.addWidget(value_label)
-            layout.addWidget(label_widget)
-
-        return container
-
-    def _create_stat_row(self, stats: list, label_on_top: bool = False, with_separators: bool = True) -> QWidget:
-        """Create a horizontal row of stat items.
-
-        Args:
-            stats: List of stat dicts with 'value', 'label', and optional 'color'
-            label_on_top: If True, use Step 1 style (label on top)
-            with_separators: If True, add vertical separators between items
-        """
-        container = QWidget()
-        container.setStyleSheet(f"""
-            QWidget {{
-                background-color: {Colors.INPUT_BG};
-                border: 1px solid {Colors.BORDER_DEFAULT};
-                border-radius: 8px;
+    def _create_simple_card(self) -> tuple:
+        """Create a simple card (no header) with shadow and return card and content layout."""
+        card = QFrame()
+        card.setLayoutDirection(Qt.RightToLeft)
+        card.setStyleSheet(f"""
+            QFrame {{
+                background-color: {Colors.SURFACE};
+                border: none;
+                border-radius: 12px;
             }}
         """)
-        layout = QHBoxLayout(container)
-        layout.setContentsMargins(16, 12, 16, 12)
-        layout.setSpacing(0)
+        self._add_shadow(card)
 
-        for i, stat in enumerate(stats):
-            stat_widget = self._create_stat_item(
-                stat.get('value', '-'),
-                stat.get('label', ''),
-                stat.get('color'),
-                label_on_top=label_on_top
-            )
-            layout.addWidget(stat_widget, stretch=1)
-            if with_separators and i < len(stats) - 1:
-                # Add separator
-                sep = QFrame()
-                sep.setFixedWidth(1)
-                sep.setStyleSheet(f"background-color: {Colors.BORDER_DEFAULT}; border: none;")
-                layout.addWidget(sep)
+        card_layout = QVBoxLayout(card)
+        card_layout.setContentsMargins(20, 16, 20, 16)
+        card_layout.setSpacing(12)
 
-        return container
+        # Content container
+        content_widget = QWidget()
+        content_widget.setLayoutDirection(Qt.RightToLeft)
+        content_widget.setStyleSheet("background: transparent; border: none;")
+        content_layout = QVBoxLayout(content_widget)
+        content_layout.setContentsMargins(0, 0, 0, 0)
+        content_layout.setSpacing(12)
 
-    def _create_field(self, label: str, value: str) -> QWidget:
-        """Create a labeled field widget for displaying data."""
-        container = QWidget()
-        container.setStyleSheet("background: transparent; border: none;")
-        layout = QVBoxLayout(container)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(6)
+        card_layout.addWidget(content_widget)
 
-        # Label
-        label_widget = QLabel(label)
-        label_widget.setFont(create_font(size=9, weight=FontManager.WEIGHT_REGULAR))
-        label_widget.setStyleSheet(f"color: {Colors.TEXT_SECONDARY}; background: transparent; border: none;")
-        label_widget.setAlignment(Qt.AlignRight)
-
-        # Value
-        value_widget = QLabel(value)
-        value_widget.setFont(create_font(size=10, weight=FontManager.WEIGHT_REGULAR))
-        value_widget.setStyleSheet(f"""
-            QLabel {{
-                color: {Colors.TEXT_PRIMARY};
-                background-color: {Colors.INPUT_BG};
-                border: 1px solid {Colors.INPUT_BORDER};
-                border-radius: 8px;
-                padding: 10px 12px;
-            }}
-        """)
-        value_widget.setAlignment(Qt.AlignRight)
-        value_widget.setWordWrap(True)
-
-        layout.addWidget(label_widget)
-        layout.addWidget(value_widget)
-
-        return container
+        return card, content_layout
 
     def _create_person_row(self, person: dict) -> QWidget:
-        """Create a person row card matching step 4 layout."""
+        """Create a person row card with blue left border accent."""
         row = QFrame()
         row.setLayoutDirection(Qt.RightToLeft)
         row.setFixedHeight(80)
@@ -329,6 +260,7 @@ class ReviewStep(BaseStep):
                 background-color: {Colors.BACKGROUND};
                 border: 1px solid #F0F0F0;
                 border-radius: 8px;
+                border-right: 3px solid #3B82F6;
             }}
             QLabel {{
                 border: none;
@@ -375,6 +307,7 @@ class ReviewStep(BaseStep):
         role_lbl = QLabel(role_text)
         role_lbl.setFont(create_font(size=10, weight=FontManager.WEIGHT_REGULAR))
         role_lbl.setStyleSheet(f"color: {Colors.WIZARD_SUBTITLE}; background: transparent;")
+        role_lbl.setAlignment(Qt.AlignRight)
 
         text_vbox.addWidget(name_lbl)
         text_vbox.addWidget(role_lbl)
@@ -386,7 +319,9 @@ class ReviewStep(BaseStep):
         view_lbl = QLabel(tr("wizard.review.view_personal_info"))
         view_lbl.setFont(create_font(size=9, weight=FontManager.WEIGHT_MEDIUM))
         view_lbl.setStyleSheet("color: #3B82F6; background: transparent; border: none;")
+        view_lbl.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
         view_lbl.setCursor(Qt.PointingHandCursor)
+        view_lbl.mousePressEvent = lambda e, p=person: self._view_person_readonly(p)
 
         card_layout.addLayout(right_group)
         card_layout.addStretch()
@@ -394,115 +329,10 @@ class ReviewStep(BaseStep):
 
         return row
 
-    def _create_demographics_grid(self, data: dict) -> QWidget:
-        """Create demographics grid with male/female breakdown (like in household_step)."""
-        container = QWidget()
-        container.setStyleSheet(f"""
-            QWidget {{
-                background-color: {Colors.INPUT_BG};
-                border: 1px solid {Colors.BORDER_DEFAULT};
-                border-radius: 8px;
-            }}
-        """)
-        grid = QGridLayout(container)
-        grid.setContentsMargins(16, 12, 16, 12)
-        grid.setSpacing(8)
-
-        # Header row
-        headers = [tr("wizard.review.demographics_category"), tr("wizard.review.demographics_male"), tr("wizard.review.demographics_female"), tr("wizard.review.demographics_total")]
-        for col, header in enumerate(headers):
-            lbl = QLabel(header)
-            lbl.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
-            lbl.setStyleSheet(f"color: {Colors.TEXT_SECONDARY}; background: transparent; border: none;")
-            lbl.setAlignment(Qt.AlignCenter)
-            grid.addWidget(lbl, 0, col)
-
-        # Data rows
-        rows = [
-            (tr("wizard.review.demographics_adults"), data.get('adult_male', 0), data.get('adult_female', 0)),
-            (tr("wizard.review.demographics_children"), data.get('minor_male', 0), data.get('minor_female', 0)),
-            (tr("wizard.review.demographics_elderly"), data.get('elderly_male', 0), data.get('elderly_female', 0)),
-            (tr("wizard.review.demographics_disabled"), data.get('disabled_male', 0), data.get('disabled_female', 0)),
-        ]
-
-        for row_idx, (category, male, female) in enumerate(rows, start=1):
-            total = male + female
-
-            cat_lbl = QLabel(category)
-            cat_lbl.setFont(create_font(size=9, weight=FontManager.WEIGHT_REGULAR))
-            cat_lbl.setStyleSheet(f"color: {Colors.TEXT_PRIMARY}; background: transparent; border: none;")
-            cat_lbl.setAlignment(Qt.AlignCenter)
-            grid.addWidget(cat_lbl, row_idx, 0)
-
-            male_lbl = QLabel(str(male))
-            male_lbl.setFont(create_font(size=10, weight=FontManager.WEIGHT_MEDIUM))
-            male_lbl.setStyleSheet(f"color: #3B82F6; background: transparent; border: none;")
-            male_lbl.setAlignment(Qt.AlignCenter)
-            grid.addWidget(male_lbl, row_idx, 1)
-
-            female_lbl = QLabel(str(female))
-            female_lbl.setFont(create_font(size=10, weight=FontManager.WEIGHT_MEDIUM))
-            female_lbl.setStyleSheet(f"color: #EC4899; background: transparent; border: none;")
-            female_lbl.setAlignment(Qt.AlignCenter)
-            grid.addWidget(female_lbl, row_idx, 2)
-
-            total_lbl = QLabel(str(total))
-            total_lbl.setFont(create_font(size=10, weight=FontManager.WEIGHT_BOLD))
-            total_lbl.setStyleSheet(f"color: {Colors.TEXT_PRIMARY}; background: transparent; border: none;")
-            total_lbl.setAlignment(Qt.AlignCenter)
-            grid.addWidget(total_lbl, row_idx, 3)
-
-        return container
-
-    def _create_status_bar(self, status: str, status_display: str) -> QWidget:
-        """Create a status bar with colored indicator."""
-        container = QWidget()
-        container.setStyleSheet("background: transparent; border: none;")
-        layout = QHBoxLayout(container)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(8)
-
-        # Status colors
-        status_colors = {
-            "new": "#22C55E",  # Green
-            "under_review": "#F59E0B",  # Orange
-            "completed": "#3B82F6",  # Blue
-            "pending": "#EF4444",  # Red
-            "draft": "#6B7280",  # Gray
-        }
-
-        color = status_colors.get(status, "#6B7280")
-
-        # Status indicator
-        indicator = QLabel()
-        indicator.setFixedSize(12, 12)
-        indicator.setStyleSheet(f"""
-            QLabel {{
-                background-color: {color};
-                border-radius: 6px;
-                border: none;
-            }}
-        """)
-
-        # Status text
-        status_label = QLabel(status_display)
-        status_label.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
-        status_label.setStyleSheet(f"color: {color}; background: transparent; border: none;")
-
-        layout.addStretch()
-        layout.addWidget(status_label)
-        layout.addWidget(indicator)
-
-        return container
-
-    # =========================================================================
-    # Card Creation Methods
-    # =========================================================================
-
-    def _create_building_card(self) -> QFrame:
-        """Create building information summary card (Step 1)."""
+    def _create_building_info_card(self) -> QFrame:
+        """Create building info card (Step 1) — header + code + address."""
         card, content_layout = self._create_card_base("blue", tr("wizard.review.building_card_title"), tr("wizard.review.building_card_subtitle"))
-        self.building_content = content_layout
+        self.building_info_content = content_layout
         return card
 
     def _create_unit_card(self) -> QFrame:
@@ -521,12 +351,6 @@ class ReviewStep(BaseStep):
         """Create persons list summary card (Step 4)."""
         card, content_layout = self._create_card_base("user-account", tr("wizard.review.persons_card_title"), tr("wizard.review.persons_card_subtitle"))
         self.persons_content = content_layout
-        return card
-
-    def _create_relations_card(self) -> QFrame:
-        """Create relations information summary card (Step 5)."""
-        card, content_layout = self._create_card_base("user-account", tr("wizard.review.relations_card_title"), tr("wizard.review.relations_card_subtitle"))
-        self.relations_content = content_layout
         return card
 
     def _create_claim_card(self) -> QFrame:
@@ -548,156 +372,167 @@ class ReviewStep(BaseStep):
         self._populate_unit_card()
         self._populate_household_card()
         self._populate_persons_card()
-        self._populate_relations_card()
         self._populate_claim_card()
 
     def _populate_building_card(self):
-        """Populate building information card - matching Step 1 layout after selection."""
-        self._clear_layout(self.building_content)
+        """Populate 3 separate building cards matching BuildingSelectionStep."""
+        self._clear_layout(self.building_info_content)
+        self._clear_layout(self.building_stats_content)
+        self._clear_layout(self.building_location_content)
 
-        if self.context.building:
-            building = self.context.building
-            building_code = str(building.building_id) if hasattr(building, 'building_id') else "-"
-            address = building.address_path if hasattr(building, 'address_path') else "-"
-            building_type = building.building_type_display if hasattr(building, 'building_type_display') else "-"
-            status = building.status_display if hasattr(building, 'status_display') else "-"
-            units_count = str(building.number_of_units) if hasattr(building, 'number_of_units') else "0"
-            parcels_count = str(getattr(building, 'number_of_apartments', 0))
-            shops_count = str(building.number_of_shops) if hasattr(building, 'number_of_shops') else "0"
-            location_desc = getattr(building, 'location_description', tr("wizard.building.location_description"))
-            general_desc = getattr(building, 'general_description', tr("wizard.building.general_description_fallback"))
-
-            # Row 1: Building code field
-            code_field = self._create_field(tr("wizard.review.building_code"), building_code)
-            self.building_content.addWidget(code_field)
-
-            # Row 2: Full address path with icon
-            addr_container = QWidget()
-            addr_container.setStyleSheet("background: transparent; border: none;")
-            addr_layout = QHBoxLayout(addr_container)
-            addr_layout.setContentsMargins(0, 0, 0, 0)
-            addr_layout.setSpacing(8)
-
-            # Address icon
-            addr_icon = QLabel()
-            addr_icon.setFixedSize(20, 20)
-            addr_pixmap = Icon.load_pixmap("blue", size=16)
-            if addr_pixmap and not addr_pixmap.isNull():
-                addr_icon.setPixmap(addr_pixmap)
-            addr_icon.setStyleSheet("background: transparent; border: none;")
-
-            # Address text
-            addr_label = QLabel(address)
-            addr_label.setFont(create_font(size=10, weight=FontManager.WEIGHT_REGULAR))
-            addr_label.setStyleSheet(f"color: {Colors.PRIMARY_BLUE}; background: transparent; border: none;")
-            addr_label.setAlignment(Qt.AlignRight)
-            addr_label.setWordWrap(True)
-
-            addr_layout.addStretch()
-            addr_layout.addWidget(addr_label)
-            addr_layout.addWidget(addr_icon)
-
-            self.building_content.addWidget(addr_container)
-
-            # Row 3: Stats row (5 sections like Step 1 - label on top, value below)
-            stats = [
-                {'value': status, 'label': tr("wizard.building.status")},
-                {'value': building_type, 'label': tr("wizard.building.type")},
-                {'value': units_count, 'label': tr("wizard.building.units_count")},
-                {'value': parcels_count, 'label': tr("wizard.building.parcels_count")},
-                {'value': shops_count, 'label': tr("wizard.building.shops_count")},
-            ]
-            stats_row = self._create_stat_row(stats, label_on_top=True, with_separators=False)
-            self.building_content.addWidget(stats_row)
-
-            # Row 4: Location section with header (like Step 1)
-            location_container = QWidget()
-            location_container.setStyleSheet(f"""
-                QWidget {{
-                    background-color: {Colors.INPUT_BG};
-                    border: 1px solid {Colors.BORDER_DEFAULT};
-                    border-radius: 8px;
-                }}
-            """)
-            location_main_layout = QVBoxLayout(location_container)
-            location_main_layout.setContentsMargins(12, 12, 12, 12)
-            location_main_layout.setSpacing(12)
-
-            # Header: "موقع البناء" (like Step 1)
-            location_header = QLabel(tr("wizard.building.location"))
-            location_header.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
-            location_header.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent; border: none;")
-            location_main_layout.addWidget(location_header)
-
-            # Content row: Map + descriptions
-            content_row = QHBoxLayout()
-            content_row.setSpacing(24)
-
-            # Map section
-            map_container = QLabel()
-            map_container.setFixedSize(200, 130)
-            map_container.setAlignment(Qt.AlignCenter)
-            map_container.setStyleSheet(f"""
-                QLabel {{
-                    background-color: #E8E8E8;
-                    border-radius: 8px;
-                    border: none;
-                }}
-            """)
-            # Try to load map image
-            map_pixmap = Icon.load_pixmap("image-40", size=None)
-            if not map_pixmap or map_pixmap.isNull():
-                map_pixmap = Icon.load_pixmap("map-placeholder", size=None)
-            if map_pixmap and not map_pixmap.isNull():
-                scaled_map = map_pixmap.scaled(200, 130, Qt.IgnoreAspectRatio, Qt.SmoothTransformation)
-                map_container.setPixmap(scaled_map)
-            else:
-                # Fallback: location icon
-                loc_pixmap = Icon.load_pixmap("carbon_location-filled", size=48)
-                if loc_pixmap and not loc_pixmap.isNull():
-                    map_container.setPixmap(loc_pixmap)
-
-            content_row.addWidget(map_container)
-
-            # Location description section
-            loc_section = QVBoxLayout()
-            loc_section.setSpacing(4)
-            loc_label = QLabel(tr("wizard.building.location_description"))
-            loc_label.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
-            loc_label.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent; border: none;")
-            loc_value = QLabel(location_desc)
-            loc_value.setFont(create_font(size=10, weight=FontManager.WEIGHT_REGULAR))
-            loc_value.setStyleSheet(f"color: {Colors.WIZARD_SUBTITLE}; background: transparent; border: none;")
-            loc_value.setWordWrap(True)
-            loc_section.addWidget(loc_label)
-            loc_section.addWidget(loc_value)
-            loc_section.addStretch()
-            content_row.addLayout(loc_section, stretch=1)
-
-            # General description section
-            gen_section = QVBoxLayout()
-            gen_section.setSpacing(4)
-            gen_label = QLabel(tr("wizard.building.general_description"))
-            gen_label.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
-            gen_label.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent; border: none;")
-            gen_value = QLabel(general_desc)
-            gen_value.setFont(create_font(size=10, weight=FontManager.WEIGHT_REGULAR))
-            gen_value.setStyleSheet(f"color: {Colors.WIZARD_SUBTITLE}; background: transparent; border: none;")
-            gen_value.setWordWrap(True)
-            gen_section.addWidget(gen_label)
-            gen_section.addWidget(gen_value)
-            gen_section.addStretch()
-            content_row.addLayout(gen_section, stretch=1)
-
-            location_main_layout.addLayout(content_row)
-
-            self.building_content.addWidget(location_container)
-        else:
+        if not self.context.building:
             no_data = QLabel(tr("wizard.building.not_selected"))
             no_data.setFont(create_font(size=10))
             no_data.setStyleSheet(f"color: {Colors.TEXT_SECONDARY}; background: transparent; border: none;")
             no_data.setAlignment(Qt.AlignCenter)
-            self.building_content.addWidget(no_data)
+            self.building_info_content.addWidget(no_data)
+            self.building_stats_card.hide()
+            self.building_location_card.hide()
+            return
+
+        self.building_stats_card.show()
+        self.building_location_card.show()
+
+        building = self.context.building
+        building_code = str(building.building_id) if hasattr(building, 'building_id') else "-"
+        building_type = building.building_type_display if hasattr(building, 'building_type_display') else "-"
+        status = building.status_display if hasattr(building, 'status_display') else "-"
+        units_count = str(building.number_of_units) if hasattr(building, 'number_of_units') else "0"
+        parcels_count = str(getattr(building, 'number_of_apartments', 0))
+        shops_count = str(building.number_of_shops) if hasattr(building, 'number_of_shops') else "0"
+        location_desc = getattr(building, 'location_description', '-')
+        general_desc = getattr(building, 'general_description', '-')
+
+        # ===== Card 1: Building number + address bar =====
+        building_num_label = QLabel(building_code)
+        building_num_label.setFont(create_font(size=16, weight=FontManager.WEIGHT_BOLD))
+        building_num_label.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent; border: none;")
+        building_num_label.setAlignment(Qt.AlignRight)
+        self.building_info_content.addWidget(building_num_label)
+
+        address = build_hierarchical_address(building_obj=building, unit_obj=None, include_unit=False)
+        addr_bar = QFrame()
+        addr_bar.setLayoutDirection(Qt.RightToLeft)
+        addr_bar.setFixedHeight(28)
+        addr_bar.setStyleSheet("QFrame { background-color: #F8FAFF; border: none; border-radius: 8px; }")
+        addr_row = QHBoxLayout(addr_bar)
+        addr_row.setContentsMargins(12, 0, 12, 0)
+        addr_row.setSpacing(8)
+
+        addr_row.addStretch()
+        addr_icon = QLabel()
+        addr_icon.setStyleSheet("background: transparent; border: none;")
+        addr_icon_pixmap = Icon.load_pixmap("dec", size=16)
+        if addr_icon_pixmap and not addr_icon_pixmap.isNull():
+            addr_icon.setPixmap(addr_icon_pixmap)
+        else:
+            addr_icon.setText("\U0001f4cd")
+        addr_row.addWidget(addr_icon)
+
+        addr_text = QLabel(address if address else "-")
+        addr_text.setAlignment(Qt.AlignCenter)
+        addr_text.setFont(create_font(size=10, weight=FontManager.WEIGHT_REGULAR))
+        addr_text.setStyleSheet("color: #0F5B95; background: transparent; border: none;")
+        addr_row.addWidget(addr_text)
+        addr_row.addStretch()
+        self.building_info_content.addWidget(addr_bar)
+
+        # ===== Card 2: Stats (5 columns) =====
+        stats_row = QHBoxLayout()
+        stats_row.setContentsMargins(0, 0, 0, 0)
+        stats_row.setSpacing(0)
+
+        stat_items = [
+            (tr("wizard.building.status"), status),
+            (tr("wizard.building.type"), building_type),
+            (tr("wizard.building.units_count"), units_count),
+            (tr("wizard.building.parcels_count"), parcels_count),
+            (tr("wizard.building.shops_count"), shops_count),
+        ]
+
+        for label_text, value_text in stat_items:
+            section = QWidget()
+            section.setStyleSheet("background: transparent;")
+            section_layout = QVBoxLayout(section)
+            section_layout.setContentsMargins(0, 0, 0, 0)
+            section_layout.setSpacing(4)
+            section_layout.setAlignment(Qt.AlignCenter)
+
+            lbl = QLabel(label_text)
+            lbl.setAlignment(Qt.AlignCenter)
+            lbl.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
+            lbl.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent; border: none;")
+
+            val = QLabel(str(value_text))
+            val.setAlignment(Qt.AlignCenter)
+            val.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
+            val.setStyleSheet(f"color: {Colors.WIZARD_SUBTITLE}; background: transparent; border: none;")
+
+            section_layout.addWidget(lbl)
+            section_layout.addWidget(val)
+            stats_row.addWidget(section, stretch=1)
+
+        self.building_stats_content.addLayout(stats_row)
+
+        # ===== Card 3: Location (map + descriptions) =====
+        loc_header = QLabel(tr("wizard.building.location_title"))
+        loc_header.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
+        loc_header.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent; border: none;")
+        loc_header.setAlignment(Qt.AlignRight)
+        self.building_location_content.addWidget(loc_header)
+
+        content_row = QHBoxLayout()
+        content_row.setSpacing(24)
+
+        map_container = QLabel()
+        map_container.setFixedSize(400, 130)
+        map_container.setAlignment(Qt.AlignCenter)
+        map_container.setObjectName("reviewMapContainer")
+        map_container.setStyleSheet("QLabel#reviewMapContainer { background-color: #E8E8E8; border-radius: 8px; }")
+        map_pixmap = Icon.load_pixmap("image-40", size=None)
+        if not map_pixmap or map_pixmap.isNull():
+            map_pixmap = Icon.load_pixmap("map-placeholder", size=None)
+        if map_pixmap and not map_pixmap.isNull():
+            map_container.setPixmap(map_pixmap.scaled(400, 130, Qt.IgnoreAspectRatio, Qt.SmoothTransformation))
+        else:
+            loc_icon = Icon.load_pixmap("carbon_location-filled", size=48)
+            if loc_icon and not loc_icon.isNull():
+                map_container.setPixmap(loc_icon)
+        content_row.addWidget(map_container)
+
+        loc_desc_section = QVBoxLayout()
+        loc_desc_section.setSpacing(4)
+        loc_desc_label = QLabel(tr("wizard.building.location_description"))
+        loc_desc_label.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
+        loc_desc_label.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent; border: none;")
+        loc_desc_label.setAlignment(Qt.AlignRight)
+        loc_desc_value = QLabel(location_desc if location_desc else "-")
+        loc_desc_value.setFont(create_font(size=10, weight=FontManager.WEIGHT_REGULAR))
+        loc_desc_value.setStyleSheet(f"color: {Colors.WIZARD_SUBTITLE}; background: transparent; border: none;")
+        loc_desc_value.setAlignment(Qt.AlignRight)
+        loc_desc_value.setWordWrap(True)
+        loc_desc_section.addWidget(loc_desc_label)
+        loc_desc_section.addWidget(loc_desc_value)
+        loc_desc_section.addStretch(1)
+        content_row.addLayout(loc_desc_section, stretch=1)
+
+        gen_desc_section = QVBoxLayout()
+        gen_desc_section.setSpacing(4)
+        gen_desc_label = QLabel(tr("wizard.building.general_description"))
+        gen_desc_label.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
+        gen_desc_label.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent; border: none;")
+        gen_desc_label.setAlignment(Qt.AlignRight)
+        gen_desc_value = QLabel(general_desc if general_desc else "-")
+        gen_desc_value.setFont(create_font(size=10, weight=FontManager.WEIGHT_REGULAR))
+        gen_desc_value.setStyleSheet(f"color: {Colors.WIZARD_SUBTITLE}; background: transparent; border: none;")
+        gen_desc_value.setAlignment(Qt.AlignRight)
+        gen_desc_value.setWordWrap(True)
+        gen_desc_section.addWidget(gen_desc_label)
+        gen_desc_section.addWidget(gen_desc_value)
+        gen_desc_section.addStretch(1)
+        content_row.addLayout(gen_desc_section, stretch=1)
+
+        self.building_location_content.addLayout(content_row)
 
     def _create_unit_stat_section(self, label_text: str, value_text: str = "-"):
         """Create a stat section matching step 3 unit card style (label top, value below, both centered)."""
@@ -761,6 +596,7 @@ class ReviewStep(BaseStep):
 
             # Build unit info container matching step 3 style
             unit_info_container = QFrame()
+            unit_info_container.setLayoutDirection(Qt.RightToLeft)
             unit_info_container.setFixedHeight(73)
             unit_info_container.setStyleSheet(f"""
                 QFrame {{
@@ -790,7 +626,12 @@ class ReviewStep(BaseStep):
 
             self.unit_content.addWidget(unit_info_container)
 
-            # وصف العقار section (matching step 2 unit card)
+            # Dotted separator line (matching Figma)
+            dotted_sep = QFrame()
+            dotted_sep.setFixedHeight(1)
+            dotted_sep.setStyleSheet("background: transparent; border-top: 1px dashed #E0E6ED;")
+            self.unit_content.addWidget(dotted_sep)
+
             desc_layout = QVBoxLayout()
             desc_layout.setContentsMargins(0, 0, 0, 0)
             desc_layout.setSpacing(2)
@@ -798,7 +639,7 @@ class ReviewStep(BaseStep):
             desc_title = QLabel(tr("wizard.unit.property_description"))
             desc_title.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
             desc_title.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent; border: none;")
-           # desc_title.setAlignment(Qt.AlignRight)
+            desc_title.setAlignment(Qt.AlignRight)
 
             desc_text_content = ""
             if unit and hasattr(unit, 'property_description') and unit.property_description:
@@ -811,7 +652,7 @@ class ReviewStep(BaseStep):
             desc_text = QLabel(desc_text_content)
             desc_text.setFont(create_font(size=9, weight=FontManager.WEIGHT_REGULAR))
             desc_text.setStyleSheet(f"color: {Colors.WIZARD_SUBTITLE}; background: transparent; border: none;")
-           # desc_text.setAlignment(Qt.AlignRight)
+            desc_text.setAlignment(Qt.AlignRight)
             desc_text.setWordWrap(True)
             desc_text.setMaximumHeight(40)
 
@@ -819,6 +660,7 @@ class ReviewStep(BaseStep):
             desc_layout.addWidget(desc_text)
 
             desc_widget = QWidget()
+            desc_widget.setLayoutDirection(Qt.RightToLeft)
             desc_widget.setStyleSheet("background: transparent; border: none;")
             desc_widget.setLayout(desc_layout)
             self.unit_content.addWidget(desc_widget)
@@ -832,6 +674,7 @@ class ReviewStep(BaseStep):
     def _create_demographic_card(self, items: list) -> QFrame:
         """Create a demographic data card with label/value rows and separators."""
         frame = QFrame()
+        frame.setLayoutDirection(Qt.RightToLeft)
         frame.setStyleSheet(f"""
             QFrame {{
                 background-color: {Colors.SURFACE};
@@ -884,55 +727,39 @@ class ReviewStep(BaseStep):
             self.household_content.addWidget(no_data)
             return
 
-        # Aggregate data from all households
         total_size = sum(h.get('size', 0) for h in self.context.households)
         hh = self.context.households[0] if self.context.households else {}
 
-        # Occupancy type/nature display
-        occ_type_val = hh.get('occupancy_type', '-') or '-'
-        occ_nature_val = hh.get('occupancy_nature', '-') or '-'
+        # Head person name
+        head_name = hh.get('head_name', '')
+        if not head_name and self.context.persons:
+            p = self.context.persons[0]
+            head_name = f"{p.get('first_name', '')} {p.get('father_name', '')} {p.get('last_name', '')}".strip()
+        if not head_name:
+            head_name = "-"
 
-        # --- Summary Row: Occupancy Type + Nature + Member count ---
+        # Summary row: head person (right) + total count (left)
         summary_container = QWidget()
+        summary_container.setLayoutDirection(Qt.RightToLeft)
         summary_container.setStyleSheet("background: transparent; border: none;")
         summary_layout = QHBoxLayout(summary_container)
         summary_layout.setContentsMargins(0, 0, 0, 0)
         summary_layout.setSpacing(0)
 
-        # Right block: occupancy type
-        type_block = QVBoxLayout()
-        type_block.setSpacing(4)
-        type_title = QLabel(tr("wizard.occupation.type"))
-        type_title.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
-        type_title.setStyleSheet(f"color: #1e293b; background: transparent; border: none;")
-        type_title.setAlignment(Qt.AlignRight)
-        type_val = QLabel(occ_type_val)
-        type_val.setFont(create_font(size=10, weight=FontManager.WEIGHT_REGULAR))
-        type_val.setStyleSheet(f"color: #94a3b8; background: transparent; border: none;")
-        type_val.setAlignment(Qt.AlignRight)
-        type_block.addWidget(type_title)
-        type_block.addWidget(type_val)
+        head_block = QVBoxLayout()
+        head_block.setSpacing(4)
+        head_title = self._create_section_label(tr("wizard.review.head_person"))
+        head_title.setAlignment(Qt.AlignRight)
+        head_val = QLabel(head_name)
+        head_val.setFont(create_font(size=10, weight=FontManager.WEIGHT_REGULAR))
+        head_val.setStyleSheet(f"color: #94a3b8; background: transparent; border: none;")
+        head_val.setAlignment(Qt.AlignRight)
+        head_block.addWidget(head_title)
+        head_block.addWidget(head_val)
 
-        # Center block: occupancy nature
-        nature_block = QVBoxLayout()
-        nature_block.setSpacing(4)
-        nature_title = QLabel(tr("wizard.occupation.nature"))
-        nature_title.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
-        nature_title.setStyleSheet(f"color: #1e293b; background: transparent; border: none;")
-        nature_title.setAlignment(Qt.AlignCenter)
-        nature_val = QLabel(occ_nature_val)
-        nature_val.setFont(create_font(size=10, weight=FontManager.WEIGHT_REGULAR))
-        nature_val.setStyleSheet(f"color: #94a3b8; background: transparent; border: none;")
-        nature_val.setAlignment(Qt.AlignCenter)
-        nature_block.addWidget(nature_title)
-        nature_block.addWidget(nature_val)
-
-        # Left block: member count
         count_block = QVBoxLayout()
         count_block.setSpacing(4)
-        count_title = QLabel(tr("wizard.household.family_size"))
-        count_title.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
-        count_title.setStyleSheet(f"color: #1e293b; background: transparent; border: none;")
+        count_title = self._create_section_label(tr("wizard.household.family_size"))
         count_title.setAlignment(Qt.AlignCenter)
         count_val = QLabel(str(total_size))
         count_val.setFont(create_font(size=10, weight=FontManager.WEIGHT_REGULAR))
@@ -941,9 +768,7 @@ class ReviewStep(BaseStep):
         count_block.addWidget(count_title)
         count_block.addWidget(count_val)
 
-        summary_layout.addLayout(type_block)
-        summary_layout.addStretch()
-        summary_layout.addLayout(nature_block)
+        summary_layout.addLayout(head_block)
         summary_layout.addStretch()
         summary_layout.addLayout(count_block)
         summary_layout.addStretch()
@@ -973,6 +798,7 @@ class ReviewStep(BaseStep):
         ]
 
         cards_container = QWidget()
+        cards_container.setLayoutDirection(Qt.RightToLeft)
         cards_container.setStyleSheet("background: transparent; border: none;")
         cards_layout = QHBoxLayout(cards_container)
         cards_layout.setContentsMargins(0, 0, 0, 0)
@@ -1001,161 +827,22 @@ class ReviewStep(BaseStep):
             row = self._create_person_row(person)
             self.persons_content.addWidget(row)
 
-    def _create_relation_person_card(self, relation: dict) -> QFrame:
-        """Create a read-only relation card for a person, matching step 5 layout."""
-        card = QFrame()
-        card.setLayoutDirection(Qt.RightToLeft)
-        card.setStyleSheet(f"""
-            QFrame {{
-                background-color: {Colors.BACKGROUND};
-                border: 1px solid #F0F0F0;
-                border-radius: 8px;
-            }}
-            QLabel {{
-                border: none;
-            }}
-        """)
-        card_layout = QVBoxLayout(card)
-        card_layout.setContentsMargins(20, 15, 20, 15)
-        card_layout.setSpacing(12)
+    def _view_person_readonly(self, person: dict):
+        """Open PersonDialog in read-only mode to view person details."""
+        from ui.wizards.office_survey.dialogs.person_dialog import PersonDialog
+        from PyQt5.QtWidgets import QDialog
 
-        # --- Person header: icon + name + role ---
-        header_layout = QHBoxLayout()
-        header_layout.setSpacing(10)
-
-        icon_label = QLabel()
-        icon_label.setFixedSize(38, 38)
-        icon_label.setAlignment(Qt.AlignCenter)
-        icon_label.setStyleSheet("""
-            QLabel {
-                background-color: #F4F8FF;
-                border-radius: 19px;
-                border: 1px solid #d1e3f8;
-            }
-        """)
-        person_icon = Icon.load_pixmap("user", size=20)
-        if person_icon and not person_icon.isNull():
-            icon_label.setPixmap(person_icon)
-
-        text_vbox = QVBoxLayout()
-        text_vbox.setSpacing(0)
-
-        person_name = relation.get('person_name', '-')
-        name_label = QLabel(person_name)
-        name_label.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
-        name_label.setStyleSheet(f"color: #2c3e50; background: transparent;")
-
-        role_text = get_relation_type_display(relation.get('relation_type', '')) if relation.get('relation_type') else '-'
-        role_label = QLabel(role_text)
-        role_label.setFont(create_font(size=9, weight=FontManager.WEIGHT_REGULAR))
-        role_label.setStyleSheet("color: #7f8c8d; background: transparent;")
-
-        text_vbox.addWidget(name_label)
-        text_vbox.addWidget(role_label)
-
-        header_layout.addWidget(icon_label)
-        header_layout.addLayout(text_vbox)
-        header_layout.addStretch()
-        card_layout.addLayout(header_layout)
-
-        # --- Form fields (read-only) in grid ---
-        label_style = "color: #333; font-size: 12px; font-weight: 600; background: transparent;"
-        value_style = f"""
-            QLabel {{
-                background-color: #ffffff;
-                border: 1px solid #dfe6e9;
-                border-radius: 4px;
-                padding: 8px 12px;
-                color: #2d3436;
-                font-size: 12px;
-            }}
-        """
-
-        grid = QGridLayout()
-        grid.setSpacing(10)
-        grid.setColumnStretch(0, 1)
-        grid.setColumnStretch(1, 1)
-        grid.setColumnStretch(2, 1)
-
-        # Row 0 - Labels
-        lbl_contract = QLabel(tr("wizard.relation.contract_type"))
-        lbl_contract.setStyleSheet(label_style)
-        grid.addWidget(lbl_contract, 0, 0)
-
-        lbl_date = QLabel(tr("wizard.relation.start_date"))
-        lbl_date.setStyleSheet(label_style)
-        grid.addWidget(lbl_date, 0, 1)
-
-        lbl_share = QLabel(tr("wizard.relation.ownership_share"))
-        lbl_share.setStyleSheet(label_style)
-        grid.addWidget(lbl_share, 0, 2)
-
-        # Row 1 - Values
-        contract_val = QLabel(relation.get('contract_type') or "-")
-        contract_val.setStyleSheet(value_style)
-        grid.addWidget(contract_val, 1, 0)
-
-        date_val = QLabel(relation.get('start_date') or "-")
-        date_val.setStyleSheet(value_style)
-        grid.addWidget(date_val, 1, 1)
-
-        share = relation.get('ownership_share', 0)
-        share_val = QLabel(f"{share} %")
-        share_val.setStyleSheet(value_style)
-        grid.addWidget(share_val, 1, 2)
-
-        card_layout.addLayout(grid)
-
-        # --- Notes ---
-        notes_text = relation.get('notes')
-        if notes_text:
-            notes_title = QLabel(tr("wizard.relation.notes_label"))
-            notes_title.setStyleSheet(label_style)
-            card_layout.addWidget(notes_title)
-
-            notes_val = QLabel(notes_text)
-            notes_val.setWordWrap(True)
-            notes_val.setStyleSheet(value_style)
-            card_layout.addWidget(notes_val)
-
-        # --- Evidence ---
-        evidence_type = relation.get('evidence_type')
-        evidence_desc = relation.get('evidence_description')
-        if evidence_type or evidence_desc:
-            docs_title = QLabel(tr("wizard.relation.documents_label"))
-            docs_title.setStyleSheet(label_style)
-            card_layout.addWidget(docs_title)
-
-            doc_text = evidence_type or ""
-            if evidence_desc:
-                doc_text += f" - {evidence_desc}" if doc_text else evidence_desc
-            docs_val = QLabel(doc_text)
-            docs_val.setStyleSheet(value_style)
-            card_layout.addWidget(docs_val)
-
-        return card
-
-    def _populate_relations_card(self):
-        """Populate relations card matching step 5 layout - one card per person."""
-        self._clear_layout(self.relations_content)
-
-        if not self.context.relations:
-            no_data = QLabel(tr("wizard.relation.no_relations"))
-            no_data.setFont(create_font(size=10))
-            no_data.setStyleSheet(f"color: {Colors.TEXT_SECONDARY}; background: transparent; border: none;")
-            no_data.setAlignment(Qt.AlignCenter)
-            self.relations_content.addWidget(no_data)
-            return
-
-        self.relations_content.setSpacing(10)
-
-        for relation in self.context.relations:
-            card = self._create_relation_person_card(relation)
-            self.relations_content.addWidget(card)
+        dialog = PersonDialog(
+            person_data=person,
+            existing_persons=self.context.persons,
+            parent=self,
+            read_only=True
+        )
+        dialog.exec_()
 
     def _create_claim_data_card(self, claim_data: dict) -> QFrame:
-        """Create a single read-only claim card matching step 6 layout."""
-        # Use display_mappings for DRY translations
+        """Create a single read-only claim card matching ClaimStep styling exactly."""
+        ro_bg = "#f0f7ff"
 
         card = QFrame()
         card.setLayoutDirection(Qt.RightToLeft)
@@ -1173,19 +860,19 @@ class ReviewStep(BaseStep):
         card_layout.setContentsMargins(20, 15, 20, 15)
         card_layout.setSpacing(12)
 
-        label_style = f"color: {Colors.WIZARD_SUBTITLE}; background: transparent;"
-        value_style = f"""
+        ro_field_style = f"""
             QLabel {{
-                background-color: {Colors.INPUT_BG};
-                border: 1px solid {Colors.BORDER_DEFAULT};
+                background-color: {ro_bg};
+                border: 1px solid #E0E6ED;
                 border-radius: 8px;
-                padding: 8px 12px;
-                color: {Colors.TEXT_PRIMARY};
-                font-size: 13px;
+                padding: 10px;
+                color: #333;
+                font-size: 14px;
+                min-height: 23px;
+                max-height: 23px;
             }}
         """
 
-        # --- Grid: Row 1 & 2 ---
         grid = QGridLayout()
         grid.setHorizontalSpacing(8)
         grid.setVerticalSpacing(8)
@@ -1195,16 +882,15 @@ class ReviewStep(BaseStep):
         def add_field(label_text, value_text, row, col):
             v = QVBoxLayout()
             v.setSpacing(4)
-            lbl = QLabel(label_text)
-            lbl.setFont(create_font(size=9, weight=FontManager.WEIGHT_REGULAR))
-            lbl.setStyleSheet(label_style)
+            lbl = self._create_section_label(label_text)
             v.addWidget(lbl)
             val = QLabel(str(value_text) if value_text else "-")
-            val.setStyleSheet(value_style)
+            val.setAlignment(Qt.AlignRight)
+            val.setStyleSheet(ro_field_style)
             v.addWidget(val)
             grid.addLayout(v, row, col)
 
-        # Claimant name - use per-card person_name first
+        # Claimant name
         claimant_name = claim_data.get('person_name', '').strip()
         if not claimant_name:
             claimant_ids = claim_data.get('claimant_person_ids', [])
@@ -1219,7 +905,7 @@ class ReviewStep(BaseStep):
         if not claimant_name:
             claimant_name = "-"
 
-        # Unit display ID - use per-card value first
+        # Unit display ID
         unit_display = claim_data.get('unit_display_id', '').strip()
         if not unit_display:
             unit_display = claim_data.get('unit_id', '-') or "-"
@@ -1235,53 +921,74 @@ class ReviewStep(BaseStep):
         add_field(tr("wizard.review.priority"), get_priority_display(claim_data.get('priority', '')), 1, 3)
 
         card_layout.addLayout(grid)
+        card_layout.addSpacing(8)
 
-        # --- Notes ---
+        # Notes
         notes_text = claim_data.get('notes', '')
-        notes_title = QLabel(tr("wizard.review.review_notes"))
-        notes_title.setFont(create_font(size=9, weight=FontManager.WEIGHT_REGULAR))
-        notes_title.setStyleSheet(label_style)
+        notes_title = self._create_section_label(tr("wizard.review.review_notes"))
         card_layout.addWidget(notes_title)
 
         notes_val = QLabel(notes_text if notes_text else tr("wizard.review.review_notes_placeholder"))
+        notes_val.setAlignment(Qt.AlignRight | Qt.AlignTop)
         notes_val.setWordWrap(True)
-        notes_val.setMinimumHeight(60)
+        notes_val.setMinimumHeight(100)
+        notes_val.setMaximumHeight(120)
         notes_val.setStyleSheet(f"""
             QLabel {{
-                background-color: {Colors.INPUT_BG};
-                border: 1px solid {Colors.BORDER_DEFAULT};
+                background-color: {ro_bg};
+                border: 1px solid #E0E6ED;
                 border-radius: 8px;
-                padding: 8px 12px;
-                color: {Colors.TEXT_SECONDARY if not notes_text else Colors.TEXT_PRIMARY};
+                padding: 8px;
+                color: {Colors.TEXT_SECONDARY if not notes_text else '#333'};
                 font-size: 13px;
             }}
         """)
         card_layout.addWidget(notes_val)
+        card_layout.addSpacing(8)
 
-        # --- Next Action Date ---
-        next_date_title = QLabel(tr("wizard.review.next_action_date"))
-        next_date_title.setFont(create_font(size=9, weight=FontManager.WEIGHT_REGULAR))
-        next_date_title.setStyleSheet(label_style)
+        # Next Action Date
+        next_date_title = self._create_section_label(tr("wizard.review.next_action_date"))
         card_layout.addWidget(next_date_title)
 
         next_date = claim_data.get('next_action_date', '00-00-0000') or '00-00-0000'
         next_date_val = QLabel(next_date)
-        next_date_val.setStyleSheet(value_style)
+        next_date_val.setAlignment(Qt.AlignRight)
+        next_date_val.setStyleSheet(ro_field_style)
         card_layout.addWidget(next_date_val)
+        card_layout.addSpacing(8)
 
-        # --- Evidence Status Bar ---
+        # Evidence status bar (pill shape matching ClaimStep)
+        evidence_count = claim_data.get('evidence_count', 0)
+        if not evidence_count:
+            evidence_ids = claim_data.get('evidence_ids', [])
+            evidence_count = len(evidence_ids) if evidence_ids else 0
+        has_evidence = evidence_count > 0
+
         eval_label = QLabel()
         eval_label.setAlignment(Qt.AlignCenter)
-        eval_label.setFixedHeight(50)
+        eval_label.setFixedHeight(36)
         eval_label.setFont(create_font(size=11, weight=FontManager.WEIGHT_SEMIBOLD))
-        eval_label.setText(f"  \u2714  {tr('wizard.review.evidence_available')}")
-        eval_label.setStyleSheet("""
-            QLabel {
-                background-color: #e1f7ef;
-                color: #10b981;
-                border-radius: 8px;
-            }
-        """)
+
+        if has_evidence:
+            count_text = f" ({evidence_count})" if evidence_count else ""
+            eval_label.setText(f"\u2713  {tr('wizard.review.evidence_available')}{count_text}")
+            eval_label.setStyleSheet("""
+                QLabel {
+                    background-color: #e1f7ef;
+                    color: #10b981;
+                    border-radius: 18px;
+                }
+            """)
+        else:
+            eval_label.setText(tr("wizard.review.waiting_documents"))
+            eval_label.setStyleSheet("""
+                QLabel {
+                    background-color: #fef3c7;
+                    color: #f59e0b;
+                    border-radius: 18px;
+                }
+            """)
+
         card_layout.addWidget(eval_label)
 
         return card

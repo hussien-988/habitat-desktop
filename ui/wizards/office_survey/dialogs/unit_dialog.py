@@ -14,8 +14,7 @@ import uuid
 
 from PyQt5.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
-    QPushButton, QComboBox, QSpinBox, QTextEdit, QFrame,
-    QStyle, QStyleOptionComboBox, QStylePainter
+    QPushButton, QComboBox, QSpinBox, QTextEdit, QFrame
 )
 from PyQt5.QtCore import Qt, QLocale
 from PyQt5.QtGui import QDoubleValidator
@@ -32,20 +31,6 @@ from ui.components.toast import Toast
 from utils.logger import get_logger
 
 logger = get_logger(__name__)
-
-
-class RtlCombo(QComboBox):
-    """QComboBox with right-aligned text for Arabic RTL support."""
-
-    def paintEvent(self, event):
-        painter = QStylePainter(self)
-        option = QStyleOptionComboBox()
-        self.initStyleOption(option)
-        painter.drawComplexControl(QStyle.CC_ComboBox, option)
-        edit_rect = self.style().subControlRect(
-            QStyle.CC_ComboBox, option, QStyle.SC_ComboBoxEditField, self
-        )
-        painter.drawText(edit_rect.adjusted(4, 0, -4, 0), Qt.AlignRight | Qt.AlignVCenter, option.currentText)
 
 
 class UnitDialog(QDialog):
@@ -161,20 +146,24 @@ class UnitDialog(QDialog):
         row2.setSpacing(16)
 
         # نوع المقسم (يمين في RTL = أول عنصر)
-        self.unit_type_combo = RtlCombo()
+        self.unit_type_combo = QComboBox()
+        self.unit_type_combo.setEditable(True)
+        self.unit_type_combo.lineEdit().setReadOnly(True)
+        self.unit_type_combo.lineEdit().setAlignment(Qt.AlignRight)
         self.unit_type_combo.setStyleSheet(self._combo_style())
         self.unit_type_combo.setFixedHeight(40)
-        self.unit_type_combo.setLayoutDirection(Qt.RightToLeft)
         self.unit_type_combo.addItem(tr("wizard.unit_dialog.select"), 0)
         for code, name_en, name_ar in Vocabularies.UNIT_TYPES:
             self.unit_type_combo.addItem(name_ar, code)
         row2.addLayout(self._create_field_container("نوع المقسم", self.unit_type_combo), 1)
 
         # حالة المقسم (يسار في RTL = ثاني عنصر)
-        self.unit_status_combo = RtlCombo()
+        self.unit_status_combo = QComboBox()
+        self.unit_status_combo.setEditable(True)
+        self.unit_status_combo.lineEdit().setReadOnly(True)
+        self.unit_status_combo.lineEdit().setAlignment(Qt.AlignRight)
         self.unit_status_combo.setStyleSheet(self._combo_style())
         self.unit_status_combo.setFixedHeight(40)
-        self.unit_status_combo.setLayoutDirection(Qt.RightToLeft)
         self.unit_status_combo.addItem(tr("wizard.unit_dialog.select"), 0)
         for code, name_en, name_ar in Vocabularies.UNIT_STATUS:
             self.unit_status_combo.addItem(name_ar, code)
@@ -467,9 +456,10 @@ class UnitDialog(QDialog):
         return btn
 
     def _combo_style(self) -> str:
-        """Get combobox stylesheet with custom dropdown arrow (matches buildings_page)."""
-        return """
-            QComboBox {
+        """Get combobox stylesheet with custom dropdown arrow for RTL layout."""
+        arrow_img = str(Config.IMAGES_DIR / "v.png").replace("\\", "/")
+        return f"""
+            QComboBox {{
                 padding: 6px 12px 6px 40px;
                 border: 1px solid #E1E8ED;
                 border-radius: 8px;
@@ -477,31 +467,37 @@ class UnitDialog(QDialog):
                 font-size: 14px;
                 font-weight: 600;
                 color: #9CA3AF;
-            }
-            QComboBox:focus {
+            }}
+            QComboBox:focus {{
                 border-color: #3890DF;
                 border-width: 2px;
-            }
-            QComboBox::drop-down {
+            }}
+            QComboBox::drop-down {{
                 subcontrol-origin: border;
                 subcontrol-position: center right;
                 width: 35px;
                 border: none;
                 margin-right: 5px;
-            }
-            QComboBox::down-arrow {
-                image: url(assets/images/v.png);
+            }}
+            QComboBox::down-arrow {{
+                image: url({arrow_img});
                 width: 12px;
                 height: 12px;
+            }}
+            QComboBox QLineEdit {{
+                background-color: transparent;
                 border: none;
-                border-width: 0px;
-            }
-            QComboBox QAbstractItemView {
+                padding-right: 8px;
+                color: #9CA3AF;
+                font-size: 14px;
+                font-weight: 600;
+            }}
+            QComboBox QAbstractItemView {{
                 font-size: 14px;
                 background-color: white;
                 selection-background-color: #3890DF;
                 selection-color: white;
-            }
+            }}
         """
 
 

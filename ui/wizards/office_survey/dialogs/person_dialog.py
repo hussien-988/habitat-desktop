@@ -14,8 +14,8 @@ import uuid
 from PyQt5.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
     QPushButton, QComboBox, QDateEdit, QFrame, QWidget,
-    QGridLayout, QTextEdit, QTabWidget, QDoubleSpinBox,
-    QRadioButton, QButtonGroup
+    QGridLayout, QTextEdit, QTabWidget,
+    QRadioButton, QButtonGroup, QSizePolicy
 )
 from PyQt5.QtCore import Qt, QDate, QUrl
 from PyQt5.QtGui import QColor, QPixmap
@@ -37,11 +37,13 @@ class PersonDialog(QDialog):
 
     def __init__(self, person_data: Optional[Dict] = None, existing_persons: List[Dict] = None, parent=None,
                  auth_token: Optional[str] = None, survey_id: Optional[str] = None,
-                 household_id: Optional[str] = None, unit_id: Optional[str] = None):
+                 household_id: Optional[str] = None, unit_id: Optional[str] = None,
+                 read_only: bool = False):
         super().__init__(parent)
         self.person_data = person_data
         self.existing_persons = existing_persons or []
         self.editing_mode = person_data is not None
+        self.read_only = read_only
         self.validation_service = ValidationService()
         self.uploaded_files = []
         self.relation_uploaded_files = []
@@ -66,6 +68,9 @@ class PersonDialog(QDialog):
         if self.editing_mode and person_data:
             self._load_person_data(person_data)
 
+        if self.read_only:
+            self._apply_read_only_mode()
+
     # UI Setup
 
     def _setup_ui(self):
@@ -84,22 +89,9 @@ class PersonDialog(QDialog):
                 background-color: #FFFFFF;
                 border-radius: 24px;
             }
-            QFrame#ContentFrame QWidget {
+            QFrame#ContentFrame QLabel,
+            QFrame#ContentFrame QRadioButton {
                 background-color: transparent;
-            }
-            QFrame#ContentFrame QLineEdit,
-            QFrame#ContentFrame QComboBox,
-            QFrame#ContentFrame QDateEdit,
-            QFrame#ContentFrame QDoubleSpinBox,
-            QFrame#ContentFrame QTextEdit {
-                background-color: #f0f7ff;
-            }
-            QFrame#ContentFrame QLineEdit:focus,
-            QFrame#ContentFrame QComboBox:focus,
-            QFrame#ContentFrame QDateEdit:focus,
-            QFrame#ContentFrame QDoubleSpinBox:focus,
-            QFrame#ContentFrame QTextEdit:focus {
-                border: 1px solid #E0E6ED;
             }
         """)
 
@@ -118,7 +110,12 @@ class PersonDialog(QDialog):
         main_layout.setContentsMargins(24, 24, 24, 24)
 
         # Dialog title (right-aligned for RTL)
-        title_text = tr("wizard.person_dialog.title_edit") if self.editing_mode else tr("wizard.person_dialog.title_add")
+        if self.read_only:
+            title_text = tr("wizard.person_dialog.title_view")
+        elif self.editing_mode:
+            title_text = tr("wizard.person_dialog.title_edit")
+        else:
+            title_text = tr("wizard.person_dialog.title_add")
         self._dialog_title = QLabel(title_text)
         self._dialog_title.setAlignment(Qt.AlignAbsolute | Qt.AlignRight)
         self._dialog_title.setStyleSheet("font-size: 18px; font-weight: bold; color: #2c3e50;")
@@ -166,6 +163,55 @@ class PersonDialog(QDialog):
         self.tab_widget.currentChanged.connect(self._update_progress)
         main_layout.addWidget(self.tab_widget)
 
+    def _apply_read_only_mode(self):
+        """Disable all input fields and change buttons for read-only viewing."""
+        from PyQt5.QtWidgets import QLineEdit, QComboBox, QDateEdit, QTextEdit, QDoubleSpinBox, QRadioButton
+
+        # Disable all input widgets
+        for widget in self.findChildren(QLineEdit):
+            widget.setReadOnly(True)
+        for widget in self.findChildren(QComboBox):
+            widget.setEnabled(False)
+        for widget in self.findChildren(QDateEdit):
+            widget.setReadOnly(True)
+        for widget in self.findChildren(QTextEdit):
+            widget.setReadOnly(True)
+        for widget in self.findChildren(QDoubleSpinBox):
+            widget.setReadOnly(True)
+        for widget in self.findChildren(QRadioButton):
+            widget.setEnabled(False)
+
+        # Replace all buttons with navigation-only buttons per tab
+        for i in range(self.tab_widget.count()):
+            tab = self.tab_widget.widget(i)
+            tab_layout = tab.layout()
+            if not tab_layout:
+                continue
+            # Find and remove button layouts (last item in each tab)
+            last_item = tab_layout.itemAt(tab_layout.count() - 1)
+            if last_item and last_item.layout():
+                btn_layout = last_item.layout()
+                # Immediately remove old buttons (hide + reparent, not deleteLater)
+                widgets_to_remove = []
+                for j in range(btn_layout.count()):
+                    item = btn_layout.itemAt(j)
+                    if item and item.widget():
+                        widgets_to_remove.append(item.widget())
+                for w in widgets_to_remove:
+                    w.hide()
+                    btn_layout.removeWidget(w)
+                    w.setParent(None)
+                # Add navigation buttons for read-only
+                if i == 0:
+                    btn_layout.addWidget(self._create_btn(tr("common.cancel"), primary=False, callback=self.reject))
+                    btn_layout.addWidget(self._create_btn(tr("wizard.person_dialog.next"), primary=True, callback=self._go_to_tab2))
+                elif i == 1:
+                    btn_layout.addWidget(self._create_btn(tr("wizard.person_dialog.previous"), primary=False, callback=self._go_to_tab1))
+                    btn_layout.addWidget(self._create_btn(tr("wizard.person_dialog.next"), primary=True, callback=self._go_to_tab3))
+                else:
+                    btn_layout.addWidget(self._create_btn(tr("wizard.person_dialog.previous"), primary=False, callback=self._go_to_tab2_back))
+                    btn_layout.addWidget(self._create_btn(tr("common.cancel"), primary=True, callback=self.reject))
+
     def _setup_progress_indicator(self, layout):
         """Create 3-bar progress indicator with gradient fill."""
         progress_layout = QHBoxLayout()
@@ -201,7 +247,7 @@ class PersonDialog(QDialog):
         # Tab 3 fields
         self.contract_type.currentIndexChanged.connect(self._update_all_progress)
         self.rel_type_combo.currentIndexChanged.connect(self._update_all_progress)
-        self.ownership_share.valueChanged.connect(self._update_all_progress)
+        self.ownership_share.textChanged.connect(self._update_all_progress)
         self.evidence_type.currentIndexChanged.connect(self._update_all_progress)
         self.evidence_desc.textChanged.connect(self._update_all_progress)
         self.notes.textChanged.connect(self._update_all_progress)
@@ -230,7 +276,7 @@ class PersonDialog(QDialog):
             fields = [
                 self.contract_type.currentIndex() > 0,
                 self.rel_type_combo.currentIndex() > 0,
-                self.ownership_share.value() > 0,
+                bool(self.ownership_share.text().strip()),
                 self.evidence_type.currentIndex() > 0,
                 bool(self.evidence_desc.text().strip()),
                 bool(self.notes.toPlainText().strip()),
@@ -333,6 +379,7 @@ class PersonDialog(QDialog):
         self.birth_date.setCalendarPopup(True)
         self.birth_date.setDate(QDate(1980, 1, 1))
         self.birth_date.setMinimumDate(QDate(1900, 1, 1))
+        self.birth_date.setMaximumDate(QDate.currentDate())
         self.birth_date.setDisplayFormat("yyyy-MM-dd")
         self.birth_date.setStyleSheet(self._date_input_style())
         grid.addWidget(self.birth_date, row, 1)
@@ -365,20 +412,13 @@ class PersonDialog(QDialog):
         self.national_id.setPlaceholderText("0000000000")
         self.national_id.setMaxLength(11)
         self.national_id.setStyleSheet(self._input_style())
-        self.national_id.textChanged.connect(self._validate_national_id)
         grid.addWidget(self.national_id, row, 0, 1, 2)
-        row += 1
-
-        # National ID status
-        self.national_id_status = QLabel("")
-        self.national_id_status.setAlignment(Qt.AlignRight)
-        grid.addWidget(self.national_id_status, row, 0, 1, 2)
         row += 1
 
         # ID Photos upload
         grid.addWidget(self._label(tr("wizard.person_dialog.attach_id_photos"), label_style), row, 0, 1, 2)
         row += 1
-        upload_frame = self._create_upload_frame(self._browse_files, "id_upload")
+        upload_frame = self._create_upload_frame(self._browse_files, "id_upload", button_text=tr("wizard.person_dialog.attach_id_photos"))
         grid.addWidget(upload_frame, row, 0, 1, 2)
 
         tab_layout.addLayout(grid)
@@ -386,11 +426,9 @@ class PersonDialog(QDialog):
 
         # Buttons: Next | Cancel
         btn_layout = QHBoxLayout()
-        btn_layout.setSpacing(3)
-        btn_layout.addStretch()
+        btn_layout.setSpacing(8)
         btn_layout.addWidget(self._create_btn(tr("common.cancel"), primary=False, callback=self.reject))
         btn_layout.addWidget(self._create_btn(tr("wizard.person_dialog.next"), primary=True, callback=self._go_to_tab2))
-        btn_layout.addStretch()
         tab_layout.addLayout(btn_layout)
 
         self.tab_widget.addTab(tab, "")
@@ -474,11 +512,9 @@ class PersonDialog(QDialog):
 
         # Buttons: Next | Previous
         btn_layout = QHBoxLayout()
-        btn_layout.setSpacing(3)
-        btn_layout.addStretch()
+        btn_layout.setSpacing(8)
         btn_layout.addWidget(self._create_btn(tr("wizard.person_dialog.previous"), primary=False, callback=self._go_to_tab1))
         btn_layout.addWidget(self._create_btn(tr("wizard.person_dialog.next"), primary=True, callback=self._go_to_tab3))
-        btn_layout.addStretch()
         tab_layout.addLayout(btn_layout)
 
         self.tab_widget.addTab(tab, "")
@@ -510,7 +546,6 @@ class PersonDialog(QDialog):
         grid.addWidget(self._label(tr("wizard.person_dialog.claim_type_label"), label_style), row, 1)
         row += 1
         self.contract_type = QComboBox()
-        self.contract_type.addItem(tr("wizard.person_dialog.select"), None)
         for code, display_name in get_contract_type_options():
             self.contract_type.addItem(display_name, code)
         self.contract_type.setStyleSheet(self._input_style())
@@ -536,12 +571,11 @@ class PersonDialog(QDialog):
         self.start_date.setStyleSheet(self._date_input_style())
         grid.addWidget(self.start_date, row, 0)
 
-        self.ownership_share = QDoubleSpinBox()
-        self.ownership_share.setRange(0, 100)
-        self.ownership_share.setDecimals(2)
-        self.ownership_share.setSuffix(" %")
-        self.ownership_share.setValue(0)
-        self.ownership_share.setStyleSheet(StyleManager.numeric_input())
+        self.ownership_share = QLineEdit()
+        self.ownership_share.setPlaceholderText("%")
+        from PyQt5.QtGui import QDoubleValidator
+        self.ownership_share.setValidator(QDoubleValidator(0, 100, 2, self))
+        self.ownership_share.setStyleSheet(self._input_style())
         grid.addWidget(self.ownership_share, row, 1)
         row += 1
 
@@ -550,7 +584,6 @@ class PersonDialog(QDialog):
         grid.addWidget(self._label(tr("wizard.person_dialog.evidence_description"), label_style), row, 1)
         row += 1
         self.evidence_type = QComboBox()
-        self.evidence_type.addItem(tr("wizard.person_dialog.select"), None)
         for code, display_name in get_evidence_type_options():
             self.evidence_type.addItem(display_name, code)
         self.evidence_type.setStyleSheet(self._input_style())
@@ -609,7 +642,7 @@ class PersonDialog(QDialog):
         row += 1
 
         # Upload frame for relation documents
-        self._rel_upload_frame = self._create_upload_frame(self._browse_relation_files, "rel_upload")
+        self._rel_upload_frame = self._create_upload_frame(self._browse_relation_files, "rel_upload", button_text=tr("wizard.person_dialog.attach_document"))
         grid.addWidget(self._rel_upload_frame, row, 0, 1, 2)
 
         # Toggle upload frame visibility based on radio
@@ -620,11 +653,9 @@ class PersonDialog(QDialog):
 
         # Buttons: Save | Previous
         btn_layout = QHBoxLayout()
-        btn_layout.setSpacing(3)
-        btn_layout.addStretch()
+        btn_layout.setSpacing(8)
         btn_layout.addWidget(self._create_btn(tr("wizard.person_dialog.previous"), primary=False, callback=self._go_to_tab2_back))
         btn_layout.addWidget(self._create_btn(tr("common.save"), primary=True, callback=self._on_final_save))
-        btn_layout.addStretch()
         tab_layout.addLayout(btn_layout)
 
         self.tab_widget.addTab(tab, "")
@@ -640,6 +671,8 @@ class PersonDialog(QDialog):
     def _create_btn(self, text: str, primary: bool = True, callback=None) -> QPushButton:
         """Create a styled action button (DRY)."""
         btn = QPushButton(text)
+        btn.setFixedHeight(44)
+        btn.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         if primary:
             btn.setStyleSheet("""
                 QPushButton {
@@ -647,10 +680,8 @@ class PersonDialog(QDialog):
                     color: white;
                     border: 1px solid #4a90e2;
                     border-radius: 8px;
-                    padding: 9px 40px;
                     font-weight: bold;
                     font-size: 14px;
-                    min-width: 200px;
                 }
                 QPushButton:hover {
                     background-color: #357ABD;
@@ -664,10 +695,8 @@ class PersonDialog(QDialog):
                     color: #4a90e2;
                     border: 1.5px solid #b0b8c4;
                     border-radius: 8px;
-                    padding: 9px 40px;
                     font-weight: bold;
                     font-size: 14px;
-                    min-width: 200px;
                 }
                 QPushButton:hover {
                     background-color: #f5f7fa;
@@ -685,7 +714,7 @@ class PersonDialog(QDialog):
             btn.clicked.connect(callback)
         return btn
 
-    def _create_upload_frame(self, browse_callback, obj_name: str) -> QFrame:
+    def _create_upload_frame(self, browse_callback, obj_name: str, button_text: str = None) -> QFrame:
         """Create a file upload frame with icon + blue text + thumbnail previews."""
         from ui.components.icon import Icon
 
@@ -735,7 +764,7 @@ class PersonDialog(QDialog):
         row_layout.addWidget(icon_lbl)
 
         # Blue underlined text (centered, next to icon)
-        text_btn = QPushButton(tr("wizard.person_dialog.attach_id_photos"))
+        text_btn = QPushButton(button_text or tr("wizard.person_dialog.attach_id_photos"))
         text_btn.setStyleSheet("""
             QPushButton {
                 color: #4a90e2;
@@ -874,8 +903,9 @@ class PersonDialog(QDialog):
 
     def _input_style(self) -> str:
         """Custom input style with light blue background."""
-        return """
-            QLineEdit, QComboBox, QDateEdit, QDoubleSpinBox {
+        down_img = str(Config.IMAGES_DIR / "down.png").replace("\\", "/")
+        return f"""
+            QLineEdit, QComboBox, QDateEdit, QDoubleSpinBox {{
                 border: 1px solid #E0E6ED;
                 border-radius: 8px;
                 padding: 10px;
@@ -884,22 +914,24 @@ class PersonDialog(QDialog):
                 font-size: 13px;
                 min-height: 20px;
                 max-height: 20px;
-            }
-            QLineEdit:focus, QComboBox:focus, QDateEdit:focus, QDoubleSpinBox:focus {
+            }}
+            QComboBox {{
+                padding-left: 35px;
+            }}
+            QLineEdit:focus, QComboBox:focus, QDateEdit:focus, QDoubleSpinBox:focus {{
                 border: 1px solid #E0E6ED;
-            }
-            QComboBox::drop-down {
+            }}
+            QComboBox::drop-down {{
                 border: none;
                 width: 30px;
-                background-image: url(assets/images/down.png);
-                background-repeat: no-repeat;
-                background-position: center;
-            }
-            QComboBox::down-arrow {
-                width: 0px;
-                height: 0px;
-            }
-            QComboBox QAbstractItemView {
+                subcontrol-position: right center;
+            }}
+            QComboBox::down-arrow {{
+                image: url({down_img});
+                width: 12px;
+                height: 12px;
+            }}
+            QComboBox QAbstractItemView {{
                 background-color: #FFFFFF;
                 border: 1px solid #E0E6ED;
                 border-radius: 0px;
@@ -909,42 +941,43 @@ class PersonDialog(QDialog):
                 selection-background-color: #e8f0fe;
                 selection-color: #333;
                 outline: none;
-            }
-            QComboBox QAbstractItemView::item {
+            }}
+            QComboBox QAbstractItemView::item {{
                 min-height: 32px;
                 padding: 6px 10px;
                 border-radius: 6px;
-            }
-            QComboBox QAbstractItemView::item:hover {
+            }}
+            QComboBox QAbstractItemView::item:hover {{
                 background-color: #f0f7ff;
-            }
-            QComboBox QAbstractItemView QScrollBar:vertical {
+            }}
+            QComboBox QAbstractItemView QScrollBar:vertical {{
                 background: transparent;
                 width: 5px;
                 margin: 4px 0px;
                 border-radius: 2px;
-            }
-            QComboBox QAbstractItemView QScrollBar::handle:vertical {
+            }}
+            QComboBox QAbstractItemView QScrollBar::handle:vertical {{
                 background: #C4CDD5;
                 min-height: 30px;
                 border-radius: 2px;
-            }
-            QComboBox QAbstractItemView QScrollBar::handle:vertical:hover {
+            }}
+            QComboBox QAbstractItemView QScrollBar::handle:vertical:hover {{
                 background: #919EAB;
-            }
+            }}
             QComboBox QAbstractItemView QScrollBar::add-line:vertical,
-            QComboBox QAbstractItemView QScrollBar::sub-line:vertical {
+            QComboBox QAbstractItemView QScrollBar::sub-line:vertical {{
                 height: 0px;
                 background: none;
-            }
+            }}
             QComboBox QAbstractItemView QScrollBar::add-page:vertical,
-            QComboBox QAbstractItemView QScrollBar::sub-page:vertical {
+            QComboBox QAbstractItemView QScrollBar::sub-page:vertical {{
                 background: none;
-            }
+            }}
         """
 
     def _date_input_style(self) -> str:
         """Custom date input style with light blue background."""
+        cal_img = str(Config.IMAGES_DIR / "calender.png").replace("\\", "/")
         return """
             QDateEdit {
                 background-color: #f0f7ff;
@@ -962,14 +995,12 @@ class PersonDialog(QDialog):
             QDateEdit::drop-down {
                 border: none;
                 width: 25px;
-                subcontrol-position: left center;
-                background-image: url(assets/images/calender.png);
-                background-repeat: no-repeat;
-                background-position: center;
+                subcontrol-position: right center;
             }
             QDateEdit::down-arrow {
-                width: 0px;
-                height: 0px;
+                image: url(""" + cal_img + """);
+                width: 16px;
+                height: 16px;
             }
             /* Calendar popup styling */
             QCalendarWidget {
@@ -1053,6 +1084,9 @@ class PersonDialog(QDialog):
 
     def _go_to_tab2(self):
         """Tab 1 → Tab 2: Validate personal info then switch."""
+        if self.read_only:
+            self.tab_widget.setCurrentIndex(1)
+            return
         if not self.first_name.text().strip():
             Toast.show_toast(self, tr("wizard.person_dialog.enter_first_name"), Toast.WARNING)
             return
@@ -1060,6 +1094,10 @@ class PersonDialog(QDialog):
             Toast.show_toast(self, tr("wizard.person_dialog.enter_last_name"), Toast.WARNING)
             return
         if self.national_id.text().strip() and not self._validate_national_id():
+            Toast.show_toast(self, tr("wizard.person_dialog.nid_invalid"), Toast.WARNING)
+            return
+        if not self.uploaded_files:
+            Toast.show_toast(self, tr("wizard.person_dialog.id_photo_required"), Toast.WARNING)
             return
         self.tab_widget.setCurrentIndex(1)
 
@@ -1083,51 +1121,192 @@ class PersonDialog(QDialog):
     # File Browsing
 
     def _browse_files(self):
-        """Browse for ID photo files."""
+        """Browse for ID photo files with duplicate detection."""
         from PyQt5.QtWidgets import QFileDialog
+        import os
         file_paths, _ = QFileDialog.getOpenFileNames(
             self, tr("wizard.person_dialog.choose_files"), "",
             "Images (*.png *.jpg *.jpeg *.pdf)"
         )
         if file_paths:
-            self.uploaded_files.extend(file_paths)
+            existing_names = {os.path.normpath(f) for f in self.uploaded_files}
+            duplicates = []
+            new_files = []
+            for fp in file_paths:
+                norm = os.path.normpath(fp)
+                if norm in existing_names:
+                    duplicates.append(fp)
+                else:
+                    new_files.append(fp)
+                    existing_names.add(norm)
+            if duplicates:
+                dup_names = [os.path.basename(f) for f in duplicates]
+                replace = self._show_duplicate_file_dialog(dup_names)
+                if replace:
+                    # Replace: add new files only (duplicates already exist)
+                    self.uploaded_files.extend(new_files)
+                # else: Cancel - don't add anything
+            else:
+                self.uploaded_files.extend(new_files)
             self._update_upload_thumbnails("id_upload", self.uploaded_files)
+            # After first upload, change button text from "attach ID photos" to "attach document"
+            if self.uploaded_files:
+                id_frame = self.findChild(QFrame, "id_upload")
+                if id_frame and hasattr(id_frame, '_text_btn'):
+                    id_frame._text_btn.setText(tr("wizard.person_dialog.attach_document"))
 
     def _browse_relation_files(self):
-        """Browse for relation evidence files."""
+        """Browse for relation evidence files with duplicate detection."""
         from PyQt5.QtWidgets import QFileDialog
+        import os
         file_paths, _ = QFileDialog.getOpenFileNames(
             self, tr("wizard.person_dialog.choose_files"), "",
             "Images (*.png *.jpg *.jpeg *.pdf)"
         )
         if file_paths:
-            self.relation_uploaded_files.extend(file_paths)
+            existing_names = {os.path.normpath(f) for f in self.relation_uploaded_files}
+            duplicates = []
+            new_files = []
+            for fp in file_paths:
+                norm = os.path.normpath(fp)
+                if norm in existing_names:
+                    duplicates.append(fp)
+                else:
+                    new_files.append(fp)
+                    existing_names.add(norm)
+            if duplicates:
+                dup_names = [os.path.basename(f) for f in duplicates]
+                replace = self._show_duplicate_file_dialog(dup_names)
+                if replace:
+                    self.relation_uploaded_files.extend(new_files)
+                # else: Cancel - don't add anything
+            else:
+                self.relation_uploaded_files.extend(new_files)
             self._update_upload_thumbnails("rel_upload", self.relation_uploaded_files)
+
+    def _show_duplicate_file_dialog(self, file_names: list) -> bool:
+        """Show a small floating dialog for duplicate files. Returns True to replace, False to cancel."""
+        from PyQt5.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QGraphicsDropShadowEffect
+        from PyQt5.QtGui import QFont, QColor
+        from ui.font_utils import create_font, FontManager
+
+        dlg = QDialog(self)
+        dlg.setWindowFlags(Qt.Dialog | Qt.FramelessWindowHint)
+        dlg.setAttribute(Qt.WA_TranslucentBackground)
+        dlg.setFixedWidth(300)
+
+        # Container with white background + rounded corners
+        container = QWidget(dlg)
+        container.setObjectName("dup_container")
+        container.setStyleSheet("""
+            QWidget#dup_container {
+                background-color: #FFFFFF;
+                border-radius: 10px;
+            }
+        """)
+
+        # Shadow
+        shadow = QGraphicsDropShadowEffect()
+        shadow.setBlurRadius(30)
+        shadow.setColor(QColor(0, 0, 0, 60))
+        shadow.setOffset(0, 6)
+        container.setGraphicsEffect(shadow)
+
+        c_layout = QVBoxLayout(container)
+        c_layout.setContentsMargins(20, 20, 20, 16)
+        c_layout.setSpacing(10)
+
+        # Warning icon (small circle)
+        icon_lbl = QLabel("⚠")
+        icon_lbl.setFixedSize(40, 40)
+        icon_lbl.setAlignment(Qt.AlignCenter)
+        icon_lbl.setStyleSheet("""
+            background-color: #FEF3C7;
+            border-radius: 20px;
+            font-size: 18px;
+        """)
+        c_layout.addWidget(icon_lbl, 0, Qt.AlignCenter)
+
+        # Title
+        title_lbl = QLabel(tr("wizard.person_dialog.duplicate_files_title"))
+        title_lbl.setAlignment(Qt.AlignCenter)
+        title_lbl.setFont(create_font(size=11, weight=FontManager.WEIGHT_SEMIBOLD))
+        title_lbl.setStyleSheet("color: #1F2937; background: transparent;")
+        c_layout.addWidget(title_lbl)
+
+        # File names
+        names_text = "\n".join(file_names[:3])
+        if len(file_names) > 3:
+            names_text += f"\n+{len(file_names) - 3} ..."
+        msg_lbl = QLabel(names_text)
+        msg_lbl.setAlignment(Qt.AlignCenter)
+        msg_lbl.setWordWrap(True)
+        msg_lbl.setFont(create_font(size=9, weight=FontManager.WEIGHT_REGULAR))
+        msg_lbl.setStyleSheet("color: #6B7280; background: transparent;")
+        c_layout.addWidget(msg_lbl)
+
+        c_layout.addSpacing(4)
+
+        # Buttons row
+        btn_row = QHBoxLayout()
+        btn_row.setSpacing(8)
+
+        cancel_btn = QPushButton(tr("common.cancel"))
+        cancel_btn.setFixedHeight(34)
+        cancel_btn.setCursor(Qt.PointingHandCursor)
+        cancel_btn.setFont(create_font(size=9, weight=FontManager.WEIGHT_MEDIUM))
+        cancel_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #F3F4F6;
+                color: #4B5563;
+                border: none;
+                border-radius: 6px;
+                padding: 6px 16px;
+            }
+            QPushButton:hover { background-color: #E5E7EB; }
+        """)
+        cancel_btn.clicked.connect(dlg.reject)
+
+        replace_btn = QPushButton(tr("wizard.person_dialog.replace_file"))
+        replace_btn.setFixedHeight(34)
+        replace_btn.setCursor(Qt.PointingHandCursor)
+        replace_btn.setFont(create_font(size=9, weight=FontManager.WEIGHT_MEDIUM))
+        replace_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #3B82F6;
+                color: white;
+                border: none;
+                border-radius: 6px;
+                padding: 6px 16px;
+            }
+            QPushButton:hover { background-color: #2563EB; }
+        """)
+        replace_btn.clicked.connect(dlg.accept)
+
+        btn_row.addWidget(cancel_btn, 1)
+        btn_row.addWidget(replace_btn, 1)
+        c_layout.addLayout(btn_row)
+
+        main_layout = QVBoxLayout(dlg)
+        main_layout.setContentsMargins(10, 10, 10, 10)
+        main_layout.addWidget(container)
+
+        return dlg.exec_() == QDialog.Accepted
 
     # Validation
 
     def _validate_national_id(self):
-        """Validate national ID."""
+        """Validate national ID. Returns True if valid or empty."""
         nid = self.national_id.text().strip()
         if not nid:
-            self.national_id_status.setText("")
             return True
-
         if len(nid) != 11 or not nid.isdigit():
-            self.national_id_status.setText(f"⚠️ {tr('wizard.person_dialog.nid_must_be_11')}")
-            self.national_id_status.setStyleSheet(f"color: {Config.WARNING_COLOR};")
             return False
-
         for person in self.existing_persons:
             if person.get('national_id') == nid:
                 if self.editing_mode and self.person_data and person.get('person_id') == self.person_data.get('person_id'):
                     continue
-                self.national_id_status.setText(f"❌ {tr('wizard.person_dialog.nid_exists')}")
-                self.national_id_status.setStyleSheet(f"color: {Config.ERROR_COLOR};")
                 return False
-
-        self.national_id_status.setText(f"✅ {tr('wizard.person_dialog.nid_available')}")
-        self.national_id_status.setStyleSheet(f"color: {Config.SUCCESS_COLOR};")
         return True
 
     # Load / Save Data
@@ -1202,7 +1381,7 @@ class PersonDialog(QDialog):
                 self.start_date.setDate(d)
 
         if rel.get('ownership_share') is not None:
-            self.ownership_share.setValue(float(rel['ownership_share']))
+            self.ownership_share.setText(str(rel['ownership_share']))
 
         if rel.get('evidence_type'):
             idx = self.evidence_type.findText(rel['evidence_type'])
@@ -1230,7 +1409,7 @@ class PersonDialog(QDialog):
             'birth_place': self.birth_place.currentData(),
             'gender': self.gender.currentData(),
             'nationality': self.nationality.currentData(),
-            'birth_date': self.birth_date.date().toString('yyyy-MM-dd'),
+            'birth_date': self.birth_date.date().toPyDate().isoformat(),
             # Tab 2
             'person_role': self.person_role.currentData(),
             'relationship_type': self.person_role.currentData(),  # backward compat
@@ -1242,8 +1421,8 @@ class PersonDialog(QDialog):
             'relation_data': {
                 'contract_type': self.contract_type.currentData() if self.contract_type.currentIndex() > 0 else None,
                 'rel_type': self.rel_type_combo.currentData(),
-                'start_date': self.start_date.date().toString('yyyy-MM-dd'),
-                'ownership_share': self.ownership_share.value(),
+                'start_date': self.start_date.date().toPyDate().isoformat(),
+                'ownership_share': float(self.ownership_share.text() or 0),
                 'evidence_type': self.evidence_type.currentData() if self.evidence_type.currentIndex() > 0 else None,
                 'evidence_desc': self.evidence_desc.text().strip() or None,
                 'notes': self.notes.toPlainText().strip() or None,
@@ -1260,6 +1439,7 @@ class PersonDialog(QDialog):
             Toast.show_toast(self, tr("wizard.person_dialog.enter_last_name"), Toast.WARNING)
             return
         if self.national_id.text().strip() and not self._validate_national_id():
+            Toast.show_toast(self, tr("wizard.person_dialog.nid_invalid"), Toast.WARNING)
             return
         self.accept()
 
@@ -1267,8 +1447,15 @@ class PersonDialog(QDialog):
 
     def _on_final_save(self):
         """Handle final save (from Tab 3) - create person via API, then link to unit, then accept."""
-        import json
+        import re
         from ui.error_handler import ErrorHandler
+
+        # Validate email format before saving
+        email_text = self.email.text().strip()
+        if email_text and not re.match(r'^[^@\s]+@[^@\s]+\.[^@\s]+$', email_text):
+            Toast.show_toast(self, tr("wizard.person_dialog.invalid_email"), Toast.WARNING)
+            self.tab_widget.setCurrentIndex(1)  # Switch to Tab 2 where email field is
+            return
 
         if self._use_api and not self.editing_mode:
             person_data = self.get_person_data()
@@ -1278,14 +1465,6 @@ class PersonDialog(QDialog):
             try:
                 response = self._api_service.create_person_in_household(
                     person_data, self._survey_id, self._household_id
-                )
-
-                response_text = json.dumps(response, indent=2, ensure_ascii=False, default=str)
-                print(f"\n[PERSON API RESPONSE]\n{response_text}")
-                ErrorHandler.show_success(
-                    self,
-                    f"POST /api/v1/Surveys/{self._survey_id}/households/{self._household_id}/persons\n\n{response_text[:1000]}",
-                    "Create Person API Response"
                 )
 
                 logger.info("Person created successfully via API")
@@ -1324,13 +1503,6 @@ class PersonDialog(QDialog):
                         self._survey_id, self._unit_id, relation_data
                     )
 
-                    relation_response_text = json.dumps(relation_response, indent=2, ensure_ascii=False, default=str)
-                    print(f"\n[RELATION API RESPONSE]\n{relation_response_text}")
-                    ErrorHandler.show_success(
-                        self,
-                        f"POST /api/v1/Surveys/{self._survey_id}/units/{self._unit_id}/relations\n\n{relation_response_text[:1000]}",
-                        "Link Person to Unit API Response"
-                    )
                     logger.info(f"Person {person_id} linked to unit {self._unit_id}")
 
                     relation_id = (
@@ -1346,6 +1518,8 @@ class PersonDialog(QDialog):
                 except Exception as e:
                     logger.error(f"Failed to link person to unit: {e}")
                     Toast.show_toast(self, tr("wizard.person_dialog.link_failed", error_msg=map_exception(e)), Toast.WARNING)
+            else:
+                logger.warning(f"Skipping relation link: survey_id={self._survey_id}, unit_id={self._unit_id}, person_id={person_id}")
 
         self.accept()
 
