@@ -32,6 +32,7 @@ Created: 2025
 
 from enum import Enum
 from typing import Optional
+from pathlib import Path
 from .design_system import (
     Colors,
     ButtonDimensions,
@@ -41,6 +42,9 @@ from .design_system import (
     Typography,
     Spacing
 )
+
+# Absolute path to images directory for stylesheet url() references
+_IMAGES_DIR = str(Path(__file__).parent.parent / "assets" / "images").replace("\\", "/")
 
 
 class ButtonVariant(Enum):
@@ -746,8 +750,8 @@ class StyleManager:
         Returns:
             Complete QSS stylesheet string
         """
-        return """
-            QLineEdit, QComboBox, QDateEdit, QDoubleSpinBox {
+        return f"""
+            QLineEdit, QComboBox, QDateEdit, QDoubleSpinBox {{
                 border: 1px solid #E0E6ED;
                 border-radius: 8px;
                 padding: 10px;
@@ -756,22 +760,21 @@ class StyleManager:
                 font-size: 14px;
                 min-height: 23px;
                 max-height: 23px;
-            }
-            QLineEdit:focus, QComboBox:focus, QDateEdit:focus, QDoubleSpinBox:focus {
+            }}
+            QLineEdit:focus, QComboBox:focus, QDateEdit:focus, QDoubleSpinBox:focus {{
                 border: 1px solid #2D9CDB;
                 background-color: white;
-            }
-            QComboBox::drop-down {
+            }}
+            QComboBox::drop-down {{
                 border: none;
                 width: 30px;
-                background-image: url(assets/images/down.png);
-                background-repeat: no-repeat;
-                background-position: center;
-            }
-            QComboBox::down-arrow {
-                width: 0px;
-                height: 0px;
-            }
+                subcontrol-position: right center;
+            }}
+            QComboBox::down-arrow {{
+                image: url({_IMAGES_DIR}/down.png);
+                width: 12px;
+                height: 12px;
+            }}
         """
 
     @staticmethod

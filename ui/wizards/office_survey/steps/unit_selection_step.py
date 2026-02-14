@@ -340,6 +340,7 @@ class UnitSelectionStep(BaseStep):
 
         # Scroll area for units
         scroll = QScrollArea()
+        scroll.setLayoutDirection(Qt.RightToLeft)
         scroll.setWidgetResizable(True)
         scroll.setWidget(self.units_container)
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)

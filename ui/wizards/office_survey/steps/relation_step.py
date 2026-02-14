@@ -28,6 +28,7 @@ from ui.components.toast import Toast
 from ui.error_handler import ErrorHandler
 from services.translation_manager import tr
 from services.error_mapper import map_exception
+from ui.components.success_popup import SuccessPopup
 from services.display_mappings import get_relation_type_options, get_contract_type_options, get_evidence_type_options
 
 logger = get_logger(__name__)
@@ -130,6 +131,7 @@ class RelationStep(BaseStep):
 
         # Scroll Area for person cards
         scroll_area = QScrollArea()
+        scroll_area.setLayoutDirection(Qt.RightToLeft)
         scroll_area.setWidgetResizable(True)
         scroll_area.setFrameShape(QFrame.NoFrame)
         scroll_area.setStyleSheet("""
@@ -529,153 +531,67 @@ class RelationStep(BaseStep):
 
     def on_next(self):
         """Called when user clicks Next - process claims via API."""
-        import sys
-        print("\n" + "="*80)
-        print("[STEP 5] on_next() called - Starting process-claims")
-        print("="*80)
-        sys.stdout.flush()
-
+        # Guard: only process claims once to prevent duplicate creation
+        if hasattr(self.context, 'finalize_response') and self.context.finalize_response:
+            logger.info("Claims already processed, skipping duplicate process-claims call")
+            return
         if self._use_api:
             self._process_claims_via_api()
-        else:
-            print("[STEP 5] API mode is OFF, skipping process-claims")
-            sys.stdout.flush()
 
     def _process_claims_via_api(self):
         """Process claims for the survey by calling the API and store response for Step 6."""
-        import sys
-        import json
-
-        print("\n[PROCESS-CLAIMS] Starting _process_claims_via_api()")
-        sys.stdout.flush()
-
         # Set auth token
         main_window = self.window()
-        auth_token = None
         if main_window and hasattr(main_window, '_api_token') and main_window._api_token:
-            auth_token = main_window._api_token
-            self._api_service.set_access_token(auth_token)
-            print(f"[PROCESS-CLAIMS] Auth token set: {auth_token[:20]}...")
-        else:
-            print("[PROCESS-CLAIMS] WARNING: No auth token available!")
-        sys.stdout.flush()
+            self._api_service.set_access_token(main_window._api_token)
 
         survey_id = self.context.get_data("survey_id")
-        print(f"[PROCESS-CLAIMS] Survey ID from context: {survey_id}")
-        sys.stdout.flush()
-
         if not survey_id:
             logger.warning("No survey_id found in context. Skipping process-claims.")
-            print("[PROCESS-CLAIMS] ERROR: No survey_id found in context!")
-            sys.stdout.flush()
             ErrorHandler.show_warning(self, "No survey_id found in context!", "Error")
             return
 
         logger.info(f"Processing claims for survey {survey_id} from Step 5")
 
-        # Prepare processing options (required by API)
         process_options = {
             "finalNotes": "Survey completed from office wizard",
             "durationMinutes": 10,
             "autoCreateClaim": True
         }
-        print(f"[PROCESS-CLAIMS] Options: {json.dumps(process_options, indent=2)}")
-
-        # Call the process-claims API
-        print(f"[PROCESS-CLAIMS] Calling API: POST /v1/Surveys/office/{survey_id}/process-claims")
-        sys.stdout.flush()
 
         try:
             api_data = self._api_service.finalize_office_survey(survey_id, process_options)
-
-            print(f"\n[PROCESS-CLAIMS] Response received:")
-            print(f"  keys={list(api_data.keys())}")
-            print(f"  Full response: {json.dumps(api_data, indent=2, ensure_ascii=False, default=str)}")
-            sys.stdout.flush()
-
             logger.info(f"Survey {survey_id} claims processed successfully")
 
             # Store the full API response in context for Step 6 (ClaimStep)
             self.context.finalize_response = api_data
 
-            # Print full API response for debugging
-            print(f"\n{'='*60}")
-            print(f"[PROCESS-CLAIMS SUCCESS] POST /api/v1/Surveys/office/{survey_id}/process-claims")
-            print(f"{'='*60}")
-            print(json.dumps(api_data, indent=2, ensure_ascii=False, default=str))
-            print(f"{'='*60}\n")
-            sys.stdout.flush()
-
-            # Log the response details - now using claimsCreatedCount and createdClaims
             claims_count = api_data.get("claimsCreatedCount", 0)
             created_claims = api_data.get("createdClaims", [])
 
             if api_data.get("claimCreated") or claims_count > 0:
                 logger.info(f"Claims created: {claims_count}")
-                print(f"[CLAIMS] Created count: {claims_count}")
 
-                # Build message with all created claims
-                claims_info = []
-                for claim in created_claims:
-                    claim_num = claim.get('claimNumber', 'N/A')
-                    claim_id = claim.get('claimId', 'N/A')
-                    claimant = claim.get('fullNameArabic', 'N/A')
-                    relation_type = claim.get('relationType', 'N/A')
-                    claims_info.append(f"- {claim_num}: {claimant} ({relation_type})")
-                    print(f"[CLAIM] {claim_num}: {claimant} (ID: {claim_id})")
-
-                # Show success message box with all claims
-                msg = f"Claims Created: {claims_count}\n\n"
-                if claims_info:
-                    msg += "\n".join(claims_info[:5])  # Show first 5 claims
-                    if len(claims_info) > 5:
-                        msg += f"\n... and {len(claims_info) - 5} more"
-
-                ErrorHandler.show_success(self, msg, "Process Claims Success")
+                claim_number = created_claims[0].get('claimNumber', '') if created_claims else ''
+                SuccessPopup.show_success(
+                    claim_number=claim_number,
+                    title=tr("wizard.success.title"),
+                    description=tr("wizard.success.description"),
+                    auto_close_ms=0,
+                    parent=self
+                )
             else:
                 reason = api_data.get('claimNotCreatedReason', 'Unknown')
                 logger.warning(f"Claim not created. Reason: {reason}")
-                print(f"[CLAIMS] Not created. Reason: {reason}")
                 ErrorHandler.show_warning(
                     self,
                     f"Survey processed but no claims created.\n\nReason: {reason}",
                     "Process Claims"
                 )
-            sys.stdout.flush()
-
-            # Print data summary
-            data_summary = api_data.get('dataSummary', {})
-            if data_summary:
-                print(f"[DATA SUMMARY]")
-                print(f"  - Property Units: {data_summary.get('propertyUnitsCount', 0)}")
-                print(f"  - Households: {data_summary.get('householdsCount', 0)}")
-                print(f"  - Persons: {data_summary.get('personsCount', 0)}")
-                print(f"  - Relations: {data_summary.get('relationsCount', 0)}")
-                print(f"  - Ownership Relations: {data_summary.get('ownershipRelationsCount', 0)}")
-                print(f"  - Evidence Count: {data_summary.get('evidenceCount', 0)}")
-                sys.stdout.flush()
-
-            Toast.show_toast(self, tr("wizard.relation.claims_processed"), Toast.SUCCESS)
 
         except Exception as e:
             logger.error(f"Failed to process claims: {e}")
-
-            # Print error response for debugging
-            print(f"\n{'='*60}")
-            print(f"[PROCESS-CLAIMS ERROR] POST /api/v1/Surveys/office/{survey_id}/process-claims")
-            print(f"{'='*60}")
-            print(f"Error: {e}")
-            print(f"{'='*60}\n")
-            sys.stdout.flush()
-
-            # Show generic error message (no technical details)
-            ErrorHandler.show_error(
-                self,
-                map_exception(e),
-                tr("common.error")
-            )
-
-            # Clear any previous response
+            ErrorHandler.show_error(self, map_exception(e), tr("common.error"))
             self.context.finalize_response = None
 
             # Show warning but allow to continue to step 6

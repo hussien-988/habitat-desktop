@@ -30,6 +30,7 @@ from services.translation_manager import tr
 from services.display_mappings import get_relation_type_display
 from services.error_mapper import map_exception
 from ui.components.toast import Toast
+from ui.components.success_popup import SuccessPopup
 
 logger = get_logger(__name__)
 
@@ -134,6 +135,7 @@ class OccupancyClaimsStep(BaseStep):
 
         # Scroll area for person cards
         scroll_area = QScrollArea()
+        scroll_area.setLayoutDirection(Qt.RightToLeft)
         scroll_area.setWidgetResizable(True)
         scroll_area.setStyleSheet("""
             QScrollArea {
@@ -509,10 +511,7 @@ class OccupancyClaimsStep(BaseStep):
             logger.error(f"Failed to fetch persons from API: {e}")
 
     def _process_claims_via_api(self):
-        """Process claims by calling the finalize API (from old RelationStep)."""
-        import sys
-        import json
-
+        """Process claims by calling the finalize API."""
         main_window = self.window()
         if main_window and hasattr(main_window, '_api_token') and main_window._api_token:
             self._api_service.set_access_token(main_window._api_token)
@@ -533,7 +532,6 @@ class OccupancyClaimsStep(BaseStep):
 
         try:
             api_data = self._api_service.finalize_office_survey(survey_id, process_options)
-
             logger.info(f"Survey {survey_id} claims processed successfully")
             self.context.finalize_response = api_data
 
@@ -543,20 +541,14 @@ class OccupancyClaimsStep(BaseStep):
             if api_data.get("claimCreated") or claims_count > 0:
                 logger.info(f"Claims created: {claims_count}")
 
-                claims_info = []
-                for claim in created_claims:
-                    claim_num = claim.get('claimNumber', 'N/A')
-                    claimant = claim.get('fullNameArabic', 'N/A')
-                    relation_type = claim.get('relationType', 'N/A')
-                    claims_info.append(f"- {claim_num}: {claimant} ({relation_type})")
-
-                msg = f"Claims Created: {claims_count}\n\n"
-                if claims_info:
-                    msg += "\n".join(claims_info[:5])
-                    if len(claims_info) > 5:
-                        msg += f"\n... and {len(claims_info) - 5} more"
-
-                ErrorHandler.show_success(self, msg, "Process Claims Success")
+                claim_number = created_claims[0].get('claimNumber', '') if created_claims else ''
+                SuccessPopup.show_success(
+                    claim_number=claim_number,
+                    title=tr("wizard.success.title"),
+                    description=tr("wizard.success.description"),
+                    auto_close_ms=0,
+                    parent=self
+                )
             else:
                 reason = api_data.get('claimNotCreatedReason', 'Unknown')
                 logger.warning(f"Claim not created. Reason: {reason}")
@@ -565,8 +557,6 @@ class OccupancyClaimsStep(BaseStep):
                     f"Survey processed but no claims created.\n\nReason: {reason}",
                     "Process Claims"
                 )
-
-            Toast.show_toast(self, tr("wizard.relation.claims_processed"), Toast.SUCCESS)
 
         except Exception as e:
             logger.error(f"Failed to process claims: {e}")
@@ -626,6 +616,10 @@ class OccupancyClaimsStep(BaseStep):
 
     def on_next(self):
         """Called when user clicks Next - process claims via API."""
+        # Guard: only process claims once to prevent duplicate creation
+        if hasattr(self.context, 'finalize_response') and self.context.finalize_response:
+            logger.info("Claims already processed, skipping duplicate process-claims call")
+            return
         if self._use_api:
             self._process_claims_via_api()
 

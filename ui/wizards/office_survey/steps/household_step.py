@@ -190,6 +190,7 @@ class HouseholdStep(BaseStep):
 
         # Create scroll area for ALL cards (modern thin scrollbar)
         scroll_area = QScrollArea()
+        scroll_area.setLayoutDirection(Qt.RightToLeft)
         scroll_area.setWidgetResizable(True)
         scroll_area.setFrameShape(QFrame.NoFrame)
         scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)

@@ -244,6 +244,8 @@ API للاتصال بـ TRRCMS Backend.
             except Exception:
                 pass
             logger.error(f"HTTP {status_code}: {endpoint} | Response: {response_data or response_text}")
+            print(f"\n[API ERROR {status_code}] {method} {endpoint}")
+            print(f"[API ERROR] Response: {response_data or response_text}")
             raise ApiException(
                 message=str(e),
                 status_code=status_code,
@@ -1190,6 +1192,10 @@ API للاتصال بـ TRRCMS Backend.
         api_data = self._convert_person_to_api_format_with_household(person_data, survey_id, household_id)
         endpoint = f"/v1/Surveys/{survey_id}/households/{household_id}/persons"
 
+        import json as _json
+        print(f"\n[CREATE PERSON] POST {endpoint}")
+        print(f"[CREATE PERSON] Payload:\n{_json.dumps(api_data, indent=2, ensure_ascii=False, default=str)}")
+
         logger.info(f"Creating person in household via {endpoint}")
         result = self._request("POST", endpoint, json_data=api_data)
         logger.info(f"Person created in household: {result.get('id', 'N/A')}")
@@ -1257,6 +1263,10 @@ API للاتصال بـ TRRCMS Backend.
         api_data = self._convert_relation_to_api_format(relation_data, survey_id, unit_id)
         endpoint = f"/v1/Surveys/{survey_id}/property-units/{unit_id}/relations"
 
+        import json as _json
+        print(f"\n[LINK RELATION] POST {endpoint}")
+        print(f"[LINK RELATION] Payload:\n{_json.dumps(api_data, indent=2, ensure_ascii=False, default=str)}")
+
         logger.info(f"Linking person {person_id} to unit {unit_id}")
         result = self._request("POST", endpoint, json_data=api_data)
         logger.info(f"Person linked to unit successfully")
@@ -1264,6 +1274,7 @@ API للاتصال بـ TRRCMS Backend.
 
     def _convert_person_to_api_format_with_household(self, person_data: Dict[str, Any], survey_id: str, household_id: str) -> Dict[str, Any]:
         """Convert person data to API format for household-scoped endpoint."""
+        import re
         from datetime import datetime
 
         def get_value(snake_key: str, camel_key: str, default=None):
@@ -1285,6 +1296,11 @@ API للاتصال بـ TRRCMS Backend.
         if not mother_name.strip():
             mother_name = '-'
 
+        # Validate email - send empty string if invalid format
+        email = get_value('email', 'email', '')
+        if email and not re.match(r'^[^@\s]+@[^@\s]+\.[^@\s]+$', email):
+            email = ''
+
         api_data = {
             "surveyId": survey_id,
             "householdId": household_id,
@@ -1294,7 +1310,7 @@ API للاتصال بـ TRRCMS Backend.
             "motherNameArabic": mother_name,
             "nationalId": get_value('national_id', 'nationalId', ''),
             "yearOfBirth": year_of_birth,
-            "email": get_value('email', 'email', ''),
+            "email": email,
             "mobileNumber": get_value('phone', 'mobileNumber', ''),
             "phoneNumber": get_value('landline', 'phoneNumber', ''),
             "relationshipToHead": get_value('relationship_type', 'relationshipToHead', '')
@@ -1311,7 +1327,10 @@ API للاتصال بـ TRRCMS Backend.
         }
 
         contract_type_map = {
-            "عقد إيجار": 1, "عقد بيع": 2, "عقد شراكة": 3
+            # Code values (from display_mappings.get_contract_type_options)
+            "lease": 1, "sale": 2, "partnership": 3,
+            # Arabic text (legacy backward compatibility)
+            "عقد إيجار": 1, "عقد بيع": 2, "عقد شراكة": 3,
         }
 
         rel_type = relation_data.get('rel_type') or relation_data.get('relationship_type', '')
@@ -1332,9 +1351,9 @@ API للاتصال بـ TRRCMS Backend.
 
         start_date = relation_data.get('start_date', '')
         if not start_date:
-            start_date = datetime.now().strftime("%Y-%m-%dT%H:%M:%S.000Z")
+            start_date = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
         elif 'T' not in start_date:
-            start_date = f"{start_date}T00:00:00.000Z"
+            start_date = f"{start_date}T00:00:00Z"
 
         ownership_share_pct = relation_data.get('ownership_share', 0)
         ownership_share_decimal = ownership_share_pct / 100.0 if ownership_share_pct else 0
@@ -1350,7 +1369,6 @@ API للاتصال بـ TRRCMS Backend.
             "ownershipShare": ownership_share_decimal,
             "contractDetails": relation_data.get('evidence_desc', ''),
             "startDate": start_date,
-            "endDate": None,
             "notes": relation_data.get('notes', '')
         }
         return api_data
