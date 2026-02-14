@@ -487,9 +487,13 @@ class OccupancyClaimsStep(BaseStep):
 
     def _fetch_persons_from_api(self):
         """Fetch persons from API and update context."""
-        main_window = self.window()
-        if main_window and hasattr(main_window, '_api_token') and main_window._api_token:
-            self._api_service.set_access_token(main_window._api_token)
+        # Skip fetch if persons already exist locally to avoid overwriting
+        # with raw API data (camelCase keys) that crashes the UI
+        if self.context.persons:
+            logger.info(f"Using {len(self.context.persons)} existing persons from context, skipping API fetch")
+            return
+
+        self._set_auth_token()
 
         survey_id = self.context.get_data("survey_id")
         household_id = self.context.get_data("household_id")
@@ -512,9 +516,7 @@ class OccupancyClaimsStep(BaseStep):
 
     def _process_claims_via_api(self):
         """Process claims by calling the finalize API."""
-        main_window = self.window()
-        if main_window and hasattr(main_window, '_api_token') and main_window._api_token:
-            self._api_service.set_access_token(main_window._api_token)
+        self._set_auth_token()
 
         survey_id = self.context.get_data("survey_id")
         if not survey_id:

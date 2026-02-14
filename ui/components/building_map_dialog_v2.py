@@ -124,6 +124,9 @@ class BuildingMapDialog(BaseMapDialog):
         # Connect building selection signal (from map clicks)
         self.building_selected.connect(self._on_building_selected_from_map)
 
+        # Cache for neighborhoods (loaded from API on first search)
+        self._neighborhoods_cache = None
+
         # SIMPLE: Load map with buildings directly (like old working version!)
         self._load_map()
 
@@ -605,142 +608,166 @@ class BuildingMapDialog(BaseMapDialog):
             "لم يتم العثور على المبنى"
         )
 
+    def _load_neighborhoods_cache(self):
+        """Load all neighborhoods from API (lazy, called once on first search)."""
+        if self._neighborhoods_cache is not None:
+            return
+
+        try:
+            from services.api_client import get_api_client
+            api_client = get_api_client()
+            if self._auth_token:
+                api_client.set_access_token(self._auth_token)
+
+            self._neighborhoods_cache = api_client.get_neighborhoods() or []
+            logger.info(f"Loaded {len(self._neighborhoods_cache)} neighborhoods from API")
+        except Exception as e:
+            logger.warning(f"Failed to load neighborhoods from API: {e}")
+            self._neighborhoods_cache = []
+
+    def _match_neighborhood(self, search_text: str):
+        """Match search text against cached neighborhoods. Returns (code, name, lat, lng) or None."""
+        search_lower = search_text.lower().strip()
+
+        best_match = None
+        for n in self._neighborhoods_cache:
+            name_ar = n.get("nameArabic", "") or ""
+            name_en = n.get("nameEnglish", "") or n.get("name", "") or ""
+
+            # Exact match gets priority
+            if search_lower == name_ar.lower() or search_lower == name_en.lower():
+                best_match = n
+                break
+
+            # Partial match (contains)
+            if not best_match:
+                if search_lower in name_ar.lower() or search_lower in name_en.lower():
+                    best_match = n
+
+        if not best_match:
+            return None
+
+        code = (
+            best_match.get("neighborhoodCode") or best_match.get("code")
+            or best_match.get("fullCode") or ""
+        )
+        name = best_match.get("nameArabic") or best_match.get("nameEnglish") or ""
+        lat = best_match.get("centerLatitude") or best_match.get("latitude") or best_match.get("centroidLat")
+        lng = best_match.get("centerLongitude") or best_match.get("longitude") or best_match.get("centroidLng")
+
+        return {"code": code, "name": name, "lat": lat, "lng": lng}
+
+    def _fly_to(self, lat, lng, zoom=17):
+        """Execute smooth flyTo on the Leaflet map."""
+        js_code = f"""
+        if (typeof window._isFlying === 'undefined') {{
+            window._isFlying = false;
+        }}
+        if (typeof map !== 'undefined') {{
+            window._isFlying = true;
+            map.flyTo([{lat}, {lng}], {zoom}, {{
+                duration: 2.0,
+                easeLinearity: 0.25
+            }});
+            setTimeout(function() {{
+                window._isFlying = false;
+            }}, 2200);
+        }}
+        """
+        self.web_view.page().runJavaScript(js_code)
+
     def _on_search_submitted(self):
-        """Handle search submission - search using backend API."""
+        """Handle search submission - search neighborhoods via API then flyTo."""
         if not self.show_search or not hasattr(self, 'search_input'):
             return
 
         search_text = self.search_input.text().strip()
-
         if not search_text:
             return
 
-        # Show loading indicator
-        if hasattr(self, 'search_input'):
-            self.search_input.setEnabled(False)
-            self.search_input.setPlaceholderText("جاري البحث...")
+        self.search_input.setEnabled(False)
+        self.search_input.setPlaceholderText("جاري البحث...")
 
         try:
-            from app.config import AleppoDivisions
+            from ui.components.toast import Toast
+            from services.api_client import get_api_client
 
             logger.info(f"Searching for: '{search_text}'")
 
-            # PROFESSIONAL FIX: Convert neighborhood name → code (API requires code!)
-            # API search_buildings() accepts neighborhood_code, NOT name
-            neighborhood_code = None
-            matched_name = None
+            # Step 1: Load neighborhoods from API (cached after first call)
+            self._load_neighborhoods_cache()
 
-            for code, name_en, name_ar in AleppoDivisions.NEIGHBORHOODS_ALEPPO:
-                if (search_text.lower() in name_ar.lower() or
-                    search_text.lower() in name_en.lower()):
-                    neighborhood_code = code
-                    matched_name = name_ar
-                    logger.info(f"Matched '{search_text}' → code: {code} ({name_ar})")
-                    break
+            # Step 2: Match search text against neighborhoods
+            match = self._match_neighborhood(search_text)
 
-            if not neighborhood_code:
+            if not match:
                 logger.warning(f"No neighborhood match for: '{search_text}'")
-                from ui.components.toast import Toast
                 Toast.show_toast(self, f"لم يتم العثور على الحي: {search_text}", "warning")
                 return
 
-            # Get buildings from API using neighborhood_code (CORRECT!)
-            from services.api_client import get_api_client
-            api_client = get_api_client()
+            logger.info(f"Matched '{search_text}' -> {match['name']} (code: {match['code']})")
 
-            # PROFESSIONAL FIX: Update auth token before API call (prevent 401!)
-            if self._auth_token:
-                api_client.set_access_token(self._auth_token)
-                logger.debug("Auth token synchronized before search")
+            # Step 3: If neighborhood has coordinates, flyTo directly
+            if match["lat"] and match["lng"]:
+                try:
+                    center_lat = float(match["lat"])
+                    center_lng = float(match["lng"])
+                    logger.info(f"Direct flyTo neighborhood center: ({center_lat:.6f}, {center_lng:.6f})")
+                    self._fly_to(center_lat, center_lng, zoom=17)
+                    Toast.show_toast(self, match["name"], "success")
+                    return
+                except (ValueError, TypeError):
+                    logger.warning(f"Invalid coordinates for {match['name']}, falling back to building search")
 
-            response = api_client.search_buildings(
-                neighborhood_code=neighborhood_code,
-                page_size=200  # Get all buildings in neighborhood
-            )
-
-            # Extract buildings from paginated response
-            buildings_data = response.get('buildings', response.get('data', []))
-
-            if not buildings_data:
-                logger.warning(f"No buildings found for neighborhood code: {neighborhood_code}")
-                from ui.components.toast import Toast
-                Toast.show_toast(self, f"لا توجد مباني في: {matched_name}", "info")
+            # Step 4: Fallback - search buildings by neighborhood code
+            if not match["code"]:
+                Toast.show_toast(self, f"لا يوجد كود للحي: {match['name']}", "warning")
                 return
 
-            # Convert API data to Building objects
-            buildings = []
-            for b_data in buildings_data:
-                building = Building.from_dict(b_data)
-                buildings.append(building)
+            api_client = get_api_client()
+            if self._auth_token:
+                api_client.set_access_token(self._auth_token)
 
-            logger.info(f"Found {len(buildings)} buildings in {matched_name}")
+            response = api_client.search_buildings(
+                neighborhood_code=match["code"],
+                page_size=200
+            )
 
-            # Calculate center from buildings with coordinates
+            buildings_data = response.get('buildings', response.get('data', []))
+            if not buildings_data:
+                Toast.show_toast(self, f"لا توجد مباني في: {match['name']}", "info")
+                return
+
+            # Calculate center from building coordinates
             lats = []
             lons = []
+            for b_data in buildings_data:
+                b = Building.from_dict(b_data)
+                if b.latitude and b.longitude:
+                    lats.append(b.latitude)
+                    lons.append(b.longitude)
 
-            for building in buildings:
-                if building.latitude and building.longitude:
-                    lats.append(building.latitude)
-                    lons.append(building.longitude)
+            if not lats:
+                Toast.show_toast(self, f"المباني في {match['name']} ليس لديها إحداثيات", "warning")
+                return
 
-            logger.info(f"Buildings with coordinates: {len(lats)}/{len(buildings)}")
+            center_lat = sum(lats) / len(lats)
+            center_lon = sum(lons) / len(lons)
 
-            if lats and lons:
-                center_lat = sum(lats) / len(lats)
-                center_lon = sum(lons) / len(lons)
-
-                # Dynamic zoom based on number of buildings (Best Practice)
-                #
-                if len(lats) <= 5:
-                    safe_zoom = 19  # Very few buildings - very close zoom
-                elif len(lats) <= 15:
-                    safe_zoom = 18  # Small area - close zoom
-                else:
-                    safe_zoom = 17  # Large area - moderate zoom
-
-                logger.info(f"Navigating to: ({center_lat:.6f}, {center_lon:.6f}) with zoom {safe_zoom}")
-
-                # PROFESSIONAL FIX: Smooth navigation without "jitter"
-                # Problem: viewport loading adds buildings during flyTo causing jitter
-                # Solution: Disable viewport loading events during flyTo
-                js_code = f"""
-                console.log('SEARCH: Flying to [{center_lat}, {center_lon}], zoom {safe_zoom}');
-
-                // Disable viewport loading events during flyTo (prevents jitter!)
-                if (typeof window._isFlying === 'undefined') {{
-                    window._isFlying = false;
-                }}
-
-                if (typeof map !== 'undefined') {{
-                    window._isFlying = true;  // Set flag to skip viewport events
-
-                    map.flyTo([{center_lat}, {center_lon}], {safe_zoom}, {{
-                        duration: 2.0,      // Smooth & professional (2 seconds)
-                        easeLinearity: 0.25 // Smooth easing
-                    }});
-
-                    // Re-enable viewport events after flyTo completes (2.2s = 2.0s + buffer)
-                    setTimeout(function() {{
-                        window._isFlying = false;
-                        console.log('FlyTo completed - viewport events re-enabled');
-                    }}, 2200);
-
-                    console.log('FlyTo started smoothly');
-                }}
-                """
-
-                self.web_view.page().runJavaScript(js_code)
+            if len(lats) <= 5:
+                safe_zoom = 19
+            elif len(lats) <= 15:
+                safe_zoom = 18
             else:
-                logger.error(f"No buildings with coordinates in '{search_text}'!")
-                from ui.components.toast import Toast
-                Toast.show_toast(self, f"المباني في {search_text} ليس لديها إحداثيات", "warning")
+                safe_zoom = 17
+
+            logger.info(f"Fallback flyTo: ({center_lat:.6f}, {center_lon:.6f}), zoom {safe_zoom}, {len(lats)} buildings")
+            self._fly_to(center_lat, center_lon, safe_zoom)
 
         except Exception as e:
             logger.error(f"Error searching: {e}", exc_info=True)
 
         finally:
-            # Re-enable search input
             if hasattr(self, 'search_input'):
                 self.search_input.setEnabled(True)
                 self.search_input.setPlaceholderText("البحث عن منطقة (مثال: الجميلية)")

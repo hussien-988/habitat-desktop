@@ -60,6 +60,7 @@ EN_TRANSLATIONS = {
     "error.api.forbidden": "Access forbidden.",
     "error.api.not_found": "Resource not found.",
     "error.api.validation": "Validation error:\n{details}",
+    "error.api.conflict": "Conflict: This item already exists.",
     "error.api.server": "Server error. Please contact support.",
     "error.api.unknown": "An unexpected error occurred. Please try again.",
 
@@ -166,7 +167,20 @@ EN_TRANSLATIONS = {
     "mapping.relation_type.worker": "Worker",
     "mapping.relation_type.other": "Other",
 
-    # Contract Types
+    # Contract Types (TenureContractType enum)
+    "mapping.contract_type.full_ownership": "Full Ownership",
+    "mapping.contract_type.shared_ownership": "Shared Ownership",
+    "mapping.contract_type.long_term_rental": "Long-Term Rental",
+    "mapping.contract_type.short_term_rental": "Short-Term Rental",
+    "mapping.contract_type.informal_tenure": "Informal Tenure",
+    "mapping.contract_type.unauthorized_occupation": "Unauthorized Occupation",
+    "mapping.contract_type.customary_rights": "Customary Rights",
+    "mapping.contract_type.inheritance_based": "Inheritance Based",
+    "mapping.contract_type.hosted_guest": "Hosted Guest",
+    "mapping.contract_type.temporary_shelter": "Temporary Shelter",
+    "mapping.contract_type.government_allocation": "Government Allocation",
+    "mapping.contract_type.usufruct": "Usufruct",
+    "mapping.contract_type.other": "Other",
     "mapping.contract_type.lease": "Lease Contract",
     "mapping.contract_type.sale": "Sale Contract",
     "mapping.contract_type.partnership": "Partnership Contract",
@@ -200,11 +214,68 @@ EN_TRANSLATIONS = {
     "mapping.claim_status.pending": "Pending",
     "mapping.claim_status.draft": "Draft",
 
-    # Evidence Types
+    # Evidence Types (EvidenceType enum)
+    "mapping.evidence_type.identification_document": "Identification Document",
+    "mapping.evidence_type.ownership_deed": "Ownership Deed",
+    "mapping.evidence_type.rental_contract": "Rental Contract",
+    "mapping.evidence_type.utility_bill": "Utility Bill",
+    "mapping.evidence_type.photo": "Photo",
+    "mapping.evidence_type.official_letter": "Official Letter",
+    "mapping.evidence_type.court_order": "Court Order",
+    "mapping.evidence_type.inheritance_document": "Inheritance Document",
+    "mapping.evidence_type.tax_receipt": "Tax Receipt",
+    "mapping.evidence_type.other": "Other",
     "mapping.evidence_type.deed": "Deed",
     "mapping.evidence_type.contract": "Contract",
     "mapping.evidence_type.proxy": "Power of Attorney",
     "mapping.evidence_type.acknowledgment": "Acknowledgment",
+
+    # Occupancy Types (OccupancyType enum)
+    "mapping.occupancy_type.owner_occupied": "Owner Occupied",
+    "mapping.occupancy_type.tenant_occupied": "Tenant Occupied",
+    "mapping.occupancy_type.family_occupied": "Family Occupied",
+    "mapping.occupancy_type.mixed_occupancy": "Mixed Occupancy",
+    "mapping.occupancy_type.vacant": "Vacant",
+    "mapping.occupancy_type.temporary_seasonal": "Temporary/Seasonal",
+    "mapping.occupancy_type.commercial_use": "Commercial Use",
+    "mapping.occupancy_type.abandoned": "Abandoned",
+    "mapping.occupancy_type.disputed": "Disputed",
+    "mapping.occupancy_type.unknown": "Unknown",
+
+    # Occupancy Nature (OccupancyNature enum)
+    "mapping.occupancy_nature.legal_formal": "Legal Formal",
+    "mapping.occupancy_nature.informal": "Informal",
+    "mapping.occupancy_nature.customary": "Customary",
+    "mapping.occupancy_nature.temporary_emergency": "Temporary/Emergency",
+    "mapping.occupancy_nature.authorized": "Authorized",
+    "mapping.occupancy_nature.unauthorized": "Unauthorized",
+    "mapping.occupancy_nature.pending_regularization": "Pending Regularization",
+    "mapping.occupancy_nature.contested": "Contested",
+    "mapping.occupancy_nature.unknown": "Unknown",
+
+    # Gender
+    "mapping.gender.male": "Male",
+    "mapping.gender.female": "Female",
+
+    # Nationality
+    "mapping.nationality.syrian": "Syrian",
+    "mapping.nationality.palestinian": "Palestinian",
+    "mapping.nationality.iraqi": "Iraqi",
+    "mapping.nationality.lebanese": "Lebanese",
+    "mapping.nationality.jordanian": "Jordanian",
+    "mapping.nationality.turkish": "Turkish",
+    "mapping.nationality.egyptian": "Egyptian",
+    "mapping.nationality.yemeni": "Yemeni",
+    "mapping.nationality.sudanese": "Sudanese",
+    "mapping.nationality.libyan": "Libyan",
+    "mapping.nationality.somali": "Somali",
+    "mapping.nationality.afghan": "Afghan",
+    "mapping.nationality.stateless": "Stateless",
+    "mapping.nationality.other": "Other",
+    "mapping.nationality.unknown": "Unknown",
+
+    # Relation Type (guest)
+    "mapping.relation_type.guest": "Guest",
 
     # ===== Wizard - Step Names =====
     "wizard.step.building_registration": "Building Registration",
@@ -302,8 +373,12 @@ EN_TRANSLATIONS = {
     # ===== Household Step =====
     "wizard.household.head_title": "Head of Household",
     "wizard.household.subtitle": "Register Household Details",
-    "wizard.household.head_name_label": "Head of Household / Provider",
-    "wizard.household.head_name_placeholder": "Person name",
+    "wizard.household.occupancy_type": "Occupancy Type",
+    "wizard.household.type_residential": "Residential",
+    "wizard.household.type_non_residential": "Non-Residential",
+    "wizard.household.occupancy_nature": "Occupancy Nature",
+    "wizard.household.nature_ownership": "Ownership",
+    "wizard.household.nature_other": "Other",
     "wizard.household.members_count": "Number of Members",
     "wizard.household.total_members": "Number of Members",
     "wizard.household.add_notes": "Add Notes",
@@ -487,6 +562,8 @@ EN_TRANSLATIONS = {
     "wizard.person_dialog.replace_file": "Replace",
     "wizard.person_dialog.id_photo_required": "ID photo is required before proceeding",
     "wizard.person_dialog.attach_document": "Attach Document",
+    "wizard.person_dialog.issue_date_title": "Document Issue Date",
+    "wizard.person_dialog.upload_partial": "{success} document(s) uploaded, {failed} failed",
 
     # ===== Occupancy Details =====
     "wizard.occupation.type": "Occupancy Type",
@@ -529,6 +606,7 @@ EN_TRANSLATIONS = {
     # Common
     "common.cancel": "Cancel",
     "common.save": "Save",
+    "common.confirm": "Confirm",
     "common.warning": "Warning",
 
     # ===== Drafts Page =====

@@ -214,3 +214,14 @@ class BaseStep(QWidget, metaclass=ABCQWidgetMeta):
     def create_validation_result(self) -> StepValidationResult:
         """Create a new validation result object."""
         return StepValidationResult(is_valid=True, errors=[], warnings=[])
+
+    def _set_auth_token(self):
+        """Set auth token from main window on all API service attributes."""
+        main_window = self.window()
+        if not (main_window and hasattr(main_window, '_api_token') and main_window._api_token):
+            return
+        token = main_window._api_token
+        for attr_name in ('_api_service', '_api_client', '_survey_api_service'):
+            service = getattr(self, attr_name, None)
+            if service and hasattr(service, 'set_access_token'):
+                service.set_access_token(token)

@@ -115,13 +115,14 @@ def get_unit_status_display(status_key) -> str:
 
 
 def get_relation_type_display(rel_key) -> str:
-    _map = {
+    _str_map = {
         "owner": "mapping.relation_type.owner",
         "co_owner": "mapping.relation_type.co_owner",
         "tenant": "mapping.relation_type.tenant",
         "occupant": "mapping.relation_type.occupant",
         "heir": "mapping.relation_type.heir",
         "guardian": "mapping.relation_type.guardian",
+        "guest": "mapping.relation_type.guest",
         "head": "mapping.relation_type.head",
         "spouse": "mapping.relation_type.spouse",
         "child": "mapping.relation_type.child",
@@ -129,39 +130,185 @@ def get_relation_type_display(rel_key) -> str:
         "worker": "mapping.relation_type.worker",
         "other": "mapping.relation_type.other",
     }
-    key = _map.get(str(rel_key).lower() if rel_key else "")
+    _int_map = {
+        1: "mapping.relation_type.owner",
+        2: "mapping.relation_type.occupant",
+        3: "mapping.relation_type.tenant",
+        4: "mapping.relation_type.guest",
+        5: "mapping.relation_type.heir",
+        99: "mapping.relation_type.other",
+    }
+    if isinstance(rel_key, int):
+        key = _int_map.get(rel_key)
+    else:
+        key = _str_map.get(str(rel_key).lower() if rel_key else "")
     return tr(key) if key else tr("mapping.not_specified")
 
 
 def get_relation_type_options() -> list:
     return [
-        ("owner", tr("mapping.relation_type.owner")),
-        ("co_owner", tr("mapping.relation_type.co_owner")),
-        ("tenant", tr("mapping.relation_type.tenant")),
-        ("occupant", tr("mapping.relation_type.occupant")),
-        ("heir", tr("mapping.relation_type.heir")),
-        ("guardian", tr("mapping.relation_type.guardian")),
-        ("other", tr("mapping.relation_type.other")),
+        (1, tr("mapping.relation_type.owner")),
+        (2, tr("mapping.relation_type.occupant")),
+        (3, tr("mapping.relation_type.tenant")),
+        (4, tr("mapping.relation_type.guest")),
+        (5, tr("mapping.relation_type.heir")),
+        (99, tr("mapping.relation_type.other")),
     ]
 
 
 def get_contract_type_options() -> list:
     return [
-        ("", tr("mapping.select")),
-        ("lease", tr("mapping.contract_type.lease")),
-        ("sale", tr("mapping.contract_type.sale")),
-        ("partnership", tr("mapping.contract_type.partnership")),
+        (0, tr("mapping.select")),
+        (1, tr("mapping.contract_type.full_ownership")),
+        (2, tr("mapping.contract_type.shared_ownership")),
+        (3, tr("mapping.contract_type.long_term_rental")),
+        (4, tr("mapping.contract_type.short_term_rental")),
+        (5, tr("mapping.contract_type.informal_tenure")),
+        (6, tr("mapping.contract_type.unauthorized_occupation")),
+        (7, tr("mapping.contract_type.customary_rights")),
+        (8, tr("mapping.contract_type.inheritance_based")),
+        (9, tr("mapping.contract_type.hosted_guest")),
+        (10, tr("mapping.contract_type.temporary_shelter")),
+        (11, tr("mapping.contract_type.government_allocation")),
+        (12, tr("mapping.contract_type.usufruct")),
+        (99, tr("mapping.contract_type.other")),
     ]
 
 
 def get_evidence_type_options() -> list:
     return [
-        ("", tr("mapping.select")),
-        ("deed", tr("mapping.evidence_type.deed")),
-        ("contract", tr("mapping.evidence_type.contract")),
-        ("proxy", tr("mapping.evidence_type.proxy")),
-        ("acknowledgment", tr("mapping.evidence_type.acknowledgment")),
+        (0, tr("mapping.select")),
+        (1, tr("mapping.evidence_type.identification_document")),
+        (2, tr("mapping.evidence_type.ownership_deed")),
+        (3, tr("mapping.evidence_type.rental_contract")),
+        (4, tr("mapping.evidence_type.utility_bill")),
+        (5, tr("mapping.evidence_type.photo")),
+        (6, tr("mapping.evidence_type.official_letter")),
+        (7, tr("mapping.evidence_type.court_order")),
+        (8, tr("mapping.evidence_type.inheritance_document")),
+        (9, tr("mapping.evidence_type.tax_receipt")),
+        (99, tr("mapping.evidence_type.other")),
     ]
+
+
+def get_occupancy_type_options() -> list:
+    return [
+        (0, tr("mapping.select")),
+        (1, tr("mapping.occupancy_type.owner_occupied")),
+        (2, tr("mapping.occupancy_type.tenant_occupied")),
+        (3, tr("mapping.occupancy_type.family_occupied")),
+        (4, tr("mapping.occupancy_type.mixed_occupancy")),
+        (5, tr("mapping.occupancy_type.vacant")),
+        (6, tr("mapping.occupancy_type.temporary_seasonal")),
+        (7, tr("mapping.occupancy_type.commercial_use")),
+        (8, tr("mapping.occupancy_type.abandoned")),
+        (9, tr("mapping.occupancy_type.disputed")),
+        (99, tr("mapping.occupancy_type.unknown")),
+    ]
+
+
+def get_occupancy_nature_options() -> list:
+    return [
+        (0, tr("mapping.select")),
+        (1, tr("mapping.occupancy_nature.legal_formal")),
+        (2, tr("mapping.occupancy_nature.informal")),
+        (3, tr("mapping.occupancy_nature.customary")),
+        (4, tr("mapping.occupancy_nature.temporary_emergency")),
+        (5, tr("mapping.occupancy_nature.authorized")),
+        (6, tr("mapping.occupancy_nature.unauthorized")),
+        (7, tr("mapping.occupancy_nature.pending_regularization")),
+        (8, tr("mapping.occupancy_nature.contested")),
+        (99, tr("mapping.occupancy_nature.unknown")),
+    ]
+
+
+def get_gender_options() -> list:
+    return [
+        (1, tr("mapping.gender.male")),
+        (2, tr("mapping.gender.female")),
+    ]
+
+
+def get_nationality_options() -> list:
+    return [
+        (1, tr("mapping.nationality.syrian")),
+        (2, tr("mapping.nationality.palestinian")),
+        (3, tr("mapping.nationality.iraqi")),
+        (4, tr("mapping.nationality.lebanese")),
+        (5, tr("mapping.nationality.jordanian")),
+        (6, tr("mapping.nationality.turkish")),
+        (7, tr("mapping.nationality.egyptian")),
+        (8, tr("mapping.nationality.yemeni")),
+        (9, tr("mapping.nationality.sudanese")),
+        (10, tr("mapping.nationality.libyan")),
+        (11, tr("mapping.nationality.somali")),
+        (12, tr("mapping.nationality.afghan")),
+        (97, tr("mapping.nationality.stateless")),
+        (98, tr("mapping.nationality.other")),
+        (99, tr("mapping.nationality.unknown")),
+    ]
+
+
+def get_occupancy_type_display(type_key) -> str:
+    _int_map = {
+        1: "mapping.occupancy_type.owner_occupied",
+        2: "mapping.occupancy_type.tenant_occupied",
+        3: "mapping.occupancy_type.family_occupied",
+        4: "mapping.occupancy_type.mixed_occupancy",
+        5: "mapping.occupancy_type.vacant",
+        6: "mapping.occupancy_type.temporary_seasonal",
+        7: "mapping.occupancy_type.commercial_use",
+        8: "mapping.occupancy_type.abandoned",
+        9: "mapping.occupancy_type.disputed",
+        99: "mapping.occupancy_type.unknown",
+    }
+    _str_map = {
+        "owneroccupied": "mapping.occupancy_type.owner_occupied",
+        "tenantoccupied": "mapping.occupancy_type.tenant_occupied",
+        "familyoccupied": "mapping.occupancy_type.family_occupied",
+        "mixedoccupancy": "mapping.occupancy_type.mixed_occupancy",
+        "vacant": "mapping.occupancy_type.vacant",
+        "temporaryseasonal": "mapping.occupancy_type.temporary_seasonal",
+        "commercialuse": "mapping.occupancy_type.commercial_use",
+        "abandoned": "mapping.occupancy_type.abandoned",
+        "disputed": "mapping.occupancy_type.disputed",
+        "unknown": "mapping.occupancy_type.unknown",
+    }
+    if isinstance(type_key, int):
+        key = _int_map.get(type_key)
+    else:
+        key = _str_map.get(str(type_key).lower().replace("_", "") if type_key else "")
+    return tr(key) if key else tr("mapping.not_specified")
+
+
+def get_occupancy_nature_display(nature_key) -> str:
+    _int_map = {
+        1: "mapping.occupancy_nature.legal_formal",
+        2: "mapping.occupancy_nature.informal",
+        3: "mapping.occupancy_nature.customary",
+        4: "mapping.occupancy_nature.temporary_emergency",
+        5: "mapping.occupancy_nature.authorized",
+        6: "mapping.occupancy_nature.unauthorized",
+        7: "mapping.occupancy_nature.pending_regularization",
+        8: "mapping.occupancy_nature.contested",
+        99: "mapping.occupancy_nature.unknown",
+    }
+    _str_map = {
+        "legalformal": "mapping.occupancy_nature.legal_formal",
+        "informal": "mapping.occupancy_nature.informal",
+        "customary": "mapping.occupancy_nature.customary",
+        "temporaryemergency": "mapping.occupancy_nature.temporary_emergency",
+        "authorized": "mapping.occupancy_nature.authorized",
+        "unauthorized": "mapping.occupancy_nature.unauthorized",
+        "pendingregularization": "mapping.occupancy_nature.pending_regularization",
+        "contested": "mapping.occupancy_nature.contested",
+        "unknown": "mapping.occupancy_nature.unknown",
+    }
+    if isinstance(nature_key, int):
+        key = _int_map.get(nature_key)
+    else:
+        key = _str_map.get(str(nature_key).lower().replace("_", "") if nature_key else "")
+    return tr(key) if key else tr("mapping.not_specified")
 
 
 def get_claim_type_display(claim_key) -> str:

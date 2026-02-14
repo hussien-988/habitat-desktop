@@ -30,7 +30,8 @@ from services.display_mappings import (
     get_relation_type_display, get_unit_status_display,
     get_claim_type_display, get_priority_display,
     get_business_type_display, get_source_display,
-    get_claim_status_display
+    get_claim_status_display,
+    get_occupancy_type_display, get_occupancy_nature_display
 )
 from utils.helpers import build_hierarchical_address
 
@@ -730,15 +731,12 @@ class ReviewStep(BaseStep):
         total_size = sum(h.get('size', 0) for h in self.context.households)
         hh = self.context.households[0] if self.context.households else {}
 
-        # Head person name
-        head_name = hh.get('head_name', '')
-        if not head_name and self.context.persons:
-            p = self.context.persons[0]
-            head_name = f"{p.get('first_name', '')} {p.get('father_name', '')} {p.get('last_name', '')}".strip()
-        if not head_name:
-            head_name = "-"
+        occupancy_type = hh.get('occupancy_type')
+        occupancy_nature = hh.get('occupancy_nature')
+        type_display = get_occupancy_type_display(occupancy_type) if occupancy_type else "-"
+        nature_display = get_occupancy_nature_display(occupancy_nature) if occupancy_nature else "-"
 
-        # Summary row: head person (right) + total count (left)
+        # Summary row: occupancy nature (right) + type (center) + total count (left)
         summary_container = QWidget()
         summary_container.setLayoutDirection(Qt.RightToLeft)
         summary_container.setStyleSheet("background: transparent; border: none;")
@@ -746,16 +744,27 @@ class ReviewStep(BaseStep):
         summary_layout.setContentsMargins(0, 0, 0, 0)
         summary_layout.setSpacing(0)
 
-        head_block = QVBoxLayout()
-        head_block.setSpacing(4)
-        head_title = self._create_section_label(tr("wizard.review.head_person"))
-        head_title.setAlignment(Qt.AlignRight)
-        head_val = QLabel(head_name)
-        head_val.setFont(create_font(size=10, weight=FontManager.WEIGHT_REGULAR))
-        head_val.setStyleSheet(f"color: #94a3b8; background: transparent; border: none;")
-        head_val.setAlignment(Qt.AlignRight)
-        head_block.addWidget(head_title)
-        head_block.addWidget(head_val)
+        nature_block = QVBoxLayout()
+        nature_block.setSpacing(4)
+        nature_title = self._create_section_label(tr("wizard.household.occupancy_nature"))
+        nature_title.setAlignment(Qt.AlignRight)
+        nature_val = QLabel(nature_display)
+        nature_val.setFont(create_font(size=10, weight=FontManager.WEIGHT_REGULAR))
+        nature_val.setStyleSheet(f"color: #94a3b8; background: transparent; border: none;")
+        nature_val.setAlignment(Qt.AlignRight)
+        nature_block.addWidget(nature_title)
+        nature_block.addWidget(nature_val)
+
+        type_block = QVBoxLayout()
+        type_block.setSpacing(4)
+        type_title = self._create_section_label(tr("wizard.household.occupancy_type"))
+        type_title.setAlignment(Qt.AlignCenter)
+        type_val = QLabel(type_display)
+        type_val.setFont(create_font(size=10, weight=FontManager.WEIGHT_REGULAR))
+        type_val.setStyleSheet(f"color: #94a3b8; background: transparent; border: none;")
+        type_val.setAlignment(Qt.AlignCenter)
+        type_block.addWidget(type_title)
+        type_block.addWidget(type_val)
 
         count_block = QVBoxLayout()
         count_block.setSpacing(4)
@@ -768,7 +777,9 @@ class ReviewStep(BaseStep):
         count_block.addWidget(count_title)
         count_block.addWidget(count_val)
 
-        summary_layout.addLayout(head_block)
+        summary_layout.addLayout(nature_block)
+        summary_layout.addStretch()
+        summary_layout.addLayout(type_block)
         summary_layout.addStretch()
         summary_layout.addLayout(count_block)
         summary_layout.addStretch()

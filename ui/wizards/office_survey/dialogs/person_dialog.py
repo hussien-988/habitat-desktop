@@ -25,7 +25,10 @@ from services.validation_service import ValidationService
 from services.api_client import get_api_client
 from services.translation_manager import tr
 from services.error_mapper import map_exception
-from services.display_mappings import get_relation_type_options, get_contract_type_options, get_evidence_type_options
+from services.display_mappings import (
+    get_relation_type_options, get_contract_type_options, get_evidence_type_options,
+    get_gender_options, get_nationality_options
+)
 from ui.components.toast import Toast
 from utils.logger import get_logger
 
@@ -46,7 +49,7 @@ class PersonDialog(QDialog):
         self.read_only = read_only
         self.validation_service = ValidationService()
         self.uploaded_files = []
-        self.relation_uploaded_files = []
+        self.relation_uploaded_files = []  # List[Dict]: {path, issue_date, hash}
 
         # API integration
         self._survey_id = survey_id
@@ -391,16 +394,15 @@ class PersonDialog(QDialog):
         row += 1
         self.gender = QComboBox()
         self.gender.addItem(tr("wizard.person_dialog.select"), None)
-        self.gender.addItem(tr("wizard.person_dialog.gender_male"), "male")
-        self.gender.addItem(tr("wizard.person_dialog.gender_female"), "female")
+        for code, display_name in get_gender_options():
+            self.gender.addItem(display_name, code)
         self.gender.setStyleSheet(self._input_style())
         grid.addWidget(self.gender, row, 0)
 
         self.nationality = QComboBox()
         self.nationality.addItem(tr("wizard.person_dialog.select"), None)
-        self.nationality.addItem(tr("wizard.person_dialog.nationality_syrian"), "syrian")
-        self.nationality.addItem(tr("wizard.person_dialog.nationality_palestinian"), "palestinian")
-        self.nationality.addItem(tr("wizard.person_dialog.nationality_other"), "other")
+        for code, display_name in get_nationality_options():
+            self.nationality.addItem(display_name, code)
         self.nationality.setStyleSheet(self._input_style())
         grid.addWidget(self.nationality, row, 1)
         row += 1
@@ -877,9 +879,9 @@ class PersonDialog(QDialog):
 
     def _remove_relation_file(self, file_path: str):
         """Remove a relation evidence file and refresh thumbnails."""
-        if file_path in self.relation_uploaded_files:
-            self.relation_uploaded_files.remove(file_path)
-        self._update_upload_thumbnails("rel_upload", self.relation_uploaded_files)
+        self.relation_uploaded_files = [f for f in self.relation_uploaded_files if f["path"] != file_path]
+        file_paths_for_thumbs = [f["path"] for f in self.relation_uploaded_files]
+        self._update_upload_thumbnails("rel_upload", file_paths_for_thumbs)
 
     @staticmethod
     def _get_governorate_options():
@@ -1149,40 +1151,62 @@ class PersonDialog(QDialog):
             else:
                 self.uploaded_files.extend(new_files)
             self._update_upload_thumbnails("id_upload", self.uploaded_files)
-            # After first upload, change button text from "attach ID photos" to "attach document"
-            if self.uploaded_files:
-                id_frame = self.findChild(QFrame, "id_upload")
-                if id_frame and hasattr(id_frame, '_text_btn'):
-                    id_frame._text_btn.setText(tr("wizard.person_dialog.attach_document"))
 
     def _browse_relation_files(self):
-        """Browse for relation evidence files with duplicate detection."""
+        """Browse for relation evidence files with dual-level duplicate detection."""
         from PyQt5.QtWidgets import QFileDialog
         import os
+        import hashlib
+
         file_paths, _ = QFileDialog.getOpenFileNames(
             self, tr("wizard.person_dialog.choose_files"), "",
             "Images (*.png *.jpg *.jpeg *.pdf)"
         )
-        if file_paths:
-            existing_names = {os.path.normpath(f) for f in self.relation_uploaded_files}
-            duplicates = []
-            new_files = []
-            for fp in file_paths:
-                norm = os.path.normpath(fp)
-                if norm in existing_names:
-                    duplicates.append(fp)
-                else:
-                    new_files.append(fp)
-                    existing_names.add(norm)
-            if duplicates:
-                dup_names = [os.path.basename(f) for f in duplicates]
-                replace = self._show_duplicate_file_dialog(dup_names)
-                if replace:
-                    self.relation_uploaded_files.extend(new_files)
-                # else: Cancel - don't add anything
-            else:
-                self.relation_uploaded_files.extend(new_files)
-            self._update_upload_thumbnails("rel_upload", self.relation_uploaded_files)
+        if not file_paths:
+            return
+
+        existing_paths = {os.path.normpath(f["path"]) for f in self.relation_uploaded_files}
+        existing_hashes = {f["hash"] for f in self.relation_uploaded_files if f.get("hash")}
+
+        duplicates = []
+        new_files = []
+
+        for fp in file_paths:
+            norm = os.path.normpath(fp)
+            # Level 1: Same path already added
+            if norm in existing_paths:
+                duplicates.append(fp)
+                continue
+            # Level 2: Same content (different path, same hash)
+            file_hash = self._compute_file_hash(fp)
+            if file_hash and file_hash in existing_hashes:
+                duplicates.append(fp)
+                continue
+            new_files.append({"path": fp, "hash": file_hash})
+            existing_paths.add(norm)
+            if file_hash:
+                existing_hashes.add(file_hash)
+
+        if duplicates:
+            dup_names = [os.path.basename(f) for f in duplicates]
+            replace = self._show_duplicate_file_dialog(dup_names)
+            if not replace:
+                return
+
+        if not new_files:
+            return
+
+        # Show issue date dialog for the batch of new files
+        issue_date = self._show_issue_date_dialog()
+        if issue_date is None:
+            return
+
+        for f in new_files:
+            f["issue_date"] = issue_date
+
+        self.relation_uploaded_files.extend(new_files)
+        file_paths_for_thumbs = [f["path"] for f in self.relation_uploaded_files]
+        self._update_upload_thumbnails("rel_upload", file_paths_for_thumbs)
 
     def _show_duplicate_file_dialog(self, file_names: list) -> bool:
         """Show a small floating dialog for duplicate files. Returns True to replace, False to cancel."""
@@ -1292,6 +1316,126 @@ class PersonDialog(QDialog):
         main_layout.addWidget(container)
 
         return dlg.exec_() == QDialog.Accepted
+
+    @staticmethod
+    def _compute_file_hash(file_path: str) -> str:
+        """Compute SHA-256 hash of a file for duplicate detection."""
+        import hashlib
+        try:
+            sha256 = hashlib.sha256()
+            with open(file_path, "rb") as f:
+                for chunk in iter(lambda: f.read(8192), b""):
+                    sha256.update(chunk)
+            return sha256.hexdigest()
+        except (IOError, OSError) as e:
+            logger.warning(f"Could not compute hash for {file_path}: {e}")
+            return ""
+
+    def _show_issue_date_dialog(self) -> str:
+        """Show a mini popup to enter document issue date. Returns ISO date string or None if cancelled."""
+        from PyQt5.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QGraphicsDropShadowEffect
+        from PyQt5.QtGui import QFont, QColor
+        from ui.font_utils import create_font, FontManager
+
+        dlg = QDialog(self)
+        dlg.setWindowFlags(Qt.Dialog | Qt.FramelessWindowHint)
+        dlg.setAttribute(Qt.WA_TranslucentBackground)
+        dlg.setFixedWidth(320)
+
+        container = QWidget(dlg)
+        container.setObjectName("date_container")
+        container.setStyleSheet("""
+            QWidget#date_container {
+                background-color: #FFFFFF;
+                border-radius: 10px;
+            }
+        """)
+
+        shadow = QGraphicsDropShadowEffect()
+        shadow.setBlurRadius(30)
+        shadow.setColor(QColor(0, 0, 0, 60))
+        shadow.setOffset(0, 6)
+        container.setGraphicsEffect(shadow)
+
+        c_layout = QVBoxLayout(container)
+        c_layout.setContentsMargins(20, 20, 20, 16)
+        c_layout.setSpacing(12)
+
+        # Title
+        title_lbl = QLabel(tr("wizard.person_dialog.issue_date_title"))
+        title_lbl.setAlignment(Qt.AlignCenter)
+        title_lbl.setFont(create_font(size=11, weight=FontManager.WEIGHT_SEMIBOLD))
+        title_lbl.setStyleSheet("color: #1F2937; background: transparent;")
+        c_layout.addWidget(title_lbl)
+
+        # Date picker
+        date_edit = QDateEdit()
+        date_edit.setCalendarPopup(True)
+        date_edit.setDate(QDate.currentDate())
+        date_edit.setDisplayFormat("yyyy-MM-dd")
+        date_edit.setLayoutDirection(Qt.LeftToRight)
+        date_edit.setStyleSheet("""
+            QDateEdit {
+                border: 1px solid #D1D5DB;
+                border-radius: 8px;
+                padding: 8px 12px;
+                background-color: #F9FAFB;
+                font-size: 13px;
+                min-height: 20px;
+            }
+            QDateEdit:focus { border-color: #3B82F6; }
+        """)
+        c_layout.addWidget(date_edit)
+
+        c_layout.addSpacing(4)
+
+        # Buttons
+        btn_row = QHBoxLayout()
+        btn_row.setSpacing(8)
+
+        cancel_btn = QPushButton(tr("common.cancel"))
+        cancel_btn.setFixedHeight(34)
+        cancel_btn.setCursor(Qt.PointingHandCursor)
+        cancel_btn.setFont(create_font(size=9, weight=FontManager.WEIGHT_MEDIUM))
+        cancel_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #F3F4F6;
+                color: #4B5563;
+                border: none;
+                border-radius: 6px;
+                padding: 6px 16px;
+            }
+            QPushButton:hover { background-color: #E5E7EB; }
+        """)
+        cancel_btn.clicked.connect(dlg.reject)
+
+        confirm_btn = QPushButton(tr("common.confirm"))
+        confirm_btn.setFixedHeight(34)
+        confirm_btn.setCursor(Qt.PointingHandCursor)
+        confirm_btn.setFont(create_font(size=9, weight=FontManager.WEIGHT_MEDIUM))
+        confirm_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #3B82F6;
+                color: white;
+                border: none;
+                border-radius: 6px;
+                padding: 6px 16px;
+            }
+            QPushButton:hover { background-color: #2563EB; }
+        """)
+        confirm_btn.clicked.connect(dlg.accept)
+
+        btn_row.addWidget(cancel_btn, 1)
+        btn_row.addWidget(confirm_btn, 1)
+        c_layout.addLayout(btn_row)
+
+        main_layout = QVBoxLayout(dlg)
+        main_layout.setContentsMargins(10, 10, 10, 10)
+        main_layout.addWidget(container)
+
+        if dlg.exec_() == QDialog.Accepted:
+            return date_edit.date().toString("yyyy-MM-dd")
+        return None
 
     # Validation
 
@@ -1492,6 +1636,7 @@ class PersonDialog(QDialog):
                 self._upload_identification_files(person_id)
 
             # Step 2: Link person to property unit with relation
+            link_success = True
             if self._survey_id and self._unit_id and person_id:
                 relation_data = person_data.get('relation_data', {})
                 relation_data['person_id'] = person_id
@@ -1516,10 +1661,16 @@ class PersonDialog(QDialog):
                         self._upload_tenure_files(relation_id)
 
                 except Exception as e:
+                    link_success = False
                     logger.error(f"Failed to link person to unit: {e}")
-                    Toast.show_toast(self, tr("wizard.person_dialog.link_failed", error_msg=map_exception(e)), Toast.WARNING)
+                    ErrorHandler.show_error(
+                        self, tr("wizard.person_dialog.link_failed", error_msg=map_exception(e)), tr("common.error")
+                    )
             else:
                 logger.warning(f"Skipping relation link: survey_id={self._survey_id}, unit_id={self._unit_id}, person_id={person_id}")
+
+            if not link_success:
+                return
 
         self.accept()
 
@@ -1527,10 +1678,60 @@ class PersonDialog(QDialog):
         """Upload identification files for the created person."""
         if not self.uploaded_files:
             return
-        logger.warning(f"File upload skipped: {len(self.uploaded_files)} identification file(s) for person {person_id}")
+
+        from services.exceptions import ApiException
+
+        for file_path in self.uploaded_files:
+            try:
+                self._api_service.upload_identification_document(
+                    self._survey_id, person_id, file_path
+                )
+                logger.info(f"Identification file uploaded: {file_path}")
+            except Exception as e:
+                logger.error(f"Failed to upload identification file {file_path}: {e}")
 
     def _upload_tenure_files(self, relation_id: str):
         """Upload tenure evidence files for the created relation."""
         if not self.relation_uploaded_files:
             return
-        logger.warning(f"File upload skipped: {len(self.relation_uploaded_files)} tenure file(s) for relation {relation_id}")
+
+        from services.error_mapper import map_exception as _map_exc
+        from services.exceptions import ApiException
+
+        success_count = 0
+        fail_count = 0
+
+        for file_entry in self.relation_uploaded_files:
+            file_path = file_entry["path"]
+            issue_date = file_entry.get("issue_date", "")
+            file_hash = file_entry.get("hash", "")
+
+            try:
+                self._api_service.upload_relation_document(
+                    survey_id=self._survey_id,
+                    relation_id=relation_id,
+                    file_path=file_path,
+                    issue_date=issue_date,
+                    file_hash=file_hash
+                )
+                success_count += 1
+            except ApiException as e:
+                if e.status_code == 409:
+                    logger.info(f"Document already exists (duplicate hash): {file_path}")
+                    success_count += 1
+                else:
+                    fail_count += 1
+                    logger.error(f"Failed to upload {file_path}: {_map_exc(e)}")
+            except Exception as e:
+                fail_count += 1
+                logger.error(f"Failed to upload {file_path}: {e}")
+
+        if fail_count > 0:
+            logger.warning(f"Document upload: {success_count} succeeded, {fail_count} failed")
+            Toast.show_toast(
+                self,
+                tr("wizard.person_dialog.upload_partial", success=success_count, failed=fail_count),
+                Toast.WARNING
+            )
+        elif success_count > 0:
+            logger.info(f"All {success_count} document(s) uploaded successfully")
