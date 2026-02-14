@@ -214,6 +214,17 @@ API للاتصال بـ TRRCMS Backend.
         """
         url = f"{self.base_url}{endpoint}"
 
+        # Log request
+        import json as _json
+        print(f"\n[API REQ] {method} {endpoint}")
+        if params:
+            print(f"[API REQ] Params: {params}")
+        if json_data:
+            try:
+                print(f"[API REQ] Body: {_json.dumps(json_data, indent=2, ensure_ascii=False, default=str)}")
+            except Exception:
+                print(f"[API REQ] Body: {json_data}")
+
         try:
             response = requests.request(
                 method=method,
@@ -226,9 +237,23 @@ API للاتصال بـ TRRCMS Backend.
             )
             response.raise_for_status()
 
+            result = None
             if response.text:
-                return response.json()
-            return None
+                result = response.json()
+
+            # Log successful response
+            print(f"[API RES] {response.status_code} {endpoint}")
+            if result:
+                try:
+                    res_str = _json.dumps(result, indent=2, ensure_ascii=False, default=str)
+                    if len(res_str) > 1000:
+                        print(f"[API RES] Body (truncated): {res_str[:1000]}...")
+                    else:
+                        print(f"[API RES] Body: {res_str}")
+                except Exception:
+                    print(f"[API RES] Body: {result}")
+
+            return result
 
         except requests.exceptions.HTTPError as e:
             status_code = e.response.status_code if e.response is not None else 0
@@ -237,15 +262,14 @@ API للاتصال بـ TRRCMS Backend.
                 response_data = e.response.json() if e.response is not None else {}
             except (ValueError, AttributeError):
                 pass
-            # Log response body for debugging server errors (especially 500)
             response_text = ''
             try:
                 response_text = e.response.text[:500] if e.response is not None else ''
             except Exception:
                 pass
             logger.error(f"HTTP {status_code}: {endpoint} | Response: {response_data or response_text}")
-            print(f"\n[API ERROR {status_code}] {method} {endpoint}")
-            print(f"[API ERROR] Response: {response_data or response_text}")
+            print(f"[API ERR] {status_code} {method} {endpoint}")
+            print(f"[API ERR] Response: {response_data or response_text}")
             raise ApiException(
                 message=str(e),
                 status_code=status_code,
@@ -417,10 +441,6 @@ API للاتصال بـ TRRCMS Backend.
         if subdistrict_code:
             payload["subdistrictCode"] = subdistrict_code
 
-        import json
-        print(json.dumps(payload, indent=2, ensure_ascii=False))
-        print(f"{'='*80}\n")
-
         logger.debug(f"Searching buildings for assignment: governorateCode=01, page={page}, pageSize={page_size}, hasActiveAssignment={has_active_assignment}")
         response = self._request("POST", "/v1/BuildingAssignments/buildings/search", json_data=payload)
 
@@ -497,15 +517,6 @@ API للاتصال بـ TRRCMS Backend.
 
         if has_active_assignment is not None:
             params["hasActiveAssignment"] = str(has_active_assignment).lower()
-
-        # ✅ DETAILED LOGGING
-        print(f"\n{'='*80}")
-        print(f"🔍 FILTER-BASED SEARCH API CALL (BuildingAssignment/buildings)")
-        print(f"{'='*80}")
-        print(f"📋 Query Parameters:")
-        import json
-        print(json.dumps(params, indent=2, ensure_ascii=False))
-        print(f"{'='*80}\n")
 
         logger.debug(f"Fetching buildings for assignment with filters: {params}")
         response = self._request("GET", "/v1/BuildingAssignments/buildings", params=params)
@@ -1124,15 +1135,14 @@ API للاتصال بـ TRRCMS Backend.
         if property_unit_id == '':
             property_unit_id = None
 
-        # headOfHouseholdName: nullable string - send null instead of empty string
-        head_name = get_value('head_name', 'headOfHouseholdName', None)
-        if head_name == '':
-            head_name = None
+        occupancy_type = get_value('occupancy_type', 'occupancyType', 0)
+        occupancy_nature = get_value('occupancy_nature', 'occupancyNature', 0)
 
         api_data = {
             "propertyUnitId": property_unit_id,
-            "headOfHouseholdName": head_name,
             "householdSize": int(get_value('size', 'householdSize', 0)),
+            "occupancyType": int(occupancy_type) if occupancy_type else None,
+            "occupancyNature": int(occupancy_nature) if occupancy_nature else None,
             "maleCount": int(get_value('adult_males', 'maleCount', 0)),
             "femaleCount": int(get_value('adult_females', 'femaleCount', 0)),
             "maleChildCount": int(get_value('male_children_under18', 'maleChildCount', 0)),
@@ -1191,10 +1201,6 @@ API للاتصال بـ TRRCMS Backend.
 
         api_data = self._convert_person_to_api_format_with_household(person_data, survey_id, household_id)
         endpoint = f"/v1/Surveys/{survey_id}/households/{household_id}/persons"
-
-        import json as _json
-        print(f"\n[CREATE PERSON] POST {endpoint}")
-        print(f"[CREATE PERSON] Payload:\n{_json.dumps(api_data, indent=2, ensure_ascii=False, default=str)}")
 
         logger.info(f"Creating person in household via {endpoint}")
         result = self._request("POST", endpoint, json_data=api_data)
@@ -1263,14 +1269,169 @@ API للاتصال بـ TRRCMS Backend.
         api_data = self._convert_relation_to_api_format(relation_data, survey_id, unit_id)
         endpoint = f"/v1/Surveys/{survey_id}/property-units/{unit_id}/relations"
 
-        import json as _json
-        print(f"\n[LINK RELATION] POST {endpoint}")
-        print(f"[LINK RELATION] Payload:\n{_json.dumps(api_data, indent=2, ensure_ascii=False, default=str)}")
-
         logger.info(f"Linking person {person_id} to unit {unit_id}")
         result = self._request("POST", endpoint, json_data=api_data)
         logger.info(f"Person linked to unit successfully")
         return result
+
+    def upload_relation_document(
+        self,
+        survey_id: str,
+        relation_id: str,
+        file_path: str,
+        issue_date: str = "",
+        file_hash: str = "",
+        evidence_type: int = 2,
+        description: str = ""
+    ) -> Dict[str, Any]:
+        """
+        Upload a tenure/relation evidence document via multipart/form-data.
+
+        Endpoint: POST /api/v1/Surveys/{surveyId}/evidence/tenure
+        """
+        import os
+        import json as _json
+        import mimetypes
+
+        if not survey_id or not relation_id:
+            raise ValueError("survey_id and relation_id are required")
+        if not file_path or not os.path.exists(file_path):
+            raise ValueError(f"File not found: {file_path}")
+
+        endpoint = f"/v1/Surveys/{survey_id}/evidence/tenure"
+        url = f"{self.base_url}{endpoint}"
+
+        file_name = os.path.basename(file_path)
+        mime_type = mimetypes.guess_type(file_path)[0] or "application/octet-stream"
+
+        self._ensure_valid_token()
+        headers = {
+            "Authorization": f"Bearer {self.access_token}",
+            "Accept": "application/json"
+        }
+
+        form_fields = {
+            "PersonPropertyRelationId": (None, relation_id),
+            "EvidenceType": (None, str(evidence_type)),
+            "Description": (None, description or file_name),
+        }
+        if issue_date:
+            date_val = f"{issue_date}T00:00:00Z" if 'T' not in issue_date else issue_date
+            form_fields["DocumentIssuedDate"] = (None, date_val)
+
+        logger.info(f"[API REQ] POST {endpoint} File: {file_name} ({mime_type})")
+
+        try:
+            with open(file_path, "rb") as f:
+                files = {"File": (file_name, f, mime_type)}
+                files.update(form_fields)
+                response = requests.post(
+                    url,
+                    files=files,
+                    headers=headers,
+                    timeout=self.config.timeout,
+                    verify=False
+                )
+
+            response.raise_for_status()
+
+            result = None
+            if response.text:
+                result = response.json()
+
+            logger.info(f"[API RES] {response.status_code} {endpoint}")
+            logger.info(f"Document uploaded: {file_name} for relation {relation_id}")
+            return result or {}
+
+        except requests.exceptions.HTTPError as e:
+            status_code = e.response.status_code if e.response is not None else 0
+            response_data = {}
+            try:
+                response_data = e.response.json() if e.response is not None else {}
+            except (ValueError, AttributeError):
+                pass
+            logger.error(f"[API ERR] {status_code} POST {endpoint}: {response_data}")
+            raise ApiException(
+                message=str(e),
+                status_code=status_code,
+                response_data=response_data
+            )
+        except (requests.exceptions.ConnectionError, requests.exceptions.Timeout) as e:
+            logger.error(f"Network error during upload: {e}")
+            raise NetworkException(message=str(e), original_error=e)
+
+    def upload_identification_document(
+        self,
+        survey_id: str,
+        person_id: str,
+        file_path: str,
+        description: str = ""
+    ) -> Dict[str, Any]:
+        """
+        Upload an identification document for a person.
+
+        Endpoint: POST /api/v1/Surveys/{surveyId}/evidence/identification
+        """
+        import os
+        import mimetypes
+
+        if not survey_id or not person_id:
+            raise ValueError("survey_id and person_id are required")
+        if not file_path or not os.path.exists(file_path):
+            raise ValueError(f"File not found: {file_path}")
+
+        endpoint = f"/v1/Surveys/{survey_id}/evidence/identification"
+        url = f"{self.base_url}{endpoint}"
+
+        file_name = os.path.basename(file_path)
+        mime_type = mimetypes.guess_type(file_path)[0] or "application/octet-stream"
+
+        self._ensure_valid_token()
+        headers = {
+            "Authorization": f"Bearer {self.access_token}",
+            "Accept": "application/json"
+        }
+
+        form_fields = {
+            "PersonId": (None, person_id),
+            "Description": (None, description or file_name),
+        }
+
+        logger.info(f"[API REQ] POST {endpoint} File: {file_name} for person {person_id}")
+
+        try:
+            with open(file_path, "rb") as f:
+                files = {"File": (file_name, f, mime_type)}
+                files.update(form_fields)
+                response = requests.post(
+                    url,
+                    files=files,
+                    headers=headers,
+                    timeout=self.config.timeout,
+                    verify=False
+                )
+
+            response.raise_for_status()
+            result = response.json() if response.text else {}
+            logger.info(f"Identification uploaded: {file_name} for person {person_id}")
+            return result
+
+        except requests.exceptions.HTTPError as e:
+            status_code = e.response.status_code if e.response is not None else 0
+            response_data = {}
+            try:
+                response_data = e.response.json() if e.response is not None else {}
+            except (ValueError, AttributeError):
+                pass
+            logger.error(f"[API ERR] {status_code} POST {endpoint}: {response_data}")
+            raise ApiException(
+                message=str(e),
+                status_code=status_code,
+                response_data=response_data
+            )
+        except (requests.exceptions.ConnectionError, requests.exceptions.Timeout) as e:
+            logger.error(f"Network error during upload: {e}")
+            raise NetworkException(message=str(e), original_error=e)
 
     def _convert_person_to_api_format_with_household(self, person_data: Dict[str, Any], survey_id: str, household_id: str) -> Dict[str, Any]:
         """Convert person data to API format for household-scoped endpoint."""
@@ -1280,13 +1441,13 @@ API للاتصال بـ TRRCMS Backend.
         def get_value(snake_key: str, camel_key: str, default=None):
             return person_data.get(snake_key) or person_data.get(camel_key) or default
 
-        year_of_birth = 0
         birth_date = get_value('birth_date', 'dateOfBirth', '')
+        date_of_birth = None
         if birth_date:
-            try:
-                year_of_birth = int(birth_date.split('-')[0])
-            except (ValueError, IndexError):
-                year_of_birth = 0
+            if 'T' not in str(birth_date):
+                date_of_birth = f"{birth_date}T00:00:00Z"
+            else:
+                date_of_birth = str(birth_date)
 
         father_name = get_value('father_name', 'fatherNameArabic', '')
         if not father_name.strip():
@@ -1296,10 +1457,13 @@ API للاتصال بـ TRRCMS Backend.
         if not mother_name.strip():
             mother_name = '-'
 
-        # Validate email - send empty string if invalid format
         email = get_value('email', 'email', '')
         if email and not re.match(r'^[^@\s]+@[^@\s]+\.[^@\s]+$', email):
             email = ''
+
+        gender = get_value('gender', 'gender', None)
+        nationality = get_value('nationality', 'nationality', None)
+        relationship = get_value('relationship_type', 'relationshipToHead', None)
 
         api_data = {
             "surveyId": survey_id,
@@ -1309,68 +1473,56 @@ API للاتصال بـ TRRCMS Backend.
             "fatherNameArabic": father_name,
             "motherNameArabic": mother_name,
             "nationalId": get_value('national_id', 'nationalId', ''),
-            "yearOfBirth": year_of_birth,
+            "gender": int(gender) if gender else None,
+            "nationality": int(nationality) if nationality else None,
+            "dateOfBirth": date_of_birth,
             "email": email,
             "mobileNumber": get_value('phone', 'mobileNumber', ''),
             "phoneNumber": get_value('landline', 'phoneNumber', ''),
-            "relationshipToHead": get_value('relationship_type', 'relationshipToHead', '')
+            "relationshipToHead": int(relationship) if relationship else None
         }
-        return api_data
+        return {k: v for k, v in api_data.items() if v is not None}
 
     def _convert_relation_to_api_format(self, relation_data: Dict[str, Any], survey_id: str, unit_id: str) -> Dict[str, Any]:
-        """Convert relation data to API format for linking person to unit."""
-        from datetime import datetime
-
-        relation_type_map = {
-            "owner": 1, "co_owner": 2, "tenant": 3, "occupant": 4,
-            "heir": 5, "guardian": 6, "other": 99
-        }
-
-        contract_type_map = {
-            # Code values (from display_mappings.get_contract_type_options)
-            "lease": 1, "sale": 2, "partnership": 3,
-            # Arabic text (legacy backward compatibility)
-            "عقد إيجار": 1, "عقد بيع": 2, "عقد شراكة": 3,
-        }
-
-        rel_type = relation_data.get('rel_type') or relation_data.get('relationship_type', '')
-        if isinstance(rel_type, str):
-            relation_type_int = relation_type_map.get(rel_type, 99)
-        elif isinstance(rel_type, int):
+        """Convert relation data to API format (LinkPersonToPropertyUnitCommand)."""
+        rel_type = relation_data.get('rel_type') or relation_data.get('relationship_type', 99)
+        if isinstance(rel_type, int):
             relation_type_int = rel_type
         else:
             relation_type_int = 99
 
-        contract_type_str = relation_data.get('contract_type', '')
-        if isinstance(contract_type_str, str):
-            contract_type_int = contract_type_map.get(contract_type_str, 0)
-        elif isinstance(contract_type_str, int):
-            contract_type_int = contract_type_str
+        occupancy_type = relation_data.get('contract_type') or relation_data.get('occupancy_type', None)
+        if isinstance(occupancy_type, int) and occupancy_type > 0:
+            occupancy_type_int = occupancy_type
         else:
-            contract_type_int = 0
-
-        start_date = relation_data.get('start_date', '')
-        if not start_date:
-            start_date = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
-        elif 'T' not in start_date:
-            start_date = f"{start_date}T00:00:00Z"
+            occupancy_type_int = None
 
         ownership_share_pct = relation_data.get('ownership_share', 0)
-        ownership_share_decimal = ownership_share_pct / 100.0 if ownership_share_pct else 0
+        ownership_share_decimal = ownership_share_pct / 100.0 if ownership_share_pct else None
+
+        has_evidence = relation_data.get('has_documents', False)
 
         api_data = {
             "surveyId": survey_id,
             "personId": relation_data.get('person_id', ''),
             "propertyUnitId": unit_id,
             "relationType": relation_type_int,
-            "relationTypeOtherDesc": relation_data.get('relation_type_other_desc', ''),
-            "contractType": contract_type_int,
-            "contractTypeOtherDesc": relation_data.get('contract_type_other_desc', ''),
-            "ownershipShare": ownership_share_decimal,
-            "contractDetails": relation_data.get('evidence_desc', ''),
-            "startDate": start_date,
-            "notes": relation_data.get('notes', '')
+            "hasEvidence": has_evidence,
         }
+
+        if occupancy_type_int:
+            api_data["occupancyType"] = occupancy_type_int
+        if ownership_share_decimal:
+            api_data["ownershipShare"] = ownership_share_decimal
+
+        contract_details = relation_data.get('evidence_desc', '') or relation_data.get('contract_details', '')
+        if contract_details:
+            api_data["contractDetails"] = contract_details
+
+        notes = relation_data.get('notes', '')
+        if notes:
+            api_data["notes"] = notes
+
         return api_data
 
     def _convert_person_to_api_format(self, person_data: Dict[str, Any]) -> Dict[str, Any]:

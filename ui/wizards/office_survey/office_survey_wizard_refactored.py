@@ -177,12 +177,9 @@ class OfficeSurveyWizard(BaseWizard):
 
                 # Call the finalize API
                 logger.info(f"Calling finalize API for survey {survey_id}")
-                print(f"\n[FINALIZE] POST /api/v1/Surveys/office/{survey_id}/finalize")
 
                 try:
                     response = api_service.finalize_survey_status(survey_id)
-
-                    print(f"[FINALIZE] Response: {json.dumps(response, indent=2, ensure_ascii=False, default=str)}")
 
                     # Update context status
                     self.context.status = "finalized"
@@ -1005,12 +1002,9 @@ class OfficeSurveyWizard(BaseWizard):
         current_step = self.navigator.current_index
 
         # ========== Previous Button Logic ==========
-        # Make transparent on first step and ClaimStep (index 4), visible on other steps
-        # ClaimStep: Going back causes crash because OccupancyClaimsStep.on_show()
-        # replaces local persons with API data (camelCase keys), causing KeyError
-        claim_step_index = 4  # ClaimStep is at index 4
-        if current_step == 0 or current_step == claim_step_index:
-            # First step / ClaimStep: make button invisible (transparent) but keep in layout
+        # Make transparent on first step, visible on other steps
+        if current_step == 0:
+            # First step: make button invisible (transparent) but keep in layout
             self.btn_previous.setStyleSheet(self.btn_previous_hidden_style)
             self.btn_previous.setEnabled(False)
             self.btn_previous.setCursor(Qt.ArrowCursor)  # Normal cursor when invisible

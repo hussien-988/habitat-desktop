@@ -60,6 +60,7 @@ AR_TRANSLATIONS = {
     "error.api.forbidden": "ليس لديك صلاحية للوصول.",
     "error.api.not_found": "المورد غير موجود.",
     "error.api.validation": "خطأ في التحقق من البيانات:\n{details}",
+    "error.api.conflict": "تعارض: هذا العنصر موجود مسبقاً.",
     "error.api.server": "خطأ في الخادم. يرجى الاتصال بالدعم الفني.",
     "error.api.unknown": "حدث خطأ غير متوقع. يرجى المحاولة مرة أخرى.",
 
@@ -166,7 +167,20 @@ AR_TRANSLATIONS = {
     "mapping.relation_type.worker": "عامل",
     "mapping.relation_type.other": "أخرى",
 
-    # Contract Types
+    # Contract Types (TenureContractType enum)
+    "mapping.contract_type.full_ownership": "ملكية كاملة",
+    "mapping.contract_type.shared_ownership": "ملكية مشتركة",
+    "mapping.contract_type.long_term_rental": "إيجار طويل الأمد",
+    "mapping.contract_type.short_term_rental": "إيجار قصير الأمد",
+    "mapping.contract_type.informal_tenure": "حيازة غير رسمية",
+    "mapping.contract_type.unauthorized_occupation": "إشغال غير مرخص",
+    "mapping.contract_type.customary_rights": "حقوق عرفية",
+    "mapping.contract_type.inheritance_based": "بناءً على إرث",
+    "mapping.contract_type.hosted_guest": "ضيف مستضاف",
+    "mapping.contract_type.temporary_shelter": "مأوى مؤقت",
+    "mapping.contract_type.government_allocation": "تخصيص حكومي",
+    "mapping.contract_type.usufruct": "حق الانتفاع",
+    "mapping.contract_type.other": "أخرى",
     "mapping.contract_type.lease": "عقد إيجار",
     "mapping.contract_type.sale": "عقد بيع",
     "mapping.contract_type.partnership": "عقد شراكة",
@@ -200,11 +214,68 @@ AR_TRANSLATIONS = {
     "mapping.claim_status.pending": "معلق",
     "mapping.claim_status.draft": "مسودة",
 
-    # Evidence Types
+    # Evidence Types (EvidenceType enum)
+    "mapping.evidence_type.identification_document": "بطاقة هوية",
+    "mapping.evidence_type.ownership_deed": "سند ملكية",
+    "mapping.evidence_type.rental_contract": "عقد إيجار",
+    "mapping.evidence_type.utility_bill": "فاتورة مرافق",
+    "mapping.evidence_type.photo": "صورة",
+    "mapping.evidence_type.official_letter": "رسالة رسمية",
+    "mapping.evidence_type.court_order": "أمر محكمة",
+    "mapping.evidence_type.inheritance_document": "وثيقة ميراث",
+    "mapping.evidence_type.tax_receipt": "إيصال ضريبة",
+    "mapping.evidence_type.other": "أخرى",
     "mapping.evidence_type.deed": "صك",
     "mapping.evidence_type.contract": "عقد",
     "mapping.evidence_type.proxy": "وكالة",
     "mapping.evidence_type.acknowledgment": "إقرار",
+
+    # Occupancy Types (OccupancyType enum)
+    "mapping.occupancy_type.owner_occupied": "إشغال مالك",
+    "mapping.occupancy_type.tenant_occupied": "إشغال مستأجر",
+    "mapping.occupancy_type.family_occupied": "إشغال عائلي",
+    "mapping.occupancy_type.mixed_occupancy": "إشغال مختلط",
+    "mapping.occupancy_type.vacant": "شاغر",
+    "mapping.occupancy_type.temporary_seasonal": "مؤقت/موسمي",
+    "mapping.occupancy_type.commercial_use": "استخدام تجاري",
+    "mapping.occupancy_type.abandoned": "مهجور",
+    "mapping.occupancy_type.disputed": "متنازع عليه",
+    "mapping.occupancy_type.unknown": "غير معروف",
+
+    # Occupancy Nature (OccupancyNature enum)
+    "mapping.occupancy_nature.legal_formal": "قانوني رسمي",
+    "mapping.occupancy_nature.informal": "غير رسمي",
+    "mapping.occupancy_nature.customary": "عرفي",
+    "mapping.occupancy_nature.temporary_emergency": "مؤقت/طوارئ",
+    "mapping.occupancy_nature.authorized": "مرخص",
+    "mapping.occupancy_nature.unauthorized": "غير مرخص",
+    "mapping.occupancy_nature.pending_regularization": "قيد التسوية",
+    "mapping.occupancy_nature.contested": "متنازع عليه",
+    "mapping.occupancy_nature.unknown": "غير معروف",
+
+    # Gender
+    "mapping.gender.male": "ذكر",
+    "mapping.gender.female": "أنثى",
+
+    # Nationality
+    "mapping.nationality.syrian": "سوري",
+    "mapping.nationality.palestinian": "فلسطيني",
+    "mapping.nationality.iraqi": "عراقي",
+    "mapping.nationality.lebanese": "لبناني",
+    "mapping.nationality.jordanian": "أردني",
+    "mapping.nationality.turkish": "تركي",
+    "mapping.nationality.egyptian": "مصري",
+    "mapping.nationality.yemeni": "يمني",
+    "mapping.nationality.sudanese": "سوداني",
+    "mapping.nationality.libyan": "ليبي",
+    "mapping.nationality.somali": "صومالي",
+    "mapping.nationality.afghan": "أفغاني",
+    "mapping.nationality.stateless": "عديم الجنسية",
+    "mapping.nationality.other": "أخرى",
+    "mapping.nationality.unknown": "غير معروف",
+
+    # Relation Type (guest)
+    "mapping.relation_type.guest": "ضيف",
 
     # ===== Wizard - Step Names =====
     "wizard.step.building_registration": "تسجيل بناء",
@@ -302,8 +373,12 @@ AR_TRANSLATIONS = {
     # ===== Household Step =====
     "wizard.household.head_title": "رب الأسرة",
     "wizard.household.subtitle": "تسجيل تفاصيل الاشغال",
-    "wizard.household.head_name_label": "رب الأسرة/العائل",
-    "wizard.household.head_name_placeholder": "اسم الشخص",
+    "wizard.household.occupancy_type": "نوع الإشغال",
+    "wizard.household.type_residential": "سكني",
+    "wizard.household.type_non_residential": "غير سكني",
+    "wizard.household.occupancy_nature": "طبيعة الإشغال",
+    "wizard.household.nature_ownership": "ملكية",
+    "wizard.household.nature_other": "أخرى",
     "wizard.household.members_count": "عدد الأفراد",
     "wizard.household.total_members": "عدد الأفراد",
     "wizard.household.add_notes": "إضافة ملاحظات",
@@ -487,6 +562,8 @@ AR_TRANSLATIONS = {
     "wizard.person_dialog.replace_file": "استبدال",
     "wizard.person_dialog.id_photo_required": "يجب إرفاق صورة الهوية قبل المتابعة",
     "wizard.person_dialog.attach_document": "إرفاق مستند",
+    "wizard.person_dialog.issue_date_title": "تاريخ إصدار المستند",
+    "wizard.person_dialog.upload_partial": "تم رفع {success} مستند(ات)، فشل رفع {failed}",
 
     # ===== Occupancy Details =====
     "wizard.occupation.type": "نوع الإشغال",
@@ -529,6 +606,7 @@ AR_TRANSLATIONS = {
     # Common
     "common.cancel": "إلغاء",
     "common.save": "حفظ",
+    "common.confirm": "تأكيد",
     "common.warning": "تحذير",
 
     # ===== Drafts Page =====

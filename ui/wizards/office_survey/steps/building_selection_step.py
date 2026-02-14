@@ -1143,6 +1143,27 @@ class BuildingSelectionStep(BaseStep):
         if not self._use_api:
             return
 
+        # Guard: skip if survey already created for the SAME building
+        existing_survey_id = self.context.get_data("survey_id")
+        current_building_uuid = getattr(self.selected_building, 'building_uuid', '') or ''
+
+        if existing_survey_id:
+            previous_building = self.context.get_data("survey_building_uuid")
+            if previous_building == current_building_uuid:
+                logger.info(f"Survey already exists ({existing_survey_id}), skipping creation")
+                return
+            else:
+                # Building changed - reset all dependent context data
+                logger.info(f"Building changed ({previous_building} -> {current_building_uuid}), resetting survey context")
+                for key in ("survey_id", "survey_data", "survey_building_uuid",
+                            "unit_linked", "household_id",
+                            "claims_count", "created_claims"):
+                    self.context.update_data(key, None)
+                self.context.persons = []
+                self.context.relations = []
+                self.context.households = []
+                self.context.finalize_response = None
+
         self._set_auth_token()
 
         building_uuid = getattr(self.selected_building, 'building_uuid', '') or ''
@@ -1160,7 +1181,7 @@ class BuildingSelectionStep(BaseStep):
             survey_id = survey_response.get("id") or survey_response.get("surveyId", "")
             self.context.update_data("survey_id", survey_id)
             self.context.update_data("survey_data", survey_response)
-            print(f"[SURVEY] Survey created successfully, survey_id: {survey_id}")
+            self.context.update_data("survey_building_uuid", building_uuid)
             logger.info(f"Survey created successfully, survey_id: {survey_id}")
 
         except Exception as e:
@@ -1181,12 +1202,6 @@ class BuildingSelectionStep(BaseStep):
         )
         self.ui_building_address.setText(address)
         self.address_container.setVisible(True)
-
-    def _set_auth_token(self):
-        """Set auth token for survey API service from main window."""
-        main_window = self.window()
-        if main_window and hasattr(main_window, '_api_token') and main_window._api_token:
-            self._survey_api_service.set_access_token(main_window._api_token)
 
     def _set_building_controller_auth(self):
         """Set auth token for building controller API service."""

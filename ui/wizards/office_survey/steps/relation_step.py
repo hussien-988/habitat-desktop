@@ -540,10 +540,7 @@ class RelationStep(BaseStep):
 
     def _process_claims_via_api(self):
         """Process claims for the survey by calling the API and store response for Step 6."""
-        # Set auth token
-        main_window = self.window()
-        if main_window and hasattr(main_window, '_api_token') and main_window._api_token:
-            self._api_service.set_access_token(main_window._api_token)
+        self._set_auth_token()
 
         survey_id = self.context.get_data("survey_id")
         if not survey_id:
