@@ -309,6 +309,9 @@ AR_TRANSLATIONS = {
     "wizard.confirm.cancel": "هل أنت متأكد من إلغاء المسح؟\nسيتم فقد جميع البيانات المدخلة.",
     "wizard.confirm.cancel_message": "هل أنت متأكد من إلغاء المسح؟\nسيتم فقد جميع البيانات المدخلة.",
     "wizard.confirm.cancel_title": "تأكيد الإلغاء",
+    "wizard.confirm.save_title": "هل تريد الحفظ؟",
+    "wizard.confirm.save_message": "لديك تغييرات غير محفوظة.\nهل تريد حفظها كمسودة؟",
+    "wizard.draft.saved_success": "تم حفظ المسودة بنجاح!",
 
     # ===== Building Selection Step =====
     "wizard.building.card_title": "بيانات البناء",
@@ -404,6 +407,15 @@ AR_TRANSLATIONS = {
     "wizard.household.no_data": "لم يتم تسجيل أي أسرة",
     "wizard.household.head_name": "اسم رب الأسرة",
     "wizard.household.family_size": "عدد أفراد الأسرة",
+    "wizard.household.occupants_title": "الشاغلين",
+    "wizard.household.unit_number": "رقم المقسم",
+    "wizard.household.floor_number": "رقم الطابق",
+    "wizard.household.rooms_count": "عدد الغرف",
+    "wizard.household.unit_area": "مساحة المقسم",
+    "wizard.household.unit_type_label": "نوع المقسم",
+    "wizard.household.unit_status_label": "حالة المقسم",
+    "wizard.household.members_required": "يجب أن يكون عدد أفراد الأسرة أكبر من صفر",
+    "wizard.household.members_mismatch": "تأكد من مطابقة عدد الأفراد",
 
     # ===== Person Step =====
     "wizard.person.card_title": "بيانات الأشخاص",
@@ -539,11 +551,17 @@ AR_TRANSLATIONS = {
     "wizard.person_dialog.enter_first_name": "الرجاء إدخال الاسم الأول",
     "wizard.person_dialog.enter_last_name": "الرجاء إدخال اسم العائلة",
     "wizard.person_dialog.invalid_email": "صيغة البريد الإلكتروني غير صحيحة",
+    "wizard.person_dialog.invalid_email_chars": "البريد الإلكتروني يجب أن يكون بأحرف لاتينية فقط",
+    "wizard.person_dialog.invalid_first_name": "الاسم الأول يجب أن يحتوي على حروف فقط (عربي أو لاتيني)",
+    "wizard.person_dialog.invalid_last_name": "اسم العائلة يجب أن يحتوي على حروف فقط (عربي أو لاتيني)",
+    "wizard.person_dialog.invalid_ownership_share": "نسبة الملكية يجب أن تكون بين 0 و 100",
+    "wizard.person_dialog.invalid_mobile": "رقم الجوال غير صحيح - يجب أن يكون 8 أرقام",
+    "wizard.person_dialog.invalid_landline": "رقم الهاتف الثابت غير صحيح - يجب أن يكون 7 أرقام",
     "wizard.person_dialog.person_saved": "تم حفظ بيانات الشخص بنجاح",
     "wizard.person_dialog.created_no_id": "تم إنشاء الشخص ولكن لم نتمكن من الحصول على معرف الشخص من الاستجابة",
     "wizard.person_dialog.create_failed": "فشل في إنشاء الشخص:\n{error_msg}",
     "wizard.person_dialog.link_failed": "تحذير: فشل في ربط الشخص بالوحدة:\n{error_msg}",
-    "wizard.person_dialog.birth_place": "مكان الولادة",
+    "wizard.person_dialog.link_failed_person_saved": "تم إنشاء الشخص بنجاح لكن فشل ربطه بالوحدة.\nيمكنك تعديل بياناته لاحقاً.",
     "wizard.person_dialog.gender": "الجنس",
     "wizard.person_dialog.nationality": "الجنسية",
     "wizard.person_dialog.nationality_syrian": "سوري",
@@ -563,6 +581,10 @@ AR_TRANSLATIONS = {
     "wizard.person_dialog.id_photo_required": "يجب إرفاق صورة الهوية قبل المتابعة",
     "wizard.person_dialog.attach_document": "إرفاق مستند",
     "wizard.person_dialog.issue_date_title": "تاريخ إصدار المستند",
+    "wizard.person_dialog.date_question_title": "تاريخ إصدار المستندات",
+    "wizard.person_dialog.date_question_subtitle": "لديك {count} مستندات. هل لها نفس تاريخ الإصدار؟",
+    "wizard.person_dialog.same_date": "تاريخ واحد",
+    "wizard.person_dialog.separate_dates": "تواريخ منفصلة",
     "wizard.person_dialog.upload_partial": "تم رفع {success} مستند(ات)، فشل رفع {failed}",
 
     # ===== Occupancy Details =====
@@ -581,6 +603,10 @@ AR_TRANSLATIONS = {
     "wizard.occupancy_claims.delete": "حذف",
     "wizard.occupancy_claims.step_title": "ادعاءات الإشغال",
     "wizard.occupancy_claims.step_description": "إضافة الأشخاص وبيانات العلاقة",
+    "wizard.occupancy_claims.empty_title": "لم يتم إضافة بيانات أفراد بعد",
+    "wizard.occupancy_claims.empty_desc": "يرجى إضافة بيانات الأفراد الشاغلين لهذا المقسم\nبالضغط على زر \"إضافة فرد جديد\" أعلاه",
+    "wizard.claims.no_claims_created": "تمت معالجة المسح ولكن لم يتم إنشاء مطالبات.\n\nالسبب: {reason}",
+    "wizard.claims.process_title": "معالجة المطالبات",
 
     # ===== Unit Dialog =====
     "wizard.unit_dialog.title_add": "أضف معلومات المقسم",

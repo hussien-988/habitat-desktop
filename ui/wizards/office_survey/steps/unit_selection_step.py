@@ -58,6 +58,7 @@ class UnitSelectionStep(BaseStep):
         # Initialize API client for linking units to survey
         self._api_service = get_api_client()
         self._use_api = getattr(Config, 'DATA_PROVIDER', 'local_db') == 'http'
+        self._loaded_building_uuid = None  # Track which building's units are loaded
 
         # Set auth token for API calls if available
         main_window = self.window()
@@ -141,7 +142,7 @@ class UnitSelectionStep(BaseStep):
         # SOLID: Single Responsibility - displays building address only
         self.unit_building_address = QLabel(tr("wizard.unit.address_label"))
         self.unit_building_address.setAlignment(Qt.AlignCenter)
-        self.unit_building_address.setFont(create_font(size=10, weight=FontManager.WEIGHT_REGULAR))
+        self.unit_building_address.setFont(create_font(size=FontManager.WIZARD_CARD_LABEL, weight=FontManager.WEIGHT_REGULAR))
         self.unit_building_address.setStyleSheet("""
             QLabel {
                 border: none;
@@ -175,13 +176,13 @@ class UnitSelectionStep(BaseStep):
             # Label (top)
             label = QLabel(label_text)
             label.setAlignment(Qt.AlignCenter)
-            label.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
+            label.setFont(create_font(size=FontManager.WIZARD_CARD_LABEL, weight=FontManager.WEIGHT_SEMIBOLD))
             label.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent;")
 
             # Value (bottom) - centered under label
             value = QLabel(value_text)
             value.setAlignment(Qt.AlignCenter)
-            value.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))  # Smaller: 9pt
+            value.setFont(create_font(size=FontManager.WIZARD_CARD_VALUE, weight=FontManager.WEIGHT_SEMIBOLD))
             value.setStyleSheet(f"color: {Colors.WIZARD_SUBTITLE}; background: transparent;")
 
             section_layout.addWidget(label)
@@ -284,7 +285,7 @@ class UnitSelectionStep(BaseStep):
         # Increased weight to emphasize title (SemiBold instead of Regular)
         # RTL: Text ends at the same point as subtitle, but starts further right
         self._title_label = QLabel("اختر مقسما")
-        self._title_label.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
+        self._title_label.setFont(create_font(size=FontManager.WIZARD_STEP_TITLE, weight=FontManager.WEIGHT_SEMIBOLD))
         self._title_label.setStyleSheet("""
             QLabel {
                 color: #1A1F1D;
@@ -298,7 +299,7 @@ class UnitSelectionStep(BaseStep):
 
         # Subtitle with same font size, different color
         self._subtitle_label = QLabel("اختر مقسما او سجل معلومات مقسم جديد")
-        self._subtitle_label.setFont(create_font(size=10, weight=FontManager.WEIGHT_REGULAR))
+        self._subtitle_label.setFont(create_font(size=FontManager.WIZARD_STEP_SUBTITLE, weight=FontManager.WEIGHT_REGULAR))
         self._subtitle_label.setStyleSheet("""
             QLabel {
                 color: #86909B;
@@ -427,7 +428,7 @@ class UnitSelectionStep(BaseStep):
         # Title
         title_label = QLabel("لا توجد مقاسم مسجلة بعد")
         title_label.setAlignment(Qt.AlignCenter)
-        title_label.setFont(create_font(size=14, weight=FontManager.WEIGHT_BOLD))
+        title_label.setFont(create_font(size=FontManager.WIZARD_EMPTY_TITLE, weight=FontManager.WEIGHT_BOLD))
         title_label.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent;")
 
         # Description
@@ -436,7 +437,7 @@ class UnitSelectionStep(BaseStep):
             "\"اضف مقسما\" أعلاه"
         )
         desc_label.setAlignment(Qt.AlignCenter)
-        desc_label.setFont(create_font(size=11, weight=FontManager.WEIGHT_REGULAR))
+        desc_label.setFont(create_font(size=FontManager.WIZARD_EMPTY_DESC, weight=FontManager.WEIGHT_REGULAR))
         desc_label.setStyleSheet(f"color: {Colors.WIZARD_SUBTITLE}; background: transparent;")
 
         center_layout.addWidget(icon_container, alignment=Qt.AlignCenter)
@@ -450,6 +451,7 @@ class UnitSelectionStep(BaseStep):
     def _load_units(self):
         """Load units for the selected building and display as cards."""
         if not self.context.building:
+            self._loaded_building_uuid = None
             # Clear all units when no building is selected (new wizard)
             self.unit_building_frame.setVisible(False)
             # Clear existing unit cards
@@ -463,6 +465,13 @@ class UnitSelectionStep(BaseStep):
             # Clear selected unit
             self.selected_unit = None
             self.emit_validation_changed(False)
+            return
+
+        building_uuid = self.context.building.building_uuid
+
+        # Guard: skip if same building's units already loaded
+        if building_uuid and self._loaded_building_uuid == building_uuid:
+            logger.info(f"Units already loaded for building {building_uuid}, skipping fetch")
             return
 
         # Populate building info card
@@ -498,7 +507,6 @@ class UnitSelectionStep(BaseStep):
                 child.widget().deleteLater()
 
         # Load units for THIS building only
-        building_uuid = self.context.building.building_uuid
         logger.info(f"Loading units for building: {building_uuid}")
         result = self.unit_controller.get_units_for_building(building_uuid)
 
@@ -531,6 +539,9 @@ class UnitSelectionStep(BaseStep):
 
         self.units_layout.addStretch()
 
+        # Mark building as loaded to prevent redundant fetches
+        self._loaded_building_uuid = building_uuid
+
     def _to_arabic_numerals(self, text: str) -> str:
         """
         DRY: Convert English/Latin numerals to Arabic-Indic numerals.
@@ -562,12 +573,12 @@ class UnitSelectionStep(BaseStep):
 
         if is_title:
             # Title style - center-aligned
-            label.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))  # Smaller: 9pt
+            label.setFont(create_font(size=FontManager.WIZARD_FIELD_LABEL, weight=FontManager.WEIGHT_SEMIBOLD))
             label.setStyleSheet("color: #1A1F1D;")
             label.setAlignment(Qt.AlignCenter)
         else:
             # Value style - center-aligned (directly under label)
-            label.setFont(create_font(size=9, weight=FontManager.WEIGHT_REGULAR))  # Smaller: 9pt
+            label.setFont(create_font(size=FontManager.WIZARD_FIELD_VALUE, weight=FontManager.WEIGHT_REGULAR))
             label.setStyleSheet("color: #86909B;")
             label.setAlignment(Qt.AlignCenter)
 
@@ -587,7 +598,7 @@ class UnitSelectionStep(BaseStep):
         unit_display_num = unit.unit_number or unit.apartment_number or "?"
 
         # Check if this is the selected unit
-        is_selected = self.context.unit and self.context.unit.unit_id == unit.unit_id
+        is_selected = bool(self.context.unit and self.context.unit.unit_id == unit.unit_id)
 
         # Create card frame - Figma: 1225×138
         card = QFrame()
@@ -633,6 +644,7 @@ class UnitSelectionStep(BaseStep):
 
         card.setCursor(Qt.PointingHandCursor)
         card.mousePressEvent = lambda _: self._on_unit_card_clicked(unit)
+        card.setProperty("unit_id", unit.unit_id)
         card.setLayoutDirection(Qt.RightToLeft)
 
         # Main layout - Figma: padding 12px all sides
@@ -718,7 +730,7 @@ class UnitSelectionStep(BaseStep):
 
         # Title: وصف المقسم
         desc_title = QLabel("وصف المقسم")
-        desc_title.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))  # Smaller: 9pt
+        desc_title.setFont(create_font(size=FontManager.WIZARD_FIELD_LABEL, weight=FontManager.WEIGHT_SEMIBOLD))
         desc_title.setStyleSheet("color: #1A1F1D;")
         desc_title.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)  # Left in RTL = Right visually
 
@@ -726,7 +738,7 @@ class UnitSelectionStep(BaseStep):
         # Description text (user-entered OR placeholder)
         desc_text_content = unit.property_description if unit.property_description else tr("wizard.unit.property_description_placeholder")
         desc_text = QLabel(desc_text_content)
-        desc_text.setFont(create_font(size=9, weight=FontManager.WEIGHT_REGULAR))  # Smaller: 9pt
+        desc_text.setFont(create_font(size=FontManager.WIZARD_FIELD_VALUE, weight=FontManager.WEIGHT_REGULAR))
         desc_text.setStyleSheet("color: #86909B;")
         desc_text.setAlignment(Qt.AlignLeft | Qt.AlignTop)  # Left in RTL = Right visually
         
@@ -737,14 +749,58 @@ class UnitSelectionStep(BaseStep):
         desc_layout.addWidget(desc_text)
         main_layout.addLayout(desc_layout)
 
-        # Checkmark for selected item
-        if is_selected:
-            check_label = QLabel("✓")
-            check_label.setStyleSheet("color: #3498db; font-size: 18px; font-weight: bold; border: none;")
-            check_label.setAlignment(Qt.AlignLeft)
-            main_layout.addWidget(check_label)
+        # Checkmark for selected item (always created, visibility toggled)
+        check_label = QLabel("✓")
+        check_label.setObjectName("checkLabel")
+        check_label.setStyleSheet("color: #3498db; font-size: 18px; font-weight: bold; border: none;")
+        check_label.setAlignment(Qt.AlignLeft)
+        check_label.setVisible(is_selected)
+        main_layout.addWidget(check_label)
 
         return card
+
+    def _refresh_unit_card_styles(self):
+        """Update selection highlight and checkmark on existing cards without API re-fetch."""
+        selected_id = self.context.unit.unit_id if self.context.unit else None
+        for i in range(self.units_layout.count()):
+            item = self.units_layout.itemAt(i)
+            if not item:
+                continue
+            card = item.widget()
+            if not card or not isinstance(card, QFrame) or card.objectName() != "unitCard":
+                continue
+            unit_id = card.property("unit_id")
+            is_selected = (unit_id == selected_id)
+            if is_selected:
+                card.setStyleSheet("""
+                    QFrame#unitCard {
+                        background-color: #f0f7ff;
+                        border: 2px solid #3498db;
+                        border-radius: 10px;
+                    }
+                    QFrame#unitCard QLabel {
+                        border: none;
+                    }
+                """)
+            else:
+                card.setStyleSheet("""
+                    QFrame#unitCard {
+                        background-color: white;
+                        border: 1px solid #e0e0e0;
+                        border-radius: 10px;
+                    }
+                    QFrame#unitCard:hover {
+                        border-color: #3498db;
+                        background-color: #f9fbfd;
+                    }
+                    QFrame#unitCard QLabel {
+                        border: none;
+                    }
+                """)
+            # Toggle checkmark visibility
+            check_label = card.findChild(QLabel, "checkLabel")
+            if check_label:
+                check_label.setVisible(is_selected)
 
     def _on_unit_card_clicked(self, unit):
         """Handle unit card click with toggle functionality."""
@@ -754,8 +810,8 @@ class UnitSelectionStep(BaseStep):
             self.context.unit = None
             self.context.is_new_unit = False
             self.selected_unit = None
-            # Refresh cards to remove selection highlight
-            self._load_units()
+            # Update card styles without re-fetching from API
+            self._refresh_unit_card_styles()
             # Emit validation changed (no unit selected = invalid)
             self.emit_validation_changed(False)
             logger.info(f"Unit deselected: {unit.unit_id}")
@@ -764,8 +820,8 @@ class UnitSelectionStep(BaseStep):
             self.context.unit = unit
             self.context.is_new_unit = False
             self.selected_unit = unit
-            # Refresh cards to show selection
-            self._load_units()
+            # Update card styles without re-fetching from API
+            self._refresh_unit_card_styles()
             # Emit validation changed (unit selected = valid)
             self.emit_validation_changed(True)
             logger.info(f"Unit selected: {unit.unit_id}")
@@ -805,6 +861,8 @@ class UnitSelectionStep(BaseStep):
                     logger.info(f"Using API-generated unit UUID: {api_uuid}")
                     self.context.new_unit_data['unit_uuid'] = api_uuid
 
+            # Reset guard to force re-fetch (new unit was created on server)
+            self._loaded_building_uuid = None
             # Refresh units list to show the newly created unit
             self._load_units()
 
@@ -820,7 +878,7 @@ class UnitSelectionStep(BaseStep):
                             self.context.is_new_unit = False  # Now it's a real API unit
                             self.selected_unit = unit
                             logger.info(f"Auto-selected newly created unit: {unit.unit_uuid}")
-                            self._load_units()  # Refresh to show selection highlight
+                            self._refresh_unit_card_styles()  # Update highlight without re-fetch
                             break
 
             # Enable next button
@@ -835,6 +893,7 @@ class UnitSelectionStep(BaseStep):
         self.add_unit_btn.setText(tr("wizard.unit.add_button"))
         # Reload unit cards with new language
         if self.context.building:
+            self._loaded_building_uuid = None  # Force re-render with new language
             self._load_units()
 
     def validate(self) -> StepValidationResult:
@@ -867,8 +926,16 @@ class UnitSelectionStep(BaseStep):
                 if previous_unit_id == current_unit_id:
                     logger.info(f"Unit already linked ({current_unit_id}), skipping")
                 else:
-                    # Unit changed - reset dependent data (household, persons, relations, claims)
+                    # Unit changed - cleanup API data before resetting local context
                     logger.info(f"Unit changed ({previous_unit_id} -> {current_unit_id}), resetting dependent data")
+                    old_household_id = self.context.get_data("household_id")
+                    old_survey_id = self.context.get_data("survey_id")
+                    if old_household_id and old_survey_id and self._use_api:
+                        try:
+                            self._api_service.delete_household(old_household_id, old_survey_id)
+                            logger.info(f"Old household {old_household_id} deleted from API on unit change")
+                        except Exception as e:
+                            logger.warning(f"Failed to delete old household {old_household_id}: {e}")
                     for key in ("unit_linked", "linked_unit_uuid", "household_id",
                                 "claims_count", "created_claims"):
                         self.context.update_data(key, None)
@@ -917,15 +984,12 @@ class UnitSelectionStep(BaseStep):
 
     def on_show(self):
         """Called when step is shown."""
-        super().on_show()
-
-        # Set auth token for API calls if available (may not be set in __init__)
+        # Set auth token before populate_data (called by super) loads units
         main_window = self.window()
         if main_window and hasattr(main_window, '_api_token') and main_window._api_token:
             self.unit_controller.set_auth_token(main_window._api_token)
 
-        # Reload units when step is shown
-        self._load_units()
+        super().on_show()
 
     def get_step_title(self) -> str:
         """Get step title."""

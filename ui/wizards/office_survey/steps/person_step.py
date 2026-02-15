@@ -96,11 +96,11 @@ class PersonStep(BaseStep):
         title_vbox.setSpacing(1)  # Match Step 1 spacing
         self._title_label = QLabel(tr("wizard.person.card_title"))
         # Title: 14px from Figma = 10pt, weight 600, color WIZARD_TITLE (matching Step 1)
-        self._title_label.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
+        self._title_label.setFont(create_font(size=FontManager.WIZARD_STEP_TITLE, weight=FontManager.WEIGHT_SEMIBOLD))
         self._title_label.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent;")
         self._subtitle_label = QLabel(tr("wizard.person.subtitle"))
         # Subtitle: 14px from Figma = 10pt, weight 400, color WIZARD_SUBTITLE (matching Step 1)
-        self._subtitle_label.setFont(create_font(size=10, weight=FontManager.WEIGHT_REGULAR))
+        self._subtitle_label.setFont(create_font(size=FontManager.WIZARD_STEP_SUBTITLE, weight=FontManager.WEIGHT_REGULAR))
         self._subtitle_label.setStyleSheet(f"color: {Colors.WIZARD_SUBTITLE}; background: transparent;")
         self._subtitle_label.setAlignment(Qt.AlignRight)
         title_vbox.addWidget(self._title_label)
@@ -134,7 +134,7 @@ class PersonStep(BaseStep):
         # Add button on the left (appears last in RTL) - matching Step 1 styling
         self._add_person_btn = QPushButton(tr("wizard.person.add_button"))
         self._add_person_btn.setLayoutDirection(Qt.RightToLeft)
-        self._add_person_btn.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
+        self._add_person_btn.setFont(create_font(size=FontManager.SIZE_BODY, weight=FontManager.WEIGHT_SEMIBOLD))
         self._add_person_btn.setStyleSheet(f"""
             QPushButton {{
                 background-color: {Colors.SURFACE};
@@ -272,14 +272,14 @@ class PersonStep(BaseStep):
         # Person name - matching Step 1 title font
         full_name = f"{person['first_name']} {person.get('father_name', '')} {person['last_name']}".strip()
         name_lbl = QLabel(full_name)
-        name_lbl.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
+        name_lbl.setFont(create_font(size=FontManager.WIZARD_CARD_LABEL, weight=FontManager.WEIGHT_SEMIBOLD))
         name_lbl.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent;")
         name_lbl.setAlignment(Qt.AlignRight)
 
         # Person role/status - matching Step 1 subtitle font
         role_text = get_relation_type_display(person.get('relationship_type', ''))
         role_lbl = QLabel(role_text)
-        role_lbl.setFont(create_font(size=10, weight=FontManager.WEIGHT_REGULAR))
+        role_lbl.setFont(create_font(size=FontManager.WIZARD_CARD_VALUE, weight=FontManager.WEIGHT_REGULAR))
         role_lbl.setStyleSheet(f"color: {Colors.WIZARD_SUBTITLE}; background: transparent;")
         #role_lbl.setAlignment(Qt.AlignRight)
 

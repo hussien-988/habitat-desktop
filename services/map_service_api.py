@@ -538,20 +538,15 @@ class MapServiceAPI:
         try:
             logger.info(f"Getting building with polygon: {building_id}")
 
-            # API expects UUID - try direct call first
-            response = self.api.get_building_by_id(building_id)
+            # API expects UUID - returns building data directly
+            data = self.api.get_building_by_id(building_id)
 
-            if not response or not response.get("success"):
+            if not data:
                 logger.error(f"Failed to get building {building_id}")
                 return None
 
-            data = response.get("data")
-            if not data:
-                logger.warning(f"No data returned for building {building_id}")
-                return None
-
-            building_uuid = data.get("buildingUuid", "")
-            building_code = data.get("buildingCode") or data.get("buildingId", "")
+            building_uuid = data.get("id") or data.get("buildingUuid", "")
+            building_code = data.get("buildingId") or data.get("buildingCode", "")
             geo_location = data.get("geoLocation") or data.get("buildingGeometryWkt")
 
             # Extract codes

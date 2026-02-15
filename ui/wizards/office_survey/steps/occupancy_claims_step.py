@@ -77,10 +77,10 @@ class OccupancyClaimsStep(BaseStep):
         title_vbox = QVBoxLayout()
         title_vbox.setSpacing(1)
         self._title_label = QLabel(tr("wizard.occupancy_claims.title"))
-        self._title_label.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
+        self._title_label.setFont(create_font(size=FontManager.WIZARD_STEP_TITLE, weight=FontManager.WEIGHT_SEMIBOLD))
         self._title_label.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent;")
         self._subtitle_label = QLabel(tr("wizard.occupancy_claims.subtitle"))
-        self._subtitle_label.setFont(create_font(size=10, weight=FontManager.WEIGHT_REGULAR))
+        self._subtitle_label.setFont(create_font(size=FontManager.WIZARD_STEP_SUBTITLE, weight=FontManager.WEIGHT_REGULAR))
         self._subtitle_label.setStyleSheet(f"color: {Colors.WIZARD_SUBTITLE}; background: transparent;")
         self._subtitle_label.setAlignment(Qt.AlignRight)
         title_vbox.addWidget(self._title_label)
@@ -206,18 +206,15 @@ class OccupancyClaimsStep(BaseStep):
                 icon_container.setStyleSheet(icon_container.styleSheet() + "font-size: 28px; color: #1a1a1a;")
 
         # Title
-        title_label = QLabel("لم يتم إضافة بيانات أفراد بعد")
+        title_label = QLabel(tr("wizard.occupancy_claims.empty_title"))
         title_label.setAlignment(Qt.AlignCenter)
-        title_label.setFont(create_font(size=14, weight=FontManager.WEIGHT_BOLD))
+        title_label.setFont(create_font(size=FontManager.WIZARD_EMPTY_TITLE, weight=FontManager.WEIGHT_BOLD))
         title_label.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent;")
 
         # Description
-        desc_label = QLabel(
-            "يرجى إضافة بيانات الأفراد الشاغلين لهذا المقسم\n"
-            "بالضغط على زر \"إضافة فرد جديد\" أعلاه"
-        )
+        desc_label = QLabel(tr("wizard.occupancy_claims.empty_desc"))
         desc_label.setAlignment(Qt.AlignCenter)
-        desc_label.setFont(create_font(size=11, weight=FontManager.WEIGHT_REGULAR))
+        desc_label.setFont(create_font(size=FontManager.WIZARD_EMPTY_DESC, weight=FontManager.WEIGHT_REGULAR))
         desc_label.setStyleSheet(f"color: {Colors.WIZARD_SUBTITLE}; background: transparent;")
 
         center_layout.addWidget(icon_container, alignment=Qt.AlignCenter)
@@ -262,10 +259,18 @@ class OccupancyClaimsStep(BaseStep):
 
         if dialog.exec_() == QDialog.Accepted:
             person_data = dialog.get_person_data()
-            person_data['person_id'] = str(uuid.uuid4())
+            api_id = dialog.get_api_person_id()
+            if api_id:
+                person_data['person_id'] = api_id
+            elif not person_data.get('person_id'):
+                person_data['person_id'] = str(uuid.uuid4())
+            rel_id = dialog.get_api_relation_id()
+            if rel_id:
+                person_data['_relation_id'] = rel_id
             self.context.persons.append(person_data)
+            self.context.finalize_response = None
             self._refresh_persons_list()
-            logger.info(f"Person added: {person_data['first_name']} {person_data['last_name']}")
+            logger.info(f"Person added: {person_data['first_name']} {person_data['last_name']} (id={person_data['person_id']})")
 
     def _view_person(self, person_id: str):
         """Show PersonDialog to view/edit a person."""
@@ -296,7 +301,17 @@ class OccupancyClaimsStep(BaseStep):
         if dialog.exec_() == QDialog.Accepted:
             updated_data = dialog.get_person_data()
             updated_data['person_id'] = person_id
+            if self._use_api and person_id:
+                try:
+                    self._set_auth_token()
+                    self._api_service.update_person(person_id, updated_data)
+                    logger.info(f"Person {person_id} updated via API")
+                except Exception as e:
+                    logger.error(f"Failed to update person via API: {e}")
+                    ErrorHandler.show_error(self, map_exception(e), tr("common.error"))
+                    return
             self.context.persons[person_index] = updated_data
+            self.context.finalize_response = None
             self._refresh_persons_list()
             logger.info(f"Person updated: {updated_data['first_name']} {updated_data['last_name']}")
 
@@ -320,9 +335,20 @@ class OccupancyClaimsStep(BaseStep):
             ):
                 return
 
+        if self._use_api and person_id:
+            try:
+                self._set_auth_token()
+                self._api_service.delete_person(person_id)
+                logger.info(f"Person {person_id} deleted from API")
+            except Exception as e:
+                logger.error(f"Failed to delete person from API: {e}")
+                ErrorHandler.show_error(self, map_exception(e), tr("common.error"))
+                return
+
         self.context.persons = [p for p in self.context.persons if p['person_id'] != person_id]
+        self.context.finalize_response = None
         self._refresh_persons_list()
-        logger.info("Person deleted")
+        logger.info(f"Person {person_id} deleted")
 
     def _create_person_row_card(self, person: dict, index: int = 0) -> QFrame:
         """Create a person row card with name, role, and action menu."""
@@ -372,7 +398,7 @@ class OccupancyClaimsStep(BaseStep):
 
         full_name = f"{person['first_name']} {person.get('father_name', '')} {person['last_name']}".strip()
         name_lbl = QLabel(full_name)
-        name_lbl.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
+        name_lbl.setFont(create_font(size=FontManager.WIZARD_CARD_LABEL, weight=FontManager.WEIGHT_SEMIBOLD))
         name_lbl.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent;")
         name_lbl.setAlignment(Qt.AlignRight)
 
@@ -380,7 +406,7 @@ class OccupancyClaimsStep(BaseStep):
         role_key = person.get('person_role') or person.get('relationship_type', '')
         role_text = get_relation_type_display(role_key)
         role_lbl = QLabel(role_text)
-        role_lbl.setFont(create_font(size=10, weight=FontManager.WEIGHT_REGULAR))
+        role_lbl.setFont(create_font(size=FontManager.WIZARD_CARD_VALUE, weight=FontManager.WEIGHT_REGULAR))
         role_lbl.setStyleSheet(f"color: {Colors.WIZARD_SUBTITLE}; background: transparent;")
 
         text_vbox.addWidget(name_lbl)
@@ -521,13 +547,15 @@ class OccupancyClaimsStep(BaseStep):
         survey_id = self.context.get_data("survey_id")
         if not survey_id:
             logger.warning("No survey_id found in context. Skipping process-claims.")
-            ErrorHandler.show_warning(self, "No survey_id found in context!", "Error")
+            ErrorHandler.show_warning(self, tr("wizard.error.no_survey_id"), tr("common.error"))
             return
 
         logger.info(f"Processing claims for survey {survey_id}")
 
+        # Only send notes on first finalization to prevent duplication
+        already_finalized = self.context.get_data("_survey_finalized_once")
         process_options = {
-            "finalNotes": "Survey completed from office wizard",
+            "finalNotes": "" if already_finalized else "Survey completed from office wizard",
             "durationMinutes": 10,
             "autoCreateClaim": True
         }
@@ -536,6 +564,7 @@ class OccupancyClaimsStep(BaseStep):
             api_data = self._api_service.finalize_office_survey(survey_id, process_options)
             logger.info(f"Survey {survey_id} claims processed successfully")
             self.context.finalize_response = api_data
+            self.context.update_data("_survey_finalized_once", True)
 
             claims_count = api_data.get("claimsCreatedCount", 0)
             created_claims = api_data.get("createdClaims", [])
@@ -556,8 +585,8 @@ class OccupancyClaimsStep(BaseStep):
                 logger.warning(f"Claim not created. Reason: {reason}")
                 ErrorHandler.show_warning(
                     self,
-                    f"Survey processed but no claims created.\n\nReason: {reason}",
-                    "Process Claims"
+                    tr("wizard.claims.no_claims_created", reason=reason),
+                    tr("wizard.claims.process_title")
                 )
 
         except Exception as e:

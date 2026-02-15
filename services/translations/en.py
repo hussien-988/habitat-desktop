@@ -309,6 +309,9 @@ EN_TRANSLATIONS = {
     "wizard.confirm.cancel": "Are you sure you want to cancel the survey?\nAll entered data will be lost.",
     "wizard.confirm.cancel_message": "Are you sure you want to cancel the survey?\nAll entered data will be lost.",
     "wizard.confirm.cancel_title": "Confirm Cancel",
+    "wizard.confirm.save_title": "Save Changes?",
+    "wizard.confirm.save_message": "You have unsaved changes.\nWould you like to save them as a draft?",
+    "wizard.draft.saved_success": "Draft saved successfully!",
 
     # ===== Building Selection Step =====
     "wizard.building.card_title": "Building Data",
@@ -404,6 +407,15 @@ EN_TRANSLATIONS = {
     "wizard.household.no_data": "No household registered",
     "wizard.household.head_name": "Head of Household Name",
     "wizard.household.family_size": "Family Size",
+    "wizard.household.occupants_title": "Occupants",
+    "wizard.household.unit_number": "Unit Number",
+    "wizard.household.floor_number": "Floor Number",
+    "wizard.household.rooms_count": "Rooms Count",
+    "wizard.household.unit_area": "Unit Area",
+    "wizard.household.unit_type_label": "Unit Type",
+    "wizard.household.unit_status_label": "Unit Status",
+    "wizard.household.members_required": "Number of household members must be greater than zero",
+    "wizard.household.members_mismatch": "Ensure member count matches the details",
 
     # ===== Person Step =====
     "wizard.person.card_title": "Persons Data",
@@ -539,11 +551,17 @@ EN_TRANSLATIONS = {
     "wizard.person_dialog.enter_first_name": "Please enter the first name",
     "wizard.person_dialog.enter_last_name": "Please enter the last name",
     "wizard.person_dialog.invalid_email": "Invalid email format",
+    "wizard.person_dialog.invalid_email_chars": "Email must contain only Latin characters",
+    "wizard.person_dialog.invalid_first_name": "First name must contain only letters (Arabic or Latin)",
+    "wizard.person_dialog.invalid_last_name": "Last name must contain only letters (Arabic or Latin)",
+    "wizard.person_dialog.invalid_ownership_share": "Ownership share must be between 0 and 100",
+    "wizard.person_dialog.invalid_mobile": "Invalid mobile number - must be exactly 8 digits",
+    "wizard.person_dialog.invalid_landline": "Invalid landline number - must be exactly 7 digits",
     "wizard.person_dialog.person_saved": "Person data saved successfully",
     "wizard.person_dialog.created_no_id": "Person created but could not get person ID from response",
     "wizard.person_dialog.create_failed": "Failed to create person:\n{error_msg}",
     "wizard.person_dialog.link_failed": "Warning: Failed to link person to unit:\n{error_msg}",
-    "wizard.person_dialog.birth_place": "Birth Place",
+    "wizard.person_dialog.link_failed_person_saved": "Person created successfully but linking to unit failed.\nYou can edit their data later.",
     "wizard.person_dialog.gender": "Gender",
     "wizard.person_dialog.nationality": "Nationality",
     "wizard.person_dialog.nationality_syrian": "Syrian",
@@ -563,6 +581,10 @@ EN_TRANSLATIONS = {
     "wizard.person_dialog.id_photo_required": "ID photo is required before proceeding",
     "wizard.person_dialog.attach_document": "Attach Document",
     "wizard.person_dialog.issue_date_title": "Document Issue Date",
+    "wizard.person_dialog.date_question_title": "Document Issue Date",
+    "wizard.person_dialog.date_question_subtitle": "You have {count} documents. Do they share the same issue date?",
+    "wizard.person_dialog.same_date": "Same date",
+    "wizard.person_dialog.separate_dates": "Separate dates",
     "wizard.person_dialog.upload_partial": "{success} document(s) uploaded, {failed} failed",
 
     # ===== Occupancy Details =====
@@ -581,6 +603,10 @@ EN_TRANSLATIONS = {
     "wizard.occupancy_claims.delete": "Delete",
     "wizard.occupancy_claims.step_title": "Occupancy Claims",
     "wizard.occupancy_claims.step_description": "Add persons and relation data",
+    "wizard.occupancy_claims.empty_title": "No persons added yet",
+    "wizard.occupancy_claims.empty_desc": "Please add the occupants data for this unit\nby clicking the \"Add New Person\" button above",
+    "wizard.claims.no_claims_created": "Survey processed but no claims created.\n\nReason: {reason}",
+    "wizard.claims.process_title": "Process Claims",
 
     # ===== Unit Dialog =====
     "wizard.unit_dialog.title_add": "Add Property Unit Information",

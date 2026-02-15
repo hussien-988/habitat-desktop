@@ -147,9 +147,6 @@ class UnitDialog(QDialog):
 
         # نوع المقسم (يمين في RTL = أول عنصر)
         self.unit_type_combo = QComboBox()
-        self.unit_type_combo.setEditable(True)
-        self.unit_type_combo.lineEdit().setReadOnly(True)
-        self.unit_type_combo.lineEdit().setAlignment(Qt.AlignRight)
         self.unit_type_combo.setStyleSheet(self._combo_style())
         self.unit_type_combo.setFixedHeight(40)
         self.unit_type_combo.addItem(tr("wizard.unit_dialog.select"), 0)
@@ -159,9 +156,6 @@ class UnitDialog(QDialog):
 
         # حالة المقسم (يسار في RTL = ثاني عنصر)
         self.unit_status_combo = QComboBox()
-        self.unit_status_combo.setEditable(True)
-        self.unit_status_combo.lineEdit().setReadOnly(True)
-        self.unit_status_combo.lineEdit().setAlignment(Qt.AlignRight)
         self.unit_status_combo.setStyleSheet(self._combo_style())
         self.unit_status_combo.setFixedHeight(40)
         self.unit_status_combo.addItem(tr("wizard.unit_dialog.select"), 0)
@@ -222,7 +216,7 @@ class UnitDialog(QDialog):
                 border: 1px solid #E1E8ED;
                 border-radius: 8px;
                 background-color: #F8FAFF;
-                font-size: 12px;
+                font-size: 14px;
                 color: #6B7280;
             }
             QTextEdit:focus {
@@ -484,14 +478,6 @@ class UnitDialog(QDialog):
                 width: 12px;
                 height: 12px;
             }}
-            QComboBox QLineEdit {{
-                background-color: transparent;
-                border: none;
-                padding-right: 8px;
-                color: #9CA3AF;
-                font-size: 14px;
-                font-weight: 600;
-            }}
             QComboBox QAbstractItemView {{
                 font-size: 14px;
                 background-color: white;
@@ -509,7 +495,7 @@ class UnitDialog(QDialog):
                 border: 1px solid #E1E8ED;
                 border-radius: 8px;
                 background-color: #F8FAFF;
-                font-size: 13px;
+                font-size: 14px;
             }
             QLineEdit:focus {
                 border-color: #3890DF;
@@ -525,7 +511,7 @@ class UnitDialog(QDialog):
                 border: 2px solid #e74c3c;
                 border-radius: 8px;
                 background-color: #FFF5F5;
-                font-size: 13px;
+                font-size: 14px;
             }
             QLineEdit:focus {
                 border-color: #e74c3c;

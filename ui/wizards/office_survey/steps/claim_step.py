@@ -140,7 +140,7 @@ class ClaimStep(BaseStep):
         # 2. Main Title (Arabic Text)
         title_label = QLabel("لا توجد مطالبة ملكية على هذا المقسم")
         title_label.setAlignment(Qt.AlignCenter)
-        title_label.setFont(create_font(size=14, weight=FontManager.WEIGHT_BOLD))
+        title_label.setFont(create_font(size=FontManager.WIZARD_EMPTY_TITLE, weight=FontManager.WEIGHT_BOLD))
         title_label.setStyleSheet(f"""
             color: {Colors.WIZARD_TITLE};
             background: transparent;
@@ -152,7 +152,7 @@ class ClaimStep(BaseStep):
             "مطالبة، وسيُعتبر العقار بدون أي مطالبات معلّقة"
         )
         desc_label.setAlignment(Qt.AlignCenter)
-        desc_label.setFont(create_font(size=11, weight=FontManager.WEIGHT_REGULAR))
+        desc_label.setFont(create_font(size=FontManager.WIZARD_EMPTY_DESC, weight=FontManager.WEIGHT_REGULAR))
         desc_label.setStyleSheet(f"""
             color: {Colors.WIZARD_SUBTITLE};
             background: transparent;
@@ -197,11 +197,11 @@ class ClaimStep(BaseStep):
         title_vbox = QVBoxLayout()
         title_vbox.setSpacing(1)
         title_label = QLabel("تسجيل الحالة")
-        title_label.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
+        title_label.setFont(create_font(size=FontManager.WIZARD_STEP_TITLE, weight=FontManager.WEIGHT_SEMIBOLD))
         title_label.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent;")
 
         subtitle_label = QLabel("ربط المطالبين بالوحدات العقارية وتتبع مطالبات تسجيل حقوق الحيازة")
-        subtitle_label.setFont(create_font(size=10, weight=FontManager.WEIGHT_REGULAR))
+        subtitle_label.setFont(create_font(size=FontManager.WIZARD_STEP_SUBTITLE, weight=FontManager.WEIGHT_REGULAR))
         subtitle_label.setStyleSheet(f"color: {Colors.WIZARD_SUBTITLE}; background: transparent;")
         subtitle_label.setAlignment(Qt.AlignRight)
         title_vbox.addWidget(title_label)
@@ -243,15 +243,16 @@ class ClaimStep(BaseStep):
             v = QVBoxLayout()
             v.setSpacing(4)
             lbl = QLabel(label_text)
-            lbl.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
+            lbl.setFont(create_font(size=FontManager.WIZARD_CARD_LABEL, weight=FontManager.WEIGHT_SEMIBOLD))
             lbl.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent;")
             v.addWidget(lbl)
             v.addWidget(field_widget)
             grid.addLayout(v, row, col)
 
-        # Read-only field styles (display only, unified #f0f7ff background)
+        # Field styles
         from app.config import Config
         ro_bg = "#f0f7ff"
+        edit_bg = "#ffffff"
         down_img = str(Config.IMAGES_DIR / "down.png").replace("\\", "/")
 
         ro_input_style = f"""
@@ -266,12 +267,12 @@ class ClaimStep(BaseStep):
                 max-height: 23px;
             }}
         """
-        ro_combo_style = f"""
+        edit_combo_style = f"""
             QComboBox {{
                 border: 1px solid #E0E6ED;
                 border-radius: 8px;
                 padding: 10px;
-                background-color: {ro_bg};
+                background-color: {edit_bg};
                 color: #333;
                 font-size: 14px;
                 min-height: 23px;
@@ -300,12 +301,18 @@ class ClaimStep(BaseStep):
                 max-height: 23px;
             }}
         """
-
-        def make_combo_readonly(combo):
-            """Block combo popup and wheel to make it display-only."""
-            combo.showPopup = lambda: None
-            combo.wheelEvent = lambda e: e.ignore()
-            combo.setFocusPolicy(Qt.NoFocus)
+        edit_date_style = f"""
+            QDateEdit {{
+                border: 1px solid #E0E6ED;
+                border-radius: 8px;
+                padding: 10px;
+                background-color: {edit_bg};
+                color: #333;
+                font-size: 14px;
+                min-height: 23px;
+                max-height: 23px;
+            }}
+        """
 
         # Row 1: معرف المطالب | معرف الوحدة المطالب بها | نوع الحالة | طبيعة الأعمال
         claim_person_search = QLineEdit()
@@ -325,8 +332,7 @@ class ClaimStep(BaseStep):
         claim_type_combo.addItem("ملكية", "ownership")
         claim_type_combo.addItem("إشغال", "occupancy")
         claim_type_combo.addItem("إيجار", "tenancy")
-        claim_type_combo.setStyleSheet(ro_combo_style)
-        make_combo_readonly(claim_type_combo)
+        claim_type_combo.setStyleSheet(edit_combo_style)
         add_field("نوع الحالة", claim_type_combo, 0, 2)
 
         claim_business_nature = QComboBox()
@@ -334,8 +340,7 @@ class ClaimStep(BaseStep):
         claim_business_nature.addItem("سكني", "residential")
         claim_business_nature.addItem("تجاري", "commercial")
         claim_business_nature.addItem("زراعي", "agricultural")
-        claim_business_nature.setStyleSheet(ro_combo_style)
-        make_combo_readonly(claim_business_nature)
+        claim_business_nature.setStyleSheet(edit_combo_style)
         add_field("طبيعة الأعمال", claim_business_nature, 0, 3)
 
         # Row 2: حالة الحالة | المصدر | تاريخ المسح | الأولوية
@@ -345,8 +350,7 @@ class ClaimStep(BaseStep):
         claim_status_combo.addItem("قيد المراجعة", "under_review")
         claim_status_combo.addItem("مكتمل", "completed")
         claim_status_combo.addItem("معلق", "pending")
-        claim_status_combo.setStyleSheet(ro_combo_style)
-        make_combo_readonly(claim_status_combo)
+        claim_status_combo.setStyleSheet(edit_combo_style)
         add_field("حالة الحالة", claim_status_combo, 1, 0)
 
         claim_source_combo = QComboBox()
@@ -354,8 +358,7 @@ class ClaimStep(BaseStep):
         claim_source_combo.addItem("مسح ميداني", "field_survey")
         claim_source_combo.addItem("طلب مباشر", "direct_request")
         claim_source_combo.addItem("إحالة", "referral")
-        claim_source_combo.setStyleSheet(ro_combo_style)
-        make_combo_readonly(claim_source_combo)
+        claim_source_combo.setStyleSheet(edit_combo_style)
         add_field("المصدر", claim_source_combo, 1, 1)
 
         claim_survey_date = QDateEdit()
@@ -374,8 +377,7 @@ class ClaimStep(BaseStep):
         claim_priority_combo.addItem("عالي", "high")
         claim_priority_combo.addItem("عاجل", "urgent")
         claim_priority_combo.setCurrentIndex(2)
-        claim_priority_combo.setStyleSheet(ro_combo_style)
-        make_combo_readonly(claim_priority_combo)
+        claim_priority_combo.setStyleSheet(edit_combo_style)
         add_field("الأولوية", claim_priority_combo, 1, 3)
 
         card_layout.addLayout(grid)
@@ -383,7 +385,7 @@ class ClaimStep(BaseStep):
 
         # Notes Section
         notes_label = QLabel("ملاحظات المراجعة")
-        notes_label.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
+        notes_label.setFont(create_font(size=FontManager.WIZARD_CARD_LABEL, weight=FontManager.WEIGHT_SEMIBOLD))
         notes_label.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent;")
         card_layout.addWidget(notes_label)
 
@@ -391,15 +393,14 @@ class ClaimStep(BaseStep):
         claim_notes.setPlaceholderText("ملاحظات إضافية")
         claim_notes.setMinimumHeight(100)
         claim_notes.setMaximumHeight(120)
-        claim_notes.setReadOnly(True)
         claim_notes.setStyleSheet(f"""
             QTextEdit {{
-                background-color: {ro_bg};
+                background-color: {edit_bg};
                 border: 1px solid #E0E6ED;
                 border-radius: 8px;
                 padding: 8px;
                 color: #333;
-                font-size: 13px;
+                font-size: 14px;
             }}
         """)
         card_layout.addWidget(claim_notes)
@@ -407,16 +408,14 @@ class ClaimStep(BaseStep):
 
         # Next Action Date Section
         next_date_label = QLabel("تاريخ الإجراء التالي")
-        next_date_label.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
+        next_date_label.setFont(create_font(size=FontManager.WIZARD_CARD_LABEL, weight=FontManager.WEIGHT_SEMIBOLD))
         next_date_label.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent;")
         card_layout.addWidget(next_date_label)
 
         claim_next_action_date = QDateEdit()
-        claim_next_action_date.setCalendarPopup(False)
-        claim_next_action_date.setButtonSymbols(QDateEdit.NoButtons)
+        claim_next_action_date.setCalendarPopup(True)
         claim_next_action_date.setDisplayFormat("yyyy-MM-dd")
-        claim_next_action_date.setReadOnly(True)
-        claim_next_action_date.setStyleSheet(ro_date_style)
+        claim_next_action_date.setStyleSheet(edit_date_style)
         card_layout.addWidget(claim_next_action_date)
         card_layout.addSpacing(8)
 
@@ -424,7 +423,7 @@ class ClaimStep(BaseStep):
         claim_eval_label = QLabel("✓  الأدلة متوفرة")
         claim_eval_label.setAlignment(Qt.AlignCenter)
         claim_eval_label.setFixedHeight(36)
-        claim_eval_label.setFont(create_font(size=11, weight=FontManager.WEIGHT_SEMIBOLD))
+        claim_eval_label.setFont(create_font(size=FontManager.WIZARD_BADGE, weight=FontManager.WEIGHT_SEMIBOLD))
         claim_eval_label.setStyleSheet("""
             QLabel {
                 background-color: #e1f7ef;
@@ -620,10 +619,11 @@ class ClaimStep(BaseStep):
                 logger.warning(f"Failed to parse survey date: {e}")
 
         # Auto-select claim type based on relations
-        owners = [r for r in self.context.relations if r.get('relation_type') in ('owner', 'co_owner')]
-        tenants = [r for r in self.context.relations if r.get('relation_type') == 'tenant']
-        occupants = [r for r in self.context.relations if r.get('relation_type') == 'occupant']
-        heirs = [r for r in self.context.relations if r.get('relation_type') == 'heir']
+        # relation_type can be integer (1=owner,2=occupant,3=tenant,4=guest,5=heir,99=other) or string
+        owners = [r for r in self.context.relations if r.get('relation_type') in ('owner', 'co_owner', 1)]
+        tenants = [r for r in self.context.relations if r.get('relation_type') in ('tenant', 3)]
+        occupants = [r for r in self.context.relations if r.get('relation_type') in ('occupant', 2)]
+        heirs = [r for r in self.context.relations if r.get('relation_type') in ('heir', 5)]
 
         if owners or heirs:
             for i in range(first_card.claim_type_combo.count()):
@@ -672,15 +672,24 @@ class ClaimStep(BaseStep):
 
         first_card = self._claim_cards[0]
 
-        owners = [r for r in self.context.relations if r.get('relation_type') in ('owner', 'co_owner')]
-        tenants = [r for r in self.context.relations if r.get('relation_type') == 'tenant']
-        occupants = [r for r in self.context.relations if r.get('relation_type') == 'occupant']
-        heirs = [r for r in self.context.relations if r.get('relation_type') == 'heir']
+        # relation_type can be integer (1=owner,2=occupant,3=tenant,4=guest,5=heir,99=other) or string
+        owners = [r for r in self.context.relations if r.get('relation_type') in ('owner', 'co_owner', 1)]
+        tenants = [r for r in self.context.relations if r.get('relation_type') in ('tenant', 3)]
+        occupants = [r for r in self.context.relations if r.get('relation_type') in ('occupant', 2)]
+        heirs = [r for r in self.context.relations if r.get('relation_type') in ('heir', 5)]
 
         total_evidences = sum(len(r.get('evidences', [])) for r in self.context.relations)
+        # Also check person data for uploaded tenure documents (not reflected in relations)
+        if total_evidences == 0:
+            for person in self.context.persons:
+                total_evidences += len(person.get('_relation_uploaded_files', []))
 
         if self.context.unit:
-            first_card.claim_unit_search.setText(str(self.context.unit.unit_id or ""))
+            unit = self.context.unit
+            unit_num = unit.unit_number or unit.apartment_number or "?"
+            unit_type = getattr(unit, 'unit_type_display_ar', None) or ""
+            unit_display = f"{unit_type} - {unit_num}".strip(" -") if unit_type else unit_num
+            first_card.claim_unit_search.setText(unit_display)
 
         if self.context.persons:
             first_person = self.context.persons[0]
@@ -759,14 +768,20 @@ class ClaimStep(BaseStep):
         for card in self._claim_cards:
             # Collect claimant person IDs
             claimant_ids = [r['person_id'] for r in self.context.relations
-                            if r['relation_type'] in ('owner', 'co_owner', 'heir')]
+                            if r.get('relation_type') in ('owner', 'co_owner', 'heir', 1, 5)]
             if not claimant_ids:
                 claimant_ids = [r['person_id'] for r in self.context.relations]
 
-            # Collect all evidences
+            # Collect all evidences from relations
             all_evidences = []
             for rel in self.context.relations:
                 all_evidences.extend(rel.get('evidences', []))
+
+            # Also count uploaded tenure documents from person data
+            evidence_count = len(all_evidences)
+            if evidence_count == 0:
+                for person in self.context.persons:
+                    evidence_count += len(person.get('_relation_uploaded_files', []))
 
             claim_data = {
                 "claim_type": card.claim_type_combo.currentData(),
@@ -774,14 +789,15 @@ class ClaimStep(BaseStep):
                 "business_nature": card.claim_business_nature.currentData(),
                 "source": card.claim_source_combo.currentData() or "OFFICE_SUBMISSION",
                 "case_status": card.claim_status_combo.currentData() or "new",
-                "survey_date": card.claim_survey_date.date().toString("yyyy-MM-dd"),
-                "next_action_date": card.claim_next_action_date.date().toString("yyyy-MM-dd"),
+                "survey_date": card.claim_survey_date.date().toPyDate().isoformat(),
+                "next_action_date": card.claim_next_action_date.date().toPyDate().isoformat(),
                 "notes": card.claim_notes.toPlainText().strip(),
                 "status": "draft",
                 "person_name": card.claim_person_search.text().strip(),
                 "unit_display_id": card.claim_unit_search.text().strip(),
                 "claimant_person_ids": claimant_ids,
                 "evidence_ids": [e['evidence_id'] for e in all_evidences],
+                "evidence_count": evidence_count,
                 "unit_id": self.context.unit.unit_id if self.context.unit else None,
                 "building_id": self.context.building.building_id if self.context.building else None
             }
