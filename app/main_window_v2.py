@@ -395,7 +395,6 @@ class MainWindow(QMainWindow):
         # Check if currently in wizard with unsaved data
         current_widget = self.stack.currentWidget()
         if current_widget == self.office_survey_wizard and page_id != "office_survey_wizard":
-            # User is trying to leave wizard - check for unsaved data
             if self._has_unsaved_wizard_data():
                 from ui.components.dialogs.confirmation_dialog import ConfirmationDialog
 
@@ -429,8 +428,8 @@ class MainWindow(QMainWindow):
                     logger.debug("User cancelled navigation")
                     return
 
-                # Reset wizard for next time
-                self._reset_wizard()
+            # Reset wizard for next time (after finalization or unsaved data handling)
+            self._reset_wizard()
 
         # Proceed with navigation
         if page_id not in self.pages:

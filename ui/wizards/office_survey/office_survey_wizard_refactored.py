@@ -268,23 +268,40 @@ class OfficeSurveyWizard(BaseWizard):
         """
         Handle draft saving.
 
-        Saves the current survey state as a draft that can be resumed later.
+        Saves to backend first (PUT /api/v1/Surveys/{id}/draft), then to local DB.
 
         Returns:
             Draft ID if successful, None otherwise
         """
         try:
-            # Update context status
             self.context.status = "draft"
-
-            # Get draft data
             draft_data = self.context.to_dict()
 
-            # Save draft to database (using create method)
-            # UC-005: Office surveys are saved as drafts with status='draft'
-            draft_id = self.survey_repo.create(draft_data)
+            # Save to backend first
+            from app.config import Config
+            use_api = getattr(Config, 'DATA_PROVIDER', 'local_db') == 'http'
+            survey_id = self.context.get_data("survey_id")
 
-            logger.info(f"Draft saved: {draft_id}")
+            if use_api and survey_id:
+                try:
+                    from services.api_client import get_api_client
+                    api_service = get_api_client()
+                    main_window = self.window()
+                    if main_window and hasattr(main_window, '_api_token') and main_window._api_token:
+                        api_service.set_access_token(main_window._api_token)
+
+                    backend_draft_data = {
+                        "property_unit_id": self.context.unit.unit_uuid if self.context.unit else None,
+                        "notes": draft_data.get("notes"),
+                    }
+                    api_service.save_draft_to_backend(survey_id, backend_draft_data)
+                    logger.info(f"Draft saved to backend: {survey_id}")
+                except Exception as e:
+                    logger.warning(f"Backend draft save failed, continuing with local: {e}")
+
+            # Save to local DB as fallback/backup
+            draft_id = self.survey_repo.create(draft_data)
+            logger.info(f"Draft saved locally: {draft_id}")
 
             return draft_id
 
@@ -296,6 +313,13 @@ class OfficeSurveyWizard(BaseWizard):
                 tr("common.error")
             )
             return None
+
+    def _handle_header_save(self):
+        """Header save button: finalize on last step, save draft on others."""
+        if self.navigator.current_index == len(self.steps) - 1:
+            self._handle_submit()
+        else:
+            self._handle_save_draft()
 
     def _handle_close(self):
         """Handle close button click - offers save draft before closing."""
@@ -624,7 +648,7 @@ class OfficeSurveyWizard(BaseWizard):
                 background-color: {ButtonDimensions.PRIMARY_HOVER_BG};
             }}
         """)
-        self.save_btn.clicked.connect(self._handle_save_draft)
+        self.save_btn.clicked.connect(self._handle_header_save)
         title_row.addWidget(self.save_btn)
 
         layout.addLayout(title_row)

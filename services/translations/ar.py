@@ -428,9 +428,13 @@ AR_TRANSLATIONS = {
     "wizard.person.delete_confirm": "هل أنت متأكد من حذف هذا الشخص؟",
     "wizard.person.min_one_required": "يجب تسجيل شخص واحد على الأقل",
     "wizard.person.no_relation_type_warning": "لا يوجد أشخاص مع نوع علاقة محدد",
+    "wizard.claim.type_required": "يجب اختيار نوع الحالة",
     "wizard.person.step_title": "تسجيل الأشخاص",
     "wizard.person.step_description": "سجل الأشخاص المرتبطين بالمقسم",
     "wizard.person.no_persons": "لم يتم تسجيل أي أشخاص",
+    "wizard.person.duplicate_title": "تحذير",
+    "wizard.person.duplicate_national_id": "الشخص برقم هوية {national_id} مضاف مسبقاً",
+    "wizard.person.duplicate_name": "الشخص {first} {last} مضاف مسبقاً",
 
     # ===== Relation Step =====
     "wizard.relation.title": "العلاقة والأدلة",

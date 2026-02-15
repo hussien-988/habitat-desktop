@@ -21,6 +21,7 @@ from PyQt5.QtCore import Qt, QDate
 from pathlib import Path
 
 from app.config import Config
+from services.vocab_service import get_options as vocab_get_options
 from utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -81,8 +82,8 @@ class EvidenceDialog(QDialog):
         layout.addWidget(type_label)
 
         self.type_combo = QComboBox()
-        for code, ar in self.DOCUMENT_TYPES:
-            self.type_combo.addItem(ar, code)
+        for code, label in vocab_get_options("DocumentType"):
+            self.type_combo.addItem(label, code)
         self.type_combo.setStyleSheet(self._input_style())
         layout.addWidget(self.type_combo)
 

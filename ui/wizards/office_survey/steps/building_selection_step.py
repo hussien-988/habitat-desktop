@@ -1149,24 +1149,18 @@ class BuildingSelectionStep(BaseStep):
                 logger.info(f"Survey already exists ({existing_survey_id}), skipping creation")
                 return
             else:
-                # Building changed - cleanup API data before resetting
-                logger.info(f"Building changed ({previous_building} -> {current_building_uuid}), resetting survey context")
-                old_household_id = self.context.get_data("household_id")
-                old_survey_id = self.context.get_data("survey_id")
-                if old_household_id and old_survey_id and self._use_api:
-                    try:
-                        self._survey_api_service.delete_household(old_household_id, old_survey_id)
-                        logger.info(f"Old household {old_household_id} deleted from API on building change")
-                    except Exception as e:
-                        logger.warning(f"Failed to delete old household {old_household_id}: {e}")
-                for key in ("survey_id", "survey_data", "survey_building_uuid",
-                            "unit_linked", "household_id",
-                            "claims_count", "created_claims"):
+                # Building changed - full cascade cleanup before resetting
+                logger.info(f"Building changed ({previous_building} -> {current_building_uuid}), cleaning up API data")
+                if self._use_api:
+                    self.context.cleanup_on_building_change(self._survey_api_service)
+                else:
+                    self.context.persons = []
+                    self.context.relations = []
+                    self.context.households = []
+                    self.context.claims = []
+                    self.context.finalize_response = None
+                for key in ("survey_id", "survey_data", "survey_building_uuid"):
                     self.context.update_data(key, None)
-                self.context.persons = []
-                self.context.relations = []
-                self.context.households = []
-                self.context.finalize_response = None
 
         self._set_auth_token()
 

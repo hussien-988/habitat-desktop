@@ -17,9 +17,21 @@ from PyQt5.QtCore import Qt, QDate
 
 from ui.wizards.framework import BaseStep, StepValidationResult
 from ui.wizards.office_survey.survey_context import SurveyContext
+from services.translation_manager import tr
+from services.vocab_service import get_options
 from utils.logger import get_logger
 
 logger = get_logger(__name__)
+
+
+def _find_combo_code_by_english(vocab_name: str, english_key: str) -> int:
+    """Find the integer code for a vocabulary item by its English label."""
+    from services.vocab_service import get_options
+    english_key_lower = english_key.lower()
+    for code, label in get_options(vocab_name, lang="en"):
+        if label.lower() == english_key_lower:
+            return code
+    return 0
 
 
 class ClaimStep(BaseStep):
@@ -328,36 +340,31 @@ class ClaimStep(BaseStep):
         add_field("معرف المقسم المطالب به", claim_unit_search, 0, 1)
 
         claim_type_combo = QComboBox()
-        claim_type_combo.addItem("اختر", "")
-        claim_type_combo.addItem("ملكية", "ownership")
-        claim_type_combo.addItem("إشغال", "occupancy")
-        claim_type_combo.addItem("إيجار", "tenancy")
+        claim_type_combo.addItem(tr("mapping.select"), 0)
+        for code, label in get_options("ClaimType"):
+            claim_type_combo.addItem(label, code)
         claim_type_combo.setStyleSheet(edit_combo_style)
         add_field("نوع الحالة", claim_type_combo, 0, 2)
 
         claim_business_nature = QComboBox()
-        claim_business_nature.addItem("اختر", "")
-        claim_business_nature.addItem("سكني", "residential")
-        claim_business_nature.addItem("تجاري", "commercial")
-        claim_business_nature.addItem("زراعي", "agricultural")
+        claim_business_nature.addItem(tr("mapping.select"), 0)
+        for code, label in get_options("BusinessNature"):
+            claim_business_nature.addItem(label, code)
         claim_business_nature.setStyleSheet(edit_combo_style)
         add_field("طبيعة الأعمال", claim_business_nature, 0, 3)
 
         # Row 2: حالة الحالة | المصدر | تاريخ المسح | الأولوية
         claim_status_combo = QComboBox()
-        claim_status_combo.addItem("اختر", "")
-        claim_status_combo.addItem("جديد", "new")
-        claim_status_combo.addItem("قيد المراجعة", "under_review")
-        claim_status_combo.addItem("مكتمل", "completed")
-        claim_status_combo.addItem("معلق", "pending")
+        claim_status_combo.addItem(tr("mapping.select"), 0)
+        for code, label in get_options("ClaimStatus"):
+            claim_status_combo.addItem(label, code)
         claim_status_combo.setStyleSheet(edit_combo_style)
         add_field("حالة الحالة", claim_status_combo, 1, 0)
 
         claim_source_combo = QComboBox()
-        claim_source_combo.addItem("اختر", "")
-        claim_source_combo.addItem("مسح ميداني", "field_survey")
-        claim_source_combo.addItem("طلب مباشر", "direct_request")
-        claim_source_combo.addItem("إحالة", "referral")
+        claim_source_combo.addItem(tr("mapping.select"), 0)
+        for code, label in get_options("ClaimSource"):
+            claim_source_combo.addItem(label, code)
         claim_source_combo.setStyleSheet(edit_combo_style)
         add_field("المصدر", claim_source_combo, 1, 1)
 
@@ -371,11 +378,9 @@ class ClaimStep(BaseStep):
         add_field("تاريخ المسح", claim_survey_date, 1, 2)
 
         claim_priority_combo = QComboBox()
-        claim_priority_combo.addItem("اختر", "")
-        claim_priority_combo.addItem("منخفض", "low")
-        claim_priority_combo.addItem("عادي", "normal")
-        claim_priority_combo.addItem("عالي", "high")
-        claim_priority_combo.addItem("عاجل", "urgent")
+        claim_priority_combo.addItem(tr("mapping.select"), 0)
+        for code, label in get_options("CasePriority"):
+            claim_priority_combo.addItem(label, code)
         claim_priority_combo.setCurrentIndex(2)
         claim_priority_combo.setStyleSheet(edit_combo_style)
         add_field("الأولوية", claim_priority_combo, 1, 3)
@@ -468,17 +473,17 @@ class ClaimStep(BaseStep):
         relation_type = claim_data.get('relationType', '').lower()
         if relation_type in ('owner', 'co_owner', 'heir'):
             for i in range(card.claim_type_combo.count()):
-                if card.claim_type_combo.itemData(i) == "ownership":
+                if card.claim_type_combo.itemData(i) == _find_combo_code_by_english("ClaimType", "Ownership"):
                     card.claim_type_combo.setCurrentIndex(i)
                     break
         elif relation_type == 'tenant':
             for i in range(card.claim_type_combo.count()):
-                if card.claim_type_combo.itemData(i) == "tenancy":
+                if card.claim_type_combo.itemData(i) == _find_combo_code_by_english("ClaimType", "Tenancy"):
                     card.claim_type_combo.setCurrentIndex(i)
                     break
         elif relation_type == 'occupant':
             for i in range(card.claim_type_combo.count()):
-                if card.claim_type_combo.itemData(i) == "occupancy":
+                if card.claim_type_combo.itemData(i) == _find_combo_code_by_english("ClaimType", "Occupancy"):
                     card.claim_type_combo.setCurrentIndex(i)
                     break
 
@@ -595,12 +600,12 @@ class ClaimStep(BaseStep):
         """Populate the first card from context when no claims were created."""
         first_card = self._claim_cards[0]
 
-        # Populate unit identifier from survey
+        # Populate unit subdivision number from survey
         unit_identifier = survey_data.get('unitIdentifier', '')
         if unit_identifier:
             first_card.claim_unit_search.setText(unit_identifier)
         elif self.context.unit:
-            first_card.claim_unit_search.setText(str(self.context.unit.unit_id or ""))
+            first_card.claim_unit_search.setText(str(self.context.unit.unit_number or ""))
 
         # Populate claimant name from first person in context
         if self.context.persons:
@@ -627,17 +632,17 @@ class ClaimStep(BaseStep):
 
         if owners or heirs:
             for i in range(first_card.claim_type_combo.count()):
-                if first_card.claim_type_combo.itemData(i) == "ownership":
+                if first_card.claim_type_combo.itemData(i) == _find_combo_code_by_english("ClaimType", "Ownership"):
                     first_card.claim_type_combo.setCurrentIndex(i)
                     break
         elif tenants:
             for i in range(first_card.claim_type_combo.count()):
-                if first_card.claim_type_combo.itemData(i) == "tenancy":
+                if first_card.claim_type_combo.itemData(i) == _find_combo_code_by_english("ClaimType", "Tenancy"):
                     first_card.claim_type_combo.setCurrentIndex(i)
                     break
         elif occupants:
             for i in range(first_card.claim_type_combo.count()):
-                if first_card.claim_type_combo.itemData(i) == "occupancy":
+                if first_card.claim_type_combo.itemData(i) == _find_combo_code_by_english("ClaimType", "Occupancy"):
                     first_card.claim_type_combo.setCurrentIndex(i)
                     break
 
@@ -687,9 +692,7 @@ class ClaimStep(BaseStep):
         if self.context.unit:
             unit = self.context.unit
             unit_num = unit.unit_number or unit.apartment_number or "?"
-            unit_type = getattr(unit, 'unit_type_display_ar', None) or ""
-            unit_display = f"{unit_type} - {unit_num}".strip(" -") if unit_type else unit_num
-            first_card.claim_unit_search.setText(unit_display)
+            first_card.claim_unit_search.setText(str(unit_num))
 
         if self.context.persons:
             first_person = self.context.persons[0]
@@ -698,17 +701,17 @@ class ClaimStep(BaseStep):
 
         if owners or heirs:
             for i in range(first_card.claim_type_combo.count()):
-                if first_card.claim_type_combo.itemData(i) == "ownership":
+                if first_card.claim_type_combo.itemData(i) == _find_combo_code_by_english("ClaimType", "Ownership"):
                     first_card.claim_type_combo.setCurrentIndex(i)
                     break
         elif tenants:
             for i in range(first_card.claim_type_combo.count()):
-                if first_card.claim_type_combo.itemData(i) == "tenancy":
+                if first_card.claim_type_combo.itemData(i) == _find_combo_code_by_english("ClaimType", "Tenancy"):
                     first_card.claim_type_combo.setCurrentIndex(i)
                     break
         elif occupants:
             for i in range(first_card.claim_type_combo.count()):
-                if first_card.claim_type_combo.itemData(i) == "occupancy":
+                if first_card.claim_type_combo.itemData(i) == _find_combo_code_by_english("ClaimType", "Occupancy"):
                     first_card.claim_type_combo.setCurrentIndex(i)
                     break
 
@@ -748,7 +751,7 @@ class ClaimStep(BaseStep):
             first_card = self._claim_cards[0]
             claim_type = first_card.claim_type_combo.currentData()
             if not claim_type:
-                result.add_error("يجب اختيار نوع الحالة")
+                result.add_error(tr("wizard.claim.type_required"))
 
         # Store claims data to context during validation
         # (collect_data() is never called by the framework during navigation)
@@ -787,8 +790,8 @@ class ClaimStep(BaseStep):
                 "claim_type": card.claim_type_combo.currentData(),
                 "priority": card.claim_priority_combo.currentData(),
                 "business_nature": card.claim_business_nature.currentData(),
-                "source": card.claim_source_combo.currentData() or "OFFICE_SUBMISSION",
-                "case_status": card.claim_status_combo.currentData() or "new",
+                "source": card.claim_source_combo.currentData() or _find_combo_code_by_english("ClaimSource", "Office Submission"),
+                "case_status": card.claim_status_combo.currentData() or _find_combo_code_by_english("ClaimStatus", "New"),
                 "survey_date": card.claim_survey_date.date().toPyDate().isoformat(),
                 "next_action_date": card.claim_next_action_date.date().toPyDate().isoformat(),
                 "notes": card.claim_notes.toPlainText().strip(),

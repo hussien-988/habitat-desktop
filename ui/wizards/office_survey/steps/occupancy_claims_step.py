@@ -304,8 +304,20 @@ class OccupancyClaimsStep(BaseStep):
             if self._use_api and person_id:
                 try:
                     self._set_auth_token()
-                    self._api_service.update_person(person_id, updated_data)
+                    # Use survey-scoped endpoint for better audit trail
+                    if survey_id and household_id:
+                        self._api_service.update_person_in_survey(
+                            survey_id, household_id, person_id, updated_data)
+                    else:
+                        self._api_service.update_person(person_id, updated_data)
                     logger.info(f"Person {person_id} updated via API")
+                    relation_id = updated_data.get('_relation_id') or person_data.get('_relation_id')
+                    if relation_id and survey_id:
+                        try:
+                            self._api_service.update_relation(survey_id, relation_id, updated_data)
+                            logger.info(f"Relation {relation_id} updated via API")
+                        except Exception as e:
+                            logger.warning(f"Failed to update relation {relation_id}: {e}")
                 except Exception as e:
                     logger.error(f"Failed to update person via API: {e}")
                     ErrorHandler.show_error(self, map_exception(e), tr("common.error"))
@@ -611,13 +623,6 @@ class OccupancyClaimsStep(BaseStep):
         if len(self.context.persons) == 0:
             result.add_error(tr("wizard.person.min_one_required"))
 
-        has_relationship = any(
-            person.get('person_role') or person.get('relationship_type')
-            for person in self.context.persons
-        )
-        if not has_relationship:
-            result.add_warning(tr("wizard.person.no_relation_type_warning"))
-
         # Collect relations from person data into context
         self.context.relations = self._collect_relations_from_persons()
 
@@ -643,7 +648,50 @@ class OccupancyClaimsStep(BaseStep):
         super().on_show()
         if self._use_api:
             self._fetch_persons_from_api()
+            self._auto_relink_orphaned_persons()
         self._refresh_persons_list()
+
+    def _auto_relink_orphaned_persons(self):
+        """Re-create relations for persons that lost them after unit change.
+
+        When user goes back to Step 2 and selects a different unit,
+        cleanup_on_unit_change() deletes relations and sets _relation_id=None.
+        This method detects those orphaned persons and re-links them
+        to the current unit using their stored relation data.
+        """
+        _, survey_id, _, unit_id = self._get_context_ids()
+        if not survey_id or not unit_id:
+            return
+
+        orphaned = [p for p in self.context.persons
+                    if p.get('person_id') and not p.get('_relation_id')]
+        if not orphaned:
+            return
+
+        logger.info(f"Found {len(orphaned)} persons without relations, auto-relinking to unit {unit_id}")
+        self._set_auth_token()
+
+        for person in orphaned:
+            person_id = person['person_id']
+            rel_data = person.get('relation_data', {})
+
+            relation_data = {
+                'person_id': person_id,
+                'rel_type': rel_data.get('rel_type') or person.get('person_role') or person.get('relationship_type'),
+                'ownership_share': rel_data.get('ownership_share', 0),
+                'contract_type': rel_data.get('contract_type'),
+                'evidence_desc': rel_data.get('evidence_desc'),
+                'notes': rel_data.get('notes'),
+                'has_documents': rel_data.get('has_documents', False),
+            }
+
+            try:
+                response = self._api_service.link_person_to_unit(survey_id, unit_id, relation_data)
+                new_relation_id = response.get('id') or response.get('relationId')
+                person['_relation_id'] = new_relation_id
+                logger.info(f"Auto-relinked person {person_id} to unit {unit_id}, new relation: {new_relation_id}")
+            except Exception as e:
+                logger.error(f"Failed to auto-relink person {person_id}: {e}")
 
     def on_next(self):
         """Called when user clicks Next - process claims via API."""

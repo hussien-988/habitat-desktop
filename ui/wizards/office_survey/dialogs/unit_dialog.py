@@ -20,6 +20,7 @@ from PyQt5.QtCore import Qt, QLocale
 from PyQt5.QtGui import QDoubleValidator
 
 from app.config import Config, Vocabularies
+# RtlCombo removed - plain QComboBox works correctly in RTL dialogs
 from models.building import Building
 from controllers.unit_controller import UnitController
 from ui.error_handler import ErrorHandler
@@ -450,11 +451,11 @@ class UnitDialog(QDialog):
         return btn
 
     def _combo_style(self) -> str:
-        """Get combobox stylesheet with custom dropdown arrow for RTL layout."""
+        """Get combobox stylesheet - same pattern as buildings_page."""
         arrow_img = str(Config.IMAGES_DIR / "v.png").replace("\\", "/")
         return f"""
             QComboBox {{
-                padding: 6px 12px 6px 40px;
+                padding: 6px 12px;
                 border: 1px solid #E1E8ED;
                 border-radius: 8px;
                 background-color: #F8FAFF;

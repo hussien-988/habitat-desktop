@@ -465,8 +465,8 @@ class RelationStep(BaseStep):
                 "relation_type": card.relation_type.currentData() if hasattr(card.relation_type, 'currentData') else None,
                 "ownership_share": float(card.ownership_share.text()) if card.ownership_share.text() and card.ownership_share.text() != "0" else 0.0,
                 "start_date": card.start_date.date().toPyDate().isoformat(),
-                "contract_type": card.contract_type.currentText() if card.contract_type.currentIndex() > 0 else None,
-                "evidence_type": card.evidence_type.currentText() if card.evidence_type.currentIndex() > 0 else None,
+                "contract_type": card.contract_type.currentData() if card.contract_type.currentIndex() > 0 else None,
+                "evidence_type": card.evidence_type.currentData() if card.evidence_type.currentIndex() > 0 else None,
                 "evidence_description": card.evidence_desc.text().strip() or None,
                 "notes": card.notes.toPlainText().strip() or None,
                 "evidences": []

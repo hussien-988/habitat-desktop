@@ -826,9 +826,11 @@ class HouseholdStep(BaseStep):
                     result.add_error(tr("wizard.household.save_failed", error_msg=map_exception(e)))
                     return result
 
-        # Clear old household data and add new one
-        self.context.households.clear()
-        self.context.households.append(household)
+        # Update or add household data
+        if self.context.households:
+            self.context.households[0] = household
+        else:
+            self.context.households.append(household)
 
         # Validate that household data exists
         if len(self.context.households) == 0:
@@ -839,6 +841,7 @@ class HouseholdStep(BaseStep):
     def _household_data_changed(self, current: Dict, stored: Dict) -> bool:
         """Compare current form data with stored household to detect changes."""
         compare_keys = [
+            "property_unit_id",
             "size", "occupancy_type", "occupancy_nature",
             "adult_males", "adult_females",
             "male_children_under18", "female_children_under18",

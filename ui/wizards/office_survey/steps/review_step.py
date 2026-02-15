@@ -1059,10 +1059,7 @@ class ReviewStep(BaseStep):
 
     def _finalize_survey_via_api(self):
         """Finalize the survey by calling the API."""
-        # Set auth token
-        main_window = self.window()
-        if main_window and hasattr(main_window, '_api_token') and main_window._api_token:
-            self._api_service.set_access_token(main_window._api_token)
+        self._set_auth_token()
 
         survey_id = self.context.get_data("survey_id")
         if not survey_id:

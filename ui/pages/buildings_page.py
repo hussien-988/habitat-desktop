@@ -25,7 +25,8 @@ try:
 except ImportError:
     HAS_WEBENGINE = False
 
-from app.config import Config, Vocabularies
+from app.config import Config
+from services.vocab_service import get_options as vocab_get_options, get_label as vocab_get_label
 from services.divisions_service import DivisionsService
 from services.api_client import get_api_client
 from models.building import Building
@@ -71,13 +72,19 @@ if HAS_WEBENGINE:
 
 class RtlCombo(QComboBox):
     """QComboBox with right-aligned text for Arabic RTL support.
-    Uses editable + read-only lineEdit to control text alignment without breaking stylesheet arrows."""
+    Uses editable + read-only lineEdit to control text alignment.
+    changeEvent ensures alignment survives stylesheet changes."""
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.setEditable(True)
         self.lineEdit().setReadOnly(True)
         self.lineEdit().setAlignment(Qt.AlignRight)
+
+    def changeEvent(self, event):
+        super().changeEvent(event)
+        if event.type() == event.StyleChange and self.lineEdit():
+            self.lineEdit().setAlignment(Qt.AlignRight)
 
 
 class CodeDisplayCombo(RtlCombo):
@@ -608,8 +615,8 @@ class AddBuildingPage(QWidget):
         vbox_status.addWidget(lbl_status)
         self.status_combo = RtlCombo()
         self.status_combo.addItem("اختر")
-        for code, en, ar in Vocabularies.BUILDING_STATUS:
-            self.status_combo.addItem(ar, code)
+        for code, label in vocab_get_options("BuildingStatus"):
+            self.status_combo.addItem(label, code)
         self.status_combo.setStyleSheet(combo_style)
         self.status_combo.setFixedHeight(45)
         self.status_combo.setLayoutDirection(Qt.RightToLeft)
@@ -625,8 +632,8 @@ class AddBuildingPage(QWidget):
         vbox_type.addWidget(lbl_type)
         self.type_combo = RtlCombo()
         self.type_combo.addItem("اختر")
-        for code, en, ar in Vocabularies.BUILDING_TYPES:
-            self.type_combo.addItem(ar, code)
+        for code, label in vocab_get_options("BuildingType"):
+            self.type_combo.addItem(label, code)
         self.type_combo.setStyleSheet(combo_style)
         self.type_combo.setFixedHeight(45)
         self.type_combo.setLayoutDirection(Qt.RightToLeft)
@@ -2614,20 +2621,12 @@ class BuildingsListPage(QWidget):
             area = (building.neighborhood_name_ar or building.neighborhood_name or '').strip()
             self.table.setItem(idx, 2, QTableWidgetItem(area))
 
-            # نوع البناء - API يرجع رقم (1) أو نص ("Commercial")
-            building_type = ""
-            for code, en, ar in Vocabularies.BUILDING_TYPES:
-                if building.building_type in (code, en):
-                    building_type = ar
-                    break
+            # نوع البناء - vocab_service handles int codes + string fallback
+            building_type = vocab_get_label("BuildingType", building.building_type)
             self.table.setItem(idx, 3, QTableWidgetItem(building_type))
 
-            # حالة البناء - API يرجع رقم (1) أو نص ("Intact")
-            building_status = ""
-            for code, en, ar in Vocabularies.BUILDING_STATUS:
-                if building.building_status in (code, en):
-                    building_status = ar
-                    break
+            # حالة البناء - vocab_service handles int codes + string fallback
+            building_status = vocab_get_label("BuildingStatus", building.building_status)
             self.table.setItem(idx, 4, QTableWidgetItem(building_status))
 
             # زر الثلاث نقاط - أكبر وأغمق
@@ -2731,17 +2730,15 @@ class BuildingsListPage(QWidget):
         elif column_index == 3:  # نوع البناء
             filter_key = 'building_type'
             for building in self._all_buildings:
-                for code, en, ar in Vocabularies.BUILDING_TYPES:
-                    if building.building_type in (code, en):
-                        unique_values.add((code, ar))
-                        break
+                if building.building_type is not None:
+                    label = vocab_get_label("BuildingType", building.building_type)
+                    unique_values.add((building.building_type, label))
         elif column_index == 4:  # حالة البناء
             filter_key = 'building_status'
             for building in self._all_buildings:
-                for code, en, ar in Vocabularies.BUILDING_STATUS:
-                    if building.building_status in (code, en):
-                        unique_values.add((code, ar))
-                        break
+                if building.building_status is not None:
+                    label = vocab_get_label("BuildingStatus", building.building_status)
+                    unique_values.add((building.building_status, label))
 
         if not unique_values:
             return
@@ -2846,7 +2843,7 @@ class BuildingsListPage(QWidget):
             target = self._active_filters['building_type']
             filtered = [
                 b for b in filtered
-                if b.building_type in (target, self._vocab_code_to_name(Vocabularies.BUILDING_TYPES, target))
+                if b.building_type == target
             ]
 
         # Apply building status filter
@@ -2854,18 +2851,10 @@ class BuildingsListPage(QWidget):
             target = self._active_filters['building_status']
             filtered = [
                 b for b in filtered
-                if b.building_status in (target, self._vocab_code_to_name(Vocabularies.BUILDING_STATUS, target))
+                if b.building_status == target
             ]
 
         return filtered
-
-    @staticmethod
-    def _vocab_code_to_name(vocab_list, code):
-        """Convert vocabulary integer code to English name. e.g. 1 → 'Residential'"""
-        for c, en, ar in vocab_list:
-            if c == code:
-                return en
-        return None
 
     def _get_building_area(self, building) -> str:
         """Get formatted area string for building (DRY helper) - neighborhood name only."""
