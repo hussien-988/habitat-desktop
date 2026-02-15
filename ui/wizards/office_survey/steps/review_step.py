@@ -129,7 +129,7 @@ class ReviewStep(BaseStep):
     def _create_section_label(self, text: str) -> QLabel:
         """DRY: Create section label with WIZARD_TITLE style (reused across all cards)."""
         lbl = QLabel(text)
-        lbl.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
+        lbl.setFont(create_font(size=FontManager.WIZARD_CARD_LABEL, weight=FontManager.WEIGHT_SEMIBOLD))
         lbl.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent; border: none;")
         lbl.setAlignment(Qt.AlignRight)
         return lbl
@@ -191,12 +191,12 @@ class ReviewStep(BaseStep):
         title_layout.setSpacing(2)
 
         title_label = QLabel(title)
-        title_label.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
+        title_label.setFont(create_font(size=FontManager.WIZARD_STEP_TITLE, weight=FontManager.WEIGHT_SEMIBOLD))
         title_label.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent; border: none;")
         title_label.setAlignment(Qt.AlignRight)
 
         subtitle_label = QLabel(subtitle)
-        subtitle_label.setFont(create_font(size=9, weight=FontManager.WEIGHT_REGULAR))
+        subtitle_label.setFont(create_font(size=FontManager.WIZARD_STEP_SUBTITLE, weight=FontManager.WEIGHT_REGULAR))
         subtitle_label.setStyleSheet(f"color: {Colors.WIZARD_SUBTITLE}; background: transparent; border: none;")
         subtitle_label.setAlignment(Qt.AlignRight)
 
@@ -299,14 +299,14 @@ class ReviewStep(BaseStep):
         if not full_name:
             full_name = person.get('full_name', person.get('name', '-'))
         name_lbl = QLabel(full_name)
-        name_lbl.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
+        name_lbl.setFont(create_font(size=FontManager.WIZARD_CARD_LABEL, weight=FontManager.WEIGHT_SEMIBOLD))
         name_lbl.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent;")
         name_lbl.setAlignment(Qt.AlignRight)
 
         role_key = person.get('person_role') or person.get('relationship_type') or person.get('role', '')
         role_text = get_relation_type_display(role_key) if role_key else get_relation_type_display('occupant')
         role_lbl = QLabel(role_text)
-        role_lbl.setFont(create_font(size=10, weight=FontManager.WEIGHT_REGULAR))
+        role_lbl.setFont(create_font(size=FontManager.WIZARD_CARD_VALUE, weight=FontManager.WEIGHT_REGULAR))
         role_lbl.setStyleSheet(f"color: {Colors.WIZARD_SUBTITLE}; background: transparent;")
         role_lbl.setAlignment(Qt.AlignRight)
 
@@ -318,7 +318,7 @@ class ReviewStep(BaseStep):
 
         # Left side: "عرض المعلومات الشخصية" link
         view_lbl = QLabel(tr("wizard.review.view_personal_info"))
-        view_lbl.setFont(create_font(size=9, weight=FontManager.WEIGHT_MEDIUM))
+        view_lbl.setFont(create_font(size=FontManager.WIZARD_FIELD_LABEL, weight=FontManager.WEIGHT_MEDIUM))
         view_lbl.setStyleSheet("color: #3B82F6; background: transparent; border: none;")
         view_lbl.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
         view_lbl.setCursor(Qt.PointingHandCursor)
@@ -383,7 +383,7 @@ class ReviewStep(BaseStep):
 
         if not self.context.building:
             no_data = QLabel(tr("wizard.building.not_selected"))
-            no_data.setFont(create_font(size=10))
+            no_data.setFont(create_font(size=FontManager.SIZE_BODY))
             no_data.setStyleSheet(f"color: {Colors.TEXT_SECONDARY}; background: transparent; border: none;")
             no_data.setAlignment(Qt.AlignCenter)
             self.building_info_content.addWidget(no_data)
@@ -406,7 +406,7 @@ class ReviewStep(BaseStep):
 
         # ===== Card 1: Building number + address bar =====
         building_num_label = QLabel(building_code)
-        building_num_label.setFont(create_font(size=16, weight=FontManager.WEIGHT_BOLD))
+        building_num_label.setFont(create_font(size=FontManager.SIZE_HEADING, weight=FontManager.WEIGHT_BOLD))
         building_num_label.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent; border: none;")
         building_num_label.setAlignment(Qt.AlignRight)
         self.building_info_content.addWidget(building_num_label)
@@ -432,7 +432,7 @@ class ReviewStep(BaseStep):
 
         addr_text = QLabel(address if address else "-")
         addr_text.setAlignment(Qt.AlignCenter)
-        addr_text.setFont(create_font(size=10, weight=FontManager.WEIGHT_REGULAR))
+        addr_text.setFont(create_font(size=FontManager.WIZARD_CARD_VALUE, weight=FontManager.WEIGHT_REGULAR))
         addr_text.setStyleSheet("color: #0F5B95; background: transparent; border: none;")
         addr_row.addWidget(addr_text)
         addr_row.addStretch()
@@ -461,12 +461,12 @@ class ReviewStep(BaseStep):
 
             lbl = QLabel(label_text)
             lbl.setAlignment(Qt.AlignCenter)
-            lbl.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
+            lbl.setFont(create_font(size=FontManager.WIZARD_CARD_LABEL, weight=FontManager.WEIGHT_SEMIBOLD))
             lbl.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent; border: none;")
 
             val = QLabel(str(value_text))
             val.setAlignment(Qt.AlignCenter)
-            val.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
+            val.setFont(create_font(size=FontManager.WIZARD_CARD_VALUE, weight=FontManager.WEIGHT_SEMIBOLD))
             val.setStyleSheet(f"color: {Colors.WIZARD_SUBTITLE}; background: transparent; border: none;")
 
             section_layout.addWidget(lbl)
@@ -477,7 +477,7 @@ class ReviewStep(BaseStep):
 
         # ===== Card 3: Location (map + descriptions) =====
         loc_header = QLabel(tr("wizard.building.location_title"))
-        loc_header.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
+        loc_header.setFont(create_font(size=FontManager.WIZARD_CARD_LABEL, weight=FontManager.WEIGHT_SEMIBOLD))
         loc_header.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent; border: none;")
         loc_header.setAlignment(Qt.AlignRight)
         self.building_location_content.addWidget(loc_header)
@@ -504,11 +504,11 @@ class ReviewStep(BaseStep):
         loc_desc_section = QVBoxLayout()
         loc_desc_section.setSpacing(4)
         loc_desc_label = QLabel(tr("wizard.building.location_description"))
-        loc_desc_label.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
+        loc_desc_label.setFont(create_font(size=FontManager.WIZARD_CARD_LABEL, weight=FontManager.WEIGHT_SEMIBOLD))
         loc_desc_label.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent; border: none;")
         loc_desc_label.setAlignment(Qt.AlignRight)
         loc_desc_value = QLabel(location_desc if location_desc else "-")
-        loc_desc_value.setFont(create_font(size=10, weight=FontManager.WEIGHT_REGULAR))
+        loc_desc_value.setFont(create_font(size=FontManager.WIZARD_CARD_VALUE, weight=FontManager.WEIGHT_REGULAR))
         loc_desc_value.setStyleSheet(f"color: {Colors.WIZARD_SUBTITLE}; background: transparent; border: none;")
         loc_desc_value.setAlignment(Qt.AlignRight)
         loc_desc_value.setWordWrap(True)
@@ -520,11 +520,11 @@ class ReviewStep(BaseStep):
         gen_desc_section = QVBoxLayout()
         gen_desc_section.setSpacing(4)
         gen_desc_label = QLabel(tr("wizard.building.general_description"))
-        gen_desc_label.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
+        gen_desc_label.setFont(create_font(size=FontManager.WIZARD_CARD_LABEL, weight=FontManager.WEIGHT_SEMIBOLD))
         gen_desc_label.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent; border: none;")
         gen_desc_label.setAlignment(Qt.AlignRight)
         gen_desc_value = QLabel(general_desc if general_desc else "-")
-        gen_desc_value.setFont(create_font(size=10, weight=FontManager.WEIGHT_REGULAR))
+        gen_desc_value.setFont(create_font(size=FontManager.WIZARD_CARD_VALUE, weight=FontManager.WEIGHT_REGULAR))
         gen_desc_value.setStyleSheet(f"color: {Colors.WIZARD_SUBTITLE}; background: transparent; border: none;")
         gen_desc_value.setAlignment(Qt.AlignRight)
         gen_desc_value.setWordWrap(True)
@@ -547,12 +547,12 @@ class ReviewStep(BaseStep):
 
         label = QLabel(label_text)
         label.setAlignment(Qt.AlignCenter)
-        label.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
+        label.setFont(create_font(size=FontManager.WIZARD_FIELD_LABEL, weight=FontManager.WEIGHT_SEMIBOLD))
         label.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent; border: none;")
 
         value = QLabel(value_text)
         value.setAlignment(Qt.AlignCenter)
-        value.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
+        value.setFont(create_font(size=FontManager.WIZARD_FIELD_VALUE, weight=FontManager.WEIGHT_SEMIBOLD))
         value.setStyleSheet(f"color: {Colors.WIZARD_SUBTITLE}; background: transparent; border: none;")
 
         section_layout.addWidget(label)
@@ -638,7 +638,7 @@ class ReviewStep(BaseStep):
             desc_layout.setSpacing(2)
 
             desc_title = QLabel(tr("wizard.unit.property_description"))
-            desc_title.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
+            desc_title.setFont(create_font(size=FontManager.WIZARD_FIELD_LABEL, weight=FontManager.WEIGHT_SEMIBOLD))
             desc_title.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent; border: none;")
             desc_title.setAlignment(Qt.AlignRight)
 
@@ -651,7 +651,7 @@ class ReviewStep(BaseStep):
                 desc_text_content = tr("wizard.unit.property_description_placeholder")
 
             desc_text = QLabel(desc_text_content)
-            desc_text.setFont(create_font(size=9, weight=FontManager.WEIGHT_REGULAR))
+            desc_text.setFont(create_font(size=FontManager.WIZARD_FIELD_VALUE, weight=FontManager.WEIGHT_REGULAR))
             desc_text.setStyleSheet(f"color: {Colors.WIZARD_SUBTITLE}; background: transparent; border: none;")
             desc_text.setAlignment(Qt.AlignRight)
             desc_text.setWordWrap(True)
@@ -667,7 +667,7 @@ class ReviewStep(BaseStep):
             self.unit_content.addWidget(desc_widget)
         else:
             no_data = QLabel(tr("wizard.unit.not_selected"))
-            no_data.setFont(create_font(size=10))
+            no_data.setFont(create_font(size=FontManager.SIZE_BODY))
             no_data.setStyleSheet(f"color: {Colors.TEXT_SECONDARY}; background: transparent; border: none;")
             no_data.setAlignment(Qt.AlignCenter)
             self.unit_content.addWidget(no_data)
@@ -694,12 +694,12 @@ class ReviewStep(BaseStep):
             item_block.setSpacing(4)
 
             txt_lbl = QLabel(text)
-            txt_lbl.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
+            txt_lbl.setFont(create_font(size=FontManager.WIZARD_CARD_LABEL, weight=FontManager.WEIGHT_SEMIBOLD))
             txt_lbl.setStyleSheet(f"color: #1e293b; background: transparent; border: none;")
             txt_lbl.setAlignment(ALIGN_ABS_RIGHT)
 
             val_lbl = QLabel(str(value))
-            val_lbl.setFont(create_font(size=10, weight=FontManager.WEIGHT_REGULAR))
+            val_lbl.setFont(create_font(size=FontManager.WIZARD_CARD_VALUE, weight=FontManager.WEIGHT_REGULAR))
             val_lbl.setStyleSheet(f"color: #94a3b8; background: transparent; border: none;")
             val_lbl.setAlignment(ALIGN_ABS_RIGHT)
 
@@ -722,7 +722,7 @@ class ReviewStep(BaseStep):
 
         if not self.context.households:
             no_data = QLabel(tr("wizard.household.no_data"))
-            no_data.setFont(create_font(size=10))
+            no_data.setFont(create_font(size=FontManager.SIZE_BODY))
             no_data.setStyleSheet(f"color: {Colors.TEXT_SECONDARY}; background: transparent; border: none;")
             no_data.setAlignment(Qt.AlignCenter)
             self.household_content.addWidget(no_data)
@@ -749,7 +749,7 @@ class ReviewStep(BaseStep):
         nature_title = self._create_section_label(tr("wizard.household.occupancy_nature"))
         nature_title.setAlignment(Qt.AlignRight)
         nature_val = QLabel(nature_display)
-        nature_val.setFont(create_font(size=10, weight=FontManager.WEIGHT_REGULAR))
+        nature_val.setFont(create_font(size=FontManager.WIZARD_CARD_VALUE, weight=FontManager.WEIGHT_REGULAR))
         nature_val.setStyleSheet(f"color: #94a3b8; background: transparent; border: none;")
         nature_val.setAlignment(Qt.AlignRight)
         nature_block.addWidget(nature_title)
@@ -760,7 +760,7 @@ class ReviewStep(BaseStep):
         type_title = self._create_section_label(tr("wizard.household.occupancy_type"))
         type_title.setAlignment(Qt.AlignCenter)
         type_val = QLabel(type_display)
-        type_val.setFont(create_font(size=10, weight=FontManager.WEIGHT_REGULAR))
+        type_val.setFont(create_font(size=FontManager.WIZARD_CARD_VALUE, weight=FontManager.WEIGHT_REGULAR))
         type_val.setStyleSheet(f"color: #94a3b8; background: transparent; border: none;")
         type_val.setAlignment(Qt.AlignCenter)
         type_block.addWidget(type_title)
@@ -771,7 +771,7 @@ class ReviewStep(BaseStep):
         count_title = self._create_section_label(tr("wizard.household.family_size"))
         count_title.setAlignment(Qt.AlignCenter)
         count_val = QLabel(str(total_size))
-        count_val.setFont(create_font(size=10, weight=FontManager.WEIGHT_REGULAR))
+        count_val.setFont(create_font(size=FontManager.WIZARD_CARD_VALUE, weight=FontManager.WEIGHT_REGULAR))
         count_val.setStyleSheet(f"color: #94a3b8; background: transparent; border: none;")
         count_val.setAlignment(Qt.AlignCenter)
         count_block.addWidget(count_title)
@@ -826,7 +826,7 @@ class ReviewStep(BaseStep):
 
         if not self.context.persons:
             no_data = QLabel(tr("wizard.person.no_persons"))
-            no_data.setFont(create_font(size=10))
+            no_data.setFont(create_font(size=FontManager.SIZE_BODY))
             no_data.setStyleSheet(f"color: {Colors.TEXT_SECONDARY}; background: transparent; border: none;")
             no_data.setAlignment(Qt.AlignCenter)
             self.persons_content.addWidget(no_data)
@@ -978,7 +978,7 @@ class ReviewStep(BaseStep):
         eval_label = QLabel()
         eval_label.setAlignment(Qt.AlignCenter)
         eval_label.setFixedHeight(36)
-        eval_label.setFont(create_font(size=11, weight=FontManager.WEIGHT_SEMIBOLD))
+        eval_label.setFont(create_font(size=FontManager.WIZARD_BADGE, weight=FontManager.WEIGHT_SEMIBOLD))
 
         if has_evidence:
             count_text = f" ({evidence_count})" if evidence_count else ""
@@ -1015,7 +1015,7 @@ class ReviewStep(BaseStep):
 
         if not claims:
             no_data = QLabel(tr("wizard.review.no_claim"))
-            no_data.setFont(create_font(size=10))
+            no_data.setFont(create_font(size=FontManager.SIZE_BODY))
             no_data.setStyleSheet(f"color: {Colors.TEXT_SECONDARY}; background: transparent; border: none;")
             no_data.setAlignment(Qt.AlignCenter)
             self.claim_content.addWidget(no_data)

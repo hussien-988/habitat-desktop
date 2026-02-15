@@ -265,7 +265,7 @@ class EvidenceDialog(QDialog):
             'evidence_id': self.evidence_data.get('evidence_id') if self.evidence_data else str(uuid.uuid4()),
             'document_type': self.type_combo.currentData(),
             'document_number': self.number_edit.text().strip() or None,
-            'issue_date': self.issue_date.date().toString('yyyy-MM-dd'),
+            'issue_date': self.issue_date.date().toPyDate().isoformat(),
             'issuing_authority': self.authority_edit.text().strip() or None,
             'file_path': self.selected_file,
             'file_name': Path(self.selected_file).name if self.selected_file else None,

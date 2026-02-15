@@ -216,14 +216,14 @@ API للاتصال بـ TRRCMS Backend.
 
         # Log request
         import json as _json
-        print(f"\n[API REQ] {method} {endpoint}")
+        logger.info(f"[API REQ] {method} {endpoint}")
         if params:
-            print(f"[API REQ] Params: {params}")
+            logger.info(f"[API REQ] Params: {params}")
         if json_data:
             try:
-                print(f"[API REQ] Body: {_json.dumps(json_data, indent=2, ensure_ascii=False, default=str)}")
+                logger.info(f"[API REQ] Body: {_json.dumps(json_data, indent=2, ensure_ascii=False, default=str)}")
             except Exception:
-                print(f"[API REQ] Body: {json_data}")
+                logger.info(f"[API REQ] Body: {json_data}")
 
         try:
             response = requests.request(
@@ -242,16 +242,16 @@ API للاتصال بـ TRRCMS Backend.
                 result = response.json()
 
             # Log successful response
-            print(f"[API RES] {response.status_code} {endpoint}")
+            logger.info(f"[API RES] {response.status_code} {endpoint}")
             if result:
                 try:
                     res_str = _json.dumps(result, indent=2, ensure_ascii=False, default=str)
                     if len(res_str) > 1000:
-                        print(f"[API RES] Body (truncated): {res_str[:1000]}...")
+                        logger.info(f"[API RES] Body (truncated): {res_str[:1000]}...")
                     else:
-                        print(f"[API RES] Body: {res_str}")
+                        logger.info(f"[API RES] Body: {res_str}")
                 except Exception:
-                    print(f"[API RES] Body: {result}")
+                    logger.info(f"[API RES] Body: {result}")
 
             return result
 
@@ -267,9 +267,7 @@ API للاتصال بـ TRRCMS Backend.
                 response_text = e.response.text[:500] if e.response is not None else ''
             except Exception:
                 pass
-            logger.error(f"HTTP {status_code}: {endpoint} | Response: {response_data or response_text}")
-            print(f"[API ERR] {status_code} {method} {endpoint}")
-            print(f"[API ERR] Response: {response_data or response_text}")
+            logger.error(f"[API ERR] {status_code} {method} {endpoint} | Response: {response_data or response_text}")
             raise ApiException(
                 message=str(e),
                 status_code=status_code,
@@ -1093,6 +1091,27 @@ API للاتصال بـ TRRCMS Backend.
         logger.info(f"Household created: {result.get('id', 'N/A')}")
         return result
 
+    def update_household(self, household_id: str, household_data: Dict[str, Any], survey_id: str) -> Dict[str, Any]:
+        """Update an existing household via API."""
+        api_data = self._convert_household_to_api_format(household_data, survey_id)
+        api_data["surveyId"] = survey_id
+        api_data["householdId"] = household_id
+
+        endpoint = f"/v1/Surveys/{survey_id}/households/{household_id}"
+        logger.info(f"Updating household {household_id} via {endpoint}")
+        result = self._request("PUT", endpoint, json_data=api_data)
+        logger.info(f"Household {household_id} updated successfully")
+        return result
+
+    def delete_household(self, household_id: str, survey_id: str) -> bool:
+        """Delete a household via API. DELETE /api/v1/Surveys/{surveyId}/households/{householdId}"""
+        if not household_id or not survey_id:
+            raise ValueError("household_id and survey_id are required")
+        endpoint = f"/v1/Surveys/{survey_id}/households/{household_id}"
+        self._request("DELETE", endpoint)
+        logger.info(f"Household {household_id} deleted from API")
+        return True
+
     def get_households_for_unit(self, unit_id: str) -> List[Dict[str, Any]]:
         """
         Get all households for a property unit.
@@ -1269,10 +1288,50 @@ API للاتصال بـ TRRCMS Backend.
         api_data = self._convert_relation_to_api_format(relation_data, survey_id, unit_id)
         endpoint = f"/v1/Surveys/{survey_id}/property-units/{unit_id}/relations"
 
-        logger.info(f"Linking person {person_id} to unit {unit_id}")
+        logger.info(f"Linking person {person_id} to unit {unit_id}, api_data={api_data}")
         result = self._request("POST", endpoint, json_data=api_data)
         logger.info(f"Person linked to unit successfully")
         return result
+
+    def update_person(self, person_id: str, person_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Update an existing person via PUT /api/v1/Persons/{id}."""
+        if not person_id:
+            raise ValueError("person_id is required")
+
+        api_data = {
+            "id": person_id,
+            "familyNameArabic": person_data.get("last_name"),
+            "firstNameArabic": person_data.get("first_name"),
+            "fatherNameArabic": person_data.get("father_name"),
+            "motherNameArabic": person_data.get("mother_name"),
+            "nationalId": person_data.get("national_id"),
+            "gender": int(person_data["gender"]) if person_data.get("gender") else None,
+            "nationality": int(person_data["nationality"]) if person_data.get("nationality") else None,
+            "email": person_data.get("email"),
+            "mobileNumber": person_data.get("phone"),
+            "phoneNumber": person_data.get("landline"),
+        }
+
+        birth_date = person_data.get("birth_date")
+        if birth_date:
+            api_data["dateOfBirth"] = f"{birth_date}T00:00:00Z" if "T" not in str(birth_date) else str(birth_date)
+
+        api_data = {k: v for k, v in api_data.items() if v is not None}
+        api_data["id"] = person_id
+
+        logger.info(f"Updating person {person_id}")
+        result = self._request("PUT", f"/v1/Persons/{person_id}", json_data=api_data)
+        logger.info(f"Person {person_id} updated successfully")
+        return result
+
+    def delete_person(self, person_id: str) -> None:
+        """Soft delete a person via DELETE /api/v1/Persons/{id}."""
+        if not person_id:
+            raise ValueError("person_id is required")
+
+        logger.info(f"Deleting person {person_id}")
+        self._request("DELETE", f"/v1/Persons/{person_id}")
+        logger.info(f"Person {person_id} deleted successfully")
 
     def upload_relation_document(
         self,
@@ -1433,6 +1492,80 @@ API للاتصال بـ TRRCMS Backend.
             logger.error(f"Network error during upload: {e}")
             raise NetworkException(message=str(e), original_error=e)
 
+    def get_survey_evidences(self, survey_id: str, evidence_type: str = None) -> List[Dict[str, Any]]:
+        """
+        Get all evidence records for a survey.
+
+        Endpoint: GET /api/v1/Surveys/{surveyId}/evidence
+        """
+        params = {}
+        if evidence_type:
+            params["evidenceType"] = evidence_type
+        result = self._request("GET", f"/v1/Surveys/{survey_id}/evidence", params=params)
+        return result if isinstance(result, list) else []
+
+    def get_relation_evidences(
+        self,
+        survey_id: str,
+        relation_id: str,
+        evidence_type: str = None,
+        only_current: bool = True
+    ) -> List[Dict[str, Any]]:
+        """
+        Get evidence records for a person-property relation.
+
+        Endpoint: GET /api/v1/Surveys/{surveyId}/relations/{relationId}/evidences
+        """
+        params = {"onlyCurrentVersions": str(only_current).lower()}
+        if evidence_type:
+            params["evidenceType"] = evidence_type
+        result = self._request(
+            "GET", f"/v1/Surveys/{survey_id}/relations/{relation_id}/evidences", params=params
+        )
+        return result if isinstance(result, list) else []
+
+    def delete_evidence(self, survey_id: str, evidence_id: str) -> bool:
+        """
+        Soft delete an evidence record.
+
+        Endpoint: DELETE /api/v1/Surveys/{surveyId}/evidence/{evidenceId}
+        Returns 204 on success.
+        """
+        self._request("DELETE", f"/v1/Surveys/{survey_id}/evidence/{evidence_id}")
+        return True
+
+    def download_evidence(self, evidence_id: str, save_path: str) -> str:
+        """
+        Download an evidence file to disk.
+
+        Endpoint: GET /api/v1/Surveys/evidence/{evidenceId}/download
+        """
+        import os
+        url = f"{self.base_url}/v1/Surveys/evidence/{evidence_id}/download"
+        self._ensure_valid_token()
+        headers = {
+            "Authorization": f"Bearer {self.access_token}",
+            "Accept": "*/*"
+        }
+
+        logger.info(f"[API REQ] GET /v1/Surveys/evidence/{evidence_id}/download")
+
+        try:
+            response = requests.get(url, headers=headers, timeout=self.config.timeout, verify=False)
+            response.raise_for_status()
+            os.makedirs(os.path.dirname(save_path), exist_ok=True)
+            with open(save_path, 'wb') as f:
+                f.write(response.content)
+            logger.info(f"Evidence downloaded: {evidence_id} -> {save_path}")
+            return save_path
+        except requests.exceptions.HTTPError as e:
+            status_code = e.response.status_code if e.response is not None else 0
+            logger.error(f"[API ERR] {status_code} download evidence {evidence_id}")
+            raise ApiException(message=str(e), status_code=status_code)
+        except (requests.exceptions.ConnectionError, requests.exceptions.Timeout) as e:
+            logger.error(f"Network error during download: {e}")
+            raise NetworkException(message=str(e), original_error=e)
+
     def _convert_person_to_api_format_with_household(self, person_data: Dict[str, Any], survey_id: str, household_id: str) -> Dict[str, Any]:
         """Convert person data to API format for household-scoped endpoint."""
         import re
@@ -1463,7 +1596,9 @@ API للاتصال بـ TRRCMS Backend.
 
         gender = get_value('gender', 'gender', None)
         nationality = get_value('nationality', 'nationality', None)
-        relationship = get_value('relationship_type', 'relationshipToHead', None)
+        # Note: person_role (owner/tenant) is RelationType, NOT RelationshipToHead.
+        # RelationshipToHead is household role (head/spouse/child) - different enum.
+        # Don't send relationship_type as relationshipToHead to avoid enum mismatch.
 
         api_data = {
             "surveyId": survey_id,
@@ -1479,7 +1614,6 @@ API للاتصال بـ TRRCMS Backend.
             "email": email,
             "mobileNumber": get_value('phone', 'mobileNumber', ''),
             "phoneNumber": get_value('landline', 'phoneNumber', ''),
-            "relationshipToHead": int(relationship) if relationship else None
         }
         return {k: v for k, v in api_data.items() if v is not None}
 
@@ -1498,7 +1632,15 @@ API للاتصال بـ TRRCMS Backend.
             occupancy_type_int = None
 
         ownership_share_pct = relation_data.get('ownership_share', 0)
-        ownership_share_decimal = ownership_share_pct / 100.0 if ownership_share_pct else None
+        if ownership_share_pct:
+            ownership_share_decimal = ownership_share_pct / 100.0
+            # Safety: if result > 1.0, user may have entered a fraction directly
+            if ownership_share_decimal > 1.0:
+                logger.warning(f"OwnershipShare: {ownership_share_pct}/100={ownership_share_decimal} > 1.0, using raw value as fraction")
+                ownership_share_decimal = min(ownership_share_pct, 1.0)
+            logger.info(f"OwnershipShare: input={ownership_share_pct}% -> API={ownership_share_decimal}")
+        else:
+            ownership_share_decimal = None
 
         has_evidence = relation_data.get('has_documents', False)
 

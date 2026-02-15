@@ -357,11 +357,11 @@ class VocabularyTermDialog(QDialog):
 
         from_date = self.effective_from.date()
         if from_date.isValid() and from_date != QDate():
-            effective_from = from_date.toString("yyyy-MM-dd")
+            effective_from = from_date.toPyDate().isoformat()
 
         to_date = self.effective_to.date()
         if to_date.isValid() and to_date != QDate() and to_date.year() > 1900:
-            effective_to = to_date.toString("yyyy-MM-dd")
+            effective_to = to_date.toPyDate().isoformat()
 
         return {
             "term_code": self.code_edit.text().strip(),

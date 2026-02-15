@@ -38,6 +38,9 @@ def map_api_error(error: ApiException) -> str:
 
     if status and status >= 500:
         logger.error(f"API server error ({status}): {error}")
+        validation_details = _extract_validation_from_500(error)
+        if validation_details:
+            return tr("error.api.validation", details=validation_details)
         return tr("error.api.server")
 
     if status:
@@ -75,6 +78,30 @@ def map_exception(error: Exception, context: str = None) -> str:
 
     logger.warning(f"Unexpected error: {error}")
     return tr("error.api.unknown")
+
+
+def _extract_validation_from_500(error: ApiException) -> str:
+    """Extract validation details from 500 errors caused by backend FluentValidation leaks."""
+    import re
+    error_text = str(error)
+    response_data = getattr(error, 'response_data', {}) or {}
+
+    details = _extract_validation_details(response_data)
+    if details:
+        return details
+
+    pattern = r'--\s*(\w+):\s*(.+?)(?:\s*Severity:|$)'
+    matches = re.findall(pattern, error_text)
+    if matches:
+        return "\n".join(f"- {field}: {msg.strip()}" for field, msg in matches)
+
+    if 'ValidationException' in error_text and 'Validation failed' in error_text:
+        start = error_text.find('Validation failed:')
+        if start >= 0:
+            msg = error_text[start:start + 200].split('\n')[0]
+            return msg
+
+    return ""
 
 
 def _extract_validation_details(response_data: dict) -> str:

@@ -124,7 +124,7 @@ class HouseholdStep(BaseStep):
         # Building address text
         self.household_building_address = QLabel(tr("wizard.unit.address_label"))
         self.household_building_address.setAlignment(Qt.AlignCenter)
-        self.household_building_address.setFont(create_font(size=10, weight=FontManager.WEIGHT_REGULAR))
+        self.household_building_address.setFont(create_font(size=FontManager.WIZARD_CARD_LABEL, weight=FontManager.WEIGHT_REGULAR))
         self.household_building_address.setStyleSheet("""
             QLabel {
                 border: none;
@@ -174,12 +174,12 @@ class HouseholdStep(BaseStep):
         unit_info_row.setContentsMargins(8, 8, 8, 8)  # Add padding inside container
 
         # Create 6 unit info sections - SAME labels as unit_selection_step cards
-        section_unit_num, self.ui_unit_number = self._create_stat_section("رقم المقسم")
-        section_floor, self.ui_floor_number = self._create_stat_section("رقم الطابق")
-        section_rooms, self.ui_rooms_count = self._create_stat_section("عدد الغرف")
-        section_area, self.ui_area = self._create_stat_section("مساحة المقسم")
-        section_unit_type, self.ui_unit_type = self._create_stat_section("نوع المقسم")
-        section_unit_status, self.ui_unit_status = self._create_stat_section("حالة المقسم")
+        section_unit_num, self.ui_unit_number = self._create_stat_section(tr("wizard.household.unit_number"))
+        section_floor, self.ui_floor_number = self._create_stat_section(tr("wizard.household.floor_number"))
+        section_rooms, self.ui_rooms_count = self._create_stat_section(tr("wizard.household.rooms_count"))
+        section_area, self.ui_area = self._create_stat_section(tr("wizard.household.unit_area"))
+        section_unit_type, self.ui_unit_type = self._create_stat_section(tr("wizard.household.unit_type_label"))
+        section_unit_status, self.ui_unit_status = self._create_stat_section(tr("wizard.household.unit_status_label"))
 
         # Add sections with equal spacing
         unit_sections = [section_unit_num, section_floor, section_rooms, section_area, section_unit_type, section_unit_status]
@@ -305,8 +305,8 @@ class HouseholdStep(BaseStep):
         title_subtitle_layout.setContentsMargins(0, 0, 0, 0)
 
         # Title
-        self._title_label = QLabel("الشاغلين")
-        self._title_label.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
+        self._title_label = QLabel(tr("wizard.household.occupants_title"))
+        self._title_label.setFont(create_font(size=FontManager.WIZARD_STEP_TITLE, weight=FontManager.WEIGHT_SEMIBOLD))
         self._title_label.setStyleSheet("""
             QLabel {
                 color: #1A1F1D;
@@ -319,7 +319,7 @@ class HouseholdStep(BaseStep):
 
         # Subtitle
         self._subtitle_label = QLabel(tr("wizard.household.subtitle"))
-        self._subtitle_label.setFont(create_font(size=10, weight=FontManager.WEIGHT_REGULAR))
+        self._subtitle_label.setFont(create_font(size=FontManager.WIZARD_STEP_SUBTITLE, weight=FontManager.WEIGHT_REGULAR))
         self._subtitle_label.setStyleSheet("""
             QLabel {
                 color: #86909B;
@@ -373,7 +373,7 @@ class HouseholdStep(BaseStep):
         nature_col.setSpacing(4)
 
         self._occupancy_nature_label = QLabel(tr("wizard.household.occupancy_nature"))
-        self._occupancy_nature_label.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
+        self._occupancy_nature_label.setFont(create_font(size=FontManager.WIZARD_FIELD_LABEL, weight=FontManager.WEIGHT_SEMIBOLD))
         self._occupancy_nature_label.setStyleSheet(label_style)
         nature_col.addWidget(self._occupancy_nature_label)
 
@@ -391,7 +391,7 @@ class HouseholdStep(BaseStep):
         type_col.setSpacing(4)
 
         self._occupancy_type_label = QLabel(tr("wizard.household.occupancy_type"))
-        self._occupancy_type_label.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
+        self._occupancy_type_label.setFont(create_font(size=FontManager.WIZARD_FIELD_LABEL, weight=FontManager.WEIGHT_SEMIBOLD))
         self._occupancy_type_label.setStyleSheet(label_style)
         type_col.addWidget(self._occupancy_type_label)
 
@@ -413,7 +413,7 @@ class HouseholdStep(BaseStep):
         total_members_layout.setSpacing(4)
 
         self._total_members_label = QLabel(tr("wizard.household.total_members"))
-        self._total_members_label.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
+        self._total_members_label.setFont(create_font(size=FontManager.WIZARD_FIELD_LABEL, weight=FontManager.WEIGHT_SEMIBOLD))
         self._total_members_label.setStyleSheet("color: #374151; background: transparent;")
         total_members_layout.addWidget(self._total_members_label)
 
@@ -438,7 +438,7 @@ class HouseholdStep(BaseStep):
         notes_field_layout.setSpacing(4)
 
         self._notes_label = QLabel(tr("wizard.household.notes_label"))
-        self._notes_label.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
+        self._notes_label.setFont(create_font(size=FontManager.WIZARD_FIELD_LABEL, weight=FontManager.WEIGHT_SEMIBOLD))
         self._notes_label.setStyleSheet("color: #374151; background: transparent;")
         notes_field_layout.addWidget(self._notes_label)
 
@@ -452,7 +452,7 @@ class HouseholdStep(BaseStep):
                 border: 1px solid #E1E8ED;
                 border-radius: 8px;
                 background-color: #F0F7FF;
-                font-size: 12px;
+                font-size: 14px;
                 color: #1A1A1A;
             }
             QTextEdit:focus {
@@ -492,7 +492,7 @@ class HouseholdStep(BaseStep):
 
         # ===== ROW 1: Title (no icon) =====
         title_label = QLabel(tr("wizard.household.composition_title"))
-        title_label.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
+        title_label.setFont(create_font(size=FontManager.WIZARD_CARD_LABEL, weight=FontManager.WEIGHT_SEMIBOLD))
         title_label.setStyleSheet("color: #1A1F1D; background: transparent;")
         title_label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
         composition_layout.addWidget(title_label)
@@ -550,13 +550,13 @@ class HouseholdStep(BaseStep):
         # Label (top)
         label = QLabel(label_text)
         label.setAlignment(Qt.AlignCenter)
-        label.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
+        label.setFont(create_font(size=FontManager.WIZARD_FIELD_LABEL, weight=FontManager.WEIGHT_SEMIBOLD))
         label.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent;")
 
         # Value (bottom) - centered under label
         value = QLabel(value_text)
         value.setAlignment(Qt.AlignCenter)
-        value.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))  # Smaller: 9pt
+        value.setFont(create_font(size=FontManager.WIZARD_FIELD_VALUE, weight=FontManager.WEIGHT_SEMIBOLD))
         value.setStyleSheet(f"color: {Colors.WIZARD_SUBTITLE}; background: transparent;")
 
         section_layout.addWidget(label)
@@ -695,7 +695,7 @@ class HouseholdStep(BaseStep):
 
         # Card title
         card_title = QLabel(title)
-        card_title.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
+        card_title.setFont(create_font(size=FontManager.WIZARD_FIELD_LABEL, weight=FontManager.WEIGHT_SEMIBOLD))
         card_title.setStyleSheet("color: #374151; background: transparent;")
         card_title.setAlignment(Qt.AlignCenter)
         card_layout.addWidget(card_title)
@@ -707,7 +707,7 @@ class HouseholdStep(BaseStep):
 
             # Label
             label = QLabel(label_text)
-            label.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
+            label.setFont(create_font(size=FontManager.WIZARD_FIELD_LABEL, weight=FontManager.WEIGHT_SEMIBOLD))
             label.setStyleSheet("color: #374151; background: transparent;")
             field_layout.addWidget(label)
 
@@ -740,7 +740,7 @@ class HouseholdStep(BaseStep):
 
     def update_language(self, is_arabic: bool):
         """Update all translatable texts when language changes."""
-        self._title_label.setText("الشاغلين" if is_arabic else "Occupants")
+        self._title_label.setText(tr("wizard.household.occupants_title"))
         self._subtitle_label.setText(tr("wizard.household.subtitle"))
         self._occupancy_type_label.setText(tr("wizard.household.occupancy_type"))
         self._occupancy_nature_label.setText(tr("wizard.household.occupancy_nature"))
@@ -762,7 +762,7 @@ class HouseholdStep(BaseStep):
         # Validate: total members must be > 0
         total_entered = self.hh_total_members.value()
         if total_entered <= 0:
-            result.add_error("يجب أن يكون عدد أفراد الأسرة أكبر من صفر")
+            result.add_error(tr("wizard.household.members_required"))
             return result
 
         # Validate: total members == sum of all male + female fields
@@ -773,7 +773,7 @@ class HouseholdStep(BaseStep):
             + self.hh_disabled_males.value() + self.hh_disabled_females.value()
         )
         if total_entered != sum_details:
-            result.add_error("تأكد من مطابقة عدد الأفراد")
+            result.add_error(tr("wizard.household.members_mismatch"))
             return result
 
         household = {
@@ -796,25 +796,31 @@ class HouseholdStep(BaseStep):
 
         # Save via API if using API mode
         if self._use_api:
-            # Guard: skip if household already created (prevents duplicate on back-navigation)
             existing_household_id = self.context.get_data("household_id")
+            survey_id = self.context.get_data("survey_id")
+            self._set_auth_token()
+
             if existing_household_id:
-                logger.info(f"Household already exists ({existing_household_id}), skipping creation")
+                stored = self.context.households[0] if self.context.households else {}
+                if self._household_data_changed(household, stored):
+                    try:
+                        self._api_client.update_household(existing_household_id, household, survey_id=survey_id)
+                        logger.info(f"Household {existing_household_id} updated via API")
+                    except Exception as e:
+                        logger.error(f"Failed to update household: {e}")
+                        result.add_error(tr("wizard.household.save_failed", error_msg=map_exception(e)))
+                        return result
+                else:
+                    logger.info(f"Household unchanged ({existing_household_id}), skipping")
                 household["api_id"] = existing_household_id
             else:
-                self._set_auth_token()
-                survey_id = self.context.get_data("survey_id")
-
                 logger.info(f"Creating household via API: property_unit_id={property_unit_id}, survey_id={survey_id}, size={household['size']}")
-
                 try:
                     api_response = self._api_client.create_household(household, survey_id=survey_id)
                     logger.info("Household created successfully via API")
-
                     household_id = api_response.get("id") or api_response.get("householdId", "")
                     household["api_id"] = household_id
                     self.context.update_data("household_id", household_id)
-
                 except Exception as e:
                     logger.error(f"Failed to create household via API: {e}")
                     result.add_error(tr("wizard.household.save_failed", error_msg=map_exception(e)))
@@ -829,6 +835,20 @@ class HouseholdStep(BaseStep):
             result.add_error(tr("wizard.household.required_error"))
 
         return result
+
+    def _household_data_changed(self, current: Dict, stored: Dict) -> bool:
+        """Compare current form data with stored household to detect changes."""
+        compare_keys = [
+            "size", "occupancy_type", "occupancy_nature",
+            "adult_males", "adult_females",
+            "male_children_under18", "female_children_under18",
+            "male_elderly_over65", "female_elderly_over65",
+            "disabled_males", "disabled_females", "notes"
+        ]
+        for key in compare_keys:
+            if current.get(key) != stored.get(key):
+                return True
+        return False
 
     def collect_data(self) -> Dict[str, Any]:
         """Collect data from the step."""
@@ -891,7 +911,7 @@ class HouseholdStep(BaseStep):
         # Format area with 2 decimal places
         if area:
             try:
-                area_formatted = f"{float(area):.2f} م²"
+                area_formatted = f"{float(area):.2f} m²"
                 self.ui_area.setText(area_formatted)
             except (ValueError, TypeError):
                 self.ui_area.setText("-")

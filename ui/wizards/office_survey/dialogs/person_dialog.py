@@ -18,7 +18,8 @@ from PyQt5.QtWidgets import (
     QRadioButton, QButtonGroup, QSizePolicy
 )
 from PyQt5.QtCore import Qt, QDate, QUrl
-from PyQt5.QtGui import QColor, QPixmap
+from PyQt5.QtGui import QColor, QPixmap, QRegExpValidator, QDoubleValidator
+from PyQt5.QtCore import QRegExp as QtRegExp
 
 from app.config import Config
 from services.validation_service import ValidationService
@@ -59,6 +60,10 @@ class PersonDialog(QDialog):
         if auth_token:
             self._api_service.set_access_token(auth_token)
         self._use_api = getattr(Config, 'DATA_PROVIDER', 'local_db') == 'http'
+        self._api_person_id = None
+        self._api_relation_id = None
+        self._evidence_ids = {}       # {normalized_path: evidence_id} for ID files
+        self._server_evidences = []   # List[EvidenceDto] from server on edit
 
         self.setModal(True)
         self.setFixedSize(589, 674)  # 565+24 width, 650+24 height (12px shadow margin each side)
@@ -236,7 +241,6 @@ class PersonDialog(QDialog):
         self.last_name.textChanged.connect(self._update_all_progress)
         self.father_name.textChanged.connect(self._update_all_progress)
         self.mother_name.textChanged.connect(self._update_all_progress)
-        self.birth_place.currentIndexChanged.connect(self._update_all_progress)
         self.gender.currentIndexChanged.connect(self._update_all_progress)
         self.nationality.currentIndexChanged.connect(self._update_all_progress)
         self.national_id.textChanged.connect(self._update_all_progress)
@@ -263,7 +267,6 @@ class PersonDialog(QDialog):
                 bool(self.last_name.text().strip()),
                 bool(self.father_name.text().strip()),
                 bool(self.mother_name.text().strip()),
-                self.birth_place.currentIndex() > 0,
                 self.gender.currentIndex() > 0,
                 self.nationality.currentIndex() > 0,
                 bool(self.national_id.text().strip()),
@@ -341,13 +344,19 @@ class PersonDialog(QDialog):
         grid.addWidget(self._label(tr("wizard.person_dialog.first_name"), label_style), row, 0)
         grid.addWidget(self._label(tr("wizard.person_dialog.last_name"), label_style), row, 1)
         row += 1
+        # Name validator: Arabic + Latin letters + spaces + hyphens + dots
+        # Note: non-raw string so Python converts \u0600-\u06FF to actual Arabic characters
+        _name_validator = QRegExpValidator(QtRegExp("[\u0600-\u06FFa-zA-Z\\s.\\-']+"))
+
         self.first_name = QLineEdit()
         self.first_name.setPlaceholderText(tr("wizard.person_dialog.first_name_placeholder"))
+        self.first_name.setValidator(_name_validator)
         self.first_name.setStyleSheet(self._input_style())
         grid.addWidget(self.first_name, row, 0)
 
         self.last_name = QLineEdit()
         self.last_name.setPlaceholderText(tr("wizard.person_dialog.last_name_placeholder"))
+        self.last_name.setValidator(_name_validator)
         self.last_name.setStyleSheet(self._input_style())
         grid.addWidget(self.last_name, row, 1)
         row += 1
@@ -358,26 +367,20 @@ class PersonDialog(QDialog):
         row += 1
         self.father_name = QLineEdit()
         self.father_name.setPlaceholderText(tr("wizard.person_dialog.father_name_placeholder"))
+        self.father_name.setValidator(_name_validator)
         self.father_name.setStyleSheet(self._input_style())
         grid.addWidget(self.father_name, row, 0)
 
         self.mother_name = QLineEdit()
         self.mother_name.setPlaceholderText(tr("wizard.person_dialog.mother_name_placeholder"))
+        self.mother_name.setValidator(_name_validator)
         self.mother_name.setStyleSheet(self._input_style())
         grid.addWidget(self.mother_name, row, 1)
         row += 1
 
-        # Row: Birth Place | Birth Date
-        grid.addWidget(self._label(tr("wizard.person_dialog.birth_place"), label_style), row, 0)
-        grid.addWidget(self._label(tr("wizard.person_dialog.birth_date"), label_style), row, 1)
+        # Row: Birth Date
+        grid.addWidget(self._label(tr("wizard.person_dialog.birth_date"), label_style), row, 0)
         row += 1
-        self.birth_place = QComboBox()
-        self.birth_place.addItem(tr("wizard.person_dialog.select"), None)
-        for code, name in self._get_governorate_options():
-            self.birth_place.addItem(name, code)
-        self.birth_place.setStyleSheet(self._input_style())
-        grid.addWidget(self.birth_place, row, 0)
-
         self.birth_date = QDateEdit()
         self.birth_date.setCalendarPopup(True)
         self.birth_date.setDate(QDate(1980, 1, 1))
@@ -385,7 +388,7 @@ class PersonDialog(QDialog):
         self.birth_date.setMaximumDate(QDate.currentDate())
         self.birth_date.setDisplayFormat("yyyy-MM-dd")
         self.birth_date.setStyleSheet(self._date_input_style())
-        grid.addWidget(self.birth_date, row, 1)
+        grid.addWidget(self.birth_date, row, 0)
         row += 1
 
         # Row: Gender | Nationality
@@ -412,7 +415,7 @@ class PersonDialog(QDialog):
         row += 1
         self.national_id = QLineEdit()
         self.national_id.setPlaceholderText("0000000000")
-        self.national_id.setMaxLength(11)
+        self.national_id.setValidator(QRegExpValidator(QtRegExp(r"\d{0,11}")))
         self.national_id.setStyleSheet(self._input_style())
         grid.addWidget(self.national_id, row, 0, 1, 2)
         row += 1
@@ -472,6 +475,7 @@ class PersonDialog(QDialog):
         row += 1
         self.email = QLineEdit()
         self.email.setPlaceholderText("*****@gmail.com")
+        self.email.setValidator(QRegExpValidator(QtRegExp(r"[a-zA-Z0-9@._\-+]+")))
         self.email.setStyleSheet(self._input_style())
         grid.addWidget(self.email, row, 0, 1, 2)
         row += 1
@@ -494,6 +498,7 @@ class PersonDialog(QDialog):
 
         self.phone = QLineEdit()
         self.phone.setPlaceholderText("00000000")
+        self.phone.setValidator(QRegExpValidator(QtRegExp(r"\d{0,8}")))
         self.phone.setStyleSheet(StyleManager.mobile_input_field())
 
         mobile_layout.addWidget(prefix_label)
@@ -506,6 +511,7 @@ class PersonDialog(QDialog):
         row += 1
         self.landline = QLineEdit()
         self.landline.setPlaceholderText("0000000")
+        self.landline.setValidator(QRegExpValidator(QtRegExp(r"\d{0,7}")))
         self.landline.setStyleSheet(self._input_style())
         grid.addWidget(self.landline, row, 0, 1, 2)
 
@@ -575,8 +581,8 @@ class PersonDialog(QDialog):
 
         self.ownership_share = QLineEdit()
         self.ownership_share.setPlaceholderText("%")
-        from PyQt5.QtGui import QDoubleValidator
         self.ownership_share.setValidator(QDoubleValidator(0, 100, 2, self))
+        self.ownership_share.editingFinished.connect(self._clamp_ownership_share)
         self.ownership_share.setStyleSheet(self._input_style())
         grid.addWidget(self.ownership_share, row, 1)
         row += 1
@@ -610,7 +616,7 @@ class PersonDialog(QDialog):
                 padding: 10px;
                 background-color: #f0f7ff;
                 color: #333;
-                font-size: 13px;
+                font-size: 14px;
             }
             QTextEdit:focus {
                 border: 1px solid #E0E6ED;
@@ -872,36 +878,35 @@ class PersonDialog(QDialog):
             layout.addWidget(thumb_widget)
 
     def _remove_uploaded_file(self, file_path: str):
-        """Remove an ID photo file and refresh thumbnails."""
+        """Remove an ID photo file and refresh thumbnails. Deletes from server if previously uploaded."""
+        import os
+        norm = os.path.normpath(file_path)
+        # Delete from server if evidence was uploaded
+        if self._use_api and norm in self._evidence_ids and self._survey_id:
+            evidence_id = self._evidence_ids[norm]
+            try:
+                self._api_service.delete_evidence(self._survey_id, evidence_id)
+                logger.info(f"Evidence deleted from server: {evidence_id}")
+                del self._evidence_ids[norm]
+            except Exception as e:
+                logger.error(f"Failed to delete evidence {evidence_id}: {e}")
         if file_path in self.uploaded_files:
             self.uploaded_files.remove(file_path)
         self._update_upload_thumbnails("id_upload", self.uploaded_files)
 
     def _remove_relation_file(self, file_path: str):
-        """Remove a relation evidence file and refresh thumbnails."""
+        """Remove a relation evidence file and refresh thumbnails. Deletes from server if previously uploaded."""
+        entry = next((f for f in self.relation_uploaded_files if f["path"] == file_path), None)
+        # Delete from server if evidence was uploaded
+        if self._use_api and entry and entry.get("evidence_id") and self._survey_id:
+            try:
+                self._api_service.delete_evidence(self._survey_id, entry["evidence_id"])
+                logger.info(f"Tenure evidence deleted from server: {entry['evidence_id']}")
+            except Exception as e:
+                logger.error(f"Failed to delete tenure evidence: {e}")
         self.relation_uploaded_files = [f for f in self.relation_uploaded_files if f["path"] != file_path]
         file_paths_for_thumbs = [f["path"] for f in self.relation_uploaded_files]
         self._update_upload_thumbnails("rel_upload", file_paths_for_thumbs)
-
-    @staticmethod
-    def _get_governorate_options():
-        """Return Syrian governorate options for birth place dropdown."""
-        return [
-            ("damascus", "دمشق"),
-            ("rural_damascus", "ريف دمشق"),
-            ("aleppo", "حلب"),
-            ("homs", "حمص"),
-            ("hama", "حماة"),
-            ("latakia", "اللاذقية"),
-            ("tartus", "طرطوس"),
-            ("deir_ez_zor", "دير الزور"),
-            ("raqqa", "الرقة"),
-            ("hasakah", "الحسكة"),
-            ("daraa", "درعا"),
-            ("suwayda", "السويداء"),
-            ("quneitra", "القنيطرة"),
-            ("idlib", "إدلب"),
-        ]
 
     def _input_style(self) -> str:
         """Custom input style with light blue background."""
@@ -913,7 +918,7 @@ class PersonDialog(QDialog):
                 padding: 10px;
                 background-color: #f0f7ff;
                 color: #333;
-                font-size: 13px;
+                font-size: 14px;
                 min-height: 20px;
                 max-height: 20px;
             }}
@@ -987,7 +992,7 @@ class PersonDialog(QDialog):
                 border-radius: 8px;
                 padding: 10px;
                 color: #333;
-                font-size: 13px;
+                font-size: 14px;
                 min-height: 20px;
                 max-height: 20px;
             }
@@ -1086,14 +1091,25 @@ class PersonDialog(QDialog):
 
     def _go_to_tab2(self):
         """Tab 1 → Tab 2: Validate personal info then switch."""
+        import re
         if self.read_only:
             self.tab_widget.setCurrentIndex(1)
             return
-        if not self.first_name.text().strip():
+        first = self.first_name.text().strip()
+        last = self.last_name.text().strip()
+        if not first:
             Toast.show_toast(self, tr("wizard.person_dialog.enter_first_name"), Toast.WARNING)
             return
-        if not self.last_name.text().strip():
+        if not last:
             Toast.show_toast(self, tr("wizard.person_dialog.enter_last_name"), Toast.WARNING)
+            return
+        # Validate names contain actual letters (not just symbols/numbers)
+        name_pattern = re.compile(r'^[\u0600-\u06FFa-zA-Z\s.\-\']{2,}$')
+        if not name_pattern.match(first):
+            Toast.show_toast(self, tr("wizard.person_dialog.invalid_first_name"), Toast.WARNING)
+            return
+        if not name_pattern.match(last):
+            Toast.show_toast(self, tr("wizard.person_dialog.invalid_last_name"), Toast.WARNING)
             return
         if self.national_id.text().strip() and not self._validate_national_id():
             Toast.show_toast(self, tr("wizard.person_dialog.nid_invalid"), Toast.WARNING)
@@ -1104,7 +1120,26 @@ class PersonDialog(QDialog):
         self.tab_widget.setCurrentIndex(1)
 
     def _go_to_tab3(self):
-        """Tab 2 → Tab 3."""
+        """Tab 2 → Tab 3: Validate contact info then switch."""
+        import re
+        if self.read_only:
+            self.tab_widget.setCurrentIndex(2)
+            return
+        # Validate phone (optional but if filled must be valid)
+        if not self._validate_mobile(self.phone.text().strip()):
+            Toast.show_toast(self, tr("wizard.person_dialog.invalid_mobile"), Toast.WARNING)
+            return
+        if not self._validate_landline(self.landline.text().strip()):
+            Toast.show_toast(self, tr("wizard.person_dialog.invalid_landline"), Toast.WARNING)
+            return
+        # Validate email (optional but if filled must be Latin + valid format)
+        email_text = self.email.text().strip()
+        if email_text and not re.match(r'^[a-zA-Z0-9@._\-+]+$', email_text):
+            Toast.show_toast(self, tr("wizard.person_dialog.invalid_email_chars"), Toast.WARNING)
+            return
+        if email_text and not re.match(r'^[^@\s]+@[^@\s]+\.[^@\s]+$', email_text):
+            Toast.show_toast(self, tr("wizard.person_dialog.invalid_email"), Toast.WARNING)
+            return
         self.tab_widget.setCurrentIndex(2)
 
     def _go_to_tab1(self):
@@ -1196,13 +1231,32 @@ class PersonDialog(QDialog):
         if not new_files:
             return
 
-        # Show issue date dialog for the batch of new files
-        issue_date = self._show_issue_date_dialog()
-        if issue_date is None:
-            return
-
-        for f in new_files:
-            f["issue_date"] = issue_date
+        # Issue date: single file → direct dialog, multiple → ask same or separate
+        if len(new_files) == 1:
+            issue_date = self._show_issue_date_dialog(os.path.basename(new_files[0]["path"]))
+            if issue_date is None:
+                return
+            new_files[0]["issue_date"] = issue_date
+        elif len(new_files) > 1:
+            use_same = self._ask_same_or_separate_dates(len(new_files))
+            if use_same is None:
+                return
+            if use_same:
+                issue_date = self._show_issue_date_dialog()
+                if issue_date is None:
+                    return
+                for f in new_files:
+                    f["issue_date"] = issue_date
+            else:
+                for f in new_files:
+                    fname = os.path.basename(f["path"])
+                    issue_date = self._show_issue_date_dialog(fname)
+                    if issue_date is None:
+                        continue
+                    f["issue_date"] = issue_date
+                new_files = [f for f in new_files if f.get("issue_date")]
+                if not new_files:
+                    return
 
         self.relation_uploaded_files.extend(new_files)
         file_paths_for_thumbs = [f["path"] for f in self.relation_uploaded_files]
@@ -1331,7 +1385,7 @@ class PersonDialog(QDialog):
             logger.warning(f"Could not compute hash for {file_path}: {e}")
             return ""
 
-    def _show_issue_date_dialog(self) -> str:
+    def _show_issue_date_dialog(self, filename: str = None) -> str:
         """Show a mini popup to enter document issue date. Returns ISO date string or None if cancelled."""
         from PyQt5.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QGraphicsDropShadowEffect
         from PyQt5.QtGui import QFont, QColor
@@ -1368,6 +1422,15 @@ class PersonDialog(QDialog):
         title_lbl.setStyleSheet("color: #1F2937; background: transparent;")
         c_layout.addWidget(title_lbl)
 
+        # Filename subtitle (when per-file mode)
+        if filename:
+            file_lbl = QLabel(filename)
+            file_lbl.setAlignment(Qt.AlignCenter)
+            file_lbl.setFont(create_font(size=9))
+            file_lbl.setStyleSheet("color: #6B7280; background: transparent;")
+            file_lbl.setWordWrap(True)
+            c_layout.addWidget(file_lbl)
+
         # Date picker
         date_edit = QDateEdit()
         date_edit.setCalendarPopup(True)
@@ -1380,7 +1443,7 @@ class PersonDialog(QDialog):
                 border-radius: 8px;
                 padding: 8px 12px;
                 background-color: #F9FAFB;
-                font-size: 13px;
+                font-size: 14px;
                 min-height: 20px;
             }
             QDateEdit:focus { border-color: #3B82F6; }
@@ -1434,10 +1497,128 @@ class PersonDialog(QDialog):
         main_layout.addWidget(container)
 
         if dlg.exec_() == QDialog.Accepted:
-            return date_edit.date().toString("yyyy-MM-dd")
+            return date_edit.date().toPyDate().isoformat()
+        return None
+
+    def _ask_same_or_separate_dates(self, file_count: int):
+        """Ask user: same date for all files or separate? Returns True=same, False=separate, None=cancelled."""
+        from PyQt5.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QGraphicsDropShadowEffect
+        from PyQt5.QtGui import QColor
+        from ui.font_utils import create_font, FontManager
+
+        dlg = QDialog(self)
+        dlg.setWindowFlags(Qt.Dialog | Qt.FramelessWindowHint)
+        dlg.setAttribute(Qt.WA_TranslucentBackground)
+        dlg.setFixedWidth(340)
+        result = [None]
+
+        container = QWidget(dlg)
+        container.setObjectName("date_ask_container")
+        container.setStyleSheet("""
+            QWidget#date_ask_container {
+                background-color: #FFFFFF;
+                border-radius: 10px;
+            }
+        """)
+
+        shadow = QGraphicsDropShadowEffect()
+        shadow.setBlurRadius(30)
+        shadow.setColor(QColor(0, 0, 0, 60))
+        shadow.setOffset(0, 6)
+        container.setGraphicsEffect(shadow)
+
+        c_layout = QVBoxLayout(container)
+        c_layout.setContentsMargins(20, 20, 20, 16)
+        c_layout.setSpacing(12)
+
+        title = QLabel(tr("wizard.person_dialog.date_question_title"))
+        title.setAlignment(Qt.AlignCenter)
+        title.setFont(create_font(size=11, weight=FontManager.WEIGHT_SEMIBOLD))
+        title.setStyleSheet("color: #1F2937; background: transparent;")
+        c_layout.addWidget(title)
+
+        subtitle = QLabel(tr("wizard.person_dialog.date_question_subtitle", count=file_count))
+        subtitle.setAlignment(Qt.AlignCenter)
+        subtitle.setFont(create_font(size=9))
+        subtitle.setStyleSheet("color: #6B7280; background: transparent;")
+        subtitle.setWordWrap(True)
+        c_layout.addWidget(subtitle)
+
+        c_layout.addSpacing(4)
+
+        btn_row = QHBoxLayout()
+        btn_row.setSpacing(8)
+
+        same_btn = QPushButton(tr("wizard.person_dialog.same_date"))
+        same_btn.setFixedHeight(34)
+        same_btn.setCursor(Qt.PointingHandCursor)
+        same_btn.setFont(create_font(size=9, weight=FontManager.WEIGHT_MEDIUM))
+        same_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #3B82F6;
+                color: white;
+                border: none;
+                border-radius: 6px;
+                padding: 6px 16px;
+            }
+            QPushButton:hover { background-color: #2563EB; }
+        """)
+        same_btn.clicked.connect(lambda: (result.__setitem__(0, True), dlg.accept()))
+
+        sep_btn = QPushButton(tr("wizard.person_dialog.separate_dates"))
+        sep_btn.setFixedHeight(34)
+        sep_btn.setCursor(Qt.PointingHandCursor)
+        sep_btn.setFont(create_font(size=9, weight=FontManager.WEIGHT_MEDIUM))
+        sep_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #F3F4F6;
+                color: #4B5563;
+                border: none;
+                border-radius: 6px;
+                padding: 6px 16px;
+            }
+            QPushButton:hover { background-color: #E5E7EB; }
+        """)
+        sep_btn.clicked.connect(lambda: (result.__setitem__(0, False), dlg.accept()))
+
+        btn_row.addWidget(same_btn, 1)
+        btn_row.addWidget(sep_btn, 1)
+        c_layout.addLayout(btn_row)
+
+        main_layout = QVBoxLayout(dlg)
+        main_layout.setContentsMargins(10, 10, 10, 10)
+        main_layout.addWidget(container)
+
+        if dlg.exec_() == QDialog.Accepted:
+            return result[0]
         return None
 
     # Validation
+
+    def _clamp_ownership_share(self):
+        """Clamp ownership share to 0-100 range on focus out."""
+        try:
+            val = float(self.ownership_share.text() or 0)
+            if val > 100:
+                self.ownership_share.setText("100")
+            elif val < 0:
+                self.ownership_share.setText("0")
+        except ValueError:
+            self.ownership_share.setText("")
+
+    def _validate_mobile(self, value: str) -> bool:
+        """Validate mobile number: exactly 8 digits (prefix 09 is fixed in UI)."""
+        if not value:
+            return True
+        digits = ''.join(c for c in value if c.isdigit())
+        return len(digits) == 8
+
+    def _validate_landline(self, value: str) -> bool:
+        """Validate landline number: exactly 7 digits (area code excluded)."""
+        if not value:
+            return True
+        digits = ''.join(c for c in value if c.isdigit())
+        return len(digits) == 7
 
     def _validate_national_id(self):
         """Validate national ID. Returns True if valid or empty."""
@@ -1463,13 +1644,6 @@ class PersonDialog(QDialog):
         self.mother_name.setText(data.get('mother_name', ''))
         self.last_name.setText(data.get('last_name', ''))
         self.national_id.setText(data.get('national_id', ''))
-
-        # Birth place
-        bp = data.get('birth_place')
-        if bp:
-            idx = self.birth_place.findData(bp)
-            if idx >= 0:
-                self.birth_place.setCurrentIndex(idx)
 
         # Birth date
         if data.get('birth_date'):
@@ -1505,10 +1679,8 @@ class PersonDialog(QDialog):
 
         # Tab 3 - relation data
         rel = data.get('relation_data', {})
-        if rel.get('contract_type'):
-            idx = self.contract_type.findText(rel['contract_type'])
-            if idx < 0:
-                idx = self.contract_type.findData(rel['contract_type'])
+        if rel.get('contract_type') is not None:
+            idx = self.contract_type.findData(rel['contract_type'])
             if idx >= 0:
                 self.contract_type.setCurrentIndex(idx)
 
@@ -1527,10 +1699,8 @@ class PersonDialog(QDialog):
         if rel.get('ownership_share') is not None:
             self.ownership_share.setText(str(rel['ownership_share']))
 
-        if rel.get('evidence_type'):
-            idx = self.evidence_type.findText(rel['evidence_type'])
-            if idx < 0:
-                idx = self.evidence_type.findData(rel['evidence_type'])
+        if rel.get('evidence_type') is not None:
+            idx = self.evidence_type.findData(rel['evidence_type'])
             if idx >= 0:
                 self.evidence_type.setCurrentIndex(idx)
 
@@ -1539,6 +1709,42 @@ class PersonDialog(QDialog):
 
         if rel.get('notes'):
             self.notes.setPlainText(rel['notes'])
+
+        # Restore document files from context (same wizard session)
+        import os
+        if data.get('_uploaded_files'):
+            self.uploaded_files = [f for f in data['_uploaded_files'] if os.path.exists(f)]
+            self._update_upload_thumbnails("id_upload", self.uploaded_files)
+
+        if data.get('_evidence_ids'):
+            self._evidence_ids = data['_evidence_ids']
+
+        if data.get('_relation_uploaded_files'):
+            self.relation_uploaded_files = [
+                f for f in data['_relation_uploaded_files']
+                if os.path.exists(f.get("path", ""))
+            ]
+            file_paths = [f["path"] for f in self.relation_uploaded_files]
+            self._update_upload_thumbnails("rel_upload", file_paths)
+
+        if data.get('_relation_id'):
+            self._api_relation_id = data['_relation_id']
+
+        # Fetch evidence count from server for logging
+        if self._use_api and self._survey_id:
+            try:
+                evidences = self._api_service.get_survey_evidences(self._survey_id)
+                person_id = data.get('person_id')
+                id_count = sum(1 for e in evidences
+                               if e.get('personId') == person_id
+                               and not e.get('personPropertyRelationId'))
+                rel_count = sum(1 for e in evidences
+                                if e.get('personPropertyRelationId'))
+                if id_count > 0 or rel_count > 0:
+                    logger.info(f"Server evidences: {id_count} identification + {rel_count} tenure")
+                self._server_evidences = evidences
+            except Exception as e:
+                logger.warning(f"Could not fetch evidences from server: {e}")
 
     def get_person_data(self) -> Dict[str, Any]:
         """Get all person data from all 3 tabs."""
@@ -1550,7 +1756,6 @@ class PersonDialog(QDialog):
             'mother_name': self.mother_name.text().strip(),
             'last_name': self.last_name.text().strip(),
             'national_id': self.national_id.text().strip() or None,
-            'birth_place': self.birth_place.currentData(),
             'gender': self.gender.currentData(),
             'nationality': self.nationality.currentData(),
             'birth_date': self.birth_date.date().toPyDate().isoformat(),
@@ -1571,8 +1776,23 @@ class PersonDialog(QDialog):
                 'evidence_desc': self.evidence_desc.text().strip() or None,
                 'notes': self.notes.toPlainText().strip() or None,
                 'has_documents': self.rb_has_docs.isChecked(),
-            }
+            },
+            # Document files (internal, for same-session persistence)
+            '_uploaded_files': list(self.uploaded_files),
+            '_evidence_ids': dict(self._evidence_ids),
+            '_relation_uploaded_files': [dict(f) for f in self.relation_uploaded_files],
+            '_relation_id': self._api_relation_id or (
+                self.person_data.get('_relation_id') if self.person_data else None
+            ),
         }
+
+    def get_api_person_id(self) -> Optional[str]:
+        """Return the API-generated person ID after creation, or None."""
+        return self._api_person_id
+
+    def get_api_relation_id(self) -> Optional[str]:
+        """Return the API-generated relation ID after linking, or None."""
+        return self._api_relation_id
 
     def _save_person(self):
         """Validate and save person data."""
@@ -1585,6 +1805,14 @@ class PersonDialog(QDialog):
         if self.national_id.text().strip() and not self._validate_national_id():
             Toast.show_toast(self, tr("wizard.person_dialog.nid_invalid"), Toast.WARNING)
             return
+        if not self._validate_mobile(self.phone.text().strip()):
+            Toast.show_toast(self, tr("wizard.person_dialog.invalid_mobile"), Toast.WARNING)
+            self.tab_widget.setCurrentIndex(1)
+            return
+        if not self._validate_landline(self.landline.text().strip()):
+            Toast.show_toast(self, tr("wizard.person_dialog.invalid_landline"), Toast.WARNING)
+            self.tab_widget.setCurrentIndex(1)
+            return
         self.accept()
 
     # API Integration
@@ -1594,12 +1822,51 @@ class PersonDialog(QDialog):
         import re
         from ui.error_handler import ErrorHandler
 
+        # Validate phone numbers before saving
+        if not self._validate_mobile(self.phone.text().strip()):
+            Toast.show_toast(self, tr("wizard.person_dialog.invalid_mobile"), Toast.WARNING)
+            self.tab_widget.setCurrentIndex(1)
+            return
+        if not self._validate_landline(self.landline.text().strip()):
+            Toast.show_toast(self, tr("wizard.person_dialog.invalid_landline"), Toast.WARNING)
+            self.tab_widget.setCurrentIndex(1)
+            return
+
         # Validate email format before saving
         email_text = self.email.text().strip()
+        if email_text and not re.match(r'^[a-zA-Z0-9@._\-+]+$', email_text):
+            Toast.show_toast(self, tr("wizard.person_dialog.invalid_email_chars"), Toast.WARNING)
+            self.tab_widget.setCurrentIndex(1)
+            return
         if email_text and not re.match(r'^[^@\s]+@[^@\s]+\.[^@\s]+$', email_text):
             Toast.show_toast(self, tr("wizard.person_dialog.invalid_email"), Toast.WARNING)
-            self.tab_widget.setCurrentIndex(1)  # Switch to Tab 2 where email field is
+            self.tab_widget.setCurrentIndex(1)
             return
+
+        # Validate names contain actual letters (not just symbols)
+        first = self.first_name.text().strip()
+        last = self.last_name.text().strip()
+        name_pattern = re.compile(r'^[\u0600-\u06FFa-zA-Z\s.\-\']{2,}$')
+        if first and not name_pattern.match(first):
+            Toast.show_toast(self, tr("wizard.person_dialog.invalid_first_name"), Toast.WARNING)
+            self.tab_widget.setCurrentIndex(0)
+            return
+        if last and not name_pattern.match(last):
+            Toast.show_toast(self, tr("wizard.person_dialog.invalid_last_name"), Toast.WARNING)
+            self.tab_widget.setCurrentIndex(0)
+            return
+
+        # Validate ownership share range
+        ownership_text = self.ownership_share.text().strip()
+        if ownership_text:
+            try:
+                ownership_val = float(ownership_text)
+                if ownership_val < 0 or ownership_val > 100:
+                    Toast.show_toast(self, tr("wizard.person_dialog.invalid_ownership_share"), Toast.WARNING)
+                    self.tab_widget.setCurrentIndex(2)
+                    return
+            except ValueError:
+                pass
 
         if self._use_api and not self.editing_mode:
             person_data = self.get_person_data()
@@ -1623,6 +1890,8 @@ class PersonDialog(QDialog):
                     logger.error(f"Could not find person ID in response. Keys: {list(response.keys())}")
                     ErrorHandler.show_error(self, tr("wizard.person_dialog.created_no_id"), tr("common.error"))
                     return
+
+                self._api_person_id = person_id
 
             except Exception as e:
                 logger.error(f"Failed to create person via API: {e}")
@@ -1657,6 +1926,9 @@ class PersonDialog(QDialog):
                         relation_response.get("PersonPropertyRelationId") or ""
                     )
 
+                    if relation_id:
+                        self._api_relation_id = relation_id
+
                     if relation_id and self.relation_uploaded_files:
                         self._upload_tenure_files(relation_id)
 
@@ -1670,12 +1942,41 @@ class PersonDialog(QDialog):
                 logger.warning(f"Skipping relation link: survey_id={self._survey_id}, unit_id={self._unit_id}, person_id={person_id}")
 
             if not link_success:
-                return
+                ErrorHandler.show_warning(
+                    self,
+                    tr("wizard.person_dialog.link_failed_person_saved"),
+                    tr("common.warning")
+                )
+
+        # Upload new files added during edit mode
+        if self._use_api and self.editing_mode:
+            import os
+            person_id = self.person_data.get('person_id')
+
+            # Upload NEW identification files only (not already in _evidence_ids)
+            new_id_files = [f for f in self.uploaded_files
+                            if os.path.normpath(f) not in self._evidence_ids]
+            if new_id_files and self._survey_id and person_id:
+                saved = self.uploaded_files
+                self.uploaded_files = new_id_files
+                self._upload_identification_files(person_id)
+                self.uploaded_files = saved
+
+            # Upload NEW tenure files only (without evidence_id)
+            relation_id = self._api_relation_id
+            new_rel_files = [f for f in self.relation_uploaded_files
+                             if not f.get("evidence_id")]
+            if new_rel_files and self._survey_id and relation_id:
+                saved = self.relation_uploaded_files
+                self.relation_uploaded_files = new_rel_files
+                self._upload_tenure_files(relation_id)
+                self.relation_uploaded_files = saved
 
         self.accept()
 
     def _upload_identification_files(self, person_id: str):
         """Upload identification files for the created person."""
+        import os
         if not self.uploaded_files:
             return
 
@@ -1683,10 +1984,16 @@ class PersonDialog(QDialog):
 
         for file_path in self.uploaded_files:
             try:
-                self._api_service.upload_identification_document(
+                response = self._api_service.upload_identification_document(
                     self._survey_id, person_id, file_path
                 )
-                logger.info(f"Identification file uploaded: {file_path}")
+                evidence_id = (
+                    response.get("id") or response.get("evidenceId") or
+                    response.get("Id") or response.get("EvidenceId") or ""
+                )
+                if evidence_id:
+                    self._evidence_ids[os.path.normpath(file_path)] = evidence_id
+                logger.info(f"Identification uploaded: {file_path} (evidence_id={evidence_id})")
             except Exception as e:
                 logger.error(f"Failed to upload identification file {file_path}: {e}")
 
@@ -1707,13 +2014,19 @@ class PersonDialog(QDialog):
             file_hash = file_entry.get("hash", "")
 
             try:
-                self._api_service.upload_relation_document(
+                response = self._api_service.upload_relation_document(
                     survey_id=self._survey_id,
                     relation_id=relation_id,
                     file_path=file_path,
                     issue_date=issue_date,
                     file_hash=file_hash
                 )
+                evidence_id = (
+                    response.get("id") or response.get("evidenceId") or
+                    response.get("Id") or response.get("EvidenceId") or ""
+                )
+                if evidence_id:
+                    file_entry["evidence_id"] = evidence_id
                 success_count += 1
             except ApiException as e:
                 if e.status_code == 409:

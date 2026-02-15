@@ -89,12 +89,12 @@ class RelationStep(BaseStep):
         title_vbox.setSpacing(1)  # Match person_step spacing
         self._title_label = QLabel(tr("wizard.relation.title"))
         # Title: 14px from Figma = 10pt, weight 600, color WIZARD_TITLE
-        self._title_label.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
+        self._title_label.setFont(create_font(size=FontManager.WIZARD_STEP_TITLE, weight=FontManager.WEIGHT_SEMIBOLD))
         self._title_label.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent;")
 
         self._subtitle_label = QLabel(tr("wizard.relation.subtitle"))
         # Subtitle: 14px from Figma = 10pt, weight 400, color WIZARD_SUBTITLE
-        self._subtitle_label.setFont(create_font(size=10, weight=FontManager.WEIGHT_REGULAR))
+        self._subtitle_label.setFont(create_font(size=FontManager.WIZARD_STEP_SUBTITLE, weight=FontManager.WEIGHT_REGULAR))
         self._subtitle_label.setStyleSheet(f"color: {Colors.WIZARD_SUBTITLE}; background: transparent;")
         self._subtitle_label.setAlignment(Qt.AlignRight)
         title_vbox.addWidget(self._title_label)
@@ -464,7 +464,7 @@ class RelationStep(BaseStep):
                 "person_name": f"{person_data.get('first_name', '')} {person_data.get('last_name', '')}",
                 "relation_type": card.relation_type.currentData() if hasattr(card.relation_type, 'currentData') else None,
                 "ownership_share": float(card.ownership_share.text()) if card.ownership_share.text() and card.ownership_share.text() != "0" else 0.0,
-                "start_date": card.start_date.date().toString("yyyy-MM-dd"),
+                "start_date": card.start_date.date().toPyDate().isoformat(),
                 "contract_type": card.contract_type.currentText() if card.contract_type.currentIndex() > 0 else None,
                 "evidence_type": card.evidence_type.currentText() if card.evidence_type.currentIndex() > 0 else None,
                 "evidence_description": card.evidence_desc.text().strip() or None,

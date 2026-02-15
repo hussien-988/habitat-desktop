@@ -241,8 +241,6 @@ class OfficeSurveyWizard(BaseWizard):
 
         except Exception as e:
             logger.error(f"Error submitting survey: {e}", exc_info=True)
-            import traceback
-            traceback.print_exc()
             ErrorHandler.show_error(
                 self,
                 f"{tr('wizard.error.save_failed')}\n{map_exception(e)}",
@@ -319,8 +317,8 @@ class OfficeSurveyWizard(BaseWizard):
 
             result = ConfirmationDialog.save_draft_confirmation(
                 parent=self,
-                title="هل تريد الحفظ؟",
-                message="لديك تغييرات غير محفوظة.\nهل تريد حفظها كمسودة؟"
+                title=tr("wizard.confirm.save_title"),
+                message=tr("wizard.confirm.save_message")
             )
 
             if result == ConfirmationDialog.SAVE:
@@ -328,7 +326,7 @@ class OfficeSurveyWizard(BaseWizard):
                 draft_id = self.on_save_draft()
                 if draft_id:
                     from ui.components.toast import Toast
-                    Toast.show_toast(self, "تم حفظ المسودة بنجاح!", Toast.SUCCESS)
+                    Toast.show_toast(self, tr("wizard.draft.saved_success"), Toast.SUCCESS)
                 else:
                     # Save failed - stay in wizard
                     return

@@ -44,11 +44,24 @@ class FontManager:
 
     # Default sizes (in points)
     SIZE_SMALL = 8
+    SIZE_CAPTION = 9
     SIZE_BODY = 10
     SIZE_SUBHEADING = 12
     SIZE_HEADING = 14
     SIZE_TITLE = 18
     SIZE_LARGE_TITLE = 24
+
+    # Wizard-specific sizes (DRY: Single Source of Truth for all wizard steps)
+    WIZARD_STEP_TITLE = 12          # Step title: "بيانات البناء", "اختر مقسما"
+    WIZARD_STEP_SUBTITLE = 10      # Step subtitle description
+    WIZARD_CARD_LABEL = 10         # Card info labels: "حالة البناء", "نوع البناء"
+    WIZARD_CARD_VALUE = 10         # Card info values
+    WIZARD_FIELD_LABEL = 9         # Form field labels (smaller)
+    WIZARD_FIELD_VALUE = 9         # Form field values
+    WIZARD_EMPTY_TITLE = 14        # Empty state title: "لا توجد مقاسم"
+    WIZARD_EMPTY_DESC = 11         # Empty state description
+    WIZARD_BADGE = 11              # Status badges: "الأدلة متوفرة"
+    WIZARD_INPUT = 10              # Input fields: QLineEdit, QComboBox, QTextEdit, QSpinBox
 
     # Weights
     WEIGHT_LIGHT = 300

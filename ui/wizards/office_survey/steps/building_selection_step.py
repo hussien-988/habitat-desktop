@@ -110,13 +110,11 @@ class BuildingSelectionStep(BaseStep):
         header_text_col = QVBoxLayout()
         header_text_col.setSpacing(1)
         self._title_label = QLabel(tr("wizard.building.card_title"))
-        # Title: 14px from Figma = 10pt, weight 600, color WIZARD_TITLE
-        self._title_label.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
+        self._title_label.setFont(create_font(size=FontManager.WIZARD_STEP_TITLE, weight=FontManager.WEIGHT_SEMIBOLD))
         self._title_label.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent;")
 
         self._subtitle_label = QLabel(tr("wizard.building.card_subtitle"))
-        # Subtitle: 14px from Figma = 10pt, weight 400, color WIZARD_SUBTITLE
-        self._subtitle_label.setFont(create_font(size=10, weight=FontManager.WEIGHT_REGULAR))
+        self._subtitle_label.setFont(create_font(size=FontManager.WIZARD_STEP_SUBTITLE, weight=FontManager.WEIGHT_REGULAR))
         self._subtitle_label.setStyleSheet(f"color: {Colors.WIZARD_SUBTITLE}; background: transparent;")
 
         header_text_col.addWidget(self._title_label)
@@ -154,7 +152,7 @@ class BuildingSelectionStep(BaseStep):
 
         # Label: building code (same as title - 14px = 10pt, weight 600, color WIZARD_TITLE)
         self._code_label = QLabel(tr("wizard.building.code_label"))
-        self._code_label.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
+        self._code_label.setFont(create_font(size=FontManager.WIZARD_CARD_LABEL, weight=FontManager.WEIGHT_SEMIBOLD))
         self._code_label.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent;")
         card_layout.addWidget(self._code_label)
 
@@ -293,7 +291,7 @@ class BuildingSelectionStep(BaseStep):
 
         self.ui_building_address = QLabel("")
         self.ui_building_address.setAlignment(Qt.AlignCenter)
-        self.ui_building_address.setFont(create_font(size=10, weight=FontManager.WEIGHT_REGULAR))
+        self.ui_building_address.setFont(create_font(size=FontManager.WIZARD_CARD_VALUE, weight=FontManager.WEIGHT_REGULAR))
         self.ui_building_address.setStyleSheet("""
             QLabel {
                 border: none;
@@ -397,15 +395,13 @@ class BuildingSelectionStep(BaseStep):
             # Label (top text) - darker color (swapped)
             label = QLabel(label_text)
             label.setAlignment(Qt.AlignCenter)
-            # DRY: Using create_font + Colors (swapped to WIZARD_TITLE)
-            label.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
+            label.setFont(create_font(size=FontManager.WIZARD_CARD_LABEL, weight=FontManager.WEIGHT_SEMIBOLD))
             label.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent;")
 
-            # Value (bottom text/number) - lighter color (swapped)
+            # Value (bottom text/number) - lighter color
             value = QLabel(value_text)
             value.setAlignment(Qt.AlignCenter)
-            # DRY: Using create_font + Colors (swapped to WIZARD_SUBTITLE)
-            value.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
+            value.setFont(create_font(size=FontManager.WIZARD_CARD_VALUE, weight=FontManager.WEIGHT_SEMIBOLD))
             value.setStyleSheet(f"color: {Colors.WIZARD_SUBTITLE}; background: transparent;")
 
             section_layout.addWidget(label)
@@ -454,7 +450,7 @@ class BuildingSelectionStep(BaseStep):
 
         # Row 1: Header only - "موقع البناء"
         header = QLabel(tr("wizard.building.location_title"))
-        header.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
+        header.setFont(create_font(size=FontManager.WIZARD_CARD_LABEL, weight=FontManager.WEIGHT_SEMIBOLD))
         header.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent;")
         location_layout.addWidget(header)
 
@@ -473,12 +469,12 @@ class BuildingSelectionStep(BaseStep):
 
             # Label (top)
             label = QLabel(label_text)
-            label.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
+            label.setFont(create_font(size=FontManager.WIZARD_CARD_LABEL, weight=FontManager.WEIGHT_SEMIBOLD))
             label.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent;")
 
             # Value (bottom)
             value = QLabel(value_text)
-            value.setFont(create_font(size=10, weight=FontManager.WEIGHT_REGULAR))
+            value.setFont(create_font(size=FontManager.WIZARD_CARD_VALUE, weight=FontManager.WEIGHT_REGULAR))
             value.setStyleSheet(f"color: {Colors.WIZARD_SUBTITLE}; background: transparent;")
             value.setWordWrap(True)
 
@@ -539,7 +535,7 @@ class BuildingSelectionStep(BaseStep):
 
         # Text: "فتح الخريطة" - 12px Figma = 9pt PyQt5, PRIMARY_BLUE color
         map_button.setText(tr("wizard.building.open_map"))
-        map_button.setFont(create_font(size=9, weight=FontManager.WEIGHT_REGULAR))
+        map_button.setFont(create_font(size=FontManager.WIZARD_FIELD_LABEL, weight=FontManager.WEIGHT_REGULAR))
 
         # DRY: Using Colors.PRIMARY_BLUE
         # Professional shadow effect for floating appearance
@@ -793,7 +789,7 @@ class BuildingSelectionStep(BaseStep):
                 item.setIcon(QIcon(icon_pixmap))
 
             # Apply font: same as subtitle (DRY: create_font + Colors.WIZARD_SUBTITLE)
-            font = create_font(size=10, weight=FontManager.WEIGHT_REGULAR)
+            font = create_font(size=FontManager.WIZARD_CARD_VALUE, weight=FontManager.WEIGHT_REGULAR)
             item.setFont(font)
             item.setForeground(QColor(Colors.WIZARD_SUBTITLE))
 
@@ -847,7 +843,7 @@ class BuildingSelectionStep(BaseStep):
                 item.setIcon(QIcon(icon_pixmap))
 
             # Apply font: same as subtitle (DRY: create_font + Colors.WIZARD_SUBTITLE)
-            font = create_font(size=10, weight=FontManager.WEIGHT_REGULAR)
+            font = create_font(size=FontManager.WIZARD_CARD_VALUE, weight=FontManager.WEIGHT_REGULAR)
             item.setFont(font)
             item.setForeground(QColor(Colors.WIZARD_SUBTITLE))
 
@@ -1153,8 +1149,16 @@ class BuildingSelectionStep(BaseStep):
                 logger.info(f"Survey already exists ({existing_survey_id}), skipping creation")
                 return
             else:
-                # Building changed - reset all dependent context data
+                # Building changed - cleanup API data before resetting
                 logger.info(f"Building changed ({previous_building} -> {current_building_uuid}), resetting survey context")
+                old_household_id = self.context.get_data("household_id")
+                old_survey_id = self.context.get_data("survey_id")
+                if old_household_id and old_survey_id and self._use_api:
+                    try:
+                        self._survey_api_service.delete_household(old_household_id, old_survey_id)
+                        logger.info(f"Old household {old_household_id} deleted from API on building change")
+                    except Exception as e:
+                        logger.warning(f"Failed to delete old household {old_household_id}: {e}")
                 for key in ("survey_id", "survey_data", "survey_building_uuid",
                             "unit_linked", "household_id",
                             "claims_count", "created_claims"):
