@@ -428,9 +428,13 @@ EN_TRANSLATIONS = {
     "wizard.person.delete_confirm": "Are you sure you want to delete this person?",
     "wizard.person.min_one_required": "At least one person must be registered",
     "wizard.person.no_relation_type_warning": "No persons with a specified relation type",
+    "wizard.claim.type_required": "Claim type must be selected",
     "wizard.person.step_title": "Register Persons",
     "wizard.person.step_description": "Register persons related to the property unit",
     "wizard.person.no_persons": "No persons registered",
+    "wizard.person.duplicate_title": "Warning",
+    "wizard.person.duplicate_national_id": "Person with national ID {national_id} already added",
+    "wizard.person.duplicate_name": "Person {first} {last} already added",
 
     # ===== Relation Step =====
     "wizard.relation.title": "Relations & Evidence",

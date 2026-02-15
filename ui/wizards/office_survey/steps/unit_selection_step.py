@@ -926,23 +926,19 @@ class UnitSelectionStep(BaseStep):
                 if previous_unit_id == current_unit_id:
                     logger.info(f"Unit already linked ({current_unit_id}), skipping")
                 else:
-                    # Unit changed - cleanup API data before resetting local context
-                    logger.info(f"Unit changed ({previous_unit_id} -> {current_unit_id}), resetting dependent data")
-                    old_household_id = self.context.get_data("household_id")
-                    old_survey_id = self.context.get_data("survey_id")
-                    if old_household_id and old_survey_id and self._use_api:
-                        try:
-                            self._api_service.delete_household(old_household_id, old_survey_id)
-                            logger.info(f"Old household {old_household_id} deleted from API on unit change")
-                        except Exception as e:
-                            logger.warning(f"Failed to delete old household {old_household_id}: {e}")
-                    for key in ("unit_linked", "linked_unit_uuid", "household_id",
-                                "claims_count", "created_claims"):
-                        self.context.update_data(key, None)
-                    self.context.persons = []
-                    self.context.relations = []
-                    self.context.households = []
-                    self.context.finalize_response = None
+                    # Unit changed - delete relations only, keep persons and household
+                    logger.info(f"Unit changed ({previous_unit_id} -> {current_unit_id}), cleaning up relations")
+                    if self._use_api:
+                        self.context.cleanup_on_unit_change(self._api_service)
+                    else:
+                        for person in self.context.persons:
+                            person['_relation_id'] = None
+                        self.context.relations = []
+                        self.context.claims = []
+                        self.context.finalize_response = None
+                        for key in ("unit_linked", "linked_unit_uuid",
+                                    "claims_count", "created_claims"):
+                            self.context.update_data(key, None)
 
             if not self.context.get_data("unit_linked"):
                 self._set_auth_token()

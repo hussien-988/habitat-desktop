@@ -15,7 +15,8 @@ from PyQt5.QtCore import Qt, pyqtSignal, QModelIndex
 from PyQt5.QtGui import QColor
 import re
 
-from app.config import Config, Vocabularies
+from app.config import Config
+from services.vocab_service import get_options as vocab_get_options
 from repositories.database import Database
 from controllers.person_controller import PersonController, PersonFilter
 from models.person import Person
@@ -160,8 +161,8 @@ class PersonDialog(QDialog):
 
         # Gender
         self.gender_combo = QComboBox()
-        for code, en, ar in Vocabularies.GENDERS:
-            self.gender_combo.addItem(ar, code)
+        for code, label in vocab_get_options("Gender"):
+            self.gender_combo.addItem(label, code)
         personal_form.addRow("الجنس:", self.gender_combo)
 
         # Year of birth
@@ -679,8 +680,8 @@ class PersonsPage(QWidget):
         # Gender filter
         self.gender_combo = QComboBox()
         self.gender_combo.addItem(self.i18n.t("all"), "")
-        for code, en, ar in Vocabularies.GENDERS:
-            self.gender_combo.addItem(ar, code)
+        for code, label in vocab_get_options("Gender"):
+            self.gender_combo.addItem(label, code)
         self.gender_combo.currentIndexChanged.connect(self._on_filter_changed)
         filters_layout.addWidget(self.gender_combo)
 

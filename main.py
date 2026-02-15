@@ -82,6 +82,12 @@ def main():
         i18n.set_language("ar")  # Default to Arabic
         logger.info(">> Internationalization initialized (Arabic)")
 
+        # Fetch and cache vocabularies from backend API
+        logger.info("Fetching vocabularies from API...")
+        from services.vocab_service import initialize_vocabularies  # type: ignore
+        initialize_vocabularies()
+        logger.info(">> Vocabularies initialized")
+
         # Create main window (now using v2 with Navbar)
         logger.info("Creating main window (NEW DESIGN v2 with Navbar)...")
         window = MainWindow(db, i18n)

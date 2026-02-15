@@ -64,6 +64,9 @@ class PersonDialog(QDialog):
         self._api_relation_id = None
         self._evidence_ids = {}       # {normalized_path: evidence_id} for ID files
         self._server_evidences = []   # List[EvidenceDto] from server on edit
+        self._pending_id_replacements = []    # deferred evidence_ids for ID file replacement
+        self._pending_rel_replacements = []   # deferred evidence_ids for tenure file replacement
+        self._field_styles = {}  # {widget: original_stylesheet} for error state restore
 
         self.setModal(True)
         self.setFixedSize(589, 674)  # 565+24 width, 650+24 height (12px shadow margin each side)
@@ -78,6 +81,14 @@ class PersonDialog(QDialog):
 
         if self.read_only:
             self._apply_read_only_mode()
+
+    def _refresh_token(self):
+        """Refresh auth token from parent wizard window before API calls."""
+        parent = self.parent()
+        if parent:
+            main_window = parent.window()
+            if main_window and hasattr(main_window, '_api_token') and main_window._api_token:
+                self._api_service.set_access_token(main_window._api_token)
 
     # UI Setup
 
@@ -259,6 +270,15 @@ class PersonDialog(QDialog):
         self.evidence_desc.textChanged.connect(self._update_all_progress)
         self.notes.textChanged.connect(self._update_all_progress)
 
+        # Clear inline errors when user starts typing
+        self.first_name.textChanged.connect(lambda: self._clear_field_error(self.first_name, self._first_name_error))
+        self.last_name.textChanged.connect(lambda: self._clear_field_error(self.last_name, self._last_name_error))
+        self.national_id.textChanged.connect(lambda: self._clear_field_error(self.national_id, self._nid_error))
+        self.phone.textChanged.connect(lambda: self._clear_field_error(self.phone, self._mobile_error))
+        self.landline.textChanged.connect(lambda: self._clear_field_error(self.landline, self._landline_error))
+        self.email.textChanged.connect(lambda: self._clear_field_error(self.email, self._email_error))
+        self.ownership_share.textChanged.connect(lambda: self._clear_field_error(self.ownership_share, self._ownership_error))
+
     def _calculate_tab_fill(self, tab_index: int) -> float:
         """Calculate fill percentage (0.0 to 1.0) for a given tab."""
         if tab_index == 0:
@@ -352,13 +372,29 @@ class PersonDialog(QDialog):
         self.first_name.setPlaceholderText(tr("wizard.person_dialog.first_name_placeholder"))
         self.first_name.setValidator(_name_validator)
         self.first_name.setStyleSheet(self._input_style())
-        grid.addWidget(self.first_name, row, 0)
+        self._first_name_error = QLabel("")
+        self._first_name_error.setStyleSheet(self._error_label_style())
+        self._first_name_error.setVisible(False)
+        fn_container = QVBoxLayout()
+        fn_container.setSpacing(2)
+        fn_container.setContentsMargins(0, 0, 0, 0)
+        fn_container.addWidget(self.first_name)
+        fn_container.addWidget(self._first_name_error)
+        grid.addLayout(fn_container, row, 0)
 
         self.last_name = QLineEdit()
         self.last_name.setPlaceholderText(tr("wizard.person_dialog.last_name_placeholder"))
         self.last_name.setValidator(_name_validator)
         self.last_name.setStyleSheet(self._input_style())
-        grid.addWidget(self.last_name, row, 1)
+        self._last_name_error = QLabel("")
+        self._last_name_error.setStyleSheet(self._error_label_style())
+        self._last_name_error.setVisible(False)
+        ln_container = QVBoxLayout()
+        ln_container.setSpacing(2)
+        ln_container.setContentsMargins(0, 0, 0, 0)
+        ln_container.addWidget(self.last_name)
+        ln_container.addWidget(self._last_name_error)
+        grid.addLayout(ln_container, row, 1)
         row += 1
 
         # Row: Father Name | Mother Name
@@ -417,7 +453,15 @@ class PersonDialog(QDialog):
         self.national_id.setPlaceholderText("0000000000")
         self.national_id.setValidator(QRegExpValidator(QtRegExp(r"\d{0,11}")))
         self.national_id.setStyleSheet(self._input_style())
-        grid.addWidget(self.national_id, row, 0, 1, 2)
+        self._nid_error = QLabel("")
+        self._nid_error.setStyleSheet(self._error_label_style())
+        self._nid_error.setVisible(False)
+        nid_container = QVBoxLayout()
+        nid_container.setSpacing(2)
+        nid_container.setContentsMargins(0, 0, 0, 0)
+        nid_container.addWidget(self.national_id)
+        nid_container.addWidget(self._nid_error)
+        grid.addLayout(nid_container, row, 0, 1, 2)
         row += 1
 
         # ID Photos upload
@@ -477,7 +521,15 @@ class PersonDialog(QDialog):
         self.email.setPlaceholderText("*****@gmail.com")
         self.email.setValidator(QRegExpValidator(QtRegExp(r"[a-zA-Z0-9@._\-+]+")))
         self.email.setStyleSheet(self._input_style())
-        grid.addWidget(self.email, row, 0, 1, 2)
+        self._email_error = QLabel("")
+        self._email_error.setStyleSheet(self._error_label_style())
+        self._email_error.setVisible(False)
+        email_container = QVBoxLayout()
+        email_container.setSpacing(2)
+        email_container.setContentsMargins(0, 0, 0, 0)
+        email_container.addWidget(self.email)
+        email_container.addWidget(self._email_error)
+        grid.addLayout(email_container, row, 0, 1, 2)
         row += 1
 
         # Mobile (full width)
@@ -503,7 +555,15 @@ class PersonDialog(QDialog):
 
         mobile_layout.addWidget(prefix_label)
         mobile_layout.addWidget(self.phone)
-        grid.addWidget(mobile_container, row, 0, 1, 2)
+        self._mobile_error = QLabel("")
+        self._mobile_error.setStyleSheet(self._error_label_style())
+        self._mobile_error.setVisible(False)
+        mobile_outer = QVBoxLayout()
+        mobile_outer.setSpacing(2)
+        mobile_outer.setContentsMargins(0, 0, 0, 0)
+        mobile_outer.addWidget(mobile_container)
+        mobile_outer.addWidget(self._mobile_error)
+        grid.addLayout(mobile_outer, row, 0, 1, 2)
         row += 1
 
         # Landline (full width)
@@ -513,7 +573,15 @@ class PersonDialog(QDialog):
         self.landline.setPlaceholderText("0000000")
         self.landline.setValidator(QRegExpValidator(QtRegExp(r"\d{0,7}")))
         self.landline.setStyleSheet(self._input_style())
-        grid.addWidget(self.landline, row, 0, 1, 2)
+        self._landline_error = QLabel("")
+        self._landline_error.setStyleSheet(self._error_label_style())
+        self._landline_error.setVisible(False)
+        landline_container = QVBoxLayout()
+        landline_container.setSpacing(2)
+        landline_container.setContentsMargins(0, 0, 0, 0)
+        landline_container.addWidget(self.landline)
+        landline_container.addWidget(self._landline_error)
+        grid.addLayout(landline_container, row, 0, 1, 2)
 
         tab_layout.addLayout(grid)
         tab_layout.addStretch()
@@ -584,7 +652,15 @@ class PersonDialog(QDialog):
         self.ownership_share.setValidator(QDoubleValidator(0, 100, 2, self))
         self.ownership_share.editingFinished.connect(self._clamp_ownership_share)
         self.ownership_share.setStyleSheet(self._input_style())
-        grid.addWidget(self.ownership_share, row, 1)
+        self._ownership_error = QLabel("")
+        self._ownership_error.setStyleSheet(self._error_label_style())
+        self._ownership_error.setVisible(False)
+        ownership_container = QVBoxLayout()
+        ownership_container.setSpacing(2)
+        ownership_container.setContentsMargins(0, 0, 0, 0)
+        ownership_container.addWidget(self.ownership_share)
+        ownership_container.addWidget(self._ownership_error)
+        grid.addLayout(ownership_container, row, 1)
         row += 1
 
         # Row: Supporting Docs | Description
@@ -878,32 +954,45 @@ class PersonDialog(QDialog):
             layout.addWidget(thumb_widget)
 
     def _remove_uploaded_file(self, file_path: str):
-        """Remove an ID photo file and refresh thumbnails. Deletes from server if previously uploaded."""
+        """Remove an ID photo file and refresh thumbnails.
+        In edit mode: defers delete for possible replacement via PUT.
+        In create mode: deletes from server immediately."""
         import os
         norm = os.path.normpath(file_path)
-        # Delete from server if evidence was uploaded
         if self._use_api and norm in self._evidence_ids and self._survey_id:
             evidence_id = self._evidence_ids[norm]
-            try:
-                self._api_service.delete_evidence(self._survey_id, evidence_id)
-                logger.info(f"Evidence deleted from server: {evidence_id}")
-                del self._evidence_ids[norm]
-            except Exception as e:
-                logger.error(f"Failed to delete evidence {evidence_id}: {e}")
+            if self.editing_mode:
+                self._pending_id_replacements.append(evidence_id)
+                logger.info(f"Evidence {evidence_id} queued for replacement")
+            else:
+                try:
+                    self._refresh_token()
+                    self._api_service.delete_evidence(self._survey_id, evidence_id)
+                    logger.info(f"Evidence deleted from server: {evidence_id}")
+                except Exception as e:
+                    logger.error(f"Failed to delete evidence {evidence_id}: {e}")
+            del self._evidence_ids[norm]
         if file_path in self.uploaded_files:
             self.uploaded_files.remove(file_path)
         self._update_upload_thumbnails("id_upload", self.uploaded_files)
 
     def _remove_relation_file(self, file_path: str):
-        """Remove a relation evidence file and refresh thumbnails. Deletes from server if previously uploaded."""
+        """Remove a relation evidence file and refresh thumbnails.
+        In edit mode: defers delete for possible replacement via PUT.
+        In create mode: deletes from server immediately."""
         entry = next((f for f in self.relation_uploaded_files if f["path"] == file_path), None)
-        # Delete from server if evidence was uploaded
         if self._use_api and entry and entry.get("evidence_id") and self._survey_id:
-            try:
-                self._api_service.delete_evidence(self._survey_id, entry["evidence_id"])
-                logger.info(f"Tenure evidence deleted from server: {entry['evidence_id']}")
-            except Exception as e:
-                logger.error(f"Failed to delete tenure evidence: {e}")
+            evidence_id = entry["evidence_id"]
+            if self.editing_mode:
+                self._pending_rel_replacements.append(evidence_id)
+                logger.info(f"Tenure evidence {evidence_id} queued for replacement")
+            else:
+                try:
+                    self._refresh_token()
+                    self._api_service.delete_evidence(self._survey_id, evidence_id)
+                    logger.info(f"Tenure evidence deleted from server: {evidence_id}")
+                except Exception as e:
+                    logger.error(f"Failed to delete tenure evidence: {e}")
         self.relation_uploaded_files = [f for f in self.relation_uploaded_files if f["path"] != file_path]
         file_paths_for_thumbs = [f["path"] for f in self.relation_uploaded_files]
         self._update_upload_thumbnails("rel_upload", file_paths_for_thumbs)
@@ -923,7 +1012,7 @@ class PersonDialog(QDialog):
                 max-height: 20px;
             }}
             QComboBox {{
-                padding-left: 35px;
+                padding-left: 4px;
             }}
             QLineEdit:focus, QComboBox:focus, QDateEdit:focus, QDoubleSpinBox:focus {{
                 border: 1px solid #E0E6ED;
@@ -981,6 +1070,74 @@ class PersonDialog(QDialog):
                 background: none;
             }}
         """
+
+    def _error_label_style(self) -> str:
+        """Style for inline validation error labels."""
+        return "color: #e74c3c; font-size: 10px; font-weight: 600; background: transparent; padding: 0px; margin: 0px;"
+
+    def _input_error_style(self) -> str:
+        """Input style with red border for validation error state."""
+        down_img = str(Config.IMAGES_DIR / "down.png").replace("\\", "/")
+        return f"""
+            QLineEdit, QComboBox, QDateEdit, QDoubleSpinBox {{
+                border: 2px solid #e74c3c;
+                border-radius: 8px;
+                padding: 10px;
+                background-color: #FFF5F5;
+                color: #333;
+                font-size: 14px;
+                min-height: 20px;
+                max-height: 20px;
+            }}
+            QComboBox {{
+                padding-left: 4px;
+            }}
+            QLineEdit:focus, QComboBox:focus, QDateEdit:focus, QDoubleSpinBox:focus {{
+                border: 2px solid #e74c3c;
+            }}
+            QComboBox::drop-down {{
+                border: none;
+                width: 30px;
+                subcontrol-position: right center;
+            }}
+            QComboBox::down-arrow {{
+                image: url({down_img});
+                width: 12px;
+                height: 12px;
+            }}
+        """
+
+    def _set_field_error(self, field, error_label, message):
+        """Show inline error: red border on field + error message below."""
+        if field not in self._field_styles:
+            self._field_styles[field] = field.styleSheet()
+        field.setStyleSheet(self._input_error_style())
+        error_label.setText(message)
+        error_label.setVisible(True)
+
+    def _clear_field_error(self, field, error_label):
+        """Clear inline error: restore original style."""
+        if field in self._field_styles:
+            field.setStyleSheet(self._field_styles[field])
+        else:
+            field.setStyleSheet(self._input_style())
+        error_label.setText("")
+        error_label.setVisible(False)
+
+    def _clear_all_errors(self):
+        """Clear all inline validation errors."""
+        error_pairs = [
+            (self.first_name, self._first_name_error),
+            (self.last_name, self._last_name_error),
+            (self.national_id, self._nid_error),
+            (self.phone, self._mobile_error),
+            (self.landline, self._landline_error),
+            (self.email, self._email_error),
+            (self.ownership_share, self._ownership_error),
+        ]
+        for field, label in error_pairs:
+            if label.isVisible():
+                self._clear_field_error(field, label)
 
     def _date_input_style(self) -> str:
         """Custom date input style with light blue background."""
@@ -1090,55 +1247,62 @@ class PersonDialog(QDialog):
     # Tab Navigation
 
     def _go_to_tab2(self):
-        """Tab 1 → Tab 2: Validate personal info then switch."""
+        """Tab 1 → Tab 2: Validate required fields + format check, then switch."""
         import re
         if self.read_only:
             self.tab_widget.setCurrentIndex(1)
             return
+        has_error = False
         first = self.first_name.text().strip()
         last = self.last_name.text().strip()
-        if not first:
-            Toast.show_toast(self, tr("wizard.person_dialog.enter_first_name"), Toast.WARNING)
-            return
-        if not last:
-            Toast.show_toast(self, tr("wizard.person_dialog.enter_last_name"), Toast.WARNING)
-            return
-        # Validate names contain actual letters (not just symbols/numbers)
         name_pattern = re.compile(r'^[\u0600-\u06FFa-zA-Z\s.\-\']{2,}$')
-        if not name_pattern.match(first):
-            Toast.show_toast(self, tr("wizard.person_dialog.invalid_first_name"), Toast.WARNING)
-            return
-        if not name_pattern.match(last):
-            Toast.show_toast(self, tr("wizard.person_dialog.invalid_last_name"), Toast.WARNING)
-            return
+        # Required: first_name
+        if not first:
+            self._set_field_error(self.first_name, self._first_name_error, tr("wizard.person_dialog.enter_first_name"))
+            has_error = True
+        elif not name_pattern.match(first):
+            self._set_field_error(self.first_name, self._first_name_error, tr("wizard.person_dialog.invalid_first_name"))
+            has_error = True
+        # Required: last_name
+        if not last:
+            self._set_field_error(self.last_name, self._last_name_error, tr("wizard.person_dialog.enter_last_name"))
+            has_error = True
+        elif not name_pattern.match(last):
+            self._set_field_error(self.last_name, self._last_name_error, tr("wizard.person_dialog.invalid_last_name"))
+            has_error = True
+        # Optional format: national_id (only validate if filled)
         if self.national_id.text().strip() and not self._validate_national_id():
-            Toast.show_toast(self, tr("wizard.person_dialog.nid_invalid"), Toast.WARNING)
-            return
-        if not self.uploaded_files:
-            Toast.show_toast(self, tr("wizard.person_dialog.id_photo_required"), Toast.WARNING)
+            self._set_field_error(self.national_id, self._nid_error, tr("wizard.person_dialog.nid_invalid"))
+            has_error = True
+        # ID photo is optional — removed requirement
+        if has_error:
             return
         self.tab_widget.setCurrentIndex(1)
 
     def _go_to_tab3(self):
-        """Tab 2 → Tab 3: Validate contact info then switch."""
+        """Tab 2 → Tab 3: Validate contact format (optional fields), then switch."""
         import re
         if self.read_only:
             self.tab_widget.setCurrentIndex(2)
             return
-        # Validate phone (optional but if filled must be valid)
+        has_error = False
+        # Optional format: mobile (if filled, must be 8 digits)
         if not self._validate_mobile(self.phone.text().strip()):
-            Toast.show_toast(self, tr("wizard.person_dialog.invalid_mobile"), Toast.WARNING)
-            return
+            self._set_field_error(self.phone, self._mobile_error, tr("wizard.person_dialog.invalid_mobile"))
+            has_error = True
+        # Optional format: landline (if filled, must be 7 digits)
         if not self._validate_landline(self.landline.text().strip()):
-            Toast.show_toast(self, tr("wizard.person_dialog.invalid_landline"), Toast.WARNING)
-            return
-        # Validate email (optional but if filled must be Latin + valid format)
+            self._set_field_error(self.landline, self._landline_error, tr("wizard.person_dialog.invalid_landline"))
+            has_error = True
+        # Optional format: email (if filled, must be valid)
         email_text = self.email.text().strip()
         if email_text and not re.match(r'^[a-zA-Z0-9@._\-+]+$', email_text):
-            Toast.show_toast(self, tr("wizard.person_dialog.invalid_email_chars"), Toast.WARNING)
-            return
-        if email_text and not re.match(r'^[^@\s]+@[^@\s]+\.[^@\s]+$', email_text):
-            Toast.show_toast(self, tr("wizard.person_dialog.invalid_email"), Toast.WARNING)
+            self._set_field_error(self.email, self._email_error, tr("wizard.person_dialog.invalid_email_chars"))
+            has_error = True
+        elif email_text and not re.match(r'^[^@\s]+@[^@\s]+\.[^@\s]+$', email_text):
+            self._set_field_error(self.email, self._email_error, tr("wizard.person_dialog.invalid_email"))
+            has_error = True
+        if has_error:
             return
         self.tab_widget.setCurrentIndex(2)
 
@@ -1795,80 +1959,116 @@ class PersonDialog(QDialog):
         return self._api_relation_id
 
     def _save_person(self):
-        """Validate and save person data."""
+        """Validate required fields + format checks, then save."""
+        has_error = False
+        # Required: first_name, last_name
         if not self.first_name.text().strip():
-            Toast.show_toast(self, tr("wizard.person_dialog.enter_first_name"), Toast.WARNING)
-            return
+            self._set_field_error(self.first_name, self._first_name_error, tr("wizard.person_dialog.enter_first_name"))
+            has_error = True
         if not self.last_name.text().strip():
-            Toast.show_toast(self, tr("wizard.person_dialog.enter_last_name"), Toast.WARNING)
-            return
+            self._set_field_error(self.last_name, self._last_name_error, tr("wizard.person_dialog.enter_last_name"))
+            has_error = True
+        # Optional format checks
         if self.national_id.text().strip() and not self._validate_national_id():
-            Toast.show_toast(self, tr("wizard.person_dialog.nid_invalid"), Toast.WARNING)
-            return
+            self._set_field_error(self.national_id, self._nid_error, tr("wizard.person_dialog.nid_invalid"))
+            self.tab_widget.setCurrentIndex(0)
+            has_error = True
         if not self._validate_mobile(self.phone.text().strip()):
-            Toast.show_toast(self, tr("wizard.person_dialog.invalid_mobile"), Toast.WARNING)
+            self._set_field_error(self.phone, self._mobile_error, tr("wizard.person_dialog.invalid_mobile"))
             self.tab_widget.setCurrentIndex(1)
-            return
+            has_error = True
         if not self._validate_landline(self.landline.text().strip()):
-            Toast.show_toast(self, tr("wizard.person_dialog.invalid_landline"), Toast.WARNING)
+            self._set_field_error(self.landline, self._landline_error, tr("wizard.person_dialog.invalid_landline"))
             self.tab_widget.setCurrentIndex(1)
+            has_error = True
+        if has_error:
             return
         self.accept()
 
     # API Integration
 
     def _on_final_save(self):
-        """Handle final save (from Tab 3) - create person via API, then link to unit, then accept."""
+        """Handle final save (from Tab 3) - validate, create person via API, link to unit, accept."""
         import re
         from ui.error_handler import ErrorHandler
 
-        # Validate phone numbers before saving
-        if not self._validate_mobile(self.phone.text().strip()):
-            Toast.show_toast(self, tr("wizard.person_dialog.invalid_mobile"), Toast.WARNING)
-            self.tab_widget.setCurrentIndex(1)
-            return
-        if not self._validate_landline(self.landline.text().strip()):
-            Toast.show_toast(self, tr("wizard.person_dialog.invalid_landline"), Toast.WARNING)
-            self.tab_widget.setCurrentIndex(1)
-            return
-
-        # Validate email format before saving
-        email_text = self.email.text().strip()
-        if email_text and not re.match(r'^[a-zA-Z0-9@._\-+]+$', email_text):
-            Toast.show_toast(self, tr("wizard.person_dialog.invalid_email_chars"), Toast.WARNING)
-            self.tab_widget.setCurrentIndex(1)
-            return
-        if email_text and not re.match(r'^[^@\s]+@[^@\s]+\.[^@\s]+$', email_text):
-            Toast.show_toast(self, tr("wizard.person_dialog.invalid_email"), Toast.WARNING)
-            self.tab_widget.setCurrentIndex(1)
-            return
-
-        # Validate names contain actual letters (not just symbols)
+        has_error = False
+        # Required: first_name, last_name
         first = self.first_name.text().strip()
         last = self.last_name.text().strip()
         name_pattern = re.compile(r'^[\u0600-\u06FFa-zA-Z\s.\-\']{2,}$')
-        if first and not name_pattern.match(first):
-            Toast.show_toast(self, tr("wizard.person_dialog.invalid_first_name"), Toast.WARNING)
+        if not first:
+            self._set_field_error(self.first_name, self._first_name_error, tr("wizard.person_dialog.enter_first_name"))
             self.tab_widget.setCurrentIndex(0)
-            return
-        if last and not name_pattern.match(last):
-            Toast.show_toast(self, tr("wizard.person_dialog.invalid_last_name"), Toast.WARNING)
+            has_error = True
+        elif not name_pattern.match(first):
+            self._set_field_error(self.first_name, self._first_name_error, tr("wizard.person_dialog.invalid_first_name"))
             self.tab_widget.setCurrentIndex(0)
-            return
+            has_error = True
+        if not last:
+            self._set_field_error(self.last_name, self._last_name_error, tr("wizard.person_dialog.enter_last_name"))
+            self.tab_widget.setCurrentIndex(0)
+            has_error = True
+        elif not name_pattern.match(last):
+            self._set_field_error(self.last_name, self._last_name_error, tr("wizard.person_dialog.invalid_last_name"))
+            self.tab_widget.setCurrentIndex(0)
+            has_error = True
 
-        # Validate ownership share range
+        # Optional format: phone, landline, email (only validate if filled)
+        if not self._validate_mobile(self.phone.text().strip()):
+            self._set_field_error(self.phone, self._mobile_error, tr("wizard.person_dialog.invalid_mobile"))
+            if not has_error:
+                self.tab_widget.setCurrentIndex(1)
+            has_error = True
+        if not self._validate_landline(self.landline.text().strip()):
+            self._set_field_error(self.landline, self._landline_error, tr("wizard.person_dialog.invalid_landline"))
+            if not has_error:
+                self.tab_widget.setCurrentIndex(1)
+            has_error = True
+        email_text = self.email.text().strip()
+        if email_text and not re.match(r'^[a-zA-Z0-9@._\-+]+$', email_text):
+            self._set_field_error(self.email, self._email_error, tr("wizard.person_dialog.invalid_email_chars"))
+            if not has_error:
+                self.tab_widget.setCurrentIndex(1)
+            has_error = True
+        elif email_text and not re.match(r'^[^@\s]+@[^@\s]+\.[^@\s]+$', email_text):
+            self._set_field_error(self.email, self._email_error, tr("wizard.person_dialog.invalid_email"))
+            if not has_error:
+                self.tab_widget.setCurrentIndex(1)
+            has_error = True
+
+        # Optional format: ownership share (0-100 if filled)
         ownership_text = self.ownership_share.text().strip()
         if ownership_text:
             try:
                 ownership_val = float(ownership_text)
                 if ownership_val < 0 or ownership_val > 100:
-                    Toast.show_toast(self, tr("wizard.person_dialog.invalid_ownership_share"), Toast.WARNING)
-                    self.tab_widget.setCurrentIndex(2)
-                    return
+                    self._set_field_error(self.ownership_share, self._ownership_error, tr("wizard.person_dialog.invalid_ownership_share"))
+                    if not has_error:
+                        self.tab_widget.setCurrentIndex(2)
+                    has_error = True
             except ValueError:
                 pass
 
+        if has_error:
+            return
+
+        # Duplication guard: check existing_persons before any API call
+        if not self.editing_mode and self.existing_persons:
+            first = self.first_name.text().strip()
+            last = self.last_name.text().strip()
+            for existing in self.existing_persons:
+                if (first and last and
+                    existing.get('first_name', '').strip() == first and
+                    existing.get('last_name', '').strip() == last):
+                    from PyQt5.QtWidgets import QMessageBox
+                    QMessageBox.warning(
+                        self, tr("wizard.person.duplicate_title"),
+                        tr("wizard.person.duplicate_name", first=first, last=last))
+                    return
+
         if self._use_api and not self.editing_mode:
+            self._refresh_token()
             person_data = self.get_person_data()
             logger.info(f"Creating person via API: {person_data.get('first_name')} {person_data.get('last_name')}")
 
@@ -1948,29 +2148,90 @@ class PersonDialog(QDialog):
                     tr("common.warning")
                 )
 
-        # Upload new files added during edit mode
+        # Handle evidence files in edit mode: replace via PUT, or upload/delete as needed
         if self._use_api and self.editing_mode:
+            self._refresh_token()
             import os
             person_id = self.person_data.get('person_id')
 
-            # Upload NEW identification files only (not already in _evidence_ids)
+            # Identification files: new files not yet on server
             new_id_files = [f for f in self.uploaded_files
                             if os.path.normpath(f) not in self._evidence_ids]
-            if new_id_files and self._survey_id and person_id:
-                saved = self.uploaded_files
-                self.uploaded_files = new_id_files
-                self._upload_identification_files(person_id)
-                self.uploaded_files = saved
 
-            # Upload NEW tenure files only (without evidence_id)
+            if self._survey_id and person_id:
+                # Replace: pair new files with pending replacement IDs (PUT)
+                for file_path in list(new_id_files):
+                    if not self._pending_id_replacements:
+                        break
+                    old_evidence_id = self._pending_id_replacements.pop(0)
+                    try:
+                        response = self._api_service.update_identification_evidence(
+                            self._survey_id, old_evidence_id, person_id, file_path)
+                        new_eid = (response.get("id") or response.get("evidenceId")
+                                   or response.get("Id") or old_evidence_id)
+                        self._evidence_ids[os.path.normpath(file_path)] = new_eid
+                        new_id_files.remove(file_path)
+                        logger.info(f"ID evidence replaced: {old_evidence_id} -> {new_eid}")
+                    except Exception as e:
+                        logger.error(f"Failed to replace ID evidence {old_evidence_id}: {e}")
+                        self._pending_id_replacements.insert(0, old_evidence_id)
+
+                # Upload remaining new files that had no replacement target (POST)
+                if new_id_files:
+                    saved = self.uploaded_files
+                    self.uploaded_files = new_id_files
+                    self._upload_identification_files(person_id)
+                    self.uploaded_files = saved
+
+                # Delete leftover pending IDs that were not replaced
+                for old_id in self._pending_id_replacements:
+                    try:
+                        self._api_service.delete_evidence(self._survey_id, old_id)
+                        logger.info(f"Orphaned ID evidence deleted: {old_id}")
+                    except Exception as e:
+                        logger.error(f"Failed to delete orphaned ID evidence {old_id}: {e}")
+                self._pending_id_replacements.clear()
+
+            # Tenure files: new files without evidence_id
             relation_id = self._api_relation_id
             new_rel_files = [f for f in self.relation_uploaded_files
                              if not f.get("evidence_id")]
-            if new_rel_files and self._survey_id and relation_id:
-                saved = self.relation_uploaded_files
-                self.relation_uploaded_files = new_rel_files
-                self._upload_tenure_files(relation_id)
-                self.relation_uploaded_files = saved
+
+            if self._survey_id and relation_id:
+                # Replace: pair new tenure files with pending replacement IDs (PUT)
+                for file_entry in list(new_rel_files):
+                    if not self._pending_rel_replacements:
+                        break
+                    old_evidence_id = self._pending_rel_replacements.pop(0)
+                    try:
+                        response = self._api_service.update_tenure_evidence(
+                            self._survey_id, old_evidence_id, relation_id,
+                            file_path=file_entry["path"],
+                            issue_date=file_entry.get("issue_date", ""))
+                        new_eid = (response.get("id") or response.get("evidenceId")
+                                   or response.get("Id") or old_evidence_id)
+                        file_entry["evidence_id"] = new_eid
+                        new_rel_files.remove(file_entry)
+                        logger.info(f"Tenure evidence replaced: {old_evidence_id} -> {new_eid}")
+                    except Exception as e:
+                        logger.error(f"Failed to replace tenure evidence {old_evidence_id}: {e}")
+                        self._pending_rel_replacements.insert(0, old_evidence_id)
+
+                # Upload remaining new tenure files (POST)
+                if new_rel_files:
+                    saved = self.relation_uploaded_files
+                    self.relation_uploaded_files = new_rel_files
+                    self._upload_tenure_files(relation_id)
+                    self.relation_uploaded_files = saved
+
+                # Delete leftover pending tenure IDs
+                for old_id in self._pending_rel_replacements:
+                    try:
+                        self._api_service.delete_evidence(self._survey_id, old_id)
+                        logger.info(f"Orphaned tenure evidence deleted: {old_id}")
+                    except Exception as e:
+                        logger.error(f"Failed to delete orphaned tenure evidence {old_id}: {e}")
+                self._pending_rel_replacements.clear()
 
         self.accept()
 

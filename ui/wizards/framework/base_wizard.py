@@ -319,7 +319,10 @@ class BaseWizard(QWidget, metaclass=ABCQWidgetMeta):
 
         # Call subclass submission handler
         if self.on_submit():
-            data = self.context.to_dict()
+            try:
+                data = self.context.to_dict()
+            except Exception:
+                data = {}
             self.wizard_completed.emit(data)
             self.close()
 

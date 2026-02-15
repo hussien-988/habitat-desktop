@@ -9,6 +9,7 @@ This context extends WizardContext with survey-specific data:
 - Claim data
 """
 
+import logging
 from typing import Optional, Dict, List, Any, TYPE_CHECKING
 from datetime import datetime
 
@@ -18,6 +19,8 @@ from models.unit import PropertyUnit as Unit
 
 if TYPE_CHECKING:
     from repositories.database import Database
+
+logger = logging.getLogger(__name__)
 
 
 class SurveyContext(WizardContext):
@@ -163,3 +166,71 @@ class SurveyContext(WizardContext):
             "status": self.status,
             "created_at": self.created_at.isoformat()
         }
+
+    def cleanup_on_building_change(self, api_client) -> None:
+        """Full cleanup when building changes. Deletes everything from API.
+        Order: Relations (cascade deletes evidence) -> Persons -> Household."""
+        survey_id = self.get_data("survey_id")
+        if not survey_id:
+            return
+
+        self._delete_relations_from_api(api_client, survey_id)
+        self._delete_persons_from_api(api_client)
+        self._delete_household_from_api(api_client, survey_id)
+
+        self.persons = []
+        self.relations = []
+        self.households = []
+        self.claims = []
+        self.finalize_response = None
+        for key in ("household_id", "unit_linked", "linked_unit_uuid",
+                    "claims_count", "created_claims"):
+            self.update_data(key, None)
+
+    def cleanup_on_unit_change(self, api_client) -> None:
+        """Partial cleanup when unit changes. Deletes relations only.
+        Persons and household stay (they belong to the survey/household)."""
+        survey_id = self.get_data("survey_id")
+        if not survey_id:
+            return
+
+        self._delete_relations_from_api(api_client, survey_id)
+
+        for person in self.persons:
+            person['_relation_id'] = None
+
+        self.relations = []
+        self.claims = []
+        self.finalize_response = None
+        for key in ("unit_linked", "linked_unit_uuid",
+                    "claims_count", "created_claims"):
+            self.update_data(key, None)
+
+    def _delete_relations_from_api(self, api_client, survey_id: str) -> None:
+        """Delete all person-unit relations from API."""
+        for person in self.persons:
+            relation_id = person.get('_relation_id')
+            if relation_id:
+                try:
+                    api_client.delete_relation(survey_id, relation_id)
+                except Exception as e:
+                    logger.warning(f"Failed to delete relation {relation_id}: {e}")
+
+    def _delete_persons_from_api(self, api_client) -> None:
+        """Delete all persons from API."""
+        for person in self.persons:
+            person_id = person.get('person_id')
+            if person_id:
+                try:
+                    api_client.delete_person(person_id)
+                except Exception as e:
+                    logger.warning(f"Failed to delete person {person_id}: {e}")
+
+    def _delete_household_from_api(self, api_client, survey_id: str) -> None:
+        """Delete household from API."""
+        household_id = self.get_data("household_id")
+        if household_id:
+            try:
+                api_client.delete_household(household_id, survey_id)
+            except Exception as e:
+                logger.warning(f"Failed to delete household {household_id}: {e}")

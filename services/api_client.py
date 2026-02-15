@@ -1324,6 +1324,45 @@ API للاتصال بـ TRRCMS Backend.
         logger.info(f"Person {person_id} updated successfully")
         return result
 
+    def update_person_in_survey(self, survey_id: str, household_id: str,
+                               person_id: str, person_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Update person within survey context.
+        Endpoint: PUT /api/v1/Surveys/{surveyId}/households/{householdId}/persons/{personId}
+        Provides better audit trail than standalone PUT /api/v1/Persons/{id}."""
+        if not all([survey_id, household_id, person_id]):
+            raise ValueError("survey_id, household_id, and person_id are all required")
+
+        api_data = {
+            "surveyId": survey_id,
+            "householdId": household_id,
+            "personId": person_id,
+            "familyNameArabic": person_data.get("last_name"),
+            "firstNameArabic": person_data.get("first_name"),
+            "fatherNameArabic": person_data.get("father_name"),
+            "motherNameArabic": person_data.get("mother_name"),
+            "nationalId": person_data.get("national_id"),
+            "gender": int(person_data["gender"]) if person_data.get("gender") else None,
+            "nationality": int(person_data["nationality"]) if person_data.get("nationality") else None,
+            "email": person_data.get("email"),
+            "mobileNumber": person_data.get("phone"),
+            "phoneNumber": person_data.get("landline"),
+        }
+
+        birth_date = person_data.get("birth_date")
+        if birth_date:
+            api_data["dateOfBirth"] = f"{birth_date}T00:00:00Z" if "T" not in str(birth_date) else str(birth_date)
+
+        api_data = {k: v for k, v in api_data.items() if v is not None}
+        api_data["surveyId"] = survey_id
+        api_data["householdId"] = household_id
+        api_data["personId"] = person_id
+
+        endpoint = f"/v1/Surveys/{survey_id}/households/{household_id}/persons/{person_id}"
+        logger.info(f"Updating person {person_id} in survey context")
+        result = self._request("PUT", endpoint, json_data=api_data)
+        logger.info(f"Person {person_id} updated in survey {survey_id}")
+        return result
+
     def delete_person(self, person_id: str) -> None:
         """Soft delete a person via DELETE /api/v1/Persons/{id}."""
         if not person_id:
@@ -1332,6 +1371,40 @@ API للاتصال بـ TRRCMS Backend.
         logger.info(f"Deleting person {person_id}")
         self._request("DELETE", f"/v1/Persons/{person_id}")
         logger.info(f"Person {person_id} deleted successfully")
+
+    def delete_relation(self, survey_id: str, relation_id: str) -> bool:
+        """Delete a person-property relation (cascade deletes evidence).
+        Endpoint: DELETE /api/v1/Surveys/{surveyId}/relations/{relationId}"""
+        if not survey_id or not relation_id:
+            raise ValueError("survey_id and relation_id are required")
+
+        logger.info(f"Deleting relation {relation_id} from survey {survey_id}")
+        self._request("DELETE", f"/v1/Surveys/{survey_id}/relations/{relation_id}")
+        logger.info(f"Relation {relation_id} deleted successfully")
+        return True
+
+    def update_relation(self, survey_id: str, relation_id: str, relation_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Update a person-property relation (partial update).
+        Endpoint: PATCH /api/v1/Surveys/{surveyId}/relations/{relationId}"""
+        if not survey_id or not relation_id:
+            raise ValueError("survey_id and relation_id are required")
+
+        api_data = {}
+        if 'rel_type' in relation_data or 'relationship_type' in relation_data:
+            api_data["relationType"] = int(relation_data.get('rel_type') or relation_data.get('relationship_type', 99))
+        if 'contract_type' in relation_data or 'occupancy_type' in relation_data:
+            val = relation_data.get('contract_type') or relation_data.get('occupancy_type')
+            if val:
+                api_data["occupancyType"] = int(val)
+        if 'ownership_share' in relation_data:
+            api_data["ownershipShare"] = relation_data['ownership_share'] / 100.0
+        if 'has_documents' in relation_data:
+            api_data["hasEvidence"] = relation_data['has_documents']
+
+        logger.info(f"Updating relation {relation_id}: {api_data}")
+        result = self._request("PATCH", f"/v1/Surveys/{survey_id}/relations/{relation_id}", json_data=api_data)
+        logger.info(f"Relation {relation_id} updated successfully")
+        return result
 
     def upload_relation_document(
         self,
@@ -1492,6 +1565,150 @@ API للاتصال بـ TRRCMS Backend.
             logger.error(f"Network error during upload: {e}")
             raise NetworkException(message=str(e), original_error=e)
 
+    def update_identification_evidence(
+        self,
+        survey_id: str,
+        evidence_id: str,
+        person_id: str,
+        file_path: str = None,
+        description: str = "",
+        notes: str = ""
+    ) -> Dict[str, Any]:
+        """Update an existing identification document.
+        Endpoint: PUT /api/v1/Surveys/{surveyId}/evidence/identification/{evidenceId}
+        File is optional — send only metadata update if no new file."""
+        import os
+        import mimetypes
+
+        if not survey_id or not evidence_id:
+            raise ValueError("survey_id and evidence_id are required")
+
+        endpoint = f"/v1/Surveys/{survey_id}/evidence/identification/{evidence_id}"
+        url = f"{self.base_url}{endpoint}"
+
+        self._ensure_valid_token()
+        headers = {
+            "Authorization": f"Bearer {self.access_token}",
+            "Accept": "application/json"
+        }
+
+        form_fields = {
+            "EvidenceId": (None, evidence_id),
+            "PersonId": (None, person_id),
+        }
+        if description:
+            form_fields["Description"] = (None, description)
+        if notes:
+            form_fields["Notes"] = (None, notes)
+
+        logger.info(f"[API REQ] PUT {endpoint}")
+
+        try:
+            if file_path and os.path.exists(file_path):
+                file_name = os.path.basename(file_path)
+                mime_type = mimetypes.guess_type(file_path)[0] or "application/octet-stream"
+                with open(file_path, "rb") as f:
+                    files = {"File": (file_name, f, mime_type)}
+                    files.update(form_fields)
+                    response = requests.put(url, files=files, headers=headers,
+                                            timeout=self.config.timeout, verify=False)
+            else:
+                response = requests.put(url, files=form_fields, headers=headers,
+                                        timeout=self.config.timeout, verify=False)
+
+            response.raise_for_status()
+            result = response.json() if response.text else {}
+            logger.info(f"Identification evidence {evidence_id} updated")
+            return result
+
+        except requests.exceptions.HTTPError as e:
+            status_code = e.response.status_code if e.response is not None else 0
+            response_data = {}
+            try:
+                response_data = e.response.json() if e.response is not None else {}
+            except (ValueError, AttributeError):
+                pass
+            logger.error(f"[API ERR] {status_code} PUT {endpoint}: {response_data}")
+            raise ApiException(message=str(e), status_code=status_code, response_data=response_data)
+        except (requests.exceptions.ConnectionError, requests.exceptions.Timeout) as e:
+            logger.error(f"Network error during evidence update: {e}")
+            raise NetworkException(message=str(e), original_error=e)
+
+    def update_tenure_evidence(
+        self,
+        survey_id: str,
+        evidence_id: str,
+        relation_id: str,
+        file_path: str = None,
+        issue_date: str = "",
+        evidence_type: int = 2,
+        description: str = "",
+        notes: str = ""
+    ) -> Dict[str, Any]:
+        """Update an existing tenure/ownership document.
+        Endpoint: PUT /api/v1/Surveys/{surveyId}/evidence/tenure/{evidenceId}
+        File is optional — send only metadata update if no new file."""
+        import os
+        import mimetypes
+
+        if not survey_id or not evidence_id:
+            raise ValueError("survey_id and evidence_id are required")
+
+        endpoint = f"/v1/Surveys/{survey_id}/evidence/tenure/{evidence_id}"
+        url = f"{self.base_url}{endpoint}"
+
+        self._ensure_valid_token()
+        headers = {
+            "Authorization": f"Bearer {self.access_token}",
+            "Accept": "application/json"
+        }
+
+        form_fields = {
+            "EvidenceId": (None, evidence_id),
+            "PersonPropertyRelationId": (None, relation_id),
+            "EvidenceType": (None, str(evidence_type)),
+        }
+        if description:
+            form_fields["Description"] = (None, description)
+        if notes:
+            form_fields["Notes"] = (None, notes)
+        if issue_date:
+            date_val = f"{issue_date}T00:00:00Z" if 'T' not in issue_date else issue_date
+            form_fields["DocumentIssuedDate"] = (None, date_val)
+
+        logger.info(f"[API REQ] PUT {endpoint}")
+
+        try:
+            if file_path and os.path.exists(file_path):
+                file_name = os.path.basename(file_path)
+                mime_type = mimetypes.guess_type(file_path)[0] or "application/octet-stream"
+                with open(file_path, "rb") as f:
+                    files = {"File": (file_name, f, mime_type)}
+                    files.update(form_fields)
+                    response = requests.put(url, files=files, headers=headers,
+                                            timeout=self.config.timeout, verify=False)
+            else:
+                response = requests.put(url, files=form_fields, headers=headers,
+                                        timeout=self.config.timeout, verify=False)
+
+            response.raise_for_status()
+            result = response.json() if response.text else {}
+            logger.info(f"Tenure evidence {evidence_id} updated")
+            return result
+
+        except requests.exceptions.HTTPError as e:
+            status_code = e.response.status_code if e.response is not None else 0
+            response_data = {}
+            try:
+                response_data = e.response.json() if e.response is not None else {}
+            except (ValueError, AttributeError):
+                pass
+            logger.error(f"[API ERR] {status_code} PUT {endpoint}: {response_data}")
+            raise ApiException(message=str(e), status_code=status_code, response_data=response_data)
+        except (requests.exceptions.ConnectionError, requests.exceptions.Timeout) as e:
+            logger.error(f"Network error during evidence update: {e}")
+            raise NetworkException(message=str(e), original_error=e)
+
     def get_survey_evidences(self, survey_id: str, evidence_type: str = None) -> List[Dict[str, Any]]:
         """
         Get all evidence records for a survey.
@@ -1631,8 +1848,8 @@ API للاتصال بـ TRRCMS Backend.
         else:
             occupancy_type_int = None
 
-        ownership_share_pct = relation_data.get('ownership_share', 0)
-        if ownership_share_pct:
+        ownership_share_pct = relation_data.get('ownership_share', None)
+        if ownership_share_pct is not None and ownership_share_pct > 0:
             ownership_share_decimal = ownership_share_pct / 100.0
             # Safety: if result > 1.0, user may have entered a fraction directly
             if ownership_share_decimal > 1.0:
@@ -1654,8 +1871,12 @@ API للاتصال بـ TRRCMS Backend.
 
         if occupancy_type_int:
             api_data["occupancyType"] = occupancy_type_int
-        if ownership_share_decimal:
+        if ownership_share_decimal is not None:
             api_data["ownershipShare"] = ownership_share_decimal
+        elif relation_type_int == 1:
+            # Backend requires ownershipShare for Owner type, default to 1.0 (100%)
+            api_data["ownershipShare"] = 1.0
+            logger.info("OwnershipShare: defaulting to 1.0 (100%) for Owner relation type")
 
         contract_details = relation_data.get('evidence_desc', '') or relation_data.get('contract_details', '')
         if contract_details:
@@ -1784,6 +2005,34 @@ API للاتصال بـ TRRCMS Backend.
         logger.info(f"Finalizing office survey {survey_id}")
         result = self._request("POST", f"/v1/Surveys/office/{survey_id}/finalize")
         logger.info(f"Office survey finalized successfully")
+        return result
+
+    def save_draft_to_backend(self, survey_id: str, draft_data: Dict[str, Any] = None) -> Dict[str, Any]:
+        """Save survey progress as draft on backend.
+        Endpoint: PUT /api/v1/Surveys/{id}/draft
+        Schema: SaveDraftSurveyCommand {surveyId, propertyUnitId, gpsCoordinates,
+                intervieweeName, intervieweeRelationship, notes, durationMinutes}"""
+        if not survey_id:
+            raise ValueError("survey_id is required")
+
+        api_data = {"surveyId": survey_id}
+        if draft_data:
+            field_map = {
+                "property_unit_id": "propertyUnitId",
+                "gps_coordinates": "gpsCoordinates",
+                "interviewee_name": "intervieweeName",
+                "interviewee_relationship": "intervieweeRelationship",
+                "notes": "notes",
+                "duration_minutes": "durationMinutes",
+            }
+            for snake_key, camel_key in field_map.items():
+                val = draft_data.get(snake_key) or draft_data.get(camel_key)
+                if val is not None:
+                    api_data[camel_key] = val
+
+        logger.info(f"Saving draft to backend for survey {survey_id}")
+        result = self._request("PUT", f"/v1/Surveys/{survey_id}/draft", json_data=api_data)
+        logger.info(f"Draft saved to backend for survey {survey_id}")
         return result
 
     def _convert_survey_to_api_format(self, survey_data: Dict[str, Any]) -> Dict[str, Any]:

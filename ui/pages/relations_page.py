@@ -15,7 +15,8 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt, pyqtSignal, QModelIndex, QDate
 from PyQt5.QtGui import QColor, QIcon
 
-from app.config import Config, Vocabularies
+from app.config import Config
+from services.vocab_service import get_options as vocab_get_options
 from repositories.database import Database
 from repositories.relation_repository import RelationRepository
 from repositories.person_repository import PersonRepository
@@ -515,8 +516,8 @@ class RelationDialog(QDialog):
         type_layout.setSpacing(4)
 
         self.type_combo = QComboBox()
-        for code, en, ar in Vocabularies.RELATION_TYPES:
-            self.type_combo.addItem(ar, code)
+        for code, label in vocab_get_options("RelationType"):
+            self.type_combo.addItem(label, code)
         self.type_combo.currentIndexChanged.connect(self._on_type_changed)
         type_layout.addWidget(self.type_combo)
 
@@ -902,8 +903,8 @@ class RelationsPage(QWidget):
         filters_layout.addWidget(QLabel("النوع:"))
         self.type_filter = QComboBox()
         self.type_filter.addItem(self.i18n.t("all"), "")
-        for code, en, ar in Vocabularies.RELATION_TYPES:
-            self.type_filter.addItem(ar, code)
+        for code, label in vocab_get_options("RelationType"):
+            self.type_filter.addItem(label, code)
         self.type_filter.currentIndexChanged.connect(self._on_filter_changed)
         filters_layout.addWidget(self.type_filter)
 

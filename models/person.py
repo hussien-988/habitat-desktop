@@ -84,12 +84,14 @@ class Person:
     @property
     def gender_display(self) -> str:
         """Get gender display name."""
-        return "Male" if self.gender == "male" else "Female"
+        from services.vocab_service import get_label
+        return get_label("Gender", self.gender, lang="en")
 
     @property
     def gender_display_ar(self) -> str:
         """Get gender display name in Arabic."""
-        return "ذكر" if self.gender == "male" else "أنثى"
+        from services.vocab_service import get_label
+        return get_label("Gender", self.gender, lang="ar")
 
     @property
     def age(self) -> Optional[int]:

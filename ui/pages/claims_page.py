@@ -15,7 +15,8 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt, pyqtSignal, QModelIndex, QDate
 from PyQt5.QtGui import QColor
 
-from app.config import Config, Vocabularies
+from app.config import Config
+from services.vocab_service import get_options as vocab_get_options
 from repositories.database import Database
 from ui.components.dialogs.base_dialog import BaseDialog
 from ui.components.dialogs import MessageDialog
@@ -99,13 +100,14 @@ class ClaimsTableModel(BaseTableModel):
         elif field_name == 'unit_id':
             return item.unit_id or "-"
         elif field_name == 'claim_type':
-            types = {"ownership": "ملكية", "occupancy": "إشغال", "tenancy": "إيجار"}
-            return types.get(item.claim_type, item.claim_type)
+            from services.vocab_service import get_label as vocab_get_label
+            return vocab_get_label("ClaimType", item.claim_type)
         elif field_name == 'status':
-            return item.case_status_display_ar if self._is_arabic else item.case_status_display
+            from services.vocab_service import get_label as vocab_get_label
+            return vocab_get_label("ClaimStatus", item.case_status)
         elif field_name == 'priority':
-            priorities = {"low": "منخفض", "normal": "عادي", "high": "عالي", "urgent": "عاجل"}
-            return priorities.get(item.priority, item.priority)
+            from services.vocab_service import get_label as vocab_get_label
+            return vocab_get_label("CasePriority", item.priority)
         elif field_name == 'submission_date':
             return str(item.submission_date) if item.submission_date else "-"
         elif field_name == 'conflict':
@@ -148,24 +150,21 @@ class ClaimDialog(QDialog):
 
         # Claim type
         self.type_combo = QComboBox()
-        types = [("ownership", "ملكية"), ("occupancy", "إشغال"), ("tenancy", "إيجار")]
-        for code, ar in types:
-            self.type_combo.addItem(ar, code)
+        for code, label in vocab_get_options("ClaimType"):
+            self.type_combo.addItem(label, code)
         form.addRow("نوع المطالبة:", self.type_combo)
 
         # Priority
         self.priority_combo = QComboBox()
-        priorities = [("low", "منخفض"), ("normal", "عادي"), ("high", "عالي"), ("urgent", "عاجل")]
-        for code, ar in priorities:
-            self.priority_combo.addItem(ar, code)
+        for code, label in vocab_get_options("CasePriority"):
+            self.priority_combo.addItem(label, code)
         self.priority_combo.setCurrentIndex(1)  # Default to normal
         form.addRow("الأولوية:", self.priority_combo)
 
         # Source
         self.source_combo = QComboBox()
-        sources = [("OFFICE_SUBMISSION", "تقديم مكتبي"), ("FIELD_COLLECTION", "جمع ميداني")]
-        for code, ar in sources:
-            self.source_combo.addItem(ar, code)
+        for code, label in vocab_get_options("ClaimSource"):
+            self.source_combo.addItem(label, code)
         form.addRow("المصدر:", self.source_combo)
 
         layout.addLayout(form)
@@ -460,9 +459,8 @@ class ClaimDetailsDialog(QDialog):
 
         # Editable fields (UC-006 S04, S05)
         self.type_combo = QComboBox()
-        types = [("ownership", "ملكية"), ("occupancy", "إشغال"), ("tenancy", "إيجار")]
-        for code, ar in types:
-            self.type_combo.addItem(ar, code)
+        for code, label in vocab_get_options("ClaimType"):
+            self.type_combo.addItem(label, code)
         idx = self.type_combo.findData(self.claim.claim_type)
         if idx >= 0:
             self.type_combo.setCurrentIndex(idx)
@@ -470,9 +468,8 @@ class ClaimDetailsDialog(QDialog):
         details_layout.addRow("النوع:", self.type_combo)
 
         self.priority_combo = QComboBox()
-        priorities = [("low", "منخفض"), ("normal", "عادي"), ("high", "عالي"), ("urgent", "عاجل")]
-        for code, ar in priorities:
-            self.priority_combo.addItem(ar, code)
+        for code, label in vocab_get_options("CasePriority"):
+            self.priority_combo.addItem(label, code)
         idx = self.priority_combo.findData(self.claim.priority)
         if idx >= 0:
             self.priority_combo.setCurrentIndex(idx)
@@ -982,17 +979,16 @@ class ClaimsPage(QWidget):
         # Status filter
         self.status_combo = QComboBox()
         self.status_combo.addItem(self.i18n.t("all"), "")
-        for code, en, ar in Vocabularies.CASE_STATUS:
-            self.status_combo.addItem(ar, code)
+        for code, label in vocab_get_options("ClaimStatus"):
+            self.status_combo.addItem(label, code)
         self.status_combo.currentIndexChanged.connect(self._on_filter_changed)
         filters_layout.addWidget(self.status_combo)
 
         # Type filter
         self.type_combo = QComboBox()
         self.type_combo.addItem(self.i18n.t("all"), "")
-        types = [("ownership", "ملكية"), ("occupancy", "إشغال"), ("tenancy", "إيجار")]
-        for code, ar in types:
-            self.type_combo.addItem(ar, code)
+        for code, label in vocab_get_options("ClaimType"):
+            self.type_combo.addItem(label, code)
         self.type_combo.currentIndexChanged.connect(self._on_filter_changed)
         filters_layout.addWidget(self.type_combo)
 
