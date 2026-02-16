@@ -10,6 +10,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Union
 
+from app.config import Config
 from utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -139,12 +140,12 @@ class MapService:
     - Spatial proximity analysis
     """
 
-    # Aleppo approximate bounding box
+    # Map bounding box (from .env / Config)
     ALEPPO_BOUNDS = {
-        "min_lat": 36.0,
-        "max_lat": 36.5,
-        "min_lon": 36.8,
-        "max_lon": 37.5
+        "min_lat": Config.MAP_BOUNDS_MIN_LAT,
+        "max_lat": Config.MAP_BOUNDS_MAX_LAT,
+        "min_lon": Config.MAP_BOUNDS_MIN_LNG,
+        "max_lon": Config.MAP_BOUNDS_MAX_LNG
     }
 
     def __init__(self, db_connection):

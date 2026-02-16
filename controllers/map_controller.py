@@ -46,9 +46,9 @@ class MapFilter:
 @dataclass
 class MapState:
     """Current state of the map."""
-    center_lat: float = 36.2
-    center_lng: float = 37.15
-    zoom: int = 15  #
+    center_lat: float = Config.MAP_CENTER_LAT
+    center_lng: float = Config.MAP_CENTER_LNG
+    zoom: int = Config.MAP_DEFAULT_ZOOM
     active_layers: List[str] = None
     selected_feature_id: Optional[str] = None
     drawing_mode: Optional[str] = None  # None, 'point', 'polygon'
@@ -76,12 +76,12 @@ class MapController(BaseController):
     gps_status_changed = pyqtSignal(str)  # status
     buildings_in_view = pyqtSignal(list)  # list of BuildingGeoData
 
-    # Map bounds for Iraq/Syria (Aleppo region)
+    # Map bounds (from .env / Config)
     DEFAULT_BOUNDS = {
-        "min_lat": 36.0,
-        "max_lat": 36.5,
-        "min_lng": 36.8,
-        "max_lng": 37.5
+        "min_lat": Config.MAP_BOUNDS_MIN_LAT,
+        "max_lat": Config.MAP_BOUNDS_MAX_LAT,
+        "min_lng": Config.MAP_BOUNDS_MIN_LNG,
+        "max_lng": Config.MAP_BOUNDS_MAX_LNG
     }
 
     def __init__(self, db: Database, parent=None):

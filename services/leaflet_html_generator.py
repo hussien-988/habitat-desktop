@@ -48,11 +48,11 @@ class LeafletHTMLGenerator:
     def generate(
         tile_server_url: str,
         buildings_geojson: str,
-        center_lat: float = 36.2021,
-        center_lon: float = 37.1343,
-        zoom: int = 15,  #
-        min_zoom: int = None,  # Minimum zoom level (prevents zooming out)
-        max_zoom: int = 20,  #
+        center_lat: float = MapConstants.DEFAULT_CENTER_LAT,
+        center_lon: float = MapConstants.DEFAULT_CENTER_LON,
+        zoom: int = MapConstants.DEFAULT_ZOOM,
+        min_zoom: int = None,
+        max_zoom: int = MapConstants.MAX_ZOOM,
         show_legend: bool = True,
         show_layer_control: bool = True,
         enable_drawing: bool = False,
@@ -288,9 +288,9 @@ class LeafletHTMLGenerator:
         .leaflet-container {{ background: {MapConstants.TILE_PANE_BACKGROUND} !important; }}
         .leaflet-tile-pane {{ background: {MapConstants.TILE_PANE_BACKGROUND}; }}
 
-        /* Smooth tile fade-in during panning (prevents jarring tile pop-in) */
+        /* GPU-accelerate tile compositing */
         .leaflet-tile {{
-            transition: opacity 0.3s ease-in !important;
+            will-change: transform;
         }}
 
         /* Loading overlay - hides map until tiles are ready */
@@ -485,6 +485,19 @@ class LeafletHTMLGenerator:
     ) -> str:
         """Get JavaScript code for map initialization."""
         import json
+        from app.config import Config as _Cfg
+        from services.tile_server_manager import get_tile_metadata
+
+        # Auto-detect zoom levels from tile server / MBTiles
+        tile_meta = get_tile_metadata()
+        effective_min_zoom = min_zoom if min_zoom is not None else tile_meta.get('minzoom', MapConstants.MIN_ZOOM)
+        effective_max_zoom = max_zoom if max_zoom != MapConstants.MAX_ZOOM else tile_meta.get('maxzoom', MapConstants.MAX_ZOOM)
+
+        # GeoServer WMS (optional, from .env)
+        geoserver_wms_url = ""
+        geoserver_workspace = _Cfg.GEOSERVER_WORKSPACE
+        if _Cfg.GEOSERVER_ENABLED and _Cfg.GEOSERVER_URL:
+            geoserver_wms_url = f"{_Cfg.GEOSERVER_URL}/{_Cfg.GEOSERVER_WORKSPACE}/wms"
 
         status_colors = LeafletHTMLGenerator.STATUS_COLORS
         status_labels = LeafletHTMLGenerator.STATUS_LABELS_AR
@@ -571,9 +584,9 @@ class LeafletHTMLGenerator:
         // PERFORMANCE: preferCanvas for 10x faster rendering (Canvas vs SVG/DOM)
         // Reference: https://leafletjs.com/reference.html#map-prefercanvas
         var map = L.map('map', {{
-            preferCanvas: true,              // CRITICAL: Use Canvas renderer (10x faster!)
-            maxZoom: {max_zoom},
-            minZoom: {min_zoom if min_zoom is not None else 15},
+            preferCanvas: true,
+            maxZoom: {effective_max_zoom},
+            minZoom: {effective_min_zoom},
             fadeAnimation: {'true' if MapConstants.MAP_FADE_ANIMATION else 'false'},
             zoomAnimation: {'true' if MapConstants.MAP_ZOOM_ANIMATION else 'false'},
             zoomAnimationThreshold: {MapConstants.MAP_ZOOM_ANIMATION_THRESHOLD}
@@ -585,19 +598,32 @@ class LeafletHTMLGenerator:
         }}
 
         // Add tile layer from local server
-        // PERFORMANCE: keepBuffer, updateWhenZooming, updateWhenIdle prevent gray areas
-        // Reference: https://leafletjs.com/reference.html#tilelayer
         var tileLayer = L.tileLayer('{tile_server_url}/tiles/{{z}}/{{x}}/{{y}}.png', {{
-            maxZoom: {max_zoom},
-            minZoom: 15,
+            maxZoom: {effective_max_zoom},
+            minZoom: {effective_min_zoom},
             attribution: 'Map data &copy; OpenStreetMap | UN-Habitat Syria',
             keepBuffer: {MapConstants.TILE_KEEP_BUFFER},
             updateWhenZooming: {'true' if MapConstants.TILE_UPDATE_WHEN_ZOOMING else 'false'},
             updateWhenIdle: {'true' if MapConstants.TILE_UPDATE_WHEN_IDLE else 'false'},
+            loading: 'lazy',
             errorTileUrl: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=='
         }});
 
         tileLayer.addTo(map);
+
+        // GeoServer WMS overlay (optional, configured via .env)
+        var geoserverWmsUrl = '{geoserver_wms_url}';
+        if (geoserverWmsUrl && geoserverWmsUrl !== '' && geoserverWmsUrl !== 'None') {{
+            var gsBuildingsLayer = L.tileLayer.wms(geoserverWmsUrl, {{
+                layers: '{geoserver_workspace}:buildings',
+                format: 'image/png',
+                transparent: true,
+                version: '1.1.1',
+                attribution: 'GeoServer - UN-Habitat'
+            }});
+            var gsOverlays = {{"Buildings (GeoServer)": gsBuildingsLayer}};
+            L.control.layers(null, gsOverlays).addTo(map);
+        }}
 
         // Loading overlay removal - hide when initial tiles are loaded
         (function() {{

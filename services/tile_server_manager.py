@@ -6,15 +6,16 @@ Provides a single point of access to the tile server for all UI components.
 Makes it easy to switch between local and production servers.
 """
 
+import json
 import os
 import socket
 import sqlite3
 import threading
+import urllib.request
 from pathlib import Path
 from http.server import HTTPServer, BaseHTTPRequestHandler
-from typing import Optional
+from typing import Optional, Dict, Any
 
-from app.config import Config
 from app.config import Config
 from utils.logger import get_logger
 
@@ -348,6 +349,7 @@ class TileServerManager:
     _port: Optional[int] = None
     _is_production: bool = False
     _production_url: Optional[str] = None
+    _tile_metadata: Optional[Dict[str, Any]] = None
 
     def __new__(cls):
         """Ensure only one instance exists (Singleton)."""
@@ -405,7 +407,10 @@ class TileServerManager:
 
         # Set paths
         base_path = Path(__file__).parent.parent
-        TileServer.mbtiles_path = base_path / "data" / "aleppo_tiles.mbtiles"
+        data_dir = base_path / "data"
+        # Find any .mbtiles file in data directory
+        mbtiles_files = list(data_dir.glob("*.mbtiles")) if data_dir.exists() else []
+        TileServer.mbtiles_path = mbtiles_files[0] if mbtiles_files else data_dir / "tiles.mbtiles"
         TileServer.assets_path = base_path / "assets" / "leaflet"
 
         # Create server - listen on all interfaces (0.0.0.0) to allow network access
@@ -421,6 +426,134 @@ class TileServerManager:
         self._server_thread.start()
 
         logger.info(f"Local tile server started on port {self._port}")
+
+    def get_tile_metadata(self) -> Dict[str, Any]:
+        """
+        Get tile metadata (minzoom, maxzoom, bounds, center).
+        Tries: 1) API (if Docker), 2) local MBTiles file, 3) Config defaults.
+        """
+        if self._tile_metadata is not None:
+            return self._tile_metadata
+
+        metadata = None
+
+        # Try API first if Docker mode
+        if self._is_production:
+            metadata = self._fetch_metadata_from_api()
+
+        # Always try local MBTiles as fallback
+        if not metadata:
+            metadata = self._read_metadata_from_mbtiles()
+
+        if metadata and metadata.get('minzoom') is not None:
+            self._tile_metadata = metadata
+            print(f"[DEBUG] Tile metadata detected: zoom {metadata.get('minzoom')}-{metadata.get('maxzoom')}")
+            logger.info(f"Tile metadata: zoom {metadata.get('minzoom')}-{metadata.get('maxzoom')}")
+        else:
+            self._tile_metadata = {
+                'minzoom': Config.MAP_MIN_ZOOM,
+                'maxzoom': Config.MAP_MAX_ZOOM,
+            }
+            print(f"[DEBUG] Tile metadata: using .env defaults (zoom {Config.MAP_MIN_ZOOM}-{Config.MAP_MAX_ZOOM})")
+            logger.warning("Could not detect tile metadata, using .env defaults")
+
+        return self._tile_metadata
+
+    def _fetch_metadata_from_api(self) -> Optional[Dict[str, Any]]:
+        """Fetch metadata from TileServer GL API (/data.json)."""
+        url = self._production_url
+        if not url:
+            return None
+
+        try:
+            req = urllib.request.Request(f"{url}/data.json", headers={'Accept': 'application/json'})
+            with urllib.request.urlopen(req, timeout=3) as resp:
+                data = json.loads(resp.read().decode())
+
+            # TileServer GL returns dict: {"source_name": {...}}
+            source_id = None
+            if isinstance(data, dict) and data:
+                source_id = list(data.keys())[0]
+            elif isinstance(data, list) and data:
+                source_id = data[0].get('id') or data[0].get('name')
+
+            if source_id:
+                req2 = urllib.request.Request(
+                    f"{url}/data/{source_id}.json",
+                    headers={'Accept': 'application/json'}
+                )
+                with urllib.request.urlopen(req2, timeout=3) as resp2:
+                    tilejson = json.loads(resp2.read().decode())
+                    return {
+                        'minzoom': tilejson.get('minzoom'),
+                        'maxzoom': tilejson.get('maxzoom'),
+                        'bounds': tilejson.get('bounds'),
+                        'center': tilejson.get('center'),
+                    }
+        except Exception as e:
+            logger.warning(f"Failed to fetch tile metadata from API: {e}")
+
+        return None
+
+    def _read_metadata_from_mbtiles(self) -> Optional[Dict[str, Any]]:
+        """Read metadata directly from MBTiles SQLite file."""
+        mbtiles_path = None
+
+        # 1) Check MBTILES_PATH from .env (explicit, works everywhere)
+        if Config.MBTILES_PATH:
+            p = Path(Config.MBTILES_PATH)
+            if p.exists():
+                mbtiles_path = p
+                print(f"[DEBUG] MBTiles from .env: {p.name} ({p.stat().st_size // (1024*1024)} MB)")
+
+        # 2) Fallback: search app data dir
+        if not mbtiles_path:
+            data_dir = Path(__file__).parent.parent / "data"
+            if data_dir.exists():
+                files = list(data_dir.glob("*.mbtiles"))
+                if files:
+                    mbtiles_path = max(files, key=lambda f: f.stat().st_size)
+
+        if not mbtiles_path:
+            logger.warning("No MBTiles file found (set MBTILES_PATH in .env)")
+            return None
+
+        try:
+            conn = sqlite3.connect(str(mbtiles_path))
+            result = {}
+
+            # Try metadata table first
+            try:
+                cursor = conn.execute("SELECT name, value FROM metadata")
+                meta = dict(cursor.fetchall())
+                if 'minzoom' in meta:
+                    result['minzoom'] = int(meta['minzoom'])
+                if 'maxzoom' in meta:
+                    result['maxzoom'] = int(meta['maxzoom'])
+                if 'bounds' in meta:
+                    result['bounds'] = [float(x) for x in meta['bounds'].split(',')]
+                if 'center' in meta:
+                    result['center'] = [float(x) for x in meta['center'].split(',')]
+            except Exception:
+                pass
+
+            # Fallback: query tiles table directly for actual zoom range
+            if 'minzoom' not in result or 'maxzoom' not in result:
+                try:
+                    cursor = conn.execute("SELECT MIN(zoom_level), MAX(zoom_level) FROM tiles")
+                    row = cursor.fetchone()
+                    if row and row[0] is not None:
+                        result['minzoom'] = int(row[0])
+                        result['maxzoom'] = int(row[1])
+                        print(f"[DEBUG] Detected zoom from tiles table: {row[0]}-{row[1]}")
+                except Exception:
+                    pass
+
+            conn.close()
+            return result if result else None
+        except Exception as e:
+            logger.warning(f"Failed to read MBTiles metadata: {e}")
+            return None
 
     def stop(self):
         """Stop the local tile server."""
@@ -439,7 +572,7 @@ class TileServerManager:
         return cls._instance
 
 
-# Global helper function for easy access
+# Global helper functions for easy access
 def get_tile_server_url() -> str:
     """
     Get the tile server URL.
@@ -451,3 +584,13 @@ def get_tile_server_url() -> str:
     """
     manager = TileServerManager.get_instance()
     return manager.get_tile_server_url()
+
+
+def get_tile_metadata() -> Dict[str, Any]:
+    """
+    Get tile metadata (minzoom, maxzoom, bounds, center).
+    Auto-detected from tile server / MBTiles file.
+    Falls back to Config values.
+    """
+    manager = TileServerManager.get_instance()
+    return manager.get_tile_metadata()

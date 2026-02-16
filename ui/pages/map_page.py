@@ -355,13 +355,13 @@ def get_leaflet_html(tile_server_url: str, buildings_geojson: str) -> str:
         // Fix Leaflet icon paths for local serving
         L.Icon.Default.imagePath = '{tile_server_url}/images/';
 
-        // Initialize map centered on Aleppo
-        var map = L.map('map').setView([36.2021, 37.1343], 15);
+        // Initialize map (center and zoom from Config/.env)
+        var map = L.map('map').setView([{Config.MAP_CENTER_LAT}, {Config.MAP_CENTER_LNG}], {Config.MAP_DEFAULT_ZOOM});
 
         // Add tile layer from local server
         L.tileLayer('{tile_server_url}/tiles/{{z}}/{{x}}/{{y}}.png', {{
-            maxZoom: 20,
-            minZoom: 15,
+            maxZoom: {Config.MAP_MAX_ZOOM},
+            minZoom: {Config.MAP_MIN_ZOOM},
             attribution: 'Map data &copy; OpenStreetMap | UN-Habitat Syria'
         }}).addTo(map);
 
@@ -742,9 +742,9 @@ class MapPage(QWidget):
         """تحديث بيانات الخريطة بأداء محسّن."""
         logger.debug("Refreshing map page with optimized performance")
 
-        # Load buildings using MapController (DRY + SOLID)
-        # Aleppo bounding box (same as MapServiceAPI)
-        bbox = (36.0, 36.8, 36.5, 37.5)  # min_lat, min_lon, max_lat, max_lon
+        # Load buildings using MapController (bounds from Config/.env)
+        bbox = (Config.MAP_BOUNDS_MIN_LAT, Config.MAP_BOUNDS_MIN_LNG,
+                Config.MAP_BOUNDS_MAX_LAT, Config.MAP_BOUNDS_MAX_LNG)
 
         # ✅ استخدام page_size محسّن = 2000 (زيادة من 1000)
         # ✅ تمرير zoom_level للتحسينات المستقبلية
