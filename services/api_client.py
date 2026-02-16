@@ -1889,21 +1889,33 @@ API للاتصال بـ TRRCMS Backend.
         return api_data
 
     def _convert_person_to_api_format(self, person_data: Dict[str, Any]) -> Dict[str, Any]:
-        """Convert person data to API format (camelCase)."""
+        """Convert person data to API format matching CreatePersonCommand schema."""
         def get_value(snake_key: str, camel_key: str, default=None):
             return person_data.get(snake_key) or person_data.get(camel_key) or default
 
+        gender = get_value('gender', 'gender', None)
+        nationality = get_value('nationality', 'nationality', None)
+
+        birth_date = get_value('birth_date', 'dateOfBirth', '')
+        date_of_birth = None
+        if birth_date:
+            if 'T' not in str(birth_date):
+                date_of_birth = f"{birth_date}T00:00:00Z"
+            else:
+                date_of_birth = str(birth_date)
+
         api_data = {
-            "fullName": get_value('full_name', 'fullName', ''),
-            "fullNameAr": get_value('full_name_ar', 'fullNameAr', ''),
+            "familyNameArabic": get_value('last_name', 'familyNameArabic', ''),
+            "firstNameArabic": get_value('first_name', 'firstNameArabic', ''),
+            "fatherNameArabic": get_value('father_name', 'fatherNameArabic', '-'),
+            "motherNameArabic": get_value('mother_name', 'motherNameArabic', '-'),
             "nationalId": get_value('national_id', 'nationalId', ''),
-            "householdId": get_value('household_id', 'householdId'),
-            "dateOfBirth": get_value('date_of_birth', 'dateOfBirth'),
-            "gender": get_value('gender', 'gender'),
-            "relationshipToHead": get_value('relationship_to_head', 'relationshipToHead'),
-            "phoneNumber": get_value('phone_number', 'phoneNumber', ''),
+            "gender": int(gender) if gender else None,
+            "nationality": int(nationality) if nationality else None,
+            "dateOfBirth": date_of_birth,
             "email": get_value('email', 'email', ''),
-            "notes": get_value('notes', 'notes', '')
+            "mobileNumber": get_value('phone', 'mobileNumber', ''),
+            "phoneNumber": get_value('landline', 'phoneNumber', ''),
         }
         return {k: v for k, v in api_data.items() if v is not None}
 

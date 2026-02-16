@@ -470,18 +470,33 @@ class ClaimStep(BaseStep):
             card.claim_unit_search.setText(unit_id)
 
         # Relation type -> claim type
-        relation_type = claim_data.get('relationType', '').lower()
-        if relation_type in ('owner', 'co_owner', 'heir'):
+        # API returns integer codes: 1=Owner, 2=Occupant, 3=Tenant, 4=Guest, 5=Heir, 99=Other
+        relation_type = claim_data.get('relationType')
+        # Map relation type (int or legacy string) to claim type
+        if isinstance(relation_type, int):
+            ownership_types = (1, 5)   # Owner, Heir
+            tenant_types = (3,)        # Tenant
+            occupant_types = (2,)      # Occupant
+            is_ownership = relation_type in ownership_types
+            is_tenant = relation_type in tenant_types
+            is_occupant = relation_type in occupant_types
+        else:
+            rt = str(relation_type).lower() if relation_type else ''
+            is_ownership = rt in ('owner', 'co_owner', 'heir')
+            is_tenant = rt == 'tenant'
+            is_occupant = rt == 'occupant'
+
+        if is_ownership:
             for i in range(card.claim_type_combo.count()):
                 if card.claim_type_combo.itemData(i) == _find_combo_code_by_english("ClaimType", "Ownership"):
                     card.claim_type_combo.setCurrentIndex(i)
                     break
-        elif relation_type == 'tenant':
+        elif is_tenant:
             for i in range(card.claim_type_combo.count()):
                 if card.claim_type_combo.itemData(i) == _find_combo_code_by_english("ClaimType", "Tenancy"):
                     card.claim_type_combo.setCurrentIndex(i)
                     break
-        elif relation_type == 'occupant':
+        elif is_occupant:
             for i in range(card.claim_type_combo.count()):
                 if card.claim_type_combo.itemData(i) == _find_combo_code_by_english("ClaimType", "Occupancy"):
                     card.claim_type_combo.setCurrentIndex(i)
