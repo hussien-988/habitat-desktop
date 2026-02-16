@@ -13,7 +13,7 @@ import uuid
 
 from PyQt5.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
-    QPushButton, QComboBox, QDateEdit, QFrame, QWidget,
+    QPushButton, QDateEdit, QFrame, QWidget,
     QGridLayout, QTextEdit, QTabWidget,
     QRadioButton, QButtonGroup, QSizePolicy
 )
@@ -30,6 +30,8 @@ from services.display_mappings import (
     get_relation_type_options, get_contract_type_options, get_evidence_type_options,
     get_gender_options, get_nationality_options
 )
+from ui.components.rtl_combo import RtlCombo
+from ui.components.centered_text_edit import CenteredTextEdit
 from ui.components.toast import Toast
 from utils.logger import get_logger
 
@@ -431,14 +433,14 @@ class PersonDialog(QDialog):
         grid.addWidget(self._label(tr("wizard.person_dialog.gender"), label_style), row, 0)
         grid.addWidget(self._label(tr("wizard.person_dialog.nationality"), label_style), row, 1)
         row += 1
-        self.gender = QComboBox()
+        self.gender = RtlCombo()
         self.gender.addItem(tr("wizard.person_dialog.select"), None)
         for code, display_name in get_gender_options():
             self.gender.addItem(display_name, code)
         self.gender.setStyleSheet(self._input_style())
         grid.addWidget(self.gender, row, 0)
 
-        self.nationality = QComboBox()
+        self.nationality = RtlCombo()
         self.nationality.addItem(tr("wizard.person_dialog.select"), None)
         for code, display_name in get_nationality_options():
             self.nationality.addItem(display_name, code)
@@ -506,7 +508,7 @@ class PersonDialog(QDialog):
         # Person Role (full width)
         grid.addWidget(self._label(tr("wizard.person_dialog.person_role"), label_style), row, 0, 1, 2)
         row += 1
-        self.person_role = QComboBox()
+        self.person_role = RtlCombo()
         self.person_role.addItem(tr("wizard.person_dialog.select"), None)
         for code, display_name in get_relation_type_options():
             self.person_role.addItem(display_name, code)
@@ -621,13 +623,13 @@ class PersonDialog(QDialog):
         grid.addWidget(self._label(tr("wizard.person_dialog.occupancy_nature"), label_style), row, 0)
         grid.addWidget(self._label(tr("wizard.person_dialog.claim_type_label"), label_style), row, 1)
         row += 1
-        self.contract_type = QComboBox()
+        self.contract_type = RtlCombo()
         for code, display_name in get_contract_type_options():
             self.contract_type.addItem(display_name, code)
         self.contract_type.setStyleSheet(self._input_style())
         grid.addWidget(self.contract_type, row, 0)
 
-        self.rel_type_combo = QComboBox()
+        self.rel_type_combo = RtlCombo()
         self.rel_type_combo.addItem(tr("wizard.person_dialog.select"), None)
         for code, display_name in get_relation_type_options():
             self.rel_type_combo.addItem(display_name, code)
@@ -667,7 +669,7 @@ class PersonDialog(QDialog):
         grid.addWidget(self._label(tr("wizard.person_dialog.evidence_type"), label_style), row, 0)
         grid.addWidget(self._label(tr("wizard.person_dialog.evidence_description"), label_style), row, 1)
         row += 1
-        self.evidence_type = QComboBox()
+        self.evidence_type = RtlCombo()
         for code, display_name in get_evidence_type_options():
             self.evidence_type.addItem(display_name, code)
         self.evidence_type.setStyleSheet(self._input_style())
@@ -682,8 +684,11 @@ class PersonDialog(QDialog):
         # Notes (full width)
         grid.addWidget(self._label(tr("wizard.person_dialog.notes_label"), label_style), row, 0, 1, 2)
         row += 1
-        self.notes = QTextEdit()
+        self.notes = CenteredTextEdit()
         self.notes.setPlaceholderText(tr("wizard.person_dialog.notes_placeholder"))
+        self.notes.setPlaceholderStyleSheet(
+            "color: #9CA3AF; background: transparent; font-size: 16px; font-weight: 400;"
+        )
         self.notes.setMaximumHeight(80)
         self.notes.setStyleSheet("""
             QTextEdit {
@@ -692,13 +697,12 @@ class PersonDialog(QDialog):
                 padding: 10px;
                 background-color: #f0f7ff;
                 color: #333;
-                font-size: 14px;
+                font-size: 16px;
             }
             QTextEdit:focus {
                 border: 1px solid #E0E6ED;
             }
         """)
-        # RTL text direction for Arabic
         self.notes.setLayoutDirection(Qt.RightToLeft)
         grid.addWidget(self.notes, row, 0, 1, 2)
         row += 1
@@ -1073,7 +1077,7 @@ class PersonDialog(QDialog):
 
     def _error_label_style(self) -> str:
         """Style for inline validation error labels."""
-        return "color: #e74c3c; font-size: 10px; font-weight: 600; background: transparent; padding: 0px; margin: 0px;"
+        return "color: #e74c3c; font-size: 11px; font-weight: 700; background: transparent; padding: 0px;"
 
     def _input_error_style(self) -> str:
         """Input style with red border for validation error state."""
@@ -1108,11 +1112,11 @@ class PersonDialog(QDialog):
         """
 
     def _set_field_error(self, field, error_label, message):
-        """Show inline error: red border on field + error message below."""
+        """Show inline error: red border on field + small ⚠ indicator below."""
         if field not in self._field_styles:
             self._field_styles[field] = field.styleSheet()
         field.setStyleSheet(self._input_error_style())
-        error_label.setText(message)
+        error_label.setText("!")
         error_label.setVisible(True)
 
     def _clear_field_error(self, field, error_label):

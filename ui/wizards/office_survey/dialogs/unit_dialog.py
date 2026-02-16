@@ -14,19 +14,20 @@ import uuid
 
 from PyQt5.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
-    QPushButton, QComboBox, QSpinBox, QTextEdit, QFrame
+    QPushButton, QSpinBox, QTextEdit, QFrame
 )
 from PyQt5.QtCore import Qt, QLocale
 from PyQt5.QtGui import QDoubleValidator
 
-from app.config import Config, Vocabularies
-# RtlCombo removed - plain QComboBox works correctly in RTL dialogs
+from app.config import Config
+from ui.components.rtl_combo import RtlCombo
 from models.building import Building
 from controllers.unit_controller import UnitController
 from ui.error_handler import ErrorHandler
 from services.validation_service import ValidationService
 from services.api_client import get_api_client
 from services.translation_manager import tr
+from services.display_mappings import get_unit_type_options, get_unit_status_options
 from services.error_mapper import map_exception
 from ui.components.toast import Toast
 from utils.logger import get_logger
@@ -147,21 +148,21 @@ class UnitDialog(QDialog):
         row2.setSpacing(16)
 
         # نوع المقسم (يمين في RTL = أول عنصر)
-        self.unit_type_combo = QComboBox()
+        self.unit_type_combo = RtlCombo()
         self.unit_type_combo.setStyleSheet(self._combo_style())
         self.unit_type_combo.setFixedHeight(40)
         self.unit_type_combo.addItem(tr("wizard.unit_dialog.select"), 0)
-        for code, name_en, name_ar in Vocabularies.UNIT_TYPES:
-            self.unit_type_combo.addItem(name_ar, code)
+        for code, label in get_unit_type_options():
+            self.unit_type_combo.addItem(label, code)
         row2.addLayout(self._create_field_container("نوع المقسم", self.unit_type_combo), 1)
 
         # حالة المقسم (يسار في RTL = ثاني عنصر)
-        self.unit_status_combo = QComboBox()
+        self.unit_status_combo = RtlCombo()
         self.unit_status_combo.setStyleSheet(self._combo_style())
         self.unit_status_combo.setFixedHeight(40)
         self.unit_status_combo.addItem(tr("wizard.unit_dialog.select"), 0)
-        for code, name_en, name_ar in Vocabularies.UNIT_STATUS:
-            self.unit_status_combo.addItem(name_ar, code)
+        for code, label in get_unit_status_options():
+            self.unit_status_combo.addItem(label, code)
         row2.addLayout(self._create_field_container("حالة المقسم", self.unit_status_combo), 1)
 
         layout.addLayout(row2)

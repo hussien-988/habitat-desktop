@@ -5,9 +5,6 @@ Centralized display mappings for status/type dictionaries (DRY).
 Display functions delegate to vocab_service for API-sourced labels,
 with string-key fallback for legacy data. Options functions delegate
 to vocab_service.get_options().
-
-EXCEPTION: Unit type/status functions stay hardcoded (PropertyUnit
-enums are NOT in the vocabularies API).
 """
 
 from services.translation_manager import tr
@@ -81,10 +78,10 @@ def get_building_status_display(status_key) -> str:
     return _vocab_label("BuildingStatus", status_key, _str_fallback)
 
 
-# ============ Unit Type (HARDCODED - NOT in vocabularies API) ============
+# ============ Unit Type ============
 
 def get_unit_type_display(type_key) -> str:
-    _str_map = {
+    _str_fallback = {
         "apartment": "mapping.unit_type.apartment",
         "shop": "mapping.unit_type.shop",
         "office": "mapping.unit_type.office",
@@ -92,24 +89,17 @@ def get_unit_type_display(type_key) -> str:
         "garage": "mapping.unit_type.garage",
         "other": "mapping.unit_type.other",
     }
-    _int_map = {
-        1: "mapping.unit_type.apartment",
-        2: "mapping.unit_type.shop",
-        3: "mapping.unit_type.office",
-        4: "mapping.unit_type.warehouse",
-        5: "mapping.unit_type.other",
-    }
-    if isinstance(type_key, int):
-        key = _int_map.get(type_key)
-    else:
-        key = _str_map.get(str(type_key).lower() if type_key else "")
-    return tr(key) if key else tr("mapping.not_specified")
+    return _vocab_label("UnitType", type_key, _str_fallback)
 
 
-# ============ Unit Status (HARDCODED - NOT in vocabularies API) ============
+def get_unit_type_options() -> list:
+    return _vocab_options("UnitType")
+
+
+# ============ Unit Status ============
 
 def get_unit_status_display(status_key) -> str:
-    _str_map = {
+    _str_fallback = {
         "occupied": "mapping.unit_status.occupied",
         "vacant": "mapping.unit_status.vacant",
         "damaged": "mapping.unit_status.damaged",
@@ -118,20 +108,11 @@ def get_unit_status_display(status_key) -> str:
         "locked": "mapping.unit_status.locked",
         "unknown": "mapping.unit_status.unknown",
     }
-    _int_map = {
-        1: "mapping.unit_status.occupied",
-        2: "mapping.unit_status.vacant",
-        3: "mapping.unit_status.damaged",
-        4: "mapping.unit_status.under_renovation",
-        5: "mapping.unit_status.uninhabitable",
-        6: "mapping.unit_status.locked",
-        99: "mapping.unit_status.unknown",
-    }
-    if isinstance(status_key, int):
-        key = _int_map.get(status_key)
-    else:
-        key = _str_map.get(str(status_key).lower() if status_key else "")
-    return tr(key) if key else tr("mapping.not_specified")
+    return _vocab_label("UnitStatus", status_key, _str_fallback)
+
+
+def get_unit_status_options() -> list:
+    return _vocab_options("UnitStatus")
 
 
 # ============ Relation Type ============

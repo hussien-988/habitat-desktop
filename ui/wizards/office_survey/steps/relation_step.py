@@ -13,12 +13,13 @@ import uuid
 from datetime import datetime
 
 from PyQt5.QtWidgets import (
-    QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QComboBox, QDateEdit,
+    QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QDateEdit,
     QDoubleSpinBox, QLineEdit, QTextEdit, QFrame, QGridLayout, QButtonGroup,
     QRadioButton, QFileDialog, QScrollArea, QWidget
 )
 from PyQt5.QtCore import Qt, QDate
 
+from ui.components.rtl_combo import RtlCombo
 from ui.wizards.framework import BaseStep, StepValidationResult
 from ui.wizards.office_survey.survey_context import SurveyContext
 from app.config import Config
@@ -283,13 +284,13 @@ class RelationStep(BaseStep):
         grid.addWidget(self._create_label(tr("wizard.relation.start_date"), label_style), 0, 2)
 
         # Row 1 - Inputs - Using StyleManager for consistent styling
-        contract_type = QComboBox()
+        contract_type = RtlCombo()
         for code, display in get_contract_type_options():
             contract_type.addItem(display, code)
         contract_type.setStyleSheet(StyleManager.form_input())
         grid.addWidget(contract_type, 1, 0)
 
-        relation_type = QComboBox()
+        relation_type = RtlCombo()
         relation_type.addItem(tr("mapping.select"), None)
         for code, display in get_relation_type_options():
             relation_type.addItem(display, code)
@@ -313,7 +314,7 @@ class RelationStep(BaseStep):
         ownership_share.setStyleSheet(StyleManager.form_input())
         grid.addWidget(ownership_share, 3, 0)
 
-        evidence_type = QComboBox()
+        evidence_type = RtlCombo()
         for code, display in get_evidence_type_options():
             evidence_type.addItem(display, code)
         evidence_type.setStyleSheet(StyleManager.form_input())
