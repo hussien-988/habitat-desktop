@@ -266,6 +266,7 @@ class PersonDialog(QDialog):
 
         # Tab 3 fields
         self.contract_type.currentIndexChanged.connect(self._update_all_progress)
+        self.contract_type.currentIndexChanged.connect(self._on_contract_type_changed)
         self.rel_type_combo.currentIndexChanged.connect(self._update_all_progress)
         self.ownership_share.textChanged.connect(self._update_all_progress)
         self.evidence_type.currentIndexChanged.connect(self._update_all_progress)
@@ -624,7 +625,10 @@ class PersonDialog(QDialog):
         grid.addWidget(self._label(tr("wizard.person_dialog.claim_type_label"), label_style), row, 1)
         row += 1
         self.contract_type = RtlCombo()
+        self.contract_type.addItem(tr("wizard.person_dialog.select"), None)
         for code, display_name in get_contract_type_options():
+            if code == 0:
+                continue
             self.contract_type.addItem(display_name, code)
         self.contract_type.setStyleSheet(self._input_style())
         grid.addWidget(self.contract_type, row, 0)
@@ -654,6 +658,7 @@ class PersonDialog(QDialog):
         self.ownership_share.setValidator(QDoubleValidator(0, 100, 2, self))
         self.ownership_share.editingFinished.connect(self._clamp_ownership_share)
         self.ownership_share.setStyleSheet(self._input_style())
+        self.ownership_share.setEnabled(False)
         self._ownership_error = QLabel("")
         self._ownership_error.setStyleSheet(self._error_label_style())
         self._ownership_error.setVisible(False)
@@ -670,7 +675,10 @@ class PersonDialog(QDialog):
         grid.addWidget(self._label(tr("wizard.person_dialog.evidence_description"), label_style), row, 1)
         row += 1
         self.evidence_type = RtlCombo()
+        self.evidence_type.addItem(tr("wizard.person_dialog.select"), None)
         for code, display_name in get_evidence_type_options():
+            if code == 0:
+                continue
             self.evidence_type.addItem(display_name, code)
         self.evidence_type.setStyleSheet(self._input_style())
         grid.addWidget(self.evidence_type, row, 0)
@@ -1763,6 +1771,13 @@ class PersonDialog(QDialog):
 
     # Validation
 
+    def _on_contract_type_changed(self):
+        """Enable ownership_share only when shared ownership is selected."""
+        is_shared = self.contract_type.currentData() == 2
+        self.ownership_share.setEnabled(is_shared)
+        if not is_shared:
+            self.ownership_share.clear()
+
     def _clamp_ownership_share(self):
         """Clamp ownership share to 0-100 range on focus out."""
         try:
@@ -2041,9 +2056,15 @@ class PersonDialog(QDialog):
                 self.tab_widget.setCurrentIndex(1)
             has_error = True
 
-        # Optional format: ownership share (0-100 if filled)
+        # Ownership share: required when shared ownership is selected
         ownership_text = self.ownership_share.text().strip()
-        if ownership_text:
+        is_shared_ownership = self.contract_type.currentData() == 2
+        if is_shared_ownership and not ownership_text:
+            self._set_field_error(self.ownership_share, self._ownership_error, tr("wizard.person_dialog.ownership_share_required"))
+            if not has_error:
+                self.tab_widget.setCurrentIndex(2)
+            has_error = True
+        elif ownership_text:
             try:
                 ownership_val = float(ownership_text)
                 if ownership_val < 0 or ownership_val > 100:
