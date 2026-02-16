@@ -328,9 +328,9 @@ class RelationStep(BaseStep):
         # Pre-fill form fields with relation data from person dialog Tab 2
         relation_data = person.get('relation_data', {})
 
-        # Pre-fill contract type
-        if relation_data.get('contract_type'):
-            idx = contract_type.findText(relation_data['contract_type'])
+        # Pre-fill contract type (match by integer code, not display text)
+        if relation_data.get('contract_type') is not None:
+            idx = contract_type.findData(relation_data['contract_type'])
             if idx >= 0:
                 contract_type.setCurrentIndex(idx)
 
@@ -352,9 +352,9 @@ class RelationStep(BaseStep):
         if relation_data.get('ownership_share') is not None:
             ownership_share.setText(str(relation_data['ownership_share']))
 
-        # Pre-fill evidence type
-        if relation_data.get('evidence_type'):
-            idx = evidence_type.findText(relation_data['evidence_type'])
+        # Pre-fill evidence type (match by integer code, not display text)
+        if relation_data.get('evidence_type') is not None:
+            idx = evidence_type.findData(relation_data['evidence_type'])
             if idx >= 0:
                 evidence_type.setCurrentIndex(idx)
 
@@ -588,7 +588,8 @@ class RelationStep(BaseStep):
 
         except Exception as e:
             logger.error(f"Failed to process claims: {e}")
-            ErrorHandler.show_error(self, map_exception(e), tr("common.error"))
+            error_msg = map_exception(e)
+            ErrorHandler.show_error(self, error_msg, tr("common.error"))
             self.context.finalize_response = None
 
             # Show warning but allow to continue to step 6

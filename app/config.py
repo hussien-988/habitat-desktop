@@ -318,48 +318,57 @@ class Vocabularies:
     ]
 
     RELATION_TYPES = [
-        ("owner", "Owner", "مالك"),
-        ("tenant", "Tenant", "مستأجر"),
-        ("heir", "Heir", "وريث"),
-        ("guest", "Guest", "ضيف"),
-        ("occupant", "Occupant", "شاغل"),
-        ("other", "Other", "آخر"),
+        (1, "Owner", "مالك"),
+        (2, "Occupant", "شاغل"),
+        (3, "Tenant", "مستأجر"),
+        (4, "Guest", "ضيف"),
+        (5, "Heir", "وريث"),
+        (99, "Other", "آخر"),
     ]
 
     DOCUMENT_TYPES = [
-        ("TAPU_GREEN", "Property Deed (Green Tapu)", "صك ملكية (طابو أخضر)"),
-        ("PROPERTY_REG", "Property Registration", "بيان قيد عقاري"),
-        ("COURT_RULING", "Court Ruling", "حكم قضائي"),
-        ("SALE_NOTARIZED", "Notarized Sale Contract", "عقد بيع موثق"),
-        ("SALE_INFORMAL", "Informal Sale Contract", "عقد بيع غير موثق"),
-        ("RENT_REGISTERED", "Registered Rental", "عقد إيجار مثبت"),
-        ("RENT_INFORMAL", "Informal Rental", "عقد إيجار غير مثبت"),
-        ("UTILITY_BILL", "Utility Bill", "فاتورة مرافق"),
-        ("MUKHTAR_CERT", "Mukhtar Certificate", "شهادة المختار"),
-        ("INHERITANCE", "Inheritance Certificate", "حصر إرث"),
-        ("WITNESS_STATEMENT", "Witness Statement", "إفادة شاهد"),
+        (1, "Tabu Green", "طابو أخضر"),
+        (2, "Tabu Red", "طابو أحمر"),
+        (3, "Agricultural Deed", "سجل زراعي"),
+        (4, "Real Estate Registry Extract", "كشف عقاري"),
+        (5, "Ownership Certificate", "شهادة ملكية"),
+        (10, "Rental Contract", "عقد إيجار"),
+        (11, "Tenancy Agreement", "اتفاقية إيجار"),
+        (20, "National Id Card", "بطاقة هوية وطنية"),
+        (21, "Passport", "جواز سفر"),
+        (22, "Family Registry", "قيد عائلي"),
+        (30, "Electricity Bill", "فاتورة كهرباء"),
+        (31, "Water Bill", "فاتورة مياه"),
+        (40, "Court Order", "حكم محكمة"),
+        (43, "Inheritance Document", "وثيقة ميراث"),
+        (63, "Witness Statement", "شهادة شهود"),
+        (70, "Sale Contract", "عقد بيع"),
+        (999, "Other", "أخرى"),
     ]
 
     CASE_STATUS = [
-        ("draft", "Draft", "مسودة"),
-        ("submitted", "Submitted", "مقدم"),
-        ("screening", "Initial Screening", "التدقيق الأولي"),
-        ("under_review", "Under Review", "قيد المراجعة"),
-        ("awaiting_docs", "Awaiting Documents", "في انتظار الوثائق"),
-        ("conflict", "Conflict Detected", "تعارض مكتشف"),
-        ("approved", "Approved", "موافق عليه"),
-        ("rejected", "Rejected", "مرفوض"),
+        (1, "Draft", "مسودة"),
+        (2, "Finalized", "نهائي"),
+        (3, "Under Review", "قيد المراجعة"),
+        (4, "Approved", "موافق عليه"),
+        (5, "Rejected", "مرفوض"),
+        (6, "Pending Evidence", "بانتظار مستندات إضافية"),
+        (7, "Disputed", "متنازع عليه"),
+        (99, "Archived", "مؤرشف"),
     ]
 
     VERIFICATION_STATUS = [
-        ("pending", "Pending", "معلق"),
-        ("verified", "Verified", "تم التحقق"),
-        ("rejected", "Rejected", "مرفوض"),
+        (1, "Pending", "قيد الانتظار"),
+        (2, "Under Review", "قيد المراجعة"),
+        (3, "Verified", "موثق"),
+        (4, "Rejected", "مرفوض"),
+        (5, "Requires Additional Info", "يتطلب معلومات إضافية"),
+        (6, "Expired", "منتهي الصلاحية"),
     ]
 
     GENDERS = [
-        ("male", "Male", "ذكر"),
-        ("female", "Female", "أنثى"),
+        (1, "Male", "ذكر"),
+        (2, "Female", "أنثى"),
     ]
 
 
