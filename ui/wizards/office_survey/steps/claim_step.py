@@ -7,18 +7,17 @@ Note: This is a simplified implementation.
 """
 
 from typing import Dict, Any
-import uuid
 
 from PyQt5.QtWidgets import (
-    QVBoxLayout, QHBoxLayout, QLabel, QComboBox, QTextEdit, QGroupBox, QFormLayout,
-    QLineEdit, QDateEdit, QGridLayout, QFrame, QScrollArea, QWidget
+    QVBoxLayout, QHBoxLayout, QLabel,
+    QLineEdit, QGridLayout, QFrame, QScrollArea, QWidget
 )
-from PyQt5.QtCore import Qt, QDate
+from PyQt5.QtCore import Qt
 
+from ui.components.centered_text_edit import CenteredTextEdit
 from ui.wizards.framework import BaseStep, StepValidationResult
 from ui.wizards.office_survey.survey_context import SurveyContext
 from services.translation_manager import tr
-from services.vocab_service import get_options
 from utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -32,6 +31,17 @@ def _find_combo_code_by_english(vocab_name: str, english_key: str) -> int:
         if label.lower() == english_key_lower:
             return code
     return 0
+
+
+def _find_display_label(vocab_name: str, code) -> str:
+    """Find the Arabic display label for a vocabulary code."""
+    from services.vocab_service import get_options
+    if code is None:
+        return ""
+    for item_code, label in get_options(vocab_name, lang="ar"):
+        if item_code == code:
+            return label
+    return str(code)
 
 
 class ClaimStep(BaseStep):
@@ -261,11 +271,8 @@ class ClaimStep(BaseStep):
             v.addWidget(field_widget)
             grid.addLayout(v, row, col)
 
-        # Field styles
-        from app.config import Config
+        # Field styles - ALL read-only with uniform background
         ro_bg = "#f0f7ff"
-        edit_bg = "#ffffff"
-        down_img = str(Config.IMAGES_DIR / "down.png").replace("\\", "/")
 
         ro_input_style = f"""
             QLineEdit {{
@@ -273,52 +280,6 @@ class ClaimStep(BaseStep):
                 border-radius: 8px;
                 padding: 10px;
                 background-color: {ro_bg};
-                color: #333;
-                font-size: 14px;
-                min-height: 23px;
-                max-height: 23px;
-            }}
-        """
-        edit_combo_style = f"""
-            QComboBox {{
-                border: 1px solid #E0E6ED;
-                border-radius: 8px;
-                padding: 10px;
-                background-color: {edit_bg};
-                color: #333;
-                font-size: 14px;
-                min-height: 23px;
-                max-height: 23px;
-            }}
-            QComboBox::drop-down {{
-                border: none;
-                width: 30px;
-                subcontrol-position: right center;
-            }}
-            QComboBox::down-arrow {{
-                image: url({down_img});
-                width: 12px;
-                height: 12px;
-            }}
-        """
-        ro_date_style = f"""
-            QDateEdit {{
-                border: 1px solid #E0E6ED;
-                border-radius: 8px;
-                padding: 10px;
-                background-color: {ro_bg};
-                color: #333;
-                font-size: 14px;
-                min-height: 23px;
-                max-height: 23px;
-            }}
-        """
-        edit_date_style = f"""
-            QDateEdit {{
-                border: 1px solid #E0E6ED;
-                border-radius: 8px;
-                padding: 10px;
-                background-color: {edit_bg};
                 color: #333;
                 font-size: 14px;
                 min-height: 23px;
@@ -337,53 +298,39 @@ class ClaimStep(BaseStep):
         claim_unit_search.setPlaceholderText("رقم المقسم")
         claim_unit_search.setStyleSheet(ro_input_style)
         claim_unit_search.setReadOnly(True)
+        claim_unit_search.setAlignment(Qt.AlignRight)
         add_field("معرف المقسم المطالب به", claim_unit_search, 0, 1)
 
-        claim_type_combo = QComboBox()
-        claim_type_combo.addItem(tr("mapping.select"), 0)
-        for code, label in get_options("ClaimType"):
-            claim_type_combo.addItem(label, code)
-        claim_type_combo.setStyleSheet(edit_combo_style)
-        add_field("نوع الحالة", claim_type_combo, 0, 2)
+        claim_type_field = QLineEdit()
+        claim_type_field.setReadOnly(True)
+        claim_type_field.setStyleSheet(ro_input_style)
+        add_field("نوع الحالة", claim_type_field, 0, 2)
 
-        claim_business_nature = QComboBox()
-        claim_business_nature.addItem(tr("mapping.select"), 0)
-        for code, label in get_options("BusinessNature"):
-            claim_business_nature.addItem(label, code)
-        claim_business_nature.setStyleSheet(edit_combo_style)
-        add_field("طبيعة الأعمال", claim_business_nature, 0, 3)
+        claim_business_nature_field = QLineEdit()
+        claim_business_nature_field.setReadOnly(True)
+        claim_business_nature_field.setStyleSheet(ro_input_style)
+        add_field("طبيعة الأعمال", claim_business_nature_field, 0, 3)
 
         # Row 2: حالة الحالة | المصدر | تاريخ المسح | الأولوية
-        claim_status_combo = QComboBox()
-        claim_status_combo.addItem(tr("mapping.select"), 0)
-        for code, label in get_options("ClaimStatus"):
-            claim_status_combo.addItem(label, code)
-        claim_status_combo.setStyleSheet(edit_combo_style)
-        add_field("حالة الحالة", claim_status_combo, 1, 0)
+        claim_status_field = QLineEdit()
+        claim_status_field.setReadOnly(True)
+        claim_status_field.setStyleSheet(ro_input_style)
+        add_field("حالة الحالة", claim_status_field, 1, 0)
 
-        claim_source_combo = QComboBox()
-        claim_source_combo.addItem(tr("mapping.select"), 0)
-        for code, label in get_options("ClaimSource"):
-            claim_source_combo.addItem(label, code)
-        claim_source_combo.setStyleSheet(edit_combo_style)
-        add_field("المصدر", claim_source_combo, 1, 1)
+        claim_source_field = QLineEdit()
+        claim_source_field.setReadOnly(True)
+        claim_source_field.setStyleSheet(ro_input_style)
+        add_field("المصدر", claim_source_field, 1, 1)
 
-        claim_survey_date = QDateEdit()
-        claim_survey_date.setCalendarPopup(False)
-        claim_survey_date.setButtonSymbols(QDateEdit.NoButtons)
-        claim_survey_date.setDisplayFormat("yyyy-MM-dd")
-        claim_survey_date.setDate(QDate.currentDate())
+        claim_survey_date = QLineEdit()
         claim_survey_date.setReadOnly(True)
-        claim_survey_date.setStyleSheet(ro_date_style)
+        claim_survey_date.setStyleSheet(ro_input_style)
         add_field("تاريخ المسح", claim_survey_date, 1, 2)
 
-        claim_priority_combo = QComboBox()
-        claim_priority_combo.addItem(tr("mapping.select"), 0)
-        for code, label in get_options("CasePriority"):
-            claim_priority_combo.addItem(label, code)
-        claim_priority_combo.setCurrentIndex(2)
-        claim_priority_combo.setStyleSheet(edit_combo_style)
-        add_field("الأولوية", claim_priority_combo, 1, 3)
+        claim_priority_field = QLineEdit()
+        claim_priority_field.setReadOnly(True)
+        claim_priority_field.setStyleSheet(ro_input_style)
+        add_field("الأولوية", claim_priority_field, 1, 3)
 
         card_layout.addLayout(grid)
         card_layout.addSpacing(8)
@@ -394,18 +341,22 @@ class ClaimStep(BaseStep):
         notes_label.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent;")
         card_layout.addWidget(notes_label)
 
-        claim_notes = QTextEdit()
+        claim_notes = CenteredTextEdit()
         claim_notes.setPlaceholderText("ملاحظات إضافية")
+        claim_notes.setPlaceholderStyleSheet(
+            "color: #9CA3AF; background: transparent; font-size: 16px; font-weight: 400;"
+        )
+        claim_notes.setReadOnly(True)
         claim_notes.setMinimumHeight(100)
         claim_notes.setMaximumHeight(120)
         claim_notes.setStyleSheet(f"""
             QTextEdit {{
-                background-color: {edit_bg};
+                background-color: {ro_bg};
                 border: 1px solid #E0E6ED;
                 border-radius: 8px;
                 padding: 8px;
                 color: #333;
-                font-size: 14px;
+                font-size: 16px;
             }}
         """)
         card_layout.addWidget(claim_notes)
@@ -417,10 +368,10 @@ class ClaimStep(BaseStep):
         next_date_label.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent;")
         card_layout.addWidget(next_date_label)
 
-        claim_next_action_date = QDateEdit()
-        claim_next_action_date.setCalendarPopup(True)
-        claim_next_action_date.setDisplayFormat("yyyy-MM-dd")
-        claim_next_action_date.setStyleSheet(edit_date_style)
+        claim_next_action_date = QLineEdit()
+        claim_next_action_date.setPlaceholderText("")
+        claim_next_action_date.setReadOnly(True)
+        claim_next_action_date.setStyleSheet(ro_input_style)
         card_layout.addWidget(claim_next_action_date)
         card_layout.addSpacing(8)
 
@@ -441,12 +392,12 @@ class ClaimStep(BaseStep):
         # Store widget references in card for later access
         card.claim_person_search = claim_person_search
         card.claim_unit_search = claim_unit_search
-        card.claim_type_combo = claim_type_combo
-        card.claim_business_nature = claim_business_nature
-        card.claim_status_combo = claim_status_combo
-        card.claim_source_combo = claim_source_combo
+        card.claim_type_field = claim_type_field
+        card.claim_business_nature_field = claim_business_nature_field
+        card.claim_status_field = claim_status_field
+        card.claim_source_field = claim_source_field
         card.claim_survey_date = claim_survey_date
-        card.claim_priority_combo = claim_priority_combo
+        card.claim_priority_field = claim_priority_field
         card.claim_notes = claim_notes
         card.claim_next_action_date = claim_next_action_date
         card.claim_eval_label = claim_eval_label
@@ -459,6 +410,9 @@ class ClaimStep(BaseStep):
 
     def _populate_card_with_data(self, card: QFrame, claim_data: Dict[str, Any]):
         """Populate a claim card with data from API response."""
+        # Store raw data for collect_data
+        card._claim_raw_data = claim_data
+
         # Claimant name
         claimant_name = claim_data.get('fullNameArabic', '')
         if claimant_name:
@@ -469,14 +423,12 @@ class ClaimStep(BaseStep):
         if unit_id:
             card.claim_unit_search.setText(unit_id)
 
-        # Relation type -> claim type
-        # API returns integer codes: 1=Owner, 2=Occupant, 3=Tenant, 4=Guest, 5=Heir, 99=Other
+        # Relation type -> claim type display text
         relation_type = claim_data.get('relationType')
-        # Map relation type (int or legacy string) to claim type
         if isinstance(relation_type, int):
-            ownership_types = (1, 5)   # Owner, Heir
-            tenant_types = (3,)        # Tenant
-            occupant_types = (2,)      # Occupant
+            ownership_types = (1, 5)
+            tenant_types = (3,)
+            occupant_types = (2,)
             is_ownership = relation_type in ownership_types
             is_tenant = relation_type in tenant_types
             is_occupant = relation_type in occupant_types
@@ -487,20 +439,34 @@ class ClaimStep(BaseStep):
             is_occupant = rt == 'occupant'
 
         if is_ownership:
-            for i in range(card.claim_type_combo.count()):
-                if card.claim_type_combo.itemData(i) == _find_combo_code_by_english("ClaimType", "Ownership"):
-                    card.claim_type_combo.setCurrentIndex(i)
-                    break
+            code = _find_combo_code_by_english("ClaimType", "Ownership")
+            card.claim_type_field.setText(_find_display_label("ClaimType", code))
         elif is_tenant:
-            for i in range(card.claim_type_combo.count()):
-                if card.claim_type_combo.itemData(i) == _find_combo_code_by_english("ClaimType", "Tenancy"):
-                    card.claim_type_combo.setCurrentIndex(i)
-                    break
+            code = _find_combo_code_by_english("ClaimType", "Tenancy")
+            card.claim_type_field.setText(_find_display_label("ClaimType", code))
         elif is_occupant:
-            for i in range(card.claim_type_combo.count()):
-                if card.claim_type_combo.itemData(i) == _find_combo_code_by_english("ClaimType", "Occupancy"):
-                    card.claim_type_combo.setCurrentIndex(i)
-                    break
+            code = _find_combo_code_by_english("ClaimType", "Occupancy")
+            card.claim_type_field.setText(_find_display_label("ClaimType", code))
+
+        # Claim status
+        claim_status = claim_data.get('claimStatus') or claim_data.get('caseStatus')
+        if claim_status:
+            card.claim_status_field.setText(_find_display_label("ClaimStatus", claim_status))
+
+        # Source
+        claim_source = claim_data.get('source') or claim_data.get('claimSource')
+        if claim_source:
+            card.claim_source_field.setText(_find_display_label("ClaimSource", claim_source))
+
+        # Business nature
+        business_nature = claim_data.get('businessNature')
+        if business_nature:
+            card.claim_business_nature_field.setText(_find_display_label("ClaimBusinessNature", business_nature))
+
+        # Priority
+        priority = claim_data.get('priority') or claim_data.get('casePriority')
+        if priority:
+            card.claim_priority_field.setText(_find_display_label("ClaimPriority", priority))
 
         # Survey date
         survey_date_str = claim_data.get('surveyDate', '')
@@ -508,23 +474,28 @@ class ClaimStep(BaseStep):
             try:
                 from datetime import datetime
                 survey_date = datetime.fromisoformat(survey_date_str.replace('Z', '+00:00'))
-                card.claim_survey_date.setDate(QDate(survey_date.year, survey_date.month, survey_date.day))
+                card.claim_survey_date.setText(f"{survey_date.year}-{survey_date.month:02d}-{survey_date.day:02d}")
             except Exception as e:
                 logger.warning(f"Failed to parse survey date: {e}")
+                card.claim_survey_date.setText(str(survey_date_str))
 
-        # Claim number in status label
-        claim_number = claim_data.get('claimNumber', '')
+        # Next action date
+        next_date_str = claim_data.get('nextActionDate', '')
+        if next_date_str:
+            try:
+                from datetime import datetime
+                next_date = datetime.fromisoformat(next_date_str.replace('Z', '+00:00'))
+                card.claim_next_action_date.setText(f"{next_date.year}-{next_date.month:02d}-{next_date.day:02d}")
+            except Exception:
+                card.claim_next_action_date.setText(str(next_date_str))
+
+        # Notes
+        notes = claim_data.get('notes', '')
+        if notes:
+            card.claim_notes.setText(notes)
+
+        # Evidence status
         has_evidence = claim_data.get('hasEvidence', False)
-
-        #if claim_number:
-           # card.claim_eval_label.setText(f"تم إنشاء المطالبة: {claim_number}")
-          #  card.claim_eval_label.setStyleSheet("""
-            #    QLabel {
-             #       background-color: #e1f7ef;
-             #       color: #10b981;
-            #  3      border-radius: 8px;
-              #  }
-           # """)
         if has_evidence:
             card.claim_eval_label.setText("✓  الأدلة متوفرة")
             card.claim_eval_label.setStyleSheet("""
@@ -592,9 +563,10 @@ class ClaimStep(BaseStep):
                 try:
                     from datetime import datetime
                     survey_date = datetime.fromisoformat(survey_date_str.replace('Z', '+00:00'))
-                    self._claim_cards[0].claim_survey_date.setDate(QDate(survey_date.year, survey_date.month, survey_date.day))
+                    self._claim_cards[0].claim_survey_date.setText(f"{survey_date.year}-{survey_date.month:02d}-{survey_date.day:02d}")
                 except Exception as e:
                     logger.warning(f"Failed to parse survey date: {e}")
+                    self._claim_cards[0].claim_survey_date.setText(str(survey_date_str))
 
             # Create additional cards for remaining claims
             for i in range(1, len(created_claims)):
@@ -634,32 +606,32 @@ class ClaimStep(BaseStep):
             try:
                 from datetime import datetime
                 survey_date = datetime.fromisoformat(survey_date_str.replace('Z', '+00:00'))
-                first_card.claim_survey_date.setDate(QDate(survey_date.year, survey_date.month, survey_date.day))
+                first_card.claim_survey_date.setText(f"{survey_date.year}-{survey_date.month:02d}-{survey_date.day:02d}")
             except Exception as e:
                 logger.warning(f"Failed to parse survey date: {e}")
+                first_card.claim_survey_date.setText(str(survey_date_str))
 
         # Auto-select claim type based on relations
-        # relation_type can be integer (1=owner,2=occupant,3=tenant,4=guest,5=heir,99=other) or string
         owners = [r for r in self.context.relations if r.get('relation_type') in ('owner', 'co_owner', 1)]
         tenants = [r for r in self.context.relations if r.get('relation_type') in ('tenant', 3)]
         occupants = [r for r in self.context.relations if r.get('relation_type') in ('occupant', 2)]
         heirs = [r for r in self.context.relations if r.get('relation_type') in ('heir', 5)]
 
         if owners or heirs:
-            for i in range(first_card.claim_type_combo.count()):
-                if first_card.claim_type_combo.itemData(i) == _find_combo_code_by_english("ClaimType", "Ownership"):
-                    first_card.claim_type_combo.setCurrentIndex(i)
-                    break
+            code = _find_combo_code_by_english("ClaimType", "Ownership")
+            first_card.claim_type_field.setText(_find_display_label("ClaimType", code))
         elif tenants:
-            for i in range(first_card.claim_type_combo.count()):
-                if first_card.claim_type_combo.itemData(i) == _find_combo_code_by_english("ClaimType", "Tenancy"):
-                    first_card.claim_type_combo.setCurrentIndex(i)
-                    break
+            code = _find_combo_code_by_english("ClaimType", "Tenancy")
+            first_card.claim_type_field.setText(_find_display_label("ClaimType", code))
         elif occupants:
-            for i in range(first_card.claim_type_combo.count()):
-                if first_card.claim_type_combo.itemData(i) == _find_combo_code_by_english("ClaimType", "Occupancy"):
-                    first_card.claim_type_combo.setCurrentIndex(i)
-                    break
+            code = _find_combo_code_by_english("ClaimType", "Occupancy")
+            first_card.claim_type_field.setText(_find_display_label("ClaimType", code))
+
+        # Store raw data for collect_data
+        first_card._claim_raw_data = {
+            'source': response,
+            'from_context': True
+        }
 
         # Update status bar
         evidence_count = data_summary.get('evidenceCount', 0)
@@ -714,21 +686,21 @@ class ClaimStep(BaseStep):
             full_name = f"{first_person.get('first_name', '')} {first_person.get('last_name', '')}"
             first_card.claim_person_search.setText(full_name.strip())
 
+        # Set claim type display text based on relations
+        claim_type_english = None
         if owners or heirs:
-            for i in range(first_card.claim_type_combo.count()):
-                if first_card.claim_type_combo.itemData(i) == _find_combo_code_by_english("ClaimType", "Ownership"):
-                    first_card.claim_type_combo.setCurrentIndex(i)
-                    break
+            claim_type_english = "Ownership"
         elif tenants:
-            for i in range(first_card.claim_type_combo.count()):
-                if first_card.claim_type_combo.itemData(i) == _find_combo_code_by_english("ClaimType", "Tenancy"):
-                    first_card.claim_type_combo.setCurrentIndex(i)
-                    break
+            claim_type_english = "Tenancy"
         elif occupants:
-            for i in range(first_card.claim_type_combo.count()):
-                if first_card.claim_type_combo.itemData(i) == _find_combo_code_by_english("ClaimType", "Occupancy"):
-                    first_card.claim_type_combo.setCurrentIndex(i)
-                    break
+            claim_type_english = "Occupancy"
+
+        if claim_type_english:
+            code = _find_combo_code_by_english("ClaimType", claim_type_english)
+            first_card.claim_type_field.setText(_find_display_label("ClaimType", code))
+
+        # Store raw data for collect_data
+        first_card._claim_raw_data = {'from_context': True}
 
         if total_evidences > 0:
             first_card.claim_eval_label.setText(f"✓  الأدلة متوفرة ({total_evidences})")
@@ -761,11 +733,10 @@ class ClaimStep(BaseStep):
         if hasattr(self, 'empty_state_widget') and self.empty_state_widget.isVisible():
             return result
 
-        # Validate at least the first card has claim type selected
+        # Validate at least the first card has claim type filled
         if self._claim_cards:
             first_card = self._claim_cards[0]
-            claim_type = first_card.claim_type_combo.currentData()
-            if not claim_type:
+            if not first_card.claim_type_field.text().strip():
                 result.add_error(tr("wizard.claim.type_required"))
 
         # Store claims data to context during validation
@@ -801,14 +772,17 @@ class ClaimStep(BaseStep):
                 for person in self.context.persons:
                     evidence_count += len(person.get('_relation_uploaded_files', []))
 
+            # Use stored raw API data if available, otherwise use defaults
+            raw = getattr(card, '_claim_raw_data', {}) or {}
+
             claim_data = {
-                "claim_type": card.claim_type_combo.currentData(),
-                "priority": card.claim_priority_combo.currentData(),
-                "business_nature": card.claim_business_nature.currentData(),
-                "source": card.claim_source_combo.currentData() or _find_combo_code_by_english("ClaimSource", "Office Submission"),
-                "case_status": card.claim_status_combo.currentData() or _find_combo_code_by_english("ClaimStatus", "New"),
-                "survey_date": card.claim_survey_date.date().toPyDate().isoformat(),
-                "next_action_date": card.claim_next_action_date.date().toPyDate().isoformat(),
+                "claim_type": raw.get('claimType') or _find_combo_code_by_english("ClaimType", "Ownership"),
+                "priority": raw.get('priority') or raw.get('casePriority'),
+                "business_nature": raw.get('businessNature'),
+                "source": raw.get('source') or raw.get('claimSource') or _find_combo_code_by_english("ClaimSource", "Office Submission"),
+                "case_status": raw.get('claimStatus') or raw.get('caseStatus') or _find_combo_code_by_english("ClaimStatus", "New"),
+                "survey_date": card.claim_survey_date.text().strip() or None,
+                "next_action_date": card.claim_next_action_date.text().strip() or None,
                 "notes": card.claim_notes.toPlainText().strip(),
                 "status": "draft",
                 "person_name": card.claim_person_search.text().strip(),

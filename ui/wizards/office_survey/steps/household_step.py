@@ -13,12 +13,14 @@ import uuid
 
 from PyQt5.QtWidgets import (
     QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton,
-    QFrame, QScrollArea, QWidget, QGroupBox, QComboBox,
+    QFrame, QScrollArea, QWidget, QGroupBox,
     QSpinBox, QTextEdit, QGridLayout, QGraphicsDropShadowEffect
 )
 from PyQt5.QtCore import Qt, QLocale
 from PyQt5.QtGui import QColor
 
+from ui.components.rtl_combo import RtlCombo
+from ui.components.centered_text_edit import CenteredTextEdit
 from ui.wizards.framework import BaseStep, StepValidationResult
 from ui.wizards.office_survey.survey_context import SurveyContext
 from app.config import Config
@@ -342,9 +344,10 @@ class HouseholdStep(BaseStep):
         occupancy_row = QHBoxLayout()
         occupancy_row.setSpacing(12)
 
-        combo_style = """
-            QComboBox {
-                padding: 0px 12px;
+        arrow_img = str(Config.IMAGES_DIR / "v.png").replace("\\", "/")
+        combo_style = f"""
+            QComboBox {{
+                padding: 6px 12px;
                 border: 1px solid #E1E8ED;
                 border-radius: 8px;
                 background-color: #F8FAFF;
@@ -352,19 +355,28 @@ class HouseholdStep(BaseStep):
                 color: #1A1A1A;
                 min-height: 43px;
                 max-height: 43px;
-            }
-            QComboBox:focus {
-                border-color: #3890DF;
-                border-width: 2px;
-            }
-            QComboBox::drop-down {
+            }}
+            QComboBox:focus {{
+                border: 1px solid #E1E8ED;
+            }}
+            QComboBox::drop-down {{
+                subcontrol-origin: border;
+                subcontrol-position: center right;
+                width: 35px;
                 border: none;
-                width: 30px;
-            }
-            QComboBox::down-arrow {
-                image: none;
-                border: none;
-            }
+                margin-right: 5px;
+            }}
+            QComboBox::down-arrow {{
+                image: url({arrow_img});
+                width: 12px;
+                height: 12px;
+            }}
+            QComboBox QAbstractItemView {{
+                font-size: 14px;
+                background-color: white;
+                selection-background-color: #3890DF;
+                selection-color: white;
+            }}
         """
         label_style = "color: #374151; background: transparent;"
 
@@ -377,7 +389,7 @@ class HouseholdStep(BaseStep):
         self._occupancy_nature_label.setStyleSheet(label_style)
         nature_col.addWidget(self._occupancy_nature_label)
 
-        self.hh_occupancy_nature = QComboBox()
+        self.hh_occupancy_nature = RtlCombo()
         for code, display_name in get_occupancy_nature_options():
             self.hh_occupancy_nature.addItem(display_name, code)
         self.hh_occupancy_nature.setStyleSheet(combo_style)
@@ -395,7 +407,7 @@ class HouseholdStep(BaseStep):
         self._occupancy_type_label.setStyleSheet(label_style)
         type_col.addWidget(self._occupancy_type_label)
 
-        self.hh_occupancy_type = QComboBox()
+        self.hh_occupancy_type = RtlCombo()
         for code, display_name in get_occupancy_type_options():
             self.hh_occupancy_type.addItem(display_name, code)
         self.hh_occupancy_type.setStyleSheet(combo_style)
@@ -420,7 +432,7 @@ class HouseholdStep(BaseStep):
         self.hh_total_members = QSpinBox()
         self.hh_total_members.setRange(0, 50)
         self.hh_total_members.setValue(0)
-        self.hh_total_members.setAlignment(Qt.AlignRight)
+        self.hh_total_members.setAlignment(Qt.AlignCenter)
         self.hh_total_members.setLocale(QLocale(QLocale.English, QLocale.UnitedStates))
         self.hh_total_members.setButtonSymbols(QSpinBox.NoButtons)
 
@@ -442,8 +454,11 @@ class HouseholdStep(BaseStep):
         self._notes_label.setStyleSheet("color: #374151; background: transparent;")
         notes_field_layout.addWidget(self._notes_label)
 
-        self.hh_notes = QTextEdit()
+        self.hh_notes = CenteredTextEdit()
         self.hh_notes.setPlaceholderText(tr("wizard.household.notes_placeholder"))
+        self.hh_notes.setPlaceholderStyleSheet(
+            "color: #9CA3AF; background: transparent; font-size: 16px; font-weight: 400;"
+        )
         self.hh_notes.setMaximumHeight(80)
         self.hh_notes.setLayoutDirection(Qt.RightToLeft)
         self.hh_notes.setStyleSheet("""
@@ -452,7 +467,8 @@ class HouseholdStep(BaseStep):
                 border: 1px solid #E1E8ED;
                 border-radius: 8px;
                 background-color: #F0F7FF;
-                font-size: 14px;
+                font-size: 16px;
+                font-weight: 600;
                 color: #1A1A1A;
             }
             QTextEdit:focus {

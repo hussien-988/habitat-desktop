@@ -34,6 +34,7 @@ from repositories.database import Database
 from controllers.building_controller import BuildingController
 from services.export_service import ExportService
 from services.validation_service import ValidationService
+from ui.components.rtl_combo import RtlCombo
 from ui.components.toast import Toast
 from ui.components.dialogs import ExportDialog
 from ui.components.message_dialog import MessageDialog
@@ -68,23 +69,6 @@ if HAS_WEBENGINE:
             """Add required headers to tile requests."""
             info.setHttpHeader(b"Accept-Language", b"en-US,en;q=0.9,ar;q=0.8")
             info.setHttpHeader(b"User-Agent", b"UN-Habitat TRRCMS/1.0")
-
-
-class RtlCombo(QComboBox):
-    """QComboBox with right-aligned text for Arabic RTL support.
-    Uses editable + read-only lineEdit to control text alignment.
-    changeEvent ensures alignment survives stylesheet changes."""
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.setEditable(True)
-        self.lineEdit().setReadOnly(True)
-        self.lineEdit().setAlignment(Qt.AlignRight)
-
-    def changeEvent(self, event):
-        super().changeEvent(event)
-        if event.type() == event.StyleChange and self.lineEdit():
-            self.lineEdit().setAlignment(Qt.AlignRight)
 
 
 class CodeDisplayCombo(RtlCombo):

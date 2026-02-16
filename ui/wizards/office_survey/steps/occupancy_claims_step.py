@@ -16,6 +16,7 @@ from PyQt5.QtWidgets import (
     QSizePolicy, QDialog
 )
 from PyQt5.QtCore import Qt
+from PyQt5.QtGui import QIcon
 
 from ui.wizards.framework import BaseStep, StepValidationResult
 from ui.wizards.office_survey.survey_context import SurveyContext
@@ -304,10 +305,14 @@ class OccupancyClaimsStep(BaseStep):
             if self._use_api and person_id:
                 try:
                     self._set_auth_token()
-                    # Use survey-scoped endpoint for better audit trail
+                    # Try survey-scoped endpoint first, fallback to standalone
                     if survey_id and household_id:
-                        self._api_service.update_person_in_survey(
-                            survey_id, household_id, person_id, updated_data)
+                        try:
+                            self._api_service.update_person_in_survey(
+                                survey_id, household_id, person_id, updated_data)
+                        except Exception:
+                            logger.warning(f"Survey-scoped update failed for person {person_id}, falling back to standalone endpoint")
+                            self._api_service.update_person(person_id, updated_data)
                     else:
                         self._api_service.update_person(person_id, updated_data)
                     logger.info(f"Person {person_id} updated via API")
@@ -368,12 +373,12 @@ class OccupancyClaimsStep(BaseStep):
 
         card = QFrame()
         card.setLayoutDirection(Qt.RightToLeft)
-        card.setFixedHeight(80)
+        card.setFixedHeight(60)
         card.setStyleSheet(f"""
             QFrame {{
                 background-color: {Colors.BACKGROUND};
-                border: 1px solid #F0F0F0;
-                border-radius: 8px;
+                border: 1px solid #E5EAF6;
+                border-radius: 12px;
             }}
             QLabel {{
                 border: none;
@@ -381,7 +386,8 @@ class OccupancyClaimsStep(BaseStep):
         """)
 
         card_layout = QHBoxLayout(card)
-        card_layout.setContentsMargins(15, 0, 15, 0)
+        card_layout.setContentsMargins(8, 8, 8, 8)
+        card_layout.setSpacing(12)
 
         # Right side: icon + text
         right_group = QHBoxLayout()
@@ -430,23 +436,27 @@ class OccupancyClaimsStep(BaseStep):
         spacer = QSpacerItem(40, 20, QSizePolicy.Expanding, QSizePolicy.Minimum)
 
         # Left side: menu button
-        menu_btn = QPushButton("...")
-        menu_btn.setFixedWidth(40)
+        menu_btn = QPushButton("⋮")
+        menu_btn.setFixedSize(36, 36)
         menu_btn.setStyleSheet("""
             QPushButton {
                 border: none;
-                color: #A0A0A0;
-                font-size: 18px;
+                color: #475569;
+                font-size: 32px;
+                font-weight: 900;
                 background: transparent;
+                border-radius: 18px;
             }
             QPushButton:hover {
-                color: #333333;
+                color: #1e293b;
+                background-color: #F1F5F9;
             }
         """)
         menu_btn.setCursor(Qt.PointingHandCursor)
 
         menu = QMenu(menu_btn)
         menu.setLayoutDirection(Qt.RightToLeft)
+        menu.setFixedSize(99, 80)
         menu.setStyleSheet("""
             QMenu {
                 background-color: white;
@@ -463,10 +473,12 @@ class OccupancyClaimsStep(BaseStep):
             }
         """)
 
-        view_action = menu.addAction(tr("wizard.occupancy_claims.view"))
+        eye_icon = QIcon(str(Config.IMAGES_DIR / "Eye.png"))
+        view_action = menu.addAction(eye_icon, tr("wizard.occupancy_claims.view"))
         view_action.triggered.connect(lambda _, pid=person['person_id']: self._view_person(pid))
 
-        delete_action = menu.addAction(tr("wizard.occupancy_claims.delete"))
+        delete_icon = QIcon(str(Config.IMAGES_DIR / "delete.png"))
+        delete_action = menu.addAction(delete_icon, tr("wizard.occupancy_claims.delete"))
         delete_action.triggered.connect(lambda _, pid=person['person_id']: self._delete_person(pid))
 
         menu_btn.clicked.connect(lambda: menu.exec_(menu_btn.mapToGlobal(menu_btn.rect().bottomRight())))
@@ -583,29 +595,13 @@ class OccupancyClaimsStep(BaseStep):
 
             if api_data.get("claimCreated") or claims_count > 0:
                 logger.info(f"Claims created: {claims_count}")
-
-                claim_number = created_claims[0].get('claimNumber', '') if created_claims else ''
-                SuccessPopup.show_success(
-                    claim_number=claim_number,
-                    title=tr("wizard.success.title"),
-                    description=tr("wizard.success.description"),
-                    auto_close_ms=0,
-                    parent=self
-                )
             else:
                 reason = api_data.get('claimNotCreatedReason', 'Unknown')
                 logger.warning(f"Claim not created. Reason: {reason}")
-                ErrorHandler.show_warning(
-                    self,
-                    tr("wizard.claims.no_claims_created", reason=reason),
-                    tr("wizard.claims.process_title")
-                )
 
         except Exception as e:
             logger.error(f"Failed to process claims: {e}")
             self.context.finalize_response = None
-            ErrorHandler.show_error(self, map_exception(e), tr("common.error"))
-            Toast.show_toast(self, tr("wizard.relation.claims_failed"), Toast.WARNING)
 
     # BaseStep interface
 

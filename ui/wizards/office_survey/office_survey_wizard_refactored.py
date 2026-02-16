@@ -17,7 +17,7 @@ Steps:
 
 from typing import List
 
-from PyQt5.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QFrame, QGraphicsDropShadowEffect, QSpacerItem, QSizePolicy
+from PyQt5.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QFrame, QGraphicsDropShadowEffect, QSpacerItem, QSizePolicy, QMessageBox
 from PyQt5.QtCore import pyqtSignal, Qt, QSize
 from PyQt5.QtGui import QFont, QColor
 from ui.error_handler import ErrorHandler
@@ -930,6 +930,31 @@ class OfficeSurveyWizard(BaseWizard):
         layout.addStretch()
 
         return footer
+
+    def _handle_previous(self):
+        """Override back navigation to warn when leaving Step 1 (Unit Selection) back to Step 0 (Building Selection).
+
+        Going back to building selection discards the current survey data
+        since we cannot update a survey's building after creation.
+        """
+        if self.navigator.current_index == 1:
+            msg = QMessageBox(self)
+            msg.setLayoutDirection(Qt.RightToLeft)
+            msg.setWindowTitle("تأكيد العودة")
+            msg.setIcon(QMessageBox.Warning)
+            msg.setText("في حالة العودة إلى اختيار المبنى ستفقد جميع المعلومات المدخلة وسيتم بدء حالة جديدة.")
+            msg.setInformativeText("هل أنت متأكد من العودة؟")
+            btn_confirm = msg.addButton("موافق", QMessageBox.AcceptRole)
+            btn_cancel = msg.addButton("إلغاء", QMessageBox.RejectRole)
+            msg.setDefaultButton(btn_cancel)
+            msg.exec_()
+
+            if msg.clickedButton() == btn_confirm:
+                self.navigator.previous_step()
+            # else: user cancelled, stay on current step
+            return
+
+        super()._handle_previous()
 
     def _on_step_changed(self, old_index: int, new_index: int):
         """

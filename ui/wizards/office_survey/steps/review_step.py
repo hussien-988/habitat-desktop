@@ -131,7 +131,6 @@ class ReviewStep(BaseStep):
         lbl = QLabel(text)
         lbl.setFont(create_font(size=FontManager.WIZARD_CARD_LABEL, weight=FontManager.WEIGHT_SEMIBOLD))
         lbl.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent; border: none;")
-        lbl.setAlignment(Qt.AlignRight)
         return lbl
 
     def _add_shadow(self, widget: QWidget):
@@ -193,12 +192,10 @@ class ReviewStep(BaseStep):
         title_label = QLabel(title)
         title_label.setFont(create_font(size=FontManager.WIZARD_STEP_TITLE, weight=FontManager.WEIGHT_SEMIBOLD))
         title_label.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent; border: none;")
-        title_label.setAlignment(Qt.AlignRight)
 
         subtitle_label = QLabel(subtitle)
         subtitle_label.setFont(create_font(size=FontManager.WIZARD_STEP_SUBTITLE, weight=FontManager.WEIGHT_REGULAR))
         subtitle_label.setStyleSheet(f"color: {Colors.WIZARD_SUBTITLE}; background: transparent; border: none;")
-        subtitle_label.setAlignment(Qt.AlignRight)
 
         title_layout.addWidget(title_label)
         title_layout.addWidget(subtitle_label)
@@ -301,14 +298,12 @@ class ReviewStep(BaseStep):
         name_lbl = QLabel(full_name)
         name_lbl.setFont(create_font(size=FontManager.WIZARD_CARD_LABEL, weight=FontManager.WEIGHT_SEMIBOLD))
         name_lbl.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent;")
-        name_lbl.setAlignment(Qt.AlignRight)
 
         role_key = person.get('person_role') or person.get('relationship_type') or person.get('role', '')
         role_text = get_relation_type_display(role_key) if role_key else get_relation_type_display('occupant')
         role_lbl = QLabel(role_text)
         role_lbl.setFont(create_font(size=FontManager.WIZARD_CARD_VALUE, weight=FontManager.WEIGHT_REGULAR))
         role_lbl.setStyleSheet(f"color: {Colors.WIZARD_SUBTITLE}; background: transparent;")
-        role_lbl.setAlignment(Qt.AlignRight)
 
         text_vbox.addWidget(name_lbl)
         text_vbox.addWidget(role_lbl)
@@ -406,9 +401,9 @@ class ReviewStep(BaseStep):
 
         # ===== Card 1: Building number + address bar =====
         building_num_label = QLabel(building_code)
-        building_num_label.setFont(create_font(size=FontManager.SIZE_HEADING, weight=FontManager.WEIGHT_BOLD))
+        building_num_label.setFont(create_font(size=FontManager.WIZARD_CARD_VALUE, weight=FontManager.WEIGHT_SEMIBOLD))
         building_num_label.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent; border: none;")
-        building_num_label.setAlignment(Qt.AlignRight)
+        building_num_label.setAlignment(Qt.AlignRight | Qt.AlignAbsolute)
         self.building_info_content.addWidget(building_num_label)
 
         address = build_hierarchical_address(building_obj=building, unit_obj=None, include_unit=False)
@@ -479,7 +474,6 @@ class ReviewStep(BaseStep):
         loc_header = QLabel(tr("wizard.building.location_title"))
         loc_header.setFont(create_font(size=FontManager.WIZARD_CARD_LABEL, weight=FontManager.WEIGHT_SEMIBOLD))
         loc_header.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent; border: none;")
-        loc_header.setAlignment(Qt.AlignRight)
         self.building_location_content.addWidget(loc_header)
 
         content_row = QHBoxLayout()
@@ -506,11 +500,9 @@ class ReviewStep(BaseStep):
         loc_desc_label = QLabel(tr("wizard.building.location_description"))
         loc_desc_label.setFont(create_font(size=FontManager.WIZARD_CARD_LABEL, weight=FontManager.WEIGHT_SEMIBOLD))
         loc_desc_label.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent; border: none;")
-        loc_desc_label.setAlignment(Qt.AlignRight)
         loc_desc_value = QLabel(location_desc if location_desc else "-")
         loc_desc_value.setFont(create_font(size=FontManager.WIZARD_CARD_VALUE, weight=FontManager.WEIGHT_REGULAR))
         loc_desc_value.setStyleSheet(f"color: {Colors.WIZARD_SUBTITLE}; background: transparent; border: none;")
-        loc_desc_value.setAlignment(Qt.AlignRight)
         loc_desc_value.setWordWrap(True)
         loc_desc_section.addWidget(loc_desc_label)
         loc_desc_section.addWidget(loc_desc_value)
@@ -522,11 +514,9 @@ class ReviewStep(BaseStep):
         gen_desc_label = QLabel(tr("wizard.building.general_description"))
         gen_desc_label.setFont(create_font(size=FontManager.WIZARD_CARD_LABEL, weight=FontManager.WEIGHT_SEMIBOLD))
         gen_desc_label.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent; border: none;")
-        gen_desc_label.setAlignment(Qt.AlignRight)
         gen_desc_value = QLabel(general_desc if general_desc else "-")
         gen_desc_value.setFont(create_font(size=FontManager.WIZARD_CARD_VALUE, weight=FontManager.WEIGHT_REGULAR))
         gen_desc_value.setStyleSheet(f"color: {Colors.WIZARD_SUBTITLE}; background: transparent; border: none;")
-        gen_desc_value.setAlignment(Qt.AlignRight)
         gen_desc_value.setWordWrap(True)
         gen_desc_section.addWidget(gen_desc_label)
         gen_desc_section.addWidget(gen_desc_value)
@@ -640,7 +630,6 @@ class ReviewStep(BaseStep):
             desc_title = QLabel(tr("wizard.unit.property_description"))
             desc_title.setFont(create_font(size=FontManager.WIZARD_FIELD_LABEL, weight=FontManager.WEIGHT_SEMIBOLD))
             desc_title.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent; border: none;")
-            desc_title.setAlignment(Qt.AlignRight)
 
             desc_text_content = ""
             if unit and hasattr(unit, 'property_description') and unit.property_description:
@@ -653,7 +642,6 @@ class ReviewStep(BaseStep):
             desc_text = QLabel(desc_text_content)
             desc_text.setFont(create_font(size=FontManager.WIZARD_FIELD_VALUE, weight=FontManager.WEIGHT_REGULAR))
             desc_text.setStyleSheet(f"color: {Colors.WIZARD_SUBTITLE}; background: transparent; border: none;")
-            desc_text.setAlignment(Qt.AlignRight)
             desc_text.setWordWrap(True)
             desc_text.setMaximumHeight(40)
 
@@ -747,11 +735,9 @@ class ReviewStep(BaseStep):
         nature_block = QVBoxLayout()
         nature_block.setSpacing(4)
         nature_title = self._create_section_label(tr("wizard.household.occupancy_nature"))
-        nature_title.setAlignment(Qt.AlignRight)
         nature_val = QLabel(nature_display)
         nature_val.setFont(create_font(size=FontManager.WIZARD_CARD_VALUE, weight=FontManager.WEIGHT_REGULAR))
         nature_val.setStyleSheet(f"color: #94a3b8; background: transparent; border: none;")
-        nature_val.setAlignment(Qt.AlignRight)
         nature_block.addWidget(nature_title)
         nature_block.addWidget(nature_val)
 
@@ -896,7 +882,6 @@ class ReviewStep(BaseStep):
             lbl = self._create_section_label(label_text)
             v.addWidget(lbl)
             val = QLabel(str(value_text) if value_text else "-")
-            val.setAlignment(Qt.AlignRight)
             val.setStyleSheet(ro_field_style)
             v.addWidget(val)
             grid.addLayout(v, row, col)
@@ -940,7 +925,7 @@ class ReviewStep(BaseStep):
         card_layout.addWidget(notes_title)
 
         notes_val = QLabel(notes_text if notes_text else tr("wizard.review.review_notes_placeholder"))
-        notes_val.setAlignment(Qt.AlignRight | Qt.AlignTop)
+        notes_val.setAlignment(Qt.AlignTop)
         notes_val.setWordWrap(True)
         notes_val.setMinimumHeight(100)
         notes_val.setMaximumHeight(120)
@@ -963,7 +948,6 @@ class ReviewStep(BaseStep):
 
         next_date = claim_data.get('next_action_date', '00-00-0000') or '00-00-0000'
         next_date_val = QLabel(next_date)
-        next_date_val.setAlignment(Qt.AlignRight)
         next_date_val.setStyleSheet(ro_field_style)
         card_layout.addWidget(next_date_val)
         card_layout.addSpacing(8)
