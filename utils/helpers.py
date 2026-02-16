@@ -218,8 +218,9 @@ def is_aleppo_region(lat: float, lon: float) -> bool:
     Returns:
         True if within Aleppo bounds
     """
-    # Approximate bounds for Aleppo Governorate
-    return 35.5 <= lat <= 37.0 and 36.5 <= lon <= 38.0
+    from app.config import Config
+    return (Config.MAP_BOUNDS_MIN_LAT <= lat <= Config.MAP_BOUNDS_MAX_LAT and
+            Config.MAP_BOUNDS_MIN_LNG <= lon <= Config.MAP_BOUNDS_MAX_LNG)
 
 
 def build_hierarchical_address(

@@ -26,21 +26,22 @@ class MapConstants:
     MAP_WIDTH = DIALOG_WIDTH - (DIALOG_PADDING * 2)  # 1052px
     MAP_BORDER_RADIUS = 8  # px
 
-    # ===== Default Map Center (Aleppo, Syria) =====
-    DEFAULT_CENTER_LAT = 36.2021  # Latitude
-    DEFAULT_CENTER_LON = 37.1343  # Longitude
-    DEFAULT_ZOOM = 15  # Zoom level (Professional: Higher zoom = fewer initial buildings = better performance)
+    # ===== Default Map Center and Bounds (from .env / Config) =====
+    from app.config import Config as _Cfg
+    DEFAULT_CENTER_LAT = _Cfg.MAP_CENTER_LAT
+    DEFAULT_CENTER_LON = _Cfg.MAP_CENTER_LNG
+    DEFAULT_ZOOM = _Cfg.MAP_DEFAULT_ZOOM
 
-    # ===== Coordinate Bounds (Aleppo region) =====
-    MIN_LAT = 36.0
-    MAX_LAT = 36.5
-    MIN_LON = 36.8
-    MAX_LON = 37.5
+    # ===== Coordinate Bounds (from .env / Config) =====
+    MIN_LAT = _Cfg.MAP_BOUNDS_MIN_LAT
+    MAX_LAT = _Cfg.MAP_BOUNDS_MAX_LAT
+    MIN_LON = _Cfg.MAP_BOUNDS_MIN_LNG
+    MAX_LON = _Cfg.MAP_BOUNDS_MAX_LNG
 
     # ===== Zoom Levels =====
-    MIN_ZOOM = 10
-    MAX_ZOOM = 18
-    MIN_ZOOM_FOR_LOADING = 12  # Professional: Don't load buildings below this zoom (performance)
+    MIN_ZOOM = _Cfg.MAP_MIN_ZOOM
+    MAX_ZOOM = _Cfg.MAP_MAX_ZOOM
+    MIN_ZOOM_FOR_LOADING = 12  # Don't load buildings below this zoom (performance)
 
     # ===== Status Colors (Building Status) =====
     # نفس الألوان المستخدمة في LeafletHTMLGenerator
@@ -82,9 +83,9 @@ class MapConstants:
 
     # ===== Tile Layer Performance (Prevents gray areas during zoom/pan) =====
     # Reference: https://leafletjs.com/reference.html#tilelayer
-    TILE_KEEP_BUFFER = 4              # Extra tile rows/cols to keep beyond viewport (default: 2)
-    TILE_UPDATE_WHEN_ZOOMING = False  # Don't update tiles mid-zoom animation (smoother)
-    TILE_UPDATE_WHEN_IDLE = False     # Update tiles during panning too (not just after idle)
+    TILE_KEEP_BUFFER = 2              # Extra tile rows/cols beyond viewport (default)
+    TILE_UPDATE_WHEN_ZOOMING = False  # Don't update tiles mid-zoom animation
+    TILE_UPDATE_WHEN_IDLE = True      # Load tiles only after pan/zoom ends (reduces requests)
     TILE_PANE_BACKGROUND = '#1a1a2e'  # Dark background for tile pane (matches satellite imagery)
 
     # ===== Map Animation (Smooth transitions) =====

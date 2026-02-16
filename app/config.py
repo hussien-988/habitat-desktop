@@ -28,6 +28,23 @@ _API_PASSWORD = os.getenv("API_PASSWORD", "Admin@123")
 # Tile Server Settings
 _TILE_SERVER_URL = os.getenv("TILE_SERVER_URL", None)
 _USE_DOCKER_TILES = os.getenv("USE_DOCKER_TILES", "false").lower() in ("true", "1", "yes")
+_MBTILES_PATH = os.getenv("MBTILES_PATH", None)
+
+# Map Geographic Settings (defaults: Aleppo, Syria)
+_MAP_CENTER_LAT = float(os.getenv("MAP_CENTER_LAT", "36.2021"))
+_MAP_CENTER_LNG = float(os.getenv("MAP_CENTER_LNG", "37.1343"))
+_MAP_DEFAULT_ZOOM = int(os.getenv("MAP_DEFAULT_ZOOM", "14"))
+_MAP_MIN_ZOOM = int(os.getenv("MAP_MIN_ZOOM", "10"))
+_MAP_MAX_ZOOM = int(os.getenv("MAP_MAX_ZOOM", "18"))
+_MAP_BOUNDS_MIN_LAT = float(os.getenv("MAP_BOUNDS_MIN_LAT", "35.5"))
+_MAP_BOUNDS_MAX_LAT = float(os.getenv("MAP_BOUNDS_MAX_LAT", "37.0"))
+_MAP_BOUNDS_MIN_LNG = float(os.getenv("MAP_BOUNDS_MIN_LNG", "36.5"))
+_MAP_BOUNDS_MAX_LNG = float(os.getenv("MAP_BOUNDS_MAX_LNG", "38.0"))
+
+# GeoServer Settings (optional)
+_GEOSERVER_URL = os.getenv("GEOSERVER_URL", None)
+_GEOSERVER_WORKSPACE = os.getenv("GEOSERVER_WORKSPACE", "trrcms")
+_GEOSERVER_ENABLED = os.getenv("GEOSERVER_ENABLED", "false").lower() in ("true", "1", "yes")
 
 
 @dataclass
@@ -75,6 +92,23 @@ class Config:
     USE_DOCKER_TILES: bool = _USE_DOCKER_TILES
     USE_EMBEDDED_TILES_FALLBACK: bool = True
     TILE_SERVER_HEALTH_TIMEOUT: int = 2
+    MBTILES_PATH: Optional[str] = _MBTILES_PATH
+
+    # Map Geographic Configuration
+    MAP_CENTER_LAT: float = _MAP_CENTER_LAT
+    MAP_CENTER_LNG: float = _MAP_CENTER_LNG
+    MAP_DEFAULT_ZOOM: int = _MAP_DEFAULT_ZOOM
+    MAP_MIN_ZOOM: int = _MAP_MIN_ZOOM
+    MAP_MAX_ZOOM: int = _MAP_MAX_ZOOM
+    MAP_BOUNDS_MIN_LAT: float = _MAP_BOUNDS_MIN_LAT
+    MAP_BOUNDS_MAX_LAT: float = _MAP_BOUNDS_MAX_LAT
+    MAP_BOUNDS_MIN_LNG: float = _MAP_BOUNDS_MIN_LNG
+    MAP_BOUNDS_MAX_LNG: float = _MAP_BOUNDS_MAX_LNG
+
+    # GeoServer Configuration (optional)
+    GEOSERVER_URL: Optional[str] = _GEOSERVER_URL
+    GEOSERVER_WORKSPACE: str = _GEOSERVER_WORKSPACE
+    GEOSERVER_ENABLED: bool = _GEOSERVER_ENABLED
 
     # Paths
     PROJECT_ROOT: Path = Path(__file__).parent.parent

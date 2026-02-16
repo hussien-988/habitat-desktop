@@ -10,6 +10,7 @@ from typing import List, Optional, Dict, Any, Tuple
 from datetime import datetime
 import json
 
+from app.config import Config
 from services.api_client import TRRCMSApiClient, get_api_client, ApiConfig
 from services.map_service import GeoPoint, GeoPolygon, BuildingGeoData
 from services.map_data_provider import IMapDataProvider, BuildingsMapProvider, MapBounds
@@ -27,10 +28,10 @@ class MapServiceAPI:
     """
 
     ALEPPO_BOUNDS = {
-        "min_lat": 36.0,
-        "max_lat": 36.5,
-        "min_lon": 36.8,
-        "max_lon": 37.5
+        "min_lat": Config.MAP_BOUNDS_MIN_LAT,
+        "max_lat": Config.MAP_BOUNDS_MAX_LAT,
+        "min_lon": Config.MAP_BOUNDS_MIN_LNG,
+        "max_lon": Config.MAP_BOUNDS_MAX_LNG
     }
 
     # Class-level caches for address lookups (loaded once)
