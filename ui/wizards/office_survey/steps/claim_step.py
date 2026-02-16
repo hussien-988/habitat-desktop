@@ -18,6 +18,10 @@ from ui.components.centered_text_edit import CenteredTextEdit
 from ui.wizards.framework import BaseStep, StepValidationResult
 from ui.wizards.office_survey.survey_context import SurveyContext
 from services.translation_manager import tr
+from services.display_mappings import (
+    get_claim_type_display, get_claim_status_display,
+    get_source_display, get_business_type_display, get_priority_display
+)
 from utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -31,17 +35,6 @@ def _find_combo_code_by_english(vocab_name: str, english_key: str) -> int:
         if label.lower() == english_key_lower:
             return code
     return 0
-
-
-def _find_display_label(vocab_name: str, code) -> str:
-    """Find the Arabic display label for a vocabulary code."""
-    from services.vocab_service import get_options
-    if code is None:
-        return ""
-    for item_code, label in get_options(vocab_name, lang="ar"):
-        if item_code == code:
-            return label
-    return str(code)
 
 
 class ClaimStep(BaseStep):
@@ -440,33 +433,33 @@ class ClaimStep(BaseStep):
 
         if is_ownership:
             code = _find_combo_code_by_english("ClaimType", "Ownership")
-            card.claim_type_field.setText(_find_display_label("ClaimType", code))
+            card.claim_type_field.setText(get_claim_type_display(code))
         elif is_tenant:
             code = _find_combo_code_by_english("ClaimType", "Tenancy")
-            card.claim_type_field.setText(_find_display_label("ClaimType", code))
+            card.claim_type_field.setText(get_claim_type_display(code))
         elif is_occupant:
             code = _find_combo_code_by_english("ClaimType", "Occupancy")
-            card.claim_type_field.setText(_find_display_label("ClaimType", code))
+            card.claim_type_field.setText(get_claim_type_display(code))
 
         # Claim status
         claim_status = claim_data.get('claimStatus') or claim_data.get('caseStatus')
         if claim_status:
-            card.claim_status_field.setText(_find_display_label("ClaimStatus", claim_status))
+            card.claim_status_field.setText(get_claim_status_display(claim_status))
 
         # Source
         claim_source = claim_data.get('source') or claim_data.get('claimSource')
         if claim_source:
-            card.claim_source_field.setText(_find_display_label("ClaimSource", claim_source))
+            card.claim_source_field.setText(get_source_display(claim_source))
 
         # Business nature
         business_nature = claim_data.get('businessNature')
         if business_nature:
-            card.claim_business_nature_field.setText(_find_display_label("ClaimBusinessNature", business_nature))
+            card.claim_business_nature_field.setText(get_business_type_display(business_nature))
 
         # Priority
         priority = claim_data.get('priority') or claim_data.get('casePriority')
         if priority:
-            card.claim_priority_field.setText(_find_display_label("ClaimPriority", priority))
+            card.claim_priority_field.setText(get_priority_display(priority))
 
         # Survey date
         survey_date_str = claim_data.get('surveyDate', '')
@@ -619,13 +612,13 @@ class ClaimStep(BaseStep):
 
         if owners or heirs:
             code = _find_combo_code_by_english("ClaimType", "Ownership")
-            first_card.claim_type_field.setText(_find_display_label("ClaimType", code))
+            first_card.claim_type_field.setText(get_claim_type_display(code))
         elif tenants:
             code = _find_combo_code_by_english("ClaimType", "Tenancy")
-            first_card.claim_type_field.setText(_find_display_label("ClaimType", code))
+            first_card.claim_type_field.setText(get_claim_type_display(code))
         elif occupants:
             code = _find_combo_code_by_english("ClaimType", "Occupancy")
-            first_card.claim_type_field.setText(_find_display_label("ClaimType", code))
+            first_card.claim_type_field.setText(get_claim_type_display(code))
 
         # Store raw data for collect_data
         first_card._claim_raw_data = {
@@ -697,7 +690,7 @@ class ClaimStep(BaseStep):
 
         if claim_type_english:
             code = _find_combo_code_by_english("ClaimType", claim_type_english)
-            first_card.claim_type_field.setText(_find_display_label("ClaimType", code))
+            first_card.claim_type_field.setText(get_claim_type_display(code))
 
         # Store raw data for collect_data
         first_card._claim_raw_data = {'from_context': True}

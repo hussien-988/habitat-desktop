@@ -17,7 +17,7 @@ Steps:
 
 from typing import List
 
-from PyQt5.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QFrame, QGraphicsDropShadowEffect, QSpacerItem, QSizePolicy, QMessageBox
+from PyQt5.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QFrame, QGraphicsDropShadowEffect, QSpacerItem, QSizePolicy
 from PyQt5.QtCore import pyqtSignal, Qt, QSize
 from PyQt5.QtGui import QFont, QColor
 from ui.error_handler import ErrorHandler
@@ -82,6 +82,8 @@ class OfficeSurveyWizard(BaseWizard):
         self.survey_repo = SurveyRepository(self.db)
         self.step_labels = []  # For step indicators
         self._finalization_complete = False  # Flag to track successful finalization
+        self._edit_mode = False  # True when editing a step from review
+        self._edit_return_index = 5  # Always return to review step (index 5)
         super().__init__(parent)
 
         # Connect base wizard signals to survey-specific signals
@@ -103,6 +105,8 @@ class OfficeSurveyWizard(BaseWizard):
             ClaimStep(self.context, self),
             ReviewStep(self.context, self)
         ]
+        # Connect edit signal from review step
+        steps[5].edit_requested.connect(self._enter_edit_mode)
         return steps
 
     def set_auth_token(self, token: str):
@@ -136,108 +140,27 @@ class OfficeSurveyWizard(BaseWizard):
 
     def on_submit(self) -> bool:
         """
-        Handle wizard submission.
+        Handle wizard submission — saves as draft.
 
-        Calls the finalize API to transition the survey from Draft to Finalized status.
-
-        POST /api/v1/Surveys/office/{id}/finalize
+        Note: finalize_survey_status() is kept in api_client.py for future use.
 
         Returns:
             True if submission was successful
         """
-        from services.api_client import get_api_client
-        from app.config import Config
-        import json
-
         try:
-            # Check if API mode is enabled
-            use_api = getattr(Config, 'DATA_PROVIDER', 'local_db') == 'http'
-
-            if use_api:
-                # Get survey_id from context
-                survey_id = self.context.get_data("survey_id")
-
-                if not survey_id:
-                    logger.error("No survey_id found in context for finalization")
-                    ErrorHandler.show_warning(
-                        self,
-                        tr("wizard.error.no_survey_id"),
-                        tr("common.error")
-                    )
-                    return False
-
-                # Initialize API service and set auth token
-                api_service = get_api_client()
-
-                # Get auth token from main window
-                main_window = self.window()
-                if main_window and hasattr(main_window, '_api_token') and main_window._api_token:
-                    api_service.set_access_token(main_window._api_token)
-                    logger.info(f"Auth token set for finalize API call")
-
-                # Call the finalize API
-                logger.info(f"Calling finalize API for survey {survey_id}")
-
-                try:
-                    response = api_service.finalize_survey_status(survey_id)
-
-                    # Update context status
-                    self.context.status = "finalized"
-
-                    logger.info(f"Survey {survey_id} finalized successfully via API")
-
-                    # Get claim number from context or response
-                    claim_number = self.context.reference_number or survey_id
-
-                    # Show success popup with claim number
-                    SuccessPopup.show_success(
-                        claim_number=claim_number,
-                        title=tr("wizard.success.title"),
-                        description=tr("wizard.success.description"),
-                        auto_close_ms=0,  # No auto-close, user must click
-                        parent=self
-                    )
-
-                    # Mark finalization as complete to prevent "save draft" dialog
-                    self._finalization_complete = True
-
-                    return True
-
-                except Exception as api_error:
-                    error_msg = str(api_error)
-                    logger.error(f"Failed to finalize survey: {error_msg}")
-
-                    ErrorHandler.show_error(
-                        self,
-                        f"{tr('wizard.error.finalize_failed')}\n{error_msg}",
-                        tr("common.error")
-                    )
-                    return False
-            else:
-                # Local database mode - use original logic
-                survey_data = self.context.to_dict()
-                survey_id = self.survey_repo.create_survey(survey_data)
-
-                self.context.status = "completed"
-
-                logger.info(f"Survey completed successfully: {survey_id}")
-
-                # Get claim number from context
-                claim_number = self.context.reference_number or survey_id
-
-                # Show success popup with claim number
+            draft_id = self.on_save_draft()
+            if draft_id:
+                claim_number = self.context.reference_number or draft_id
                 SuccessPopup.show_success(
                     claim_number=claim_number,
                     title=tr("wizard.success.title"),
                     description=tr("wizard.success.description"),
-                    auto_close_ms=0,  # No auto-close, user must click
+                    auto_close_ms=0,
                     parent=self
                 )
-
-                # Mark finalization as complete to prevent "save draft" dialog
                 self._finalization_complete = True
-
                 return True
+            return False
 
         except Exception as e:
             logger.error(f"Error submitting survey: {e}", exc_info=True)
@@ -931,30 +854,58 @@ class OfficeSurveyWizard(BaseWizard):
 
         return footer
 
+    def _enter_edit_mode(self, step_index: int):
+        """Enter edit mode: navigate from review to a target step for editing."""
+        self._edit_mode = True
+        self.navigator.goto_step(step_index, skip_validation=True)
+
+    def _exit_edit_mode(self):
+        """Exit edit mode and return to the review step."""
+        return_index = self._edit_return_index
+        self._edit_mode = False
+        self.navigator.goto_step(return_index, skip_validation=True)
+
     def _handle_previous(self):
-        """Override back navigation to warn when leaving Step 1 (Unit Selection) back to Step 0 (Building Selection).
+        """Override back navigation with edit mode support and step-1 warning."""
+        # Edit mode: Cancel → return to review
+        if self._edit_mode:
+            self._exit_edit_mode()
+            return
 
-        Going back to building selection discards the current survey data
-        since we cannot update a survey's building after creation.
-        """
+        # Normal mode: warn when going back from step 1 to step 0
         if self.navigator.current_index == 1:
-            msg = QMessageBox(self)
-            msg.setLayoutDirection(Qt.RightToLeft)
-            msg.setWindowTitle("تأكيد العودة")
-            msg.setIcon(QMessageBox.Warning)
-            msg.setText("في حالة العودة إلى اختيار المبنى ستفقد جميع المعلومات المدخلة وسيتم بدء حالة جديدة.")
-            msg.setInformativeText("هل أنت متأكد من العودة؟")
-            btn_confirm = msg.addButton("موافق", QMessageBox.AcceptRole)
-            btn_cancel = msg.addButton("إلغاء", QMessageBox.RejectRole)
-            msg.setDefaultButton(btn_cancel)
-            msg.exec_()
-
-            if msg.clickedButton() == btn_confirm:
+            from ui.components.confirmation_modal import ConfirmationModal
+            confirmed = ConfirmationModal.ask_confirmation(
+                self,
+                title="تأكيد العودة",
+                message="في حالة العودة إلى اختيار المبنى ستفقد جميع المعلومات المدخلة وسيتم بدء حالة جديدة.",
+                confirm_text="موافق",
+                cancel_text="إلغاء",
+                confirm_style="danger"
+            )
+            if confirmed:
                 self.navigator.previous_step()
-            # else: user cancelled, stay on current step
             return
 
         super()._handle_previous()
+
+    def _handle_next(self):
+        """Override next button with edit mode support."""
+        if self._edit_mode:
+            # Validate current step before saving
+            current_step = self.navigator.get_current_step()
+            if current_step:
+                validation_result = current_step.validate()
+                if not validation_result.is_valid:
+                    self._on_validation_failed(validation_result)
+                    return
+                # Call on_next() hook (API calls, data persistence)
+                if hasattr(current_step, 'on_next') and callable(current_step.on_next):
+                    current_step.on_next()
+            self._exit_edit_mode()
+            return
+
+        super()._handle_next()
 
     def _on_step_changed(self, old_index: int, new_index: int):
         """
@@ -1047,6 +998,29 @@ class OfficeSurveyWizard(BaseWizard):
         avoiding container widgets or dynamic layout changes.
         """
         current_step = self.navigator.current_index
+
+        # ========== Edit Mode Override ==========
+        if self._edit_mode:
+            # Previous → "إلغاء" (Cancel)
+            self.btn_previous.setStyleSheet(self.btn_previous_visible_style)
+            self.btn_previous.setEnabled(True)
+            self.btn_previous.setCursor(Qt.PointingHandCursor)
+            self.prev_shadow.setEnabled(True)
+            self.btn_previous.setText(f"<   {tr('wizard.button.cancel_edit')}")
+
+            # Next → "حفظ التعديلات" (Save Changes)
+            self.btn_next.show()
+            self.btn_next.setEnabled(True)
+            self.btn_next.setText(f"{tr('wizard.button.save_changes')}   >")
+
+            # Hide final save
+            if hasattr(self, 'btn_final_save'):
+                self.btn_final_save.hide()
+            return
+
+        # ========== Normal Mode: Restore button text ==========
+        self.btn_previous.setText(f"<   {tr('wizard.button.previous')}")
+        self.btn_next.setText(f"{tr('wizard.button.next')}   >")
 
         # ========== Previous Button Logic ==========
         # Make transparent on first step, visible on other steps

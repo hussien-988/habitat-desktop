@@ -390,7 +390,10 @@ class HouseholdStep(BaseStep):
         nature_col.addWidget(self._occupancy_nature_label)
 
         self.hh_occupancy_nature = RtlCombo()
+        self.hh_occupancy_nature.addItem(tr("wizard.household.select"), None)
         for code, display_name in get_occupancy_nature_options():
+            if code == 0:
+                continue
             self.hh_occupancy_nature.addItem(display_name, code)
         self.hh_occupancy_nature.setStyleSheet(combo_style)
         self.hh_occupancy_nature.setFixedHeight(45)
@@ -408,7 +411,10 @@ class HouseholdStep(BaseStep):
         type_col.addWidget(self._occupancy_type_label)
 
         self.hh_occupancy_type = RtlCombo()
+        self.hh_occupancy_type.addItem(tr("wizard.household.select"), None)
         for code, display_name in get_occupancy_type_options():
+            if code == 0:
+                continue
             self.hh_occupancy_type.addItem(display_name, code)
         self.hh_occupancy_type.setStyleSheet(combo_style)
         self.hh_occupancy_type.setFixedHeight(45)
@@ -941,6 +947,16 @@ class HouseholdStep(BaseStep):
         if len(self.context.households) > 0:
             household = self.context.households[0]
             # Head of household name
+            # Restore occupancy combos
+            if household.get('occupancy_nature') is not None:
+                idx = self.hh_occupancy_nature.findData(household['occupancy_nature'])
+                if idx >= 0:
+                    self.hh_occupancy_nature.setCurrentIndex(idx)
+            if household.get('occupancy_type') is not None:
+                idx = self.hh_occupancy_type.findData(household['occupancy_type'])
+                if idx >= 0:
+                    self.hh_occupancy_type.setCurrentIndex(idx)
+
             self.hh_total_members.setValue(household.get("size", 0))
             self.hh_adult_males.setValue(household.get("adult_males", 0))
             self.hh_adult_females.setValue(household.get("adult_females", 0))

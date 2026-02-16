@@ -10,9 +10,10 @@ from datetime import datetime
 
 from PyQt5.QtWidgets import (
     QVBoxLayout, QLabel, QScrollArea, QWidget, QFrame,
-    QHBoxLayout, QGridLayout, QGraphicsDropShadowEffect
+    QHBoxLayout, QGridLayout, QGraphicsDropShadowEffect,
+    QPushButton, QMenu
 )
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtGui import QColor
 
 from ui.wizards.framework import BaseStep, StepValidationResult
@@ -31,7 +32,6 @@ from services.display_mappings import (
     get_claim_type_display, get_priority_display,
     get_business_type_display, get_source_display,
     get_claim_status_display,
-    get_occupancy_type_display, get_occupancy_nature_display
 )
 from utils.helpers import build_hierarchical_address
 
@@ -40,6 +40,8 @@ logger = get_logger(__name__)
 
 class ReviewStep(BaseStep):
     """Step 6: Review & Submit."""
+
+    edit_requested = pyqtSignal(int)  # Emits step index to edit
 
     def __init__(self, context: SurveyContext, parent=None):
         super().__init__(context, parent)
@@ -142,7 +144,58 @@ class ReviewStep(BaseStep):
         shadow.setColor(QColor(0, 0, 0, 25))
         widget.setGraphicsEffect(shadow)
 
-    def _create_card_base(self, icon_name: str, title: str, subtitle: str) -> tuple:
+    def _request_edit(self, step_index: int):
+        """Emit signal requesting wizard to enter edit mode for a step."""
+        self.edit_requested.emit(step_index)
+
+    def _create_edit_menu_button(self, callback) -> QPushButton:
+        """DRY: Create a ⋮ menu button with a single 'تعديل' action."""
+        menu_btn = QPushButton("⋮")
+        menu_btn.setFixedSize(36, 36)
+        menu_btn.setStyleSheet("""
+            QPushButton {
+                border: none;
+                color: #475569;
+                font-size: 24px;
+                font-weight: 700;
+                background: transparent;
+                border-radius: 18px;
+            }
+            QPushButton:hover {
+                color: #1e293b;
+                background-color: #F1F5F9;
+            }
+        """)
+        menu_btn.setCursor(Qt.PointingHandCursor)
+
+        menu = QMenu(menu_btn)
+        menu.setLayoutDirection(Qt.RightToLeft)
+        menu.setStyleSheet("""
+            QMenu {
+                background-color: white;
+                border: 1px solid #E5E7EB;
+                border-radius: 6px;
+                padding: 4px;
+            }
+            QMenu::item {
+                padding: 8px 16px;
+                border-radius: 4px;
+            }
+            QMenu::item:selected {
+                background-color: #F3F4F6;
+            }
+        """)
+
+        edit_action = menu.addAction(tr("wizard.review.edit"))
+        edit_action.triggered.connect(callback)
+
+        menu_btn.clicked.connect(
+            lambda: menu.exec_(menu_btn.mapToGlobal(menu_btn.rect().bottomRight()))
+        )
+
+        return menu_btn
+
+    def _create_card_base(self, icon_name: str, title: str, subtitle: str, edit_callback=None) -> tuple:
         """Create base card with header (icon, title, subtitle) and return card and content layout."""
         card = QFrame()
         card.setLayoutDirection(Qt.RightToLeft)
@@ -204,6 +257,11 @@ class ReviewStep(BaseStep):
         header_layout.addWidget(icon_label)
         header_layout.addWidget(title_container)
         header_layout.addStretch()
+
+        # Edit menu button (appears on left side in RTL)
+        if edit_callback:
+            edit_btn = self._create_edit_menu_button(edit_callback)
+            header_layout.addWidget(edit_btn)
 
         card_layout.addWidget(header_container)
 
@@ -317,7 +375,7 @@ class ReviewStep(BaseStep):
         view_lbl.setStyleSheet("color: #3B82F6; background: transparent; border: none;")
         view_lbl.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
         view_lbl.setCursor(Qt.PointingHandCursor)
-        view_lbl.mousePressEvent = lambda e, p=person: self._view_person_readonly(p)
+        view_lbl.mousePressEvent = lambda e, p=person: self._view_person_editable(p)
 
         card_layout.addLayout(right_group)
         card_layout.addStretch()
@@ -333,19 +391,22 @@ class ReviewStep(BaseStep):
 
     def _create_unit_card(self) -> QFrame:
         """Create unit information summary card (Step 2) - matching step 2 header."""
-        card, content_layout = self._create_card_base("move", tr("wizard.review.unit_card_title"), tr("wizard.review.unit_card_subtitle"))
+        card, content_layout = self._create_card_base("move", tr("wizard.review.unit_card_title"), tr("wizard.review.unit_card_subtitle"),
+                                                       edit_callback=lambda: self._request_edit(1))
         self.unit_content = content_layout
         return card
 
     def _create_household_card(self) -> QFrame:
         """Create household information summary card (Step 3)."""
-        card, content_layout = self._create_card_base("user-group", tr("wizard.review.household_card_title"), tr("wizard.review.household_card_subtitle"))
+        card, content_layout = self._create_card_base("user-group", tr("wizard.review.household_card_title"), tr("wizard.review.household_card_subtitle"),
+                                                       edit_callback=lambda: self._request_edit(2))
         self.household_content = content_layout
         return card
 
     def _create_persons_card(self) -> QFrame:
         """Create persons list summary card (Step 4)."""
-        card, content_layout = self._create_card_base("user-account", tr("wizard.review.persons_card_title"), tr("wizard.review.persons_card_subtitle"))
+        card, content_layout = self._create_card_base("user-account", tr("wizard.review.persons_card_title"), tr("wizard.review.persons_card_subtitle"),
+                                                       edit_callback=lambda: self._request_edit(3))
         self.persons_content = content_layout
         return card
 
@@ -717,14 +778,16 @@ class ReviewStep(BaseStep):
             return
 
         total_size = sum(h.get('size', 0) for h in self.context.households)
-        hh = self.context.households[0] if self.context.households else {}
 
-        occupancy_type = hh.get('occupancy_type')
-        occupancy_nature = hh.get('occupancy_nature')
-        type_display = get_occupancy_type_display(occupancy_type) if occupancy_type else "-"
-        nature_display = get_occupancy_nature_display(occupancy_nature) if occupancy_nature else "-"
+        # Get main occupant name (first person in context)
+        main_occupant_name = "-"
+        if self.context.persons:
+            p = self.context.persons[0]
+            main_occupant_name = f"{p.get('first_name', '')} {p.get('father_name', '')} {p.get('last_name', '')}".strip()
+            if not main_occupant_name:
+                main_occupant_name = p.get('full_name', p.get('name', '-'))
 
-        # Summary row: occupancy nature (right) + type (center) + total count (left)
+        # Summary row: main occupant info (right) + total count (left)
         summary_container = QWidget()
         summary_container.setLayoutDirection(Qt.RightToLeft)
         summary_container.setStyleSheet("background: transparent; border: none;")
@@ -732,25 +795,14 @@ class ReviewStep(BaseStep):
         summary_layout.setContentsMargins(0, 0, 0, 0)
         summary_layout.setSpacing(0)
 
-        nature_block = QVBoxLayout()
-        nature_block.setSpacing(4)
-        nature_title = self._create_section_label(tr("wizard.household.occupancy_nature"))
-        nature_val = QLabel(nature_display)
-        nature_val.setFont(create_font(size=FontManager.WIZARD_CARD_VALUE, weight=FontManager.WEIGHT_REGULAR))
-        nature_val.setStyleSheet(f"color: #94a3b8; background: transparent; border: none;")
-        nature_block.addWidget(nature_title)
-        nature_block.addWidget(nature_val)
-
-        type_block = QVBoxLayout()
-        type_block.setSpacing(4)
-        type_title = self._create_section_label(tr("wizard.household.occupancy_type"))
-        type_title.setAlignment(Qt.AlignCenter)
-        type_val = QLabel(type_display)
-        type_val.setFont(create_font(size=FontManager.WIZARD_CARD_VALUE, weight=FontManager.WEIGHT_REGULAR))
-        type_val.setStyleSheet(f"color: #94a3b8; background: transparent; border: none;")
-        type_val.setAlignment(Qt.AlignCenter)
-        type_block.addWidget(type_title)
-        type_block.addWidget(type_val)
+        occupant_block = QVBoxLayout()
+        occupant_block.setSpacing(4)
+        occupant_title = self._create_section_label(tr("wizard.review.main_occupant_info"))
+        occupant_val = QLabel(main_occupant_name)
+        occupant_val.setFont(create_font(size=FontManager.WIZARD_CARD_VALUE, weight=FontManager.WEIGHT_REGULAR))
+        occupant_val.setStyleSheet(f"color: #94a3b8; background: transparent; border: none;")
+        occupant_block.addWidget(occupant_title)
+        occupant_block.addWidget(occupant_val)
 
         count_block = QVBoxLayout()
         count_block.setSpacing(4)
@@ -763,9 +815,7 @@ class ReviewStep(BaseStep):
         count_block.addWidget(count_title)
         count_block.addWidget(count_val)
 
-        summary_layout.addLayout(nature_block)
-        summary_layout.addStretch()
-        summary_layout.addLayout(type_block)
+        summary_layout.addLayout(occupant_block)
         summary_layout.addStretch()
         summary_layout.addLayout(count_block)
         summary_layout.addStretch()
@@ -824,18 +874,77 @@ class ReviewStep(BaseStep):
             row = self._create_person_row(person)
             self.persons_content.addWidget(row)
 
-    def _view_person_readonly(self, person: dict):
-        """Open PersonDialog in read-only mode to view person details."""
+    def _view_person_editable(self, person: dict):
+        """Open PersonDialog in editable mode to view/edit person details from review."""
         from ui.wizards.office_survey.dialogs.person_dialog import PersonDialog
         from PyQt5.QtWidgets import QDialog
+
+        # Get API context IDs
+        auth_token = None
+        main_window = self.window()
+        if main_window and hasattr(main_window, '_api_token'):
+            auth_token = main_window._api_token
+
+        survey_id = self.context.get_data("survey_id")
+        household_id = self.context.get_data("household_id")
+        unit_id = None
+        if self.context.unit:
+            unit_id = getattr(self.context.unit, 'unit_uuid', None)
+        elif self.context.new_unit_data:
+            unit_id = self.context.new_unit_data.get('unit_uuid')
 
         dialog = PersonDialog(
             person_data=person,
             existing_persons=self.context.persons,
             parent=self,
-            read_only=True
+            auth_token=auth_token,
+            survey_id=survey_id,
+            household_id=household_id,
+            unit_id=unit_id
         )
-        dialog.exec_()
+
+        if dialog.exec_() == QDialog.Accepted:
+            updated_data = dialog.get_person_data()
+            person_id = person.get('person_id')
+            updated_data['person_id'] = person_id
+
+            # Update person via API
+            if self._use_api and person_id:
+                try:
+                    self._set_auth_token()
+                    if survey_id and household_id:
+                        try:
+                            self._api_service.update_person_in_survey(
+                                survey_id, household_id, person_id, updated_data)
+                        except Exception:
+                            logger.warning(f"Survey-scoped update failed for person {person_id}, falling back to standalone")
+                            self._api_service.update_person(person_id, updated_data)
+                    else:
+                        self._api_service.update_person(person_id, updated_data)
+                    logger.info(f"Person {person_id} updated via API from review step")
+
+                    relation_id = updated_data.get('_relation_id') or person.get('_relation_id')
+                    if relation_id and survey_id:
+                        try:
+                            self._api_service.update_relation(survey_id, relation_id, updated_data)
+                            logger.info(f"Relation {relation_id} updated via API")
+                        except Exception as e:
+                            logger.warning(f"Failed to update relation {relation_id}: {e}")
+                except Exception as e:
+                    logger.error(f"Failed to update person via API: {e}")
+                    from services.error_mapper import map_exception
+                    ErrorHandler.show_error(self, map_exception(e), tr("common.error"))
+                    return
+
+            # Update context
+            for i, p in enumerate(self.context.persons):
+                if p.get('person_id') == person_id:
+                    self.context.persons[i] = updated_data
+                    break
+
+            # Refresh persons card
+            self._populate_persons_card()
+            logger.info(f"Person updated from review: {updated_data.get('first_name', '')} {updated_data.get('last_name', '')}")
 
     def _create_claim_data_card(self, claim_data: dict) -> QFrame:
         """Create a single read-only claim card matching ClaimStep styling exactly."""
