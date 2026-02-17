@@ -36,6 +36,10 @@ tileserver/*.mbtiles
 *.swo
 *~
 
+# PyInstaller build output
+build/
+dist/
+
 # OS files
 .DS_Store
 Thumbs.db
