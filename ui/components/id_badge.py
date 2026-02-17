@@ -189,12 +189,14 @@ class IDBadgeWidget(QWidget):
 
         self._logout_action = self.menu.addAction(tr("navbar.menu.logout"))
 
-        # Connect signals
-        self._lang_action.triggered.connect(self.language_change_requested.emit)
-        self._sync_action.triggered.connect(self.sync_requested.emit)
-        self._password_action.triggered.connect(self.password_change_requested.emit)
-        self._security_action.triggered.connect(self.security_settings_requested.emit)
-        self._data_action.triggered.connect(self.data_management_requested.emit)
+        # Connect signals (Coming Soon for unfinished features)
+        from ui.components.coming_soon_popup import ComingSoonPopup
+        _coming_soon = lambda: ComingSoonPopup.popup(self)
+        self._lang_action.triggered.connect(_coming_soon)
+        self._sync_action.triggered.connect(_coming_soon)
+        self._password_action.triggered.connect(_coming_soon)
+        self._security_action.triggered.connect(_coming_soon)
+        self._data_action.triggered.connect(_coming_soon)
         self._logout_action.triggered.connect(self.logout_requested.emit)
 
     def mousePressEvent(self, event):

@@ -757,6 +757,11 @@ AR_TRANSLATIONS = {
     "navbar.menu.data_management": "🗄️  إدارة البيانات المرجعية",
     "navbar.menu.logout": "➜  تسجيل خروج",
 
+    # ===== Case Details Page =====
+    "page.case_details.title": "تفاصيل الحالة",
+    "page.case_details.breadcrumb": "المسودات",
+    "page.case_details.back_to_list": "العودة للقائمة",
+
     # ===== Error Boundary =====
     "error_boundary.step_error": "خطأ في {step_name}",
     "error_boundary.operation_error": "حدث خطأ أثناء {operation}:\n\n{error_type}: {error_msg}\n\nيمكنك المحاولة مرة أخرى أو الاتصال بالدعم الفني.",

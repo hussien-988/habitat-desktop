@@ -27,6 +27,7 @@ except ImportError:
 
 from app.config import Config
 from services.vocab_service import get_options as vocab_get_options, get_label as vocab_get_label
+from services.display_mappings import get_building_type_display, get_building_status_display
 from services.divisions_service import DivisionsService
 from services.api_client import get_api_client
 from models.building import Building
@@ -2605,12 +2606,12 @@ class BuildingsListPage(QWidget):
             area = (building.neighborhood_name_ar or building.neighborhood_name or '').strip()
             self.table.setItem(idx, 2, QTableWidgetItem(area))
 
-            # نوع البناء - vocab_service handles int codes + string fallback
-            building_type = vocab_get_label("BuildingType", building.building_type)
+            # نوع البناء - display_mappings handles int codes + string fallback
+            building_type = get_building_type_display(building.building_type)
             self.table.setItem(idx, 3, QTableWidgetItem(building_type))
 
-            # حالة البناء - vocab_service handles int codes + string fallback
-            building_status = vocab_get_label("BuildingStatus", building.building_status)
+            # حالة البناء - display_mappings handles int codes + string fallback
+            building_status = get_building_status_display(building.building_status)
             self.table.setItem(idx, 4, QTableWidgetItem(building_status))
 
             # زر الثلاث نقاط - أكبر وأغمق
@@ -2715,13 +2716,13 @@ class BuildingsListPage(QWidget):
             filter_key = 'building_type'
             for building in self._all_buildings:
                 if building.building_type is not None:
-                    label = vocab_get_label("BuildingType", building.building_type)
+                    label = get_building_type_display(building.building_type)
                     unique_values.add((building.building_type, label))
         elif column_index == 4:  # حالة البناء
             filter_key = 'building_status'
             for building in self._all_buildings:
                 if building.building_status is not None:
-                    label = vocab_get_label("BuildingStatus", building.building_status)
+                    label = get_building_status_display(building.building_status)
                     unique_values.add((building.building_status, label))
 
         if not unique_values:
@@ -2900,6 +2901,8 @@ class BuildingsListPage(QWidget):
         view_action = QAction("  عرض", self)
         if view_icon:
             view_action.setIcon(view_icon)
+        from ui.components.coming_soon_popup import ComingSoonPopup
+        view_action.triggered.connect(lambda: ComingSoonPopup.popup(self))
         menu.addAction(view_action)
 
         # 2. تعديل - لون #212B36

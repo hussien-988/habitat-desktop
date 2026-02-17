@@ -183,6 +183,10 @@ class DraftClaimsPage(QWidget):
         # Clear existing content
         self._clear_content()
 
+        # Force equal column widths even when one column is empty
+        self.content_layout.setColumnStretch(0, 1)
+        self.content_layout.setColumnStretch(1, 1)
+
         if not self.claims_data:
             self._show_empty_state()
             return
@@ -251,86 +255,78 @@ class DraftClaimsPage(QWidget):
             self.title_label.setText(title)
 
     def refresh(self, data=None):
-        """Refresh the claims list."""
-        if self.db:
-            try:
-                from repositories.claim_repository import ClaimRepository
-                claim_repo = ClaimRepository(self.db)
+        """Refresh survey drafts list from Surveys/office API."""
+        try:
+            from controllers.survey_controller import SurveyController
+            ctrl = SurveyController(self.db)
+            result = ctrl.load_office_surveys(status="Draft")
 
-                all_claims = claim_repo.get_all(limit=100)
-                # Filter for draft claims only (includes awaiting_documents per UC-001 S23)
-                claims = [c for c in all_claims if c.case_status in ['draft', 'awaiting_documents']]
-
+            if not result.success or not result.data:
                 self.claims_data = []
-                for claim in claims:
-                    # Get claimant name (DRY: consistent pattern)
-                    claimant_name = 'غير محدد'
-                    if claim.person_ids:
-                        try:
-                            from repositories.person_repository import PersonRepository
-                            person_repo = PersonRepository(self.db)
-                            first_person_id = claim.person_ids.split(',')[0].strip()
-                            if first_person_id:
-                                person = person_repo.get_by_id(first_person_id)
-                                if person:
-                                    claimant_name = person.full_name_ar or person.full_name
-                                    if not claimant_name or not claimant_name.strip():
-                                        claimant_name = 'غير محدد'
-                        except Exception:
-                            pass
+                self._show_empty_state()
+                return
 
-                    # Get building and unit objects (Best Practice: pass complete objects)
-                    building_obj = None
-                    unit_obj = None
+            surveys = result.data
 
-                    if claim.unit_id:
-                        try:
-                            from repositories.unit_repository import UnitRepository
-                            from repositories.building_repository import BuildingRepository
-                            unit_repo = UnitRepository(self.db)
-                            building_repo = BuildingRepository(self.db)
+            # Fetch Building objects by UUID for full address display
+            building_ids = {s.get('buildingId', '') for s in surveys if s.get('buildingId')}
+            buildings_cache = self._fetch_buildings_by_ids(building_ids)
 
-                            # Load complete unit object
-                            # Fix: Use get_by_id() instead of find_by_id()
-                            unit_obj = unit_repo.get_by_id(claim.unit_id)
+            self.claims_data = []
+            for s in surveys:
+                building_obj = buildings_cache.get(s.get('buildingId'))
 
-                            # Load complete building object with all address fields
-                            if unit_obj and unit_obj.building_id:
-                                # Fix: Use get_by_id() instead of find_by_id()
-                                building_obj = building_repo.get_by_id(unit_obj.building_id)
-                        except Exception as e:
-                            pass
+                # Create unit namespace if unit data available
+                unit_obj = None
+                unit_num = s.get('unitIdentifier', '')
+                if unit_num:
+                    class _NS:
+                        def __init__(self, **kw): self.__dict__.update(kw)
+                    unit_obj = _NS(unit_number=unit_num)
 
-                    # Format date (DRY: consistent date formatting)
-                    date_str = '2025-01-01'
-                    if claim.submission_date:
-                        if isinstance(claim.submission_date, str):
-                            date_str = claim.submission_date.split('T')[0] if 'T' in claim.submission_date else claim.submission_date
-                        else:
-                            date_str = claim.submission_date.strftime('%Y-%m-%d')
+                self.claims_data.append({
+                    'claim_id': s.get('referenceCode') or s.get('id', 'N/A'),
+                    'claim_uuid': s.get('id', ''),
+                    'claimant_name': s.get('intervieweeName') or 'غير محدد',
+                    'date': (s.get('surveyDate') or '')[:10],
+                    'status': 'draft',
+                    'building': building_obj,
+                    'unit': unit_obj,
+                    'unit_id': s.get('propertyUnitId', ''),
+                    'unit_number': unit_num,
+                    'building_id': s.get('buildingNumber') or (building_obj.building_id if building_obj else ''),
+                })
 
-                    # Best Practice: Pass complete objects instead of individual fields
-                    # This enables build_hierarchical_address() to work correctly
-                    self.claims_data.append({
-                        'claim_id': claim.claim_id or claim.case_number or 'N/A',
-                        'claimant_name': claimant_name,
-                        'date': date_str,
-                        'status': claim.case_status or 'draft',
-                        # Pass complete objects (DRY + SOLID)
-                        'building': building_obj,  # Complete Building model object
-                        'unit': unit_obj,          # Complete Unit model object
-                        # Keep IDs for backward compatibility
-                        'unit_id': claim.unit_id or '',
-                        'building_id': building_obj.building_id if building_obj else ''
-                    })
-            except Exception as e:
-                import traceback
-                print(f"Error loading claims: {e}")
-                print(f"Traceback:\n{traceback.format_exc()}")
-                self.claims_data = []
+            if self.claims_data:
+                self._show_claims_list()
+            else:
+                self._show_empty_state()
 
-        # Display based on data availability
-        if self.claims_data:
-            self._show_claims_list()
-        else:
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).warning(f"API load failed: {e}")
+            self.claims_data = []
             self._show_empty_state()
+
+    def _fetch_buildings_by_ids(self, building_ids):
+        """Fetch Building objects from API by UUID."""
+        from models.building import Building
+        from controllers.claim_controller import ClaimController
+        cache = {}
+        if not building_ids:
+            return cache
+        try:
+            from services.api_client import get_api_client
+            api = get_api_client()
+            for bid in building_ids:
+                if not bid:
+                    continue
+                try:
+                    dto = api.get_building_by_id(bid)
+                    mapped = ClaimController._map_building_dto(dto)
+                    cache[bid] = Building.from_dict(mapped)
+                except Exception:
+                    pass
+        except Exception:
+            pass
+        return cache

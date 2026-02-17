@@ -125,7 +125,7 @@ class MainWindow(QMainWindow):
         from ui.pages.map_page import MapPage
         from ui.pages.duplicates_page import DuplicatesPage
         from ui.pages.field_assignment_page import FieldAssignmentPage
-        from ui.pages.draft_office_surveys_page_v2 import DraftOfficeSurveysPage
+        from ui.pages.case_details_page import CaseDetailsPage
         from ui.wizards.office_survey import OfficeSurveyWizard
 
 
@@ -231,9 +231,9 @@ class MainWindow(QMainWindow):
         self.pages[Pages.FIELD_ASSIGNMENT] = FieldAssignmentPage(self.db, self.i18n, self)
         self.stack.addWidget(self.pages[Pages.FIELD_ASSIGNMENT])
 
-        # Draft Office Surveys page (UC-005) - NEW DESIGN V2
-        self.pages[Pages.DRAFT_OFFICE_SURVEYS] = DraftOfficeSurveysPage(self.db, self)
-        self.stack.addWidget(self.pages[Pages.DRAFT_OFFICE_SURVEYS])
+        # Case Details page — read-only view of survey/claim
+        self.pages[Pages.CASE_DETAILS] = CaseDetailsPage(self)
+        self.stack.addWidget(self.pages[Pages.CASE_DETAILS])
 
         # Office Survey Wizard (UC-004, UC-005) - NEW wizard framework
         self.office_survey_wizard = OfficeSurveyWizard(self.db, self)
@@ -289,9 +289,10 @@ class MainWindow(QMainWindow):
             lambda: self.navigate_to(Pages.BUILDINGS)
         )
 
-        # Draft Office Surveys - resume draft (UC-005 S03)
-        if Pages.DRAFT_OFFICE_SURVEYS in self.pages:
-            self.pages[Pages.DRAFT_OFFICE_SURVEYS].draft_selected.connect(self._on_draft_selected)
+        # Case Details - back to drafts
+        self.pages[Pages.CASE_DETAILS].back_requested.connect(
+            lambda: self.navigate_to(Pages.DRAFT_CLAIMS)
+        )
 
         # Draft Claims - view/edit draft claim
         self.pages[Pages.DRAFT_CLAIMS].claim_selected.connect(self._on_draft_claim_selected)
@@ -412,8 +413,8 @@ class MainWindow(QMainWindow):
                         from ui.components.toast import Toast
                         Toast.show_toast(self, "✅ تم حفظ المسودة بنجاح!", Toast.SUCCESS)
                         # Refresh drafts page
-                        if Pages.DRAFT_OFFICE_SURVEYS in self.pages:
-                            self.pages[Pages.DRAFT_OFFICE_SURVEYS].refresh()
+                        if Pages.DRAFT_CLAIMS in self.pages:
+                            self.pages[Pages.DRAFT_CLAIMS].refresh()
                     else:
                         # Save failed - stay in wizard
                         logger.warning("Failed to save draft")
@@ -495,33 +496,35 @@ class MainWindow(QMainWindow):
         self.navigate_to(Pages.BUILDING_DETAILS, building_id)
 
     def _on_draft_claim_selected(self, claim_id: str):
-        """Handle draft claim selection."""
-        logger.info(f"Draft claim selected: {claim_id}")
-        from ui.components.toast import Toast
-        Toast.show_toast(
-            self,
-            f"تم اختيار المسودة: {claim_id}",
-            Toast.INFO
-        )
+        """Navigate to case details — fetch full survey context from Surveys/office API."""
+        logger.info(f"Draft survey selected: {claim_id}")
 
-    def _on_draft_selected(self, draft_context: dict):
-        """
-        Handle draft survey selection from draft list (UC-005 S03).
-        Load the draft into the office survey wizard.
-        """
-        logger.info(f"Loading draft survey into wizard")
+        # Find survey data from DraftClaimsPage list
+        claims_page = self.pages[Pages.DRAFT_CLAIMS]
+        claim_data = None
+        for c in claims_page.claims_data:
+            if c.get('claim_id') == claim_id:
+                claim_data = c
+                break
 
-        # Restore context from draft (SurveyContext imported in wizard creation)
-        from ui.wizards.office_survey.survey_context import SurveyContext
-        self.office_survey_wizard.context = SurveyContext.from_dict(draft_context)
+        if not claim_data:
+            logger.warning(f"Survey data not found for: {claim_id}")
+            return
 
-        # Navigate to saved step
-        saved_step = self.office_survey_wizard.context.current_step_index or 0
-        self.office_survey_wizard.navigator.goto_step(saved_step, skip_validation=True)
+        survey_uuid = claim_data.get('claim_uuid')
+        if survey_uuid:
+            try:
+                from controllers.survey_controller import SurveyController
+                ctrl = SurveyController(self.db)
+                result = ctrl.get_survey_full_context(survey_uuid)
+                if result.success and result.data:
+                    self.navigate_to(Pages.CASE_DETAILS, result.data)
+                    return
+            except Exception as e:
+                logger.warning(f"Survey context fetch failed: {e}")
 
-        # Navigate to wizard
-        self.stack.setCurrentWidget(self.office_survey_wizard)
-        logger.debug("Draft loaded into office survey wizard")
+        logger.warning(f"Could not load survey details for: {claim_id}")
+
 
     def _start_new_office_survey(self):
         """
@@ -549,7 +552,7 @@ class MainWindow(QMainWindow):
             Toast.SUCCESS
         )
 
-        self.pages[Pages.DRAFT_OFFICE_SURVEYS].refresh()
+        self.pages[Pages.DRAFT_CLAIMS].refresh()
         self.navbar.set_current_tab(1)
         self._on_tab_changed(1)
 
@@ -563,8 +566,8 @@ class MainWindow(QMainWindow):
         """Handle survey saved as draft."""
         logger.info(f"Survey saved as draft: {survey_id}")
         # Refresh the draft list
-        if hasattr(self.pages.get(Pages.DRAFT_OFFICE_SURVEYS), 'refresh'):
-            self.pages[Pages.DRAFT_OFFICE_SURVEYS].refresh()
+        if hasattr(self.pages.get(Pages.DRAFT_CLAIMS), 'refresh'):
+            self.pages[Pages.DRAFT_CLAIMS].refresh()
 
     def toggle_language(self):
         """Toggle between English and Arabic."""

@@ -213,6 +213,9 @@ class FieldWorkPreparationPage(QWidget):
 
     def _on_next(self):
         """Handle next button."""
+        from ui.components.coming_soon_popup import ComingSoonPopup
+        ComingSoonPopup.popup(self)
+        return
         if self.current_step == 0:
             # Moving from Step 1 to Step 2
             selected_buildings = self.step1.get_selected_buildings()

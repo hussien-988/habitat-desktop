@@ -204,7 +204,8 @@ class CompletedClaimsPage(QWidget):
 
     def _on_card_clicked(self, claim_id: str):
         """Handle card click"""
-        self.claim_selected.emit(claim_id)
+        from ui.components.coming_soon_popup import ComingSoonPopup
+        ComingSoonPopup.popup(self)
 
     def _clear_content(self):
         """Clear all content from layout"""

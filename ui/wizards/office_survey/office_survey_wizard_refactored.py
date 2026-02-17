@@ -213,8 +213,18 @@ class OfficeSurveyWizard(BaseWizard):
                     if main_window and hasattr(main_window, '_api_token') and main_window._api_token:
                         api_service.set_access_token(main_window._api_token)
 
+                    # Build interviewee name from first person in context
+                    interviewee_name = None
+                    if self.context.persons:
+                        p = self.context.persons[0]
+                        parts = [p.get("first_name", ""), p.get("father_name", ""), p.get("last_name", "")]
+                        interviewee_name = " ".join(part for part in parts if part)
+                        if not interviewee_name:
+                            interviewee_name = p.get("full_name")
+
                     backend_draft_data = {
                         "property_unit_id": self.context.unit.unit_uuid if self.context.unit else None,
+                        "interviewee_name": interviewee_name,
                         "notes": draft_data.get("notes"),
                     }
                     api_service.save_draft_to_backend(survey_id, backend_draft_data)

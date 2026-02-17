@@ -106,8 +106,19 @@ class SurveyContext(WizardContext):
         ctx.finalize_response = data.get("finalize_response")
         ctx.clerk_id = data.get("clerk_id")
 
-        # Note: Building and Unit objects would need to be restored from repository
-        # based on the stored IDs. This should be done by the wizard on load.
+        building_data = data.get("building")
+        if building_data and isinstance(building_data, dict):
+            try:
+                ctx.building = Building.from_dict(building_data)
+            except Exception as e:
+                logger.warning(f"Failed to restore building: {e}")
+
+        unit_data = data.get("unit")
+        if unit_data and isinstance(unit_data, dict):
+            try:
+                ctx.unit = Unit.from_dict(unit_data)
+            except Exception as e:
+                logger.warning(f"Failed to restore unit: {e}")
 
         return ctx
 
