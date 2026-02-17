@@ -1,0 +1,69 @@
+version: '3.8'
+
+services:
+  db:
+    image: postgis/postgis:16-3.4-alpine
+    container_name: trrcms-db
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_DB: TRRCMS_Dev
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: 3123124
+      PGDATA: /var/lib/postgresql/data/pgdata
+    volumes:
+      - trrcms_data:/var/lib/postgresql/data
+    networks:
+      - trrcms-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  api:
+    image: trrcms-backend-api:latest
+    container_name: trrcms-api
+    ports:
+      - "8080:8080"
+    environment:
+      ConnectionStrings__DefaultConnection: "Host=db;Port=5432;Database=TRRCMS_Dev;Username=postgres;Password=3123124"
+      ASPNETCORE_URLS: "http://+:8080"
+      ASPNETCORE_ENVIRONMENT: Development
+      JwtSettings__Secret: "docker-dev-jwt-secret-key-minimum-32-characters-long-change-in-production"
+      JwtSettings__Issuer: TRRCMS.API
+      JwtSettings__Audience: TRRCMS.Clients
+      JwtSettings__AccessTokenExpirationMinutes: "60"
+      JwtSettings__RefreshTokenExpirationDays: "30"
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - trrcms-network
+    restart: unless-stopped
+
+  tileserver:
+    image: tileserver-tileserver:latest
+    container_name: trrcms-tileserver
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./tileserver/aleppo_tiles.mbtiles:/app/data/aleppo_tiles.mbtiles:ro
+      - ./tileserver/leaflet:/app/leaflet:ro
+    networks:
+      - trrcms-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5000/health')"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+
+networks:
+  trrcms-network:
+    name: trrcms-network
+
+volumes:
+  trrcms_data:
