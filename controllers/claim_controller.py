@@ -561,6 +561,218 @@ class ClaimController(BaseController):
 
         return to_status in allowed_transitions.get(from_status, [])
 
+    # ==================== Backend API Methods ====================
+
+    def load_claims_from_api(self, status: int = None) -> OperationResult:
+        """
+        Load claims summaries from backend API.
+
+        Args:
+            status: ClaimStatus enum or None for all
+
+        Returns:
+            OperationResult with list of CreatedClaimSummaryDto dicts
+        """
+        try:
+            from services.api_client import get_api_client
+            api = get_api_client()
+            summaries = api.get_claims_summaries(claim_status=status)
+            logger.info(f"Loaded {len(summaries)} claim summaries from API (status={status})")
+            return OperationResult.ok(data=summaries)
+        except Exception as e:
+            logger.warning(f"API load failed, falling back to local: {e}")
+            return OperationResult.fail(message=str(e))
+
+    def get_claim_full_context(self, claim_id: str) -> OperationResult:
+        """
+        Fetch full claim + building + unit + persons + households from API.
+
+        Returns dict compatible with SurveyContext.from_dict().
+        """
+        try:
+            from services.api_client import get_api_client
+            api = get_api_client()
+
+            claim = api.get_claim_by_id(claim_id)
+            property_unit_id = claim.get("propertyUnitId")
+            building_data = {}
+            unit_data = {}
+            households = []
+            persons = []
+            survey_id = None
+
+            # Get survey_id from summaries (needed for households/relations)
+            try:
+                summaries = api.get_claims_summaries()
+                for s in summaries:
+                    if s.get("claimId") == claim_id:
+                        survey_id = s.get("surveyId")
+                        break
+            except Exception as e:
+                logger.warning(f"Failed to get survey_id: {e}")
+
+            if property_unit_id:
+                # Fetch unit directly by ID
+                try:
+                    unit_dto = api._request("GET", f"/v1/PropertyUnits/{property_unit_id}")
+                    unit_data = self._map_unit_dto(unit_dto)
+                    building_id = unit_dto.get("buildingId")
+                    if building_id:
+                        building_dto = api.get_building_by_id(building_id)
+                        building_data = self._map_building_dto(building_dto)
+                except Exception as e:
+                    logger.warning(f"Failed to fetch building/unit: {e}")
+
+            # Fetch households via survey endpoint (has demographics)
+            if survey_id:
+                try:
+                    raw_households = api._request("GET", f"/v1/Surveys/{survey_id}/households")
+                    if isinstance(raw_households, list):
+                        households = [self._map_household_dto(h) for h in raw_households]
+                except Exception as e:
+                    logger.warning(f"Failed to fetch households: {e}")
+
+            # Fetch persons via relations (includes role and relation_id)
+            if survey_id and property_unit_id:
+                try:
+                    relations = api._request(
+                        "GET", "/v1/PersonPropertyRelations",
+                        params={"surveyId": survey_id, "propertyUnitId": property_unit_id}
+                    )
+                    if isinstance(relations, list):
+                        for rel in relations:
+                            person_id = rel.get("personId")
+                            if not person_id:
+                                continue
+                            try:
+                                person_dto = api._request("GET", f"/v1/Persons/{person_id}")
+                                persons.append(self._map_person_dto(person_dto, rel))
+                            except Exception:
+                                pass
+                except Exception as e:
+                    logger.warning(f"Failed to fetch persons: {e}")
+
+            # Fallback: at least include primary claimant
+            if not persons and claim.get("primaryClaimantName"):
+                persons.append({
+                    "first_name": claim["primaryClaimantName"],
+                    "person_role": "claimant",
+                })
+
+            context = {
+                "building": building_data,
+                "unit": unit_data,
+                "households": households,
+                "persons": persons,
+                "claim_data": self._map_claim_data(claim),
+                "claims": [{
+                    "claim_id": claim.get("claimNumber") or claim.get("id"),
+                    "claim_type": claim.get("claimType"),
+                    "status": claim.get("status"),
+                }],
+            }
+            logger.info(f"Built full context for claim {claim_id}")
+            return OperationResult.ok(data=context)
+
+        except Exception as e:
+            logger.error(f"Failed to get claim context: {e}", exc_info=True)
+            return OperationResult.fail(message=str(e))
+
+    @staticmethod
+    def _map_building_dto(dto: dict) -> dict:
+        """Map API BuildingDto to Building-compatible dict format."""
+        return {
+            "building_id": dto.get("buildingCode") or dto.get("id", ""),
+            "building_uuid": dto.get("id", ""),
+            "governorate_name_ar": dto.get("governorateNameArabic", ""),
+            "district_name_ar": dto.get("districtNameArabic", ""),
+            "subdistrict_name_ar": dto.get("subDistrictNameArabic", ""),
+            "community_name_ar": dto.get("communityNameArabic", ""),
+            "neighborhood_name_ar": dto.get("neighborhoodNameArabic", ""),
+            "building_number": dto.get("buildingNumber", ""),
+            "building_type": dto.get("buildingType", 0),
+            "building_status": dto.get("buildingStatus", 0),
+            "number_of_floors": dto.get("numberOfFloors", 0),
+            "number_of_units": dto.get("numberOfPropertyUnits", 0),
+            "number_of_apartments": dto.get("numberOfApartments", 0),
+            "number_of_shops": dto.get("numberOfShops", 0),
+            "location_description": dto.get("locationDescription", ""),
+            "general_description": dto.get("generalDescription", ""),
+            "latitude": dto.get("latitude"),
+            "longitude": dto.get("longitude"),
+        }
+
+    @staticmethod
+    def _map_unit_dto(dto: dict) -> dict:
+        """Map API PropertyUnitDto to Unit-compatible dict format."""
+        return {
+            "unit_id": dto.get("id", ""),
+            "unit_uuid": dto.get("id", ""),
+            "building_id": dto.get("buildingId", ""),
+            "unit_number": dto.get("unitIdentifier") or dto.get("unitNumber", ""),
+            "floor_number": dto.get("floorNumber", 0),
+            "unit_type": dto.get("unitType", 0),
+            "apartment_status": dto.get("status") or dto.get("unitStatus", 0),
+            "apartment_number": str(dto.get("numberOfRooms", 0)),
+            "area_sqm": dto.get("areaSquareMeters") or dto.get("areaSqm", 0),
+            "property_description": dto.get("description", ""),
+        }
+
+    @staticmethod
+    def _map_person_dto(person_dto: dict, relation_dto: dict) -> dict:
+        """Map API PersonDto + RelationDto to person dict for SurveyContext."""
+        return {
+            "person_id": person_dto.get("id", ""),
+            "first_name": person_dto.get("firstNameArabic", ""),
+            "father_name": person_dto.get("fatherNameArabic", ""),
+            "last_name": person_dto.get("familyNameArabic", ""),
+            "full_name": person_dto.get("fullNameArabic", ""),
+            "mother_name": person_dto.get("motherNameArabic", ""),
+            "gender": person_dto.get("gender"),
+            "date_of_birth": person_dto.get("dateOfBirth", ""),
+            "national_id": person_dto.get("nationalId", ""),
+            "nationality": person_dto.get("nationality"),
+            "person_role": relation_dto.get("relationType", ""),
+            "relationship_type": relation_dto.get("relationType", ""),
+            "_relation_id": relation_dto.get("id", ""),
+        }
+
+    @staticmethod
+    def _map_household_dto(dto: dict) -> dict:
+        """Map API HouseholdDto to household dict for SurveyContext demographics."""
+        return {
+            "household_id": dto.get("id", ""),
+            "size": dto.get("householdSize", 0),
+            "adult_male": dto.get("maleCount", 0),
+            "adult_female": dto.get("femaleCount", 0),
+            "minor_male": dto.get("maleChildCount", 0),
+            "minor_female": dto.get("femaleChildCount", 0),
+            "elderly_male": dto.get("maleElderlyCount", 0),
+            "elderly_female": dto.get("femaleElderlyCount", 0),
+            "disabled_male": dto.get("maleDisabledCount", 0),
+            "disabled_female": dto.get("femaleDisabledCount", 0),
+            "occupancy_type": dto.get("occupancyType"),
+            "occupancy_nature": dto.get("occupancyNature"),
+            "notes": dto.get("notes", ""),
+        }
+
+    @staticmethod
+    def _map_claim_data(claim: dict) -> dict:
+        """Map API ClaimDto to claim_data dict for ReviewStep."""
+        return {
+            "claim_type": claim.get("claimType", ""),
+            "priority": claim.get("priority"),
+            "source": claim.get("claimSource"),
+            "case_status": claim.get("status"),
+            "person_name": claim.get("primaryClaimantName", ""),
+            "unit_display_id": claim.get("propertyUnitCode", ""),
+            "business_nature": claim.get("claimType", ""),
+            "survey_date": (claim.get("createdAtUtc") or "")[:10],
+            "notes": claim.get("claimDescription") or claim.get("processingNotes") or "",
+            "next_action_date": (claim.get("targetCompletionDate") or "")[:10] if claim.get("targetCompletionDate") else "",
+            "evidence_count": claim.get("evidenceCount", 0),
+        }
+
     # ==================== Statistics ====================
 
     def get_statistics(self) -> OperationResult[Dict[str, Any]]:

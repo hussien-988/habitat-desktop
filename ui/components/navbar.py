@@ -487,14 +487,18 @@ class Navbar(QFrame):
 
     def _on_tab_clicked(self, index: int):
         """Handle tab click event"""
+        if index in (3, 4, 5):
+            from ui.components.coming_soon_popup import ComingSoonPopup
+            ComingSoonPopup.popup(self)
+            return
         self._set_active_tab(index)
         self.tab_changed.emit(index)
 
     def _on_search(self):
         """Handle search request (Enter pressed or icon clicked)"""
-        search_text = self.search_input.text().strip()
-        if search_text:
-            self.search_requested.emit(f"{self.search_mode}:{search_text}")
+        from ui.components.coming_soon_popup import ComingSoonPopup
+        ComingSoonPopup.popup(self)
+        return
 
     def _on_search_menu_clicked(self):
         """Show search mode selection menu"""

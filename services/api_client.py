@@ -1960,6 +1960,58 @@ API للاتصال بـ TRRCMS Backend.
         logger.info(f"Office survey created: {result.get('id', 'N/A')}")
         return result
 
+    def get_office_surveys(
+        self,
+        status: Optional[str] = None,
+        page: int = 1,
+        page_size: int = 20,
+        building_id: Optional[str] = None,
+        clerk_id: Optional[str] = None,
+        from_date: Optional[str] = None,
+        to_date: Optional[str] = None,
+        reference_code: Optional[str] = None,
+        interviewee_name: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """
+        Get paginated list of office surveys.
+
+        Endpoint: GET /api/v1/Surveys/office
+        """
+        params: Dict[str, Any] = {"page": page, "pageSize": page_size}
+        if status:
+            params["status"] = status
+        if building_id:
+            params["buildingId"] = building_id
+        if clerk_id:
+            params["clerkId"] = clerk_id
+        if from_date:
+            params["fromDate"] = from_date
+        if to_date:
+            params["toDate"] = to_date
+        if reference_code:
+            params["referenceCode"] = reference_code
+        if interviewee_name:
+            params["intervieweeName"] = interviewee_name
+        return self._request("GET", "/v1/Surveys/office", params=params)
+
+    def get_office_survey_detail(self, survey_id: str) -> Dict[str, Any]:
+        """
+        Get full office survey detail including households, relations, evidence.
+
+        Endpoint: GET /api/v1/Surveys/office/{id}
+        """
+        if not survey_id:
+            raise ValueError("survey_id is required")
+        return self._request("GET", f"/v1/Surveys/office/{survey_id}")
+
+    def delete_survey(self, survey_id: str) -> bool:
+        """Delete a survey. Endpoint: DELETE /api/v1/Surveys/office/{surveyId}"""
+        if not survey_id:
+            raise ValueError("survey_id is required")
+        self._request("DELETE", f"/v1/Surveys/office/{survey_id}")
+        logger.info(f"Survey {survey_id} deleted")
+        return True
+
     def finalize_office_survey(self, survey_id: str, finalize_options: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """
         Process claims for an office survey.
@@ -2168,6 +2220,118 @@ API للاتصال بـ TRRCMS Backend.
         except Exception as e:
             logger.warning(f"Neighborhood not found: {full_code}")
             return None
+
+    # ==================== Claims APIs ====================
+
+    def get_claims_summaries(
+        self,
+        claim_status: Optional[int] = None,
+        claim_source: Optional[int] = None,
+        created_by_user_id: Optional[str] = None,
+        survey_visit_id: Optional[str] = None,
+        building_code: Optional[str] = None,
+    ) -> List[Dict[str, Any]]:
+        """
+        Get claim summaries for list pages.
+
+        Args:
+            claim_status: 1=Draft, 2=Submitted, 3=UnderReview, 4=Verified, 5=Approved, 6=Rejected, 7=Archived
+            claim_source: 1=FieldSurvey, 2=DirectRequest, 3=Referral, 4=OfficeSubmission
+            created_by_user_id: Filter by creator UUID
+            survey_visit_id: Filter by survey visit UUID
+            building_code: Filter by 17-digit building code
+
+        Returns:
+            List of CreatedClaimSummaryDto
+
+        Endpoint: GET /api/claims/summaries
+        """
+        params = {}
+        if claim_status is not None:
+            params["claimStatus"] = claim_status
+        if claim_source is not None:
+            params["claimSource"] = claim_source
+        if created_by_user_id:
+            params["createdByUserId"] = created_by_user_id
+        if survey_visit_id:
+            params["surveyVisitId"] = survey_visit_id
+        if building_code:
+            params["buildingCode"] = building_code
+
+        logger.info(f"Fetching claims summaries with filters: {params or 'none'}")
+        result = self._request("GET", "/claims/summaries", params=params)
+
+        # Handle both array and paginated response
+        if isinstance(result, list):
+            summaries = result
+        elif isinstance(result, dict):
+            summaries = result.get("items", result.get("data", []))
+        else:
+            summaries = []
+
+        logger.info(f"Fetched {len(summaries)} claim summaries")
+        return summaries
+
+    def get_claims(
+        self,
+        status: Optional[int] = None,
+        priority: Optional[int] = None,
+        property_unit_id: Optional[str] = None,
+        primary_claimant_id: Optional[str] = None,
+        has_conflicts: Optional[bool] = None,
+    ) -> List[Dict[str, Any]]:
+        """
+        Get all claims with filters.
+
+        Args:
+            status: ClaimStatus enum (1=Draft, 2=Submitted, etc.)
+            priority: CasePriority enum (1=Low, 2=Normal, 3=High, 4=Urgent)
+            property_unit_id: Filter by property unit UUID
+            primary_claimant_id: Filter by primary claimant UUID
+            has_conflicts: Filter by conflict status
+
+        Returns:
+            List of ClaimDto
+
+        Endpoint: GET /api/Claims
+        """
+        params = {}
+        if status is not None:
+            params["status"] = status
+        if priority is not None:
+            params["priority"] = priority
+        if property_unit_id:
+            params["propertyUnitId"] = property_unit_id
+        if primary_claimant_id:
+            params["primaryClaimantId"] = primary_claimant_id
+        if has_conflicts is not None:
+            params["hasConflicts"] = str(has_conflicts).lower()
+
+        logger.info(f"Fetching claims with filters: {params or 'none'}")
+        result = self._request("GET", "/Claims", params=params)
+        claims = result if isinstance(result, list) else []
+        logger.info(f"Fetched {len(claims)} claims")
+        return claims
+
+    def get_claim_by_id(self, claim_id: str) -> Dict[str, Any]:
+        """
+        Get full claim details by ID.
+
+        Args:
+            claim_id: Claim UUID
+
+        Returns:
+            ClaimDto with full details
+
+        Endpoint: GET /api/Claims/{id}
+        """
+        if not claim_id:
+            raise ValueError("claim_id is required")
+
+        logger.info(f"Fetching claim details: {claim_id}")
+        result = self._request("GET", f"/Claims/{claim_id}")
+        logger.info(f"Fetched claim: {result.get('claimNumber', 'N/A')}")
+        return result
 
 
 # ==================== Singleton Instance ====================

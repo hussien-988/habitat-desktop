@@ -13,8 +13,8 @@ from PyQt5.QtWidgets import (
     QHBoxLayout, QGridLayout, QGraphicsDropShadowEffect,
     QPushButton, QMenu
 )
-from PyQt5.QtCore import Qt, pyqtSignal
-from PyQt5.QtGui import QColor
+from PyQt5.QtCore import Qt, pyqtSignal, QSize
+from PyQt5.QtGui import QColor, QIcon
 
 from ui.wizards.framework import BaseStep, StepValidationResult
 from ui.wizards.office_survey.survey_context import SurveyContext
@@ -43,7 +43,8 @@ class ReviewStep(BaseStep):
 
     edit_requested = pyqtSignal(int)  # Emits step index to edit
 
-    def __init__(self, context: SurveyContext, parent=None):
+    def __init__(self, context: SurveyContext, parent=None, read_only=False):
+        self._read_only = read_only
         super().__init__(context, parent)
 
         # Initialize API service for finalizing survey
@@ -369,17 +370,18 @@ class ReviewStep(BaseStep):
         right_group.addWidget(icon_lbl)
         right_group.addLayout(text_vbox)
 
-        # Left side: "عرض المعلومات الشخصية" link
-        view_lbl = QLabel(tr("wizard.review.view_personal_info"))
-        view_lbl.setFont(create_font(size=FontManager.WIZARD_FIELD_LABEL, weight=FontManager.WEIGHT_MEDIUM))
-        view_lbl.setStyleSheet("color: #3B82F6; background: transparent; border: none;")
-        view_lbl.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
-        view_lbl.setCursor(Qt.PointingHandCursor)
-        view_lbl.mousePressEvent = lambda e, p=person: self._view_person_editable(p)
-
         card_layout.addLayout(right_group)
         card_layout.addStretch()
-        card_layout.addWidget(view_lbl)
+
+        # Left side: "عرض المعلومات الشخصية" link (hidden in read_only mode)
+        if not self._read_only:
+            view_lbl = QLabel(tr("wizard.review.view_personal_info"))
+            view_lbl.setFont(create_font(size=FontManager.WIZARD_FIELD_LABEL, weight=FontManager.WEIGHT_MEDIUM))
+            view_lbl.setStyleSheet("color: #3B82F6; background: transparent; border: none;")
+            view_lbl.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+            view_lbl.setCursor(Qt.PointingHandCursor)
+            view_lbl.mousePressEvent = lambda e, p=person: self._view_person_editable(p)
+            card_layout.addWidget(view_lbl)
 
         return row
 
@@ -392,21 +394,21 @@ class ReviewStep(BaseStep):
     def _create_unit_card(self) -> QFrame:
         """Create unit information summary card (Step 2) - matching step 2 header."""
         card, content_layout = self._create_card_base("move", tr("wizard.review.unit_card_title"), tr("wizard.review.unit_card_subtitle"),
-                                                       edit_callback=lambda: self._request_edit(1))
+                                                       edit_callback=None if self._read_only else lambda: self._request_edit(1))
         self.unit_content = content_layout
         return card
 
     def _create_household_card(self) -> QFrame:
         """Create household information summary card (Step 3)."""
         card, content_layout = self._create_card_base("user-group", tr("wizard.review.household_card_title"), tr("wizard.review.household_card_subtitle"),
-                                                       edit_callback=lambda: self._request_edit(2))
+                                                       edit_callback=None if self._read_only else lambda: self._request_edit(2))
         self.household_content = content_layout
         return card
 
     def _create_persons_card(self) -> QFrame:
         """Create persons list summary card (Step 4)."""
         card, content_layout = self._create_card_base("user-account", tr("wizard.review.persons_card_title"), tr("wizard.review.persons_card_subtitle"),
-                                                       edit_callback=lambda: self._request_edit(3))
+                                                       edit_callback=None if self._read_only else lambda: self._request_edit(3))
         self.persons_content = content_layout
         return card
 
@@ -415,6 +417,31 @@ class ReviewStep(BaseStep):
         card, content_layout = self._create_card_base("elements", tr("wizard.review.claim_card_title"), tr("wizard.review.claim_card_subtitle"))
         self.claim_content = content_layout
         return card
+
+    def _open_map_dialog(self):
+        """Open map dialog in read-only mode to view the building location."""
+        from ui.components.building_map_dialog_v2 import show_building_map_dialog
+
+        auth_token = None
+        try:
+            main_window = self
+            while main_window and not hasattr(main_window, 'current_user'):
+                main_window = main_window.parent()
+            if main_window and hasattr(main_window, 'current_user') and main_window.current_user:
+                auth_token = getattr(main_window.current_user, '_api_token', None)
+        except Exception as e:
+            logger.warning(f"Could not get auth token: {e}")
+
+        building = self.context.building
+        if building:
+            show_building_map_dialog(
+                db=self.context.db,
+                selected_building_id=building.building_uuid or building.building_id,
+                auth_token=auth_token,
+                read_only=True,
+                selected_building=building,
+                parent=self
+            )
 
     def _clear_layout(self, layout):
         """Clear all widgets from a layout."""
@@ -453,7 +480,7 @@ class ReviewStep(BaseStep):
         building = self.context.building
         building_code = str(building.building_id) if hasattr(building, 'building_id') else "-"
         building_type = building.building_type_display if hasattr(building, 'building_type_display') else "-"
-        status = building.status_display if hasattr(building, 'status_display') else "-"
+        status = building.building_status_display if hasattr(building, 'building_status_display') else "-"
         units_count = str(building.number_of_units) if hasattr(building, 'number_of_units') else "0"
         parcels_count = str(getattr(building, 'number_of_apartments', 0))
         shops_count = str(building.number_of_shops) if hasattr(building, 'number_of_shops') else "0"
@@ -551,9 +578,58 @@ class ReviewStep(BaseStep):
         if map_pixmap and not map_pixmap.isNull():
             map_container.setPixmap(map_pixmap.scaled(400, 130, Qt.IgnoreAspectRatio, Qt.SmoothTransformation))
         else:
-            loc_icon = Icon.load_pixmap("carbon_location-filled", size=48)
-            if loc_icon and not loc_icon.isNull():
-                map_container.setPixmap(loc_icon)
+            loc_fallback = Icon.load_pixmap("carbon_location-filled", size=48)
+            if loc_fallback and not loc_fallback.isNull():
+                map_container.setPixmap(loc_fallback)
+
+        # "فتح الخريطة" button (top-left, same as building_selection_step)
+        map_button = QPushButton(map_container)
+        map_button.setFixedSize(94, 20)
+        map_button.move(8, 8)
+        map_button.setCursor(Qt.PointingHandCursor)
+        icon_pixmap = Icon.load_pixmap("pill", size=12)
+        if icon_pixmap and not icon_pixmap.isNull():
+            map_button.setIcon(QIcon(icon_pixmap))
+            map_button.setIconSize(QSize(12, 12))
+        map_button.setText(tr("wizard.building.open_map"))
+        map_button.setFont(create_font(size=FontManager.WIZARD_FIELD_LABEL, weight=FontManager.WEIGHT_REGULAR))
+        map_button.setStyleSheet(f"""
+            QPushButton {{
+                background-color: white;
+                color: {Colors.PRIMARY_BLUE};
+                border: none;
+                border-radius: 5px;
+                padding: 4px;
+                text-align: center;
+            }}
+            QPushButton:hover {{
+                background-color: #F5F5F5;
+            }}
+        """)
+        btn_shadow = QGraphicsDropShadowEffect()
+        btn_shadow.setBlurRadius(8)
+        btn_shadow.setXOffset(0)
+        btn_shadow.setYOffset(2)
+        btn_shadow.setColor(QColor(0, 0, 0, 60))
+        map_button.setGraphicsEffect(btn_shadow)
+        map_button.clicked.connect(self._open_map_dialog)
+
+        # Location icon (center of map)
+        location_icon = QLabel(map_container)
+        loc_pixmap = Icon.load_pixmap("carbon_location-filled", size=56)
+        if loc_pixmap and not loc_pixmap.isNull():
+            location_icon.setPixmap(loc_pixmap)
+            location_icon.setFixedSize(56, 56)
+            location_icon.move(172, 37)
+            location_icon.setStyleSheet("background: transparent;")
+        else:
+            location_icon.setText("\U0001f4cd")
+            location_icon.setFont(create_font(size=32, weight=FontManager.WEIGHT_REGULAR))
+            location_icon.setStyleSheet("background: transparent;")
+            location_icon.setAlignment(Qt.AlignCenter)
+            location_icon.setFixedSize(56, 56)
+            location_icon.move(172, 37)
+
         content_row.addWidget(map_container)
 
         loc_desc_section = QVBoxLayout()

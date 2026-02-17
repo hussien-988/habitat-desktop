@@ -232,13 +232,13 @@ class Pages:
     CLAIMS = "claims"
     DRAFT_CLAIMS = "draft_claims"  # Draft claims page
     CLAIM_DETAILS = "claim_details"
+    CASE_DETAILS = "case_details"
     DOCUMENTS = "documents"
     HOUSEHOLDS = "households"
     RELATIONS = "relations"
     CONFLICTS = "conflicts"
     DUPLICATES = "duplicates"  # UC-007, UC-008: Property & Person duplicates
     FIELD_ASSIGNMENT = "field_assignment"  # UC-012: Assign buildings to field teams
-    DRAFT_OFFICE_SURVEYS = "draft_office_surveys"  # UC-005: Draft office surveys list
     SEARCH = "search"
     REPORTS = "reports"
     MAP_VIEW = "map_view"

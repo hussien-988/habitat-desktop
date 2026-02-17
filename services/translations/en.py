@@ -757,6 +757,11 @@ EN_TRANSLATIONS = {
     "navbar.menu.data_management": "🗄️  Reference Data Management",
     "navbar.menu.logout": "➜  Logout",
 
+    # ===== Case Details Page =====
+    "page.case_details.title": "Case Details",
+    "page.case_details.breadcrumb": "Drafts",
+    "page.case_details.back_to_list": "Back to List",
+
     # ===== Error Boundary =====
     "error_boundary.step_error": "Error in {step_name}",
     "error_boundary.operation_error": "Error during {operation}:\n\n{error_type}: {error_msg}\n\nYou can try again or contact support.",
