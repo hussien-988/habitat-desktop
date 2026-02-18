@@ -49,6 +49,14 @@ class BaseTableModel(QAbstractTableModel):
         self._items = items
         self.endResetModel()
 
+    def get_item(self, row: int):
+        """Return the underlying item at `row` or None if out of range."""
+        if row is None:
+            return None
+        if 0 <= int(row) < len(self._items):
+            return self._items[int(row)]
+        return None
+
     def set_language(self, is_arabic: bool):
         self._is_arabic = is_arabic
         self.layoutChanged.emit()

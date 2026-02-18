@@ -962,9 +962,17 @@ class UnitsPage(QWidget):
             building_id_display = building_id[:20] + "..." if len(building_id) > 20 else building_id
             self.table.setItem(row, 1, QTableWidgetItem(building_id_display))
 
-            # Type - map to Arabic
-            unit_type = unit.unit_type or "other"
-            type_display = type_ar_map.get(unit_type.lower(), unit_type)
+            # Type - map to Arabic (guard against non-string values)
+            unit_type_val = unit.unit_type if unit.unit_type is not None else "other"
+            if not isinstance(unit_type_val, str):
+                try:
+                    unit_type_str = str(unit_type_val)
+                except Exception:
+                    unit_type_str = "other"
+            else:
+                unit_type_str = unit_type_val
+            unit_type_str = unit_type_str.strip() or "other"
+            type_display = type_ar_map.get(unit_type_str.lower(), unit_type_str)
             self.table.setItem(row, 2, QTableWidgetItem(type_display))
 
             # Floor
@@ -973,9 +981,17 @@ class UnitsPage(QWidget):
             # Apartment number (shows number of rooms from API)
             self.table.setItem(row, 4, QTableWidgetItem(unit.apartment_number or "-"))
 
-            # Status - map to Arabic
-            status = unit.apartment_status or "unknown"
-            status_display = status_ar_map.get(status.lower(), status)
+            # Status - map to Arabic (guard against non-string values)
+            status_val = unit.apartment_status if unit.apartment_status is not None else "unknown"
+            if not isinstance(status_val, str):
+                try:
+                    status_str = str(status_val)
+                except Exception:
+                    status_str = "unknown"
+            else:
+                status_str = status_val
+            status_str = status_str.strip() or "unknown"
+            status_display = status_ar_map.get(status_str.lower(), status_str)
             self.table.setItem(row, 5, QTableWidgetItem(status_display))
 
             # Actions button

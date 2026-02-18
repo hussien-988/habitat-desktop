@@ -189,10 +189,10 @@ class IDBadgeWidget(QWidget):
 
         self._logout_action = self.menu.addAction(tr("navbar.menu.logout"))
 
-        # Connect signals
-        self._lang_action.triggered.connect(self.language_requested.emit)
+        # Connect signals to the widget's defined pyqtSignals
+        self._lang_action.triggered.connect(self.language_change_requested.emit)
         self._sync_action.triggered.connect(self.sync_requested.emit)
-        self._password_action.triggered.connect(self.change_password_requested.emit)
+        self._password_action.triggered.connect(self.password_change_requested.emit)
         self._security_action.triggered.connect(self.security_settings_requested.emit)
         self._data_action.triggered.connect(self.data_management_requested.emit)
         self._logout_action.triggered.connect(self.logout_requested.emit)
