@@ -1,0 +1,297 @@
+{
+  "governorates": [
+    {
+      "code": "01",
+      "name_en": "Aleppo",
+      "name_ar": "حلب",
+      "districts": [
+        {
+          "code": "01",
+          "name_en": "Mount Simeon",
+          "name_ar": "جبل سمعان",
+          "subdistricts": [
+            {
+              "code": "01",
+              "name_en": "Mount Simeon",
+              "name_ar": "مدينة حلب",
+              "communities": [
+                {"code": "001", "name_en": "Western Sector", "name_ar": "القطاع الغربي"},
+                {"code": "002", "name_en": "Eastern Sector", "name_ar": "القطاع الشرقي"},
+                {"code": "003", "name_en": "Northern Sector", "name_ar": "القطاع الشمالي"},
+                {"code": "004", "name_en": "Southern Sector", "name_ar": "القطاع الجنوبي"},
+                {"code": "005", "name_en": "Central Sector", "name_ar": "القطاع المركزي"}
+              ]
+            },
+            {
+              "code": "02",
+              "name_en": "Haritan",
+              "name_ar": "حريتان",
+              "communities": [
+                {"code": "001", "name_en": "Haritan", "name_ar": "حريتان"},
+                {"code": "002", "name_en": "Anadan", "name_ar": "عندان"}
+              ]
+            },
+            {
+              "code": "03",
+              "name_en": "Darat Izza",
+              "name_ar": "دارة عزة",
+              "communities": [
+                {"code": "001", "name_en": "Darat Izza", "name_ar": "دارة عزة"}
+              ]
+            }
+          ]
+        },
+        {
+          "code": "02",
+          "name_en": "Atarib",
+          "name_ar": "الأتارب",
+          "subdistricts": [
+            {
+              "code": "01",
+              "name_en": "Atarib",
+              "name_ar": "الأتارب",
+              "communities": [
+                {"code": "001", "name_en": "Atarib", "name_ar": "الأتارب"}
+              ]
+            },
+            {
+              "code": "02",
+              "name_en": "Urum al-Kubra",
+              "name_ar": "أورم الكبرى",
+              "communities": [
+                {"code": "001", "name_en": "Urum al-Kubra", "name_ar": "أورم الكبرى"},
+                {"code": "002", "name_en": "Kafr Naha", "name_ar": "كفر ناها"}
+              ]
+            }
+          ]
+        },
+        {
+          "code": "03",
+          "name_en": "Al-Bab",
+          "name_ar": "الباب",
+          "subdistricts": [
+            {
+              "code": "01",
+              "name_en": "Al-Bab",
+              "name_ar": "الباب",
+              "communities": [
+                {"code": "001", "name_en": "Al-Bab", "name_ar": "الباب"},
+                {"code": "002", "name_en": "Qabasin", "name_ar": "قباسين"}
+              ]
+            },
+            {
+              "code": "02",
+              "name_en": "Tadef",
+              "name_ar": "تادف",
+              "communities": [
+                {"code": "001", "name_en": "Tadef", "name_ar": "تادف"}
+              ]
+            },
+            {
+              "code": "03",
+              "name_en": "Al-Rai",
+              "name_ar": "الراعي",
+              "communities": [
+                {"code": "001", "name_en": "Al-Rai", "name_ar": "الراعي"},
+                {"code": "002", "name_en": "Akhtarin", "name_ar": "أخترين"}
+              ]
+            }
+          ]
+        },
+        {
+          "code": "04",
+          "name_en": "Manbij",
+          "name_ar": "منبج",
+          "subdistricts": [
+            {
+              "code": "01",
+              "name_en": "Manbij",
+              "name_ar": "منبج",
+              "communities": [
+                {"code": "001", "name_en": "Manbij", "name_ar": "منبج"}
+              ]
+            },
+            {
+              "code": "02",
+              "name_en": "Maskanah",
+              "name_ar": "مسكنة",
+              "communities": [
+                {"code": "001", "name_en": "Maskanah", "name_ar": "مسكنة"}
+              ]
+            },
+            {
+              "code": "03",
+              "name_en": "Al-Khafsah",
+              "name_ar": "الخفسة",
+              "communities": [
+                {"code": "001", "name_en": "Al-Khafsah", "name_ar": "الخفسة"}
+              ]
+            }
+          ]
+        },
+        {
+          "code": "05",
+          "name_en": "Ayn al-Arab",
+          "name_ar": "عين العرب",
+          "subdistricts": [
+            {
+              "code": "01",
+              "name_en": "Ayn al-Arab",
+              "name_ar": "عين العرب",
+              "communities": [
+                {"code": "001", "name_en": "Ayn al-Arab", "name_ar": "عين العرب"}
+              ]
+            },
+            {
+              "code": "02",
+              "name_en": "Shuyukh Tahtani",
+              "name_ar": "شيوخ تحتاني",
+              "communities": [
+                {"code": "001", "name_en": "Shuyukh Tahtani", "name_ar": "شيوخ تحتاني"}
+              ]
+            }
+          ]
+        },
+        {
+          "code": "06",
+          "name_en": "Jarabulus",
+          "name_ar": "جرابلس",
+          "subdistricts": [
+            {
+              "code": "01",
+              "name_en": "Jarabulus",
+              "name_ar": "جرابلس",
+              "communities": [
+                {"code": "001", "name_en": "Jarabulus", "name_ar": "جرابلس"}
+              ]
+            },
+            {
+              "code": "02",
+              "name_en": "Ghandoura",
+              "name_ar": "غندورة",
+              "communities": [
+                {"code": "001", "name_en": "Ghandoura", "name_ar": "غندورة"}
+              ]
+            }
+          ]
+        },
+        {
+          "code": "07",
+          "name_en": "Azaz",
+          "name_ar": "أعزاز",
+          "subdistricts": [
+            {
+              "code": "01",
+              "name_en": "Azaz",
+              "name_ar": "أعزاز",
+              "communities": [
+                {"code": "001", "name_en": "Azaz", "name_ar": "أعزاز"}
+              ]
+            },
+            {
+              "code": "02",
+              "name_en": "Tell Rifaat",
+              "name_ar": "تل رفعت",
+              "communities": [
+                {"code": "001", "name_en": "Tell Rifaat", "name_ar": "تل رفعت"}
+              ]
+            },
+            {
+              "code": "03",
+              "name_en": "Mare",
+              "name_ar": "مارع",
+              "communities": [
+                {"code": "001", "name_en": "Mare", "name_ar": "مارع"}
+              ]
+            }
+          ]
+        },
+        {
+          "code": "08",
+          "name_en": "Afrin",
+          "name_ar": "عفرين",
+          "subdistricts": [
+            {
+              "code": "01",
+              "name_en": "Afrin",
+              "name_ar": "عفرين",
+              "communities": [
+                {"code": "001", "name_en": "Afrin", "name_ar": "عفرين"}
+              ]
+            },
+            {
+              "code": "02",
+              "name_en": "Jandairis",
+              "name_ar": "جنديرس",
+              "communities": [
+                {"code": "001", "name_en": "Jandairis", "name_ar": "جنديرس"}
+              ]
+            },
+            {
+              "code": "03",
+              "name_en": "Rajo",
+              "name_ar": "راجو",
+              "communities": [
+                {"code": "001", "name_en": "Rajo", "name_ar": "راجو"}
+              ]
+            }
+          ]
+        },
+        {
+          "code": "09",
+          "name_en": "As-Safira",
+          "name_ar": "السفيرة",
+          "subdistricts": [
+            {
+              "code": "01",
+              "name_en": "As-Safira",
+              "name_ar": "السفيرة",
+              "communities": [
+                {"code": "001", "name_en": "As-Safira", "name_ar": "السفيرة"}
+              ]
+            },
+            {
+              "code": "02",
+              "name_en": "Khanasir",
+              "name_ar": "خناصر",
+              "communities": [
+                {"code": "001", "name_en": "Khanasir", "name_ar": "خناصر"}
+              ]
+            },
+            {
+              "code": "03",
+              "name_en": "Al-Hajib",
+              "name_ar": "الحاجب",
+              "communities": [
+                {"code": "001", "name_en": "Al-Hajib", "name_ar": "الحاجب"}
+              ]
+            }
+          ]
+        },
+        {
+          "code": "10",
+          "name_en": "Dayr Hafir",
+          "name_ar": "دير حافر",
+          "subdistricts": [
+            {
+              "code": "01",
+              "name_en": "Dayr Hafir",
+              "name_ar": "دير حافر",
+              "communities": [
+                {"code": "001", "name_en": "Dayr Hafir", "name_ar": "دير حافر"}
+              ]
+            },
+            {
+              "code": "02",
+              "name_en": "Rasm Hirmil",
+              "name_ar": "رسم حرمل الإمام",
+              "communities": [
+                {"code": "001", "name_en": "Rasm Hirmil", "name_ar": "رسم حرمل الإمام"}
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,45 @@
+# Ignore Python cache and compiled files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# local runtime files
+data/trrcms.db
+logs/app.log
+
+# optional: ignore all logs and DBs
+logs/
+*.log
+*.db
+
+# Environment configuration (local settings)
+.env
+.env.local
+.env.*.local
+.env.development
+.env.production
+
+# Docker local overrides
+docker-compose.override.yml
+docker-compose.*.yml
+
+# Tile server data (large files)
+*.mbtiles
+tileserver/data/
+tileserver/*.mbtiles
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# PyInstaller build output
+build/
+dist/
+
+# OS files
+.DS_Store
+Thumbs.db

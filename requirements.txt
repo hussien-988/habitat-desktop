@@ -1,0 +1,71 @@
+# TRRCMS - Tenure Rights Registration & Claims Management System
+# UN-Habitat Syria - FSD v5.0 Compliant
+# Python 3.10+ required
+
+# =============================================================================
+# Core GUI Framework
+# =============================================================================
+PyQt5>=5.15.9
+PyQtWebEngine>=5.15.6  # For map display
+
+# =============================================================================
+# Database - FSD 5.2: PostgreSQL 16 + PostGIS
+# =============================================================================
+# PostgreSQL driver (production)
+psycopg2-binary>=2.9.9
+
+# SQLite is included in Python stdlib (development/fallback)
+
+# =============================================================================
+# PDF Report Generation - FSD FR-D-11
+# =============================================================================
+reportlab>=4.0.0       # PDF generation
+arabic-reshaper>=3.0.0 # Arabic text reshaping
+python-bidi>=0.4.2     # Bidirectional text support
+qrcode>=7.4.2          # QR code generation
+Pillow>=10.0.0         # Image processing
+
+# =============================================================================
+# Data Processing & Export - FSD FR-D-17
+# =============================================================================
+openpyxl>=3.1.2        # Excel export
+pandas>=2.0.0          # Data manipulation
+geojson>=3.0.0         # GeoJSON export
+
+# =============================================================================
+# API & Web Services - FSD FR-D-13, FR-D-15
+# =============================================================================
+flask>=3.0.0           # REST API server
+flask-cors>=4.0.0      # CORS support
+flask-jwt-extended>=4.6.0  # JWT authentication
+werkzeug>=3.0.0        # WSGI utilities
+zeroconf>=0.131.0      # mDNS/Bonjour for LAN discovery
+
+# =============================================================================
+# Security - FSD 13.1
+# =============================================================================
+cryptography>=41.0.0   # Encryption and signing
+bcrypt>=4.1.0          # Password hashing
+PyJWT>=2.8.0           # JWT tokens
+
+# =============================================================================
+# Utilities
+# =============================================================================
+python-dateutil>=2.8.2 # Date utilities
+python-dotenv>=1.0.0   # Environment configuration
+colorama>=0.4.6        # Colored console output
+
+# =============================================================================
+# Development & Testing (optional)
+# =============================================================================
+# pytest>=7.4.0
+# pytest-qt>=4.2.0
+# pytest-cov>=4.1.0
+# black>=23.0.0
+# flake8>=6.0.0
+# mypy>=1.5.0
+
+# =============================================================================
+# Build & Packaging (optional)
+# =============================================================================
+# pyinstaller>=6.0.0

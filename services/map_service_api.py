@@ -1,0 +1,923 @@
+# -*- coding: utf-8 -*-
+"""
+Map Service API - نسخة MapService تستخدم Backend API بدلاً من قاعدة البيانات المحلية
+====================================================================================
+
+يوفر نفس الواجهة (interface) مثل MapService الأصلي، لكن يتصل بالـ Backend API.
+"""
+
+from typing import List, Optional, Dict, Any, Tuple
+from datetime import datetime
+import json
+
+from app.config import Config
+from services.api_client import TRRCMSApiClient, get_api_client, ApiConfig
+from services.map_service import GeoPoint, GeoPolygon, BuildingGeoData
+from services.map_data_provider import IMapDataProvider, BuildingsMapProvider, MapBounds
+from models.building import Building
+from utils.logger import get_logger
+
+logger = get_logger(__name__)
+
+
+class MapServiceAPI:
+    """
+    Map service using Backend API with Strategy Pattern.
+
+    Uses pluggable data providers for different use cases.
+    """
+
+    ALEPPO_BOUNDS = {
+        "min_lat": Config.MAP_BOUNDS_MIN_LAT,
+        "max_lat": Config.MAP_BOUNDS_MAX_LAT,
+        "min_lon": Config.MAP_BOUNDS_MIN_LNG,
+        "max_lon": Config.MAP_BOUNDS_MAX_LNG
+    }
+
+    # Class-level caches for address lookups (loaded once)
+    _admin_divisions_cache = None
+    _neighborhoods_cache = None
+
+    def __init__(self, api_client: Optional[TRRCMSApiClient] = None, data_provider: Optional[IMapDataProvider] = None):
+        """
+        Initialize map service.
+
+        Args:
+            api_client: API client instance (created automatically if not provided)
+            data_provider: Data provider implementation (default: BuildingsMapProvider)
+        """
+        self.api = api_client or get_api_client()
+        self.data_provider = data_provider or BuildingsMapProvider(self.api)
+        logger.info(f"MapServiceAPI initialized with {self.data_provider.__class__.__name__}")
+
+    def set_auth_token(self, token: str, expires_in: int = 3600):
+        """Update API client auth token."""
+        if token:
+            self.api.set_access_token(token, expires_in)
+            logger.debug("MapServiceAPI: Auth token synchronized")
+
+    # ==================== Building Location ====================
+
+    def get_building_location(self, building_uuid: str) -> Optional[BuildingGeoData]:
+        """
+        الحصول على موقع مبنى من الـ API.
+
+        Args:
+            building_uuid: UUID للمبنى
+
+        Returns:
+            BuildingGeoData أو None
+        """
+        try:
+            building_data = self.api.get_building_by_id(building_uuid)
+
+            if not building_data:
+                return None
+
+            # Convert API response to BuildingGeoData
+            point = None
+            polygon = None
+
+            if building_data.get("latitude") and building_data.get("longitude"):
+                point = GeoPoint(
+                    latitude=building_data["latitude"],
+                    longitude=building_data["longitude"]
+                )
+
+            if building_data.get("buildingGeometryWkt"):
+                polygon = GeoPolygon.from_wkt(building_data["buildingGeometryWkt"])
+
+            # ✅ CRITICAL FIX: Try 'buildingCode' first (BuildingAssignments API), then 'buildingId'
+            building_id = building_data.get("buildingCode") or building_data.get("buildingId", "")
+
+            return BuildingGeoData(
+                building_uuid=building_data["id"],
+                building_id=building_id,
+                geometry_type="polygon" if polygon else "point",
+                point=point,
+                polygon=polygon,
+                neighborhood_code=building_data.get("neighborhoodCode", ""),
+                status=building_data.get("status", ""),
+                properties={
+                    "building_type": building_data.get("buildingType"),
+                    "number_of_units": building_data.get("numberOfPropertyUnits", 0)
+                }
+            )
+
+        except Exception as e:
+            logger.error(f"Error getting building location from API: {e}", exc_info=True)
+            return None
+
+    def update_building_geometry(
+        self,
+        building_uuid: str,
+        point: Optional[GeoPoint] = None,
+        polygon: Optional[GeoPolygon] = None,
+        user_id: Optional[str] = None
+    ) -> bool:
+        """
+        تحديث موقع المبنى عبر الـ API.
+
+        Args:
+            building_uuid: UUID للمبنى
+            point: موقع نقطة (optional)
+            polygon: مضلع (optional)
+            user_id: معرّف المستخدم (يُستخدم للـ audit)
+
+        Returns:
+            True إذا نجح التحديث
+        """
+        try:
+            self.api.update_building_geometry(
+                building_id=building_uuid,
+                latitude=point.latitude if point else None,
+                longitude=point.longitude if point else None,
+                building_geometry_wkt=polygon.to_wkt() if polygon else None
+            )
+
+            logger.info(f"✅ Updated geometry for building {building_uuid}")
+            return True
+
+        except Exception as e:
+            logger.error(f"❌ Error updating building geometry: {e}", exc_info=True)
+            return False
+
+    # ==================== Spatial Queries ====================
+
+    def get_buildings_in_bbox(
+        self,
+        north_east_lat: float,
+        north_east_lng: float,
+        south_west_lat: float,
+        south_west_lng: float,
+        status_filter: Optional[str] = None,
+        page_size: int = 2000
+    ) -> List[Building]:
+        """
+        الحصول على المباني ضمن bounding box من الـ API.
+
+        Uses /Buildings/polygon endpoint with PostGIS spatial filtering.
+
+        Professional Best Practice:
+        - ✅ Default page_size increased to 2000 for better coverage (محسّن)
+        - Configurable for different use cases
+
+        Args:
+            north_east_lat: حد الشمال الشرقي (latitude)
+            north_east_lng: حد الشمال الشرقي (longitude)
+            south_west_lat: حد الجنوب الغربي (latitude)
+            south_west_lng: حد الجنوب الغربي (longitude)
+            status_filter: فلتر حسب حالة المبنى
+            page_size: Maximum number of buildings to load (default: 1000)
+
+        Returns:
+            قائمة بـ Building objects
+        """
+        try:
+            bounds = MapBounds(
+                min_lat=south_west_lat,
+                max_lat=north_east_lat,
+                min_lng=south_west_lng,
+                max_lng=north_east_lng
+            )
+
+            logger.info(f"Loading buildings in viewport: NE({north_east_lat:.3f}, {north_east_lng:.3f}) - SW({south_west_lat:.3f}, {south_west_lng:.3f})")
+
+            buildings_data = self.data_provider.get_buildings_for_viewport(bounds=bounds, max_results=page_size)
+
+            buildings = []
+            for data in buildings_data:
+                building = self._convert_api_building_to_model(data)
+                buildings.append(building)
+
+            logger.info(f"Loaded {len(buildings)} buildings")
+            return buildings
+
+        except Exception as e:
+            logger.error(f"Error loading buildings: {e}", exc_info=True)
+            return []
+
+    def get_buildings_in_bbox_optimized(
+        self,
+        north_east_lat: float,
+        north_east_lng: float,
+        south_west_lat: float,
+        south_west_lng: float,
+        page_size: int = 2000,
+        zoom_level: int = 15,
+        status_filter: Optional[str] = None
+    ) -> List[Building]:
+        """
+        ✅ النسخة المحسّنة: الحصول على المباني مع page_size أكبر وتحسينات للأداء.
+
+        Professional Optimizations:
+        - ✅ page_size = 2000 (زيادة من 1000)
+        - ✅ Support zoom_level for future simplification
+        - ✅ Uses PostGIS ST_Contains() in backend
+        - ✅ Lightweight data transfer
+
+        Args:
+            north_east_lat: حد الشمال الشرقي (latitude)
+            north_east_lng: حد الشمال الشرقي (longitude)
+            south_west_lat: حد الجنوب الغربي (latitude)
+            south_west_lng: حد الجنوب الغربي (longitude)
+            page_size: Maximum buildings to load (default: 2000) ⚡
+            zoom_level: Zoom level (for future simplification optimization)
+            status_filter: فلتر حسب حالة المبنى
+
+        Returns:
+            قائمة بـ Building objects
+        """
+        try:
+            logger.info(f"🗺️ MapServiceAPI.get_buildings_in_bbox_optimized()")
+            logger.info(f"   BBox: NE({north_east_lat:.4f}, {north_east_lng:.4f}) - SW({south_west_lat:.4f}, {south_west_lng:.4f})")
+            logger.info(f"   Page Size: {page_size} | Zoom: {zoom_level}")
+
+            # Convert bounding box to polygon WKT
+            polygon_wkt = f"POLYGON(({south_west_lng} {south_west_lat}, {north_east_lng} {south_west_lat}, {north_east_lng} {north_east_lat}, {south_west_lng} {north_east_lat}, {south_west_lng} {south_west_lat}))"
+
+            # Call API with optimized page_size
+            buildings_data = self.api.get_buildings_in_polygon(
+                polygon_wkt=polygon_wkt,
+                status=status_filter,
+                page=1,
+                page_size=page_size  # ✅ 2000 بدلاً من 1000
+            )
+
+            buildings = []
+            for data in buildings_data:
+                building = self._convert_api_building_to_model(data)
+                buildings.append(building)
+
+            logger.info(f"✅ Fetched {len(buildings)} buildings from API (optimized)")
+            return buildings
+
+        except Exception as e:
+            logger.error(f"❌ Error fetching buildings (optimized): {e}", exc_info=True)
+            return []
+
+    def get_buildings_for_map_lightweight(
+        self,
+        north_east_lat: float,
+        north_east_lng: float,
+        south_west_lat: float,
+        south_west_lng: float,
+        status_filter: Optional[str] = None
+    ) -> List[Building]:
+        """
+        ✅ Lightweight: يستخدم /Buildings/map endpoint (BuildingMapDto بدلاً من BuildingDto الكامل).
+
+        Professional Optimization:
+        - 📦 حجم أقل بـ 50-70% (لا يحتوي على polygons/details)
+        - ⚡ أسرع في النقل والمعالجة
+        - 🎯 مخصص لعرض الخرائط فقط
+
+        Args:
+            north_east_lat: حد الشمال الشرقي (latitude)
+            north_east_lng: حد الشمال الشرقي (longitude)
+            south_west_lat: حد الجنوب الغربي (latitude)
+            south_west_lng: حد الجنوب الغربي (longitude)
+            status_filter: فلتر حسب حالة المبنى
+
+        Returns:
+            قائمة بـ Building objects (lightweight - points only)
+        """
+        try:
+            logger.info(f"📍 MapServiceAPI.get_buildings_for_map_lightweight()")
+            logger.info(f"   BBox: NE({north_east_lat:.4f}, {north_east_lng:.4f}) - SW({south_west_lat:.4f}, {south_west_lng:.4f})")
+
+            # استدعاء /Buildings/map endpoint (Lightweight DTO)
+            map_dtos = self.api.get_buildings_for_map(
+                north_east_lat=north_east_lat,
+                north_east_lng=north_east_lng,
+                south_west_lat=south_west_lat,
+                south_west_lng=south_west_lng,
+                status=status_filter
+            )
+
+            # تحويل MapDto إلى Building objects
+            buildings = []
+            for dto in map_dtos:
+                building = Building()
+                building.building_uuid = dto.get("id")
+                # ✅ CRITICAL FIX: Try 'buildingCode' first (BuildingAssignments API), then 'buildingId'
+                building.building_id = dto.get("buildingCode") or dto.get("buildingId")
+                building.latitude = dto.get("latitude")
+                building.longitude = dto.get("longitude")
+                building.building_status = dto.get("status")
+                building.building_type = dto.get("buildingType")
+                building.number_of_units = dto.get("numberOfPropertyUnits", 0)
+                # لا نضيف polygon - lightweight
+                buildings.append(building)
+
+            logger.info(f"✅ Fetched {len(buildings)} buildings (lightweight DTO)")
+            return buildings
+
+        except Exception as e:
+            logger.error(f"❌ Error fetching buildings (lightweight): {e}", exc_info=True)
+            return []
+
+    def search_buildings_by_location(
+        self,
+        center: GeoPoint,
+        radius_meters: float = 1000
+    ) -> List[BuildingGeoData]:
+        """
+        البحث عن المباني ضمن دائرة.
+
+        Args:
+            center: مركز الدائرة
+            radius_meters: نصف القطر بالأمتار
+
+        Returns:
+            قائمة بـ BuildingGeoData
+        """
+        # تحويل الدائرة إلى bounding box تقريبي
+        # 1 degree latitude ≈ 111km, 1 degree longitude ≈ 85km at 36°N
+        lat_range = radius_meters / 111000
+        lng_range = radius_meters / 85000
+
+        return self._fetch_buildings_as_geodata(
+            north_east_lat=center.latitude + lat_range,
+            north_east_lng=center.longitude + lng_range,
+            south_west_lat=center.latitude - lat_range,
+            south_west_lng=center.longitude - lng_range
+        )
+
+    def search_buildings_in_polygon(self, polygon: GeoPolygon) -> List[BuildingGeoData]:
+        """
+        البحث عن المباني داخل مضلع.
+
+        Args:
+            polygon: المضلع
+
+        Returns:
+            قائمة بـ BuildingGeoData
+        """
+        # Get bounding box for polygon
+        all_coords = [coord for ring in polygon.coordinates for coord in ring]
+        min_lng = min(c[0] for c in all_coords)
+        max_lng = max(c[0] for c in all_coords)
+        min_lat = min(c[1] for c in all_coords)
+        max_lat = max(c[1] for c in all_coords)
+
+        # Fetch buildings in bounding box
+        all_buildings = self._fetch_buildings_as_geodata(
+            north_east_lat=max_lat,
+            north_east_lng=max_lng,
+            south_west_lat=min_lat,
+            south_west_lng=min_lng
+        )
+
+        # Filter to only buildings inside polygon
+        buildings_in_polygon = []
+        for building in all_buildings:
+            if building.point and self._point_in_polygon(building.point, polygon):
+                buildings_in_polygon.append(building)
+
+        return buildings_in_polygon
+
+    def get_buildings_by_neighborhood(
+        self,
+        neighborhood_code: str
+    ) -> List[BuildingGeoData]:
+        """
+        الحصول على جميع المباني في حي معين.
+
+        Args:
+            neighborhood_code: رمز الحي
+
+        Returns:
+            قائمة بـ BuildingGeoData
+        """
+        try:
+            result = self.api.search_buildings(
+                neighborhood_code=neighborhood_code,
+                page_size=1000
+            )
+
+            buildings = result.get("items", [])
+            return [self._convert_api_building_to_geodata(b) for b in buildings]
+
+        except Exception as e:
+            logger.error(f"Error fetching buildings by neighborhood: {e}")
+            return []
+
+    # ==================== Proximity & Overlap ====================
+
+    def check_proximity_overlap(
+        self,
+        building1_uuid: str,
+        building2_uuid: str
+    ) -> Dict[str, Any]:
+        """
+        فحص التقارب والتداخل بين مبنيين.
+
+        Args:
+            building1_uuid: UUID للمبنى الأول
+            building2_uuid: UUID للمبنى الثاني
+
+        Returns:
+            معلومات التقارب والتداخل
+        """
+        building1 = self.get_building_location(building1_uuid)
+        building2 = self.get_building_location(building2_uuid)
+
+        if not building1 or not building2:
+            return {"error": "Building not found"}
+
+        result = {
+            "building1_id": building1.building_id,
+            "building2_id": building2.building_id,
+            "same_neighborhood": building1.neighborhood_code == building2.neighborhood_code,
+            "distance_meters": None,
+            "overlapping": False,
+            "overlap_percentage": 0.0
+        }
+
+        # Calculate distance
+        point1 = building1.point or (building1.polygon.get_centroid() if building1.polygon else None)
+        point2 = building2.point or (building2.polygon.get_centroid() if building2.polygon else None)
+
+        if point1 and point2:
+            result["distance_meters"] = self._haversine_distance(point1, point2)
+
+        return result
+
+    # ==================== GeoJSON Export ====================
+
+    def export_to_geojson(
+        self,
+        buildings: List[BuildingGeoData],
+        include_properties: bool = True
+    ) -> Dict:
+        """
+        تصدير المباني إلى GeoJSON.
+
+        Args:
+            buildings: قائمة BuildingGeoData
+            include_properties: تضمين الخصائص
+
+        Returns:
+            GeoJSON FeatureCollection
+        """
+        features = []
+
+        for building in buildings:
+            geometry = None
+            if building.polygon:
+                geometry = building.polygon.to_geojson()
+            elif building.point:
+                geometry = building.point.to_geojson()
+            else:
+                continue
+
+            feature = {
+                "type": "Feature",
+                "id": building.building_uuid,
+                "geometry": geometry,
+                "properties": {
+                    "building_id": building.building_id,
+                    "building_uuid": building.building_uuid,
+                    "neighborhood_code": building.neighborhood_code,
+                    "status": building.status
+                }
+            }
+
+            if include_properties:
+                feature["properties"].update(building.properties)
+
+            features.append(feature)
+
+        return {
+            "type": "FeatureCollection",
+            "name": "TRRCMS_Buildings",
+            "crs": {
+                "type": "name",
+                "properties": {"name": "urn:ogc:def:crs:EPSG::4326"}
+            },
+            "features": features
+        }
+
+    # ==================== Validation ====================
+
+    def validate_coordinates(
+        self,
+        latitude: float,
+        longitude: float
+    ) -> Tuple[bool, str]:
+        """
+        التحقق من صحة الإحداثيات (ضمن نطاق حلب).
+
+        Args:
+            latitude: خط العرض
+            longitude: خط الطول
+
+        Returns:
+            (is_valid, error_message)
+        """
+        if latitude < self.ALEPPO_BOUNDS["min_lat"] or latitude > self.ALEPPO_BOUNDS["max_lat"]:
+            return False, "الإحداثيات خارج نطاق حلب (خط العرض)"
+
+        if longitude < self.ALEPPO_BOUNDS["min_lon"] or longitude > self.ALEPPO_BOUNDS["max_lon"]:
+            return False, "الإحداثيات خارج نطاق حلب (خط الطول)"
+
+        return True, ""
+
+    # ==================== Helper Methods ====================
+
+    def get_building_with_polygon(self, building_id: str) -> Optional[Building]:
+        """
+        Get single building with polygon geometry from API.
+
+        Args:
+            building_id: Building UUID or building code (17-digit)
+
+        Returns:
+            Building object with polygon or None
+        """
+        try:
+            logger.info(f"Getting building with polygon: {building_id}")
+
+            # API expects UUID - returns building data directly
+            data = self.api.get_building_by_id(building_id)
+
+            if not data:
+                logger.error(f"Failed to get building {building_id}")
+                return None
+
+            building_uuid = data.get("id") or data.get("buildingUuid", "")
+            building_code = data.get("buildingId") or data.get("buildingCode", "")
+            geo_location = data.get("geoLocation") or data.get("buildingGeometryWkt")
+
+            # Extract codes
+            gov_code = data.get("governorateCode", "")
+            dist_code = data.get("districtCode", "")
+            subdist_code = data.get("subdistrictCode") or data.get("subDistrictCode", "")
+            community_code = data.get("communityCode", "")
+            neighborhood_code = data.get("neighborhoodCode", "")
+
+            # Fallback: extract codes from building_code (17 digits: GG-DD-SS-CCC-NNN-BBBBB)
+            if not gov_code and len(building_code) == 17 and building_code.isdigit():
+                gov_code = building_code[0:2]
+                dist_code = dist_code or building_code[2:4]
+                subdist_code = subdist_code or building_code[4:6]
+                community_code = community_code or building_code[6:9]
+                neighborhood_code = neighborhood_code or building_code[9:12]
+
+            # Try API name fields first (including nameArabic for neighborhood)
+            gov_name = data.get("governorateNameAr") or data.get("governorateName", "")
+            dist_name = data.get("districtNameAr") or data.get("districtName", "")
+            subdist_name = data.get("subDistrictNameAr") or data.get("subdistrictNameAr") or data.get("subdistrictName", "")
+            community_name = data.get("communityNameAr") or data.get("communityName", "")
+            neighborhood_name = data.get("neighborhoodNameAr") or data.get("neighborhoodName") or data.get("nameArabic", "")
+
+            # Resolve missing names from local JSON files
+            if not gov_name or not dist_name or not subdist_name or not neighborhood_name:
+                resolved = self._resolve_address_names(
+                    gov_code, dist_code, subdist_code, community_code, neighborhood_code
+                )
+                gov_name = gov_name or resolved["governorate_name_ar"]
+                dist_name = dist_name or resolved["district_name_ar"]
+                subdist_name = subdist_name or resolved["subdistrict_name_ar"]
+                community_name = community_name or resolved["community_name_ar"]
+                neighborhood_name = neighborhood_name or resolved["neighborhood_name_ar"]
+
+            building = Building(
+                building_uuid=building_uuid,
+                building_id=building_code,
+                geo_location=geo_location,
+                latitude=data.get("latitude"),
+                longitude=data.get("longitude"),
+                governorate_code=gov_code,
+                governorate_name_ar=gov_name,
+                district_code=dist_code,
+                district_name_ar=dist_name,
+                subdistrict_code=subdist_code,
+                subdistrict_name_ar=subdist_name,
+                community_code=community_code,
+                community_name_ar=community_name,
+                neighborhood_code=neighborhood_code,
+                neighborhood_name_ar=neighborhood_name,
+                building_number=data.get("buildingNumber", ""),
+                building_type=data.get("buildingType", 1),
+                building_status=data.get("buildingStatus", 1),
+                number_of_units=data.get("numberOfUnits", 0),
+                number_of_shops=data.get("numberOfShops", 0),
+                number_of_apartments=data.get("numberOfApartments", 0),
+                number_of_floors=data.get("numberOfFloors", 0)
+            )
+
+            logger.info(f"Successfully retrieved building {building_id} with polygon")
+            return building
+
+        except Exception as e:
+            logger.error(f"Error getting building with polygon: {e}", exc_info=True)
+            return None
+
+    @classmethod
+    def _resolve_address_names(cls, gov_code: str, dist_code: str, subdist_code: str,
+                                community_code: str, neighborhood_code: str) -> Dict[str, str]:
+        """
+        Resolve address names from codes using local JSON files.
+
+        Uses administrative_divisions.json for governorate/district/subdistrict/community
+        and neighborhoods.json for neighborhood names.
+
+        Returns dict with keys: governorate_name_ar, district_name_ar,
+        subdistrict_name_ar, community_name_ar, neighborhood_name_ar
+        """
+        result = {
+            "governorate_name_ar": "",
+            "district_name_ar": "",
+            "subdistrict_name_ar": "",
+            "community_name_ar": "",
+            "neighborhood_name_ar": ""
+        }
+
+        # Load administrative divisions cache
+        if cls._admin_divisions_cache is None:
+            cls._admin_divisions_cache = {}
+            try:
+                import os
+                json_path = os.path.join(
+                    os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                    "data", "administrative_divisions.json"
+                )
+                with open(json_path, "r", encoding="utf-8") as f:
+                    cls._admin_divisions_cache = json.load(f)
+                logger.info("Loaded administrative_divisions.json for address resolution")
+            except Exception as e:
+                logger.warning(f"Could not load administrative_divisions.json: {e}")
+
+        # Load neighborhoods cache
+        if cls._neighborhoods_cache is None:
+            cls._neighborhoods_cache = {}
+            try:
+                import os
+                json_path = os.path.join(
+                    os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                    "data", "neighborhoods.json"
+                )
+                with open(json_path, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                for n in data.get("neighborhoods", []):
+                    cls._neighborhoods_cache[n["code"]] = n.get("name_ar", "")
+                logger.info(f"Loaded {len(cls._neighborhoods_cache)} neighborhoods from JSON")
+            except Exception as e:
+                logger.warning(f"Could not load neighborhoods.json: {e}")
+
+        # Resolve from administrative divisions hierarchy
+        try:
+            for gov in cls._admin_divisions_cache.get("governorates", []):
+                if gov.get("code") == gov_code:
+                    result["governorate_name_ar"] = gov.get("name_ar", "")
+                    for dist in gov.get("districts", []):
+                        if dist.get("code") == dist_code:
+                            result["district_name_ar"] = dist.get("name_ar", "")
+                            for subdist in dist.get("subdistricts", []):
+                                if subdist.get("code") == subdist_code:
+                                    result["subdistrict_name_ar"] = subdist.get("name_ar", "")
+                                    for comm in subdist.get("communities", []):
+                                        if comm.get("code") == community_code:
+                                            result["community_name_ar"] = comm.get("name_ar", "")
+                                            break
+                                    break
+                            break
+                    break
+        except Exception as e:
+            logger.warning(f"Error resolving admin division names: {e}")
+
+        # Resolve neighborhood from neighborhoods.json
+        if neighborhood_code and cls._neighborhoods_cache:
+            result["neighborhood_name_ar"] = cls._neighborhoods_cache.get(neighborhood_code, "")
+
+        return result
+
+    def _convert_api_building_to_model(self, data: Dict[str, Any]) -> Building:
+        """
+        تحويل API response إلى Building model.
+
+        SOLID Principle: Single Responsibility - converts API data to domain model
+        DRY Principle: Centralized conversion logic
+        """
+        building_id = data.get("buildingCode") or data.get("buildingId", "")
+        geo_location = data.get("buildingGeometryWkt")
+
+        logger.warning(f"[API→Model] Building {building_id}:")
+        logger.warning(f"   API response keys: {list(data.keys())[:15]}")
+        logger.warning(f"   has 'buildingGeometryWkt': {geo_location is not None}")
+
+        if geo_location:
+            logger.warning(f"   WKT preview: {str(geo_location)[:100]}...")
+        else:
+            logger.error(f"   ❌ NO buildingGeometryWkt in API response!")
+
+        # Extract codes from API response
+        gov_code = data.get("governorateCode", "")
+        dist_code = data.get("districtCode", "")
+        subdist_code = data.get("subDistrictCode") or data.get("subdistrictCode", "")
+        community_code = data.get("communityCode", "")
+        neighborhood_code = data.get("neighborhoodCode", "")
+        building_number = data.get("buildingNumber", "")
+
+        # Fallback: extract codes from building_id (17 digits: GG-DD-SS-CCC-NNN-BBBBB)
+        if not gov_code and len(building_id) == 17 and building_id.isdigit():
+            gov_code = building_id[0:2]
+            dist_code = dist_code or building_id[2:4]
+            subdist_code = subdist_code or building_id[4:6]
+            community_code = community_code or building_id[6:9]
+            neighborhood_code = neighborhood_code or building_id[9:12]
+            building_number = building_number or building_id[12:17]
+
+        # Try API name fields first, fallback to JSON lookup
+        gov_name = data.get("governorateNameAr") or data.get("governorateName", "")
+        dist_name = data.get("districtNameAr") or data.get("districtName", "")
+        subdist_name = data.get("subDistrictNameAr") or data.get("subDistrictName") or data.get("subdistrictName", "")
+        community_name = data.get("communityNameAr") or data.get("communityName", "")
+        neighborhood_name = data.get("neighborhoodNameAr") or data.get("neighborhoodName") or data.get("nameArabic", "")
+
+        # If any name is missing, resolve from local JSON files
+        if not gov_name or not dist_name or not subdist_name or not neighborhood_name:
+            resolved = self._resolve_address_names(
+                gov_code, dist_code, subdist_code, community_code, neighborhood_code
+            )
+            gov_name = gov_name or resolved["governorate_name_ar"]
+            dist_name = dist_name or resolved["district_name_ar"]
+            subdist_name = subdist_name or resolved["subdistrict_name_ar"]
+            community_name = community_name or resolved["community_name_ar"]
+            neighborhood_name = neighborhood_name or resolved["neighborhood_name_ar"]
+
+        return Building(
+            building_uuid=data.get("id", ""),
+            building_id=building_id,
+            latitude=data.get("latitude"),
+            longitude=data.get("longitude"),
+            building_status=data.get("status"),
+            building_type=data.get("buildingType", 1),
+            number_of_units=data.get("numberOfPropertyUnits", 0),
+            number_of_apartments=data.get("numberOfApartments", 0),
+            number_of_shops=data.get("numberOfShops", 0),
+            number_of_floors=data.get("numberOfFloors", 0),
+            geo_location=geo_location,
+            governorate_code=gov_code,
+            governorate_name_ar=gov_name,
+            district_code=dist_code,
+            district_name_ar=dist_name,
+            subdistrict_code=subdist_code,
+            subdistrict_name_ar=subdist_name,
+            community_code=community_code,
+            community_name_ar=community_name,
+            neighborhood_code=neighborhood_code,
+            neighborhood_name_ar=neighborhood_name,
+            building_number=building_number
+        )
+
+    def _convert_api_building_to_geodata(self, data: Dict[str, Any]) -> BuildingGeoData:
+        """
+        تحويل API response إلى BuildingGeoData.
+
+        ✅ FIX: BuildingAssignments API uses 'buildingCode' not 'buildingId'!
+        """
+        point = None
+        polygon = None
+
+        if data.get("latitude") and data.get("longitude"):
+            point = GeoPoint(
+                latitude=data["latitude"],
+                longitude=data["longitude"]
+            )
+
+        if data.get("buildingGeometryWkt"):
+            polygon = GeoPolygon.from_wkt(data["buildingGeometryWkt"])
+
+        # ✅ CRITICAL FIX: Try 'buildingCode' first (BuildingAssignments API), then 'buildingId'
+        building_id = data.get("buildingCode") or data.get("buildingId", "")
+
+        return BuildingGeoData(
+            building_uuid=data["id"],
+            building_id=building_id,
+            geometry_type="polygon" if polygon else "point",
+            point=point,
+            polygon=polygon,
+            neighborhood_code=data.get("neighborhoodCode", ""),
+            status=data.get("status", ""),
+            properties={
+                "building_type": data.get("buildingType"),
+                "number_of_units": data.get("numberOfPropertyUnits", 0)
+            }
+        )
+
+    def _fetch_buildings_as_geodata(
+        self,
+        north_east_lat: float,
+        north_east_lng: float,
+        south_west_lat: float,
+        south_west_lng: float
+    ) -> List[BuildingGeoData]:
+        """جلب المباني كـ BuildingGeoData."""
+        print(f"[DEBUG] _fetch_buildings_as_geodata: NE({north_east_lat}, {north_east_lng}) SW({south_west_lat}, {south_west_lng})")
+        buildings_data = self.api.get_buildings_for_map(
+            north_east_lat, north_east_lng,
+            south_west_lat, south_west_lng
+        )
+        print(f"[DEBUG] API returned {len(buildings_data)} buildings")
+
+        result = [self._convert_api_building_to_geodata(b) for b in buildings_data]
+        print(f"[DEBUG] Converted to {len(result)} BuildingGeoData objects")
+        return result
+
+    # ==================== Neighborhood Methods ====================
+
+    def get_neighborhoods_in_viewport(self, north_east_lat: float, north_east_lng: float,
+                                     south_west_lat: float, south_west_lng: float) -> List[Dict]:
+        """
+        Get neighborhood boundaries in viewport.
+
+        Args:
+            north_east_lat: Northeast corner latitude
+            north_east_lng: Northeast corner longitude
+            south_west_lat: Southwest corner latitude
+            south_west_lng: Southwest corner longitude
+
+        Returns:
+            List of neighborhoods with boundaries
+        """
+        try:
+            bounds = MapBounds(
+                min_lat=south_west_lat,
+                max_lat=north_east_lat,
+                min_lng=south_west_lng,
+                max_lng=north_east_lng
+            )
+
+            neighborhoods = self.data_provider.get_neighborhoods_in_viewport(bounds)
+            logger.info(f"Loaded {len(neighborhoods)} neighborhoods in viewport")
+            return neighborhoods
+
+        except Exception as e:
+            logger.error(f"Error loading neighborhoods: {e}")
+            return []
+
+    def get_neighborhood_by_coordinates(self, latitude: float, longitude: float) -> Optional[Dict]:
+        """
+        Get neighborhood containing a point (reverse geocoding).
+
+        Args:
+            latitude: Point latitude
+            longitude: Point longitude
+
+        Returns:
+            Neighborhood data or None
+        """
+        try:
+            neighborhood = self.data_provider.get_neighborhood_by_point(lat=latitude, lng=longitude)
+            if neighborhood:
+                logger.info(f"Found neighborhood: {neighborhood.get('nameArabic', 'N/A')}")
+            return neighborhood
+
+        except Exception as e:
+            logger.warning(f"No neighborhood found at ({latitude}, {longitude}): {e}")
+            return None
+
+    # ==================== Helper Methods ====================
+
+    def _haversine_distance(self, point1: GeoPoint, point2: GeoPoint) -> float:
+        """Calculate distance between two points (Haversine formula)."""
+        import math
+
+        R = 6371000  # Earth radius in meters
+
+        lat1 = math.radians(point1.latitude)
+        lat2 = math.radians(point2.latitude)
+        dlat = math.radians(point2.latitude - point1.latitude)
+        dlon = math.radians(point2.longitude - point1.longitude)
+
+        a = math.sin(dlat/2)**2 + math.cos(lat1) * math.cos(lat2) * math.sin(dlon/2)**2
+        c = 2 * math.atan2(math.sqrt(a), math.sqrt(1-a))
+
+        return R * c
+
+    def _point_in_polygon(self, point: GeoPoint, polygon: GeoPolygon) -> bool:
+        """التحقق من وجود نقطة داخل مضلع (ray casting)."""
+        if not polygon.coordinates:
+            return False
+
+        outer_ring = polygon.coordinates[0]
+        n = len(outer_ring)
+        inside = False
+
+        x = point.longitude
+        y = point.latitude
+
+        j = n - 1
+        for i in range(n):
+            xi, yi = outer_ring[i]
+            xj, yj = outer_ring[j]
+
+            if ((yi > y) != (yj > y)) and (x < (xj - xi) * (y - yi) / (yj - yi) + xi):
+                inside = not inside
+
+            j = i
+
+        return inside
