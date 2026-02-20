@@ -20,6 +20,7 @@ from PyQt5.QtCore import Qt, QLocale
 from PyQt5.QtGui import QColor
 
 from ui.components.rtl_combo import RtlCombo
+from ui.style_manager import StyleManager
 from ui.components.centered_text_edit import CenteredTextEdit
 from ui.wizards.framework import BaseStep, StepValidationResult
 from ui.wizards.office_survey.survey_context import SurveyContext
@@ -197,39 +198,10 @@ class HouseholdStep(BaseStep):
         scroll_area.setFrameShape(QFrame.NoFrame)
         scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
-        scroll_area.setStyleSheet("""
-            QScrollArea {
-                background-color: transparent;
-                border: none;
-            }
-            QScrollBar:vertical {
-                background: transparent;
-                width: 6px;
-                margin: 4px 0px 4px 0px;
-                border-radius: 3px;
-            }
-            QScrollBar::handle:vertical {
-                background: #C4CDD5;
-                min-height: 40px;
-                border-radius: 3px;
-            }
-            QScrollBar::handle:vertical:hover {
-                background: #919EAB;
-            }
-            QScrollBar::handle:vertical:pressed {
-                background: #637381;
-            }
-            QScrollBar::add-line:vertical,
-            QScrollBar::sub-line:vertical {
-                height: 0px;
-                background: none;
-                border: none;
-            }
-            QScrollBar::add-page:vertical,
-            QScrollBar::sub-page:vertical {
-                background: none;
-            }
-        """)
+        scroll_area.setStyleSheet(
+            "QScrollArea { background-color: transparent; border: none; }"
+            + StyleManager.scrollbar()
+        )
 
         # Container widget for scroll area content
         scroll_content = QWidget()

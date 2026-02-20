@@ -51,40 +51,6 @@ RADIO_STYLE = f"""
     }}
 """
 
-SCROLLBAR_STYLE = """
-    QScrollArea {
-        border: none;
-        background-color: transparent;
-    }
-    QScrollBar:vertical {
-        background: transparent;
-        width: 6px;
-        margin: 4px 0px 4px 0px;
-        border-radius: 3px;
-    }
-    QScrollBar::handle:vertical {
-        background: #C4CDD5;
-        min-height: 40px;
-        border-radius: 3px;
-    }
-    QScrollBar::handle:vertical:hover {
-        background: #919EAB;
-    }
-    QScrollBar::handle:vertical:pressed {
-        background: #637381;
-    }
-    QScrollBar::add-line:vertical,
-    QScrollBar::sub-line:vertical {
-        height: 0px;
-        background: none;
-        border: none;
-    }
-    QScrollBar::add-page:vertical,
-    QScrollBar::sub-page:vertical {
-        background: none;
-    }
-"""
-
 # Mock data for claims (same as duplicates page)
 MOCK_CLAIMS = [
     {
@@ -183,7 +149,10 @@ class ClaimComparisonPage(QWidget):
         scroll.setWidgetResizable(True)
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
-        scroll.setStyleSheet(SCROLLBAR_STYLE)
+        scroll.setStyleSheet(
+            "QScrollArea { border: none; background-color: transparent; }"
+            + StyleManager.scrollbar()
+        )
         self._scroll_area = scroll
 
         # Scrollable content

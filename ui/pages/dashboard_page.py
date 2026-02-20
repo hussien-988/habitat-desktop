@@ -15,6 +15,7 @@ from repositories.database import Database
 from services.dashboard_service import DashboardService
 from utils.i18n import I18n
 from utils.helpers import format_number
+from ui.style_manager import StyleManager
 from utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -197,7 +198,10 @@ class DashboardPage(QWidget):
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QFrame.NoFrame)
-        scroll.setStyleSheet("QScrollArea { border: none; background-color: transparent; }")
+        scroll.setStyleSheet(
+            "QScrollArea { border: none; background-color: transparent; }"
+            + StyleManager.scrollbar()
+        )
 
         content = QWidget()
         content.setStyleSheet(f"background-color: {Config.BACKGROUND_COLOR};")

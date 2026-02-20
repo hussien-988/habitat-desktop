@@ -28,6 +28,7 @@ from models.claim import Claim
 from models.document import Document
 from services.workflow_service import WorkflowService
 from ui.components.toast import Toast
+from ui.style_manager import StyleManager
 from ui.components.base_table_model import BaseTableModel
 from utils.i18n import I18n
 from utils.logger import get_logger
@@ -446,7 +447,10 @@ class ClaimDetailsDialog(QDialog):
         """Create the details tab with editable fields."""
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
-        scroll.setStyleSheet("QScrollArea { border: none; }")
+        scroll.setStyleSheet(
+            "QScrollArea { border: none; }"
+            + StyleManager.scrollbar()
+        )
 
         details_widget = QWidget()
         details_layout = QFormLayout(details_widget)
@@ -618,7 +622,10 @@ class ClaimDetailsDialog(QDialog):
         if history:
             scroll = QScrollArea()
             scroll.setWidgetResizable(True)
-            scroll.setStyleSheet("QScrollArea { border: none; }")
+            scroll.setStyleSheet(
+            "QScrollArea { border: none; }"
+            + StyleManager.scrollbar()
+        )
 
             content = QWidget()
             content_layout = QVBoxLayout(content)

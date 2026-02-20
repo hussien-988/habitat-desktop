@@ -13,6 +13,7 @@ from PyQt5.QtGui import QFont
 
 from app.config import Config
 from ui.font_utils import create_font, FontManager
+from ui.style_manager import StyleManager
 
 
 class ValidationErrorDialog(QDialog):
@@ -82,6 +83,10 @@ class ValidationErrorDialog(QDialog):
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QFrame.NoFrame)
+        scroll.setStyleSheet(
+            "QScrollArea { background: transparent; border: none; }"
+            + StyleManager.scrollbar()
+        )
 
         details_widget = QWidget()
         details_layout = QVBoxLayout(details_widget)

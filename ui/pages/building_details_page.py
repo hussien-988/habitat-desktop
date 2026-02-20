@@ -21,6 +21,7 @@ from repositories.claim_repository import ClaimRepository
 from ui.components.table_models import UnitsTableModel, PersonsTableModel
 from utils.i18n import I18n
 from utils.helpers import format_date
+from ui.style_manager import StyleManager
 from utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -112,6 +113,10 @@ class BuildingDetailsPage(QWidget):
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QFrame.NoFrame)
+        scroll.setStyleSheet(
+            "QScrollArea { background: transparent; border: none; }"
+            + StyleManager.scrollbar()
+        )
 
         content = QWidget()
         layout = QVBoxLayout(content)
