@@ -704,14 +704,8 @@ class MapServiceAPI:
         building_id = data.get("buildingCode") or data.get("buildingId", "")
         geo_location = data.get("buildingGeometryWkt")
 
-        logger.warning(f"[API→Model] Building {building_id}:")
-        logger.warning(f"   API response keys: {list(data.keys())[:15]}")
-        logger.warning(f"   has 'buildingGeometryWkt': {geo_location is not None}")
-
-        if geo_location:
-            logger.warning(f"   WKT preview: {str(geo_location)[:100]}...")
-        else:
-            logger.error(f"   ❌ NO buildingGeometryWkt in API response!")
+        if not geo_location:
+            logger.warning(f"Building {building_id}: no buildingGeometryWkt in API response")
 
         # Extract codes from API response
         gov_code = data.get("governorateCode", "")

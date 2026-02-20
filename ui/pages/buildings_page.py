@@ -27,7 +27,10 @@ except ImportError:
 
 from app.config import Config
 from services.vocab_service import get_options as vocab_get_options, get_label as vocab_get_label
-from services.display_mappings import get_building_type_display, get_building_status_display
+from services.display_mappings import (
+    get_building_type_display, get_building_status_display,
+    get_building_type_options, get_building_status_options
+)
 from services.divisions_service import DivisionsService
 from services.api_client import get_api_client
 from models.building import Building
@@ -2382,7 +2385,7 @@ class BuildingsListPage(QWidget):
             QHeaderView::section:hover {{
                 background-color: #EBEEF2;
             }}
-        """)
+        """ + StyleManager.scrollbar())
 
         # ضبط المحاذاة والعرض
         header = self.table.horizontalHeader()
@@ -2547,9 +2550,23 @@ class BuildingsListPage(QWidget):
 
         footer.addStretch()
 
+        from ui.components.toggle_switch import ToggleSwitch
+        self.dense_toggle = ToggleSwitch("Dense", checked=True)
+        self.dense_toggle.toggled.connect(self._on_dense_toggle)
+        footer.addWidget(self.dense_toggle)
+
         card_layout.addWidget(footer_frame)
 
         layout.addWidget(table_card)
+
+    def _on_dense_toggle(self, checked):
+        row_height = 52 if checked else 68
+        v_header = self.table.verticalHeader()
+        v_header.setDefaultSectionSize(row_height)
+        if checked:
+            self.table.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        else:
+            self.table.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
 
     def showEvent(self, event):
         """تحميل البيانات تلقائياً عند عرض الصفحة"""
@@ -2587,10 +2604,23 @@ class BuildingsListPage(QWidget):
         end_idx = min(start_idx + self._rows_per_page, total)
         page_buildings = self._buildings[start_idx:end_idx]
 
-        # Clear all table cells
+        # Clear spans and cells
+        self.table.clearSpans()
         for row in range(11):
             for col in range(6):
                 self.table.setItem(row, col, QTableWidgetItem(""))
+
+        if total == 0:
+            self.table.setSpan(0, 0, 11, 6)
+            empty_item = QTableWidgetItem("لا توجد بيانات مطابقة للفلتر المحدد")
+            empty_item.setTextAlignment(Qt.AlignCenter)
+            from PyQt5.QtGui import QColor
+            empty_item.setForeground(QColor("#9CA3AF"))
+            self.table.setItem(0, 0, empty_item)
+            self.page_label.setText("0-0 of 0")
+            self.prev_btn.setEnabled(False)
+            self.next_btn.setEnabled(False)
+            return
 
         # Populate table with current page data
         for idx, building in enumerate(page_buildings):
@@ -2714,16 +2744,14 @@ class BuildingsListPage(QWidget):
                     unique_values.add(area)
         elif column_index == 3:  # نوع البناء
             filter_key = 'building_type'
-            for building in self._all_buildings:
-                if building.building_type is not None:
-                    label = get_building_type_display(building.building_type)
-                    unique_values.add((building.building_type, label))
+            for code, label in get_building_type_options():
+                if code:
+                    unique_values.add((code, label))
         elif column_index == 4:  # حالة البناء
             filter_key = 'building_status'
-            for building in self._all_buildings:
-                if building.building_status is not None:
-                    label = get_building_status_display(building.building_status)
-                    unique_values.add((building.building_status, label))
+            for code, label in get_building_status_options():
+                if code:
+                    unique_values.add((code, label))
 
         if not unique_values:
             return
@@ -2828,7 +2856,7 @@ class BuildingsListPage(QWidget):
             target = self._active_filters['building_type']
             filtered = [
                 b for b in filtered
-                if b.building_type == target
+                if self._match_code(b.building_type, target)
             ]
 
         # Apply building status filter
@@ -2836,10 +2864,19 @@ class BuildingsListPage(QWidget):
             target = self._active_filters['building_status']
             filtered = [
                 b for b in filtered
-                if b.building_status == target
+                if self._match_code(b.building_status, target)
             ]
 
         return filtered
+
+    @staticmethod
+    def _match_code(value, target):
+        if value is None:
+            return False
+        try:
+            return int(value) == int(target)
+        except (ValueError, TypeError):
+            return str(value).strip().lower() == str(target).strip().lower()
 
     def _get_building_area(self, building) -> str:
         """Get formatted area string for building (DRY helper) - neighborhood name only."""

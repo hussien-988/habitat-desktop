@@ -50,6 +50,14 @@ class UnitRepository:
             return self._row_to_unit(row)
         return None
 
+    def get_by_uuid(self, unit_uuid: str) -> Optional[PropertyUnit]:
+        """Get unit by unit_uuid."""
+        query = "SELECT * FROM property_units WHERE unit_uuid = ?"
+        row = self.db.fetch_one(query, (unit_uuid,))
+        if row:
+            return self._row_to_unit(row)
+        return None
+
     def get_by_building(self, building_id: str) -> List[PropertyUnit]:
         """Get all units for a building."""
         query = "SELECT * FROM property_units WHERE building_id = ? ORDER BY floor_number, unit_number"

@@ -588,12 +588,12 @@ class StyleManager:
         return f"""
             QScrollBar:vertical {{
                 background-color: {Colors.BACKGROUND};
-                width: 12px;
-                border-radius: 6px;
+                width: 16px;
+                border-radius: 8px;
             }}
             QScrollBar::handle:vertical {{
                 background-color: #c0c0c0;
-                border-radius: 6px;
+                border-radius: 8px;
                 min-height: 30px;
                 margin: 2px;
             }}
@@ -603,19 +603,25 @@ class StyleManager:
             QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{
                 height: 0px;
             }}
+            QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {{
+                background: none;
+            }}
             QScrollBar:horizontal {{
                 background-color: {Colors.BACKGROUND};
-                height: 12px;
-                border-radius: 6px;
+                height: 16px;
+                border-radius: 8px;
             }}
             QScrollBar::handle:horizontal {{
                 background-color: #c0c0c0;
-                border-radius: 6px;
+                border-radius: 8px;
                 min-width: 30px;
                 margin: 2px;
             }}
             QScrollBar::handle:horizontal:hover {{
                 background-color: {Colors.PRIMARY_BLUE};
+            }}
+            QScrollBar::add-page:horizontal, QScrollBar::sub-page:horizontal {{
+                background: none;
             }}
         """
 

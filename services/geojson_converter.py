@@ -120,18 +120,30 @@ class GeoJSONConverter:
             geometry, geometry_type = GeoJSONConverter._parse_geo_location(
                 building.geo_location
             )
-            logger.debug(f"Building {building.building_id}: geo_location parsed -> geometry_type={geometry_type}, has_geometry={geometry is not None}")
 
         # Strategy 2: Fallback to building_geometry if available
         if not geometry and hasattr(building, 'building_geometry') and building.building_geometry:
             geometry, geometry_type = GeoJSONConverter._parse_geo_location(
                 building.building_geometry
             )
-            logger.debug(f"Building {building.building_id}: building_geometry parsed -> geometry_type={geometry_type}, has_geometry={geometry is not None}")
 
-        # No valid polygon geometry found
+        # Strategy 3: Fallback to Point from lat/lng coordinates
+        if not geometry and building.latitude and building.longitude:
+            try:
+                lat = float(building.latitude)
+                lng = float(building.longitude)
+                if -90 <= lat <= 90 and -180 <= lng <= 180:
+                    geometry = {
+                        "type": "Point",
+                        "coordinates": [lng, lat]
+                    }
+                    geometry_type = GeometryType.POINT
+            except (ValueError, TypeError):
+                pass
+
+        # No geometry at all
         if not geometry:
-            logger.debug(f"Building {building.building_id} has no polygon geometry - skipping")
+            logger.debug(f"Building {building.building_id} has no geometry - skipping")
             return None
 
         # Build properties
@@ -141,7 +153,6 @@ class GeoJSONConverter:
             geometry_type
         )
 
-        logger.debug(f"Building {building.building_id}: Final feature -> geometry.type={geometry.get('type')}, properties.geometry_type={properties.get('geometry_type')}")
 
         return {
             "type": "Feature",

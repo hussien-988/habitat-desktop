@@ -14,10 +14,11 @@ import uuid
 
 from PyQt5.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
-    QPushButton, QSpinBox, QTextEdit, QFrame
+    QPushButton, QSpinBox, QTextEdit, QFrame, QGraphicsDropShadowEffect,
+    QWidget
 )
 from PyQt5.QtCore import Qt, QLocale
-from PyQt5.QtGui import QDoubleValidator
+from PyQt5.QtGui import QDoubleValidator, QColor
 
 from app.config import Config
 from ui.components.rtl_combo import RtlCombo
@@ -73,14 +74,16 @@ class UnitDialog(QDialog):
         # CRITICAL: جعل الخلفية شفافة حتى تظهر فقط الزوايا المنحنية
         self.setAttribute(Qt.WA_TranslucentBackground)
 
-        # الأبعاد حسب Figma: 574×589
-        self.setFixedSize(574, 589)
+        # الأبعاد حسب Figma: 574×589 + shadow margin (20+20=40 W, 12+28=40 H)
+        self.setFixedSize(614, 629)
 
         self.setStyleSheet("""
             QDialog {
                 background-color: transparent;
             }
         """)
+
+        self._overlay = None
 
         self._setup_ui()
         if unit_data:
@@ -89,7 +92,7 @@ class UnitDialog(QDialog):
     def _setup_ui(self):
         """Setup the dialog UI."""
         main_layout = QVBoxLayout(self)
-        main_layout.setContentsMargins(0, 0, 0, 0)
+        main_layout.setContentsMargins(20, 12, 20, 28)  # Margin for shadow to render
         main_layout.setSpacing(0)
 
         # إنشاء frame أبيض مع زوايا منحنية (يرث RTL من التطبيق تلقائياً)
@@ -98,10 +101,18 @@ class UnitDialog(QDialog):
         content_frame.setStyleSheet("""
             QFrame#ContentFrame {
                 background-color: #FFFFFF;
-                border: 1px solid #E1E8ED;
+                border: none;
                 border-radius: 24px;
             }
         """)
+
+        # Shadow effect — makes dialog float above the page
+        shadow = QGraphicsDropShadowEffect()
+        shadow.setBlurRadius(40)
+        shadow.setXOffset(0)
+        shadow.setYOffset(8)
+        shadow.setColor(QColor(0, 0, 0, 80))
+        content_frame.setGraphicsEffect(shadow)
 
         layout = QVBoxLayout(content_frame)
         layout.setSpacing(0)
@@ -355,7 +366,7 @@ class UnitDialog(QDialog):
         container.setSpacing(4)
 
         label = QLabel(label_text)
-        label.setStyleSheet("font-size: 14px; font-weight: 600; color: #374151;")
+        label.setStyleSheet("font-size: 14px; font-weight: 600; color: #374151; background: transparent;")
 
         container.addWidget(label)
         container.addWidget(widget)
@@ -380,7 +391,7 @@ class UnitDialog(QDialog):
         container.setSpacing(4)
 
         label = QLabel(label_text)
-        label.setStyleSheet("font-size: 14px; font-weight: 600; color: #374151;")
+        label.setStyleSheet("font-size: 14px; font-weight: 600; color: #374151; background: transparent;")
 
         container.addWidget(label)
         container.addWidget(widget)
@@ -722,3 +733,41 @@ class UnitDialog(QDialog):
         """Set authentication token for API calls."""
         if self._api_service:
             self._api_service.set_access_token(token)
+
+    # ── Overlay for floating appearance ──
+
+    def showEvent(self, event):
+        """Show dark overlay behind dialog when it opens."""
+        super().showEvent(event)
+        if self.parent():
+            top_window = self.parent().window()
+            self._overlay = QWidget(top_window)
+            self._overlay.setGeometry(0, 0, top_window.width(), top_window.height())
+            self._overlay.setStyleSheet("background-color: rgba(0, 0, 0, 0.4);")
+            self._overlay.setAttribute(Qt.WA_TransparentForMouseEvents, False)
+            self._overlay.show()
+            self._overlay.raise_()
+            self.raise_()  # Keep dialog above overlay
+
+    def _cleanup_overlay(self):
+        """Remove the dark overlay."""
+        if self._overlay:
+            try:
+                self._overlay.hide()
+                self._overlay.setParent(None)
+                self._overlay.deleteLater()
+            except RuntimeError:
+                pass
+            self._overlay = None
+
+    def closeEvent(self, event):
+        self._cleanup_overlay()
+        super().closeEvent(event)
+
+    def reject(self):
+        self._cleanup_overlay()
+        super().reject()
+
+    def accept(self):
+        self._cleanup_overlay()
+        super().accept()

@@ -78,6 +78,14 @@ def get_building_status_display(status_key) -> str:
     return _vocab_label("BuildingStatus", status_key, _str_fallback)
 
 
+def get_building_type_options() -> list:
+    return _vocab_options("BuildingType")
+
+
+def get_building_status_options() -> list:
+    return _vocab_options("BuildingStatus")
+
+
 # ============ Unit Type ============
 
 def get_unit_type_display(type_key) -> str:

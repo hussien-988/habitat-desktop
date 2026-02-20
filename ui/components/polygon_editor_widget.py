@@ -281,15 +281,18 @@ class PolygonEditorWidget(QWidget):
 
     def _load_map(self):
         """Load Leaflet map with polygon drawing capabilities."""
+        from services.tile_server_manager import get_tile_server_url
+        tile_url = get_tile_server_url()
+
         html = """
 <!DOCTYPE html>
 <html>
 <head>
     <meta charset="utf-8">
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.css"/>
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.js"></script>
+    <link rel="stylesheet" href="__TILE_URL__/leaflet.css" />
+    <link rel="stylesheet" href="__TILE_URL__/leaflet-draw.css"/>
+    <script src="__TILE_URL__/leaflet.js"></script>
+    <script src="__TILE_URL__/leaflet-draw.js"></script>
     <script src="qrc:///qtwebchannel/qwebchannel.js"></script>
     <style>
         body { margin: 0; padding: 0; }
@@ -302,9 +305,9 @@ class PolygonEditorWidget(QWidget):
         // Initialize map (Aleppo center)
         var map = L.map('map').setView([36.2021, 37.1343], 13);
 
-        // Add OpenStreetMap tiles
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            attribution: '© OpenStreetMap contributors',
+        // Add tiles from local tile server (offline)
+        L.tileLayer('__TILE_URL__/tiles/{z}/{x}/{y}.png', {
+            attribution: 'Map data &copy; OpenStreetMap | UN-Habitat Syria',
             maxZoom: 19
         }).addTo(map);
 
@@ -425,6 +428,7 @@ class PolygonEditorWidget(QWidget):
 </html>
         """
 
+        html = html.replace("__TILE_URL__", tile_url)
         self.map_view.setHtml(html)
 
     def _start_drawing(self):
