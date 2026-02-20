@@ -238,6 +238,7 @@ class Pages:
     RELATIONS = "relations"
     CONFLICTS = "conflicts"
     DUPLICATES = "duplicates"  # UC-007, UC-008: Property & Person duplicates
+    CLAIM_COMPARISON = "claim_comparison"  # UC-007: Claim comparison for merge
     FIELD_ASSIGNMENT = "field_assignment"  # UC-012: Assign buildings to field teams
     SEARCH = "search"
     REPORTS = "reports"

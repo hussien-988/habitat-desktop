@@ -125,6 +125,7 @@ class MainWindow(QMainWindow):
         from ui.pages.admin_page import AdminPage
         from ui.pages.map_page import MapPage
         from ui.pages.duplicates_page import DuplicatesPage
+        from ui.pages.claim_comparison_page import ClaimComparisonPage
         from ui.pages.field_assignment_page import FieldAssignmentPage
         from ui.pages.case_details_page import CaseDetailsPage
         from ui.wizards.office_survey import OfficeSurveyWizard
@@ -232,6 +233,10 @@ class MainWindow(QMainWindow):
         self.pages[Pages.DUPLICATES] = DuplicatesPage(self.db, self.i18n, self)
         self.stack.addWidget(self.pages[Pages.DUPLICATES])
 
+        # Claim Comparison page (UC-007)
+        self.pages[Pages.CLAIM_COMPARISON] = ClaimComparisonPage(self.db, self.i18n, self)
+        self.stack.addWidget(self.pages[Pages.CLAIM_COMPARISON])
+
         # Field Assignment page (UC-012)
         self.pages[Pages.FIELD_ASSIGNMENT] = FieldAssignmentPage(self.db, self.i18n, self)
         self.stack.addWidget(self.pages[Pages.FIELD_ASSIGNMENT])
@@ -318,6 +323,16 @@ class MainWindow(QMainWindow):
         self.office_survey_wizard.survey_completed.connect(self._on_survey_completed)
         self.office_survey_wizard.survey_cancelled.connect(self._on_survey_cancelled)
         self.office_survey_wizard.survey_saved_draft.connect(self._on_survey_saved_draft)
+
+        # Duplicates page - view comparison
+        self.pages[Pages.DUPLICATES].view_comparison_requested.connect(
+            lambda: self.navigate_to(Pages.CLAIM_COMPARISON)
+        )
+
+        # Claim Comparison - back to duplicates
+        self.pages[Pages.CLAIM_COMPARISON].back_requested.connect(
+            lambda: self.navigate_to(Pages.DUPLICATES)
+        )
 
         # Language change signal
         self.language_changed.connect(self._on_language_changed)
