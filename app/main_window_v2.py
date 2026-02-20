@@ -114,6 +114,7 @@ class MainWindow(QMainWindow):
         from ui.pages.buildings_page import BuildingsPage
         from ui.pages.building_details_page import BuildingDetailsPage
         from ui.pages.units_page import UnitsPage
+        from ui.pages.unit_details_page import UnitDetailsPage
         from ui.pages.persons_page import PersonsPage
         from ui.pages.relations_page import RelationsPage
         from ui.pages.households_page import HouseholdsPage
@@ -186,6 +187,10 @@ class MainWindow(QMainWindow):
         # Units page (UC-002)
         self.pages[Pages.UNITS] = UnitsPage(self.db, self.i18n, self)
         self.stack.addWidget(self.pages[Pages.UNITS])
+
+        # Unit details page
+        self.pages[Pages.UNIT_DETAILS] = UnitDetailsPage(self.db, self.i18n, self)
+        self.stack.addWidget(self.pages[Pages.UNIT_DETAILS])
 
         # Persons page (UC-003)
         self.pages[Pages.PERSONS] = PersonsPage(self.db, self.i18n, self)
@@ -287,6 +292,14 @@ class MainWindow(QMainWindow):
         # Building details - back to list
         self.pages[Pages.BUILDING_DETAILS].back_requested.connect(
             lambda: self.navigate_to(Pages.BUILDINGS)
+        )
+
+        # Units page - view details
+        self.pages[Pages.UNITS].view_unit.connect(self._on_view_unit)
+
+        # Unit details - back to list
+        self.pages[Pages.UNIT_DETAILS].back_requested.connect(
+            lambda: self.navigate_to(Pages.UNITS)
         )
 
         # Case Details - back to drafts
@@ -494,6 +507,11 @@ class MainWindow(QMainWindow):
         """Handle view building request from buildings list."""
         logger.debug(f"Viewing building: {building_id}")
         self.navigate_to(Pages.BUILDING_DETAILS, building_id)
+
+    def _on_view_unit(self, unit):
+        """Handle view unit request from units list."""
+        logger.debug(f"Viewing unit: {getattr(unit, 'unit_id', unit)}")
+        self.navigate_to(Pages.UNIT_DETAILS, unit)
 
     def _on_draft_claim_selected(self, claim_id: str):
         """Navigate to case details — fetch full survey context from Surveys/office API."""

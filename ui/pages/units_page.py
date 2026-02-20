@@ -5,20 +5,25 @@ Implements UC-002: Property Unit Management
 """
 
 from PyQt5.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
+    QWidget, QVBoxLayout, QHBoxLayout, QLabel,
     QPushButton, QComboBox, QTableWidget, QTableWidgetItem, QHeaderView,
-    QFrame, QDialog, QFormLayout, QSpinBox, QTextEdit,
-    QAbstractItemView, QGraphicsDropShadowEffect, QSizePolicy
+    QFrame, QDialog,
+    QAbstractItemView, QGraphicsDropShadowEffect
 )
-from PyQt5.QtCore import Qt, pyqtSignal
-from PyQt5.QtGui import QColor, QIcon, QCursor
+from PyQt5.QtCore import Qt, pyqtSignal, QPoint
+from PyQt5.QtGui import QColor, QIcon, QCursor, QFont
 
-from app.config import Config, Vocabularies
+from app.config import Config
 from repositories.database import Database
 from repositories.unit_repository import UnitRepository
 from repositories.building_repository import BuildingRepository
 from models.unit import PropertyUnit
 from services.api_client import get_api_client
+from services.display_mappings import (
+    get_unit_type_display, get_unit_status_display,
+    get_unit_type_options, get_unit_status_options
+)
+from ui.wizards.office_survey.dialogs.unit_dialog import UnitDialog as WizardUnitDialog
 from ui.components.toast import Toast
 from ui.components.primary_button import PrimaryButton
 from ui.error_handler import ErrorHandler
@@ -29,615 +34,125 @@ from ui.style_manager import StyleManager, PageDimensions
 logger = get_logger(__name__)
 
 
-class UnitDialog(QDialog):
-    """Dialog for creating/editing a property unit - modern card-based style."""
+class BuildingSelectDialog(QDialog):
+    """Simple dialog to select a building before adding a unit."""
 
-    def __init__(self, db: Database, i18n: I18n, unit: PropertyUnit = None, parent=None):
+    def __init__(self, building_repo, parent=None):
         super().__init__(parent)
-        self.db = db
-        self.i18n = i18n
-        self.unit = unit
-        self.building_repo = BuildingRepository(db)
-        self.unit_repo = UnitRepository(db)
-        self._is_edit_mode = unit is not None
+        self.building_repo = building_repo
+        self._selected_building = None
 
-        # Remove title bar for modern look
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.Dialog)
-
-        # Make background transparent for rounded corners
         self.setAttribute(Qt.WA_TranslucentBackground)
+        self.setLayoutDirection(Qt.RightToLeft)
+        self.setFixedSize(420, 200)
 
-        # Fixed size matching the design from step 2
-        self.setFixedSize(560, 580)
-
-        self.setStyleSheet("""
-            QDialog {
-                background-color: transparent;
-            }
-        """)
-
+        self.setStyleSheet("QDialog { background-color: transparent; }")
         self._setup_ui()
 
-        if unit:
-            self._populate_data()
-        else:
-            # Auto-suggest first unit number for selected building
-            self._on_building_changed()
-
-    def _create_field_widget(self, label_text: str, widget, placeholder: str = None) -> QWidget:
-        """Create a field container with label above the input."""
-        container = QWidget()
-        container.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        layout = QVBoxLayout(container)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(6)
-
-        # Label
-        label = QLabel(label_text)
-        label.setStyleSheet("color: #6B7280; font-size: 13px; font-weight: 500; border: none; background: transparent;")
-        label.setAlignment(Qt.AlignRight)
-        layout.addWidget(label)
-
-        # Style the widget
-        if isinstance(widget, QComboBox):
-            widget.setStyleSheet(f"""
-                QComboBox {{
-                    background-color: #FFFFFF;
-                    border: 1px solid #E5E7EB;
-                    border-radius: 8px;
-                    padding: 10px 12px;
-                    font-size: 14px;
-                    min-height: 20px;
-                }}
-                QComboBox:focus {{
-                    border: 2px solid {Config.PRIMARY_COLOR};
-                }}
-                QComboBox::drop-down {{
-                    border: none;
-                    width: 30px;
-                }}
-                QComboBox::down-arrow {{
-                    image: none;
-                    border-left: 5px solid transparent;
-                    border-right: 5px solid transparent;
-                    border-top: 6px solid #6B7280;
-                    margin-right: 10px;
-                }}
-                QComboBox QAbstractItemView {{
-                    background-color: white;
-                    border: 1px solid #E5E7EB;
-                    border-radius: 8px;
-                    selection-background-color: #EBF5FF;
-                }}
-            """)
-            if placeholder:
-                widget.setPlaceholderText(placeholder)
-        elif isinstance(widget, QSpinBox):
-            # Style spinbox with stacked up/down buttons on left side like in step 2 photo
-            widget.setStyleSheet(f"""
-                QSpinBox {{
-                    background-color: #FFFFFF;
-                    border: 1px solid #E5E7EB;
-                    border-radius: 8px;
-                    padding: 8px 12px 8px 32px;
-                    font-size: 14px;
-                    min-height: 24px;
-                }}
-                QSpinBox:focus {{
-                    border: 1px solid {Config.PRIMARY_COLOR};
-                }}
-                QSpinBox::up-button {{
-                    subcontrol-origin: border;
-                    subcontrol-position: center left;
-                    width: 24px;
-                    height: 12px;
-                    border: none;
-                    border-right: 1px solid #E5E7EB;
-                    border-top-left-radius: 7px;
-                    background: transparent;
-                    margin-bottom: 0px;
-                }}
-                QSpinBox::up-button:hover {{
-                    background: #F3F4F6;
-                }}
-                QSpinBox::up-arrow {{
-                    image: none;
-                    border-left: 4px solid transparent;
-                    border-right: 4px solid transparent;
-                    border-bottom: 5px solid #9CA3AF;
-                    width: 0;
-                    height: 0;
-                }}
-                QSpinBox::down-button {{
-                    subcontrol-origin: border;
-                    subcontrol-position: center left;
-                    width: 24px;
-                    height: 12px;
-                    border: none;
-                    border-right: 1px solid #E5E7EB;
-                    border-bottom-left-radius: 7px;
-                    background: transparent;
-                    margin-top: 12px;
-                }}
-                QSpinBox::down-button:hover {{
-                    background: #F3F4F6;
-                }}
-                QSpinBox::down-arrow {{
-                    image: none;
-                    border-left: 4px solid transparent;
-                    border-right: 4px solid transparent;
-                    border-top: 5px solid #9CA3AF;
-                    width: 0;
-                    height: 0;
-                }}
-            """)
-        elif isinstance(widget, QLineEdit):
-            widget.setStyleSheet(f"""
-                QLineEdit {{
-                    background-color: #FFFFFF;
-                    border: 1px solid #E5E7EB;
-                    border-radius: 8px;
-                    padding: 10px 12px;
-                    font-size: 14px;
-                    min-height: 20px;
-                }}
-                QLineEdit:focus {{
-                    border: 2px solid {Config.PRIMARY_COLOR};
-                }}
-            """)
-            if placeholder:
-                widget.setPlaceholderText(placeholder)
-        elif isinstance(widget, QTextEdit):
-            widget.setStyleSheet(f"""
-                QTextEdit {{
-                    background-color: #FFFFFF;
-                    border: 1px solid #E5E7EB;
-                    border-radius: 8px;
-                    padding: 10px 12px;
-                    font-size: 14px;
-                }}
-                QTextEdit:focus {{
-                    border: 2px solid {Config.PRIMARY_COLOR};
-                }}
-            """)
-            if placeholder:
-                widget.setPlaceholderText(placeholder)
-
-        layout.addWidget(widget)
-        return container
-
     def _setup_ui(self):
-        # Main layout
         main_layout = QVBoxLayout(self)
         main_layout.setContentsMargins(0, 0, 0, 0)
-        main_layout.setSpacing(0)
 
-        # Card container with white background and rounded corners
         card = QFrame()
         card.setStyleSheet("""
             QFrame {
                 background-color: white;
                 border-radius: 16px;
-                border: none;
+                border: 1px solid #E1E8ED;
             }
         """)
-
-        # Add shadow to card
         shadow = QGraphicsDropShadowEffect()
         shadow.setBlurRadius(20)
         shadow.setColor(QColor(0, 0, 0, 40))
         shadow.setOffset(0, 4)
         card.setGraphicsEffect(shadow)
 
-        card_layout = QVBoxLayout(card)
-        card_layout.setContentsMargins(32, 24, 32, 24)
-        card_layout.setSpacing(20)
+        layout = QVBoxLayout(card)
+        layout.setContentsMargins(24, 20, 24, 20)
+        layout.setSpacing(16)
 
-        # Title header - right aligned like in photo
-        title_label = QLabel("أضف معلومات المقسم" if not self._is_edit_mode else "تعديل معلومات المقسم")
-        title_label.setStyleSheet("""
-            font-size: 16px;
-            font-weight: 600;
-            color: #1F2937;
-            background: transparent;
-            border: none;
-            padding: 0px;
-        """)
-        title_label.setAlignment(Qt.AlignRight)
-        card_layout.addWidget(title_label)
+        title = QLabel("اختر المبنى")
+        title.setStyleSheet("font-size: 16px; font-weight: 600; color: #1A1F1D;")
+        layout.addWidget(title)
 
-        # Form content
-        form_container = QWidget()
-        form_layout = QVBoxLayout(form_container)
-        form_layout.setContentsMargins(0, 0, 0, 0)
-        form_layout.setSpacing(16)
-
-        # Row 1: حالة الوحدة (Status - left) | نوع الوحدة (Type - right) - RTL order
-        row1 = QHBoxLayout()
-        row1.setSpacing(16)
-
-        # Unit Type (right side visually in RTL - added first)
-        self.type_combo = QComboBox()
-        self.type_combo.addItem("اختر", "")
-        for code, en, ar in Vocabularies.UNIT_TYPES:
-            self.type_combo.addItem(ar, code)
-        row1.addWidget(self._create_field_widget("نوع الوحدة", self.type_combo, "اختر"))
-
-        # Status (left side visually in RTL - added second)
-        self.status_combo = QComboBox()
-        self.status_combo.addItem("اختر", "")
-        statuses = [("occupied", "مشغول"), ("vacant", "شاغر"), ("unknown", "غير معروف")]
-        for code, ar in statuses:
-            self.status_combo.addItem(ar, code)
-        row1.addWidget(self._create_field_widget("حالة الوحدة", self.status_combo, "اختر"))
-
-        form_layout.addLayout(row1)
-
-        # Row 2: رقم الوحدة (Unit Number - left) | رقم الطابق (Floor - right) - RTL order
-        row2 = QHBoxLayout()
-        row2.setSpacing(16)
-
-        # Floor number (right side visually in RTL - added first)
-        self.floor_spin = QSpinBox()
-        self.floor_spin.setRange(-3, 50)
-        self.floor_spin.setValue(0)
-        self.floor_spin.setAlignment(Qt.AlignCenter)
-        row2.addWidget(self._create_field_widget("رقم الطابق", self.floor_spin))
-
-        # Unit number (left side visually in RTL - added second)
-        self.unit_number_input = QSpinBox()
-        self.unit_number_input.setRange(0, 999)
-        self.unit_number_input.setValue(0)
-        self.unit_number_input.setAlignment(Qt.AlignCenter)
-        row2.addWidget(self._create_field_widget("رقم الوحدة", self.unit_number_input))
-
-        form_layout.addLayout(row2)
-
-        # Error label for unit number (hidden by default)
-        self.unit_number_error = QLabel("")
-        self.unit_number_error.setStyleSheet("color: #DC2626; font-size: 11px;")
-        self.unit_number_error.setVisible(False)
-        self.unit_number_error.setAlignment(Qt.AlignRight)
-        form_layout.addWidget(self.unit_number_error)
-
-        # Row 3: مساحة الوحدة (Area - left) | عدد الغرف (Rooms - right) - RTL order
-        row3 = QHBoxLayout()
-        row3.setSpacing(16)
-
-        # Rooms count (right side visually in RTL - added first)
-        self.apt_number = QSpinBox()
-        self.apt_number.setRange(0, 20)
-        self.apt_number.setValue(0)
-        self.apt_number.setAlignment(Qt.AlignCenter)
-        row3.addWidget(self._create_field_widget("عدد الغرف", self.apt_number))
-
-        # Area (left side visually in RTL - added second)
-        self.area_input = QLineEdit()
-        self.area_input.setAlignment(Qt.AlignRight)
-        self.area_input.setPlaceholderText("المساحة التقريبية أو المقاسة (م²)")
-        row3.addWidget(self._create_field_widget("مساحة الوحدة", self.area_input))
-
-        form_layout.addLayout(row3)
-
-        # Row 4: وصف العقار (Description) - full width
-        self.description = QTextEdit()
-        self.description.setFixedHeight(80)
-        desc_widget = self._create_field_widget("وصف العقار", self.description,
-            "وصف تفصيلي يشمل: عدد الغرف وأنواعها، المساحة التقريبية، الاتجاهات والحدود، وأي ميزات مميزة")
-        form_layout.addWidget(desc_widget)
-
-        card_layout.addWidget(form_container)
-
-        # Building combo
         self.building_combo = QComboBox()
+        self.building_combo.setStyleSheet(f"""
+            QComboBox {{
+                background-color: #F8FAFF;
+                border: 1px solid #E1E8ED;
+                border-radius: 8px;
+                padding: 10px 12px;
+                font-size: 14px;
+                min-height: 20px;
+            }}
+            QComboBox:focus {{ border: 2px solid {Config.PRIMARY_COLOR}; }}
+            QComboBox::drop-down {{ border: none; width: 30px; }}
+            QComboBox::down-arrow {{
+                image: none;
+                border-left: 5px solid transparent;
+                border-right: 5px solid transparent;
+                border-top: 6px solid #6B7280;
+                margin-right: 10px;
+            }}
+        """)
         buildings = self.building_repo.get_all(limit=500)
+        self._buildings = buildings
         for b in buildings:
-            display = f"{b.building_id} - {b.neighborhood_name_ar}"
+            name = b.neighborhood_name_ar or b.neighborhood_name or ""
+            display = f"{b.building_id} - {name}".strip(" -")
             self.building_combo.addItem(display, b.building_id)
-        self.building_combo.currentIndexChanged.connect(self._on_building_changed)
-        card_layout.addWidget(self.building_combo)
+        layout.addWidget(self.building_combo)
 
-        # Hint label
-        self.unit_number_hint = QLabel("")
-        self.unit_number_hint.setStyleSheet("color: #6B7280; font-size: 12px; margin-top: 4px;")
-        card_layout.addWidget(self.unit_number_hint)
-
-        # Spacer
-        card_layout.addStretch()
-
-        # Buttons row - حفظ (Save - blue, left) | إلغاء (Cancel - outline, right)
         btn_layout = QHBoxLayout()
         btn_layout.setSpacing(12)
 
-        # Save button (primary - blue) - appears on LEFT in RTL
-        save_btn = QPushButton("حفظ")
-        save_btn.setFixedHeight(45)
-        save_btn.setCursor(Qt.PointingHandCursor)
-        save_btn.setStyleSheet(f"""
-            QPushButton {{
-                background-color: {Config.PRIMARY_COLOR};
-                color: white;
-                border: none;
-                border-radius: 8px;
-                padding: 12px 32px;
-                font-size: 14px;
-                font-weight: 600;
-            }}
-            QPushButton:hover {{
-                background-color: {Config.PRIMARY_DARK};
-            }}
-        """)
-        save_btn.clicked.connect(self.accept)
-        btn_layout.addWidget(save_btn)
-
-        # Cancel button (secondary - outline) - appears on RIGHT in RTL
         cancel_btn = QPushButton("إلغاء")
-        cancel_btn.setFixedHeight(45)
+        cancel_btn.setFixedHeight(40)
         cancel_btn.setCursor(Qt.PointingHandCursor)
         cancel_btn.setStyleSheet("""
             QPushButton {
-                background-color: white;
-                color: #6B7280;
-                border: 1px solid #E5E7EB;
-                border-radius: 8px;
-                padding: 12px 32px;
-                font-size: 14px;
-                font-weight: 500;
+                background-color: white; color: #6B7280;
+                border: 1px solid #E5E7EB; border-radius: 8px;
+                padding: 8px 24px; font-size: 14px;
             }
-            QPushButton:hover {
-                background-color: #F9FAFB;
-                border-color: #D1D5DB;
-            }
+            QPushButton:hover { background-color: #F9FAFB; }
         """)
         cancel_btn.clicked.connect(self.reject)
         btn_layout.addWidget(cancel_btn)
 
-        card_layout.addLayout(btn_layout)
+        ok_btn = QPushButton("تأكيد")
+        ok_btn.setFixedHeight(40)
+        ok_btn.setCursor(Qt.PointingHandCursor)
+        ok_btn.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {Config.PRIMARY_COLOR}; color: white;
+                border: none; border-radius: 8px;
+                padding: 8px 24px; font-size: 14px; font-weight: 600;
+            }}
+            QPushButton:hover {{ background-color: {Config.PRIMARY_DARK}; }}
+        """)
+        ok_btn.clicked.connect(self.accept)
+        btn_layout.addWidget(ok_btn)
 
+        layout.addLayout(btn_layout)
         main_layout.addWidget(card)
 
-    def _populate_data(self):
-        """Populate form with existing unit data."""
-        if not self.unit:
-            return
-
-        # Find and select building (block signal to avoid auto-suggest overwriting)
-        self.building_combo.blockSignals(True)
-        idx = self.building_combo.findData(self.unit.building_id)
-        if idx >= 0:
-            self.building_combo.setCurrentIndex(idx)
-        self.building_combo.blockSignals(False)
-
-        # Unit number (now a QSpinBox)
-        if self.unit.unit_number:
-            try:
-                self.unit_number_input.setValue(int(self.unit.unit_number))
-            except (ValueError, TypeError):
-                self.unit_number_input.setValue(0)
-
-        # Unit type
-        idx = self.type_combo.findData(self.unit.unit_type)
-        if idx >= 0:
-            self.type_combo.setCurrentIndex(idx)
-
-        self.floor_spin.setValue(self.unit.floor_number)
-
-        # Apartment number / rooms count (QSpinBox)
-        if self.unit.apartment_number:
-            try:
-                self.apt_number.setValue(int(self.unit.apartment_number))
-            except (ValueError, TypeError):
-                self.apt_number.setValue(0)
-
-        idx = self.status_combo.findData(self.unit.apartment_status)
-        if idx >= 0:
-            self.status_combo.setCurrentIndex(idx)
-
-        # Area (now a QLineEdit)
-        if self.unit.area_sqm:
-            self.area_input.setText(str(int(self.unit.area_sqm)))
-
-        self.description.setPlainText(self.unit.property_description or "")
-
-    def _on_building_changed(self):
-        """Handle building selection change - auto-suggest next unit number."""
-        if self._is_edit_mode:
-            return  # Don't auto-suggest in edit mode
-
+    def get_selected_building(self):
         building_id = self.building_combo.currentData()
-        if building_id:
-            next_number = self.unit_repo.get_next_unit_number(building_id)
-            try:
-                self.unit_number_input.setValue(int(next_number))
-            except (ValueError, TypeError):
-                self.unit_number_input.setValue(1)
-            self.unit_number_hint.setText(f"رقم الوحدة التالي المتاح: {next_number}")
-
-    def _validate_unit_number(self):
-        """Validate unit number format and uniqueness."""
-        num = self.unit_number_input.value()
-
-        # Check range (1-999)
-        if num < 1 or num > 999:
-            self._show_unit_number_error("يجب أن يكون الرقم بين 001 و 999")
-            return False
-
-        # Check uniqueness
-        building_id = self.building_combo.currentData()
-        padded_number = str(num).zfill(3)
-        exclude_uuid = self.unit.unit_uuid if self.unit else None
-
-        if self.unit_repo.unit_number_exists(building_id, padded_number, exclude_uuid):
-            self._show_unit_number_error("رقم الوحدة موجود مسبقاً في هذا المبنى")
-            return False
-
-        # Valid
-        self._hide_unit_number_error()
-        return True
-
-    def _show_unit_number_error(self, message: str):
-        """Show unit number validation error."""
-        self.unit_number_error.setText(message)
-        self.unit_number_error.setVisible(True)
-        self.unit_number_input.setStyleSheet("""
-            QSpinBox {
-                background-color: #FEF2F2;
-                border: 2px solid #DC2626;
-                border-radius: 8px;
-                padding: 8px 12px 8px 32px;
-                font-size: 14px;
-                min-height: 24px;
-            }
-            QSpinBox::up-button {
-                subcontrol-origin: border;
-                subcontrol-position: center left;
-                width: 24px;
-                height: 12px;
-                border: none;
-                border-right: 1px solid #DC2626;
-                border-top-left-radius: 7px;
-                background: transparent;
-            }
-            QSpinBox::up-arrow {
-                image: none;
-                border-left: 4px solid transparent;
-                border-right: 4px solid transparent;
-                border-bottom: 5px solid #DC2626;
-                width: 0;
-                height: 0;
-            }
-            QSpinBox::down-button {
-                subcontrol-origin: border;
-                subcontrol-position: center left;
-                width: 24px;
-                height: 12px;
-                border: none;
-                border-right: 1px solid #DC2626;
-                border-bottom-left-radius: 7px;
-                background: transparent;
-                margin-top: 12px;
-            }
-            QSpinBox::down-arrow {
-                image: none;
-                border-left: 4px solid transparent;
-                border-right: 4px solid transparent;
-                border-top: 5px solid #DC2626;
-                width: 0;
-                height: 0;
-            }
-        """)
-
-    def _hide_unit_number_error(self):
-        """Hide unit number validation error."""
-        self.unit_number_error.setVisible(False)
-        self.unit_number_input.setStyleSheet(f"""
-            QSpinBox {{
-                background-color: #FFFFFF;
-                border: 1px solid #E5E7EB;
-                border-radius: 8px;
-                padding: 8px 12px 8px 32px;
-                font-size: 14px;
-                min-height: 24px;
-            }}
-            QSpinBox:focus {{
-                border: 1px solid {Config.PRIMARY_COLOR};
-            }}
-            QSpinBox::up-button {{
-                subcontrol-origin: border;
-                subcontrol-position: center left;
-                width: 24px;
-                height: 12px;
-                border: none;
-                border-right: 1px solid #E5E7EB;
-                border-top-left-radius: 7px;
-                background: transparent;
-            }}
-            QSpinBox::up-button:hover {{
-                background: #F3F4F6;
-            }}
-            QSpinBox::up-arrow {{
-                image: none;
-                border-left: 4px solid transparent;
-                border-right: 4px solid transparent;
-                border-bottom: 5px solid #9CA3AF;
-                width: 0;
-                height: 0;
-            }}
-            QSpinBox::down-button {{
-                subcontrol-origin: border;
-                subcontrol-position: center left;
-                width: 24px;
-                height: 12px;
-                border: none;
-                border-right: 1px solid #E5E7EB;
-                border-bottom-left-radius: 7px;
-                background: transparent;
-                margin-top: 12px;
-            }}
-            QSpinBox::down-button:hover {{
-                background: #F3F4F6;
-            }}
-            QSpinBox::down-arrow {{
-                image: none;
-                border-left: 4px solid transparent;
-                border-right: 4px solid transparent;
-                border-top: 5px solid #9CA3AF;
-                width: 0;
-                height: 0;
-            }}
-        """)
-
-    def _get_padded_unit_number(self) -> str:
-        """Get unit number padded to 3 digits."""
-        num = self.unit_number_input.value()
-        if num > 0:
-            return str(num).zfill(3)
-        return "001"
-
-    def accept(self):
-        """Override accept to validate before closing."""
-        if not self._validate_unit_number():
-            ErrorHandler.show_warning(
-                self,
-                "الرجاء تصحيح رقم الوحدة قبل الحفظ",
-                "خطأ في البيانات"
-            )
-            return
-        super().accept()
-
-    def get_data(self) -> dict:
-        """Get form data as dictionary."""
-        unit_number = self._get_padded_unit_number()
-        building_id = self.building_combo.currentData()
-        # Generate unit_id from building_id + unit_number
-        unit_id = f"{building_id}-{unit_number}"
-
-        # Parse area from text input
-        area_text = self.area_input.text().strip()
-        area_sqm = None
-        if area_text:
-            try:
-                area_sqm = float(area_text)
-            except ValueError:
-                area_sqm = None
-
-        return {
-            "building_id": building_id,
-            "unit_number": unit_number,
-            "unit_id": unit_id,
-            "unit_type": self.type_combo.currentData() or None,
-            "floor_number": self.floor_spin.value(),
-            "apartment_number": str(self.apt_number.value()) if self.apt_number.value() > 0 else "",
-            "apartment_status": self.status_combo.currentData() or None,
-            "area_sqm": area_sqm,
-            "property_description": self.description.toPlainText().strip(),
-        }
+        if not building_id:
+            return None
+        for b in self._buildings:
+            if b.building_id == building_id:
+                return b
+        return None
 
 
 class UnitsPage(QWidget):
-    """Property Units management page with card-based table layout matching buildings page."""
+    """Property Units management page — 6-column table matching Figma design."""
 
-    view_unit = pyqtSignal(str)
+    view_unit = pyqtSignal(object)
+    edit_unit_signal = pyqtSignal(object)
 
     def __init__(self, db: Database, i18n: I18n, parent=None):
         super().__init__(parent)
@@ -646,149 +161,164 @@ class UnitsPage(QWidget):
         self.unit_repo = UnitRepository(db)
         self.building_repo = BuildingRepository(db)
 
-        # API service for fetching units
         self._api_service = get_api_client()
         self._use_api = getattr(Config, 'DATA_PROVIDER', 'local_db') == 'http'
 
-        # Pagination
         self._all_units = []
         self._units = []
         self._current_page = 1
-        self._page_size = 11  # Fixed 11 rows like buildings page
+        self._rows_per_page = 11
+        self._total_pages = 1
+
+        self._active_filters = {
+            'neighborhood': None,
+            'unit_type': None,
+            'unit_status': None,
+        }
+        self._buildings_cache = {}
 
         self._setup_ui()
 
     def _setup_ui(self):
-        # Background color from StyleManager
+        from ui.design_system import Colors
+        from ui.font_utils import create_font, FontManager
+        from pathlib import Path
+        import sys
+
         self.setStyleSheet(StyleManager.page_background())
 
         layout = QVBoxLayout(self)
-        # Apply unified padding from PageDimensions
         layout.setContentsMargins(
-            PageDimensions.CONTENT_PADDING_H,        # Left: 131px
-            PageDimensions.CONTENT_PADDING_V_TOP,    # Top: 32px
-            PageDimensions.CONTENT_PADDING_H,        # Right: 131px
-            PageDimensions.CONTENT_PADDING_V_BOTTOM  # Bottom: 0px
+            PageDimensions.CONTENT_PADDING_H,
+            PageDimensions.CONTENT_PADDING_V_TOP,
+            PageDimensions.CONTENT_PADDING_H,
+            PageDimensions.CONTENT_PADDING_V_BOTTOM,
         )
-        layout.setSpacing(15)  # 15px gap between header and table card
+        layout.setSpacing(15)
 
-        # Header row - Title on left, buttons on right
+        # ── Header row ──
         top_row = QHBoxLayout()
         top_row.setSpacing(20)
 
-        # Title
-        title = QLabel("الوحدات العقارية")
-        title.setStyleSheet("font-size: 32px; font-weight: bold; color: #333;")
+        title = QLabel("الوحدات السكنية")
+        title.setFont(create_font(size=FontManager.SIZE_TITLE, weight=FontManager.WEIGHT_SEMIBOLD))
+        title.setStyleSheet(f"color: {Colors.PAGE_TITLE}; background: transparent; border: none;")
         top_row.addWidget(title)
 
         top_row.addStretch()
 
-        # Add unit button - using PrimaryButton component like buildings page
         add_btn = PrimaryButton("إضافة وحدة جديدة", icon_name="icon")
         add_btn.clicked.connect(self._on_add_unit)
         top_row.addWidget(add_btn)
 
         layout.addLayout(top_row)
 
-        # Table card
+        # ── Table card ──
         table_card = QFrame()
-        table_card.setStyleSheet("""
-            QFrame {
-                background-color: white;
-                border-radius: 16px;
-            }
-        """)
-
-        table_shadow = QGraphicsDropShadowEffect()
-        table_shadow.setBlurRadius(10)
-        table_shadow.setColor(QColor(0, 0, 0, 15))
-        table_shadow.setOffset(0, 2)
-        table_card.setGraphicsEffect(table_shadow)
-
+        table_card.setFixedHeight(708)
+        table_card.setStyleSheet("background-color: white; border-radius: 16px;")
         card_layout = QVBoxLayout(table_card)
         card_layout.setContentsMargins(10, 10, 10, 10)
+        card_layout.setSpacing(0)
 
+        # Table
         self.table = QTableWidget()
-        self.table.setColumnCount(7)
-        self.table.setRowCount(11)  # Fixed 11 rows
+        self.table.setColumnCount(6)
+        self.table.setRowCount(11)
         self.table.setLayoutDirection(Qt.RightToLeft)
+        self.table.setShowGrid(False)
+        self.table.setFocusPolicy(Qt.NoFocus)
+        self.table.setSelectionMode(QTableWidget.NoSelection)
+        self.table.setEditTriggers(QAbstractItemView.NoEditTriggers)
+        self.table.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.table.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
 
-        # Get down.png icon path
-        from pathlib import Path
-        import sys
-
+        # Icon for filterable columns
         if hasattr(sys, '_MEIPASS'):
             base_path = Path(sys._MEIPASS)
         else:
             base_path = Path(__file__).parent.parent.parent
-
         icon_path = base_path / "assets" / "images" / "down.png"
 
-        # Set headers
-        headers = ["رقم الوحدة", "رقم المبنى", "النوع", "الطابق", "رقم الشقة", "الحالة", ""]
+        headers = ["رقم المقسم", "المنطقة", "نوع المقسم", "حالة المقسم", "وصف المقسم", ""]
         for i, text in enumerate(headers):
             item = QTableWidgetItem(text)
-            # Add icon to filterable columns (2, 5)
-            if i in [2, 5] and icon_path.exists():
-                icon = QIcon(str(icon_path))
-                item.setIcon(icon)
+            if i in (1, 2, 3) and icon_path.exists():
+                item.setIcon(QIcon(str(icon_path)))
             self.table.setHorizontalHeaderItem(i, item)
 
-        # Disable scroll bars
-        self.table.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        self.table.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-
-        # Table styling
+        # Styling (DRY — same as buildings page)
         self.table.setStyleSheet("""
             QTableWidget {
-                background-color: white;
                 border: none;
-                gridline-color: #F1F5F9;
+                background-color: white;
+                font-size: 10.5pt;
+                font-weight: 400;
+                color: #212B36;
             }
             QTableWidget::item {
-                padding: 12px 8px;
-                border-bottom: 1px solid #F1F5F9;
+                padding: 8px 15px;
+                border-bottom: 1px solid #F0F0F0;
+                color: #212B36;
+                font-size: 10.5pt;
+                font-weight: 400;
             }
-            QTableWidget::item:selected {
-                background-color: #EBF5FF;
+            QTableWidget::item:hover {
+                background-color: #FAFBFC;
+            }
+            QHeaderView {
+                border-top-left-radius: 16px;
+                border-top-right-radius: 16px;
             }
             QHeaderView::section {
                 background-color: #F8F9FA;
-                color: #6B7280;
-                font-weight: 600;
-                padding: 12px 8px;
+                padding: 12px;
+                padding-left: 30px;
                 border: none;
-                border-bottom: 1px solid #E1E8ED;
+                color: #637381;
+                font-weight: 600;
+                font-size: 11pt;
+                height: 56px;
             }
-        """)
+            QHeaderView::section:hover {
+                background-color: #EBEEF2;
+            }
+        """ + StyleManager.scrollbar())
 
-        # Configure header
+        # Header config
         header = self.table.horizontalHeader()
-        header.setStretchLastSection(False)
-        header.setSectionResizeMode(0, QHeaderView.Stretch)  # Unit ID
-        header.setSectionResizeMode(1, QHeaderView.Stretch)  # Building ID
-        header.setSectionResizeMode(2, QHeaderView.ResizeToContents)  # Type
-        header.setSectionResizeMode(3, QHeaderView.ResizeToContents)  # Floor
-        header.setSectionResizeMode(4, QHeaderView.ResizeToContents)  # Apt Number
-        header.setSectionResizeMode(5, QHeaderView.ResizeToContents)  # Status
-        header.setSectionResizeMode(6, QHeaderView.Fixed)  # Actions
-        header.resizeSection(6, 50)  # Fixed width for actions column
+        header.setDefaultAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        header.setFixedHeight(56)
+        header.setStretchLastSection(True)
+        header.setMouseTracking(True)
+        header.sectionEntered.connect(self._on_header_hover)
+        header.sectionClicked.connect(self._on_header_clicked)
 
-        # Set row height
-        self.table.verticalHeader().setVisible(False)
-        self.table.verticalHeader().setDefaultSectionSize(50)
+        # Column widths
+        header.setSectionResizeMode(0, QHeaderView.Fixed)
+        header.resizeSection(0, 298)   # رقم المقسم
+        header.setSectionResizeMode(1, QHeaderView.Fixed)
+        header.resizeSection(1, 206)   # المنطقة
+        header.setSectionResizeMode(2, QHeaderView.Fixed)
+        header.resizeSection(2, 220)   # نوع المقسم
+        header.setSectionResizeMode(3, QHeaderView.Fixed)
+        header.resizeSection(3, 195)   # حالة المقسم
+        header.setSectionResizeMode(4, QHeaderView.Fixed)
+        header.resizeSection(4, 195)   # وصف المقسم
+        header.setSectionResizeMode(5, QHeaderView.Stretch)  # ⋮
 
-        # Selection behavior
-        self.table.setSelectionBehavior(QAbstractItemView.SelectRows)
-        self.table.setSelectionMode(QAbstractItemView.SingleSelection)
-        self.table.setEditTriggers(QAbstractItemView.NoEditTriggers)
+        # Row heights
+        v_header = self.table.verticalHeader()
+        v_header.setVisible(False)
+        v_header.setDefaultSectionSize(52)
 
-        # Double click to edit
+        # Events
+        self.table.cellClicked.connect(self._on_cell_clicked)
         self.table.cellDoubleClicked.connect(self._on_row_double_click)
 
         card_layout.addWidget(self.table)
 
-        # Footer with pagination
+        # ── Footer ──
         footer_frame = QFrame()
         footer_frame.setStyleSheet("""
             QFrame {
@@ -810,66 +340,82 @@ class UnitsPage(QWidget):
         nav_layout.setContentsMargins(0, 0, 0, 0)
         nav_layout.setSpacing(8)
 
-        # Previous button
-        self.prev_btn = QPushButton(">")
-        self.prev_btn.setFixedSize(32, 32)
-        self.prev_btn.setStyleSheet("""
+        nav_btn_style = """
             QPushButton {
                 background: transparent;
                 border: 1px solid #E1E8ED;
                 border-radius: 4px;
-                color: #6B7280;
+                color: #637381;
+                font-size: 14pt;
                 font-weight: bold;
             }
-            QPushButton:hover {
-                background-color: #F3F4F6;
-            }
-            QPushButton:disabled {
-                color: #D1D5DB;
-                border-color: #F3F4F6;
-            }
-        """)
+            QPushButton:hover { background-color: #EBEEF2; }
+            QPushButton:disabled { color: #C1C7CD; }
+        """
+        self.prev_btn = QPushButton(">")
+        self.prev_btn.setFixedSize(32, 32)
+        self.prev_btn.setStyleSheet(nav_btn_style)
         self.prev_btn.clicked.connect(self._on_prev_page)
         nav_layout.addWidget(self.prev_btn)
 
-        # Next button
         self.next_btn = QPushButton("<")
         self.next_btn.setFixedSize(32, 32)
-        self.next_btn.setStyleSheet("""
-            QPushButton {
-                background: transparent;
-                border: 1px solid #E1E8ED;
-                border-radius: 4px;
-                color: #6B7280;
-                font-weight: bold;
-            }
-            QPushButton:hover {
-                background-color: #F3F4F6;
-            }
-            QPushButton:disabled {
-                color: #D1D5DB;
-                border-color: #F3F4F6;
-            }
-        """)
+        self.next_btn.setStyleSheet(nav_btn_style)
         self.next_btn.clicked.connect(self._on_next_page)
         nav_layout.addWidget(self.next_btn)
 
         footer.addWidget(nav_container)
 
-        # Page info label
-        self.page_label = QLabel("صفحة 1 من 1")
-        self.page_label.setStyleSheet("color: #6B7280; background: transparent;")
+        # Page counter
+        self.page_label = QLabel("0-0 of 0")
+        self.page_label.setStyleSheet("color: #637381; font-size: 10pt; font-weight: 400; background: transparent;")
         footer.addWidget(self.page_label)
 
-        footer.addStretch()
+        # Rows per page selector
+        from PyQt5.QtGui import QPixmap
+        rows_container = QFrame()
+        rows_container.setStyleSheet("""
+            QFrame {
+                background: transparent;
+                border: 1px solid #E1E8ED;
+                border-radius: 4px;
+                padding: 4px 8px;
+            }
+            QFrame:hover { background-color: #EBEEF2; }
+        """)
+        rows_container.setCursor(Qt.PointingHandCursor)
+        rows_layout = QHBoxLayout(rows_container)
+        rows_layout.setContentsMargins(4, 2, 4, 2)
+        rows_layout.setSpacing(4)
 
-        # Results count
-        self.count_label = QLabel("0 وحدة")
-        self.count_label.setStyleSheet("color: #6B7280; background: transparent;")
-        footer.addWidget(self.count_label)
+        down_icon_label = QLabel()
+        if icon_path.exists():
+            down_pixmap = QPixmap(str(icon_path))
+            if not down_pixmap.isNull():
+                down_pixmap = down_pixmap.scaled(10, 10, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+                down_icon_label.setPixmap(down_pixmap)
+        down_icon_label.setStyleSheet("background: transparent; border: none;")
+        rows_layout.addWidget(down_icon_label)
+
+        self.rows_number = QLabel(str(self._rows_per_page))
+        self.rows_number.setStyleSheet("color: #637381; font-size: 10pt; font-weight: 400; background: transparent; border: none;")
+        rows_layout.addWidget(self.rows_number)
+
+        rows_container.mousePressEvent = lambda e: self._show_page_selection_menu(rows_container)
+        footer.addWidget(rows_container)
+
+        rows_label = QLabel("Rows per page:")
+        rows_label.setStyleSheet("color: #637381; font-size: 10pt; font-weight: 400; background: transparent;")
+        footer.addWidget(rows_label)
+
+        from ui.components.toggle_switch import ToggleSwitch
+        self.dense_toggle = ToggleSwitch("Dense", checked=True)
+        self.dense_toggle.toggled.connect(self._on_dense_toggle)
+
+        footer.addStretch()
+        footer.addWidget(self.dense_toggle)
 
         card_layout.addWidget(footer_frame)
-
         layout.addWidget(table_card)
 
     def refresh(self, data=None):
@@ -912,113 +458,96 @@ class UnitsPage(QWidget):
             units = self.unit_repo.get_all(limit=1000)
 
         self._all_units = units
-        self._units = units
+
+        self._buildings_cache = {}
+        all_buildings = self.building_repo.get_all(limit=5000)
+        for b in all_buildings:
+            self._buildings_cache[b.building_id] = b
+            if b.building_uuid:
+                self._buildings_cache[b.building_uuid] = b
+
+        self._units = self._apply_filters(units)
         self._current_page = 1
         self._update_table()
 
     def _update_table(self):
-        """Update table with current page of units."""
-        # Calculate pagination
-        total_units = len(self._units)
-        total_pages = max(1, (total_units + self._page_size - 1) // self._page_size)
-        self._current_page = min(self._current_page, total_pages)
+        total = len(self._units)
+        self._total_pages = max(1, (total + self._rows_per_page - 1) // self._rows_per_page)
+        self._current_page = min(self._current_page, self._total_pages)
 
-        start_idx = (self._current_page - 1) * self._page_size
-        end_idx = min(start_idx + self._page_size, total_units)
+        start_idx = (self._current_page - 1) * self._rows_per_page
+        end_idx = min(start_idx + self._rows_per_page, total)
         page_units = self._units[start_idx:end_idx]
 
-        # Clear table
-        for row in range(self._page_size):
-            for col in range(7):
+        # Clear spans and cells
+        self.table.clearSpans()
+        for row in range(self._rows_per_page):
+            for col in range(6):
                 self.table.setItem(row, col, QTableWidgetItem(""))
 
-        # Mapping for unit type to Arabic
-        type_ar_map = {
-            "apartment": "شقة",
-            "shop": "محل تجاري",
-            "office": "مكتب",
-            "warehouse": "مستودع",
-            "other": "أخرى",
-        }
+        if total == 0:
+            self.table.setSpan(0, 0, self._rows_per_page, 6)
+            empty_item = QTableWidgetItem("لا توجد بيانات مطابقة للفلتر المحدد")
+            empty_item.setTextAlignment(Qt.AlignCenter)
+            empty_item.setForeground(QColor("#9CA3AF"))
+            self.table.setItem(0, 0, empty_item)
+            self.page_label.setText("0-0 of 0")
+            self.prev_btn.setEnabled(False)
+            self.next_btn.setEnabled(False)
+            return
 
-        # Mapping for status to Arabic
-        status_ar_map = {
-            "occupied": "مشغول",
-            "vacant": "شاغر",
-            "damaged": "متضرر",
-            "under_renovation": "قيد التجديد",
-            "uninhabitable": "غير صالح للسكن",
-            "locked": "مغلق",
-            "unknown": "غير معروف",
-        }
-
-        # Populate table
+        # Populate rows
         for row, unit in enumerate(page_units):
-            # Unit ID
-            self.table.setItem(row, 0, QTableWidgetItem(unit.unit_id or ""))
+            # col 0: رقم المقسم
+            try:
+                num = str(int(unit.unit_number))
+            except (ValueError, TypeError):
+                num = unit.unit_number or ""
+            self.table.setItem(row, 0, QTableWidgetItem(num))
 
-            # Building ID (truncated)
-            building_id = unit.building_id or ""
-            building_id_display = building_id[:20] + "..." if len(building_id) > 20 else building_id
-            self.table.setItem(row, 1, QTableWidgetItem(building_id_display))
+            # col 1: المنطقة (neighborhood from building)
+            area = self._get_unit_area(unit)
+            self.table.setItem(row, 1, QTableWidgetItem(area))
 
-            # Type - map to Arabic (guard against non-string values)
-            unit_type_val = unit.unit_type if unit.unit_type is not None else "other"
-            if not isinstance(unit_type_val, str):
-                try:
-                    unit_type_str = str(unit_type_val)
-                except Exception:
-                    unit_type_str = "other"
-            else:
-                unit_type_str = unit_type_val
-            unit_type_str = unit_type_str.strip() or "other"
-            type_display = type_ar_map.get(unit_type_str.lower(), unit_type_str)
-            self.table.setItem(row, 2, QTableWidgetItem(type_display))
+            # col 2: نوع المقسم
+            self.table.setItem(row, 2, QTableWidgetItem(get_unit_type_display(unit.unit_type)))
 
-            # Floor
-            self.table.setItem(row, 3, QTableWidgetItem(str(unit.floor_number or 0)))
+            # col 3: حالة المقسم
+            self.table.setItem(row, 3, QTableWidgetItem(get_unit_status_display(unit.apartment_status)))
 
-            # Apartment number (shows number of rooms from API)
-            self.table.setItem(row, 4, QTableWidgetItem(unit.apartment_number or "-"))
+            # col 4: وصف المقسم (truncated)
+            desc = unit.property_description or ""
+            desc_display = desc[:40] + "..." if len(desc) > 40 else desc
+            self.table.setItem(row, 4, QTableWidgetItem(desc_display))
 
-            # Status - map to Arabic (guard against non-string values)
-            status_val = unit.apartment_status if unit.apartment_status is not None else "unknown"
-            if not isinstance(status_val, str):
-                try:
-                    status_str = str(status_val)
-                except Exception:
-                    status_str = "unknown"
-            else:
-                status_str = status_val
-            status_str = status_str.strip() or "unknown"
-            status_display = status_ar_map.get(status_str.lower(), status_str)
-            self.table.setItem(row, 5, QTableWidgetItem(status_display))
+            # col 5: ⋮ (3-dot menu)
+            dots_item = QTableWidgetItem("⋮")
+            dots_item.setTextAlignment(Qt.AlignCenter)
+            dots_font = QFont()
+            dots_font.setPointSize(18)
+            dots_font.setWeight(QFont.Bold)
+            dots_item.setFont(dots_font)
+            dots_item.setForeground(QColor("#637381"))
+            self.table.setItem(row, 5, dots_item)
 
-            # Actions button
-            action_btn = QPushButton("⋮")
-            action_btn.setFixedSize(30, 30)
-            action_btn.setStyleSheet("""
-                QPushButton {
-                    background: transparent;
-                    border: none;
-                    color: #6B7280;
-                    font-size: 18px;
-                    font-weight: bold;
-                }
-                QPushButton:hover {
-                    background-color: #F3F4F6;
-                    border-radius: 4px;
-                }
-            """)
-            action_btn.setCursor(Qt.PointingHandCursor)
-            action_btn.clicked.connect(lambda checked, u=unit: self._show_unit_menu(u))
-            self.table.setCellWidget(row, 6, action_btn)
-
-        # Update pagination controls
+        # Update pagination
+        if total > 0:
+            self.page_label.setText(f"{start_idx + 1}-{end_idx} of {total}")
+        else:
+            self.page_label.setText("0-0 of 0")
+        self.rows_number.setText(str(self._rows_per_page))
         self.prev_btn.setEnabled(self._current_page > 1)
-        self.next_btn.setEnabled(self._current_page < total_pages)
-        self.page_label.setText(f"صفحة {self._current_page} من {total_pages}")
-        self.count_label.setText(f"{total_units} وحدة")
+        self.next_btn.setEnabled(self._current_page < self._total_pages)
+
+    def _get_unit_area(self, unit) -> str:
+        if not unit.building_id:
+            return ""
+        building = self._buildings_cache.get(unit.building_id)
+        if building:
+            return (building.neighborhood_name_ar or building.neighborhood_name or "").strip()
+        return ""
+
+    # ── Pagination ──
 
     def _on_prev_page(self):
         if self._current_page > 1:
@@ -1026,137 +555,295 @@ class UnitsPage(QWidget):
             self._update_table()
 
     def _on_next_page(self):
-        total_pages = max(1, (len(self._units) + self._page_size - 1) // self._page_size)
-        if self._current_page < total_pages:
+        if self._current_page < self._total_pages:
             self._current_page += 1
             self._update_table()
 
+    def _go_to_page(self, page_num):
+        """Go to specific page."""
+        if 1 <= page_num <= self._total_pages:
+            self._current_page = page_num
+            self._load_units()
+
+    def _show_page_selection_menu(self, parent_widget):
+        """Show dropdown menu to select rows per page."""
+        from PyQt5.QtWidgets import QMenu
+        menu = QMenu(self)
+        menu.setStyleSheet("""
+            QMenu {
+                background-color: white;
+                border: 1px solid #E1E8ED;
+                border-radius: 4px;
+                padding: 4px;
+            }
+            QMenu::item {
+                padding: 6px 20px;
+                color: #637381;
+                font-size: 10pt;
+            }
+            QMenu::item:selected {
+                background-color: #E3F2FD;
+                color: #3498db;
+            }
+        """)
+        for size in [5, 10, 15, 25]:
+            action = menu.addAction(str(size))
+            if size == self._rows_per_page:
+                action.setEnabled(False)
+            else:
+                action.triggered.connect(lambda checked, s=size: self._set_rows_per_page(s))
+        menu.exec_(parent_widget.mapToGlobal(parent_widget.rect().bottomLeft()))
+
+    def _set_rows_per_page(self, size):
+        """Change rows per page and reload."""
+        self._rows_per_page = size
+        self.table.setRowCount(size)
+        v_header = self.table.verticalHeader()
+        v_header.setDefaultSectionSize(76)
+        self._current_page = 1
+        self._update_table()
+
+    def _on_dense_toggle(self, checked):
+        row_height = 52 if checked else 68
+        v_header = self.table.verticalHeader()
+        v_header.setDefaultSectionSize(row_height)
+        if checked:
+            self.table.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        else:
+            self.table.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+
+    # ── Row interactions ──
+
     def _on_row_double_click(self, row, col):
-        """Handle double-click to edit unit."""
-        start_idx = (self._current_page - 1) * self._page_size
+        """Handle double-click to view unit details."""
+        start_idx = (self._current_page - 1) * self._rows_per_page
         unit_idx = start_idx + row
         if unit_idx < len(self._units):
-            unit = self._units[unit_idx]
-            self._edit_unit(unit)
+            self.view_unit.emit(self._units[unit_idx])
 
-    def _show_unit_menu(self, unit: PropertyUnit):
-        """Show context menu for unit actions."""
-        from PyQt5.QtWidgets import QMenu
+    def _on_cell_clicked(self, row: int, col: int):
+        """Open action menu when 3-dot column is clicked."""
+        if col != 5:
+            return
+        item = self.table.item(row, 0)
+        if not item or not item.text().strip():
+            return
+        start_idx = (self._current_page - 1) * self._rows_per_page
+        unit_idx = start_idx + row
+        if unit_idx >= len(self._units):
+            return
+        self._show_actions_menu(row, col, self._units[unit_idx])
+
+    def _show_actions_menu(self, row: int, col: int, unit: PropertyUnit):
+        """Show 3-dot action menu below the cell (same pattern as buildings page)."""
+        from PyQt5.QtWidgets import QMenu, QAction
+        from ui.components.icon import Icon
+
+        rect = self.table.visualItemRect(self.table.item(row, col))
+        position = QPoint(rect.right() - 10, rect.bottom())
+
+        menu = QMenu(self)
+        menu.setFixedSize(200, 149)
+
+        # عرض
+        view_icon = Icon.load_qicon("eye-open", size=18)
+        view_action = QAction("  عرض", self)
+        if view_icon:
+            view_action.setIcon(view_icon)
+        view_action.triggered.connect(lambda: self.view_unit.emit(unit))
+        menu.addAction(view_action)
+
+        # تعديل
+        edit_icon = Icon.load_qicon("edit-01", size=18)
+        edit_action = QAction("  تعديل", self)
+        if edit_icon:
+            edit_action.setIcon(edit_icon)
+        edit_action.triggered.connect(lambda: self._edit_unit(unit))
+        menu.addAction(edit_action)
+
+        # حذف
+        delete_icon = Icon.load_qicon("delete", size=18)
+        delete_action = QAction("  حذف", self)
+        if delete_icon:
+            delete_action.setIcon(delete_icon)
+        delete_action.triggered.connect(lambda: self._delete_unit(unit))
+        menu.addAction(delete_action)
+
+        menu.setStyleSheet("""
+            QMenu {
+                background-color: white;
+                border: 1px solid #E1E8ED;
+                border-radius: 8px;
+                padding: 8px;
+            }
+            QMenu::item {
+                padding: 10px;
+                border-radius: 4px;
+                color: #212B36;
+                font-size: 11pt;
+                font-weight: 400;
+            }
+            QMenu::item:selected {
+                background-color: #F6F6F7;
+            }
+        """)
+        menu.exec_(self.table.viewport().mapToGlobal(position))
+
+    # ── Header filter system ──
+
+    def _on_header_hover(self, logical_index: int):
+        """Pointer cursor on filterable columns only."""
+        header = self.table.horizontalHeader()
+        if logical_index in (1, 2, 3):
+            header.setCursor(Qt.PointingHandCursor)
+        else:
+            header.setCursor(Qt.ArrowCursor)
+
+    def _on_header_clicked(self, logical_index: int):
+        if logical_index not in (1, 2, 3):
+            return
+        self._show_filter_menu(logical_index)
+
+    def _show_filter_menu(self, column_index: int):
+        """Show filter dropdown for the clicked column header."""
+        unique_values = set()
+        filter_key = None
+
+        if column_index == 1:
+            filter_key = 'neighborhood'
+            seen = set()
+            for b in self._buildings_cache.values():
+                if id(b) in seen:
+                    continue
+                seen.add(id(b))
+                area = (b.neighborhood_name_ar or b.neighborhood_name or "").strip()
+                if area:
+                    unique_values.add((area, area))
+        elif column_index == 2:
+            filter_key = 'unit_type'
+            for code, label in get_unit_type_options():
+                if code:
+                    unique_values.add((code, label))
+        elif column_index == 3:
+            filter_key = 'unit_status'
+            for code, label in get_unit_status_options():
+                if code:
+                    unique_values.add((code, label))
+
+        if not unique_values:
+            return
+
+        from PyQt5.QtWidgets import QMenu, QAction
         menu = QMenu(self)
         menu.setLayoutDirection(Qt.RightToLeft)
         menu.setStyleSheet("""
             QMenu {
                 background-color: white;
-                border: 1px solid #E5E7EB;
-                border-radius: 6px;
-                padding: 4px;
+                border: 1px solid #E1E8ED;
+                border-radius: 8px;
+                padding: 8px;
             }
             QMenu::item {
-                padding: 8px 16px;
+                padding: 10px 20px;
                 border-radius: 4px;
+                font-size: 10pt;
+                color: #637381;
             }
             QMenu::item:selected {
-                background-color: #F3F4F6;
+                background-color: #EFF6FF;
+                color: #3890DF;
             }
         """)
 
-        edit_action = menu.addAction("تعديل")
-        edit_action.triggered.connect(lambda: self._edit_unit(unit))
+        # "عرض الكل" (clear filter)
+        clear_action = QAction("عرض الكل", self)
+        clear_action.triggered.connect(lambda: self._apply_filter(filter_key, None))
+        menu.addAction(clear_action)
+        menu.addSeparator()
 
-        delete_action = menu.addAction("حذف")
-        delete_action.triggered.connect(lambda: self._delete_unit(unit))
+        sorted_values = sorted(unique_values, key=lambda x: x[1])
+        for code, display in sorted_values:
+            action = QAction(display, self)
+            action.triggered.connect(lambda checked, c=code: self._apply_filter(filter_key, c))
+            if self._active_filters.get(filter_key) == code:
+                action.setCheckable(True)
+                action.setChecked(True)
+            menu.addAction(action)
 
-        menu.exec_(QCursor.pos())
+        header = self.table.horizontalHeader()
+        x_pos = header.sectionViewportPosition(column_index)
+        y_pos = header.height()
+        pos = self.table.mapToGlobal(QPoint(x_pos, y_pos))
+        menu.exec_(pos)
+
+    def _apply_filter(self, filter_key: str, filter_value):
+        """Apply filter and reload table."""
+        self._active_filters[filter_key] = filter_value
+        self._current_page = 1
+        self._units = self._apply_filters(self._all_units)
+        self._update_table()
+
+    def _apply_filters(self, units: list) -> list:
+        filtered = units
+
+        if self._active_filters.get('neighborhood'):
+            target = self._active_filters['neighborhood']
+            filtered = [u for u in filtered if self._get_unit_area(u) == target]
+
+        if self._active_filters.get('unit_type'):
+            target = self._active_filters['unit_type']
+            filtered = [u for u in filtered if self._match_code(u.unit_type, target)]
+
+        if self._active_filters.get('unit_status'):
+            target = self._active_filters['unit_status']
+            filtered = [u for u in filtered if self._match_code(u.apartment_status, target)]
+
+        return filtered
+
+    @staticmethod
+    def _match_code(value, target):
+        if value is None:
+            return False
+        try:
+            return int(value) == int(target)
+        except (ValueError, TypeError):
+            return str(value).strip().lower() == str(target).strip().lower()
+
+    # ── CRUD operations ──
 
     def _on_add_unit(self):
-        """Add new unit."""
-        dialog = UnitDialog(self.db, self.i18n, parent=self)
+        select_dlg = BuildingSelectDialog(self.building_repo, parent=self)
+        if select_dlg.exec_() != QDialog.Accepted:
+            return
+        building = select_dlg.get_selected_building()
+        if not building:
+            return
+
+        main_window = self.window()
+        auth_token = getattr(main_window, '_api_token', None) if main_window else None
+
+        dialog = WizardUnitDialog(building, self.db, parent=self, auth_token=auth_token)
         if dialog.exec_() == QDialog.Accepted:
-            data = dialog.get_data()
-
-            try:
-                if self._use_api:
-                    # Create via API: POST /api/v1/PropertyUnits
-                    logger.info("Creating unit via API")
-
-                    # Set auth token if available
-                    main_window = self.window()
-                    if main_window and hasattr(main_window, '_api_token') and main_window._api_token:
-                        self._api_service.set_access_token(main_window._api_token)
-
-                    # Prepare API data format
-                    api_data = {
-                        "buildingId": data.get("building_id", ""),
-                        "unitIdentifier": data.get("unit_number", ""),
-                        "floorNumber": data.get("floor_number", 0),
-                        "unitType": self._get_unit_type_code(data.get("unit_type")),
-                        "status": self._get_status_code(data.get("apartment_status")),
-                        "areaSquareMeters": data.get("area_sqm") or 0,
-                        "numberOfRooms": int(data.get("apartment_number") or 0) if data.get("apartment_number") else 0,
-                        "description": data.get("property_description", "")
-                    }
-
-                    try:
-                        response = self._api_service.create_property_unit(api_data)
-                        Toast.show_toast(self, "تم إضافة الوحدة بنجاح", Toast.SUCCESS)
-                        self._load_units()
-                    except Exception as api_error:
-                        error_msg = str(api_error)
-                        logger.error(f"Failed to create unit via API: {error_msg}")
-                        Toast.show_toast(self, f"فشل في إضافة الوحدة: {error_msg}", Toast.ERROR)
-                else:
-                    # Create via local repository
-                    unit = PropertyUnit(**data)
-                    self.unit_repo.create(unit)
-                    Toast.show_toast(self, "تم إضافة الوحدة بنجاح", Toast.SUCCESS)
-                    self._load_units()
-            except Exception as e:
-                logger.error(f"Failed to create unit: {e}")
-                Toast.show_toast(self, f"فشل في إضافة الوحدة: {str(e)}", Toast.ERROR)
-
-    def _get_unit_type_code(self, unit_type: str) -> int:
-        """Convert unit type string to API code."""
-        type_map = {
-            "apartment": 0,
-            "shop": 1,
-            "office": 2,
-            "warehouse": 3,
-            "other": 4,
-        }
-        if unit_type:
-            return type_map.get(unit_type.lower(), 0)
-        return 0
-
-    def _get_status_code(self, status: str) -> int:
-        """Convert status string to API code."""
-        status_map = {
-            "occupied": 0,
-            "vacant": 1,
-            "damaged": 2,
-            "under_renovation": 3,
-            "uninhabitable": 4,
-            "locked": 5,
-            "unknown": 6,
-        }
-        if status:
-            return status_map.get(status.lower(), 0)
-        return 0
+            Toast.show_toast(self, "تم إضافة الوحدة بنجاح", Toast.SUCCESS)
+            self._load_units()
 
     def _edit_unit(self, unit: PropertyUnit):
-        """Edit existing unit."""
-        dialog = UnitDialog(self.db, self.i18n, unit=unit, parent=self)
-        if dialog.exec_() == QDialog.Accepted:
-            data = dialog.get_data()
-            for key, value in data.items():
-                setattr(unit, key, value)
+        # Use buildings cache (dual-indexed by ID and UUID) to avoid mismatch
+        building = self._buildings_cache.get(unit.building_id)
+        if not building:
+            building = self.building_repo.get_by_id(unit.building_id)
+        if not building:
+            Toast.show_toast(self, "لم يتم العثور على المبنى", Toast.ERROR)
+            return
 
-            try:
-                self.unit_repo.update(unit)
-                Toast.show_toast(self, "تم تحديث الوحدة بنجاح", Toast.SUCCESS)
-                self._load_units()
-            except Exception as e:
-                logger.error(f"Failed to update unit: {e}")
-                Toast.show_toast(self, f"فشل في تحديث الوحدة: {str(e)}", Toast.ERROR)
+        unit_data = unit.to_dict()
+        main_window = self.window()
+        auth_token = getattr(main_window, '_api_token', None) if main_window else None
+
+        dialog = WizardUnitDialog(building, self.db, unit_data=unit_data, parent=self, auth_token=auth_token)
+        if dialog.exec_() == QDialog.Accepted:
+            Toast.show_toast(self, "تم تحديث الوحدة بنجاح", Toast.SUCCESS)
+            self._load_units()
 
     def _delete_unit(self, unit: PropertyUnit):
         """Delete unit with confirmation."""
@@ -1175,5 +862,4 @@ class UnitsPage(QWidget):
 
     def update_language(self, is_arabic: bool):
         """Update language."""
-        # Reload headers and data
         self._update_table()

@@ -820,24 +820,9 @@ class MapPage(QWidget):
             # Generate and load HTML
             tile_url = f"http://127.0.0.1:{self.tile_server_port}"
             geojson = self._buildings_to_geojson(geo_buildings)
-
-            # Log GeoJSON summary
-            import json
-            try:
-                geojson_data = json.loads(geojson)
-                features = geojson_data.get('features', [])
-                polygon_features = [f for f in features if f.get('geometry', {}).get('type') in ['Polygon', 'MultiPolygon']]
-                point_features = [f for f in features if f.get('geometry', {}).get('type') == 'Point']
-                logger.info(f"GeoJSON summary: {len(polygon_features)} Polygon features, {len(point_features)} Point features, {len(features)} total")
-                if polygon_features:
-                    sample = polygon_features[0]
-                    logger.debug(f"Sample polygon feature: building_id={sample.get('properties', {}).get('building_id')}, geometry_type={sample.get('properties', {}).get('geometry_type')}")
-            except:
-                pass
-
             html = get_leaflet_html(tile_url, geojson)
 
-            self.web_view.setHtml(html)
+            self.web_view.setHtml(html, QUrl(tile_url))
         else:
             self.status_label.setText(tr("page.map.load_error"))
             self.status_label.setStyleSheet(f"""

@@ -92,11 +92,11 @@ class LeafletHTMLGenerator:
         drawing_css = f'<link rel="stylesheet" href="{tile_server_url}/leaflet-draw.css" />' if enable_drawing else ''
         drawing_js = f'<script src="{tile_server_url}/leaflet-draw.js"></script>' if enable_drawing else ''
 
-        # إضافة Leaflet.markercluster للـ clustering (best practice for thousands of buildings)
-        clustering_css = '''
-    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" />
-    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" />'''
-        clustering_js = '<script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>'
+        # إضافة Leaflet.markercluster للـ clustering (محلي - offline بالكامل)
+        clustering_css = f'''
+    <link rel="stylesheet" href="{tile_server_url}/MarkerCluster.css" />
+    <link rel="stylesheet" href="{tile_server_url}/MarkerCluster.Default.css" />'''
+        clustering_js = f'<script src="{tile_server_url}/leaflet.markercluster.js"></script>'
 
         html = f'''
 <!DOCTYPE html>
@@ -641,8 +641,13 @@ class LeafletHTMLGenerator:
             // Remove when all visible tiles finish loading
             tileLayer.on('load', removeOverlay);
 
-            // Fallback: remove after 3 seconds max (prevents stuck overlay)
-            setTimeout(removeOverlay, 3000);
+            // Also remove when map itself is ready (covers offline/cached tiles)
+            map.whenReady(function() {{
+                setTimeout(removeOverlay, 500);
+            }});
+
+            // Fallback: remove after 1.5 seconds max
+            setTimeout(removeOverlay, 1500);
         }})();
 
         // Status colors and labels
@@ -675,25 +680,10 @@ class LeafletHTMLGenerator:
         // Buildings GeoJSON - Direct embedding (Simple & Works)
         var buildingsData = {buildings_json};
 
-        // Diagnostic: Log GeoJSON structure
-        console.log('========================================');
-        console.log('GeoJSON Loaded - Total Features:', buildingsData.features.length);
-        if (buildingsData.features.length > 0) {{
-            var sample = buildingsData.features[0];
-            console.log('Sample Feature:');
-            console.log('  - ID:', sample.id);
-            console.log('  - Geometry Type:', sample.geometry.type);
-            console.log('  - Properties geometry_type:', sample.properties.geometry_type);
-            console.log('  - Has coordinates:', sample.geometry.coordinates ? 'Yes' : 'No');
-
-            // Count by geometry type
-            var polygonCount = buildingsData.features.filter(f => f.geometry.type === 'Polygon' || f.geometry.type === 'MultiPolygon').length;
-            var pointCount = buildingsData.features.filter(f => f.geometry.type === 'Point').length;
-            console.log('Feature Types:');
-            console.log('  - Polygons:', polygonCount);
-            console.log('  - Points:', pointCount);
-        }}
-        console.log('========================================');
+        // Summary log only (no per-building spam)
+        var _polyCount = buildingsData.features.filter(f => f.geometry.type === 'Polygon' || f.geometry.type === 'MultiPolygon').length;
+        var _ptCount = buildingsData.features.filter(f => f.geometry.type === 'Point').length;
+        console.log('GeoJSON: ' + buildingsData.features.length + ' features (' + _polyCount + ' polygons, ' + _ptCount + ' points)');
 
         // =========================================================
         // Professional Marker Clustering Configuration
@@ -775,11 +765,7 @@ class LeafletHTMLGenerator:
                 var geomType = props.geometry_type || 'Point';
                 var actualGeomType = feature.geometry.type;
 
-                // Diagnostic: Print detailed info about each building
-                console.log('🏢 Adding building:', props.building_id);
-                console.log('   - Actual Geometry Type (from GeoJSON):', actualGeomType);
-                console.log('   - Property geometry_type:', geomType);
-                console.log('   - MISMATCH:', actualGeomType !== geomType ? 'YES ⚠️' : 'No');
+                // Per-building logging removed for performance
 
                 // ✅ Use building_id_display (with dashes) for UI, building_id (no dashes) for API
                 var buildingIdDisplay = props.building_id_display || props.building_id || 'مبنى';
@@ -792,11 +778,9 @@ class LeafletHTMLGenerator:
                 // to ensure correct rendering
                 if (actualGeomType === 'Point') {{
                     pointsLayer.addLayer(layer);
-                    markers.addLayer(layer);  // Add point markers to cluster
-                    console.log('   → Added to POINTS layer (marker)');
+                    markers.addLayer(layer);
                 }} else {{
                     polygonsLayer.addLayer(layer);
-                    console.log('   → Added to POLYGONS layer');
                 }}
 
                 {hover_js_block}
@@ -809,9 +793,7 @@ class LeafletHTMLGenerator:
         // Add polygons layer to map (bypasses clustering)
         polygonsLayer.addTo(map);
 
-        console.log('✅ Buildings layer created with clustering support');
-        console.log('   - Markers in cluster:', markers.getLayers().length);
-        console.log('   - Polygons on map:', polygonsLayer.getLayers().length);
+        console.log('Map ready: ' + markers.getLayers().length + ' markers, ' + polygonsLayer.getLayers().length + ' polygons');
 
         // Add existing polygons layer (displayed in blue)
         {LeafletHTMLGenerator._get_existing_polygons_js(existing_polygons_geojson) if existing_polygons_geojson else '// No existing polygons'}
