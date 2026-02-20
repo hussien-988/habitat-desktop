@@ -23,6 +23,7 @@ from models.person import Person
 from services.validation_service import ValidationService
 from ui.components.toast import Toast
 from ui.components.base_table_model import BaseTableModel
+from ui.style_manager import StyleManager
 from utils.i18n import I18n
 from utils.logger import get_logger
 
@@ -114,6 +115,10 @@ class PersonDialog(QDialog):
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QFrame.NoFrame)
+        scroll.setStyleSheet(
+            "QScrollArea { background: transparent; border: none; }"
+            + StyleManager.scrollbar()
+        )
         scroll_widget = QWidget()
         layout = QVBoxLayout(scroll_widget)
         layout.setSpacing(16)

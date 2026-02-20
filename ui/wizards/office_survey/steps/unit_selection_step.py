@@ -28,6 +28,7 @@ from services.api_client import get_api_client
 from utils.logger import get_logger
 from utils.helpers import build_hierarchical_address
 from ui.design_system import Colors
+from ui.style_manager import StyleManager
 from ui.components.icon import Icon
 from ui.components.action_button import ActionButton
 from ui.font_utils import create_font, FontManager
@@ -346,39 +347,10 @@ class UnitSelectionStep(BaseStep):
         scroll.setWidget(self.units_container)
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
-        scroll.setStyleSheet("""
-            QScrollArea {
-                border: none;
-                background-color: white;
-            }
-            QScrollBar:vertical {
-                background: transparent;
-                width: 6px;
-                margin: 4px 0px 4px 0px;
-                border-radius: 3px;
-            }
-            QScrollBar::handle:vertical {
-                background: #C4CDD5;
-                min-height: 40px;
-                border-radius: 3px;
-            }
-            QScrollBar::handle:vertical:hover {
-                background: #919EAB;
-            }
-            QScrollBar::handle:vertical:pressed {
-                background: #637381;
-            }
-            QScrollBar::add-line:vertical,
-            QScrollBar::sub-line:vertical {
-                height: 0px;
-                background: none;
-                border: none;
-            }
-            QScrollBar::add-page:vertical,
-            QScrollBar::sub-page:vertical {
-                background: none;
-            }
-        """)
+        scroll.setStyleSheet(
+            "QScrollArea { border: none; background-color: white; }"
+            + StyleManager.scrollbar()
+        )
         self._scroll_area = scroll
         units_main_layout.addWidget(scroll, 1)
 

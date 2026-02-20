@@ -26,6 +26,7 @@ from ui.components.toast import Toast
 from ui.components.base_table_model import BaseTableModel
 from ui.error_handler import ErrorHandler
 from utils.i18n import I18n
+from ui.style_manager import StyleManager
 from utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -1014,7 +1015,10 @@ class AdminPage(QWidget):
 
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
-        scroll.setStyleSheet("QScrollArea { border: none; }")
+        scroll.setStyleSheet(
+            "QScrollArea { border: none; }"
+            + StyleManager.scrollbar()
+        )
 
         content = QWidget()
         layout = QFormLayout(content)

@@ -28,6 +28,7 @@ from app.config import Config
 from services.api_client import get_api_client
 from utils.logger import get_logger
 from ui.error_handler import ErrorHandler
+from ui.style_manager import StyleManager
 from ui.font_utils import FontManager, create_font
 from ui.design_system import Colors
 from services.translation_manager import tr
@@ -161,12 +162,10 @@ class PersonStep(BaseStep):
         scroll_area = QScrollArea()
         scroll_area.setLayoutDirection(Qt.RightToLeft)
         scroll_area.setWidgetResizable(True)
-        scroll_area.setStyleSheet("""
-            QScrollArea {
-                border: none;
-                background-color: transparent;
-            }
-        """)
+        scroll_area.setStyleSheet(
+            "QScrollArea { border: none; background-color: transparent; }"
+            + StyleManager.scrollbar()
+        )
 
         scroll_widget = QWidget()
         scroll_widget.setLayoutDirection(Qt.RightToLeft)

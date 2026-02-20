@@ -22,6 +22,7 @@ from ui.wizards.framework import BaseStep, StepValidationResult
 from ui.wizards.office_survey.survey_context import SurveyContext
 from ui.wizards.office_survey.dialogs.person_dialog import PersonDialog
 from app.config import Config
+from ui.style_manager import StyleManager
 from services.api_client import get_api_client
 from utils.logger import get_logger
 from ui.error_handler import ErrorHandler
@@ -138,12 +139,10 @@ class OccupancyClaimsStep(BaseStep):
         scroll_area = QScrollArea()
         scroll_area.setLayoutDirection(Qt.RightToLeft)
         scroll_area.setWidgetResizable(True)
-        scroll_area.setStyleSheet("""
-            QScrollArea {
-                border: none;
-                background-color: transparent;
-            }
-        """)
+        scroll_area.setStyleSheet(
+            "QScrollArea { border: none; background-color: transparent; }"
+            + StyleManager.scrollbar()
+        )
 
         scroll_widget = QWidget()
         scroll_widget.setLayoutDirection(Qt.RightToLeft)

@@ -20,6 +20,7 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt, QDate
 
 from ui.components.rtl_combo import RtlCombo
+from ui.style_manager import StyleManager
 from ui.wizards.framework import BaseStep, StepValidationResult
 from ui.wizards.office_survey.survey_context import SurveyContext
 from app.config import Config
@@ -135,26 +136,10 @@ class RelationStep(BaseStep):
         scroll_area.setLayoutDirection(Qt.RightToLeft)
         scroll_area.setWidgetResizable(True)
         scroll_area.setFrameShape(QFrame.NoFrame)
-        scroll_area.setStyleSheet("""
-            QScrollArea {
-                border: none;
-                background-color: transparent;
-            }
-            QScrollBar:vertical {
-                border: none;
-                background: #f0f0f0;
-                width: 10px;
-                margin: 0px;
-            }
-            QScrollBar::handle:vertical {
-                background: #c0c0c0;
-                border-radius: 5px;
-                min-height: 20px;
-            }
-            QScrollBar::handle:vertical:hover {
-                background: #a0a0a0;
-            }
-        """)
+        scroll_area.setStyleSheet(
+            "QScrollArea { border: none; background-color: transparent; }"
+            + StyleManager.scrollbar()
+        )
 
         # Container widget for cards
         scroll_widget = QWidget()

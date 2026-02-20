@@ -20,6 +20,7 @@ from ui.wizards.framework import BaseStep, StepValidationResult
 from ui.wizards.office_survey.survey_context import SurveyContext
 from ui.error_handler import ErrorHandler
 from ui.design_system import Colors
+from ui.style_manager import StyleManager
 from ui.font_utils import FontManager, create_font
 from ui.components.icon import Icon
 from utils.logger import get_logger
@@ -70,24 +71,10 @@ class ReviewStep(BaseStep):
         scroll.setLayoutDirection(Qt.RightToLeft)
         scroll.setWidgetResizable(True)
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        scroll.setStyleSheet(f"""
-            QScrollArea {{
-                border: none;
-                background-color: transparent;
-            }}
-            QScrollBar:vertical {{
-                background: {Colors.BACKGROUND};
-                width: 8px;
-                border-radius: 4px;
-            }}
-            QScrollBar::handle:vertical {{
-                background: {Colors.BORDER_DEFAULT};
-                border-radius: 4px;
-            }}
-            QScrollBar::handle:vertical:hover {{
-                background: {Colors.TEXT_SECONDARY};
-            }}
-        """)
+        scroll.setStyleSheet(
+            "QScrollArea { border: none; background-color: transparent; }"
+            + StyleManager.scrollbar()
+        )
 
         # Scroll content container
         scroll_content = QWidget()

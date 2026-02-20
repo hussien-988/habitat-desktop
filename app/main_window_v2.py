@@ -128,6 +128,8 @@ class MainWindow(QMainWindow):
         from ui.pages.claim_comparison_page import ClaimComparisonPage
         from ui.pages.field_assignment_page import FieldAssignmentPage
         from ui.pages.case_details_page import CaseDetailsPage
+        from ui.pages.user_management_page import UserManagementPage
+        from ui.pages.add_user_page import AddUserPage
         from ui.wizards.office_survey import OfficeSurveyWizard
 
 
@@ -245,6 +247,14 @@ class MainWindow(QMainWindow):
         self.pages[Pages.CASE_DETAILS] = CaseDetailsPage(self)
         self.stack.addWidget(self.pages[Pages.CASE_DETAILS])
 
+        # User Management page
+        self.pages[Pages.USER_MANAGEMENT] = UserManagementPage(self.db, self.i18n, self)
+        self.stack.addWidget(self.pages[Pages.USER_MANAGEMENT])
+
+        # Add User page
+        self.pages[Pages.ADD_USER] = AddUserPage(self.db, self.i18n, self)
+        self.stack.addWidget(self.pages[Pages.ADD_USER])
+
         # Office Survey Wizard (UC-004, UC-005) - NEW wizard framework
         self.office_survey_wizard = OfficeSurveyWizard(self.db, self)
         self.stack.addWidget(self.office_survey_wizard)
@@ -261,7 +271,7 @@ class MainWindow(QMainWindow):
             2: Pages.BUILDINGS,
             3: Pages.UNITS,
             4: Pages.DUPLICATES,
-            5: Pages.ADMIN,
+            5: Pages.USER_MANAGEMENT,
         }
 
     def _setup_layout(self):
@@ -332,6 +342,16 @@ class MainWindow(QMainWindow):
         # Claim Comparison - back to duplicates
         self.pages[Pages.CLAIM_COMPARISON].back_requested.connect(
             lambda: self.navigate_to(Pages.DUPLICATES)
+        )
+
+        # User Management - add new user
+        self.pages[Pages.USER_MANAGEMENT].add_user_requested.connect(
+            lambda: self.navigate_to(Pages.ADD_USER)
+        )
+
+        # Add User - back to user management
+        self.pages[Pages.ADD_USER].back_requested.connect(
+            lambda: self.navigate_to(Pages.USER_MANAGEMENT)
         )
 
         # Language change signal

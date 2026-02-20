@@ -22,6 +22,7 @@ from services.display_mappings import (
     get_claim_type_display, get_claim_status_display,
     get_source_display, get_business_type_display, get_priority_display
 )
+from ui.style_manager import StyleManager
 from utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -72,15 +73,11 @@ class ClaimStep(BaseStep):
         self.scroll_area.setWidgetResizable(True)
         self.scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
-        self.scroll_area.setStyleSheet(f"""
-            QScrollArea {{
-                background-color: {Colors.BACKGROUND};
-                border: none;
-            }}
-            QScrollArea > QWidget > QWidget {{
-                background-color: {Colors.BACKGROUND};
-            }}
-        """)
+        self.scroll_area.setStyleSheet(
+            f"QScrollArea {{ background-color: {Colors.BACKGROUND}; border: none; }}"
+            f" QScrollArea > QWidget > QWidget {{ background-color: {Colors.BACKGROUND}; }}"
+            + StyleManager.scrollbar()
+        )
 
         # Container widget for scroll area
         scroll_content = QWidget()

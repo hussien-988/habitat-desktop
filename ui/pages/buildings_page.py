@@ -124,7 +124,10 @@ class AddBuildingPage(QWidget):
         scroll.setFrameShape(QFrame.NoFrame)
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
-        scroll.setStyleSheet("QScrollArea { border: none; background: transparent; }")
+        scroll.setStyleSheet(
+            "QScrollArea { border: none; background: transparent; }"
+            + StyleManager.scrollbar()
+        )
 
         # Container widget for scroll area
         container = QWidget()
