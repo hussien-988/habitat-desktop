@@ -16,6 +16,7 @@ from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtGui import QColor
 
 from repositories.database import Database
+from services.duplicate_service import DuplicateService
 from ui.font_utils import create_font, FontManager
 from ui.style_manager import StyleManager
 from ui.design_system import Colors, PageDimensions
@@ -51,52 +52,6 @@ RADIO_STYLE = f"""
     }}
 """
 
-# ── Mock data (will be replaced with real data binding later) ──
-MOCK_UNITS = [
-    {
-        "unit_number": "12",
-        "area": "حلب - الحميدية",
-        "type": "سكنية",
-        "status": "جيدة",
-        "floor": "3",
-        "rooms": "1",
-        "area_sqm": "120 (م²)",
-    },
-    {
-        "unit_number": "12",
-        "area": "حلب - الحميدية",
-        "type": "سكنية",
-        "status": "جيدة",
-        "floor": "3",
-        "rooms": "1",
-        "area_sqm": "120 (م²)",
-    },
-]
-
-MOCK_CLAIMS = [
-    {
-        "claim_id": "CL-2025-000001",
-        "claimant_name": "دار عربي الخاص محمود حسن",
-        "date": "2024-12-01",
-        "governorate_name_ar": "حلب",
-        "district_name_ar": "الحميدية",
-        "subdistrict_name_ar": "اسم الناحية",
-        "neighborhood_name_ar": "اسم التجمع - اسم الحي",
-        "building_id": "رقم البناء",
-        "unit_number": "رقم المقسم العقارية",
-    },
-    {
-        "claim_id": "CL-2025-000001",
-        "claimant_name": "دار عربي الخاص محمود حسن",
-        "date": "2024-12-01",
-        "governorate_name_ar": "حلب",
-        "district_name_ar": "الحميدية",
-        "subdistrict_name_ar": "اسم الناحية",
-        "neighborhood_name_ar": "اسم التجمع - اسم الحي",
-        "building_id": "رقم البناء",
-        "unit_number": "رقم المقسم العقارية",
-    },
-]
 
 
 class DuplicatesPage(QWidget):
@@ -108,8 +63,11 @@ class DuplicatesPage(QWidget):
         super().__init__(parent)
         self.db = db
         self.i18n = i18n
+        self.duplicate_service = DuplicateService(db) if db else None
         self.unit_radio_group = QButtonGroup(self)
         self.claim_radio_group = QButtonGroup(self)
+        self._unit_groups = []
+        self._person_groups = []
         self._setup_ui()
 
     def _setup_ui(self):
@@ -282,18 +240,46 @@ class DuplicatesPage(QWidget):
             }
         """)
 
-        # Populate mock data
-        self._populate_units_table(MOCK_UNITS)
+        # Load real duplicate data
+        self._load_unit_duplicates()
 
-        # Adjust table height to fit content
+        # Adjust table height
         row_height = 48
         header_height = 40
-        table_height = header_height + (row_height * len(MOCK_UNITS)) + 4
+        row_count = max(self.units_table.rowCount(), 1)
+        table_height = header_height + (row_height * row_count) + 4
         self.units_table.setFixedHeight(table_height)
         self.units_table.verticalHeader().setDefaultSectionSize(row_height)
 
         card_layout.addWidget(self.units_table)
         return card
+
+    def _load_unit_duplicates(self):
+        """Load real duplicate unit data from DuplicateService."""
+        if not self.duplicate_service:
+            self._show_no_duplicates_message(self.units_table)
+            return
+
+        try:
+            self._unit_groups = self.duplicate_service.detect_unit_duplicates()
+            if self._unit_groups:
+                records = self._unit_groups[0].records
+                self._populate_units_table(records)
+            else:
+                self._show_no_duplicates_message(self.units_table)
+        except Exception as e:
+            logger.warning(f"Failed to detect unit duplicates: {e}")
+            self._show_no_duplicates_message(self.units_table)
+
+    def _show_no_duplicates_message(self, table):
+        """Show a 'no duplicates found' message in a table."""
+        table.setRowCount(1)
+        table.setSpan(0, 0, 1, table.columnCount())
+        msg = QTableWidgetItem("لا توجد تكرارات - جميع السجلات فريدة")
+        msg.setTextAlignment(Qt.AlignCenter)
+        msg.setForeground(QColor("#27AE60"))
+        msg.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
+        table.setItem(0, 0, msg)
 
     def _populate_units_table(self, units_data):
         self.units_table.setRowCount(len(units_data))
@@ -312,19 +298,18 @@ class DuplicatesPage(QWidget):
             radio_layout.addWidget(radio)
             self.units_table.setCellWidget(row_idx, 0, radio_container)
 
-            # Select first row by default
             if row_idx == 0:
                 radio.setChecked(True)
 
-            # Data columns
+            # Data columns (from real DB records)
             columns = [
-                unit["unit_number"],
-                unit["area"],
-                unit["type"],
-                unit["status"],
-                unit["floor"],
-                unit["rooms"],
-                unit["area_sqm"],
+                str(unit.get("unit_number", "")),
+                unit.get("neighborhood_name_ar", unit.get("area", "")),
+                unit.get("unit_type", unit.get("type", "")),
+                unit.get("apartment_status", unit.get("status", "")),
+                str(unit.get("floor_number", unit.get("floor", ""))),
+                str(unit.get("number_of_rooms", unit.get("rooms", ""))),
+                f"{unit.get('area_sqm', 0):.0f} (م²)" if unit.get("area_sqm") else "",
             ]
             for col_idx, value in enumerate(columns):
                 item = QTableWidgetItem(value)
@@ -386,40 +371,118 @@ class DuplicatesPage(QWidget):
         subtitle.setStyleSheet(f"color: {Colors.WIZARD_SUBTITLE}; background: transparent; border: none;")
         card_layout.addWidget(subtitle)
 
-        # Claim rows: Radio + gap + ClaimListCard
-        for idx, claim_data in enumerate(MOCK_CLAIMS):
-            row = QHBoxLayout()
-            row.setSpacing(16)
-            row.setContentsMargins(0, 0, 0, 0)
+        # Load real person duplicates
+        self._claims_container = QVBoxLayout()
+        self._claims_container.setSpacing(8)
+        card_layout.addLayout(self._claims_container)
+        self._load_person_duplicates()
 
-            # Radio button
+        return card
+
+    def _load_person_duplicates(self):
+        """Load real person duplicate data."""
+        # Clear existing
+        while self._claims_container.count():
+            item = self._claims_container.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+            elif item.layout():
+                while item.layout().count():
+                    child = item.layout().takeAt(0)
+                    if child.widget():
+                        child.widget().deleteLater()
+
+        if not self.duplicate_service:
+            no_dup = QLabel("لا توجد تكرارات في الأشخاص")
+            no_dup.setAlignment(Qt.AlignCenter)
+            no_dup.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
+            no_dup.setStyleSheet("color: #27AE60; background: transparent; padding: 20px;")
+            self._claims_container.addWidget(no_dup)
+            return
+
+        try:
+            self._person_groups = self.duplicate_service.detect_person_duplicates()
+        except Exception as e:
+            logger.warning(f"Failed to detect person duplicates: {e}")
+            self._person_groups = []
+
+        if not self._person_groups:
+            no_dup = QLabel("لا توجد تكرارات في الأشخاص - جميع السجلات فريدة")
+            no_dup.setAlignment(Qt.AlignCenter)
+            no_dup.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
+            no_dup.setStyleSheet("color: #27AE60; background: transparent; padding: 20px;")
+            self._claims_container.addWidget(no_dup)
+            return
+
+        # Show first duplicate group
+        group = self._person_groups[0]
+        for idx, person in enumerate(group.records):
+            row_layout = QHBoxLayout()
+            row_layout.setSpacing(16)
+            row_layout.setContentsMargins(0, 0, 0, 0)
+
             radio = QRadioButton()
             radio.setStyleSheet(RADIO_STYLE)
             self.claim_radio_group.addButton(radio, idx)
-            row.addWidget(radio)
+            row_layout.addWidget(radio)
 
-            # ClaimListCard — same design as drafts page
+            # Build a claim-like card from person data
+            claim_data = {
+                "claim_id": person.get("national_id", ""),
+                "claimant_name": f"{person.get('first_name_ar', '')} {person.get('last_name_ar', '')}",
+                "date": str(person.get("created_at", "")),
+                "governorate_name_ar": person.get("nationality", ""),
+                "district_name_ar": person.get("gender", ""),
+                "subdistrict_name_ar": f"مواليد: {person.get('year_of_birth', '')}",
+                "neighborhood_name_ar": person.get("mobile_number", ""),
+                "building_id": "",
+                "unit_number": "",
+            }
             claim_card = ClaimListCard(claim_data, icon_name="yelow")
             claim_card.setFixedHeight(112)
-            row.addWidget(claim_card, 1)
+            row_layout.addWidget(claim_card, 1)
 
-            card_layout.addLayout(row)
-
-        return card
+            self._claims_container.addLayout(row_layout)
 
     # ────────────────────────────────────────────
     # Actions
     # ────────────────────────────────────────────
     def _on_merge_clicked(self):
-        """Handle merge button click — placeholder for real logic."""
+        """Handle merge button click."""
         selected_unit = self.unit_radio_group.checkedId()
         selected_claim = self.claim_radio_group.checkedId()
-        logger.info(f"Merge clicked — unit: {selected_unit}, claim: {selected_claim}")
-        Toast.show_toast(self, "سيتم تنفيذ عملية الدمج لاحقاً", Toast.INFO)
+        logger.info(f"Merge clicked - unit: {selected_unit}, claim: {selected_claim}")
+
+        if not self.duplicate_service:
+            Toast.show_toast(self, "خدمة كشف التكرارات غير متوفرة", Toast.WARNING)
+            return
+
+        merged = False
+        if self._unit_groups and selected_unit >= 0:
+            group = self._unit_groups[0]
+            master_id = group.records[selected_unit].get("unit_id", "")
+            if master_id:
+                self.duplicate_service.resolve_as_merge(group, master_id, "User selected master")
+                merged = True
+
+        if self._person_groups and selected_claim >= 0:
+            group = self._person_groups[0]
+            master_id = group.records[selected_claim].get("person_id", "")
+            if master_id:
+                self.duplicate_service.resolve_as_merge(group, master_id, "User selected master")
+                merged = True
+
+        if merged:
+            Toast.show_toast(self, "تم الدمج بنجاح", Toast.SUCCESS)
+            self.refresh()
+        else:
+            Toast.show_toast(self, "يرجى اختيار السجلات المراد دمجها", Toast.WARNING)
 
     def refresh(self, data=None):
-        """Refresh page data — placeholder for real data binding."""
+        """Refresh page data."""
         logger.debug("Refreshing duplicates page")
+        self._load_unit_duplicates()
+        self._load_person_duplicates()
 
     def update_language(self, is_arabic: bool):
         """Update UI language — placeholder."""

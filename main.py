@@ -24,7 +24,7 @@ from PyQt5.QtCore import Qt
 from app.config import Config  # type: ignore
 from app import MainWindow  # type: ignore
 from repositories.database import Database  # type: ignore
-from repositories.seed import seed_database  # type: ignore
+from repositories.seed import seed_database, seed_users_only  # type: ignore
 from utils.i18n import I18n  # type: ignore
 from utils.logger import setup_logger  # type: ignore
 from ui.font_utils import set_application_default_font  # type: ignore
@@ -57,24 +57,27 @@ def main():
         logger.info("Starting TRRCMS Application")
         logger.info("=" * 80)
 
-        # Delete old SQLite database to start fresh each time
-        logger.info("Cleaning up old database...")
+        # Persistent database — keep existing data between runs
         sqlite_db_path = Config.DB_PATH
         if sqlite_db_path.exists():
-            sqlite_db_path.unlink()
-            logger.info(f">> Old database deleted: {sqlite_db_path}")
+            logger.info(f"Using existing database: {sqlite_db_path}")
         else:
-            logger.info(">> No old database found (fresh start)")
+            logger.info("No database found, will create fresh one")
 
-        # Initialize database
+        # Initialize database (CREATE IF NOT EXISTS — safe for existing DB)
         logger.info("Initializing database...")
         db = Database()
         db.initialize()
         logger.info(">> Database initialized successfully")
 
-        # Seed demo data from GeoJSON
-        logger.info("Loading demo data from GeoJSON...")
-        seed_database(db)
+        # Seed only users if DB is empty (no mock buildings/units/claims)
+        user_count = db.fetch_one("SELECT COUNT(*) as count FROM users")
+        if user_count and user_count['count'] == 0:
+            from repositories.seed import seed_users_only
+            seed_users_only(db)
+            logger.info(">> Seeded initial users (clean start)")
+        else:
+            logger.info(f">> Database has {user_count['count']} users, skipping seed")
 
         # Initialize i18n
         logger.info("Initializing internationalization...")
@@ -82,11 +85,17 @@ def main():
         i18n.set_language("ar")  # Default to Arabic
         logger.info(">> Internationalization initialized (Arabic)")
 
-        # Fetch and cache vocabularies from backend API
-        logger.info("Fetching vocabularies from API...")
-        from services.vocab_service import initialize_vocabularies  # type: ignore
-        initialize_vocabularies()
-        logger.info(">> Vocabularies initialized")
+        # Fetch and cache vocabularies from backend API (skip in local mode)
+        if Config.DATA_MODE != "local":
+            logger.info("Fetching vocabularies from API...")
+            try:
+                from services.vocab_service import initialize_vocabularies  # type: ignore
+                initialize_vocabularies()
+                logger.info(">> Vocabularies initialized")
+            except Exception as e:
+                logger.warning(f">> Vocabulary fetch failed (will use defaults): {e}")
+        else:
+            logger.info(">> Local mode: skipping API vocabulary fetch")
 
         # Create main window (now using v2 with Navbar)
         logger.info("Creating main window (NEW DESIGN v2 with Navbar)...")

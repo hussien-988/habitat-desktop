@@ -594,6 +594,28 @@ class Navbar(QFrame):
             }}
         """)
 
+    # Role-based tab visibility
+    TAB_PERMISSIONS = {
+        "admin": [0, 1, 2, 3, 4, 5],
+        "data_manager": [0, 1, 2, 3, 4, 5],
+        "office_clerk": [0, 1, 2, 3],
+        "field_supervisor": [0, 1, 2, 3],
+        "field_researcher": [1, 2],
+        "analyst": [0, 2, 3, 4],
+    }
+
+    def configure_for_role(self, role: str):
+        """Show/hide tabs based on user role."""
+        allowed = self.TAB_PERMISSIONS.get(role, [0, 1, 2, 3, 4, 5])
+        for i, btn in enumerate(self.tab_buttons):
+            btn.setVisible(i in allowed)
+        # Select the first visible tab
+        for idx in sorted(allowed):
+            if idx < len(self.tab_buttons):
+                self._set_active_tab(idx)
+                self.tab_changed.emit(idx)
+                break
+
     # Public API methods
 
     def set_current_tab(self, index: int):

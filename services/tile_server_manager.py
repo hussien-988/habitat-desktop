@@ -363,19 +363,34 @@ class TileServerManager:
             self._initialized = True
 
             # Use smart tile server URL with health check and fallback
-            # Get tile server URL from Config
             production_url = Config.TILE_SERVER_URL if Config.USE_DOCKER_TILES else None
+            use_production = False
+
             if production_url:
+                # Actually verify the Docker tile server is reachable
+                try:
+                    req = urllib.request.Request(
+                        f"{production_url}/data.json",
+                        headers={'Accept': 'application/json'}
+                    )
+                    with urllib.request.urlopen(req, timeout=Config.TILE_SERVER_HEALTH_TIMEOUT) as resp:
+                        if resp.status == 200:
+                            use_production = True
+                            logger.info(f"Docker tile server reachable: {production_url}")
+                except Exception as e:
+                    logger.warning(f"Docker tile server unavailable ({production_url}): {e}")
+
+            if use_production:
                 print(f"\n[DEBUG] Tile Server: DOCKER/EXTERNAL")
                 print(f"[DEBUG] URL: {production_url}")
                 print(f"[DEBUG] Health Check: PASSED\n")
-                logger.info(f"✅ Using external tile server: {production_url}")
+                logger.info(f"Using external tile server: {production_url}")
                 self._is_production = True
                 self._production_url = production_url
             else:
                 print(f"\n[DEBUG] Tile Server: EMBEDDED/LOCAL")
                 print(f"[DEBUG] Starting local tile server on random port\n")
-                logger.info("📦 Using embedded local tile server")
+                logger.info("Using embedded local tile server")
                 self._is_production = False
 
     def get_tile_server_url(self) -> str:

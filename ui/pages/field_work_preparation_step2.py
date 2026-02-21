@@ -26,9 +26,10 @@ logger = get_logger(__name__)
 class ResearcherRadioItem(QWidget):
     """Custom radio button item for researcher list."""
 
-    def __init__(self, researcher_id, available, parent=None):
+    def __init__(self, researcher_id, display_name, available, parent=None):
         super().__init__(parent)
         self.researcher_id = researcher_id
+        self.display_name = display_name
         self.available = available
         self.setCursor(Qt.PointingHandCursor)
 
@@ -86,15 +87,14 @@ class ResearcherRadioItem(QWidget):
         if icon_pixmap and not icon_pixmap.isNull():
             icon_container.setPixmap(icon_pixmap)
         else:
-            icon_container.setText("👤")
+            icon_container.setText("U")
         layout.addWidget(icon_container)
 
-        # Text with researcher ID (no stretch factor - text is short)
-        item_text = f"ID {researcher_id}"
-        text_label = QLabel(item_text)
+        # Text with researcher name
+        text_label = QLabel(display_name)
         text_label.setFont(create_font(size=10, weight=FontManager.WEIGHT_REGULAR))
         text_label.setStyleSheet(f"color: {Colors.PAGE_SUBTITLE}; background: transparent;")
-        layout.addWidget(text_label)  # No stretch - keeps text next to icon
+        layout.addWidget(text_label)
 
         # Add stretch at the end to push all elements together on the right
         layout.addStretch(1)
@@ -122,18 +122,38 @@ class FieldWorkPreparationStep2(QWidget):
         self._selected_researcher = None
         self._is_initialized = False  # Flag to prevent auto-showing suggestions
 
-        # Mock researchers list (replace with actual data later)
-        # Format: (ID, Available)
-        self._researchers = [
-            ("12345", True),
-            ("12346", True),
-            ("12347", False),
-            ("12348", True),
-            ("12349", True)
-        ]
+        # Load researchers from database
+        # Format: (user_id, display_name, available)
+        self._researchers = self._fetch_researchers_from_db()
 
         self._setup_ui()
         self._is_initialized = True  # Mark as initialized
+
+    def _fetch_researchers_from_db(self):
+        """Fetch field researchers and data collectors from the users table."""
+        try:
+            from repositories.database import Database
+            main_window = self.window()
+            db = getattr(main_window, 'db', None) if main_window else None
+            if not db:
+                db = Database()
+
+            rows = db.fetch_all(
+                """SELECT user_id, username, full_name, full_name_ar, is_active
+                   FROM users
+                   WHERE role IN ('field_researcher', 'data_collector') AND is_active = 1"""
+            )
+            researchers = []
+            for row in rows:
+                display_name = row.get('full_name_ar') or row.get('full_name') or row.get('username', '')
+                researchers.append((row['user_id'], display_name, True))
+            if researchers:
+                return researchers
+        except Exception as e:
+            logger.warning(f"Failed to load researchers from DB: {e}")
+
+        # Fallback if DB query fails or returns empty
+        return [("fallback_1", "باحث ميداني 1", True), ("fallback_2", "باحث ميداني 2", True)]
 
     def _setup_ui(self):
         """Setup UI - content only (no header/footer)."""
@@ -370,14 +390,14 @@ class FieldWorkPreparationStep2(QWidget):
         """Load researchers into the list."""
         self.researchers_list.clear()
 
-        for researcher_id, available in self._researchers:
+        for researcher_id, display_name, available in self._researchers:
             item = QListWidgetItem(self.researchers_list)
 
             # Create custom widget with radio button
-            widget = ResearcherRadioItem(researcher_id, available, self)
+            widget = ResearcherRadioItem(researcher_id, display_name, available, self)
             widget.radio.toggled.connect(
-                lambda checked, rid=researcher_id, avail=available:
-                self._on_researcher_selected(rid, avail, checked)
+                lambda checked, rid=researcher_id, name=display_name, avail=available:
+                self._on_researcher_selected(rid, name, avail, checked)
             )
 
             # Set item size
@@ -386,18 +406,18 @@ class FieldWorkPreparationStep2(QWidget):
             self.researchers_list.addItem(item)
             self.researchers_list.setItemWidget(item, widget)
 
-    def _on_researcher_selected(self, researcher_id, available, checked):
+    def _on_researcher_selected(self, researcher_id, display_name, available, checked):
         """Handle researcher selection (hide suggestions like Step 1)."""
         if checked:
             self._selected_researcher = {
                 'id': researcher_id,
-                'name': f"ID {researcher_id}",
+                'name': display_name,
                 'available': available
             }
-            logger.info(f"Researcher selected: ID {researcher_id}")
+            logger.info(f"Researcher selected: {display_name} ({researcher_id})")
 
-            # Update search field with selected researcher ID
-            self.researcher_search.setText(f"ID {researcher_id}")
+            # Update search field with selected researcher name
+            self.researcher_search.setText(display_name)
 
             # Hide suggestions and show selected card (like Step 1)
             self._set_suggestions_visible(False)
@@ -455,11 +475,13 @@ class FieldWorkPreparationStep2(QWidget):
             widget = self.researchers_list.itemWidget(item)
 
             if widget and hasattr(widget, 'researcher_id'):
-                researcher_id = widget.researcher_id
+                researcher_id = widget.researcher_id or ""
+                display_name = getattr(widget, 'display_name', '') or ""
 
-                # Search text match
+                # Search by name or ID
                 text_match = (
-                    search_text in researcher_id.lower() if researcher_id else False
+                    search_text in researcher_id.lower() or
+                    search_text in display_name.lower()
                 ) if search_text else True
 
                 # Show only if matches

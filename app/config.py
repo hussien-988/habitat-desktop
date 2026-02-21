@@ -41,6 +41,9 @@ _MAP_BOUNDS_MAX_LAT = float(os.getenv("MAP_BOUNDS_MAX_LAT", "37.0"))
 _MAP_BOUNDS_MIN_LNG = float(os.getenv("MAP_BOUNDS_MIN_LNG", "36.5"))
 _MAP_BOUNDS_MAX_LNG = float(os.getenv("MAP_BOUNDS_MAX_LNG", "38.0"))
 
+# Data Mode: "local" = offline demo, "api" = Docker backend, "" = show chooser UI
+_DATA_MODE = os.getenv("DATA_MODE", "")
+
 # GeoServer Settings (optional)
 _GEOSERVER_URL = os.getenv("GEOSERVER_URL", None)
 _GEOSERVER_WORKSPACE = os.getenv("GEOSERVER_WORKSPACE", "trrcms")
@@ -65,12 +68,19 @@ class Config:
     DEV_USERNAME: str = "admin"
     DEV_PASSWORD: str = "Admin@123"
 
+    # Data Mode (runtime switchable)
+    # "local" = offline demo (SQLite only, no API calls)
+    # "api"   = central database via Docker backend
+    # ""      = show chooser screen on startup
+    DATA_MODE: str = _DATA_MODE
+
     # Data Provider Configuration
     # Options: "mock", "http", "local_db"
     # - mock: Uses in-memory mock data for development (no backend required)
     # - http: Connects to a REST API backend (uses /api/Buildings endpoint)
     # - local_db: Uses local SQLite/PostgreSQL database
-    DATA_PROVIDER: str = "http"  # Changed to use API backend
+    # Automatically set to "local_db" when DATA_MODE is "local"
+    DATA_PROVIDER: str = "local_db" if _DATA_MODE == "local" else "http"
 
     # Mock Data Provider Settings
     MOCK_SIMULATE_DELAY: bool = True
@@ -257,7 +267,12 @@ class Roles:
     DATA_MANAGER = "data_manager"
     OFFICE_CLERK = "office_clerk"
     FIELD_SUPERVISOR = "field_supervisor"
+    FIELD_RESEARCHER = "field_researcher"
+    DATA_COLLECTOR = "data_collector"
     ANALYST = "analyst"
+
+    # Roles that cannot log in to the desktop application
+    NON_LOGIN_ROLES = ("data_collector",)
 
     @classmethod
     def get_display_name(cls, role: str, arabic: bool = False) -> str:
@@ -266,6 +281,8 @@ class Roles:
             cls.DATA_MANAGER: ("Data Manager", "مدير البيانات"),
             cls.OFFICE_CLERK: ("Office Clerk", "موظف المكتب"),
             cls.FIELD_SUPERVISOR: ("Field Supervisor", "مشرف ميداني"),
+            cls.FIELD_RESEARCHER: ("Field Researcher", "باحث ميداني"),
+            cls.DATA_COLLECTOR: ("Data Collector", "جامع بيانات"),
             cls.ANALYST: ("Analyst", "محلل"),
         }
         name = names.get(role, (role, role))

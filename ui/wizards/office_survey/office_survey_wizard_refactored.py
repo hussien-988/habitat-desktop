@@ -140,14 +140,21 @@ class OfficeSurveyWizard(BaseWizard):
 
     def on_submit(self) -> bool:
         """
-        Handle wizard submission — saves as draft.
+        Handle wizard submission — saves survey with appropriate status.
 
-        Note: finalize_survey_status() is kept in api_client.py for future use.
+        Sets status to 'finalized' if a claim was created, 'draft' otherwise.
 
         Returns:
             True if submission was successful
         """
         try:
+            # Determine status based on claim creation result
+            finalize_resp = getattr(self.context, 'finalize_response', None)
+            if finalize_resp and finalize_resp.get("claimCreated"):
+                self.context.status = "finalized"
+            else:
+                self.context.status = "draft"
+
             draft_id = self.on_save_draft()
             if draft_id:
                 claim_number = self.context.reference_number or draft_id
@@ -197,7 +204,8 @@ class OfficeSurveyWizard(BaseWizard):
             Draft ID if successful, None otherwise
         """
         try:
-            self.context.status = "draft"
+            if not self.context.status or self.context.status == "in_progress":
+                self.context.status = "draft"
             draft_data = self.context.to_dict()
 
             # Save to backend first

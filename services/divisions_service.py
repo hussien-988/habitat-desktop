@@ -92,6 +92,13 @@ class DivisionsService:
                                 ]
         return []
 
+    def get_governorate_name(self, gov_code: str) -> Tuple[str, str]:
+        """Get (name_en, name_ar) for a governorate."""
+        for g in self._data:
+            if g["code"] == gov_code:
+                return (g["name_en"], g["name_ar"])
+        return ("", "")
+
     def get_district_name(self, gov_code: str, dist_code: str) -> Tuple[str, str]:
         """Get (name_en, name_ar) for a district."""
         for g in self._data:

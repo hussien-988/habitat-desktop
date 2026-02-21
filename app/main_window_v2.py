@@ -110,6 +110,7 @@ class MainWindow(QMainWindow):
         # Import here to avoid circular imports
         from ui.components.navbar import Navbar
         from ui.pages.login_page import LoginPage
+        from ui.pages.splash_page import SplashPage
         from ui.pages.dashboard_page import DashboardPage
         from ui.pages.buildings_page import BuildingsPage
         from ui.pages.building_details_page import BuildingDetailsPage
@@ -171,8 +172,12 @@ class MainWindow(QMainWindow):
         # Create pages
         self.pages = {}
 
+        # Splash page (mode chooser)
+        self.splash_page = SplashPage(self)
+        self.stack.addWidget(self.splash_page)
+
         # Login page
-        self.pages[Pages.LOGIN] = LoginPage(self.i18n, self)
+        self.pages[Pages.LOGIN] = LoginPage(self.i18n, db=self.db, parent=self)
         self.stack.addWidget(self.pages[Pages.LOGIN])
 
         # Dashboard page
@@ -302,6 +307,9 @@ class MainWindow(QMainWindow):
 
     def _connect_signals(self):
         """Connect widget signals to slots."""
+        # Splash page signal
+        self.splash_page.mode_selected.connect(self._on_data_mode_selected)
+
         # Login page signals
         self.pages[Pages.LOGIN].login_successful.connect(self._on_login_success)
 
@@ -368,14 +376,40 @@ class MainWindow(QMainWindow):
             lambda: self.navigate_to(Pages.USER_MANAGEMENT)
         )
 
+        # Add User - save new user to database
+        self.pages[Pages.ADD_USER].save_requested.connect(self._on_save_new_user)
+
         # Language change signal
         self.language_changed.connect(self._on_language_changed)
 
     def _show_login(self):
-        """Show the login page."""
+        """Show login or splash page depending on DATA_MODE."""
         self.navbar.setVisible(False)
+        if Config.DATA_MODE:
+            self.pages[Pages.LOGIN].set_data_mode(Config.DATA_MODE, self.db)
+            self.stack.setCurrentWidget(self.pages[Pages.LOGIN])
+            logger.info("Showing login page (mode pre-set)")
+        else:
+            self.stack.setCurrentWidget(self.splash_page)
+            logger.info("Showing splash/mode chooser")
+
+    def _on_data_mode_selected(self, mode: str):
+        """Handle data mode selection from splash page."""
+        Config.DATA_MODE = mode
+        Config.DATA_PROVIDER = "local_db" if mode == "local" else "http"
+        if mode == "local":
+            Config.USE_DOCKER_TILES = False
+        logger.info(f"Data mode set to: {mode}, provider: {Config.DATA_PROVIDER}")
+
+        # Switch controllers to match selected mode
+        if mode == "local":
+            buildings_page = self.pages.get(Pages.BUILDINGS)
+            if buildings_page and hasattr(buildings_page, 'building_controller'):
+                buildings_page.building_controller.switch_to_local_db()
+                logger.info("BuildingController switched to local DB after mode selection")
+
+        self.pages[Pages.LOGIN].set_data_mode(mode, self.db)
         self.stack.setCurrentWidget(self.pages[Pages.LOGIN])
-        logger.info("Showing login page")
 
     def _on_login_success(self, user):
         """Handle successful login."""
@@ -396,9 +430,8 @@ class MainWindow(QMainWindow):
         # Update navbar with user info
         self.navbar.set_user_id(str(user.user_id))
 
-        # Navigate to first tab (Completed Claims / Dashboard)
-        self.navbar.set_current_tab(0)
-        self._on_tab_changed(0)
+        # Configure tabs based on user role (RBAC)
+        self.navbar.configure_for_role(user.role)
 
     def _set_api_token_for_controllers(self, token: str):
         """Pass API token to all controllers that use API backend."""
@@ -427,6 +460,36 @@ class MainWindow(QMainWindow):
                 logger.info(f"User logged out: {self.current_user.username}")
                 self.current_user = None
                 self._show_login()
+
+    def _on_save_new_user(self, data: dict):
+        """Handle saving a new user from AddUserPage to database."""
+        try:
+            from models.user import User
+            from repositories.user_repository import UserRepository
+            from ui.components.toast import Toast
+
+            user = User(
+                username=data.get("user_id", ""),
+                role=data.get("role", "analyst"),
+                full_name=data.get("user_id", ""),
+                full_name_ar=data.get("user_id", ""),
+            )
+            user.set_password(data.get("password", ""), track_history=False)
+
+            repo = UserRepository(self.db)
+            repo.create(user)
+
+            logger.info(f"New user created: {user.username}, role={user.role}")
+            Toast.show_toast(self, "تم حفظ المستخدم بنجاح", Toast.SUCCESS)
+
+            self.navigate_to(Pages.USER_MANAGEMENT)
+            if Pages.USER_MANAGEMENT in self.pages:
+                self.pages[Pages.USER_MANAGEMENT].refresh()
+
+        except Exception as e:
+            logger.error(f"Failed to create user: {e}", exc_info=True)
+            from ui.components.toast import Toast
+            Toast.show_toast(self, f"فشل في حفظ المستخدم: {e}", Toast.ERROR)
 
     def _on_sync_requested(self):
         """Handle sync data request from navbar menu."""

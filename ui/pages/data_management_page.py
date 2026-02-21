@@ -374,6 +374,7 @@ class DataManagementPage(QWidget):
         if pixmap_del and not pixmap_del.isNull():
             from PyQt5.QtGui import QIcon
             delete_btn.setIcon(QIcon(pixmap_del))
+        delete_btn.clicked.connect(lambda _, tid=term_id, vn=vocab_name: self._on_delete_term(tid, vn))
         layout.addWidget(delete_btn)
 
         # Edit icon
@@ -388,6 +389,7 @@ class DataManagementPage(QWidget):
         if pixmap_edit and not pixmap_edit.isNull():
             from PyQt5.QtGui import QIcon
             edit_btn.setIcon(QIcon(pixmap_edit))
+        edit_btn.clicked.connect(lambda _, tid=term_id, tl=term_label, vn=vocab_name: self._on_edit_term(tid, tl, vn))
         layout.addWidget(edit_btn)
 
         # Term text (right side in RTL)
@@ -398,6 +400,47 @@ class DataManagementPage(QWidget):
         layout.addWidget(text)
 
         return chip
+
+    def _on_delete_term(self, term_id: str, vocab_name: str):
+        """Delete a vocabulary term after confirmation."""
+        from PyQt5.QtWidgets import QMessageBox
+        reply = QMessageBox.question(
+            self, "تأكيد الحذف", "هل أنت متأكد من حذف هذا المصطلح؟",
+            QMessageBox.Yes | QMessageBox.No, QMessageBox.No
+        )
+        if reply != QMessageBox.Yes:
+            return
+        if not self.db:
+            return
+        try:
+            cursor = self.db.conn.cursor()
+            cursor.execute("DELETE FROM vocabulary_terms WHERE term_id = ?", (term_id,))
+            self.db.conn.commit()
+            self._populate_vocab_group(vocab_name)
+        except Exception as e:
+            logger.warning(f"Failed to delete term {term_id}: {e}")
+
+    def _on_edit_term(self, term_id: str, current_label: str, vocab_name: str):
+        """Edit a vocabulary term label."""
+        text, ok = QInputDialog.getText(
+            self, "تعديل مصطلح", "عدّل المصطلح:",
+            QLineEdit.Normal, current_label
+        )
+        if not ok or not text.strip() or text.strip() == current_label:
+            return
+        if not self.db:
+            return
+        try:
+            new_label = text.strip()
+            cursor = self.db.conn.cursor()
+            cursor.execute(
+                "UPDATE vocabulary_terms SET term_label = ?, term_label_ar = ? WHERE term_id = ?",
+                (new_label, new_label, term_id)
+            )
+            self.db.conn.commit()
+            self._populate_vocab_group(vocab_name)
+        except Exception as e:
+            logger.warning(f"Failed to update term {term_id}: {e}")
 
     def _toggle_accordion(self, cat_name: str):
         content = self._accordion_contents.get(cat_name)

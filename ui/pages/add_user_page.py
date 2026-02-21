@@ -43,7 +43,16 @@ PERMISSION_ACTIONS = [
     ("delete", "حذف"),
 ]
 
-ROLES = ["-", "مدير", "ميداني", "مراجع", "مدقق"]
+ROLES = [
+    ("-", "-"),
+    ("admin", "مدير النظام"),
+    ("data_manager", "مدير البيانات"),
+    ("office_clerk", "موظف المكتب"),
+    ("field_supervisor", "مشرف ميداني"),
+    ("field_researcher", "باحث ميداني"),
+    ("data_collector", "جامع بيانات"),
+    ("analyst", "محلل"),
+]
 
 
 class AddUserPage(QWidget):
@@ -227,7 +236,8 @@ class AddUserPage(QWidget):
         role_group.addWidget(role_label)
 
         self.role_combo = RtlCombo()
-        self.role_combo.addItems(ROLES)
+        for role_id, role_label in ROLES:
+            self.role_combo.addItem(role_label, role_id)
         self.role_combo.setFixedHeight(42)
         self.role_combo.setStyleSheet("""
             QComboBox {
@@ -425,7 +435,7 @@ class AddUserPage(QWidget):
 
         return {
             "user_id": self.user_id_input.text().strip(),
-            "role": self.role_combo.currentText(),
+            "role": self.role_combo.currentData() or "-",
             "permissions": permissions,
         }
 
@@ -446,9 +456,8 @@ class AddUserPage(QWidget):
             return
 
         data["password"] = password
-        logger.info(f"Save user: {data}")
+        logger.info(f"Save user requested: {data.get('user_id')}, role={data.get('role')}")
         self.save_requested.emit(data)
-        Toast.show_toast(self, "تم حفظ المستخدم بنجاح", Toast.SUCCESS)
 
     def refresh(self, data=None):
         """Reset form for new user entry."""

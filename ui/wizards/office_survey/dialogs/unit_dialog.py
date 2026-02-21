@@ -60,7 +60,7 @@ class UnitDialog(QDialog):
 
         # Initialize API client for creating units
         self._api_service = get_api_client()
-        if auth_token:
+        if self._api_service and auth_token:
             self._api_service.set_access_token(auth_token)
             self.unit_controller.set_auth_token(auth_token)
         self._use_api = getattr(Config, 'DATA_PROVIDER', 'local_db') == 'http'

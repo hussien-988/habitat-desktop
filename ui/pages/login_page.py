@@ -28,9 +28,10 @@ class LoginPage(QWidget):
 
     login_successful = pyqtSignal(object)
 
-    def __init__(self, i18n: I18n, parent=None):
+    def __init__(self, i18n: I18n, db=None, parent=None):
         super().__init__(parent)
         self.i18n = i18n
+        self.db = db
         self.auth_service = ApiAuthService()
         self.password_visible = False
         self._arabic_re = re.compile(r"[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF]")
@@ -381,6 +382,23 @@ class LoginPage(QWidget):
         self.password_input.setText(Config.DEV_PASSWORD)
 
         logger.info("DEV MODE: Auto-filled login credentials")
+
+    def set_data_mode(self, mode: str, db=None):
+        """Switch auth service based on data mode."""
+        if mode == "local" and db:
+            from services.local_auth_service import LocalAuthService
+            self.auth_service = LocalAuthService(db)
+            self.db = db
+            if Config.DEV_MODE:
+                self.username_input.setText("admin")
+                self.password_input.setText("admin123")
+            logger.info("Login: switched to local auth (SQLite)")
+        else:
+            self.auth_service = ApiAuthService()
+            if Config.DEV_MODE and Config.DEV_AUTO_LOGIN:
+                self.username_input.setText(Config.DEV_USERNAME)
+                self.password_input.setText(Config.DEV_PASSWORD)
+            logger.info("Login: switched to API auth")
 
     def _toggle_password_visibility(self):
         """Toggle password visibility"""
