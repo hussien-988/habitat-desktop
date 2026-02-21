@@ -616,6 +616,9 @@ class BuildingMapDialog(BaseMapDialog):
         try:
             from services.api_client import get_api_client
             api_client = get_api_client()
+            if not api_client:
+                self._neighborhoods_cache = []
+                return
             if self._auth_token:
                 api_client.set_access_token(self._auth_token)
 

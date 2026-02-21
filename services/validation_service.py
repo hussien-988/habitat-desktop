@@ -27,8 +27,8 @@ class ValidationService:
     # Syrian National ID regex (11 digits)
     NATIONAL_ID_PATTERN = re.compile(r"^\d{11}$")
 
-    # Building ID pattern (17 digits with dashes)
-    BUILDING_ID_PATTERN = re.compile(r"^\d{2}-\d{2}-\d{2}-\d{3}-\d{3}-\d{5}$")
+    # Building ID pattern: dashed (GG-DD-SS-CCC-NNN-BBBBB) or dashless (17 digits)
+    BUILDING_ID_PATTERN = re.compile(r"^(\d{2}-\d{2}-\d{2}-\d{3}-\d{3}-\d{5}|\d{17})$")
 
     # Phone number pattern (Syrian format)
     PHONE_PATTERN = re.compile(r"^(\+963|0)?9\d{8}$")

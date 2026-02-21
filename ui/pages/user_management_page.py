@@ -13,7 +13,10 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt, pyqtSignal, QPoint
 from PyQt5.QtGui import QColor, QIcon, QFont, QPixmap
 
+from app.config import Roles
 from repositories.database import Database
+from repositories.user_repository import UserRepository
+from models.user import User
 from ui.components.page_header import PageHeader
 from ui.components.toggle_switch import ToggleSwitch
 from ui.components.icon import Icon
@@ -24,21 +27,6 @@ from utils.i18n import I18n
 from utils.logger import get_logger
 
 logger = get_logger(__name__)
-
-# Mock data
-MOCK_USERS = [
-    {"user_id": 12, "role": "ميداني", "permission": "انشاء مطالبات"},
-    {"user_id": 12, "role": "ميداني", "permission": "انشاء مطالبات"},
-    {"user_id": 12, "role": "ميداني", "permission": "انشاء مطالبات"},
-    {"user_id": 12, "role": "ميداني", "permission": "انشاء مطالبات"},
-    {"user_id": 12, "role": "ميداني", "permission": "انشاء مطالبات"},
-    {"user_id": 12, "role": "ميداني", "permission": "انشاء مطالبات"},
-    {"user_id": 12, "role": "ميداني", "permission": "انشاء مطالبات"},
-    {"user_id": 12, "role": "ميداني", "permission": "انشاء مطالبات"},
-    {"user_id": 12, "role": "ميداني", "permission": "انشاء مطالبات"},
-    {"user_id": 12, "role": "ميداني", "permission": "انشاء مطالبات"},
-    {"user_id": 12, "role": "ميداني", "permission": "انشاء مطالبات"},
-]
 
 
 class UserManagementPage(QWidget):
@@ -52,6 +40,7 @@ class UserManagementPage(QWidget):
         super().__init__(parent)
         self.db = db
         self.i18n = i18n
+        self.user_repo = UserRepository(db) if db else None
 
         self._all_users = []
         self._users = []
@@ -60,7 +49,7 @@ class UserManagementPage(QWidget):
         self._total_pages = 1
         self._active_filters = {
             'role': None,
-            'permission': None,
+            'status': None,
         }
 
         self._setup_ui()
@@ -297,7 +286,23 @@ class UserManagementPage(QWidget):
         self._load_users()
 
     def _load_users(self):
-        self._all_users = list(MOCK_USERS)
+        if self.user_repo:
+            users = self.user_repo.get_all(limit=1000)
+            self._all_users = [
+                {
+                    "user_id": u.user_id,
+                    "username": u.username,
+                    "full_name": u.full_name_ar or u.full_name or u.username,
+                    "role": Roles.get_display_name(u.role, arabic=True),
+                    "role_key": u.role,
+                    "is_active": u.is_active,
+                    "email": u.email or "",
+                    "_user_obj": u,
+                }
+                for u in users
+            ]
+        else:
+            self._all_users = []
         self._users = self._apply_filters(self._all_users)
         self._current_page = 1
         self._update_table()
@@ -329,14 +334,21 @@ class UserManagementPage(QWidget):
             return
 
         for row, user in enumerate(page_users):
-            # col 0: المستخدم ID
-            self.table.setItem(row, 0, QTableWidgetItem(str(user.get("user_id", ""))))
+            # col 0: اسم المستخدم / الاسم الكامل
+            display = user.get("full_name", user.get("username", ""))
+            self.table.setItem(row, 0, QTableWidgetItem(display))
 
             # col 1: الدور
             self.table.setItem(row, 1, QTableWidgetItem(user.get("role", "")))
 
-            # col 2: الصلاحية
-            self.table.setItem(row, 2, QTableWidgetItem(user.get("permission", "")))
+            # col 2: الحالة
+            status = "نشط" if user.get("is_active", True) else "معطل"
+            status_item = QTableWidgetItem(status)
+            if user.get("is_active", True):
+                status_item.setForeground(QColor("#27AE60"))
+            else:
+                status_item.setForeground(QColor("#E74C3C"))
+            self.table.setItem(row, 2, status_item)
 
             # col 3: ⋮
             dots_item = QTableWidgetItem("⋮")
@@ -511,11 +523,8 @@ class UserManagementPage(QWidget):
                 if role:
                     unique_values.add(role)
         elif column_index == 2:
-            filter_key = 'permission'
-            for u in self._all_users:
-                perm = u.get("permission", "").strip()
-                if perm:
-                    unique_values.add(perm)
+            filter_key = 'status'
+            unique_values = {"نشط", "معطل"}
 
         if not unique_values:
             return
@@ -573,13 +582,16 @@ class UserManagementPage(QWidget):
             target = self._active_filters['role']
             filtered = [u for u in filtered if u.get("role", "").strip() == target]
 
-        if self._active_filters.get('permission'):
-            target = self._active_filters['permission']
-            filtered = [u for u in filtered if u.get("permission", "").strip() == target]
+        if self._active_filters.get('status'):
+            target = self._active_filters['status']
+            if target == "نشط":
+                filtered = [u for u in filtered if u.get("is_active", True)]
+            elif target == "معطل":
+                filtered = [u for u in filtered if not u.get("is_active", True)]
 
         return filtered
 
-    # ── Actions (stubs) ──
+    # ── Actions ──
 
     def _on_add_user(self):
         self.add_user_requested.emit()
@@ -595,13 +607,27 @@ class UserManagementPage(QWidget):
     def _on_change_password(self, user: dict):
         logger.info(f"Change password for user: {user.get('user_id')}")
         new_password = PasswordDialog.get_password(self)
-        if new_password:
-            logger.info(f"Password changed for user: {user.get('user_id')}")
-            Toast.show_toast(self, "تم تغيير كلمة المرور بنجاح", Toast.SUCCESS)
+        if new_password and self.user_repo:
+            user_obj = user.get("_user_obj")
+            if user_obj:
+                user_obj.set_password(new_password)
+                self.user_repo.update(user_obj)
+                logger.info(f"Password changed for user: {user.get('username')}")
+                Toast.show_toast(self, "تم تغيير كلمة المرور بنجاح", Toast.SUCCESS)
 
     def _on_delete_user(self, user: dict):
-        logger.info(f"Delete user: {user.get('user_id')}")
-        Toast.show_toast(self, "سيتم تنفيذ حذف المستخدم لاحقاً", Toast.INFO)
+        from PyQt5.QtWidgets import QMessageBox
+        username = user.get("username", "")
+        reply = QMessageBox.question(
+            self, "تأكيد الحذف",
+            f"هل أنت متأكد من حذف المستخدم: {user.get('full_name', username)}؟",
+            QMessageBox.Yes | QMessageBox.No, QMessageBox.No
+        )
+        if reply == QMessageBox.Yes and self.user_repo:
+            self.user_repo.delete(user.get("user_id"))
+            logger.info(f"Deleted user: {username}")
+            Toast.show_toast(self, "تم حذف المستخدم بنجاح", Toast.SUCCESS)
+            self._load_users()
 
     def update_language(self, is_arabic: bool):
         pass

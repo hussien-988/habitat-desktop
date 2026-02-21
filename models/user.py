@@ -260,6 +260,8 @@ class User:
             "data_manager": "Data Manager",
             "office_clerk": "Office Clerk",
             "field_supervisor": "Field Supervisor",
+            "field_researcher": "Field Researcher",
+            "data_collector": "Data Collector",
             "analyst": "Analyst",
         }
         return roles.get(self.role, self.role)
@@ -272,6 +274,8 @@ class User:
             "data_manager": "مدير البيانات",
             "office_clerk": "موظف المكتب",
             "field_supervisor": "مشرف ميداني",
+            "field_researcher": "باحث ميداني",
+            "data_collector": "جامع بيانات",
             "analyst": "محلل",
         }
         return roles.get(self.role, self.role)
@@ -290,6 +294,8 @@ class User:
             "data_manager": ["import", "export", "review", "approve", "report"],
             "office_clerk": ["create", "edit", "scan", "print"],
             "field_supervisor": ["view", "export", "report"],
+            "field_researcher": ["view", "create", "edit"],
+            "data_collector": ["view"],
             "analyst": ["view", "export", "report"],
         }
 

@@ -77,13 +77,12 @@ API للاتصال بـ TRRCMS Backend.
         self.refresh_token: Optional[str] = None
         self.token_expires_at: Optional[datetime] = None
 
-        # Login on initialization
+        # Login on initialization (non-fatal if API is unavailable)
         try:
             self.login(config.username, config.password)
-            logger.info(f"✅ Connected to TRRCMS API at {self.base_url}")
+            logger.info(f"Connected to TRRCMS API at {self.base_url}")
         except Exception as e:
-            logger.error(f"❌ Failed to connect to API: {e}")
-            raise
+            logger.warning(f"API not available at {self.base_url}: {e}. Client created without token.")
 
     # ==================== Authentication ====================
 
@@ -2339,7 +2338,7 @@ API للاتصال بـ TRRCMS Backend.
 _api_client_instance: Optional[TRRCMSApiClient] = None
 
 
-def get_api_client(config: Optional[ApiConfig] = None) -> TRRCMSApiClient:
+def get_api_client(config: Optional[ApiConfig] = None) -> Optional[TRRCMSApiClient]:
     """
     الحصول على instance واحد من ApiClient (Singleton).
 
@@ -2347,8 +2346,12 @@ def get_api_client(config: Optional[ApiConfig] = None) -> TRRCMSApiClient:
         config: تكوين API (يُستخدم فقط في المرة الأولى)
 
     Returns:
-        TRRCMSApiClient instance
+        TRRCMSApiClient instance, or None in local mode
     """
+    from app.config import Config
+    if Config.DATA_MODE == "local":
+        return None
+
     global _api_client_instance
 
     if _api_client_instance is None:

@@ -30,19 +30,54 @@ class SurveyController:
 
     def load_office_surveys(self, status: str = "Draft", page: int = 1, page_size: int = 100) -> OperationResult:
         """
-        Fetch paginated list of office surveys from API.
+        Fetch paginated list of office surveys from API, with local DB fallback.
 
         Returns OperationResult with list of survey summary dicts.
         """
+        # Try API first
         try:
             from services.api_client import get_api_client
             api = get_api_client()
-            response = api.get_office_surveys(status=status, page=page, page_size=page_size)
-            surveys = response.get("surveys", [])
-            logger.info(f"Loaded {len(surveys)} office surveys (status={status})")
+            if api is not None:
+                response = api.get_office_surveys(status=status, page=page, page_size=page_size)
+                surveys = response.get("surveys", [])
+                logger.info(f"Loaded {len(surveys)} office surveys from API (status={status})")
+                return OperationResult.ok(data=surveys)
+        except Exception as e:
+            logger.warning(f"API load failed, falling back to local DB: {e}")
+
+        # Fallback to local DB
+        try:
+            from repositories.survey_repository import SurveyRepository
+            if self.db is None:
+                from repositories.database import Database
+                self.db = Database()
+            repo = SurveyRepository(self.db)
+            local_status = status.lower()
+            if local_status == "draft":
+                rows = repo.get_drafts_for_office(limit=page_size, offset=(page - 1) * page_size)
+            else:
+                rows = repo.search_drafts(source='office', limit=page_size, offset=(page - 1) * page_size)
+
+            # Map local DB fields to API response format
+            surveys = []
+            for row in rows:
+                context = row.get("context", {})
+                surveys.append({
+                    "id": row.get("survey_id", ""),
+                    "buildingId": row.get("building_id", ""),
+                    "propertyUnitId": row.get("unit_id", ""),
+                    "unitIdentifier": context.get("unit", {}).get("unit_number", "") if isinstance(context.get("unit"), dict) else "",
+                    "referenceCode": row.get("reference_code", ""),
+                    "intervieweeName": context.get("persons", [{}])[0].get("full_name", "") if context.get("persons") else "",
+                    "surveyDate": str(row.get("survey_date", "")),
+                    "status": row.get("status", "draft"),
+                    "buildingNumber": context.get("building", {}).get("building_id", "") if isinstance(context.get("building"), dict) else "",
+                })
+            logger.info(f"Loaded {len(surveys)} office surveys from local DB (status={status})")
             return OperationResult.ok(data=surveys)
         except Exception as e:
-            logger.error(f"Failed to load office surveys: {e}", exc_info=True)
+            logger.error(f"Failed to load office surveys from local DB: {e}", exc_info=True)
             return OperationResult.fail(message=str(e))
 
     # ------------------------------------------------------------------
@@ -65,6 +100,10 @@ class SurveyController:
             from controllers.building_controller import BuildingController
 
             api = get_api_client()
+            if api is None:
+                # Fallback: load from local DB context_data
+                return self._get_survey_context_local(survey_id)
+
             detail = api.get_office_survey_detail(survey_id)
 
             # 1) Building enrichment — use BuildingController (resolves admin names from JSON)
@@ -205,3 +244,21 @@ class SurveyController:
             "next_action_date": "",
             "evidence_count": summary.get("evidenceCount", 0),
         }
+
+    def _get_survey_context_local(self, survey_id: str) -> OperationResult:
+        """Load survey context from local DB when API is unavailable."""
+        try:
+            from repositories.survey_repository import SurveyRepository
+            if self.db is None:
+                from repositories.database import Database
+                self.db = Database()
+            repo = SurveyRepository(self.db)
+            row = repo.get_by_id(survey_id)
+            if not row:
+                return OperationResult.fail(message=f"Survey {survey_id} not found in local DB")
+
+            context = row.get("context", {})
+            return OperationResult.ok(data=context)
+        except Exception as e:
+            logger.error(f"Failed to load survey context from local DB: {e}", exc_info=True)
+            return OperationResult.fail(message=str(e))

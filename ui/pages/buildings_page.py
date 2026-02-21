@@ -631,27 +631,10 @@ class AddBuildingPage(QWidget):
         vbox_type.addWidget(self.type_combo)
         card2_layout.addLayout(vbox_type, 1)  # توحيد العرض - stretch factor
 
-        # عدد الوحدات (DRY: using _create_spinbox_with_arrows)
-        vbox_units = QVBoxLayout()
-        vbox_units.setSpacing(6)
-        lbl_units = QLabel("عدد الوحدات")
-        lbl_units.setFont(card2_label_font)
-        lbl_units.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent;")
-        vbox_units.addWidget(lbl_units)
-        self.apartments_spin = QSpinBox()
-        self.apartments_spin.setRange(0, 200)
-        self.apartments_spin.setValue(0)
-        self.apartments_spin.setAlignment(Qt.AlignRight)
-        self.apartments_spin.setLocale(QLocale(QLocale.English, QLocale.UnitedStates))
-        self.apartments_spin.setButtonSymbols(QSpinBox.NoButtons)
-        apartments_widget = self._create_spinbox_with_arrows(self.apartments_spin)
-        vbox_units.addWidget(apartments_widget)
-        card2_layout.addLayout(vbox_units, 1)  # توحيد العرض - stretch factor
-
-        # عدد المقاسم (DRY: using _create_spinbox_with_arrows)
+        # عدد الطوابق
         vbox_floors = QVBoxLayout()
         vbox_floors.setSpacing(6)
-        lbl_floors = QLabel("عدد المقاسم")
+        lbl_floors = QLabel("عدد الطوابق")
         lbl_floors.setFont(card2_label_font)
         lbl_floors.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent;")
         vbox_floors.addWidget(lbl_floors)
@@ -663,24 +646,67 @@ class AddBuildingPage(QWidget):
         self.floors_spin.setButtonSymbols(QSpinBox.NoButtons)
         floors_widget = self._create_spinbox_with_arrows(self.floors_spin)
         vbox_floors.addWidget(floors_widget)
-        card2_layout.addLayout(vbox_floors, 1)  # توحيد العرض - stretch factor
+        card2_layout.addLayout(vbox_floors, 1)
 
-        # عدد المحلات (DRY: using _create_spinbox_with_arrows)
-        vbox_shops = QVBoxLayout()
-        vbox_shops.setSpacing(6)
-        lbl_shops = QLabel("عدد المحلات")
-        lbl_shops.setFont(card2_label_font)
-        lbl_shops.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent;")
-        vbox_shops.addWidget(lbl_shops)
-        self.shops_spin = QSpinBox()
-        self.shops_spin.setRange(0, 50)
-        self.shops_spin.setValue(0)
-        self.shops_spin.setAlignment(Qt.AlignRight)
-        self.shops_spin.setLocale(QLocale(QLocale.English, QLocale.UnitedStates))
-        self.shops_spin.setButtonSymbols(QSpinBox.NoButtons)
-        shops_widget = self._create_spinbox_with_arrows(self.shops_spin)
-        vbox_shops.addWidget(shops_widget)
-        card2_layout.addLayout(vbox_shops, 1)  # توحيد العرض - stretch factor
+        # عدد المقاسم السكنية
+        vbox_residential = QVBoxLayout()
+        vbox_residential.setSpacing(6)
+        lbl_residential = QLabel("المقاسم السكنية")
+        lbl_residential.setFont(card2_label_font)
+        lbl_residential.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent;")
+        vbox_residential.addWidget(lbl_residential)
+        self.residential_spin = QSpinBox()
+        self.residential_spin.setRange(0, 200)
+        self.residential_spin.setValue(0)
+        self.residential_spin.setAlignment(Qt.AlignRight)
+        self.residential_spin.setLocale(QLocale(QLocale.English, QLocale.UnitedStates))
+        self.residential_spin.setButtonSymbols(QSpinBox.NoButtons)
+        self.residential_spin.valueChanged.connect(self._update_total_units)
+        residential_widget = self._create_spinbox_with_arrows(self.residential_spin)
+        vbox_residential.addWidget(residential_widget)
+        card2_layout.addLayout(vbox_residential, 1)
+
+        # عدد المقاسم غير السكنية
+        vbox_non_residential = QVBoxLayout()
+        vbox_non_residential.setSpacing(6)
+        lbl_non_residential = QLabel("غير السكنية")
+        lbl_non_residential.setFont(card2_label_font)
+        lbl_non_residential.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent;")
+        vbox_non_residential.addWidget(lbl_non_residential)
+        self.non_residential_spin = QSpinBox()
+        self.non_residential_spin.setRange(0, 200)
+        self.non_residential_spin.setValue(0)
+        self.non_residential_spin.setAlignment(Qt.AlignRight)
+        self.non_residential_spin.setLocale(QLocale(QLocale.English, QLocale.UnitedStates))
+        self.non_residential_spin.setButtonSymbols(QSpinBox.NoButtons)
+        self.non_residential_spin.valueChanged.connect(self._update_total_units)
+        non_residential_widget = self._create_spinbox_with_arrows(self.non_residential_spin)
+        vbox_non_residential.addWidget(non_residential_widget)
+        card2_layout.addLayout(vbox_non_residential, 1)
+
+        # العدد الكلي للمقاسم (read-only, auto-calculated)
+        vbox_total = QVBoxLayout()
+        vbox_total.setSpacing(6)
+        lbl_total = QLabel("العدد الكلي")
+        lbl_total.setFont(card2_label_font)
+        lbl_total.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent;")
+        vbox_total.addWidget(lbl_total)
+        self.total_units_label = QLabel("0")
+        self.total_units_label.setAlignment(Qt.AlignCenter)
+        self.total_units_label.setFixedHeight(45)
+        self.total_units_label.setStyleSheet("""
+            QLabel {
+                padding: 6px 12px;
+                border: 1px solid #E1E8ED;
+                border-radius: 8px;
+                background-color: #EEF2F7;
+                font-size: 16px;
+                font-weight: 700;
+                color: #374151;
+            }
+        """)
+        vbox_total.addWidget(self.total_units_label)
+        card2_layout.addLayout(vbox_total, 1)
 
         layout.addWidget(card2)
 
@@ -1106,15 +1132,16 @@ class AddBuildingPage(QWidget):
         bldg_num = building_num.zfill(5)
 
         building_id = f"{gov}-{dist}-{subdist}-{comm}-{neigh}-{bldg_num}"
+        building_id_plain = building_id.replace("-", "")
 
         # Check if this building ID already exists in the database
         # Skip check if we're editing an existing building with this ID
-        if self.building and self.building.building_id == building_id:
+        if self.building and self.building.building_id == building_id_plain:
             self.building_id_warning.hide()
             return
 
-        # Use controller to check existence
-        result = self.building_controller.get_building(building_id)
+        # Use controller to check existence (dashless for DB lookup)
+        result = self.building_controller.get_building_by_id(building_id_plain)
 
         if result.success and result.data:
             self.building_id_warning.setText("⚠️ هذا البناء موجود بالفعل")
@@ -1123,9 +1150,9 @@ class AddBuildingPage(QWidget):
             self.building_id_warning.hide()
 
     def _update_total_units(self):
-        """Update total units."""
-        total = self.apartments_spin.value() + self.shops_spin.value()
-        self.units_label.setText(str(total))
+        """Update total units label (residential + non-residential)."""
+        total = self.residential_spin.value() + self.non_residential_spin.value()
+        self.total_units_label.setText(str(total))
 
     def _get_auth_token(self) -> Optional[str]:
         """
@@ -1397,8 +1424,9 @@ class AddBuildingPage(QWidget):
 
         # تحميل الأعداد
         self.floors_spin.setValue(self.building.number_of_floors or 1)
-        self.apartments_spin.setValue(self.building.number_of_apartments or 0)
-        self.shops_spin.setValue(self.building.number_of_shops or 0)
+        self.residential_spin.setValue(self.building.number_of_apartments or 0)
+        self.non_residential_spin.setValue(self.building.number_of_shops or 0)
+        self._update_total_units()
 
         # تحميل الأوصاف
         if hasattr(self.building, 'general_description') and self.building.general_description:
@@ -1752,6 +1780,7 @@ class AddBuildingPage(QWidget):
         comm_code = self._get_community_code()
         neigh_code = self._get_neighborhood_code()
 
+        gov_en, gov_ar = self._divisions.get_governorate_name(gov_code)
         dist_en, dist_ar = self._divisions.get_district_name(gov_code, dist_code)
         subdist_en, subdist_ar = self._divisions.get_subdistrict_name(gov_code, dist_code, subdist_code)
         comm_en, comm_ar = self._divisions.get_community_name(gov_code, dist_code, subdist_code, comm_code)
@@ -1763,8 +1792,8 @@ class AddBuildingPage(QWidget):
             "building_id": building_id,
             # GG: Governorate
             "governorate_code": gov_code,
-            "governorate_name": "Aleppo",
-            "governorate_name_ar": "حلب",
+            "governorate_name": gov_en,
+            "governorate_name_ar": gov_ar,
             # DD: District
             "district_code": dist_code,
             "district_name": dist_en,
@@ -1787,9 +1816,9 @@ class AddBuildingPage(QWidget):
             "building_type": self.type_combo.currentData(),
             "building_status": self.status_combo.currentData(),
             "number_of_floors": self.floors_spin.value(),
-            "number_of_apartments": self.apartments_spin.value(),
-            "number_of_shops": self.shops_spin.value(),
-            "number_of_units": self.apartments_spin.value() + self.shops_spin.value(),
+            "number_of_apartments": self.residential_spin.value(),
+            "number_of_shops": self.non_residential_spin.value(),
+            "number_of_units": self.residential_spin.value() + self.non_residential_spin.value(),
             # Coordinates
             "latitude": self.latitude_spin.value() if self.latitude_spin.value() != 0 else None,
             "longitude": self.longitude_spin.value() if self.longitude_spin.value() != 0 else None,
@@ -1885,7 +1914,7 @@ class AddBuildingPage(QWidget):
         self._validate_building_id_realtime()
 
     def _load_neighborhoods_from_api(self):
-        """Load neighborhoods from backend API based on current hierarchy selection."""
+        """Load neighborhoods from backend API, with local JSON fallback."""
         gov_code = self._get_gov_code()
         dist_code = self._get_district_code()
         subdist_code = self._get_subdistrict_code()
@@ -1896,26 +1925,59 @@ class AddBuildingPage(QWidget):
         self.neighborhood_combo.addItem("اختر الحي", "")
 
         if gov_code and dist_code and subdist_code and comm_code:
+            neighborhoods = []
+            # Try API first
             try:
                 api_client = get_api_client()
-                neighborhoods = api_client.get_neighborhoods(
-                    governorate_code=gov_code,
-                    district_code=dist_code,
-                    subdistrict_code=subdist_code,
-                    community_code=comm_code
-                )
-                self._neighborhoods_cache = neighborhoods
-                for n in neighborhoods:
-                    code = n.get("neighborhoodCode", "")
-                    name_ar = n.get("nameArabic", "")
-                    self.neighborhood_combo.addItem(f"{code} - {name_ar}", code)
-                if self.neighborhood_combo.count() > 1:
-                    self.neighborhood_combo.setCurrentIndex(1)
+                if api_client is not None:
+                    neighborhoods = api_client.get_neighborhoods(
+                        governorate_code=gov_code,
+                        district_code=dist_code,
+                        subdistrict_code=subdist_code,
+                        community_code=comm_code
+                    )
             except Exception as e:
                 logger.warning(f"Failed to load neighborhoods from API: {e}")
-                self._neighborhoods_cache = []
+
+            # Fallback to local JSON if API returned nothing
+            if not neighborhoods:
+                neighborhoods = self._load_neighborhoods_from_json()
+
+            self._neighborhoods_cache = neighborhoods
+            for n in neighborhoods:
+                code = n.get("neighborhoodCode", n.get("code", ""))
+                name_ar = n.get("nameArabic", n.get("name_ar", ""))
+                self.neighborhood_combo.addItem(f"{code} - {name_ar}", code)
+            if self.neighborhood_combo.count() > 1:
+                self.neighborhood_combo.setCurrentIndex(1)
 
         self.neighborhood_combo.blockSignals(False)
+
+    def _load_neighborhoods_from_json(self):
+        """Load neighborhoods from local JSON file as fallback."""
+        try:
+            import json
+            from pathlib import Path
+            json_path = Path(__file__).parent.parent.parent / "data" / "neighborhoods.json"
+            if not json_path.exists():
+                logger.warning(f"Neighborhoods JSON not found: {json_path}")
+                return []
+            with open(json_path, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+            raw = data.get('neighborhoods', [])
+            # Normalize to API format for consistent access
+            result = []
+            for n in raw:
+                result.append({
+                    "neighborhoodCode": n.get("code", ""),
+                    "nameArabic": n.get("name_ar", ""),
+                    "nameEnglish": n.get("name_en", ""),
+                })
+            logger.info(f"Loaded {len(result)} neighborhoods from local JSON")
+            return result
+        except Exception as e:
+            logger.warning(f"Failed to load neighborhoods from JSON: {e}")
+            return []
 
     def _get_neighborhood_name_ar(self) -> str:
         """Get Arabic name from cached API neighborhoods."""

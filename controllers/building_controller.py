@@ -277,6 +277,10 @@ class BuildingController(BaseController):
                 self._emit_completed("create_building", True)
                 self.building_created.emit(saved_building.building_uuid)
                 self._trigger_callbacks("on_building_created", saved_building)
+
+                # Auto-create unit records based on counts
+                self._auto_create_units(saved_building, data)
+
                 return OperationResult.ok(
                     data=saved_building,
                     message="Building created successfully",
@@ -553,7 +557,7 @@ class BuildingController(BaseController):
                 response = self._api_service.get_building_by_id(building_id)
                 building = self._api_dto_to_building(response) if response else None
             else:
-                building = self.repository.get_by_building_id(building_id)
+                building = self.repository.get_by_id(building_id)
 
             if building:
                 return OperationResult.ok(data=building)
@@ -622,8 +626,8 @@ class BuildingController(BaseController):
                         building = self._api_dto_to_building(item)
                         buildings.append(building)
                 except Exception as e:
-                    logger.error(f"API search failed: {e}")
-                    buildings = []
+                    logger.warning(f"API search failed, falling back to local DB: {e}")
+                    buildings = self._query_buildings(filter_)
             else:
                 # Build query based on filter
                 buildings = self._query_buildings(filter_)
@@ -1069,31 +1073,101 @@ class BuildingController(BaseController):
         return OperationResult.ok()
 
     def _validate_building_id_format(self, building_id: str) -> bool:
-        """Validate 17-digit building ID format."""
-        # Format: GG-DD-SS-CCC-NNN-BBBBB
+        """Validate building ID format (dashed or dashless 17-digit)."""
         import re
-        pattern = r"^\d{2}-\d{2}-\d{2}-\d{3}-\d{3}-\d{5}$"
-        return bool(re.match(pattern, building_id))
+        # Dashed: GG-DD-SS-CCC-NNN-BBBBB (22 chars)
+        pattern_dashed = r"^\d{2}-\d{2}-\d{2}-\d{3}-\d{3}-\d{5}$"
+        # Dashless: 17 digits
+        pattern_plain = r"^\d{17}$"
+        return bool(re.match(pattern_dashed, building_id) or re.match(pattern_plain, building_id))
 
     def _generate_building_id(self, data: Dict[str, Any]) -> str:
-        """Generate 17-digit building ID from administrative codes."""
+        """Generate 17-digit building ID from administrative codes (dashless)."""
         gov = data.get("governorate_code", "00")[:2].zfill(2)
         dist = data.get("district_code", "00")[:2].zfill(2)
         sub = data.get("subdistrict_code", "00")[:2].zfill(2)
         comm = data.get("community_code", "000")[:3].zfill(3)
         neigh = data.get("neighborhood_code", "000")[:3].zfill(3)
 
-        # Get next building number
+        # DB stores dashless 17-digit IDs: 12-char prefix + 5-digit building number
+        prefix = f"{gov}{dist}{sub}{comm}{neigh}"
+
         result = self.db.fetch_one("""
-            SELECT MAX(CAST(SUBSTR(building_id, 18, 5) AS INTEGER)) as max_num
+            SELECT MAX(CAST(SUBSTR(building_id, 13, 5) AS INTEGER)) as max_num
             FROM buildings
             WHERE building_id LIKE ?
-        """, (f"{gov}-{dist}-{sub}-{comm}-{neigh}-%",))
+        """, (f"{prefix}%",))
 
         next_num = (result['max_num'] or 0) + 1 if result and result['max_num'] else 1
         building_num = str(next_num).zfill(5)
 
-        return f"{gov}-{dist}-{sub}-{comm}-{neigh}-{building_num}"
+        return f"{prefix}{building_num}"
+
+    def _auto_create_units(self, building: Building, data: dict):
+        """Create unit records automatically based on building's unit counts."""
+        if not self.db:
+            return
+
+        from repositories.unit_repository import UnitRepository
+        from models.unit import PropertyUnit
+        unit_repo = UnitRepository(self.db)
+
+        residential = data.get("number_of_apartments", 0)
+        non_residential = data.get("number_of_shops", 0)
+
+        if residential + non_residential == 0:
+            return
+
+        unit_num = 1
+
+        for _ in range(residential):
+            unit = PropertyUnit(
+                building_id=building.building_id,
+                unit_type="apartment",
+                unit_number=str(unit_num).zfill(3),
+                apartment_status="unknown",
+            )
+            unit_repo.create(unit)
+            unit_num += 1
+
+        for _ in range(non_residential):
+            unit = PropertyUnit(
+                building_id=building.building_id,
+                unit_type="shop",
+                unit_number=str(unit_num).zfill(3),
+                apartment_status="unknown",
+            )
+            unit_repo.create(unit)
+            unit_num += 1
+
+        total = residential + non_residential
+        logger.info(f"Auto-created {total} units for building {building.building_id} ({residential} residential, {non_residential} non-residential)")
+
+    def sync_building_unit_counts(self, building_id: str):
+        """Update building's unit counts from actual unit records."""
+        if not self.db:
+            return
+
+        residential = self.db.fetch_one(
+            "SELECT COUNT(*) as c FROM property_units WHERE building_id = ? AND unit_type = 'apartment'",
+            (building_id,)
+        )
+        non_residential = self.db.fetch_one(
+            "SELECT COUNT(*) as c FROM property_units WHERE building_id = ? AND unit_type != 'apartment'",
+            (building_id,)
+        )
+
+        res_count = residential["c"] if residential else 0
+        non_res_count = non_residential["c"] if non_residential else 0
+        total = res_count + non_res_count
+
+        self.db.execute(
+            """UPDATE buildings
+               SET number_of_apartments = ?, number_of_shops = ?, number_of_units = ?, updated_at = ?
+               WHERE building_id = ?""",
+            (res_count, non_res_count, total, datetime.now().isoformat(), building_id)
+        )
+        logger.info(f"Synced building {building_id} unit counts: {res_count} residential, {non_res_count} non-residential, {total} total")
 
     def _has_dependencies(self, building_uuid: str) -> bool:
         """Check if building has dependent records."""

@@ -7,19 +7,25 @@ Loads data from GeoJSON file for consistency with future API integration.
 import random
 import json
 import os
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
 from typing import List
+from decimal import Decimal
 
 from models.building import Building
 from models.unit import PropertyUnit
 from models.person import Person
 from models.relation import PersonUnitRelation
+from models.household import Household
+from models.evidence import Evidence
 from models.claim import Claim
 from models.user import User
 from .database import Database
 from .building_repository import BuildingRepository
 from .unit_repository import UnitRepository
 from .person_repository import PersonRepository
+from .relation_repository import RelationRepository
+from .household_repository import HouseholdRepository
+from .evidence_repository import EvidenceRepository
 from .claim_repository import ClaimRepository
 from .user_repository import UserRepository
 from utils.logger import get_logger
@@ -66,7 +72,42 @@ BUILDING_TYPES = ["residential", "commercial", "mixed_use"]
 BUILDING_STATUSES = ["intact", "minor_damage", "major_damage", "destroyed"]
 UNIT_TYPES = ["apartment", "shop", "office"]
 RELATION_TYPES = ["owner", "tenant", "heir", "occupant"]
+CONTRACT_TYPES = ["tabu_green", "tabu_red", "rental_contract", "inheritance", "verbal_agreement"]
+EVIDENCE_TYPES = ["document", "witness", "community", "other"]
+EVIDENCE_DESCRIPTIONS = [
+    "Tabu Akhdar (Green Title Deed)",
+    "Tabu Ahmar (Red Title Deed)",
+    "Rental contract signed by both parties",
+    "Witness statement from two neighbors",
+    "Community affirmation by mukhtar",
+    "Electricity bill showing occupancy",
+    "Water bill as proof of residence",
+    "Inheritance document from court",
+    "Sale contract notarized",
+    "Family registry extract",
+]
+EVIDENCE_DESCRIPTIONS_AR = [
+    "طابو أخضر (سند ملكية)",
+    "طابو أحمر (سند ملكية)",
+    "عقد إيجار موقع من الطرفين",
+    "شهادة شاهدين من الجيران",
+    "تأكيد مجتمعي من المختار",
+    "فاتورة كهرباء تثبت الإقامة",
+    "فاتورة مياه كدليل على السكن",
+    "وثيقة إرث من المحكمة",
+    "عقد بيع موثق",
+    "قيد عائلي",
+]
+OCCUPANCY_TYPES = ["owner", "tenant", "guest", "caretaker", "relative"]
+OCCUPANCY_NATURES = ["permanent", "temporary", "seasonal"]
 CASE_STATUSES = ["draft", "submitted", "screening", "under_review", "awaiting_docs", "approved"]
+
+
+def seed_users_only(db: Database):
+    """Seed only user accounts — no mock buildings/units/persons/claims."""
+    user_repo = UserRepository(db)
+    _seed_users(user_repo)
+    logger.info(">> Seeded user accounts only (clean database)")
 
 
 def seed_database(db: Database, force_reseed: bool = False):
@@ -88,6 +129,9 @@ def seed_database(db: Database, force_reseed: bool = False):
     building_repo = BuildingRepository(db)
     unit_repo = UnitRepository(db)
     person_repo = PersonRepository(db)
+    relation_repo = RelationRepository(db)
+    household_repo = HouseholdRepository(db)
+    evidence_repo = EvidenceRepository(db)
     claim_repo = ClaimRepository(db)
 
     # Seed users (only if no users exist)
@@ -107,6 +151,15 @@ def seed_database(db: Database, force_reseed: bool = False):
     # Seed persons (150 persons)
     persons = _seed_persons(person_repo, 150)
 
+    # Seed person-unit relations (link persons to units)
+    relations = _seed_relations(relation_repo, units, persons)
+
+    # Seed households (occupancy data per unit)
+    households = _seed_households(household_repo, units, persons)
+
+    # Seed evidence (documents/witness statements supporting relations)
+    evidences = _seed_evidence(evidence_repo, relations)
+
     # Seed claims (50 claims)
     _seed_claims(claim_repo, units, persons, 50)
 
@@ -115,6 +168,9 @@ def seed_database(db: Database, force_reseed: bool = False):
     logger.info(f"  - Buildings: {len(buildings)} (from GeoJSON)")
     logger.info(f"  - Units: {len(units)}")
     logger.info(f"  - Persons: {len(persons)}")
+    logger.info(f"  - Relations: {len(relations)}")
+    logger.info(f"  - Households: {len(households)}")
+    logger.info(f"  - Evidence: {len(evidences)}")
     logger.info(f"  - Claims: 50")
 
 
@@ -130,6 +186,10 @@ def reset_test_user_passwords(db: Database):
         "clerk": "clerk123",
         "supervisor": "supervisor123",
         "analyst": "analyst123",
+        "field1": "field123",
+        "field2": "field456",
+        "collector1": "collector123",
+        "collector2": "collector456",
     }
 
     for username, password in test_users.items():
@@ -191,9 +251,40 @@ def _seed_users(repo: UserRepository):
             role="analyst",
             email="analyst@unhabitat.org"
         ),
+        User(
+            username="field1",
+            full_name="Field Researcher 1",
+            full_name_ar="باحث ميداني 1",
+            role="field_researcher",
+            email="field1@unhabitat.org"
+        ),
+        User(
+            username="field2",
+            full_name="Field Researcher 2",
+            full_name_ar="باحث ميداني 2",
+            role="field_researcher",
+            email="field2@unhabitat.org"
+        ),
+        User(
+            username="collector1",
+            full_name="Data Collector 1",
+            full_name_ar="جامع بيانات 1",
+            role="data_collector",
+            email="collector1@unhabitat.org"
+        ),
+        User(
+            username="collector2",
+            full_name="Data Collector 2",
+            full_name_ar="جامع بيانات 2",
+            role="data_collector",
+            email="collector2@unhabitat.org"
+        ),
     ]
 
-    passwords = ["admin123", "manager123", "clerk123", "supervisor123", "analyst123"]
+    passwords = [
+        "admin123", "manager123", "clerk123", "supervisor123", "analyst123",
+        "field123", "field456", "collector123", "collector456",
+    ]
 
     for user, password in zip(users, passwords):
         user.set_password(password)
@@ -419,6 +510,177 @@ def _seed_persons(repo: PersonRepository, count: int) -> List[Person]:
 
     logger.debug(f"Created {len(persons)} persons")
     return persons
+
+
+def _seed_relations(repo: RelationRepository, units: List[PropertyUnit],
+                    persons: List[Person]) -> List[PersonUnitRelation]:
+    """Seed person-unit relations linking persons to units."""
+    relations = []
+    person_idx = 0
+
+    for unit in units:
+        if person_idx >= len(persons):
+            break
+
+        # Each unit gets 1-3 related persons
+        num_relations = random.randint(1, 3)
+
+        for j in range(num_relations):
+            if person_idx >= len(persons):
+                break
+
+            person = persons[person_idx]
+            person_idx += 1
+
+            # First person is usually owner, others are tenant/occupant/heir
+            if j == 0:
+                rel_type = random.choices(
+                    ["owner", "tenant", "occupant"],
+                    weights=[60, 25, 15]
+                )[0]
+            else:
+                rel_type = random.choice(["tenant", "heir", "occupant", "guest"])
+
+            ownership_share = random.choice([600, 1200, 2400]) if rel_type == "owner" else 0
+            contract_type = random.choice(CONTRACT_TYPES) if rel_type in ["owner", "tenant"] else None
+
+            start_date = date.today() - timedelta(days=random.randint(365, 365 * 10))
+            verification = random.choices(
+                ["pending", "verified", "rejected"],
+                weights=[40, 50, 10]
+            )[0]
+
+            relation = PersonUnitRelation(
+                person_id=person.person_id,
+                unit_id=unit.unit_id,
+                relation_type=rel_type,
+                ownership_share=ownership_share,
+                tenure_contract_type=contract_type,
+                relation_start_date=start_date,
+                verification_status=verification,
+                verification_date=date.today() if verification != "pending" else None,
+                verified_by="system" if verification != "pending" else None,
+                created_at=datetime.now() - timedelta(days=random.randint(1, 180)),
+                created_by="system"
+            )
+
+            repo.create(relation)
+            relations.append(relation)
+
+    logger.debug(f"Created {len(relations)} person-unit relations")
+    return relations
+
+
+def _seed_households(repo: HouseholdRepository, units: List[PropertyUnit],
+                     persons: List[Person]) -> List[Household]:
+    """Seed household/occupancy data for units."""
+    households = []
+    person_idx = 0
+
+    # Create households for ~60% of units (occupied ones)
+    occupied_units = [u for u in units if u.apartment_status == "occupied"]
+    if not occupied_units:
+        occupied_units = units[:int(len(units) * 0.6)]
+
+    for unit in occupied_units:
+        if person_idx >= len(persons):
+            person_idx = 0  # Wrap around
+
+        main_person = persons[person_idx]
+        person_idx += 1
+
+        # Generate realistic demographics
+        household_size = random.randint(1, 8)
+        males = random.randint(0, household_size)
+        females = household_size - males
+        minors = random.randint(0, min(household_size - 1, 4))
+        elderly = random.randint(0, min(household_size - minors, 2))
+        adults = household_size - minors - elderly
+        if adults < 1:
+            adults = 1
+            minors = max(0, minors - 1)
+
+        occ_type = random.choice(OCCUPANCY_TYPES)
+        monthly_rent = None
+        if occ_type == "tenant":
+            monthly_rent = Decimal(str(random.randint(50, 500) * 1000))
+
+        start_date = date.today() - timedelta(days=random.randint(30, 365 * 5))
+
+        display_name = main_person.full_name_ar if hasattr(main_person, 'full_name_ar') else None
+        if not display_name:
+            display_name = f"{main_person.first_name_ar} {main_person.last_name_ar}"
+
+        household = Household(
+            unit_id=unit.unit_id,
+            main_occupant_id=main_person.person_id,
+            main_occupant_name=display_name,
+            occupancy_size=household_size,
+            male_count=males,
+            female_count=females,
+            minors_count=minors,
+            adults_count=adults,
+            elderly_count=elderly,
+            with_disability_count=random.choice([0, 0, 0, 0, 1]),
+            occupancy_type=occ_type,
+            occupancy_nature=random.choice(OCCUPANCY_NATURES),
+            occupancy_start_date=start_date,
+            monthly_rent=monthly_rent,
+            created_at=datetime.now() - timedelta(days=random.randint(1, 180)),
+            created_by="system"
+        )
+
+        repo.create(household)
+        households.append(household)
+
+    logger.debug(f"Created {len(households)} households")
+    return households
+
+
+def _seed_evidence(repo: EvidenceRepository,
+                   relations: List[PersonUnitRelation]) -> List[Evidence]:
+    """Seed evidence records supporting person-unit relations."""
+    evidences = []
+
+    # Create evidence for ~40% of relations
+    relations_with_evidence = random.sample(
+        relations,
+        min(len(relations), int(len(relations) * 0.4))
+    )
+
+    for relation in relations_with_evidence:
+        # 1-2 evidence items per relation
+        num_evidence = random.randint(1, 2)
+
+        for _ in range(num_evidence):
+            idx = random.randint(0, len(EVIDENCE_DESCRIPTIONS) - 1)
+            ev_type = random.choice(EVIDENCE_TYPES)
+            ref_date = date.today() - timedelta(days=random.randint(30, 365 * 5))
+
+            verification = random.choices(
+                ["pending", "verified", "rejected"],
+                weights=[30, 60, 10]
+            )[0]
+
+            evidence = Evidence(
+                relation_id=relation.relation_id,
+                reference_number=f"REF-{random.randint(10000, 99999)}",
+                reference_date=ref_date,
+                evidence_description=EVIDENCE_DESCRIPTIONS_AR[idx],
+                evidence_type=ev_type,
+                verification_status=verification,
+                verification_notes=None,
+                verified_by="system" if verification != "pending" else None,
+                verification_date=date.today() if verification != "pending" else None,
+                created_at=datetime.now() - timedelta(days=random.randint(1, 180)),
+                created_by="system"
+            )
+
+            repo.create(evidence)
+            evidences.append(evidence)
+
+    logger.debug(f"Created {len(evidences)} evidence records")
+    return evidences
 
 
 def _seed_claims(repo: ClaimRepository, units: List[PropertyUnit], persons: List[Person], count: int):

@@ -433,25 +433,29 @@ class UnitsPage(QWidget):
         if self._use_api:
             # Load from API: GET /api/v1/PropertyUnits
             logger.info("Loading units from API")
-            raw_units = self._api_service.get_all_property_units(limit=1000)
-            # Convert API dicts to PropertyUnit objects
-            units = []
-            for dto in raw_units:
-                if isinstance(dto, dict):
-                    units.append(PropertyUnit(
-                        unit_uuid=dto.get("id") or dto.get("unitUuid") or "",
-                        unit_id=dto.get("unitId") or "",
-                        building_id=dto.get("buildingId") or "",
-                        unit_type=dto.get("unitType") or "apartment",
-                        unit_number=dto.get("unitIdentifier") or dto.get("unitNumber") or "001",
-                        floor_number=dto.get("floorNumber") or 0,
-                        apartment_number=dto.get("apartmentNumber") or dto.get("unitIdentifier") or "",
-                        apartment_status=dto.get("status") or dto.get("apartmentStatus") or "occupied",
-                        property_description=dto.get("description") or dto.get("propertyDescription") or "",
-                        area_sqm=dto.get("areaSquareMeters") or dto.get("areaSqm"),
-                    ))
-                else:
-                    units.append(dto)
+            try:
+                raw_units = self._api_service.get_all_property_units(limit=1000)
+                # Convert API dicts to PropertyUnit objects
+                units = []
+                for dto in raw_units:
+                    if isinstance(dto, dict):
+                        units.append(PropertyUnit(
+                            unit_uuid=dto.get("id") or dto.get("unitUuid") or "",
+                            unit_id=dto.get("unitId") or "",
+                            building_id=dto.get("buildingId") or "",
+                            unit_type=dto.get("unitType") or "apartment",
+                            unit_number=dto.get("unitIdentifier") or dto.get("unitNumber") or "001",
+                            floor_number=dto.get("floorNumber") or 0,
+                            apartment_number=dto.get("apartmentNumber") or dto.get("unitIdentifier") or "",
+                            apartment_status=dto.get("status") or dto.get("apartmentStatus") or "occupied",
+                            property_description=dto.get("description") or dto.get("propertyDescription") or "",
+                            area_sqm=dto.get("areaSquareMeters") or dto.get("areaSqm"),
+                        ))
+                    else:
+                        units.append(dto)
+            except Exception as e:
+                logger.warning(f"API units load failed, falling back to local DB: {e}")
+                units = self.unit_repo.get_all(limit=1000)
         else:
             # Load from local database
             logger.info("Loading units from local database")
