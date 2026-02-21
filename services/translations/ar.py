@@ -750,12 +750,12 @@ AR_TRANSLATIONS = {
     "navbar.search_menu.by_name": "🔍 بحث بالاسم",
     "navbar.search_menu.by_claim_id": "🔢 بحث برقم المطالبة",
     "navbar.search_menu.by_building": "🏢 بحث بالمبنى",
-    "navbar.menu.change_language": "🌐  تغيير اللغة",
-    "navbar.menu.sync_data": "🔄  المزامنة والبيانات",
-    "navbar.menu.change_password": "🔒  تغيير كلمة المرور",
-    "navbar.menu.security_policies": "ℹ️  سياسات الأمان",
-    "navbar.menu.data_management": "🗄️  إدارة البيانات المرجعية",
-    "navbar.menu.logout": "➜  تسجيل خروج",
+    "navbar.menu.change_language": "تغيير اللغة",
+    "navbar.menu.sync_data": "المزامنة والبيانات",
+    "navbar.menu.change_password": "تغيير كلمة المرور",
+    "navbar.menu.security_policies": "سياسات الأمان",
+    "navbar.menu.data_management": "إدارة البيانات المرجعية",
+    "navbar.menu.logout": "تسجيل خروج",
 
     # ===== Case Details Page =====
     "page.case_details.title": "تفاصيل الحالة",

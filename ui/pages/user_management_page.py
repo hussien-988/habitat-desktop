@@ -594,7 +594,7 @@ class UserManagementPage(QWidget):
 
     def _on_change_password(self, user: dict):
         logger.info(f"Change password for user: {user.get('user_id')}")
-        new_password = PasswordDialog.change_password(self)
+        new_password = PasswordDialog.get_password(self)
         if new_password:
             logger.info(f"Password changed for user: {user.get('user_id')}")
             Toast.show_toast(self, "تم تغيير كلمة المرور بنجاح", Toast.SUCCESS)

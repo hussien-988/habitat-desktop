@@ -750,12 +750,12 @@ EN_TRANSLATIONS = {
     "navbar.search_menu.by_name": "🔍 Search by name",
     "navbar.search_menu.by_claim_id": "🔢 Search by claim number",
     "navbar.search_menu.by_building": "🏢 Search by building",
-    "navbar.menu.change_language": "🌐  Change Language",
-    "navbar.menu.sync_data": "🔄  Sync & Data",
-    "navbar.menu.change_password": "🔒  Change Password",
-    "navbar.menu.security_policies": "ℹ️  Security Policies",
-    "navbar.menu.data_management": "🗄️  Reference Data Management",
-    "navbar.menu.logout": "➜  Logout",
+    "navbar.menu.change_language": "Change Language",
+    "navbar.menu.sync_data": "Sync & Data",
+    "navbar.menu.change_password": "Change Password",
+    "navbar.menu.security_policies": "Security Policies",
+    "navbar.menu.data_management": "Reference Data Management",
+    "navbar.menu.logout": "Logout",
 
     # ===== Case Details Page =====
     "page.case_details.title": "Case Details",
