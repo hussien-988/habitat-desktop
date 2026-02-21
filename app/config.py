@@ -247,6 +247,8 @@ class Pages:
     MAP_VIEW = "map_view"
     ADMIN = "admin"
     AUDIT = "audit"
+    SYNC_DATA = "sync_data"
+    DATA_MANAGEMENT = "data_management"
 
 
 # User roles

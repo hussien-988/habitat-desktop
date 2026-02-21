@@ -50,6 +50,9 @@ from .base_dialog import BaseDialog, DialogType
 from .message_dialog import MessageDialog
 from .confirmation_dialog import ConfirmationDialog
 from .password_dialog import PasswordDialog
+from .language_dialog import LanguageDialog
+from .logout_dialog import LogoutDialog
+from .security_dialog import SecurityDialog
 
 # Import legacy dialogs for backward compatibility
 try:
@@ -68,6 +71,9 @@ __all__ = [
     'MessageDialog',
     'ConfirmationDialog',
     'PasswordDialog',
+    'LanguageDialog',
+    'LogoutDialog',
+    'SecurityDialog',
     # Legacy exports (for backward compatibility)
     'ConfirmDialog',
     'ErrorDialog',

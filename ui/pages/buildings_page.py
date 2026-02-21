@@ -2239,7 +2239,7 @@ class BuildingsListPage(QWidget):
     Buildings List Page with Table
     """
 
-    view_building = pyqtSignal(str)
+    view_building = pyqtSignal(object)
     edit_building = pyqtSignal(object)
     add_building = pyqtSignal()
     prepare_field_work = pyqtSignal()
@@ -3138,7 +3138,7 @@ class BuildingsPage(QWidget):
     Set DATA_PROVIDER = "http" in config to use API backend.
     """
 
-    view_building = pyqtSignal(str)
+    view_building = pyqtSignal(object)
 
     def __init__(self, db: Database = None, i18n: I18n = None, parent=None, use_api: bool = None):
         super().__init__(parent)

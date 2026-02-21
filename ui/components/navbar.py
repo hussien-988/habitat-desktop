@@ -98,6 +98,10 @@ class Navbar(QFrame):
     search_requested = pyqtSignal(str)
     logout_requested = pyqtSignal()
     language_change_requested = pyqtSignal()
+    sync_requested = pyqtSignal()
+    password_change_requested = pyqtSignal()
+    security_settings_requested = pyqtSignal()
+    data_management_requested = pyqtSignal()
 
     def __init__(self, user_id=None, parent=None):
         super().__init__(parent)
@@ -167,6 +171,10 @@ class Navbar(QFrame):
         self.id_badge = IDBadgeWidget(user_id=self.user_id)
         self.id_badge.logout_requested.connect(self._on_logout_requested)
         self.id_badge.language_change_requested.connect(self._on_language_change_requested)
+        self.id_badge.sync_requested.connect(self._on_sync_requested)
+        self.id_badge.password_change_requested.connect(self._on_password_change_requested)
+        self.id_badge.security_settings_requested.connect(self._on_security_settings_requested)
+        self.id_badge.data_management_requested.connect(self._on_data_management_requested)
         layout.addWidget(self.id_badge)
 
         # Divider line between ID and Logo (Figma spec)
@@ -631,6 +639,22 @@ class Navbar(QFrame):
     def _on_language_change_requested(self):
         """Handle language change request from ID badge dropdown"""
         self.language_change_requested.emit()
+
+    def _on_sync_requested(self):
+        """Handle sync data request from ID badge dropdown"""
+        self.sync_requested.emit()
+
+    def _on_password_change_requested(self):
+        """Handle password change request from ID badge dropdown"""
+        self.password_change_requested.emit()
+
+    def _on_security_settings_requested(self):
+        """Handle security settings request from ID badge dropdown"""
+        self.security_settings_requested.emit()
+
+    def _on_data_management_requested(self):
+        """Handle data management request from ID badge dropdown"""
+        self.data_management_requested.emit()
 
 
 class SimpleNavbar(QFrame):

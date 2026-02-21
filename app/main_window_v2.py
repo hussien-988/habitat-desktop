@@ -255,6 +255,16 @@ class MainWindow(QMainWindow):
         self.pages[Pages.ADD_USER] = AddUserPage(self.db, self.i18n, self)
         self.stack.addWidget(self.pages[Pages.ADD_USER])
 
+        # Sync & Data page
+        from ui.pages.sync_data_page import SyncDataPage
+        self.pages[Pages.SYNC_DATA] = SyncDataPage(self.db, self.i18n, self)
+        self.stack.addWidget(self.pages[Pages.SYNC_DATA])
+
+        # Data Management page
+        from ui.pages.data_management_page import DataManagementPage
+        self.pages[Pages.DATA_MANAGEMENT] = DataManagementPage(self.db, self.i18n, self)
+        self.stack.addWidget(self.pages[Pages.DATA_MANAGEMENT])
+
         # Office Survey Wizard (UC-004, UC-005) - NEW wizard framework
         self.office_survey_wizard = OfficeSurveyWizard(self.db, self)
         self.stack.addWidget(self.office_survey_wizard)
@@ -300,6 +310,10 @@ class MainWindow(QMainWindow):
         self.navbar.search_requested.connect(self._on_search_requested)
         self.navbar.logout_requested.connect(self._handle_logout)  # ✅ Connect logout
         self.navbar.language_change_requested.connect(self.toggle_language)  # ✅ Connect language toggle
+        self.navbar.sync_requested.connect(self._on_sync_requested)
+        self.navbar.password_change_requested.connect(self._on_password_change_requested)
+        self.navbar.security_settings_requested.connect(self._on_security_settings_requested)
+        self.navbar.data_management_requested.connect(self._on_data_management_requested)
 
         # Buildings page - view details
         self.pages[Pages.BUILDINGS].view_building.connect(self._on_view_building)
@@ -408,16 +422,35 @@ class MainWindow(QMainWindow):
     def _handle_logout(self):
         """Handle logout request."""
         if self.current_user:
-            confirmed = ErrorHandler.confirm(
-                self,
-                self.i18n.t("logout_confirm_message"),
-                self.i18n.t("logout_confirm_title")
-            )
-
-            if confirmed:
+            from ui.components.dialogs.logout_dialog import LogoutDialog
+            if LogoutDialog.confirm_logout(parent=self):
                 logger.info(f"User logged out: {self.current_user.username}")
                 self.current_user = None
                 self._show_login()
+
+    def _on_sync_requested(self):
+        """Handle sync data request from navbar menu."""
+        self.navigate_to(Pages.SYNC_DATA)
+
+    def _on_password_change_requested(self):
+        """Handle password change request from navbar menu."""
+        from ui.components.dialogs.password_dialog import PasswordDialog
+        result = PasswordDialog.change_password(parent=self)
+        if result:
+            current_pwd, new_pwd = result
+            logger.info("Password change requested by user")
+
+    def _on_security_settings_requested(self):
+        """Handle security settings request from navbar menu."""
+        from ui.components.dialogs.security_dialog import SecurityDialog
+        result = SecurityDialog.show_settings(parent=self)
+        if result:
+            session_days, max_attempts = result
+            logger.info(f"Security settings updated: session={session_days}d, attempts={max_attempts}")
+
+    def _on_data_management_requested(self):
+        """Handle data management request from navbar menu."""
+        self.navigate_to(Pages.DATA_MANAGEMENT)
 
     def _on_tab_changed(self, tab_index: int):
         """Handle navbar tab change."""
@@ -538,10 +571,10 @@ class MainWindow(QMainWindow):
         if hasattr(self, '_api_token') and self._api_token:
             self.office_survey_wizard.set_auth_token(self._api_token)
 
-    def _on_view_building(self, building_id: str):
+    def _on_view_building(self, building):
         """Handle view building request from buildings list."""
-        logger.debug(f"Viewing building: {building_id}")
-        self.navigate_to(Pages.BUILDING_DETAILS, building_id)
+        logger.debug(f"Viewing building: {getattr(building, 'building_id', building)}")
+        self.navigate_to(Pages.BUILDING_DETAILS, building)
 
     def _on_view_unit(self, unit):
         """Handle view unit request from units list."""
@@ -623,19 +656,23 @@ class MainWindow(QMainWindow):
             self.pages[Pages.DRAFT_CLAIMS].refresh()
 
     def toggle_language(self):
-        """Toggle between English and Arabic."""
-        self._is_arabic = not self._is_arabic
-        lang_code = "ar" if self._is_arabic else "en"
-        self.i18n.set_language(lang_code)
-        tm_set_language(lang_code)
+        """Show language dialog and apply selection."""
+        from ui.components.dialogs.language_dialog import LanguageDialog
 
-        # Update layout direction
+        current = "ar" if self._is_arabic else "en"
+        selected = LanguageDialog.get_language(parent=self, current_lang=current)
+        if selected is None or selected == current:
+            return
+
+        self._is_arabic = (selected == "ar")
+        self.i18n.set_language(selected)
+        tm_set_language(selected)
+
         if self._is_arabic:
             self.setLayoutDirection(Qt.RightToLeft)
         else:
             self.setLayoutDirection(Qt.LeftToRight)
 
-        # Emit signal for components to update
         self.language_changed.emit(self._is_arabic)
         logger.info(f"Language changed to: {'Arabic' if self._is_arabic else 'English'}")
 
@@ -657,13 +694,8 @@ class MainWindow(QMainWindow):
     def closeEvent(self, event):
         """Handle window close event."""
         if self.current_user:
-            confirmed = ErrorHandler.confirm(
-                self,
-                self.i18n.t("exit_confirm_message"),
-                self.i18n.t("exit_confirm_title")
-            )
-
-            if not confirmed:
+            from ui.components.dialogs.logout_dialog import LogoutDialog
+            if not LogoutDialog.confirm_exit(parent=self):
                 event.ignore()
                 return
 

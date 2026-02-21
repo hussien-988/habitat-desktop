@@ -50,12 +50,13 @@ class PasswordDialog(QDialog):
     def __init__(self, mode: str = SET, parent=None):
         super().__init__(parent)
         self.password = None
+        self.current_password = None
         self._mode = mode
         self._visibility = {}  # field_name → bool
 
         self.setModal(True)
-        # Figma: SET=589×234, CHANGE=589×320, +24 for shadow margin
-        height = 344 if mode == self.CHANGE else 258
+        # Figma: SET=589×320, CHANGE=589×406, +24 for shadow margin
+        height = 430 if mode == self.CHANGE else 344
         self.setFixedSize(613, height)
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.Dialog)
         self.setAttribute(Qt.WA_TranslucentBackground)
@@ -118,7 +119,7 @@ class PasswordDialog(QDialog):
         outer.addWidget(container)
 
     def _build_set_mode(self, layout: QVBoxLayout):
-        """Single password field — new user."""
+        """Two password fields with confirmation — new user."""
         title = self._create_title("حفظ المستخدم")
         layout.addWidget(title)
 
@@ -128,13 +129,25 @@ class PasswordDialog(QDialog):
         self.password_input = self._create_password_field("أدخل كلمة المرور", "password")
         layout.addWidget(self.password_input)
 
+        confirm_label = self._create_subtitle("اعد ادخال كلمة المرور")
+        layout.addWidget(confirm_label)
+
+        self.confirm_input = self._create_password_field("أدخل كلمة المرور", "confirm")
+        layout.addWidget(self.confirm_input)
+
     def _build_change_mode(self, layout: QVBoxLayout):
-        """Two password fields with confirmation — change password."""
+        """Three password fields — current + new + confirm."""
         title = self._create_title("تغيير كلمة المرور")
         layout.addWidget(title)
 
-        subtitle = self._create_subtitle("ضع كلمة المرور الجديدة")
-        layout.addWidget(subtitle)
+        current_label = self._create_subtitle("ضع كلمة المرور الحالية")
+        layout.addWidget(current_label)
+
+        self.current_input = self._create_password_field("أدخل كلمة المرور", "current")
+        layout.addWidget(self.current_input)
+
+        new_label = self._create_subtitle("ضع كلمة المرور الجديدة")
+        layout.addWidget(new_label)
 
         self.password_input = self._create_password_field("أدخل كلمة المرور", "password")
         layout.addWidget(self.password_input)
@@ -238,23 +251,34 @@ class PasswordDialog(QDialog):
         if not pwd:
             return
 
+        # Both modes have confirm_input
+        confirm = self.confirm_input.text().strip()
+        if pwd != confirm:
+            self._highlight_error(self.confirm_input)
+            return
+
         if self._mode == self.CHANGE:
-            confirm = self.confirm_input.text().strip()
-            if pwd != confirm:
-                self.confirm_input.setStyleSheet("""
-                    QLineEdit {
-                        background-color: #f0f7ff;
-                        border: 2px solid #E74C3C;
-                        border-radius: 8px;
-                        padding: 0 13px;
-                        color: #2C3E50;
-                    }
-                    QLineEdit::placeholder { color: #9CA3AF; }
-                """)
+            current = self.current_input.text().strip()
+            if not current:
+                self._highlight_error(self.current_input)
                 return
+
+            self.current_password = current
 
         self.password = pwd
         self.accept()
+
+    def _highlight_error(self, field: QLineEdit):
+        field.setStyleSheet("""
+            QLineEdit {
+                background-color: #f0f7ff;
+                border: 2px solid #E74C3C;
+                border-radius: 8px;
+                padding: 0 13px;
+                color: #2C3E50;
+            }
+            QLineEdit::placeholder { color: #9CA3AF; }
+        """)
 
     @staticmethod
     def get_password(parent=None) -> Optional[str]:
@@ -265,9 +289,9 @@ class PasswordDialog(QDialog):
         return None
 
     @staticmethod
-    def change_password(parent=None) -> Optional[str]:
-        """Show CHANGE dialog and return new password, or None if cancelled."""
+    def change_password(parent=None) -> Optional[tuple]:
+        """Show CHANGE dialog and return (current_password, new_password), or None if cancelled."""
         dialog = PasswordDialog(mode=PasswordDialog.CHANGE, parent=parent)
         if dialog.exec_() == QDialog.Accepted:
-            return dialog.password
+            return (dialog.current_password, dialog.password)
         return None
