@@ -209,73 +209,77 @@ def _seed_users(repo: UserRepository):
     Seed default users for all roles as per UC-009.
 
     Test accounts created:
-    - admin / admin123 - مدير النظام (Full system access)
-    - manager / manager123 - مدير البيانات (Data import/export/review)
-    - clerk / clerk123 - موظف المكتب (Data entry/document scanning)
-    - supervisor / supervisor123 - مشرف ميداني (Field oversight)
-    - analyst / analyst123 - محلل (Reports/analysis)
+    - admin / admin123 - admin
+    - manager / manager123 - data_manager
+    - clerk / clerk123 - office_clerk
+    - supervisor / supervisor123 - field_supervisor
+    - analyst / analyst123 - analyst
+    - field1 / field123 - field_researcher
+    - field2 / field456 - field_researcher
+    - collector1 / collector123 - data_collector
+    - collector2 / collector456 - data_collector
     """
     users = [
         User(
             username="admin",
-            full_name="System Administrator",
-            full_name_ar="مدير النظام",
+            full_name="Ahmad Al-Halabi",
+            full_name_ar="أحمد الحلبي",
             role="admin",
             email="admin@unhabitat.org"
         ),
         User(
             username="manager",
-            full_name="Data Manager",
-            full_name_ar="مدير البيانات",
+            full_name="Khalid Al-Hassan",
+            full_name_ar="خالد الحسن",
             role="data_manager",
             email="manager@unhabitat.org"
         ),
         User(
             username="clerk",
-            full_name="Office Clerk",
-            full_name_ar="موظف المكتب",
+            full_name="Muhammad Al-Ali",
+            full_name_ar="محمد العلي",
             role="office_clerk",
             email="clerk@unhabitat.org"
         ),
         User(
             username="supervisor",
-            full_name="Field Supervisor",
-            full_name_ar="مشرف ميداني",
+            full_name="Omar Al-Ibrahim",
+            full_name_ar="عمر الإبراهيم",
             role="field_supervisor",
             email="supervisor@unhabitat.org"
         ),
         User(
             username="analyst",
-            full_name="Data Analyst",
-            full_name_ar="محلل البيانات",
+            full_name="Hassan Al-Shami",
+            full_name_ar="حسن الشامي",
             role="analyst",
             email="analyst@unhabitat.org"
         ),
         User(
             username="field1",
-            full_name="Field Researcher 1",
-            full_name_ar="باحث ميداني 1",
+            full_name="Yusuf Al-Khalil",
+            full_name_ar="يوسف الخليل",
             role="field_researcher",
             email="field1@unhabitat.org"
         ),
         User(
             username="field2",
-            full_name="Field Researcher 2",
-            full_name_ar="باحث ميداني 2",
+            full_name="Ibrahim Al-Ahmad",
+            full_name_ar="إبراهيم الأحمد",
             role="field_researcher",
             email="field2@unhabitat.org"
         ),
         User(
             username="collector1",
-            full_name="Data Collector 1",
-            full_name_ar="جامع بيانات 1",
+            full_name="Samir Al-Qadi",
+            full_name_ar="سمير القاضي",
             role="data_collector",
             email="collector1@unhabitat.org"
         ),
         User(
             username="collector2",
-            full_name="Data Collector 2",
-            full_name_ar="جامع بيانات 2",
+            full_name="Faisal Al-Najjar",
+            full_name_ar="فيصل النجار",
             role="data_collector",
             email="collector2@unhabitat.org"
         ),

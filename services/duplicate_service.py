@@ -430,3 +430,78 @@ class DuplicateService:
             "person": len(person_dups),
             "total": len(building_dups) + len(unit_dups) + len(person_dups)
         }
+
+    def get_person_comparison_data(self, group: DuplicateGroup) -> List[Dict[str, Any]]:
+        """Get full comparison data for each person in a duplicate group.
+
+        For each person: find their claims, linked units, and buildings.
+        Returns list of dicts with keys: person, claims, units, buildings.
+        """
+        results = []
+        for person_record in group.records:
+            person_id = person_record.get("person_id", "")
+
+            # Claims linked to this person
+            claims_rows = self.db.fetch_all(
+                "SELECT * FROM claims WHERE person_ids LIKE ?",
+                (f"%{person_id}%",)
+            )
+            claims = [dict(r) for r in claims_rows]
+
+            # Units via person_unit_relations
+            relation_rows = self.db.fetch_all(
+                "SELECT unit_id FROM person_unit_relations WHERE person_id = ?",
+                (person_id,)
+            )
+
+            units = []
+            buildings = []
+            seen_building_ids = set()
+
+            for rel in relation_rows:
+                unit_row = self.db.fetch_one(
+                    "SELECT * FROM property_units WHERE unit_id = ?",
+                    (rel["unit_id"],)
+                )
+                if unit_row:
+                    unit_dict = dict(unit_row)
+                    units.append(unit_dict)
+                    bid = unit_dict.get("building_id")
+                    if bid and bid not in seen_building_ids:
+                        seen_building_ids.add(bid)
+                        bld_row = self.db.fetch_one(
+                            "SELECT * FROM buildings WHERE building_id = ?",
+                            (bid,)
+                        )
+                        if bld_row:
+                            buildings.append(dict(bld_row))
+
+            # Also check claims for unit_id references not found via relations
+            for claim in claims:
+                claim_unit_id = claim.get("unit_id")
+                if claim_unit_id and not any(u.get("unit_id") == claim_unit_id for u in units):
+                    unit_row = self.db.fetch_one(
+                        "SELECT * FROM property_units WHERE unit_id = ?",
+                        (claim_unit_id,)
+                    )
+                    if unit_row:
+                        unit_dict = dict(unit_row)
+                        units.append(unit_dict)
+                        bid = unit_dict.get("building_id")
+                        if bid and bid not in seen_building_ids:
+                            seen_building_ids.add(bid)
+                            bld_row = self.db.fetch_one(
+                                "SELECT * FROM buildings WHERE building_id = ?",
+                                (bid,)
+                            )
+                            if bld_row:
+                                buildings.append(dict(bld_row))
+
+            results.append({
+                "person": person_record,
+                "claims": claims,
+                "units": units,
+                "buildings": buildings,
+            })
+
+        return results

@@ -760,7 +760,9 @@ class OccupancyClaimsStep(BaseStep):
                 "claimCreated": False,
                 "claimsCreatedCount": 0,
                 "createdClaims": [],
-                "claimNotCreatedReason": "No ownership relation found"
+                "claimNotCreatedReason": "No ownership relation found",
+                "dataSummary": {"evidenceCount": 0},
+                "survey": {},
             }
             return
 
@@ -789,7 +791,7 @@ class OccupancyClaimsStep(BaseStep):
 
             claim_data = {
                 "claim_type": "ownership",
-                "unit_uuid": self.context.unit.unit_uuid if self.context.unit else "",
+                "unit_id": self.context.unit.unit_id if self.context.unit else "",
                 "person_ids": json.dumps(person_ids),
                 "relation_ids": json.dumps(relation_ids),
                 "case_status": case_status,
@@ -801,14 +803,41 @@ class OccupancyClaimsStep(BaseStep):
             if result.success:
                 claim = result.data
                 logger.info(f"Local claim created: {claim.claim_uuid}, status={case_status}")
+
+                # Build claimant name from first person
+                claimant_name = ""
+                if self.context.persons:
+                    p = self.context.persons[0]
+                    claimant_name = f"{p.get('first_name', '')} {p.get('father_name', '')} {p.get('last_name', '')}".strip()
+                    if not claimant_name:
+                        claimant_name = p.get('full_name', '')
+
+                # Get owner relation type
+                owner_rel_type = owners[0].get('relation_type', 1) if owners else 1
+
+                from datetime import datetime as _dt
                 self.context.finalize_response = {
                     "claimCreated": True,
                     "claimsCreatedCount": 1,
                     "createdClaims": [{
                         "claimId": claim.claim_uuid,
                         "caseNumber": claim.case_number,
-                        "status": case_status,
+                        "fullNameArabic": claimant_name,
+                        "propertyUnitIdNumber": self.context.unit.unit_id if self.context.unit else "",
+                        "relationType": owner_rel_type,
+                        "claimStatus": 1,
+                        "source": 4,
+                        "businessNature": 1,
+                        "priority": 2,
+                        "surveyDate": _dt.now().strftime("%Y-%m-%dT%H:%M:%S"),
+                        "hasEvidence": total_evidences > 0,
                     }],
+                    "survey": {
+                        "surveyDate": _dt.now().strftime("%Y-%m-%dT%H:%M:%S"),
+                    },
+                    "dataSummary": {
+                        "evidenceCount": total_evidences,
+                    },
                 }
             else:
                 logger.error(f"Local claim creation failed: {result.message}")

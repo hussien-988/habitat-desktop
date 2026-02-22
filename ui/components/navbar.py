@@ -96,6 +96,7 @@ class Navbar(QFrame):
     # Signals
     tab_changed = pyqtSignal(int)
     search_requested = pyqtSignal(str)
+    filter_applied = pyqtSignal(dict)
     logout_requested = pyqtSignal()
     language_change_requested = pyqtSignal()
     sync_requested = pyqtSignal()
@@ -326,6 +327,28 @@ class Navbar(QFrame):
             }
         """)
         self.search_input.returnPressed.connect(self._on_search)
+        self.search_input.textChanged.connect(self._on_search_text_changed)
+
+        # X clear button (hidden by default, shown when text present)
+        self.clear_btn = QPushButton("✕")
+        self.clear_btn.setFixedSize(20, 20)
+        self.clear_btn.setCursor(QCursor(Qt.PointingHandCursor))
+        clear_font = create_font(size=7, weight=QFont.Normal)
+        self.clear_btn.setFont(clear_font)
+        self.clear_btn.setStyleSheet("""
+            QPushButton {
+                background: rgba(255, 255, 255, 0.2);
+                border: none;
+                border-radius: 10px;
+                color: white;
+                padding: 0px;
+            }
+            QPushButton:hover {
+                background: rgba(255, 255, 255, 0.3);
+            }
+        """)
+        self.clear_btn.clicked.connect(self._on_clear_search)
+        self.clear_btn.setVisible(False)
 
         # Menu dropdown button (left side in RTL) - using list.png
         menu_btn = QPushButton()
@@ -360,6 +383,7 @@ class Navbar(QFrame):
         # Add widgets (RTL layout)
         layout.addWidget(search_icon_btn)
         layout.addWidget(self.search_input)
+        layout.addWidget(self.clear_btn)
         layout.addWidget(menu_btn)
 
         return search_container
@@ -500,55 +524,31 @@ class Navbar(QFrame):
 
     def _on_search(self):
         """Handle search request (Enter pressed or icon clicked)"""
-        self.search_requested.emit(self.search_input.text())
+        text = self.search_input.text()
+        self.clear_btn.setVisible(bool(text.strip()))
+        self.search_requested.emit(text)
+
+    def _on_search_text_changed(self, text: str):
+        """Show/hide clear button based on search text"""
+        self.clear_btn.setVisible(bool(text.strip()))
 
     def _on_search_menu_clicked(self):
-        """Show search mode selection menu"""
-        from PyQt5.QtWidgets import QMenu
+        """Show search filter dialog"""
+        from .dialogs.search_filter_dialog import SearchFilterDialog
 
-        menu = QMenu(self)
-        menu.setStyleSheet(f"""
-            QMenu {{
-                background-color: white;
-                border: 1px solid #E5E7EB;
-                border-radius: 4px;
-                padding: 4px;
-            }}
-            QMenu::item {{
-                padding: 8px 20px;
-                color: #2C3E50;
-                font-family: '{Typography.FONT_FAMILY_ARABIC}';
-                font-size: 11px;
-            }}
-            QMenu::item:selected {{
-                background-color: {Colors.PRIMARY_BLUE};
-                color: white;
-                border-radius: 3px;
-            }}
-        """)
+        filters = SearchFilterDialog.get_filters(parent=self.window())
+        if filters is None:
+            return
 
-        # Search mode options
-        name_action = menu.addAction(tr("navbar.search_menu.by_name"))
-        id_action = menu.addAction(tr("navbar.search_menu.by_claim_id"))
-        building_action = menu.addAction(tr("navbar.search_menu.by_building"))
+        # Emit filter signal if any filter values present
+        if any(v for v in filters.values() if v):
+            self.filter_applied.emit(filters)
 
-        # Show menu
-        action = menu.exec_(
-            self.search_menu_btn.mapToGlobal(
-                self.search_menu_btn.rect().bottomLeft()
-            )
-        )
-
-        # Update search mode
-        if action == name_action:
-            self.search_mode = "name"
-            self.search_input.setPlaceholderText(tr("navbar.search.by_name"))
-        elif action == id_action:
-            self.search_mode = "claim_id"
-            self.search_input.setPlaceholderText(tr("navbar.search.by_claim_id"))
-        elif action == building_action:
-            self.search_mode = "building"
-            self.search_input.setPlaceholderText(tr("navbar.search.by_building"))
+    def _on_clear_search(self):
+        """Clear search text and emit empty search to reset results"""
+        self.search_input.clear()
+        self.clear_btn.setVisible(False)
+        self.search_requested.emit("")
 
     def _apply_styles(self):
         """Apply navbar background and component styles"""

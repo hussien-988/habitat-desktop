@@ -271,9 +271,16 @@ class CompletedClaimsPage(QWidget):
                 claimant_name = 'غير محدد'
                 if claim.person_ids:
                     try:
+                        import json as _json
                         from repositories.person_repository import PersonRepository
                         person_repo = PersonRepository(self.db)
-                        first_person_id = claim.person_ids.split(',')[0].strip()
+                        # person_ids can be JSON array or comma-separated
+                        raw = claim.person_ids.strip()
+                        if raw.startswith('['):
+                            pid_list = _json.loads(raw)
+                            first_person_id = pid_list[0] if pid_list else ''
+                        else:
+                            first_person_id = raw.split(',')[0].strip()
                         if first_person_id:
                             person = person_repo.get_by_id(first_person_id)
                             if person:

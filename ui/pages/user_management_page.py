@@ -292,6 +292,7 @@ class UserManagementPage(QWidget):
                 {
                     "user_id": u.user_id,
                     "username": u.username,
+                    "display_id": str(int(u.user_id.replace('-', '')[:8], 16) % 900000 + 100000),
                     "full_name": u.full_name_ar or u.full_name or u.username,
                     "role": Roles.get_display_name(u.role, arabic=True),
                     "role_key": u.role,
@@ -334,9 +335,8 @@ class UserManagementPage(QWidget):
             return
 
         for row, user in enumerate(page_users):
-            # col 0: اسم المستخدم / الاسم الكامل
-            display = user.get("full_name", user.get("username", ""))
-            self.table.setItem(row, 0, QTableWidgetItem(display))
+            # col 0: المستخدم ID (6-digit display ID from UUID)
+            self.table.setItem(row, 0, QTableWidgetItem(user.get("display_id", "")))
 
             # col 1: الدور
             self.table.setItem(row, 1, QTableWidgetItem(user.get("role", "")))
