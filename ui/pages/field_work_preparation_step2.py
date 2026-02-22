@@ -431,27 +431,23 @@ class FieldWorkPreparationStep2(QWidget):
             self.researcher_selected.emit(researcher_id)
 
     def _on_search_focus(self, event):
-        """Show suggestions when search field gets focus (only if initialized)."""
-        # Call the original focusInEvent
+        """Handle focus on search field - don't auto-open suggestions."""
         from PyQt5.QtWidgets import QLineEdit
         QLineEdit.focusInEvent(self.researcher_search, event)
-
-        # Only show suggestions if widget is fully initialized
-        # This prevents auto-showing on initial load
-        if self._is_initialized:
-            self._set_suggestions_visible(True)
-            self._filter_researchers()
+        # Do NOT auto-open suggestions on focus.
+        # User must click the search icon or type to see suggestions.
 
     def _on_search(self):
-        """Handle search icon click."""
+        """Handle search icon click - show suggestions."""
         search_text = self.researcher_search.text().strip()
         logger.debug(f"Searching for researcher: {search_text}")
+        self._set_suggestions_visible(True)
         self._filter_researchers()
 
     def _on_search_text_changed(self, text):
-        """Filter suggestions on text change (don't auto-show/hide)."""
-        # Only filter, don't auto-show suggestions
-        # Suggestions are shown on focus, hidden on selection
+        """Show suggestions when user types, filter results."""
+        if self._is_initialized and text.strip():
+            self._set_suggestions_visible(True)
         self._filter_researchers()
 
     def _on_search_enter(self):

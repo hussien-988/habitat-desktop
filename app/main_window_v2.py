@@ -127,7 +127,8 @@ class MainWindow(QMainWindow):
         from ui.pages.map_page import MapPage
         from ui.pages.duplicates_page import DuplicatesPage
         from ui.pages.claim_comparison_page import ClaimComparisonPage
-        from ui.pages.field_assignment_page import FieldAssignmentPage
+        from ui.pages.field_work_preparation_page import FieldWorkPreparationPage
+        from controllers.building_controller import BuildingController
         from ui.pages.case_details_page import CaseDetailsPage
         from ui.pages.user_management_page import UserManagementPage
         from ui.pages.add_user_page import AddUserPage
@@ -244,9 +245,11 @@ class MainWindow(QMainWindow):
         self.pages[Pages.CLAIM_COMPARISON] = ClaimComparisonPage(self.db, self.i18n, self)
         self.stack.addWidget(self.pages[Pages.CLAIM_COMPARISON])
 
-        # Field Assignment page (UC-012)
-        self.pages[Pages.FIELD_ASSIGNMENT] = FieldAssignmentPage(self.db, self.i18n, self)
+        # Field Work Preparation wizard (UC-012)
+        field_bc = BuildingController(self.db, use_api=True)
+        self.pages[Pages.FIELD_ASSIGNMENT] = FieldWorkPreparationPage(field_bc, self.i18n, self)
         self.stack.addWidget(self.pages[Pages.FIELD_ASSIGNMENT])
+        self.pages[Pages.FIELD_ASSIGNMENT].completed.connect(self._on_field_work_completed)
 
         # Case Details page — read-only view of survey/claim
         self.pages[Pages.CASE_DETAILS] = CaseDetailsPage(self)
@@ -421,6 +424,10 @@ class MainWindow(QMainWindow):
             if buildings_page and hasattr(buildings_page, 'building_controller'):
                 buildings_page.building_controller.switch_to_local_db()
                 logger.info("BuildingController switched to local DB after mode selection")
+            field_page = self.pages.get(Pages.FIELD_ASSIGNMENT)
+            if field_page and hasattr(field_page, 'building_controller'):
+                field_page.building_controller.switch_to_local_db()
+                logger.info("Field work BuildingController switched to local DB")
 
         self.pages[Pages.LOGIN].set_data_mode(mode, self.db)
         self.stack.setCurrentWidget(self.pages[Pages.LOGIN])
@@ -461,6 +468,13 @@ class MainWindow(QMainWindow):
                 buildings_page.building_controller.set_auth_token(token)
                 logger.info("API token set for BuildingController")
 
+        # Pass token to Field Work Preparation wizard controller
+        if Pages.FIELD_ASSIGNMENT in self.pages:
+            field_page = self.pages[Pages.FIELD_ASSIGNMENT]
+            if hasattr(field_page, 'building_controller'):
+                field_page.building_controller.set_auth_token(token)
+                logger.info("API token set for Field Work BuildingController")
+
         # Pass token to OfficeSurveyWizard controller
         if hasattr(self, 'office_survey_wizard') and self.office_survey_wizard:
             self.office_survey_wizard.set_auth_token(token)
@@ -483,17 +497,20 @@ class MainWindow(QMainWindow):
     def _on_save_new_user(self, data: dict):
         """Handle saving a new or updated user from AddUserPage."""
         try:
+            import json
             from models.user import User
             from repositories.user_repository import UserRepository
             from ui.components.toast import Toast
 
             repo = UserRepository(self.db)
+            permissions_json = json.dumps(data.get("permissions", {}))
 
             if data.get("_mode") == "edit":
                 user_id = data.get("_editing_user_id")
                 user = repo.get_by_id(user_id)
                 if user:
                     user.role = data.get("role", user.role)
+                    user.permissions = permissions_json
                     repo.update(user)
                     logger.info(f"User updated: {user.username}, role={user.role}")
                     Toast.show_toast(self, "تم تحديث المستخدم بنجاح", Toast.SUCCESS)
@@ -503,6 +520,7 @@ class MainWindow(QMainWindow):
                     role=data.get("role", "analyst"),
                     full_name=data.get("user_id", ""),
                     full_name_ar=data.get("user_id", ""),
+                    permissions=permissions_json,
                 )
                 user.set_password(data.get("password", ""), track_history=False)
                 repo.create(user)
@@ -517,6 +535,46 @@ class MainWindow(QMainWindow):
             logger.error(f"Failed to save user: {e}", exc_info=True)
             from ui.components.toast import Toast
             Toast.show_toast(self, f"فشل في حفظ المستخدم: {e}", Toast.ERROR)
+
+    def _on_field_work_completed(self, workflow_data):
+        """Handle field work wizard completion - save assignment and navigate to sync page."""
+        try:
+            logger.info(f"_on_field_work_completed received: {type(workflow_data)}")
+            buildings = workflow_data.get('buildings', [])
+            researcher = workflow_data.get('researcher', {})
+            researcher_name = researcher.get('name', 'N/A')
+            building_count = len(buildings)
+            logger.info(f"Field work assigned: {building_count} buildings to {researcher_name}")
+
+            # Save assignment to sync_log for tracking
+            from datetime import datetime
+            sync_date = datetime.now().strftime("%Y-%m-%d %H:%M")
+
+            self.db.execute(
+                """INSERT INTO sync_log (device_id, action, details, sync_date, status)
+                   VALUES (?, ?, ?, ?, ?)""",
+                (
+                    researcher_name,
+                    f"تمت مزامنة {building_count} مبنى من قبل {researcher_name}",
+                    "",
+                    sync_date,
+                    "success"
+                )
+            )
+            logger.info("Saved to sync_log successfully")
+
+            # Show success toast
+            from ui.components.toast import Toast
+            Toast.show_toast(
+                self,
+                f"تم إسناد {building_count} مبنى إلى {researcher_name}",
+                Toast.SUCCESS
+            )
+
+            # Navigate to sync page so user can verify
+            self.navigate_to(Pages.SYNC_DATA)
+        except Exception as e:
+            logger.error(f"Error in _on_field_work_completed: {e}", exc_info=True)
 
     def _on_sync_requested(self):
         """Handle sync data request from navbar menu."""

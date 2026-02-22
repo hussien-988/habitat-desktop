@@ -117,6 +117,99 @@ def is_initialized() -> bool:
     return _initialized
 
 
+def add_term(vocab_name: str, code: int, label_ar: str, label_en: str, order: int = 0):
+    """Add a new term to the in-memory cache. Affects all dropdowns immediately."""
+    key = _normalize_name(vocab_name)
+    if key not in _lookup:
+        _lookup[key] = {}
+    if key not in _options_cache:
+        _options_cache[key] = []
+
+    _lookup[key][code] = {"ar": label_ar, "en": label_en, "order": order}
+    _options_cache[key].append((code, label_ar, label_en, order))
+    _options_cache[key].sort(key=lambda x: x[3])
+
+
+def update_term(vocab_name: str, code: int, label_ar: str, label_en: str):
+    """Update a term's labels in the in-memory cache."""
+    key = _normalize_name(vocab_name)
+    if key not in _lookup or code not in _lookup[key]:
+        return
+    _lookup[key][code]["ar"] = label_ar
+    _lookup[key][code]["en"] = label_en
+    opts = _options_cache.get(key, [])
+    for i, (c, ar, en, order) in enumerate(opts):
+        if c == code:
+            _options_cache[key][i] = (c, label_ar, label_en, order)
+            break
+
+
+def remove_term(vocab_name: str, code: int):
+    """Remove a term from the in-memory cache."""
+    key = _normalize_name(vocab_name)
+    if key in _lookup:
+        _lookup[key].pop(code, None)
+    if key in _options_cache:
+        _options_cache[key] = [t for t in _options_cache[key] if t[0] != code]
+
+
+def get_next_code(vocab_name: str) -> int:
+    """Get next available integer code for a vocabulary."""
+    key = _normalize_name(vocab_name)
+    codes = [c for c in _lookup.get(key, {}).keys() if isinstance(c, int)]
+    if not codes:
+        return 1
+    normal_codes = [c for c in codes if c < 90]
+    if not normal_codes:
+        return 1
+    return max(normal_codes) + 1
+
+
+def load_db_customizations(db):
+    """Merge user-added vocabulary terms from DB into the cache.
+    Called after initialize_vocabularies() to restore user edits."""
+    if not db:
+        return
+    try:
+        rows = db.fetch_all(
+            "SELECT vocabulary_name, term_code, term_label, term_label_ar, status "
+            "FROM vocabulary_terms WHERE source = 'manual' ORDER BY vocabulary_name, term_code"
+        )
+        added = 0
+        for row in rows:
+            vocab_name = row[0]
+            term_code = row[1]
+            term_label = row[2]
+            term_label_ar = row[3]
+            status = row[4]
+
+            try:
+                code = int(term_code)
+            except (ValueError, TypeError):
+                continue
+
+            key = _normalize_name(vocab_name)
+            if status == "deleted":
+                if key in _lookup and code in _lookup[key]:
+                    remove_term(vocab_name, code)
+                continue
+
+            label_ar = term_label_ar or term_label or ""
+            label_en = term_label or label_ar
+
+            if key in _lookup and code in _lookup[key]:
+                update_term(vocab_name, code, label_ar, label_en)
+            else:
+                existing = _options_cache.get(key, [])
+                max_order = max((t[3] for t in existing), default=0)
+                add_term(vocab_name, code, label_ar, label_en, order=max_order + 1)
+            added += 1
+        if added:
+            logger.info(f"Loaded {added} user vocabulary customizations from DB")
+    except Exception as e:
+        logger.warning(f"Failed to load DB vocabulary customizations: {e}")
+
+
 # ============ Internal helpers ============
 
 def _normalize_name(name: str) -> str:

@@ -24,15 +24,15 @@ class UserRepository:
         query = """
             INSERT INTO users (
                 user_id, username, password_hash, password_salt, email,
-                full_name, full_name_ar, role,
+                full_name, full_name_ar, role, permissions,
                 is_active, is_locked, failed_attempts,
                 last_login, last_activity,
                 created_at, updated_at, created_by
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """
         params = (
             user.user_id, user.username, user.password_hash, user.password_salt, user.email,
-            user.full_name, user.full_name_ar, user.role,
+            user.full_name, user.full_name_ar, user.role, user.permissions,
             1 if user.is_active else 0,
             1 if user.is_locked else 0,
             user.failed_attempts,
@@ -80,6 +80,7 @@ class UserRepository:
         query = """
             UPDATE users SET
                 email = ?, full_name = ?, full_name_ar = ?, role = ?,
+                permissions = ?,
                 is_active = ?, is_locked = ?, failed_attempts = ?,
                 last_login = ?, last_activity = ?,
                 updated_at = ?
@@ -87,6 +88,7 @@ class UserRepository:
         """
         params = (
             user.email, user.full_name, user.full_name_ar, user.role,
+            user.permissions,
             1 if user.is_active else 0,
             1 if user.is_locked else 0,
             user.failed_attempts,

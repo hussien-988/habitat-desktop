@@ -176,6 +176,10 @@ class FieldWorkPreparationStep1(QWidget):
         self._load_filter_data()
         self._load_buildings()
 
+        # Install event filter to detect clicks outside suggestions
+        from PyQt5.QtWidgets import QApplication
+        QApplication.instance().installEventFilter(self)
+
     def _setup_ui(self):
         """Setup UI - content only (no header/footer)."""
         self.setLayoutDirection(Qt.RightToLeft)
@@ -310,7 +314,6 @@ class FieldWorkPreparationStep1(QWidget):
             }
         """)
         self.building_search.textChanged.connect(self._on_search_text_changed)
-        self.building_search.returnPressed.connect(self._on_search)
 
         # "بحث على الخريطة" link button
         map_link_btn = QPushButton("بحث على الخريطة")
@@ -774,8 +777,8 @@ class FieldWorkPreparationStep1(QWidget):
         self._update_selection_count()
         self._update_selected_card_visibility()
 
-        # NOTE: Do NOT clear search field - keep suggestions visible for multi-select
-        # User can select multiple buildings from same search results
+        # Return focus to search field so Enter key works for dismissing suggestions
+        self.building_search.setFocus()
 
     def _on_table_checkbox_changed(self, building_id: str, state):
         """
@@ -803,18 +806,13 @@ class FieldWorkPreparationStep1(QWidget):
 
     def _update_selected_card_visibility(self):
         """
-        Show/hide selected buildings card based on selection count and suggestions visibility.
+        Show/hide selected buildings card based on selection count.
 
-        Rules (from Figma behavior):
-        - Show card only when: has selections AND suggestions list is hidden
-        - Update header count
+        Card is visible whenever there are selected buildings, regardless of
+        whether the suggestions list is open or closed.
         """
         has_selection = len(self._selected_building_ids) > 0
-        suggestions_hidden = not self.buildings_list.isVisible()
-
-        # Show card only if has selections AND suggestions are hidden
-        should_show = has_selection and suggestions_hidden
-        self.selected_buildings_card.setVisible(should_show)
+        self.selected_buildings_card.setVisible(has_selection)
 
         # Update header count (confirmed buildings only)
         count = len(self._confirmed_building_ids)
@@ -829,6 +827,12 @@ class FieldWorkPreparationStep1(QWidget):
         - Building icon (32×32px with #f0f7ff background)
         - Building ID (formatted: 01-01-01-...)
         """
+        # Skip if already in table (prevents duplicates on list rebuild)
+        for i in range(self.selected_table_layout.count()):
+            widget = self.selected_table_layout.itemAt(i).widget()
+            if widget and widget.objectName() == f"row_{building.building_id}":
+                return
+
         # === Checkbox with checkmark overlay (unified with suggestions) ===
         checkbox_container = QWidget()
         checkbox_container.setFixedSize(20, 20)
@@ -1022,42 +1026,36 @@ class FieldWorkPreparationStep1(QWidget):
         # Show suggestions only if there's search text OR active filters
         should_show = bool(text.strip()) or has_active_filter
         self._set_suggestions_visible(should_show)
-        self._filter_buildings()
+        self._filter_buildings_local()
 
         # Update selected card visibility (depends on suggestions visibility)
         self._update_selected_card_visibility()
 
     def _load_buildings_from_api(self):
         """
-        ✅ Load buildings from Backend API with filters (Best Practice).
-
-        Reduces load on local database by fetching directly from Backend.
-        Implements UC-012 field assignment workflow.
+        Load buildings from Backend API with filters.
+        Falls back to local DB filtering when API is unavailable.
         """
         filters = self.get_filters()
 
         try:
-            # ✅ Call Backend API with filters (no polygon needed!)
             result = self.building_controller.search_for_assignment_by_filters(
                 governorate_code=filters['governorate'],
                 subdistrict_code=filters['subdistrict'],
-                survey_status=filters['building_status'],  # This is survey_status in API
-                has_active_assignment=False,  # Only show unassigned buildings
+                survey_status=filters['building_status'],
+                has_active_assignment=False,
                 page=1,
                 page_size=500
             )
 
             if not result.success:
-                logger.error(f"Failed to load buildings from API: {result.message}")
-                # Fallback to local filtering if API fails
-                self._filter_buildings()
+                logger.warning(f"API search failed: {result.message}, using local fallback")
+                self._filter_buildings_local()
                 return
 
-            # ✅ Clear and repopulate list with API results
             self.buildings_list.clear()
             buildings = result.data
 
-            # Apply search text filter locally (if any)
             search_text = self.building_search.text().lower()
             if search_text:
                 buildings = [
@@ -1065,84 +1063,63 @@ class FieldWorkPreparationStep1(QWidget):
                     if search_text in (b.building_id.lower() if b.building_id else "")
                 ]
 
-            logger.info(f"✅ Loaded {len(buildings)} buildings from API with filters")
-
-            # Add buildings to list
-            for building in buildings:
-                item = QListWidgetItem(self.buildings_list)
-                widget = BuildingCheckboxItem(building, self)
-
-                # Connect checkbox
-                widget.checkbox.stateChanged.connect(
-                    lambda state, b=building: self._on_checkbox_changed(b, state)
-                )
-
-                # Check if already selected
-                if building.building_id in self._selected_building_ids:
-                    widget.checkbox.setChecked(True)
-
-                item.setSizeHint(widget.sizeHint())
-                self.buildings_list.addItem(item)
-                self.buildings_list.setItemWidget(item, widget)
+            logger.info(f"Loaded {len(buildings)} buildings from API with filters")
+            self._populate_buildings_list(buildings)
 
         except Exception as e:
-            logger.error(f"Error loading buildings from API: {e}", exc_info=True)
-            # Fallback to local filtering
-            self._filter_buildings()
+            logger.warning(f"API error: {e}, using local fallback")
+            self._filter_buildings_local()
 
-    def _filter_buildings(self):
+    def _filter_buildings_local(self):
         """
-        Filter buildings list based on search text and filters (DRY principle).
+        Fallback: rebuild list from cached local buildings with filters applied.
+        Used when Backend API is unavailable.
+        """
+        if not hasattr(self, '_all_buildings') or not self._all_buildings:
+            logger.warning("No cached buildings for local filtering")
+            return
 
-        NOTE: This is the FALLBACK method for local filtering.
-        Prefer _load_buildings_from_api() for better performance.
-        """
-        search_text = self.building_search.text().lower()
         filters = self.get_filters()
+        search_text = self.building_search.text().lower()
 
-        for i in range(self.buildings_list.count()):
-            item = self.buildings_list.item(i)
-            widget = self.buildings_list.itemWidget(item)
+        filtered = []
+        for b in self._all_buildings:
+            if filters['governorate'] and b.governorate_code != filters['governorate']:
+                continue
+            if filters['subdistrict'] and b.subdistrict_code != filters['subdistrict']:
+                continue
+            if search_text and search_text not in (b.building_id.lower() if b.building_id else ""):
+                continue
+            filtered.append(b)
 
-            if widget and hasattr(widget, 'building'):
-                building = widget.building
+        self.buildings_list.clear()
+        logger.info(f"Local filter: {len(filtered)}/{len(self._all_buildings)} buildings match")
+        self._populate_buildings_list(filtered)
 
-                # Search text match
-                text_match = (
-                    search_text in building.building_id.lower() if building.building_id else False
-                ) if search_text else True
-
-                # Filter matches
-                governorate_match = (
-                    building.governorate_code == filters['governorate']
-                ) if filters['governorate'] else True
-
-                subdistrict_match = (
-                    building.subdistrict_code == filters['subdistrict']
-                ) if filters['subdistrict'] else True
-
-                building_status_match = (
-                    building.building_status == filters['building_status']
-                ) if filters['building_status'] else True
-
-                # Show only if ALL filters match
-                match = text_match and governorate_match and subdistrict_match and building_status_match
-                item.setHidden(not match)
+    def _populate_buildings_list(self, buildings):
+        """Populate the suggestions list with building items."""
+        for building in buildings:
+            item = QListWidgetItem(self.buildings_list)
+            widget = BuildingCheckboxItem(building, self)
+            widget.checkbox.stateChanged.connect(
+                lambda state, b=building: self._on_checkbox_changed(b, state)
+            )
+            if building.building_id in self._selected_building_ids:
+                widget.checkbox.setChecked(True)
+            item.setSizeHint(widget.sizeHint())
+            self.buildings_list.addItem(item)
+            self.buildings_list.setItemWidget(item, widget)
 
     def _on_filter_changed(self):
         """
-        ✅ Handle filter change - uses Backend API for efficient search (Best Practice).
+        Handle filter change - pre-loads filtered data without opening suggestions.
 
-        Rules:
-        - Show suggestions if: filters applied OR search text
-        - Hide suggestions if: no filters AND no search text
-        - Update selected card visibility
-        - ✅ NEW: Calls Backend API instead of local filtering
+        Filters are applied silently. Suggestions only open when user types in
+        the search field or clicks the search icon.
         """
         filters = self.get_filters()
         logger.debug(f"Filters changed: {filters}")
 
-        # Show buildings list if filters are applied OR search text exists
         has_active_filter = any([
             filters['subdistrict'],
             filters['governorate'],
@@ -1150,22 +1127,13 @@ class FieldWorkPreparationStep1(QWidget):
         ])
 
         if has_active_filter or filters['search_text']:
-            self._set_suggestions_visible(True)
-            # ✅ BEST PRACTICE: Load from Backend API with filters
+            # Pre-load filtered data but do NOT auto-open suggestions
             self._load_buildings_from_api()
         else:
-            self._set_suggestions_visible(False)
-            self.buildings_list.clear()  # Clear list when no filters
-
-        # Update selected card visibility
-        self._update_selected_card_visibility()
+            self.buildings_list.clear()
 
     def _on_search(self):
-        """
-        ✅ Handle search action - uses Backend API with filters (Best Practice).
-
-        If filters are applied, loads from API. Otherwise uses local search.
-        """
+        """Handle search icon click - show suggestions with filtered results."""
         search_text = self.building_search.text().strip()
         logger.debug(f"Searching for: {search_text}")
 
@@ -1177,11 +1145,13 @@ class FieldWorkPreparationStep1(QWidget):
         ])
 
         if has_active_filter:
-            # ✅ Use API if filters are active
             self._load_buildings_from_api()
         else:
-            # Fallback to local search if no filters
-            self._filter_buildings()
+            self._filter_buildings_local()
+
+        # Show suggestions when user explicitly clicks search
+        self._set_suggestions_visible(True)
+        self._update_selected_card_visibility()
 
     def _on_open_map(self):
         """
@@ -1302,56 +1272,46 @@ class FieldWorkPreparationStep1(QWidget):
             if building.building_id in self._selected_building_ids
         ]
 
-    def mousePressEvent(self, event):
+    def eventFilter(self, obj, event):
         """
-        Handle mouse press to detect clicks outside suggestions list.
+        Global event filter to detect clicks outside the suggestions list.
 
-        When user clicks outside the suggestions list (and not on filter combos or search bar),
-        hide the suggestions by clearing search and show the selected buildings card.
+        Installed on QApplication to intercept all mouse events.
         """
-        # Check if suggestions list is visible
-        if self.buildings_list.isVisible():
-            # Get widgets to check
-            widgets_to_exclude = [
-                self.buildings_list,
-                self.building_search,
-                self.subdistrict_combo,
-                self.governorate_combo,
-                self.building_status_combo
-            ]
+        from PyQt5.QtCore import QEvent, QRect
 
-            # Check if click is on any of the excluded widgets
-            click_on_widget = False
-            for widget in widgets_to_exclude:
-                if widget.underMouse():
-                    click_on_widget = True
+        if event.type() == QEvent.MouseButtonPress and self.buildings_list.isVisible():
+            # Check if click is inside suggestions list or search bar
+            click_pos = event.globalPos()
+            inside = False
+
+            for widget in [self.buildings_list, self.building_search]:
+                rect = widget.rect()
+                global_tl = widget.mapToGlobal(rect.topLeft())
+                global_rect = QRect(global_tl, rect.size())
+                if global_rect.contains(click_pos):
+                    inside = True
                     break
 
-            # If click is outside all excluded widgets, hide suggestions
-            if not click_on_widget:
-                # Clear filters and search to hide suggestions
-                filters = self.get_filters()
-                has_active_filter = any([
-                    filters['subdistrict'],
-                    filters['governorate'],
-                    filters['building_status']
-                ])
+            if not inside:
+                self.building_search.blockSignals(True)
+                self.building_search.clear()
+                self.building_search.blockSignals(False)
+                self._set_suggestions_visible(False)
+                self._update_selected_card_visibility()
 
-                # Only clear search if no active filters
-                if not has_active_filter:
-                    self.building_search.clear()
-                    self._set_suggestions_visible(False)
-                    self._update_selected_card_visibility()
-
-        super().mousePressEvent(event)
+        return super().eventFilter(obj, event)
 
     def _on_search_enter(self):
         """
         Handle Enter key press in search field (Best Practice).
 
-        Hide suggestions and show selected buildings card.
+        Clears search, hides suggestions, shows selected buildings card.
         """
-        # Clear search field and hide suggestions
+        # Block signals to prevent textChanged from re-showing suggestions
+        self.building_search.blockSignals(True)
         self.building_search.clear()
+        self.building_search.blockSignals(False)
+
         self._set_suggestions_visible(False)
         self._update_selected_card_visibility()

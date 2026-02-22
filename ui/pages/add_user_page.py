@@ -556,7 +556,16 @@ class AddUserPage(QWidget):
             self.role_combo.setCurrentIndex(idx)
         self.role_combo.setEnabled(mode != 'view')
 
-        role_perms = ROLE_PERMISSIONS.get(role_key, {})
+        import json
+        stored = user_data.get("permissions_json", "")
+        if stored:
+            try:
+                role_perms = json.loads(stored)
+            except (json.JSONDecodeError, TypeError):
+                role_perms = ROLE_PERMISSIONS.get(role_key, {})
+        else:
+            role_perms = ROLE_PERMISSIONS.get(role_key, {})
+
         for key in self._permission_checkboxes:
             section_perms = role_perms.get(key, {})
             for action_key in self._permission_checkboxes[key]:

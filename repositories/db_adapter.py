@@ -369,6 +369,12 @@ class SQLiteAdapter(DatabaseAdapter):
             )
         """)
 
+        # Migration: add permissions column if missing
+        try:
+            cursor.execute("ALTER TABLE users ADD COLUMN permissions TEXT DEFAULT ''")
+        except Exception:
+            pass
+
         # Buildings table
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS buildings (
@@ -934,6 +940,102 @@ class SQLiteAdapter(DatabaseAdapter):
                 ("approved", "Approved", "موافق عليها"),
                 ("rejected", "Rejected", "مرفوضة"),
             ],
+            'contract_type': [
+                ("full_ownership", "Full Ownership", "ملكية كاملة"),
+                ("shared_ownership", "Shared Ownership", "ملكية مشتركة"),
+                ("long_term_rental", "Long-term Rental", "إيجار طويل الأمد"),
+                ("short_term_rental", "Short-term Rental", "إيجار قصير الأمد"),
+                ("informal_tenure", "Informal Tenure", "حيازة غير رسمية"),
+                ("unauthorized_occupation", "Unauthorized Occupation", "إشغال غير مرخص"),
+                ("customary_rights", "Customary Rights", "حقوق عرفية"),
+                ("inheritance_based", "Inheritance-based", "قائم على الإرث"),
+                ("hosted_guest", "Hosted/Guest", "مستضاف/ضيف"),
+                ("temporary_shelter", "Temporary Shelter", "مأوى مؤقت"),
+                ("government_allocation", "Government Allocation", "تخصيص حكومي"),
+                ("usufruct", "Usufruct", "حق الانتفاع"),
+                ("other", "Other", "أخرى"),
+            ],
+            'evidence_type': [
+                ("identification_document", "Identification Document", "وثيقة هوية"),
+                ("ownership_deed", "Ownership Deed", "سند ملكية"),
+                ("rental_contract", "Rental Contract", "عقد إيجار"),
+                ("utility_bill", "Utility Bill", "فاتورة خدمات"),
+                ("photo", "Photo", "صورة"),
+                ("official_letter", "Official Letter", "خطاب رسمي"),
+                ("court_order", "Court Order", "أمر محكمة"),
+                ("inheritance_document", "Inheritance Document", "وثيقة إرث"),
+                ("tax_receipt", "Tax Receipt", "إيصال ضريبي"),
+                ("other", "Other", "أخرى"),
+            ],
+            'occupancy_type': [
+                ("owner_occupied", "Owner Occupied", "مشغول من المالك"),
+                ("tenant_occupied", "Tenant Occupied", "مشغول من المستأجر"),
+                ("family_occupied", "Family Occupied", "مشغول من العائلة"),
+                ("mixed_occupancy", "Mixed Occupancy", "إشغال مختلط"),
+                ("vacant", "Vacant", "شاغر"),
+                ("temporary_seasonal", "Temporary/Seasonal", "مؤقت/موسمي"),
+                ("commercial_use", "Commercial Use", "استخدام تجاري"),
+                ("abandoned", "Abandoned", "مهجور"),
+                ("disputed", "Disputed", "متنازع عليه"),
+                ("unknown", "Unknown", "غير معروف"),
+            ],
+            'occupancy_nature': [
+                ("legal_formal", "Legal/Formal", "قانوني/رسمي"),
+                ("informal", "Informal", "غير رسمي"),
+                ("customary", "Customary", "عرفي"),
+                ("temporary_emergency", "Temporary/Emergency", "مؤقت/طوارئ"),
+                ("authorized", "Authorized", "مرخص"),
+                ("unauthorized", "Unauthorized", "غير مرخص"),
+                ("pending_regularization", "Pending Regularization", "بانتظار التسوية"),
+                ("contested", "Contested", "متنازع عليه"),
+                ("unknown", "Unknown", "غير معروف"),
+            ],
+            'nationality': [
+                ("syrian", "Syrian", "سوري"),
+                ("palestinian", "Palestinian", "فلسطيني"),
+                ("iraqi", "Iraqi", "عراقي"),
+                ("lebanese", "Lebanese", "لبناني"),
+                ("jordanian", "Jordanian", "أردني"),
+                ("turkish", "Turkish", "تركي"),
+                ("egyptian", "Egyptian", "مصري"),
+                ("yemeni", "Yemeni", "يمني"),
+                ("sudanese", "Sudanese", "سوداني"),
+                ("libyan", "Libyan", "ليبي"),
+                ("somali", "Somali", "صومالي"),
+                ("afghan", "Afghan", "أفغاني"),
+                ("stateless", "Stateless", "عديم الجنسية"),
+                ("other", "Other", "أخرى"),
+                ("unknown", "Unknown", "غير معروف"),
+            ],
+            'claim_type': [
+                ("ownership", "Ownership", "ملكية"),
+                ("occupancy", "Occupancy", "إشغال"),
+                ("tenancy", "Tenancy", "إيجار"),
+            ],
+            'claim_status': [
+                ("new", "New", "جديدة"),
+                ("under_review", "Under Review", "قيد المراجعة"),
+                ("completed", "Completed", "مكتملة"),
+                ("pending", "Pending", "معلقة"),
+                ("draft", "Draft", "مسودة"),
+            ],
+            'case_priority': [
+                ("low", "Low", "منخفضة"),
+                ("normal", "Normal", "عادية"),
+                ("high", "High", "عالية"),
+                ("urgent", "Urgent", "عاجلة"),
+            ],
+            'claim_source': [
+                ("field_survey", "Field Survey", "مسح ميداني"),
+                ("direct_request", "Direct Request", "طلب مباشر"),
+                ("referral", "Referral", "إحالة"),
+                ("office_submission", "Office Submission", "تقديم مكتبي"),
+            ],
+            'business_nature': [
+                ("residential", "Residential", "سكني"),
+                ("commercial", "Commercial", "تجاري"),
+                ("agricultural", "Agricultural", "زراعي"),
+            ],
         }
 
         for vocab_name, terms in vocabularies.items():
@@ -1179,6 +1281,12 @@ class PostgreSQLAdapter(DatabaseAdapter):
                 created_by TEXT
             )
         """)
+
+        # Migration: add permissions column if missing
+        try:
+            cursor.execute("ALTER TABLE users ADD COLUMN permissions TEXT DEFAULT ''")
+        except Exception:
+            pass
 
         # Buildings table with PostGIS geometry
         cursor.execute("""

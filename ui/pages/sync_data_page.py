@@ -149,7 +149,7 @@ class SyncDataPage(QWidget):
 
         return card
 
-    def _create_sync_row(self, device_id: str, case_count: int, sync_date: str) -> QFrame:
+    def _create_sync_row(self, display_text: str, sync_date: str) -> QFrame:
         row = QFrame()
         row.setFixedHeight(48)
         row.setStyleSheet("""
@@ -178,8 +178,7 @@ class SyncDataPage(QWidget):
         layout.addWidget(icon_label)
 
         # Sync description text
-        text = f"تمت مزامنة {case_count} حالة  من الجهاز ID {device_id}"
-        text_label = QLabel(text)
+        text_label = QLabel(display_text)
         text_label.setFont(create_font(
             size=FontManager.SIZE_BODY,
             weight=QFont.Normal
@@ -207,42 +206,26 @@ class SyncDataPage(QWidget):
                 if item.widget():
                     item.widget().deleteLater()
 
-    def _get_mock_data(self):
-        """Mock data for development/testing."""
-        return [
-            ("12345", "synced 12 cases", "12", "2024-12-01", "success"),
-            ("12345", "synced 12 cases", "12", "2024-12-01", "success"),
-            ("12345", "synced 12 cases", "12", "2024-12-01", "success"),
-        ]
-
     def _load_sync_log(self):
         """Load sync log from local database."""
         if not self.db:
-            return self._get_mock_data()
+            return []
 
         try:
-            cursor = self.db.conn.cursor()
-            cursor.execute("""
-                SELECT device_id, action, details, sync_date, status
-                FROM sync_log
-                ORDER BY sync_date DESC
-            """)
-            rows = cursor.fetchall()
+            rows = self.db.fetch_all(
+                "SELECT device_id, action, details, sync_date, status "
+                "FROM sync_log ORDER BY sync_date DESC"
+            )
             if not rows:
-                return self._get_mock_data()
-            return rows
+                return []
+            return [
+                (r.get('device_id', ''), r.get('action', ''), r.get('details', ''),
+                 r.get('sync_date', ''), r.get('status', ''))
+                for r in rows
+            ]
         except Exception as e:
             logger.warning(f"Failed to load sync log: {e}")
-            return self._get_mock_data()
-
-    def _parse_case_count(self, action: str, details: str) -> int:
-        """Extract case count from action/details fields."""
-        import re
-        for text in [details or "", action or ""]:
-            match = re.search(r'(\d+)', text)
-            if match:
-                return int(match.group(1))
-        return 0
+            return []
 
     def refresh(self, data=None):
         """Refresh sync log display."""
@@ -255,11 +238,11 @@ class SyncDataPage(QWidget):
             for row in rows:
                 device_id = row[0] or "---"
                 action = row[1] or ""
-                details = row[2] or ""
                 sync_date = row[3] or ""
-                case_count = self._parse_case_count(action, details)
 
-                row_widget = self._create_sync_row(device_id, case_count, sync_date)
+                display_text = action if action else f"مزامنة من الجهاز {device_id}"
+
+                row_widget = self._create_sync_row(display_text, sync_date)
                 self._rows_container.addWidget(row_widget)
         else:
             self._empty_label.show()

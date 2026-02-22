@@ -548,15 +548,16 @@ class UnitController(BaseController):
         )
         building_id = result['building_id'] if result else "UNKNOWN"
 
-        # Get next unit number for this building (using building_id)
-        result = self.db.fetch_one("""
-            SELECT COUNT(*) + 1 as next_num FROM property_units WHERE building_id = ?
-        """, (building_id,))
-
-        unit_num = result['next_num'] if result else 1
-
-        # Format: BuildingID-UnitNum
-        return f"{building_id}-U{str(unit_num).zfill(3)}"
+        # Find next available unit number (handles gaps from deletions)
+        unit_num = 1
+        while True:
+            candidate = f"{building_id}-U{str(unit_num).zfill(3)}"
+            exists = self.db.fetch_one(
+                "SELECT 1 FROM property_units WHERE unit_id = ?", (candidate,)
+            )
+            if not exists:
+                return candidate
+            unit_num += 1
 
     def _has_dependencies(self, unit_uuid: str) -> bool:
         """Check if unit has dependent records."""
