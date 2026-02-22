@@ -108,7 +108,7 @@ class UserManagementPage(QWidget):
             base_path = Path(__file__).parent.parent.parent
         icon_path = base_path / "assets" / "images" / "down.png"
 
-        headers = ["المستخدم ID", "الدور", "الصلاحية", ""]
+        headers = ["المستخدم ", "الدور", "الصلاحية", ""]
         for i, text in enumerate(headers):
             item = QTableWidgetItem(text)
             if i in (1, 2) and icon_path.exists():
@@ -296,6 +296,7 @@ class UserManagementPage(QWidget):
                     "full_name": u.full_name_ar or u.full_name or u.username,
                     "role": Roles.get_display_name(u.role, arabic=True),
                     "role_key": u.role,
+                    "permissions_json": u.permissions or "",
                     "is_active": u.is_active,
                     "email": u.email or "",
                     "_user_obj": u,

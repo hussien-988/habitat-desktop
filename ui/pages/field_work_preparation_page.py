@@ -35,8 +35,8 @@ class FieldWorkPreparationPage(QWidget):
     3. Fixed footer
     """
 
-    # Signals
-    completed = pyqtSignal(dict)
+    # Signals (use 'object' to pass Python dicts with complex values)
+    completed = pyqtSignal(object)
     cancelled = pyqtSignal()
 
     def __init__(self, building_controller: BuildingController, i18n: I18n, parent=None):
@@ -234,27 +234,38 @@ class FieldWorkPreparationPage(QWidget):
             self._update_navigation()
 
         elif self.current_step == 1:
-            # Show confirmation dialog before completing
-            researcher = self.step2.get_selected_researcher()
-            buildings = self.step1.get_selected_buildings()
+            try:
+                # Show confirmation dialog before completing
+                researcher = self.step2.get_selected_researcher()
+                buildings = self.step1.get_selected_buildings()
+                logger.info(f"Step 2 finish: researcher={researcher}, buildings={len(buildings)}")
 
-            # Show confirmation dialog
-            from ui.components.field_work_confirmation_dialog import FieldWorkConfirmationDialog
-            building_count = len(buildings)
-            researcher_id = researcher.get('name', 'N/A') if researcher else 'N/A'
+                # Show confirmation dialog
+                from ui.components.field_work_confirmation_dialog import FieldWorkConfirmationDialog
+                building_count = len(buildings)
+                researcher_name = researcher.get('name', 'N/A') if researcher else 'N/A'
 
-            confirmed = FieldWorkConfirmationDialog.show_confirmation(
-                building_count,
-                researcher_id,
-                self
-            )
+                confirmed = FieldWorkConfirmationDialog.show_confirmation(
+                    building_count,
+                    researcher_name,
+                    self
+                )
+                logger.info(f"Confirmation dialog result: {confirmed}")
 
-            if confirmed:
-                workflow_data = {
-                    'buildings': buildings,
-                    'researcher': researcher
-                }
-                self.completed.emit(workflow_data)
+                if confirmed:
+                    workflow_data = {
+                        'buildings': buildings,
+                        'researcher': researcher
+                    }
+                    logger.info(f"Completing field work with {building_count} buildings")
+                    # Call main window handler directly (signal approach had delivery issues)
+                    main_window = self.window()
+                    if hasattr(main_window, '_on_field_work_completed'):
+                        main_window._on_field_work_completed(workflow_data)
+                    else:
+                        logger.error("Main window missing _on_field_work_completed handler")
+            except Exception as e:
+                logger.error(f"Error in field work completion: {e}", exc_info=True)
 
     def _update_navigation(self):
         """Update navigation buttons based on current step."""

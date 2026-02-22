@@ -17,27 +17,29 @@ from ui.design_system import Colors, PageDimensions
 from ui.style_manager import StyleManager
 from ui.font_utils import create_font, FontManager
 from ui.components.dialogs.password_dialog import _INPUT_STYLE
+from services import vocab_service
 from utils.logger import get_logger
 
 logger = get_logger(__name__)
 
-# Vocabulary groups organized by category
-VOCAB_CATEGORIES = {
-    "Claims": {
-        "color": "#3B86FF",
-        "groups": [
-            ("building_status", "حالة المقسم"),
-            ("building_type", "نوع المقسم"),
-        ]
-    },
-    "Persons": {
-        "color": "#F97316",
-        "groups": [
-            ("relation_type", "حالة المقسم"),
-            ("unit_type", "نوع المقسم"),
-        ]
-    },
-}
+# All vocabulary sections (flat list — accordion pills)
+VOCAB_SECTIONS = [
+    ("building_type", "نوع المبنى"),
+    ("building_status", "حالة المبنى"),
+    ("unit_type", "نوع الوحدة"),
+    ("relation_type", "نوع العلاقة"),
+    ("case_status", "حالة القضية"),
+    ("contract_type", "نوع العقد"),
+    ("evidence_type", "نوع الوثيقة"),
+    ("occupancy_type", "نوع الإشغال"),
+    ("occupancy_nature", "طبيعة الإشغال"),
+    ("nationality", "الجنسية"),
+    ("claim_type", "نوع المطالبة"),
+    ("claim_status", "حالة المطالبة"),
+    ("case_priority", "أولوية القضية"),
+    ("claim_source", "مصدر المطالبة"),
+    ("business_nature", "طبيعة النشاط"),
+]
 
 
 class DataManagementPage(QWidget):
@@ -47,7 +49,8 @@ class DataManagementPage(QWidget):
         super().__init__(parent)
         self.db = db
         self.i18n = i18n
-        self._vocab_containers = {}
+        self._vocab_add_btns = {}
+        self._vocab_terms_widgets = {}
         self._accordion_contents = {}
         self._accordion_arrows = {}
         self._setup_ui()
@@ -195,123 +198,92 @@ class DataManagementPage(QWidget):
         card.setStyleSheet("""
             QFrame#vocabCard {
                 background-color: white;
-                border-radius: 8px;
+                border-radius: 16px;
+                border: none;
             }
         """)
         card.setMaximumWidth(1249)
-        card.setMinimumHeight(522)
         card.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Minimum)
 
         layout = QVBoxLayout(card)
-        layout.setContentsMargins(12, 12, 12, 12)
-        layout.setSpacing(16)
+        layout.setContentsMargins(24, 24, 24, 24)
+        layout.setSpacing(12)
 
         # Section title
         section_title = QLabel("إدارة المفردات")
-        section_title.setFont(create_font(size=12, weight=QFont.Bold))
+        section_title.setFont(create_font(size=FontManager.SIZE_BODY, weight=QFont.Bold))
         section_title.setStyleSheet(f"color: {Colors.TEXT_PRIMARY}; background: transparent;")
+        section_title.setAlignment(Qt.AlignLeft)
         layout.addWidget(section_title)
 
-        # Category sub-cards
-        for cat_name, cat_info in VOCAB_CATEGORIES.items():
-            sub_card = self._create_category_sub_card(cat_name, cat_info)
-            layout.addWidget(sub_card)
+        # Accordion sections for each vocabulary
+        for i, (key, title) in enumerate(VOCAB_SECTIONS):
+            expanded = (i == 0)
+            section = self._create_vocab_section(key, title, expanded)
+            layout.addWidget(section)
 
         return card
 
-    def _create_category_sub_card(self, cat_name: str, cat_info: dict) -> QFrame:
-        sub_card = QFrame()
-        sub_card.setObjectName(f"subCard_{cat_name}")
-        sub_card.setLayoutDirection(Qt.RightToLeft)
-        sub_card.setStyleSheet(f"""
-            QFrame#subCard_{cat_name} {{
-                background-color: white;
-                border: 1px solid #E5E7EB;
-                border-radius: 12px;
-            }}
-        """)
-        sub_card.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Minimum)
+    def _create_vocab_section(self, key: str, title: str, expanded: bool = False) -> QFrame:
+        """Create a collapsible vocabulary section (pill header + chips content)."""
+        section = QFrame()
+        section.setObjectName(f"vocabSection_{key}")
+        section.setStyleSheet(f"QFrame#vocabSection_{key} {{ background: transparent; border: none; }}")
+        section_layout = QVBoxLayout(section)
+        section_layout.setContentsMargins(0, 0, 0, 0)
+        section_layout.setSpacing(4)
 
-        sub_layout = QVBoxLayout(sub_card)
-        sub_layout.setContentsMargins(12, 12, 12, 12)
-        sub_layout.setSpacing(8)
-
-        # Header pill (clickable accordion toggle)
+        # Pill header (clickable)
         header = QFrame()
-        header.setObjectName(f"accordionHeader_{cat_name}")
+        header.setObjectName(f"vocabHeader_{key}")
         header.setCursor(Qt.PointingHandCursor)
-        header.setFixedHeight(33)
-        header.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        header.setLayoutDirection(Qt.RightToLeft)
+        header.setFixedHeight(48)
         header.setStyleSheet(f"""
-            QFrame#accordionHeader_{cat_name} {{
+            QFrame#vocabHeader_{key} {{
                 background-color: #f0f7ff;
-                border-radius: 6px;
+                border: 1px solid #E1E8ED;
+                border-radius: 20px;
             }}
-            QFrame#accordionHeader_{cat_name}:hover {{
+            QFrame#vocabHeader_{key}:hover {{
                 background-color: #E3EEF9;
             }}
         """)
 
         header_layout = QHBoxLayout(header)
-        header_layout.setContentsMargins(12, 0, 12, 0)
-        header_layout.setSpacing(0)
+        header_layout.setContentsMargins(16, 0, 16, 0)
 
-        cat_label = QLabel(cat_name)
-        cat_label.setFont(create_font(size=10, weight=QFont.Medium))
-        cat_label.setStyleSheet(f"color: {cat_info['color']}; background: transparent;")
-        header_layout.addWidget(cat_label)
+        title_label = QLabel(title)
+        title_label.setFont(create_font(size=FontManager.SIZE_BODY, weight=QFont.Bold))
+        title_label.setStyleSheet(f"color: {Colors.TEXT_PRIMARY}; background: transparent; border: none;")
+        header_layout.addWidget(title_label)
+
         header_layout.addStretch()
 
-        arrow = QLabel("∨")
+        arrow = QLabel("∨" if expanded else "‹")
         arrow.setFont(create_font(size=FontManager.SIZE_SMALL, weight=QFont.Bold))
-        arrow.setStyleSheet("color: #637381; background: transparent;")
+        arrow.setStyleSheet("color: #637381; background: transparent; border: none;")
         arrow.setFixedWidth(20)
         arrow.setAlignment(Qt.AlignCenter)
+        self._accordion_arrows[key] = arrow
         header_layout.addWidget(arrow)
-        self._accordion_arrows[cat_name] = arrow
 
-        header.mousePressEvent = lambda e, k=cat_name: self._toggle_accordion(k)
-        sub_layout.addWidget(header)
+        header.mousePressEvent = lambda e, k=key: self._toggle_accordion(k)
+        section_layout.addWidget(header)
 
-        # Content (vocab groups — visible by default)
+        # Content (chips + add button, wrapped in rows)
         content = QWidget()
-        content.setLayoutDirection(Qt.RightToLeft)
-        content.setStyleSheet("background: transparent;")
+        content.setObjectName(f"vocabContent_{key}")
+        content.setStyleSheet(f"""
+            QWidget#vocabContent_{key} {{
+                background-color: white;
+                border: 1px solid #E1E8ED;
+                border-radius: 8px;
+            }}
+        """)
         content_layout = QVBoxLayout(content)
-        content_layout.setContentsMargins(0, 4, 0, 0)
-        content_layout.setSpacing(4)
+        content_layout.setContentsMargins(16, 8, 16, 12)
+        content_layout.setSpacing(6)
 
-        for vocab_name, group_label in cat_info["groups"]:
-            group_widget = self._create_vocab_group(vocab_name, group_label)
-            content_layout.addWidget(group_widget)
-
-        self._accordion_contents[cat_name] = content
-        sub_layout.addWidget(content)
-
-        return sub_card
-
-    def _create_vocab_group(self, vocab_name: str, group_label: str) -> QWidget:
-        widget = QWidget()
-        widget.setLayoutDirection(Qt.RightToLeft)
-        widget.setStyleSheet("background: transparent;")
-        layout = QVBoxLayout(widget)
-        layout.setContentsMargins(0, 0, 0, 4)
-        layout.setSpacing(4)
-
-        # Group label
-        label = QLabel(group_label)
-        label.setFont(create_font(size=FontManager.SIZE_BODY, weight=QFont.Medium))
-        label.setStyleSheet(f"color: {Colors.TEXT_PRIMARY}; background: transparent;")
-        label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
-        layout.addWidget(label)
-
-        # Terms row — flat layout, chips added directly here
-        terms_row = QHBoxLayout()
-        terms_row.setSpacing(6)
-        terms_row.setContentsMargins(0, 0, 0, 0)
-
-        # Add button first, then stretch — chips will be inserted at index 0,1,2... by _populate
         add_btn = QPushButton("اضافة")
         add_btn.setFixedSize(106, 45)
         add_btn.setCursor(Qt.PointingHandCursor)
@@ -335,18 +307,19 @@ class DataManagementPage(QWidget):
                 border-color: #2870BF;
             }}
         """)
-        add_btn.clicked.connect(lambda: self._on_add_term(vocab_name))
-        terms_row.addWidget(add_btn)
-        terms_row.addStretch()
+        add_btn.clicked.connect(lambda _, vn=key: self._on_add_term(vn))
 
-        self._vocab_containers[vocab_name] = terms_row
-        layout.addLayout(terms_row)
+        self._vocab_add_btns[key] = add_btn
+        self._accordion_contents[key] = content
 
-        self._populate_vocab_group(vocab_name)
+        self._populate_vocab_group(key)
 
-        return widget
+        content.setVisible(expanded)
+        section_layout.addWidget(content)
 
-    def _create_term_chip(self, term_label: str, term_id: str, vocab_name: str) -> QFrame:
+        return section
+
+    def _create_term_chip(self, term_label: str, code: int, vocab_name: str) -> QFrame:
         chip = QFrame()
         chip.setLayoutDirection(Qt.RightToLeft)
         chip.setFixedSize(150, 45)
@@ -374,7 +347,7 @@ class DataManagementPage(QWidget):
         if pixmap_del and not pixmap_del.isNull():
             from PyQt5.QtGui import QIcon
             delete_btn.setIcon(QIcon(pixmap_del))
-        delete_btn.clicked.connect(lambda _, tid=term_id, vn=vocab_name: self._on_delete_term(tid, vn))
+        delete_btn.clicked.connect(lambda _, c=code, vn=vocab_name: self._on_delete_term(c, vn))
         layout.addWidget(delete_btn)
 
         # Edit icon
@@ -389,7 +362,7 @@ class DataManagementPage(QWidget):
         if pixmap_edit and not pixmap_edit.isNull():
             from PyQt5.QtGui import QIcon
             edit_btn.setIcon(QIcon(pixmap_edit))
-        edit_btn.clicked.connect(lambda _, tid=term_id, tl=term_label, vn=vocab_name: self._on_edit_term(tid, tl, vn))
+        edit_btn.clicked.connect(lambda _, c=code, tl=term_label, vn=vocab_name: self._on_edit_term(c, tl, vn))
         layout.addWidget(edit_btn)
 
         # Term text (right side in RTL)
@@ -401,7 +374,7 @@ class DataManagementPage(QWidget):
 
         return chip
 
-    def _on_delete_term(self, term_id: str, vocab_name: str):
+    def _on_delete_term(self, code: int, vocab_name: str):
         """Delete a vocabulary term after confirmation."""
         from PyQt5.QtWidgets import QMessageBox
         reply = QMessageBox.question(
@@ -410,17 +383,11 @@ class DataManagementPage(QWidget):
         )
         if reply != QMessageBox.Yes:
             return
-        if not self.db:
-            return
-        try:
-            cursor = self.db.conn.cursor()
-            cursor.execute("DELETE FROM vocabulary_terms WHERE term_id = ?", (term_id,))
-            self.db.conn.commit()
-            self._populate_vocab_group(vocab_name)
-        except Exception as e:
-            logger.warning(f"Failed to delete term {term_id}: {e}")
+        vocab_service.remove_term(vocab_name, code)
+        self._delete_term_from_db(vocab_name, code)
+        self._populate_vocab_group(vocab_name)
 
-    def _on_edit_term(self, term_id: str, current_label: str, vocab_name: str):
+    def _on_edit_term(self, code: int, current_label: str, vocab_name: str):
         """Edit a vocabulary term label."""
         text, ok = QInputDialog.getText(
             self, "تعديل مصطلح", "عدّل المصطلح:",
@@ -428,19 +395,10 @@ class DataManagementPage(QWidget):
         )
         if not ok or not text.strip() or text.strip() == current_label:
             return
-        if not self.db:
-            return
-        try:
-            new_label = text.strip()
-            cursor = self.db.conn.cursor()
-            cursor.execute(
-                "UPDATE vocabulary_terms SET term_label = ?, term_label_ar = ? WHERE term_id = ?",
-                (new_label, new_label, term_id)
-            )
-            self.db.conn.commit()
-            self._populate_vocab_group(vocab_name)
-        except Exception as e:
-            logger.warning(f"Failed to update term {term_id}: {e}")
+        new_label = text.strip()
+        vocab_service.update_term(vocab_name, code, new_label, new_label)
+        self._update_term_in_db(vocab_name, code, new_label)
+        self._populate_vocab_group(vocab_name)
 
     def _toggle_accordion(self, cat_name: str):
         content = self._accordion_contents.get(cat_name)
@@ -715,62 +673,63 @@ class DataManagementPage(QWidget):
 
     # --- Data Loading ---
 
-    _MOCK_TERMS = {
-        "building_status": [
-            ("1", "bs_damaged", "Damaged", "متضررة"),
-            ("2", "bs_habitable", "Habitable", "صالحة للسكن"),
-            ("3", "bs_destroyed", "Destroyed", "مدمرة"),
-        ],
-        "building_type": [
-            ("4", "bt_residential", "Residential", "سكني"),
-            ("5", "bt_commercial", "Commercial", "تجاري"),
-            ("6", "bt_mixed", "Mixed", "مختلط"),
-        ],
-        "relation_type": [
-            ("7", "rt_owner", "Owner", "مالك"),
-            ("8", "rt_tenant", "Tenant", "مستأجر"),
-            ("9", "rt_occupant", "Occupant", "شاغل"),
-        ],
-        "unit_type": [
-            ("10", "ut_apartment", "Apartment", "شقة"),
-            ("11", "ut_shop", "Shop", "محل"),
-            ("12", "ut_office", "Office", "مكتب"),
-        ],
-    }
-
     def _load_vocabulary_terms(self, vocab_name: str) -> list:
-        if not self.db:
-            return self._MOCK_TERMS.get(vocab_name, [])
-        try:
-            cursor = self.db.conn.cursor()
-            cursor.execute(
-                "SELECT term_id, term_code, term_label, term_label_ar FROM vocabulary_terms WHERE vocabulary_name = ? AND status = 'active' ORDER BY term_code",
-                (vocab_name,)
-            )
-            rows = cursor.fetchall()
-            if rows:
-                return rows
-            return self._MOCK_TERMS.get(vocab_name, [])
-        except Exception as e:
-            logger.warning(f"Failed to load vocabulary {vocab_name}: {e}")
-            return self._MOCK_TERMS.get(vocab_name, [])
+        """Load terms from vocab_service (same source as dropdowns)."""
+        options = vocab_service.get_options(vocab_name, lang="ar")
+        return [(code, label) for code, label in options if code != 0]
 
     def _populate_vocab_group(self, vocab_name: str):
-        container = self._vocab_containers.get(vocab_name)
-        if not container:
+        content_widget = self._accordion_contents.get(vocab_name)
+        add_btn = self._vocab_add_btns.get(vocab_name)
+        if content_widget is None:
+            return
+        container = content_widget.layout()
+        if container is None:
             return
 
-        # Clear chips only (keep last 2 items: add_btn + stretch)
-        while container.count() > 2:
-            item = container.takeAt(0)
-            if item.widget():
-                item.widget().deleteLater()
+        # Remove old terms widget if it exists
+        old_widget = self._vocab_terms_widgets.get(vocab_name)
+        if old_widget:
+            container.removeWidget(old_widget)
+            old_widget.deleteLater()
+
+        # Build a new widget with all chips arranged in rows
+        terms_widget = QWidget()
+        terms_widget.setStyleSheet("background: transparent;")
+        terms_layout = QVBoxLayout(terms_widget)
+        terms_layout.setContentsMargins(0, 0, 0, 0)
+        terms_layout.setSpacing(6)
 
         terms = self._load_vocabulary_terms(vocab_name)
-        for i, term in enumerate(terms):
-            label_ar = term[3] or term[2] or term[1]
-            chip = self._create_term_chip(label_ar, term[0], vocab_name)
-            container.insertWidget(i, chip)
+        CHIPS_PER_ROW = 5
+
+        current_row = QHBoxLayout()
+        current_row.setSpacing(6)
+        current_row.setContentsMargins(0, 0, 0, 0)
+        chips_in_row = 0
+
+        for code, label in terms:
+            if chips_in_row >= CHIPS_PER_ROW:
+                current_row.addStretch()
+                terms_layout.addLayout(current_row)
+                current_row = QHBoxLayout()
+                current_row.setSpacing(6)
+                current_row.setContentsMargins(0, 0, 0, 0)
+                chips_in_row = 0
+
+            chip = self._create_term_chip(label, code, vocab_name)
+            current_row.addWidget(chip)
+            chips_in_row += 1
+
+        # Add button at the end of the last row
+        if add_btn:
+            add_btn.setParent(None)
+            current_row.addWidget(add_btn)
+        current_row.addStretch()
+        terms_layout.addLayout(current_row)
+
+        container.addWidget(terms_widget)
+        self._vocab_terms_widgets[vocab_name] = terms_widget
 
     def _on_add_term(self, vocab_name: str):
         text, ok = QInputDialog.getText(
@@ -778,27 +737,53 @@ class DataManagementPage(QWidget):
             QLineEdit.Normal, ""
         )
         if ok and text.strip():
-            self._add_term_to_db(vocab_name, text.strip())
+            label_ar = text.strip()
+            code = vocab_service.get_next_code(vocab_name)
+            vocab_service.add_term(vocab_name, code, label_ar, label_ar, order=code)
+            self._persist_term_to_db(vocab_name, code, label_ar)
             self._populate_vocab_group(vocab_name)
 
-    def _add_term_to_db(self, vocab_name: str, label_ar: str):
+    def _persist_term_to_db(self, vocab_name: str, code: int, label_ar: str):
         if not self.db:
             return
         try:
             import uuid
             from datetime import datetime
-            code = label_ar.replace(" ", "_").lower()
-            cursor = self.db.conn.cursor()
-            cursor.execute(
-                "INSERT INTO vocabulary_terms (term_id, vocabulary_name, term_code, term_label, term_label_ar, created_at) VALUES (?, ?, ?, ?, ?, ?)",
-                (str(uuid.uuid4()), vocab_name, code, label_ar, label_ar, datetime.now().isoformat())
+            self.db.execute(
+                "INSERT OR REPLACE INTO vocabulary_terms "
+                "(term_id, vocabulary_name, term_code, term_label, term_label_ar, source, status, created_at) "
+                "VALUES (?, ?, ?, ?, ?, 'manual', 'active', ?)",
+                (str(uuid.uuid4()), vocab_name, str(code), label_ar, label_ar, datetime.now().isoformat())
             )
-            self.db.conn.commit()
         except Exception as e:
-            logger.warning(f"Failed to add term: {e}")
+            logger.warning(f"Failed to persist term to DB: {e}")
+
+    def _update_term_in_db(self, vocab_name: str, code: int, label_ar: str):
+        if not self.db:
+            return
+        try:
+            from datetime import datetime
+            self.db.execute(
+                "UPDATE vocabulary_terms SET term_label = ?, term_label_ar = ?, source = 'manual', updated_at = ? "
+                "WHERE vocabulary_name = ? AND term_code = ?",
+                (label_ar, label_ar, datetime.now().isoformat(), vocab_name, str(code))
+            )
+        except Exception as e:
+            logger.warning(f"Failed to update term in DB: {e}")
+
+    def _delete_term_from_db(self, vocab_name: str, code: int):
+        if not self.db:
+            return
+        try:
+            self.db.execute(
+                "DELETE FROM vocabulary_terms WHERE vocabulary_name = ? AND term_code = ?",
+                (vocab_name, str(code))
+            )
+        except Exception as e:
+            logger.warning(f"Failed to delete term from DB: {e}")
 
     def refresh(self, data=None):
-        for vocab_name in self._vocab_containers:
+        for vocab_name in self._accordion_contents:
             self._populate_vocab_group(vocab_name)
 
     def showEvent(self, event):

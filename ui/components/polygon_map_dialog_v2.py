@@ -84,14 +84,14 @@ class PolygonMapDialog(BaseMapDialog):
             parent=parent
         )
 
-        # ✅ CRITICAL FIX: Set auth_token AFTER super().__init__
-        # BaseMapDialog.__init__ sets self._auth_token = None, so we must reassign here!
+        # Set auth_token AFTER super().__init__ (BaseMapDialog resets it to None)
         self._auth_token = _temp_auth_token
 
-        if self._auth_token:
-            logger.info(f"✅ Auth token set for PolygonMapDialog (length: {len(self._auth_token)})")
-        else:
-            logger.warning("⚠️ No auth token - API calls will fail with 401!")
+        # Set auth token and db on viewport loader (same as BuildingMapDialog)
+        if hasattr(self, '_viewport_loader') and self._viewport_loader:
+            if self._viewport_loader.map_service and self._auth_token:
+                self._viewport_loader.map_service.set_auth_token(self._auth_token)
+            self._viewport_loader.db = self.db
 
         # Connect multi-select signal (polygon drawing disabled)
         self._clicked_building_ids = []
@@ -321,43 +321,57 @@ class PolygonMapDialog(BaseMapDialog):
     def _load_and_cache_initial_buildings(self) -> str:
         """
         Load initial buildings, cache them for multi-select lookup, return GeoJSON.
-
-
+        Falls back to local DB when API is unavailable.
         """
-        from services.map_service_api import MapServiceAPI
         from services.geojson_converter import GeoJSONConverter
 
-        try:
-            map_service = MapServiceAPI()
-            if self._auth_token:
+        if not hasattr(self, '_viewport_buildings_cache'):
+            self._viewport_buildings_cache = {}
+
+        # Try API first (only if auth token available)
+        if self._auth_token:
+            try:
+                from services.map_service_api import MapServiceAPI
+                map_service = MapServiceAPI()
                 map_service.set_auth_token(self._auth_token)
 
-            # Load buildings from API (same bounds as load_buildings_geojson)
-            buildings = map_service.get_buildings_in_bbox(
-                north_east_lat=36.5,
-                north_east_lng=37.5,
-                south_west_lat=36.0,
-                south_west_lng=36.8,
-                page_size=200
-            )
+                buildings = map_service.get_buildings_in_bbox(
+                    north_east_lat=36.5,
+                    north_east_lng=37.5,
+                    south_west_lat=36.0,
+                    south_west_lng=36.8,
+                    page_size=200
+                )
 
-            logger.info(f"✅ Loaded {len(buildings)} initial buildings from API")
+                if buildings:
+                    logger.info(f"Loaded {len(buildings)} initial buildings from API")
+                    for b in buildings:
+                        if b.building_id:
+                            self._viewport_buildings_cache[b.building_id] = b
+                    return GeoJSONConverter.buildings_to_geojson(buildings, prefer_polygons=True)
+                else:
+                    logger.warning("API returned 0 buildings, using local DB fallback")
 
-            # ✅ CRITICAL: Cache buildings for multi-select lookup
-            if not hasattr(self, '_viewport_buildings_cache'):
-                self._viewport_buildings_cache = {}
-            for b in buildings:
-                if b.building_id:
-                    self._viewport_buildings_cache[b.building_id] = b
+            except Exception as e:
+                logger.warning(f"API unavailable for map buildings: {e}, using local DB fallback")
 
-            logger.info(f"✅ Cached {len(self._viewport_buildings_cache)} buildings in viewport cache")
+        # Fallback: load from local database
+        try:
+            from controllers.building_controller import BuildingController
+            controller = BuildingController(self.db, use_api=False)
+            result = controller.load_buildings()
+            if result.success and result.data:
+                buildings = result.data
+                self.buildings = buildings
+                for b in buildings:
+                    if b.building_id:
+                        self._viewport_buildings_cache[b.building_id] = b
+                logger.info(f"Loaded {len(buildings)} buildings from local DB for map")
+                return GeoJSONConverter.buildings_to_geojson(buildings, prefer_polygons=True)
+        except Exception as e2:
+            logger.error(f"Local DB fallback also failed: {e2}", exc_info=True)
 
-            # Convert to GeoJSON for map display
-            return GeoJSONConverter.buildings_to_geojson(buildings, prefer_polygons=True)
-
-        except Exception as e:
-            logger.error(f"Error loading initial buildings: {e}", exc_info=True)
-            return '{"type":"FeatureCollection","features":[]}'
+        return '{"type":"FeatureCollection","features":[]}'
 
     def _on_geometry_selected(self, geom_type: str, wkt: str):
         """

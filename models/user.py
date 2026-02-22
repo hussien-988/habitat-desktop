@@ -51,6 +51,7 @@ class User:
     full_name: str = ""
     full_name_ar: str = ""
     role: str = "analyst"  # admin, data_manager, office_clerk, field_supervisor, analyst
+    permissions: str = ""  # JSON string of custom permissions
 
     # Status
     is_active: bool = True
