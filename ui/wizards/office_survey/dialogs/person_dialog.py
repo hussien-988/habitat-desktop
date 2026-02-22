@@ -2078,20 +2078,6 @@ class PersonDialog(QDialog):
         if has_error:
             return
 
-        # Duplication guard: check existing_persons before any API call
-        if not self.editing_mode and self.existing_persons:
-            first = self.first_name.text().strip()
-            last = self.last_name.text().strip()
-            for existing in self.existing_persons:
-                if (first and last and
-                    existing.get('first_name', '').strip() == first and
-                    existing.get('last_name', '').strip() == last):
-                    from PyQt5.QtWidgets import QMessageBox
-                    QMessageBox.warning(
-                        self, tr("wizard.person.duplicate_title"),
-                        tr("wizard.person.duplicate_name", first=first, last=last))
-                    return
-
         if self._use_api and not self.editing_mode:
             self._refresh_token()
             person_data = self.get_person_data()

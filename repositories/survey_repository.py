@@ -241,9 +241,13 @@ class SurveyRepository:
             params.append(f"%{reference_code}%")
 
         if person_name:
-            # Search in JSON context_data for person names
-            query += " AND context_data LIKE ?"
-            params.append(f'%"name":"%{person_name}%"%')
+            # Search person names in JSON context_data (first_name, last_name, father_name)
+            query += " AND (context_data LIKE ? OR context_data LIKE ? OR context_data LIKE ?)"
+            params.extend([
+                f'%"first_name": "{person_name}%',
+                f'%"last_name": "{person_name}%',
+                f'%"father_name": "{person_name}%',
+            ])
 
         if start_date:
             query += " AND DATE(created_at) >= ?"

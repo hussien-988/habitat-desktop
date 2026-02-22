@@ -57,7 +57,7 @@ RADIO_STYLE = f"""
 class DuplicatesPage(QWidget):
     """Duplicates resolution page — matches Figma design."""
 
-    view_comparison_requested = pyqtSignal()
+    view_comparison_requested = pyqtSignal(object)  # Emits DuplicateGroup
 
     def __init__(self, db: Database, i18n: I18n, parent=None):
         super().__init__(parent)
@@ -358,7 +358,7 @@ class DuplicatesPage(QWidget):
             }}
         """)
         view_btn.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
-        view_btn.clicked.connect(self.view_comparison_requested.emit)
+        view_btn.clicked.connect(self._on_view_comparison_clicked)
 
         title_row.addWidget(title_label)
         title_row.addStretch()
@@ -447,6 +447,13 @@ class DuplicatesPage(QWidget):
     # ────────────────────────────────────────────
     # Actions
     # ────────────────────────────────────────────
+    def _on_view_comparison_clicked(self):
+        """Emit view comparison with the current person duplicate group."""
+        if self._person_groups:
+            self.view_comparison_requested.emit(self._person_groups[0])
+        else:
+            Toast.show_toast(self, "لا توجد تكرارات للمقارنة", Toast.WARNING)
+
     def _on_merge_clicked(self):
         """Handle merge button click."""
         selected_unit = self.unit_radio_group.checkedId()

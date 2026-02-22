@@ -246,7 +246,189 @@ class DraftClaimsPage(QWidget):
             query: Search query string
             mode: Search mode (name, claim_id, building)
         """
-        pass
+        if not query.strip():
+            self.title_label.setText(self.current_tab_title)
+            self.refresh()
+            return
+
+        try:
+            from controllers.survey_controller import SurveyController
+            ctrl = SurveyController(self.db)
+
+            # Try API search first
+            kwargs = {}
+            if mode == "name":
+                kwargs['person_name'] = query
+            elif mode == "claim_id":
+                kwargs['reference_code'] = query
+            elif mode == "building":
+                kwargs['building_id'] = query
+
+            result = self._search_via_api(ctrl, query, mode)
+            if result is not None:
+                self._display_search_results(result)
+                return
+
+            # Fallback: local DB search
+            from repositories.survey_repository import SurveyRepository
+            repo = SurveyRepository(self.db)
+            rows = repo.search_drafts(source='office', **kwargs)
+            surveys = self._map_local_rows_to_surveys(rows, ctrl)
+            self._display_search_results(surveys)
+
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).warning(f"Search failed: {e}")
+            self.claims_data = []
+            self._show_empty_state()
+
+    def apply_filters(self, filters: dict):
+        """
+        Apply advanced filters from the filter dialog.
+
+        Args:
+            filters: Dict with keys: building_code, governorate_code, date
+        """
+        has_filter = any(v for v in filters.values() if v)
+        if not has_filter:
+            self.title_label.setText(self.current_tab_title)
+            self.refresh()
+            return
+
+        try:
+            from controllers.survey_controller import SurveyController
+            ctrl = SurveyController(self.db)
+
+            # Load all drafts then filter by building_code, governorate, date
+            result = ctrl.load_office_surveys(status="Draft")
+            if not result.success or not result.data:
+                self._display_search_results([])
+                return
+
+            surveys = result.data
+            building_code = filters.get('building_code', '').strip()
+            gov_code = filters.get('governorate_code', '').strip()
+            filter_date = filters.get('date', '').strip()
+
+            filtered = []
+            for s in surveys:
+                # Filter by building code
+                if building_code:
+                    bid = s.get('buildingNumber', '') or ''
+                    buid = s.get('buildingId', '') or ''
+                    if building_code not in bid and building_code not in buid:
+                        continue
+
+                # Filter by governorate (building_id starts with gov code)
+                if gov_code:
+                    bid = s.get('buildingNumber', '') or ''
+                    if not bid.startswith(gov_code):
+                        continue
+
+                # Filter by date
+                if filter_date:
+                    survey_date = (s.get('surveyDate') or '')[:10]
+                    if survey_date != filter_date:
+                        continue
+
+                filtered.append(s)
+
+            self._display_search_results(filtered)
+
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).warning(f"Filter failed: {e}")
+            self.claims_data = []
+            self._show_empty_state()
+
+    def _search_via_api(self, ctrl, query, mode):
+        """Try searching via API. Returns list of survey dicts or None."""
+        try:
+            from services.api_client import get_api_client
+            api = get_api_client()
+            if api is None:
+                return None
+            # API does not have a dedicated search endpoint for drafts,
+            # so we load all drafts and filter client-side
+            result = ctrl.load_office_surveys(status="Draft")
+            if not result.success or not result.data:
+                return []
+
+            surveys = result.data
+            filtered = []
+            q = query.strip().lower()
+            for s in surveys:
+                if mode == "name":
+                    name = (s.get('intervieweeName') or '').lower()
+                    if q in name:
+                        filtered.append(s)
+                elif mode == "claim_id":
+                    ref = (s.get('referenceCode') or '').lower()
+                    sid = (s.get('id') or '').lower()
+                    if q in ref or q in sid:
+                        filtered.append(s)
+                elif mode == "building":
+                    bid = (s.get('buildingNumber') or '').lower()
+                    buid = (s.get('buildingId') or '').lower()
+                    if q in bid or q in buid:
+                        filtered.append(s)
+            return filtered
+        except Exception:
+            return None
+
+    def _map_local_rows_to_surveys(self, rows, ctrl):
+        """Convert local DB rows to API-format survey dicts."""
+        surveys = []
+        for row in rows:
+            context = row.get("context", {})
+            surveys.append({
+                "id": row.get("survey_id", ""),
+                "buildingId": row.get("building_id") or context.get("building_uuid") or "",
+                "propertyUnitId": row.get("unit_id", ""),
+                "unitIdentifier": context.get("unit", {}).get("unit_number", "") if isinstance(context.get("unit"), dict) else "",
+                "referenceCode": row.get("reference_code", ""),
+                "intervieweeName": ctrl._extract_interviewee_name(context),
+                "surveyDate": str(row.get("survey_date", "")),
+                "status": row.get("status", "draft"),
+                "buildingNumber": context.get("building", {}).get("building_id", "") if isinstance(context.get("building"), dict) else "",
+            })
+        return surveys
+
+    def _display_search_results(self, surveys):
+        """Display search/filter results using the same card format as refresh()."""
+        building_ids = {s.get('buildingId', '') for s in surveys if s.get('buildingId')}
+        buildings_cache = self._fetch_buildings_by_ids(building_ids)
+
+        self.claims_data = []
+        for s in surveys:
+            building_obj = buildings_cache.get(s.get('buildingId'))
+
+            unit_obj = None
+            unit_num = s.get('unitIdentifier', '')
+            if unit_num:
+                class _NS:
+                    def __init__(self, **kw): self.__dict__.update(kw)
+                unit_obj = _NS(unit_number=unit_num)
+
+            self.claims_data.append({
+                'claim_id': s.get('referenceCode') or s.get('id', 'N/A'),
+                'claim_uuid': s.get('id', ''),
+                'claimant_name': s.get('intervieweeName') or 'غير محدد',
+                'date': (s.get('surveyDate') or '')[:10],
+                'status': 'draft',
+                'building': building_obj,
+                'unit': unit_obj,
+                'unit_id': s.get('propertyUnitId', ''),
+                'unit_number': unit_num,
+                'building_id': s.get('buildingNumber') or (building_obj.building_id if building_obj else ''),
+            })
+
+        self.title_label.setText(f"نتائج البحث ({len(self.claims_data)})")
+
+        if self.claims_data:
+            self._show_claims_list()
+        else:
+            self._show_empty_state()
 
     def set_tab_title(self, title: str):
         """Update page title."""
@@ -256,6 +438,7 @@ class DraftClaimsPage(QWidget):
 
     def refresh(self, data=None):
         """Refresh survey drafts list from Surveys/office API."""
+        self.title_label.setText(self.current_tab_title)
         try:
             from controllers.survey_controller import SurveyController
             ctrl = SurveyController(self.db)

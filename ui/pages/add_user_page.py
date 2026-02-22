@@ -54,6 +54,58 @@ ROLES = [
     ("analyst", "محلل"),
 ]
 
+ROLE_PERMISSIONS = {
+    "admin": {
+        "claims": {"view": True, "add": True, "edit": True, "delete": True},
+        "buildings": {"view": True, "add": True, "edit": True, "delete": True},
+        "units": {"view": True, "add": True, "edit": True, "delete": True},
+        "duplicates": {"view": True, "add": True, "edit": True, "delete": True},
+        "user_management": {"view": True, "add": True, "edit": True, "delete": True},
+    },
+    "data_manager": {
+        "claims": {"view": True, "add": True, "edit": True, "delete": True},
+        "buildings": {"view": True, "add": True, "edit": True, "delete": True},
+        "units": {"view": True, "add": True, "edit": True, "delete": True},
+        "duplicates": {"view": True, "add": True, "edit": True, "delete": True},
+        "user_management": {"view": True, "add": False, "edit": False, "delete": False},
+    },
+    "office_clerk": {
+        "claims": {"view": True, "add": True, "edit": True, "delete": False},
+        "buildings": {"view": True, "add": True, "edit": True, "delete": False},
+        "units": {"view": True, "add": True, "edit": True, "delete": False},
+        "duplicates": {"view": True, "add": False, "edit": False, "delete": False},
+        "user_management": {"view": False, "add": False, "edit": False, "delete": False},
+    },
+    "field_supervisor": {
+        "claims": {"view": True, "add": False, "edit": False, "delete": False},
+        "buildings": {"view": True, "add": False, "edit": False, "delete": False},
+        "units": {"view": True, "add": False, "edit": False, "delete": False},
+        "duplicates": {"view": True, "add": False, "edit": False, "delete": False},
+        "user_management": {"view": False, "add": False, "edit": False, "delete": False},
+    },
+    "field_researcher": {
+        "claims": {"view": True, "add": True, "edit": True, "delete": False},
+        "buildings": {"view": True, "add": True, "edit": True, "delete": False},
+        "units": {"view": True, "add": True, "edit": True, "delete": False},
+        "duplicates": {"view": True, "add": False, "edit": False, "delete": False},
+        "user_management": {"view": False, "add": False, "edit": False, "delete": False},
+    },
+    "data_collector": {
+        "claims": {"view": True, "add": True, "edit": False, "delete": False},
+        "buildings": {"view": True, "add": True, "edit": False, "delete": False},
+        "units": {"view": True, "add": True, "edit": False, "delete": False},
+        "duplicates": {"view": False, "add": False, "edit": False, "delete": False},
+        "user_management": {"view": False, "add": False, "edit": False, "delete": False},
+    },
+    "analyst": {
+        "claims": {"view": True, "add": False, "edit": False, "delete": False},
+        "buildings": {"view": True, "add": False, "edit": False, "delete": False},
+        "units": {"view": True, "add": False, "edit": False, "delete": False},
+        "duplicates": {"view": True, "add": False, "edit": False, "delete": False},
+        "user_management": {"view": False, "add": False, "edit": False, "delete": False},
+    },
+}
+
 
 class AddUserPage(QWidget):
     """Add new user form page with permissions accordion."""
@@ -69,6 +121,9 @@ class AddUserPage(QWidget):
         self._permission_checkboxes = {}
         self._section_contents = {}
         self._section_arrows = {}
+
+        self._mode = 'add'  # 'add', 'edit', 'view'
+        self._editing_user = None
 
         self._setup_ui()
 
@@ -267,6 +322,7 @@ class AddUserPage(QWidget):
                 selection-color: white;
             }
         """)
+        self.role_combo.currentIndexChanged.connect(self._on_role_changed)
         role_group.addWidget(self.role_combo)
         fields_layout.addLayout(role_group, 1)
 
@@ -281,7 +337,7 @@ class AddUserPage(QWidget):
         perm_title.setStyleSheet(
             f"color: {Colors.PAGE_TITLE}; background: transparent;"
         )
-        perm_title.setAlignment(Qt.AlignRight)
+        perm_title.setAlignment(Qt.AlignLeft)
         card_layout.addWidget(perm_title)
 
         # Permission sections (accordion)
@@ -412,6 +468,18 @@ class AddUserPage(QWidget):
 
         return section
 
+    def _on_role_changed(self, index):
+        """Update permission checkboxes when role changes (RBAC)."""
+        if self._mode == 'view':
+            return
+        role_key = self.role_combo.currentData() or ""
+        role_perms = ROLE_PERMISSIONS.get(role_key, {})
+        for key in self._permission_checkboxes:
+            section_perms = role_perms.get(key, {})
+            for action_key in self._permission_checkboxes[key]:
+                cb = self._permission_checkboxes[key][action_key]
+                cb.setChecked(section_perms.get(action_key, False))
+
     def _toggle_section(self, key: str):
         """Toggle permission section visibility."""
         content = self._section_contents.get(key)
@@ -451,17 +519,65 @@ class AddUserPage(QWidget):
             Toast.show_toast(self, "يرجى اختيار اسم الدور", Toast.WARNING)
             return
 
-        password = PasswordDialog.get_password(self)
-        if password is None:
-            return
+        if self._mode == 'edit':
+            data["_editing_user_id"] = self._editing_user.get("user_id")
+            data["_mode"] = "edit"
+            logger.info(f"Update user requested: {data.get('user_id')}, role={data.get('role')}")
+            self.save_requested.emit(data)
+        else:
+            password = PasswordDialog.get_password(self)
+            if password is None:
+                return
+            data["password"] = password
+            data["_mode"] = "add"
+            logger.info(f"Save user requested: {data.get('user_id')}, role={data.get('role')}")
+            self.save_requested.emit(data)
 
-        data["password"] = password
-        logger.info(f"Save user requested: {data.get('user_id')}, role={data.get('role')}")
-        self.save_requested.emit(data)
+    def set_user_data(self, user_data: dict, mode: str = 'edit'):
+        """Pre-fill form with existing user data for view/edit mode."""
+        self._mode = mode
+        self._editing_user = user_data
+
+        if mode == 'view':
+            self.title_label.setText("عرض بيانات المستخدم")
+            self.breadcrumb_label.setText("إدارة المستخدمين  •  عرض بيانات المستخدم")
+            self.save_btn.setVisible(False)
+        elif mode == 'edit':
+            self.title_label.setText("تعديل بيانات المستخدم")
+            self.breadcrumb_label.setText("إدارة المستخدمين  •  تعديل بيانات المستخدم")
+            self.save_btn.setVisible(True)
+
+        self.user_id_input.setText(user_data.get("display_id", user_data.get("username", "")))
+        self.user_id_input.setEnabled(False)
+
+        role_key = user_data.get("role_key", user_data.get("role", ""))
+        idx = self.role_combo.findData(role_key)
+        if idx >= 0:
+            self.role_combo.setCurrentIndex(idx)
+        self.role_combo.setEnabled(mode != 'view')
+
+        role_perms = ROLE_PERMISSIONS.get(role_key, {})
+        for key in self._permission_checkboxes:
+            section_perms = role_perms.get(key, {})
+            for action_key in self._permission_checkboxes[key]:
+                cb = self._permission_checkboxes[key][action_key]
+                cb.setChecked(section_perms.get(action_key, False))
+                cb.setEnabled(mode != 'view')
 
     def refresh(self, data=None):
-        """Reset form for new user entry."""
+        """Reset form or load user data for view/edit."""
+        if data and isinstance(data, dict) and data.get('_mode'):
+            self.set_user_data(data, data['_mode'])
+            return
+
+        self._mode = 'add'
+        self._editing_user = None
+        self.title_label.setText("إضافة مستخدم جديد")
+        self.breadcrumb_label.setText("إدارة المستخدمين  •  إضافة مستخدم جديد")
+        self.save_btn.setVisible(True)
+        self.user_id_input.setEnabled(True)
         self.user_id_input.clear()
+        self.role_combo.setEnabled(True)
         self.role_combo.setCurrentIndex(0)
 
         for key, _ in PERMISSION_SECTIONS:
@@ -469,8 +585,8 @@ class AddUserPage(QWidget):
                 cb = self._permission_checkboxes.get(key, {}).get(action_key)
                 if cb:
                     cb.setChecked(False)
+                    cb.setEnabled(True)
 
-            # Collapse all sections
             content = self._section_contents.get(key)
             arrow = self._section_arrows.get(key)
             if content:
@@ -478,7 +594,6 @@ class AddUserPage(QWidget):
             if arrow:
                 arrow.setText("‹")
 
-        # Expand first section by default
         first_key = PERMISSION_SECTIONS[0][0]
         first_content = self._section_contents.get(first_key)
         first_arrow = self._section_arrows.get(first_key)

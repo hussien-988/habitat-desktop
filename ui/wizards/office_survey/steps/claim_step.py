@@ -688,6 +688,26 @@ class ClaimStep(BaseStep):
             code = _find_combo_code_by_english("ClaimType", claim_type_english)
             first_card.claim_type_field.setText(get_claim_type_display(code))
 
+        # Case status: New
+        status_code = _find_combo_code_by_english("ClaimStatus", "New")
+        first_card.claim_status_field.setText(get_claim_status_display(status_code))
+
+        # Source: Office Submission
+        source_code = _find_combo_code_by_english("ClaimSource", "Office Submission")
+        first_card.claim_source_field.setText(get_source_display(source_code))
+
+        # Survey date: today
+        from datetime import datetime
+        first_card.claim_survey_date.setText(datetime.now().strftime("%Y-%m-%d"))
+
+        # Priority: Normal
+        priority_code = _find_combo_code_by_english("CasePriority", "Normal")
+        first_card.claim_priority_field.setText(get_priority_display(priority_code))
+
+        # Business nature: Residential (default)
+        biz_code = _find_combo_code_by_english("BusinessNature", "Residential")
+        first_card.claim_business_nature_field.setText(get_business_type_display(biz_code))
+
         # Store raw data for collect_data
         first_card._claim_raw_data = {'from_context': True}
 

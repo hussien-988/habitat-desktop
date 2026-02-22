@@ -30,6 +30,32 @@ from utils.logger import setup_logger  # type: ignore
 from ui.font_utils import set_application_default_font  # type: ignore
 
 
+def _migrate_seed_user_names(db):
+    """One-time migration: fix seed users that had role names as full_name_ar."""
+    old_role_names = (
+        "مدير النظام", "مدير البيانات", "موظف المكتب", "مشرف ميداني",
+        "محلل البيانات", "باحث ميداني 1", "باحث ميداني 2",
+        "جامع بيانات 1", "جامع بيانات 2",
+    )
+    migrations = {
+        "admin": ("أحمد الحلبي", "Ahmad Al-Halabi"),
+        "manager": ("خالد الحسن", "Khalid Al-Hassan"),
+        "clerk": ("محمد العلي", "Muhammad Al-Ali"),
+        "supervisor": ("عمر الإبراهيم", "Omar Al-Ibrahim"),
+        "analyst": ("حسن الشامي", "Hassan Al-Shami"),
+        "field1": ("يوسف الخليل", "Yusuf Al-Khalil"),
+        "field2": ("إبراهيم الأحمد", "Ibrahim Al-Ahmad"),
+        "collector1": ("سمير القاضي", "Samir Al-Qadi"),
+        "collector2": ("فيصل النجار", "Faisal Al-Najjar"),
+    }
+    placeholders = ",".join("?" for _ in old_role_names)
+    for username, (name_ar, name_en) in migrations.items():
+        db.execute(
+            f"UPDATE users SET full_name_ar = ?, full_name = ? WHERE username = ? AND full_name_ar IN ({placeholders})",
+            (name_ar, name_en, username) + old_role_names
+        )
+
+
 def main():
     """Main application entry point."""
 
@@ -69,6 +95,9 @@ def main():
         db = Database()
         db.initialize()
         logger.info(">> Database initialized successfully")
+
+        # Fix seed users' full_name_ar (was set to role names in old seed)
+        _migrate_seed_user_names(db)
 
         # Seed only users if DB is empty (no mock buildings/units/claims)
         user_count = db.fetch_one("SELECT COUNT(*) as count FROM users")

@@ -66,7 +66,7 @@ class Config:
     DEV_MODE: bool = True
     DEV_AUTO_LOGIN: bool = True  # Auto-fill login credentials in dev mode
     DEV_USERNAME: str = "admin"
-    DEV_PASSWORD: str = "Admin@123"
+    DEV_PASSWORD: str = "admin123"
 
     # Data Mode (runtime switchable)
     # "local" = offline demo (SQLite only, no API calls)

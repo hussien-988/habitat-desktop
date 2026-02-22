@@ -316,6 +316,7 @@ class MainWindow(QMainWindow):
         # Navbar signals
         self.navbar.tab_changed.connect(self._on_tab_changed)
         self.navbar.search_requested.connect(self._on_search_requested)
+        self.navbar.filter_applied.connect(self._on_filter_applied)
         self.navbar.logout_requested.connect(self._handle_logout)  # ✅ Connect logout
         self.navbar.language_change_requested.connect(self.toggle_language)  # ✅ Connect language toggle
         self.navbar.sync_requested.connect(self._on_sync_requested)
@@ -361,7 +362,7 @@ class MainWindow(QMainWindow):
 
         # Duplicates page - view comparison
         self.pages[Pages.DUPLICATES].view_comparison_requested.connect(
-            lambda: self.navigate_to(Pages.CLAIM_COMPARISON)
+            lambda group: self.navigate_to(Pages.CLAIM_COMPARISON, group)
         )
 
         # Claim Comparison - back to duplicates
@@ -377,6 +378,16 @@ class MainWindow(QMainWindow):
         # Add User - back to user management
         self.pages[Pages.ADD_USER].back_requested.connect(
             lambda: self.navigate_to(Pages.USER_MANAGEMENT)
+        )
+
+        # User Management - view user details
+        self.pages[Pages.USER_MANAGEMENT].view_user.connect(
+            lambda user: self._navigate_to_user(user, 'view')
+        )
+
+        # User Management - edit user
+        self.pages[Pages.USER_MANAGEMENT].edit_user_signal.connect(
+            lambda user: self._navigate_to_user(user, 'edit')
         )
 
         # Add User - save new user to database
@@ -464,33 +475,46 @@ class MainWindow(QMainWindow):
                 self.current_user = None
                 self._show_login()
 
+    def _navigate_to_user(self, user_data: dict, mode: str):
+        """Navigate to AddUserPage in view or edit mode."""
+        user_data['_mode'] = mode
+        self.navigate_to(Pages.ADD_USER, user_data)
+
     def _on_save_new_user(self, data: dict):
-        """Handle saving a new user from AddUserPage to database."""
+        """Handle saving a new or updated user from AddUserPage."""
         try:
             from models.user import User
             from repositories.user_repository import UserRepository
             from ui.components.toast import Toast
 
-            user = User(
-                username=data.get("user_id", ""),
-                role=data.get("role", "analyst"),
-                full_name=data.get("user_id", ""),
-                full_name_ar=data.get("user_id", ""),
-            )
-            user.set_password(data.get("password", ""), track_history=False)
-
             repo = UserRepository(self.db)
-            repo.create(user)
 
-            logger.info(f"New user created: {user.username}, role={user.role}")
-            Toast.show_toast(self, "تم حفظ المستخدم بنجاح", Toast.SUCCESS)
+            if data.get("_mode") == "edit":
+                user_id = data.get("_editing_user_id")
+                user = repo.get_by_id(user_id)
+                if user:
+                    user.role = data.get("role", user.role)
+                    repo.update(user)
+                    logger.info(f"User updated: {user.username}, role={user.role}")
+                    Toast.show_toast(self, "تم تحديث المستخدم بنجاح", Toast.SUCCESS)
+            else:
+                user = User(
+                    username=data.get("user_id", ""),
+                    role=data.get("role", "analyst"),
+                    full_name=data.get("user_id", ""),
+                    full_name_ar=data.get("user_id", ""),
+                )
+                user.set_password(data.get("password", ""), track_history=False)
+                repo.create(user)
+                logger.info(f"New user created: {user.username}, role={user.role}")
+                Toast.show_toast(self, "تم حفظ المستخدم بنجاح", Toast.SUCCESS)
 
             self.navigate_to(Pages.USER_MANAGEMENT)
             if Pages.USER_MANAGEMENT in self.pages:
                 self.pages[Pages.USER_MANAGEMENT].refresh()
 
         except Exception as e:
-            logger.error(f"Failed to create user: {e}", exc_info=True)
+            logger.error(f"Failed to save user: {e}", exc_info=True)
             from ui.components.toast import Toast
             Toast.show_toast(self, f"فشل في حفظ المستخدم: {e}", Toast.ERROR)
 
@@ -530,8 +554,20 @@ class MainWindow(QMainWindow):
     def _on_search_requested(self, search_text: str):
         """Handle search request from navbar."""
         logger.info(f"Search requested: {search_text}")
-        # Navigate to search page with query
+        # If on draft claims page, search within drafts
+        current_page = self.stack.currentWidget()
+        if current_page == self.pages.get(Pages.DRAFT_CLAIMS):
+            search_mode = getattr(self.navbar, 'search_mode', 'name')
+            current_page.search_claims(search_text, search_mode)
+            return
+        # Otherwise navigate to search page
         self.navigate_to(Pages.SEARCH, search_text)
+
+    def _on_filter_applied(self, filters: dict):
+        """Handle filter applied from navbar filter popup."""
+        current_page = self.stack.currentWidget()
+        if current_page == self.pages.get(Pages.DRAFT_CLAIMS):
+            current_page.apply_filters(filters)
 
     def navigate_to(self, page_id: str, data=None):
         """
@@ -704,6 +740,11 @@ class MainWindow(QMainWindow):
                     return
             except Exception as e:
                 logger.warning(f"Survey context fetch failed: {e}")
+
+        # Fallback: navigate with claim_data directly (for claims without survey context)
+        if claim_data:
+            self.navigate_to(Pages.CASE_DETAILS, claim_data)
+            return
 
         logger.warning(f"Could not load claim details for: {claim_id}")
 

@@ -283,9 +283,6 @@ class BuildingController(BaseController):
                 self.building_created.emit(saved_building.building_uuid)
                 self._trigger_callbacks("on_building_created", saved_building)
 
-                # Auto-create unit records based on counts
-                self._auto_create_units(saved_building, data)
-
                 return OperationResult.ok(
                     data=saved_building,
                     message="Building created successfully",
