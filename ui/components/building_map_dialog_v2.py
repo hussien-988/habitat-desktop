@@ -117,9 +117,12 @@ class BuildingMapDialog(BaseMapDialog):
         logger.debug(f"Auth token set in BaseMapDialog: {bool(self._auth_token)}")
 
         # FIX: Set token in viewport loader to prevent 401 errors
-        if hasattr(self, '_viewport_loader') and self._viewport_loader and self._viewport_loader.map_service and self._auth_token:
-            self._viewport_loader.map_service.set_auth_token(self._auth_token)
-            logger.info(f"Auth token set in viewport loader")
+        if hasattr(self, '_viewport_loader') and self._viewport_loader:
+            if self._viewport_loader.map_service and self._auth_token:
+                self._viewport_loader.map_service.set_auth_token(self._auth_token)
+                logger.info(f"Auth token set in viewport loader")
+            # Set db for local fallback when API unavailable
+            self._viewport_loader.db = self.db
 
         # Connect building selection signal (from map clicks)
         self.building_selected.connect(self._on_building_selected_from_map)
@@ -150,28 +153,41 @@ class BuildingMapDialog(BaseMapDialog):
                 logger.info("View-only mode: Loading ONLY selected building (no initial 200)")
             else:
                 # Selection mode: Load 200 buildings for browsing
-                # IMPORTANT: Load buildings AND cache them for selection!
-                from services.map_service_api import MapServiceAPI
-                from services.geojson_converter import GeoJSONConverter
+                buildings = []
+                try:
+                    from services.map_service_api import MapServiceAPI
 
-                map_service = MapServiceAPI()
-                if self._auth_token:
-                    map_service.set_auth_token(self._auth_token)
+                    map_service = MapServiceAPI()
+                    if self._auth_token:
+                        map_service.set_auth_token(self._auth_token)
 
-                # Load buildings from BuildingAssignments API
-                buildings = map_service.get_buildings_in_bbox(
-                    north_east_lat=36.5,
-                    north_east_lng=37.5,
-                    south_west_lat=36.0,
-                    south_west_lng=36.8,
-                    page_size=200
-                )
+                    buildings = map_service.get_buildings_in_bbox(
+                        north_east_lat=36.5,
+                        north_east_lng=37.5,
+                        south_west_lat=36.0,
+                        south_west_lng=36.8,
+                        page_size=200
+                    )
+                except Exception as e:
+                    logger.warning(f"API map loading failed: {e}")
+
+                # Fallback to local DB if API returned nothing
+                if not buildings:
+                    try:
+                        from repositories.building_repository import BuildingRepository
+                        repo = BuildingRepository(self.db) if self.db else None
+                        if repo:
+                            buildings = repo.get_all(limit=200)
+                            logger.info(f"Loaded {len(buildings)} buildings from local DB fallback")
+                    except Exception as e2:
+                        logger.error(f"Local DB fallback also failed: {e2}")
+                        buildings = []
 
                 # CRITICAL: Cache buildings for selection lookup!
                 self._buildings_cache = buildings
                 logger.info(f"Cached {len(buildings)} buildings for selection")
 
-                # Convert to GeoJSON
+                from services.geojson_converter import GeoJSONConverter
                 buildings_geojson = GeoJSONConverter.buildings_to_geojson(
                     buildings,
                     prefer_polygons=True
@@ -609,7 +625,7 @@ class BuildingMapDialog(BaseMapDialog):
         )
 
     def _load_neighborhoods_cache(self):
-        """Load all neighborhoods from API (lazy, called once on first search)."""
+        """Load all neighborhoods from API or local JSON (lazy, called once on first search)."""
         if self._neighborhoods_cache is not None:
             return
 
@@ -617,8 +633,7 @@ class BuildingMapDialog(BaseMapDialog):
             from services.api_client import get_api_client
             api_client = get_api_client()
             if not api_client:
-                self._neighborhoods_cache = []
-                return
+                raise Exception("No API client available")
             if self._auth_token:
                 api_client.set_access_token(self._auth_token)
 
@@ -626,7 +641,34 @@ class BuildingMapDialog(BaseMapDialog):
             logger.info(f"Loaded {len(self._neighborhoods_cache)} neighborhoods from API")
         except Exception as e:
             logger.warning(f"Failed to load neighborhoods from API: {e}")
-            self._neighborhoods_cache = []
+            # Fallback: load from local JSON file
+            try:
+                import json as _json
+                import os
+                json_path = os.path.join(
+                    os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+                    "data", "neighborhoods.json"
+                )
+                with open(json_path, "r", encoding="utf-8") as f:
+                    data = _json.load(f)
+                self._neighborhoods_cache = []
+                for n in data.get("neighborhoods", []):
+                    polygon = n.get("polygon", [])
+                    center_lat, center_lng = None, None
+                    if polygon and len(polygon) >= 3:
+                        center_lng = sum(p[0] for p in polygon) / len(polygon)
+                        center_lat = sum(p[1] for p in polygon) / len(polygon)
+                    self._neighborhoods_cache.append({
+                        "nameArabic": n.get("name_ar", ""),
+                        "nameEnglish": n.get("name_en", ""),
+                        "neighborhoodCode": n.get("code", ""),
+                        "centerLatitude": center_lat,
+                        "centerLongitude": center_lng,
+                    })
+                logger.info(f"Loaded {len(self._neighborhoods_cache)} neighborhoods from local JSON")
+            except Exception as e2:
+                logger.error(f"Failed to load local neighborhoods: {e2}")
+                self._neighborhoods_cache = []
 
     def _match_neighborhood(self, search_text: str):
         """Match search text against cached neighborhoods. Returns (code, name, lat, lng) or None."""

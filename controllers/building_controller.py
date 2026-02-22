@@ -81,13 +81,14 @@ class BuildingController(BaseController):
             # Check if DATA_PROVIDER is set to "http" in config
             self._use_api = getattr(Config, 'DATA_PROVIDER', 'local_db') == 'http'
 
+        # Initialize repository for local fallback regardless of mode
+        self.repository = BuildingRepository(db) if db else None
+
         # Initialize appropriate backend
         if self._use_api:
             self._api_service = get_api_client()
-            self.repository = None
-            logger.info("BuildingController using API backend")
+            logger.info("BuildingController using API backend (local fallback ready)")
         else:
-            self.repository = BuildingRepository(db) if db else None
             self._api_service = None
             logger.info("BuildingController using local database backend")
 
@@ -270,7 +271,11 @@ class BuildingController(BaseController):
                 saved_building = self._api_dto_to_building(response)
             else:
                 logger.info(f"💾 Using local DB for building creation (Config.DATA_PROVIDER={Config.DATA_PROVIDER})")
-                building = Building(**data)
+                # Filter to only Building dataclass fields
+                import dataclasses
+                valid_fields = {f.name for f in dataclasses.fields(Building)}
+                filtered = {k: v for k, v in data.items() if k in valid_fields}
+                building = Building(**filtered)
                 saved_building = self.repository.create(building)
 
             if saved_building:
@@ -343,12 +348,24 @@ class BuildingController(BaseController):
                 updated_building = self._api_dto_to_building(response)
             else:
                 # Update building locally
+                old_apartments = existing.number_of_apartments or 0
+                old_shops = existing.number_of_shops or 0
+
                 for key, value in data.items():
                     if hasattr(existing, key):
                         setattr(existing, key, value)
 
                 existing.updated_at = datetime.now()
                 updated_building = self.repository.update(existing)
+
+                # Sync unit records if counts changed
+                new_apartments = data.get("number_of_apartments", old_apartments)
+                new_shops = data.get("number_of_shops", old_shops)
+                if old_apartments != new_apartments or old_shops != new_shops:
+                    try:
+                        self._sync_units_on_edit(updated_building, new_apartments, new_shops)
+                    except Exception as e:
+                        logger.error(f"Failed to sync units on edit: {e}")
 
             if updated_building:
                 self._emit_completed("update_building", True)
@@ -408,14 +425,18 @@ class BuildingController(BaseController):
             if not self._use_api and self._has_dependencies(building_uuid):
                 self._emit_error("delete_building", "Building has related records")
                 return OperationResult.fail(
-                    message="Cannot delete building with related claims or units",
-                    message_ar="لا يمكن حذف مبنى له مطالبات أو وحدات مرتبطة"
+                    message="Cannot delete building: units have associated data (claims, surveys, etc.)",
+                    message_ar="لا يمكن حذف المبنى: الوحدات تحتوي على بيانات مرتبطة (مطالبات، مسوحات، إلخ)"
                 )
 
             # Delete building via API or local database
             if self._use_api and self._api_service:
                 success = self._api_service.delete_building(building_uuid)
             else:
+                # Delete units first (no CASCADE in schema)
+                self.db.execute(
+                    "DELETE FROM property_units WHERE building_id = ?",
+                    (existing.building_id,))
                 success = self.repository.delete(building_uuid)
 
             if success:
@@ -1169,22 +1190,102 @@ class BuildingController(BaseController):
         )
         logger.info(f"Synced building {building_id} unit counts: {res_count} residential, {non_res_count} non-residential, {total} total")
 
+    def _unit_has_data(self, unit_id: str) -> bool:
+        """Check if a unit has associated claims, relations, households, or surveys."""
+        for table in ("claims", "person_unit_relations", "households", "surveys"):
+            result = self.db.fetch_one(
+                f"SELECT COUNT(*) as c FROM {table} WHERE unit_id = ?", (unit_id,))
+            if result and result['c'] > 0:
+                return True
+        return False
+
+    def _sync_units_on_edit(self, building: 'Building', new_apartments: int, new_shops: int):
+        """Sync unit records when building unit counts change during edit."""
+        if not self.db:
+            return
+
+        from repositories.unit_repository import UnitRepository
+        unit_repo = UnitRepository(self.db)
+
+        existing = unit_repo.get_by_building(building.building_id)
+        current_apts = [u for u in existing if u.unit_type == "apartment"]
+        current_shops = [u for u in existing if u.unit_type != "apartment"]
+
+        self._adjust_unit_count(unit_repo, building, current_apts, new_apartments, "apartment")
+        self._adjust_unit_count(unit_repo, building, current_shops, new_shops, "shop")
+
+    def _adjust_unit_count(self, unit_repo, building: 'Building',
+                           existing_of_type: list, desired: int, unit_type: str):
+        """Add or remove unit records to match the desired count for a given type."""
+        from models.unit import PropertyUnit
+        current = len(existing_of_type)
+
+        if desired > current:
+            next_num = int(unit_repo.get_next_unit_number(building.building_id))
+            for i in range(desired - current):
+                unit = PropertyUnit(
+                    building_id=building.building_id,
+                    unit_type=unit_type,
+                    unit_number=str(next_num + i).zfill(3),
+                    apartment_status="unknown",
+                )
+                unit_repo.create(unit)
+            logger.info(f"Created {desired - current} {unit_type} units for building {building.building_id}")
+
+        elif desired < current:
+            sorted_desc = sorted(existing_of_type, key=lambda u: u.unit_number, reverse=True)
+            to_remove = current - desired
+            removed = 0
+            for unit in sorted_desc:
+                if removed >= to_remove:
+                    break
+                if not self._unit_has_data(unit.unit_id):
+                    unit_repo.delete(unit.unit_uuid)
+                    removed += 1
+            if removed > 0:
+                logger.info(f"Deleted {removed} empty {unit_type} units for building {building.building_id}")
+            if removed < to_remove:
+                logger.warning(
+                    f"Could only remove {removed}/{to_remove} {unit_type} units "
+                    f"(remaining have associated data)")
+
     def _has_dependencies(self, building_uuid: str) -> bool:
-        """Check if building has dependent records."""
-        # Get building_id from building_uuid
+        """Check if building has real dependent records (not empty auto-created units)."""
         building_result = self.db.fetch_one(
             "SELECT building_id FROM buildings WHERE building_uuid = ?",
-            (building_uuid,)
-        )
+            (building_uuid,))
         if not building_result:
             return False
 
-        # Check for units
-        result = self.db.fetch_one(
-            "SELECT COUNT(*) as count FROM property_units WHERE building_id = ?",
-            (building_result['building_id'],)
-        )
-        if result and result['count'] > 0:
+        bid = building_result['building_id']
+
+        # Check claims on building's units
+        r = self.db.fetch_one(
+            "SELECT COUNT(*) as c FROM claims WHERE unit_id IN "
+            "(SELECT unit_id FROM property_units WHERE building_id = ?)", (bid,))
+        if r and r['c'] > 0:
+            return True
+
+        # Check person-unit relations
+        r = self.db.fetch_one(
+            "SELECT COUNT(*) as c FROM person_unit_relations WHERE unit_id IN "
+            "(SELECT unit_id FROM property_units WHERE building_id = ?)", (bid,))
+        if r and r['c'] > 0:
+            return True
+
+        # Check households
+        r = self.db.fetch_one(
+            "SELECT COUNT(*) as c FROM households WHERE unit_id IN "
+            "(SELECT unit_id FROM property_units WHERE building_id = ?)", (bid,))
+        if r and r['c'] > 0:
+            return True
+
+        # Check surveys on units or building
+        r = self.db.fetch_one(
+            "SELECT COUNT(*) as c FROM surveys WHERE unit_id IN "
+            "(SELECT unit_id FROM property_units WHERE building_id = ?) "
+            "OR building_id = ?", (bid, bid))
+        if r and r['c'] > 0:
             return True
 
         return False

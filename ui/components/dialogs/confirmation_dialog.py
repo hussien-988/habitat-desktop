@@ -134,16 +134,21 @@ class ConfirmationDialog(QDialog):
         # Create container widget for white background with rounded corners
         container = QWidget()
         container.setObjectName("dialogContainer")
-        container.setStyleSheet(f"""
-            QWidget#dialogContainer {{
+        container.setStyleSheet("""
+            QWidget#dialogContainer {
                 background-color: white;
                 border-radius: 12px;
-            }}
+                border: 1px solid #E5E7EB;
+            }
+            QWidget#dialogContainer QLabel {
+                border: none;
+                background: transparent;
+            }
         """)
 
-        # Main dialog layout (transparent background)
+        # Main dialog layout - margins give shadow room to render
         dialog_layout = QVBoxLayout(self)
-        dialog_layout.setContentsMargins(0, 0, 0, 0)
+        dialog_layout.setContentsMargins(24, 24, 24, 24)
         dialog_layout.addWidget(container)
 
         # Container layout (content)
@@ -206,10 +211,10 @@ class ConfirmationDialog(QDialog):
 
         # Add shadow effect to container for depth
         shadow = QGraphicsDropShadowEffect()
-        shadow.setBlurRadius(20)
+        shadow.setBlurRadius(30)
         shadow.setXOffset(0)
-        shadow.setYOffset(4)
-        shadow.setColor(QColor(0, 0, 0, 60))  # Semi-transparent shadow
+        shadow.setYOffset(6)
+        shadow.setColor(QColor(0, 0, 0, 80))
         container.setGraphicsEffect(shadow)
 
     def _create_button(

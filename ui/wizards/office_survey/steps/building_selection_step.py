@@ -1135,10 +1135,7 @@ class BuildingSelectionStep(BaseStep):
         return result
 
     def on_next(self):
-        """Called when transitioning from Step 1 to Step 2 - create survey via API."""
-        if not self._use_api:
-            return
-
+        """Called when transitioning from Step 1 to Step 2 - create survey via API or locally."""
         # Guard: skip if survey already created for the SAME building
         existing_survey_id = self.context.get_data("survey_id")
         current_building_uuid = getattr(self.selected_building, 'building_uuid', '') or ''
@@ -1149,8 +1146,8 @@ class BuildingSelectionStep(BaseStep):
                 logger.info(f"Survey already exists ({existing_survey_id}), skipping creation")
                 return
             else:
-                # Building changed - full cascade cleanup before resetting
-                logger.info(f"Building changed ({previous_building} -> {current_building_uuid}), cleaning up API data")
+                # Building changed - cleanup
+                logger.info(f"Building changed ({previous_building} -> {current_building_uuid}), cleaning up")
                 if self._use_api:
                     self.context.cleanup_on_building_change(self._survey_api_service)
                 else:
@@ -1162,33 +1159,34 @@ class BuildingSelectionStep(BaseStep):
                 for key in ("survey_id", "survey_data", "survey_building_uuid"):
                     self.context.update_data(key, None)
 
-        self._set_auth_token()
-
         building_uuid = getattr(self.selected_building, 'building_uuid', '') or ''
-        survey_data = {
-            "building_uuid": building_uuid,
-            "surveyDate": datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ"),
-            "inPersonVisit": True,
-        }
 
-        logger.info(f"Creating office survey for building: {building_uuid}")
+        survey_created = False
+        if self._use_api:
+            self._set_auth_token()
+            survey_data = {
+                "building_uuid": building_uuid,
+                "surveyDate": datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ"),
+                "inPersonVisit": True,
+            }
+            logger.info(f"Creating office survey for building: {building_uuid}")
+            try:
+                survey_response = self._survey_api_service.create_office_survey(survey_data)
+                survey_id = survey_response.get("id") or survey_response.get("surveyId", "")
+                self.context.update_data("survey_id", survey_id)
+                self.context.update_data("survey_data", survey_response)
+                self.context.update_data("survey_building_uuid", building_uuid)
+                logger.info(f"Survey created successfully, survey_id: {survey_id}")
+                survey_created = True
+            except Exception as e:
+                logger.warning(f"API survey creation failed, falling back to local: {e}")
 
-        try:
-            survey_response = self._survey_api_service.create_office_survey(survey_data)
-
-            survey_id = survey_response.get("id") or survey_response.get("surveyId", "")
+        if not survey_created:
+            import uuid
+            survey_id = str(uuid.uuid4())
             self.context.update_data("survey_id", survey_id)
-            self.context.update_data("survey_data", survey_response)
             self.context.update_data("survey_building_uuid", building_uuid)
-            logger.info(f"Survey created successfully, survey_id: {survey_id}")
-
-        except Exception as e:
-            logger.error(f"Failed to create survey: {e}", exc_info=True)
-            ErrorHandler.show_error(
-                self,
-                map_exception(e),
-                tr("common.error")
-            )
+            logger.info(f"Local survey created: {survey_id} for building {building_uuid}")
 
     def _update_address_display(self, building):
         """Update building address bar after selection."""

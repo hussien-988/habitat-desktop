@@ -691,21 +691,26 @@ class LeafletHTMLGenerator:
         // Best Practice: Use marker clustering for handling thousands of buildings
         // Reference: https://github.com/Leaflet/Leaflet.markercluster
 
-        //
-        var markers = L.markerClusterGroup({{
-            maxClusterRadius: 60,
-            spiderfyOnMaxZoom: true,
-            showCoverageOnHover: false,
-            zoomToBoundsOnClick: true,
-            disableClusteringAtZoom: 18,
-            spiderfyDistanceMultiplier: 1.5,
-            chunkedLoading: true,
-            chunkInterval: 100,
-            chunkDelay: 25,
-            removeOutsideVisibleBounds: true,
-            animate: true,
-            animateAddingMarkers: false
-        }});
+        var markers;
+        if (typeof L.markerClusterGroup === 'function') {{
+            markers = L.markerClusterGroup({{
+                maxClusterRadius: 60,
+                spiderfyOnMaxZoom: true,
+                showCoverageOnHover: false,
+                zoomToBoundsOnClick: true,
+                disableClusteringAtZoom: 18,
+                spiderfyDistanceMultiplier: 1.5,
+                chunkedLoading: true,
+                chunkInterval: 100,
+                chunkDelay: 25,
+                removeOutsideVisibleBounds: true,
+                animate: true,
+                animateAddingMarkers: false
+            }});
+        }} else {{
+            console.warn('MarkerCluster not available, using featureGroup fallback');
+            markers = L.featureGroup();
+        }}
 
         // Create separate layers for points and polygons
         var pointsLayer = L.featureGroup();

@@ -160,8 +160,8 @@ class PersonRepository:
     def delete(self, person_id: str) -> bool:
         """Delete a person by ID."""
         query = "DELETE FROM persons WHERE person_id = ?"
-        cursor = self.db.execute(query, (person_id,))
-        return cursor.rowcount > 0
+        self.db.execute(query, (person_id,))
+        return self.get_by_id(person_id) is None
 
     def _row_to_person(self, row) -> Person:
         """Convert database row to Person object."""

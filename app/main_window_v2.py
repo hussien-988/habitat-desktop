@@ -347,6 +347,9 @@ class MainWindow(QMainWindow):
         # Draft Claims - view/edit draft claim
         self.pages[Pages.DRAFT_CLAIMS].claim_selected.connect(self._on_draft_claim_selected)
 
+        # Completed Claims - view claim details
+        self.pages[Pages.CLAIMS].claim_selected.connect(self._on_completed_claim_selected)
+
         # Add Claim buttons - start new office survey (UC-004 S01)
         self.pages[Pages.DRAFT_CLAIMS].add_claim_clicked.connect(self._start_new_office_survey)
         self.pages[Pages.CLAIMS].add_claim_clicked.connect(self._start_new_office_survey)
@@ -674,6 +677,35 @@ class MainWindow(QMainWindow):
 
         logger.warning(f"Could not load survey details for: {claim_id}")
 
+    def _on_completed_claim_selected(self, claim_id: str):
+        """Navigate to case details for a completed claim."""
+        logger.info(f"Completed claim selected: {claim_id}")
+
+        claims_page = self.pages[Pages.CLAIMS]
+        claim_data = None
+        for c in claims_page.claims_data:
+            if c.get('claim_id') == claim_id:
+                claim_data = c
+                break
+
+        if not claim_data:
+            logger.warning(f"Claim data not found for: {claim_id}")
+            return
+
+        # Try loading via survey_uuid (if available from survey-based claims)
+        survey_uuid = claim_data.get('claim_uuid') or claim_data.get('survey_id')
+        if survey_uuid:
+            try:
+                from controllers.survey_controller import SurveyController
+                ctrl = SurveyController(self.db)
+                result = ctrl.get_survey_full_context(survey_uuid)
+                if result.success and result.data:
+                    self.navigate_to(Pages.CASE_DETAILS, result.data)
+                    return
+            except Exception as e:
+                logger.warning(f"Survey context fetch failed: {e}")
+
+        logger.warning(f"Could not load claim details for: {claim_id}")
 
     def _start_new_office_survey(self):
         """

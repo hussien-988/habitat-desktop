@@ -234,8 +234,8 @@ class ClaimRepository:
     def delete(self, claim_uuid: str) -> bool:
         """Delete a claim by UUID."""
         query = "DELETE FROM claims WHERE claim_uuid = ?"
-        cursor = self.db.execute(query, (claim_uuid,))
-        return cursor.rowcount > 0
+        self.db.execute(query, (claim_uuid,))
+        return self.get_by_uuid(claim_uuid) is None
 
     def save_history(self, claim: Claim, change_reason: str, user_id: str = None) -> str:
         """
