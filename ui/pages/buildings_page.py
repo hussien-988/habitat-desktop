@@ -561,7 +561,7 @@ class AddBuildingPage(QWidget):
         arrow_img2 = str(Config.IMAGES_DIR / "v.png").replace("\\", "/")
         combo_style = f"""
             QComboBox {{
-                padding: 6px 12px 6px 40px;
+                padding: 0px 12px 0px 40px;
                 border: 1px solid #E1E8ED;
                 border-radius: 8px;
                 background-color: #F8FAFF;
@@ -628,6 +628,7 @@ class AddBuildingPage(QWidget):
         self.type_combo.setStyleSheet(combo_style)
         self.type_combo.setFixedHeight(45)
         self.type_combo.setLayoutDirection(Qt.RightToLeft)
+        self.type_combo.currentIndexChanged.connect(self._on_building_type_changed)
         vbox_type.addWidget(self.type_combo)
         card2_layout.addLayout(vbox_type, 1)  # توحيد العرض - stretch factor
 
@@ -1153,6 +1154,28 @@ class AddBuildingPage(QWidget):
         """Update total units label (residential + non-residential)."""
         total = self.residential_spin.value() + self.non_residential_spin.value()
         self.total_units_label.setText(str(total))
+
+    def _on_building_type_changed(self):
+        """Enable/disable residential and non-residential spins based on building type."""
+        building_type = self.type_combo.currentData()
+
+        # Vocab integer codes: 1=Residential, 2=Commercial, 3=MixedUse, 4=Industrial
+        if building_type == 1:
+            self.residential_spin.setEnabled(True)
+            self.non_residential_spin.setEnabled(False)
+            self.non_residential_spin.setValue(0)
+        elif building_type in (2, 4):
+            self.residential_spin.setEnabled(False)
+            self.residential_spin.setValue(0)
+            self.non_residential_spin.setEnabled(True)
+        elif building_type == 3:
+            self.residential_spin.setEnabled(True)
+            self.non_residential_spin.setEnabled(True)
+        else:
+            self.residential_spin.setEnabled(True)
+            self.non_residential_spin.setEnabled(True)
+
+        self._update_total_units()
 
     def _get_auth_token(self) -> Optional[str]:
         """
@@ -3075,36 +3098,19 @@ class BuildingsListPage(QWidget):
 
     def _on_delete_building(self, building: Building):
         """Delete building with confirmation dialog."""
+        from ui.components.dialogs import ConfirmationDialog, MessageDialog as FigmaMessageDialog
+
         # تأكيد الحذف
-        if not MessageDialog.confirm(
-            self,
-            "تأكيد الحذف",
-            f"سيتم حذف المبنى <b>{building.building_id}</b><br>"
-            "هذا الإجراء لا يمكن التراجع عنه.",
-            ok_text="حذف",
-            cancel_text="إلغاء"
-        ):
+        result = ConfirmationDialog.confirm(
+            parent=self,
+            title="تأكيد الحذف",
+            message=f"سيتم حذف المبنى {building.building_id}\nهذا الإجراء لا يمكن التراجع عنه.",
+            icon_name="wirning"
+        )
+        if result != ConfirmationDialog.YES:
             return
 
         try:
-            # التحقق من وجود مطالبات مرتبطة
-            from repositories.claim_repository import ClaimRepository
-            from repositories.database import Database
-            db = Database.get_instance()
-            claim_repo = ClaimRepository(db)
-            related_claims = claim_repo.get_claims_for_building(building.building_uuid)
-
-            if related_claims:
-                if not MessageDialog.confirm(
-                    self,
-                    "تحذير: توجد مطالبات مرتبطة",
-                    f"يوجد <b>{len(related_claims)}</b> مطالبة مرتبطة بهذا المبنى.<br><br>"
-                    "هل تريد المتابعة في الحذف؟",
-                    ok_text="متابعة الحذف",
-                    cancel_text="إلغاء"
-                ):
-                    return
-
             # حذف المبنى باستخدام controller
             result = self.building_controller.delete_building(building.building_uuid)
 
@@ -3112,27 +3118,15 @@ class BuildingsListPage(QWidget):
                 Toast.show_toast(self, f"تم حذف المبنى {building.building_id} بنجاح", Toast.SUCCESS)
                 self._load_buildings()
             else:
-                raise Exception(result.message)
+                raise Exception(result.message or result.message_ar)
 
         except Exception as e:
             logger.error(f"Failed to delete building: {e}")
-            error_msg = str(e).lower()
-
-            # رسالة واضحة حسب نوع الخطأ
-            if "foreign key constraint failed" in error_msg or "constraint" in error_msg:
-                MessageDialog.error(
-                    self,
-                    "لا يمكن حذف المبنى",
-                    f"المبنى <b>{building.building_id}</b> مرتبط ببيانات أخرى<br>"
-                    "(وحدات، مطالبات، أو وثائق)<br><br>"
-                    "يجب حذف البيانات المرتبطة أولاً"
-                )
-            else:
-                MessageDialog.error(
-                    self,
-                    "خطأ في الحذف",
-                    f"حدث خطأ أثناء حذف المبنى:<br>{str(e)}"
-                )
+            FigmaMessageDialog.show_error(
+                self,
+                "خطأ في الحذف",
+                f"حدث خطأ أثناء حذف المبنى:\n{str(e)}"
+            )
 
     def _go_to_previous_page(self):
         """Go to previous page."""

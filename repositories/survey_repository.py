@@ -55,8 +55,8 @@ class SurveyRepository:
 
         params = (
             survey_id,
-            survey_data.get('building', {}).get('building_id') if survey_data.get('building') else None,
-            survey_data.get('unit', {}).get('unit_id') if survey_data.get('unit') else None,
+            survey_data.get('building_id') or (survey_data.get('building', {}).get('building_id') if isinstance(survey_data.get('building'), dict) else None),
+            survey_data.get('unit_id') or (survey_data.get('unit', {}).get('unit_id') if isinstance(survey_data.get('unit'), dict) else None),
             survey_data.get('clerk_id'),
             _to_isoformat(survey_data.get('survey_date')) if survey_data.get('survey_date') else datetime.now().date().isoformat(),
             survey_data.get('survey_type', 'office'),
@@ -108,8 +108,8 @@ class SurveyRepository:
             finalized_at = datetime.now().isoformat()
 
         params = (
-            survey_data.get('building', {}).get('building_id') if survey_data.get('building') else None,
-            survey_data.get('unit', {}).get('unit_id') if survey_data.get('unit') else None,
+            survey_data.get('building_id') or (survey_data.get('building', {}).get('building_id') if isinstance(survey_data.get('building'), dict) else None),
+            survey_data.get('unit_id') or (survey_data.get('unit', {}).get('unit_id') if isinstance(survey_data.get('unit'), dict) else None),
             survey_data.get('clerk_id'),
             survey_data.get('survey_date', datetime.now().date()).isoformat() if survey_data.get('survey_date') else datetime.now().date().isoformat(),
             survey_data.get('survey_type', 'office'),
@@ -123,9 +123,9 @@ class SurveyRepository:
             survey_id
         )
 
-        cursor = self.db.execute(query, params)
+        self.db.execute(query, params)
         logger.debug(f"Updated survey: {survey_id}")
-        return cursor.rowcount > 0
+        return True
 
     def get_by_id(self, survey_id: str) -> Optional[Dict[str, Any]]:
         """
@@ -163,6 +163,18 @@ class SurveyRepository:
             LIMIT ? OFFSET ?
         """
         rows = self.db.fetch_all(query, (limit, offset))
+        return [self._row_to_dict(row) for row in rows]
+
+    def get_by_status_and_source(self, status: str = 'finalized', source: str = 'office',
+                                 limit: int = 100, offset: int = 0) -> List[Dict[str, Any]]:
+        """Get surveys by status and source."""
+        query = """
+            SELECT * FROM surveys
+            WHERE status = ? AND source = ?
+            ORDER BY updated_at DESC
+            LIMIT ? OFFSET ?
+        """
+        rows = self.db.fetch_all(query, (status, source, limit, offset))
         return [self._row_to_dict(row) for row in rows]
 
     def get_drafts_for_field(self, limit: int = 100, offset: int = 0) -> List[Dict[str, Any]]:
@@ -282,9 +294,9 @@ class SurveyRepository:
             WHERE survey_id = ?
         """
         params = (status, datetime.now().isoformat(), finalized_at, survey_id)
-        cursor = self.db.execute(query, params)
+        self.db.execute(query, params)
         logger.debug(f"Updated survey {survey_id} status to {status}")
-        return cursor.rowcount > 0
+        return True
 
     def delete(self, survey_id: str) -> bool:
         """
@@ -297,8 +309,8 @@ class SurveyRepository:
             True if deleted successfully
         """
         query = "DELETE FROM surveys WHERE survey_id = ?"
-        cursor = self.db.execute(query, (survey_id,))
-        return cursor.rowcount > 0
+        self.db.execute(query, (survey_id,))
+        return self.get_by_id(survey_id) is None
 
     def get_statistics(self) -> Dict[str, Any]:
         """

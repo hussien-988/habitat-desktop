@@ -788,10 +788,12 @@ class HouseholdStep(BaseStep):
             "notes": self.hh_notes.toPlainText().strip()
         }
 
-        # Save via API if using API mode
+        # Save household data
+        existing_household_id = self.context.get_data("household_id")
+        survey_id = self.context.get_data("survey_id")
+        saved = False
+
         if self._use_api:
-            existing_household_id = self.context.get_data("household_id")
-            survey_id = self.context.get_data("survey_id")
             self._set_auth_token()
 
             if existing_household_id:
@@ -800,12 +802,12 @@ class HouseholdStep(BaseStep):
                     try:
                         self._api_client.update_household(existing_household_id, household, survey_id=survey_id)
                         logger.info(f"Household {existing_household_id} updated via API")
+                        saved = True
                     except Exception as e:
-                        logger.error(f"Failed to update household: {e}")
-                        result.add_error(tr("wizard.household.save_failed", error_msg=map_exception(e)))
-                        return result
+                        logger.warning(f"Failed to update household via API, falling back to local: {e}")
                 else:
                     logger.info(f"Household unchanged ({existing_household_id}), skipping")
+                    saved = True
                 household["api_id"] = existing_household_id
             else:
                 logger.info(f"Creating household via API: property_unit_id={property_unit_id}, survey_id={survey_id}, size={household['size']}")
@@ -815,10 +817,16 @@ class HouseholdStep(BaseStep):
                     household_id = api_response.get("id") or api_response.get("householdId", "")
                     household["api_id"] = household_id
                     self.context.update_data("household_id", household_id)
+                    saved = True
                 except Exception as e:
-                    logger.error(f"Failed to create household via API: {e}")
-                    result.add_error(tr("wizard.household.save_failed", error_msg=map_exception(e)))
-                    return result
+                    logger.warning(f"Failed to create household via API, falling back to local: {e}")
+
+        if not saved:
+            # Local fallback: store household_id in context for local tracking
+            if not existing_household_id:
+                household_id = household["household_id"]
+                self.context.update_data("household_id", household_id)
+                logger.info(f"Household {household_id} saved locally")
 
         # Update or add household data
         if self.context.households:

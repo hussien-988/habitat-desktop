@@ -24,6 +24,7 @@ from services.display_mappings import (
 )
 from ui.style_manager import StyleManager
 from utils.logger import get_logger
+from ui.wizards.office_survey.steps.occupancy_claims_step import _is_owner_relation
 
 logger = get_logger(__name__)
 
@@ -602,12 +603,11 @@ class ClaimStep(BaseStep):
                 first_card.claim_survey_date.setText(str(survey_date_str))
 
         # Auto-select claim type based on relations
-        owners = [r for r in self.context.relations if r.get('relation_type') in ('owner', 'co_owner', 1)]
+        owners_or_heirs = [r for r in self.context.relations if _is_owner_relation(r.get('relation_type'))]
         tenants = [r for r in self.context.relations if r.get('relation_type') in ('tenant', 3)]
         occupants = [r for r in self.context.relations if r.get('relation_type') in ('occupant', 2)]
-        heirs = [r for r in self.context.relations if r.get('relation_type') in ('heir', 5)]
 
-        if owners or heirs:
+        if owners_or_heirs:
             code = _find_combo_code_by_english("ClaimType", "Ownership")
             first_card.claim_type_field.setText(get_claim_type_display(code))
         elif tenants:
@@ -655,10 +655,9 @@ class ClaimStep(BaseStep):
         first_card = self._claim_cards[0]
 
         # relation_type can be integer (1=owner,2=occupant,3=tenant,4=guest,5=heir,99=other) or string
-        owners = [r for r in self.context.relations if r.get('relation_type') in ('owner', 'co_owner', 1)]
+        owners_or_heirs = [r for r in self.context.relations if _is_owner_relation(r.get('relation_type'))]
         tenants = [r for r in self.context.relations if r.get('relation_type') in ('tenant', 3)]
         occupants = [r for r in self.context.relations if r.get('relation_type') in ('occupant', 2)]
-        heirs = [r for r in self.context.relations if r.get('relation_type') in ('heir', 5)]
 
         total_evidences = sum(len(r.get('evidences', [])) for r in self.context.relations)
         # Also check person data for uploaded tenure documents (not reflected in relations)
@@ -678,7 +677,7 @@ class ClaimStep(BaseStep):
 
         # Set claim type display text based on relations
         claim_type_english = None
-        if owners or heirs:
+        if owners_or_heirs:
             claim_type_english = "Ownership"
         elif tenants:
             claim_type_english = "Tenancy"
@@ -747,9 +746,7 @@ class ClaimStep(BaseStep):
         for card in self._claim_cards:
             # Collect claimant person IDs
             claimant_ids = [r['person_id'] for r in self.context.relations
-                            if r.get('relation_type') in ('owner', 'co_owner', 'heir', 1, 5)]
-            if not claimant_ids:
-                claimant_ids = [r['person_id'] for r in self.context.relations]
+                            if _is_owner_relation(r.get('relation_type'))]
 
             # Collect all evidences from relations
             all_evidences = []

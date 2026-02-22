@@ -317,6 +317,10 @@ class BaseWizard(QWidget, metaclass=ABCQWidgetMeta):
                 self._on_validation_failed(validation_result)
                 return
 
+            # Call on_next() hook for the last step (same as navigate_next does for other steps)
+            if hasattr(current_step, 'on_next') and callable(current_step.on_next):
+                current_step.on_next()
+
         # Call subclass submission handler
         if self.on_submit():
             try:

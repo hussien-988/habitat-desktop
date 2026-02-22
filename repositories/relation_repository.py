@@ -198,8 +198,8 @@ class RelationRepository:
     def delete(self, relation_id: str) -> bool:
         """Delete a relation by ID."""
         query = "DELETE FROM person_unit_relations WHERE relation_id = ?"
-        cursor = self.db.execute(query, (relation_id,))
-        return cursor.rowcount > 0
+        self.db.execute(query, (relation_id,))
+        return self.get_by_id(relation_id) is None
 
     def _row_to_relation(self, row) -> PersonUnitRelation:
         """Convert database row to PersonUnitRelation object."""

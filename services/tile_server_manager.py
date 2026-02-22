@@ -80,6 +80,12 @@ class TileServer(BaseHTTPRequestHandler):
                 self._serve_static_file_cached(self.assets_path / 'leaflet.draw.js', 'application/javascript')
             elif path == '/leaflet-draw.css' or path == '/leaflet.draw.css':
                 self._serve_static_file_cached(self.assets_path / 'leaflet.draw.css', 'text/css')
+            elif path == '/leaflet.markercluster.js':
+                self._serve_static_file_cached(self.assets_path / 'leaflet.markercluster.js', 'application/javascript')
+            elif path == '/MarkerCluster.css':
+                self._serve_static_file_cached(self.assets_path / 'MarkerCluster.css', 'text/css')
+            elif path == '/MarkerCluster.Default.css':
+                self._serve_static_file_cached(self.assets_path / 'MarkerCluster.Default.css', 'text/css')
             elif path.startswith('/images/'):
                 image_name = path[8:]
                 self._serve_static_file_cached(self.assets_path / 'images' / image_name, 'image/png')

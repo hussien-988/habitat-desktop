@@ -171,8 +171,9 @@ class BuildingRepository:
     def delete(self, building_uuid: str) -> bool:
         """Delete a building by UUID."""
         query = "DELETE FROM buildings WHERE building_uuid = ?"
-        cursor = self.db.execute(query, (building_uuid,))
-        return cursor.rowcount > 0
+        self.db.execute(query, (building_uuid,))
+        # Verify deletion
+        return self.get_by_uuid(building_uuid) is None
 
     def get_statistics(self) -> Dict[str, Any]:
         """Get building statistics for dashboard."""

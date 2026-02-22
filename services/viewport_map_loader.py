@@ -103,7 +103,8 @@ class ViewportMapLoader:
         cache_max_size: int = 50,
         cache_max_age_minutes: int = 10,
         building_cache_service: Optional[BuildingCacheService] = None,
-        use_spatial_sampling: bool = True
+        use_spatial_sampling: bool = True,
+        db=None
     ):
         """
         Initialize viewport loader.
@@ -115,8 +116,10 @@ class ViewportMapLoader:
             cache_max_age_minutes: Cache expiry time
             building_cache_service: Optional BuildingCacheService (uses singleton if not provided)
             use_spatial_sampling: Enable grid-based spatial sampling (Best Practice!)
+            db: Database instance for local fallback when API unavailable
         """
         self.map_service = map_service or MapServiceAPI()
+        self.db = db
         self.cache_enabled = cache_enabled
         self.cache_max_size = cache_max_size
         self.cache_max_age_minutes = cache_max_age_minutes
@@ -129,7 +132,7 @@ class ViewportMapLoader:
         self._cache: Dict[str, CachedViewportData] = {}
 
         logger.info(
-            f"✅ ViewportMapLoader initialized "
+            f"ViewportMapLoader initialized "
             f"(cache: {cache_enabled}, spatial_sampling: {use_spatial_sampling})"
         )
 
@@ -188,7 +191,6 @@ class ViewportMapLoader:
             buildings = []
 
             if self.building_cache:
-                # Load from application-wide cache (FAST!)
                 buildings = self.building_cache.get_buildings_for_viewport(
                     north_east_lat=north_east_lat,
                     north_east_lng=north_east_lng,
@@ -199,7 +201,6 @@ class ViewportMapLoader:
                 )
                 logger.debug(f"Loaded {len(buildings)} buildings from cache service")
             else:
-                # Fallback: Use local cache or API
                 bounds = ViewportBounds(
                     north_east_lat=north_east_lat,
                     north_east_lng=north_east_lng,
@@ -207,13 +208,11 @@ class ViewportMapLoader:
                     south_west_lng=south_west_lng
                 )
 
-                # Check local cache
                 if self.cache_enabled and not force_refresh:
                     cached = self._get_from_cache(bounds)
                     if cached:
                         buildings = cached.buildings
                     else:
-                        # Load from API (token already set above)
                         buildings = self.map_service.get_buildings_in_bbox(
                             north_east_lat=north_east_lat,
                             north_east_lng=north_east_lng,
@@ -224,7 +223,17 @@ class ViewportMapLoader:
                         )
                         self._store_in_cache(bounds, buildings)
 
-            # BEST PRACTICE 2: Spatial Sampling (Grid-based distribution)
+            # Fallback to local DB if API returned nothing
+            if not buildings and self.db:
+                try:
+                    from repositories.building_repository import BuildingRepository
+                    repo = BuildingRepository(self.db)
+                    buildings = repo.get_all(limit=max_markers)
+                    logger.info(f"Viewport: loaded {len(buildings)} buildings from local DB fallback")
+                except Exception as db_e:
+                    logger.error(f"Local DB viewport fallback failed: {db_e}")
+
+            # Spatial Sampling (Grid-based distribution)
             if self.use_spatial_sampling and zoom_level is not None and len(buildings) > 0:
                 # Apply spatial sampling for even distribution
                 sampled_buildings = SpatialSampler.sample_buildings(

@@ -946,37 +946,26 @@ class BaseMapDialog(QDialog):
     @staticmethod
     def load_buildings_geojson(db, limit: int = 200, auth_token: Optional[str] = None) -> str:
         """
-        Load buildings from BuildingAssignments API and convert to GeoJSON.
-
-        ✅ FIX: Uses MapServiceAPI → api_client → BuildingAssignments API (PostGIS-enabled)
-        Same approach as Field Assignment page (DRY principle).
+        Load buildings for map display. API-first with local DB fallback.
 
         Args:
-            db: Database instance (not used, kept for compatibility)
+            db: Database instance (used for local fallback)
             limit: Maximum number of buildings to load
-            auth_token: Authentication token for API calls (REQUIRED!)
+            auth_token: Authentication token for API calls
 
         Returns:
             GeoJSON string with buildings
         """
-        from services.map_service_api import MapServiceAPI
         from services.geojson_converter import GeoJSONConverter
-        import json
 
+        # Strategy 1: API (PostGIS-enabled)
         try:
-            # ✅ Use MapServiceAPI (same as Field Assignment!)
-            # MapServiceAPI → api_client → BuildingAssignments API (PostGIS-enabled)
+            from services.map_service_api import MapServiceAPI
             map_service = MapServiceAPI()
 
-            # ✅ CRITICAL: Set auth token BEFORE any API operations!
             if auth_token:
                 map_service.set_auth_token(auth_token)
-                logger.info(f"✅ Auth token set for MapServiceAPI (token length: {len(auth_token)})")
-            else:
-                logger.warning(f"⚠️ NO AUTH TOKEN provided to load_buildings_geojson - API calls may fail!")
 
-            # ✅ Load buildings from BuildingAssignments API using viewport
-            # Use Aleppo approximate bounds for initial load
             buildings = map_service.get_buildings_in_bbox(
                 north_east_lat=36.5,
                 north_east_lng=37.5,
@@ -985,20 +974,26 @@ class BaseMapDialog(QDialog):
                 page_size=limit
             )
 
-            logger.info(f"✅ Loaded {len(buildings)} buildings from BuildingAssignments API (PostGIS)")
-
-            # Convert to GeoJSON
-            buildings_geojson = GeoJSONConverter.buildings_to_geojson(
-                buildings,
-                prefer_polygons=True
-            )
-
-            return buildings_geojson
+            if buildings:
+                logger.info(f"Loaded {len(buildings)} buildings from API")
+                return GeoJSONConverter.buildings_to_geojson(buildings, prefer_polygons=True)
 
         except Exception as e:
-            logger.error(f"Error loading buildings: {e}", exc_info=True)
-            # Return empty GeoJSON on error
-            return '{"type":"FeatureCollection","features":[]}'
+            logger.warning(f"API buildings load failed, trying local DB: {e}")
+
+        # Strategy 2: Local database fallback
+        if db:
+            try:
+                from repositories.building_repository import BuildingRepository
+                repo = BuildingRepository(db)
+                buildings = repo.get_all(limit=limit)
+                if buildings:
+                    logger.info(f"Loaded {len(buildings)} buildings from local DB")
+                    return GeoJSONConverter.buildings_to_geojson(buildings, prefer_polygons=True)
+            except Exception as e:
+                logger.warning(f"Local buildings load also failed: {e}")
+
+        return '{"type":"FeatureCollection","features":[]}'
 
     @staticmethod
     def load_neighborhoods_geojson(auth_token: Optional[str] = None) -> Optional[str]:

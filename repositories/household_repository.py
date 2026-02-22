@@ -168,14 +168,16 @@ class HouseholdRepository:
     def delete(self, household_id: str) -> bool:
         """Delete a household by ID."""
         query = "DELETE FROM households WHERE household_id = ?"
-        cursor = self.db.execute(query, (household_id,))
-        return cursor.rowcount > 0
+        self.db.execute(query, (household_id,))
+        return self.get_by_id(household_id) is None
 
     def delete_by_unit(self, unit_id: str) -> int:
         """Delete all households for a unit. Returns count of deleted records."""
-        query = "DELETE FROM households WHERE unit_id = ?"
-        cursor = self.db.execute(query, (unit_id,))
-        return cursor.rowcount
+        count_result = self.db.fetch_one(
+            "SELECT COUNT(*) as c FROM households WHERE unit_id = ?", (unit_id,))
+        count = count_result['c'] if count_result else 0
+        self.db.execute("DELETE FROM households WHERE unit_id = ?", (unit_id,))
+        return count
 
     def _row_to_household(self, row) -> Household:
         """Convert database row to Household object."""

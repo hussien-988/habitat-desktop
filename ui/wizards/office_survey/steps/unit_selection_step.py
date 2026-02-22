@@ -881,52 +881,62 @@ class UnitSelectionStep(BaseStep):
             result.add_error(tr("wizard.unit.select_or_create_error"))
             return result
 
-        # Link selected unit to survey via API
-        if self._use_api:
-            survey_id = self.context.get_data("survey_id")
+        # Link selected unit to survey
+        survey_id = self.context.get_data("survey_id")
 
-            # Get unit_id from selected unit or newly created unit
-            current_unit_id = None
-            if self.selected_unit and self.selected_unit != "new_unit":
-                current_unit_id = getattr(self.selected_unit, 'unit_uuid', None)
-            elif self.context.new_unit_data:
-                current_unit_id = self.context.new_unit_data.get('unit_uuid')
+        # Get unit_id from selected unit or newly created unit
+        current_unit_id = None
+        if self.selected_unit and self.selected_unit != "new_unit":
+            current_unit_id = getattr(self.selected_unit, 'unit_uuid', None)
+        elif self.context.new_unit_data:
+            current_unit_id = self.context.new_unit_data.get('unit_uuid')
 
-            # Guard: skip if same unit already linked (prevents duplicate on back-navigation)
-            if self.context.get_data("unit_linked"):
-                previous_unit_id = self.context.get_data("linked_unit_uuid")
-                if previous_unit_id == current_unit_id:
-                    logger.info(f"Unit already linked ({current_unit_id}), skipping")
-                else:
-                    # Unit changed - delete relations only, keep persons and household
-                    logger.info(f"Unit changed ({previous_unit_id} -> {current_unit_id}), cleaning up relations")
-                    if self._use_api:
+        # Guard: skip if same unit already linked (prevents duplicate on back-navigation)
+        if self.context.get_data("unit_linked"):
+            previous_unit_id = self.context.get_data("linked_unit_uuid")
+            if previous_unit_id == current_unit_id:
+                logger.info(f"Unit already linked ({current_unit_id}), skipping")
+                return result
+            else:
+                # Unit changed - cleanup relations
+                logger.info(f"Unit changed ({previous_unit_id} -> {current_unit_id}), cleaning up relations")
+                cleaned = False
+                if self._use_api:
+                    try:
                         self.context.cleanup_on_unit_change(self._api_service)
-                    else:
-                        for person in self.context.persons:
-                            person['_relation_id'] = None
-                        self.context.relations = []
-                        self.context.claims = []
-                        self.context.finalize_response = None
-                        for key in ("unit_linked", "linked_unit_uuid",
-                                    "claims_count", "created_claims"):
-                            self.context.update_data(key, None)
+                        cleaned = True
+                    except Exception as e:
+                        logger.warning(f"API cleanup failed, doing local cleanup: {e}")
 
-            if not self.context.get_data("unit_linked"):
+                if not cleaned:
+                    for person in self.context.persons:
+                        person['_relation_id'] = None
+                    self.context.relations = []
+                    self.context.claims = []
+                    self.context.finalize_response = None
+                    for key in ("unit_linked", "linked_unit_uuid",
+                                "claims_count", "created_claims"):
+                        self.context.update_data(key, None)
+
+        if not self.context.get_data("unit_linked"):
+            linked = False
+            if self._use_api:
                 self._set_auth_token()
-
                 if survey_id and current_unit_id:
                     try:
                         response = self._api_service.link_unit_to_survey(survey_id, current_unit_id)
                         logger.info(f"Unit {current_unit_id} linked to survey {survey_id}")
-                        self.context.update_data("unit_linked", True)
-                        self.context.update_data("linked_unit_uuid", current_unit_id)
+                        linked = True
                     except Exception as e:
-                        logger.error(f"Failed to link unit to survey: {e}")
-                        result.add_error(tr("wizard.unit.link_failed", error_msg=map_exception(e)))
-                        return result
+                        logger.warning(f"API link failed, falling back to local: {e}")
                 else:
                     logger.warning(f"Missing survey_id ({survey_id}) or unit_id ({current_unit_id}), skipping link")
+
+            if not linked:
+                logger.info(f"Unit {current_unit_id} linked locally to survey")
+
+            self.context.update_data("unit_linked", True)
+            self.context.update_data("linked_unit_uuid", current_unit_id)
 
         return result
 

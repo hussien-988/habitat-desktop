@@ -42,6 +42,7 @@ from ui.font_utils import create_font, FontManager
 from ui.components.success_popup import SuccessPopup
 from utils.logger import get_logger
 from services.translation_manager import tr
+from ui.wizards.office_survey.steps.occupancy_claims_step import _is_owner_relation
 
 logger = get_logger(__name__)
 
@@ -150,7 +151,25 @@ class OfficeSurveyWizard(BaseWizard):
         try:
             # Determine status based on claim creation result
             finalize_resp = getattr(self.context, 'finalize_response', None)
+            has_claim = False
             if finalize_resp and finalize_resp.get("claimCreated"):
+                has_claim = True
+            if not has_claim and self.context.claims:
+                # Fallback: check if claims were collected with valid owner claimants
+                for c in self.context.claims:
+                    if c.get("claimant_person_ids"):
+                        has_claim = True
+                        break
+            if not has_claim and self.context.persons:
+                # Last resort: check persons directly for owner/heir role
+                for p in self.context.persons:
+                    role = p.get('person_role') or p.get('relationship_type')
+                    if _is_owner_relation(role):
+                        has_claim = True
+                        logger.info(f"on_submit: Owner found in persons (role={role}), setting finalized")
+                        break
+
+            if has_claim:
                 self.context.status = "finalized"
             else:
                 self.context.status = "draft"

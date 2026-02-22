@@ -116,8 +116,8 @@ class DocumentRepository:
     def delete(self, document_id: str) -> bool:
         """Delete a document by ID."""
         query = "DELETE FROM documents WHERE document_id = ?"
-        cursor = self.db.execute(query, (document_id,))
-        return cursor.rowcount > 0
+        self.db.execute(query, (document_id,))
+        return self.get_by_id(document_id) is None
 
     def link_to_claim(self, claim_uuid: str, document_id: str, user_id: str = None) -> bool:
         """Link a document to a claim."""

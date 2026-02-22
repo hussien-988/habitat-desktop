@@ -250,84 +250,122 @@ class CompletedClaimsPage(QWidget):
             self.title_label.setText(title)
 
     def refresh(self, data=None):
-        """Refresh the claims list."""
-        if self.db:
-            try:
-                from repositories.claim_repository import ClaimRepository
-                claim_repo = ClaimRepository(self.db)
+        """Refresh the claims list from claims repo + finalized surveys."""
+        self.claims_data = []
+        seen_ids = set()
 
-                all_claims = claim_repo.get_all(limit=100)
-                claims = [c for c in all_claims if c.case_status in ['approved', 'rejected']]
+        if not self.db:
+            self._show_empty_state()
+            return
 
-                self.claims_data = []
-                for claim in claims:
-                    # Get claimant name (DRY: consistent pattern)
-                    claimant_name = 'غير محدد'
-                    if claim.person_ids:
+        # Source 1: Claims from ClaimRepository (local DB)
+        try:
+            from repositories.claim_repository import ClaimRepository
+            claim_repo = ClaimRepository(self.db)
+
+            all_claims = claim_repo.get_all(limit=100)
+            valid_statuses = ['approved', 'rejected', 'submitted', 'finalized']
+            claims = [c for c in all_claims if c.case_status in valid_statuses]
+
+            for claim in claims:
+                claimant_name = 'غير محدد'
+                if claim.person_ids:
+                    try:
+                        from repositories.person_repository import PersonRepository
+                        person_repo = PersonRepository(self.db)
+                        first_person_id = claim.person_ids.split(',')[0].strip()
+                        if first_person_id:
+                            person = person_repo.get_by_id(first_person_id)
+                            if person:
+                                claimant_name = person.full_name_ar or person.full_name
+                                if not claimant_name or not claimant_name.strip():
+                                    claimant_name = 'غير محدد'
+                    except Exception:
+                        pass
+
+                building_obj = None
+                unit_obj = None
+                if claim.unit_id:
+                    try:
+                        from repositories.unit_repository import UnitRepository
+                        from repositories.building_repository import BuildingRepository
+                        unit_repo = UnitRepository(self.db)
+                        building_repo = BuildingRepository(self.db)
+                        unit_obj = unit_repo.get_by_id(claim.unit_id)
+                        if unit_obj and unit_obj.building_id:
+                            building_obj = building_repo.get_by_id(unit_obj.building_id)
+                    except Exception:
+                        pass
+
+                date_str = ''
+                if claim.submission_date:
+                    if isinstance(claim.submission_date, str):
+                        date_str = claim.submission_date.split('T')[0] if 'T' in claim.submission_date else claim.submission_date
+                    else:
+                        date_str = claim.submission_date.strftime('%Y-%m-%d')
+
+                cid = claim.claim_id or claim.case_number or 'N/A'
+                seen_ids.add(cid)
+                self.claims_data.append({
+                    'claim_id': cid,
+                    'claim_uuid': claim.claim_uuid if hasattr(claim, 'claim_uuid') else '',
+                    'survey_id': claim.survey_id if hasattr(claim, 'survey_id') else '',
+                    'claimant_name': claimant_name,
+                    'date': date_str,
+                    'status': claim.case_status or 'submitted',
+                    'building': building_obj,
+                    'unit': unit_obj,
+                    'unit_id': claim.unit_id or '',
+                    'building_id': building_obj.building_id if building_obj else ''
+                })
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).warning(f"Error loading claims from repo: {e}")
+
+        # Source 2: Finalized surveys (from SurveyController)
+        try:
+            from controllers.survey_controller import SurveyController
+            ctrl = SurveyController(self.db)
+            result = ctrl.load_office_surveys(status="Finalized")
+            if result.success and result.data:
+                from repositories.building_repository import BuildingRepository
+                building_repo = BuildingRepository(self.db)
+
+                for s in result.data:
+                    ref = s.get('referenceCode') or s.get('id', '')
+                    if ref in seen_ids:
+                        continue
+
+                    building_obj = None
+                    bid = s.get('buildingId')
+                    if bid:
                         try:
-                            from repositories.person_repository import PersonRepository
-                            person_repo = PersonRepository(self.db)
-                            first_person_id = claim.person_ids.split(',')[0].strip()
-                            if first_person_id:
-                                person = person_repo.get_by_id(first_person_id)
-                                if person:
-                                    claimant_name = person.full_name_ar or person.full_name
-                                    if not claimant_name or not claimant_name.strip():
-                                        claimant_name = 'غير محدد'
+                            building_obj = building_repo.get_by_uuid(bid) or building_repo.get_by_id(bid)
                         except Exception:
                             pass
 
-                    # Get building and unit objects (Best Practice: pass complete objects)
-                    building_obj = None
                     unit_obj = None
+                    unit_num = s.get('unitIdentifier', '')
+                    if unit_num:
+                        class _NS:
+                            def __init__(self, **kw): self.__dict__.update(kw)
+                        unit_obj = _NS(unit_number=unit_num)
 
-                    if claim.unit_id:
-                        try:
-                            from repositories.unit_repository import UnitRepository
-                            from repositories.building_repository import BuildingRepository
-                            unit_repo = UnitRepository(self.db)
-                            building_repo = BuildingRepository(self.db)
-
-                            # Load complete unit object
-                            # Fix: Use get_by_id() instead of find_by_id()
-                            unit_obj = unit_repo.get_by_id(claim.unit_id)
-
-                            # Load complete building object with all address fields
-                            if unit_obj and unit_obj.building_id:
-                                # Fix: Use get_by_id() instead of find_by_id()
-                                building_obj = building_repo.get_by_id(unit_obj.building_id)
-                        except Exception as e:
-                            pass
-
-                    # Format date (DRY: consistent date formatting)
-                    date_str = '2025-01-01'
-                    if claim.submission_date:
-                        if isinstance(claim.submission_date, str):
-                            date_str = claim.submission_date.split('T')[0] if 'T' in claim.submission_date else claim.submission_date
-                        else:
-                            date_str = claim.submission_date.strftime('%Y-%m-%d')
-
-                    # Best Practice: Pass complete objects instead of individual fields
-                    # This enables build_hierarchical_address() to work correctly
                     self.claims_data.append({
-                        'claim_id': claim.claim_id or claim.case_number or 'N/A',
-                        'claimant_name': claimant_name,
-                        'date': date_str,
-                        'status': claim.case_status or 'draft',
-                        # Pass complete objects (DRY + SOLID)
-                        'building': building_obj,  # Complete Building model object
-                        'unit': unit_obj,          # Complete Unit model object
-                        # Keep IDs for backward compatibility
-                        'unit_id': claim.unit_id or '',
-                        'building_id': building_obj.building_id if building_obj else ''
+                        'claim_id': ref,
+                        'claim_uuid': s.get('id', ''),
+                        'claimant_name': s.get('intervieweeName') or 'غير محدد',
+                        'date': (s.get('surveyDate') or '')[:10],
+                        'status': 'finalized',
+                        'building': building_obj,
+                        'unit': unit_obj,
+                        'unit_id': s.get('propertyUnitId', ''),
+                        'building_id': s.get('buildingNumber') or (building_obj.building_id if building_obj else ''),
                     })
-            except Exception as e:
-                import traceback
-                print(f"Error loading claims: {e}")
-                print(f"Traceback:\n{traceback.format_exc()}")
-                self.claims_data = []
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).warning(f"Error loading finalized surveys: {e}")
 
-        # Display based on data availability
         if self.claims_data:
             self._show_claims_list()
         else:

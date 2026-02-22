@@ -28,6 +28,18 @@ from utils.logger import get_logger
 from ui.error_handler import ErrorHandler
 from ui.font_utils import FontManager, create_font
 from ui.design_system import Colors
+
+
+def _is_owner_relation(relation_type) -> bool:
+    """Check if a relation type indicates ownership (owner or heir).
+    Handles both integer codes (from Vocabularies) and string values (legacy/API)."""
+    if relation_type is None:
+        return False
+    if isinstance(relation_type, int):
+        return relation_type in (1, 5)
+    if isinstance(relation_type, str):
+        return relation_type.lower() in ('owner', 'co_owner', 'coowner', 'heir')
+    return False
 from services.translation_manager import tr
 from services.display_mappings import get_relation_type_display
 from services.error_mapper import map_exception
@@ -511,6 +523,16 @@ class OccupancyClaimsStep(BaseStep):
         for person in self.context.persons:
             rel_data = person.get('relation_data', {})
             rel_type = rel_data.get('rel_type') or person.get('relationship_type') or person.get('person_role')
+
+            logger.info(
+                f"Collecting relation for person {person.get('first_name', '?')}: "
+                f"rel_data.rel_type={rel_data.get('rel_type')!r}, "
+                f"relationship_type={person.get('relationship_type')!r}, "
+                f"person_role={person.get('person_role')!r}, "
+                f"resolved={rel_type!r} (type={type(rel_type).__name__}), "
+                f"is_owner={_is_owner_relation(rel_type)}"
+            )
+
             if not rel_type:
                 continue
 
@@ -599,8 +621,8 @@ class OccupancyClaimsStep(BaseStep):
                 logger.warning(f"Claim not created. Reason: {reason}")
 
         except Exception as e:
-            logger.error(f"Failed to process claims: {e}")
-            self.context.finalize_response = None
+            logger.warning(f"Failed to process claims via API, falling back to local: {e}")
+            self._process_claims_locally()
 
     # BaseStep interface
 
@@ -681,8 +703,12 @@ class OccupancyClaimsStep(BaseStep):
             }
 
             try:
-                response = self._api_service.link_person_to_unit(survey_id, unit_id, relation_data)
-                new_relation_id = response.get('id') or response.get('relationId')
+                if self._use_api:
+                    response = self._api_service.link_person_to_unit(survey_id, unit_id, relation_data)
+                    new_relation_id = response.get('id') or response.get('relationId')
+                else:
+                    import uuid
+                    new_relation_id = str(uuid.uuid4())
                 person['_relation_id'] = new_relation_id
                 logger.info(f"Auto-relinked person {person_id} to unit {unit_id}, new relation: {new_relation_id}")
             except Exception as e:
@@ -702,7 +728,31 @@ class OccupancyClaimsStep(BaseStep):
     def _process_claims_locally(self):
         """Process claims locally when no API is available."""
         relations = self.context.relations or []
-        owners = [r for r in relations if r.get('relation_type') in ('owner', 'co_owner', 1)]
+        logger.info(f"Processing claims locally: {len(relations)} relations found")
+        for r in relations:
+            rt = r.get('relation_type')
+            logger.info(
+                f"  relation_type={rt!r} (type={type(rt).__name__}), "
+                f"person_id={r.get('person_id')}, is_owner={_is_owner_relation(rt)}"
+            )
+        owners = [r for r in relations if _is_owner_relation(r.get('relation_type'))]
+
+        # Fallback: check persons directly if no owners found in relations
+        if not owners and self.context.persons:
+            for p in self.context.persons:
+                role = p.get('person_role') or p.get('relationship_type')
+                if _is_owner_relation(role):
+                    owners.append({
+                        'person_id': p.get('person_id'),
+                        'relation_type': role,
+                        'person_name': f"{p.get('first_name', '')} {p.get('last_name', '')}",
+                        'ownership_share': p.get('relation_data', {}).get('ownership_share', 0),
+                        'evidences': []
+                    })
+            if owners:
+                logger.info(f"Fallback: found {len(owners)} owners from persons data directly")
+
+        logger.info(f"Found {len(owners)} owner/heir relations")
 
         if not owners:
             logger.info("No ownership relation found - no claim created")
@@ -739,7 +789,7 @@ class OccupancyClaimsStep(BaseStep):
 
             claim_data = {
                 "claim_type": "ownership",
-                "unit_id": self.context.unit.unit_uuid if self.context.unit else "",
+                "unit_uuid": self.context.unit.unit_uuid if self.context.unit else "",
                 "person_ids": json.dumps(person_ids),
                 "relation_ids": json.dumps(relation_ids),
                 "case_status": case_status,

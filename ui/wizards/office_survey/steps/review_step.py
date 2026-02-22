@@ -28,6 +28,7 @@ from app.config import Config
 from services.api_client import get_api_client
 from services.translation_manager import tr
 from services.error_mapper import map_exception
+from ui.wizards.office_survey.steps.occupancy_claims_step import _is_owner_relation
 from services.display_mappings import (
     get_relation_type_display, get_unit_status_display,
     get_claim_type_display, get_priority_display,
@@ -1218,7 +1219,22 @@ class ReviewStep(BaseStep):
     def _process_claims_locally(self):
         """Fallback: process claims locally when API is not available."""
         relations = self.context.relations or []
-        owners = [r for r in relations if r.get('relation_type') in ('owner', 'co_owner', 1)]
+        owners = [r for r in relations if _is_owner_relation(r.get('relation_type'))]
+
+        # Fallback: check persons directly if no owners found in relations
+        if not owners and self.context.persons:
+            for p in self.context.persons:
+                role = p.get('person_role') or p.get('relationship_type')
+                if _is_owner_relation(role):
+                    owners.append({
+                        'person_id': p.get('person_id'),
+                        'relation_type': role,
+                        'person_name': f"{p.get('first_name', '')} {p.get('last_name', '')}",
+                        'ownership_share': p.get('relation_data', {}).get('ownership_share', 0),
+                        'evidences': []
+                    })
+            if owners:
+                logger.info(f"Review step fallback: found {len(owners)} owners from persons data")
 
         if not owners:
             logger.info("Review step: No ownership relation found - no claim created")
@@ -1255,7 +1271,7 @@ class ReviewStep(BaseStep):
 
             claim_data = {
                 "claim_type": "ownership",
-                "unit_id": self.context.unit.unit_uuid if self.context.unit else "",
+                "unit_uuid": self.context.unit.unit_uuid if self.context.unit else "",
                 "person_ids": json.dumps(person_ids),
                 "relation_ids": json.dumps(relation_ids),
                 "case_status": case_status,
@@ -1311,25 +1327,17 @@ class ReviewStep(BaseStep):
             "autoCreateClaim": True
         }
 
-        # Call the finalize API
-        try:
-            response = self._api_service.finalize_office_survey(survey_id, finalize_options)
+        if self._use_api:
+            try:
+                response = self._api_service.finalize_office_survey(survey_id, finalize_options)
+                logger.info(f"Survey {survey_id} finalized successfully")
+                self.context.finalize_response = response
+                return
+            except Exception as e:
+                logger.warning(f"Failed to finalize survey via API, falling back to local: {e}")
 
-            logger.info(f"Survey {survey_id} finalized successfully")
-            ErrorHandler.show_success(
-                self,
-                tr("wizard.review.finalize_success"),
-                tr("common.success")
-            )
-
-        except Exception as e:
-            logger.error(f"Failed to finalize survey: {e}")
-
-            ErrorHandler.show_error(
-                self,
-                tr("wizard.review.finalize_error", error_msg=map_exception(e)),
-                tr("common.error")
-            )
+        # Fallback to local processing
+        self._process_claims_locally()
 
     def on_show(self):
         """Refresh summary when step is shown."""

@@ -169,8 +169,8 @@ class UnitRepository:
     def delete(self, unit_uuid: str) -> bool:
         """Delete a unit by UUID."""
         query = "DELETE FROM property_units WHERE unit_uuid = ?"
-        cursor = self.db.execute(query, (unit_uuid,))
-        return cursor.rowcount > 0
+        self.db.execute(query, (unit_uuid,))
+        return self.get_by_uuid(unit_uuid) is None
 
     def _row_to_unit(self, row) -> PropertyUnit:
         """Convert database row to PropertyUnit object."""

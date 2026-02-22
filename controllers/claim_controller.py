@@ -113,6 +113,10 @@ class ClaimController(BaseController):
             if not data.get("case_status"):
                 data["case_status"] = "draft"
 
+            # Normalize: Claim model uses unit_id, callers may pass unit_uuid
+            if data.get("unit_uuid") and not data.get("unit_id"):
+                data["unit_id"] = data.pop("unit_uuid")
+
             # Create claim
             claim = Claim(**data)
             saved_claim = self.repository.create(claim)
@@ -458,12 +462,11 @@ class ClaimController(BaseController):
 
         query += f" ORDER BY created_at DESC LIMIT {filter_.limit} OFFSET {filter_.offset}"
 
-        cursor = self.db.cursor()
-        cursor.execute(query, params)
-
+        rows = self.db.execute(query, tuple(params))
         claims = []
-        for row in cursor.fetchall():
-            claims.append(Claim.from_row(row))
+        for row in rows:
+            row_dict = dict(row) if hasattr(row, 'keys') else row
+            claims.append(Claim.from_dict(row_dict))
 
         return claims
 
@@ -796,16 +799,16 @@ class ClaimController(BaseController):
             OperationResult with status counts
         """
         try:
-            cursor = self.db.cursor()
-            cursor.execute("""
+            rows = self.db.execute("""
                 SELECT case_status, COUNT(*) as count
                 FROM claims
                 GROUP BY case_status
             """)
-
             result = {}
-            for row in cursor.fetchall():
-                result[row[0] or "unknown"] = row[1]
+            for row in rows:
+                status = row.get("case_status") if hasattr(row, 'get') else row[0]
+                count = row.get("count") if hasattr(row, 'get') else row[1]
+                result[status or "unknown"] = count
 
             return OperationResult.ok(data=result)
 
@@ -824,10 +827,9 @@ class ClaimController(BaseController):
 
         # Required fields for new claims
         if not is_update:
-            required = ["unit_uuid"]
-            for field in required:
-                if not data.get(field):
-                    errors.append(f"Missing required field: {field}")
+            # Accept either unit_uuid or unit_id
+            if not data.get("unit_uuid") and not data.get("unit_id"):
+                errors.append("Missing required field: unit_uuid or unit_id")
 
         if errors:
             return OperationResult.fail(
@@ -840,10 +842,11 @@ class ClaimController(BaseController):
 
     def _generate_case_number(self) -> str:
         """Generate unique case number."""
-        cursor = self.db.cursor()
-        cursor.execute("SELECT MAX(CAST(SUBSTR(case_number, 5) AS INTEGER)) FROM claims WHERE case_number LIKE 'CLM-%'")
-
-        result = cursor.fetchone()
-        next_num = (result[0] or 0) + 1 if result else 1
-
+        rows = self.db.execute(
+            "SELECT MAX(CAST(SUBSTR(case_number, 5) AS INTEGER)) as max_num FROM claims WHERE case_number LIKE 'CLM-%'"
+        )
+        max_num = None
+        if rows:
+            max_num = rows[0].get("max_num") if hasattr(rows[0], 'get') else rows[0][0]
+        next_num = (max_num or 0) + 1
         return f"CLM-{str(next_num).zfill(6)}"
