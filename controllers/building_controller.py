@@ -10,31 +10,24 @@ Handles:
 - Building validation
 - Building statistics
 
-Supports both API and local database backends based on Config.DATA_PROVIDER.
+Uses API backend for all data operations.
 """
 
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
 
 from PyQt5.QtCore import pyqtSignal
 
-from app.config import Config
 from controllers.base_controller import BaseController, OperationResult
 from models.building import Building
 from repositories.building_repository import BuildingRepository
 from repositories.database import Database
+from services.api_client import get_api_client
 from services.validation_service import ValidationService
 from utils.logger import get_logger
 
 logger = get_logger(__name__)
-
-# Optional: API client for Backend search
-try:
-    from services.api_client import get_api_client
-    API_CLIENT_AVAILABLE = True
-except ImportError:
-    API_CLIENT_AVAILABLE = False
 
 
 @dataclass
@@ -65,32 +58,16 @@ class BuildingController(BaseController):
     buildings_loaded = pyqtSignal(list)  # list of buildings
     building_selected = pyqtSignal(object)  # Building object
 
-    # Class-level caches for address lookup (loaded once from JSON files)
-    _neighborhoods_cache: Optional[Dict[str, Dict]] = None
-    _admin_divisions_cache: Optional[Dict] = None
-
-    def __init__(self, db: Database = None, parent=None, use_api: bool = None):
+    def __init__(self, db: Database = None, parent=None, **kwargs):
         super().__init__(parent)
         self.db = db
 
-        # Determine whether to use API or local database
-        # Priority: explicit parameter > Config setting
-        if use_api is not None:
-            self._use_api = use_api
-        else:
-            # Check if DATA_PROVIDER is set to "http" in config
-            self._use_api = getattr(Config, 'DATA_PROVIDER', 'local_db') == 'http'
-
-        # Initialize repository for local fallback regardless of mode
+        # Repository kept for local-only helpers (unit sync, dependency checks)
         self.repository = BuildingRepository(db) if db else None
 
-        # Initialize appropriate backend
-        if self._use_api:
-            self._api_service = get_api_client()
-            logger.info("BuildingController using API backend (local fallback ready)")
-        else:
-            self._api_service = None
-            logger.info("BuildingController using local database backend")
+        # Always use API backend
+        self._api_service = get_api_client()
+        logger.info("BuildingController using API backend")
 
         self.validation_service = ValidationService()
 
@@ -100,47 +77,28 @@ class BuildingController(BaseController):
 
     @classmethod
     def _get_neighborhood_name(cls, code: str) -> str:
-        """
-        Lookup neighborhood Arabic name by code from neighborhoods.json.
-
-        Uses class-level cache - loads the file only once.
-        Fallback: returns the code itself if not found.
-        """
+        """Lookup neighborhood Arabic name by code via API."""
         if not code:
             return ""
 
-        # Load cache once
-        if cls._neighborhoods_cache is None:
-            cls._neighborhoods_cache = {}
-            try:
-                import json
-                import os
-                json_path = os.path.join(
-                    os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-                    "data", "neighborhoods.json"
-                )
-                with open(json_path, "r", encoding="utf-8") as f:
-                    data = json.load(f)
-                for n in data.get("neighborhoods", []):
-                    cls._neighborhoods_cache[n["code"]] = n
-                logger.info(f"Loaded {len(cls._neighborhoods_cache)} neighborhoods from JSON")
-            except Exception as e:
-                logger.warning(f"Could not load neighborhoods.json: {e}")
+        try:
+            api = get_api_client()
+            neighborhoods = api.get_neighborhoods()
+            for n in neighborhoods:
+                if n.get("neighborhoodCode") == code:
+                    return n.get("nameArabic", code)
+        except Exception as e:
+            logger.debug(f"API neighborhood lookup failed: {e}")
+            raise
 
-        entry = cls._neighborhoods_cache.get(code)
-        if entry:
-            return entry.get("name_ar", code)
         return code
 
     @classmethod
     def _resolve_admin_names(cls, gov_code: str, dist_code: str,
                               subdist_code: str, community_code: str = "") -> Dict[str, str]:
         """
-        Resolve governorate/district/subdistrict/community names from codes
-        using administrative_divisions.json.
-
-        Returns dict with keys: governorate_name_ar, district_name_ar,
-        subdistrict_name_ar, community_name_ar
+        Resolve governorate/district/subdistrict/community names from codes.
+        Uses DivisionsService (API-first with JSON fallback).
         """
         result = {
             "governorate_name_ar": "",
@@ -152,44 +110,25 @@ class BuildingController(BaseController):
         if not gov_code:
             return result
 
-        # Load admin divisions cache once
-        if cls._admin_divisions_cache is None:
-            cls._admin_divisions_cache = {}
-            try:
-                import json
-                import os
-                json_path = os.path.join(
-                    os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-                    "data", "administrative_divisions.json"
-                )
-                with open(json_path, "r", encoding="utf-8") as f:
-                    cls._admin_divisions_cache = json.load(f)
-                logger.info("Loaded administrative_divisions.json for address resolution")
-            except Exception as e:
-                logger.warning(f"Could not load administrative_divisions.json: {e}")
-
         try:
-            for gov in cls._admin_divisions_cache.get("governorates", []):
-                if gov.get("code") == gov_code:
-                    result["governorate_name_ar"] = gov.get("name_ar", "")
-                    if not dist_code:
-                        break
-                    for dist in gov.get("districts", []):
-                        if dist.get("code") == dist_code:
-                            result["district_name_ar"] = dist.get("name_ar", "")
-                            if not subdist_code:
-                                break
-                            for subdist in dist.get("subdistricts", []):
-                                if subdist.get("code") == subdist_code:
-                                    result["subdistrict_name_ar"] = subdist.get("name_ar", "")
-                                    if community_code:
-                                        for comm in subdist.get("communities", []):
-                                            if comm.get("code") == community_code:
-                                                result["community_name_ar"] = comm.get("name_ar", "")
-                                                break
-                                    break
-                            break
-                    break
+            from services.divisions_service import DivisionsService
+            service = DivisionsService()
+
+            _, name_ar = service.get_governorate_name(gov_code)
+            result["governorate_name_ar"] = name_ar
+
+            if dist_code:
+                _, name_ar = service.get_district_name(gov_code, dist_code)
+                result["district_name_ar"] = name_ar
+
+            if dist_code and subdist_code:
+                _, name_ar = service.get_subdistrict_name(gov_code, dist_code, subdist_code)
+                result["subdistrict_name_ar"] = name_ar
+
+            if dist_code and subdist_code and community_code:
+                _, name_ar = service.get_community_name(gov_code, dist_code, subdist_code, community_code)
+                result["community_name_ar"] = name_ar
+
         except Exception as e:
             logger.warning(f"Error resolving admin division names: {e}")
 
@@ -210,7 +149,7 @@ class BuildingController(BaseController):
     @property
     def is_using_api(self) -> bool:
         """Check if controller is using API backend."""
-        return self._use_api
+        return True
 
     def set_auth_token(self, token: str):
         """
@@ -221,21 +160,6 @@ class BuildingController(BaseController):
         """
         if self._api_service:
             self._api_service.set_access_token(token)
-
-    def switch_to_api(self):
-        """Switch to API backend."""
-        if not self._use_api:
-            self._api_service = get_api_client()
-            self._use_api = True
-            logger.info("BuildingController switched to API backend")
-
-    def switch_to_local_db(self):
-        """Switch to local database backend."""
-        if self._use_api:
-            if self.db:
-                self.repository = BuildingRepository(self.db)
-            self._use_api = False
-            logger.info("BuildingController switched to local database backend")
 
     # ==================== CRUD Operations ====================
 
@@ -264,19 +188,9 @@ class BuildingController(BaseController):
             if not data.get("building_id"):
                 data["building_id"] = self._generate_building_id(data)
 
-            # Create building via API or local database
-            if self._use_api and self._api_service:
-                logger.info(f"🌐 Using API backend for building creation (Config.DATA_PROVIDER={Config.DATA_PROVIDER})")
-                response = self._api_service.create_building(data)
-                saved_building = self._api_dto_to_building(response)
-            else:
-                logger.info(f"💾 Using local DB for building creation (Config.DATA_PROVIDER={Config.DATA_PROVIDER})")
-                # Filter to only Building dataclass fields
-                import dataclasses
-                valid_fields = {f.name for f in dataclasses.fields(Building)}
-                filtered = {k: v for k, v in data.items() if k in valid_fields}
-                building = Building(**filtered)
-                saved_building = self.repository.create(building)
+            # Create building via API
+            response = self._api_service.create_building(data)
+            saved_building = self._api_dto_to_building(response)
 
             if saved_building:
                 self._emit_completed("create_building", True)
@@ -316,12 +230,9 @@ class BuildingController(BaseController):
         try:
             self._emit_started("update_building")
 
-            # Get existing building
-            if self._use_api and self._api_service:
-                response = self._api_service.get_building_by_id(building_uuid)
-                existing = self._api_dto_to_building(response) if response else None
-            else:
-                existing = self.repository.get_by_uuid(building_uuid)
+            # Get existing building via API
+            response = self._api_service.get_building_by_id(building_uuid)
+            existing = self._api_dto_to_building(response) if response else None
 
             if not existing:
                 self._emit_error("update_building", "Building not found")
@@ -336,33 +247,11 @@ class BuildingController(BaseController):
                 self._emit_error("update_building", validation_result.message)
                 return validation_result
 
-            # Update building via API or local database
-            if self._use_api and self._api_service:
-                # Merge existing data with new data
-                merged_data = existing.to_dict()
-                merged_data.update(data)
-                response = self._api_service.update_building(building_uuid, merged_data)
-                updated_building = self._api_dto_to_building(response)
-            else:
-                # Update building locally
-                old_apartments = existing.number_of_apartments or 0
-                old_shops = existing.number_of_shops or 0
-
-                for key, value in data.items():
-                    if hasattr(existing, key):
-                        setattr(existing, key, value)
-
-                existing.updated_at = datetime.now()
-                updated_building = self.repository.update(existing)
-
-                # Sync unit records if counts changed
-                new_apartments = data.get("number_of_apartments", old_apartments)
-                new_shops = data.get("number_of_shops", old_shops)
-                if old_apartments != new_apartments or old_shops != new_shops:
-                    try:
-                        self._sync_units_on_edit(updated_building, new_apartments, new_shops)
-                    except Exception as e:
-                        logger.error(f"Failed to sync units on edit: {e}")
+            # Update building via API
+            merged_data = existing.to_dict()
+            merged_data.update(data)
+            response = self._api_service.update_building(building_uuid, merged_data)
+            updated_building = self._api_dto_to_building(response)
 
             if updated_building:
                 self._emit_completed("update_building", True)
@@ -405,11 +294,8 @@ class BuildingController(BaseController):
         try:
             self._emit_started("delete_building")
 
-            # Check if building exists
-            if self._use_api and self._api_service:
-                existing = self._api_service.get_building_by_id(building_uuid)
-            else:
-                existing = self.repository.get_by_uuid(building_uuid)
+            # Check if building exists via API
+            existing = self._api_service.get_building_by_id(building_uuid)
 
             if not existing:
                 self._emit_error("delete_building", "Building not found")
@@ -418,23 +304,8 @@ class BuildingController(BaseController):
                     message_ar="المبنى غير موجود"
                 )
 
-            # Check if building has dependencies (only for local database)
-            if not self._use_api and self._has_dependencies(building_uuid):
-                self._emit_error("delete_building", "Building has related records")
-                return OperationResult.fail(
-                    message="Cannot delete building: units have associated data (claims, surveys, etc.)",
-                    message_ar="لا يمكن حذف المبنى: الوحدات تحتوي على بيانات مرتبطة (مطالبات، مسوحات، إلخ)"
-                )
-
-            # Delete building via API or local database
-            if self._use_api and self._api_service:
-                success = self._api_service.delete_building(building_uuid)
-            else:
-                # Delete units first (no CASCADE in schema)
-                self.db.execute(
-                    "DELETE FROM property_units WHERE building_id = ?",
-                    (existing.building_id,))
-                success = self.repository.delete(building_uuid)
+            # Delete building via API
+            success = self._api_service.delete_building(building_uuid)
 
             if success:
                 self._emit_completed("delete_building", True)
@@ -489,23 +360,13 @@ class BuildingController(BaseController):
                     message_ar="يجب توفير حقل هندسي واحد على الأقل"
                 )
 
-            if self._use_api and self._api_service:
-                # Use API service
-                response = self._api_service.update_building_geometry(
-                    building_id=building_uuid,
-                    latitude=latitude,
-                    longitude=longitude,
-                    building_geometry_wkt=polygon_wkt
-                )
-                building = self._api_dto_to_building(response) if response else None
-            else:
-                # Use local repository
-                building = self.repository.update_geometry(
-                    building_uuid=building_uuid,
-                    latitude=latitude,
-                    longitude=longitude,
-                    polygon_wkt=polygon_wkt
-                )
+            response = self._api_service.update_building_geometry(
+                building_id=building_uuid,
+                latitude=latitude,
+                longitude=longitude,
+                building_geometry_wkt=polygon_wkt
+            )
+            building = self._api_dto_to_building(response) if response else None
 
             if building:
                 # Emit signals
@@ -543,11 +404,8 @@ class BuildingController(BaseController):
             OperationResult with Building or error
         """
         try:
-            if self._use_api and self._api_service:
-                response = self._api_service.get_building_by_id(building_uuid)
-                building = self._api_dto_to_building(response) if response else None
-            else:
-                building = self.repository.get_by_uuid(building_uuid)
+            response = self._api_service.get_building_by_id(building_uuid)
+            building = self._api_dto_to_building(response) if response else None
 
             if building:
                 return OperationResult.ok(data=building)
@@ -571,11 +429,8 @@ class BuildingController(BaseController):
             OperationResult with Building or error
         """
         try:
-            if self._use_api and self._api_service:
-                response = self._api_service.get_building_by_id(building_id)
-                building = self._api_dto_to_building(response) if response else None
-            else:
-                building = self.repository.get_by_id(building_id)
+            response = self._api_service.get_building_by_id(building_id)
+            building = self._api_dto_to_building(response) if response else None
 
             if building:
                 return OperationResult.ok(data=building)
@@ -631,24 +486,14 @@ class BuildingController(BaseController):
 
             filter_ = filter_ or self._current_filter
 
-            # Use API or local database based on configuration
-            if self._use_api and self._api_service:
-                try:
-                    # Use BuildingAssignments/buildings API (returns neighborhoodName populated)
-                    response = self._api_service.get_buildings_for_assignment(
-                        page_size=filter_.limit if filter_ else 100
-                    )
-                    # Convert API response to Building objects
-                    buildings = []
-                    for item in response.get("items", []):
-                        building = self._api_dto_to_building(item)
-                        buildings.append(building)
-                except Exception as e:
-                    logger.warning(f"API search failed, falling back to local DB: {e}")
-                    buildings = self._query_buildings(filter_)
-            else:
-                # Build query based on filter
-                buildings = self._query_buildings(filter_)
+            # Load buildings via API
+            response = self._api_service.get_buildings_for_assignment(
+                page_size=filter_.limit if filter_ else 100
+            )
+            buildings = []
+            for item in response.get("items", []):
+                building = self._api_dto_to_building(item)
+                buildings.append(building)
 
             self._buildings_cache = buildings
             self._current_filter = filter_
@@ -665,10 +510,7 @@ class BuildingController(BaseController):
 
     def search_buildings(self, search_text: str) -> OperationResult[List[Building]]:
         """
-        Search buildings by text.
-
-        When using API backend, calls POST /v1/Buildings/search with {"buildingId": "..."}
-        When using local database, filters buildings by building_id or address.
+        Search buildings by text via API.
 
         Args:
             search_text: Text to search for (building ID)
@@ -679,25 +521,16 @@ class BuildingController(BaseController):
         try:
             self._emit_started("search_buildings")
 
-            if self._use_api and self._api_service:
-                # Use dedicated search API endpoint
-                logger.info(f"🌐 Using API backend for building search (Config.DATA_PROVIDER={Config.DATA_PROVIDER})")
-                response = self._api_service.search_buildings(building_id=search_text, page_size=100)
-                # Convert API response to Building objects
-                buildings = []
-                for item in response.get("buildings", response.get("items", [])):
-                    building = self._api_dto_to_building(item)
-                    buildings.append(building)
-                logger.info(f"Search found {len(buildings)} buildings for query: {search_text}")
-                self._buildings_cache = buildings
-                self._emit_completed("search_buildings", True)
-                self.buildings_loaded.emit(buildings)
-                return OperationResult.ok(data=buildings)
-            else:
-                # Use local database filter
-                logger.info(f"💾 Using local DB for building search (Config.DATA_PROVIDER={Config.DATA_PROVIDER})")
-                filter_ = BuildingFilter(search_text=search_text)
-                return self.load_buildings(filter_)
+            response = self._api_service.search_buildings(building_id=search_text, page_size=100)
+            buildings = []
+            for item in response.get("buildings", response.get("items", [])):
+                building = self._api_dto_to_building(item)
+                buildings.append(building)
+            logger.info(f"Search found {len(buildings)} buildings for query: {search_text}")
+            self._buildings_cache = buildings
+            self._emit_completed("search_buildings", True)
+            self.buildings_loaded.emit(buildings)
+            return OperationResult.ok(data=buildings)
 
         except Exception as e:
             error_msg = f"Error searching buildings: {str(e)}"
@@ -741,15 +574,10 @@ class BuildingController(BaseController):
             OperationResult with list of Buildings from API
         """
         try:
-            if not API_CLIENT_AVAILABLE:
-                logger.warning("API client not available - falling back to local search")
-                return OperationResult.fail(message="API client not available")
-
             self._emit_started("search_for_assignment")
 
             # Call Backend API
-            api_client = get_api_client()
-            response = api_client.search_buildings_for_assignment(
+            response = self._api_service.search_buildings_for_assignment(
                 polygon_wkt=polygon_wkt,
                 governorate_code=governorate_code,
                 subdistrict_code=subdistrict_code,
@@ -810,18 +638,10 @@ class BuildingController(BaseController):
             )
         """
         try:
-            if not API_CLIENT_AVAILABLE:
-                logger.warning("API client not available for filter-based search")
-                return OperationResult.fail(
-                    message="API client not available",
-                    message_ar="عميل API غير متوفر"
-                )
-
             self._emit_started("search_for_assignment_by_filters")
 
-            # Call Backend API with filters only (no polygon needed!)
-            api_client = get_api_client()
-            response = api_client.get_buildings_for_assignment(
+            # Call Backend API with filters only (no polygon needed)
+            response = self._api_service.get_buildings_for_assignment(
                 governorate_code=governorate_code,
                 subdistrict_code=subdistrict_code,
                 survey_status=survey_status,
@@ -892,7 +712,7 @@ class BuildingController(BaseController):
             subdist_name = subdist_name or resolved["subdistrict_name_ar"]
             community_name = community_name or resolved["community_name_ar"]
 
-        # Neighborhood name: API → neighborhoods.json fallback
+        # Neighborhood name: API
         if not neighborhood_name and neighborhood_code:
             neighborhood_name = self._get_neighborhood_name(neighborhood_code)
 
@@ -928,52 +748,6 @@ class BuildingController(BaseController):
             longitude=dto.get("longitude"),
             geo_location=dto.get("buildingGeometryWkt") or dto.get("geoLocation")
         )
-
-    def _query_buildings(self, filter_: BuildingFilter) -> List[Building]:
-        """Execute building query with filter."""
-        query = "SELECT * FROM buildings WHERE 1=1"
-        params = []
-
-        if filter_.neighborhood_code:
-            query += " AND neighborhood_code = ?"
-            params.append(filter_.neighborhood_code)
-
-        if filter_.building_type:
-            query += " AND building_type = ?"
-            params.append(filter_.building_type)
-
-        if filter_.building_status:
-            query += " AND building_status = ?"
-            params.append(filter_.building_status)
-
-        if filter_.search_text:
-            # Search in building_id, address, AND neighborhood names (Best Practice)
-            query += " AND (building_id LIKE ? OR address LIKE ? OR neighborhood_name_ar LIKE ? OR neighborhood_name LIKE ?)"
-            search_param = f"%{filter_.search_text}%"
-            params.extend([search_param, search_param, search_param, search_param])
-
-        if filter_.has_coordinates is not None:
-            if filter_.has_coordinates:
-                query += " AND latitude IS NOT NULL AND longitude IS NOT NULL"
-            else:
-                query += " AND (latitude IS NULL OR longitude IS NULL)"
-
-        if filter_.assigned_to:
-            query += """ AND building_uuid IN (
-                SELECT building_uuid FROM field_assignments WHERE assigned_to = ?
-            )"""
-            params.append(filter_.assigned_to)
-
-        query += f" ORDER BY created_at DESC LIMIT {filter_.limit} OFFSET {filter_.offset}"
-
-        # استخدام fetch_all من Database بدلاً من cursor مباشرة
-        rows = self.db.fetch_all(query, tuple(params) if params else None)
-
-        buildings = []
-        for row in rows:
-            buildings.append(self.repository._row_to_building(row))
-
-        return buildings
 
     # ==================== Statistics ====================
 
@@ -1246,47 +1020,6 @@ class BuildingController(BaseController):
                     f"Could only remove {removed}/{to_remove} {unit_type} units "
                     f"(remaining have associated data)")
 
-    def _has_dependencies(self, building_uuid: str) -> bool:
-        """Check if building has real dependent records (not empty auto-created units)."""
-        building_result = self.db.fetch_one(
-            "SELECT building_id FROM buildings WHERE building_uuid = ?",
-            (building_uuid,))
-        if not building_result:
-            return False
-
-        bid = building_result['building_id']
-
-        # Check claims on building's units
-        r = self.db.fetch_one(
-            "SELECT COUNT(*) as c FROM claims WHERE unit_id IN "
-            "(SELECT unit_id FROM property_units WHERE building_id = ?)", (bid,))
-        if r and r['c'] > 0:
-            return True
-
-        # Check person-unit relations
-        r = self.db.fetch_one(
-            "SELECT COUNT(*) as c FROM person_unit_relations WHERE unit_id IN "
-            "(SELECT unit_id FROM property_units WHERE building_id = ?)", (bid,))
-        if r and r['c'] > 0:
-            return True
-
-        # Check households
-        r = self.db.fetch_one(
-            "SELECT COUNT(*) as c FROM households WHERE unit_id IN "
-            "(SELECT unit_id FROM property_units WHERE building_id = ?)", (bid,))
-        if r and r['c'] > 0:
-            return True
-
-        # Check surveys on units or building
-        r = self.db.fetch_one(
-            "SELECT COUNT(*) as c FROM surveys WHERE unit_id IN "
-            "(SELECT unit_id FROM property_units WHERE building_id = ?) "
-            "OR building_id = ?", (bid, bid))
-        if r and r['c'] > 0:
-            return True
-
-        return False
-
     # ==================== Export ====================
 
     def export_buildings(
@@ -1305,7 +1038,8 @@ class BuildingController(BaseController):
             OperationResult with file path
         """
         try:
-            buildings = self._query_buildings(filter_ or BuildingFilter(limit=10000))
+            result = self.load_buildings(filter_ or BuildingFilter(limit=10000))
+            buildings = result.data if result.success else []
 
             # Delegate to export service
             from services.export_service import ExportService

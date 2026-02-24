@@ -384,21 +384,12 @@ class LoginPage(QWidget):
         logger.info("DEV MODE: Auto-filled login credentials")
 
     def set_data_mode(self, mode: str, db=None):
-        """Switch auth service based on data mode."""
-        if mode == "local" and db:
-            from services.local_auth_service import LocalAuthService
-            self.auth_service = LocalAuthService(db)
-            self.db = db
-            if Config.DEV_MODE:
-                self.username_input.setText("admin")
-                self.password_input.setText("admin123")
-            logger.info("Login: switched to local auth (SQLite)")
-        else:
-            self.auth_service = ApiAuthService()
-            if Config.DEV_MODE and Config.DEV_AUTO_LOGIN:
-                self.username_input.setText(Config.DEV_USERNAME)
-                self.password_input.setText(Config.DEV_PASSWORD)
-            logger.info("Login: switched to API auth")
+        """Set auth service (always API)."""
+        self.auth_service = ApiAuthService()
+        if Config.DEV_MODE and Config.DEV_AUTO_LOGIN:
+            self.username_input.setText(Config.DEV_USERNAME)
+            self.password_input.setText(Config.DEV_PASSWORD)
+        logger.info("Login: using API auth")
 
     def _toggle_password_visibility(self):
         """Toggle password visibility"""

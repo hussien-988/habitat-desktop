@@ -41,8 +41,8 @@ _MAP_BOUNDS_MAX_LAT = float(os.getenv("MAP_BOUNDS_MAX_LAT", "37.0"))
 _MAP_BOUNDS_MIN_LNG = float(os.getenv("MAP_BOUNDS_MIN_LNG", "36.5"))
 _MAP_BOUNDS_MAX_LNG = float(os.getenv("MAP_BOUNDS_MAX_LNG", "38.0"))
 
-# Data Mode: "local" = offline demo, "api" = Docker backend, "" = show chooser UI
-_DATA_MODE = os.getenv("DATA_MODE", "")
+# Data Mode: always "api" (Docker backend)
+_DATA_MODE = os.getenv("DATA_MODE", "api")
 
 # GeoServer Settings (optional)
 _GEOSERVER_URL = os.getenv("GEOSERVER_URL", None)
@@ -63,29 +63,14 @@ class Config:
 
     # Development Mode
     # WARNING: Set to False in production! Only use True during development/testing
-    DEV_MODE: bool = False
-    DEV_AUTO_LOGIN: bool = False
+    DEV_MODE: bool = True
+    DEV_AUTO_LOGIN: bool = True
     DEV_USERNAME: str = "admin"
-    DEV_PASSWORD: str = "admin123"
+    DEV_PASSWORD: str = "Admin@123"
 
-    # Data Mode (runtime switchable)
-    # "local" = offline demo (SQLite only, no API calls)
-    # "api"   = central database via Docker backend
-    # ""      = show chooser screen on startup
-    DATA_MODE: str = _DATA_MODE
-
-    # Data Provider Configuration
-    # Options: "mock", "http", "local_db"
-    # - mock: Uses in-memory mock data for development (no backend required)
-    # - http: Connects to a REST API backend (uses /api/Buildings endpoint)
-    # - local_db: Uses local SQLite/PostgreSQL database
-    # Automatically set to "local_db" when DATA_MODE is "local"
-    DATA_PROVIDER: str = "local_db" if _DATA_MODE == "local" else "http"
-
-    # Mock Data Provider Settings
-    MOCK_SIMULATE_DELAY: bool = True
-    MOCK_DELAY_MS: int = 200
-    MOCK_PERSIST_TO_FILE: bool = False
+    # Data Mode: always API (Docker backend)
+    DATA_MODE: str = "api"
+    DATA_PROVIDER: str = "http"
 
     # HTTP API Backend Settings
     # ✅ DYNAMIC: Reads from .env file (API_BASE_URL, API_TIMEOUT, API_MAX_RETRIES, etc.)
@@ -419,3 +404,5 @@ class AleppoDivisions:
         ("019", "Al-Shaar", "الشعار"),
         ("020", "Bustan al-Qasr", "بستان القصر"),
     ]
+
+

@@ -1873,8 +1873,8 @@ class AddBuildingPage(QWidget):
             return
 
         try:
-            from services.neighborhood_geocoder import NeighborhoodGeocoderFactory
-            geocoder = NeighborhoodGeocoderFactory.create(provider="local")
+            from services.neighborhood_geocoder import NeighborhoodGeocoder
+            geocoder = NeighborhoodGeocoder()
             lon = self.longitude_spin.value()
             lat = self.latitude_spin.value()
             detected = geocoder.find_neighborhood(f"POINT({lon} {lat})")
@@ -1937,7 +1937,7 @@ class AddBuildingPage(QWidget):
         self._validate_building_id_realtime()
 
     def _load_neighborhoods_from_api(self):
-        """Load neighborhoods from backend API, with local JSON fallback."""
+        """Load neighborhoods from backend API."""
         gov_code = self._get_gov_code()
         dist_code = self._get_district_code()
         subdist_code = self._get_subdistrict_code()
@@ -1949,7 +1949,6 @@ class AddBuildingPage(QWidget):
 
         if gov_code and dist_code and subdist_code and comm_code:
             neighborhoods = []
-            # Try API first
             try:
                 api_client = get_api_client()
                 if api_client is not None:
@@ -1962,10 +1961,6 @@ class AddBuildingPage(QWidget):
             except Exception as e:
                 logger.warning(f"Failed to load neighborhoods from API: {e}")
 
-            # Fallback to local JSON if API returned nothing
-            if not neighborhoods:
-                neighborhoods = self._load_neighborhoods_from_json()
-
             self._neighborhoods_cache = neighborhoods
             for n in neighborhoods:
                 code = n.get("neighborhoodCode", n.get("code", ""))
@@ -1975,32 +1970,6 @@ class AddBuildingPage(QWidget):
                 self.neighborhood_combo.setCurrentIndex(1)
 
         self.neighborhood_combo.blockSignals(False)
-
-    def _load_neighborhoods_from_json(self):
-        """Load neighborhoods from local JSON file as fallback."""
-        try:
-            import json
-            from pathlib import Path
-            json_path = Path(__file__).parent.parent.parent / "data" / "neighborhoods.json"
-            if not json_path.exists():
-                logger.warning(f"Neighborhoods JSON not found: {json_path}")
-                return []
-            with open(json_path, 'r', encoding='utf-8') as f:
-                data = json.load(f)
-            raw = data.get('neighborhoods', [])
-            # Normalize to API format for consistent access
-            result = []
-            for n in raw:
-                result.append({
-                    "neighborhoodCode": n.get("code", ""),
-                    "nameArabic": n.get("name_ar", ""),
-                    "nameEnglish": n.get("name_en", ""),
-                })
-            logger.info(f"Loaded {len(result)} neighborhoods from local JSON")
-            return result
-        except Exception as e:
-            logger.warning(f"Failed to load neighborhoods from JSON: {e}")
-            return []
 
     def _get_neighborhood_name_ar(self) -> str:
         """Get Arabic name from cached API neighborhoods."""
@@ -2028,9 +1997,9 @@ class AddBuildingPage(QWidget):
         - Different neighborhood: confirm dialog before overriding
         """
         try:
-            from services.neighborhood_geocoder import NeighborhoodGeocoderFactory
+            from services.neighborhood_geocoder import NeighborhoodGeocoder
 
-            geocoder = NeighborhoodGeocoderFactory.create(provider="local")
+            geocoder = NeighborhoodGeocoder()
             detected = geocoder.find_neighborhood(geometry_wkt)
 
             if not detected:
@@ -2076,9 +2045,9 @@ class AddBuildingPage(QWidget):
             (latitude, longitude) tuple or None
         """
         try:
-            from services.neighborhood_geocoder import NeighborhoodGeocoderFactory
+            from services.neighborhood_geocoder import NeighborhoodGeocoder
 
-            geocoder = NeighborhoodGeocoderFactory.create(provider="local")
+            geocoder = NeighborhoodGeocoder()
             neighborhood = geocoder.get_neighborhood_by_code(neighborhood_code)
 
             if neighborhood:
@@ -2110,10 +2079,10 @@ class AddBuildingPage(QWidget):
     def _get_neighborhood_bounds(self, neighborhood_code: str):
         """Get bounding box for Leaflet fitBounds: [[south_lat, west_lng], [north_lat, east_lng]]."""
         try:
-            from services.neighborhood_geocoder import NeighborhoodGeocoderFactory
+            from services.neighborhood_geocoder import NeighborhoodGeocoder
             import json
 
-            geocoder = NeighborhoodGeocoderFactory.create(provider="local")
+            geocoder = NeighborhoodGeocoder()
             if not geocoder.get_neighborhood_by_code(neighborhood_code):
                 return None
 
@@ -2133,13 +2102,11 @@ class AddBuildingPage(QWidget):
             return None
 
     def _build_neighborhoods_geojson(self) -> str:
-        """Load neighborhoods from Backend API (best practice), fallback to local JSON."""
-        # API-first: get real data from Docker backend
+        """Load neighborhoods from Backend API."""
         try:
             from services.api_client import get_api_client
             api = get_api_client()
 
-            # Full Aleppo bounds
             neighborhoods = api.get_neighborhoods_by_bounds(
                 sw_lat=36.14, sw_lng=37.07,
                 ne_lat=36.26, ne_lng=37.23
@@ -2151,10 +2118,9 @@ class AddBuildingPage(QWidget):
                     logger.info(f"Loaded {len(neighborhoods)} neighborhoods from API")
                     return geojson
         except Exception as e:
-            logger.warning(f"API neighborhoods failed, using local fallback: {e}")
+            logger.warning(f"API neighborhoods failed: {e}")
 
-        # Fallback: local JSON
-        return self._build_neighborhoods_geojson_local()
+        return '{"type":"FeatureCollection","features":[]}'
 
     def _neighborhoods_api_to_geojson(self, neighborhoods: list) -> str:
         """Convert API neighborhood response (with WKT boundaries) to GeoJSON."""
@@ -2209,52 +2175,6 @@ class AddBuildingPage(QWidget):
         except Exception:
             pass
         return None
-
-    def _build_neighborhoods_geojson_local(self) -> str:
-        """Fallback: Build GeoJSON from local neighborhoods.json."""
-        try:
-            import json
-            import os
-
-            data_file = os.path.join(
-                os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
-                'data', 'neighborhoods.json'
-            )
-            with open(data_file, 'r', encoding='utf-8') as f:
-                data = json.load(f)
-
-            features = []
-            for n in data.get('neighborhoods', []):
-                polygon = n.get('polygon', [])
-                if not polygon:
-                    continue
-
-                lngs = [p[0] for p in polygon]
-                lats = [p[1] for p in polygon]
-                center_lng = sum(lngs) / len(lngs)
-                center_lat = sum(lats) / len(lats)
-
-                features.append({
-                    "type": "Feature",
-                    "properties": {
-                        "code": n['code'],
-                        "name_ar": n.get('name_ar', ''),
-                        "name_en": n.get('name_en', ''),
-                        "center_lat": center_lat,
-                        "center_lng": center_lng
-                    },
-                    "geometry": {
-                        "type": "Point",
-                        "coordinates": [center_lng, center_lat]
-                    }
-                })
-
-            return json.dumps({"type": "FeatureCollection", "features": features})
-        except Exception as e:
-            logger.error(f"Failed to build local neighborhoods GeoJSON: {e}", exc_info=True)
-            return '{"type":"FeatureCollection","features":[]}'
-
-
 
 class FilterableHeaderView(QHeaderView):
     """
@@ -3196,11 +3116,11 @@ class BuildingsPage(QWidget):
 
     view_building = pyqtSignal(object)
 
-    def __init__(self, db: Database = None, i18n: I18n = None, parent=None, use_api: bool = None):
+    def __init__(self, db: Database = None, i18n: I18n = None, parent=None, **kwargs):
         super().__init__(parent)
         self.db = db
         self.i18n = i18n
-        self.building_controller = BuildingController(db, use_api=use_api)
+        self.building_controller = BuildingController(db)
         self.export_service = ExportService(db) if db else None
 
         self._setup_ui()

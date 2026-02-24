@@ -35,8 +35,7 @@ class MapServiceAPI:
     }
 
     # Class-level caches for address lookups (loaded once)
-    _admin_divisions_cache = None
-    _neighborhoods_cache = None
+    # Class-level attributes
 
     def __init__(self, api_client: Optional[TRRCMSApiClient] = None, data_provider: Optional[IMapDataProvider] = None):
         """
@@ -619,13 +618,9 @@ class MapServiceAPI:
     def _resolve_address_names(cls, gov_code: str, dist_code: str, subdist_code: str,
                                 community_code: str, neighborhood_code: str) -> Dict[str, str]:
         """
-        Resolve address names from codes using local JSON files.
-
-        Uses administrative_divisions.json for governorate/district/subdistrict/community
-        and neighborhoods.json for neighborhood names.
-
-        Returns dict with keys: governorate_name_ar, district_name_ar,
-        subdistrict_name_ar, community_name_ar, neighborhood_name_ar
+        Resolve address names from codes.
+        Uses DivisionsService (API-first) for admin divisions,
+        and API/JSON for neighborhood names.
         """
         result = {
             "governorate_name_ar": "",
@@ -635,62 +630,43 @@ class MapServiceAPI:
             "neighborhood_name_ar": ""
         }
 
-        # Load administrative divisions cache
-        if cls._admin_divisions_cache is None:
-            cls._admin_divisions_cache = {}
-            try:
-                import os
-                json_path = os.path.join(
-                    os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-                    "data", "administrative_divisions.json"
-                )
-                with open(json_path, "r", encoding="utf-8") as f:
-                    cls._admin_divisions_cache = json.load(f)
-                logger.info("Loaded administrative_divisions.json for address resolution")
-            except Exception as e:
-                logger.warning(f"Could not load administrative_divisions.json: {e}")
-
-        # Load neighborhoods cache
-        if cls._neighborhoods_cache is None:
-            cls._neighborhoods_cache = {}
-            try:
-                import os
-                json_path = os.path.join(
-                    os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-                    "data", "neighborhoods.json"
-                )
-                with open(json_path, "r", encoding="utf-8") as f:
-                    data = json.load(f)
-                for n in data.get("neighborhoods", []):
-                    cls._neighborhoods_cache[n["code"]] = n.get("name_ar", "")
-                logger.info(f"Loaded {len(cls._neighborhoods_cache)} neighborhoods from JSON")
-            except Exception as e:
-                logger.warning(f"Could not load neighborhoods.json: {e}")
-
-        # Resolve from administrative divisions hierarchy
+        # Resolve admin divisions via DivisionsService (API-first with JSON fallback)
         try:
-            for gov in cls._admin_divisions_cache.get("governorates", []):
-                if gov.get("code") == gov_code:
-                    result["governorate_name_ar"] = gov.get("name_ar", "")
-                    for dist in gov.get("districts", []):
-                        if dist.get("code") == dist_code:
-                            result["district_name_ar"] = dist.get("name_ar", "")
-                            for subdist in dist.get("subdistricts", []):
-                                if subdist.get("code") == subdist_code:
-                                    result["subdistrict_name_ar"] = subdist.get("name_ar", "")
-                                    for comm in subdist.get("communities", []):
-                                        if comm.get("code") == community_code:
-                                            result["community_name_ar"] = comm.get("name_ar", "")
-                                            break
-                                    break
-                            break
-                    break
+            from services.divisions_service import DivisionsService
+            service = DivisionsService()
+
+            if gov_code:
+                _, name_ar = service.get_governorate_name(gov_code)
+                result["governorate_name_ar"] = name_ar
+
+            if gov_code and dist_code:
+                _, name_ar = service.get_district_name(gov_code, dist_code)
+                result["district_name_ar"] = name_ar
+
+            if gov_code and dist_code and subdist_code:
+                _, name_ar = service.get_subdistrict_name(gov_code, dist_code, subdist_code)
+                result["subdistrict_name_ar"] = name_ar
+
+            if gov_code and dist_code and subdist_code and community_code:
+                _, name_ar = service.get_community_name(gov_code, dist_code, subdist_code, community_code)
+                result["community_name_ar"] = name_ar
+
         except Exception as e:
             logger.warning(f"Error resolving admin division names: {e}")
 
-        # Resolve neighborhood from neighborhoods.json
-        if neighborhood_code and cls._neighborhoods_cache:
-            result["neighborhood_name_ar"] = cls._neighborhoods_cache.get(neighborhood_code, "")
+        # Resolve neighborhood name via API
+        if neighborhood_code:
+            try:
+                from services.api_client import get_api_client
+                api = get_api_client()
+                if api:
+                    neighborhoods = api.get_neighborhoods()
+                    for n in neighborhoods:
+                        if n.get("neighborhoodCode") == neighborhood_code:
+                            result["neighborhood_name_ar"] = n.get("nameArabic", "")
+                            break
+            except Exception as e:
+                logger.warning(f"Failed to resolve neighborhood name: {e}")
 
         return result
 
