@@ -124,8 +124,10 @@ class AddUserPage(QWidget):
 
         self._mode = 'add'  # 'add', 'edit', 'view'
         self._editing_user = None
+        self._is_dirty = False
 
         self._setup_ui()
+        self._connect_dirty_tracking()
 
     def _setup_ui(self):
         self.setLayoutDirection(Qt.RightToLeft)
@@ -523,6 +525,7 @@ class AddUserPage(QWidget):
             data["_editing_user_id"] = self._editing_user.get("user_id")
             data["_mode"] = "edit"
             logger.info(f"Update user requested: {data.get('user_id')}, role={data.get('role')}")
+            self._is_dirty = False
             self.save_requested.emit(data)
         else:
             password = PasswordDialog.get_password(self)
@@ -531,6 +534,7 @@ class AddUserPage(QWidget):
             data["password"] = password
             data["_mode"] = "add"
             logger.info(f"Save user requested: {data.get('user_id')}, role={data.get('role')}")
+            self._is_dirty = False
             self.save_requested.emit(data)
 
     def set_user_data(self, user_data: dict, mode: str = 'edit'):
@@ -581,6 +585,7 @@ class AddUserPage(QWidget):
 
         self._mode = 'add'
         self._editing_user = None
+        self._is_dirty = False
         self.title_label.setText("إضافة مستخدم جديد")
         self.breadcrumb_label.setText("إدارة المستخدمين  •  إضافة مستخدم جديد")
         self.save_btn.setVisible(True)
@@ -610,6 +615,22 @@ class AddUserPage(QWidget):
             first_content.setVisible(True)
         if first_arrow:
             first_arrow.setText("∨")
+
+    def _connect_dirty_tracking(self):
+        """Track field changes to detect unsaved data."""
+        self.user_id_input.textChanged.connect(self._mark_dirty)
+        self.role_combo.currentIndexChanged.connect(self._mark_dirty)
+        for key in self._permission_checkboxes:
+            for action_key in self._permission_checkboxes[key]:
+                self._permission_checkboxes[key][action_key].stateChanged.connect(self._mark_dirty)
+
+    def _mark_dirty(self):
+        self._is_dirty = True
+
+    def has_unsaved_changes(self) -> bool:
+        if self._mode == 'view':
+            return False
+        return self._is_dirty
 
     def update_language(self, is_arabic: bool):
         pass

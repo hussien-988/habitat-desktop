@@ -81,14 +81,15 @@ class DuplicateService:
 
     def detect_unit_duplicates(self) -> List[DuplicateGroup]:
         """
-        Detect units with duplicate building_id + unit_number composite keys.
-        Per UC-007: Detect identical composite key (building_id + unit_number).
+        Detect units with duplicate building_id + unit_number + floor_number composite keys.
+        Per UC-007: Detect identical composite key (building_id + unit_code).
+        Floor_number included to avoid false positives for same unit_number on different floors.
         """
         query = """
-            SELECT building_id, unit_number, COUNT(*) as cnt
+            SELECT building_id, unit_number, floor_number, COUNT(*) as cnt
             FROM property_units
             WHERE unit_number IS NOT NULL AND unit_number != ''
-            GROUP BY building_id, unit_number
+            GROUP BY building_id, unit_number, floor_number
             HAVING COUNT(*) > 1
         """
         rows = self.db.fetch_all(query)
@@ -97,10 +98,10 @@ class DuplicateService:
         for row in rows:
             building_id = row["building_id"]
             unit_number = row["unit_number"]
-            composite_key = f"{building_id}:{unit_number}"
+            floor_number = row["floor_number"]
+            composite_key = f"{building_id}:{unit_number}:{floor_number}"
 
-            # Get all units with this composite key
-            units = self._get_units_by_composite_key(building_id, unit_number)
+            units = self._get_units_by_composite_key(building_id, unit_number, floor_number)
 
             if len(units) > 1:
                 group = DuplicateGroup(
@@ -156,6 +157,58 @@ class DuplicateService:
         logger.info(f"Detected {len(groups)} person duplicate groups")
         return groups
 
+    # ========== Person-Unit Relation Duplicate Detection ==========
+
+    def detect_person_unit_duplicates(self) -> List[DuplicateGroup]:
+        """
+        Detect when the same person is linked to the same unit multiple times
+        via person_unit_relations table.
+        """
+        query = """
+            SELECT person_id, unit_id, COUNT(*) as cnt
+            FROM person_unit_relations
+            GROUP BY person_id, unit_id
+            HAVING COUNT(*) > 1
+        """
+        rows = self.db.fetch_all(query)
+
+        groups = []
+        for row in rows:
+            person_id = row["person_id"]
+            unit_id = row["unit_id"]
+            composite_key = f"{person_id}:{unit_id}"
+
+            relations = self._get_person_unit_relations(person_id, unit_id)
+
+            if len(relations) > 1:
+                group = DuplicateGroup(
+                    group_id=str(uuid.uuid4()),
+                    entity_type="person_unit_relation",
+                    group_key=composite_key,
+                    records=relations,
+                    status="pending"
+                )
+                groups.append(group)
+
+        logger.info(f"Detected {len(groups)} person-unit relation duplicate groups")
+        return groups
+
+    def _get_person_unit_relations(self, person_id: str, unit_id: str) -> List[Dict[str, Any]]:
+        """Get relation records with joined person and unit details."""
+        query = """
+            SELECT pur.*,
+                   p.first_name_ar, p.last_name_ar, p.national_id,
+                   pu.unit_number, pu.floor_number, pu.unit_type,
+                   pu.apartment_status, pu.building_id,
+                   pu.number_of_rooms, pu.area_sqm, pu.unit_uuid
+            FROM person_unit_relations pur
+            LEFT JOIN persons p ON pur.person_id = p.person_id
+            LEFT JOIN property_units pu ON pur.unit_id = pu.unit_id
+            WHERE pur.person_id = ? AND pur.unit_id = ?
+        """
+        rows = self.db.fetch_all(query, (person_id, unit_id))
+        return [dict(row) for row in rows]
+
     # ========== Resolution Actions ==========
 
     def resolve_as_merge(
@@ -176,7 +229,7 @@ class DuplicateService:
             user_id: ID of user performing the resolution
         """
         try:
-            record_ids = [r.get("building_uuid") or r.get("unit_uuid") or r.get("person_uuid")
+            record_ids = [r.get("building_uuid") or r.get("unit_uuid") or r.get("person_uuid") or r.get("relation_id")
                          for r in group.records]
 
             # Log the resolution
@@ -195,6 +248,8 @@ class DuplicateService:
                 self._merge_units(group.records, master_record_id)
             elif group.entity_type == "person":
                 self._merge_persons(group.records, master_record_id)
+            elif group.entity_type == "person_unit_relation":
+                self._merge_person_unit_relations(group.records, master_record_id)
 
             logger.info(f"Merged {group.entity_type} duplicates: {group.group_key} -> {master_record_id}")
             return True
@@ -264,10 +319,14 @@ class DuplicateService:
         rows = self.db.fetch_all(query, (building_id,))
         return [dict(row) for row in rows]
 
-    def _get_units_by_composite_key(self, building_id: str, unit_number: str) -> List[Dict[str, Any]]:
-        """Get all unit records with a specific building_id + unit_number."""
-        query = "SELECT * FROM property_units WHERE building_id = ? AND unit_number = ?"
-        rows = self.db.fetch_all(query, (building_id, unit_number))
+    def _get_units_by_composite_key(self, building_id: str, unit_number: str, floor_number=None) -> List[Dict[str, Any]]:
+        """Get all unit records with a specific building_id + unit_number + floor_number."""
+        if floor_number is not None:
+            query = "SELECT * FROM property_units WHERE building_id = ? AND unit_number = ? AND floor_number = ?"
+            rows = self.db.fetch_all(query, (building_id, unit_number, floor_number))
+        else:
+            query = "SELECT * FROM property_units WHERE building_id = ? AND unit_number = ?"
+            rows = self.db.fetch_all(query, (building_id, unit_number))
         return [dict(row) for row in rows]
 
     def _get_persons_by_national_id(self, national_id: str) -> List[Dict[str, Any]]:
@@ -288,7 +347,7 @@ class DuplicateService:
         """Save resolution decision to database."""
         resolution_id = str(uuid.uuid4())
         record_ids = ",".join(
-            r.get("building_uuid") or r.get("unit_uuid") or r.get("person_uuid") or ""
+            r.get("building_uuid") or r.get("unit_uuid") or r.get("person_uuid") or r.get("relation_id") or ""
             for r in group.records
         )
 
@@ -384,6 +443,18 @@ class DuplicateService:
                 self.db.execute(
                     "DELETE FROM persons WHERE person_uuid = ?",
                     (record["person_uuid"],)
+                )
+
+    def _merge_person_unit_relations(self, records: List[Dict], master_relation_id: str):
+        """
+        Merge duplicate person-unit relations.
+        Keep master relation, delete duplicates.
+        """
+        for record in records:
+            if record.get("relation_id") != master_relation_id:
+                self.db.execute(
+                    "DELETE FROM person_unit_relations WHERE relation_id = ?",
+                    (record["relation_id"],)
                 )
 
     def _update_claim_person_references(self, old_person_id: str, new_person_id: str):

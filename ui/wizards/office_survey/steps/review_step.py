@@ -46,7 +46,7 @@ class ReviewStep(BaseStep):
     edit_requested = pyqtSignal(int)  # Emits step index to edit
 
     def __init__(self, context: SurveyContext, parent=None, read_only=False):
-        self._read_only = read_only
+        self._read_only = True  # Disabled for client build
         super().__init__(context, parent)
 
         # Initialize API service for finalizing survey

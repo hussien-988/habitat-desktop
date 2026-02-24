@@ -322,9 +322,24 @@ class IDBadgeWidget(QWidget):
 
         self._menu_item_widgets = []
 
+        # Features disabled for client build
+        _disabled_keys = {
+            "navbar.menu.change_language",
+            "navbar.menu.change_password",
+            "navbar.menu.security_policies",
+        }
+
         for icon_name, tr_key, signal in self._menu_items_config:
             item = _MenuItem(icon_name, tr(tr_key))
-            item.clicked.connect(signal.emit)
+            if tr_key in _disabled_keys:
+                item.setCursor(Qt.ForbiddenCursor)
+                item.setToolTip("هذه الميزة غير متاحة حالياً")
+                from PyQt5.QtWidgets import QGraphicsOpacityEffect
+                opacity_effect = QGraphicsOpacityEffect()
+                opacity_effect.setOpacity(0.5)
+                item.setGraphicsEffect(opacity_effect)
+            else:
+                item.clicked.connect(signal.emit)
             self._popup.add_item(item)
             self._menu_item_widgets.append((item, tr_key))
 

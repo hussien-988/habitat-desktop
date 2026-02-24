@@ -63,8 +63,8 @@ class Config:
 
     # Development Mode
     # WARNING: Set to False in production! Only use True during development/testing
-    DEV_MODE: bool = True
-    DEV_AUTO_LOGIN: bool = True  # Auto-fill login credentials in dev mode
+    DEV_MODE: bool = False
+    DEV_AUTO_LOGIN: bool = False
     DEV_USERNAME: str = "admin"
     DEV_PASSWORD: str = "admin123"
 
@@ -206,7 +206,7 @@ class Config:
     QGIS_PREFIX_PATH: str = "C:/Program Files/QGIS 3.34"  # Update for your QGIS install
 
     # Logo
-    LOGO_PATH: Path = ASSETS_DIR / "images" / "un-logo.jpg"
+    LOGO_PATH: Path = ASSETS_DIR / "images" / "Layer_1.png"
     LOGO_PLACEHOLDER: bool = False  # False = use actual logo file
 
     # Import Wizard

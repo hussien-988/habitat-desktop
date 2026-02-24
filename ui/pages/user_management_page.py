@@ -607,6 +607,15 @@ class UserManagementPage(QWidget):
 
     def _on_change_password(self, user: dict):
         logger.info(f"Change password for user: {user.get('user_id')}")
+        from ui.components.dialogs.confirmation_dialog import ConfirmationDialog, DialogResult
+        display_name = user.get('full_name', user.get('username', ''))
+        result = ConfirmationDialog.confirm(
+            parent=self,
+            title="تغيير كلمة المرور",
+            message=f"هل تريد تغيير كلمة المرور للمستخدم: {display_name}؟"
+        )
+        if result != DialogResult.YES:
+            return
         new_password = PasswordDialog.get_password(self)
         if new_password and self.user_repo:
             user_obj = user.get("_user_obj")
@@ -617,14 +626,15 @@ class UserManagementPage(QWidget):
                 Toast.show_toast(self, "تم تغيير كلمة المرور بنجاح", Toast.SUCCESS)
 
     def _on_delete_user(self, user: dict):
-        from PyQt5.QtWidgets import QMessageBox
+        from ui.components.dialogs.confirmation_dialog import ConfirmationDialog, DialogResult
         username = user.get("username", "")
-        reply = QMessageBox.question(
-            self, "تأكيد الحذف",
-            f"هل أنت متأكد من حذف المستخدم: {user.get('full_name', username)}؟",
-            QMessageBox.Yes | QMessageBox.No, QMessageBox.No
+        display_name = user.get('full_name', username)
+        result = ConfirmationDialog.confirm(
+            parent=self,
+            title="تأكيد الحذف",
+            message=f"هل أنت متأكد من حذف المستخدم: {display_name}؟"
         )
-        if reply == QMessageBox.Yes and self.user_repo:
+        if result == DialogResult.YES and self.user_repo:
             self.user_repo.delete(user.get("user_id"))
             logger.info(f"Deleted user: {username}")
             Toast.show_toast(self, "تم حذف المستخدم بنجاح", Toast.SUCCESS)
