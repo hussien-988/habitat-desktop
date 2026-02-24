@@ -349,16 +349,14 @@ class PolygonMapDialog(BaseMapDialog):
                         if b.building_id:
                             self._viewport_buildings_cache[b.building_id] = b
                     return GeoJSONConverter.buildings_to_geojson(buildings, prefer_polygons=True)
-                else:
-                    logger.warning("API returned 0 buildings, using local DB fallback")
 
             except Exception as e:
-                logger.warning(f"API unavailable for map buildings: {e}, using local DB fallback")
+                logger.error(f"API unavailable for map buildings: {e}", exc_info=True)
 
-        # Fallback: load from local database
+        # Fallback: load via BuildingController (API-only)
         try:
             from controllers.building_controller import BuildingController
-            controller = BuildingController(self.db, use_api=False)
+            controller = BuildingController(self.db)
             result = controller.load_buildings()
             if result.success and result.data:
                 buildings = result.data
@@ -366,10 +364,10 @@ class PolygonMapDialog(BaseMapDialog):
                 for b in buildings:
                     if b.building_id:
                         self._viewport_buildings_cache[b.building_id] = b
-                logger.info(f"Loaded {len(buildings)} buildings from local DB for map")
+                logger.info(f"Loaded {len(buildings)} buildings via controller for map")
                 return GeoJSONConverter.buildings_to_geojson(buildings, prefer_polygons=True)
         except Exception as e2:
-            logger.error(f"Local DB fallback also failed: {e2}", exc_info=True)
+            logger.error(f"BuildingController fallback also failed: {e2}", exc_info=True)
 
         return '{"type":"FeatureCollection","features":[]}'
 

@@ -246,7 +246,7 @@ class MainWindow(QMainWindow):
         self.stack.addWidget(self.pages[Pages.CLAIM_COMPARISON])
 
         # Field Work Preparation wizard (UC-012)
-        field_bc = BuildingController(self.db, use_api=True)
+        field_bc = BuildingController(self.db)
         self.pages[Pages.FIELD_ASSIGNMENT] = FieldWorkPreparationPage(field_bc, self.i18n, self)
         self.stack.addWidget(self.pages[Pages.FIELD_ASSIGNMENT])
         self.pages[Pages.FIELD_ASSIGNMENT].completed.connect(self._on_field_work_completed)
@@ -412,24 +412,10 @@ class MainWindow(QMainWindow):
 
     def _on_data_mode_selected(self, mode: str):
         """Handle data mode selection from splash page."""
-        Config.DATA_MODE = mode
-        Config.DATA_PROVIDER = "local_db" if mode == "local" else "http"
-        if mode == "local":
-            Config.USE_DOCKER_TILES = False
-        logger.info(f"Data mode set to: {mode}, provider: {Config.DATA_PROVIDER}")
+        Config.DATA_MODE = "api"
+        logger.info("Data mode: API (Docker backend)")
 
-        # Switch controllers to match selected mode
-        if mode == "local":
-            buildings_page = self.pages.get(Pages.BUILDINGS)
-            if buildings_page and hasattr(buildings_page, 'building_controller'):
-                buildings_page.building_controller.switch_to_local_db()
-                logger.info("BuildingController switched to local DB after mode selection")
-            field_page = self.pages.get(Pages.FIELD_ASSIGNMENT)
-            if field_page and hasattr(field_page, 'building_controller'):
-                field_page.building_controller.switch_to_local_db()
-                logger.info("Field work BuildingController switched to local DB")
-
-        self.pages[Pages.LOGIN].set_data_mode(mode, self.db)
+        self.pages[Pages.LOGIN].set_data_mode("api", self.db)
         self.stack.setCurrentWidget(self.pages[Pages.LOGIN])
 
     def _on_login_success(self, user):

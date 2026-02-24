@@ -583,7 +583,7 @@ class ClaimController(BaseController):
             logger.info(f"Loaded {len(summaries)} claim summaries from API (status={status})")
             return OperationResult.ok(data=summaries)
         except Exception as e:
-            logger.warning(f"API load failed, falling back to local: {e}")
+            logger.error(f"Failed to load claims from API: {e}", exc_info=True)
             return OperationResult.fail(message=str(e))
 
     def get_claim_full_context(self, claim_id: str) -> OperationResult:

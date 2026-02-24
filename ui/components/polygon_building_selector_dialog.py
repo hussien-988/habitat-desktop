@@ -421,10 +421,10 @@ class PolygonBuildingSelectorDialog(QDialog):
 
     def _resolve_buildings_address_names(self, buildings: List[Building]):
         """
-        Resolve address names from codes using local JSON files.
+        Resolve address names from codes using the API.
 
         Extracts codes from building_id (17 digits: GG-DD-SS-CCC-NNN-BBBBB)
-        then resolves names from administrative_divisions.json + neighborhoods.json.
+        then resolves names via BuildingController helpers.
         """
         from controllers.building_controller import BuildingController
         for b in buildings:
@@ -438,7 +438,7 @@ class PolygonBuildingSelectorDialog(QDialog):
                 b.neighborhood_code = b.neighborhood_code or bid[9:12]
                 b.building_number = b.building_number or bid[12:17]
 
-            # Always resolve names from JSON (override dataclass defaults)
+            # Resolve admin division names via API
             if b.governorate_code:
                 resolved = BuildingController._resolve_admin_names(
                     b.governorate_code, b.district_code,
@@ -453,7 +453,7 @@ class PolygonBuildingSelectorDialog(QDialog):
                 if resolved["community_name_ar"]:
                     b.community_name_ar = resolved["community_name_ar"]
 
-            # Resolve neighborhood name from neighborhoods.json
+            # Resolve neighborhood name via API
             if b.neighborhood_code:
                 name = BuildingController._get_neighborhood_name(b.neighborhood_code)
                 if name and name != b.neighborhood_code:

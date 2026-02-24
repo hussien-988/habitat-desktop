@@ -10,7 +10,7 @@ Handles:
 - Unit validation
 - Unit-building relationships
 
-Supports both API and local database backends based on Config.DATA_PROVIDER.
+Uses API backend for data fetching.
 """
 
 from dataclasses import dataclass
@@ -19,7 +19,6 @@ from typing import Any, Dict, List, Optional
 
 from PyQt5.QtCore import pyqtSignal
 
-from app.config import Config
 from controllers.base_controller import BaseController, OperationResult
 from models.unit import PropertyUnit
 from repositories.unit_repository import UnitRepository
@@ -47,7 +46,7 @@ class UnitController(BaseController):
     Controller for property unit management.
 
     Provides a clean interface between UI and data layer for unit operations.
-    Supports both API and local database backends based on Config.DATA_PROVIDER.
+    Uses API backend for data fetching.
     """
 
     # Signals
@@ -61,23 +60,11 @@ class UnitController(BaseController):
         super().__init__(parent)
         self.db = db
 
-        # Determine whether to use API or local database
-        if use_api is not None:
-            self._use_api = use_api
-        else:
-            self._use_api = getattr(Config, 'DATA_PROVIDER', 'local_db') == 'http'
-
-        # Initialize repository for local fallback regardless of mode
         self.repository = UnitRepository(db) if db else None
 
-        # Initialize appropriate backend
-        if self._use_api:
-            from services.api_client import get_api_client
-            self._api_service = get_api_client()
-            logger.info("UnitController using API backend (local fallback ready)")
-        else:
-            self._api_service = None
-            logger.info("UnitController using local database backend")
+        from services.api_client import get_api_client
+        self._api_service = get_api_client()
+        logger.info("UnitController using API backend")
 
         self._current_unit: Optional[PropertyUnit] = None
         self._units_cache: List[PropertyUnit] = []
@@ -375,20 +362,12 @@ class UnitController(BaseController):
         try:
             self._emit_started("get_units_for_building")
 
-            if self._use_api and self._api_service:
-                try:
-                    units_data = self._api_service.get_units_for_building(building_uuid)
-                    units = [self._api_dto_to_unit(dto) for dto in units_data]
-                    self._units_cache = units
-                    self._emit_completed("get_units_for_building", True)
-                    self.units_loaded.emit(units)
-                    return OperationResult.ok(data=units)
-                except Exception as e:
-                    logger.warning(f"API units load failed, falling back to local DB: {e}")
-
-            # Local database fallback
-            filter_ = UnitFilter(building_uuid=building_uuid)
-            return self.load_units(filter_)
+            units_data = self._api_service.get_units_for_building(building_uuid)
+            units = [self._api_dto_to_unit(dto) for dto in units_data]
+            self._units_cache = units
+            self._emit_completed("get_units_for_building", True)
+            self.units_loaded.emit(units)
+            return OperationResult.ok(data=units)
 
         except Exception as e:
             error_msg = f"Error getting units for building: {str(e)}"

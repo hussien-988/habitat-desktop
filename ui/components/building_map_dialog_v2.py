@@ -121,7 +121,6 @@ class BuildingMapDialog(BaseMapDialog):
             if self._viewport_loader.map_service and self._auth_token:
                 self._viewport_loader.map_service.set_auth_token(self._auth_token)
                 logger.info(f"Auth token set in viewport loader")
-            # Set db for local fallback when API unavailable
             self._viewport_loader.db = self.db
 
         # Connect building selection signal (from map clicks)
@@ -170,18 +169,6 @@ class BuildingMapDialog(BaseMapDialog):
                     )
                 except Exception as e:
                     logger.warning(f"API map loading failed: {e}")
-
-                # Fallback to local DB if API returned nothing
-                if not buildings:
-                    try:
-                        from repositories.building_repository import BuildingRepository
-                        repo = BuildingRepository(self.db) if self.db else None
-                        if repo:
-                            buildings = repo.get_all(limit=200)
-                            logger.info(f"Loaded {len(buildings)} buildings from local DB fallback")
-                    except Exception as e2:
-                        logger.error(f"Local DB fallback also failed: {e2}")
-                        buildings = []
 
                 # CRITICAL: Cache buildings for selection lookup!
                 self._buildings_cache = buildings
@@ -625,7 +612,7 @@ class BuildingMapDialog(BaseMapDialog):
         )
 
     def _load_neighborhoods_cache(self):
-        """Load all neighborhoods from API or local JSON (lazy, called once on first search)."""
+        """Load all neighborhoods from API (lazy, called once on first search)."""
         if self._neighborhoods_cache is not None:
             return
 
@@ -641,34 +628,7 @@ class BuildingMapDialog(BaseMapDialog):
             logger.info(f"Loaded {len(self._neighborhoods_cache)} neighborhoods from API")
         except Exception as e:
             logger.warning(f"Failed to load neighborhoods from API: {e}")
-            # Fallback: load from local JSON file
-            try:
-                import json as _json
-                import os
-                json_path = os.path.join(
-                    os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
-                    "data", "neighborhoods.json"
-                )
-                with open(json_path, "r", encoding="utf-8") as f:
-                    data = _json.load(f)
-                self._neighborhoods_cache = []
-                for n in data.get("neighborhoods", []):
-                    polygon = n.get("polygon", [])
-                    center_lat, center_lng = None, None
-                    if polygon and len(polygon) >= 3:
-                        center_lng = sum(p[0] for p in polygon) / len(polygon)
-                        center_lat = sum(p[1] for p in polygon) / len(polygon)
-                    self._neighborhoods_cache.append({
-                        "nameArabic": n.get("name_ar", ""),
-                        "nameEnglish": n.get("name_en", ""),
-                        "neighborhoodCode": n.get("code", ""),
-                        "centerLatitude": center_lat,
-                        "centerLongitude": center_lng,
-                    })
-                logger.info(f"Loaded {len(self._neighborhoods_cache)} neighborhoods from local JSON")
-            except Exception as e2:
-                logger.error(f"Failed to load local neighborhoods: {e2}")
-                self._neighborhoods_cache = []
+            self._neighborhoods_cache = []
 
     def _match_neighborhood(self, search_text: str):
         """Match search text against cached neighborhoods. Returns (code, name, lat, lng) or None."""

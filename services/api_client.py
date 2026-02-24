@@ -2128,6 +2128,42 @@ API للاتصال بـ TRRCMS Backend.
         }
         return {k: v for k, v in api_data.items() if v is not None and v != ''}
 
+    # ==================== Administrative Divisions APIs ====================
+
+    def get_governorates(self) -> List[Dict[str, Any]]:
+        """Get all governorates."""
+        return self._request("GET", "/v1/administrative-divisions/governorates")
+
+    def get_districts(self, governorate_code: Optional[str] = None) -> List[Dict[str, Any]]:
+        """Get districts, optionally filtered by governorate."""
+        params = {}
+        if governorate_code:
+            params["governorateCode"] = governorate_code
+        return self._request("GET", "/v1/administrative-divisions/districts", params=params)
+
+    def get_sub_districts(self, governorate_code: Optional[str] = None,
+                          district_code: Optional[str] = None) -> List[Dict[str, Any]]:
+        """Get sub-districts, optionally filtered by governorate and district."""
+        params = {}
+        if governorate_code:
+            params["governorateCode"] = governorate_code
+        if district_code:
+            params["districtCode"] = district_code
+        return self._request("GET", "/v1/administrative-divisions/sub-districts", params=params)
+
+    def get_communities(self, governorate_code: Optional[str] = None,
+                        district_code: Optional[str] = None,
+                        sub_district_code: Optional[str] = None) -> List[Dict[str, Any]]:
+        """Get communities, optionally filtered by governorate, district, and sub-district."""
+        params = {}
+        if governorate_code:
+            params["governorateCode"] = governorate_code
+        if district_code:
+            params["districtCode"] = district_code
+        if sub_district_code:
+            params["subDistrictCode"] = sub_district_code
+        return self._request("GET", "/v1/administrative-divisions/communities", params=params)
+
     # ==================== Neighborhoods APIs ====================
 
     def get_neighborhoods_by_bounds(self, sw_lat: float, sw_lng: float, ne_lat: float, ne_lng: float) -> List[Dict[str, Any]]:
@@ -2346,12 +2382,8 @@ def get_api_client(config: Optional[ApiConfig] = None) -> Optional[TRRCMSApiClie
         config: تكوين API (يُستخدم فقط في المرة الأولى)
 
     Returns:
-        TRRCMSApiClient instance, or None in local mode
+        TRRCMSApiClient instance
     """
-    from app.config import Config
-    if Config.DATA_MODE == "local":
-        return None
-
     global _api_client_instance
 
     if _api_client_instance is None:

@@ -30,70 +30,20 @@ class SurveyController:
 
     def load_office_surveys(self, status: str = "Draft", page: int = 1, page_size: int = 100) -> OperationResult:
         """
-        Fetch paginated list of office surveys from API, with local DB fallback.
+        Fetch paginated list of office surveys from API.
 
         Returns OperationResult with list of survey summary dicts.
         """
-        # Try API first
         try:
             from services.api_client import get_api_client
             api = get_api_client()
-            if api is not None:
-                response = api.get_office_surveys(status=status, page=page, page_size=page_size)
-                surveys = response.get("surveys", [])
-                logger.info(f"Loaded {len(surveys)} office surveys from API (status={status})")
-                return OperationResult.ok(data=surveys)
-        except Exception as e:
-            logger.warning(f"API load failed, falling back to local DB: {e}")
-
-        # Fallback to local DB
-        try:
-            from repositories.survey_repository import SurveyRepository
-            if self.db is None:
-                from repositories.database import Database
-                self.db = Database()
-            repo = SurveyRepository(self.db)
-            local_status = status.lower()
-            if local_status == "draft":
-                rows = repo.get_drafts_for_office(limit=page_size, offset=(page - 1) * page_size)
-            elif local_status == "finalized":
-                rows = repo.get_by_status_and_source(status='finalized', source='office', limit=page_size, offset=(page - 1) * page_size)
-            else:
-                rows = repo.search_drafts(source='office', limit=page_size, offset=(page - 1) * page_size)
-
-            # Map local DB fields to API response format
-            surveys = []
-            for row in rows:
-                context = row.get("context", {})
-                surveys.append({
-                    "id": row.get("survey_id", ""),
-                    "buildingId": row.get("building_id") or context.get("building_uuid") or context.get("building_id") or "",
-                    "propertyUnitId": row.get("unit_id", ""),
-                    "unitIdentifier": context.get("unit", {}).get("unit_number", "") if isinstance(context.get("unit"), dict) else "",
-                    "referenceCode": row.get("reference_code", ""),
-                    "intervieweeName": self._extract_interviewee_name(context),
-                    "surveyDate": str(row.get("survey_date", "")),
-                    "status": row.get("status", "draft"),
-                    "buildingNumber": context.get("building", {}).get("building_id", "") if isinstance(context.get("building"), dict) else "",
-                })
-            logger.info(f"Loaded {len(surveys)} office surveys from local DB (status={status})")
+            response = api.get_office_surveys(status=status, page=page, page_size=page_size)
+            surveys = response.get("surveys", [])
+            logger.info(f"Loaded {len(surveys)} office surveys from API (status={status})")
             return OperationResult.ok(data=surveys)
         except Exception as e:
-            logger.error(f"Failed to load office surveys from local DB: {e}", exc_info=True)
+            logger.error(f"Failed to load office surveys: {e}", exc_info=True)
             return OperationResult.fail(message=str(e))
-
-    @staticmethod
-    def _extract_interviewee_name(context: dict) -> str:
-        """Extract interviewee name from context persons list."""
-        persons = context.get("persons", [])
-        if not persons:
-            return ""
-        p = persons[0]
-        parts = [p.get("first_name", ""), p.get("father_name", ""), p.get("last_name", "")]
-        name = " ".join(part for part in parts if part)
-        if not name:
-            name = p.get("full_name", "")
-        return name
 
     # ------------------------------------------------------------------
     # Detail: full survey context for ReviewStep / CaseDetailsPage
@@ -115,10 +65,6 @@ class SurveyController:
             from controllers.building_controller import BuildingController
 
             api = get_api_client()
-            if api is None:
-                # Fallback: load from local DB context_data
-                return self._get_survey_context_local(survey_id)
-
             detail = api.get_office_survey_detail(survey_id)
 
             # 1) Building enrichment — use BuildingController (resolves admin names from JSON)
@@ -200,8 +146,8 @@ class SurveyController:
             return OperationResult.ok(data=context)
 
         except Exception as e:
-            logger.warning(f"API survey context failed, falling back to local DB: {e}")
-            return self._get_survey_context_local(survey_id)
+            logger.error(f"Failed to get survey context: {e}", exc_info=True)
+            return OperationResult.fail(message=str(e))
 
     # ------------------------------------------------------------------
     # Mapping: survey detail → claim_data dict for ReviewStep
@@ -260,59 +206,3 @@ class SurveyController:
             "evidence_count": summary.get("evidenceCount", 0),
         }
 
-    def _get_survey_context_local(self, survey_id: str) -> OperationResult:
-        """Load survey context from local DB when API is unavailable."""
-        try:
-            from repositories.survey_repository import SurveyRepository
-            if self.db is None:
-                from repositories.database import Database
-                self.db = Database()
-            repo = SurveyRepository(self.db)
-            row = repo.get_by_id(survey_id)
-            if not row:
-                return OperationResult.fail(message=f"Survey {survey_id} not found in local DB")
-
-            context = row.get("context", {})
-
-            # Enrich building data from local DB if missing
-            if not context.get("building") or not isinstance(context.get("building"), dict):
-                building_uuid = context.get("building_uuid") or row.get("building_id", "")
-                building_id = context.get("building_id", "")
-                if building_uuid or building_id:
-                    try:
-                        from repositories.building_repository import BuildingRepository
-                        b_repo = BuildingRepository(self.db)
-                        building = None
-                        if building_uuid:
-                            building = b_repo.get_by_uuid(building_uuid)
-                        if not building and building_id:
-                            building = b_repo.get_by_id(building_id)
-                        if building:
-                            context["building"] = building.to_dict()
-                            logger.debug(f"Enriched building data from local DB: {building.building_id}")
-                    except Exception as e:
-                        logger.warning(f"Failed to enrich building from local DB: {e}")
-
-            # Enrich unit data from local DB if missing
-            if not context.get("unit") or not isinstance(context.get("unit"), dict):
-                unit_uuid = context.get("unit_uuid", "")
-                unit_id = context.get("unit_id", "")
-                if unit_uuid or unit_id:
-                    try:
-                        from repositories.unit_repository import UnitRepository
-                        u_repo = UnitRepository(self.db)
-                        unit = None
-                        if unit_uuid:
-                            unit = u_repo.get_by_uuid(unit_uuid)
-                        if not unit and unit_id:
-                            unit = u_repo.get_by_id(unit_id)
-                        if unit:
-                            context["unit"] = unit.to_dict()
-                            logger.debug(f"Enriched unit data from local DB: {unit.unit_id}")
-                    except Exception as e:
-                        logger.warning(f"Failed to enrich unit from local DB: {e}")
-
-            return OperationResult.ok(data=context)
-        except Exception as e:
-            logger.error(f"Failed to load survey context from local DB: {e}", exc_info=True)
-            return OperationResult.fail(message=str(e))
