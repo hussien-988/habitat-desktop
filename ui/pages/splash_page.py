@@ -139,7 +139,7 @@ class SplashPage(QWidget):
         logo_layout.setAlignment(Qt.AlignCenter)
         logo_label = QLabel()
         logo_path = os.path.join(
-            str(Config.ASSETS_DIR), "images", "un-logo.jpg"
+            str(Config.ASSETS_DIR), "images", "Layer_1.png"
         )
         if os.path.exists(logo_path):
             pixmap = QPixmap(logo_path)
@@ -201,7 +201,7 @@ class SplashPage(QWidget):
         local_card.clicked.connect(lambda: self._on_mode("local"))
         cards_layout.addWidget(local_card)
 
-        # Central API card
+        # Central API card — disabled for client build
         api_card = _ModeCard(
             icon_text="\u2601",
             title="بيانات مركزية",
@@ -209,7 +209,12 @@ class SplashPage(QWidget):
             description="الاتصال بقاعدة البيانات المركزية\nيتطلب اتصال بالشبكة",
             color=Colors.PRIMARY_BLUE,
         )
-        api_card.clicked.connect(lambda: self._on_mode("api"))
+        api_card.setCursor(Qt.ForbiddenCursor)
+        api_card.setToolTip("هذه الميزة غير متاحة حالياً")
+        from PyQt5.QtWidgets import QGraphicsOpacityEffect
+        api_opacity = QGraphicsOpacityEffect()
+        api_opacity.setOpacity(0.5)
+        api_card.setGraphicsEffect(api_opacity)
         cards_layout.addWidget(api_card)
 
         main.addLayout(cards_layout)

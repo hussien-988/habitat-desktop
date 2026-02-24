@@ -673,6 +673,19 @@ class MainWindow(QMainWindow):
             # Reset wizard for next time (after finalization or unsaved data handling)
             self._reset_wizard()
 
+        # Check if leaving Add User page with unsaved changes
+        if current_widget == self.pages.get(Pages.ADD_USER) and page_id != Pages.ADD_USER:
+            add_user_page = self.pages[Pages.ADD_USER]
+            if hasattr(add_user_page, 'has_unsaved_changes') and add_user_page.has_unsaved_changes():
+                from ui.components.dialogs.confirmation_dialog import ConfirmationDialog, DialogResult
+                result = ConfirmationDialog.confirm(
+                    parent=self,
+                    title="تغييرات غير محفوظة",
+                    message="لديك تغييرات غير محفوظة.\nهل تريد المغادرة بدون حفظ؟"
+                )
+                if result != DialogResult.YES:
+                    return
+
         # Proceed with navigation
         if page_id not in self.pages:
             # Handle special case: office survey wizard

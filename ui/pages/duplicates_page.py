@@ -17,6 +17,7 @@ from PyQt5.QtGui import QColor
 
 from repositories.database import Database
 from services.duplicate_service import DuplicateService
+from services.display_mappings import get_unit_type_display, get_unit_status_display
 from ui.font_utils import create_font, FontManager
 from ui.style_manager import StyleManager
 from ui.design_system import Colors, PageDimensions
@@ -262,6 +263,10 @@ class DuplicatesPage(QWidget):
 
         try:
             self._unit_groups = self.duplicate_service.detect_unit_duplicates()
+            # Also detect person-unit relation duplicates
+            person_unit_dups = self.duplicate_service.detect_person_unit_duplicates()
+            self._unit_groups.extend(person_unit_dups)
+
             if self._unit_groups:
                 records = self._unit_groups[0].records
                 self._populate_units_table(records)
@@ -305,8 +310,8 @@ class DuplicatesPage(QWidget):
             columns = [
                 str(unit.get("unit_number", "")),
                 unit.get("neighborhood_name_ar", unit.get("area", "")),
-                unit.get("unit_type", unit.get("type", "")),
-                unit.get("apartment_status", unit.get("status", "")),
+                get_unit_type_display(unit.get("unit_type", unit.get("type", ""))),
+                get_unit_status_display(unit.get("apartment_status", unit.get("status", ""))),
                 str(unit.get("floor_number", unit.get("floor", ""))),
                 str(unit.get("number_of_rooms", unit.get("rooms", ""))),
                 f"{unit.get('area_sqm', 0):.0f} (م²)" if unit.get("area_sqm") else "",
@@ -467,7 +472,10 @@ class DuplicatesPage(QWidget):
         merged = False
         if self._unit_groups and selected_unit >= 0:
             group = self._unit_groups[0]
-            master_id = group.records[selected_unit].get("unit_id", "")
+            if group.entity_type == "person_unit_relation":
+                master_id = group.records[selected_unit].get("relation_id", "")
+            else:
+                master_id = group.records[selected_unit].get("unit_id", "")
             if master_id:
                 self.duplicate_service.resolve_as_merge(group, master_id, "User selected master")
                 merged = True

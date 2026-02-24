@@ -55,6 +55,10 @@ a = Analysis(
         'dotenv',
         'zeroconf',
         'colorama',
+        'requests',
+        'urllib3',
+        'certifi',
+        'idna',
         # App modules
         'app',
         'app.config',
@@ -95,7 +99,8 @@ exe = EXE(
     bootloader_ignore_signals=False,
     strip=False,
     upx=True,
-    console=False,  # No black CMD window
+    console=False,
+    icon='assets/images/app.ico',
     disable_windowed_traceback=False,
 )
 

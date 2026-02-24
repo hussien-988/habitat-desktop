@@ -192,6 +192,7 @@ class ConfirmationDialog(QDialog):
 
         # Row 4: Buttons area (centered)
         buttons_layout = QHBoxLayout()
+        buttons_layout.setContentsMargins(16, 0, 16, 0)
         buttons_layout.setSpacing(12)
         buttons_layout.addStretch()
 
@@ -243,8 +244,7 @@ class ConfirmationDialog(QDialog):
         """
         btn = QPushButton(text)
 
-        # Figma: 170×50
-        btn.setFixedSize(170, 50)
+        btn.setFixedSize(150, 48)
         btn.setCursor(Qt.PointingHandCursor)
 
         # Figma: Font 10pt

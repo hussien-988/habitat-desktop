@@ -376,12 +376,13 @@ class DataManagementPage(QWidget):
 
     def _on_delete_term(self, code: int, vocab_name: str):
         """Delete a vocabulary term after confirmation."""
-        from PyQt5.QtWidgets import QMessageBox
-        reply = QMessageBox.question(
-            self, "تأكيد الحذف", "هل أنت متأكد من حذف هذا المصطلح؟",
-            QMessageBox.Yes | QMessageBox.No, QMessageBox.No
+        from ui.components.dialogs.confirmation_dialog import ConfirmationDialog, DialogResult
+        result = ConfirmationDialog.confirm(
+            parent=self,
+            title="تأكيد الحذف",
+            message="هل أنت متأكد من حذف هذا المصطلح؟"
         )
-        if reply != QMessageBox.Yes:
+        if result != DialogResult.YES:
             return
         vocab_service.remove_term(vocab_name, code)
         self._delete_term_from_db(vocab_name, code)
@@ -635,7 +636,6 @@ class DataManagementPage(QWidget):
         section_title = QLabel("المساعدة و الدعم")
         section_title.setFont(create_font(size=12, weight=QFont.Bold))
         section_title.setStyleSheet(f"color: {Colors.TEXT_PRIMARY}; background: transparent;")
-        section_title.setAlignment(Qt.AlignRight)
         layout.addWidget(section_title)
 
         # Fields row
