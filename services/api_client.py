@@ -901,6 +901,24 @@ API للاتصال بـ TRRCMS Backend.
             json_data=payload
         )
 
+    def delete_building_assignment(self, assignment_id: str) -> bool:
+        """
+        حذف تعيين ميداني.
+
+        Args:
+            assignment_id: UUID للتعيين
+
+        Returns:
+            True إذا تم الحذف بنجاح
+
+        Endpoint: DELETE /api/v1/BuildingAssignments/{id}
+        """
+        if not assignment_id:
+            raise ValueError("assignment_id is required")
+        self._request("DELETE", f"/v1/BuildingAssignments/{assignment_id}")
+        logger.info(f"Assignment {assignment_id} deleted")
+        return True
+
     def get_assignment_statistics(self) -> Dict[str, Any]:
         """
         جلب إحصائيات التعيينات.
@@ -2344,7 +2362,12 @@ API للاتصال بـ TRRCMS Backend.
 
         logger.info(f"Fetching claims with filters: {params or 'none'}")
         result = self._request("GET", "/Claims", params=params)
-        claims = result if isinstance(result, list) else []
+        if isinstance(result, list):
+            claims = result
+        elif isinstance(result, dict):
+            claims = result.get("items", result.get("data", []))
+        else:
+            claims = []
         logger.info(f"Fetched {len(claims)} claims")
         return claims
 
@@ -2367,6 +2390,24 @@ API للاتصال بـ TRRCMS Backend.
         result = self._request("GET", f"/Claims/{claim_id}")
         logger.info(f"Fetched claim: {result.get('claimNumber', 'N/A')}")
         return result
+
+    def delete_claim(self, claim_id: str) -> bool:
+        """
+        حذف مطالبة.
+
+        Args:
+            claim_id: UUID للمطالبة
+
+        Returns:
+            True إذا تم الحذف بنجاح
+
+        Endpoint: DELETE /api/Claims/{id}
+        """
+        if not claim_id:
+            raise ValueError("claim_id is required")
+        self._request("DELETE", f"/Claims/{claim_id}")
+        logger.info(f"Claim {claim_id} deleted")
+        return True
 
 
 # ==================== Singleton Instance ====================
