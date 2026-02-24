@@ -105,6 +105,17 @@ class MainWindow(QMainWindow):
         self.logout_shortcut = QShortcut(QKeySequence("Ctrl+Q"), self)
         self.logout_shortcut.activated.connect(self._handle_logout)
 
+        # Developer reset tool: Ctrl+Shift+R (DEV_MODE only)
+        if Config.DEV_MODE:
+            self.dev_reset_shortcut = QShortcut(QKeySequence("Ctrl+Shift+R"), self)
+            self.dev_reset_shortcut.activated.connect(self._open_dev_reset_dialog)
+
+    def _open_dev_reset_dialog(self):
+        """Open developer data reset dialog (DEV_MODE only)."""
+        from ui.components.dialogs.dev_reset_dialog import DevResetDialog
+        dialog = DevResetDialog(self, db=self.db)
+        dialog.exec_()
+
     def _create_widgets(self):
         """Create main UI components with new design."""
         # Import here to avoid circular imports
