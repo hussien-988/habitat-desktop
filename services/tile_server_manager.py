@@ -54,6 +54,8 @@ class TileServer(BaseHTTPRequestHandler):
     def _get_db_connection(cls):
         """Get persistent database connection."""
         if cls._db_connection is None and cls.mbtiles_path:
+            if not Path(str(cls.mbtiles_path)).exists():
+                return None
             cls._db_connection = sqlite3.connect(
                 str(cls.mbtiles_path),
                 check_same_thread=False,
@@ -373,18 +375,16 @@ class TileServerManager:
             use_production = False
 
             if production_url:
-                # Actually verify the Docker tile server is reachable
                 try:
-                    req = urllib.request.Request(
-                        f"{production_url}/data.json",
-                        headers={'Accept': 'application/json'}
-                    )
-                    with urllib.request.urlopen(req, timeout=Config.TILE_SERVER_HEALTH_TIMEOUT) as resp:
-                        if resp.status == 200:
-                            use_production = True
-                            logger.info(f"Docker tile server reachable: {production_url}")
-                except Exception as e:
-                    logger.warning(f"Docker tile server unavailable ({production_url}): {e}")
+                    from urllib.parse import urlparse
+                    parsed = urlparse(production_url)
+                    host = parsed.hostname or 'localhost'
+                    port = parsed.port or 5000
+                    with socket.create_connection((host, port), timeout=Config.TILE_SERVER_HEALTH_TIMEOUT):
+                        use_production = True
+                        logger.info(f"Docker tile server reachable (TCP {host}:{port}): {production_url}")
+                except (socket.timeout, socket.error, OSError) as e:
+                    logger.warning(f"Docker tile server port unreachable ({production_url}): {e}")
 
             if use_production:
                 print(f"\n[DEBUG] Tile Server: DOCKER/EXTERNAL")
@@ -416,6 +416,18 @@ class TileServerManager:
         if self._port is None:
             self._start_local_server()
 
+        return f"http://127.0.0.1:{self._port}"
+
+    def get_local_server_url(self) -> str:
+        """
+        Get the local Python tile server URL, starting it if needed.
+
+        Always returns the local server URL regardless of Docker mode.
+        Used for serving static assets (leaflet.js, leaflet.css, etc.)
+        that are only available from the local Python server.
+        """
+        if self._port is None:
+            self._start_local_server()
         return f"http://127.0.0.1:{self._port}"
 
     def _start_local_server(self):
@@ -505,11 +517,13 @@ class TileServerManager:
                 )
                 with urllib.request.urlopen(req2, timeout=3) as resp2:
                     tilejson = json.loads(resp2.read().decode())
+                    tiles_list = tilejson.get('tiles', [])
                     return {
                         'minzoom': tilejson.get('minzoom'),
                         'maxzoom': tilejson.get('maxzoom'),
                         'bounds': tilejson.get('bounds'),
                         'center': tilejson.get('center'),
+                        'tile_template': tiles_list[0] if tiles_list else None,
                     }
         except Exception as e:
             logger.warning(f"Failed to fetch tile metadata from API: {e}")
@@ -605,6 +619,17 @@ def get_tile_server_url() -> str:
     """
     manager = TileServerManager.get_instance()
     return manager.get_tile_server_url()
+
+
+def get_local_server_url() -> str:
+    """
+    Get the local Python tile server URL (always starts local server).
+
+    Returns the local server URL regardless of Docker mode.
+    Use this for static assets (leaflet.js, leaflet.css, etc.).
+    """
+    manager = TileServerManager.get_instance()
+    return manager.get_local_server_url()
 
 
 def get_tile_metadata() -> Dict[str, Any]:

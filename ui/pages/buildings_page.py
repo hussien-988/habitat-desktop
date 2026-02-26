@@ -379,7 +379,7 @@ class AddBuildingPage(QWidget):
                 border: 1px solid #3890DF;
             }}
             QComboBox::drop-down {{
-                subcontrol-origin: border;
+                subcontrol-origin: padding;
                 subcontrol-position: center right;
                 width: 35px;
                 border: none;
@@ -574,7 +574,7 @@ class AddBuildingPage(QWidget):
                 border-width: 2px;
             }}
             QComboBox::drop-down {{
-                subcontrol-origin: border;
+                subcontrol-origin: padding;
                 subcontrol-position: center right;
                 width: 35px;
                 border: none;
@@ -584,6 +584,7 @@ class AddBuildingPage(QWidget):
                 image: url({arrow_img2});
                 width: 12px;
                 height: 12px;
+                border: none;
             }}
             QComboBox QLineEdit {{
                 background-color: transparent;
@@ -632,23 +633,6 @@ class AddBuildingPage(QWidget):
         vbox_type.addWidget(self.type_combo)
         card2_layout.addLayout(vbox_type, 1)  # توحيد العرض - stretch factor
 
-        # عدد الطوابق
-        vbox_floors = QVBoxLayout()
-        vbox_floors.setSpacing(6)
-        lbl_floors = QLabel("عدد الطوابق")
-        lbl_floors.setFont(card2_label_font)
-        lbl_floors.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent;")
-        vbox_floors.addWidget(lbl_floors)
-        self.floors_spin = QSpinBox()
-        self.floors_spin.setRange(1, 50)
-        self.floors_spin.setValue(1)
-        self.floors_spin.setAlignment(Qt.AlignRight)
-        self.floors_spin.setLocale(QLocale(QLocale.English, QLocale.UnitedStates))
-        self.floors_spin.setButtonSymbols(QSpinBox.NoButtons)
-        floors_widget = self._create_spinbox_with_arrows(self.floors_spin)
-        vbox_floors.addWidget(floors_widget)
-        card2_layout.addLayout(vbox_floors, 1)
-
         # عدد المقاسم السكنية
         vbox_residential = QVBoxLayout()
         vbox_residential.setSpacing(6)
@@ -684,6 +668,23 @@ class AddBuildingPage(QWidget):
         non_residential_widget = self._create_spinbox_with_arrows(self.non_residential_spin)
         vbox_non_residential.addWidget(non_residential_widget)
         card2_layout.addLayout(vbox_non_residential, 1)
+
+        # عدد الطوابق
+        vbox_floors = QVBoxLayout()
+        vbox_floors.setSpacing(6)
+        lbl_floors = QLabel("عدد الطوابق")
+        lbl_floors.setFont(card2_label_font)
+        lbl_floors.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent;")
+        vbox_floors.addWidget(lbl_floors)
+        self.floors_spin = QSpinBox()
+        self.floors_spin.setRange(0, 50)
+        self.floors_spin.setValue(1)
+        self.floors_spin.setAlignment(Qt.AlignRight)
+        self.floors_spin.setLocale(QLocale(QLocale.English, QLocale.UnitedStates))
+        self.floors_spin.setButtonSymbols(QSpinBox.NoButtons)
+        floors_widget = self._create_spinbox_with_arrows(self.floors_spin)
+        vbox_floors.addWidget(floors_widget)
+        card2_layout.addLayout(vbox_floors, 1)
 
         # العدد الكلي للمقاسم (read-only, auto-calculated)
         vbox_total = QVBoxLayout()
@@ -1424,7 +1425,9 @@ class AddBuildingPage(QWidget):
             if idx >= 0:
                 self.community_combo.setCurrentIndex(idx)
 
-        # NNN: Load neighborhood code - select in combo by data
+        # NNN: Load neighborhood — must reload neighborhoods for correct community first
+        # (cascading handlers load neighborhoods for community[index=1], not the actual community)
+        self._load_neighborhoods_from_api()
         if hasattr(self.building, 'neighborhood_code') and self.building.neighborhood_code:
             idx = self.neighborhood_combo.findData(self.building.neighborhood_code)
             if idx >= 0:
@@ -1446,16 +1449,17 @@ class AddBuildingPage(QWidget):
             self.status_combo.setCurrentIndex(idx)
 
         # تحميل الأعداد
-        self.floors_spin.setValue(self.building.number_of_floors or 1)
         self.residential_spin.setValue(self.building.number_of_apartments or 0)
         self.non_residential_spin.setValue(self.building.number_of_shops or 0)
+        if hasattr(self, 'floors_spin'):
+            self.floors_spin.setValue(self.building.number_of_floors or 1)
         self._update_total_units()
 
         # تحميل الأوصاف
-        if hasattr(self.building, 'general_description') and self.building.general_description:
+        if getattr(self.building, 'general_description', None):
             self.general_desc.setText(self.building.general_description)
-        if hasattr(self.building, 'site_description') and self.building.site_description:
-            self.site_desc.setText(self.building.site_description)
+        if getattr(self.building, 'location_description', None):
+            self.site_desc.setText(self.building.location_description)
 
         if self.building.latitude:
             self.latitude_spin.setValue(self.building.latitude)
@@ -1753,7 +1757,8 @@ class AddBuildingPage(QWidget):
                 # Update - use controller
                 result = self.building_controller.update_building(
                     self.building.building_uuid,
-                    data
+                    data,
+                    existing_building=self.building
                 )
 
                 if result.success:
@@ -1838,10 +1843,10 @@ class AddBuildingPage(QWidget):
             # Building Details
             "building_type": self.type_combo.currentData(),
             "building_status": self.status_combo.currentData(),
-            "number_of_floors": self.floors_spin.value(),
             "number_of_apartments": self.residential_spin.value(),
             "number_of_shops": self.non_residential_spin.value(),
             "number_of_units": self.residential_spin.value() + self.non_residential_spin.value(),
+            "number_of_floors": self.floors_spin.value() if hasattr(self, 'floors_spin') else 1,
             # Coordinates
             "latitude": self.latitude_spin.value() if self.latitude_spin.value() != 0 else None,
             "longitude": self.longitude_spin.value() if self.longitude_spin.value() != 0 else None,
@@ -2034,82 +2039,57 @@ class AddBuildingPage(QWidget):
         except Exception as e:
             logger.error(f"Failed to detect neighborhood: {e}", exc_info=True)
 
-    def _get_neighborhood_center(self, neighborhood_code: str) -> Optional[Tuple[float, float]]:
-        """
-        Get center coordinates of neighborhood from polygon.
-
-        Args:
-            neighborhood_code: Neighborhood code (e.g., "002")
-
-        Returns:
-            (latitude, longitude) tuple or None
-        """
+    def _parse_wkt_bounds(self, wkt: str):
+        """Extract [[min_lat, min_lng], [max_lat, max_lng]] from any WKT geometry."""
+        import re
+        if not wkt:
+            return None
         try:
-            from services.neighborhood_geocoder import NeighborhoodGeocoder
+            coords = re.findall(r'([-\d.]+)\s+([-\d.]+)', wkt)
+            if coords:
+                lngs = [float(c[0]) for c in coords]
+                lats = [float(c[1]) for c in coords]
+                return [[min(lats), min(lngs)], [max(lats), max(lngs)]]
+        except Exception:
+            pass
+        return None
 
-            geocoder = NeighborhoodGeocoder()
-            neighborhood = geocoder.get_neighborhood_by_code(neighborhood_code)
-
-            if neighborhood:
-                logger.info(f"Found neighborhood: {neighborhood.name_ar} ({neighborhood.code})")
-                import json
-                data_file = geocoder._data_file
-                with open(data_file, 'r', encoding='utf-8') as f:
-                    data = json.load(f)
-
-                for n in data.get('neighborhoods', []):
-                    if n['code'] == neighborhood_code:
-                        polygon = n.get('polygon', [])
-                        if polygon:
-                            lng_sum = sum(p[0] for p in polygon)
-                            lat_sum = sum(p[1] for p in polygon)
-                            count = len(polygon)
-                            center_lng = lng_sum / count
-                            center_lat = lat_sum / count
-                            logger.info(f"Calculated center: lat={center_lat}, lng={center_lng}")
-                            return center_lat, center_lng
-
-            logger.warning(f"Neighborhood not found: {neighborhood_code}")
-            return None
-
-        except Exception as e:
-            logger.error(f"Failed to get neighborhood center: {e}", exc_info=True)
-            return None
+    def _get_neighborhood_center(self, neighborhood_code: str) -> Optional[Tuple[float, float]]:
+        """Get center coordinates of neighborhood from _neighborhoods_cache."""
+        for n in getattr(self, '_neighborhoods_cache', []):
+            if n.get('neighborhoodCode') == neighborhood_code:
+                wkt = n.get('boundaries') or n.get('boundary') or n.get('boundaryWkt', '')
+                result = self._parse_wkt_centroid(wkt)
+                if result:
+                    logger.info(f"Neighborhood center from cache: {neighborhood_code} -> {result}")
+                    return result
+        logger.warning(f"Neighborhood not found in cache: {neighborhood_code}")
+        return None
 
     def _get_neighborhood_bounds(self, neighborhood_code: str):
-        """Get bounding box for Leaflet fitBounds: [[south_lat, west_lng], [north_lat, east_lng]]."""
-        try:
-            from services.neighborhood_geocoder import NeighborhoodGeocoder
-            import json
-
-            geocoder = NeighborhoodGeocoder()
-            if not geocoder.get_neighborhood_by_code(neighborhood_code):
-                return None
-
-            with open(geocoder._data_file, 'r', encoding='utf-8') as f:
-                data = json.load(f)
-
-            for n in data.get('neighborhoods', []):
-                if n['code'] == neighborhood_code:
-                    polygon = n.get('polygon', [])
-                    if polygon:
-                        lngs = [p[0] for p in polygon]
-                        lats = [p[1] for p in polygon]
-                        return [[min(lats), min(lngs)], [max(lats), max(lngs)]]
-            return None
-        except Exception as e:
-            logger.error(f"Failed to get neighborhood bounds: {e}", exc_info=True)
-            return None
+        """Get Leaflet bounds [[s,w],[n,e]] from _neighborhoods_cache."""
+        for n in getattr(self, '_neighborhoods_cache', []):
+            if n.get('neighborhoodCode') == neighborhood_code:
+                wkt = n.get('boundaries') or n.get('boundary') or n.get('boundaryWkt', '')
+                result = self._parse_wkt_bounds(wkt)
+                if result:
+                    logger.info(f"Neighborhood bounds from cache: {neighborhood_code} -> {result}")
+                    return result
+        logger.warning(f"Neighborhood bounds not found in cache: {neighborhood_code}")
+        return None
 
     def _build_neighborhoods_geojson(self) -> str:
-        """Load neighborhoods from Backend API."""
+        """Load neighborhoods from Backend API using Config map bounds."""
         try:
             from services.api_client import get_api_client
+            from app.config import Config
             api = get_api_client()
 
             neighborhoods = api.get_neighborhoods_by_bounds(
-                sw_lat=36.14, sw_lng=37.07,
-                ne_lat=36.26, ne_lng=37.23
+                sw_lat=Config.MAP_BOUNDS_MIN_LAT,
+                sw_lng=Config.MAP_BOUNDS_MIN_LNG,
+                ne_lat=Config.MAP_BOUNDS_MAX_LAT,
+                ne_lng=Config.MAP_BOUNDS_MAX_LNG
             )
 
             if neighborhoods:
@@ -2129,17 +2109,21 @@ class AddBuildingPage(QWidget):
         for n in neighborhoods:
             name_ar = n.get('nameArabic', n.get('name_ar', ''))
             name_en = n.get('nameEnglish', n.get('name_en', ''))
-            code = n.get('code', '')
-            wkt = n.get('boundaries', '')
+            code = n.get('neighborhoodCode', n.get('fullCode', n.get('code', '')))
 
-            if not wkt:
-                continue
+            # Use API-provided center if available (more accurate than computing from WKT)
+            center_lat = n.get('centerLatitude') or n.get('center_lat')
+            center_lng = n.get('centerLongitude') or n.get('center_lng')
 
-            centroid = self._parse_wkt_centroid(wkt)
-            if not centroid:
-                continue
+            if not center_lat or not center_lng:
+                wkt = n.get('boundaryWkt', n.get('boundaries', n.get('boundary', '')))
+                if not wkt:
+                    continue
+                centroid = self._parse_wkt_centroid(wkt)
+                if not centroid:
+                    continue
+                center_lat, center_lng = centroid
 
-            center_lat, center_lng = centroid
             features.append({
                 "type": "Feature",
                 "properties": {
@@ -2160,17 +2144,15 @@ class AddBuildingPage(QWidget):
         return json.dumps({"type": "FeatureCollection", "features": features})
 
     def _parse_wkt_centroid(self, wkt: str):
-        """Extract centroid from WKT POLYGON string."""
+        """Extract centroid from any WKT geometry string."""
+        import re
+        if not wkt:
+            return None
         try:
-            coords_str = wkt.replace('POLYGON((', '').replace('))', '').strip()
-            pairs = coords_str.split(',')
-            lngs, lats = [], []
-            for pair in pairs:
-                parts = pair.strip().split()
-                if len(parts) == 2:
-                    lngs.append(float(parts[0]))
-                    lats.append(float(parts[1]))
-            if lats and lngs:
+            coords = re.findall(r'([-\d.]+)\s+([-\d.]+)', wkt)
+            if coords:
+                lngs = [float(c[0]) for c in coords]
+                lats = [float(c[1]) for c in coords]
                 return sum(lats) / len(lats), sum(lngs) / len(lngs)
         except Exception:
             pass
@@ -2263,10 +2245,12 @@ class BuildingsListPage(QWidget):
 
         # Active filters (DRY - same as field_work_preparation_page)
         self._active_filters = {
-            'area': None,           # المنطقة (column 2)
-            'building_type': None,  # نوع البناء (column 3)
-            'building_status': None # حالة البناء (column 4)
+            'area': None,           # المنطقة/district (column 2)
+            'neighborhood': None,   # الحي/neighborhood (column 3)
+            'building_type': None,  # نوع البناء (column 4)
+            'building_status': None # حالة البناء (column 5)
         }
+        self._neighborhoods_api_cache = []  # cached from API on first filter use
 
         self._setup_ui()
 
@@ -2324,7 +2308,7 @@ class BuildingsListPage(QWidget):
         card_layout.setContentsMargins(10, 10, 10, 10)
 
         self.table = QTableWidget()
-        self.table.setColumnCount(6)
+        self.table.setColumnCount(7)
         self.table.setRowCount(11)  # Fixed 11 rows
         self.table.setLayoutDirection(Qt.RightToLeft)
 
@@ -2341,11 +2325,11 @@ class BuildingsListPage(QWidget):
         icon_path = base_path / "assets" / "images" / "down.png"
 
         # Set headers with icons for filterable columns
-        headers = ["رمز البناء", "تاريخ الادخال", "المنطقة", "نوع البناء", "حالة البناء", ""]
+        headers = ["رمز البناء", "تاريخ الادخال", "المنطقة", "الحي", "نوع البناء", "حالة البناء", ""]
         for i, text in enumerate(headers):
             item = QTableWidgetItem(text)
-            # Add icon to filterable columns (2, 3, 4)
-            if i in [2, 3, 4] and icon_path.exists():
+            # Add icon to filterable columns (2, 3, 4, 5)
+            if i in [2, 3, 4, 5] and icon_path.exists():
                 icon = QIcon(str(icon_path))
                 item.setIcon(icon)
             self.table.setHorizontalHeaderItem(i, item)
@@ -2405,23 +2389,26 @@ class BuildingsListPage(QWidget):
         # Connect hover event for cursor change on filterable columns
         header.sectionEntered.connect(self._on_header_hover)
 
-        # تحديد عرض الأعمدة حسب Figma
+        # تحديد عرض الأعمدة
         header.setSectionResizeMode(0, QHeaderView.Fixed)  # رمز البناء
         header.resizeSection(0, 298)
 
         header.setSectionResizeMode(1, QHeaderView.Fixed)  # تاريخ الإدخال
-        header.resizeSection(1, 220)
+        header.resizeSection(1, 180)
 
-        header.setSectionResizeMode(2, QHeaderView.Fixed)  # المنطقة
-        header.resizeSection(2, 206)
+        header.setSectionResizeMode(2, QHeaderView.Fixed)  # المنطقة (district)
+        header.resizeSection(2, 160)
 
-        header.setSectionResizeMode(3, QHeaderView.Fixed)  # نوع البناء
-        header.resizeSection(3, 195)
+        header.setSectionResizeMode(3, QHeaderView.Fixed)  # الحي (neighborhood)
+        header.resizeSection(3, 160)
 
-        header.setSectionResizeMode(4, QHeaderView.Fixed)  # حالة البناء
-        header.resizeSection(4, 195)
+        header.setSectionResizeMode(4, QHeaderView.Fixed)  # نوع البناء
+        header.resizeSection(4, 165)
 
-        header.setSectionResizeMode(5, QHeaderView.Stretch)  # أيقونة الثلاث نقاط (الباقي)
+        header.setSectionResizeMode(5, QHeaderView.Fixed)  # حالة البناء
+        header.resizeSection(5, 165)
+
+        header.setSectionResizeMode(6, QHeaderView.Stretch)  # أيقونة الثلاث نقاط (الباقي)
 
         # ضبط ارتفاع الصفوف بالتساوي
         # الارتفاع المتاح: 708 (card) - 10 (top) - 10 (bottom) - 56 (header) - 58 (footer) = 574px
@@ -2619,7 +2606,7 @@ class BuildingsListPage(QWidget):
                 self.table.setItem(row, col, QTableWidgetItem(""))
 
         if total == 0:
-            self.table.setSpan(0, 0, 11, 6)
+            self.table.setSpan(0, 0, 11, 7)
             empty_item = QTableWidgetItem("لا توجد بيانات مطابقة للفلتر المحدد")
             empty_item.setTextAlignment(Qt.AlignCenter)
             from PyQt5.QtGui import QColor
@@ -2640,17 +2627,21 @@ class BuildingsListPage(QWidget):
             date_str = building.created_at.strftime("%d/%m/%Y") if building.created_at else ""
             self.table.setItem(idx, 1, QTableWidgetItem(date_str))
 
-            # المنطقة (neighborhood only - no district prefix)
-            area = (building.neighborhood_name_ar or building.neighborhood_name or '').strip()
+            # المنطقة - district name
+            area = (building.district_name_ar or building.district_name or '').strip()
             self.table.setItem(idx, 2, QTableWidgetItem(area))
+
+            # الحي - neighborhood name
+            hood = (building.neighborhood_name_ar or building.neighborhood_name or '').strip()
+            self.table.setItem(idx, 3, QTableWidgetItem(hood))
 
             # نوع البناء - display_mappings handles int codes + string fallback
             building_type = get_building_type_display(building.building_type)
-            self.table.setItem(idx, 3, QTableWidgetItem(building_type))
+            self.table.setItem(idx, 4, QTableWidgetItem(building_type))
 
             # حالة البناء - display_mappings handles int codes + string fallback
             building_status = get_building_status_display(building.building_status)
-            self.table.setItem(idx, 4, QTableWidgetItem(building_status))
+            self.table.setItem(idx, 5, QTableWidgetItem(building_status))
 
             # زر الثلاث نقاط - أكبر وأغمق
             actions_item = QTableWidgetItem("⋮")
@@ -2664,7 +2655,7 @@ class BuildingsListPage(QWidget):
             actions_item.setFont(dots_font)
             actions_item.setForeground(QColor("#637381"))  # لون أغمق
 
-            self.table.setItem(idx, 5, actions_item)
+            self.table.setItem(idx, 6, actions_item)
 
         # Update pagination info (counter only: "1-11 of 50")
         if total > 0:
@@ -2712,8 +2703,8 @@ class BuildingsListPage(QWidget):
         """
         header = self.table.horizontalHeader()
 
-        # Pointer cursor only for filterable columns (2, 3, 4)
-        if logical_index in [2, 3, 4]:
+        # Pointer cursor only for filterable columns (2, 3, 4, 5)
+        if logical_index in [2, 3, 4, 5]:
             header.setCursor(Qt.PointingHandCursor)
         else:
             header.setCursor(Qt.ArrowCursor)
@@ -2723,12 +2714,13 @@ class BuildingsListPage(QWidget):
         Handle header click to show filter menu (DRY - same pattern as field_work_preparation).
 
         Filterable columns:
-        - Column 2: المنطقة (Area)
-        - Column 3: نوع البناء (Building Type)
-        - Column 4: حالة البناء (Building Status)
+        - Column 2: المنطقة (District)
+        - Column 3: الحي (Neighborhood)
+        - Column 4: نوع البناء (Building Type)
+        - Column 5: حالة البناء (Building Status)
         """
-        # Only columns 2, 3, 4 are filterable
-        if logical_index not in [2, 3, 4]:
+        # Only columns 2, 3, 4, 5 are filterable
+        if logical_index not in [2, 3, 4, 5]:
             return
 
         self._show_filter_menu(logical_index)
@@ -2744,18 +2736,26 @@ class BuildingsListPage(QWidget):
         unique_values = set()
         filter_key = None
 
-        if column_index == 2:  # المنطقة (neighborhood only, no district)
+        if column_index == 2:  # المنطقة (district)
             filter_key = 'area'
             for building in self._all_buildings:
-                area = (building.neighborhood_name_ar or building.neighborhood_name or '').strip()
+                area = (building.district_name_ar or building.district_name or '').strip()
                 if area:
                     unique_values.add(area)
-        elif column_index == 3:  # نوع البناء
+        elif column_index == 3:  # الحي (neighborhood - loaded from API)
+            filter_key = 'neighborhood'
+            neighborhoods = self._load_neighborhoods_for_filter()
+            for n in neighborhoods:
+                code = n.get("neighborhoodCode", n.get("code", ""))
+                name_ar = n.get("nameArabic", n.get("name_ar", ""))
+                if code and name_ar:
+                    unique_values.add((code, name_ar))
+        elif column_index == 4:  # نوع البناء
             filter_key = 'building_type'
             for code, label in get_building_type_options():
                 if code:
                     unique_values.add((code, label))
-        elif column_index == 4:  # حالة البناء
+        elif column_index == 5:  # حالة البناء
             filter_key = 'building_status'
             for code, label in get_building_status_options():
                 if code:
@@ -2809,10 +2809,13 @@ class BuildingsListPage(QWidget):
             if column_index == 2 and self._active_filters['area'] == value:
                 action.setCheckable(True)
                 action.setChecked(True)
-            elif column_index == 3 and self._active_filters['building_type'] == (value if isinstance(value, str) else value[0]):
+            elif column_index == 3 and self._active_filters['neighborhood'] == (value if isinstance(value, str) else value[0]):
                 action.setCheckable(True)
                 action.setChecked(True)
-            elif column_index == 4 and self._active_filters['building_status'] == (value if isinstance(value, str) else value[0]):
+            elif column_index == 4 and self._active_filters['building_type'] == (value if isinstance(value, str) else value[0]):
+                action.setCheckable(True)
+                action.setChecked(True)
+            elif column_index == 5 and self._active_filters['building_status'] == (value if isinstance(value, str) else value[0]):
                 action.setCheckable(True)
                 action.setChecked(True)
 
@@ -2852,12 +2855,17 @@ class BuildingsListPage(QWidget):
         """
         filtered = buildings
 
-        # Apply area filter
+        # Apply area filter (district)
         if self._active_filters['area']:
             filtered = [
                 b for b in filtered
                 if self._get_building_area(b) == self._active_filters['area']
             ]
+
+        # Apply neighborhood filter
+        if self._active_filters['neighborhood']:
+            target = self._active_filters['neighborhood']
+            filtered = [b for b in filtered if b.neighborhood_code == target]
 
         # Apply building type filter
         if self._active_filters['building_type']:
@@ -2887,9 +2895,28 @@ class BuildingsListPage(QWidget):
             return str(value).strip().lower() == str(target).strip().lower()
 
     def _get_building_area(self, building) -> str:
-        """Get formatted area string for building (DRY helper) - neighborhood name only."""
-        # Return neighborhood name only (not district + neighborhood)
-        return (building.neighborhood_name_ar or building.neighborhood_name or '').strip()
+        """Get district name for building (used by area filter)."""
+        return (building.district_name_ar or building.district_name or '').strip()
+
+    def _load_neighborhoods_for_filter(self) -> list:
+        """Load neighborhoods from API for filter menu (cached after first call)."""
+        if not self._neighborhoods_api_cache:
+            try:
+                from services.api_client import get_api_client
+                api = get_api_client()
+                if api:
+                    self._neighborhoods_api_cache = api.get_neighborhoods()
+            except Exception as e:
+                logger.warning(f"Could not load neighborhoods for filter: {e}")
+                # fallback: extract unique neighborhoods from already-loaded buildings
+                seen = {}
+                for b in self._all_buildings:
+                    if b.neighborhood_code and b.neighborhood_name_ar:
+                        seen[b.neighborhood_code] = b.neighborhood_name_ar
+                self._neighborhoods_api_cache = [
+                    {"neighborhoodCode": k, "nameArabic": v} for k, v in seen.items()
+                ]
+        return self._neighborhoods_api_cache
 
     def _on_cell_double_click(self, row, col):
         """Handle cell double click."""
@@ -2904,7 +2931,7 @@ class BuildingsListPage(QWidget):
     def _on_cell_clicked(self, row: int, col: int):
         """فتح القائمة المنسدلة عند الضغط على زر الثلاث نقاط."""
         # التحقق من أن المستخدم ضغط على عمود الإجراءات (آخر عمود)
-        if col != 5:
+        if col != 6:
             return
 
         # التحقق من وجود محتوى في السطر

@@ -214,13 +214,15 @@ class BuildingController(BaseController):
             self._emit_error("create_building", error_msg)
             return OperationResult.fail(message=error_msg)
 
-    def update_building(self, building_uuid: str, data: Dict[str, Any]) -> OperationResult[Building]:
+    def update_building(self, building_uuid: str, data: Dict[str, Any],
+                        existing_building: Optional[Building] = None) -> OperationResult[Building]:
         """
         Update an existing building.
 
         Args:
             building_uuid: UUID of building to update
             data: Updated building data
+            existing_building: Existing Building object (avoids extra API GET if provided)
 
         Returns:
             OperationResult with updated Building or error
@@ -230,16 +232,19 @@ class BuildingController(BaseController):
         try:
             self._emit_started("update_building")
 
-            # Get existing building via API
-            response = self._api_service.get_building_by_id(building_uuid)
-            existing = self._api_dto_to_building(response) if response else None
-
-            if not existing:
-                self._emit_error("update_building", "Building not found")
-                return OperationResult.fail(
-                    message="Building not found",
-                    message_ar="المبنى غير موجود"
-                )
+            # Use provided building object to avoid extra API roundtrip
+            if existing_building:
+                merged_data = existing_building.to_dict()
+            else:
+                response = self._api_service.get_building_by_id(building_uuid)
+                existing = self._api_dto_to_building(response) if response else None
+                if not existing:
+                    self._emit_error("update_building", "Building not found")
+                    return OperationResult.fail(
+                        message="Building not found",
+                        message_ar="المبنى غير موجود"
+                    )
+                merged_data = existing.to_dict()
 
             # Validate data
             validation_result = self._validate_building_data(data, is_update=True)
@@ -248,7 +253,6 @@ class BuildingController(BaseController):
                 return validation_result
 
             # Update building via API
-            merged_data = existing.to_dict()
             merged_data.update(data)
             response = self._api_service.update_building(building_uuid, merged_data)
             updated_building = self._api_dto_to_building(response)
@@ -740,13 +744,19 @@ class BuildingController(BaseController):
             building_number=dto.get("buildingNumber", ""),
             building_type=dto.get("buildingType") or 1,
             building_status=dto.get("status") or dto.get("buildingStatus") or 1,
-            number_of_units=dto.get("numberOfUnits") or dto.get("numberOfPropertyUnits", 0),
-            number_of_apartments=dto.get("numberOfApartments", 0),
-            number_of_shops=dto.get("numberOfShops", 0),
+            number_of_apartments=dto.get("numberOfApartments", 0) or 0,
+            number_of_shops=dto.get("numberOfShops", 0) or 0,
+            number_of_units=(
+                dto.get("numberOfUnits") or
+                dto.get("numberOfPropertyUnits") or
+                (dto.get("numberOfApartments", 0) or 0) + (dto.get("numberOfShops", 0) or 0)
+            ),
             number_of_floors=dto.get("numberOfFloors", 1),
             latitude=dto.get("latitude"),
             longitude=dto.get("longitude"),
-            geo_location=dto.get("buildingGeometryWkt") or dto.get("geoLocation")
+            geo_location=dto.get("buildingGeometryWkt") or dto.get("geoLocation"),
+            location_description=dto.get("locationDescription") or dto.get("location_description"),
+            general_description=dto.get("generalDescription") or dto.get("general_description"),
         )
 
     # ==================== Statistics ====================

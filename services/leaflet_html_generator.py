@@ -64,7 +64,8 @@ class LeafletHTMLGenerator:
         initial_bounds: list = None,  # [[south_lat, west_lng], [north_lat, east_lng]]
         neighborhoods_geojson: str = None,  # GeoJSON for neighborhood boundaries overlay
         selected_neighborhood_code: str = None,  # Highlight this neighborhood
-        skip_fit_bounds: bool = False  # Skip auto fitBounds (respect zoom param exactly)
+        skip_fit_bounds: bool = False,  # Skip auto fitBounds (respect zoom param exactly)
+        tile_layer_url: str = None  # Separate URL for map tiles (defaults to tile_server_url)
     ) -> str:
         """
         Generate Leaflet HTML with unified geometry display.
@@ -139,7 +140,8 @@ class LeafletHTMLGenerator:
         initial_bounds,
         neighborhoods_geojson,
         selected_neighborhood_code,
-        skip_fit_bounds
+        skip_fit_bounds,
+        tile_layer_url
     )}
 </body>
 </html>
@@ -181,22 +183,8 @@ class LeafletHTMLGenerator:
         .leaflet-draw-toolbar {
             direction: ltr !important;
         }
-        .drawing-mode-indicator {
-            position: absolute;
-            top: 60px;
-            right: 10px;
-            z-index: 1000;
-            background: white;
-            padding: 8px 12px;
-            border-radius: 6px;
-            box-shadow: 0 2px 6px rgba(0,0,0,0.2);
-            font-size: 12px;
-            font-weight: 600;
-            color: #0072BC;
-            display: none;
-        }
 
-        /* إصلاح أيقونات أدوات الرسم - استخدام SVG مضمنة بدلاً من الصور */
+        /* General toolbar links */
         .leaflet-draw-toolbar a {
             background-image: none !important;
             display: flex;
@@ -207,32 +195,61 @@ class LeafletHTMLGenerator:
             color: #333;
         }
 
-        /* أيقونة رسم المضلع */
+        /* Polygon draw button — labeled blue chip */
+        .leaflet-draw-draw-polygon {
+            width: auto !important;
+            padding: 0 10px 0 8px !important;
+            background: linear-gradient(135deg, #0072BC, #005fa3) !important;
+            border: none !important;
+            border-radius: 6px !important;
+            box-shadow: 0 2px 6px rgba(0, 114, 188, 0.3) !important;
+            transition: all 0.2s ease !important;
+            color: white !important;
+            gap: 6px !important;
+        }
         .leaflet-draw-draw-polygon::before {
             content: "⬡";
-            font-size: 20px;
+            font-size: 18px;
+            color: white;
+        }
+        .leaflet-draw-draw-polygon:hover {
+            background: linear-gradient(135deg, #005fa3, #004c82) !important;
+            box-shadow: 0 3px 10px rgba(0, 114, 188, 0.45) !important;
+        }
+        .leaflet-draw-draw-polygon.leaflet-draw-toolbar-button-enabled {
+            background: linear-gradient(135deg, #004c82, #003d6b) !important;
         }
 
-        /* أيقونة رسم النقطة/العلامة */
+        /* Injected text label inside polygon button */
+        .draw-btn-label {
+            font-size: 12px;
+            font-family: 'Segoe UI', 'Tahoma', Arial, sans-serif;
+            color: white;
+            white-space: nowrap;
+            font-weight: 500;
+            vertical-align: middle;
+            margin-right: 4px;
+        }
+
+        /* Marker icon */
         .leaflet-draw-draw-marker::before {
             content: "📍";
             font-size: 18px;
         }
 
-        /* أيقونة التعديل */
+        /* Edit icon */
         .leaflet-draw-edit-edit::before {
             content: "✏️";
             font-size: 16px;
         }
 
-        /* أيقونة الحذف */
+        /* Delete icon */
         .leaflet-draw-edit-remove::before {
             content: "🗑️";
             font-size: 16px;
         }
 
-        /* تحسين مظهر أزرار الأدوات */
-        .leaflet-draw-toolbar .leaflet-draw-draw-polygon,
+        /* Standard buttons (marker, edit, delete) */
         .leaflet-draw-toolbar .leaflet-draw-draw-marker,
         .leaflet-draw-toolbar .leaflet-draw-edit-edit,
         .leaflet-draw-toolbar .leaflet-draw-edit-remove {
@@ -240,13 +257,50 @@ class LeafletHTMLGenerator:
             border: 2px solid #ccc !important;
             border-radius: 4px;
         }
-
         .leaflet-draw-toolbar a:hover {
             background-color: #f0f0f0 !important;
         }
-
         .leaflet-draw-toolbar .leaflet-draw-toolbar-button-enabled {
             background-color: #0072BC !important;
+        }
+
+        /* Modern circular vertex handles (replaces white squares) */
+        .leaflet-editing-icon {
+            border-radius: 50% !important;
+            background: #0072BC !important;
+            border: 2px solid white !important;
+            box-shadow: 0 1px 5px rgba(0, 0, 0, 0.35) !important;
+            width: 10px !important;
+            height: 10px !important;
+            margin-left: -5px !important;
+            margin-top: -5px !important;
+        }
+        .leaflet-editing-icon:hover {
+            background: #004c82 !important;
+            transform: scale(1.3);
+        }
+
+        /* Guide dots during active drawing */
+        .leaflet-draw-guide-dot {
+            width: 6px !important;
+            height: 6px !important;
+            border-radius: 50% !important;
+            background: rgba(0, 114, 188, 0.55) !important;
+            border: 2px solid rgba(0, 114, 188, 0.8) !important;
+        }
+
+        /* Draw tooltip — dark pill shape */
+        .leaflet-draw-tooltip {
+            background: rgba(20, 20, 20, 0.78) !important;
+            color: white !important;
+            border: none !important;
+            border-radius: 4px !important;
+            padding: 4px 8px !important;
+            font-size: 11px !important;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.3) !important;
+        }
+        .leaflet-draw-tooltip::before {
+            border-right-color: rgba(20, 20, 20, 0.78) !important;
         }
         ''' if enable_drawing else ''
 
@@ -458,6 +512,16 @@ class LeafletHTMLGenerator:
         .neighborhood-tooltip::before {{
             border-top-color: #0072BC !important;
         }}
+        .map-status-overlay {{
+            background: rgba(255,255,255,0.85);
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            padding: 6px 10px;
+            font-size: 11px;
+            direction: rtl;
+            min-width: 120px;
+            font-family: 'Segoe UI', Tahoma, sans-serif;
+        }}
     </style>
 '''
 
@@ -481,17 +545,30 @@ class LeafletHTMLGenerator:
         initial_bounds: list = None,
         neighborhoods_geojson: str = None,
         selected_neighborhood_code: str = None,
-        skip_fit_bounds: bool = False
+        skip_fit_bounds: bool = False,
+        tile_layer_url: str = None
     ) -> str:
         """Get JavaScript code for map initialization."""
         import json
         from app.config import Config as _Cfg
         from services.tile_server_manager import get_tile_metadata
 
+        effective_tile_url = tile_layer_url or tile_server_url
+
         # Auto-detect zoom levels from tile server / MBTiles
         tile_meta = get_tile_metadata()
         effective_min_zoom = min_zoom if min_zoom is not None else tile_meta.get('minzoom', MapConstants.MIN_ZOOM)
         effective_max_zoom = max_zoom if max_zoom != MapConstants.MAX_ZOOM else tile_meta.get('maxzoom', MapConstants.MAX_ZOOM)
+
+        # Determine actual tile URL template — Docker TileServer GL returns its own URL in tiles[0]
+        tile_template_from_meta = tile_meta.get('tile_template')
+        if tile_template_from_meta:
+            tile_layer_url_js = json.dumps(tile_template_from_meta)
+            tile_status_label = "Docker (" + tile_template_from_meta.split('/')[2] + ")"
+        else:
+            fallback_tile_url = effective_tile_url + "/tiles/{z}/{x}/{y}.png"
+            tile_layer_url_js = json.dumps(fallback_tile_url)
+            tile_status_label = "Local (" + tile_server_url.split(':')[-1] + ")"
 
         # GeoServer WMS (optional, from .env)
         geoserver_wms_url = ""
@@ -597,8 +674,8 @@ class LeafletHTMLGenerator:
             map.fitBounds(initialBounds, {{padding: [50, 50]}});
         }}
 
-        // Add tile layer from local server
-        var tileLayer = L.tileLayer('{tile_server_url}/tiles/{{z}}/{{x}}/{{y}}.png', {{
+        // Add tile layer
+        var tileLayer = L.tileLayer({tile_layer_url_js}, {{
             maxZoom: {effective_max_zoom},
             minZoom: {effective_min_zoom},
             attribution: 'Map data &copy; OpenStreetMap | UN-Habitat Syria',
@@ -804,7 +881,7 @@ class LeafletHTMLGenerator:
         {LeafletHTMLGenerator._get_existing_polygons_js(existing_polygons_geojson) if existing_polygons_geojson else '// No existing polygons'}
 
         // Neighborhoods overlay layer (zoom-based visibility)
-        {LeafletHTMLGenerator._get_neighborhoods_layer_js(neighborhoods_geojson, selected_neighborhood_code) if neighborhoods_geojson else '// No neighborhoods overlay'}
+        {LeafletHTMLGenerator._get_neighborhoods_layer_js(neighborhoods_geojson, selected_neighborhood_code, enable_drawing) if neighborhoods_geojson else '// No neighborhoods overlay'}
 
         // Fit to buildings if any (skip when initial_bounds or skip_fit_bounds set)
         var skipFitBounds = {'true' if skip_fit_bounds else 'false'};
@@ -869,6 +946,18 @@ class LeafletHTMLGenerator:
         {LeafletHTMLGenerator._get_multiselect_js() if enable_multiselect else '// Multi-select disabled'}
 
         {LeafletHTMLGenerator._get_viewport_loading_js() if enable_viewport_loading else '// Viewport loading disabled'}
+
+        // Status confirmation overlay (bottom-left)
+        var statusControl = L.control({{position: 'bottomleft'}});
+        statusControl.onAdd = function(map) {{
+            var div = L.DomUtil.create('div', 'map-status-overlay');
+            var buildingCount = buildingsData ? buildingsData.features.length : 0;
+            div.innerHTML = '<strong>حالة الخريطة</strong><br>' +
+                            'المباني: ' + buildingCount + '<br>' +
+                            'خادم Tiles: {tile_status_label}';
+            return div;
+        }};
+        statusControl.addTo(map);
     </script>
 '''
 
@@ -895,7 +984,7 @@ class LeafletHTMLGenerator:
 '''
 
     @staticmethod
-    def _get_neighborhoods_layer_js(neighborhoods_geojson: str, selected_neighborhood_code: str = None) -> str:
+    def _get_neighborhoods_layer_js(neighborhoods_geojson: str, selected_neighborhood_code: str = None, enable_drawing: bool = False) -> str:
         """
         Get JavaScript for neighborhood center pins with zoom-based visibility.
 
@@ -912,6 +1001,11 @@ class LeafletHTMLGenerator:
             return '// Invalid neighborhoods GeoJSON'
 
         selected_code = selected_neighborhood_code or ''
+
+        if enable_drawing:
+            zoom_handler_js = "// Drawing mode: pins always visible at all zoom levels"
+        else:
+            zoom_handler_js = "map.on('zoomend', updateNeighborhoodVisibility);\n            updateNeighborhoodVisibility();"
 
         return f'''
         // =========================================================
@@ -978,8 +1072,7 @@ class LeafletHTMLGenerator:
                 }}
             }}
 
-            map.on('zoomend', updateNeighborhoodVisibility);
-            updateNeighborhoodVisibility();
+            {zoom_handler_js}
 
             console.log('Neighborhood pins loaded:', neighborhoodsData.features.length);
         }}
