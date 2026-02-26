@@ -169,6 +169,20 @@ API للاتصال بـ TRRCMS Backend.
             logger.error(f"❌ Token refresh failed: {e}")
             return False
 
+    def logout(self) -> Dict[str, Any]:
+        """POST /v1/Auth/logout — invalidate refresh token server-side."""
+        body = {"refreshToken": self.refresh_token} if self.refresh_token else {}
+        result = self._request("POST", "/v1/Auth/logout", body)
+        self.access_token = None
+        self.refresh_token = None
+        self.token_expires_at = None
+        return result or {}
+
+    def change_password(self, current_password: str, new_password: str) -> Dict[str, Any]:
+        """POST /v1/Auth/change-password."""
+        body = {"currentPassword": current_password, "newPassword": new_password}
+        return self._request("POST", "/v1/Auth/change-password", body) or {}
+
     def _ensure_valid_token(self):
         """التأكد من صلاحية الـ Token قبل الطلب."""
         if not self.access_token:
@@ -1030,31 +1044,102 @@ API للاتصال بـ TRRCMS Backend.
         logger.info(f"Unit linked successfully")
         return result
 
-    def get_all_property_units(self, limit: int = 1000) -> List[Dict[str, Any]]:
+    def get_all_property_units(
+        self,
+        building_id: Optional[str] = None,
+        unit_type: Optional[int] = None,
+        status: Optional[int] = None,
+        group_by_building: bool = False,
+        limit: int = 1000
+    ) -> List[Dict[str, Any]]:
         """
-        Get all property units.
+        Get property units as a flat list (flattens grouped response).
 
-        Args:
-            limit: Maximum number of units to return (not enforced by API)
-
-        Returns:
-            List of property unit dictionaries
-
-        Endpoint: GET /api/v1/PropertyUnits
+        Endpoint: GET /api/v1/PropertyUnits?groupByBuilding=false
         """
-        logger.info("Fetching all property units")
-        result = self._request("GET", "/v1/PropertyUnits")
+        params: Dict[str, Any] = {"groupByBuilding": "false"}
+        if building_id:
+            params["buildingId"] = building_id
+        if unit_type is not None:
+            params["unitType"] = unit_type
+        if status is not None:
+            params["status"] = status
+        if group_by_building:
+            params["groupByBuilding"] = "true"
+
+        logger.info(f"Fetching property units (groupByBuilding={group_by_building})")
+        result = self._request("GET", "/v1/PropertyUnits", params=params)
 
         if isinstance(result, list):
-            units = result
-        elif isinstance(result, dict):
-            units = result.get("data") or result.get("units") or result.get("items") or []
-        else:
-            logger.warning(f"Unexpected response format: {type(result)}")
-            return []
+            return result
+        if isinstance(result, dict):
+            # GroupedPropertyUnitsResponseDto — flatten if grouped
+            grouped = result.get("groupedByBuilding", [])
+            if grouped:
+                units: List[Dict[str, Any]] = []
+                for g in grouped:
+                    units.extend(g.get("propertyUnits", []))
+                logger.info(f"Fetched {len(units)} units (flattened from {len(grouped)} buildings)")
+                return units
+            return result.get("data") or result.get("units") or result.get("items") or []
+        logger.warning(f"Unexpected response format: {type(result)}")
+        return []
 
-        logger.info(f"Fetched {len(units)} property units")
-        return units if isinstance(units, list) else []
+    def get_units_grouped(
+        self,
+        building_id: Optional[str] = None,
+        unit_type: Optional[int] = None,
+        status: Optional[int] = None
+    ) -> Dict[str, Any]:
+        """
+        Get property units grouped by building.
+
+        Returns:
+            GroupedPropertyUnitsResponseDto:
+            {groupedByBuilding: [BuildingWithUnitsDto], totalUnits, totalBuildings}
+
+        Endpoint: GET /api/v1/PropertyUnits?groupByBuilding=true
+        """
+        params: Dict[str, Any] = {"groupByBuilding": "true"}
+        if building_id:
+            params["buildingId"] = building_id
+        if unit_type is not None:
+            params["unitType"] = unit_type
+        if status is not None:
+            params["status"] = status
+
+        logger.info("Fetching grouped property units")
+        result = self._request("GET", "/v1/PropertyUnits", params=params)
+        if isinstance(result, dict):
+            return result
+        return {"groupedByBuilding": [], "totalUnits": 0, "totalBuildings": 0}
+
+    def get_property_unit_by_id(self, unit_id: str) -> Optional[Dict[str, Any]]:
+        """
+        Get a single property unit by UUID.
+
+        Endpoint: GET /api/v1/PropertyUnits/{id}
+        """
+        if not unit_id:
+            return None
+        logger.info(f"Fetching property unit: {unit_id}")
+        return self._request("GET", f"/v1/PropertyUnits/{unit_id}")
+
+    def delete_property_unit(self, unit_id: str) -> bool:
+        """
+        Soft-delete a property unit.
+
+        Endpoint: DELETE /api/v1/PropertyUnits/{id}
+        """
+        if not unit_id:
+            return False
+        try:
+            logger.info(f"Deleting property unit: {unit_id}")
+            self._request("DELETE", f"/v1/PropertyUnits/{unit_id}")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to delete property unit {unit_id}: {e}")
+            return False
 
     def get_units_for_building(self, building_id: str) -> List[Dict[str, Any]]:
         """
@@ -2411,6 +2496,99 @@ API للاتصال بـ TRRCMS Backend.
         self._request("DELETE", f"/Claims/{claim_id}")
         logger.info(f"Claim {claim_id} deleted")
         return True
+
+
+    # ==================== Users ====================
+
+    def get_all_users(
+        self,
+        page: int = 1,
+        page_size: int = 100,
+        role: Optional[str] = None,
+        is_active: Optional[bool] = None
+    ) -> Dict[str, Any]:
+        """GET /v1/Users"""
+        params: Dict[str, Any] = {"page": page, "pageSize": page_size}
+        if role:
+            params["role"] = role
+        if is_active is not None:
+            params["isActive"] = is_active
+        return self._request("GET", "/v1/Users", params=params) or {}
+
+    def get_user(self, user_id: str) -> Dict[str, Any]:
+        """GET /v1/Users/{id}"""
+        return self._request("GET", f"/v1/Users/{user_id}") or {}
+
+    def create_user(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        """POST /v1/Users"""
+        return self._request("POST", "/v1/Users", data) or {}
+
+    def update_user(self, user_id: str, data: Dict[str, Any]) -> Dict[str, Any]:
+        """PUT /v1/Users/{id}"""
+        return self._request("PUT", f"/v1/Users/{user_id}", data) or {}
+
+    def delete_user(self, user_id: str) -> None:
+        """DELETE /v1/Users/{id}"""
+        self._request("DELETE", f"/v1/Users/{user_id}")
+
+    def activate_user(self, user_id: str) -> Dict[str, Any]:
+        """PUT /v1/Users/{id}/activate"""
+        return self._request("PUT", f"/v1/Users/{user_id}/activate") or {}
+
+    def deactivate_user(self, user_id: str) -> Dict[str, Any]:
+        """PUT /v1/Users/{id}/deactivate"""
+        return self._request("PUT", f"/v1/Users/{user_id}/deactivate") or {}
+
+    def unlock_user(self, user_id: str) -> Dict[str, Any]:
+        """PUT /v1/Users/{id}/unlock"""
+        return self._request("PUT", f"/v1/Users/{user_id}/unlock") or {}
+
+    def admin_change_user_password(self, user_id: str, new_password: str) -> Dict[str, Any]:
+        """PUT /v1/Users/{id}/change-password (admin action)"""
+        return self._request("PUT", f"/v1/Users/{user_id}/change-password",
+                             {"newPassword": new_password}) or {}
+
+    def grant_user_permissions(self, user_id: str, permissions: Dict[str, Any]) -> Dict[str, Any]:
+        """POST /v1/Users/{id}/permissions"""
+        return self._request("POST", f"/v1/Users/{user_id}/permissions", permissions) or {}
+
+    def revoke_user_permission(self, user_id: str, permission: str) -> None:
+        """DELETE /v1/Users/{id}/permissions/{permission}"""
+        self._request("DELETE", f"/v1/Users/{user_id}/permissions/{permission}")
+
+    # ==================== Vocabularies ====================
+
+    def get_vocabulary_terms(self, vocab_name: str) -> Dict[str, Any]:
+        """GET /v1/Vocabularies/{name}"""
+        return self._request("GET", f"/v1/Vocabularies/{vocab_name}") or {}
+
+    def create_vocabulary(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        """POST /v1/Vocabularies"""
+        return self._request("POST", "/v1/Vocabularies", data) or {}
+
+    def create_vocabulary_term(self, vocab_name: str, data: Dict[str, Any]) -> Dict[str, Any]:
+        """POST /v1/Vocabularies/{name}/terms"""
+        return self._request("POST", f"/v1/Vocabularies/{vocab_name}/terms", data) or {}
+
+    def update_vocabulary_term(self, vocab_name: str, code: str, data: Dict[str, Any]) -> Dict[str, Any]:
+        """PUT /v1/Vocabularies/{name}/terms/{code}"""
+        return self._request("PUT", f"/v1/Vocabularies/{vocab_name}/terms/{code}", data) or {}
+
+    def activate_vocabulary_term(self, vocab_name: str, code: str) -> Dict[str, Any]:
+        """PATCH /v1/Vocabularies/{name}/terms/{code}/activate"""
+        return self._request("PATCH", f"/v1/Vocabularies/{vocab_name}/terms/{code}/activate") or {}
+
+    def deactivate_vocabulary_term(self, vocab_name: str, code: str) -> Dict[str, Any]:
+        """PATCH /v1/Vocabularies/{name}/terms/{code}/deactivate"""
+        return self._request("PATCH", f"/v1/Vocabularies/{vocab_name}/terms/{code}/deactivate") or {}
+
+    def export_vocabularies(self) -> Any:
+        """GET /v1/Vocabularies/export"""
+        return self._request("GET", "/v1/Vocabularies/export")
+
+    def import_vocabularies(self, data: Any) -> Dict[str, Any]:
+        """POST /v1/Vocabularies/import"""
+        return self._request("POST", "/v1/Vocabularies/import", data) or {}
 
 
 # ==================== Singleton Instance ====================

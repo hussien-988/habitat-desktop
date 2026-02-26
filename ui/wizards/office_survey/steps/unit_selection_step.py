@@ -883,6 +883,9 @@ class UnitSelectionStep(BaseStep):
 
         # Link selected unit to survey
         survey_id = self.context.get_data("survey_id")
+        if not survey_id:
+            result.add_error("لم يتم إنشاء المسح. يرجى العودة للخطوة الأولى والمحاولة مجدداً.")
+            return result
 
         # Get unit_id from selected unit or newly created unit
         current_unit_id = None
@@ -928,15 +931,16 @@ class UnitSelectionStep(BaseStep):
                         logger.info(f"Unit {current_unit_id} linked to survey {survey_id}")
                         linked = True
                     except Exception as e:
-                        logger.warning(f"API link failed, falling back to local: {e}")
+                        logger.error(f"API link failed: {e}")
+                        result.add_error("فشل ربط الوحدة بالمسح. يرجى المحاولة مجدداً.")
+                        return result
                 else:
-                    logger.warning(f"Missing survey_id ({survey_id}) or unit_id ({current_unit_id}), skipping link")
+                    result.add_error("لم يتم إنشاء المسح أو الوحدة. يرجى العودة للخطوة الأولى والمحاولة مجدداً.")
+                    return result
 
-            if not linked:
-                logger.info(f"Unit {current_unit_id} linked locally to survey")
-
-            self.context.update_data("unit_linked", True)
-            self.context.update_data("linked_unit_uuid", current_unit_id)
+            if linked:
+                self.context.update_data("unit_linked", True)
+                self.context.update_data("linked_unit_uuid", current_unit_id)
 
         return result
 

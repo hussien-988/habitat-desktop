@@ -215,55 +215,48 @@ class OfficeSurveyWizard(BaseWizard):
 
     def on_save_draft(self) -> str:
         """
-        Handle draft saving.
+        Handle draft saving via backend API.
 
-        Saves to backend first (PUT /api/v1/Surveys/{id}/draft), then to local DB.
+        Saves draft notes to backend (PUT /api/v1/Surveys/{id}/draft).
 
         Returns:
-            Draft ID if successful, None otherwise
+            Survey ID if successful, None otherwise
         """
         try:
+            survey_id = self.context.get_data("survey_id")
+            if not survey_id:
+                ErrorHandler.show_error(
+                    self,
+                    tr("wizard.error.no_survey_id"),
+                    tr("common.error")
+                )
+                return None
+
             if not self.context.status or self.context.status == "in_progress":
                 self.context.status = "draft"
-            draft_data = self.context.to_dict()
 
-            # Save to backend first
-            from app.config import Config
-            use_api = getattr(Config, 'DATA_PROVIDER', 'local_db') == 'http'
-            survey_id = self.context.get_data("survey_id")
+            from services.api_client import get_api_client
+            api_service = get_api_client()
+            main_window = self.window()
+            if main_window and hasattr(main_window, '_api_token') and main_window._api_token:
+                api_service.set_access_token(main_window._api_token)
 
-            if use_api and survey_id:
-                try:
-                    from services.api_client import get_api_client
-                    api_service = get_api_client()
-                    main_window = self.window()
-                    if main_window and hasattr(main_window, '_api_token') and main_window._api_token:
-                        api_service.set_access_token(main_window._api_token)
+            interviewee_name = None
+            if self.context.persons:
+                p = self.context.persons[0]
+                parts = [p.get("first_name", ""), p.get("father_name", ""), p.get("last_name", "")]
+                interviewee_name = " ".join(part for part in parts if part)
+                if not interviewee_name:
+                    interviewee_name = p.get("full_name")
 
-                    # Build interviewee name from first person in context
-                    interviewee_name = None
-                    if self.context.persons:
-                        p = self.context.persons[0]
-                        parts = [p.get("first_name", ""), p.get("father_name", ""), p.get("last_name", "")]
-                        interviewee_name = " ".join(part for part in parts if part)
-                        if not interviewee_name:
-                            interviewee_name = p.get("full_name")
-
-                    backend_draft_data = {
-                        "property_unit_id": self.context.unit.unit_uuid if self.context.unit else None,
-                        "interviewee_name": interviewee_name,
-                        "notes": draft_data.get("notes"),
-                    }
-                    api_service.save_draft_to_backend(survey_id, backend_draft_data)
-                    logger.info(f"Draft saved to backend: {survey_id}")
-                except Exception as e:
-                    logger.warning(f"Backend draft save failed, continuing with local: {e}")
-
-            # Save to local DB as fallback/backup
-            draft_id = self.survey_repo.create(draft_data)
-            logger.info(f"Draft saved locally: {draft_id}")
-
-            return draft_id
+            backend_draft_data = {
+                "property_unit_id": self.context.unit.unit_uuid if self.context.unit else None,
+                "interviewee_name": interviewee_name,
+                "notes": self.context.get_data("notes"),
+            }
+            api_service.save_draft_to_backend(survey_id, backend_draft_data)
+            logger.info(f"Draft saved to backend: {survey_id}")
+            return survey_id
 
         except Exception as e:
             logger.error(f"Error saving draft: {e}", exc_info=True)

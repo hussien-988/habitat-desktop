@@ -20,6 +20,7 @@ from repositories.building_repository import BuildingRepository
 from controllers.unit_controller import UnitController
 from services.display_mappings import get_unit_type_display, get_unit_status_display
 from ui.components.icon import Icon
+from ui.components.toast import Toast
 from ui.design_system import Colors, PageDimensions, ButtonDimensions
 from ui.font_utils import create_font, FontManager
 from ui.style_manager import StyleManager
@@ -474,6 +475,27 @@ class BuildingDetailsPage(QWidget):
 
         self.current_building = building
 
+        # Recalculate unit counts from actual PropertyUnits API data
+        building_uuid = building.building_uuid
+        if building_uuid:
+            try:
+                main_window = self.window()
+                if main_window and hasattr(main_window, '_api_token') and main_window._api_token:
+                    self.unit_controller.set_auth_token(main_window._api_token)
+                units_result = self.unit_controller.get_units_for_building(building_uuid)
+                if units_result.success and units_result.data is not None:
+                    actual_units = units_result.data
+                    total = len(actual_units)
+                    residential = sum(
+                        1 for u in actual_units
+                        if str(getattr(u, 'unit_type', '')).strip() in ('1', 'apartment')
+                    )
+                    building.number_of_units = total
+                    building.number_of_apartments = residential
+                    building.number_of_shops = total - residential
+            except Exception as e:
+                logger.warning(f"Could not recalculate unit counts: {e}")
+
         # Reset to cards view
         if self._units_view_active:
             self.info_card.setVisible(True)
@@ -716,7 +738,11 @@ class BuildingDetailsPage(QWidget):
         except Exception as e:
             logger.warning(f"Could not set auth token: {e}")
 
-        building_uuid = self.current_building.building_uuid or self.current_building.building_id
+        building_uuid = self.current_building.building_uuid
+        if not building_uuid:
+            Toast.show_toast(self, "لم يتم العثور على معرّف المبنى", Toast.ERROR)
+            return
+
         result = self.unit_controller.get_units_for_building(building_uuid)
 
         if result.success:
@@ -724,6 +750,7 @@ class BuildingDetailsPage(QWidget):
         else:
             logger.error(f"Failed to load units: {result.message}")
             self._units_list = []
+            Toast.show_toast(self, f"فشل تحميل الوحدات: {result.message}", Toast.ERROR)
 
         self._units_page = 1
         self._update_units_table()

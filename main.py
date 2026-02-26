@@ -68,13 +68,6 @@ def main():
         initialize_vocabularies()
         logger.info(">> Vocabularies initialized from API")
 
-        # Load user vocabulary customizations from local DB
-        try:
-            from services.vocab_service import load_db_customizations
-            load_db_customizations(db)
-        except Exception as e:
-            logger.warning(f">> Failed to load vocab customizations: {e}")
-
         # Create main window
         logger.info("Creating main window...")
         window = MainWindow(db, i18n)

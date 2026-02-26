@@ -15,8 +15,7 @@ from PyQt5.QtGui import QColor, QIcon, QFont, QPixmap
 
 from app.config import Roles
 from repositories.database import Database
-from repositories.user_repository import UserRepository
-from models.user import User
+from controllers.user_controller import UserController
 from ui.components.page_header import PageHeader
 from ui.components.toggle_switch import ToggleSwitch
 from ui.components.icon import Icon
@@ -36,11 +35,11 @@ class UserManagementPage(QWidget):
     edit_user_signal = pyqtSignal(object)
     add_user_requested = pyqtSignal()
 
-    def __init__(self, db: Database, i18n: I18n, parent=None):
+    def __init__(self, db: Database, i18n: I18n, user_controller: UserController = None, parent=None):
         super().__init__(parent)
         self.db = db
         self.i18n = i18n
-        self.user_repo = UserRepository(db) if db else None
+        self._user_controller = user_controller
 
         self._all_users = []
         self._users = []
@@ -286,28 +285,44 @@ class UserManagementPage(QWidget):
         self._load_users()
 
     def _load_users(self):
-        if self.user_repo:
-            users = self.user_repo.get_all(limit=1000)
-            self._all_users = [
-                {
-                    "user_id": u.user_id,
-                    "username": u.username,
-                    "display_id": str(int(u.user_id.replace('-', '')[:8], 16) % 900000 + 100000),
-                    "full_name": u.full_name_ar or u.full_name or u.username,
-                    "role": Roles.get_display_name(u.role, arabic=True),
-                    "role_key": u.role,
-                    "permissions_json": u.permissions or "",
-                    "is_active": u.is_active,
-                    "email": u.email or "",
-                    "_user_obj": u,
-                }
-                for u in users
-            ]
-        else:
+        if not self._user_controller:
             self._all_users = []
+            self._users = []
+            self._update_table()
+            return
+        result = self._user_controller.get_all_users()
+        if not result.success:
+            logger.error(f"Failed to load users: {result.message}")
+            Toast.show_toast(self, f"فشل تحميل المستخدمين: {result.message}", Toast.ERROR)
+            self._all_users = []
+        else:
+            raw = result.data or []
+            self._all_users = [self._map_api_user(u) for u in raw]
         self._users = self._apply_filters(self._all_users)
         self._current_page = 1
         self._update_table()
+
+    def _map_api_user(self, u: dict) -> dict:
+        user_id = u.get("id") or u.get("userId") or u.get("user_id", "")
+        username = u.get("username") or u.get("userName", "")
+        role_key = u.get("role", "")
+        full_name = u.get("fullNameAr") or u.get("fullName") or username
+        try:
+            display_id = str(int(user_id.replace('-', '')[:8], 16) % 900000 + 100000)
+        except Exception:
+            display_id = user_id[:6] if user_id else "------"
+        return {
+            "user_id": user_id,
+            "username": username,
+            "display_id": display_id,
+            "full_name": full_name,
+            "role": Roles.get_display_name(role_key, arabic=True),
+            "role_key": role_key,
+            "permissions_json": u.get("permissions", ""),
+            "is_active": u.get("isActive", u.get("is_active", True)),
+            "email": u.get("email", ""),
+            "_raw": u,
+        }
 
     def _update_table(self):
         total = len(self._users)
@@ -609,36 +624,43 @@ class UserManagementPage(QWidget):
         logger.info(f"Change password for user: {user.get('user_id')}")
         from ui.components.dialogs.confirmation_dialog import ConfirmationDialog, DialogResult
         display_name = user.get('full_name', user.get('username', ''))
-        result = ConfirmationDialog.confirm(
+        confirm = ConfirmationDialog.confirm(
             parent=self,
             title="تغيير كلمة المرور",
             message=f"هل تريد تغيير كلمة المرور للمستخدم: {display_name}؟"
         )
-        if result != DialogResult.YES:
+        if confirm != DialogResult.YES:
             return
         new_password = PasswordDialog.get_password(self)
-        if new_password and self.user_repo:
-            user_obj = user.get("_user_obj")
-            if user_obj:
-                user_obj.set_password(new_password)
-                self.user_repo.update(user_obj)
-                logger.info(f"Password changed for user: {user.get('username')}")
-                Toast.show_toast(self, "تم تغيير كلمة المرور بنجاح", Toast.SUCCESS)
+        if not new_password or not self._user_controller:
+            return
+        result = self._user_controller.admin_change_user_password(user.get("user_id", ""), new_password)
+        if result.success:
+            logger.info(f"Password changed for user: {user.get('username')}")
+            Toast.show_toast(self, "تم تغيير كلمة المرور بنجاح", Toast.SUCCESS)
+        else:
+            logger.error(f"Password change failed: {result.message}")
+            Toast.show_toast(self, f"فشل تغيير كلمة المرور: {result.message}", Toast.ERROR)
 
     def _on_delete_user(self, user: dict):
         from ui.components.dialogs.confirmation_dialog import ConfirmationDialog, DialogResult
         username = user.get("username", "")
         display_name = user.get('full_name', username)
-        result = ConfirmationDialog.confirm(
+        confirm = ConfirmationDialog.confirm(
             parent=self,
             title="تأكيد الحذف",
             message=f"هل أنت متأكد من حذف المستخدم: {display_name}؟"
         )
-        if result == DialogResult.YES and self.user_repo:
-            self.user_repo.delete(user.get("user_id"))
+        if confirm != DialogResult.YES or not self._user_controller:
+            return
+        result = self._user_controller.delete_user(user.get("user_id", ""))
+        if result.success:
             logger.info(f"Deleted user: {username}")
             Toast.show_toast(self, "تم حذف المستخدم بنجاح", Toast.SUCCESS)
             self._load_users()
+        else:
+            logger.error(f"Delete user failed: {result.message}")
+            Toast.show_toast(self, f"فشل حذف المستخدم: {result.message}", Toast.ERROR)
 
     def update_language(self, is_arabic: bool):
         pass

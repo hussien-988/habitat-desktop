@@ -143,7 +143,10 @@ class MainWindow(QMainWindow):
         from ui.pages.case_details_page import CaseDetailsPage
         from ui.pages.user_management_page import UserManagementPage
         from ui.pages.add_user_page import AddUserPage
+        from controllers.user_controller import UserController
         from ui.wizards.office_survey import OfficeSurveyWizard
+
+        self._user_controller = UserController(parent=self)
 
 
         # Central widget
@@ -267,7 +270,9 @@ class MainWindow(QMainWindow):
         self.stack.addWidget(self.pages[Pages.CASE_DETAILS])
 
         # User Management page
-        self.pages[Pages.USER_MANAGEMENT] = UserManagementPage(self.db, self.i18n, self)
+        self.pages[Pages.USER_MANAGEMENT] = UserManagementPage(
+            self.db, self.i18n, user_controller=self._user_controller, parent=self
+        )
         self.stack.addWidget(self.pages[Pages.USER_MANAGEMENT])
 
         # Add User page
@@ -477,12 +482,22 @@ class MainWindow(QMainWindow):
             self.office_survey_wizard.set_auth_token(token)
             logger.info("API token set for OfficeSurveyWizard")
 
+        # Pass token to UserController
+        if hasattr(self, '_user_controller') and self._user_controller:
+            self._user_controller.set_auth_token(token)
+            logger.info("API token set for UserController")
+
     def _handle_logout(self):
         """Handle logout request."""
         if self.current_user:
             from ui.components.dialogs.logout_dialog import LogoutDialog
             if LogoutDialog.confirm_logout(parent=self):
                 logger.info(f"User logged out: {self.current_user.username}")
+                try:
+                    from services.api_client import get_api_client
+                    get_api_client().logout()
+                except Exception as e:
+                    logger.warning(f"API logout failed (proceeding with local logout): {e}")
                 self.current_user = None
                 self._show_login()
 
@@ -492,46 +507,45 @@ class MainWindow(QMainWindow):
         self.navigate_to(Pages.ADD_USER, user_data)
 
     def _on_save_new_user(self, data: dict):
-        """Handle saving a new or updated user from AddUserPage."""
-        try:
-            import json
-            from models.user import User
-            from repositories.user_repository import UserRepository
-            from ui.components.toast import Toast
+        """Handle saving a new or updated user from AddUserPage via backend API."""
+        from ui.components.toast import Toast
 
-            repo = UserRepository(self.db)
-            permissions_json = json.dumps(data.get("permissions", {}))
+        if not hasattr(self, '_user_controller') or not self._user_controller:
+            Toast.show_toast(self, "خطأ: UserController غير مهيأ", Toast.ERROR)
+            return
 
-            if data.get("_mode") == "edit":
-                user_id = data.get("_editing_user_id")
-                user = repo.get_by_id(user_id)
-                if user:
-                    user.role = data.get("role", user.role)
-                    user.permissions = permissions_json
-                    repo.update(user)
-                    logger.info(f"User updated: {user.username}, role={user.role}")
-                    Toast.show_toast(self, "تم تحديث المستخدم بنجاح", Toast.SUCCESS)
-            else:
-                user = User(
-                    username=data.get("user_id", ""),
-                    role=data.get("role", "analyst"),
-                    full_name=data.get("user_id", ""),
-                    full_name_ar=data.get("user_id", ""),
-                    permissions=permissions_json,
-                )
-                user.set_password(data.get("password", ""), track_history=False)
-                repo.create(user)
-                logger.info(f"New user created: {user.username}, role={user.role}")
-                Toast.show_toast(self, "تم حفظ المستخدم بنجاح", Toast.SUCCESS)
+        is_edit = data.get("_mode") == "edit"
+        permissions = data.get("permissions", {})
 
+        if is_edit:
+            user_id = data.get("_editing_user_id", "")
+            api_data = {
+                "role": data.get("role", ""),
+                "permissions": permissions,
+            }
+            result = self._user_controller.update_user(user_id, api_data)
+            success_msg = "تم تحديث المستخدم بنجاح"
+            fail_prefix = "فشل تحديث المستخدم"
+        else:
+            api_data = {
+                "username": data.get("user_id", ""),
+                "password": data.get("password", ""),
+                "role": data.get("role", "analyst"),
+                "permissions": permissions,
+            }
+            result = self._user_controller.create_user(api_data)
+            success_msg = "تم حفظ المستخدم بنجاح"
+            fail_prefix = "فشل حفظ المستخدم"
+
+        if result.success:
+            logger.info(f"User {'updated' if is_edit else 'created'}: {data.get('user_id')}")
+            Toast.show_toast(self, success_msg, Toast.SUCCESS)
             self.navigate_to(Pages.USER_MANAGEMENT)
             if Pages.USER_MANAGEMENT in self.pages:
                 self.pages[Pages.USER_MANAGEMENT].refresh()
-
-        except Exception as e:
-            logger.error(f"Failed to save user: {e}", exc_info=True)
-            from ui.components.toast import Toast
-            Toast.show_toast(self, f"فشل في حفظ المستخدم: {e}", Toast.ERROR)
+        else:
+            logger.error(f"Save user failed: {result.message}")
+            Toast.show_toast(self, f"{fail_prefix}: {result.message}", Toast.ERROR)
 
     def _on_field_work_completed(self, workflow_data):
         """Handle field work wizard completion - save assignment and navigate to sync page."""
@@ -578,12 +592,22 @@ class MainWindow(QMainWindow):
         self.navigate_to(Pages.SYNC_DATA)
 
     def _on_password_change_requested(self):
-        """Handle password change request from navbar menu."""
+        """Handle password change request from navbar menu (admin only)."""
         from ui.components.dialogs.password_dialog import PasswordDialog
+        from ui.components.toast import Toast
+        from services.api_client import get_api_client
         result = PasswordDialog.change_password(parent=self)
-        if result:
-            current_pwd, new_pwd = result
-            logger.info("Password change requested by user")
+        if not result:
+            return
+        current_pwd, new_pwd = result
+        try:
+            get_api_client().change_password(current_pwd, new_pwd)
+            Toast.show_toast(self, "تم تغيير كلمة المرور بنجاح", Toast.SUCCESS)
+            logger.info("Password changed successfully via API")
+        except Exception as e:
+            logger.error(f"Password change failed: {e}")
+            from ui.components.error_handler import ErrorHandler
+            ErrorHandler.show_error(self, str(e))
 
     def _on_security_settings_requested(self):
         """Handle security settings request from navbar menu."""
