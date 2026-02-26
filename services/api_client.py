@@ -699,11 +699,14 @@ API للاتصال بـ TRRCMS Backend.
             "buildingType": get_value('building_type', 'buildingType'),
             "buildingStatus": get_value('building_status', 'buildingStatus'),
             "numberOfPropertyUnits": get_value('number_of_units', 'numberOfPropertyUnits'),
+            "numberOfUnits": get_value('number_of_units', 'numberOfUnits'),
             "numberOfApartments": get_value('number_of_apartments', 'numberOfApartments'),
             "numberOfShops": get_value('number_of_shops', 'numberOfShops'),
+            "numberOfFloors": get_value('number_of_floors', 'numberOfFloors'),
             "latitude": get_value('latitude', 'latitude'),
             "longitude": get_value('longitude', 'longitude'),
             "locationDescription": get_value('location_description', 'locationDescription', ''),
+            "generalDescription": get_value('general_description', 'generalDescription', ''),
             "notes": get_value('notes', 'notes', ''),
         }
         return {k: v for k, v in api_data.items() if v is not None}

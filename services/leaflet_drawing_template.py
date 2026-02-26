@@ -146,52 +146,18 @@ DRAWING_JS_TEMPLATE = """
             });
             map.addControl(drawControl);
 
-            // إضافة مربع تعليمات للرسم
-            var drawingInstructions = L.control({position: 'topright'});
-            drawingInstructions.onAdd = function(map) {
-                var div = L.DomUtil.create('div', 'drawing-instructions-box');
-                div.style.cssText = 'background: white; padding: 12px 16px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.25); font-size: 13px; direction: rtl; max-width: 280px; display: none; margin-top: 10px;';
-                div.id = 'drawingInstructions';
-                return div;
-            };
-            drawingInstructions.addTo(map);
-
-            // دالة لتحديث التعليمات حسب نوع الرسم
-            function updateDrawingInstructions(layerType) {
-                var instructionsBox = document.getElementById('drawingInstructions');
-                if (!instructionsBox) return;
-
-                if (layerType === 'polygon') {
-                    instructionsBox.innerHTML = '<div style="font-weight: 600; color: #0072BC; margin-bottom: 6px;">📐 تعليمات رسم المضلع:</div>' +
-                                               '<div style="color: #333; line-height: 1.6; font-size: 12px;">' +
-                                               '1️⃣ اضغط على الخريطة لإضافة نقاط<br>' +
-                                               '2️⃣ <strong style="color:#28a745">اضغط مرتين متتاليتين</strong> لإنهاء الرسم (أسهل طريقة!)<br>' +
-                                               '3️⃣ أو اضغط على النقطة الأولى لإغلاق المضلع<br>' +
-                                               '4️⃣ أو اضغط زر <strong style="color:#0072BC">FINISH</strong> في الأعلى<br>' +
-                                               '❌ اضغط ESC للإلغاء</div>';
-                } else if (layerType === 'marker') {
-                    instructionsBox.innerHTML = '<div style="font-weight: 600; color: #0072BC; margin-bottom: 6px;">📍 تعليمات إضافة نقطة:</div>' +
-                                               '<div style="color: #333; line-height: 1.6; font-size: 12px;">' +
-                                               '✓ اضغط على الخريطة لإضافة نقطة<br>' +
-                                               '❌ اضغط ESC للإلغاء</div>';
-                }
+            // Inject text label into the polygon draw button
+            if (enablePolygon) {
+                setTimeout(function() {
+                    var polygonBtn = document.querySelector('.leaflet-draw-draw-polygon');
+                    if (polygonBtn) {
+                        var span = document.createElement('span');
+                        span.className = 'draw-btn-label';
+                        span.textContent = 'ارسم حدود المنطقة';
+                        polygonBtn.appendChild(span);
+                    }
+                }, 50);
             }
-
-            // إظهار/إخفاء التعليمات عند بدء/إنهاء الرسم
-            map.on(L.Draw.Event.DRAWSTART, function(e) {
-                var instructionsBox = document.getElementById('drawingInstructions');
-                if (instructionsBox) {
-                    updateDrawingInstructions(e.layerType);
-                    instructionsBox.style.display = 'block';
-                }
-            });
-
-            map.on(L.Draw.Event.DRAWSTOP, function(e) {
-                var instructionsBox = document.getElementById('drawingInstructions');
-                if (instructionsBox) {
-                    instructionsBox.style.display = 'none';
-                }
-            });
 
             // Handle drawing created
             map.on(L.Draw.Event.CREATED, function(e) {
@@ -364,14 +330,5 @@ DRAWING_JS_TEMPLATE = """
                     sendGeometryToPython(null, null);
                 }
             };
-
-            // Add instructions
-            var instructions = L.control({position: 'topright'});
-            instructions.onAdd = function(map) {
-                var div = L.DomUtil.create('div', 'drawing-instructions');
-                div.innerHTML = '<div style="background: white; padding: 10px; border-radius: 6px; box-shadow: 0 2px 6px rgba(0,0,0,0.2); font-size: 12px; direction: rtl;">📍 اضغط على الخريطة لإضافة نقطة</div>';
-                return div;
-            };
-            instructions.addTo(map);
         }
 """

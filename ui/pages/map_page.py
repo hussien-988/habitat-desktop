@@ -628,14 +628,52 @@ class MapPage(QWidget):
         layout.addWidget(info_bar)
 
     def _start_tile_server(self):
-        """Get tile server URL from centralized manager."""
-        from services.tile_server_manager import get_tile_server_url
+        """Get tile server URLs from centralized manager."""
+        from services.tile_server_manager import get_tile_server_url, get_local_server_url
 
-        tile_url = get_tile_server_url()
-        # Extract port from URL for backward compatibility
-        self.tile_server_port = tile_url.split(':')[-1]
-        logger.info(f"Using tile server: {tile_url}")
+        # Local server always starts — serves static assets (leaflet.js, leaflet.css, etc.)
+        self.local_asset_url = get_local_server_url()
+        # Tile URL may be Docker (when available) or local
+        self.tile_url = get_tile_server_url()
+        # Backward compat: other methods may use tile_server_port
+        self.tile_server_port = self.local_asset_url.split(':')[-1]
+        logger.info(f"Assets URL: {self.local_asset_url}, Tiles URL: {self.tile_url}")
         return True
+
+    def _parse_wkt_centroid(self, wkt: str):
+        """Extract centroid from any WKT POLYGON or MULTIPOLYGON."""
+        import re
+        if not wkt:
+            return None
+        try:
+            coords = re.findall(r'([-\d.]+)\s+([-\d.]+)', wkt)
+            if coords:
+                lngs = [float(c[0]) for c in coords]
+                lats = [float(c[1]) for c in coords]
+                return sum(lats) / len(lats), sum(lngs) / len(lngs)
+        except Exception:
+            pass
+        return None
+
+    def _neighborhoods_api_to_geojson(self, neighborhoods: list) -> str:
+        """Convert API neighborhood list to GeoJSON for map overlay pins."""
+        features = []
+        for n in neighborhoods:
+            wkt = n.get('boundaries') or n.get('boundary') or n.get('boundaryWkt') or ''
+            center = self._parse_wkt_centroid(wkt)
+            if not center:
+                continue
+            features.append({
+                "type": "Feature",
+                "properties": {
+                    "code": n.get('neighborhoodCode') or n.get('code', ''),
+                    "center_lat": center[0],
+                    "center_lng": center[1],
+                    "name_ar": n.get('nameArabic') or n.get('name_ar', '')
+                },
+                "geometry": None
+            })
+        return json.dumps({"type": "FeatureCollection", "features": features})
 
     def _buildings_to_geojson(self, buildings) -> str:
         """
@@ -742,9 +780,17 @@ class MapPage(QWidget):
         """تحديث بيانات الخريطة بأداء محسّن."""
         logger.debug("Refreshing map page with optimized performance")
 
-        # Load buildings using MapController (bounds from Config/.env)
-        bbox = (Config.MAP_BOUNDS_MIN_LAT, Config.MAP_BOUNDS_MIN_LNG,
-                Config.MAP_BOUNDS_MAX_LAT, Config.MAP_BOUNDS_MAX_LNG)
+        # Use tile metadata bounds when available — supports tiles beyond .env config area
+        from services.tile_server_manager import get_tile_metadata
+        tile_meta = get_tile_metadata()
+        tile_bounds = tile_meta.get('bounds')  # [min_lng, min_lat, max_lng, max_lat] GeoJSON order
+
+        if tile_bounds and len(tile_bounds) == 4:
+            bbox = (tile_bounds[1], tile_bounds[0], tile_bounds[3], tile_bounds[2])
+            logger.info(f"Using tile metadata bounds for bbox: {bbox}")
+        else:
+            bbox = (Config.MAP_BOUNDS_MIN_LAT, Config.MAP_BOUNDS_MIN_LNG,
+                    Config.MAP_BOUNDS_MAX_LAT, Config.MAP_BOUNDS_MAX_LNG)
 
         # ✅ استخدام page_size محسّن = 2000 (زيادة من 1000)
         # ✅ تمرير zoom_level للتحسينات المستقبلية
@@ -817,12 +863,39 @@ class MapPage(QWidget):
                 border-radius: 12px;
             """)
 
-            # Generate and load HTML
-            tile_url = f"http://127.0.0.1:{self.tile_server_port}"
-            geojson = self._buildings_to_geojson(geo_buildings)
-            html = get_leaflet_html(tile_url, geojson)
+            # Load neighborhoods from backend API
+            neighborhoods_geojson = None
+            try:
+                from services.api_client import get_api_client
+                api = get_api_client()
+                neighborhoods = api.get_neighborhoods_by_bounds(
+                    sw_lat=Config.MAP_BOUNDS_MIN_LAT,
+                    sw_lng=Config.MAP_BOUNDS_MIN_LNG,
+                    ne_lat=Config.MAP_BOUNDS_MAX_LAT,
+                    ne_lng=Config.MAP_BOUNDS_MAX_LNG
+                )
+                if neighborhoods:
+                    neighborhoods_geojson = self._neighborhoods_api_to_geojson(neighborhoods)
+                    logger.info(f"Loaded {len(neighborhoods)} neighborhoods for map overlay")
+            except Exception as e:
+                logger.warning(f"Could not load neighborhoods: {e}")
 
-            self.web_view.setHtml(html, QUrl(tile_url))
+            # Use tile metadata bounds as initial_bounds so map shows full tile coverage
+            initial_bounds = None
+            if tile_bounds and len(tile_bounds) == 4:
+                initial_bounds = [[tile_bounds[1], tile_bounds[0]], [tile_bounds[3], tile_bounds[2]]]
+
+            # Generate and load HTML
+            geojson = self._buildings_to_geojson(geo_buildings)
+            html = get_leaflet_html(
+                self.local_asset_url,
+                geojson,
+                tile_layer_url=self.tile_url,
+                neighborhoods_geojson=neighborhoods_geojson,
+                initial_bounds=initial_bounds
+            )
+
+            self.web_view.setHtml(html, QUrl(self.local_asset_url))
         else:
             self.status_label.setText(tr("page.map.load_error"))
             self.status_label.setStyleSheet(f"""

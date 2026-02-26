@@ -936,9 +936,8 @@ class BaseMapDialog(QDialog):
             logger.warning("WebView not available")
             return
 
-        from services.tile_server_manager import get_tile_server_url
-        tile_server_url = get_tile_server_url()
-        base_url = QUrl(tile_server_url)
+        from services.tile_server_manager import get_local_server_url
+        base_url = QUrl(get_local_server_url())
 
         self.web_view.setHtml(html, base_url)
         logger.info("Map HTML loaded")

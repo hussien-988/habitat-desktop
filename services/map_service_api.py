@@ -600,10 +600,14 @@ class MapServiceAPI:
                 neighborhood_name_ar=neighborhood_name,
                 building_number=data.get("buildingNumber", ""),
                 building_type=data.get("buildingType", 1),
-                building_status=data.get("buildingStatus", 1),
-                number_of_units=data.get("numberOfUnits", 0),
-                number_of_shops=data.get("numberOfShops", 0),
-                number_of_apartments=data.get("numberOfApartments", 0),
+                building_status=data.get("status") or data.get("buildingStatus", 1),
+                number_of_apartments=data.get("numberOfApartments", 0) or 0,
+                number_of_shops=data.get("numberOfShops", 0) or 0,
+                number_of_units=(
+                    data.get("numberOfUnits") or
+                    data.get("numberOfPropertyUnits") or
+                    (data.get("numberOfApartments", 0) or 0) + (data.get("numberOfShops", 0) or 0)
+                ),
                 number_of_floors=data.get("numberOfFloors", 0)
             )
 

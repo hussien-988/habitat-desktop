@@ -91,11 +91,13 @@ class MapPickerDialog(BaseMapDialog):
 
     def _load_map(self):
         """Load map with drawing tools AND existing buildings."""
-        from services.tile_server_manager import get_tile_server_url
+        from services.tile_server_manager import get_local_server_url, get_tile_server_url
 
         try:
-            # Get tile server URL
-            tile_server_url = get_tile_server_url()
+            # Local server for assets (leaflet.js, leaflet.css) — always local Python server
+            tile_server_url = get_local_server_url()
+            # Tile URL may be Docker when available, or local as fallback
+            docker_url = get_tile_server_url()
 
             # Load buildings using shared method (DRY principle) - BEST PRACTICE!
             buildings_geojson = '{"type":"FeatureCollection","features":[]}'  # Default empty
@@ -149,7 +151,8 @@ class MapPickerDialog(BaseMapDialog):
                 initial_bounds=self.initial_bounds,
                 neighborhoods_geojson=self.neighborhoods_geojson,
                 selected_neighborhood_code=self.selected_neighborhood_code,
-                skip_fit_bounds=self._skip_fit_bounds
+                skip_fit_bounds=self._skip_fit_bounds,
+                tile_layer_url=docker_url
             )
 
             # Load into web view

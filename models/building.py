@@ -78,6 +78,10 @@ class Building:
     # Legacy support
     legacy_stdm_id: Optional[str] = None
 
+    # Descriptions
+    location_description: Optional[str] = None
+    general_description: Optional[str] = None
+
     def __post_init__(self):
         """
         Generate building_id if not provided and ensure no dashes.
@@ -204,6 +208,8 @@ class Building:
             "created_by": self.created_by,
             "updated_by": self.updated_by,
             "legacy_stdm_id": self.legacy_stdm_id,
+            "location_description": self.location_description,
+            "general_description": self.general_description,
         }
 
     @classmethod

@@ -457,6 +457,21 @@ class BuildingDetailsPage(QWidget):
                 logger.error(f"Building not found: {data}")
                 return
 
+        # Re-fetch full details from API for complete stats and status
+        building_id_for_api = building.building_uuid or building.building_id
+        if building_id_for_api:
+            try:
+                from services.map_service_api import MapServiceAPI
+                map_api = MapServiceAPI()
+                main_window = self.window()
+                if main_window and hasattr(main_window, '_api_token') and main_window._api_token:
+                    map_api.set_auth_token(main_window._api_token)
+                full_building = map_api.get_building_with_polygon(building_id_for_api)
+                if full_building:
+                    building = full_building
+            except Exception as e:
+                logger.warning(f"Could not re-fetch building details from API: {e}")
+
         self.current_building = building
 
         # Reset to cards view
@@ -487,7 +502,7 @@ class BuildingDetailsPage(QWidget):
         self._clear_layout(self.stats_content)
         self._clear_layout(self.location_content)
 
-        building_code = str(building.building_id) if building.building_id else "-"
+        building_code = building.building_id_formatted or building.building_id_display or building.building_id or "-"
         status = building.building_status_display if hasattr(building, 'building_status_display') else "-"
         building_type = building.building_type_display if hasattr(building, 'building_type_display') else "-"
         units_count = str(getattr(building, 'number_of_units', 0))
