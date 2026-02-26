@@ -24,19 +24,25 @@ _initialized: bool = False
 def initialize_vocabularies():
     """
     Fetch vocabularies from backend API and build in-memory cache.
+    Falls back to hardcoded values if API is unavailable.
     Called once at app startup from main.py.
     """
     global _initialized
     from app.config import Config
     url = f"{Config.API_BASE_URL}/{Config.API_VERSION}/vocabularies"
     logger.info(f"Fetching vocabularies from: {url}")
-    response = requests.get(url, timeout=10, verify=False)
-    response.raise_for_status()
-    data = response.json()
-    _build_cache(data)
-    _build_from_translation_keys()
-    _initialized = True
-    logger.info(f"Loaded {len(data)} vocabularies from API")
+    try:
+        response = requests.get(url, timeout=10, verify=False)
+        response.raise_for_status()
+        data = response.json()
+        _build_cache(data)
+        _build_from_translation_keys()
+        _initialized = True
+        logger.info(f"Loaded {len(data)} vocabularies from API")
+    except Exception as e:
+        logger.warning(f"Could not load vocabularies from API ({e}). Using hardcoded fallback.")
+        _build_cache_from_hardcoded()
+        _initialized = True
 
 
 def get_label(vocab_name: str, code, lang: str = None) -> str:

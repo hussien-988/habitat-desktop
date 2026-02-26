@@ -303,24 +303,26 @@ class UserManagementPage(QWidget):
         self._update_table()
 
     def _map_api_user(self, u: dict) -> dict:
-        user_id = u.get("id") or u.get("userId") or u.get("user_id", "")
-        username = u.get("username") or u.get("userName", "")
-        role_key = u.get("role", "")
-        full_name = u.get("fullNameAr") or u.get("fullName") or username
+        user_id = str(u.get("id") or u.get("userId") or u.get("user_id") or "")
+        username = str(u.get("username") or u.get("userName") or "")
+        role_raw = u.get("role") or u.get("roleKey") or ""
+        role_key = str(role_raw) if role_raw is not None else ""
+        full_name = str(u.get("fullNameAr") or u.get("fullName") or username)
         try:
             display_id = str(int(user_id.replace('-', '')[:8], 16) % 900000 + 100000)
         except Exception:
             display_id = user_id[:6] if user_id else "------"
+        role_display = Roles.get_display_name(role_key, arabic=True)
         return {
             "user_id": user_id,
             "username": username,
             "display_id": display_id,
             "full_name": full_name,
-            "role": Roles.get_display_name(role_key, arabic=True),
+            "role": str(role_display) if role_display is not None else role_key,
             "role_key": role_key,
-            "permissions_json": u.get("permissions", ""),
-            "is_active": u.get("isActive", u.get("is_active", True)),
-            "email": u.get("email", ""),
+            "permissions_json": str(u.get("permissions") or ""),
+            "is_active": bool(u.get("isActive", u.get("is_active", True))),
+            "email": str(u.get("email") or ""),
             "_raw": u,
         }
 

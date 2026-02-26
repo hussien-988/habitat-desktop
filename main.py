@@ -62,11 +62,14 @@ def main():
         i18n.set_language("ar")
         logger.info(">> Internationalization initialized (Arabic)")
 
-        # Fetch vocabularies from backend API
+        # Fetch vocabularies from backend API (non-fatal if unavailable)
         logger.info("Fetching vocabularies from API...")
-        from services.vocab_service import initialize_vocabularies  # type: ignore
-        initialize_vocabularies()
-        logger.info(">> Vocabularies initialized from API")
+        try:
+            from services.vocab_service import initialize_vocabularies  # type: ignore
+            initialize_vocabularies()
+            logger.info(">> Vocabularies initialized")
+        except Exception as e:
+            logger.warning(f">> Vocabularies initialization failed: {e}")
 
         # Create main window
         logger.info("Creating main window...")
