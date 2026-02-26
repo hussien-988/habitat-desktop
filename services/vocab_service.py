@@ -257,6 +257,8 @@ def _build_cache(api_data: List[Dict]):
     _ALIASES = {
         "contracttype": "tenurecontracttype",     # ContractType → tenure_contract_type
         "casestatus": "claimstatus",              # CaseStatus → claim_status
+        "unittype": "propertyunittype",           # UnitType → property_unit_type
+        "unitstatus": "propertyunitstatus",       # UnitStatus → property_unit_status
     }
     for alias, real_key in _ALIASES.items():
         if real_key in _lookup and alias not in _lookup:
@@ -282,8 +284,6 @@ def _build_cache_from_hardcoded():
             "documenttype": getattr(Vocabularies, "DOCUMENT_TYPES", []),
             "casestatus": getattr(Vocabularies, "CASE_STATUS", []),
             "verificationstatus": getattr(Vocabularies, "VERIFICATION_STATUS", []),
-            "unittype": getattr(Vocabularies, "UNIT_TYPES", []),
-            "unitstatus": getattr(Vocabularies, "UNIT_STATUS", []),
         }
         for key, tuples in _vocabs_from_config.items():
             if not tuples:
@@ -413,22 +413,6 @@ def _build_from_translation_keys():
             (1, "mapping.business_type.residential"),
             (2, "mapping.business_type.commercial"),
             (3, "mapping.business_type.agricultural"),
-        ],
-        "unittype": [
-            (1, "mapping.unit_type.apartment"),
-            (2, "mapping.unit_type.shop"),
-            (3, "mapping.unit_type.office"),
-            (4, "mapping.unit_type.warehouse"),
-            (5, "mapping.unit_type.other"),
-        ],
-        "unitstatus": [
-            (1, "mapping.unit_status.occupied"),
-            (2, "mapping.unit_status.vacant"),
-            (3, "mapping.unit_status.damaged"),
-            (4, "mapping.unit_status.under_renovation"),
-            (5, "mapping.unit_status.uninhabitable"),
-            (6, "mapping.unit_status.locked"),
-            (99, "mapping.unit_status.unknown"),
         ],
     }
 

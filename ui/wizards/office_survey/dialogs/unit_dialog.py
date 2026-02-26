@@ -619,45 +619,27 @@ class UnitDialog(QDialog):
         if not self._validate():
             return
 
-        # If creating new unit, try API first then fallback to local DB
         if not self.unit_data:
             unit_data = self.get_unit_data()
             if self._survey_id:
                 unit_data['survey_id'] = self._survey_id
 
-            created = False
-            if self._use_api:
-                logger.info(f"Creating property unit via API: {unit_data}")
-                try:
-                    response = self._api_service.create_property_unit(unit_data)
-                    logger.info("Property unit created successfully via API")
-                    self._created_unit_data = response
-                    created = True
-                except Exception as e:
-                    logger.warning(f"API unit creation failed, falling back to local: {e}")
-                    if "409" in str(e):
-                        self._show_styled_message(
-                            tr("common.error"),
-                            "هذا المقسم مسجّل مسبقاً في النظام. يرجى اختياره من القائمة أو تغيير رقم المقسم.",
-                            is_error=True
-                        )
-                        return
-
-            if not created:
-                # Local DB creation
-                try:
-                    result = self.unit_controller.create_unit(unit_data)
-                    if result.success:
-                        logger.info(f"Property unit created locally: {result.data.unit_uuid}")
-                        self._created_unit_data = {'id': result.data.unit_uuid}
-                    else:
-                        logger.error(f"Local unit creation failed: {result.message}")
-                        self._show_styled_message(tr("common.error"), result.message or result.message_ar, is_error=True)
-                        return
-                except Exception as e:
-                    logger.error(f"Failed to create unit locally: {e}")
-                    self._show_styled_message(tr("common.error"), str(e), is_error=True)
+            logger.info(f"Creating property unit via API: {unit_data}")
+            try:
+                response = self._api_service.create_property_unit(unit_data)
+                logger.info("Property unit created successfully via API")
+                self._created_unit_data = response
+            except Exception as e:
+                logger.error(f"API unit creation failed: {e}")
+                if "409" in str(e):
+                    self._show_styled_message(
+                        tr("common.error"),
+                        "هذا المقسم مسجّل مسبقاً في النظام. يرجى اختياره من القائمة أو تغيير رقم المقسم.",
+                        is_error=True
+                    )
                     return
+                self._show_styled_message(tr("common.error"), str(e), is_error=True)
+                return
 
         self.accept()
 

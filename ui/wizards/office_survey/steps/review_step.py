@@ -977,12 +977,8 @@ class ReviewStep(BaseStep):
                 try:
                     self._set_auth_token()
                     if survey_id and household_id:
-                        try:
-                            self._api_service.update_person_in_survey(
-                                survey_id, household_id, person_id, updated_data)
-                        except Exception:
-                            logger.warning(f"Survey-scoped update failed for person {person_id}, falling back to standalone")
-                            self._api_service.update_person(person_id, updated_data)
+                        self._api_service.update_person_in_survey(
+                            survey_id, household_id, person_id, updated_data)
                     else:
                         self._api_service.update_person(person_id, updated_data)
                     logger.info(f"Person {person_id} updated via API from review step")
@@ -1211,125 +1207,7 @@ class ReviewStep(BaseStep):
             logger.info("Survey already finalized in Step 5, skipping duplicate finalize")
             return
 
-        if self._use_api:
-            self._finalize_survey_via_api()
-        else:
-            self._process_claims_locally()
-
-    def _process_claims_locally(self):
-        """Fallback: process claims locally when API is not available."""
-        relations = self.context.relations or []
-        owners = [r for r in relations if _is_owner_relation(r.get('relation_type'))]
-
-        # Fallback: check persons directly if no owners found in relations
-        if not owners and self.context.persons:
-            for p in self.context.persons:
-                role = p.get('person_role') or p.get('relationship_type')
-                if _is_owner_relation(role):
-                    owners.append({
-                        'person_id': p.get('person_id'),
-                        'relation_type': role,
-                        'person_name': f"{p.get('first_name', '')} {p.get('last_name', '')}",
-                        'ownership_share': p.get('relation_data', {}).get('ownership_share', 0),
-                        'evidences': []
-                    })
-            if owners:
-                logger.info(f"Review step fallback: found {len(owners)} owners from persons data")
-
-        if not owners:
-            logger.info("Review step: No ownership relation found - no claim created")
-            self.context.finalize_response = {
-                "claimCreated": False,
-                "claimsCreatedCount": 0,
-                "createdClaims": [],
-                "claimNotCreatedReason": "No ownership relation found",
-                "dataSummary": {"evidenceCount": 0},
-                "survey": {},
-            }
-            return
-
-        total_evidences = 0
-        for r in relations:
-            total_evidences += len(r.get('evidences', []))
-        if total_evidences == 0:
-            for p in self.context.persons:
-                total_evidences += len(p.get('_relation_uploaded_files', []))
-
-        case_status = "submitted" if total_evidences > 0 else "draft"
-
-        try:
-            import json
-            from controllers.claim_controller import ClaimController
-            from repositories.database import Database
-
-            main_window = self.window()
-            db = getattr(main_window, 'db', None) if main_window else None
-            if not db:
-                db = Database()
-
-            claim_controller = ClaimController(db)
-            person_ids = [p.get("person_id") or "" for p in self.context.persons]
-            relation_ids = [r.get("relation_id") or "" for r in owners]
-
-            claim_data = {
-                "claim_type": "ownership",
-                "unit_id": self.context.unit.unit_id if self.context.unit else "",
-                "person_ids": json.dumps(person_ids),
-                "relation_ids": json.dumps(relation_ids),
-                "case_status": case_status,
-                "source": "office_survey",
-            }
-
-            result = claim_controller.create_claim(claim_data)
-
-            if result.success:
-                claim = result.data
-                logger.info(f"Review step: Local claim created: {claim.claim_uuid}, status={case_status}")
-
-                claimant_name = ""
-                if self.context.persons:
-                    p = self.context.persons[0]
-                    claimant_name = f"{p.get('first_name', '')} {p.get('father_name', '')} {p.get('last_name', '')}".strip()
-                    if not claimant_name:
-                        claimant_name = p.get('full_name', '')
-
-                owner_rel_type = owners[0].get('relation_type', 1) if owners else 1
-
-                from datetime import datetime as _dt
-                self.context.finalize_response = {
-                    "claimCreated": True,
-                    "claimsCreatedCount": 1,
-                    "createdClaims": [{
-                        "claimId": claim.claim_uuid,
-                        "caseNumber": claim.case_number,
-                        "fullNameArabic": claimant_name,
-                        "propertyUnitIdNumber": self.context.unit.unit_id if self.context.unit else "",
-                        "relationType": owner_rel_type,
-                        "claimStatus": 1,
-                        "source": 4,
-                        "businessNature": 1,
-                        "priority": 2,
-                        "surveyDate": _dt.now().strftime("%Y-%m-%dT%H:%M:%S"),
-                        "hasEvidence": total_evidences > 0,
-                    }],
-                    "survey": {
-                        "surveyDate": _dt.now().strftime("%Y-%m-%dT%H:%M:%S"),
-                    },
-                    "dataSummary": {
-                        "evidenceCount": total_evidences,
-                    },
-                }
-            else:
-                logger.error(f"Review step: Local claim creation failed: {result.message}")
-                self.context.finalize_response = {
-                    "claimCreated": False,
-                    "claimsCreatedCount": 0,
-                    "createdClaims": [],
-                    "claimNotCreatedReason": result.message or "Local claim creation failed"
-                }
-        except Exception as e:
-            logger.error(f"Review step: Error creating local claim: {e}", exc_info=True)
-            self.context.finalize_response = None
+        self._finalize_survey_via_api()
 
     def _finalize_survey_via_api(self):
         """Finalize the survey by calling the API."""
@@ -1361,10 +1239,9 @@ class ReviewStep(BaseStep):
                 self.context.finalize_response = response
                 return
             except Exception as e:
-                logger.warning(f"Failed to finalize survey via API, falling back to local: {e}")
-
-        # Fallback to local processing
-        self._process_claims_locally()
+                logger.error(f"Failed to finalize survey via API: {e}")
+                from services.error_mapper import map_exception
+                ErrorHandler.show_error(self, map_exception(e), tr("common.error"))
 
     def on_show(self):
         """Refresh summary when step is shown."""

@@ -221,45 +221,34 @@ class UnitController(BaseController):
         try:
             self._emit_started("delete_unit")
 
-            # Check if unit exists
-            existing = self.repository.get_by_uuid(unit_uuid)
-            if not existing:
-                self._emit_error("delete_unit", "Unit not found")
+            # Delete via API (soft delete)
+            api_success = self._api_service.delete_property_unit(unit_uuid)
+            if not api_success:
+                self._emit_error("delete_unit", "API delete failed")
                 return OperationResult.fail(
-                    message="Unit not found",
-                    message_ar="الوحدة غير موجودة"
-                )
-
-            # Check if unit has dependencies
-            if self._has_dependencies(unit_uuid):
-                return OperationResult.fail(
-                    message="Cannot delete unit with active claims or relations",
-                    message_ar="لا يمكن حذف وحدة لها مطالبات أو علاقات نشطة"
-                )
-
-            # Delete unit
-            success = self.repository.delete(unit_uuid)
-
-            if success:
-                self._emit_completed("delete_unit", True)
-                self.unit_deleted.emit(unit_uuid)
-                self._trigger_callbacks("on_unit_deleted", unit_uuid)
-
-                # Clear current unit if it was deleted
-                if self._current_unit and self._current_unit.unit_uuid == unit_uuid:
-                    self._current_unit = None
-
-                return OperationResult.ok(
-                    data=True,
-                    message="Unit deleted successfully",
-                    message_ar="تم حذف الوحدة بنجاح"
-                )
-            else:
-                self._emit_error("delete_unit", "Failed to delete unit")
-                return OperationResult.fail(
-                    message="Failed to delete unit",
+                    message="Failed to delete unit via API",
                     message_ar="فشل في حذف الوحدة"
                 )
+
+            # Also remove from local DB if available (best effort)
+            if self.repository:
+                try:
+                    self.repository.delete(unit_uuid)
+                except Exception:
+                    pass
+
+            self._emit_completed("delete_unit", True)
+            self.unit_deleted.emit(unit_uuid)
+            self._trigger_callbacks("on_unit_deleted", unit_uuid)
+
+            if self._current_unit and self._current_unit.unit_uuid == unit_uuid:
+                self._current_unit = None
+
+            return OperationResult.ok(
+                data=True,
+                message="Unit deleted successfully",
+                message_ar="تم حذف الوحدة بنجاح"
+            )
 
         except Exception as e:
             error_msg = f"Error deleting unit: {str(e)}"
@@ -347,6 +336,33 @@ class UnitController(BaseController):
         except Exception as e:
             error_msg = f"Error loading units: {str(e)}"
             self._emit_error("load_units", error_msg)
+            return OperationResult.fail(message=error_msg)
+
+    def get_units_grouped(
+        self,
+        building_id: Optional[str] = None,
+        unit_type: Optional[int] = None,
+        status: Optional[int] = None
+    ) -> OperationResult[List[Dict[str, Any]]]:
+        """
+        Get units grouped by building from API.
+
+        Returns:
+            OperationResult with list of BuildingWithUnitsDto dicts:
+            [{buildingId, buildingNumber, unitCount, propertyUnits: [PropertyUnitDto]}]
+        """
+        try:
+            self._emit_started("get_units_grouped")
+            response = self._api_service.get_units_grouped(building_id, unit_type, status)
+            groups = response.get("groupedByBuilding", [])
+            total_units = response.get("totalUnits", 0)
+            total_buildings = response.get("totalBuildings", 0)
+            logger.info(f"Loaded {total_units} units across {total_buildings} buildings")
+            self._emit_completed("get_units_grouped", True)
+            return OperationResult.ok(data=groups)
+        except Exception as e:
+            error_msg = f"Error loading grouped units: {str(e)}"
+            self._emit_error("get_units_grouped", error_msg)
             return OperationResult.fail(message=error_msg)
 
     def get_units_for_building(self, building_uuid: str) -> OperationResult[List[PropertyUnit]]:

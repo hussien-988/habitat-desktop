@@ -22,6 +22,8 @@ from PyQt5.QtGui import QIcon
 
 from utils.i18n import I18n
 from repositories.database import Database
+from services.api_client import get_api_client
+from services.vocab_service import get_all_vocabularies, initialize_vocabularies
 from ui.components.dialogs.base_dialog import BaseDialog
 from ui.error_handler import ErrorHandler
 from utils.logger import get_logger
@@ -236,30 +238,17 @@ class VocabularyManagementPage(QWidget):
         layout.addLayout(content)
 
     def _load_vocabularies(self):
-        """Load vocabulary list from database."""
+        """Load vocabulary list from backend API via vocab_service cache."""
         self.vocab_list.clear()
-
         try:
-            cursor = self.db.cursor()
-            cursor.execute("""
-                SELECT DISTINCT vocabulary_name FROM vocabularies
-                ORDER BY vocabulary_name
-            """)
-
-            for row in cursor.fetchall():
-                self.vocab_list.addItem(row[0])
-
-            # Add predefined vocabularies if not exist
-            predefined = [
-                "building_type", "building_status", "unit_type",
-                "claim_type", "claim_status", "document_type",
-                "relation_type", "gender", "nationality"
-            ]
-
-            for vocab in predefined:
-                if self.vocab_list.findText(vocab) == -1:
-                    self.vocab_list.addItem(vocab)
-
+            initialize_vocabularies()
+        except Exception as e:
+            logger.warning(f"Could not refresh vocabularies from API: {e}")
+        try:
+            for v in get_all_vocabularies():
+                name = v.get("vocabularyName", "")
+                if name:
+                    self.vocab_list.addItem(name)
         except Exception as e:
             logger.error(f"Failed to load vocabularies: {e}")
 
@@ -269,36 +258,27 @@ class VocabularyManagementPage(QWidget):
         self._load_terms(vocabulary_name)
 
     def _load_terms(self, vocabulary_name: str):
-        """Load terms for selected vocabulary."""
+        """Load terms for selected vocabulary from API cache."""
         self.terms_table.setRowCount(0)
-
         if not vocabulary_name:
             return
-
         try:
-            cursor = self.db.cursor()
-            cursor.execute("""
-                SELECT code, label_ar, label_en, display_order, is_active
-                FROM vocabularies
-                WHERE vocabulary_name = ?
-                ORDER BY display_order, code
-            """, (vocabulary_name,))
-
-            rows = cursor.fetchall()
-
-            self.terms_table.setRowCount(len(rows))
-            for i, row in enumerate(rows):
-                self.terms_table.setItem(i, 0, QTableWidgetItem(row[0] or ""))
-                self.terms_table.setItem(i, 1, QTableWidgetItem(row[1] or ""))
-                self.terms_table.setItem(i, 2, QTableWidgetItem(row[2] or ""))
-                self.terms_table.setItem(i, 3, QTableWidgetItem(str(row[3] or 0)))
-
-                active_item = QTableWidgetItem("✓" if row[4] else "✗")
+            vocab = next(
+                (v for v in get_all_vocabularies()
+                 if v.get("vocabularyName", "") == vocabulary_name),
+                None
+            )
+            terms = vocab.get("values", []) if vocab else []
+            self.terms_table.setRowCount(len(terms))
+            for i, t in enumerate(terms):
+                self.terms_table.setItem(i, 0, QTableWidgetItem(str(t.get("code", ""))))
+                self.terms_table.setItem(i, 1, QTableWidgetItem(t.get("labelArabic", "")))
+                self.terms_table.setItem(i, 2, QTableWidgetItem(t.get("labelEnglish", "")))
+                self.terms_table.setItem(i, 3, QTableWidgetItem(str(t.get("displayOrder", 0))))
+                active_item = QTableWidgetItem("✓")
                 active_item.setTextAlignment(Qt.AlignCenter)
                 self.terms_table.setItem(i, 4, active_item)
-
-            self.term_count_label.setText(str(len(rows)))
-
+            self.term_count_label.setText(str(len(terms)))
         except Exception as e:
             logger.error(f"Failed to load terms: {e}")
 
@@ -334,6 +314,10 @@ class VocabularyManagementPage(QWidget):
             )
             return
 
+        try:
+            get_api_client().create_vocabulary({"name": name, "displayName": name})
+        except Exception as e:
+            logger.warning(f"API create_vocabulary failed (vocab may already exist): {e}")
         self.vocab_list.addItem(name)
         self.vocab_list.setCurrentText(name)
         self.new_vocab_input.clear()
@@ -352,38 +336,20 @@ class VocabularyManagementPage(QWidget):
                 return
 
             try:
-                cursor = self.db.cursor()
-
-                # Check for duplicate code
-                cursor.execute("""
-                    SELECT COUNT(*) FROM vocabularies
-                    WHERE vocabulary_name = ? AND code = ?
-                """, (self.current_vocabulary, data["code"]))
-
-                if cursor.fetchone()[0] > 0:
-                    ErrorHandler.show_warning(
-                        self,
-                        self.i18n.t("code_exists"),
-                        self.i18n.t("error")
-                    )
-                    return
-
-                cursor.execute("""
-                    INSERT INTO vocabularies (vocabulary_name, code, label_ar, label_en, display_order, is_active)
-                    VALUES (?, ?, ?, ?, ?, ?)
-                """, (
-                    self.current_vocabulary,
-                    data["code"],
-                    data["label_ar"],
-                    data["label_en"],
-                    data["display_order"],
-                    1 if data["is_active"] else 0
-                ))
-
-                self.db.connection.commit()
+                api_data = {
+                    "code": data["code"],
+                    "labelAr": data["label_ar"],
+                    "labelEn": data["label_en"],
+                    "displayOrder": data["display_order"],
+                    "isActive": bool(data["is_active"]),
+                }
+                get_api_client().create_vocabulary_term(self.current_vocabulary, api_data)
+                try:
+                    initialize_vocabularies()
+                except Exception:
+                    pass
                 self._load_terms(self.current_vocabulary)
                 self.vocabulary_updated.emit(self.current_vocabulary)
-
             except Exception as e:
                 logger.error(f"Failed to add term: {e}")
                 ErrorHandler.show_error(self, str(e), self.i18n.t("error"))
@@ -409,25 +375,20 @@ class VocabularyManagementPage(QWidget):
             data = dialog.get_data()
 
             try:
-                cursor = self.db.cursor()
-                cursor.execute("""
-                    UPDATE vocabularies
-                    SET code = ?, label_ar = ?, label_en = ?, display_order = ?, is_active = ?
-                    WHERE vocabulary_name = ? AND code = ?
-                """, (
-                    data["code"],
-                    data["label_ar"],
-                    data["label_en"],
-                    data["display_order"],
-                    1 if data["is_active"] else 0,
-                    self.current_vocabulary,
-                    original_code
-                ))
-
-                self.db.connection.commit()
+                api_data = {
+                    "code": data["code"],
+                    "labelAr": data["label_ar"],
+                    "labelEn": data["label_en"],
+                    "displayOrder": data["display_order"],
+                    "isActive": bool(data["is_active"]),
+                }
+                get_api_client().update_vocabulary_term(self.current_vocabulary, original_code, api_data)
+                try:
+                    initialize_vocabularies()
+                except Exception:
+                    pass
                 self._load_terms(self.current_vocabulary)
                 self.vocabulary_updated.emit(self.current_vocabulary)
-
             except Exception as e:
                 logger.error(f"Failed to update term: {e}")
                 ErrorHandler.show_error(self, str(e), self.i18n.t("error"))
@@ -447,22 +408,19 @@ class VocabularyManagementPage(QWidget):
             self.i18n.t("confirm_delete")
         ):
             try:
-                cursor = self.db.cursor()
-                cursor.execute("""
-                    DELETE FROM vocabularies
-                    WHERE vocabulary_name = ? AND code = ?
-                """, (self.current_vocabulary, code))
-
-                self.db.connection.commit()
+                get_api_client().deactivate_vocabulary_term(self.current_vocabulary, code)
+                try:
+                    initialize_vocabularies()
+                except Exception:
+                    pass
                 self._load_terms(self.current_vocabulary)
                 self.vocabulary_updated.emit(self.current_vocabulary)
-
             except Exception as e:
-                logger.error(f"Failed to delete term: {e}")
+                logger.error(f"Failed to deactivate term: {e}")
                 ErrorHandler.show_error(self, str(e), self.i18n.t("error"))
 
     def _export_vocabularies(self):
-        """Export vocabularies for mobile devices (UC-010 S09)."""
+        """Export vocabularies for mobile devices (UC-010 S09) via API."""
         try:
             from PyQt5.QtWidgets import QFileDialog
             import json
@@ -478,32 +436,7 @@ class VocabularyManagementPage(QWidget):
             if not file_path:
                 return
 
-            cursor = self.db.cursor()
-            cursor.execute("""
-                SELECT vocabulary_name, code, label_ar, label_en, display_order, is_active
-                FROM vocabularies
-                WHERE is_active = 1
-                ORDER BY vocabulary_name, display_order, code
-            """)
-
-            vocabularies = {}
-            for row in cursor.fetchall():
-                vocab_name = row[0]
-                if vocab_name not in vocabularies:
-                    vocabularies[vocab_name] = []
-
-                vocabularies[vocab_name].append({
-                    "code": row[1],
-                    "label_ar": row[2],
-                    "label_en": row[3],
-                    "display_order": row[4]
-                })
-
-            export_data = {
-                "version": "1.0",
-                "exported_at": datetime.now().isoformat(),
-                "vocabularies": vocabularies
-            }
+            export_data = get_api_client().export_vocabularies()
 
             with open(file_path, "w", encoding="utf-8") as f:
                 json.dump(export_data, f, ensure_ascii=False, indent=2)

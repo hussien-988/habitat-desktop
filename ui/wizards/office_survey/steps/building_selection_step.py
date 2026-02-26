@@ -23,6 +23,7 @@ from PyQt5.QtGui import QColor, QPixmap, QIcon
 from ui.wizards.framework import BaseStep, StepValidationResult
 from ui.wizards.office_survey.survey_context import SurveyContext
 from controllers.building_controller import BuildingController, BuildingFilter
+from controllers.unit_controller import UnitController
 from models.building import Building
 from app.config import Config
 from services.api_client import get_api_client
@@ -59,6 +60,7 @@ class BuildingSelectionStep(BaseStep):
         """Initialize the step."""
         super().__init__(context, parent)
         self.building_controller = BuildingController(self.context.db)
+        self._unit_controller = UnitController(self.context.db)
         self.selected_building: Optional[Building] = None
 
         # Initialize survey API service
@@ -665,6 +667,7 @@ class BuildingSelectionStep(BaseStep):
             self.ui_units_count.setText(str(getattr(selected_building, 'number_of_apartments', 0) + (selected_building.number_of_shops or 0)))
             self.ui_parcels_count.setText(str(getattr(selected_building, 'number_of_apartments', 0)))
             self.ui_shops_count.setText(str(selected_building.number_of_shops))
+            self._update_unit_count_from_api(selected_building)
 
             # Show stats card + address
             self._update_address_display(selected_building)
@@ -739,6 +742,7 @@ class BuildingSelectionStep(BaseStep):
             self.ui_units_count.setText(str(getattr(selected_building, 'number_of_apartments', 0) + (selected_building.number_of_shops or 0)))
             self.ui_parcels_count.setText(str(getattr(selected_building, 'number_of_apartments', 0)))
             self.ui_shops_count.setText(str(selected_building.number_of_shops))
+            self._update_unit_count_from_api(selected_building)
 
             # Update location card
             self.ui_general_desc.setText(getattr(selected_building, 'general_description', tr("wizard.building.general_description_fallback")))
@@ -859,10 +863,10 @@ class BuildingSelectionStep(BaseStep):
         # Update stats card with building data
         self.ui_building_type.setText(building.building_type_display or "-")
         self.ui_building_status.setText(building.building_status_display or "-")
-        # TODO: Get actual counts from building object
         self.ui_units_count.setText(str(getattr(building, 'number_of_apartments', 0) + (building.number_of_shops or 0)))
         self.ui_parcels_count.setText(str(getattr(building, 'number_of_apartments', 0)))
         self.ui_shops_count.setText(str(building.number_of_shops))
+        self._update_unit_count_from_api(building)
 
         # Show stats card + address
         self._update_address_display(building)
@@ -935,6 +939,7 @@ class BuildingSelectionStep(BaseStep):
                 self.ui_units_count.setText(str(getattr(building, 'number_of_apartments', 0) + (building.number_of_shops or 0)))
                 self.ui_parcels_count.setText(str(getattr(building, 'number_of_apartments', 0)))
                 self.ui_shops_count.setText(str(building.number_of_shops))
+                self._update_unit_count_from_api(building)
                 self._update_address_display(building)
                 self.stats_card.setVisible(True)
 
@@ -1101,6 +1106,7 @@ class BuildingSelectionStep(BaseStep):
                 self.ui_units_count.setText(str(getattr(building, 'number_of_apartments', 0) + (building.number_of_shops or 0)))
                 self.ui_parcels_count.setText(str(getattr(building, 'number_of_apartments', 0)))
                 self.ui_shops_count.setText(str(building.number_of_shops))
+                self._update_unit_count_from_api(building)
                 self.stats_card.setVisible(True)
 
                 # Update location card
@@ -1126,67 +1132,54 @@ class BuildingSelectionStep(BaseStep):
         self.search_on_map_btn.setText(tr("wizard.building.search_on_map"))
 
     def validate(self) -> StepValidationResult:
-        """Validate that a building is selected (Step 1 only validates, no API calls)."""
+        """Validate building selection and create survey via API (blocks navigation on failure)."""
         result = self.create_validation_result()
 
         if not self.selected_building:
             result.add_error(tr("wizard.building.must_select"))
+            return result
 
-        return result
-
-    def on_next(self):
-        """Called when transitioning from Step 1 to Step 2 - create survey via API or locally."""
-        # Guard: skip if survey already created for the SAME building
-        existing_survey_id = self.context.get_data("survey_id")
-        current_building_uuid = getattr(self.selected_building, 'building_uuid', '') or ''
-
-        if existing_survey_id:
-            previous_building = self.context.get_data("survey_building_uuid")
-            if previous_building == current_building_uuid:
-                logger.info(f"Survey already exists ({existing_survey_id}), skipping creation")
-                return
-            else:
-                # Building changed - cleanup
-                logger.info(f"Building changed ({previous_building} -> {current_building_uuid}), cleaning up")
-                if self._use_api:
-                    self.context.cleanup_on_building_change(self._survey_api_service)
-                else:
-                    self.context.persons = []
-                    self.context.relations = []
-                    self.context.households = []
-                    self.context.claims = []
-                    self.context.finalize_response = None
-                for key in ("survey_id", "survey_data", "survey_building_uuid"):
-                    self.context.update_data(key, None)
+        if not self._use_api:
+            return result
 
         building_uuid = getattr(self.selected_building, 'building_uuid', '') or ''
+        existing_survey_id = self.context.get_data("survey_id")
+        previous_building_uuid = self.context.get_data("survey_building_uuid")
 
-        survey_created = False
-        if self._use_api:
-            self._set_auth_token()
-            survey_data = {
-                "building_uuid": building_uuid,
-                "surveyDate": datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ"),
-                "inPersonVisit": True,
-            }
-            logger.info(f"Creating office survey for building: {building_uuid}")
+        # Survey already created for this same building — skip
+        if existing_survey_id and previous_building_uuid == building_uuid:
+            return result
+
+        # Building changed — cleanup old survey context first
+        if existing_survey_id and previous_building_uuid != building_uuid:
+            logger.info(f"Building changed ({previous_building_uuid} -> {building_uuid}), cleaning up")
             try:
-                survey_response = self._survey_api_service.create_office_survey(survey_data)
-                survey_id = survey_response.get("id") or survey_response.get("surveyId", "")
-                self.context.update_data("survey_id", survey_id)
-                self.context.update_data("survey_data", survey_response)
-                self.context.update_data("survey_building_uuid", building_uuid)
-                logger.info(f"Survey created successfully, survey_id: {survey_id}")
-                survey_created = True
+                self.context.cleanup_on_building_change(self._survey_api_service)
             except Exception as e:
-                logger.warning(f"API survey creation failed, falling back to local: {e}")
+                logger.warning(f"Cleanup failed: {e}")
+            for key in ("survey_id", "survey_data", "survey_building_uuid"):
+                self.context.update_data(key, None)
 
-        if not survey_created:
-            import uuid
-            survey_id = str(uuid.uuid4())
+        # Create survey via API
+        self._set_auth_token()
+        survey_data = {
+            "building_uuid": building_uuid,
+            "surveyDate": datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "inPersonVisit": True,
+        }
+        logger.info(f"Creating office survey for building: {building_uuid}")
+        try:
+            survey_response = self._survey_api_service.create_office_survey(survey_data)
+            survey_id = survey_response.get("id") or survey_response.get("surveyId", "")
             self.context.update_data("survey_id", survey_id)
+            self.context.update_data("survey_data", survey_response)
             self.context.update_data("survey_building_uuid", building_uuid)
-            logger.info(f"Local survey created: {survey_id} for building {building_uuid}")
+            logger.info(f"Survey created successfully, survey_id: {survey_id}")
+        except Exception as e:
+            logger.error(f"Survey creation failed: {e}")
+            result.add_error("فشل إنشاء المسح على السيرفر. يرجى المحاولة مجدداً.")
+
+        return result
 
     def _update_address_display(self, building):
         """Update building address bar after selection."""
@@ -1198,6 +1191,29 @@ class BuildingSelectionStep(BaseStep):
         )
         self.ui_building_address.setText(address)
         self.address_container.setVisible(True)
+
+    def _update_unit_count_from_api(self, building):
+        """Fetch actual unit counts from PropertyUnits API and update display labels."""
+        building_uuid = getattr(building, 'building_uuid', None)
+        if not building_uuid:
+            return
+        try:
+            main_window = self.window()
+            if main_window and hasattr(main_window, '_api_token') and main_window._api_token:
+                self._unit_controller.set_auth_token(main_window._api_token)
+            result = self._unit_controller.get_units_for_building(building_uuid)
+            if result.success and result.data is not None:
+                units = result.data
+                total = len(units)
+                residential = sum(
+                    1 for u in units
+                    if str(getattr(u, 'unit_type', '')).strip() in ('1', 'apartment')
+                )
+                self.ui_units_count.setText(str(total))
+                self.ui_parcels_count.setText(str(residential))
+                self.ui_shops_count.setText(str(total - residential))
+        except Exception as e:
+            logger.warning(f"Could not fetch unit counts for building {building_uuid}: {e}")
 
     def _set_building_controller_auth(self):
         """Set auth token for building controller API service."""
@@ -1223,6 +1239,7 @@ class BuildingSelectionStep(BaseStep):
             self.ui_units_count.setText(str(getattr(self.context.building, 'number_of_apartments', 0) + (self.context.building.number_of_shops or 0)))
             self.ui_parcels_count.setText(str(getattr(self.context.building, 'number_of_apartments', 0)))
             self.ui_shops_count.setText(str(self.context.building.number_of_shops))
+            self._update_unit_count_from_api(self.context.building)
             self.stats_card.setVisible(True)
 
             # Update address

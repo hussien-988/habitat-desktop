@@ -804,7 +804,9 @@ class HouseholdStep(BaseStep):
                         logger.info(f"Household {existing_household_id} updated via API")
                         saved = True
                     except Exception as e:
-                        logger.warning(f"Failed to update household via API, falling back to local: {e}")
+                        logger.error(f"Failed to update household via API: {e}")
+                        result.add_error("فشل تحديث بيانات الأسرة. يرجى المحاولة مجدداً.")
+                        return result
                 else:
                     logger.info(f"Household unchanged ({existing_household_id}), skipping")
                     saved = True
@@ -819,14 +821,9 @@ class HouseholdStep(BaseStep):
                     self.context.update_data("household_id", household_id)
                     saved = True
                 except Exception as e:
-                    logger.warning(f"Failed to create household via API, falling back to local: {e}")
-
-        if not saved:
-            # Local fallback: store household_id in context for local tracking
-            if not existing_household_id:
-                household_id = household["household_id"]
-                self.context.update_data("household_id", household_id)
-                logger.info(f"Household {household_id} saved locally")
+                    logger.error(f"Failed to create household via API: {e}")
+                    result.add_error("فشل حفظ بيانات الأسرة. يرجى المحاولة مجدداً.")
+                    return result
 
         # Update or add household data
         if self.context.households:
