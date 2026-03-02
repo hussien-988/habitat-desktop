@@ -414,7 +414,7 @@ class Navbar(QFrame):
         # Tab titles (translatable)
         self._tab_keys = [
             "navbar.tab.completed_claims",
-            "navbar.tab.drafts",
+            "navbar.tab.cases",
             "navbar.tab.buildings",
             "navbar.tab.residential_units",
             "navbar.tab.duplicates",

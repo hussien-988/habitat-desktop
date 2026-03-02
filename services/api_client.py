@@ -984,6 +984,7 @@ API للاتصال بـ TRRCMS Backend.
             Updated property unit data
         """
         api_data = self._convert_property_unit_to_api_format(unit_data)
+        api_data["id"] = unit_id
         result = self._request("PUT", f"/v1/PropertyUnits/{unit_id}", json_data=api_data)
         logger.info(f"Property unit updated: {unit_id}")
         return result

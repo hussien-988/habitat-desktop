@@ -13,7 +13,7 @@ Note: Navbar is managed by MainWindow, not by individual pages
 
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel,
-    QScrollArea, QSpacerItem, QSizePolicy, QFrame, QGridLayout
+    QScrollArea, QSpacerItem, QSizePolicy, QFrame, QGridLayout, QPushButton
 )
 from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtGui import QFont
@@ -39,6 +39,7 @@ class DraftClaimsPage(QWidget):
 
     claim_selected = pyqtSignal(str)
     add_claim_clicked = pyqtSignal()
+    survey_finalized = pyqtSignal(str)
 
     def __init__(self, db=None, i18n=None, parent=None):
         super().__init__(parent)
@@ -197,10 +198,37 @@ class DraftClaimsPage(QWidget):
             row = index // PageDimensions.CARD_COLUMNS  # Integer division for row
             col = index % PageDimensions.CARD_COLUMNS   # Modulo for column (0 or 1)
 
-            # DRY: Use ClaimListCard with yelow icon for drafts
+            container = QFrame()
+            container.setStyleSheet("background: transparent; border: none;")
+            c_layout = QVBoxLayout(container)
+            c_layout.setContentsMargins(0, 0, 0, 0)
+            c_layout.setSpacing(6)
+
             card = ClaimListCard(claim, icon_name="yelow")
             card.clicked.connect(self._on_card_clicked)
-            self.content_layout.addWidget(card, row, col)
+            c_layout.addWidget(card)
+
+            finalize_btn = QPushButton("إتمام المطالبة")
+            finalize_btn.setCursor(Qt.PointingHandCursor)
+            finalize_btn.setStyleSheet("""
+                QPushButton {
+                    background-color: #1E3A8A;
+                    color: #FFFFFF;
+                    border: none;
+                    border-radius: 6px;
+                    padding: 6px 14px;
+                    font-size: 11px;
+                    font-weight: 600;
+                }
+                QPushButton:hover { background-color: #1E40AF; }
+            """)
+            uid = claim.get('claim_uuid', '')
+            finalize_btn.clicked.connect(
+                lambda checked, u=uid: self._on_finalize_clicked(u)
+            )
+            c_layout.addWidget(finalize_btn)
+
+            self.content_layout.addWidget(container, row, col)
 
         # Add spacer at the bottom to push content up
         spacer = QSpacerItem(20, 40, QSizePolicy.Minimum, QSizePolicy.Expanding)
@@ -210,6 +238,29 @@ class DraftClaimsPage(QWidget):
     def _on_card_clicked(self, claim_id: str):
         """Handle card click"""
         self.claim_selected.emit(claim_id)
+
+    def _on_finalize_clicked(self, claim_uuid: str):
+        """Finalize a draft survey: process-claims then finalize status."""
+        if not claim_uuid:
+            return
+        try:
+            from services.api_client import get_api_client
+            api = get_api_client()
+            api.finalize_office_survey(claim_uuid, {
+                "autoCreateClaim": True,
+                "finalNotes": "",
+                "durationMinutes": 1
+            })
+            api.finalize_survey_status(claim_uuid)
+            from ui.components.toast import Toast
+            Toast.show_toast(self, "تم إتمام المطالبة بنجاح", Toast.SUCCESS)
+            self.survey_finalized.emit(claim_uuid)
+            self.refresh()
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).warning(f"Finalize failed: {e}")
+            from ui.error_handler import ErrorHandler
+            ErrorHandler.show_error(self, f"فشل إتمام المطالبة:\n{e}", "خطأ")
 
     def _clear_content(self):
         """Clear all content from layout"""
@@ -501,15 +552,15 @@ class DraftClaimsPage(QWidget):
         # Try API first
         try:
             from services.api_client import get_api_client
-            from controllers.claim_controller import ClaimController
+            from controllers.building_controller import BuildingController
             api = get_api_client()
+            bc = BuildingController(self.db)
             for bid in building_ids:
                 if not bid:
                     continue
                 try:
                     dto = api.get_building_by_id(bid)
-                    mapped = ClaimController._map_building_dto(dto)
-                    cache[bid] = Building.from_dict(mapped)
+                    cache[bid] = bc._api_dto_to_building(dto)
                 except Exception:
                     pass
         except Exception:

@@ -531,6 +531,13 @@ class OccupancyClaimsStep(BaseStep):
             if not rel_type:
                 continue
 
+            tenure_files = person.get('_relation_uploaded_files') or []
+            evidences = [
+                {"evidence_id": f["evidence_id"], "issue_date": f.get("issue_date", "")}
+                for f in tenure_files
+                if f.get("evidence_id")
+            ]
+
             relation = {
                 "relation_id": str(uuid.uuid4()),
                 "person_id": person.get('person_id'),
@@ -542,8 +549,8 @@ class OccupancyClaimsStep(BaseStep):
                 "evidence_type": rel_data.get('evidence_type'),
                 "evidence_description": rel_data.get('evidence_desc'),
                 "notes": rel_data.get('notes'),
-                "has_documents": rel_data.get('has_documents', False),
-                "evidences": []
+                "has_documents": rel_data.get('has_documents', False) or bool(evidences),
+                "evidences": evidences
             }
             relations.append(relation)
 

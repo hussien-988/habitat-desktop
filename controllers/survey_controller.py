@@ -192,6 +192,19 @@ class SurveyController:
             priority = claim_dto.get("priority")
             source = claim_dto.get("claimSource") or source
 
+        # Evidence count: prefer dataSummary, fallback to counting from relations/evidences
+        evidence_count = summary.get("evidenceCount", 0)
+        if not evidence_count:
+            for rel in (detail.get("relations") or []):
+                evidence_count += len(rel.get("evidences") or rel.get("evidenceItems") or [])
+        if not evidence_count:
+            evidence_count = len(
+                detail.get("evidences") or
+                detail.get("tenureEvidences") or
+                detail.get("evidence") or
+                []
+            )
+
         return {
             "claim_type": claim_type,
             "priority": priority,
@@ -203,6 +216,6 @@ class SurveyController:
             "survey_date": (detail.get("surveyDate") or "")[:10],
             "notes": detail.get("notes") or "",
             "next_action_date": "",
-            "evidence_count": summary.get("evidenceCount", 0),
+            "evidence_count": evidence_count,
         }
 

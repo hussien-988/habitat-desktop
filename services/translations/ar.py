@@ -737,7 +737,11 @@ AR_TRANSLATIONS = {
 
     # ===== Navbar & ID Badge =====
     "navbar.tab.completed_claims": "المطالبات المكتملة",
+    "navbar.tab.cases": "الحالات",
     "navbar.tab.drafts": "المسودة",
+    "cases.tab.drafts": "مسودات",
+    "cases.tab.finalized": "تمت المعالجة",
+    "cases.tab.completed": "مكتمل",
     "navbar.tab.buildings": "المباني",
     "navbar.tab.residential_units": "الوحدات السكنية",
     "navbar.tab.duplicates": "التكرارات",

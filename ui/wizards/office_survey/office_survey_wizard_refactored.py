@@ -11,8 +11,8 @@ Steps:
 2. Unit Selection/Creation - Select existing or create new unit
 3. Occupancy Details - Record occupancy demographics
 4. Occupancy Claims - Add persons with relation data
-5. Claim Creation - Create tenure claim
-6. Review & Submit - Review and submit survey
+5. Review & Submit - Review and submit survey
+6. Claim Creation - Create tenure claim
 """
 
 from typing import List
@@ -68,8 +68,8 @@ class OfficeSurveyWizard(BaseWizard):
             ("2", tr("wizard.step.property_unit")),
             ("3", tr("wizard.step.occupation_details")),
             ("4", tr("wizard.step.occupancy_claims")),
-            ("5", tr("wizard.step.claim")),
-            ("6", tr("wizard.step.final_review")),
+            ("5", tr("wizard.step.final_review")),
+            ("6", tr("wizard.step.claim")),
         ]
 
     # Signals (aliases for BaseWizard signals for backward compatibility)
@@ -84,7 +84,7 @@ class OfficeSurveyWizard(BaseWizard):
         self.step_labels = []  # For step indicators
         self._finalization_complete = False  # Flag to track successful finalization
         self._edit_mode = False  # True when editing a step from review
-        self._edit_return_index = 5  # Always return to review step (index 5)
+        self._edit_return_index = 4  # Always return to review step (index 4)
         super().__init__(parent)
 
         # Connect base wizard signals to survey-specific signals
@@ -103,11 +103,11 @@ class OfficeSurveyWizard(BaseWizard):
             UnitSelectionStep(self.context, self),
             HouseholdStep(self.context, self),
             OccupancyClaimsStep(self.context, self),
-            ClaimStep(self.context, self),
-            ReviewStep(self.context, self)
+            ReviewStep(self.context, self),
+            ClaimStep(self.context, self)
         ]
         # Connect edit signal from review step
-        steps[5].edit_requested.connect(self._enter_edit_mode)
+        steps[4].edit_requested.connect(self._enter_edit_mode)
         return steps
 
     def set_auth_token(self, token: str):
