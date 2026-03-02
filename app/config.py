@@ -225,7 +225,8 @@ class Pages:
     PERSONS = "persons"
     PERSON_DETAILS = "person_details"
     CLAIMS = "claims"
-    DRAFT_CLAIMS = "draft_claims"  # Draft claims page
+    DRAFT_CLAIMS = "draft_claims"  # Draft claims page (kept for backward compat)
+    CASES = "cases"  # Cases page with 3 sub-tabs (Draft / Finalized / Completed)
     CLAIM_DETAILS = "claim_details"
     CASE_DETAILS = "case_details"
     DOCUMENTS = "documents"

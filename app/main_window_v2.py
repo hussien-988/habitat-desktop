@@ -131,7 +131,7 @@ class MainWindow(QMainWindow):
         from ui.pages.relations_page import RelationsPage
         from ui.pages.households_page import HouseholdsPage
         from ui.pages.completed_claims_page import CompletedClaimsPage
-        from ui.pages.draft_claims_page import DraftClaimsPage
+        from ui.pages.cases_page import CasesPage
         from ui.pages.search_page import SearchPage
         from ui.pages.reports_page import ReportsPage
         from ui.pages.admin_page import AdminPage
@@ -231,9 +231,9 @@ class MainWindow(QMainWindow):
         self.pages[Pages.CLAIMS] = CompletedClaimsPage(self.db, self.i18n, self)
         self.stack.addWidget(self.pages[Pages.CLAIMS])
 
-        # Draft Claims page
-        self.pages[Pages.DRAFT_CLAIMS] = DraftClaimsPage(self.db, self.i18n, self)
-        self.stack.addWidget(self.pages[Pages.DRAFT_CLAIMS])
+        # Cases page (3 sub-tabs: Draft / Finalized / Completed)
+        self.pages[Pages.CASES] = CasesPage(self.db, self.i18n, self)
+        self.stack.addWidget(self.pages[Pages.CASES])
 
         # Search page (UC-011)
         self.pages[Pages.SEARCH] = SearchPage(self.db, self.i18n, self)
@@ -295,13 +295,14 @@ class MainWindow(QMainWindow):
 
         # Map tabs to pages (based on Figma design)
         # Tab 0: المطالبات المكتملة (Completed Claims)
-        # Tab 1: المسودة (Draft Claims)
+        # Tab 1: الحالات (Cases — 3 internal sub-tabs)
         # Tab 2: المبانى (Buildings)
         # Tab 3: الوحدات السكنية (Units)
         # Tab 4: التكرارات (Duplicates)
+        # Tab 5: إدارة المستخدمين (User Management)
         self.tab_page_mapping = {
             0: Pages.CLAIMS,
-            1: Pages.DRAFT_CLAIMS,
+            1: Pages.CASES,
             2: Pages.BUILDINGS,
             3: Pages.UNITS,
             4: Pages.DUPLICATES,
@@ -359,19 +360,22 @@ class MainWindow(QMainWindow):
             lambda: self.navigate_to(Pages.UNITS)
         )
 
-        # Case Details - back to drafts
-        self.pages[Pages.CASE_DETAILS].back_requested.connect(
-            lambda: self.navigate_to(Pages.DRAFT_CLAIMS)
-        )
+        # Case Details - back to source page (draft or finalized)
+        self.pages[Pages.CASE_DETAILS].back_requested.connect(self._on_case_details_back)
 
-        # Draft Claims - view/edit draft claim
-        self.pages[Pages.DRAFT_CLAIMS].claim_selected.connect(self._on_draft_claim_selected)
+        # Cases - view survey details (works for all 3 sub-tabs)
+        self.pages[Pages.CASES].claim_selected.connect(self._on_draft_claim_selected)
+
+        # Cases - finalize survey → stay on cases page (switch to finalized sub-tab)
+        self.pages[Pages.CASES].survey_finalized.connect(
+            lambda _: self.navigate_to(Pages.CASES)
+        )
 
         # Completed Claims - view claim details
         self.pages[Pages.CLAIMS].claim_selected.connect(self._on_completed_claim_selected)
 
         # Add Claim buttons - start new office survey (UC-004 S01)
-        self.pages[Pages.DRAFT_CLAIMS].add_claim_clicked.connect(self._start_new_office_survey)
+        self.pages[Pages.CASES].add_claim_clicked.connect(self._start_new_office_survey)
         self.pages[Pages.CLAIMS].add_claim_clicked.connect(self._start_new_office_survey)
 
         # Office Survey Wizard signals
@@ -635,7 +639,7 @@ class MainWindow(QMainWindow):
         logger.info(f"Search requested: {search_text}")
         # If on draft claims page, search within drafts
         current_page = self.stack.currentWidget()
-        if current_page == self.pages.get(Pages.DRAFT_CLAIMS):
+        if current_page == self.pages.get(Pages.CASES):
             search_mode = getattr(self.navbar, 'search_mode', 'name')
             current_page.search_claims(search_text, search_mode)
             return
@@ -645,7 +649,7 @@ class MainWindow(QMainWindow):
     def _on_filter_applied(self, filters: dict):
         """Handle filter applied from navbar filter popup."""
         current_page = self.stack.currentWidget()
-        if current_page == self.pages.get(Pages.DRAFT_CLAIMS):
+        if current_page == self.pages.get(Pages.CASES):
             current_page.apply_filters(filters)
 
     def navigate_to(self, page_id: str, data=None):
@@ -675,8 +679,8 @@ class MainWindow(QMainWindow):
                         from ui.components.toast import Toast
                         Toast.show_toast(self, "✅ تم حفظ المسودة بنجاح!", Toast.SUCCESS)
                         # Refresh drafts page
-                        if Pages.DRAFT_CLAIMS in self.pages:
-                            self.pages[Pages.DRAFT_CLAIMS].refresh()
+                        if Pages.CASES in self.pages:
+                            self.pages[Pages.CASES].refresh()
                     else:
                         # Save failed - stay in wizard
                         logger.warning("Failed to save draft")
@@ -780,7 +784,7 @@ class MainWindow(QMainWindow):
         logger.info(f"Draft survey selected: {claim_id}")
 
         # Find survey data from DraftClaimsPage list
-        claims_page = self.pages[Pages.DRAFT_CLAIMS]
+        claims_page = self.pages[Pages.CASES]
         claim_data = None
         for c in claims_page.claims_data:
             if c.get('claim_id') == claim_id:
@@ -804,6 +808,10 @@ class MainWindow(QMainWindow):
                 logger.warning(f"Survey context fetch failed: {e}")
 
         logger.warning(f"Could not load survey details for: {claim_id}")
+
+    def _on_case_details_back(self):
+        """Navigate back to the Cases page from CaseDetailsPage."""
+        self.navigate_to(Pages.CASES)
 
     def _on_completed_claim_selected(self, claim_id: str):
         """Navigate to case details for a completed claim."""
@@ -866,7 +874,7 @@ class MainWindow(QMainWindow):
             Toast.SUCCESS
         )
 
-        self.pages[Pages.DRAFT_CLAIMS].refresh()
+        self.pages[Pages.CASES].refresh()
         self.navbar.set_current_tab(1)
         self._on_tab_changed(1)
 
@@ -880,8 +888,8 @@ class MainWindow(QMainWindow):
         """Handle survey saved as draft."""
         logger.info(f"Survey saved as draft: {survey_id}")
         # Refresh the draft list
-        if hasattr(self.pages.get(Pages.DRAFT_CLAIMS), 'refresh'):
-            self.pages[Pages.DRAFT_CLAIMS].refresh()
+        if hasattr(self.pages.get(Pages.CASES), 'refresh'):
+            self.pages[Pages.CASES].refresh()
 
     def toggle_language(self):
         """Show language dialog and apply selection."""

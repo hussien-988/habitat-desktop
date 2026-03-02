@@ -7,8 +7,7 @@ Implements UC-002: Property Unit Management
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel,
     QPushButton, QComboBox, QTableWidget, QTableWidgetItem, QHeaderView,
-    QFrame, QDialog, QLineEdit, QListWidget, QListWidgetItem,
-    QAbstractItemView, QGraphicsDropShadowEffect
+    QFrame, QDialog, QAbstractItemView
 )
 from PyQt5.QtCore import Qt, pyqtSignal, QPoint, QTimer
 from PyQt5.QtGui import QColor, QIcon, QCursor, QFont
@@ -25,6 +24,7 @@ from services.display_mappings import (
     get_unit_type_options, get_unit_status_options
 )
 from ui.wizards.office_survey.dialogs.unit_dialog import UnitDialog as WizardUnitDialog
+from ui.components.building_picker_dialog import BuildingPickerDialog
 from ui.components.toast import Toast
 from ui.components.primary_button import PrimaryButton
 from ui.error_handler import ErrorHandler
@@ -34,242 +34,6 @@ from ui.style_manager import StyleManager, PageDimensions
 
 logger = get_logger(__name__)
 
-
-class BuildingPickerDialog(QDialog):
-    """Dialog to search and select a building before adding a unit.
-
-    Shows a search field; results appear as a dropdown when typing >= 2 chars.
-    Clicking a result item immediately accepts the dialog.
-    """
-
-    def __init__(self, db, api_service, groups=None, auth_token=None, parent=None):
-        super().__init__(parent)
-        self.db = db
-        self._api_service = api_service
-        self._groups = groups or []
-        self._auth_token = auth_token
-        self._selected_building = None
-
-        self._search_timer = QTimer(self)
-        self._search_timer.setSingleShot(True)
-        self._search_timer.timeout.connect(self._do_api_search)
-
-        self.setWindowFlags(Qt.FramelessWindowHint | Qt.Dialog)
-        self.setAttribute(Qt.WA_TranslucentBackground)
-        self.setLayoutDirection(Qt.RightToLeft)
-        self.setMinimumWidth(520)
-        self.setMaximumWidth(520)
-        self.setStyleSheet("QDialog { background-color: transparent; }")
-        self._setup_ui()
-
-    def _setup_ui(self):
-        main_layout = QVBoxLayout(self)
-        main_layout.setContentsMargins(0, 0, 0, 0)
-
-        card = QFrame()
-        card.setStyleSheet("""
-            QFrame {
-                background-color: white;
-                border-radius: 16px;
-                border: 1px solid #E1E8ED;
-            }
-        """)
-        shadow = QGraphicsDropShadowEffect()
-        shadow.setBlurRadius(24)
-        shadow.setColor(QColor(0, 0, 0, 45))
-        shadow.setOffset(0, 6)
-        card.setGraphicsEffect(shadow)
-
-        layout = QVBoxLayout(card)
-        layout.setContentsMargins(24, 20, 24, 20)
-        layout.setSpacing(12)
-
-        title = QLabel("اختر المبنى")
-        title.setStyleSheet("font-size: 16px; font-weight: 600; color: #1A1F1D;")
-        layout.addWidget(title)
-
-        # Search row
-        search_row = QHBoxLayout()
-        search_row.setSpacing(8)
-
-        self.search_input = QLineEdit()
-        self.search_input.setPlaceholderText("ابحث برمز المبنى أو القسيمة ...")
-        self.search_input.setLayoutDirection(Qt.RightToLeft)
-        self.search_input.setStyleSheet(f"""
-            QLineEdit {{
-                background-color: #F8FAFF;
-                border: 1px solid #E1E8ED;
-                border-radius: 8px;
-                padding: 9px 12px;
-                font-size: 13px;
-                color: #212B36;
-            }}
-            QLineEdit:focus {{ border: 2px solid {Config.PRIMARY_COLOR}; }}
-        """)
-        self.search_input.textChanged.connect(self._on_search_text_changed)
-        search_row.addWidget(self.search_input)
-
-        map_btn = QPushButton("الخريطة")
-        map_btn.setFixedHeight(38)
-        map_btn.setFixedWidth(95)
-        map_btn.setCursor(Qt.PointingHandCursor)
-        map_btn.setStyleSheet(f"""
-            QPushButton {{
-                background-color: white;
-                color: {Config.PRIMARY_COLOR};
-                border: 1px solid {Config.PRIMARY_COLOR};
-                border-radius: 8px;
-                padding: 6px 14px;
-                font-size: 13px;
-                font-weight: 500;
-            }}
-            QPushButton:hover {{ background-color: #EEF4FF; }}
-        """)
-        map_btn.clicked.connect(self._on_map_btn_clicked)
-        search_row.addWidget(map_btn)
-
-        layout.addLayout(search_row)
-
-        # Status label — shows search state (hidden when empty)
-        self.status_label = QLabel("")
-        self.status_label.setStyleSheet(
-            "color: #637381; font-size: 10pt; background: transparent; border: none;"
-        )
-        layout.addWidget(self.status_label)
-
-        # Results list — hidden initially, appears as dropdown on search
-        self.results_list = QListWidget()
-        self.results_list.setLayoutDirection(Qt.RightToLeft)
-        self.results_list.setFixedHeight(195)
-        self.results_list.setVisible(False)
-        self.results_list.setStyleSheet("""
-            QListWidget {
-                border: 1px solid #E1E8ED;
-                border-radius: 8px;
-                background-color: #FAFBFC;
-                font-size: 13px;
-                color: #212B36;
-                outline: none;
-            }
-            QListWidget::item {
-                padding: 10px 14px;
-                border-bottom: 1px solid #F0F0F0;
-                cursor: pointer;
-            }
-            QListWidget::item:hover {
-                background-color: #EEF4FF;
-                color: #1E3A8A;
-            }
-        """)
-        self.results_list.itemClicked.connect(self._on_item_clicked)
-        layout.addWidget(self.results_list)
-
-        # Cancel button
-        cancel_btn = QPushButton("إلغاء")
-        cancel_btn.setFixedHeight(40)
-        cancel_btn.setCursor(Qt.PointingHandCursor)
-        cancel_btn.setStyleSheet("""
-            QPushButton {
-                background-color: white; color: #6B7280;
-                border: 1px solid #E5E7EB; border-radius: 8px;
-                padding: 8px 24px; font-size: 14px;
-            }
-            QPushButton:hover { background-color: #F9FAFB; }
-        """)
-        cancel_btn.clicked.connect(self.reject)
-
-        btn_layout = QHBoxLayout()
-        btn_layout.addStretch()
-        btn_layout.addWidget(cancel_btn)
-        layout.addLayout(btn_layout)
-
-        main_layout.addWidget(card)
-
-    def _on_search_text_changed(self, text: str):
-        self._search_timer.stop()
-        if len(text.strip()) < 2:
-            self.results_list.clear()
-            self.results_list.setVisible(False)
-            self.status_label.setText("")
-            self.adjustSize()
-            return
-        self.status_label.setText("جاري البحث ...")
-        self._search_timer.start(300)
-
-    def _do_api_search(self):
-        text = self.search_input.text().strip()
-        if len(text) < 2:
-            return
-        try:
-            response = self._api_service.search_buildings(building_id=text, page_size=20)
-            items = []
-            if isinstance(response, dict):
-                items = response.get("items", []) or response.get("data", []) or []
-            elif isinstance(response, list):
-                items = response
-
-            from models.building import Building
-            buildings = []
-            for dto in items:
-                b = Building()
-                b.building_uuid = dto.get("id") or dto.get("buildingUuid") or ""
-                b.building_id = (
-                    dto.get("buildingCode") or dto.get("buildingNumber") or
-                    dto.get("buildingId") or ""
-                )
-                b.neighborhood_name_ar = (
-                    dto.get("neighborhoodName") or dto.get("neighborhoodNameAr") or ""
-                )
-                buildings.append(b)
-
-            self._populate_list(buildings)
-
-            if buildings:
-                self.results_list.setVisible(True)
-                self.status_label.setText(f"{len(buildings)} نتيجة — انقر للاختيار")
-            else:
-                self.results_list.setVisible(False)
-                self.status_label.setText("لا توجد نتائج")
-            self.adjustSize()
-        except Exception as e:
-            logger.warning(f"Building search failed: {e}")
-            self.status_label.setText("فشل البحث — تأكد من الاتصال بالخادم")
-
-    def _populate_list(self, buildings):
-        self.results_list.clear()
-        for b in buildings:
-            neighborhood = (b.neighborhood_name_ar or "").strip()
-            display = b.building_id or b.building_uuid or ""
-            if neighborhood:
-                display = f"{display}  —  {neighborhood}"
-            item = QListWidgetItem(display)
-            item.setData(Qt.UserRole, b)
-            self.results_list.addItem(item)
-
-    def _on_item_clicked(self, item):
-        """Single click on a result item — select and accept immediately."""
-        self._selected_building = item.data(Qt.UserRole)
-        self.accept()
-
-    def _on_map_btn_clicked(self):
-        try:
-            from ui.components.building_map_dialog_v2 import BuildingMapDialog
-            dlg = BuildingMapDialog(
-                db=self.db,
-                auth_token=self._auth_token,
-                read_only=False,
-                parent=self
-            )
-            if dlg.exec_() == QDialog.Accepted:
-                building = dlg.get_selected_building()
-                if building:
-                    self._selected_building = building
-                    self.accept()
-        except Exception as e:
-            logger.warning(f"Failed to open map dialog: {e}")
-
-    def get_selected_building(self):
-        return self._selected_building
 
 
 class UnitsPage(QWidget):
@@ -935,7 +699,6 @@ class UnitsPage(QWidget):
         picker = BuildingPickerDialog(
             db=self.db,
             api_service=self._api_service,
-            groups=self._groups,
             auth_token=auth_token,
             parent=self
         )

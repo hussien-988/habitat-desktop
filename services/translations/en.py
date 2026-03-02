@@ -737,7 +737,11 @@ EN_TRANSLATIONS = {
 
     # ===== Navbar & ID Badge =====
     "navbar.tab.completed_claims": "Completed Claims",
+    "navbar.tab.cases": "Cases",
     "navbar.tab.drafts": "Drafts",
+    "cases.tab.drafts": "Drafts",
+    "cases.tab.finalized": "Finalized",
+    "cases.tab.completed": "Completed",
     "navbar.tab.buildings": "Buildings",
     "navbar.tab.residential_units": "Residential Units",
     "navbar.tab.duplicates": "Duplicates",
