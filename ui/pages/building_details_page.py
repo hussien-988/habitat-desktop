@@ -672,25 +672,10 @@ class BuildingDetailsPage(QWidget):
 
         content_row.addWidget(map_container)
 
-        # Location description
-        loc_desc_section = QVBoxLayout()
-        loc_desc_section.setSpacing(4)
-        loc_desc_lbl = QLabel("وصف الموقع")
-        loc_desc_lbl.setFont(create_font(size=FontManager.WIZARD_CARD_LABEL, weight=FontManager.WEIGHT_SEMIBOLD))
-        loc_desc_lbl.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent; border: none;")
-        loc_desc_val = QLabel(location_desc)
-        loc_desc_val.setFont(create_font(size=FontManager.WIZARD_CARD_VALUE, weight=FontManager.WEIGHT_REGULAR))
-        loc_desc_val.setStyleSheet(f"color: {Colors.WIZARD_SUBTITLE}; background: transparent; border: none;")
-        loc_desc_val.setWordWrap(True)
-        loc_desc_section.addWidget(loc_desc_lbl)
-        loc_desc_section.addWidget(loc_desc_val)
-        loc_desc_section.addStretch(1)
-        content_row.addLayout(loc_desc_section, stretch=1)
-
         # General description
         gen_desc_section = QVBoxLayout()
         gen_desc_section.setSpacing(4)
-        gen_desc_lbl = QLabel("الوصف العام")
+        gen_desc_lbl = QLabel("وصف البناء")
         gen_desc_lbl.setFont(create_font(size=FontManager.WIZARD_CARD_LABEL, weight=FontManager.WEIGHT_SEMIBOLD))
         gen_desc_lbl.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent; border: none;")
         gen_desc_val = QLabel(general_desc)

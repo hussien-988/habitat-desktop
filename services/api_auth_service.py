@@ -19,6 +19,16 @@ from utils.logger import get_logger
 logger = get_logger(__name__)
 
 
+_ROLE_MAP = {
+    1: "data_collector",
+    2: "field_supervisor",
+    3: "office_clerk",
+    4: "data_manager",
+    5: "analyst",
+    6: "admin",
+}
+
+
 class ApiAuthService:
     """Authentication service that delegates to the REST API."""
 
@@ -113,9 +123,13 @@ class ApiAuthService:
         user = User()
         user.user_id = data.get("user_id") or data.get("userId") or data.get("id") or ""
         user.username = data.get("username") or data.get("userName") or ""
-        user.full_name = data.get("full_name") or data.get("fullName") or ""
-        user.full_name_ar = data.get("full_name_ar") or data.get("fullNameAr") or ""
-        user.role = data.get("role") or "analyst"
+        user.full_name = data.get("full_name") or data.get("fullName") or data.get("fullNameEnglish") or ""
+        user.full_name_ar = data.get("full_name_ar") or data.get("fullNameAr") or data.get("fullNameArabic") or ""
+        raw_role = data.get("role")
+        if isinstance(raw_role, int):
+            user.role = _ROLE_MAP.get(raw_role, "analyst")
+        else:
+            user.role = raw_role or "analyst"
         user.email = data.get("email")
         user.is_active = data.get("is_active", data.get("isActive", True))
         user.is_locked = data.get("is_locked", data.get("isLocked", False))

@@ -199,8 +199,11 @@ class FieldWorkPreparationPage(QWidget):
         )
         self.step_container.addWidget(self.step1)
 
-        # Step 2: Select Researcher (will be created when needed)
+        # Step 2: Select Researcher (created when needed)
         self.step2 = None
+
+        # Step 3: Summary / Confirmation (created when needed)
+        self.step3 = None
 
         self.current_step = 0
 
@@ -234,56 +237,60 @@ class FieldWorkPreparationPage(QWidget):
             self._update_navigation()
 
         elif self.current_step == 1:
+            # Moving from Step 2 to Step 3 (summary)
+            researcher = self.step2.get_selected_researcher()
+            buildings = self.step1.get_selected_buildings()
+            if not researcher:
+                return
+
+            # Rebuild step3 each time (fresh data)
+            if self.step3 is not None:
+                self.step_container.removeWidget(self.step3)
+                self.step3.deleteLater()
+
+            from ui.pages.field_work_preparation_step3 import FieldWorkPreparationStep3
+            self.step3 = FieldWorkPreparationStep3(buildings, researcher, parent=self)
+            self.step_container.addWidget(self.step3)
+
+            self.current_step = 2
+            self.step_container.setCurrentIndex(self.current_step)
+            self._update_navigation()
+
+        elif self.current_step == 2:
+            # Step 3: Confirm and submit
             try:
-                # Show confirmation dialog before completing
-                researcher = self.step2.get_selected_researcher()
-                buildings = self.step1.get_selected_buildings()
-                logger.info(f"Step 2 finish: researcher={researcher}, buildings={len(buildings)}")
-
-                # Show confirmation dialog
-                from ui.components.field_work_confirmation_dialog import FieldWorkConfirmationDialog
-                building_count = len(buildings)
-                researcher_name = researcher.get('name', 'N/A') if researcher else 'N/A'
-
-                confirmed = FieldWorkConfirmationDialog.show_confirmation(
-                    building_count,
-                    researcher_name,
-                    self
-                )
-                logger.info(f"Confirmation dialog result: {confirmed}")
-
-                if confirmed:
-                    workflow_data = {
-                        'buildings': buildings,
-                        'researcher': researcher
-                    }
-                    logger.info(f"Completing field work with {building_count} buildings")
-                    # Call main window handler directly (signal approach had delivery issues)
-                    main_window = self.window()
-                    if hasattr(main_window, '_on_field_work_completed'):
-                        main_window._on_field_work_completed(workflow_data)
-                    else:
-                        logger.error("Main window missing _on_field_work_completed handler")
+                summary = self.step3.get_summary()
+                workflow_data = {
+                    'buildings': summary['buildings'],
+                    'researcher': summary['researcher'],
+                }
+                logger.info(f"Submitting field work: {len(workflow_data['buildings'])} buildings")
+                main_window = self.window()
+                if hasattr(main_window, '_on_field_work_completed'):
+                    main_window._on_field_work_completed(workflow_data)
+                else:
+                    logger.error("Main window missing _on_field_work_completed handler")
             except Exception as e:
-                logger.error(f"Error in field work completion: {e}", exc_info=True)
+                logger.error(f"Error in field work submission: {e}", exc_info=True)
 
     def _update_navigation(self):
         """Update navigation buttons based on current step."""
         if self.current_step == 0:
-            # Step 1
             self.btn_back.setEnabled(False)
             self.btn_next.setText("التالي   >")
-            # Enable next if buildings selected
             has_selection = len(self.step1.get_selected_buildings()) > 0 if hasattr(self, 'step1') else False
             self.btn_next.setEnabled(has_selection)
 
         elif self.current_step == 1:
-            # Step 2
             self.btn_back.setEnabled(True)
-            self.btn_next.setText("إنهاء   >")
-            # Enable next if researcher selected
+            self.btn_next.setText("التالي   >")
             has_researcher = self.step2.get_selected_researcher() is not None if self.step2 else False
             self.btn_next.setEnabled(has_researcher)
+
+        elif self.current_step == 2:
+            self.btn_back.setEnabled(True)
+            self.btn_next.setText("تأكيد وإرسال   >")
+            self.btn_next.setEnabled(True)
 
     def enable_next_button(self, enabled: bool):
         """Allow steps to enable/disable next button."""

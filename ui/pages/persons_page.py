@@ -617,8 +617,8 @@ class PersonsPage(QWidget):
         header_layout.addStretch()
 
         # Add person button
-        add_btn = QPushButton("+ " + self.i18n.t("add_person"))
-        add_btn.setStyleSheet(f"""
+        self.add_btn = QPushButton("+ " + self.i18n.t("add_person"))
+        self.add_btn.setStyleSheet(f"""
             QPushButton {{
                 background-color: {Config.SUCCESS_COLOR};
                 color: white;
@@ -632,9 +632,9 @@ class PersonsPage(QWidget):
                 background-color: #219A52;
             }}
         """)
-        add_btn.setCursor(Qt.PointingHandCursor)
-        add_btn.clicked.connect(self._on_add_person)
-        header_layout.addWidget(add_btn)
+        self.add_btn.setCursor(Qt.PointingHandCursor)
+        self.add_btn.clicked.connect(self._on_add_person)
+        header_layout.addWidget(self.add_btn)
 
         layout.addLayout(header_layout)
 
@@ -754,6 +754,13 @@ class PersonsPage(QWidget):
         """Refresh the persons list."""
         logger.debug("Refreshing persons page")
         self._load_persons()
+
+    def configure_for_role(self, role: str):
+        """Enable/disable CRUD buttons based on user role."""
+        self._user_role = role
+        can_create = role in {"admin", "data_manager", "office_clerk", "field_researcher"}
+        if hasattr(self, 'add_btn'):
+            self.add_btn.setEnabled(can_create)
 
     def _load_persons(self):
         """Load persons with filters."""

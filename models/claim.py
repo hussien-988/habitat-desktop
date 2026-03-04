@@ -122,6 +122,14 @@ class Claim:
         return statuses.get(self.case_status, self.case_status)
 
     @property
+    def case_category(self) -> str:
+        return "closed" if self.claim_type == "ownership" else "open"
+
+    @property
+    def case_category_ar(self) -> str:
+        return "مغلقة" if self.claim_type == "ownership" else "مفتوحة"
+
+    @property
     def source_display(self) -> str:
         """Get display name for source."""
         sources = {

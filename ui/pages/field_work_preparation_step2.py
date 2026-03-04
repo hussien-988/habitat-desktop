@@ -130,30 +130,30 @@ class FieldWorkPreparationStep2(QWidget):
         self._is_initialized = True  # Mark as initialized
 
     def _fetch_researchers_from_db(self):
-        """Fetch field researchers and data collectors from the users table."""
+        """Fetch field researchers and data collectors from API."""
         try:
-            from repositories.database import Database
-            main_window = self.window()
-            db = getattr(main_window, 'db', None) if main_window else None
-            if not db:
-                db = Database()
-
-            rows = db.fetch_all(
-                """SELECT user_id, username, full_name, full_name_ar, is_active
-                   FROM users
-                   WHERE role IN ('field_researcher', 'data_collector') AND is_active = 1"""
-            )
+            from services.api_client import get_api_client
+            api = get_api_client()
             researchers = []
-            for row in rows:
-                display_name = row.get('full_name_ar') or row.get('full_name') or row.get('username', '')
-                researchers.append((row['user_id'], display_name, True))
+            for role in ("field_researcher", "data_collector"):
+                result = api.get_all_users(role=role, is_active=True)
+                items = result.get("items", []) if isinstance(result, dict) else []
+                for user in items:
+                    user_id = user.get("id") or user.get("userId") or ""
+                    display_name = (
+                        user.get("fullNameArabic")
+                        or user.get("fullName")
+                        or user.get("userName")
+                        or user_id
+                    )
+                    if user_id:
+                        researchers.append((user_id, display_name, True))
             if researchers:
                 return researchers
         except Exception as e:
-            logger.warning(f"Failed to load researchers from DB: {e}")
+            logger.warning(f"Failed to load researchers from API: {e}")
 
-        # Fallback if DB query fails or returns empty
-        return [("fallback_1", "باحث ميداني 1", True), ("fallback_2", "باحث ميداني 2", True)]
+        return []
 
     def _setup_ui(self):
         """Setup UI - content only (no header/footer)."""

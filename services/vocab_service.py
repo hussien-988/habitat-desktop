@@ -45,6 +45,19 @@ def initialize_vocabularies():
         _initialized = True
 
 
+def refresh_vocabularies():
+    """
+    Re-fetch vocabularies from backend API and rebuild cache.
+    Can be called at runtime without restarting the app.
+    """
+    global _initialized, _raw_vocabularies, _lookup, _options_cache
+    _initialized = False
+    _raw_vocabularies = []
+    _lookup = {}
+    _options_cache = {}
+    initialize_vocabularies()
+
+
 def get_label(vocab_name: str, code, lang: str = None) -> str:
     """
     Get display label for a vocabulary code.

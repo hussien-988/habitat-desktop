@@ -245,6 +245,7 @@ class Pages:
     AUDIT = "audit"
     SYNC_DATA = "sync_data"
     DATA_MANAGEMENT = "data_management"
+    IMPORT_WIZARD = "import_wizard"
 
 
 # User roles

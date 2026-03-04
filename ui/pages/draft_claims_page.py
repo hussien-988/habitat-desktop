@@ -543,13 +543,11 @@ class DraftClaimsPage(QWidget):
             self._show_empty_state()
 
     def _fetch_buildings_by_ids(self, building_ids):
-        """Fetch Building objects by UUID from API with local DB fallback."""
-        from models.building import Building
+        """Fetch Building objects by UUID from API."""
         cache = {}
         if not building_ids:
             return cache
 
-        # Try API first
         try:
             from services.api_client import get_api_client
             from controllers.building_controller import BuildingController
@@ -565,18 +563,5 @@ class DraftClaimsPage(QWidget):
                     pass
         except Exception:
             pass
-
-        # Fallback: load missing buildings from local DB
-        missing = [b for b in building_ids if b and b not in cache]
-        if missing:
-            try:
-                from repositories.building_repository import BuildingRepository
-                repo = BuildingRepository(self.db)
-                for bid in missing:
-                    building = repo.get_by_uuid(bid) or repo.get_by_id(bid)
-                    if building:
-                        cache[bid] = building
-            except Exception:
-                pass
 
         return cache

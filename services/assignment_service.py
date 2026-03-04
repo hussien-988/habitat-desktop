@@ -11,17 +11,10 @@ import uuid
 import json
 
 from repositories.database import Database
+from services.api_client import get_api_client
 from utils.logger import get_logger
 
 logger = get_logger(__name__)
-
-# Import API client (optional - for Backend sync)
-try:
-    from services.api_client import TRRCMSApiClient, get_api_client
-    API_CLIENT_AVAILABLE = True
-except ImportError:
-    API_CLIENT_AVAILABLE = False
-    logger.warning("API client not available - assignments will be local only")
 
 
 @dataclass
@@ -67,22 +60,17 @@ class AssignmentService:
     Implements UC-012 Assign Buildings to Field Teams.
     """
 
-    def __init__(self, db: Database, api_client: Optional['TRRCMSApiClient'] = None):
+    def __init__(self, db: Database = None, api_client=None):
         """
         Initialize assignment service.
 
         Args:
-            db: Local database connection
-            api_client: Optional API client for Backend sync
+            db: Local database connection (optional, for legacy read operations)
+            api_client: Optional API client override
         """
         self.db = db
-        self.api = api_client or (get_api_client() if API_CLIENT_AVAILABLE else None)
-        self.sync_enabled = self.api is not None
-
-        if self.sync_enabled:
-            logger.info("✅ AssignmentService: Backend sync enabled")
-        else:
-            logger.info("⚠️ AssignmentService: Local-only mode (no Backend sync)")
+        self.api = api_client or get_api_client()
+        logger.info("AssignmentService initialized with API backend")
 
     # ========== Assignment Management ==========
 
@@ -159,79 +147,32 @@ class AssignmentService:
         notes: str = None
     ) -> List[BuildingAssignment]:
         """
-        Create assignments for multiple buildings (UC-012 S07).
+        Create assignments for multiple buildings via API (UC-012 S07).
 
         Args:
             building_ids: List of building IDs
-            field_team_name: Target field team
+            field_team_name: Researcher user ID (assigned_to)
             assigned_by: User creating assignments
             notes: Common notes for all assignments
         """
-        assignments = []
-        errors = []
+        self.api.create_assignment(
+            building_ids=building_ids,
+            assigned_to=field_team_name,
+            notes=notes
+        )
+        logger.info(f"Created {len(building_ids)} assignments via API for researcher: {field_team_name}")
 
-        for building_id in building_ids:
-            try:
-                assignment = self.create_assignment(
-                    building_id=building_id,
-                    field_team_name=field_team_name,
-                    assigned_by=assigned_by,
-                    notes=notes
-                )
-                assignments.append(assignment)
-            except ValueError as e:
-                errors.append(f"{building_id}: {str(e)}")
-                logger.warning(f"Skipping assignment for {building_id}: {e}")
-
-        if errors:
-            logger.warning(f"Batch assignment completed with {len(errors)} errors")
-
-        # Sync to Backend API if enabled
-        if self.sync_enabled and assignments:
-            try:
-                self.sync_assignments_to_backend(assignments)
-            except Exception as e:
-                logger.warning(f"Failed to sync assignments to Backend (will remain local): {e}")
-
-        return assignments
-
-    def sync_assignments_to_backend(self, assignments: List[BuildingAssignment]) -> bool:
-        """
-        مزامنة التعيينات مع Backend API.
-
-        Args:
-            assignments: قائمة التعيينات المراد مزامنتها
-
-        Returns:
-            True إذا نجحت المزامنة
-        """
-        if not self.sync_enabled:
-            logger.warning("Backend sync is disabled")
-            return False
-
-        try:
-            # Group assignments by researcher
-            by_researcher = {}
-            for assignment in assignments:
-                researcher = assignment.field_team_name or "unknown"
-                if researcher not in by_researcher:
-                    by_researcher[researcher] = []
-                by_researcher[researcher].append(assignment.building_id)
-
-            # Create assignments in Backend
-            for researcher_id, building_ids in by_researcher.items():
-                response = self.api.create_assignment(
-                    building_ids=building_ids,
-                    assigned_to=researcher_id,
-                    notes=assignments[0].notes if assignments else None
-                )
-                logger.info(f"✅ Synced {len(building_ids)} buildings to Backend for researcher: {researcher_id}")
-
-            return True
-
-        except Exception as e:
-            logger.error(f"Failed to sync to Backend: {e}", exc_info=True)
-            return False
+        return [
+            BuildingAssignment(
+                building_id=bid,
+                field_team_name=field_team_name,
+                assigned_by=assigned_by,
+                assignment_status="pending",
+                assignment_date=datetime.now(),
+                notes=notes
+            )
+            for bid in building_ids
+        ]
 
     def get_assignment(self, assignment_id: str) -> Optional[BuildingAssignment]:
         """Get assignment by ID."""
@@ -413,31 +354,33 @@ class AssignmentService:
 
     def get_field_teams(self) -> List[Dict[str, str]]:
         """
-        Get list of field researchers from users table.
+        Get list of field researchers via API.
         Returns users with role='field_researcher'.
         """
-        query = """
-            SELECT user_id, username, full_name, full_name_ar
-            FROM users
-            WHERE role = 'field_researcher' AND is_active = 1
-            ORDER BY full_name_ar, full_name
-        """
-        rows = self.db.fetch_all(query)
-
-        teams = []
-        for row in rows:
-            display_name = row.get("full_name_ar") or row.get("full_name") or row.get("username")
-            teams.append({
-                "team_id": row["user_id"],
-                "team_name": display_name,
-                "researcher_id": row["user_id"]
-            })
-
-        # Fallback: if no field_researchers, return empty list with message
-        if not teams:
-            logger.warning("No field researchers found in database")
-
-        return teams
+        try:
+            result = self.api.get_all_users(role="field_researcher", is_active=True)
+            items = result.get("items", []) if isinstance(result, dict) else []
+            teams = []
+            for user in items:
+                user_id = user.get("id") or user.get("userId") or ""
+                display_name = (
+                    user.get("fullNameArabic")
+                    or user.get("fullName")
+                    or user.get("userName")
+                    or user_id
+                )
+                if user_id:
+                    teams.append({
+                        "team_id": user_id,
+                        "team_name": display_name,
+                        "researcher_id": user_id
+                    })
+            if not teams:
+                logger.warning("No field researchers found via API")
+            return teams
+        except Exception as e:
+            logger.warning(f"Failed to load field teams from API: {e}")
+            return []
 
     def get_available_tablets(self) -> List[Dict[str, str]]:
         """
@@ -466,46 +409,12 @@ class AssignmentService:
     # ========== Statistics ==========
 
     def get_assignment_statistics(self) -> Dict[str, Any]:
-        """Get assignment statistics for dashboard."""
-        stats = {}
-
-        # Total assignments
-        result = self.db.fetch_one("SELECT COUNT(*) as count FROM building_assignments")
-        stats["total"] = result["count"] if result else 0
-
-        # By status
-        rows = self.db.fetch_all("""
-            SELECT assignment_status, COUNT(*) as count
-            FROM building_assignments
-            GROUP BY assignment_status
-        """)
-        stats["by_status"] = {row["assignment_status"]: row["count"] for row in rows}
-
-        # By transfer status
-        rows = self.db.fetch_all("""
-            SELECT transfer_status, COUNT(*) as count
-            FROM building_assignments
-            GROUP BY transfer_status
-        """)
-        stats["by_transfer"] = {row["transfer_status"]: row["count"] for row in rows}
-
-        # By team
-        rows = self.db.fetch_all("""
-            SELECT field_team_name, COUNT(*) as count
-            FROM building_assignments
-            WHERE field_team_name IS NOT NULL
-            GROUP BY field_team_name
-        """)
-        stats["by_team"] = {row["field_team_name"]: row["count"] for row in rows}
-
-        # Pending transfers
-        result = self.db.fetch_one("""
-            SELECT COUNT(*) as count FROM building_assignments
-            WHERE transfer_status = 'not_transferred' AND assignment_status = 'pending'
-        """)
-        stats["pending_transfers"] = result["count"] if result else 0
-
-        return stats
+        """Get assignment statistics via API."""
+        try:
+            return self.api.get_assignment_statistics() or {}
+        except Exception as e:
+            logger.warning(f"Failed to get assignment statistics from API: {e}")
+            return {}
 
     def _row_to_assignment(self, row) -> BuildingAssignment:
         """Convert database row to BuildingAssignment."""

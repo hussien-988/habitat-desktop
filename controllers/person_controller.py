@@ -12,15 +12,14 @@ Handles:
 """
 
 from dataclasses import dataclass
-from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 from PyQt5.QtCore import pyqtSignal
 
 from controllers.base_controller import BaseController, OperationResult
 from models.person import Person
-from repositories.person_repository import PersonRepository
 from repositories.database import Database
+from services.api_client import get_api_client
 from utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -57,10 +56,10 @@ class PersonController(BaseController):
     person_selected = pyqtSignal(object)  # Person object
     duplicate_found = pyqtSignal(str, str)  # person_uuid, match_type
 
-    def __init__(self, db: Database, parent=None):
+    def __init__(self, db: Database = None, parent=None):
         super().__init__(parent)
         self.db = db
-        self.repository = PersonRepository(db)
+        self._api = get_api_client()
 
         self._current_person: Optional[Person] = None
         self._persons_cache: List[Person] = []
@@ -101,32 +100,18 @@ class PersonController(BaseController):
                 self._emit_error("create_person", validation_result.message)
                 return validation_result
 
-            # Check for duplicates
-            duplicate = self._check_duplicates(data)
-            if duplicate:
-                self.duplicate_found.emit(duplicate["person_uuid"], duplicate["match_type"])
-                # Return warning but allow creation
-                logger.warning(f"Potential duplicate found: {duplicate}")
+            # Create person via API
+            result_dto = self._api.create_person(data)
+            saved_person = self._api_dto_to_person(result_dto)
 
-            # Create person
-            person = Person(**data)
-            saved_person = self.repository.create(person)
-
-            if saved_person:
-                self._emit_completed("create_person", True)
-                self.person_created.emit(saved_person.person_uuid)
-                self._trigger_callbacks("on_person_created", saved_person)
-                return OperationResult.ok(
-                    data=saved_person,
-                    message="Person created successfully",
-                    message_ar="تم إنشاء الشخص بنجاح"
-                )
-            else:
-                self._emit_error("create_person", "Failed to create person")
-                return OperationResult.fail(
-                    message="Failed to create person",
-                    message_ar="فشل في إنشاء الشخص"
-                )
+            self._emit_completed("create_person", True)
+            self.person_created.emit(saved_person.person_uuid)
+            self._trigger_callbacks("on_person_created", saved_person)
+            return OperationResult.ok(
+                data=saved_person,
+                message="Person created successfully",
+                message_ar="تم إنشاء الشخص بنجاح"
+            )
 
         except Exception as e:
             error_msg = f"Error creating person: {str(e)}"
@@ -149,50 +134,28 @@ class PersonController(BaseController):
         try:
             self._emit_started("update_person")
 
-            # Get existing person
-            existing = self.repository.get_by_uuid(person_uuid)
-            if not existing:
-                self._emit_error("update_person", "Person not found")
-                return OperationResult.fail(
-                    message="Person not found",
-                    message_ar="الشخص غير موجود"
-                )
-
             # Validate data
             validation_result = self._validate_person_data(data, is_update=True)
             if not validation_result.success:
                 self._emit_error("update_person", validation_result.message)
                 return validation_result
 
-            # Update person
-            for key, value in data.items():
-                if hasattr(existing, key):
-                    setattr(existing, key, value)
+            # Update person via API
+            result_dto = self._api.update_person(person_uuid, data)
+            updated_person = self._api_dto_to_person(result_dto)
 
-            existing.updated_at = datetime.now()
+            self._emit_completed("update_person", True)
+            self.person_updated.emit(person_uuid)
+            self._trigger_callbacks("on_person_updated", updated_person)
 
-            updated_person = self.repository.update(existing)
+            if self._current_person and self._current_person.person_uuid == person_uuid:
+                self._current_person = updated_person
 
-            if updated_person:
-                self._emit_completed("update_person", True)
-                self.person_updated.emit(person_uuid)
-                self._trigger_callbacks("on_person_updated", updated_person)
-
-                # Update current person if it's the one being edited
-                if self._current_person and self._current_person.person_uuid == person_uuid:
-                    self._current_person = updated_person
-
-                return OperationResult.ok(
-                    data=updated_person,
-                    message="Person updated successfully",
-                    message_ar="تم تحديث الشخص بنجاح"
-                )
-            else:
-                self._emit_error("update_person", "Failed to update person")
-                return OperationResult.fail(
-                    message="Failed to update person",
-                    message_ar="فشل في تحديث الشخص"
-                )
+            return OperationResult.ok(
+                data=updated_person,
+                message="Person updated successfully",
+                message_ar="تم تحديث الشخص بنجاح"
+            )
 
         except Exception as e:
             error_msg = f"Error updating person: {str(e)}"
@@ -214,45 +177,21 @@ class PersonController(BaseController):
         try:
             self._emit_started("delete_person")
 
-            # Check if person exists
-            existing = self.repository.get_by_uuid(person_uuid)
-            if not existing:
-                self._emit_error("delete_person", "Person not found")
-                return OperationResult.fail(
-                    message="Person not found",
-                    message_ar="الشخص غير موجود"
-                )
+            # Delete person via API
+            self._api.delete_person(person_uuid)
 
-            # Check if person has dependencies
-            if self._has_dependencies(person_uuid):
-                return OperationResult.fail(
-                    message="Cannot delete person with active claims or relations",
-                    message_ar="لا يمكن حذف شخص له مطالبات أو علاقات نشطة"
-                )
+            self._emit_completed("delete_person", True)
+            self.person_deleted.emit(person_uuid)
+            self._trigger_callbacks("on_person_deleted", person_uuid)
 
-            # Delete person
-            success = self.repository.delete(person_uuid)
+            if self._current_person and self._current_person.person_uuid == person_uuid:
+                self._current_person = None
 
-            if success:
-                self._emit_completed("delete_person", True)
-                self.person_deleted.emit(person_uuid)
-                self._trigger_callbacks("on_person_deleted", person_uuid)
-
-                # Clear current person if it was deleted
-                if self._current_person and self._current_person.person_uuid == person_uuid:
-                    self._current_person = None
-
-                return OperationResult.ok(
-                    data=True,
-                    message="Person deleted successfully",
-                    message_ar="تم حذف الشخص بنجاح"
-                )
-            else:
-                self._emit_error("delete_person", "Failed to delete person")
-                return OperationResult.fail(
-                    message="Failed to delete person",
-                    message_ar="فشل في حذف الشخص"
-                )
+            return OperationResult.ok(
+                data=True,
+                message="Person deleted successfully",
+                message_ar="تم حذف الشخص بنجاح"
+            )
 
         except Exception as e:
             error_msg = f"Error deleting person: {str(e)}"
@@ -261,7 +200,7 @@ class PersonController(BaseController):
 
     def get_person(self, person_uuid: str) -> OperationResult[Person]:
         """
-        Get a person by UUID.
+        Get a person by UUID via API.
 
         Args:
             person_uuid: UUID of person
@@ -270,22 +209,22 @@ class PersonController(BaseController):
             OperationResult with Person or error
         """
         try:
-            person = self.repository.get_by_uuid(person_uuid)
-
-            if person:
-                return OperationResult.ok(data=person)
-            else:
-                return OperationResult.fail(
-                    message="Person not found",
-                    message_ar="الشخص غير موجود"
-                )
-
+            result = self._api.get_persons(search=person_uuid, page=1, page_size=1)
+            items = result.get("items", []) if isinstance(result, dict) else []
+            # Search by exact id match
+            dto = next((p for p in items if p.get("id") == person_uuid), None)
+            if dto:
+                return OperationResult.ok(data=self._api_dto_to_person(dto))
+            return OperationResult.fail(
+                message="Person not found",
+                message_ar="الشخص غير موجود"
+            )
         except Exception as e:
             return OperationResult.fail(message=str(e))
 
     def get_person_by_national_id(self, national_id: str) -> OperationResult[Person]:
         """
-        Get a person by national ID.
+        Get a person by national ID via API.
 
         Args:
             national_id: National ID
@@ -294,16 +233,14 @@ class PersonController(BaseController):
             OperationResult with Person or error
         """
         try:
-            person = self.repository.get_by_national_id(national_id)
-
-            if person:
-                return OperationResult.ok(data=person)
-            else:
-                return OperationResult.fail(
-                    message="Person not found",
-                    message_ar="الشخص غير موجود"
-                )
-
+            result = self._api.get_persons(national_id=national_id, page=1, page_size=1)
+            items = result.get("items", []) if isinstance(result, dict) else []
+            if items:
+                return OperationResult.ok(data=self._api_dto_to_person(items[0]))
+            return OperationResult.fail(
+                message="Person not found",
+                message_ar="الشخص غير موجود"
+            )
         except Exception as e:
             return OperationResult.fail(message=str(e))
 
@@ -337,7 +274,7 @@ class PersonController(BaseController):
 
     def load_persons(self, filter_: Optional[PersonFilter] = None) -> OperationResult[List[Person]]:
         """
-        Load persons with optional filter.
+        Load persons with optional filter via API.
 
         Args:
             filter_: Optional filter criteria
@@ -350,8 +287,14 @@ class PersonController(BaseController):
 
             filter_ = filter_ or self._current_filter
 
-            # Build query based on filter
-            persons = self._query_persons(filter_)
+            result = self._api.get_persons(
+                search=filter_.search_text,
+                national_id=filter_.national_id,
+                page=1,
+                page_size=filter_.limit
+            )
+            items = result.get("items", []) if isinstance(result, dict) else (result if isinstance(result, list) else [])
+            persons = [self._api_dto_to_person(dto) for dto in items]
 
             self._persons_cache = persons
             self._current_filter = filter_
@@ -381,7 +324,7 @@ class PersonController(BaseController):
 
     def get_persons_for_unit(self, unit_uuid: str) -> OperationResult[List[Person]]:
         """
-        Get persons related to a unit.
+        Get persons related to a unit via API.
 
         Args:
             unit_uuid: Unit UUID
@@ -394,7 +337,7 @@ class PersonController(BaseController):
 
     def get_persons_for_building(self, building_uuid: str) -> OperationResult[List[Person]]:
         """
-        Get persons related to a building.
+        Get persons related to a building via API.
 
         Args:
             building_uuid: Building UUID
@@ -405,60 +348,25 @@ class PersonController(BaseController):
         filter_ = PersonFilter(building_uuid=building_uuid)
         return self.load_persons(filter_)
 
-    def _query_persons(self, filter_: PersonFilter) -> List[Person]:
-        """Execute person query with filter."""
-        query = "SELECT * FROM persons WHERE 1=1"
-        params = []
-
-        if filter_.national_id:
-            query += " AND national_id = ?"
-            params.append(filter_.national_id)
-
-        if filter_.phone_number:
-            query += " AND (phone_number = ? OR phone_number_alt = ?)"
-            params.extend([filter_.phone_number, filter_.phone_number])
-
-        if filter_.full_name:
-            query += " AND full_name LIKE ?"
-            params.append(f"%{filter_.full_name}%")
-
-        if filter_.gender:
-            query += " AND gender = ?"
-            params.append(filter_.gender)
-
-        if filter_.nationality:
-            query += " AND nationality = ?"
-            params.append(filter_.nationality)
-
-        if filter_.unit_uuid:
-            query += """ AND person_uuid IN (
-                SELECT person_uuid FROM relations WHERE unit_uuid = ?
-            )"""
-            params.append(filter_.unit_uuid)
-
-        if filter_.building_uuid:
-            query += """ AND person_uuid IN (
-                SELECT r.person_uuid FROM relations r
-                JOIN units u ON r.unit_uuid = u.unit_uuid
-                WHERE u.building_uuid = ?
-            )"""
-            params.append(filter_.building_uuid)
-
-        if filter_.search_text:
-            query += " AND (full_name LIKE ? OR national_id LIKE ? OR phone_number LIKE ?)"
-            search_param = f"%{filter_.search_text}%"
-            params.extend([search_param, search_param, search_param])
-
-        query += f" ORDER BY created_at DESC LIMIT {filter_.limit} OFFSET {filter_.offset}"
-
-        cursor = self.db.cursor()
-        cursor.execute(query, params)
-
-        persons = []
-        for row in cursor.fetchall():
-            persons.append(Person.from_row(row))
-
-        return persons
+    def _api_dto_to_person(self, dto: Dict[str, Any]) -> Person:
+        """Convert API DTO (camelCase) to Person model."""
+        return Person(
+            person_uuid=dto.get("id") or dto.get("personUuid") or "",
+            first_name=dto.get("firstNameArabic") or dto.get("firstName") or "",
+            last_name=dto.get("familyNameArabic") or dto.get("familyName") or "",
+            father_name=dto.get("fatherNameArabic") or dto.get("fatherName") or "",
+            mother_name=dto.get("motherNameArabic") or dto.get("motherName") or "",
+            full_name=dto.get("fullName") or (
+                f"{dto.get('firstNameArabic', '')} {dto.get('familyNameArabic', '')}".strip()
+            ),
+            national_id=dto.get("nationalId") or dto.get("national_id") or "",
+            gender=str(dto.get("gender") or ""),
+            nationality=str(dto.get("nationality") or ""),
+            birth_date=dto.get("dateOfBirth") or "",
+            phone=dto.get("mobileNumber") or dto.get("phone") or "",
+            landline=dto.get("phoneNumber") or dto.get("landline") or "",
+            email=dto.get("email") or "",
+        )
 
     # ==================== Validation ====================
 
@@ -516,94 +424,30 @@ class PersonController(BaseController):
         return bool(re.match(pattern, clean_phone))
 
     def _check_duplicates(self, data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
-        """Check for potential duplicate persons."""
-        cursor = self.db.cursor()
-
-        # Check by national ID
-        if data.get("national_id"):
-            cursor.execute(
-                "SELECT person_uuid FROM persons WHERE national_id = ?",
-                (data["national_id"],)
-            )
-            result = cursor.fetchone()
-            if result:
-                return {"person_uuid": result[0], "match_type": "national_id"}
-
-        # Check by phone
-        if data.get("phone_number"):
-            cursor.execute(
-                "SELECT person_uuid FROM persons WHERE phone_number = ? OR phone_number_alt = ?",
-                (data["phone_number"], data["phone_number"])
-            )
-            result = cursor.fetchone()
-            if result:
-                return {"person_uuid": result[0], "match_type": "phone_number"}
-
+        """Check for potential duplicate persons via API."""
+        try:
+            if data.get("national_id"):
+                result = self._api.get_persons(national_id=data["national_id"], page=1, page_size=1)
+                items = result.get("items", []) if isinstance(result, dict) else []
+                if items:
+                    return {"person_uuid": items[0].get("id", ""), "match_type": "national_id"}
+        except Exception:
+            pass
         return None
-
-    def _has_dependencies(self, person_uuid: str) -> bool:
-        """Check if person has dependent records."""
-        cursor = self.db.cursor()
-
-        # Check for claims
-        cursor.execute(
-            "SELECT COUNT(*) FROM claims WHERE claimant_uuid = ?",
-            (person_uuid,)
-        )
-        if cursor.fetchone()[0] > 0:
-            return True
-
-        # Check for active relations
-        cursor.execute(
-            "SELECT COUNT(*) FROM relations WHERE person_uuid = ?",
-            (person_uuid,)
-        )
-        if cursor.fetchone()[0] > 0:
-            return True
-
-        return False
 
     # ==================== Statistics ====================
 
     def get_statistics(self) -> OperationResult[Dict[str, Any]]:
         """
-        Get person statistics.
+        Get person statistics via API.
 
         Returns:
             OperationResult with statistics dictionary
         """
         try:
-            count = self.repository.count()
-
-            cursor = self.db.cursor()
-
-            # By gender
-            cursor.execute("""
-                SELECT gender, COUNT(*) as count
-                FROM persons
-                WHERE gender IS NOT NULL
-                GROUP BY gender
-            """)
-            by_gender = {row[0]: row[1] for row in cursor.fetchall()}
-
-            # By nationality
-            cursor.execute("""
-                SELECT nationality, COUNT(*) as count
-                FROM persons
-                WHERE nationality IS NOT NULL
-                GROUP BY nationality
-                ORDER BY count DESC
-                LIMIT 10
-            """)
-            by_nationality = {row[0]: row[1] for row in cursor.fetchall()}
-
-            stats = {
-                "total": count,
-                "by_gender": by_gender,
-                "by_nationality": by_nationality
-            }
-
+            result = self._api.get_persons(page=1, page_size=1)
+            total = result.get("totalCount", 0) if isinstance(result, dict) else 0
+            stats = {"total": total}
             return OperationResult.ok(data=stats)
-
         except Exception as e:
             return OperationResult.fail(message=str(e))

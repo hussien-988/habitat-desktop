@@ -14,15 +14,13 @@ Uses API backend for data fetching.
 """
 
 from dataclasses import dataclass
-from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 from PyQt5.QtCore import pyqtSignal
 
 from controllers.base_controller import BaseController, OperationResult
 from models.unit import PropertyUnit
-from repositories.unit_repository import UnitRepository
-from repositories.database import Database
+from services.api_client import get_api_client
 from utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -56,13 +54,8 @@ class UnitController(BaseController):
     units_loaded = pyqtSignal(list)  # list of units
     unit_selected = pyqtSignal(object)  # Unit object
 
-    def __init__(self, db: Database = None, parent=None, use_api: bool = None):
+    def __init__(self, db=None, parent=None, use_api: bool = None):
         super().__init__(parent)
-        self.db = db
-
-        self.repository = UnitRepository(db) if db else None
-
-        from services.api_client import get_api_client
         self._api_service = get_api_client()
         logger.info("UnitController using API backend")
 
@@ -111,29 +104,18 @@ class UnitController(BaseController):
                 self._emit_error("create_unit", validation_result.message)
                 return validation_result
 
-            # Generate unit ID if not provided
-            if not data.get("unit_id"):
-                data["unit_id"] = self._generate_unit_id(data)
+            # Create unit via API
+            result_dto = self._api_service.create_property_unit(data)
+            saved_unit = self._api_dto_to_unit(result_dto)
 
-            # Create unit (filter to valid fields only)
-            unit = PropertyUnit.from_dict(data)
-            saved_unit = self.repository.create(unit)
-
-            if saved_unit:
-                self._emit_completed("create_unit", True)
-                self.unit_created.emit(saved_unit.unit_uuid)
-                self._trigger_callbacks("on_unit_created", saved_unit)
-                return OperationResult.ok(
-                    data=saved_unit,
-                    message="Unit created successfully",
-                    message_ar="تم إنشاء الوحدة بنجاح"
-                )
-            else:
-                self._emit_error("create_unit", "Failed to create unit")
-                return OperationResult.fail(
-                    message="Failed to create unit",
-                    message_ar="فشل في إنشاء الوحدة"
-                )
+            self._emit_completed("create_unit", True)
+            self.unit_created.emit(saved_unit.unit_uuid)
+            self._trigger_callbacks("on_unit_created", saved_unit)
+            return OperationResult.ok(
+                data=saved_unit,
+                message="Unit created successfully",
+                message_ar="تم إنشاء الوحدة بنجاح"
+            )
 
         except Exception as e:
             error_msg = f"Error creating unit: {str(e)}"
@@ -156,50 +138,28 @@ class UnitController(BaseController):
         try:
             self._emit_started("update_unit")
 
-            # Get existing unit
-            existing = self.repository.get_by_uuid(unit_uuid)
-            if not existing:
-                self._emit_error("update_unit", "Unit not found")
-                return OperationResult.fail(
-                    message="Unit not found",
-                    message_ar="الوحدة غير موجودة"
-                )
-
             # Validate data
             validation_result = self._validate_unit_data(data, is_update=True)
             if not validation_result.success:
                 self._emit_error("update_unit", validation_result.message)
                 return validation_result
 
-            # Update unit
-            for key, value in data.items():
-                if hasattr(existing, key):
-                    setattr(existing, key, value)
+            # Update unit via API
+            result_dto = self._api_service.update_property_unit(unit_uuid, data)
+            updated_unit = self._api_dto_to_unit(result_dto)
 
-            existing.updated_at = datetime.now()
+            self._emit_completed("update_unit", True)
+            self.unit_updated.emit(unit_uuid)
+            self._trigger_callbacks("on_unit_updated", updated_unit)
 
-            updated_unit = self.repository.update(existing)
+            if self._current_unit and self._current_unit.unit_uuid == unit_uuid:
+                self._current_unit = updated_unit
 
-            if updated_unit:
-                self._emit_completed("update_unit", True)
-                self.unit_updated.emit(unit_uuid)
-                self._trigger_callbacks("on_unit_updated", updated_unit)
-
-                # Update current unit if it's the one being edited
-                if self._current_unit and self._current_unit.unit_uuid == unit_uuid:
-                    self._current_unit = updated_unit
-
-                return OperationResult.ok(
-                    data=updated_unit,
-                    message="Unit updated successfully",
-                    message_ar="تم تحديث الوحدة بنجاح"
-                )
-            else:
-                self._emit_error("update_unit", "Failed to update unit")
-                return OperationResult.fail(
-                    message="Failed to update unit",
-                    message_ar="فشل في تحديث الوحدة"
-                )
+            return OperationResult.ok(
+                data=updated_unit,
+                message="Unit updated successfully",
+                message_ar="تم تحديث الوحدة بنجاح"
+            )
 
         except Exception as e:
             error_msg = f"Error updating unit: {str(e)}"
@@ -221,7 +181,6 @@ class UnitController(BaseController):
         try:
             self._emit_started("delete_unit")
 
-            # Delete via API (soft delete)
             api_success = self._api_service.delete_property_unit(unit_uuid)
             if not api_success:
                 self._emit_error("delete_unit", "API delete failed")
@@ -229,13 +188,6 @@ class UnitController(BaseController):
                     message="Failed to delete unit via API",
                     message_ar="فشل في حذف الوحدة"
                 )
-
-            # Also remove from local DB if available (best effort)
-            if self.repository:
-                try:
-                    self.repository.delete(unit_uuid)
-                except Exception:
-                    pass
 
             self._emit_completed("delete_unit", True)
             self.unit_deleted.emit(unit_uuid)
@@ -266,16 +218,13 @@ class UnitController(BaseController):
             OperationResult with Unit or error
         """
         try:
-            unit = self.repository.get_by_uuid(unit_uuid)
-
-            if unit:
-                return OperationResult.ok(data=unit)
-            else:
-                return OperationResult.fail(
-                    message="Unit not found",
-                    message_ar="الوحدة غير موجودة"
-                )
-
+            dto = self._api_service.get_property_unit_by_id(unit_uuid)
+            if dto:
+                return OperationResult.ok(data=self._api_dto_to_unit(dto))
+            return OperationResult.fail(
+                message="Unit not found",
+                message_ar="الوحدة غير موجودة"
+            )
         except Exception as e:
             return OperationResult.fail(message=str(e))
 
@@ -309,7 +258,7 @@ class UnitController(BaseController):
 
     def load_units(self, filter_: Optional[UnitFilter] = None) -> OperationResult[List[PropertyUnit]]:
         """
-        Load units with optional filter.
+        Load units with optional filter via API.
 
         Args:
             filter_: Optional filter criteria
@@ -322,8 +271,22 @@ class UnitController(BaseController):
 
             filter_ = filter_ or self._current_filter
 
-            # Build query based on filter
-            units = self._query_units(filter_)
+            if filter_.building_uuid:
+                units_data = self._api_service.get_units_for_building(filter_.building_uuid)
+            else:
+                units_data = self._api_service.get_all_property_units(limit=filter_.limit)
+
+            units = [self._api_dto_to_unit(dto) for dto in units_data]
+
+            # Apply local text filter if needed
+            if filter_.search_text:
+                search = filter_.search_text.lower()
+                units = [
+                    u for u in units
+                    if search in (u.unit_id or "").lower()
+                    or search in (u.unit_number or "").lower()
+                    or search in (u.property_description or "").lower()
+                ]
 
             self._units_cache = units
             self._current_filter = filter_
@@ -431,57 +394,6 @@ class UnitController(BaseController):
             area_sqm=dto.get("areaSquareMeters") or dto.get("areaSqm"),
         )
 
-    def _query_units(self, filter_: UnitFilter) -> List[PropertyUnit]:
-        """Execute unit query with filter."""
-        query = "SELECT * FROM property_units WHERE 1=1"
-        params = []
-
-        if filter_.building_uuid:
-            # Convert building_uuid to building_id since table uses building_id
-            building_result = self.db.fetch_one(
-                "SELECT building_id FROM buildings WHERE building_uuid = ?",
-                (filter_.building_uuid,)
-            )
-            if building_result:
-                query += " AND building_id = ?"
-                params.append(building_result['building_id'])
-            else:
-                # Building not found, return empty list
-                return []
-
-        if filter_.unit_type:
-            query += " AND unit_type = ?"
-            params.append(filter_.unit_type)
-
-        if filter_.occupancy_status:
-            query += " AND occupancy_status = ?"
-            params.append(filter_.occupancy_status)
-
-        if filter_.floor_number is not None:
-            query += " AND floor_number = ?"
-            params.append(filter_.floor_number)
-
-        if filter_.has_claims is not None:
-            if filter_.has_claims:
-                query += " AND unit_uuid IN (SELECT DISTINCT unit_uuid FROM claims)"
-            else:
-                query += " AND unit_uuid NOT IN (SELECT DISTINCT unit_uuid FROM claims)"
-
-        if filter_.search_text:
-            query += " AND (unit_id LIKE ? OR notes LIKE ?)"
-            search_param = f"%{filter_.search_text}%"
-            params.extend([search_param, search_param])
-
-        query += f" ORDER BY floor_number, unit_id LIMIT {filter_.limit} OFFSET {filter_.offset}"
-
-        rows = self.db.fetch_all(query, tuple(params) if params else None)
-
-        units = []
-        for row in rows:
-            units.append(self.repository._row_to_unit(row))
-
-        return units
-
     # ==================== Validation ====================
 
     def _validate_unit_data(
@@ -498,15 +410,6 @@ class UnitController(BaseController):
             for field in required:
                 if not data.get(field):
                     errors.append(f"Missing required field: {field}")
-
-            # Verify building exists
-            if data.get("building_uuid"):
-                result = self.db.fetch_one(
-                    "SELECT COUNT(*) as count FROM buildings WHERE building_uuid = ?",
-                    (data["building_uuid"],)
-                )
-                if not result or result['count'] == 0:
-                    errors.append("Building not found")
 
         # Validate floor number
         if data.get("floor_number") is not None:
@@ -529,106 +432,22 @@ class UnitController(BaseController):
 
         return OperationResult.ok()
 
-    def _generate_unit_id(self, data: Dict[str, Any]) -> str:
-        """Generate unit ID based on building and sequence."""
-        building_uuid = data.get("building_uuid")
-
-        if not building_uuid:
-            return ""
-
-        # Get building ID
-        result = self.db.fetch_one(
-            "SELECT building_id FROM buildings WHERE building_uuid = ?",
-            (building_uuid,)
-        )
-        building_id = result['building_id'] if result else "UNKNOWN"
-
-        # Find next available unit number (handles gaps from deletions)
-        unit_num = 1
-        while True:
-            candidate = f"{building_id}-U{str(unit_num).zfill(3)}"
-            exists = self.db.fetch_one(
-                "SELECT 1 FROM property_units WHERE unit_id = ?", (candidate,)
-            )
-            if not exists:
-                return candidate
-            unit_num += 1
-
-    def _has_dependencies(self, unit_uuid: str) -> bool:
-        """Check if unit has dependent records."""
-        # Check for claims
-        result = self.db.fetch_one(
-            "SELECT COUNT(*) as count FROM claims WHERE unit_uuid = ?",
-            (unit_uuid,)
-        )
-        if result and result['count'] > 0:
-            return True
-
-        # Check for relations
-        result = self.db.fetch_one(
-            "SELECT COUNT(*) as count FROM relations WHERE unit_uuid = ?",
-            (unit_uuid,)
-        )
-        if result and result['count'] > 0:
-            return True
-
-        # Check for households
-        result = self.db.fetch_one(
-            "SELECT COUNT(*) as count FROM households WHERE unit_uuid = ?",
-            (unit_uuid,)
-        )
-        if result and result['count'] > 0:
-            return True
-
-        return False
-
     # ==================== Statistics ====================
 
     def get_statistics(self) -> OperationResult[Dict[str, Any]]:
         """
-        Get unit statistics.
+        Get unit statistics via API.
 
         Returns:
             OperationResult with statistics dictionary
         """
         try:
-            # Total count
-            result = self.db.fetch_one("SELECT COUNT(*) as count FROM property_units")
-            total = result['count'] if result else 0
-
-            # By type
-            rows = self.db.fetch_all("""
-                SELECT unit_type, COUNT(*) as count
-                FROM property_units
-                WHERE unit_type IS NOT NULL
-                GROUP BY unit_type
-            """)
-            by_type = {row['unit_type']: row['count'] for row in rows}
-
-            # By occupancy status
-            rows = self.db.fetch_all("""
-                SELECT occupancy_status, COUNT(*) as count
-                FROM property_units
-                WHERE occupancy_status IS NOT NULL
-                GROUP BY occupancy_status
-            """)
-            by_occupancy = {row['occupancy_status']: row['count'] for row in rows}
-
-            # Average area
-            result = self.db.fetch_one("""
-                SELECT AVG(unit_area) as avg_area FROM property_units WHERE unit_area > 0
-            """)
-            avg_area = result['avg_area'] if result and result['avg_area'] else 0
-
+            response = self._api_service.get_units_grouped()
             stats = {
-                "total": total,
-                "by_type": by_type,
-                "by_occupancy_status": by_occupancy,
-                "average_area": round(avg_area, 2)
+                "total": response.get("totalUnits", 0),
+                "total_buildings": response.get("totalBuildings", 0),
             }
-
             return OperationResult.ok(data=stats)
-
         except Exception as e:
             return OperationResult.fail(message=str(e))
 
@@ -642,16 +461,8 @@ class UnitController(BaseController):
         Returns:
             Number of units
         """
-        # Get building_id from building_uuid
-        building_result = self.db.fetch_one(
-            "SELECT building_id FROM buildings WHERE building_uuid = ?",
-            (building_uuid,)
-        )
-        if not building_result:
+        try:
+            units_data = self._api_service.get_units_for_building(building_uuid)
+            return len(units_data)
+        except Exception:
             return 0
-
-        result = self.db.fetch_one(
-            "SELECT COUNT(*) as count FROM property_units WHERE building_id = ?",
-            (building_result['building_id'],)
-        )
-        return result['count'] if result else 0

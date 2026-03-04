@@ -23,7 +23,7 @@ from PyQt5.QtGui import QIcon
 from utils.i18n import I18n
 from repositories.database import Database
 from services.api_client import get_api_client
-from services.vocab_service import get_all_vocabularies, initialize_vocabularies
+from services.vocab_service import get_all_vocabularies, initialize_vocabularies, refresh_vocabularies
 from ui.components.dialogs.base_dialog import BaseDialog
 from ui.error_handler import ErrorHandler
 from utils.logger import get_logger
@@ -141,6 +141,11 @@ class VocabularyManagementPage(QWidget):
 
         header.addStretch()
 
+        # Refresh from API button
+        self.refresh_btn = QPushButton("تحديث من API")
+        self.refresh_btn.clicked.connect(self._refresh_from_api)
+        header.addWidget(self.refresh_btn)
+
         # Export button
         self.export_btn = QPushButton(self.i18n.t("export_for_mobile"))
         self.export_btn.clicked.connect(self._export_vocabularies)
@@ -251,6 +256,20 @@ class VocabularyManagementPage(QWidget):
                     self.vocab_list.addItem(name)
         except Exception as e:
             logger.error(f"Failed to load vocabularies: {e}")
+
+    def _refresh_from_api(self):
+        """Re-fetch vocabularies from backend API and reload the UI."""
+        self.refresh_btn.setEnabled(False)
+        self.refresh_btn.setText("جارٍ التحديث...")
+        try:
+            refresh_vocabularies()
+            self._load_vocabularies()
+            logger.info("Vocabularies refreshed from API successfully")
+        except Exception as e:
+            logger.error(f"Failed to refresh vocabularies: {e}")
+        finally:
+            self.refresh_btn.setEnabled(True)
+            self.refresh_btn.setText("تحديث من API")
 
     def _on_vocabulary_selected(self, vocabulary_name: str):
         """Handle vocabulary selection."""
