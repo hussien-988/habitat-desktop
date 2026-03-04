@@ -598,7 +598,7 @@ class Navbar(QFrame):
     TAB_PERMISSIONS = {
         "admin": [0, 1, 2, 3, 4, 5],
         "data_manager": [0, 1, 2, 3, 4, 5],
-        "office_clerk": [0, 1, 2, 3],
+        "office_clerk": [1],
         "field_supervisor": [0, 1, 2, 3],
         "field_researcher": [1, 2],
         "analyst": [0, 2, 3, 4],

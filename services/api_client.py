@@ -2363,6 +2363,53 @@ API للاتصال بـ TRRCMS Backend.
             logger.warning(f"Neighborhood not found: {full_code}")
             return None
 
+    # ==================== Persons APIs (standalone) ====================
+
+    def get_persons(
+        self,
+        search: Optional[str] = None,
+        national_id: Optional[str] = None,
+        household_id: Optional[str] = None,
+        page: int = 1,
+        page_size: int = 50
+    ) -> Dict[str, Any]:
+        """
+        Get persons list with optional filters.
+
+        Endpoint: GET /v1/Persons
+        """
+        params: Dict[str, Any] = {"page": page, "pageSize": page_size}
+        if search:
+            params["search"] = search
+        if national_id:
+            params["nationalId"] = national_id
+        if household_id:
+            params["householdId"] = household_id
+        logger.info(f"Fetching persons with filters: {params}")
+        return self._request("GET", "/v1/Persons", params=params) or {}
+
+    # ==================== Households APIs (standalone) ====================
+
+    def get_households(
+        self,
+        unit_id: Optional[str] = None,
+        building_id: Optional[str] = None,
+        page: int = 1,
+        page_size: int = 50
+    ) -> Dict[str, Any]:
+        """
+        Get households list with optional filters.
+
+        Endpoint: GET /v1/Households
+        """
+        params: Dict[str, Any] = {"page": page, "pageSize": page_size}
+        if unit_id:
+            params["propertyUnitId"] = unit_id
+        if building_id:
+            params["buildingId"] = building_id
+        logger.info(f"Fetching households with filters: {params}")
+        return self._request("GET", "/v1/Households", params=params) or {}
+
     # ==================== Claims APIs ====================
 
     def get_claims_summaries(
@@ -2386,7 +2433,7 @@ API للاتصال بـ TRRCMS Backend.
         Returns:
             List of CreatedClaimSummaryDto
 
-        Endpoint: GET /api/claims/summaries
+        Endpoint: GET /v1/Claims/summaries
         """
         params = {}
         if claim_status is not None:
@@ -2401,7 +2448,7 @@ API للاتصال بـ TRRCMS Backend.
             params["buildingCode"] = building_code
 
         logger.info(f"Fetching claims summaries with filters: {params or 'none'}")
-        result = self._request("GET", "/claims/summaries", params=params)
+        result = self._request("GET", "/v1/Claims/summaries", params=params)
 
         # Handle both array and paginated response
         if isinstance(result, list):
@@ -2435,7 +2482,7 @@ API للاتصال بـ TRRCMS Backend.
         Returns:
             List of ClaimDto
 
-        Endpoint: GET /api/Claims
+        Endpoint: GET /v1/Claims
         """
         params = {}
         if status is not None:
@@ -2450,7 +2497,7 @@ API للاتصال بـ TRRCMS Backend.
             params["hasConflicts"] = str(has_conflicts).lower()
 
         logger.info(f"Fetching claims with filters: {params or 'none'}")
-        result = self._request("GET", "/Claims", params=params)
+        result = self._request("GET", "/v1/Claims", params=params)
         if isinstance(result, list):
             claims = result
         elif isinstance(result, dict):
@@ -2470,31 +2517,31 @@ API للاتصال بـ TRRCMS Backend.
         Returns:
             ClaimDto with full details
 
-        Endpoint: GET /api/Claims/{id}
+        Endpoint: GET /v1/Claims/{id}
         """
         if not claim_id:
             raise ValueError("claim_id is required")
 
         logger.info(f"Fetching claim details: {claim_id}")
-        result = self._request("GET", f"/Claims/{claim_id}")
+        result = self._request("GET", f"/v1/Claims/{claim_id}")
         logger.info(f"Fetched claim: {result.get('claimNumber', 'N/A')}")
         return result
 
     def delete_claim(self, claim_id: str) -> bool:
         """
-        حذف مطالبة.
+        Delete a claim.
 
         Args:
-            claim_id: UUID للمطالبة
+            claim_id: Claim UUID
 
         Returns:
-            True إذا تم الحذف بنجاح
+            True if deleted successfully
 
-        Endpoint: DELETE /api/Claims/{id}
+        Endpoint: DELETE /v1/Claims/{id}
         """
         if not claim_id:
             raise ValueError("claim_id is required")
-        self._request("DELETE", f"/Claims/{claim_id}")
+        self._request("DELETE", f"/v1/Claims/{claim_id}")
         logger.info(f"Claim {claim_id} deleted")
         return True
 

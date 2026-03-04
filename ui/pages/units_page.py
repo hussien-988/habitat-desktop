@@ -101,9 +101,9 @@ class UnitsPage(QWidget):
 
         top_row.addStretch()
 
-        add_btn = PrimaryButton("إضافة وحدة جديدة", icon_name="icon")
-        add_btn.clicked.connect(self._on_add_unit)
-        top_row.addWidget(add_btn)
+        self.add_btn = PrimaryButton("إضافة وحدة جديدة", icon_name="icon")
+        self.add_btn.clicked.connect(self._on_add_unit)
+        top_row.addWidget(self.add_btn)
 
         layout.addLayout(top_row)
 
@@ -314,6 +314,13 @@ class UnitsPage(QWidget):
     def refresh(self, data=None):
         logger.debug("Refreshing units page")
         self._load_units()
+
+    def configure_for_role(self, role: str):
+        """Enable/disable CRUD buttons based on user role."""
+        self._user_role = role
+        can_create = role in {"admin", "data_manager", "office_clerk", "field_researcher"}
+        if hasattr(self, 'add_btn'):
+            self.add_btn.setEnabled(can_create)
 
     def _set_auth_token(self):
         main_window = self.window()
@@ -530,11 +537,13 @@ class UnitsPage(QWidget):
         view_action.triggered.connect(lambda: self.view_unit.emit(unit))
         menu.addAction(view_action)
 
+        _role = getattr(self, '_user_role', 'admin')
         edit_icon = Icon.load_qicon("edit-01", size=18)
         edit_action = QAction("  تعديل", self)
         if edit_icon:
             edit_action.setIcon(edit_icon)
         edit_action.triggered.connect(lambda: self._edit_unit(unit, group))
+        edit_action.setEnabled(_role in {"admin", "data_manager", "office_clerk", "field_researcher"})
         menu.addAction(edit_action)
 
         delete_icon = Icon.load_qicon("delete", size=18)
@@ -542,6 +551,7 @@ class UnitsPage(QWidget):
         if delete_icon:
             delete_action.setIcon(delete_icon)
         delete_action.triggered.connect(lambda: self._delete_unit(unit))
+        delete_action.setEnabled(_role in {"admin", "data_manager"})
         menu.addAction(delete_action)
 
         menu.setStyleSheet("""

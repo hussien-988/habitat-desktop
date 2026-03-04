@@ -30,6 +30,16 @@ class MainWindow(QMainWindow):
 
     language_changed = pyqtSignal(bool)  # True for Arabic, False for English
 
+    # Pages restricted to specific roles only (RBAC - page level)
+    _PAGE_ROLE_ACCESS = {
+        Pages.ADMIN: {"admin", "data_manager"},
+        Pages.USER_MANAGEMENT: {"admin", "data_manager"},
+        Pages.ADD_USER: {"admin", "data_manager"},
+        Pages.FIELD_ASSIGNMENT: {"admin", "data_manager", "field_supervisor"},
+        Pages.DATA_MANAGEMENT: {"admin", "data_manager"},
+        Pages.REPORTS: {"admin", "data_manager", "field_supervisor", "analyst"},
+    }
+
     def __init__(self, db: Database, i18n: I18n, parent=None):
         super().__init__(parent)
         self.WINDOW_RADIUS = 12
@@ -145,6 +155,7 @@ class MainWindow(QMainWindow):
         from ui.pages.add_user_page import AddUserPage
         from controllers.user_controller import UserController
         from ui.wizards.office_survey import OfficeSurveyWizard
+        from ui.pages.import_wizard_page import ImportWizardPage
 
         self._user_controller = UserController(parent=self)
 
@@ -288,6 +299,10 @@ class MainWindow(QMainWindow):
         from ui.pages.data_management_page import DataManagementPage
         self.pages[Pages.DATA_MANAGEMENT] = DataManagementPage(self.db, self.i18n, self)
         self.stack.addWidget(self.pages[Pages.DATA_MANAGEMENT])
+
+        # Import Wizard page (stub)
+        self.pages[Pages.IMPORT_WIZARD] = ImportWizardPage(self.db, self.i18n, self)
+        self.stack.addWidget(self.pages[Pages.IMPORT_WIZARD])
 
         # Office Survey Wizard (UC-004, UC-005) - NEW wizard framework
         self.office_survey_wizard = OfficeSurveyWizard(self.db, self)
@@ -459,6 +474,12 @@ class MainWindow(QMainWindow):
 
         # Configure tabs based on user role (RBAC)
         self.navbar.configure_for_role(user.role)
+
+        # Apply role-based CRUD button visibility to content pages
+        for page_id in (Pages.BUILDINGS, Pages.UNITS, Pages.PERSONS):
+            page = self.pages.get(page_id)
+            if page and hasattr(page, 'configure_for_role'):
+                page.configure_for_role(user.role)
 
     def _set_api_token_for_controllers(self, token: str):
         """Pass API token to all controllers that use API backend."""
@@ -710,6 +731,15 @@ class MainWindow(QMainWindow):
                 )
                 if result != DialogResult.YES:
                     return
+
+        # RBAC: block restricted pages for unauthorized roles
+        if page_id in self._PAGE_ROLE_ACCESS and self.current_user:
+            role = getattr(self.current_user, 'role', None)
+            if role not in self._PAGE_ROLE_ACCESS[page_id]:
+                from ui.components.toast import Toast
+                Toast.show_toast(self, "غير مخوّل: لا تملك صلاحية الوصول إلى هذه الصفحة", Toast.ERROR)
+                logger.warning(f"Access denied: {self.current_user.username} ({role}) -> {page_id}")
+                return
 
         # Proceed with navigation
         if page_id not in self.pages:

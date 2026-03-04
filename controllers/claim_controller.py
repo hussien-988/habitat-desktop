@@ -5,7 +5,7 @@ Claim Controller
 Controller for claim management operations.
 
 Handles:
-- Claim CRUD operations
+- Claim read operations (load, get, delete)
 - Claim workflow transitions
 - Claim validation
 - Claim search and filtering
@@ -20,12 +20,20 @@ from PyQt5.QtCore import pyqtSignal
 
 from controllers.base_controller import BaseController, OperationResult
 from models.claim import Claim
-from repositories.claim_repository import ClaimRepository
-from repositories.database import Database
-from services.workflow_service import WorkflowService
+from services.api_client import get_api_client
 from utils.logger import get_logger
 
 logger = get_logger(__name__)
+
+# Claim status string <-> API int mapping
+_STATUS_STR_TO_INT = {
+    "draft": 1, "submitted": 2, "under_review": 3,
+    "verified": 4, "approved": 5, "rejected": 6, "archived": 7,
+}
+_STATUS_INT_TO_STR = {v: k for k, v in _STATUS_STR_TO_INT.items()}
+
+_PRIORITY_STR_TO_INT = {"low": 1, "normal": 2, "high": 3, "urgent": 4}
+_PRIORITY_INT_TO_STR = {v: k for k, v in _PRIORITY_STR_TO_INT.items()}
 
 
 @dataclass
@@ -60,11 +68,9 @@ class ClaimController(BaseController):
     claim_selected = pyqtSignal(object)  # Claim object
     status_changed = pyqtSignal(str, str, str)  # claim_uuid, old_status, new_status
 
-    def __init__(self, db: Database, parent=None):
+    def __init__(self, db=None, parent=None):
         super().__init__(parent)
-        self.db = db
-        self.repository = ClaimRepository(db)
-        self.workflow_service = WorkflowService(db)
+        self._api = get_api_client()
 
         self._current_claim: Optional[Claim] = None
         self._claims_cache: List[Claim] = []
@@ -86,145 +92,31 @@ class ClaimController(BaseController):
 
     def create_claim(self, data: Dict[str, Any]) -> OperationResult[Claim]:
         """
-        Create a new claim.
-
-        Args:
-            data: Claim data dictionary
+        Not supported directly - claims are created via Survey wizard.
 
         Returns:
-            OperationResult with created Claim or error
+            OperationResult failure
         """
-        self._log_operation("create_claim", data=data)
-
-        try:
-            self._emit_started("create_claim")
-
-            # Validate data
-            validation_result = self._validate_claim_data(data)
-            if not validation_result.success:
-                self._emit_error("create_claim", validation_result.message)
-                return validation_result
-
-            # Generate case number if not provided
-            if not data.get("case_number"):
-                data["case_number"] = self._generate_case_number()
-
-            # Set initial status
-            if not data.get("case_status"):
-                data["case_status"] = "draft"
-
-            # Normalize: Claim model uses unit_id, callers may pass unit_uuid
-            if data.get("unit_uuid") and not data.get("unit_id"):
-                data["unit_id"] = data.pop("unit_uuid")
-
-            # Create claim
-            claim = Claim(**data)
-            saved_claim = self.repository.create(claim)
-
-            if saved_claim:
-                self._emit_completed("create_claim", True)
-                self.claim_created.emit(saved_claim.claim_uuid)
-                self._trigger_callbacks("on_claim_created", saved_claim)
-                return OperationResult.ok(
-                    data=saved_claim,
-                    message="Claim created successfully",
-                    message_ar="تم إنشاء المطالبة بنجاح"
-                )
-            else:
-                self._emit_error("create_claim", "Failed to create claim")
-                return OperationResult.fail(
-                    message="Failed to create claim",
-                    message_ar="فشل في إنشاء المطالبة"
-                )
-
-        except Exception as e:
-            error_msg = f"Error creating claim: {str(e)}"
-            self._emit_error("create_claim", error_msg)
-            return OperationResult.fail(message=error_msg)
+        return OperationResult.fail(
+            message="Claims are created via the Survey wizard, not directly",
+            message_ar="يتم إنشاء المطالبات عبر معالج المسح"
+        )
 
     def update_claim(self, claim_uuid: str, data: Dict[str, Any]) -> OperationResult[Claim]:
         """
-        Update an existing claim.
-
-        Args:
-            claim_uuid: UUID of claim to update
-            data: Updated claim data
+        Not supported directly - no claim update API endpoint.
 
         Returns:
-            OperationResult with updated Claim or error
+            OperationResult failure
         """
-        self._log_operation("update_claim", claim_uuid=claim_uuid, data=data)
-
-        try:
-            self._emit_started("update_claim")
-
-            # Get existing claim
-            existing = self.repository.get_by_uuid(claim_uuid)
-            if not existing:
-                self._emit_error("update_claim", "Claim not found")
-                return OperationResult.fail(
-                    message="Claim not found",
-                    message_ar="المطالبة غير موجودة"
-                )
-
-            # Check if status change is allowed
-            if data.get("case_status") and data["case_status"] != existing.case_status:
-                if not self._can_change_status(existing.case_status, data["case_status"]):
-                    return OperationResult.fail(
-                        message=f"Cannot change status from {existing.case_status} to {data['case_status']}",
-                        message_ar="لا يمكن تغيير الحالة"
-                    )
-
-            # Validate data
-            validation_result = self._validate_claim_data(data, is_update=True)
-            if not validation_result.success:
-                self._emit_error("update_claim", validation_result.message)
-                return validation_result
-
-            # Update claim
-            old_status = existing.case_status
-            for key, value in data.items():
-                if hasattr(existing, key):
-                    setattr(existing, key, value)
-
-            existing.updated_at = datetime.now()
-
-            updated_claim = self.repository.update(existing)
-
-            if updated_claim:
-                self._emit_completed("update_claim", True)
-                self.claim_updated.emit(claim_uuid)
-
-                # Emit status change signal if status changed
-                if data.get("case_status") and data["case_status"] != old_status:
-                    self.status_changed.emit(claim_uuid, old_status, data["case_status"])
-
-                self._trigger_callbacks("on_claim_updated", updated_claim)
-
-                # Update current claim if it's the one being edited
-                if self._current_claim and self._current_claim.claim_uuid == claim_uuid:
-                    self._current_claim = updated_claim
-
-                return OperationResult.ok(
-                    data=updated_claim,
-                    message="Claim updated successfully",
-                    message_ar="تم تحديث المطالبة بنجاح"
-                )
-            else:
-                self._emit_error("update_claim", "Failed to update claim")
-                return OperationResult.fail(
-                    message="Failed to update claim",
-                    message_ar="فشل في تحديث المطالبة"
-                )
-
-        except Exception as e:
-            error_msg = f"Error updating claim: {str(e)}"
-            self._emit_error("update_claim", error_msg)
-            return OperationResult.fail(message=error_msg)
+        return OperationResult.fail(
+            message="Direct claim update is not supported via API",
+            message_ar="تحديث المطالبة المباشر غير مدعوم عبر API"
+        )
 
     def delete_claim(self, claim_uuid: str) -> OperationResult[bool]:
         """
-        Delete a claim.
+        Delete a claim via API.
 
         Args:
             claim_uuid: UUID of claim to delete
@@ -237,45 +129,33 @@ class ClaimController(BaseController):
         try:
             self._emit_started("delete_claim")
 
-            # Get existing claim
-            existing = self.repository.get_by_uuid(claim_uuid)
-            if not existing:
-                self._emit_error("delete_claim", "Claim not found")
-                return OperationResult.fail(
-                    message="Claim not found",
-                    message_ar="المطالبة غير موجودة"
-                )
+            # Fetch claim to verify status before delete
+            try:
+                dto = self._api.get_claim_by_id(claim_uuid)
+                claim = self._api_dto_to_claim(dto)
+                status_str = claim.case_status
+                if status_str not in ["draft", "cancelled", "rejected"]:
+                    return OperationResult.fail(
+                        message="Only draft, cancelled, or rejected claims can be deleted",
+                        message_ar="يمكن حذف المطالبات المسودة أو الملغاة أو المرفوضة فقط"
+                    )
+            except Exception:
+                pass  # Proceed with delete even if pre-check fails
 
-            # Check if claim can be deleted (only drafts)
-            if existing.case_status not in ["draft", "cancelled"]:
-                return OperationResult.fail(
-                    message="Only draft or cancelled claims can be deleted",
-                    message_ar="يمكن حذف المطالبات المسودة أو الملغاة فقط"
-                )
+            self._api.delete_claim(claim_uuid)
 
-            # Delete claim
-            success = self.repository.delete(claim_uuid)
+            self._emit_completed("delete_claim", True)
+            self.claim_deleted.emit(claim_uuid)
+            self._trigger_callbacks("on_claim_deleted", claim_uuid)
 
-            if success:
-                self._emit_completed("delete_claim", True)
-                self.claim_deleted.emit(claim_uuid)
-                self._trigger_callbacks("on_claim_deleted", claim_uuid)
+            if self._current_claim and self._current_claim.claim_uuid == claim_uuid:
+                self._current_claim = None
 
-                # Clear current claim if it was deleted
-                if self._current_claim and self._current_claim.claim_uuid == claim_uuid:
-                    self._current_claim = None
-
-                return OperationResult.ok(
-                    data=True,
-                    message="Claim deleted successfully",
-                    message_ar="تم حذف المطالبة بنجاح"
-                )
-            else:
-                self._emit_error("delete_claim", "Failed to delete claim")
-                return OperationResult.fail(
-                    message="Failed to delete claim",
-                    message_ar="فشل في حذف المطالبة"
-                )
+            return OperationResult.ok(
+                data=True,
+                message="Claim deleted successfully",
+                message_ar="تم حذف المطالبة بنجاح"
+            )
 
         except Exception as e:
             error_msg = f"Error deleting claim: {str(e)}"
@@ -284,7 +164,7 @@ class ClaimController(BaseController):
 
     def get_claim(self, claim_uuid: str) -> OperationResult[Claim]:
         """
-        Get a claim by UUID.
+        Get a claim by UUID via API.
 
         Args:
             claim_uuid: UUID of claim
@@ -293,16 +173,13 @@ class ClaimController(BaseController):
             OperationResult with Claim or error
         """
         try:
-            claim = self.repository.get_by_uuid(claim_uuid)
-
-            if claim:
-                return OperationResult.ok(data=claim)
-            else:
-                return OperationResult.fail(
-                    message="Claim not found",
-                    message_ar="المطالبة غير موجودة"
-                )
-
+            dto = self._api.get_claim_by_id(claim_uuid)
+            if dto:
+                return OperationResult.ok(data=self._api_dto_to_claim(dto))
+            return OperationResult.fail(
+                message="Claim not found",
+                message_ar="المطالبة غير موجودة"
+            )
         except Exception as e:
             return OperationResult.fail(message=str(e))
 
@@ -336,7 +213,7 @@ class ClaimController(BaseController):
 
     def load_claims(self, filter_: Optional[ClaimFilter] = None) -> OperationResult[List[Claim]]:
         """
-        Load claims with optional filter.
+        Load claims with optional filter via API.
 
         Args:
             filter_: Optional filter criteria
@@ -349,8 +226,24 @@ class ClaimController(BaseController):
 
             filter_ = filter_ or self._current_filter
 
-            # Build query based on filter
-            claims = self._query_claims(filter_)
+            status_int = _STATUS_STR_TO_INT.get(filter_.case_status) if filter_.case_status else None
+
+            dtos = self._api.get_claims(
+                status=status_int,
+                property_unit_id=filter_.unit_uuid,
+                primary_claimant_id=filter_.claimant_uuid,
+            )
+
+            claims = [self._api_dto_to_claim(dto) for dto in dtos]
+
+            # Apply local text filter if needed
+            if filter_.search_text:
+                search = filter_.search_text.lower()
+                claims = [
+                    c for c in claims
+                    if search in (c.case_number or "").lower()
+                    or search in (c.notes or "").lower()
+                ]
 
             self._claims_cache = claims
             self._current_filter = filter_
@@ -383,7 +276,7 @@ class ClaimController(BaseController):
         Filter claims by status.
 
         Args:
-            status: Status to filter by
+            status: Status string to filter by
 
         Returns:
             OperationResult with list of Claims
@@ -393,7 +286,7 @@ class ClaimController(BaseController):
 
     def get_claims_for_building(self, building_uuid: str) -> OperationResult[List[Claim]]:
         """
-        Get claims for a specific building.
+        Get claims for a specific building via API summaries.
 
         Args:
             building_uuid: Building UUID
@@ -401,12 +294,21 @@ class ClaimController(BaseController):
         Returns:
             OperationResult with list of Claims
         """
-        filter_ = ClaimFilter(building_uuid=building_uuid)
-        return self.load_claims(filter_)
+        try:
+            summaries = self._api.get_claims_summaries()
+            # Filter by building UUID if available in summary data
+            filtered = [
+                s for s in summaries
+                if s.get("buildingId") == building_uuid or s.get("buildingCode") == building_uuid
+            ]
+            claims = [self._api_summary_to_claim(s) for s in filtered]
+            return OperationResult.ok(data=claims)
+        except Exception as e:
+            return OperationResult.fail(message=str(e))
 
     def get_claims_for_unit(self, unit_uuid: str) -> OperationResult[List[Claim]]:
         """
-        Get claims for a specific unit.
+        Get claims for a specific unit via API.
 
         Args:
             unit_uuid: Unit UUID
@@ -417,138 +319,69 @@ class ClaimController(BaseController):
         filter_ = ClaimFilter(unit_uuid=unit_uuid)
         return self.load_claims(filter_)
 
-    def _query_claims(self, filter_: ClaimFilter) -> List[Claim]:
-        """Execute claim query with filter."""
-        query = "SELECT * FROM claims WHERE 1=1"
-        params = []
+    def _api_dto_to_claim(self, dto: Dict[str, Any]) -> Claim:
+        """Convert API ClaimDto (camelCase) to Claim model."""
+        raw_status = dto.get("status")
+        case_status = _STATUS_INT_TO_STR.get(raw_status, str(raw_status or "draft"))
 
-        if filter_.case_status:
-            query += " AND case_status = ?"
-            params.append(filter_.case_status)
+        raw_priority = dto.get("priority")
+        priority = _PRIORITY_INT_TO_STR.get(raw_priority, str(raw_priority or "normal"))
 
-        if filter_.claim_type:
-            query += " AND claim_type = ?"
-            params.append(filter_.claim_type)
+        return Claim(
+            claim_uuid=dto.get("id") or dto.get("claimId") or "",
+            case_number=dto.get("claimNumber") or "",
+            claim_type=str(dto.get("claimType") or "ownership"),
+            case_status=case_status,
+            priority=priority,
+            unit_id=dto.get("propertyUnitId") or "",
+            person_ids=dto.get("primaryClaimantId") or "",
+            notes=dto.get("claimDescription") or dto.get("processingNotes") or "",
+            source=str(dto.get("claimSource") or "OFFICE_SUBMISSION"),
+            has_conflict=bool(dto.get("hasConflict") or dto.get("hasConflicts")),
+            created_by=dto.get("createdByUserId") or "",
+        )
 
-        if filter_.building_uuid:
-            # Join with buildings table to convert building_uuid to building_id
-            query += " AND unit_uuid IN (SELECT u.unit_uuid FROM property_units u JOIN buildings b ON u.building_id = b.building_id WHERE b.building_uuid = ?)"
-            params.append(filter_.building_uuid)
+    def _api_summary_to_claim(self, dto: Dict[str, Any]) -> Claim:
+        """Convert API CreatedClaimSummaryDto to Claim model."""
+        raw_status = dto.get("claimStatus") or dto.get("status")
+        case_status = _STATUS_INT_TO_STR.get(raw_status, str(raw_status or "draft"))
 
-        if filter_.unit_uuid:
-            query += " AND unit_uuid = ?"
-            params.append(filter_.unit_uuid)
-
-        if filter_.claimant_uuid:
-            query += " AND claimant_uuid = ?"
-            params.append(filter_.claimant_uuid)
-
-        if filter_.assigned_to:
-            query += " AND assigned_to = ?"
-            params.append(filter_.assigned_to)
-
-        if filter_.search_text:
-            query += " AND (case_number LIKE ? OR notes LIKE ?)"
-            search_param = f"%{filter_.search_text}%"
-            params.extend([search_param, search_param])
-
-        if filter_.date_from:
-            query += " AND created_at >= ?"
-            params.append(filter_.date_from.isoformat())
-
-        if filter_.date_to:
-            query += " AND created_at <= ?"
-            params.append(filter_.date_to.isoformat())
-
-        query += f" ORDER BY created_at DESC LIMIT {filter_.limit} OFFSET {filter_.offset}"
-
-        rows = self.db.execute(query, tuple(params))
-        claims = []
-        for row in rows:
-            row_dict = dict(row) if hasattr(row, 'keys') else row
-            claims.append(Claim.from_dict(row_dict))
-
-        return claims
+        return Claim(
+            claim_uuid=dto.get("claimId") or dto.get("id") or "",
+            case_number=dto.get("claimNumber") or "",
+            claim_type=str(dto.get("claimType") or ""),
+            case_status=case_status,
+        )
 
     # ==================== Workflow Operations ====================
 
     def submit_claim(self, claim_uuid: str) -> OperationResult[Claim]:
-        """
-        Submit a draft claim for review.
-
-        Args:
-            claim_uuid: UUID of claim to submit
-
-        Returns:
-            OperationResult with updated Claim
-        """
-        return self._change_status(claim_uuid, "submitted", "draft")
+        """Submit a draft claim for review."""
+        return OperationResult.fail(
+            message="Claim workflow transitions require API endpoint not yet implemented",
+            message_ar="انتقالات سير عمل المطالبة تتطلب endpoint API"
+        )
 
     def approve_claim(self, claim_uuid: str, notes: str = "") -> OperationResult[Claim]:
-        """
-        Approve a claim.
-
-        Args:
-            claim_uuid: UUID of claim to approve
-            notes: Optional approval notes
-
-        Returns:
-            OperationResult with updated Claim
-        """
-        data = {"case_status": "approved"}
-        if notes:
-            data["review_notes"] = notes
-        return self.update_claim(claim_uuid, data)
+        """Approve a claim."""
+        return OperationResult.fail(
+            message="Claim workflow transitions require API endpoint not yet implemented",
+            message_ar="انتقالات سير عمل المطالبة تتطلب endpoint API"
+        )
 
     def reject_claim(self, claim_uuid: str, reason: str) -> OperationResult[Claim]:
-        """
-        Reject a claim.
-
-        Args:
-            claim_uuid: UUID of claim to reject
-            reason: Rejection reason
-
-        Returns:
-            OperationResult with updated Claim
-        """
-        data = {
-            "case_status": "rejected",
-            "rejection_reason": reason
-        }
-        return self.update_claim(claim_uuid, data)
+        """Reject a claim."""
+        return OperationResult.fail(
+            message="Claim workflow transitions require API endpoint not yet implemented",
+            message_ar="انتقالات سير عمل المطالبة تتطلب endpoint API"
+        )
 
     def request_review(self, claim_uuid: str) -> OperationResult[Claim]:
-        """
-        Request review for a claim.
-
-        Args:
-            claim_uuid: UUID of claim
-
-        Returns:
-            OperationResult with updated Claim
-        """
-        return self._change_status(claim_uuid, "under_review", "submitted")
-
-    def _change_status(
-        self,
-        claim_uuid: str,
-        new_status: str,
-        expected_current_status: Optional[str] = None
-    ) -> OperationResult[Claim]:
-        """Change claim status with validation."""
-        claim_result = self.get_claim(claim_uuid)
-        if not claim_result.success:
-            return claim_result
-
-        claim = claim_result.data
-
-        if expected_current_status and claim.case_status != expected_current_status:
-            return OperationResult.fail(
-                message=f"Claim must be in '{expected_current_status}' status",
-                message_ar="حالة المطالبة غير صحيحة"
-            )
-
-        return self.update_claim(claim_uuid, {"case_status": new_status})
+        """Request review for a claim."""
+        return OperationResult.fail(
+            message="Claim workflow transitions require API endpoint not yet implemented",
+            message_ar="انتقالات سير عمل المطالبة تتطلب endpoint API"
+        )
 
     def _can_change_status(self, from_status: str, to_status: str) -> bool:
         """Check if status transition is allowed."""
@@ -561,30 +394,9 @@ class ClaimController(BaseController):
             "rejected": ["under_review"],
             "cancelled": []
         }
-
         return to_status in allowed_transitions.get(from_status, [])
 
     # ==================== Backend API Methods ====================
-
-    def load_claims_from_api(self, status: int = None) -> OperationResult:
-        """
-        Load claims summaries from backend API.
-
-        Args:
-            status: ClaimStatus enum or None for all
-
-        Returns:
-            OperationResult with list of CreatedClaimSummaryDto dicts
-        """
-        try:
-            from services.api_client import get_api_client
-            api = get_api_client()
-            summaries = api.get_claims_summaries(claim_status=status)
-            logger.info(f"Loaded {len(summaries)} claim summaries from API (status={status})")
-            return OperationResult.ok(data=summaries)
-        except Exception as e:
-            logger.error(f"Failed to load claims from API: {e}", exc_info=True)
-            return OperationResult.fail(message=str(e))
 
     def get_claim_full_context(self, claim_id: str) -> OperationResult:
         """
@@ -593,10 +405,7 @@ class ClaimController(BaseController):
         Returns dict compatible with SurveyContext.from_dict().
         """
         try:
-            from services.api_client import get_api_client
-            api = get_api_client()
-
-            claim = api.get_claim_by_id(claim_id)
+            claim = self._api.get_claim_by_id(claim_id)
             property_unit_id = claim.get("propertyUnitId")
             building_data = {}
             unit_data = {}
@@ -606,7 +415,7 @@ class ClaimController(BaseController):
 
             # Get survey_id from summaries (needed for households/relations)
             try:
-                summaries = api.get_claims_summaries()
+                summaries = self._api.get_claims_summaries()
                 for s in summaries:
                     if s.get("claimId") == claim_id:
                         survey_id = s.get("surveyId")
@@ -615,30 +424,27 @@ class ClaimController(BaseController):
                 logger.warning(f"Failed to get survey_id: {e}")
 
             if property_unit_id:
-                # Fetch unit directly by ID
                 try:
-                    unit_dto = api._request("GET", f"/v1/PropertyUnits/{property_unit_id}")
+                    unit_dto = self._api._request("GET", f"/v1/PropertyUnits/{property_unit_id}")
                     unit_data = self._map_unit_dto(unit_dto)
                     building_id = unit_dto.get("buildingId")
                     if building_id:
-                        building_dto = api.get_building_by_id(building_id)
+                        building_dto = self._api.get_building_by_id(building_id)
                         building_data = self._map_building_dto(building_dto)
                 except Exception as e:
                     logger.warning(f"Failed to fetch building/unit: {e}")
 
-            # Fetch households via survey endpoint (has demographics)
             if survey_id:
                 try:
-                    raw_households = api._request("GET", f"/v1/Surveys/{survey_id}/households")
+                    raw_households = self._api._request("GET", f"/v1/Surveys/{survey_id}/households")
                     if isinstance(raw_households, list):
                         households = [self._map_household_dto(h) for h in raw_households]
                 except Exception as e:
                     logger.warning(f"Failed to fetch households: {e}")
 
-            # Fetch persons via relations (includes role and relation_id)
             if survey_id and property_unit_id:
                 try:
-                    relations = api._request(
+                    relations = self._api._request(
                         "GET", "/v1/PersonPropertyRelations",
                         params={"surveyId": survey_id, "propertyUnitId": property_unit_id}
                     )
@@ -648,14 +454,13 @@ class ClaimController(BaseController):
                             if not person_id:
                                 continue
                             try:
-                                person_dto = api._request("GET", f"/v1/Persons/{person_id}")
+                                person_dto = self._api._request("GET", f"/v1/Persons/{person_id}")
                                 persons.append(self._map_person_dto(person_dto, rel))
                             except Exception:
                                 pass
                 except Exception as e:
                     logger.warning(f"Failed to fetch persons: {e}")
 
-            # Fallback: at least include primary claimant
             if not persons and claim.get("primaryClaimantName"):
                 persons.append({
                     "first_name": claim["primaryClaimantName"],
@@ -780,38 +585,39 @@ class ClaimController(BaseController):
 
     def get_statistics(self) -> OperationResult[Dict[str, Any]]:
         """
-        Get claim statistics.
+        Get claim statistics via API.
 
         Returns:
             OperationResult with statistics dictionary
         """
         try:
-            stats = self.repository.get_statistics()
+            summaries = self._api.get_claims_summaries()
+            total = len(summaries)
+            by_status: Dict[str, int] = {}
+            for s in summaries:
+                raw_status = s.get("claimStatus") or s.get("status")
+                status_str = _STATUS_INT_TO_STR.get(raw_status, str(raw_status or "unknown"))
+                by_status[status_str] = by_status.get(status_str, 0) + 1
+            stats = {"total": total, "by_status": by_status}
             return OperationResult.ok(data=stats)
         except Exception as e:
             return OperationResult.fail(message=str(e))
 
     def get_claims_by_status(self) -> OperationResult[Dict[str, int]]:
         """
-        Get claim count by status.
+        Get claim count by status via API.
 
         Returns:
             OperationResult with status counts
         """
         try:
-            rows = self.db.execute("""
-                SELECT case_status, COUNT(*) as count
-                FROM claims
-                GROUP BY case_status
-            """)
-            result = {}
-            for row in rows:
-                status = row.get("case_status") if hasattr(row, 'get') else row[0]
-                count = row.get("count") if hasattr(row, 'get') else row[1]
-                result[status or "unknown"] = count
-
+            summaries = self._api.get_claims_summaries()
+            result: Dict[str, int] = {}
+            for s in summaries:
+                raw_status = s.get("claimStatus") or s.get("status")
+                status_str = _STATUS_INT_TO_STR.get(raw_status, str(raw_status or "unknown"))
+                result[status_str] = result.get(status_str, 0) + 1
             return OperationResult.ok(data=result)
-
         except Exception as e:
             return OperationResult.fail(message=str(e))
 
@@ -825,9 +631,7 @@ class ClaimController(BaseController):
         """Validate claim data."""
         errors = []
 
-        # Required fields for new claims
         if not is_update:
-            # Accept either unit_uuid or unit_id
             if not data.get("unit_uuid") and not data.get("unit_id"):
                 errors.append("Missing required field: unit_uuid or unit_id")
 
@@ -839,14 +643,3 @@ class ClaimController(BaseController):
             )
 
         return OperationResult.ok()
-
-    def _generate_case_number(self) -> str:
-        """Generate unique case number."""
-        rows = self.db.execute(
-            "SELECT MAX(CAST(SUBSTR(case_number, 5) AS INTEGER)) as max_num FROM claims WHERE case_number LIKE 'CLM-%'"
-        )
-        max_num = None
-        if rows:
-            max_num = rows[0].get("max_num") if hasattr(rows[0], 'get') else rows[0][0]
-        next_num = (max_num or 0) + 1
-        return f"CLM-{str(next_num).zfill(6)}"

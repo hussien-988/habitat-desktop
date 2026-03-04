@@ -278,11 +278,11 @@ EN_TRANSLATIONS = {
     "mapping.relation_type.guest": "Guest",
 
     # ===== Wizard - Step Names =====
-    "wizard.step.building_registration": "Building Registration",
+    "wizard.step.building_registration": "Select a Building",
     "wizard.step.property_unit": "Property Unit",
     "wizard.step.household_details": "Household Details",
     "wizard.step.occupation_details": "Occupancy Details",
-    "wizard.step.occupancy_claims": "Occupancy Claims",
+    "wizard.step.occupancy_claims": "Tenure Claims",
     "wizard.step.persons": "Persons",
     "wizard.step.relations_evidence": "Relations & Evidence",
     "wizard.step.claim": "Claim",
@@ -612,7 +612,7 @@ EN_TRANSLATIONS = {
     "wizard.occupancy_claims.add_person": "Add New Person",
     "wizard.occupancy_claims.view": "View",
     "wizard.occupancy_claims.delete": "Delete",
-    "wizard.occupancy_claims.step_title": "Occupancy Claims",
+    "wizard.occupancy_claims.step_title": "Tenure Claims",
     "wizard.occupancy_claims.step_description": "Add persons and relation data",
     "wizard.occupancy_claims.empty_title": "No persons added yet",
     "wizard.occupancy_claims.empty_desc": "Please add the occupants data for this unit\nby clicking the \"Add New Person\" button above",
@@ -738,7 +738,7 @@ EN_TRANSLATIONS = {
     # ===== Navbar & ID Badge =====
     "navbar.tab.completed_claims": "Completed Claims",
     "navbar.tab.cases": "Cases",
-    "navbar.tab.drafts": "Drafts",
+    "navbar.tab.drafts": "Add a claim",
     "cases.tab.drafts": "Drafts",
     "cases.tab.finalized": "Finalized",
     "cases.tab.completed": "Completed",

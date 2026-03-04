@@ -392,8 +392,7 @@ class ClaimComparisonPage(QWidget):
             ("العدد الكلي للمقاسم", data.get("total_units", "-")),
             ("نوع البناء", data.get("building_type", "-")),
             ("حالة البناء", data.get("building_status", "-")),
-            ("الوصف العام", data.get("general_description", "-")),
-            ("وصف الموقع", data.get("location_description", "-")),
+            ("وصف البناء", data.get("general_description", "-")),
         ]
 
         for label_text, value_text in stat_items:

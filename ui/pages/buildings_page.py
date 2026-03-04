@@ -444,7 +444,7 @@ class AddBuildingPage(QWidget):
         # Field 3: رمز البلدة (Subdistrict) - Dropdown from DivisionsService
         sub_container = QVBoxLayout()
         sub_container.setSpacing(6)
-        sub_label = QLabel("رمز البلدة")
+        sub_label = QLabel("رمز الناحية")
         sub_label.setFont(label_font)
         sub_label.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent;")
         self.subdistrict_combo = CodeDisplayCombo()
@@ -459,7 +459,7 @@ class AddBuildingPage(QWidget):
         # Field 4: رمز القرية (Community) - Dropdown from DivisionsService
         comm_container = QVBoxLayout()
         comm_container.setSpacing(6)
-        comm_label = QLabel("رمز القرية")
+        comm_label = QLabel("رمز المدينة")
         comm_label.setFont(label_font)
         comm_label.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent;")
         self.community_combo = CodeDisplayCombo()
@@ -496,7 +496,7 @@ class AddBuildingPage(QWidget):
         # Field 6: رمز البناء (Building Number) - QLineEdit (unique number)
         build_container = QVBoxLayout()
         build_container.setSpacing(6)
-        build_label = QLabel("رمز البناء")
+        build_label = QLabel("رقم البناء")
         build_label.setFont(label_font)
         build_label.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent;")
         self.building_number = QLineEdit()
@@ -867,42 +867,11 @@ class AddBuildingPage(QWidget):
 
         content_row.addLayout(map_section, stretch=1)
 
-        # Section 2: وصف الموقع (center) - QLineEdit for input
-        section_location = QVBoxLayout()
-        section_location.setSpacing(4)
-
-        lbl_location = QLabel("وصف الموقع")
-        lbl_location.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
-        lbl_location.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent;")
-
-        self.site_desc = QTextEdit()
-        self.site_desc.setPlaceholderText("ادخل وصفاً تفصيلياً...")
-        self.site_desc.setFixedHeight(130)  # نفس ارتفاع الخريطة
-        self.site_desc.setStyleSheet("""
-            QTextEdit {
-                background-color: #F8FAFF;
-                border: 1px solid #dcdfe6;
-                border-radius: 8px;
-                padding: 8px 12px;
-                color: #606266;
-                font-size: 10pt;
-            }
-            QTextEdit:focus {
-                border: 1px solid #3890DF;
-            }
-        """)
-
-        section_location.addWidget(lbl_location)
-        section_location.addWidget(self.site_desc)
-        section_location.addStretch(1)  # Push content to top
-
-        content_row.addLayout(section_location, stretch=1)
-
-        # Section 3: الوصف العام (right) - QLineEdit for input
+        # Section 3: وصف البناء (center) - QLineEdit for input
         section_general = QVBoxLayout()
         section_general.setSpacing(4)
 
-        lbl_general = QLabel("الوصف العام")
+        lbl_general = QLabel("وصف البناء")
         lbl_general.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
         lbl_general.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent;")
 
@@ -1458,8 +1427,6 @@ class AddBuildingPage(QWidget):
         # تحميل الأوصاف
         if getattr(self.building, 'general_description', None):
             self.general_desc.setText(self.building.general_description)
-        if getattr(self.building, 'location_description', None):
-            self.site_desc.setText(self.building.location_description)
 
         if self.building.latitude:
             self.latitude_spin.setValue(self.building.latitude)
@@ -1852,7 +1819,7 @@ class AddBuildingPage(QWidget):
             "longitude": self.longitude_spin.value() if self.longitude_spin.value() != 0 else None,
             # Location descriptions (QTextEdit uses toPlainText())
             "general_description": self.general_desc.toPlainText().strip(),
-            "location_description": self.site_desc.toPlainText().strip(),
+            "location_description": "",
         }
 
         if self._polygon_wkt:
@@ -2290,11 +2257,11 @@ class BuildingsListPage(QWidget):
 
         # زر إضافة بناء جديد (أزرق solid)
         # DRY: Exact copy of "Add New Case" button from claims pages (PrimaryButton component)
-        add_btn = PrimaryButton("إضافة بناء جديد", icon_name="icon")
-        add_btn.clicked.connect(self.add_building.emit)
+        self.add_btn = PrimaryButton("إضافة بناء جديد", icon_name="icon")
+        self.add_btn.clicked.connect(self.add_building.emit)
 
         btn_layout.addWidget(btn_field)
-        btn_layout.addWidget(add_btn)
+        btn_layout.addWidget(self.add_btn)
 
         top_row.addLayout(btn_layout)
 
@@ -2573,6 +2540,13 @@ class BuildingsListPage(QWidget):
         """Refresh list."""
         logger.debug("Refreshing buildings list")
         self._load_buildings()
+
+    def configure_for_role(self, role: str):
+        """Enable/disable CRUD buttons based on user role."""
+        self._user_role = role
+        can_create = role in {"admin", "data_manager", "office_clerk", "field_researcher"}
+        if hasattr(self, 'add_btn'):
+            self.add_btn.setEnabled(can_create)
 
     def _load_buildings(self):
         """Load buildings from repository and populate table."""
@@ -2977,11 +2951,13 @@ class BuildingsListPage(QWidget):
         menu.addAction(view_action)
 
         # 2. تعديل - لون #212B36
+        _role = getattr(self, '_user_role', 'admin')
         edit_icon = Icon.load_qicon("edit-01", size=18)
         edit_action = QAction("  تعديل", self)
         if edit_icon:
             edit_action.setIcon(edit_icon)
         edit_action.triggered.connect(lambda: self.edit_building.emit(building))
+        edit_action.setEnabled(_role in {"admin", "data_manager", "office_clerk", "field_researcher"})
         menu.addAction(edit_action)
 
         # 3. حذف - لون #FF4842
@@ -2990,6 +2966,7 @@ class BuildingsListPage(QWidget):
         if delete_icon:
             delete_action.setIcon(delete_icon)
         delete_action.triggered.connect(lambda: self._on_delete_building(building))
+        delete_action.setEnabled(_role in {"admin", "data_manager"})
         menu.addAction(delete_action)
 
         # Apply styles
@@ -3190,6 +3167,10 @@ class BuildingsPage(QWidget):
         logger.debug("Refreshing buildings page")
         self.list_page.refresh()
         self.stacked.setCurrentIndex(0)
+
+    def configure_for_role(self, role: str):
+        """Delegate role configuration to inner list page."""
+        self.list_page.configure_for_role(role)
 
     def _on_add_building(self):
         """Add building."""

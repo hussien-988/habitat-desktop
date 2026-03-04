@@ -297,6 +297,11 @@ class ClaimStep(BaseStep):
         claim_type_field.setStyleSheet(ro_input_style)
         add_field("نوع الحالة", claim_type_field, 0, 2)
 
+        case_category_field = QLineEdit()
+        case_category_field.setReadOnly(True)
+        case_category_field.setStyleSheet(ro_input_style)
+        add_field("حالة القضية", case_category_field, 2, 2)
+
         claim_business_nature_field = QLineEdit()
         claim_business_nature_field.setReadOnly(True)
         claim_business_nature_field.setStyleSheet(ro_input_style)
@@ -384,6 +389,7 @@ class ClaimStep(BaseStep):
         card.claim_person_search = claim_person_search
         card.claim_unit_search = claim_unit_search
         card.claim_type_field = claim_type_field
+        card.case_category_field = case_category_field
         card.claim_business_nature_field = claim_business_nature_field
         card.claim_status_field = claim_status_field
         card.claim_source_field = claim_source_field
@@ -438,6 +444,38 @@ class ClaimStep(BaseStep):
         elif is_occupant:
             code = _find_combo_code_by_english("ClaimType", "Occupancy")
             card.claim_type_field.setText(get_claim_type_display(code))
+
+        # Case category: closed for ownership, open otherwise
+        if is_ownership:
+            card.case_category_field.setText("مغلقة")
+            card.case_category_field.setStyleSheet("""
+                QLineEdit {
+                    border: 1px solid #E0E6ED;
+                    border-radius: 8px;
+                    padding: 10px;
+                    background-color: #e8f5e9;
+                    color: #2e7d32;
+                    font-size: 14px;
+                    font-weight: bold;
+                    min-height: 23px;
+                    max-height: 23px;
+                }
+            """)
+        else:
+            card.case_category_field.setText("مفتوحة")
+            card.case_category_field.setStyleSheet("""
+                QLineEdit {
+                    border: 1px solid #E0E6ED;
+                    border-radius: 8px;
+                    padding: 10px;
+                    background-color: #fff3e0;
+                    color: #e65100;
+                    font-size: 14px;
+                    font-weight: bold;
+                    min-height: 23px;
+                    max-height: 23px;
+                }
+            """)
 
         # Claim status
         claim_status = claim_data.get('claimStatus') or claim_data.get('caseStatus')
@@ -687,6 +725,38 @@ class ClaimStep(BaseStep):
         if claim_type_english:
             code = _find_combo_code_by_english("ClaimType", claim_type_english)
             first_card.claim_type_field.setText(get_claim_type_display(code))
+
+        # Case category: closed for ownership, open otherwise
+        if owners_or_heirs:
+            first_card.case_category_field.setText("مغلقة")
+            first_card.case_category_field.setStyleSheet("""
+                QLineEdit {
+                    border: 1px solid #E0E6ED;
+                    border-radius: 8px;
+                    padding: 10px;
+                    background-color: #e8f5e9;
+                    color: #2e7d32;
+                    font-size: 14px;
+                    font-weight: bold;
+                    min-height: 23px;
+                    max-height: 23px;
+                }
+            """)
+        else:
+            first_card.case_category_field.setText("مفتوحة")
+            first_card.case_category_field.setStyleSheet("""
+                QLineEdit {
+                    border: 1px solid #E0E6ED;
+                    border-radius: 8px;
+                    padding: 10px;
+                    background-color: #fff3e0;
+                    color: #e65100;
+                    font-size: 14px;
+                    font-weight: bold;
+                    min-height: 23px;
+                    max-height: 23px;
+                }
+            """)
 
         # Case status: New
         status_code = _find_combo_code_by_english("ClaimStatus", "New")

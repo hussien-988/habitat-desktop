@@ -596,11 +596,10 @@ class BuildingSelectionStep(BaseStep):
 
         content_row.addLayout(map_section, stretch=1)
 
-        # Section 2: وصف الموقع (center)
-        section_location, self.ui_location_desc = _create_info_section(tr("wizard.building.location_desc"), tr("wizard.building.location_desc"))
-        content_row.addLayout(section_location, stretch=1)
+        # Section 2: وصف الموقع — removed per comments doc
+        _, self.ui_location_desc = _create_info_section(tr("wizard.building.location_desc"), tr("wizard.building.location_desc"))
 
-        # Section 3: الوصف العام (right)
+        # Section 3: وصف البناء (center)
         section_general, self.ui_general_desc = _create_info_section(tr("wizard.building.general_desc"), tr("wizard.building.general_desc_placeholder"))
         content_row.addLayout(section_general, stretch=1)
 
