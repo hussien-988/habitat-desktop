@@ -253,7 +253,7 @@ class BuildingListPanel(QFrame):
             self.detail_coords.setText(tr("page.map.coords_unavailable"))
 
 
-def get_leaflet_html(tile_server_url: str, buildings_geojson: str) -> str:
+def get_leaflet_html(tile_server_url: str, buildings_geojson: str, **kwargs) -> str:
     """
     Generate Leaflet HTML with offline tiles and local Leaflet library.
 
@@ -263,7 +263,7 @@ def get_leaflet_html(tile_server_url: str, buildings_geojson: str) -> str:
     Best Practice (DRY): Delegates to centralized HTML generator
     """
     from services.leaflet_html_generator import generate_leaflet_html
-    return generate_leaflet_html(tile_server_url, buildings_geojson)
+    return generate_leaflet_html(tile_server_url, buildings_geojson, **kwargs)
 
     # Original implementation (deprecated, keeping as fallback):
     return f'''
