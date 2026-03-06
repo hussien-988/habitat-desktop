@@ -65,7 +65,10 @@ class LeafletHTMLGenerator:
         neighborhoods_geojson: str = None,  # GeoJSON for neighborhood boundaries overlay
         selected_neighborhood_code: str = None,  # Highlight this neighborhood
         skip_fit_bounds: bool = False,  # Skip auto fitBounds (respect zoom param exactly)
-        tile_layer_url: str = None  # Separate URL for map tiles (defaults to tile_server_url)
+        tile_layer_url: str = None,  # Separate URL for map tiles (defaults to tile_server_url)
+        boundaries_geojson: str = None,  # GeoJSON for administrative boundary polygons
+        boundary_level: str = None,  # Level name: 'governorates'|'subdistricts'|etc.
+        places_json: str = None  # JSON array of populated places for map labels
     ) -> str:
         """
         Generate Leaflet HTML with unified geometry display.
@@ -141,7 +144,10 @@ class LeafletHTMLGenerator:
         neighborhoods_geojson,
         selected_neighborhood_code,
         skip_fit_bounds,
-        tile_layer_url
+        tile_layer_url,
+        boundaries_geojson,
+        boundary_level,
+        places_json
     )}
 </body>
 </html>
@@ -546,7 +552,10 @@ class LeafletHTMLGenerator:
         neighborhoods_geojson: str = None,
         selected_neighborhood_code: str = None,
         skip_fit_bounds: bool = False,
-        tile_layer_url: str = None
+        tile_layer_url: str = None,
+        boundaries_geojson: str = None,
+        boundary_level: str = None,
+        places_json: str = None
     ) -> str:
         """Get JavaScript code for map initialization."""
         import json
@@ -883,6 +892,12 @@ class LeafletHTMLGenerator:
         // Neighborhoods overlay layer (zoom-based visibility)
         {LeafletHTMLGenerator._get_neighborhoods_layer_js(neighborhoods_geojson, selected_neighborhood_code, enable_drawing) if neighborhoods_geojson else '// No neighborhoods overlay'}
 
+        // Administrative boundary layer (polygons from Shapefiles)
+        {LeafletHTMLGenerator._get_boundaries_layer_js(boundaries_geojson, boundary_level) if boundaries_geojson else '// No boundary layer'}
+
+        // Populated places layer (city/town labels at low zoom)
+        {LeafletHTMLGenerator._get_places_layer_js(places_json) if places_json else '// No places layer'}
+
         // Fit to buildings if any (skip when initial_bounds or skip_fit_bounds set)
         var skipFitBounds = {'true' if skip_fit_bounds else 'false'};
         if (!skipFitBounds && !initialBounds && buildingsData.features && buildingsData.features.length > 0) {{
@@ -1138,6 +1153,155 @@ class LeafletHTMLGenerator:
 
             console.log('Existing polygon displayed (will be replaced when user draws new one)');
         }}
+'''
+
+    @staticmethod
+    def _get_boundaries_layer_js(boundaries_geojson: str, level: str = None) -> str:
+        """
+        Generate JavaScript for administrative boundary polygon layer.
+
+        Features:
+        - Zoom-based visibility (hidden below zoom 7 for governorates, 10 for others)
+        - Subtle fill with visible border
+        - Arabic name tooltip on hover
+        - Added to layer control overlay
+        """
+        try:
+            boundaries_dict = json.loads(boundaries_geojson)
+            boundaries_json = json.dumps(boundaries_dict)
+        except Exception:
+            return '// Invalid boundaries GeoJSON'
+
+        # Zoom threshold: governorates visible earlier, sub-levels only at higher zoom
+        zoom_threshold = 7 if level == 'governorates' else 10
+
+        # Arabic label field depends on the level
+        # Governorates: NAME_AR, PCODE
+        # Subdistricts: NAME_AR, ADM3_AR (if present)
+        # Neighbourhoods: NAME_AR, ADM4_AR (if present)
+        layer_label_ar = {
+            'governorates':  'حدود المحافظات',
+            'districts':     'حدود المناطق',
+            'subdistricts':  'حدود النواحي',
+            'neighbourhoods':'حدود الأحياء',
+            'country':       'حدود الدولة',
+        }.get(level or '', 'الحدود الإدارية')
+
+        return f'''
+        // Administrative boundary layer — level: {level or 'unknown'}
+        var boundaryData = {boundaries_json};
+        var boundaryZoomThreshold = {zoom_threshold};
+
+        var boundaryStyle = {{
+            color: '#3388ff',
+            weight: 1.5,
+            opacity: 0.7,
+            fillColor: '#3388ff',
+            fillOpacity: 0.05
+        }};
+
+        var boundaryLayer = L.geoJSON(boundaryData, {{
+            style: boundaryStyle,
+            onEachFeature: function(feature, layer) {{
+                var p = feature.properties;
+                var nameAr = p.NAME_AR || p.ADM3_AR || p.ADM4_AR || p.name_ar || '';
+                var pcode = p.PCODE || p.ADM1_PCODE || p.ADM3_PCODE || '';
+                if (nameAr) {{
+                    layer.bindTooltip(nameAr, {{
+                        sticky: true,
+                        direction: 'auto',
+                        className: 'boundary-tooltip'
+                    }});
+                }}
+                layer.on('mouseover', function() {{
+                    this.setStyle({{ weight: 2.5, fillOpacity: 0.15 }});
+                }});
+                layer.on('mouseout', function() {{
+                    this.setStyle(boundaryStyle);
+                }});
+            }}
+        }});
+
+        function updateBoundaryVisibility() {{
+            if (map.getZoom() >= boundaryZoomThreshold) {{
+                if (!map.hasLayer(boundaryLayer)) {{
+                    boundaryLayer.addTo(map);
+                }}
+            }} else {{
+                if (map.hasLayer(boundaryLayer)) {{
+                    map.removeLayer(boundaryLayer);
+                }}
+            }}
+        }}
+
+        map.on('zoomend', updateBoundaryVisibility);
+        updateBoundaryVisibility();
+
+        // Register in overlayMaps for layer control (if it exists)
+        if (typeof overlayMaps !== 'undefined') {{
+            overlayMaps['{layer_label_ar}'] = boundaryLayer;
+        }}
+
+        console.log('Boundary layer loaded: {level or "unknown"}, ' + (boundaryData.features ? boundaryData.features.length : 0) + ' features');
+'''
+
+    @staticmethod
+    def _get_places_layer_js(places_json: str) -> str:
+        """
+        Generate JavaScript for populated places layer (city/town name labels).
+
+        Shows circle markers with Arabic name tooltips at zoom 8-12.
+        Capitals use a larger, orange marker. Other places use a small grey marker.
+        Layer auto-hides when zooming into building level (zoom > 12).
+        """
+        try:
+            places_list = json.loads(places_json)
+            places_embedded = json.dumps(places_list, ensure_ascii=False)
+        except Exception:
+            return '// Invalid places JSON'
+
+        return f'''
+        // Populated places layer — visible at zoom 8-12
+        var placesData = {places_embedded};
+        var placesLayer = L.featureGroup();
+
+        if (placesData && placesData.length > 0) {{
+            placesData.forEach(function(place) {{
+                if (!place.lat || !place.lng) return;
+                var isCapital = place.is_capital === true;
+                var marker = L.circleMarker([place.lat, place.lng], {{
+                    radius:      isCapital ? 5 : 3,
+                    color:       isCapital ? '#E65100' : '#757575',
+                    fillColor:   isCapital ? '#FF6B35' : '#BDBDBD',
+                    fillOpacity: 0.85,
+                    weight:      1
+                }});
+                var label = place.name_ar || place.name_en || '';
+                if (label) {{
+                    marker.bindTooltip(label, {{
+                        permanent: false,
+                        sticky: true,
+                        direction: 'top',
+                        className: 'place-label-tooltip'
+                    }});
+                }}
+                placesLayer.addLayer(marker);
+            }});
+        }}
+
+        function updatePlacesVisibility() {{
+            var zoom = map.getZoom();
+            if (zoom >= 8 && zoom <= 12) {{
+                if (!map.hasLayer(placesLayer)) placesLayer.addTo(map);
+            }} else {{
+                if (map.hasLayer(placesLayer)) map.removeLayer(placesLayer);
+            }}
+        }}
+
+        map.on('zoomend', updatePlacesVisibility);
+        updatePlacesVisibility();
+
+        console.log('Places layer loaded: ' + (placesData ? placesData.length : 0) + ' places');
 '''
 
     @staticmethod

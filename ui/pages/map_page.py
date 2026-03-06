@@ -885,6 +885,16 @@ class MapPage(QWidget):
             if tile_bounds and len(tile_bounds) == 4:
                 initial_bounds = [[tile_bounds[1], tile_bounds[0]], [tile_bounds[3], tile_bounds[2]]]
 
+            # Load administrative boundary layer (governorates from local GeoJSON)
+            from services import boundary_service
+            boundaries_geojson = None
+            boundary_level = 'governorates'
+            if boundary_service.is_available(boundary_level):
+                boundaries_geojson = boundary_service.get(boundary_level)
+
+            # Load populated places for map labels at zoom 8-12
+            places_json = boundary_service.get_places_json() if boundary_service.is_available('populated_places') else None
+
             # Generate and load HTML
             geojson = self._buildings_to_geojson(geo_buildings)
             html = get_leaflet_html(
@@ -892,7 +902,10 @@ class MapPage(QWidget):
                 geojson,
                 tile_layer_url=self.tile_url,
                 neighborhoods_geojson=neighborhoods_geojson,
-                initial_bounds=initial_bounds
+                initial_bounds=initial_bounds,
+                boundaries_geojson=boundaries_geojson,
+                boundary_level=boundary_level,
+                places_json=places_json
             )
 
             self.web_view.setHtml(html, QUrl(self.local_asset_url))

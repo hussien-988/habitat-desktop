@@ -706,8 +706,24 @@ class BuildingMapDialog(BaseMapDialog):
             match = self._match_neighborhood(search_text)
 
             if not match:
-                logger.warning(f"No neighborhood match for: '{search_text}'")
-                Toast.show_toast(self, f"لم يتم العثور على الحي: {search_text}", "warning")
+                # Fallback: search populated places (local, no API required)
+                from services import boundary_service
+                places = boundary_service.get_places_list()
+                place_matches = [
+                    p for p in places
+                    if search_text in p.get('name_ar', '')
+                    or search_text.lower() in p.get('name_en', '').lower()
+                ]
+                if place_matches:
+                    best = place_matches[0]
+                    label = best.get('name_ar') or best.get('name_en') or search_text
+                    logger.info(f"Place match '{search_text}' -> {label} ({best.get('lat')}, {best.get('lng')})")
+                    self._fly_to(float(best['lat']), float(best['lng']), zoom=13)
+                    Toast.show_toast(self, label, "success")
+                    return
+
+                logger.warning(f"No match for: '{search_text}'")
+                Toast.show_toast(self, f"لم يتم العثور على: {search_text}", "warning")
                 return
 
             logger.info(f"Matched '{search_text}' -> {match['name']} (code: {match['code']})")
