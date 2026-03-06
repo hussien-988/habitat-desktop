@@ -419,6 +419,7 @@ class Navbar(QFrame):
             "navbar.tab.residential_units",
             "navbar.tab.duplicates",
             "navbar.tab.user_management",
+            "navbar.tab.map",
         ]
         tab_titles = [tr(key) for key in self._tab_keys]
 
@@ -596,12 +597,12 @@ class Navbar(QFrame):
 
     # Role-based tab visibility
     TAB_PERMISSIONS = {
-        "admin": [0, 1, 2, 3, 4, 5],
-        "data_manager": [0, 1, 2, 3, 4, 5],
-        "office_clerk": [1],
-        "field_supervisor": [0, 1, 2, 3],
-        "field_researcher": [1, 2],
-        "analyst": [0, 2, 3, 4],
+        "admin": [0, 1, 2, 3, 4, 5, 6],
+        "data_manager": [0, 1, 2, 3, 4, 5, 6],
+        "office_clerk": [1, 6],
+        "field_supervisor": [0, 1, 2, 3, 6],
+        "field_researcher": [1, 2, 6],
+        "analyst": [0, 2, 3, 4, 6],
     }
 
     def configure_for_role(self, role: str):

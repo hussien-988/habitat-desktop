@@ -77,15 +77,34 @@ class DivisionsService:
 
     def get_communities(self, gov_code: str, dist_code: str, subdist_code: str) -> List[Tuple[str, str, str]]:
         """Get communities for a subdistrict as [(code, name_en, name_ar)]."""
-        api = self._get_api_client()
-        items = api.get_communities(
-            governorate_code=gov_code, district_code=dist_code,
-            sub_district_code=subdist_code
-        )
-        return [
-            (c.get("code", ""), c.get("nameEnglish", ""), c.get("nameArabic", ""))
-            for c in items if c.get("isActive", True)
-        ]
+        try:
+            api = self._get_api_client()
+            items = api.get_communities(
+                governorate_code=gov_code, district_code=dist_code,
+                sub_district_code=subdist_code
+            )
+            result = [
+                (c.get("code", ""), c.get("nameEnglish", ""), c.get("nameArabic", ""))
+                for c in items if c.get("isActive", True)
+            ]
+            if result:
+                return result
+        except Exception:
+            pass
+
+        # Local fallback from populated places dataset
+        try:
+            from services import boundary_service
+            places = boundary_service.get_places_list(admin3_pcode=subdist_code)
+            if places:
+                return [
+                    (p.get('pcode', ''), p.get('name_en', ''), p.get('name_ar', ''))
+                    for p in places
+                ]
+        except Exception:
+            pass
+
+        return []
 
     # ==================== Name Lookups ====================
 

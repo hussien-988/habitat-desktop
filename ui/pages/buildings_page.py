@@ -2544,9 +2544,10 @@ class BuildingsListPage(QWidget):
     def configure_for_role(self, role: str):
         """Enable/disable CRUD buttons based on user role."""
         self._user_role = role
-        can_create = role in {"admin", "data_manager", "office_clerk", "field_researcher"}
+        can_create = role in {"admin", "data_manager", "field_researcher"}
         if hasattr(self, 'add_btn'):
             self.add_btn.setEnabled(can_create)
+            self.add_btn.setVisible(can_create)
 
     def _load_buildings(self):
         """Load buildings from repository and populate table."""

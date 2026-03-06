@@ -322,6 +322,7 @@ class MainWindow(QMainWindow):
             3: Pages.UNITS,
             4: Pages.DUPLICATES,
             5: Pages.USER_MANAGEMENT,
+            6: Pages.MAP_VIEW,
         }
 
     def _setup_layout(self):
