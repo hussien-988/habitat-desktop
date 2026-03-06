@@ -675,7 +675,9 @@ class LeafletHTMLGenerator:
             minZoom: {effective_min_zoom},
             fadeAnimation: {'true' if MapConstants.MAP_FADE_ANIMATION else 'false'},
             zoomAnimation: {'true' if MapConstants.MAP_ZOOM_ANIMATION else 'false'},
-            zoomAnimationThreshold: {MapConstants.MAP_ZOOM_ANIMATION_THRESHOLD}
+            zoomAnimationThreshold: {MapConstants.MAP_ZOOM_ANIMATION_THRESHOLD},
+            maxBounds: [[{MapConstants.MIN_LAT}, {MapConstants.MIN_LON}], [{MapConstants.MAX_LAT}, {MapConstants.MAX_LON}]],
+            maxBoundsViscosity: 1.0
         }}).setView([{center_lat}, {center_lon}], {zoom});
 
         var initialBounds = {initial_bounds_js};
