@@ -318,6 +318,15 @@ class BuildingMapDialog(BaseMapDialog):
             # Load neighborhoods for map overlay (DRY - shared helper from BaseMapDialog)
             neighborhoods_geojson = self.load_neighborhoods_geojson(auth_token=self._auth_token)
 
+            # Load local boundary layers (neighbourhood polygons + city name labels)
+            from services import boundary_service
+            boundaries_geojson = boundary_service.get('neighbourhoods') if boundary_service.is_available('neighbourhoods') else None
+            places_json = boundary_service.get_places_json() if boundary_service.is_available('populated_places') else None
+
+            # Fallback: if API returned no neighborhoods, use local polygon file as overlay
+            if not neighborhoods_geojson and boundaries_geojson:
+                neighborhoods_geojson = boundaries_geojson
+
             # Generate map HTML using LeafletHTMLGenerator
             html = generate_leaflet_html(
                 tile_server_url=tile_server_url.rstrip('/'),
@@ -332,6 +341,9 @@ class BuildingMapDialog(BaseMapDialog):
                 enable_viewport_loading=(not self._is_view_only),
                 enable_drawing=False,
                 neighborhoods_geojson=neighborhoods_geojson,
+                boundaries_geojson=boundaries_geojson,
+                boundary_level='neighbourhoods',
+                places_json=places_json,
                 skip_fit_bounds=self._is_view_only
             )
 
