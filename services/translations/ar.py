@@ -278,6 +278,8 @@ AR_TRANSLATIONS = {
     "mapping.relation_type.guest": "ضيف",
 
     # ===== Wizard - Step Names =====
+    "wizard.step.building_info": "معلومات البناء",
+    "wizard.step.applicant_info": "معلومات مقدم الطلب",
     "wizard.step.building_registration": "اختيار بناء",
     "wizard.step.property_unit": "المقاسم",
     "wizard.step.household_details": "تفاصيل الاشغال",
@@ -288,16 +290,25 @@ AR_TRANSLATIONS = {
     "wizard.step.claim": "المطالبة",
     "wizard.step.final_review": "المراجعة النهائية",
 
+    # ===== Applicant Info Step =====
+    "wizard.applicant.subtitle": "أدخل بيانات الشخص الزائر",
+    "wizard.applicant.full_name": "الاسم الكامل",
+    "wizard.applicant.national_id": "الرقم الوطني",
+    "wizard.applicant.phone": "رقم الهاتف",
+    "wizard.applicant.email": "البريد الإلكتروني",
+    "wizard.applicant.in_person": "زيارة حضورية",
+
     # Wizard General
     "wizard.title": "معالج المسح المكتبي - Office Survey",
     "wizard.button.finish_survey": "إنهاء المسح",
     "wizard.button.save": "حفظ",
     "wizard.button.save_changes": "حفظ التعديلات",
     "wizard.button.cancel_edit": "إلغاء",
+    "wizard.button.add_case": "إضافة مطالبة",
     "wizard.button.previous": "السابق",
     "wizard.button.next": "التالي",
-    "wizard.header.add_new_case": "إضافة حالة جديدة",
-    "wizard.header.title": "إضافة حالة جديدة",
+    "wizard.header.add_new_case": "إضافة مطالبة",
+    "wizard.header.title": "إضافة مطالبة",
     "wizard.header.completed_claims": "المطالبات المكتملة",
     "wizard.header.breadcrumb": "المطالبات المكتملة",
     "wizard.header.select_building": "اختيار المبنى",
@@ -318,7 +329,9 @@ AR_TRANSLATIONS = {
     # ===== Building Selection Step =====
     "wizard.building.card_title": "بيانات البناء",
     "wizard.building.card_subtitle": "ابحث عن معلومات البناء والموقع الجغرافي",
-    "wizard.building.code_label": "رمز البناء",
+    "wizard.building.subtitle": "مراجعة بيانات البناء المختار",
+    "wizard.building.coordinates": "الإحداثيات",
+    "wizard.building.code_label": "رقم البناء",
     "wizard.building.search_placeholder": "ابحث عن رمز البناء ...",
     "wizard.building.search_on_map": "بحث على الخريطة",
     "wizard.building.type": "نوع البناء",
@@ -494,7 +507,7 @@ AR_TRANSLATIONS = {
     "wizard.review.no_survey_id": "لم يتم العثور على معرف المسح. لا يمكن إنهاء المسح.",
     "wizard.review.step_title": "المراجعة النهائية",
     "wizard.review.step_description": "راجع جميع البيانات المدخلة قبل الإرسال",
-    "wizard.review.building_code": "رمز البناء",
+    "wizard.review.building_code": "رقم البناء",
     "wizard.review.status.active": "نشط",
     "wizard.review.status.completed": "مكتمل",
     "wizard.review.status.pending": "معلق",
@@ -648,7 +661,7 @@ AR_TRANSLATIONS = {
 
     # ===== Drafts Page =====
     "page.drafts.title": "المسودة",
-    "page.drafts.add_new": "+ إضافة حالة جديدة",
+    "page.drafts.add_new": "+ إضافة مطالبة",
     "page.drafts.filter": "الفلتر",
     "page.drafts.building_code": "رمز المبنى",
     "page.drafts.search_placeholder": "ابحث عن رمز المبنى ...",
@@ -742,11 +755,14 @@ AR_TRANSLATIONS = {
     "cases.tab.drafts": "مسودات",
     "cases.tab.finalized": "تمت المعالجة",
     "cases.tab.completed": "مكتمل",
+    "cases.tab.open": "مفتوحة",
+    "cases.tab.closed": "مغلقة",
     "navbar.tab.buildings": "المباني",
     "navbar.tab.residential_units": "الوحدات السكنية",
     "navbar.tab.duplicates": "التكرارات",
     "navbar.tab.user_management": "إدارة المستخدمين",
     "navbar.tab.map": "الخريطة",
+    "navbar.tab.field_assignment": "تجهيز العمل الميداني",
     "navbar.search.default": "ابحث عن الرمز أو الاسم...",
     "navbar.search.by_name": "ابحث عن اسم المستلم...",
     "navbar.search.by_claim_id": "ابحث برقم المطالبة...",
@@ -768,6 +784,16 @@ AR_TRANSLATIONS = {
     "navbar.menu.security_policies": "سياسات الأمان",
     "navbar.menu.data_management": "إدارة البيانات المرجعية",
     "navbar.menu.logout": "تسجيل خروج",
+
+    # ===== Building Documents =====
+    "building.docs.section_title": "وثائق المبنى",
+    "building.docs.none": "لا توجد وثائق",
+    "building.docs.view_details": "عرض التفاصيل",
+
+    # ===== Review Step - Case Status =====
+    "review.case.closed": "القضية مُغلَقة — تم تسجيل ادعاء الحيازة",
+    "review.case.open": "القضية مفتوحة — يُنتظر الوصول للمالك",
+    "review.applicant.title": "مقدم الطلب",
 
     # ===== Case Details Page =====
     "page.case_details.title": "تفاصيل الحالة",

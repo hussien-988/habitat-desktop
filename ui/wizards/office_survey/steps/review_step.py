@@ -84,6 +84,14 @@ class ReviewStep(BaseStep):
         scroll_layout.setContentsMargins(0, 0, 0, 0)
         scroll_layout.setSpacing(20)  # Increased spacing for clear card separation
 
+        # Case status banner (populated in populate_data)
+        self.case_status_banner = self._create_case_status_banner()
+        scroll_layout.addWidget(self.case_status_banner)
+
+        # Applicant info card
+        self.applicant_card = self._create_applicant_card()
+        scroll_layout.addWidget(self.applicant_card)
+
         # Create summary cards — building split into 3 separate cards
         # Building Card 1: Header + code + address
         self.building_info_card = self._create_building_info_card()
@@ -123,6 +131,65 @@ class ReviewStep(BaseStep):
         lbl.setFont(create_font(size=FontManager.WIZARD_CARD_LABEL, weight=FontManager.WEIGHT_SEMIBOLD))
         lbl.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent; border: none;")
         return lbl
+
+    def _create_case_status_banner(self) -> QFrame:
+        """Create a banner showing whether the case is open or closed."""
+        banner = QFrame()
+        banner.setObjectName("caseStatusBanner")
+        banner.setFixedHeight(48)
+        banner.setStyleSheet("""
+            QFrame#caseStatusBanner {
+                background-color: #FFF7ED;
+                border: 1px solid #FED7AA;
+                border-radius: 8px;
+            }
+        """)
+        b_layout = QHBoxLayout(banner)
+        b_layout.setContentsMargins(16, 0, 16, 0)
+
+        self._case_status_label = QLabel(tr("review.case.open"))
+        self._case_status_label.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
+        self._case_status_label.setStyleSheet("color: #C2410C; background: transparent; border: none;")
+        self._case_status_label.setAlignment(Qt.AlignVCenter | Qt.AlignRight)
+        b_layout.addWidget(self._case_status_label)
+        return banner
+
+    def _create_applicant_card(self) -> QFrame:
+        """Create a summary card for applicant (visitor) information."""
+        card = QFrame()
+        card.setLayoutDirection(Qt.RightToLeft)
+        card.setStyleSheet(f"""
+            QFrame {{
+                background-color: {Colors.SURFACE};
+                border: none;
+                border-radius: 12px;
+            }}
+        """)
+        self._add_shadow(card)
+
+        card_layout = QVBoxLayout(card)
+        card_layout.setContentsMargins(20, 16, 20, 16)
+        card_layout.setSpacing(12)
+
+        header_row = QHBoxLayout()
+        title_lbl = QLabel(tr("review.applicant.title"))
+        title_lbl.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
+        title_lbl.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent; border: none;")
+        header_row.addWidget(title_lbl)
+        header_row.addStretch()
+        card_layout.addLayout(header_row)
+
+        divider = QFrame()
+        divider.setFrameShape(QFrame.HLine)
+        divider.setStyleSheet("background-color: #E2E8F0; border: none;")
+        divider.setFixedHeight(1)
+        card_layout.addWidget(divider)
+
+        self._applicant_grid = QGridLayout()
+        self._applicant_grid.setSpacing(8)
+        card_layout.addLayout(self._applicant_grid)
+
+        return card
 
     def _add_shadow(self, widget: QWidget):
         """Add drop shadow effect to a widget."""
@@ -440,11 +507,77 @@ class ReviewStep(BaseStep):
 
     def _populate_review(self):
         """Populate all summary cards with data from context."""
+        self._populate_case_status_banner()
+        self._populate_applicant_card()
         self._populate_building_card()
         self._populate_unit_card()
         self._populate_household_card()
         self._populate_persons_card()
         self._populate_claim_card()
+
+    def _populate_case_status_banner(self):
+        """Update case status banner based on whether a claim/owner exists."""
+        has_owner = False
+        if self.context.persons:
+            for p in self.context.persons:
+                role = p.get('person_role') or p.get('relationship_type')
+                if _is_owner_relation(role):
+                    has_owner = True
+                    break
+
+        if has_owner:
+            self._case_status_label.setText(tr("review.case.closed"))
+            self._case_status_label.setStyleSheet(
+                "color: #15803D; background: transparent; border: none;"
+            )
+            self.case_status_banner.setStyleSheet("""
+                QFrame#caseStatusBanner {
+                    background-color: #F0FDF4;
+                    border: 1px solid #BBF7D0;
+                    border-radius: 8px;
+                }
+            """)
+        else:
+            self._case_status_label.setText(tr("review.case.open"))
+            self._case_status_label.setStyleSheet(
+                "color: #C2410C; background: transparent; border: none;"
+            )
+            self.case_status_banner.setStyleSheet("""
+                QFrame#caseStatusBanner {
+                    background-color: #FFF7ED;
+                    border: 1px solid #FED7AA;
+                    border-radius: 8px;
+                }
+            """)
+
+    def _populate_applicant_card(self):
+        """Populate the applicant summary card from context.applicant."""
+        self._clear_layout(self._applicant_grid)
+
+        applicant = getattr(self.context, 'applicant', None)
+        if not applicant:
+            no_data = QLabel("-")
+            no_data.setFont(create_font(size=FontManager.SIZE_BODY))
+            no_data.setStyleSheet(f"color: {Colors.TEXT_SECONDARY}; background: transparent; border: none;")
+            self._applicant_grid.addWidget(no_data, 0, 0)
+            return
+
+        fields = [
+            (tr("wizard.applicant.full_name"), applicant.get("full_name", "-")),
+            (tr("wizard.applicant.national_id"), applicant.get("national_id", "-")),
+            (tr("wizard.applicant.phone"), applicant.get("phone", "-")),
+            (tr("wizard.applicant.email"), applicant.get("email", "-")),
+        ]
+
+        for row, (label_text, value_text) in enumerate(fields):
+            lbl = QLabel(label_text + ":")
+            lbl.setFont(create_font(size=FontManager.WIZARD_CARD_LABEL, weight=FontManager.WEIGHT_SEMIBOLD))
+            lbl.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent; border: none;")
+            val = QLabel(value_text or "-")
+            val.setFont(create_font(size=FontManager.WIZARD_CARD_LABEL, weight=FontManager.WEIGHT_REGULAR))
+            val.setStyleSheet(f"color: {Colors.TEXT_SECONDARY}; background: transparent; border: none;")
+            self._applicant_grid.addWidget(lbl, row // 2, (row % 2) * 2)
+            self._applicant_grid.addWidget(val, row // 2, (row % 2) * 2 + 1)
 
     def _populate_building_card(self):
         """Populate 3 separate building cards matching BuildingSelectionStep."""

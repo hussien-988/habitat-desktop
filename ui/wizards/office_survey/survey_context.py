@@ -57,6 +57,12 @@ class SurveyContext(WizardContext):
         # Clerk information
         self.clerk_id: Optional[str] = None
 
+        # Applicant (visitor) information
+        self.applicant: Optional[Dict] = None   # {full_name, national_id, phone, email, in_person}
+
+        # Case status: 1=Open (no owner claim), 2=Closed (owner claim registered)
+        self.case_status: int = 1
+
     def _get_reference_prefix(self) -> str:
         """Override to use survey-specific prefix."""
         return "SRV"
@@ -80,7 +86,9 @@ class SurveyContext(WizardContext):
             "claim_data": self.claim_data,
             "claims": self.claims,
             "finalize_response": self.finalize_response,
-            "clerk_id": self.clerk_id
+            "clerk_id": self.clerk_id,
+            "applicant": self.applicant,
+            "case_status": self.case_status
         }
 
         # Merge and return
@@ -105,6 +113,8 @@ class SurveyContext(WizardContext):
         ctx.claims = data.get("claims", [])
         ctx.finalize_response = data.get("finalize_response")
         ctx.clerk_id = data.get("clerk_id")
+        ctx.applicant = data.get("applicant")
+        ctx.case_status = data.get("case_status", 1)
 
         building_data = data.get("building")
         if building_data and isinstance(building_data, dict):

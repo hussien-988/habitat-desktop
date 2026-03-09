@@ -412,14 +412,13 @@ class Navbar(QFrame):
         layout.setSpacing(NavbarDimensions.TAB_GAP)  # 24px gap between tabs (Figma)
 
         # Tab titles (translatable)
+        # Index mapping: 0=claims, 1=cases, 2=duplicates, 3=user_management, 4=field_assignment
         self._tab_keys = [
             "navbar.tab.completed_claims",
             "navbar.tab.cases",
-            "navbar.tab.buildings",
-            "navbar.tab.residential_units",
             "navbar.tab.duplicates",
             "navbar.tab.user_management",
-            "navbar.tab.map",
+            "navbar.tab.field_assignment",
         ]
         tab_titles = [tr(key) for key in self._tab_keys]
 
@@ -596,13 +595,14 @@ class Navbar(QFrame):
         """)
 
     # Role-based tab visibility
+    # Tab indices: 0=claims, 1=cases, 2=duplicates, 3=user_management, 4=field_assignment
     TAB_PERMISSIONS = {
-        "admin": [0, 1, 2, 3, 4, 5, 6],
-        "data_manager": [0, 1, 2, 3, 4, 5, 6],
-        "office_clerk": [1, 6],
-        "field_supervisor": [0, 1, 2, 3, 6],
-        "field_researcher": [1, 2, 6],
-        "analyst": [0, 2, 3, 4, 6],
+        "admin":            [0, 1, 2, 3, 4],
+        "data_manager":     [0, 1, 2, 4],
+        "office_clerk":     [1],
+        "field_supervisor": [0, 1, 4],
+        "field_researcher": [1],
+        "analyst":          [0, 2],
     }
 
     def configure_for_role(self, role: str):

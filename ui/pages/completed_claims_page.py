@@ -24,6 +24,7 @@ from ..components.claim_list_card import ClaimListCard
 from ..components.primary_button import PrimaryButton
 from ..font_utils import create_font, FontManager
 from ..style_manager import StyleManager
+from services.translation_manager import tr
 
 
 class CompletedClaimsPage(QWidget):
@@ -152,7 +153,7 @@ class CompletedClaimsPage(QWidget):
 
         # Add button - Using reusable PrimaryButton component (DRY + SOLID)
         # Figma: 199×48px, padding 24×12, font 16px, icon instead of "+"
-        add_btn = PrimaryButton("إضافة حالة جديدة", icon_name="icon")
+        add_btn = PrimaryButton(tr("wizard.button.add_case"), icon_name="icon")
         add_btn.clicked.connect(self.add_claim_clicked.emit)
         layout.addWidget(add_btn)
 
@@ -264,16 +265,16 @@ class CompletedClaimsPage(QWidget):
                 if result.success and result.data:
                     summaries.extend(result.data)
             for s in summaries:
-                status_int = s.get("claimStatus") or s.get("status") or 0
+                status_int = s.get("caseStatus") or 0
                 status_str = "approved" if status_int == 5 else "rejected"
-                date_raw = s.get("createdAt", "")
+                date_raw = s.get("createdAt", s.get("surveyDate", ""))
                 date_str = date_raw.split("T")[0] if "T" in date_raw else date_raw
                 cid = s.get("claimId", "N/A")
                 self.claims_data.append({
                     "claim_id": cid,
                     "claim_uuid": cid,
                     "survey_id": s.get("surveyId", ""),
-                    "claimant_name": s.get("primaryClaimantName") or "غير محدد",
+                    "claimant_name": s.get("fullNameArabic") or s.get("primaryClaimantName") or "غير محدد",
                     "date": date_str,
                     "status": status_str,
                     "building": None,

@@ -7,12 +7,13 @@ Multi-step wizard for conducting office-based property surveys.
 This implementation uses the unified Wizard Framework.
 
 Steps:
-1. Building Selection - Search and select building
+1. Applicant Info - Collect visitor/applicant information
 2. Unit Selection/Creation - Select existing or create new unit
 3. Occupancy Details - Record occupancy demographics
 4. Occupancy Claims - Add persons with relation data
 5. Review & Submit - Review and submit survey
-6. Claim Creation - Create tenure claim
+
+Note: Building selection happens BEFORE the wizard opens (via BuildingMapDialog).
 """
 
 from typing import List
@@ -26,11 +27,11 @@ from services.error_mapper import map_exception
 from ui.wizards.framework import BaseWizard, BaseStep
 from ui.wizards.office_survey.survey_context import SurveyContext
 from ui.wizards.office_survey.steps import (
-    BuildingSelectionStep,
+    BuildingInfoStep,
+    ApplicantInfoStep,
     UnitSelectionStep,
     HouseholdStep,
     OccupancyClaimsStep,
-    ClaimStep,
     ReviewStep
 )
 
@@ -64,12 +65,12 @@ class OfficeSurveyWizard(BaseWizard):
     def get_step_names(cls):
         """Get step names (translated at runtime)."""
         return [
-            ("1", tr("wizard.step.building_registration")),
-            ("2", tr("wizard.step.property_unit")),
-            ("3", tr("wizard.step.occupation_details")),
-            ("4", tr("wizard.step.occupancy_claims")),
-            ("5", tr("wizard.step.final_review")),
-            ("6", tr("wizard.step.claim")),
+            ("1", tr("wizard.step.building_info")),
+            ("2", tr("wizard.step.applicant_info")),
+            ("3", tr("wizard.step.property_unit")),
+            ("4", tr("wizard.step.occupation_details")),
+            ("5", tr("wizard.step.occupancy_claims")),
+            ("6", tr("wizard.step.final_review")),
         ]
 
     # Signals (aliases for BaseWizard signals for backward compatibility)
@@ -84,7 +85,7 @@ class OfficeSurveyWizard(BaseWizard):
         self.step_labels = []  # For step indicators
         self._finalization_complete = False  # Flag to track successful finalization
         self._edit_mode = False  # True when editing a step from review
-        self._edit_return_index = 4  # Always return to review step (index 4)
+        self._edit_return_index = 5  # Always return to review step (index 5)
         super().__init__(parent)
 
         # Connect base wizard signals to survey-specific signals
@@ -99,22 +100,20 @@ class OfficeSurveyWizard(BaseWizard):
     def create_steps(self) -> List[BaseStep]:
         """Create and return list of wizard steps."""
         steps = [
-            BuildingSelectionStep(self.context, self),
-            UnitSelectionStep(self.context, self),
-            HouseholdStep(self.context, self),
-            OccupancyClaimsStep(self.context, self),
-            ReviewStep(self.context, self),
-            ClaimStep(self.context, self)
+            BuildingInfoStep(self.context, self),     # 0 - Building info (read-only)
+            ApplicantInfoStep(self.context, self),    # 1 - Applicant info
+            UnitSelectionStep(self.context, self),    # 2 - Unit selection
+            HouseholdStep(self.context, self),        # 3 - Occupancy details
+            OccupancyClaimsStep(self.context, self),  # 4 - Tenure claims
+            ReviewStep(self.context, self),           # 5 - Final review
         ]
         # Connect edit signal from review step
-        steps[4].edit_requested.connect(self._enter_edit_mode)
+        steps[5].edit_requested.connect(self._enter_edit_mode)
         return steps
 
     def set_auth_token(self, token: str):
         """
         Set authentication token for API calls.
-
-        Passes the token to the BuildingController in the building selection step.
 
         Args:
             token: JWT/Bearer token from user login
@@ -123,13 +122,9 @@ class OfficeSurveyWizard(BaseWizard):
             logger.warning("No token provided to wizard")
             return
 
-        # Find the building selection step and set the token on its controller
-        for step in self.steps:
-            if isinstance(step, BuildingSelectionStep):
-                if hasattr(step, 'building_controller') and step.building_controller:
-                    step.building_controller.set_auth_token(token)
-                    logger.info("API token set for wizard's BuildingController")
-                break
+        # Store token for use by individual steps
+        self._auth_token = token
+        logger.info("API token stored in wizard")
 
     def get_wizard_title(self) -> str:
         """Get wizard title."""
@@ -171,8 +166,10 @@ class OfficeSurveyWizard(BaseWizard):
 
             if has_claim:
                 self.context.status = "finalized"
+                self.context.case_status = 2  # Closed
             else:
                 self.context.status = "draft"
+                self.context.case_status = 1  # Open
 
             draft_id = self.on_save_draft()
             if draft_id:
@@ -242,7 +239,10 @@ class OfficeSurveyWizard(BaseWizard):
                 api_service.set_access_token(main_window._api_token)
 
             interviewee_name = None
-            if self.context.persons:
+            # Prefer applicant info (from ApplicantInfoStep)
+            if self.context.applicant:
+                interviewee_name = self.context.applicant.get("full_name")
+            if not interviewee_name and self.context.persons:
                 p = self.context.persons[0]
                 parts = [p.get("first_name", ""), p.get("father_name", ""), p.get("last_name", "")]
                 interviewee_name = " ".join(part for part in parts if part)

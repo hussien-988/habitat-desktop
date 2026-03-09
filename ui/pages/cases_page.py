@@ -1,11 +1,10 @@
 # -*- coding: utf-8 -*-
 """
-Cases Page — displays office surveys grouped in 3 internal sub-tabs.
+Cases Page — displays office surveys in 2 internal sub-tabs.
 
 Sub-tabs:
-  0. مسودات  (Draft)    — unprocessed surveys, includes finalize button
-  1. فاينالايز (Finalized) — surveys where process-claims has been run
-  2. مكتمل   (Completed) — surveys in Submitted / UnderReview / Verified state
+  0. مفتوحة  (Open)   — Draft surveys (claimant is non-owner, awaiting owner)
+  1. مغلقة   (Closed) — Finalized / Completed surveys (owner claim registered)
 """
 
 from PyQt5.QtWidgets import (
@@ -26,9 +25,8 @@ from services.translation_manager import tr
 
 
 _TABS = [
-    {"label_key": "cases.tab.drafts",    "statuses": ["Draft"],                             "show_finalize": True},
-    {"label_key": "cases.tab.finalized", "statuses": ["Finalized"],                         "show_finalize": False},
-    {"label_key": "cases.tab.completed", "statuses": ["Submitted", "UnderReview", "Verified"], "show_finalize": False},
+    {"label_key": "cases.tab.open",   "statuses": ["Draft"],                     "show_finalize": False},
+    {"label_key": "cases.tab.closed", "statuses": ["Finalized", "Completed"],    "show_finalize": False},
 ]
 
 _TAB_BTN_ACTIVE = """
@@ -79,7 +77,7 @@ class CasesPage(QWidget):
         self.i18n = i18n
         self.claims_data = []          # data of the currently visible tab
         self._active_tab = 0
-        self._tab_data = {0: [], 1: [], 2: []}
+        self._tab_data = {0: [], 1: []}
         self._tab_buttons = []
         self._setup_ui()
 
@@ -145,7 +143,7 @@ class CasesPage(QWidget):
 
         layout.addSpacerItem(QSpacerItem(40, 20, QSizePolicy.Expanding, QSizePolicy.Minimum))
 
-        add_btn = PrimaryButton(tr("wizard.button.add_case") if tr("wizard.button.add_case") != "wizard.button.add_case" else "إضافة حالة جديدة", icon_name="icon")
+        add_btn = PrimaryButton(tr("wizard.button.add_case"), icon_name="icon")
         add_btn.clicked.connect(self.add_claim_clicked.emit)
         layout.addWidget(add_btn)
 
@@ -361,7 +359,7 @@ class CasesPage(QWidget):
 
     def refresh(self, data=None):
         """Reload all cached tab data and redisplay active tab."""
-        self._tab_data = {0: [], 1: [], 2: []}
+        self._tab_data = {0: [], 1: []}
         self._load_and_show_tab(self._active_tab, force=True)
 
     def _fetch_buildings_by_ids(self, building_ids):

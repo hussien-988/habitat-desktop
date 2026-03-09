@@ -278,6 +278,8 @@ EN_TRANSLATIONS = {
     "mapping.relation_type.guest": "Guest",
 
     # ===== Wizard - Step Names =====
+    "wizard.step.building_info": "Building Information",
+    "wizard.step.applicant_info": "Applicant Info",
     "wizard.step.building_registration": "Select a Building",
     "wizard.step.property_unit": "Property Unit",
     "wizard.step.household_details": "Household Details",
@@ -288,16 +290,25 @@ EN_TRANSLATIONS = {
     "wizard.step.claim": "Claim",
     "wizard.step.final_review": "Final Review",
 
+    # ===== Applicant Info Step =====
+    "wizard.applicant.subtitle": "Enter visitor information",
+    "wizard.applicant.full_name": "Full Name",
+    "wizard.applicant.national_id": "National ID",
+    "wizard.applicant.phone": "Phone Number",
+    "wizard.applicant.email": "Email Address",
+    "wizard.applicant.in_person": "In-Person Visit",
+
     # Wizard General
     "wizard.title": "Office Survey Wizard",
     "wizard.button.finish_survey": "Finish Survey",
     "wizard.button.save": "Save",
     "wizard.button.save_changes": "Save Changes",
     "wizard.button.cancel_edit": "Cancel",
+    "wizard.button.add_case": "Add a Claim",
     "wizard.button.previous": "Previous",
     "wizard.button.next": "Next",
-    "wizard.header.add_new_case": "Add New Case",
-    "wizard.header.title": "Add New Case",
+    "wizard.header.add_new_case": "Add a Claim",
+    "wizard.header.title": "Add a Claim",
     "wizard.header.completed_claims": "Completed Claims",
     "wizard.header.breadcrumb": "Completed Claims",
     "wizard.header.select_building": "Select Building",
@@ -318,7 +329,9 @@ EN_TRANSLATIONS = {
     # ===== Building Selection Step =====
     "wizard.building.card_title": "Building Data",
     "wizard.building.card_subtitle": "Search for building information and location",
-    "wizard.building.code_label": "Building Code",
+    "wizard.building.subtitle": "Review selected building data",
+    "wizard.building.coordinates": "Coordinates",
+    "wizard.building.code_label": "Building Number",
     "wizard.building.search_placeholder": "Search for building code...",
     "wizard.building.search_on_map": "Search on Map",
     "wizard.building.type": "Building Type",
@@ -494,7 +507,7 @@ EN_TRANSLATIONS = {
     "wizard.review.no_survey_id": "Survey ID not found. Cannot finalize survey.",
     "wizard.review.step_title": "Final Review",
     "wizard.review.step_description": "Review all entered data before submission",
-    "wizard.review.building_code": "Building Code",
+    "wizard.review.building_code": "Building Number",
     "wizard.review.status.active": "Active",
     "wizard.review.status.completed": "Completed",
     "wizard.review.status.pending": "Pending",
@@ -648,7 +661,7 @@ EN_TRANSLATIONS = {
 
     # ===== Drafts Page =====
     "page.drafts.title": "Drafts",
-    "page.drafts.add_new": "+ Add New Case",
+    "page.drafts.add_new": "+ Add a Claim",
     "page.drafts.filter": "Filter",
     "page.drafts.building_code": "Building Code",
     "page.drafts.search_placeholder": "Search for building code...",
@@ -742,11 +755,14 @@ EN_TRANSLATIONS = {
     "cases.tab.drafts": "Drafts",
     "cases.tab.finalized": "Finalized",
     "cases.tab.completed": "Completed",
+    "cases.tab.open": "Open",
+    "cases.tab.closed": "Closed",
     "navbar.tab.buildings": "Buildings",
     "navbar.tab.residential_units": "Residential Units",
     "navbar.tab.duplicates": "Duplicates",
     "navbar.tab.user_management": "User Management",
     "navbar.tab.map": "Map",
+    "navbar.tab.field_assignment": "Field Work Preparation",
     "navbar.search.default": "Search by code or name...",
     "navbar.search.by_name": "Search by recipient name...",
     "navbar.search.by_claim_id": "Search by claim number...",
@@ -768,6 +784,16 @@ EN_TRANSLATIONS = {
     "navbar.menu.security_policies": "Security Policies",
     "navbar.menu.data_management": "Reference Data Management",
     "navbar.menu.logout": "Logout",
+
+    # ===== Building Documents =====
+    "building.docs.section_title": "Building Documents",
+    "building.docs.none": "No documents available",
+    "building.docs.view_details": "View Details",
+
+    # ===== Review Step - Case Status =====
+    "review.case.closed": "Case Closed — Tenure claim registered",
+    "review.case.open": "Case Open — Awaiting owner identification",
+    "review.applicant.title": "Applicant",
 
     # ===== Case Details Page =====
     "page.case_details.title": "Case Details",

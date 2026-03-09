@@ -251,7 +251,7 @@ class AddUserPage(QWidget):
         # Right field: المستخدم ID
         id_group = QVBoxLayout()
         id_group.setSpacing(6)
-        id_label = QLabel("المستخدم ID")
+        id_label = QLabel("اسم المستخدم")
         id_label.setFont(create_font(
             size=FontManager.SIZE_BODY,
             weight=FontManager.WEIGHT_SEMIBOLD,
@@ -259,7 +259,7 @@ class AddUserPage(QWidget):
         id_label.setStyleSheet(f"color: {Colors.PAGE_TITLE}; background: transparent;")
         id_group.addWidget(id_label)
 
-        self.user_id_input = InputField(placeholder="00000")
+        self.user_id_input = InputField(placeholder="اسم المستخدم")
         self.user_id_input.setAlignment(Qt.AlignRight)
         self.user_id_input.setStyleSheet("""
             QLineEdit {
@@ -514,7 +514,7 @@ class AddUserPage(QWidget):
         data = self._collect_data()
 
         if not data["user_id"]:
-            Toast.show_toast(self, "يرجى إدخال المستخدم ID", Toast.WARNING)
+            Toast.show_toast(self, "يرجى إدخال اسم المستخدم", Toast.WARNING)
             return
 
         if data["role"] == "-":
@@ -551,7 +551,7 @@ class AddUserPage(QWidget):
             self.breadcrumb_label.setText("إدارة المستخدمين  •  تعديل بيانات المستخدم")
             self.save_btn.setVisible(True)
 
-        self.user_id_input.setText(user_data.get("display_id", user_data.get("username", "")))
+        self.user_id_input.setText(user_data.get("username", ""))
         self.user_id_input.setEnabled(False)
 
         role_key = user_data.get("role_key", user_data.get("role", ""))
