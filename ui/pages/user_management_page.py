@@ -35,6 +35,15 @@ class UserManagementPage(QWidget):
     edit_user_signal = pyqtSignal(object)
     add_user_requested = pyqtSignal()
 
+    _NUMERIC_ROLE_MAP = {
+        "1": "data_collector",
+        "2": "field_supervisor",
+        "3": "office_clerk",
+        "4": "data_manager",
+        "5": "analyst",
+        "6": "admin",
+    }
+
     def __init__(self, db: Database, i18n: I18n, user_controller: UserController = None, parent=None):
         super().__init__(parent)
         self.db = db
@@ -305,14 +314,22 @@ class UserManagementPage(QWidget):
     def _map_api_user(self, u: dict) -> dict:
         user_id = str(u.get("id") or u.get("userId") or u.get("user_id") or "")
         username = str(u.get("username") or u.get("userName") or "")
-        role_raw = u.get("role") or u.get("roleKey") or ""
-        role_key = str(role_raw) if role_raw is not None else ""
+        role_raw = u.get("role") or u.get("roleKey") or u.get("roleName") or u.get("role_name") or ""
+        role_code = str(role_raw) if role_raw is not None else ""
+        role_key = self._NUMERIC_ROLE_MAP.get(role_code, role_code) if role_code.isdigit() else role_code
         full_name = str(u.get("fullNameAr") or u.get("fullName") or username)
         try:
             display_id = str(int(user_id.replace('-', '')[:8], 16) % 900000 + 100000)
         except Exception:
             display_id = user_id[:6] if user_id else "------"
-        role_display = Roles.get_display_name(role_key, arabic=True)
+        # Try vocab service first (uses API labels), fall back to Roles class
+        try:
+            from services import vocab_service
+            role_display = vocab_service.get_display("user_role", role_code, arabic=True) or ""
+            if not role_display:
+                role_display = Roles.get_display_name(role_key, arabic=True)
+        except Exception:
+            role_display = Roles.get_display_name(role_key, arabic=True)
         return {
             "user_id": user_id,
             "username": username,
@@ -353,8 +370,8 @@ class UserManagementPage(QWidget):
             return
 
         for row, user in enumerate(page_users):
-            # col 0: المستخدم ID (6-digit display ID from UUID)
-            self.table.setItem(row, 0, QTableWidgetItem(user.get("display_id", "")))
+            # col 0: اسم المستخدم
+            self.table.setItem(row, 0, QTableWidgetItem(user.get("username", "")))
 
             # col 1: الدور
             self.table.setItem(row, 1, QTableWidgetItem(user.get("role", "")))

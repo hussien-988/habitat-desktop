@@ -793,6 +793,22 @@ API للاتصال بـ TRRCMS Backend.
         """
         return self._request("GET", f"/v1/PropertyUnits/building/{building_id}")
 
+    def get_building_documents(self, building_id: str) -> List[Dict[str, Any]]:
+        """
+        Get documents attached to a building.
+
+        Args:
+            building_id: Building UUID
+
+        Returns:
+            List of BuildingDocumentDto with originalFileName, filePath, mimeType
+        """
+        try:
+            return self._request("GET", f"/api/v1/building-documents/by-building/{building_id}") or []
+        except Exception as e:
+            logger.warning(f"Failed to fetch building documents for {building_id}: {e}")
+            return []
+
     # ==================== Utility ====================
 
     def health_check(self) -> bool:
@@ -2437,7 +2453,7 @@ API للاتصال بـ TRRCMS Backend.
         """
         params = {}
         if claim_status is not None:
-            params["claimStatus"] = claim_status
+            params["caseStatus"] = claim_status
         if claim_source is not None:
             params["claimSource"] = claim_source
         if created_by_user_id:
@@ -2448,7 +2464,7 @@ API للاتصال بـ TRRCMS Backend.
             params["buildingCode"] = building_code
 
         logger.info(f"Fetching claims summaries with filters: {params or 'none'}")
-        result = self._request("GET", "/v1/Claims/summaries", params=params)
+        result = self._request("GET", "/api/Claims/summaries", params=params)
 
         # Handle both array and paginated response
         if isinstance(result, list):
@@ -2486,18 +2502,18 @@ API للاتصال بـ TRRCMS Backend.
         """
         params = {}
         if status is not None:
-            params["status"] = status
+            params["CaseStatus"] = status
         if priority is not None:
-            params["priority"] = priority
+            params["Priority"] = priority
         if property_unit_id:
-            params["propertyUnitId"] = property_unit_id
+            params["PropertyUnitId"] = property_unit_id
         if primary_claimant_id:
-            params["primaryClaimantId"] = primary_claimant_id
+            params["PrimaryClaimantId"] = primary_claimant_id
         if has_conflicts is not None:
-            params["hasConflicts"] = str(has_conflicts).lower()
+            params["HasConflicts"] = str(has_conflicts).lower()
 
         logger.info(f"Fetching claims with filters: {params or 'none'}")
-        result = self._request("GET", "/v1/Claims", params=params)
+        result = self._request("GET", "/api/Claims", params=params)
         if isinstance(result, list):
             claims = result
         elif isinstance(result, dict):

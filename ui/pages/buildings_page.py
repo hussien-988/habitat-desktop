@@ -153,9 +153,9 @@ class AddBuildingPage(QWidget):
         title_subtitle_container = QVBoxLayout()
         title_subtitle_container.setSpacing(4)
 
-        # Title: "إضافة بناء جديد" or "تعديل بناء"
+        # Title: always "معلومات البناء" (read-only informational screen)
         # Figma: Desktop/H4 24px = 18pt Bold (DRY: Using FontManager)
-        title_label = QLabel("إضافة بناء جديد" if not self.building else "تعديل بناء")
+        title_label = QLabel("معلومات البناء")
         title_font = create_font(
             size=FontManager.SIZE_TITLE,  # 18pt (24px Figma)
             weight=QFont.Bold,
@@ -188,7 +188,7 @@ class AddBuildingPage(QWidget):
         subtitle_layout.addWidget(dot_label)
 
         # Part 2
-        subtitle_part2 = QLabel("إضافة بناء جديد" if not self.building else "تعديل بناء")
+        subtitle_part2 = QLabel("معلومات البناء")
         subtitle_part2.setFont(subtitle_font)
         subtitle_part2.setStyleSheet(f"color: {Colors.TEXT_SECONDARY}; border: none; background: transparent;")
         subtitle_layout.addWidget(subtitle_part2)
@@ -262,6 +262,7 @@ class AddBuildingPage(QWidget):
             }}
         """)
         save_btn.clicked.connect(self._on_save)
+        save_btn.setVisible(False)  # Read-only mode: no save button
         title_row.addWidget(save_btn)
 
         layout.addLayout(title_row)
@@ -811,6 +812,7 @@ class AddBuildingPage(QWidget):
         map_button.setGraphicsEffect(shadow)
 
         map_button.clicked.connect(self._on_pick_from_map)
+        map_button.setVisible(False)  # Read-only mode: no map picking
 
         # Location icon in center of map
         location_icon = QLabel(map_container)
@@ -867,7 +869,50 @@ class AddBuildingPage(QWidget):
 
         content_row.addLayout(map_section, stretch=1)
 
-        # Section 3: وصف البناء (center) - QLineEdit for input
+        # Section 2: وثائق المبنى - Document thumbnails (replaces وصف الموقع)
+        docs_section = QVBoxLayout()
+        docs_section.setSpacing(4)
+
+        lbl_docs = QLabel("وثائق المبنى")
+        lbl_docs.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
+        lbl_docs.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent;")
+        docs_section.addWidget(lbl_docs)
+
+        self.docs_scroll = QScrollArea()
+        self.docs_scroll.setFixedHeight(130)
+        self.docs_scroll.setWidgetResizable(True)
+        self.docs_scroll.setFrameShape(QFrame.NoFrame)
+        self.docs_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        self.docs_scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.docs_scroll.setStyleSheet("""
+            QScrollArea {
+                background-color: #F8FAFF;
+                border: 1px solid #dcdfe6;
+                border-radius: 8px;
+            }
+        """)
+
+        self.docs_container = QWidget()
+        self.docs_container.setStyleSheet("background: transparent;")
+        self.docs_layout = QHBoxLayout(self.docs_container)
+        self.docs_layout.setContentsMargins(8, 8, 8, 8)
+        self.docs_layout.setSpacing(8)
+        self.docs_layout.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+
+        self.docs_empty_label = QLabel("لا توجد وثائق")
+        self.docs_empty_label.setStyleSheet(f"color: {Colors.TEXT_SECONDARY}; background: transparent;")
+        self.docs_empty_label.setFont(create_font(size=9, weight=FontManager.WEIGHT_REGULAR))
+        self.docs_empty_label.setAlignment(Qt.AlignCenter)
+        self.docs_layout.addWidget(self.docs_empty_label)
+        self.docs_layout.addStretch()
+
+        self.docs_scroll.setWidget(self.docs_container)
+        docs_section.addWidget(self.docs_scroll)
+        docs_section.addStretch(1)
+
+        content_row.addLayout(docs_section, stretch=1)
+
+        # Section 3: وصف البناء (read-only text)
         section_general = QVBoxLayout()
         section_general.setSpacing(4)
 
@@ -876,7 +921,8 @@ class AddBuildingPage(QWidget):
         lbl_general.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent;")
 
         self.general_desc = QTextEdit()
-        self.general_desc.setPlaceholderText("ادخل وصفاً عاماً...")
+        self.general_desc.setPlaceholderText("لا يوجد وصف")
+        self.general_desc.setReadOnly(True)
         self.general_desc.setFixedHeight(130)  # نفس ارتفاع الخريطة
         self.general_desc.setStyleSheet("""
             QTextEdit {
@@ -886,9 +932,6 @@ class AddBuildingPage(QWidget):
                 padding: 8px 12px;
                 color: #606266;
                 font-size: 10pt;
-            }
-            QTextEdit:focus {
-                border: 1px solid #3890DF;
             }
         """)
 
@@ -922,6 +965,124 @@ class AddBuildingPage(QWidget):
         # ✅ FIX: Set container in scroll area and add to main layout
         scroll.setWidget(container)
         main_layout.addWidget(scroll)
+
+        # Apply read-only mode to all form fields
+        self._apply_read_only_mode()
+
+    def _apply_read_only_mode(self):
+        """Make all form inputs read-only (page is informational only)."""
+        for combo in (
+            self.governorate_combo, self.district_combo,
+            self.subdistrict_combo, self.community_combo,
+            self.neighborhood_combo, self.status_combo, self.type_combo
+        ):
+            combo.setEnabled(False)
+
+        self.building_number.setReadOnly(True)
+
+        for spin in (self.residential_spin, self.non_residential_spin, self.floors_spin):
+            spin.setEnabled(False)
+
+        self.polygon_radio.setEnabled(False)
+
+    def _load_building_documents(self, building_uuid: str):
+        """Fetch and display document thumbnails for the building."""
+        # Clear existing docs
+        while self.docs_layout.count() > 0:
+            item = self.docs_layout.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+
+        try:
+            from services.api_client import get_api_client
+            api = get_api_client()
+            if not api:
+                self._show_no_docs()
+                return
+            docs = api.get_building_documents(building_uuid)
+        except Exception as e:
+            logger.warning(f"Failed to load building documents: {e}")
+            self._show_no_docs()
+            return
+
+        if not docs:
+            self._show_no_docs()
+            return
+
+        for doc in docs:
+            card = self._create_doc_card(doc)
+            self.docs_layout.addWidget(card)
+
+        self.docs_layout.addStretch()
+
+    def _show_no_docs(self):
+        """Display 'no documents' placeholder in the docs area."""
+        label = QLabel("لا توجد وثائق")
+        label.setStyleSheet(f"color: {Colors.TEXT_SECONDARY}; background: transparent;")
+        label.setFont(create_font(size=9, weight=FontManager.WEIGHT_REGULAR))
+        label.setAlignment(Qt.AlignCenter)
+        self.docs_layout.addWidget(label)
+        self.docs_layout.addStretch()
+
+    def _create_doc_card(self, doc: dict) -> QWidget:
+        """Create a clickable document thumbnail card (70x90px)."""
+        from PyQt5.QtWidgets import QSizePolicy
+        card = QFrame()
+        card.setFixedSize(70, 100)
+        card.setStyleSheet("""
+            QFrame {
+                background-color: #ffffff;
+                border: 1px solid #E1E8ED;
+                border-radius: 6px;
+            }
+            QFrame:hover { border-color: #3890DF; }
+        """)
+        card.setCursor(Qt.PointingHandCursor)
+
+        card_layout = QVBoxLayout(card)
+        card_layout.setContentsMargins(4, 4, 4, 4)
+        card_layout.setSpacing(2)
+
+        mime_type = doc.get("mimeType", "")
+        file_path = doc.get("filePath", "")
+        file_name = doc.get("originalFileName", "")
+
+        thumb = QLabel()
+        thumb.setFixedSize(60, 60)
+        thumb.setAlignment(Qt.AlignCenter)
+        thumb.setStyleSheet("border: none; background: transparent;")
+
+        if mime_type.startswith("image/") and file_path:
+            px = QPixmap(file_path)
+            if not px.isNull():
+                thumb.setPixmap(px.scaled(60, 60, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+            else:
+                thumb.setText("🖼")
+                thumb.setFont(create_font(size=20, weight=FontManager.WEIGHT_REGULAR))
+        else:
+            thumb.setText("📄")
+            thumb.setFont(create_font(size=20, weight=FontManager.WEIGHT_REGULAR))
+
+        card_layout.addWidget(thumb, alignment=Qt.AlignCenter)
+
+        name_label = QLabel(file_name[:10] + "..." if len(file_name) > 10 else file_name)
+        name_label.setFont(create_font(size=7, weight=FontManager.WEIGHT_REGULAR))
+        name_label.setStyleSheet(f"color: {Colors.TEXT_SECONDARY}; border: none; background: transparent;")
+        name_label.setAlignment(Qt.AlignCenter)
+        name_label.setWordWrap(True)
+        card_layout.addWidget(name_label)
+
+        card.mousePressEvent = lambda event, fp=file_path: self._on_doc_clicked(fp)
+
+        return card
+
+    def _on_doc_clicked(self, file_path: str):
+        """Open a document file using the system default application."""
+        if not file_path:
+            return
+        from PyQt5.QtCore import QUrl
+        from PyQt5.QtGui import QDesktopServices
+        QDesktopServices.openUrl(QUrl.fromLocalFile(file_path))
 
     def _get_card_style(self):
         """Get card stylesheet."""
@@ -1443,6 +1604,11 @@ class AddBuildingPage(QWidget):
 
         # تحديث رمز البناء
         self._update_building_id()
+
+        # Load document thumbnails if building has a UUID
+        building_uuid = getattr(self.building, 'building_uuid', None)
+        if building_uuid:
+            self._load_building_documents(building_uuid)
 
     def _show_validation_error_dialog(self, errors):
         """عرض نافذة خطأ واضحة للتحقق من البيانات."""

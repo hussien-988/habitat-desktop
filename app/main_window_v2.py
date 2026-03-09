@@ -33,8 +33,8 @@ class MainWindow(QMainWindow):
     # Pages restricted to specific roles only (RBAC - page level)
     _PAGE_ROLE_ACCESS = {
         Pages.ADMIN: {"admin", "data_manager"},
-        Pages.USER_MANAGEMENT: {"admin", "data_manager"},
-        Pages.ADD_USER: {"admin", "data_manager"},
+        Pages.USER_MANAGEMENT: {"admin"},
+        Pages.ADD_USER: {"admin"},
         Pages.FIELD_ASSIGNMENT: {"admin", "data_manager", "field_supervisor"},
         Pages.DATA_MANAGEMENT: {"admin", "data_manager"},
         Pages.REPORTS: {"admin", "data_manager", "field_supervisor", "analyst"},
@@ -308,21 +308,18 @@ class MainWindow(QMainWindow):
         self.office_survey_wizard = OfficeSurveyWizard(self.db, self)
         self.stack.addWidget(self.office_survey_wizard)
 
-        # Map tabs to pages (based on Figma design)
+        # Map tabs to pages
         # Tab 0: المطالبات المكتملة (Completed Claims)
-        # Tab 1: الحالات (Cases — 3 internal sub-tabs)
-        # Tab 2: المبانى (Buildings)
-        # Tab 3: الوحدات السكنية (Units)
-        # Tab 4: التكرارات (Duplicates)
-        # Tab 5: إدارة المستخدمين (User Management)
+        # Tab 1: الحالات (Cases — مفتوحة/مغلقة)
+        # Tab 2: التكرارات (Duplicates)
+        # Tab 3: إدارة المستخدمين (User Management)
+        # Tab 4: تجهيز العمل الميداني (Field Work Preparation)
         self.tab_page_mapping = {
             0: Pages.CLAIMS,
             1: Pages.CASES,
-            2: Pages.BUILDINGS,
-            3: Pages.UNITS,
-            4: Pages.DUPLICATES,
-            5: Pages.USER_MANAGEMENT,
-            6: Pages.MAP_VIEW,
+            2: Pages.DUPLICATES,
+            3: Pages.USER_MANAGEMENT,
+            4: Pages.FIELD_ASSIGNMENT,
         }
 
     def _setup_layout(self):
@@ -782,9 +779,11 @@ class MainWindow(QMainWindow):
 
         return False
 
-    def _reset_wizard(self):
+    def _reset_wizard(self, building=None):
         """Reset wizard to clean state (Best Practice: DRY)."""
         new_context = self.office_survey_wizard.create_context()
+        if building is not None:
+            new_context.building = building
         self.office_survey_wizard.context = new_context
 
         for step in self.office_survey_wizard.steps:
@@ -882,17 +881,34 @@ class MainWindow(QMainWindow):
     def _start_new_office_survey(self):
         """
         Start a new office survey (UC-004 S01).
-        Resets the wizard to initial state and opens it.
+        Flow: BuildingMapDialog → Wizard (Step 0 = BuildingInfoStep → Step 1 = ApplicantInfo).
         """
-        logger.info("Starting new office survey")
+        from PyQt5.QtWidgets import QDialog
+        from ui.components.building_map_dialog_v2 import BuildingMapDialog
 
-        # Reset wizard (DRY: use centralized method)
-        self._reset_wizard()
+        logger.info("Starting new office survey — opening building map dialog")
 
-        # Navigate to wizard
+        auth_token = getattr(self, '_api_token', None)
+        dialog = BuildingMapDialog(
+            db=self.db,
+            auth_token=auth_token,
+            read_only=False,
+            parent=self
+        )
+        if dialog.exec_() != QDialog.Accepted:
+            logger.debug("Building selection cancelled")
+            return
+
+        selected_building = dialog.get_selected_building()
+        if not selected_building:
+            logger.warning("Map dialog accepted but no building selected")
+            return
+
+        logger.info(f"Building selected: {selected_building.building_id}")
+
+        # Reset wizard with building pre-set so populate_data() runs correctly on Step 0
+        self._reset_wizard(building=selected_building)
         self.stack.setCurrentWidget(self.office_survey_wizard)
-
-        logger.debug("New office survey wizard opened")
 
     def _on_survey_completed(self, survey_id: str):
         """Handle survey completion from wizard."""

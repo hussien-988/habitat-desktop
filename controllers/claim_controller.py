@@ -258,6 +258,15 @@ class ClaimController(BaseController):
             self._emit_error("load_claims", error_msg)
             return OperationResult.fail(message=error_msg)
 
+    def load_claims_from_api(self, status: int) -> OperationResult:
+        """Load raw claim dicts from API filtered by numeric status."""
+        try:
+            from services.api_client import get_api_client
+            dtos = get_api_client().get_claims_summaries(claim_status=status)
+            return OperationResult.ok(data=dtos)
+        except Exception as e:
+            return OperationResult.fail(message=str(e))
+
     def search_claims(self, search_text: str) -> OperationResult[List[Claim]]:
         """
         Search claims by text.

@@ -313,33 +313,16 @@ class IDBadgeWidget(QWidget):
 
         # Menu items: (icon_name, translation_key, signal)
         self._menu_items_config = [
-            ("language", "navbar.menu.change_language", self.language_change_requested),
-            ("fluent", "navbar.menu.sync_data", self.sync_requested),
-            ("lock", "navbar.menu.change_password", self.password_change_requested),
-            ("safe", "navbar.menu.security_policies", self.security_settings_requested),
-            ("data", "navbar.menu.data_management", self.data_management_requested),
+            ("fluent", "navbar.menu.sync_data",         self.sync_requested),
+            ("safe",   "navbar.menu.security_policies", self.security_settings_requested),
+            ("data",   "navbar.menu.data_management",   self.data_management_requested),
         ]
 
         self._menu_item_widgets = []
 
-        # Features disabled for client build
-        _disabled_keys = {
-            "navbar.menu.change_language",
-            "navbar.menu.change_password",
-            "navbar.menu.security_policies",
-        }
-
         for icon_name, tr_key, signal in self._menu_items_config:
             item = _MenuItem(icon_name, tr(tr_key))
-            if tr_key in _disabled_keys:
-                item.setCursor(Qt.ForbiddenCursor)
-                item.setToolTip("هذه الميزة غير متاحة حالياً")
-                from PyQt5.QtWidgets import QGraphicsOpacityEffect
-                opacity_effect = QGraphicsOpacityEffect()
-                opacity_effect.setOpacity(0.5)
-                item.setGraphicsEffect(opacity_effect)
-            else:
-                item.clicked.connect(signal.emit)
+            item.clicked.connect(signal.emit)
             self._popup.add_item(item)
             self._menu_item_widgets.append((item, tr_key))
 

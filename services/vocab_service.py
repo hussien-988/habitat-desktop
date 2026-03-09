@@ -6,6 +6,7 @@ Fetches from backend API on startup (GET /api/v1/vocabularies, public, no auth).
 Falls back to hardcoded values from Vocabularies class + translation keys.
 """
 
+import json
 import requests
 from typing import Dict, List, Tuple, Any, Optional
 from utils.logger import get_logger
@@ -37,11 +38,19 @@ def initialize_vocabularies():
         data = response.json()
         _build_cache(data)
         _build_from_translation_keys()
+        _save_vocab_cache(data)
         _initialized = True
         logger.info(f"Loaded {len(data)} vocabularies from API")
     except Exception as e:
-        logger.warning(f"Could not load vocabularies from API ({e}). Using hardcoded fallback.")
-        _build_cache_from_hardcoded()
+        logger.warning(f"Could not load vocabularies from API ({e}).")
+        cached = _load_vocab_cache()
+        if cached:
+            _build_cache(cached)
+            _build_from_translation_keys()
+            logger.info("Using locally cached vocabularies (offline mode)")
+        else:
+            logger.warning("No local cache found. Using hardcoded fallback.")
+            _build_cache_from_hardcoded()
         _initialized = True
 
 
@@ -56,6 +65,34 @@ def refresh_vocabularies():
     _lookup = {}
     _options_cache = {}
     initialize_vocabularies()
+
+
+def _save_vocab_cache(data: list) -> None:
+    """Save raw API vocabulary data to local cache file."""
+    try:
+        from app.config import Config
+        cache_path = Config.DATA_DIR / "vocab_cache.json"
+        Config.DATA_DIR.mkdir(parents=True, exist_ok=True)
+        with open(cache_path, 'w', encoding='utf-8') as f:
+            json.dump(data, f, ensure_ascii=False)
+        logger.info(f"Saved vocab cache ({len(data)} vocabularies)")
+    except Exception as e:
+        logger.warning(f"Could not save vocab cache: {e}")
+
+
+def _load_vocab_cache() -> list:
+    """Load vocabulary data from local cache file. Returns [] if not found."""
+    try:
+        from app.config import Config
+        cache_path = Config.DATA_DIR / "vocab_cache.json"
+        if cache_path.exists():
+            with open(cache_path, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+            logger.info(f"Loaded vocab cache ({len(data)} vocabularies)")
+            return data
+    except Exception as e:
+        logger.warning(f"Could not load vocab cache: {e}")
+    return []
 
 
 def get_label(vocab_name: str, code, lang: str = None) -> str:
@@ -303,6 +340,8 @@ def _build_cache_from_hardcoded():
             "documenttype": getattr(Vocabularies, "DOCUMENT_TYPES", []),
             "casestatus": getattr(Vocabularies, "CASE_STATUS", []),
             "verificationstatus": getattr(Vocabularies, "VERIFICATION_STATUS", []),
+            "unittype": getattr(Vocabularies, "UNIT_TYPES", []),
+            "unitstatus": getattr(Vocabularies, "UNIT_STATUS", []),
         }
         for key, tuples in _vocabs_from_config.items():
             if not tuples:
@@ -317,6 +356,26 @@ def _build_cache_from_hardcoded():
             _options_cache[key] = options_list
     except Exception as e:
         logger.warning(f"Failed to load from Vocabularies class: {e}")
+
+    # --- Roles (user_role vocab — matches API vocabularyName: "user_role") ---
+    try:
+        _role_items = [
+            ("1", "جامع بيانات ميداني", "Field Collector",  0),
+            ("2", "مشرف ميداني",        "Field Supervisor", 1),
+            ("3", "موظف مكتب",          "Office Clerk",     2),
+            ("4", "مدير بيانات",        "Data Manager",     3),
+            ("5", "محلل",               "Analyst",          4),
+            ("6", "مدير النظام",        "Administrator",    5),
+        ]
+        role_code_map = {}
+        role_options = []
+        for code, ar, en, order in _role_items:
+            role_code_map[code] = {"ar": ar, "en": en, "order": order}
+            role_options.append((code, ar, en, order))
+        _lookup["user_role"] = role_code_map
+        _options_cache["user_role"] = role_options
+    except Exception as e:
+        logger.warning(f"Failed to load user_role vocab: {e}")
 
     # --- From display_mappings translation keys (vocabs not in config) ---
     _build_from_translation_keys()

@@ -24,6 +24,7 @@ from ..components.claim_list_card import ClaimListCard
 from ..components.primary_button import PrimaryButton
 from ..font_utils import create_font, FontManager
 from ..style_manager import StyleManager
+from services.translation_manager import tr
 
 
 class DraftClaimsPage(QWidget):
@@ -153,7 +154,7 @@ class DraftClaimsPage(QWidget):
 
         # Add button - Using reusable PrimaryButton component (DRY + SOLID)
         # Figma: 199×48px, padding 24×12, font 16px, icon instead of "+"
-        add_btn = PrimaryButton("إضافة حالة جديدة", icon_name="icon")
+        add_btn = PrimaryButton(tr("wizard.button.add_case"), icon_name="icon")
         add_btn.clicked.connect(self.add_claim_clicked.emit)
         layout.addWidget(add_btn)
 

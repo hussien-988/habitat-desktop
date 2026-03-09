@@ -3,14 +3,15 @@
 Office Survey Steps Package.
 
 Contains individual steps for the office survey wizard:
-- Step 1: Building Selection
+- Step 1: Applicant Info (visitor information)
 - Step 2: Unit Selection/Creation
 - Step 3: Occupancy Details (Household)
 - Step 4: Occupancy Claims (Person + Relation merged)
-- Step 5: Claim Creation
-- Step 6: Review & Submit
+- Step 5: Review & Submit
 """
 
+from .building_info_step import BuildingInfoStep
+from .applicant_info_step import ApplicantInfoStep
 from .building_selection_step import BuildingSelectionStep
 from .unit_selection_step import UnitSelectionStep
 from .household_step import HouseholdStep
@@ -19,6 +20,8 @@ from .claim_step import ClaimStep
 from .review_step import ReviewStep
 
 __all__ = [
+    'BuildingInfoStep',
+    'ApplicantInfoStep',
     'BuildingSelectionStep',
     'UnitSelectionStep',
     'HouseholdStep',
