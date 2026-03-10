@@ -2425,6 +2425,7 @@ class BuildingsListPage(QWidget):
         # DRY: Exact copy of "Add New Case" button from claims pages (PrimaryButton component)
         self.add_btn = PrimaryButton("إضافة بناء جديد", icon_name="icon")
         self.add_btn.clicked.connect(self.add_building.emit)
+        self.add_btn.hide()
 
         btn_layout.addWidget(btn_field)
         btn_layout.addWidget(self.add_btn)
@@ -3124,7 +3125,7 @@ class BuildingsListPage(QWidget):
         if edit_icon:
             edit_action.setIcon(edit_icon)
         edit_action.triggered.connect(lambda: self.edit_building.emit(building))
-        edit_action.setEnabled(_role in {"admin", "data_manager", "office_clerk", "field_researcher"})
+        edit_action.setVisible(False)
         menu.addAction(edit_action)
 
         # 3. حذف - لون #FF4842
@@ -3133,7 +3134,7 @@ class BuildingsListPage(QWidget):
         if delete_icon:
             delete_action.setIcon(delete_icon)
         delete_action.triggered.connect(lambda: self._on_delete_building(building))
-        delete_action.setEnabled(_role in {"admin", "data_manager"})
+        delete_action.setVisible(False)
         menu.addAction(delete_action)
 
         # Apply styles

@@ -44,11 +44,14 @@ class PersonDialog(QDialog):
     def __init__(self, person_data: Optional[Dict] = None, existing_persons: List[Dict] = None, parent=None,
                  auth_token: Optional[str] = None, survey_id: Optional[str] = None,
                  household_id: Optional[str] = None, unit_id: Optional[str] = None,
-                 read_only: bool = False):
+                 read_only: bool = False, existing_person_mode: bool = False,
+                 initial_tab: int = 0):
         super().__init__(parent)
+        self._existing_person_mode = existing_person_mode
+        self._initial_tab = initial_tab
         self.person_data = person_data
         self.existing_persons = existing_persons or []
-        self.editing_mode = person_data is not None
+        self.editing_mode = person_data is not None and not existing_person_mode
         self.read_only = read_only
         self.validation_service = ValidationService()
         self.uploaded_files = []
@@ -78,11 +81,17 @@ class PersonDialog(QDialog):
 
         self._setup_ui()
 
-        if self.editing_mode and person_data:
+        if (self.editing_mode or self._existing_person_mode) and person_data:
             self._load_person_data(person_data)
 
         if self.read_only:
             self._apply_read_only_mode()
+
+        if self._existing_person_mode:
+            self._apply_existing_person_mode()
+
+        if self._initial_tab > 0:
+            self.tab_widget.setCurrentIndex(self._initial_tab)
 
     def _refresh_token(self):
         """Refresh auth token from parent wizard window before API calls."""
@@ -133,6 +142,8 @@ class PersonDialog(QDialog):
         # Dialog title (right-aligned for RTL)
         if self.read_only:
             title_text = tr("wizard.person_dialog.title_view")
+        elif getattr(self, '_existing_person_mode', False):
+            title_text = tr("wizard.person_dialog.title_link_existing")
         elif self.editing_mode:
             title_text = tr("wizard.person_dialog.title_edit")
         else:
@@ -232,6 +243,20 @@ class PersonDialog(QDialog):
                 else:
                     btn_layout.addWidget(self._create_btn(tr("wizard.person_dialog.previous"), primary=False, callback=self._go_to_tab2_back))
                     btn_layout.addWidget(self._create_btn(tr("common.cancel"), primary=True, callback=self.reject))
+
+    def _apply_existing_person_mode(self):
+        """Make Tab1 and Tab2 fields read-only when linking an existing person to a unit."""
+        from PyQt5.QtWidgets import QComboBox, QDateEdit as _QDateEdit
+        read_only_style = " background-color: #F3F4F6;"
+        for tab_idx in [0, 1]:
+            tab = self.tab_widget.widget(tab_idx)
+            for w in tab.findChildren(QLineEdit):
+                w.setReadOnly(True)
+                w.setStyleSheet(w.styleSheet() + read_only_style)
+            for w in tab.findChildren(QComboBox):
+                w.setEnabled(False)
+            for w in tab.findChildren(_QDateEdit):
+                w.setReadOnly(True)
 
     def _setup_progress_indicator(self, layout):
         """Create 3-bar progress indicator with gradient fill."""
@@ -737,6 +762,11 @@ class PersonDialog(QDialog):
         grid.addWidget(radio_widget, row, 0, 1, 2)
         row += 1
 
+        # Existing survey documents section
+        self._existing_docs_frame = self._build_existing_docs_section()
+        grid.addWidget(self._existing_docs_frame, row, 0, 1, 2)
+        row += 1
+
         # Upload frame for relation documents
         self._rel_upload_frame = self._create_upload_frame(self._browse_relation_files, "rel_upload", button_text=tr("wizard.person_dialog.attach_document"))
         grid.addWidget(self._rel_upload_frame, row, 0, 1, 2)
@@ -755,6 +785,102 @@ class PersonDialog(QDialog):
         tab_layout.addLayout(btn_layout)
 
         self.tab_widget.addTab(tab, "")
+
+    # Existing Documents Section
+
+    def _build_existing_docs_section(self) -> QFrame:
+        """Build a collapsible section showing existing survey documents."""
+        frame = QFrame()
+        frame.setObjectName("ExistingDocsFrame")
+        frame.setStyleSheet("""
+            QFrame#ExistingDocsFrame {
+                background-color: #F8FAFC;
+                border: 1px solid #E2E8F0;
+                border-radius: 8px;
+            }
+            QFrame#ExistingDocsFrame QLabel { background: transparent; }
+            QFrame#ExistingDocsFrame QCheckBox { background: transparent; }
+        """)
+        layout = QVBoxLayout(frame)
+        layout.setContentsMargins(10, 8, 10, 8)
+        layout.setSpacing(6)
+
+        header = QLabel("المستندات الموجودة المرتبطة بالاستمارة")
+        header.setStyleSheet("font-size: 11px; font-weight: 700; color: #64748B;")
+        header.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        layout.addWidget(header)
+
+        self._existing_docs_container = QVBoxLayout()
+        self._existing_docs_container.setSpacing(4)
+        layout.addLayout(self._existing_docs_container)
+
+        self._existing_docs_checkboxes = []
+
+        # Load docs asynchronously
+        from PyQt5.QtCore import QTimer
+        QTimer.singleShot(200, self._load_existing_docs)
+
+        frame.setVisible(False)
+        return frame
+
+    def _load_existing_docs(self):
+        """Fetch existing survey evidences and populate checkboxes."""
+        if not self._use_api or not self._survey_id:
+            return
+        try:
+            self._refresh_token()
+            evidences = self._api_service.get_survey_evidences(self._survey_id)
+        except Exception as e:
+            logger.warning(f"Could not load existing docs: {e}")
+            return
+
+        if not evidences:
+            return
+
+        from PyQt5.QtWidgets import QCheckBox
+
+        for ev in evidences:
+            ev_id = (ev.get('id') or ev.get('evidenceId')
+                     or ev.get('Id') or ev.get('EvidenceId') or '')
+            if not ev_id:
+                continue
+
+            ev_type = ev.get('evidenceType') or ev.get('EvidenceType') or ''
+            issue_date = (ev.get('documentIssuedDate')
+                          or ev.get('DocumentIssuedDate') or '')
+            file_name = ev.get('originalFileName') or ev.get('OriginalFileName') or ''
+
+            # Build display text
+            display_parts = []
+            if file_name:
+                display_parts.append(file_name)
+            if issue_date:
+                date_part = str(issue_date)[:10]
+                display_parts.append(date_part)
+            label_text = " - ".join(display_parts) if display_parts else f"مستند ({ev_id[:8]})"
+
+            cb = QCheckBox(label_text)
+            cb.setStyleSheet("font-size: 12px; color: #334155;")
+            cb.setLayoutDirection(Qt.RightToLeft)
+            cb._evidence_data = {
+                'evidence_id': ev_id,
+                'issue_date': issue_date,
+                'path': '',
+                '_selected_existing': True,
+            }
+            self._existing_docs_checkboxes.append(cb)
+            self._existing_docs_container.addWidget(cb)
+
+        if self._existing_docs_checkboxes:
+            self._existing_docs_frame.setVisible(True)
+
+    def _get_selected_existing_docs(self) -> list:
+        """Return list of evidence entries for checked existing documents."""
+        selected = []
+        for cb in self._existing_docs_checkboxes:
+            if cb.isChecked():
+                selected.append(dict(cb._evidence_data))
+        return selected
 
     # UI Helpers
 
@@ -1905,9 +2031,12 @@ class PersonDialog(QDialog):
         if data.get('_relation_uploaded_files'):
             self.relation_uploaded_files = [
                 f for f in data['_relation_uploaded_files']
+                if os.path.exists(f.get("path", "")) or f.get("evidence_id")
+            ]
+            file_paths = [
+                f["path"] for f in self.relation_uploaded_files
                 if os.path.exists(f.get("path", ""))
             ]
-            file_paths = [f["path"] for f in self.relation_uploaded_files]
             self._update_upload_thumbnails("rel_upload", file_paths)
 
         if data.get('_relation_id'):
@@ -1976,6 +2105,10 @@ class PersonDialog(QDialog):
     def get_api_relation_id(self) -> Optional[str]:
         """Return the API-generated relation ID after linking, or None."""
         return self._api_relation_id
+
+    def get_relation_uploaded_files(self) -> List[Dict]:
+        """Return uploaded relation/tenure evidence files (with evidence_id if uploaded)."""
+        return list(self.relation_uploaded_files)
 
     def _save_person(self):
         """Validate required fields + format checks, then save."""
@@ -2078,6 +2211,72 @@ class PersonDialog(QDialog):
         if has_error:
             return
 
+        if self._use_api and self._existing_person_mode:
+            self._refresh_token()
+            person_id = (self.person_data or {}).get('person_id', '')
+            if not person_id:
+                from ui.error_handler import ErrorHandler
+                ErrorHandler.show_error(self, "معرف الشخص غير متوفر", tr("common.error"))
+                return
+            self._api_person_id = person_id
+            person_data = self.get_person_data()
+            link_success = True
+            if self._survey_id and self._unit_id:
+                relation_data = person_data.get('relation_data', {})
+                relation_data['person_id'] = person_id
+                if not relation_data.get('rel_type'):
+                    relation_data['rel_type'] = person_data.get('relationship_type')
+                relation_data['is_contact'] = True
+                try:
+                    relation_response = self._api_service.link_person_to_unit(
+                        self._survey_id, self._unit_id, relation_data
+                    )
+                    relation_id = (
+                        relation_response.get("id") or relation_response.get("relationId") or
+                        relation_response.get("Id") or relation_response.get("RelationId") or
+                        relation_response.get("personPropertyRelationId") or ""
+                    )
+                    if relation_id:
+                        self._api_relation_id = relation_id
+                    new_tenure_files = [
+                        f for f in self.relation_uploaded_files
+                        if not f.get("evidence_id")
+                    ]
+                    if relation_id and new_tenure_files:
+                        saved = self.relation_uploaded_files
+                        self.relation_uploaded_files = new_tenure_files
+                        self._upload_tenure_files(relation_id)
+                        self.relation_uploaded_files = saved
+
+                    # Link any selected existing evidence to the new relation
+                    if relation_id and self._survey_id:
+                        for ev in self._get_selected_existing_docs():
+                            try:
+                                self._api_service.link_evidence_to_relation(
+                                    self._survey_id, ev['evidence_id'], relation_id
+                                )
+                                self.relation_uploaded_files.append(ev)
+                                logger.info(f"Linked existing evidence {ev['evidence_id']} to relation {relation_id}")
+                            except Exception as ev_err:
+                                logger.warning(f"Failed to link evidence {ev['evidence_id']}: {ev_err}")
+                except Exception as e:
+                    link_success = False
+                    logger.error(f"Failed to link existing person to unit: {e}")
+                    from ui.error_handler import ErrorHandler
+                    ErrorHandler.show_error(
+                        self, tr("wizard.person_dialog.link_failed", error_msg=map_exception(e)), tr("common.error")
+                    )
+            else:
+                logger.warning(f"Skipping relation link: survey_id={self._survey_id}, unit_id={self._unit_id}")
+            if not link_success:
+                from ui.error_handler import ErrorHandler
+                ErrorHandler.show_warning(
+                    self, tr("wizard.person_dialog.link_failed_person_saved"), tr("common.warning")
+                )
+                return
+            self.accept()
+            return
+
         if self._use_api and not self.editing_mode:
             self._refresh_token()
             person_data = self.get_person_data()
@@ -2142,6 +2341,18 @@ class PersonDialog(QDialog):
 
                     if relation_id and self.relation_uploaded_files:
                         self._upload_tenure_files(relation_id)
+
+                    # Link any selected existing evidence to the new relation
+                    if relation_id and self._survey_id:
+                        for ev in self._get_selected_existing_docs():
+                            try:
+                                self._api_service.link_evidence_to_relation(
+                                    self._survey_id, ev['evidence_id'], relation_id
+                                )
+                                self.relation_uploaded_files.append(ev)
+                                logger.info(f"Linked existing evidence {ev['evidence_id']} to relation {relation_id}")
+                            except Exception as ev_err:
+                                logger.warning(f"Failed to link evidence {ev['evidence_id']}: {ev_err}")
 
                 except Exception as e:
                     link_success = False

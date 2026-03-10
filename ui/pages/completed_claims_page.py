@@ -251,41 +251,67 @@ class CompletedClaimsPage(QWidget):
             self.title_label.setText(title)
 
     def refresh(self, data=None):
-        """Refresh the claims list from the backend API (Approved and Rejected statuses)."""
+        """Refresh the claims list from Finalized office surveys."""
         self.claims_data = []
-        if not self.db:
-            self._show_empty_state()
-            return
         try:
-            from controllers.claim_controller import ClaimController
-            ctrl = ClaimController(self.db)
-            summaries = []
-            for status_int in (5, 6):   # 5=Approved, 6=Rejected
-                result = ctrl.load_claims_from_api(status=status_int)
-                if result.success and result.data:
-                    summaries.extend(result.data)
+            from controllers.survey_controller import SurveyController
+            ctrl = SurveyController(self.db)
+            result = ctrl.load_office_surveys(status="Finalized")
+            summaries = result.data if result.success and result.data else []
             for s in summaries:
-                status_int = s.get("caseStatus") or 0
-                status_str = "approved" if status_int == 5 else "rejected"
-                date_raw = s.get("createdAt", s.get("surveyDate", ""))
-                date_str = date_raw.split("T")[0] if "T" in date_raw else date_raw
-                cid = s.get("claimId", "N/A")
                 self.claims_data.append({
-                    "claim_id": cid,
-                    "claim_uuid": cid,
-                    "survey_id": s.get("surveyId", ""),
-                    "claimant_name": s.get("fullNameArabic") or s.get("primaryClaimantName") or "غير محدد",
-                    "date": date_str,
-                    "status": status_str,
-                    "building": None,
-                    "unit": None,
-                    "unit_id": "",
-                    "building_id": "",
+                    "claim_id":      s.get("referenceCode") or s.get("id", "N/A"),
+                    "claim_uuid":    s.get("id", ""),
+                    "survey_id":     s.get("id", ""),
+                    "claimant_name": s.get("intervieweeName") or "غير محدد",
+                    "date":          (s.get("surveyDate") or "")[:10],
+                    "status":        "approved",
+                    "building_id":   s.get("buildingId", ""),
+                    "unit_number":   s.get("unitIdentifier", "") or s.get("propertyUnitCode", ""),
+                    "building":      None,
+                    "unit":          None,
+                    "unit_id":       s.get("propertyUnitId", ""),
                 })
         except Exception as e:
             import logging
-            logging.getLogger(__name__).warning(f"Error loading claims from API: {e}")
+            logging.getLogger(__name__).warning(f"Error loading finalized surveys: {e}")
+
+        # Enrich missing names from survey detail
+        self._enrich_missing_names(self.claims_data)
+
         if self.claims_data:
             self._show_claims_list()
         else:
             self._show_empty_state()
+
+    def _enrich_missing_names(self, items):
+        """For items with no intervieweeName, fetch name from survey detail/persons."""
+        missing = [item for item in items if item.get("claimant_name") == "غير محدد"]
+        if not missing:
+            return
+        try:
+            from services.api_client import get_api_client
+            api = get_api_client()
+        except Exception:
+            return
+        for item in missing:
+            try:
+                detail = api.get_office_survey_detail(item["claim_uuid"])
+                if detail.get("intervieweeName"):
+                    item["claimant_name"] = detail["intervieweeName"]
+                    continue
+                for rel in (detail.get("relations") or []):
+                    pid = rel.get("personId")
+                    if pid:
+                        person = api._request("GET", f"/v1/Persons/{pid}")
+                        parts = [
+                            person.get("firstNameArabic", ""),
+                            person.get("fatherNameArabic", ""),
+                            person.get("familyNameArabic", ""),
+                        ]
+                        name = " ".join(p for p in parts if p)
+                        if name:
+                            item["claimant_name"] = name
+                            break
+            except Exception:
+                pass

@@ -21,6 +21,7 @@ from PyQt5.QtGui import QIcon
 from ui.wizards.framework import BaseStep, StepValidationResult
 from ui.wizards.office_survey.survey_context import SurveyContext
 from ui.wizards.office_survey.dialogs.person_dialog import PersonDialog
+from ui.wizards.office_survey.dialogs.person_selection_dialog import PersonSelectionDialog
 from app.config import Config
 from ui.style_manager import StyleManager
 from services.api_client import get_api_client
@@ -147,6 +148,10 @@ class OccupancyClaimsStep(BaseStep):
         table_layout.addLayout(header)
         table_layout.addSpacing(12)
 
+        self._applicant_section = self._build_applicant_section()
+        self._applicant_section.setVisible(False)
+        table_layout.addWidget(self._applicant_section)
+
         # Scroll area for person cards
         scroll_area = QScrollArea()
         scroll_area.setLayoutDirection(Qt.RightToLeft)
@@ -237,6 +242,139 @@ class OccupancyClaimsStep(BaseStep):
 
         return container
 
+    def _build_applicant_section(self) -> QFrame:
+        """Build the applicant card shown at top of persons list."""
+        frame = QFrame()
+        frame.setObjectName("ApplicantSection")
+        frame.setStyleSheet("""
+            QFrame#ApplicantSection {
+                background-color: #EFF6FF;
+                border: 1px solid #BFDBFE;
+                border-radius: 10px;
+            }
+            QFrame#ApplicantSection QLabel { border: none; background: transparent; }
+        """)
+        row = QHBoxLayout(frame)
+        row.setContentsMargins(12, 10, 12, 10)
+        row.setSpacing(10)
+
+        text_col = QVBoxLayout()
+        text_col.setSpacing(2)
+        self._applicant_name_lbl = QLabel("")
+        self._applicant_name_lbl.setFont(create_font(size=12, weight=FontManager.WEIGHT_SEMIBOLD))
+        self._applicant_name_lbl.setStyleSheet(f"color: {Colors.WIZARD_TITLE};")
+        self._applicant_name_lbl.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        self._applicant_nid_lbl = QLabel("")
+        self._applicant_nid_lbl.setFont(create_font(size=10, weight=FontManager.WEIGHT_REGULAR))
+        self._applicant_nid_lbl.setStyleSheet(f"color: #64748B;")
+        self._applicant_nid_lbl.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        text_col.addWidget(self._applicant_name_lbl)
+        text_col.addWidget(self._applicant_nid_lbl)
+
+        self._link_applicant_btn = QPushButton(tr("wizard.occupancy_claims.link_applicant"))
+        self._link_applicant_btn.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
+        self._link_applicant_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #3B82F6; color: white;
+                border: none; border-radius: 6px; padding: 8px 16px;
+            }
+            QPushButton:hover { background-color: #2563EB; }
+        """)
+        self._link_applicant_btn.clicked.connect(self._add_applicant_as_person)
+
+        badge = QLabel(tr("wizard.occupancy_claims.applicant_badge"))
+        badge.setStyleSheet("""
+            QLabel {
+                background-color: #3B82F6; color: white;
+                border-radius: 4px; padding: 2px 8px;
+                font-size: 10px; font-weight: 600;
+            }
+        """)
+
+        row.addLayout(text_col)
+        row.addStretch()
+        row.addWidget(badge)
+        row.addWidget(self._link_applicant_btn)
+        return frame
+
+    def _refresh_applicant_section(self):
+        """Show/hide the applicant card based on context state."""
+        if not self.context.applicant:
+            self._applicant_section.setVisible(False)
+            return
+        contact_person_id = self.context.get_data('contact_person_id')
+        applicant_nid = self.context.applicant.get('national_id', '')
+        already_added = any(
+            p.get('_is_applicant')
+            or (contact_person_id and p.get('person_id') == contact_person_id)
+            or (applicant_nid and p.get('national_id') == applicant_nid)
+            for p in self.context.persons
+        )
+        if already_added:
+            self._applicant_section.setVisible(False)
+            return
+        applicant = self.context.applicant
+        name = " ".join(filter(None, [
+            applicant.get('first_name_ar', ''),
+            applicant.get('father_name_ar', ''),
+            applicant.get('last_name_ar', ''),
+        ]))
+        nid = applicant.get('national_id', '')
+        self._applicant_name_lbl.setText(name or "—")
+        self._applicant_nid_lbl.setText(f"رقم وطني: {nid}" if nid else "")
+        self._applicant_section.setVisible(True)
+
+    def _add_applicant_as_person(self):
+        """Open PersonDialog pre-filled with applicant data (relation entry only)."""
+        applicant = self.context.applicant
+        if not applicant:
+            return
+
+        contact_person_id = self.context.get_data('contact_person_id')
+        auth_token, survey_id, household_id, unit_id = self._get_context_ids()
+
+        person_data = {
+            'person_id': contact_person_id or str(uuid.uuid4()),
+            'first_name': applicant.get('first_name_ar', ''),
+            'father_name': applicant.get('father_name_ar', ''),
+            'last_name': applicant.get('last_name_ar', ''),
+            'mother_name': applicant.get('mother_name_ar', ''),
+            'national_id': applicant.get('national_id', ''),
+            'gender': applicant.get('gender'),
+            'nationality': applicant.get('nationality'),
+            'phone': applicant.get('phone', ''),
+            'email': applicant.get('email', ''),
+            'landline': applicant.get('landline', ''),
+        }
+
+        dialog = PersonDialog(
+            person_data=person_data,
+            existing_persons=self.context.persons,
+            parent=self,
+            auth_token=auth_token,
+            survey_id=survey_id,
+            household_id=household_id,
+            unit_id=unit_id,
+            existing_person_mode=True,
+        )
+        if dialog.exec_() != QDialog.Accepted:
+            return
+
+        result_data = dialog.get_person_data()
+        result_data['person_id'] = contact_person_id or dialog.get_api_person_id() or person_data['person_id']
+        result_data['_is_applicant'] = True
+        rel_id = dialog.get_api_relation_id()
+        if rel_id:
+            result_data['_relation_id'] = rel_id
+        rel_files = dialog.get_relation_uploaded_files()
+        if rel_files:
+            result_data['_relation_uploaded_files'] = rel_files
+
+        self.context.persons.append(result_data)
+        self.context.finalize_response = None
+        self._refresh_persons_list()
+        logger.info(f"Applicant added as person: {result_data.get('first_name')} {result_data.get('last_name')}")
+
     def _get_context_ids(self):
         """Get survey_id, household_id, unit_id, and auth_token from context."""
         auth_token = None
@@ -255,10 +393,113 @@ class OccupancyClaimsStep(BaseStep):
 
         return auth_token, survey_id, household_id, unit_id
 
+    def _is_applicant_added(self) -> bool:
+        """Check if applicant is already added as a person."""
+        if not self.context.applicant:
+            return True
+        contact_person_id = self.context.get_data('contact_person_id')
+        applicant_nid = self.context.applicant.get('national_id', '')
+        return any(
+            p.get('_is_applicant')
+            or (contact_person_id and p.get('person_id') == contact_person_id)
+            or (applicant_nid and p.get('national_id') == applicant_nid)
+            for p in self.context.persons
+        )
+
+    def _fetch_unit_persons(self) -> list:
+        """Fetch persons already linked to this unit from API."""
+        if not self._use_api:
+            return []
+        survey_id = self.context.get_data("survey_id")
+        if not survey_id:
+            return []
+        try:
+            self._set_auth_token()
+            detail = self._api_service.get_office_survey_detail(survey_id)
+            relations = detail.get('relations', [])
+            result = []
+            for r in relations:
+                pid = r.get('personId') or r.get('person_id')
+                if not pid:
+                    continue
+                result.append({
+                    'person_id': pid,
+                    'first_name': r.get('firstNameArabic') or r.get('first_name', ''),
+                    'father_name': r.get('fatherNameArabic') or r.get('father_name', ''),
+                    'last_name': r.get('familyNameArabic') or r.get('last_name', ''),
+                    'mother_name': r.get('motherNameArabic') or r.get('mother_name', ''),
+                    'national_id': r.get('nationalId') or r.get('national_id', ''),
+                    'gender': r.get('gender'),
+                    'nationality': r.get('nationality'),
+                    'phone': r.get('mobileNumber') or r.get('phone', ''),
+                    'email': r.get('email', ''),
+                    'person_role': r.get('relationType') or r.get('relation_type'),
+                    'relationship_type': r.get('relationType') or r.get('relation_type'),
+                    '_relation_id': r.get('id') or r.get('relationId'),
+                })
+            return result
+        except Exception as e:
+            logger.warning(f"Could not fetch unit persons: {e}")
+            return []
+
+    def _add_existing_person(self, person_data: dict):
+        """Add an existing person from the unit, opening PersonDialog in existing_person_mode."""
+        auth_token, survey_id, household_id, unit_id = self._get_context_ids()
+        dialog = PersonDialog(
+            person_data=person_data,
+            existing_persons=self.context.persons,
+            parent=self,
+            auth_token=auth_token,
+            survey_id=survey_id,
+            household_id=household_id,
+            unit_id=unit_id,
+            existing_person_mode=True,
+        )
+        if dialog.exec_() != QDialog.Accepted:
+            return
+        result_data = dialog.get_person_data()
+        result_data['person_id'] = person_data.get('person_id') or dialog.get_api_person_id() or str(uuid.uuid4())
+        rel_id = dialog.get_api_relation_id() or person_data.get('_relation_id')
+        if rel_id:
+            result_data['_relation_id'] = rel_id
+        rel_files = dialog.get_relation_uploaded_files()
+        if rel_files:
+            result_data['_relation_uploaded_files'] = rel_files
+        self.context.persons.append(result_data)
+        self.context.finalize_response = None
+        self._refresh_persons_list()
+        logger.info(f"Existing person added: {result_data.get('first_name')} {result_data.get('last_name')}")
+
     def _add_person(self):
-        """Show PersonDialog to add a new person."""
+        """Show PersonSelectionDialog, then open PersonDialog based on selection."""
         auth_token, survey_id, household_id, unit_id = self._get_context_ids()
 
+        # Fetch existing persons linked to this unit
+        unit_persons = self._fetch_unit_persons()
+
+        # Show selection dialog
+        selection_dialog = PersonSelectionDialog(
+            applicant=self.context.applicant if not self._is_applicant_added() else None,
+            existing_persons=unit_persons,
+            already_added_ids=[p.get('person_id') for p in self.context.persons],
+            parent=self,
+        )
+        if selection_dialog.exec_() != QDialog.Accepted:
+            return
+
+        selection = selection_dialog.get_selection()
+        if not selection:
+            return
+
+        if selection['type'] == 'applicant':
+            self._add_applicant_as_person()
+            return
+
+        if selection['type'] == 'existing':
+            self._add_existing_person(selection['person_data'])
+            return
+
+        # 'new' — current behavior
         dialog = PersonDialog(
             person_data=None,
             existing_persons=self.context.persons,
@@ -279,6 +520,9 @@ class OccupancyClaimsStep(BaseStep):
             rel_id = dialog.get_api_relation_id()
             if rel_id:
                 person_data['_relation_id'] = rel_id
+            rel_files = dialog.get_relation_uploaded_files()
+            if rel_files:
+                person_data['_relation_uploaded_files'] = rel_files
             self.context.persons.append(person_data)
             self.context.finalize_response = None
             self._refresh_persons_list()
@@ -300,43 +544,72 @@ class OccupancyClaimsStep(BaseStep):
 
         auth_token, survey_id, household_id, unit_id = self._get_context_ids()
 
+        has_relation = bool(
+            person_data.get('person_role')
+            or person_data.get('relationship_type')
+            or person_data.get('relation_data', {}).get('rel_type')
+            or person_data.get('_relation_id')
+        )
+        initial_tab = 2 if has_relation else 1
+
+        # No relation yet → open in existing_person_mode so link_person_to_unit() is called
+        open_as_existing = not has_relation
+
+        person_data_copy = dict(person_data)
+        if person_data.get('_is_applicant') and self.context.applicant:
+            id_photos = self.context.applicant.get('id_photo_paths', [])
+            if id_photos:
+                person_data_copy['_uploaded_files'] = id_photos
+
         dialog = PersonDialog(
-            person_data=person_data,
+            person_data=person_data_copy,
             existing_persons=self.context.persons,
             parent=self,
             auth_token=auth_token,
             survey_id=survey_id,
             household_id=household_id,
-            unit_id=unit_id
+            unit_id=unit_id,
+            existing_person_mode=open_as_existing,
+            initial_tab=initial_tab,
         )
 
         if dialog.exec_() == QDialog.Accepted:
             updated_data = dialog.get_person_data()
             updated_data['person_id'] = person_id
-            if self._use_api and person_id:
-                try:
-                    self._set_auth_token()
-                    if survey_id and household_id:
-                        self._api_service.update_person_in_survey(
-                            survey_id, household_id, person_id, updated_data)
-                    else:
+
+            rel_files = dialog.get_relation_uploaded_files()
+            if rel_files:
+                updated_data['_relation_uploaded_files'] = rel_files
+
+            if open_as_existing:
+                # PersonDialog handled link_person_to_unit() + evidence upload internally
+                rel_id = dialog.get_api_relation_id()
+                if rel_id:
+                    updated_data['_relation_id'] = rel_id
+            else:
+                if self._use_api and person_id:
+                    try:
+                        self._set_auth_token()
                         self._api_service.update_person(person_id, updated_data)
-                    logger.info(f"Person {person_id} updated via API")
-                    relation_id = updated_data.get('_relation_id') or person_data.get('_relation_id')
-                    if relation_id and survey_id:
-                        try:
-                            self._api_service.update_relation(survey_id, relation_id, updated_data)
-                            logger.info(f"Relation {relation_id} updated via API")
-                        except Exception as e:
-                            logger.warning(f"Failed to update relation {relation_id}: {e}")
-                except Exception as e:
-                    logger.error(f"Failed to update person via API: {e}")
-                    ErrorHandler.show_error(self, map_exception(e), tr("common.error"))
-                    return
+                        logger.info(f"Person {person_id} updated via API")
+                        relation_id = updated_data.get('_relation_id') or person_data.get('_relation_id')
+                        if relation_id and survey_id:
+                            try:
+                                self._api_service.update_relation(survey_id, relation_id, updated_data)
+                                logger.info(f"Relation {relation_id} updated via API")
+                            except Exception as e:
+                                logger.warning(f"Failed to update relation {relation_id}: {e}")
+                    except Exception as e:
+                        logger.error(f"Failed to update person via API: {e}")
+                        ErrorHandler.show_error(self, map_exception(e), tr("common.error"))
+                        return
+
+            if person_data.get('_is_applicant'):
+                updated_data['_is_applicant'] = True
             self.context.persons[person_index] = updated_data
             self.context.finalize_response = None
             self._refresh_persons_list()
-            logger.info(f"Person updated: {updated_data['first_name']} {updated_data['last_name']}")
+            logger.info(f"Person updated: {updated_data.get('first_name', '')} {updated_data.get('last_name', '')}")
 
     def _delete_person(self, person_id: str):
         """Delete a person with confirmation."""
@@ -377,6 +650,8 @@ class OccupancyClaimsStep(BaseStep):
         """Create a person row card with name, role, and action menu."""
         from ui.components.icon import Icon
 
+        person_id = person['person_id']
+
         card = QFrame()
         card.setLayoutDirection(Qt.RightToLeft)
         card.setFixedHeight(60)
@@ -386,10 +661,16 @@ class OccupancyClaimsStep(BaseStep):
                 border: 1px solid #E5EAF6;
                 border-radius: 12px;
             }}
+            QFrame:hover {{
+                background-color: #F8FAFF;
+                border-color: #C7D7F0;
+            }}
             QLabel {{
                 border: none;
             }}
         """)
+        card.setCursor(Qt.PointingHandCursor)
+        card.mousePressEvent = lambda e, pid=person_id: self._view_person(pid) if e.button() == Qt.LeftButton else None
 
         card_layout = QHBoxLayout(card)
         card_layout.setContentsMargins(8, 8, 8, 8)
@@ -427,8 +708,12 @@ class OccupancyClaimsStep(BaseStep):
         name_lbl.setAlignment(Qt.AlignRight)
 
         # Show role from person_role or relationship_type
-        role_key = person.get('person_role') or person.get('relationship_type', '')
-        role_text = get_relation_type_display(role_key)
+        role_key = (
+            person.get('person_role')
+            or person.get('relationship_type')
+            or person.get('relation_data', {}).get('rel_type')
+        )
+        role_text = get_relation_type_display(role_key) if role_key else ""
         role_lbl = QLabel(role_text)
         role_lbl.setFont(create_font(size=FontManager.WIZARD_CARD_VALUE, weight=FontManager.WEIGHT_REGULAR))
         role_lbl.setStyleSheet(f"color: {Colors.WIZARD_SUBTITLE}; background: transparent;")
@@ -512,6 +797,8 @@ class OccupancyClaimsStep(BaseStep):
             person_card = self._create_person_row_card(person, idx)
             self.persons_table_layout.insertWidget(idx, person_card)
 
+        self._refresh_applicant_section()
+
     def _collect_relations_from_persons(self) -> List[Dict[str, Any]]:
         """Collect relation data from person records (stored in relation_data)."""
         relations = []
@@ -580,12 +867,87 @@ class OccupancyClaimsStep(BaseStep):
         try:
             persons = self._api_service.get_persons_for_household(survey_id, household_id)
             if persons:
-                self.context.persons = persons
+                self.context.persons = [self._normalize_api_person(p) for p in persons]
                 logger.info(f"Loaded {len(persons)} persons from API")
             else:
                 logger.info("No persons found from API")
         except Exception as e:
             logger.error(f"Failed to fetch persons from API: {e}")
+
+    @staticmethod
+    def _normalize_api_person(p: dict) -> dict:
+        """Map camelCase API person response to snake_case keys expected by the UI."""
+        return {
+            "person_id":       p.get("id") or p.get("person_id", ""),
+            "first_name":      p.get("firstNameArabic") or p.get("first_name", ""),
+            "last_name":       p.get("familyNameArabic") or p.get("last_name", ""),
+            "father_name":     p.get("fatherNameArabic") or p.get("father_name", ""),
+            "mother_name":     p.get("motherNameArabic") or p.get("mother_name", ""),
+            "national_id":     p.get("nationalId") or p.get("national_id", ""),
+            "birth_date":      p.get("dateOfBirth") or p.get("birth_date", ""),
+            "gender":          p.get("gender"),
+            "nationality":     p.get("nationality"),
+            "phone":           p.get("mobileNumber") or p.get("phone", ""),
+            "landline":        p.get("phoneNumber") or p.get("landline", ""),
+            "email":           p.get("email", ""),
+            "person_role":     p.get("relationType") or p.get("person_role"),
+            "relationship_type": p.get("relationshipType") or p.get("relationship_type"),
+            "_relation_id":    p.get("relationId") or p.get("_relation_id"),
+            "relation_data":   p.get("relation_data", {}),
+        }
+
+    def _enrich_persons_with_server_evidences(self):
+        """Fetch server evidences once and populate _relation_uploaded_files
+        for persons that have a _relation_id but no local evidence entries."""
+        if not self._use_api:
+            return
+
+        survey_id = self.context.get_data("survey_id")
+        if not survey_id:
+            return
+
+        needs_enrichment = any(
+            p.get('_relation_id') and not p.get('_relation_uploaded_files')
+            for p in self.context.persons
+        )
+        if not needs_enrichment:
+            return
+
+        try:
+            self._set_auth_token()
+            evidences = self._api_service.get_survey_evidences(survey_id)
+        except Exception as e:
+            logger.warning(f"Could not fetch survey evidences for enrichment: {e}")
+            return
+
+        relation_ev_map: dict = {}
+        for ev in evidences:
+            rel_id = (ev.get('personPropertyRelationId')
+                      or ev.get('PersonPropertyRelationId'))
+            if not rel_id:
+                continue
+            ev_id = (ev.get('id') or ev.get('evidenceId')
+                     or ev.get('Id') or ev.get('EvidenceId') or '')
+            if not ev_id:
+                continue
+            relation_ev_map.setdefault(rel_id, []).append({
+                'path': '',
+                'evidence_id': ev_id,
+                'issue_date': (ev.get('documentIssuedDate')
+                               or ev.get('DocumentIssuedDate') or ''),
+            })
+
+        for person in self.context.persons:
+            rel_id = person.get('_relation_id')
+            if not rel_id or person.get('_relation_uploaded_files'):
+                continue
+            server_files = relation_ev_map.get(rel_id, [])
+            if server_files:
+                person['_relation_uploaded_files'] = server_files
+                logger.info(
+                    f"Enriched {person.get('first_name', '?')} with "
+                    f"{len(server_files)} server evidences"
+                )
 
     def _process_claims_via_api(self):
         """Process claims by calling the finalize API."""
@@ -634,6 +996,7 @@ class OccupancyClaimsStep(BaseStep):
         self._title_label.setText(tr("wizard.occupancy_claims.title"))
         self._subtitle_label.setText(tr("wizard.occupancy_claims.subtitle"))
         self._add_person_btn.setText(tr("wizard.occupancy_claims.add_person"))
+        self._link_applicant_btn.setText(tr("wizard.occupancy_claims.link_applicant"))
         self._refresh_persons_list()
 
     def validate(self) -> StepValidationResult:
@@ -645,8 +1008,57 @@ class OccupancyClaimsStep(BaseStep):
 
         # Collect relations from person data into context
         self.context.relations = self._collect_relations_from_persons()
+        self.context.claims = self._build_claims_preview()
 
         return result
+
+    def _build_claims_preview(self) -> list:
+        """Build a claims preview list from persons with relations, for ReviewStep display."""
+        unit_id = None
+        unit_display_id = None
+        if self.context.unit:
+            unit_id = getattr(self.context.unit, 'unit_uuid', None)
+            unit_display_id = (
+                getattr(self.context.unit, 'unit_number', None)
+                or getattr(self.context.unit, 'unit_display_id', None)
+            )
+        elif self.context.new_unit_data:
+            unit_id = self.context.new_unit_data.get('unit_uuid')
+            unit_display_id = self.context.new_unit_data.get('unit_number')
+
+        claims = []
+        for person in self.context.persons:
+            rel_data = person.get('relation_data', {})
+            role_key = (
+                rel_data.get('rel_type')
+                or person.get('person_role')
+                or person.get('relationship_type')
+            )
+            if not role_key:
+                continue
+            full_name = " ".join(filter(None, [
+                person.get('first_name', ''),
+                person.get('father_name', ''),
+                person.get('last_name', ''),
+            ]))
+            tenure_files = person.get('_relation_uploaded_files') or []
+            evidence_ids = [f['evidence_id'] for f in tenure_files if f.get('evidence_id')]
+            claims.append({
+                'person_name': full_name,
+                'claimant_name': full_name,
+                'unit_id': unit_id,
+                'unit_display_id': unit_display_id,
+                'claim_type': role_key,
+                'business_nature': rel_data.get('contract_type'),
+                'case_status': 'open',
+                'source': rel_data.get('evidence_type'),
+                'survey_date': rel_data.get('start_date'),
+                'priority': rel_data.get('priority', 2) or 2,
+                'notes': rel_data.get('notes', ''),
+                'evidence_count': len(evidence_ids),
+                'evidence_ids': evidence_ids,
+            })
+        return claims
 
     def collect_data(self) -> Dict[str, Any]:
         """Collect persons and relations data."""
@@ -666,10 +1078,11 @@ class OccupancyClaimsStep(BaseStep):
     def on_show(self):
         """Called when step is shown."""
         super().on_show()
-        if self._use_api:
-            self._fetch_persons_from_api()
-            self._auto_relink_orphaned_persons()
+        self._fetch_persons_from_api()
+        self._enrich_persons_with_server_evidences()
+        self._auto_relink_orphaned_persons()
         self._refresh_persons_list()
+        self._refresh_applicant_section()
 
     def _auto_relink_orphaned_persons(self):
         """Re-create relations for persons that lost them after unit change.
