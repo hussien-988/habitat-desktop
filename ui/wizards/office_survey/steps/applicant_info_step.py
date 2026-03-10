@@ -2,224 +2,595 @@
 """
 Applicant Info Step - Step 1 of Office Survey Wizard.
 
-Collects visitor/applicant information:
-- Full name (required) -> intervieweeName
-- National ID -> first person in OccupancyClaimsStep
-- Phone number -> contactPhone
-- Email (optional) -> contactEmail
-- In-person visit checkbox -> inPersonVisit
+Single-page form (no tabs). White rounded card with drop shadow.
+Fields: first/last/father/mother name, birth year, gender, nationality,
+        national ID, mobile (+963|09), landline, ID photo, in-person visit.
+
+collect_data() stores context.applicant with backward-compat "full_name" key.
 """
+
+import os
+from typing import List
 
 from PyQt5.QtWidgets import (
     QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
-    QFrame, QCheckBox, QSizePolicy
+    QPushButton, QFrame, QWidget,
+    QGridLayout, QCheckBox, QSizePolicy,
+    QScrollArea, QFileDialog, QGraphicsDropShadowEffect,
 )
-from PyQt5.QtCore import Qt
-from PyQt5.QtGui import QFont
+from PyQt5.QtCore import Qt, QUrl, QRegExp as QtRegExp
+from PyQt5.QtGui import QColor, QPixmap, QRegExpValidator, QDesktopServices
 
+from app.config import Config
 from ui.wizards.framework import BaseStep, StepValidationResult
 from ui.wizards.office_survey.survey_context import SurveyContext
-from ui.design_system import Colors
-from ui.font_utils import create_font, FontManager
+from ui.components.rtl_combo import RtlCombo
+from ui.style_manager import StyleManager
+from services.display_mappings import get_gender_options, get_nationality_options
 from services.translation_manager import tr
 from utils.logger import get_logger
 
 logger = get_logger(__name__)
 
+_LABEL_STYLE = "color: #555; font-weight: 600; font-size: 11pt; background: transparent;"
+
 
 class ApplicantInfoStep(BaseStep):
-    """
-    Step 1: Applicant (Visitor) Information.
-
-    Maps to CreateOfficeSurveyCommand fields:
-    - intervieweeName: full_name
-    - contactPhone: phone
-    - contactEmail: email
-    - inPersonVisit: in_person
-    """
+    """Step 1: Applicant (Visitor) Information — single-page form."""
 
     def __init__(self, context: SurveyContext, parent=None):
         super().__init__(context, parent)
+        self.uploaded_files: List[str] = []
+        self._field_styles: dict = {}
+        from services.api_client import get_api_client
+        self._api_client = get_api_client()
+
+    # ------------------------------------------------------------------
+    # UI construction
+    # ------------------------------------------------------------------
 
     def setup_ui(self):
-        layout = self.main_layout
-        layout.setContentsMargins(0, 8, 0, 16)
-        layout.setSpacing(0)
+        self.main_layout.setContentsMargins(0, 4, 0, 16)
+        self.main_layout.setSpacing(0)
 
-        # Card
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.NoFrame)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        scroll.setStyleSheet(
+            "QScrollArea { border: none; background: transparent; }"
+            + StyleManager.scrollbar()
+        )
+
+        # White rounded card with drop shadow
         card = QFrame()
-        card.setObjectName("applicantCard")
+        card.setObjectName("ApplicantCard")
         card.setStyleSheet("""
-            QFrame#applicantCard {
+            QFrame#ApplicantCard {
                 background-color: #FFFFFF;
-                border: 1px solid #E1E8ED;
-                border-radius: 12px;
+                border-radius: 24px;
+            }
+            QFrame#ApplicantCard QLabel,
+            QFrame#ApplicantCard QCheckBox {
+                background-color: transparent;
             }
         """)
+        shadow = QGraphicsDropShadowEffect(card)
+        shadow.setBlurRadius(30)
+        shadow.setOffset(0, 4)
+        shadow.setColor(QColor(0, 0, 0, 40))
+        card.setGraphicsEffect(shadow)
+
         card_layout = QVBoxLayout(card)
-        card_layout.setContentsMargins(20, 20, 20, 20)
+        card_layout.setContentsMargins(24, 24, 24, 24)
         card_layout.setSpacing(16)
+        card_layout.setDirection(QVBoxLayout.TopToBottom)
 
-        # Header
-        header_row = QHBoxLayout()
-        header_row.setSpacing(12)
-
-        icon_label = QLabel()
-        icon_label.setFixedSize(40, 40)
-        icon_label.setAlignment(Qt.AlignCenter)
-        icon_label.setStyleSheet("""
-            QLabel {
-                background-color: #EFF6FF;
-                border: 1px solid #DBEAFE;
-                border-radius: 10px;
-                font-size: 18px;
-            }
-        """)
-        icon_label.setText("👤")
-        header_row.addWidget(icon_label)
-
-        header_text = QVBoxLayout()
-        header_text.setSpacing(2)
-
-        title_label = QLabel(tr("wizard.step.applicant_info"))
-        title_label.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
-        title_label.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent;")
-        header_text.addWidget(title_label)
-
-        subtitle_label = QLabel(tr("wizard.applicant.subtitle"))
-        subtitle_label.setFont(create_font(size=9, weight=FontManager.WEIGHT_REGULAR))
-        subtitle_label.setStyleSheet(f"color: {Colors.WIZARD_SUBTITLE}; background: transparent;")
-        header_text.addWidget(subtitle_label)
-
-        header_row.addLayout(header_text)
-        header_row.addStretch()
-        card_layout.addLayout(header_row)
+        # Title
+        title = QLabel(tr("wizard.step.applicant_info"))
+        title.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        title.setStyleSheet("font-size: 18px; font-weight: bold; color: #2c3e50; background: transparent;")
+        card_layout.addWidget(title)
 
         # Divider
-        divider = QFrame()
-        divider.setFrameShape(QFrame.HLine)
-        divider.setStyleSheet("color: #E1E8ED; border: none; background-color: #E1E8ED;")
-        divider.setFixedHeight(1)
-        card_layout.addWidget(divider)
+        div = QFrame()
+        div.setFrameShape(QFrame.HLine)
+        div.setFixedHeight(1)
+        div.setStyleSheet("border: none; background-color: #e8ecf0;")
+        card_layout.addWidget(div)
 
-        # Field style
-        input_style = """
-            QLineEdit {
-                background-color: #F8FAFF;
-                border: 1px solid #dcdfe6;
-                border-radius: 8px;
-                padding: 8px 12px;
-                color: #374151;
-                font-size: 10pt;
+        # Form grid
+        card_layout.addLayout(self._build_form())
+
+        # Wrap card in container to allow stretching below
+        container = QWidget()
+        container.setStyleSheet("background: transparent;")
+        wrap = QVBoxLayout(container)
+        wrap.setContentsMargins(0, 0, 0, 0)
+        wrap.setSpacing(0)
+        wrap.addWidget(card)
+        wrap.addStretch()
+
+        scroll.setWidget(container)
+        self.main_layout.addWidget(scroll)
+
+    def _build_form(self) -> QGridLayout:
+        grid = QGridLayout()
+        grid.setHorizontalSpacing(14)
+        grid.setVerticalSpacing(10)
+        grid.setColumnStretch(0, 1)
+        grid.setColumnStretch(1, 1)
+
+        _name_v = QRegExpValidator(QtRegExp("[\u0600-\u06FFa-zA-Z\\s.\\-']+"))
+        row = 0
+
+        # --- Row 1: الاسم الأول | الكنية ---
+        grid.addWidget(self._lbl(tr("wizard.person_dialog.first_name") + " *"), row, 0)
+        grid.addWidget(self._lbl(tr("wizard.person_dialog.last_name") + " *"), row, 1)
+        row += 1
+
+        self.first_name = self._field(tr("wizard.person_dialog.first_name_placeholder"), _name_v)
+        self._first_name_error = self._err_lbl()
+        fn_box = self._field_box(self.first_name, self._first_name_error)
+        grid.addLayout(fn_box, row, 0)
+
+        self.last_name = self._field(tr("wizard.person_dialog.last_name_placeholder"), _name_v)
+        self._last_name_error = self._err_lbl()
+        ln_box = self._field_box(self.last_name, self._last_name_error)
+        grid.addLayout(ln_box, row, 1)
+        row += 1
+
+        # --- Row 2: اسم الأب | اسم الأم ---
+        grid.addWidget(self._lbl(tr("wizard.person_dialog.father_name")), row, 0)
+        grid.addWidget(self._lbl(tr("wizard.person_dialog.mother_name") + " *"), row, 1)
+        row += 1
+
+        self.father_name = self._field(tr("wizard.person_dialog.father_name_placeholder"), _name_v)
+        grid.addWidget(self.father_name, row, 0)
+
+        self.mother_name = self._field(tr("wizard.person_dialog.mother_name_placeholder"), _name_v)
+        self._mother_name_error = self._err_lbl()
+        mn_box = self._field_box(self.mother_name, self._mother_name_error)
+        grid.addLayout(mn_box, row, 1)
+        row += 1
+
+        # --- Row 3: سنة الميلاد | الجنس ---
+        grid.addWidget(self._lbl(tr("wizard.person_dialog.birth_date")), row, 0)
+        grid.addWidget(self._lbl(tr("wizard.person_dialog.gender")), row, 1)
+        row += 1
+
+        self.birth_year = self._field("مثال: 1980", QRegExpValidator(QtRegExp(r"\d{0,4}")))
+        grid.addWidget(self.birth_year, row, 0)
+
+        self.gender = RtlCombo()
+        self.gender.addItem(tr("wizard.person_dialog.select"), None)
+        for code, display_name in get_gender_options():
+            self.gender.addItem(display_name, code)
+        self.gender.setStyleSheet(self._input_style())
+        grid.addWidget(self.gender, row, 1)
+        row += 1
+
+        # --- Row 4: الجنسية | الرقم الوطني ---
+        grid.addWidget(self._lbl(tr("wizard.person_dialog.nationality")), row, 0)
+        grid.addWidget(self._lbl(tr("wizard.person_dialog.national_id")), row, 1)
+        row += 1
+
+        self.nationality = RtlCombo()
+        self.nationality.addItem(tr("wizard.person_dialog.select"), None)
+        for code, display_name in get_nationality_options():
+            self.nationality.addItem(display_name, code)
+        self.nationality.setStyleSheet(self._input_style())
+        grid.addWidget(self.nationality, row, 0)
+
+        self.national_id = self._field("0000000000", QRegExpValidator(QtRegExp(r"\d{0,11}")))
+        self._nid_error = self._err_lbl()
+        nid_box = self._field_box(self.national_id, self._nid_error)
+        grid.addLayout(nid_box, row, 1)
+        row += 1
+
+        # --- Row 5: رقم الجوال (full width) ---
+        grid.addWidget(self._lbl(tr("wizard.person_dialog.mobile")), row, 0, 1, 2)
+        row += 1
+        mobile_container = QFrame()
+        mobile_container.setStyleSheet(StyleManager.mobile_input_container())
+        mob_layout = QHBoxLayout(mobile_container)
+        mob_layout.setContentsMargins(0, 0, 0, 0)
+        mob_layout.setSpacing(0)
+        mob_layout.setDirection(QHBoxLayout.RightToLeft)
+        prefix_lbl = QLabel("+963 | 09")
+        prefix_lbl.setFixedWidth(90)
+        prefix_lbl.setAlignment(Qt.AlignCenter)
+        prefix_lbl.setStyleSheet(StyleManager.mobile_input_prefix())
+        self.phone = QLineEdit()
+        self.phone.setPlaceholderText("00000000")
+        self.phone.setValidator(QRegExpValidator(QtRegExp(r"\d{0,8}")))
+        self.phone.setStyleSheet(StyleManager.mobile_input_field())
+        mob_layout.addWidget(prefix_lbl)
+        mob_layout.addWidget(self.phone)
+        self._mobile_error = self._err_lbl()
+        mob_outer = QVBoxLayout()
+        mob_outer.setSpacing(2)
+        mob_outer.setContentsMargins(0, 0, 0, 0)
+        mob_outer.addWidget(mobile_container)
+        mob_outer.addWidget(self._mobile_error)
+        grid.addLayout(mob_outer, row, 0, 1, 2)
+        row += 1
+
+        # --- Row 6: رقم الهاتف الثابت (full width) ---
+        grid.addWidget(self._lbl(tr("wizard.person_dialog.phone")), row, 0, 1, 2)
+        row += 1
+        self.landline = self._field("0000000", QRegExpValidator(QtRegExp(r"\d{0,7}")))
+        self._landline_error = self._err_lbl()
+        land_box = self._field_box(self.landline, self._landline_error)
+        grid.addLayout(land_box, row, 0, 1, 2)
+        row += 1
+
+        # --- Row 7: ID photo upload (full width) ---
+        grid.addWidget(self._lbl(tr("wizard.person_dialog.attach_id_photos")), row, 0, 1, 2)
+        row += 1
+        self._id_upload_frame = self._create_upload_frame(
+            self._browse_files, "id_upload",
+            button_text=tr("wizard.person_dialog.attach_id_photos"),
+        )
+        grid.addWidget(self._id_upload_frame, row, 0, 1, 2)
+        row += 1
+
+        # --- Row 8: زيارة حضورية (checkbox) ---
+        self.in_person_check = QCheckBox(tr("wizard.applicant.in_person"))
+        self.in_person_check.setStyleSheet("font-size: 11pt; color: #374151; background: transparent;")
+        self.in_person_check.setChecked(True)
+        grid.addWidget(self.in_person_check, row, 0, 1, 2)
+
+        # Connect clear-error signals
+        self.first_name.textChanged.connect(lambda: self._clear_err(self.first_name, self._first_name_error))
+        self.last_name.textChanged.connect(lambda: self._clear_err(self.last_name, self._last_name_error))
+        self.mother_name.textChanged.connect(lambda: self._clear_err(self.mother_name, self._mother_name_error))
+        self.national_id.textChanged.connect(lambda: self._clear_err(self.national_id, self._nid_error))
+        self.phone.textChanged.connect(lambda: self._clear_err(self.phone, self._mobile_error))
+        self.landline.textChanged.connect(lambda: self._clear_err(self.landline, self._landline_error))
+
+        return grid
+
+    # ------------------------------------------------------------------
+    # File upload helpers
+    # ------------------------------------------------------------------
+
+    def _browse_files(self):
+        file_paths, _ = QFileDialog.getOpenFileNames(
+            self, tr("wizard.person_dialog.choose_files"), "",
+            "Images (*.png *.jpg *.jpeg *.pdf)"
+        )
+        if file_paths:
+            existing = {os.path.normpath(f) for f in self.uploaded_files}
+            for fp in file_paths:
+                if os.path.normpath(fp) not in existing:
+                    self.uploaded_files.append(fp)
+                    existing.add(os.path.normpath(fp))
+            self._update_upload_thumbnails("id_upload", self.uploaded_files)
+
+    def _remove_uploaded_file(self, file_path: str):
+        if file_path in self.uploaded_files:
+            self.uploaded_files.remove(file_path)
+        self._update_upload_thumbnails("id_upload", self.uploaded_files)
+
+    def _update_upload_thumbnails(self, obj_name: str, file_paths: list):
+        frame = self.findChild(QFrame, obj_name)
+        if not frame or not hasattr(frame, "_thumbnails_layout"):
+            return
+        layout = frame._thumbnails_layout
+        while layout.count():
+            item = layout.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+        for fp in file_paths:
+            layout.addWidget(self._create_thumbnail_widget(fp, self._remove_uploaded_file))
+
+    def _create_thumbnail_widget(self, file_path: str, remove_callback) -> QWidget:
+        container = QWidget()
+        container.setFixedSize(48, 48)
+        container.setStyleSheet("border: none; background: transparent;")
+
+        thumb = QLabel(container)
+        thumb.setFixedSize(44, 44)
+        thumb.move(4, 4)
+        thumb.setAlignment(Qt.AlignCenter)
+        thumb.setStyleSheet("""
+            QLabel {
+                border: 1px solid #E0E6ED; border-radius: 6px;
+                background-color: #FFFFFF;
             }
-            QLineEdit:focus {
-                border: 1px solid #3890DF;
+        """)
+        thumb.setCursor(Qt.PointingHandCursor)
+        px = QPixmap(file_path)
+        if not px.isNull():
+            thumb.setPixmap(px.scaled(40, 40, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+        else:
+            thumb.setText("📄")
+        thumb.mousePressEvent = lambda e, fp=file_path: QDesktopServices.openUrl(QUrl.fromLocalFile(fp))
+
+        x_btn = QLabel(container)
+        x_btn.setFixedSize(18, 18)
+        x_btn.move(0, 0)
+        x_btn.setText("✕")
+        x_btn.setAlignment(Qt.AlignCenter)
+        x_btn.setStyleSheet("""
+            QLabel {
+                background-color: rgba(60,60,60,180); color: white;
+                border-radius: 9px; font-size: 10px; font-weight: bold; border: none;
+            }
+        """)
+        x_btn.setCursor(Qt.PointingHandCursor)
+        x_btn.mousePressEvent = lambda e, fp=file_path: remove_callback(fp)
+        return container
+
+    # ------------------------------------------------------------------
+    # Widget factory helpers (DRY)
+    # ------------------------------------------------------------------
+
+    def _lbl(self, text: str) -> QLabel:
+        lbl = QLabel(text)
+        lbl.setStyleSheet(_LABEL_STYLE)
+        return lbl
+
+    def _field(self, placeholder: str, validator=None) -> QLineEdit:
+        f = QLineEdit()
+        f.setPlaceholderText(placeholder)
+        if validator:
+            f.setValidator(validator)
+        f.setStyleSheet(self._input_style())
+        return f
+
+    @staticmethod
+    def _err_lbl() -> QLabel:
+        lbl = QLabel("")
+        lbl.setStyleSheet("color: #e74c3c; font-size: 11px; font-weight: 700; background: transparent;")
+        lbl.setVisible(False)
+        return lbl
+
+    @staticmethod
+    def _field_box(field: QLineEdit, error_lbl: QLabel) -> QVBoxLayout:
+        box = QVBoxLayout()
+        box.setSpacing(2)
+        box.setContentsMargins(0, 0, 0, 0)
+        box.addWidget(field)
+        box.addWidget(error_lbl)
+        return box
+
+    def _create_upload_frame(self, browse_callback, obj_name: str, button_text: str = None) -> QFrame:
+        from ui.components.icon import Icon
+
+        frame = QFrame()
+        frame.setObjectName(obj_name)
+        frame.setMinimumHeight(55)
+        frame.setStyleSheet(f"""
+            QFrame#{obj_name} {{
+                border: 2px dashed #B0C4DE;
+                border-radius: 8px;
+                background-color: transparent;
+            }}
+        """)
+        frame_layout = QVBoxLayout(frame)
+        frame_layout.setContentsMargins(12, 8, 12, 8)
+        frame_layout.setSpacing(6)
+
+        row_layout = QHBoxLayout()
+        row_layout.setContentsMargins(0, 0, 0, 0)
+        row_layout.setSpacing(6)
+
+        thumbnails_container = QWidget()
+        thumbnails_container.setStyleSheet("border: none; background: transparent;")
+        thumbnails_layout = QHBoxLayout(thumbnails_container)
+        thumbnails_layout.setContentsMargins(0, 0, 0, 0)
+        thumbnails_layout.setSpacing(6)
+        row_layout.addWidget(thumbnails_container)
+        row_layout.addStretch()
+
+        icon_lbl = QLabel()
+        icon_lbl.setFixedSize(22, 22)
+        icon_lbl.setAlignment(Qt.AlignCenter)
+        icon_lbl.setStyleSheet("border: none; background: transparent;")
+        up_px = Icon.load_pixmap("upload_file", size=20)
+        if up_px and not up_px.isNull():
+            icon_lbl.setPixmap(up_px)
+        else:
+            icon_lbl.setText("📎")
+            icon_lbl.setStyleSheet("border: none; font-size: 16px; background: transparent;")
+        icon_lbl.setCursor(Qt.PointingHandCursor)
+        icon_lbl.mousePressEvent = lambda e: browse_callback()
+        row_layout.addWidget(icon_lbl)
+
+        text_btn = QPushButton(button_text or tr("wizard.person_dialog.attach_id_photos"))
+        text_btn.setStyleSheet("""
+            QPushButton {
+                color: #4a90e2; text-decoration: underline;
+                border: none; background: transparent;
+                font-size: 12px; font-weight: 500; padding: 0px;
+            }
+            QPushButton:hover { color: #357ABD; }
+        """)
+        text_btn.setCursor(Qt.PointingHandCursor)
+        text_btn.clicked.connect(browse_callback)
+        row_layout.addWidget(text_btn)
+        row_layout.addStretch()
+        frame_layout.addLayout(row_layout)
+
+        frame._thumbnails_container = thumbnails_container
+        frame._thumbnails_layout = thumbnails_layout
+        frame._text_btn = text_btn
+        return frame
+
+    # ------------------------------------------------------------------
+    # Style helpers
+    # ------------------------------------------------------------------
+
+    def _input_style(self) -> str:
+        down_img = str(Config.IMAGES_DIR / "down.png").replace("\\", "/")
+        return f"""
+            QLineEdit, QComboBox, QSpinBox {{
+                border: 1px solid #E0E6ED;
+                border-radius: 8px;
+                padding: 10px;
+                background-color: #f0f7ff;
+                color: #333;
+                font-size: 14px;
+                min-height: 20px;
+                max-height: 20px;
+            }}
+            QComboBox {{ padding-left: 4px; }}
+            QLineEdit:focus, QComboBox:focus, QSpinBox:focus {{ border: 1px solid #4a90e2; }}
+            QComboBox::drop-down {{ border: none; width: 30px; subcontrol-position: right center; }}
+            QComboBox::down-arrow {{ image: url({down_img}); width: 12px; height: 12px; }}
+            QComboBox QAbstractItemView {{
+                background-color: #FFFFFF; border: 1px solid #E0E6ED;
+                border-bottom-left-radius: 10px; border-bottom-right-radius: 10px;
+                padding: 4px; selection-background-color: #e8f0fe;
+                selection-color: #333; outline: none;
+            }}
+            QComboBox QAbstractItemView::item {{
+                min-height: 32px; padding: 6px 10px; border-radius: 6px;
+            }}
+            QComboBox QAbstractItemView::item:hover {{ background-color: #f0f7ff; }}
+        """
+
+    def _input_error_style(self) -> str:
+        return """
+            QLineEdit, QComboBox, QSpinBox {
+                border: 2px solid #e74c3c; border-radius: 8px; padding: 10px;
+                background-color: #FFF5F5; color: #333;
+                font-size: 14px; min-height: 20px; max-height: 20px;
             }
         """
-        label_font = create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD)
 
-        # Row 1: Full name + National ID
-        row1 = QHBoxLayout()
-        row1.setSpacing(16)
+    def _set_err(self, field, error_lbl: QLabel):
+        if field not in self._field_styles:
+            self._field_styles[field] = field.styleSheet()
+        field.setStyleSheet(self._input_error_style())
+        error_lbl.setText("!")
+        error_lbl.setVisible(True)
 
-        full_name_col = QVBoxLayout()
-        full_name_col.setSpacing(6)
-        lbl_name = QLabel(tr("wizard.applicant.full_name") + " *")
-        lbl_name.setFont(label_font)
-        lbl_name.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent;")
-        self.full_name_edit = QLineEdit()
-        self.full_name_edit.setPlaceholderText(tr("wizard.applicant.full_name"))
-        self.full_name_edit.setStyleSheet(input_style)
-        self.full_name_edit.setFixedHeight(42)
-        self.full_name_edit.setLayoutDirection(Qt.RightToLeft)
-        full_name_col.addWidget(lbl_name)
-        full_name_col.addWidget(self.full_name_edit)
-        row1.addLayout(full_name_col, 2)
+    def _clear_err(self, field, error_lbl: QLabel):
+        field.setStyleSheet(self._field_styles.get(field, self._input_style()))
+        error_lbl.setText("")
+        error_lbl.setVisible(False)
 
-        nat_id_col = QVBoxLayout()
-        nat_id_col.setSpacing(6)
-        lbl_nat = QLabel(tr("wizard.applicant.national_id"))
-        lbl_nat.setFont(label_font)
-        lbl_nat.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent;")
-        self.national_id_edit = QLineEdit()
-        self.national_id_edit.setPlaceholderText(tr("wizard.applicant.national_id"))
-        self.national_id_edit.setStyleSheet(input_style)
-        self.national_id_edit.setFixedHeight(42)
-        self.national_id_edit.setLayoutDirection(Qt.RightToLeft)
-        nat_id_col.addWidget(lbl_nat)
-        nat_id_col.addWidget(self.national_id_edit)
-        row1.addLayout(nat_id_col, 1)
-
-        card_layout.addLayout(row1)
-
-        # Row 2: Phone + Email
-        row2 = QHBoxLayout()
-        row2.setSpacing(16)
-
-        phone_col = QVBoxLayout()
-        phone_col.setSpacing(6)
-        lbl_phone = QLabel(tr("wizard.applicant.phone"))
-        lbl_phone.setFont(label_font)
-        lbl_phone.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent;")
-        self.phone_edit = QLineEdit()
-        self.phone_edit.setPlaceholderText(tr("wizard.applicant.phone"))
-        self.phone_edit.setStyleSheet(input_style)
-        self.phone_edit.setFixedHeight(42)
-        phone_col.addWidget(lbl_phone)
-        phone_col.addWidget(self.phone_edit)
-        row2.addLayout(phone_col, 1)
-
-        email_col = QVBoxLayout()
-        email_col.setSpacing(6)
-        lbl_email = QLabel(tr("wizard.applicant.email"))
-        lbl_email.setFont(label_font)
-        lbl_email.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent;")
-        self.email_edit = QLineEdit()
-        self.email_edit.setPlaceholderText(tr("wizard.applicant.email"))
-        self.email_edit.setStyleSheet(input_style)
-        self.email_edit.setFixedHeight(42)
-        email_col.addWidget(lbl_email)
-        email_col.addWidget(self.email_edit)
-        row2.addLayout(email_col, 1)
-
-        card_layout.addLayout(row2)
-
-        # Row 3: In-person checkbox
-        self.in_person_check = QCheckBox(tr("wizard.applicant.in_person"))
-        self.in_person_check.setFont(create_font(size=9, weight=FontManager.WEIGHT_REGULAR))
-        self.in_person_check.setStyleSheet(f"color: {Colors.TEXT_PRIMARY}; background: transparent;")
-        self.in_person_check.setChecked(True)
-        card_layout.addWidget(self.in_person_check)
-
-        layout.addWidget(card)
-        layout.addStretch()
+    # ------------------------------------------------------------------
+    # BaseStep interface
+    # ------------------------------------------------------------------
 
     def validate(self) -> StepValidationResult:
         result = StepValidationResult(is_valid=True, errors=[])
-        name = self.full_name_edit.text().strip()
-        if not name:
-            result.add_error("الاسم الكامل مطلوب")
+
+        # 1. Local validation — required fields
+        if not self.first_name.text().strip():
+            self._set_err(self.first_name, self._first_name_error)
+            result.add_error("الاسم الأول مطلوب")
+        if not self.last_name.text().strip():
+            self._set_err(self.last_name, self._last_name_error)
+            result.add_error("الكنية مطلوبة")
+        if not self.mother_name.text().strip():
+            self._set_err(self.mother_name, self._mother_name_error)
+            result.add_error("اسم الأم مطلوب")
+
+        if not result.is_valid:
+            return result
+
+        # 2. Require survey_id from previous step
+        survey_id = self.context.get_data("survey_id")
+        if not survey_id:
+            result.add_error("لم يتم إنشاء المسح، يرجى العودة للخطوة السابقة")
+            return result
+
+        # 3. Collect data into context.applicant
+        self.collect_data()
+
+        # 4. Set auth token
+        self._set_auth_token()
+
+        # 5. Call API
+        try:
+            response = self._api_client.create_contact_person(survey_id, self.context.applicant)
+            self.context.update_data(
+                "contact_person_id",
+                response.get("id") or response.get("contactPersonId", "")
+            )
+        except Exception as e:
+            logger.error(f"Contact person API failed: {e}")
+            result.add_error("فشل حفظ بيانات مقدم الطلب. يرجى المحاولة مجدداً.")
+
+        # 6. Save intervieweeName so it appears in the surveys list
+        try:
+            a = self.context.applicant or {}
+            parts = [a.get("first_name_ar", ""), a.get("father_name_ar", ""), a.get("last_name_ar", "")]
+            interviewee_name = " ".join(p for p in parts if p) or a.get("full_name")
+            if interviewee_name:
+                self._api_client.save_draft_to_backend(survey_id, {"interviewee_name": interviewee_name})
+                logger.info(f"intervieweeName saved: {interviewee_name}")
+        except Exception as e:
+            logger.warning(f"Could not save interviewee name: {e}")
+
         return result
 
     def collect_data(self) -> dict:
+        fn  = self.first_name.text().strip()
+        fat = self.father_name.text().strip()
+        ln  = self.last_name.text().strip()
+
+        year_text = self.birth_year.text().strip()
+        birth_year = int(year_text) if year_text.isdigit() and len(year_text) == 4 else None
+
         data = {
-            "full_name": self.full_name_edit.text().strip(),
-            "national_id": self.national_id_edit.text().strip(),
-            "phone": self.phone_edit.text().strip(),
-            "email": self.email_edit.text().strip(),
-            "in_person": self.in_person_check.isChecked(),
+            "first_name_ar":  fn,
+            "father_name_ar": fat,
+            "mother_name_ar": self.mother_name.text().strip(),
+            "last_name_ar":   ln,
+            "birth_year":     birth_year,
+            "gender":         self.gender.currentData(),
+            "nationality":    self.nationality.currentData(),
+            "national_id":    self.national_id.text().strip(),
+            "phone":          self.phone.text().strip(),
+            "landline":       self.landline.text().strip(),
+            "in_person":      self.in_person_check.isChecked(),
+            "id_photo_paths": list(self.uploaded_files),
+            "full_name": " ".join(p for p in [fn, fat, ln] if p),
         }
         self.context.applicant = data
         return data
 
     def populate_data(self):
-        if self.context.applicant:
-            a = self.context.applicant
-            self.full_name_edit.setText(a.get("full_name", ""))
-            self.national_id_edit.setText(a.get("national_id", ""))
-            self.phone_edit.setText(a.get("phone", ""))
-            self.email_edit.setText(a.get("email", ""))
-            self.in_person_check.setChecked(a.get("in_person", True))
+        a = self.context.applicant
+        if not a:
+            return
+
+        self.first_name.setText(a.get("first_name_ar", ""))
+        self.father_name.setText(a.get("father_name_ar", ""))
+        self.mother_name.setText(a.get("mother_name_ar", ""))
+        self.last_name.setText(a.get("last_name_ar", ""))
+
+        if a.get("birth_year"):
+            self.birth_year.setText(str(a["birth_year"]))
+
+        gender_val = a.get("gender")
+        for i in range(self.gender.count()):
+            if self.gender.itemData(i) == gender_val:
+                self.gender.setCurrentIndex(i)
+                break
+
+        nat_val = a.get("nationality")
+        for i in range(self.nationality.count()):
+            if self.nationality.itemData(i) == nat_val:
+                self.nationality.setCurrentIndex(i)
+                break
+
+        self.national_id.setText(a.get("national_id", ""))
+        self.phone.setText(a.get("phone", ""))
+        self.landline.setText(a.get("landline", ""))
+        self.in_person_check.setChecked(a.get("in_person", True))
+
+        photos = a.get("id_photo_paths", [])
+        self.uploaded_files = list(photos)
+        if photos:
+            self._update_upload_thumbnails("id_upload", photos)
 
     def get_name(self) -> str:
         return tr("wizard.step.applicant_info")

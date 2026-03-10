@@ -34,6 +34,7 @@ from ui.wizards.office_survey.steps import (
     OccupancyClaimsStep,
     ReviewStep
 )
+from ui.wizards.office_survey.steps.claim_step import ClaimStep
 
 from repositories.survey_repository import SurveyRepository
 from repositories.database import Database
@@ -65,7 +66,7 @@ class OfficeSurveyWizard(BaseWizard):
     def get_step_names(cls):
         """Get step names (translated at runtime)."""
         return [
-            ("1", tr("wizard.step.building_info")),
+            ("1", tr("wizard.step.building_registration")),
             ("2", tr("wizard.step.applicant_info")),
             ("3", tr("wizard.step.property_unit")),
             ("4", tr("wizard.step.occupation_details")),
@@ -106,6 +107,7 @@ class OfficeSurveyWizard(BaseWizard):
             HouseholdStep(self.context, self),        # 3 - Occupancy details
             OccupancyClaimsStep(self.context, self),  # 4 - Tenure claims
             ReviewStep(self.context, self),           # 5 - Final review
+            ClaimStep(self.context, self),            # 6 - Claim display
         ]
         # Connect edit signal from review step
         steps[5].edit_requested.connect(self._enter_edit_mode)
@@ -144,6 +146,20 @@ class OfficeSurveyWizard(BaseWizard):
             True if submission was successful
         """
         try:
+            # If ReviewStep.on_next() already finalized the survey on the backend,
+            # skip all draft-save logic and show success directly
+            if self.context.status == "finalized":
+                claim_number = self.context.reference_number or self.context.get_data("survey_id") or ""
+                SuccessPopup.show_success(
+                    claim_number=claim_number,
+                    title=tr("wizard.success.title"),
+                    description=tr("wizard.success.description"),
+                    auto_close_ms=0,
+                    parent=self
+                )
+                self._finalization_complete = True
+                return True
+
             # Determine status based on claim creation result
             finalize_resp = getattr(self.context, 'finalize_response', None)
             has_claim = False
@@ -229,6 +245,10 @@ class OfficeSurveyWizard(BaseWizard):
                 )
                 return None
 
+            if self.context.status == "finalized":
+                logger.info(f"Survey {survey_id} is finalized, skipping draft save")
+                return survey_id
+
             if not self.context.status or self.context.status == "in_progress":
                 self.context.status = "draft"
 
@@ -241,7 +261,9 @@ class OfficeSurveyWizard(BaseWizard):
             interviewee_name = None
             # Prefer applicant info (from ApplicantInfoStep)
             if self.context.applicant:
-                interviewee_name = self.context.applicant.get("full_name")
+                a = self.context.applicant
+                parts_ap = [a.get("first_name_ar", ""), a.get("father_name_ar", ""), a.get("last_name_ar", "")]
+                interviewee_name = " ".join(p for p in parts_ap if p) or a.get("full_name")
             if not interviewee_name and self.context.persons:
                 p = self.context.persons[0]
                 parts = [p.get("first_name", ""), p.get("father_name", ""), p.get("last_name", "")]
@@ -259,6 +281,10 @@ class OfficeSurveyWizard(BaseWizard):
             return survey_id
 
         except Exception as e:
+            err_msg = str(e)
+            if "Finalized" in err_msg or "finalized" in err_msg:
+                logger.warning(f"Draft save skipped (survey already finalized): {e}")
+                return survey_id
             logger.error(f"Error saving draft: {e}", exc_info=True)
             ErrorHandler.show_error(
                 self,

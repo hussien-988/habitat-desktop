@@ -379,6 +379,9 @@ class MainWindow(QMainWindow):
         # Cases - view survey details (works for all 3 sub-tabs)
         self.pages[Pages.CASES].claim_selected.connect(self._on_draft_claim_selected)
 
+        # Cases - resume draft survey in wizard for editing (UC-005)
+        self.pages[Pages.CASES].resume_survey.connect(self._on_resume_draft_survey)
+
         # Cases - finalize survey → stay on cases page (switch to finalized sub-tab)
         self.pages[Pages.CASES].survey_finalized.connect(
             lambda _: self.navigate_to(Pages.CASES)
@@ -813,10 +816,10 @@ class MainWindow(QMainWindow):
         """Navigate to case details — fetch full survey context from Surveys/office API."""
         logger.info(f"Draft survey selected: {claim_id}")
 
-        # Find survey data from DraftClaimsPage list
+        # Find survey data from CasesPage list
         claims_page = self.pages[Pages.CASES]
         claim_data = None
-        for c in claims_page.claims_data:
+        for c in claims_page._all_data:
             if c.get('claim_id') == claim_id:
                 claim_data = c
                 break
@@ -838,6 +841,35 @@ class MainWindow(QMainWindow):
                 logger.warning(f"Survey context fetch failed: {e}")
 
         logger.warning(f"Could not load survey details for: {claim_id}")
+
+    def _on_resume_draft_survey(self, survey_uuid: str):
+        """UC-005: Load draft survey into wizard for editing and resumption."""
+        if not survey_uuid:
+            return
+        try:
+            from controllers.survey_controller import SurveyController
+            result = SurveyController(self.db).get_survey_full_context(survey_uuid)
+            if not result.success or not result.data:
+                logger.warning(f"Could not load draft context for: {survey_uuid}")
+                return
+
+            new_context = self.office_survey_wizard.create_context()
+            new_context.from_dict(result.data)
+
+            self.office_survey_wizard.context = new_context
+            for step in self.office_survey_wizard.steps:
+                step.context = new_context
+            self.office_survey_wizard.navigator.context = new_context
+            self.office_survey_wizard.navigator.reset()
+            self.office_survey_wizard._finalization_complete = False
+
+            if hasattr(self, '_api_token') and self._api_token:
+                self.office_survey_wizard.set_auth_token(self._api_token)
+
+            self.navigate_to(Pages.OFFICE_SURVEY_WIZARD)
+            logger.info(f"Draft survey {survey_uuid} loaded into wizard for resumption")
+        except Exception as e:
+            logger.error(f"Failed to resume draft {survey_uuid}: {e}")
 
     def _on_case_details_back(self):
         """Navigate back to the Cases page from CaseDetailsPage."""
@@ -910,10 +942,10 @@ class MainWindow(QMainWindow):
         self._reset_wizard(building=selected_building)
         self.stack.setCurrentWidget(self.office_survey_wizard)
 
-    def _on_survey_completed(self, survey_id: str):
+    def _on_survey_completed(self, data):
         """Handle survey completion from wizard."""
         from ui.components.toast import Toast
-        logger.info(f"Survey completed: {survey_id}")
+        logger.info(f"Survey completed: {data}")
 
         Toast.show_toast(
             self,
@@ -921,9 +953,21 @@ class MainWindow(QMainWindow):
             Toast.SUCCESS
         )
 
-        self.pages[Pages.CASES].refresh()
-        self.navbar.set_current_tab(1)
-        self._on_tab_changed(1)
+        # Navigate to المطالبات المكتملة (Tab 0) if survey was finalized (claim created),
+        # otherwise to الحالات (Tab 1)
+        is_finalized = (
+            isinstance(data, dict) and data.get('status') == 'finalized'
+        )
+
+        if is_finalized:
+            if hasattr(self.pages.get(Pages.CLAIMS), 'refresh'):
+                self.pages[Pages.CLAIMS].refresh()
+            self.navbar.set_current_tab(0)
+            self._on_tab_changed(0)
+        else:
+            self.pages[Pages.CASES].refresh()
+            self.navbar.set_current_tab(1)
+            self._on_tab_changed(1)
 
     def _on_survey_cancelled(self):
         """Handle survey cancellation from wizard."""

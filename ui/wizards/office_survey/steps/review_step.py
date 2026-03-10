@@ -84,9 +84,9 @@ class ReviewStep(BaseStep):
         scroll_layout.setContentsMargins(0, 0, 0, 0)
         scroll_layout.setSpacing(20)  # Increased spacing for clear card separation
 
-        # Case status banner (populated in populate_data)
+        # Case status banner (hidden — not shown in final review)
         self.case_status_banner = self._create_case_status_banner()
-        scroll_layout.addWidget(self.case_status_banner)
+        self.case_status_banner.hide()
 
         # Applicant info card
         self.applicant_card = self._create_applicant_card()
@@ -516,39 +516,50 @@ class ReviewStep(BaseStep):
         self._populate_claim_card()
 
     def _populate_case_status_banner(self):
-        """Update case status banner based on whether a claim/owner exists."""
-        has_owner = False
-        if self.context.persons:
-            for p in self.context.persons:
-                role = p.get('person_role') or p.get('relationship_type')
-                if _is_owner_relation(role):
-                    has_owner = True
-                    break
+        """Update case status banner based on claim/owner/evidence state.
 
-        if has_owner:
-            self._case_status_label.setText(tr("review.case.closed"))
-            self._case_status_label.setStyleSheet(
-                "color: #15803D; background: transparent; border: none;"
-            )
-            self.case_status_banner.setStyleSheet("""
-                QFrame#caseStatusBanner {
-                    background-color: #F0FDF4;
-                    border: 1px solid #BBF7D0;
-                    border-radius: 8px;
-                }
-            """)
+        Three states per UC-004 S17–S18:
+          - Closed:           owner exists AND has uploaded evidence
+          - Pending evidence: owner exists BUT no evidence uploaded
+          - Open:             no owner relation — no claim created
+        """
+        has_owner = False
+        owner_has_evidence = False
+
+        for p in (self.context.persons or []):
+            role = p.get('person_role') or p.get('relationship_type')
+            if _is_owner_relation(role):
+                has_owner = True
+                rel_files = p.get('_relation_uploaded_files') or []
+                has_docs_flag = p.get('relation_data', {}).get('has_documents', False)
+                if rel_files or has_docs_flag:
+                    owner_has_evidence = True
+                break
+
+        if has_owner and owner_has_evidence:
+            text = tr("review.case.closed")
+            text_color = "#15803D"
+            bg_color, border_color = "#F0FDF4", "#BBF7D0"
+        elif has_owner:
+            text = tr("review.case.pending_evidence")
+            text_color = "#92400E"
+            bg_color, border_color = "#FFFBEB", "#FDE68A"
         else:
-            self._case_status_label.setText(tr("review.case.open"))
-            self._case_status_label.setStyleSheet(
-                "color: #C2410C; background: transparent; border: none;"
-            )
-            self.case_status_banner.setStyleSheet("""
-                QFrame#caseStatusBanner {
-                    background-color: #FFF7ED;
-                    border: 1px solid #FED7AA;
-                    border-radius: 8px;
-                }
-            """)
+            text = tr("review.case.open")
+            text_color = "#C2410C"
+            bg_color, border_color = "#FFF7ED", "#FED7AA"
+
+        self._case_status_label.setText(text)
+        self._case_status_label.setStyleSheet(
+            f"color: {text_color}; background: transparent; border: none;"
+        )
+        self.case_status_banner.setStyleSheet(f"""
+            QFrame#caseStatusBanner {{
+                background-color: {bg_color};
+                border: 1px solid {border_color};
+                border-radius: 8px;
+            }}
+        """)
 
     def _populate_applicant_card(self):
         """Populate the applicant summary card from context.applicant."""
@@ -562,8 +573,14 @@ class ReviewStep(BaseStep):
             self._applicant_grid.addWidget(no_data, 0, 0)
             return
 
+        full_name_display = " ".join(filter(None, [
+            applicant.get("first_name_ar"),
+            applicant.get("father_name_ar"),
+            applicant.get("last_name_ar"),
+        ])) or applicant.get("full_name", "-")
+
         fields = [
-            (tr("wizard.applicant.full_name"), applicant.get("full_name", "-")),
+            (tr("wizard.applicant.full_name"), full_name_display),
             (tr("wizard.applicant.national_id"), applicant.get("national_id", "-")),
             (tr("wizard.applicant.phone"), applicant.get("phone", "-")),
             (tr("wizard.applicant.email"), applicant.get("email", "-")),
@@ -1334,47 +1351,62 @@ class ReviewStep(BaseStep):
         return self.context.get_summary()
 
     def on_next(self):
-        """Called when user clicks Next/Submit button. Finalize the survey via API if not already done."""
-        # Skip finalize if already done in Step 4 (OccupancyClaimsStep)
-        if hasattr(self.context, 'finalize_response') and self.context.finalize_response:
-            logger.info("Survey already finalized in Step 5, skipping duplicate finalize")
-            return
-
-        self._finalize_survey_via_api()
-
-    def _finalize_survey_via_api(self):
-        """Finalize the survey by calling the API."""
+        """Called when user clicks Next/Submit button. Finalize the survey via API."""
         self._set_auth_token()
-
         survey_id = self.context.get_data("survey_id")
         if not survey_id:
             logger.error("No survey_id found in context. Cannot finalize.")
-            ErrorHandler.show_error(
-                self,
-                tr("wizard.review.no_survey_id"),
-                tr("common.error")
-            )
+            ErrorHandler.show_error(self, tr("wizard.review.no_survey_id"), tr("common.error"))
             return
 
-        logger.info(f"Finalizing survey {survey_id}")
+        if not self._use_api:
+            return
 
-        # Prepare finalization options
+        # Save intervieweeName before finalizing (draft endpoint only works while Draft)
+        try:
+            a = self.context.applicant or {}
+            parts = [a.get("first_name_ar", ""), a.get("father_name_ar", ""), a.get("last_name_ar", "")]
+            name = " ".join(p for p in parts if p) or a.get("full_name")
+            if name:
+                self._api_service.save_draft_to_backend(survey_id, {"interviewee_name": name})
+        except Exception:
+            pass
+
+        # Step 1: process-claims if not already done in OccupancyClaimsStep
+        if not (hasattr(self.context, 'finalize_response') and self.context.finalize_response):
+            self._finalize_survey_via_api(survey_id)
+            if not (hasattr(self.context, 'finalize_response') and self.context.finalize_response):
+                return  # process-claims failed, stop
+
+        # Step 2: finalize the survey (S19-S21: transition to FINALIZED state)
+        self._call_finalize_endpoint(survey_id)
+
+    def _finalize_survey_via_api(self, survey_id: str):
+        """Call process-claims endpoint (S17-S18)."""
         finalize_options = {
             "finalNotes": "Survey completed successfully",
-            "durationMinutes": 0,  # Could calculate from survey start time
+            "durationMinutes": 0,
             "autoCreateClaim": True
         }
+        try:
+            response = self._api_service.finalize_office_survey(survey_id, finalize_options)
+            logger.info(f"Survey {survey_id} process-claims succeeded")
+            self.context.finalize_response = response
+        except Exception as e:
+            logger.error(f"Failed to process claims for survey {survey_id}: {e}")
+            from services.error_mapper import map_exception
+            ErrorHandler.show_error(self, map_exception(e), tr("common.error"))
 
-        if self._use_api:
-            try:
-                response = self._api_service.finalize_office_survey(survey_id, finalize_options)
-                logger.info(f"Survey {survey_id} finalized successfully")
-                self.context.finalize_response = response
-                return
-            except Exception as e:
-                logger.error(f"Failed to finalize survey via API: {e}")
-                from services.error_mapper import map_exception
-                ErrorHandler.show_error(self, map_exception(e), tr("common.error"))
+    def _call_finalize_endpoint(self, survey_id: str):
+        """Call finalize endpoint to transition survey to FINALIZED state (S19-S21)."""
+        try:
+            self._api_service.finalize_survey_status(survey_id)
+            logger.info(f"Survey {survey_id} finalized successfully")
+            self.context.status = "finalized"
+        except Exception as e:
+            logger.error(f"Failed to finalize survey status {survey_id}: {e}")
+            from services.error_mapper import map_exception
+            ErrorHandler.show_error(self, map_exception(e), tr("common.error"))
 
     def on_show(self):
         """Refresh summary when step is shown."""

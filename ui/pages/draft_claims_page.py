@@ -41,6 +41,7 @@ class DraftClaimsPage(QWidget):
     claim_selected = pyqtSignal(str)
     add_claim_clicked = pyqtSignal()
     survey_finalized = pyqtSignal(str)
+    resume_survey = pyqtSignal(str)  # survey_uuid
 
     def __init__(self, db=None, i18n=None, parent=None):
         super().__init__(parent)
@@ -228,6 +229,25 @@ class DraftClaimsPage(QWidget):
                 lambda checked, u=uid: self._on_finalize_clicked(u)
             )
             c_layout.addWidget(finalize_btn)
+
+            resume_btn = QPushButton(tr("page.drafts.resume"))
+            resume_btn.setCursor(Qt.PointingHandCursor)
+            resume_btn.setStyleSheet("""
+                QPushButton {
+                    background-color: transparent;
+                    color: #1E3A8A;
+                    border: 1px solid #1E3A8A;
+                    border-radius: 6px;
+                    padding: 6px 14px;
+                    font-size: 11px;
+                    font-weight: 600;
+                }
+                QPushButton:hover { background-color: #EFF6FF; }
+            """)
+            resume_btn.clicked.connect(
+                lambda checked, u=uid: self.resume_survey.emit(u)
+            )
+            c_layout.addWidget(resume_btn)
 
             self.content_layout.addWidget(container, row, col)
 

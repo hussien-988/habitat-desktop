@@ -804,7 +804,7 @@ API للاتصال بـ TRRCMS Backend.
             List of BuildingDocumentDto with originalFileName, filePath, mimeType
         """
         try:
-            return self._request("GET", f"/api/v1/building-documents/by-building/{building_id}") or []
+            return self._request("GET", f"/v1/building-documents/by-building/{building_id}") or []
         except Exception as e:
             logger.warning(f"Failed to fetch building documents for {building_id}: {e}")
             return []
@@ -1485,6 +1485,15 @@ API للاتصال بـ TRRCMS Backend.
         logger.info(f"Person {person_id} updated in survey {survey_id}")
         return result
 
+    def get_persons(self, page: int = 1, page_size: int = 100) -> Dict[str, Any]:
+        """
+        Get paginated list of all persons.
+
+        Endpoint: GET /api/v1/Persons
+        """
+        params = {"page": page, "pageSize": page_size}
+        return self._request("GET", "/v1/Persons", params=params)
+
     def delete_person(self, person_id: str) -> None:
         """Soft delete a person via DELETE /api/v1/Persons/{id}."""
         if not person_id:
@@ -1831,6 +1840,23 @@ API للاتصال بـ TRRCMS Backend.
             logger.error(f"Network error during evidence update: {e}")
             raise NetworkException(message=str(e), original_error=e)
 
+    def link_evidence_to_relation(
+        self, survey_id: str, evidence_id: str, relation_id: str
+    ) -> Dict[str, Any]:
+        """
+        Link an existing evidence record to a person-property relation.
+
+        Endpoint: POST /api/v1/Surveys/{surveyId}/evidence/{evidenceId}/link-to-relation
+        """
+        if not survey_id or not evidence_id or not relation_id:
+            raise ValueError("survey_id, evidence_id, and relation_id are required")
+        endpoint = f"/v1/Surveys/{survey_id}/evidence/{evidence_id}/link-to-relation"
+        body = {"personPropertyRelationId": relation_id}
+        logger.info(f"Linking evidence {evidence_id} to relation {relation_id}")
+        result = self._request("POST", endpoint, json_data=body)
+        logger.info(f"Evidence linked: {result.get('id', 'N/A')}")
+        return result
+
     def get_survey_evidences(self, survey_id: str, evidence_type: str = None) -> List[Dict[str, Any]]:
         """
         Get all evidence records for a survey.
@@ -2008,6 +2034,9 @@ API للاتصال بـ TRRCMS Backend.
         if notes:
             api_data["notes"] = notes
 
+        if relation_data.get('is_contact'):
+            api_data["isContact"] = True
+
         return api_data
 
     def _convert_person_to_api_format(self, person_data: Dict[str, Any]) -> Dict[str, Any]:
@@ -2080,6 +2109,76 @@ API للاتصال بـ TRRCMS Backend.
         logger.info(f"Creating office survey for building: {api_data.get('buildingId', 'N/A')}")
         result = self._request("POST", "/v1/Surveys/office", json_data=api_data)
         logger.info(f"Office survey created: {result.get('id', 'N/A')}")
+        return result
+
+    def create_contact_person(self, survey_id: str, person_data: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Set the contact person (applicant) for an office survey.
+
+        Args:
+            survey_id: Survey UUID (from context, created in BuildingInfoStep)
+            person_data: Dict with keys:
+                Required: first_name_ar, father_name_ar, last_name_ar, mother_name_ar
+                Optional: national_id, gender, nationality, birth_year, email, phone, landline
+
+        Returns:
+            API response dict
+
+        Endpoint: POST /api/v1/Surveys/{surveyId}/contact-person
+        """
+        if not survey_id:
+            raise ValueError("survey_id is required")
+
+        import re as _re
+
+        father_name = person_data.get("father_name_ar", "").strip()
+        if not father_name:
+            father_name = "-"
+
+        mother_name = person_data.get("mother_name_ar", "").strip()
+        if not mother_name:
+            mother_name = "-"
+
+        api_data: Dict[str, Any] = {
+            "firstNameArabic":  person_data.get("first_name_ar", "").strip(),
+            "fatherNameArabic": father_name,
+            "familyNameArabic": person_data.get("last_name_ar", "").strip(),
+            "motherNameArabic": mother_name,
+        }
+
+        if person_data.get("national_id"):
+            api_data["nationalId"] = person_data["national_id"].strip()
+
+        gender = person_data.get("gender")
+        if gender is not None:
+            try:
+                api_data["gender"] = int(gender)
+            except (ValueError, TypeError):
+                pass
+
+        nationality = person_data.get("nationality")
+        if nationality is not None:
+            try:
+                api_data["nationality"] = int(nationality)
+            except (ValueError, TypeError):
+                pass
+
+        if person_data.get("birth_year"):
+            api_data["dateOfBirth"] = f"{person_data['birth_year']}-01-01"
+
+        email = person_data.get("email", "").strip()
+        if email and _re.match(r'^[^@\s]+@[^@\s]+\.[^@\s]+$', email):
+            api_data["email"] = email
+
+        if person_data.get("phone"):
+            api_data["mobileNumber"] = person_data["phone"].strip()
+        if person_data.get("landline"):
+            api_data["phoneNumber"] = person_data["landline"].strip()
+
+        endpoint = f"/v1/Surveys/{survey_id}/contact-person"
+        logger.info(f"Setting contact person for survey {survey_id}")
+        result = self._request("POST", endpoint, json_data=api_data)
+        logger.info(f"Contact person set: {result.get('id', 'N/A')}")
         return result
 
     def get_office_surveys(
@@ -2157,7 +2256,8 @@ API للاتصال بـ TRRCMS Backend.
             "surveyId": survey_id,
             "finalNotes": "",
             "durationMinutes": 10,
-            "autoCreateClaim": True
+            "autoCreateClaim": True,
+            "caseStatus": 1
         }
 
         if finalize_options:
@@ -2464,7 +2564,7 @@ API للاتصال بـ TRRCMS Backend.
             params["buildingCode"] = building_code
 
         logger.info(f"Fetching claims summaries with filters: {params or 'none'}")
-        result = self._request("GET", "/api/Claims/summaries", params=params)
+        result = self._request("GET", "/v1/Claims/summaries", params=params)
 
         # Handle both array and paginated response
         if isinstance(result, list):
@@ -2513,7 +2613,7 @@ API للاتصال بـ TRRCMS Backend.
             params["HasConflicts"] = str(has_conflicts).lower()
 
         logger.info(f"Fetching claims with filters: {params or 'none'}")
-        result = self._request("GET", "/api/Claims", params=params)
+        result = self._request("GET", "/v1/Claims", params=params)
         if isinstance(result, list):
             claims = result
         elif isinstance(result, dict):

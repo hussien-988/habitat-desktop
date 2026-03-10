@@ -95,11 +95,18 @@ class SurveyController:
                 for h in (detail.get("households") or [])
             ]
 
-            # 4) Persons from relations (scoped to THIS survey only)
+            # 4) Persons + relations from survey detail
             persons = []
+            relations = []
             seen_person_ids = set()
             for rel in (detail.get("relations") or []):
                 person_id = rel.get("personId")
+                relations.append({
+                    "relation_id": rel.get("id", ""),
+                    "person_id": person_id or "",
+                    "unit_id": rel.get("propertyUnitId", ""),
+                    "relation_type": rel.get("relationType", ""),
+                })
                 if not person_id or person_id in seen_person_ids:
                     continue
                 seen_person_ids.add(person_id)
@@ -135,13 +142,14 @@ class SurveyController:
                 "unit": unit_data,
                 "households": households,
                 "persons": persons,
+                "relations": relations,
                 "claim_data": claim_data,
                 "claims": claims,
             }
             logger.info(
                 f"Built survey context: building={bool(building_data)}, "
                 f"unit={bool(unit_data)}, households={len(households)}, "
-                f"persons={len(persons)}"
+                f"persons={len(persons)}, relations={len(relations)}"
             )
             return OperationResult.ok(data=context)
 
