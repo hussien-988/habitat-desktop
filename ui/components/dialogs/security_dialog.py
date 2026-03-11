@@ -18,14 +18,17 @@ from PyQt5.QtGui import QColor, QFont
 from ui.components.icon import Icon
 from ui.design_system import Colors
 from ui.font_utils import create_font, FontManager
+from utils.logger import get_logger
+
+logger = get_logger(__name__)
 
 
 class SecurityDialog(QDialog):
-    """Dialog for configuring security policies."""
+    """Dialog for configuring security policies (UC-011)."""
 
-    def __init__(self, parent=None, session_days: int = 1, max_attempts: int = 12):
+    def __init__(self, parent=None, session_timeout_minutes: int = 30, max_attempts: int = 5):
         super().__init__(parent)
-        self.session_days = session_days
+        self.session_timeout_minutes = session_timeout_minutes
         self.max_attempts = max_attempts
 
         self.setModal(True)
@@ -75,13 +78,13 @@ class SecurityDialog(QDialog):
         title.setAlignment(Qt.AlignRight)
         layout.addWidget(title)
 
-        # Field 1: Session duration
-        field1 = self._create_field("مدة الجلسة", self.session_days, 1, 30, " Day")
+        # Field 1: Session timeout in minutes
+        field1 = self._create_field("مهلة الجلسة (دقيقة)", self.session_timeout_minutes, 5, 480, " دقيقة")
         self._session_spin = field1["spin"]
         layout.addLayout(field1["layout"])
 
         # Field 2: Max login attempts
-        field2 = self._create_field("عدد محاولات الدخول", self.max_attempts, 1, 99, "")
+        field2 = self._create_field("عدد محاولات الدخول", self.max_attempts, 1, 20, "")
         self._attempts_spin = field2["spin"]
         layout.addLayout(field2["layout"])
 
@@ -264,14 +267,47 @@ class SecurityDialog(QDialog):
         return btn
 
     def _on_save(self):
-        self.session_days = self._session_spin.value()
+        self.session_timeout_minutes = self._session_spin.value()
         self.max_attempts = self._attempts_spin.value()
+
+        # Persist to SecurityService (UC-011 S07)
+        try:
+            from repositories.database import Database
+            from services.security_service import SecurityService
+            db = Database()
+            svc = SecurityService(db)
+            settings = svc.get_settings()
+            settings.session_timeout_minutes = self.session_timeout_minutes
+            settings.max_failed_login_attempts = self.max_attempts
+            success, errors = svc.update_settings(settings)
+            if not success:
+                logger.warning(f"Security settings save failed: {errors}")
+        except Exception as e:
+            logger.warning(f"Could not persist security settings: {e}")
+
         self.accept()
 
     @staticmethod
-    def show_settings(parent=None, session_days: int = 1, max_attempts: int = 12) -> Optional[tuple]:
-        """Show security policies dialog. Returns (session_days, max_attempts) or None."""
-        dialog = SecurityDialog(parent=parent, session_days=session_days, max_attempts=max_attempts)
+    def show_settings(parent=None, **kwargs) -> Optional[tuple]:
+        """Show security policies dialog. Reads from SecurityService. Returns (timeout_min, max_attempts) or None."""
+        timeout_min = 30
+        max_attempts = 5
+        try:
+            from repositories.database import Database
+            from services.security_service import SecurityService
+            db = Database()
+            svc = SecurityService(db)
+            settings = svc.get_settings()
+            timeout_min = settings.session_timeout_minutes
+            max_attempts = settings.max_failed_login_attempts
+        except Exception as e:
+            logger.warning(f"Could not load security settings: {e}")
+
+        dialog = SecurityDialog(
+            parent=parent,
+            session_timeout_minutes=timeout_min,
+            max_attempts=max_attempts
+        )
         if dialog.exec_() == QDialog.Accepted:
-            return (dialog.session_days, dialog.max_attempts)
+            return (dialog.session_timeout_minutes, dialog.max_attempts)
         return None

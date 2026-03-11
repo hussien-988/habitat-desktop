@@ -3,17 +3,17 @@
 Duplicate detection and resolution service.
 Implements UC-007: Resolve Duplicate Properties
 Implements UC-008: Resolve Person Duplicates
+
+Detects duplicates by fetching data via REST API and grouping in Python.
+Resolution actions use API CRUD endpoints.
 """
 
-from typing import List, Dict, Any, Optional, Tuple
+from typing import List, Dict, Any, Optional
 from datetime import datetime
 from dataclasses import dataclass
+from collections import defaultdict
 import uuid
 
-from repositories.database import Database
-from repositories.building_repository import BuildingRepository
-from repositories.unit_repository import UnitRepository
-from repositories.person_repository import PersonRepository
 from utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -23,7 +23,7 @@ logger = get_logger(__name__)
 class DuplicateGroup:
     """Represents a group of potential duplicate records."""
     group_id: str
-    entity_type: str  # "building", "unit", or "person"
+    entity_type: str  # "building", "unit", "person", or "person_unit_relation"
     group_key: str  # The shared key (building_id, unit composite key, or national_id)
     records: List[Dict[str, Any]]
     status: str = "pending"  # pending, resolved, escalated
@@ -31,90 +31,106 @@ class DuplicateGroup:
 
 class DuplicateService:
     """
-    Service for detecting and resolving duplicate records.
+    Service for detecting and resolving duplicate records via REST API.
 
-    Property duplicates (UC-007): Detected by identical building_id or
-    building_id + unit_number composite key.
+    Property duplicates (UC-007): Detected by identical buildingId or
+    buildingId + unitIdentifier composite key.
 
-    Person duplicates (UC-008): Detected by identical national_id.
+    Person duplicates (UC-008): Detected by identical nationalId.
     """
 
-    def __init__(self, db: Database):
+    def __init__(self, db=None):
         self.db = db
-        self.building_repo = BuildingRepository(db)
-        self.unit_repo = UnitRepository(db)
-        self.person_repo = PersonRepository(db)
+
+    def _get_api(self):
+        """Get the API client instance."""
+        from services.api_client import get_api_client
+        api = get_api_client()
+        if not api:
+            raise RuntimeError("API client not available")
+        return api
 
     # ========== Property Duplicate Detection (UC-007) ==========
 
     def detect_building_duplicates(self) -> List[DuplicateGroup]:
         """
-        Detect buildings with duplicate building_id values.
-        Per UC-007: Detect when two or more building records share the same building_id.
+        Detect buildings with duplicate buildingId values via REST API.
+        Fetches all buildings paginated, groups by buildingId in Python.
         """
-        query = """
-            SELECT building_id, COUNT(*) as cnt
-            FROM buildings
-            GROUP BY building_id
-            HAVING COUNT(*) > 1
-        """
-        rows = self.db.fetch_all(query)
+        try:
+            api = self._get_api()
+            all_buildings = []
+            page = 1
+            while True:
+                result = api.search_buildings(page=page, page_size=200)
+                items = result.get("items", [])
+                if not items:
+                    break
+                all_buildings.extend(items)
+                total_pages = result.get("totalPages", 1)
+                if page >= total_pages:
+                    break
+                page += 1
 
-        groups = []
-        for row in rows:
-            building_id = row["building_id"]
-            # Get all buildings with this ID
-            buildings = self._get_buildings_by_id(building_id)
+            groups_map = defaultdict(list)
+            for b in all_buildings:
+                key = b.get("buildingId", "")
+                if key:
+                    groups_map[key].append(b)
 
-            if len(buildings) > 1:
-                group = DuplicateGroup(
-                    group_id=str(uuid.uuid4()),
-                    entity_type="building",
-                    group_key=building_id,
-                    records=buildings,
-                    status="pending"
-                )
-                groups.append(group)
+            groups = []
+            for key, records in groups_map.items():
+                if len(records) > 1:
+                    groups.append(DuplicateGroup(
+                        group_id=str(uuid.uuid4()),
+                        entity_type="building",
+                        group_key=key,
+                        records=records,
+                        status="pending"
+                    ))
 
-        logger.info(f"Detected {len(groups)} building duplicate groups")
-        return groups
+            logger.info(f"Detected {len(groups)} building duplicate groups from API")
+            return groups
+
+        except Exception as e:
+            logger.error(f"Failed to detect building duplicates: {e}")
+            return []
 
     def detect_unit_duplicates(self) -> List[DuplicateGroup]:
         """
-        Detect units with duplicate building_id + unit_number + floor_number composite keys.
-        Per UC-007: Detect identical composite key (building_id + unit_code).
-        Floor_number included to avoid false positives for same unit_number on different floors.
+        Detect units with duplicate buildingId + unitIdentifier + floorNumber composite keys.
+        Fetches all property units via REST API, groups in Python.
         """
-        query = """
-            SELECT building_id, unit_number, floor_number, COUNT(*) as cnt
-            FROM property_units
-            WHERE unit_number IS NOT NULL AND unit_number != ''
-            GROUP BY building_id, unit_number, floor_number
-            HAVING COUNT(*) > 1
-        """
-        rows = self.db.fetch_all(query)
+        try:
+            api = self._get_api()
+            all_units = api.get_all_property_units(limit=5000)
 
-        groups = []
-        for row in rows:
-            building_id = row["building_id"]
-            unit_number = row["unit_number"]
-            floor_number = row["floor_number"]
-            composite_key = f"{building_id}:{unit_number}:{floor_number}"
+            groups_map = defaultdict(list)
+            for u in all_units:
+                building_id = u.get("buildingId", "")
+                unit_id = u.get("unitIdentifier", "")
+                floor = str(u.get("floorNumber", ""))
+                if unit_id:
+                    composite_key = f"{building_id}:{unit_id}:{floor}"
+                    groups_map[composite_key].append(u)
 
-            units = self._get_units_by_composite_key(building_id, unit_number, floor_number)
+            groups = []
+            for key, records in groups_map.items():
+                if len(records) > 1:
+                    groups.append(DuplicateGroup(
+                        group_id=str(uuid.uuid4()),
+                        entity_type="unit",
+                        group_key=key,
+                        records=records,
+                        status="pending"
+                    ))
 
-            if len(units) > 1:
-                group = DuplicateGroup(
-                    group_id=str(uuid.uuid4()),
-                    entity_type="unit",
-                    group_key=composite_key,
-                    records=units,
-                    status="pending"
-                )
-                groups.append(group)
+            logger.info(f"Detected {len(groups)} unit duplicate groups from API")
+            return groups
 
-        logger.info(f"Detected {len(groups)} unit duplicate groups")
-        return groups
+        except Exception as e:
+            logger.error(f"Failed to detect unit duplicates: {e}")
+            return []
 
     def get_all_property_duplicates(self) -> List[DuplicateGroup]:
         """Get all property (building + unit) duplicate groups."""
@@ -126,88 +142,47 @@ class DuplicateService:
 
     def detect_person_duplicates(self) -> List[DuplicateGroup]:
         """
-        Detect persons with duplicate national_id values.
-        Per UC-008: Detect when two or more Person records share the same national_id.
+        Detect persons with duplicate nationalId values via REST API.
+        Fetches all persons paginated, groups by nationalId in Python.
         """
-        query = """
-            SELECT national_id, COUNT(*) as cnt
-            FROM persons
-            WHERE national_id IS NOT NULL AND national_id != ''
-            GROUP BY national_id
-            HAVING COUNT(*) > 1
-        """
-        rows = self.db.fetch_all(query)
+        try:
+            api = self._get_api()
+            all_persons = []
+            page = 1
+            while True:
+                result = api.get_persons(page=page, page_size=200)
+                items = result.get("items", [])
+                if not items:
+                    break
+                all_persons.extend(items)
+                total_pages = result.get("totalPages", 1)
+                if page >= total_pages:
+                    break
+                page += 1
 
-        groups = []
-        for row in rows:
-            national_id = row["national_id"]
-            # Get all persons with this ID
-            persons = self._get_persons_by_national_id(national_id)
+            groups_map = defaultdict(list)
+            for p in all_persons:
+                nid = p.get("nationalId", "")
+                if nid:
+                    groups_map[nid].append(p)
 
-            if len(persons) > 1:
-                group = DuplicateGroup(
-                    group_id=str(uuid.uuid4()),
-                    entity_type="person",
-                    group_key=national_id,
-                    records=persons,
-                    status="pending"
-                )
-                groups.append(group)
+            groups = []
+            for key, records in groups_map.items():
+                if len(records) > 1:
+                    groups.append(DuplicateGroup(
+                        group_id=str(uuid.uuid4()),
+                        entity_type="person",
+                        group_key=key,
+                        records=records,
+                        status="pending"
+                    ))
 
-        logger.info(f"Detected {len(groups)} person duplicate groups")
-        return groups
+            logger.info(f"Detected {len(groups)} person duplicate groups from API")
+            return groups
 
-    # ========== Person-Unit Relation Duplicate Detection ==========
-
-    def detect_person_unit_duplicates(self) -> List[DuplicateGroup]:
-        """
-        Detect when the same person is linked to the same unit multiple times
-        via person_unit_relations table.
-        """
-        query = """
-            SELECT person_id, unit_id, COUNT(*) as cnt
-            FROM person_unit_relations
-            GROUP BY person_id, unit_id
-            HAVING COUNT(*) > 1
-        """
-        rows = self.db.fetch_all(query)
-
-        groups = []
-        for row in rows:
-            person_id = row["person_id"]
-            unit_id = row["unit_id"]
-            composite_key = f"{person_id}:{unit_id}"
-
-            relations = self._get_person_unit_relations(person_id, unit_id)
-
-            if len(relations) > 1:
-                group = DuplicateGroup(
-                    group_id=str(uuid.uuid4()),
-                    entity_type="person_unit_relation",
-                    group_key=composite_key,
-                    records=relations,
-                    status="pending"
-                )
-                groups.append(group)
-
-        logger.info(f"Detected {len(groups)} person-unit relation duplicate groups")
-        return groups
-
-    def _get_person_unit_relations(self, person_id: str, unit_id: str) -> List[Dict[str, Any]]:
-        """Get relation records with joined person and unit details."""
-        query = """
-            SELECT pur.*,
-                   p.first_name_ar, p.last_name_ar, p.national_id,
-                   pu.unit_number, pu.floor_number, pu.unit_type,
-                   pu.apartment_status, pu.building_id,
-                   pu.number_of_rooms, pu.area_sqm, pu.unit_uuid
-            FROM person_unit_relations pur
-            LEFT JOIN persons p ON pur.person_id = p.person_id
-            LEFT JOIN property_units pu ON pur.unit_id = pu.unit_id
-            WHERE pur.person_id = ? AND pur.unit_id = ?
-        """
-        rows = self.db.fetch_all(query, (person_id, unit_id))
-        return [dict(row) for row in rows]
+        except Exception as e:
+            logger.error(f"Failed to detect person duplicates: {e}")
+            return []
 
     # ========== Resolution Actions ==========
 
@@ -220,19 +195,9 @@ class DuplicateService:
     ) -> bool:
         """
         Resolve duplicates by merging into a master record.
-        The master record is kept, others are merged into it.
-
-        Args:
-            group: The duplicate group to resolve
-            master_record_id: ID of the record to keep as master
-            justification: Reason for the merge decision
-            user_id: ID of user performing the resolution
+        The master record is kept, others are deleted via API.
         """
         try:
-            record_ids = [r.get("building_uuid") or r.get("unit_uuid") or r.get("person_uuid") or r.get("relation_id")
-                         for r in group.records]
-
-            # Log the resolution
             self._save_resolution(
                 group=group,
                 resolution_type="merge",
@@ -241,15 +206,12 @@ class DuplicateService:
                 user_id=user_id
             )
 
-            # Perform entity-specific merge
             if group.entity_type == "building":
                 self._merge_buildings(group.records, master_record_id)
             elif group.entity_type == "unit":
                 self._merge_units(group.records, master_record_id)
             elif group.entity_type == "person":
                 self._merge_persons(group.records, master_record_id)
-            elif group.entity_type == "person_unit_relation":
-                self._merge_person_unit_relations(group.records, master_record_id)
 
             logger.info(f"Merged {group.entity_type} duplicates: {group.group_key} -> {master_record_id}")
             return True
@@ -266,7 +228,7 @@ class DuplicateService:
     ) -> bool:
         """
         Resolve by marking records as intentionally separate (not duplicates).
-        Per UC-007/UC-008: Keep-separate decisions prevent re-surfacing.
+        Prevents re-surfacing in future detection.
         """
         try:
             self._save_resolution(
@@ -276,10 +238,8 @@ class DuplicateService:
                 justification=justification,
                 user_id=user_id
             )
-
             logger.info(f"Marked {group.entity_type} as separate: {group.group_key}")
             return True
-
         except Exception as e:
             logger.error(f"Failed to mark as separate: {e}")
             return False
@@ -292,7 +252,7 @@ class DuplicateService:
     ) -> bool:
         """
         Escalate complex case for senior review.
-        Per UC-007/UC-008 S05a: Complex cases requiring investigation.
+        UC-007/UC-008 S05a: Request field verification.
         """
         try:
             self._save_resolution(
@@ -303,191 +263,100 @@ class DuplicateService:
                 user_id=user_id,
                 status="escalated"
             )
-
             logger.info(f"Escalated {group.entity_type} for review: {group.group_key}")
             return True
-
         except Exception as e:
             logger.error(f"Failed to escalate: {e}")
             return False
 
-    # ========== Helper Methods ==========
-
-    def _get_buildings_by_id(self, building_id: str) -> List[Dict[str, Any]]:
-        """Get all building records with a specific building_id."""
-        query = "SELECT * FROM buildings WHERE building_id = ?"
-        rows = self.db.fetch_all(query, (building_id,))
-        return [dict(row) for row in rows]
-
-    def _get_units_by_composite_key(self, building_id: str, unit_number: str, floor_number=None) -> List[Dict[str, Any]]:
-        """Get all unit records with a specific building_id + unit_number + floor_number."""
-        if floor_number is not None:
-            query = "SELECT * FROM property_units WHERE building_id = ? AND unit_number = ? AND floor_number = ?"
-            rows = self.db.fetch_all(query, (building_id, unit_number, floor_number))
-        else:
-            query = "SELECT * FROM property_units WHERE building_id = ? AND unit_number = ?"
-            rows = self.db.fetch_all(query, (building_id, unit_number))
-        return [dict(row) for row in rows]
-
-    def _get_persons_by_national_id(self, national_id: str) -> List[Dict[str, Any]]:
-        """Get all person records with a specific national_id."""
-        query = "SELECT * FROM persons WHERE national_id = ?"
-        rows = self.db.fetch_all(query, (national_id,))
-        return [dict(row) for row in rows]
-
-    def _save_resolution(
+    def request_field_verification(
         self,
         group: DuplicateGroup,
-        resolution_type: str,
-        master_record_id: Optional[str],
         justification: str,
-        user_id: str = None,
-        status: str = "resolved"
-    ):
-        """Save resolution decision to database."""
-        resolution_id = str(uuid.uuid4())
-        record_ids = ",".join(
-            r.get("building_uuid") or r.get("unit_uuid") or r.get("person_uuid") or r.get("relation_id") or ""
-            for r in group.records
-        )
-
-        query = """
-            INSERT INTO duplicate_resolutions (
-                resolution_id, entity_type, group_key, record_ids,
-                resolution_type, master_record_id, justification,
-                resolved_by, resolved_at, status
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        user_id: str = None
+    ) -> bool:
         """
-        params = (
-            resolution_id,
-            group.entity_type,
-            group.group_key,
-            record_ids,
-            resolution_type,
-            master_record_id,
-            justification,
-            user_id,
-            datetime.now().isoformat(),
-            status
-        )
-        self.db.execute(query, params)
-
-    def _merge_buildings(self, records: List[Dict], master_uuid: str):
+        Request field verification for a duplicate group.
+        UC-007 S05: Request field verification option.
         """
-        Merge building records into master.
-        Updates all references (units, claims) to point to master.
-        """
-        master = next((r for r in records if r["building_uuid"] == master_uuid), None)
-        if not master:
-            raise ValueError(f"Master building not found: {master_uuid}")
-
-        for record in records:
-            if record["building_uuid"] != master_uuid:
-                # Update units to reference master building
-                self.db.execute(
-                    "UPDATE property_units SET building_id = ? WHERE building_id = ?",
-                    (master["building_id"], record["building_id"])
-                )
-                # Delete the duplicate building
-                self.db.execute(
-                    "DELETE FROM buildings WHERE building_uuid = ?",
-                    (record["building_uuid"],)
-                )
-
-    def _merge_units(self, records: List[Dict], master_uuid: str):
-        """
-        Merge unit records into master.
-        Updates all references (relations, claims) to point to master.
-        """
-        master = next((r for r in records if r["unit_uuid"] == master_uuid), None)
-        if not master:
-            raise ValueError(f"Master unit not found: {master_uuid}")
-
-        for record in records:
-            if record["unit_uuid"] != master_uuid:
-                # Update person-unit relations to reference master
-                self.db.execute(
-                    "UPDATE person_unit_relations SET unit_id = ? WHERE unit_id = ?",
-                    (master["unit_id"], record["unit_id"])
-                )
-                # Update claims to reference master
-                self.db.execute(
-                    "UPDATE claims SET unit_id = ? WHERE unit_id = ?",
-                    (master["unit_id"], record["unit_id"])
-                )
-                # Delete the duplicate unit
-                self.db.execute(
-                    "DELETE FROM property_units WHERE unit_uuid = ?",
-                    (record["unit_uuid"],)
-                )
-
-    def _merge_persons(self, records: List[Dict], master_uuid: str):
-        """
-        Merge person records into master.
-        Updates all references (relations, claims, households) to point to master.
-        """
-        master = next((r for r in records if r["person_uuid"] == master_uuid), None)
-        if not master:
-            raise ValueError(f"Master person not found: {master_uuid}")
-
-        for record in records:
-            if record["person_uuid"] != master_uuid:
-                # Update person-unit relations to reference master
-                self.db.execute(
-                    "UPDATE person_unit_relations SET person_id = ? WHERE person_id = ?",
-                    (master["person_id"], record["person_id"])
-                )
-                # Update claims to reference master (person_ids is comma-separated)
-                self._update_claim_person_references(record["person_id"], master["person_id"])
-                # Delete the duplicate person
-                self.db.execute(
-                    "DELETE FROM persons WHERE person_uuid = ?",
-                    (record["person_uuid"],)
-                )
-
-    def _merge_person_unit_relations(self, records: List[Dict], master_relation_id: str):
-        """
-        Merge duplicate person-unit relations.
-        Keep master relation, delete duplicates.
-        """
-        for record in records:
-            if record.get("relation_id") != master_relation_id:
-                self.db.execute(
-                    "DELETE FROM person_unit_relations WHERE relation_id = ?",
-                    (record["relation_id"],)
-                )
-
-    def _update_claim_person_references(self, old_person_id: str, new_person_id: str):
-        """Update person_ids field in claims (comma-separated list)."""
-        query = "SELECT claim_uuid, person_ids FROM claims WHERE person_ids LIKE ?"
-        rows = self.db.fetch_all(query, (f"%{old_person_id}%",))
-
-        for row in rows:
-            person_ids = row["person_ids"]
-            # Replace old ID with new ID
-            updated_ids = person_ids.replace(old_person_id, new_person_id)
-            # Remove any duplicate IDs that might result
-            id_list = [p.strip() for p in updated_ids.split(",") if p.strip()]
-            unique_ids = list(dict.fromkeys(id_list))  # Preserve order, remove dups
-
-            self.db.execute(
-                "UPDATE claims SET person_ids = ? WHERE claim_uuid = ?",
-                (",".join(unique_ids), row["claim_uuid"])
+        try:
+            self._save_resolution(
+                group=group,
+                resolution_type="field_verification",
+                master_record_id=None,
+                justification=justification,
+                user_id=user_id,
+                status="pending_verification"
             )
+            logger.info(f"Requested field verification for {group.entity_type}: {group.group_key}")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to request field verification: {e}")
+            return False
 
-    def get_resolution_history(self, entity_type: str = None) -> List[Dict[str, Any]]:
-        """Get history of duplicate resolutions."""
-        query = "SELECT * FROM duplicate_resolutions"
-        params = []
+    # ========== Comparison Data ==========
 
-        if entity_type:
-            query += " WHERE entity_type = ?"
-            params.append(entity_type)
+    def get_person_comparison_data(self, group: DuplicateGroup) -> List[Dict[str, Any]]:
+        """Get full comparison data for each person in a duplicate group.
 
-        query += " ORDER BY resolved_at DESC"
+        For each person: find their claims, linked units, and buildings via API.
+        Returns list of dicts with keys: person, claims, units, buildings.
+        """
+        try:
+            api = self._get_api()
+        except Exception:
+            return []
 
-        rows = self.db.fetch_all(query, tuple(params))
-        return [dict(row) for row in rows]
+        results = []
+        for person_record in group.records:
+            person_id = person_record.get("id", "")
+            national_id = person_record.get("nationalId", "")
+
+            claims = []
+            units = []
+            buildings = []
+
+            try:
+                # Get claims where this person is the primary claimant
+                all_claims = api.get_claims(primary_claimant_id=person_id)
+                if isinstance(all_claims, list):
+                    claims = all_claims
+                elif isinstance(all_claims, dict):
+                    claims = all_claims.get("items", [])
+            except Exception as e:
+                logger.warning(f"Failed to fetch claims for person {person_id}: {e}")
+
+            # Get units and buildings from claims
+            seen_unit_ids = set()
+            seen_building_ids = set()
+
+            for claim in claims:
+                unit_id = claim.get("propertyUnitId", "")
+                if unit_id and unit_id not in seen_unit_ids:
+                    seen_unit_ids.add(unit_id)
+                    try:
+                        # Get units for the building associated with this claim
+                        building_id_from_claim = claim.get("buildingId", "")
+                        if building_id_from_claim and building_id_from_claim not in seen_building_ids:
+                            seen_building_ids.add(building_id_from_claim)
+                            building = api.get_building_by_id(building_id_from_claim)
+                            if building:
+                                buildings.append(building)
+                                bld_units = api.get_property_units_by_building(building_id_from_claim)
+                                for u in bld_units:
+                                    if u.get("id") == unit_id:
+                                        units.append(u)
+                    except Exception as e:
+                        logger.warning(f"Failed to fetch building/unit details: {e}")
+
+            results.append({
+                "person": person_record,
+                "claims": claims,
+                "units": units,
+                "buildings": buildings,
+            })
+
+        return results
 
     def get_pending_count(self) -> Dict[str, int]:
         """Get count of pending duplicates by entity type."""
@@ -502,77 +371,143 @@ class DuplicateService:
             "total": len(building_dups) + len(unit_dups) + len(person_dups)
         }
 
-    def get_person_comparison_data(self, group: DuplicateGroup) -> List[Dict[str, Any]]:
-        """Get full comparison data for each person in a duplicate group.
+    # ========== Private Merge Methods ==========
 
-        For each person: find their claims, linked units, and buildings.
-        Returns list of dicts with keys: person, claims, units, buildings.
-        """
-        results = []
-        for person_record in group.records:
-            person_id = person_record.get("person_id", "")
+    def _merge_buildings(self, records: List[Dict], master_id: str):
+        """Merge building records — keep master, delete duplicates via API."""
+        api = self._get_api()
+        master = next((r for r in records if r.get("id") == master_id), None)
+        if not master:
+            raise ValueError(f"Master building not found: {master_id}")
 
-            # Claims linked to this person
-            claims_rows = self.db.fetch_all(
-                "SELECT * FROM claims WHERE person_ids LIKE ?",
-                (f"%{person_id}%",)
-            )
-            claims = [dict(r) for r in claims_rows]
+        for record in records:
+            if record.get("id") != master_id:
+                try:
+                    api.delete_building(record["id"])
+                except Exception as e:
+                    logger.error(f"Failed to delete duplicate building {record.get('id')}: {e}")
 
-            # Units via person_unit_relations
-            relation_rows = self.db.fetch_all(
-                "SELECT unit_id FROM person_unit_relations WHERE person_id = ?",
-                (person_id,)
-            )
+    def _merge_units(self, records: List[Dict], master_id: str):
+        """Merge unit records — keep master, delete duplicates via API."""
+        api = self._get_api()
+        for record in records:
+            if record.get("id") != master_id:
+                try:
+                    # Soft-delete by updating status (no direct delete endpoint for units)
+                    api.update_property_unit(record["id"], {"isDeleted": True})
+                except Exception as e:
+                    logger.error(f"Failed to soft-delete duplicate unit {record.get('id')}: {e}")
 
-            units = []
-            buildings = []
-            seen_building_ids = set()
+    def _merge_persons(self, records: List[Dict], master_id: str):
+        """Merge person records — keep master, delete duplicates via API."""
+        api = self._get_api()
+        for record in records:
+            if record.get("id") != master_id:
+                try:
+                    api.delete_person(record["id"])
+                except Exception as e:
+                    logger.error(f"Failed to delete duplicate person {record.get('id')}: {e}")
 
-            for rel in relation_rows:
-                unit_row = self.db.fetch_one(
-                    "SELECT * FROM property_units WHERE unit_id = ?",
-                    (rel["unit_id"],)
+    # ========== Resolution Logging ==========
+
+    def _save_resolution(
+        self,
+        group: DuplicateGroup,
+        resolution_type: str,
+        master_record_id: Optional[str],
+        justification: str,
+        user_id: str = None,
+        status: str = "resolved"
+    ):
+        """Save resolution decision to local database (audit trail)."""
+        if not self.db:
+            logger.warning("No local DB available for resolution logging")
+            return
+
+        resolution_id = str(uuid.uuid4())
+        record_ids = ",".join(
+            r.get("id", "") for r in group.records
+        )
+
+        try:
+            # Ensure table exists
+            self.db.execute("""
+                CREATE TABLE IF NOT EXISTS duplicate_resolutions (
+                    resolution_id TEXT PRIMARY KEY,
+                    entity_type TEXT,
+                    group_key TEXT,
+                    record_ids TEXT,
+                    resolution_type TEXT,
+                    master_record_id TEXT,
+                    justification TEXT,
+                    resolved_by TEXT,
+                    resolved_at TEXT,
+                    status TEXT
                 )
-                if unit_row:
-                    unit_dict = dict(unit_row)
-                    units.append(unit_dict)
-                    bid = unit_dict.get("building_id")
-                    if bid and bid not in seen_building_ids:
-                        seen_building_ids.add(bid)
-                        bld_row = self.db.fetch_one(
-                            "SELECT * FROM buildings WHERE building_id = ?",
-                            (bid,)
-                        )
-                        if bld_row:
-                            buildings.append(dict(bld_row))
+            """)
 
-            # Also check claims for unit_id references not found via relations
-            for claim in claims:
-                claim_unit_id = claim.get("unit_id")
-                if claim_unit_id and not any(u.get("unit_id") == claim_unit_id for u in units):
-                    unit_row = self.db.fetch_one(
-                        "SELECT * FROM property_units WHERE unit_id = ?",
-                        (claim_unit_id,)
-                    )
-                    if unit_row:
-                        unit_dict = dict(unit_row)
-                        units.append(unit_dict)
-                        bid = unit_dict.get("building_id")
-                        if bid and bid not in seen_building_ids:
-                            seen_building_ids.add(bid)
-                            bld_row = self.db.fetch_one(
-                                "SELECT * FROM buildings WHERE building_id = ?",
-                                (bid,)
-                            )
-                            if bld_row:
-                                buildings.append(dict(bld_row))
+            self.db.execute(
+                """INSERT INTO duplicate_resolutions (
+                    resolution_id, entity_type, group_key, record_ids,
+                    resolution_type, master_record_id, justification,
+                    resolved_by, resolved_at, status
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (
+                    resolution_id,
+                    group.entity_type,
+                    group.group_key,
+                    record_ids,
+                    resolution_type,
+                    master_record_id,
+                    justification,
+                    user_id,
+                    datetime.now().isoformat(),
+                    status
+                )
+            )
+        except Exception as e:
+            logger.warning(f"Failed to save resolution to local DB: {e}")
 
-            results.append({
-                "person": person_record,
-                "claims": claims,
-                "units": units,
-                "buildings": buildings,
-            })
+    def get_resolution_history(self, entity_type: str = None) -> List[Dict[str, Any]]:
+        """Get history of duplicate resolutions from local DB."""
+        if not self.db:
+            return []
 
-        return results
+        try:
+            query = "SELECT * FROM duplicate_resolutions"
+            params = []
+            if entity_type:
+                query += " WHERE entity_type = ?"
+                params.append(entity_type)
+            query += " ORDER BY resolved_at DESC"
+            rows = self.db.fetch_all(query, tuple(params))
+            return [dict(row) for row in rows]
+        except Exception:
+            return []
+
+    def get_resolved_group_keys(self) -> set:
+        """Get set of group_keys already resolved (to filter out from detection)."""
+        if not self.db:
+            return set()
+
+        try:
+            self.db.execute("""
+                CREATE TABLE IF NOT EXISTS duplicate_resolutions (
+                    resolution_id TEXT PRIMARY KEY,
+                    entity_type TEXT,
+                    group_key TEXT,
+                    record_ids TEXT,
+                    resolution_type TEXT,
+                    master_record_id TEXT,
+                    justification TEXT,
+                    resolved_by TEXT,
+                    resolved_at TEXT,
+                    status TEXT
+                )
+            """)
+            rows = self.db.fetch_all(
+                "SELECT group_key FROM duplicate_resolutions WHERE status IN ('resolved', 'pending_verification')"
+            )
+            return {row["group_key"] for row in rows}
+        except Exception:
+            return set()

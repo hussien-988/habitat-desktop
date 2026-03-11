@@ -7,6 +7,12 @@ Structure (SAME as BaseWizard):
 - Header (fixed)
 - QStackedWidget (content changes between steps)
 - Footer (fixed)
+
+Steps:
+  1. Select Buildings (S01-S03)
+  2. Select Researcher (S06-S07)
+  3. Summary with units + revisit (S03-S05)
+  4. Completion & Transfer Status (S08-S12)
 """
 
 from PyQt5.QtWidgets import (
@@ -205,11 +211,14 @@ class FieldWorkPreparationPage(QWidget):
         # Step 3: Summary / Confirmation (created when needed)
         self.step3 = None
 
+        # Step 4: Completion & Transfer Status (created after submission)
+        self.step4 = None
+
         self.current_step = 0
 
     def _on_back(self):
         """Handle back button."""
-        if self.current_step > 0:
+        if self.current_step > 0 and self.current_step < 3:
             self.current_step -= 1
             self.step_container.setCurrentIndex(self.current_step)
             self._update_navigation()
@@ -263,6 +272,7 @@ class FieldWorkPreparationPage(QWidget):
                 workflow_data = {
                     'buildings': summary['buildings'],
                     'researcher': summary['researcher'],
+                    'revisit_buildings': summary.get('revisit_buildings', []),
                 }
                 logger.info(f"Submitting field work: {len(workflow_data['buildings'])} buildings")
                 main_window = self.window()
@@ -272,6 +282,10 @@ class FieldWorkPreparationPage(QWidget):
                     logger.error("Main window missing _on_field_work_completed handler")
             except Exception as e:
                 logger.error(f"Error in field work submission: {e}", exc_info=True)
+
+        elif self.current_step == 3:
+            # Step 4: "New Assignment" button pressed — restart wizard
+            self.refresh()
 
     def _update_navigation(self):
         """Update navigation buttons based on current step."""
@@ -292,6 +306,64 @@ class FieldWorkPreparationPage(QWidget):
             self.btn_next.setText("تأكيد وإرسال   >")
             self.btn_next.setEnabled(True)
 
+        elif self.current_step == 3:
+            # Completion view — only "New Assignment" button
+            self.btn_back.setEnabled(False)
+            self.btn_next.setText("تعيين جديد")
+            self.btn_next.setEnabled(True)
+
     def enable_next_button(self, enabled: bool):
         """Allow steps to enable/disable next button."""
         self.btn_next.setEnabled(enabled)
+
+    def show_completion(self, buildings, researcher_name, assignment_ids):
+        """Show completion & transfer status view after successful assignment (S08-S12)."""
+        # Stop step4 refresh timer if exists from previous run
+        if self.step4 is not None:
+            if hasattr(self.step4, 'stop_refresh'):
+                self.step4.stop_refresh()
+            self.step_container.removeWidget(self.step4)
+            self.step4.deleteLater()
+
+        from ui.pages.field_work_preparation_step4 import FieldWorkPreparationStep4
+        main_window = self.window()
+        db = getattr(main_window, 'db', None)
+        self.step4 = FieldWorkPreparationStep4(
+            buildings, researcher_name, assignment_ids, db=db, parent=self
+        )
+        self.step_container.addWidget(self.step4)
+
+        self.current_step = 3
+        self.step_container.setCurrentIndex(self.step_container.indexOf(self.step4))
+        self._update_navigation()
+
+    def refresh(self, data=None):
+        """Reset wizard to step 1 for a new assignment."""
+        # Remove step 4 if exists
+        if self.step4 is not None:
+            if hasattr(self.step4, 'stop_refresh'):
+                self.step4.stop_refresh()
+            self.step_container.removeWidget(self.step4)
+            self.step4.deleteLater()
+            self.step4 = None
+
+        # Remove step 2 and 3 if they exist
+        if self.step3 is not None:
+            self.step_container.removeWidget(self.step3)
+            self.step3.deleteLater()
+            self.step3 = None
+        if self.step2 is not None:
+            self.step_container.removeWidget(self.step2)
+            self.step2.deleteLater()
+            self.step2 = None
+
+        # Reset to step 1
+        self.current_step = 0
+        self.step_container.setCurrentIndex(0)
+        self._update_navigation()
+
+        # Reload step 1 data
+        if hasattr(self.step1, '_load_buildings'):
+            self.step1._selected_building_ids.clear()
+            self.step1._confirmed_building_ids.clear()
+            self.step1._load_buildings()

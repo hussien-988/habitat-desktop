@@ -5,25 +5,27 @@ Vocabulary Management Page
 Implements UC-010 Vocabulary Management requirements.
 
 Features:
-- View and edit controlled vocabularies
-- Add/remove vocabulary terms
-- Export vocabularies for mobile devices
-- Version management
+- View and edit controlled vocabularies via API
+- Add/remove/deprecate vocabulary terms
+- Import vocabulary updates from file (S04/S04a)
+- Export vocabularies for mobile devices (S09)
+- Audit logging of all actions (S10)
 """
 
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QTableWidget, QTableWidgetItem, QComboBox, QLineEdit,
-    QGroupBox, QFormLayout, QHeaderView,
+    QGroupBox, QFormLayout, QHeaderView, QDialog, QFileDialog,
     QDialogButtonBox, QCheckBox, QSpinBox
 )
 from PyQt5.QtCore import Qt, pyqtSignal
-from PyQt5.QtGui import QIcon
+from PyQt5.QtGui import QColor
 
 from utils.i18n import I18n
 from repositories.database import Database
 from services.api_client import get_api_client
-from services.vocab_service import get_all_vocabularies, initialize_vocabularies, refresh_vocabularies
+from services.vocab_service import get_all_vocabularies, refresh_vocabularies
+from services.security_service import SecurityService
 from ui.components.dialogs.base_dialog import BaseDialog
 from ui.error_handler import ErrorHandler
 from utils.logger import get_logger
@@ -38,7 +40,6 @@ class VocabularyEditDialog(BaseDialog):
         self.term_data = term_data or {}
         i18n = i18n or I18n()
 
-        # Determine title key based on edit/add mode
         title_key = "edit_term" if term_data else "add_term"
 
         super().__init__(
@@ -57,29 +58,32 @@ class VocabularyEditDialog(BaseDialog):
 
         # Code
         self.code_input = QLineEdit()
-        self.code_input.setText(self.term_data.get("code", ""))
+        self.code_input.setText(str(self.term_data.get("code", "")))
+        if self.term_data:
+            self.code_input.setEnabled(False)
         form.addRow(self.i18n.t("code") + ":", self.code_input)
 
         # Arabic label
         self.label_ar_input = QLineEdit()
-        self.label_ar_input.setText(self.term_data.get("label_ar", ""))
+        self.label_ar_input.setText(self.term_data.get("labelArabic", ""))
         self.label_ar_input.setLayoutDirection(Qt.RightToLeft)
         form.addRow(self.i18n.t("label_ar") + ":", self.label_ar_input)
 
         # English label
         self.label_en_input = QLineEdit()
-        self.label_en_input.setText(self.term_data.get("label_en", ""))
+        self.label_en_input.setText(self.term_data.get("labelEnglish", ""))
         form.addRow(self.i18n.t("label_en") + ":", self.label_en_input)
 
         # Display order
         self.order_input = QSpinBox()
         self.order_input.setRange(0, 9999)
-        self.order_input.setValue(self.term_data.get("display_order", 0))
+        self.order_input.setValue(self.term_data.get("displayOrder", 0))
         form.addRow(self.i18n.t("display_order") + ":", self.order_input)
 
         # Active status
         self.active_check = QCheckBox(self.i18n.t("active"))
-        self.active_check.setChecked(self.term_data.get("is_active", True))
+        is_active = self.term_data.get("isActive", True)
+        self.active_check.setChecked(bool(is_active))
         form.addRow("", self.active_check)
 
         layout.addLayout(form)
@@ -93,13 +97,13 @@ class VocabularyEditDialog(BaseDialog):
         layout.addWidget(buttons)
 
     def get_data(self) -> dict:
-        """Get entered data."""
+        """Get entered data in API-compatible format."""
         return {
             "code": self.code_input.text().strip(),
-            "label_ar": self.label_ar_input.text().strip(),
-            "label_en": self.label_en_input.text().strip(),
-            "display_order": self.order_input.value(),
-            "is_active": self.active_check.isChecked()
+            "labelArabic": self.label_ar_input.text().strip(),
+            "labelEnglish": self.label_en_input.text().strip(),
+            "displayOrder": self.order_input.value(),
+            "isActive": self.active_check.isChecked()
         }
 
 
@@ -109,20 +113,22 @@ class VocabularyManagementPage(QWidget):
 
     Implements UC-010:
     - S02: View vocabularies list
-    - S03: Select vocabulary to edit
-    - S04-S06: Add/Edit/Delete terms
-    - S07: Save changes
-    - S08: Manage versions
+    - S03: Select vocabulary to edit (with status display)
+    - S04: Import vocabulary update from file
+    - S04a: Invalid file handling
+    - S05: Add/Edit/Deprecate terms via API
     - S09: Export for mobile
+    - S10: Audit logging
     """
 
-    vocabulary_updated = pyqtSignal(str)  # vocabulary_name
+    vocabulary_updated = pyqtSignal(str)
 
     def __init__(self, db: Database, i18n: I18n = None, parent=None):
         super().__init__(parent)
         self.db = db
         self.i18n = i18n or I18n()
         self.current_vocabulary = None
+        self.security_service = SecurityService(db)
         self._setup_ui()
         self._load_vocabularies()
 
@@ -146,7 +152,12 @@ class VocabularyManagementPage(QWidget):
         self.refresh_btn.clicked.connect(self._refresh_from_api)
         header.addWidget(self.refresh_btn)
 
-        # Export button
+        # Import button (UC-010 S04)
+        self.import_btn = QPushButton("استيراد من ملف")
+        self.import_btn.clicked.connect(self._import_vocabularies)
+        header.addWidget(self.import_btn)
+
+        # Export button (UC-010 S09)
         self.export_btn = QPushButton(self.i18n.t("export_for_mobile"))
         self.export_btn.clicked.connect(self._export_vocabularies)
         header.addWidget(self.export_btn)
@@ -183,10 +194,15 @@ class VocabularyManagementPage(QWidget):
         self.term_count_label = QLabel("0")
         info_layout.addRow(self.i18n.t("term_count") + ":", self.term_count_label)
 
-        self.version_label = QLabel("1.0")
-        info_layout.addRow(self.i18n.t("version") + ":", self.version_label)
-
         left_layout.addWidget(info_group)
+
+        # Show deprecated checkbox (UC-010 S03)
+        self.show_deprecated_check = QCheckBox("إظهار المصطلحات المتقادمة")
+        self.show_deprecated_check.stateChanged.connect(
+            lambda: self._load_terms(self.current_vocabulary)
+        )
+        left_layout.addWidget(self.show_deprecated_check)
+
         left_layout.addStretch()
 
         content.addWidget(left_panel, 1)
@@ -243,12 +259,8 @@ class VocabularyManagementPage(QWidget):
         layout.addLayout(content)
 
     def _load_vocabularies(self):
-        """Load vocabulary list from backend API via vocab_service cache."""
+        """Load vocabulary list from backend API."""
         self.vocab_list.clear()
-        try:
-            initialize_vocabularies()
-        except Exception as e:
-            logger.warning(f"Could not refresh vocabularies from API: {e}")
         try:
             for v in get_all_vocabularies():
                 name = v.get("vocabularyName", "")
@@ -277,29 +289,45 @@ class VocabularyManagementPage(QWidget):
         self._load_terms(vocabulary_name)
 
     def _load_terms(self, vocabulary_name: str):
-        """Load terms for selected vocabulary from API cache."""
+        """Load terms for selected vocabulary from API."""
         self.terms_table.setRowCount(0)
         if not vocabulary_name:
             return
+
+        show_deprecated = self.show_deprecated_check.isChecked()
+
         try:
-            vocab = next(
-                (v for v in get_all_vocabularies()
-                 if v.get("vocabularyName", "") == vocabulary_name),
-                None
-            )
-            terms = vocab.get("values", []) if vocab else []
-            self.terms_table.setRowCount(len(terms))
-            for i, t in enumerate(terms):
-                self.terms_table.setItem(i, 0, QTableWidgetItem(str(t.get("code", ""))))
-                self.terms_table.setItem(i, 1, QTableWidgetItem(t.get("labelArabic", "")))
-                self.terms_table.setItem(i, 2, QTableWidgetItem(t.get("labelEnglish", "")))
-                self.terms_table.setItem(i, 3, QTableWidgetItem(str(t.get("displayOrder", 0))))
-                active_item = QTableWidgetItem("✓")
-                active_item.setTextAlignment(Qt.AlignCenter)
-                self.terms_table.setItem(i, 4, active_item)
-            self.term_count_label.setText(str(len(terms)))
+            api = get_api_client()
+            result = api.get_vocabulary_terms(vocabulary_name)
+            terms = result.get("values", []) if isinstance(result, dict) else []
         except Exception as e:
-            logger.error(f"Failed to load terms: {e}")
+            logger.error(f"Failed to load terms from API: {e}")
+            return
+
+        if not show_deprecated:
+            terms = [t for t in terms if t.get("isActive", True)]
+
+        self.terms_table.setRowCount(len(terms))
+        for i, t in enumerate(terms):
+            code = str(t.get("code", ""))
+            label_ar = t.get("labelArabic", "") or ""
+            label_en = t.get("labelEnglish", "") or ""
+            order = str(t.get("displayOrder", 0))
+            is_active = t.get("isActive", True)
+
+            self.terms_table.setItem(i, 0, QTableWidgetItem(code))
+            self.terms_table.setItem(i, 1, QTableWidgetItem(label_ar))
+            self.terms_table.setItem(i, 2, QTableWidgetItem(label_en))
+            self.terms_table.setItem(i, 3, QTableWidgetItem(order))
+
+            status_text = "نشط" if is_active else "متقادم"
+            status_item = QTableWidgetItem(status_text)
+            status_item.setTextAlignment(Qt.AlignCenter)
+            if not is_active:
+                status_item.setBackground(QColor("#FEE2E2"))
+            self.terms_table.setItem(i, 4, status_item)
+
+        self.term_count_label.setText(str(len(terms)))
 
     def _filter_terms(self, search_text: str):
         """Filter terms table by search text."""
@@ -319,12 +347,11 @@ class VocabularyManagementPage(QWidget):
         self.delete_term_btn.setEnabled(has_selection)
 
     def _add_vocabulary(self):
-        """Add a new vocabulary."""
+        """Add a new vocabulary via API."""
         name = self.new_vocab_input.text().strip()
         if not name:
             return
 
-        # Check if already exists
         if self.vocab_list.findText(name) != -1:
             ErrorHandler.show_warning(
                 self,
@@ -335,14 +362,22 @@ class VocabularyManagementPage(QWidget):
 
         try:
             get_api_client().create_vocabulary({"name": name, "displayName": name})
+            refresh_vocabularies()
+            self._load_vocabularies()
+            self.vocab_list.setCurrentText(name)
+            self.new_vocab_input.clear()
+            self.security_service.log_action(
+                action="vocabulary_created",
+                entity_type="vocabulary",
+                entity_id=name,
+                details=f"تم إنشاء تصنيف جديد: {name}"
+            )
         except Exception as e:
-            logger.warning(f"API create_vocabulary failed (vocab may already exist): {e}")
-        self.vocab_list.addItem(name)
-        self.vocab_list.setCurrentText(name)
-        self.new_vocab_input.clear()
+            logger.error(f"Failed to create vocabulary: {e}")
+            ErrorHandler.show_error(self, str(e), self.i18n.t("error"))
 
     def _add_term(self):
-        """Add a new term to current vocabulary."""
+        """Add a new term to current vocabulary via API (UC-010 S05)."""
         if not self.current_vocabulary:
             return
 
@@ -355,37 +390,34 @@ class VocabularyManagementPage(QWidget):
                 return
 
             try:
-                api_data = {
-                    "code": data["code"],
-                    "labelAr": data["label_ar"],
-                    "labelEn": data["label_en"],
-                    "displayOrder": data["display_order"],
-                    "isActive": bool(data["is_active"]),
-                }
-                get_api_client().create_vocabulary_term(self.current_vocabulary, api_data)
-                try:
-                    initialize_vocabularies()
-                except Exception:
-                    pass
+                get_api_client().create_vocabulary_term(self.current_vocabulary, data)
+                refresh_vocabularies()
                 self._load_terms(self.current_vocabulary)
                 self.vocabulary_updated.emit(self.current_vocabulary)
+                self.security_service.log_action(
+                    action="vocabulary_term_created",
+                    entity_type="vocabulary",
+                    entity_id=f"{self.current_vocabulary}/{data['code']}",
+                    details=f"تم إضافة تصنيف: {data['labelArabic']}"
+                )
             except Exception as e:
                 logger.error(f"Failed to add term: {e}")
                 ErrorHandler.show_error(self, str(e), self.i18n.t("error"))
 
     def _edit_term(self):
-        """Edit selected term."""
+        """Edit selected term via API (UC-010 S05)."""
         selected = self.terms_table.selectedItems()
         if not selected:
             return
 
         row = selected[0].row()
+        is_active_text = self.terms_table.item(row, 4).text()
         term_data = {
             "code": self.terms_table.item(row, 0).text(),
-            "label_ar": self.terms_table.item(row, 1).text(),
-            "label_en": self.terms_table.item(row, 2).text(),
-            "display_order": int(self.terms_table.item(row, 3).text() or 0),
-            "is_active": self.terms_table.item(row, 4).text() == "✓"
+            "labelArabic": self.terms_table.item(row, 1).text(),
+            "labelEnglish": self.terms_table.item(row, 2).text(),
+            "displayOrder": int(self.terms_table.item(row, 3).text() or 0),
+            "isActive": is_active_text == "نشط"
         }
         original_code = term_data["code"]
 
@@ -394,32 +426,31 @@ class VocabularyManagementPage(QWidget):
             data = dialog.get_data()
 
             try:
-                api_data = {
-                    "code": data["code"],
-                    "labelAr": data["label_ar"],
-                    "labelEn": data["label_en"],
-                    "displayOrder": data["display_order"],
-                    "isActive": bool(data["is_active"]),
-                }
-                get_api_client().update_vocabulary_term(self.current_vocabulary, original_code, api_data)
-                try:
-                    initialize_vocabularies()
-                except Exception:
-                    pass
+                get_api_client().update_vocabulary_term(
+                    self.current_vocabulary, original_code, data
+                )
+                refresh_vocabularies()
                 self._load_terms(self.current_vocabulary)
                 self.vocabulary_updated.emit(self.current_vocabulary)
+                self.security_service.log_action(
+                    action="vocabulary_term_updated",
+                    entity_type="vocabulary",
+                    entity_id=f"{self.current_vocabulary}/{original_code}",
+                    details=f"تم تحديث تصنيف: {data['labelArabic']}"
+                )
             except Exception as e:
                 logger.error(f"Failed to update term: {e}")
                 ErrorHandler.show_error(self, str(e), self.i18n.t("error"))
 
     def _delete_term(self):
-        """Delete selected term."""
+        """Deactivate selected term via API (UC-010 S05)."""
         selected = self.terms_table.selectedItems()
         if not selected:
             return
 
         row = selected[0].row()
         code = self.terms_table.item(row, 0).text()
+        label = self.terms_table.item(row, 1).text()
 
         if ErrorHandler.confirm(
             self,
@@ -428,20 +459,95 @@ class VocabularyManagementPage(QWidget):
         ):
             try:
                 get_api_client().deactivate_vocabulary_term(self.current_vocabulary, code)
-                try:
-                    initialize_vocabularies()
-                except Exception:
-                    pass
+                refresh_vocabularies()
                 self._load_terms(self.current_vocabulary)
                 self.vocabulary_updated.emit(self.current_vocabulary)
+                self.security_service.log_action(
+                    action="vocabulary_term_deprecated",
+                    entity_type="vocabulary",
+                    entity_id=f"{self.current_vocabulary}/{code}",
+                    details=f"تم إيقاف تصنيف: {label}"
+                )
             except Exception as e:
                 logger.error(f"Failed to deactivate term: {e}")
                 ErrorHandler.show_error(self, str(e), self.i18n.t("error"))
 
+    def _import_vocabularies(self):
+        """Import vocabulary update from file (UC-010 S04/S04a)."""
+        file_path, _ = QFileDialog.getOpenFileName(
+            self,
+            "استيراد التصنيف",
+            "",
+            "JSON Files (*.json);;CSV Files (*.csv);;All Files (*)"
+        )
+        if not file_path:
+            return
+
+        try:
+            import json
+            import csv
+
+            data = None
+            if file_path.endswith(".json"):
+                with open(file_path, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+            elif file_path.endswith(".csv"):
+                with open(file_path, "r", encoding="utf-8") as f:
+                    reader = csv.DictReader(f)
+                    data = list(reader)
+            else:
+                ErrorHandler.show_warning(
+                    self,
+                    "نوع الملف غير مدعوم. استخدم JSON أو CSV",
+                    self.i18n.t("error")
+                )
+                return
+
+            if not data:
+                ErrorHandler.show_warning(
+                    self,
+                    "الملف فارغ أو غير صالح",
+                    self.i18n.t("error")
+                )
+                return
+
+            # Validate file structure (S04a)
+            if isinstance(data, list) and len(data) > 0:
+                sample = data[0]
+                if "code" not in sample:
+                    ErrorHandler.show_warning(
+                        self,
+                        "الملف لا يحتوي على الأعمدة المطلوبة (code). تحقق من بنية الملف.",
+                        self.i18n.t("error")
+                    )
+                    return
+
+            api = get_api_client()
+            api.import_vocabularies(data)
+            refresh_vocabularies()
+            self._load_vocabularies()
+            self._load_terms(self.current_vocabulary)
+
+            self.security_service.log_action(
+                action="vocabulary_imported",
+                entity_type="vocabulary",
+                entity_id=self.current_vocabulary or "all",
+                details=f"تم استيراد من ملف: {file_path}"
+            )
+
+            ErrorHandler.show_success(
+                self,
+                "تم الاستيراد بنجاح",
+                self.i18n.t("success")
+            )
+
+        except Exception as e:
+            logger.error(f"Failed to import vocabularies: {e}")
+            ErrorHandler.show_error(self, str(e), self.i18n.t("error"))
+
     def _export_vocabularies(self):
         """Export vocabularies for mobile devices (UC-010 S09) via API."""
         try:
-            from PyQt5.QtWidgets import QFileDialog
             import json
             from datetime import datetime
 
@@ -459,6 +565,13 @@ class VocabularyManagementPage(QWidget):
 
             with open(file_path, "w", encoding="utf-8") as f:
                 json.dump(export_data, f, ensure_ascii=False, indent=2)
+
+            self.security_service.log_action(
+                action="vocabulary_exported",
+                entity_type="vocabulary",
+                entity_id="all",
+                details=f"تم التصدير إلى: {file_path}"
+            )
 
             ErrorHandler.show_success(
                 self,

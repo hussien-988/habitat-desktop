@@ -2549,7 +2549,7 @@ API للاتصال بـ TRRCMS Backend.
         Returns:
             List of CreatedClaimSummaryDto
 
-        Endpoint: GET /v1/Claims/summaries
+        Endpoint: GET /api/Claims/summaries
         """
         params = {}
         if claim_status is not None:
@@ -2564,7 +2564,7 @@ API للاتصال بـ TRRCMS Backend.
             params["buildingCode"] = building_code
 
         logger.info(f"Fetching claims summaries with filters: {params or 'none'}")
-        result = self._request("GET", "/v1/Claims/summaries", params=params)
+        result = self._request("GET", "/Claims/summaries", params=params)
 
         # Handle both array and paginated response
         if isinstance(result, list):
@@ -2598,7 +2598,7 @@ API للاتصال بـ TRRCMS Backend.
         Returns:
             List of ClaimDto
 
-        Endpoint: GET /v1/Claims
+        Endpoint: GET /api/Claims
         """
         params = {}
         if status is not None:
@@ -2613,7 +2613,7 @@ API للاتصال بـ TRRCMS Backend.
             params["HasConflicts"] = str(has_conflicts).lower()
 
         logger.info(f"Fetching claims with filters: {params or 'none'}")
-        result = self._request("GET", "/v1/Claims", params=params)
+        result = self._request("GET", "/Claims", params=params)
         if isinstance(result, list):
             claims = result
         elif isinstance(result, dict):
@@ -2633,13 +2633,13 @@ API للاتصال بـ TRRCMS Backend.
         Returns:
             ClaimDto with full details
 
-        Endpoint: GET /v1/Claims/{id}
+        Endpoint: GET /api/Claims/{id}
         """
         if not claim_id:
             raise ValueError("claim_id is required")
 
         logger.info(f"Fetching claim details: {claim_id}")
-        result = self._request("GET", f"/v1/Claims/{claim_id}")
+        result = self._request("GET", f"/Claims/{claim_id}")
         logger.info(f"Fetched claim: {result.get('claimNumber', 'N/A')}")
         return result
 
@@ -2653,14 +2653,63 @@ API للاتصال بـ TRRCMS Backend.
         Returns:
             True if deleted successfully
 
-        Endpoint: DELETE /v1/Claims/{id}
+        Endpoint: DELETE /api/Claims/{id}
         """
         if not claim_id:
             raise ValueError("claim_id is required")
-        self._request("DELETE", f"/v1/Claims/{claim_id}")
+        self._request("DELETE", f"/Claims/{claim_id}")
         logger.info(f"Claim {claim_id} deleted")
         return True
 
+    def update_claim(self, claim_id: str, update_data: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Update existing claim (UC-006).
+
+        Args:
+            claim_id: Claim UUID
+            update_data: UpdateClaimCommand fields:
+                primaryClaimantId, claimType, priority, tenureContractType,
+                tenureContractDetails, caseStatus, processingNotes,
+                publicRemarks, reasonForModification
+
+        Endpoint: PUT /api/Claims/{id}
+        """
+        if not claim_id:
+            raise ValueError("claim_id is required")
+        payload = {"claimId": claim_id, **update_data}
+        logger.info(f"Updating claim: {claim_id}")
+        return self._request("PUT", f"/Claims/{claim_id}", json_data=payload)
+
+    def submit_claim(self, claim_id: str, user_id: str) -> Dict[str, Any]:
+        """
+        Submit claim for processing.
+
+        Endpoint: PUT /api/Claims/{id}/submit
+        """
+        return self._request("PUT", f"/Claims/{claim_id}/submit",
+                             json_data={"claimId": claim_id, "submittedByUserId": user_id})
+
+    def verify_claim(self, claim_id: str, user_id: str, notes: str = "") -> Dict[str, Any]:
+        """
+        Verify claim.
+
+        Endpoint: PUT /api/Claims/{id}/verify
+        """
+        return self._request("PUT", f"/Claims/{claim_id}/verify",
+                             json_data={"claimId": claim_id, "verifiedByUserId": user_id,
+                                        "verificationNotes": notes})
+
+    def assign_claim(self, claim_id: str, user_id: str,
+                     target_date: Optional[str] = None) -> Dict[str, Any]:
+        """
+        Assign claim to case officer.
+
+        Endpoint: PUT /api/Claims/{id}/assign
+        """
+        payload = {"claimId": claim_id, "assignToUserId": user_id}
+        if target_date:
+            payload["targetCompletionDate"] = target_date
+        return self._request("PUT", f"/Claims/{claim_id}/assign", json_data=payload)
 
     # ==================== Users ====================
 

@@ -780,6 +780,7 @@ AR_TRANSLATIONS = {
     "navbar.tab.user_management": "إدارة المستخدمين",
     "navbar.tab.map": "الخريطة",
     "navbar.tab.field_assignment": "تجهيز العمل الميداني",
+    "page.case_details.edit_claim": "تعديل المطالبة",
     "navbar.search.default": "ابحث عن الرمز أو الاسم...",
     "navbar.search.by_name": "ابحث عن اسم المستلم...",
     "navbar.search.by_claim_id": "ابحث برقم المطالبة...",

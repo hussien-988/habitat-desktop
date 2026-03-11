@@ -19,7 +19,8 @@ from PyQt5.QtGui import QColor, QIcon
 from app.config import Config, Roles, Vocabularies
 from repositories.database import Database
 from repositories.user_repository import UserRepository
-from repositories.vocabulary_repository import VocabularyRepository, VocabularyTerm
+from services.api_client import get_api_client
+from services.vocab_service import get_all_vocabularies, refresh_vocabularies
 from services.security_service import SecurityService, SecuritySettings
 from models.user import User
 from ui.components.toast import Toast
@@ -238,16 +239,16 @@ class UserDialog(QDialog):
 class VocabularyTermDialog(QDialog):
     """Dialog for creating/editing a vocabulary term."""
 
-    def __init__(self, vocabulary_name: str, term: VocabularyTerm = None, parent=None):
+    def __init__(self, vocabulary_name: str, term_data: dict = None, parent=None):
         super().__init__(parent)
         self.vocabulary_name = vocabulary_name
-        self.term = term
+        self.term_data = term_data
 
-        self.setWindowTitle("تعديل المصطلح" if term else "إضافة مصطلح جديد")
+        self.setWindowTitle("تعديل المصطلح" if term_data else "إضافة مصطلح جديد")
         self.setMinimumWidth(450)
         self._setup_ui()
 
-        if term:
+        if term_data:
             self._populate_data()
 
     def _setup_ui(self):
@@ -260,7 +261,7 @@ class VocabularyTermDialog(QDialog):
 
         self.code_edit = QLineEdit()
         self.code_edit.setPlaceholderText("الرمز (مثال: residential)")
-        if self.term:
+        if self.term_data:
             self.code_edit.setEnabled(False)
         form.addRow("الرمز:", self.code_edit)
 
@@ -325,22 +326,15 @@ class VocabularyTermDialog(QDialog):
         layout.addLayout(btn_layout)
 
     def _populate_data(self):
-        if not self.term:
+        if not self.term_data:
             return
-        self.code_edit.setText(self.term.term_code)
-        self.label_en_edit.setText(self.term.term_label or "")
-        self.label_ar_edit.setText(self.term.term_label_ar or "")
-        self.is_active.setChecked(self.term.status == "active")
-
-        # Load effective dates
-        if self.term.effective_from:
-            date = QDate.fromString(self.term.effective_from, "yyyy-MM-dd")
-            if date.isValid():
-                self.effective_from.setDate(date)
-        if self.term.effective_to:
-            date = QDate.fromString(self.term.effective_to, "yyyy-MM-dd")
-            if date.isValid():
-                self.effective_to.setDate(date)
+        self.code_edit.setText(str(self.term_data.get("code", "")))
+        self.label_en_edit.setText(self.term_data.get("labelEnglish", "") or "")
+        self.label_ar_edit.setText(self.term_data.get("labelArabic", "") or "")
+        is_active = self.term_data.get("isActive", True)
+        if isinstance(is_active, str):
+            is_active = is_active.lower() == "active"
+        self.is_active.setChecked(bool(is_active))
 
     def _on_save(self):
         if not self.code_edit.text().strip():
@@ -352,25 +346,11 @@ class VocabularyTermDialog(QDialog):
         self.accept()
 
     def get_data(self) -> dict:
-        # Get effective dates (None if date is minimum/unset)
-        effective_from = None
-        effective_to = None
-
-        from_date = self.effective_from.date()
-        if from_date.isValid() and from_date != QDate():
-            effective_from = from_date.toPyDate().isoformat()
-
-        to_date = self.effective_to.date()
-        if to_date.isValid() and to_date != QDate() and to_date.year() > 1900:
-            effective_to = to_date.toPyDate().isoformat()
-
         return {
-            "term_code": self.code_edit.text().strip(),
-            "term_label": self.label_en_edit.text().strip() or self.code_edit.text().strip(),
-            "term_label_ar": self.label_ar_edit.text().strip(),
-            "status": "active" if self.is_active.isChecked() else "deprecated",
-            "effective_from": effective_from,
-            "effective_to": effective_to,
+            "code": self.code_edit.text().strip(),
+            "labelEnglish": self.label_en_edit.text().strip() or self.code_edit.text().strip(),
+            "labelArabic": self.label_ar_edit.text().strip(),
+            "isActive": self.is_active.isChecked(),
         }
 
 
@@ -382,9 +362,8 @@ class AdminPage(QWidget):
         self.db = db
         self.i18n = i18n
         self.user_repo = UserRepository(db)
-        self.vocab_repo = VocabularyRepository(db)
         self.security_service = SecurityService(db)
-        self.current_vocabulary = "building_type"
+        self.current_vocabulary = None
 
         self._setup_ui()
 
@@ -596,11 +575,7 @@ class AdminPage(QWidget):
         header_layout = QHBoxLayout()
 
         self.vocab_combo = QComboBox()
-        self.vocab_combo.addItem("أنواع المباني", "building_type")
-        self.vocab_combo.addItem("حالات المباني", "building_status")
-        self.vocab_combo.addItem("أنواع الوحدات", "unit_type")
-        self.vocab_combo.addItem("أنواع العلاقات", "relation_type")
-        self.vocab_combo.addItem("حالات المطالبات", "case_status")
+        self._populate_vocab_combo()
         self.vocab_combo.setMinimumWidth(200)
         self.vocab_combo.currentIndexChanged.connect(self._on_vocabulary_changed)
         header_layout.addWidget(self.vocab_combo)
@@ -634,20 +609,6 @@ class AdminPage(QWidget):
         """)
         export_btn.clicked.connect(self._on_export_vocab)
         header_layout.addWidget(export_btn)
-
-        # Cleanup test data button
-        cleanup_btn = QPushButton("تنظيف بيانات الاختبار")
-        cleanup_btn.setStyleSheet(f"""
-            QPushButton {{
-                background-color: {Config.ERROR_COLOR};
-                color: white;
-                border: none;
-                border-radius: 6px;
-                padding: 8px 16px;
-            }}
-        """)
-        cleanup_btn.clicked.connect(self._on_cleanup_test_data)
-        header_layout.addWidget(cleanup_btn)
 
         # Add term button (UC-010 S05)
         add_btn = QPushButton("+ إضافة مصطلح")
@@ -710,35 +671,69 @@ class AdminPage(QWidget):
 
         return widget
 
+    def _populate_vocab_combo(self):
+        """Populate vocabulary combo from API."""
+        self.vocab_combo.clear()
+        try:
+            for v in get_all_vocabularies():
+                name = v.get("vocabularyName", "")
+                if name:
+                    self.vocab_combo.addItem(name, name)
+        except Exception as e:
+            logger.warning(f"Failed to load vocabularies from API: {e}")
+
+        if self.vocab_combo.count() > 0:
+            self.current_vocabulary = self.vocab_combo.currentData()
+
     def _on_vocabulary_changed(self, index):
         """Handle vocabulary selection change."""
         self.current_vocabulary = self.vocab_combo.currentData()
         self._load_vocab_terms()
 
     def _load_vocab_terms(self):
-        """Load vocabulary terms into table."""
-        include_deprecated = self.show_deprecated.isChecked() if hasattr(self, 'show_deprecated') else False
-        terms = self.vocab_repo.get_terms(self.current_vocabulary, include_deprecated=include_deprecated)
+        """Load vocabulary terms from API into table."""
+        self.vocab_table.setRowCount(0)
+        if not self.current_vocabulary:
+            return
+
+        show_deprecated = self.show_deprecated.isChecked() if hasattr(self, 'show_deprecated') else False
+
+        try:
+            api = get_api_client()
+            result = api.get_vocabulary_terms(self.current_vocabulary)
+            terms = result.get("values", []) if isinstance(result, dict) else []
+        except Exception as e:
+            logger.error(f"Failed to load vocab terms from API: {e}")
+            Toast.show_toast(self, f"فشل في تحميل المصطلحات: {str(e)}", Toast.ERROR)
+            return
+
+        if not show_deprecated:
+            terms = [t for t in terms if t.get("isActive", True)]
 
         self.vocab_table.setRowCount(len(terms))
         for i, term in enumerate(terms):
-            self.vocab_table.setItem(i, 0, QTableWidgetItem(term.term_code))
-            self.vocab_table.setItem(i, 1, QTableWidgetItem(term.term_label or ""))
-            self.vocab_table.setItem(i, 2, QTableWidgetItem(term.term_label_ar or ""))
+            code = str(term.get("code", ""))
+            label_en = term.get("labelEnglish", "") or ""
+            label_ar = term.get("labelArabic", "") or ""
+            is_active = term.get("isActive", True)
 
-            status_item = QTableWidgetItem("نشط" if term.status == "active" else "متقادم")
-            if term.status != "active":
+            self.vocab_table.setItem(i, 0, QTableWidgetItem(code))
+            self.vocab_table.setItem(i, 1, QTableWidgetItem(label_en))
+            self.vocab_table.setItem(i, 2, QTableWidgetItem(label_ar))
+
+            status_text = "نشط" if is_active else "متقادم"
+            status_item = QTableWidgetItem(status_text)
+            if not is_active:
                 status_item.setBackground(QColor("#FEE2E2"))
             self.vocab_table.setItem(i, 3, status_item)
 
-            # Actions cell - colored badge buttons
+            # Actions cell
             actions_widget = QWidget()
             actions_widget.setStyleSheet("background: transparent;")
             actions_layout = QHBoxLayout(actions_widget)
             actions_layout.setContentsMargins(8, 4, 8, 4)
             actions_layout.setSpacing(6)
 
-            # Edit button - blue badge
             edit_btn = QPushButton("تعديل")
             edit_btn.setCursor(Qt.PointingHandCursor)
             edit_btn.setStyleSheet("""
@@ -759,8 +754,7 @@ class AdminPage(QWidget):
             edit_btn.clicked.connect(lambda checked, t=term: self._on_edit_term(t))
             actions_layout.addWidget(edit_btn)
 
-            if term.status == "active":
-                # Stop button - yellow badge
+            if is_active:
                 stop_btn = QPushButton("إيقاف")
                 stop_btn.setCursor(Qt.PointingHandCursor)
                 stop_btn.setStyleSheet("""
@@ -781,7 +775,6 @@ class AdminPage(QWidget):
                 stop_btn.clicked.connect(lambda checked, t=term: self._on_deprecate_term(t))
                 actions_layout.addWidget(stop_btn)
             else:
-                # Activate button - green badge
                 act_btn = QPushButton("تفعيل")
                 act_btn.setCursor(Qt.PointingHandCursor)
                 act_btn.setStyleSheet("""
@@ -810,54 +803,46 @@ class AdminPage(QWidget):
         self._load_vocab_terms()
 
     def _on_add_term(self):
-        """Add a new vocabulary term."""
+        """Add a new vocabulary term via API (UC-010 S05)."""
+        if not self.current_vocabulary:
+            return
         dialog = VocabularyTermDialog(self.current_vocabulary, parent=self)
         if dialog.exec_() == QDialog.Accepted:
             data = dialog.get_data()
-            term = VocabularyTerm(
-                vocabulary_name=self.current_vocabulary,
-                term_code=data["term_code"],
-                term_label=data["term_label"],
-                term_label_ar=data["term_label_ar"],
-                status=data["status"],
-                effective_from=data.get("effective_from"),
-                effective_to=data.get("effective_to")
-            )
+            if not data["code"]:
+                Toast.show_toast(self, "الرمز مطلوب", Toast.ERROR)
+                return
             try:
-                self.vocab_repo.create_term(term)
-                # Log action
+                api = get_api_client()
+                api.create_vocabulary_term(self.current_vocabulary, data)
+                refresh_vocabularies()
                 self.security_service.log_action(
                     action="vocabulary_term_created",
                     entity_type="vocabulary",
-                    entity_id=f"{self.current_vocabulary}/{term.term_code}",
-                    details=f"تم إضافة تصنيف: {term.term_label_ar}"
+                    entity_id=f"{self.current_vocabulary}/{data['code']}",
+                    details=f"تم إضافة تصنيف: {data['labelArabic']}"
                 )
                 Toast.show_toast(self, "تم إضافة المصطلح بنجاح", Toast.SUCCESS)
                 self._load_vocab_terms()
-            except ValueError as e:
-                Toast.show_toast(self, str(e), Toast.ERROR)
             except Exception as e:
                 logger.error(f"Failed to create term: {e}")
                 Toast.show_toast(self, f"فشل في إضافة المصطلح: {str(e)}", Toast.ERROR)
 
-    def _on_edit_term(self, term: VocabularyTerm):
-        """Edit an existing vocabulary term."""
-        dialog = VocabularyTermDialog(self.current_vocabulary, term=term, parent=self)
+    def _on_edit_term(self, term_data: dict):
+        """Edit an existing vocabulary term via API (UC-010 S05)."""
+        dialog = VocabularyTermDialog(self.current_vocabulary, term_data=term_data, parent=self)
         if dialog.exec_() == QDialog.Accepted:
             data = dialog.get_data()
-            term.term_label = data["term_label"]
-            term.term_label_ar = data["term_label_ar"]
-            term.status = data["status"]
-            term.effective_from = data.get("effective_from")
-            term.effective_to = data.get("effective_to")
+            original_code = str(term_data.get("code", ""))
             try:
-                self.vocab_repo.update_term(term)
-                # Log action
+                api = get_api_client()
+                api.update_vocabulary_term(self.current_vocabulary, original_code, data)
+                refresh_vocabularies()
                 self.security_service.log_action(
                     action="vocabulary_term_updated",
                     entity_type="vocabulary",
-                    entity_id=f"{self.current_vocabulary}/{term.term_code}",
-                    details=f"تم تحديث تصنيف: {term.term_label_ar}"
+                    entity_id=f"{self.current_vocabulary}/{original_code}",
+                    details=f"تم تحديث تصنيف: {data['labelArabic']}"
                 )
                 Toast.show_toast(self, "تم تحديث المصطلح بنجاح", Toast.SUCCESS)
                 self._load_vocab_terms()
@@ -865,62 +850,58 @@ class AdminPage(QWidget):
                 logger.error(f"Failed to update term: {e}")
                 Toast.show_toast(self, f"فشل في تحديث المصطلح: {str(e)}", Toast.ERROR)
 
-    def _on_deprecate_term(self, term: VocabularyTerm):
-        """Deprecate a vocabulary term."""
+    def _on_deprecate_term(self, term_data: dict):
+        """Deprecate a vocabulary term via API (UC-010 S05)."""
+        label = term_data.get("labelArabic", "")
+        code = str(term_data.get("code", ""))
         if ErrorHandler.confirm(
             self,
-            f"هل تريد إيقاف المصطلح '{term.term_label_ar}'؟\nسيظل المصطلح موجوداً ولكن لن يظهر في القوائم الجديدة.",
+            f"هل تريد إيقاف المصطلح '{label}'؟\nسيظل المصطلح موجوداً ولكن لن يظهر في القوائم الجديدة.",
             "تأكيد الإيقاف"
         ):
-            self.vocab_repo.deprecate_term(term.term_id)
-            # Log action
-            self.security_service.log_action(
-                action="vocabulary_term_deprecated",
-                entity_type="vocabulary",
-                entity_id=f"{self.current_vocabulary}/{term.term_code}",
-                details=f"تم إيقاف تصنيف: {term.term_label_ar}"
-            )
-            Toast.show_toast(self, "تم إيقاف المصطلح", Toast.SUCCESS)
-            self._load_vocab_terms()
-
-    def _on_activate_term(self, term: VocabularyTerm):
-        """Activate a deprecated vocabulary term."""
-        self.vocab_repo.activate_term(term.term_id)
-        # Log action
-        self.security_service.log_action(
-            action="vocabulary_term_activated",
-            entity_type="vocabulary",
-            entity_id=f"{self.current_vocabulary}/{term.term_code}",
-            details=f"تم تفعيل تصنيف: {term.term_label_ar}"
-        )
-        Toast.show_toast(self, "تم تفعيل المصطلح", Toast.SUCCESS)
-        self._load_vocab_terms()
-
-    def _on_cleanup_test_data(self):
-        """Remove non-default vocabulary terms (test data)."""
-        if ErrorHandler.confirm(
-            self,
-            "سيتم حذف جميع المصطلحات غير الافتراضية (بيانات الاختبار).\n\nهل تريد المتابعة؟",
-            "تأكيد تنظيف البيانات"
-        ):
             try:
-                count = self.vocab_repo.cleanup_test_data()
-                if count > 0:
-                    Toast.show_toast(self, f"تم حذف {count} مصطلح اختباري", Toast.SUCCESS)
-                else:
-                    Toast.show_toast(self, "لا توجد بيانات اختبار للحذف", Toast.INFO)
+                api = get_api_client()
+                api.deactivate_vocabulary_term(self.current_vocabulary, code)
+                refresh_vocabularies()
+                self.security_service.log_action(
+                    action="vocabulary_term_deprecated",
+                    entity_type="vocabulary",
+                    entity_id=f"{self.current_vocabulary}/{code}",
+                    details=f"تم إيقاف تصنيف: {label}"
+                )
+                Toast.show_toast(self, "تم إيقاف المصطلح", Toast.SUCCESS)
                 self._load_vocab_terms()
             except Exception as e:
-                logger.error(f"Cleanup failed: {e}")
-                Toast.show_toast(self, f"فشل في التنظيف: {str(e)}", Toast.ERROR)
+                logger.error(f"Failed to deprecate term: {e}")
+                Toast.show_toast(self, f"فشل في إيقاف المصطلح: {str(e)}", Toast.ERROR)
+
+    def _on_activate_term(self, term_data: dict):
+        """Activate a deprecated vocabulary term via API."""
+        code = str(term_data.get("code", ""))
+        label = term_data.get("labelArabic", "")
+        try:
+            api = get_api_client()
+            api.activate_vocabulary_term(self.current_vocabulary, code)
+            refresh_vocabularies()
+            self.security_service.log_action(
+                action="vocabulary_term_activated",
+                entity_type="vocabulary",
+                entity_id=f"{self.current_vocabulary}/{code}",
+                details=f"تم تفعيل تصنيف: {label}"
+            )
+            Toast.show_toast(self, "تم تفعيل المصطلح", Toast.SUCCESS)
+            self._load_vocab_terms()
+        except Exception as e:
+            logger.error(f"Failed to activate term: {e}")
+            Toast.show_toast(self, f"فشل في تفعيل المصطلح: {str(e)}", Toast.ERROR)
 
     def _on_import_vocab(self):
-        """Import vocabulary terms from file (UC-010 S04)."""
+        """Import vocabulary terms from file via API (UC-010 S04)."""
         file_path, _ = QFileDialog.getOpenFileName(
             self,
             "استيراد التصنيف",
             "",
-            "CSV Files (*.csv);;JSON Files (*.json);;All Files (*)"
+            "JSON Files (*.json);;CSV Files (*.csv);;All Files (*)"
         )
         if not file_path:
             return
@@ -929,20 +910,46 @@ class AdminPage(QWidget):
             import json
             import csv
 
-            terms = []
+            data = None
             if file_path.endswith(".json"):
                 with open(file_path, "r", encoding="utf-8") as f:
-                    terms = json.load(f)
+                    data = json.load(f)
             elif file_path.endswith(".csv"):
                 with open(file_path, "r", encoding="utf-8") as f:
                     reader = csv.DictReader(f)
-                    terms = list(reader)
+                    data = list(reader)
             else:
-                Toast.show_toast(self, "نوع الملف غير مدعوم", Toast.ERROR)
+                Toast.show_toast(self, "نوع الملف غير مدعوم. استخدم JSON أو CSV", Toast.ERROR)
                 return
 
-            count = self.vocab_repo.import_vocabulary(self.current_vocabulary, terms)
-            Toast.show_toast(self, f"تم استيراد {count} مصطلح", Toast.SUCCESS)
+            if not data:
+                Toast.show_toast(self, "الملف فارغ أو غير صالح", Toast.ERROR)
+                return
+
+            # Validate structure (S04a)
+            if isinstance(data, list) and len(data) > 0:
+                sample = data[0]
+                required_keys = {"code"}
+                if not required_keys.issubset(set(sample.keys())):
+                    Toast.show_toast(
+                        self,
+                        "الملف لا يحتوي على الأعمدة المطلوبة (code). تحقق من بنية الملف.",
+                        Toast.ERROR
+                    )
+                    return
+
+            api = get_api_client()
+            api.import_vocabularies(data)
+            refresh_vocabularies()
+            self._populate_vocab_combo()
+
+            self.security_service.log_action(
+                action="vocabulary_imported",
+                entity_type="vocabulary",
+                entity_id=self.current_vocabulary or "all",
+                details=f"تم استيراد من ملف: {file_path}"
+            )
+            Toast.show_toast(self, "تم الاستيراد بنجاح", Toast.SUCCESS)
             self._load_vocab_terms()
 
         except Exception as e:
@@ -950,33 +957,32 @@ class AdminPage(QWidget):
             Toast.show_toast(self, f"فشل في الاستيراد: {str(e)}", Toast.ERROR)
 
     def _on_export_vocab(self):
-        """Export vocabulary terms to file (UC-010 S09)."""
+        """Export vocabulary terms to file via API (UC-010 S09)."""
         file_path, _ = QFileDialog.getSaveFileName(
             self,
             "تصدير التصنيف",
-            f"{self.current_vocabulary}.json",
-            "JSON Files (*.json);;CSV Files (*.csv)"
+            f"vocabularies_{self.current_vocabulary or 'all'}.json",
+            "JSON Files (*.json)"
         )
         if not file_path:
             return
 
         try:
             import json
-            import csv
 
-            terms = self.vocab_repo.export_vocabulary(self.current_vocabulary)
+            api = get_api_client()
+            export_data = api.export_vocabularies()
 
-            if file_path.endswith(".json"):
-                with open(file_path, "w", encoding="utf-8") as f:
-                    json.dump(terms, f, ensure_ascii=False, indent=2)
-            elif file_path.endswith(".csv"):
-                with open(file_path, "w", encoding="utf-8", newline="") as f:
-                    if terms:
-                        writer = csv.DictWriter(f, fieldnames=terms[0].keys())
-                        writer.writeheader()
-                        writer.writerows(terms)
+            with open(file_path, "w", encoding="utf-8") as f:
+                json.dump(export_data, f, ensure_ascii=False, indent=2)
 
-            Toast.show_toast(self, f"تم تصدير {len(terms)} مصطلح", Toast.SUCCESS)
+            self.security_service.log_action(
+                action="vocabulary_exported",
+                entity_type="vocabulary",
+                entity_id=self.current_vocabulary or "all",
+                details=f"تم تصدير إلى: {file_path}"
+            )
+            Toast.show_toast(self, "تم التصدير بنجاح", Toast.SUCCESS)
 
         except Exception as e:
             logger.error(f"Export failed: {e}")
@@ -1099,6 +1105,26 @@ class AdminPage(QWidget):
         save_btn.clicked.connect(self._on_save_security_settings)
         layout.addRow("", save_btn)
 
+        # Reset to defaults button
+        reset_btn = QPushButton("إعادة الإعدادات الافتراضية")
+        reset_btn.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {Config.WARNING_COLOR};
+                color: white;
+                border: none;
+                border-radius: 6px;
+                padding: 10px 20px;
+                font-weight: 600;
+            }}
+        """)
+        reset_btn.clicked.connect(self._on_reset_security_defaults)
+        layout.addRow("", reset_btn)
+
+        # Last updated info label
+        self.settings_info_label = QLabel("")
+        self.settings_info_label.setStyleSheet(f"color: {Config.TEXT_LIGHT}; font-size: 11px;")
+        layout.addRow("", self.settings_info_label)
+
         scroll.setWidget(content)
 
         main_layout = QVBoxLayout(widget)
@@ -1199,6 +1225,14 @@ class AdminPage(QWidget):
         self.max_login_attempts.setValue(settings.max_failed_login_attempts)
         self.lockout_duration.setValue(settings.account_lockout_duration_minutes)
 
+        # Show last updated info
+        if settings.updated_at:
+            updated_str = settings.updated_at.strftime("%Y-%m-%d %H:%M")
+            by_str = settings.updated_by or "-"
+            self.settings_info_label.setText(f"آخر تحديث: {updated_str}  |  بواسطة: {by_str}")
+        else:
+            self.settings_info_label.setText("")
+
     def _on_save_security_settings(self):
         """Save security settings (UC-011 S07)."""
         settings = SecuritySettings(
@@ -1218,10 +1252,25 @@ class AdminPage(QWidget):
 
         if success:
             Toast.show_toast(self, "تم حفظ إعدادات الأمان بنجاح", Toast.SUCCESS)
-            # Refresh audit log to show the new entry
+            self._load_security_settings()  # Refresh updated_at display
             self._load_audit_logs()
         else:
             ErrorHandler.show_warning(self, "\n".join(errors), "خطأ في التحقق")
+
+    def _on_reset_security_defaults(self):
+        """Reset security settings to defaults."""
+        defaults = SecuritySettings()
+        self.password_min_length.setValue(defaults.password_min_length)
+        self.require_uppercase.setChecked(defaults.password_require_uppercase)
+        self.require_lowercase.setChecked(defaults.password_require_lowercase)
+        self.require_digit.setChecked(defaults.password_require_digit)
+        self.require_symbol.setChecked(defaults.password_require_symbol)
+        self.password_expiry.setValue(defaults.password_expiry_days)
+        self.password_history.setValue(defaults.password_reuse_history)
+        self.session_timeout.setValue(defaults.session_timeout_minutes)
+        self.max_login_attempts.setValue(defaults.max_failed_login_attempts)
+        self.lockout_duration.setValue(defaults.account_lockout_duration_minutes)
+        self._on_save_security_settings()
 
     def _load_audit_logs(self):
         """Load audit log entries."""

@@ -1,22 +1,29 @@
 # -*- coding: utf-8 -*-
 """
 Duplicates Page — التكرارات
-Displays duplicate units and claims for review and merge.
+Displays duplicate units and persons for review and merge.
 Implements UC-007: Resolve Duplicate Properties
 Implements UC-008: Resolve Person Duplicates
+
+Features:
+- Queue navigation (next/prev) between duplicate groups
+- Field difference highlighting
+- Resolution options: merge, keep separate, request field verification
+- Required justification notes
+- Loading indicator for API fetch
 """
 
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QTableWidget, QTableWidgetItem, QHeaderView, QFrame,
     QRadioButton, QButtonGroup, QAbstractItemView,
-    QGraphicsDropShadowEffect, QSizePolicy
+    QSizePolicy, QTextEdit, QApplication
 )
-from PyQt5.QtCore import Qt, pyqtSignal
+from PyQt5.QtCore import Qt, pyqtSignal, QThread, pyqtSignal as Signal
 from PyQt5.QtGui import QColor
 
 from repositories.database import Database
-from services.duplicate_service import DuplicateService
+from services.duplicate_service import DuplicateService, DuplicateGroup
 from services.display_mappings import get_unit_type_display, get_unit_status_display
 from ui.font_utils import create_font, FontManager
 from ui.style_manager import StyleManager
@@ -54,9 +61,26 @@ RADIO_STYLE = f"""
 """
 
 
+class _DetectionWorker(QThread):
+    """Background worker for duplicate detection (API calls)."""
+    finished = Signal(list, list)
+    error = Signal(str)
+
+    def __init__(self, service: DuplicateService):
+        super().__init__()
+        self.service = service
+
+    def run(self):
+        try:
+            unit_groups = self.service.detect_unit_duplicates()
+            person_groups = self.service.detect_person_duplicates()
+            self.finished.emit(unit_groups, person_groups)
+        except Exception as e:
+            self.error.emit(str(e))
+
 
 class DuplicatesPage(QWidget):
-    """Duplicates resolution page — matches Figma design."""
+    """Duplicates resolution page with queue navigation and resolution options."""
 
     view_comparison_requested = pyqtSignal(object)  # Emits DuplicateGroup
 
@@ -64,12 +88,20 @@ class DuplicatesPage(QWidget):
         super().__init__(parent)
         self.db = db
         self.i18n = i18n
-        self.duplicate_service = DuplicateService(db) if db else None
+        self.duplicate_service = DuplicateService(db)
         self.unit_radio_group = QButtonGroup(self)
         self.claim_radio_group = QButtonGroup(self)
         self._unit_groups = []
         self._person_groups = []
+        self._current_unit_idx = 0
+        self._current_person_idx = 0
+        self._worker = None
+        self._user_id = None
         self._setup_ui()
+
+    def set_user_id(self, user_id: str):
+        """Set current user ID for audit trail."""
+        self._user_id = user_id
 
     def _setup_ui(self):
         self.setStyleSheet(StyleManager.page_background())
@@ -81,19 +113,31 @@ class DuplicatesPage(QWidget):
             PageDimensions.CONTENT_PADDING_H,
             PageDimensions.CONTENT_PADDING_V_BOTTOM,
         )
-        layout.setSpacing(30)
+        layout.setSpacing(20)
 
-        # ── Header: Title + Merge button ──
+        # Header: Title + action buttons
         header = self._build_header()
         layout.addLayout(header)
 
-        # ── Units card ──
-        units_card = self._build_units_section()
-        layout.addWidget(units_card)
+        # Loading label (shown during API fetch)
+        self._loading_label = QLabel("جاري تحميل البيانات من الخادم...")
+        self._loading_label.setAlignment(Qt.AlignCenter)
+        self._loading_label.setFont(create_font(size=11, weight=FontManager.WEIGHT_SEMIBOLD))
+        self._loading_label.setStyleSheet("color: #6B7280; background: transparent; padding: 40px;")
+        self._loading_label.setVisible(False)
+        layout.addWidget(self._loading_label)
 
-        # ── Claims card ──
-        claims_card = self._build_claims_section()
-        layout.addWidget(claims_card)
+        # Units card
+        self._units_card = self._build_units_section()
+        layout.addWidget(self._units_card)
+
+        # Persons/Claims card
+        self._claims_card = self._build_claims_section()
+        layout.addWidget(self._claims_card)
+
+        # Resolution section
+        self._resolution_card = self._build_resolution_section()
+        layout.addWidget(self._resolution_card)
 
         layout.addStretch()
 
@@ -104,17 +148,17 @@ class DuplicatesPage(QWidget):
         header = QHBoxLayout()
         header.setContentsMargins(0, 0, 0, 0)
 
-        # Title — right side
+        # Title
         title = QLabel("التكرارات")
         title.setFont(create_font(size=FontManager.SIZE_TITLE, weight=FontManager.WEIGHT_SEMIBOLD))
         title.setStyleSheet(f"color: {Colors.PAGE_TITLE}; background: transparent; border: none;")
 
-        # Merge button — left side
-        merge_btn = QPushButton("دمج")
-        merge_btn.setCursor(Qt.PointingHandCursor)
-        merge_btn.setFont(create_font(size=FontManager.SIZE_BODY, weight=FontManager.WEIGHT_SEMIBOLD))
-        merge_btn.setFixedSize(75, 48)
-        merge_btn.setStyleSheet(f"""
+        # Action button
+        self.action_btn = QPushButton("تنفيذ")
+        self.action_btn.setCursor(Qt.PointingHandCursor)
+        self.action_btn.setFont(create_font(size=FontManager.SIZE_BODY, weight=FontManager.WEIGHT_SEMIBOLD))
+        self.action_btn.setFixedSize(90, 48)
+        self.action_btn.setStyleSheet(f"""
             QPushButton {{
                 background-color: {Colors.PRIMARY_BLUE};
                 color: white;
@@ -129,21 +173,22 @@ class DuplicatesPage(QWidget):
             QPushButton:pressed {{
                 background-color: #2568A8;
             }}
+            QPushButton:disabled {{
+                background-color: #B0BEC5;
+            }}
         """)
-        merge_btn.clicked.connect(self._on_merge_clicked)
-        self.merge_btn = merge_btn
+        self.action_btn.clicked.connect(self._on_action_clicked)
 
         header.addWidget(title)
         header.addStretch()
-        header.addWidget(merge_btn)
+        header.addWidget(self.action_btn)
 
         return header
 
     # ────────────────────────────────────────────
-    # Units Section
+    # Units Section with Queue Navigation
     # ────────────────────────────────────────────
     def _build_units_section(self) -> QFrame:
-        # ── White card container ──
         card = QFrame()
         card.setObjectName("unitsCard")
         card.setStyleSheet("""
@@ -158,12 +203,54 @@ class DuplicatesPage(QWidget):
         card_layout.setSpacing(8)
         card_layout.setContentsMargins(16, 16, 16, 16)
 
-        # Section title + subtitle (red color)
+        # Title row with navigation
+        title_row = QHBoxLayout()
+        title_row.setContentsMargins(0, 0, 0, 0)
+
         title_label = QLabel("الوحدات")
         title_label.setFont(create_font(size=14, weight=FontManager.WEIGHT_BOLD))
         title_label.setStyleSheet("color: #E74C3C; background: transparent; border: none;")
-        card_layout.addWidget(title_label)
 
+        # Queue navigation
+        self._unit_nav_label = QLabel("")
+        self._unit_nav_label.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
+        self._unit_nav_label.setStyleSheet(f"color: {Colors.WIZARD_SUBTITLE}; background: transparent;")
+
+        nav_btn_style = f"""
+            QPushButton {{
+                background-color: #F4F6F8;
+                color: {Colors.PRIMARY_BLUE};
+                border: none;
+                border-radius: 6px;
+                padding: 4px 12px;
+                font-weight: 600;
+            }}
+            QPushButton:hover {{ background-color: #E8EDF2; }}
+            QPushButton:disabled {{ color: #B0BEC5; background-color: #F4F6F8; }}
+        """
+
+        self._unit_prev_btn = QPushButton("السابق")
+        self._unit_prev_btn.setFont(create_font(size=8, weight=FontManager.WEIGHT_SEMIBOLD))
+        self._unit_prev_btn.setCursor(Qt.PointingHandCursor)
+        self._unit_prev_btn.setFixedHeight(28)
+        self._unit_prev_btn.setStyleSheet(nav_btn_style)
+        self._unit_prev_btn.clicked.connect(lambda: self._navigate_units(-1))
+
+        self._unit_next_btn = QPushButton("التالي")
+        self._unit_next_btn.setFont(create_font(size=8, weight=FontManager.WEIGHT_SEMIBOLD))
+        self._unit_next_btn.setCursor(Qt.PointingHandCursor)
+        self._unit_next_btn.setFixedHeight(28)
+        self._unit_next_btn.setStyleSheet(nav_btn_style)
+        self._unit_next_btn.clicked.connect(lambda: self._navigate_units(1))
+
+        title_row.addWidget(title_label)
+        title_row.addStretch()
+        title_row.addWidget(self._unit_nav_label)
+        title_row.addWidget(self._unit_prev_btn)
+        title_row.addWidget(self._unit_next_btn)
+        card_layout.addLayout(title_row)
+
+        # Subtitle
         subtitle = QLabel("اختر الوحدة الصحيحة")
         subtitle.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
         subtitle.setStyleSheet(f"color: {Colors.WIZARD_SUBTITLE}; background: transparent; border: none;")
@@ -171,9 +258,9 @@ class DuplicatesPage(QWidget):
 
         # Table
         self.units_table = QTableWidget()
-        self.units_table.setColumnCount(8)  # 7 data + 1 radio
+        self.units_table.setColumnCount(8)
         self.units_table.setHorizontalHeaderLabels([
-            "",  # radio column
+            "",
             "رقم المقسم",
             "المنطقة",
             "نوع المقسم",
@@ -190,7 +277,6 @@ class DuplicatesPage(QWidget):
         self.units_table.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.units_table.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
 
-        # Header styling
         header = self.units_table.horizontalHeader()
         header.setDefaultAlignment(Qt.AlignCenter)
         header.setSectionResizeMode(QHeaderView.Stretch)
@@ -217,64 +303,356 @@ class DuplicatesPage(QWidget):
                 border-bottom: 1px solid #E5E7EB;
                 padding: 10px 8px;
             }
-            QRadioButton {
-                background: transparent;
-                border: none;
-                spacing: 0px;
-            }
-            QRadioButton::indicator {
-                width: 16px;
-                height: 16px;
-                border-radius: 8px;
-                border: 2px solid #C4CDD5;
-                background: #f0f7ff;
-            }
-            QRadioButton::indicator:hover {
-                border-color: #3890DF;
-            }
-            QRadioButton::indicator:checked {
-                width: 16px;
-                height: 16px;
-                border-radius: 8px;
-                border: 4px solid #3890DF;
-                background: #3890DF;
-            }
-        """)
-
-        # Load real duplicate data
-        self._load_unit_duplicates()
-
-        # Adjust table height
-        row_height = 48
-        header_height = 40
-        row_count = max(self.units_table.rowCount(), 1)
-        table_height = header_height + (row_height * row_count) + 4
-        self.units_table.setFixedHeight(table_height)
-        self.units_table.verticalHeader().setDefaultSectionSize(row_height)
+        """ + RADIO_STYLE)
 
         card_layout.addWidget(self.units_table)
         return card
 
-    def _load_unit_duplicates(self):
-        """Load real duplicate unit data from DuplicateService."""
-        if not self.duplicate_service:
-            self._show_no_duplicates_message(self.units_table)
+    # ────────────────────────────────────────────
+    # Claims/Persons Section with Queue Navigation
+    # ────────────────────────────────────────────
+    def _build_claims_section(self) -> QFrame:
+        card = QFrame()
+        card.setObjectName("claimsCard")
+        card.setStyleSheet("""
+            QFrame#claimsCard {
+                background-color: white;
+                border-radius: 16px;
+                border: none;
+            }
+        """)
+
+        card_layout = QVBoxLayout(card)
+        card_layout.setSpacing(8)
+        card_layout.setContentsMargins(16, 16, 16, 16)
+
+        # Title row with navigation
+        title_row = QHBoxLayout()
+        title_row.setContentsMargins(0, 0, 0, 0)
+
+        title_label = QLabel("الأشخاص")
+        title_label.setFont(create_font(size=14, weight=FontManager.WEIGHT_BOLD))
+        title_label.setStyleSheet("color: #E74C3C; background: transparent; border: none;")
+
+        view_btn = QPushButton("عرض المقارنة")
+        view_btn.setCursor(Qt.PointingHandCursor)
+        view_btn.setFont(create_font(size=FontManager.SIZE_BODY, weight=FontManager.WEIGHT_SEMIBOLD))
+        view_btn.setStyleSheet(f"""
+            QPushButton {{
+                color: {Colors.PRIMARY_BLUE};
+                background: transparent;
+                border: none;
+                padding: 0;
+            }}
+            QPushButton:hover {{
+                text-decoration: underline;
+            }}
+        """)
+        view_btn.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+        view_btn.clicked.connect(self._on_view_comparison_clicked)
+
+        # Person queue nav
+        self._person_nav_label = QLabel("")
+        self._person_nav_label.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
+        self._person_nav_label.setStyleSheet(f"color: {Colors.WIZARD_SUBTITLE}; background: transparent;")
+
+        nav_btn_style = f"""
+            QPushButton {{
+                background-color: #F4F6F8;
+                color: {Colors.PRIMARY_BLUE};
+                border: none;
+                border-radius: 6px;
+                padding: 4px 12px;
+                font-weight: 600;
+            }}
+            QPushButton:hover {{ background-color: #E8EDF2; }}
+            QPushButton:disabled {{ color: #B0BEC5; background-color: #F4F6F8; }}
+        """
+
+        self._person_prev_btn = QPushButton("السابق")
+        self._person_prev_btn.setFont(create_font(size=8, weight=FontManager.WEIGHT_SEMIBOLD))
+        self._person_prev_btn.setCursor(Qt.PointingHandCursor)
+        self._person_prev_btn.setFixedHeight(28)
+        self._person_prev_btn.setStyleSheet(nav_btn_style)
+        self._person_prev_btn.clicked.connect(lambda: self._navigate_persons(-1))
+
+        self._person_next_btn = QPushButton("التالي")
+        self._person_next_btn.setFont(create_font(size=8, weight=FontManager.WEIGHT_SEMIBOLD))
+        self._person_next_btn.setCursor(Qt.PointingHandCursor)
+        self._person_next_btn.setFixedHeight(28)
+        self._person_next_btn.setStyleSheet(nav_btn_style)
+        self._person_next_btn.clicked.connect(lambda: self._navigate_persons(1))
+
+        title_row.addWidget(title_label)
+        title_row.addStretch()
+        title_row.addWidget(self._person_nav_label)
+        title_row.addWidget(self._person_prev_btn)
+        title_row.addWidget(self._person_next_btn)
+        title_row.addWidget(view_btn)
+        card_layout.addLayout(title_row)
+
+        # Subtitle
+        subtitle = QLabel("اختيار السجل الأساسي")
+        subtitle.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
+        subtitle.setStyleSheet(f"color: {Colors.WIZARD_SUBTITLE}; background: transparent; border: none;")
+        card_layout.addWidget(subtitle)
+
+        # Rows container
+        self._claims_container = QVBoxLayout()
+        self._claims_container.setSpacing(8)
+        card_layout.addLayout(self._claims_container)
+
+        return card
+
+    # ────────────────────────────────────────────
+    # Resolution Section
+    # ────────────────────────────────────────────
+    def _build_resolution_section(self) -> QFrame:
+        card = QFrame()
+        card.setObjectName("resolutionCard")
+        card.setStyleSheet("""
+            QFrame#resolutionCard {
+                background-color: white;
+                border-radius: 16px;
+                border: none;
+            }
+        """)
+
+        card_layout = QVBoxLayout(card)
+        card_layout.setSpacing(12)
+        card_layout.setContentsMargins(16, 16, 16, 16)
+
+        # Title
+        title_label = QLabel("إجراء الحل")
+        title_label.setFont(create_font(size=14, weight=FontManager.WEIGHT_BOLD))
+        title_label.setStyleSheet("color: #E74C3C; background: transparent; border: none;")
+        card_layout.addWidget(title_label)
+
+        # Resolution options as radio buttons
+        self._resolution_group = QButtonGroup(self)
+
+        resolution_options = [
+            ("دمج السجلات", "merge"),
+            ("إبقاء منفصل", "keep_separate"),
+            ("طلب تحقق ميداني", "field_verification"),
+        ]
+
+        options_layout = QHBoxLayout()
+        options_layout.setSpacing(24)
+
+        for idx, (label, value) in enumerate(resolution_options):
+            radio = QRadioButton(label)
+            radio.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
+            radio.setStyleSheet(RADIO_STYLE + """
+                QRadioButton { padding: 6px 12px; }
+            """)
+            radio.setProperty("resolution_type", value)
+            self._resolution_group.addButton(radio, idx)
+            options_layout.addWidget(radio)
+            if idx == 0:
+                radio.setChecked(True)
+
+        options_layout.addStretch()
+        card_layout.addLayout(options_layout)
+
+        # Justification text area
+        just_label = QLabel("مبرر القرار (مطلوب)")
+        just_label.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
+        just_label.setStyleSheet(f"color: {Colors.WIZARD_SUBTITLE}; background: transparent;")
+        card_layout.addWidget(just_label)
+
+        self._justification_edit = QTextEdit()
+        self._justification_edit.setPlaceholderText("أدخل سبب قرار الحل...")
+        self._justification_edit.setFixedHeight(80)
+        self._justification_edit.setFont(create_font(size=9, weight=FontManager.WEIGHT_REGULAR))
+        self._justification_edit.setStyleSheet(f"""
+            QTextEdit {{
+                border: 1px solid #E5E7EB;
+                border-radius: 8px;
+                padding: 8px;
+                background: #FAFBFC;
+                color: #333;
+            }}
+            QTextEdit:focus {{
+                border-color: {Colors.PRIMARY_BLUE};
+            }}
+        """)
+        card_layout.addWidget(self._justification_edit)
+
+        return card
+
+    # ────────────────────────────────────────────
+    # Queue Navigation
+    # ────────────────────────────────────────────
+    def _navigate_units(self, direction: int):
+        """Navigate to next/prev unit duplicate group."""
+        if not self._unit_groups:
+            return
+        new_idx = self._current_unit_idx + direction
+        if 0 <= new_idx < len(self._unit_groups):
+            self._current_unit_idx = new_idx
+            self._display_unit_group()
+
+    def _navigate_persons(self, direction: int):
+        """Navigate to next/prev person duplicate group."""
+        if not self._person_groups:
+            return
+        new_idx = self._current_person_idx + direction
+        if 0 <= new_idx < len(self._person_groups):
+            self._current_person_idx = new_idx
+            self._display_person_group()
+
+    def _update_unit_nav(self):
+        """Update unit navigation controls."""
+        total = len(self._unit_groups)
+        if total == 0:
+            self._unit_nav_label.setText("")
+            self._unit_prev_btn.setEnabled(False)
+            self._unit_next_btn.setEnabled(False)
+            return
+        current = self._current_unit_idx + 1
+        self._unit_nav_label.setText(f"{current} من {total}")
+        self._unit_prev_btn.setEnabled(self._current_unit_idx > 0)
+        self._unit_next_btn.setEnabled(self._current_unit_idx < total - 1)
+
+    def _update_person_nav(self):
+        """Update person navigation controls."""
+        total = len(self._person_groups)
+        if total == 0:
+            self._person_nav_label.setText("")
+            self._person_prev_btn.setEnabled(False)
+            self._person_next_btn.setEnabled(False)
+            return
+        current = self._current_person_idx + 1
+        self._person_nav_label.setText(f"{current} من {total}")
+        self._person_prev_btn.setEnabled(self._current_person_idx > 0)
+        self._person_next_btn.setEnabled(self._current_person_idx < total - 1)
+
+    # ────────────────────────────────────────────
+    # Data Loading
+    # ────────────────────────────────────────────
+    def _start_detection(self):
+        """Start duplicate detection in background thread."""
+        if self._worker and self._worker.isRunning():
             return
 
-        try:
-            self._unit_groups = self.duplicate_service.detect_unit_duplicates()
-            # Also detect person-unit relation duplicates
-            person_unit_dups = self.duplicate_service.detect_person_unit_duplicates()
-            self._unit_groups.extend(person_unit_dups)
+        self._loading_label.setVisible(True)
+        self._units_card.setVisible(False)
+        self._claims_card.setVisible(False)
+        self._resolution_card.setVisible(False)
 
-            if self._unit_groups:
-                records = self._unit_groups[0].records
-                self._populate_units_table(records)
-            else:
-                self._show_no_duplicates_message(self.units_table)
-        except Exception as e:
-            logger.warning(f"Failed to detect unit duplicates: {e}")
+        self._worker = _DetectionWorker(self.duplicate_service)
+        self._worker.finished.connect(self._on_detection_finished)
+        self._worker.error.connect(self._on_detection_error)
+        self._worker.start()
+
+    def _on_detection_finished(self, unit_groups, person_groups):
+        """Handle detection results."""
+        self._loading_label.setVisible(False)
+        self._units_card.setVisible(True)
+        self._claims_card.setVisible(True)
+        self._resolution_card.setVisible(True)
+
+        self._unit_groups = unit_groups
+        self._person_groups = person_groups
+        self._current_unit_idx = 0
+        self._current_person_idx = 0
+
+        self._display_unit_group()
+        self._display_person_group()
+
+    def _on_detection_error(self, error_msg):
+        """Handle detection error."""
+        self._loading_label.setText(f"فشل تحميل البيانات: {error_msg}")
+        logger.error(f"Duplicate detection error: {error_msg}")
+
+    def _display_unit_group(self):
+        """Display the current unit duplicate group in the table."""
+        # Clear radio buttons
+        for btn in self.unit_radio_group.buttons():
+            self.unit_radio_group.removeButton(btn)
+
+        self._update_unit_nav()
+
+        if not self._unit_groups:
             self._show_no_duplicates_message(self.units_table)
+            self._adjust_table_height()
+            return
+
+        group = self._unit_groups[self._current_unit_idx]
+        records = group.records
+        self._populate_units_table(records)
+        self._adjust_table_height()
+
+    def _display_person_group(self):
+        """Display the current person duplicate group as claim cards."""
+        # Clear existing
+        while self._claims_container.count():
+            item = self._claims_container.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+            elif item.layout():
+                while item.layout().count():
+                    child = item.layout().takeAt(0)
+                    if child.widget():
+                        child.widget().deleteLater()
+
+        # Clear radio buttons
+        for btn in self.claim_radio_group.buttons():
+            self.claim_radio_group.removeButton(btn)
+
+        self._update_person_nav()
+
+        if not self._person_groups:
+            no_dup = QLabel("لا توجد تكرارات في الأشخاص - جميع السجلات فريدة")
+            no_dup.setAlignment(Qt.AlignCenter)
+            no_dup.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
+            no_dup.setStyleSheet("color: #27AE60; background: transparent; padding: 20px;")
+            self._claims_container.addWidget(no_dup)
+            return
+
+        group = self._person_groups[self._current_person_idx]
+        # Collect field values to detect differences
+        field_keys = ["nationalId", "firstNameArabic", "fatherNameArabic",
+                      "familyNameArabic", "motherNameArabic", "gender", "dateOfBirth"]
+        diff_fields = self._find_differing_fields(group.records, field_keys)
+
+        for idx, person in enumerate(group.records):
+            row_layout = QHBoxLayout()
+            row_layout.setSpacing(16)
+            row_layout.setContentsMargins(0, 0, 0, 0)
+
+            radio = QRadioButton()
+            radio.setStyleSheet(RADIO_STYLE)
+            self.claim_radio_group.addButton(radio, idx)
+            if idx == 0:
+                radio.setChecked(True)
+            row_layout.addWidget(radio)
+
+            # Build person info card
+            name = f"{person.get('firstNameArabic', '')} {person.get('fatherNameArabic', '')} {person.get('familyNameArabic', '')}".strip()
+            claim_data = {
+                "claim_id": person.get("nationalId", ""),
+                "claimant_name": name or "-",
+                "date": str(person.get("dateOfBirth", "")),
+                "governorate_name_ar": person.get("motherNameArabic", ""),
+                "district_name_ar": person.get("gender", ""),
+                "subdistrict_name_ar": f"مواليد: {person.get('dateOfBirth', '')}",
+                "neighborhood_name_ar": "",
+                "building_id": "",
+                "unit_number": "",
+            }
+            claim_card = ClaimListCard(claim_data, icon_name="yelow")
+            claim_card.setFixedHeight(112)
+
+            # Highlight if person has differing fields
+            if diff_fields:
+                claim_card.setStyleSheet(claim_card.styleSheet() + """
+                    QFrame { border-left: 3px solid #F39C12; }
+                """)
+
+            row_layout.addWidget(claim_card, 1)
+            self._claims_container.addLayout(row_layout)
 
     def _show_no_duplicates_message(self, table):
         """Show a 'no duplicates found' message in a table."""
@@ -287,7 +665,13 @@ class DuplicatesPage(QWidget):
         table.setItem(0, 0, msg)
 
     def _populate_units_table(self, units_data):
+        """Populate units table with field difference highlighting."""
         self.units_table.setRowCount(len(units_data))
+
+        # Detect which fields differ
+        field_keys = ["unitIdentifier", "buildingId", "unitType", "status",
+                      "floorNumber", "numberOfRooms", "areaSquareMeters"]
+        diff_fields = self._find_differing_fields(units_data, field_keys)
 
         for row_idx, unit in enumerate(units_data):
             # Radio button in column 0
@@ -306,198 +690,178 @@ class DuplicatesPage(QWidget):
             if row_idx == 0:
                 radio.setChecked(True)
 
-            # Data columns (from real DB records)
-            columns = [
-                str(unit.get("unit_number", "")),
-                unit.get("neighborhood_name_ar", unit.get("area", "")),
-                get_unit_type_display(unit.get("unit_type", unit.get("type", ""))),
-                get_unit_status_display(unit.get("apartment_status", unit.get("status", ""))),
-                str(unit.get("floor_number", unit.get("floor", ""))),
-                str(unit.get("number_of_rooms", unit.get("rooms", ""))),
-                f"{unit.get('area_sqm', 0):.0f} (م²)" if unit.get("area_sqm") else "",
+            # Data columns mapped from API camelCase fields
+            col_mapping = [
+                ("unitIdentifier", str(unit.get("unitIdentifier", ""))),
+                ("buildingId", unit.get("buildingId", "")),
+                ("unitType", get_unit_type_display(unit.get("unitType", unit.get("type", "")))),
+                ("status", get_unit_status_display(unit.get("status", ""))),
+                ("floorNumber", str(unit.get("floorNumber", ""))),
+                ("numberOfRooms", str(unit.get("numberOfRooms", ""))),
+                ("areaSquareMeters", f"{unit.get('areaSquareMeters', 0):.0f} (م²)" if unit.get("areaSquareMeters") else ""),
             ]
-            for col_idx, value in enumerate(columns):
+
+            for col_idx, (field_key, value) in enumerate(col_mapping):
                 item = QTableWidgetItem(value)
                 item.setTextAlignment(Qt.AlignCenter)
                 item.setFont(create_font(size=9, weight=FontManager.WEIGHT_REGULAR))
+
+                # Highlight fields that differ between records
+                if field_key in diff_fields:
+                    item.setBackground(QColor("#FFF3CD"))
+                    item.setFont(create_font(size=9, weight=FontManager.WEIGHT_BOLD))
+
                 self.units_table.setItem(row_idx, col_idx + 1, item)
 
-    # ────────────────────────────────────────────
-    # Claims Section (white card container)
-    # ────────────────────────────────────────────
-    def _build_claims_section(self) -> QFrame:
-        card = QFrame()
-        card.setObjectName("claimsCard")
-        card.setStyleSheet("""
-            QFrame#claimsCard {
-                background-color: white;
-                border-radius: 16px;
-                border: none;
-            }
-        """)
+    def _adjust_table_height(self):
+        """Adjust table height based on row count."""
+        row_height = 48
+        header_height = 40
+        row_count = max(self.units_table.rowCount(), 1)
+        table_height = header_height + (row_height * row_count) + 4
+        self.units_table.setFixedHeight(table_height)
+        self.units_table.verticalHeader().setDefaultSectionSize(row_height)
 
-        card_layout = QVBoxLayout(card)
-        card_layout.setSpacing(8)
-        card_layout.setContentsMargins(16, 16, 16, 16)
+    @staticmethod
+    def _find_differing_fields(records: list, field_keys: list) -> set:
+        """Find which fields have different values across records."""
+        if len(records) < 2:
+            return set()
 
-        # Title row: "المطالبات" (red) + stretch + "عرض" (blue)
-        title_row = QHBoxLayout()
-        title_row.setContentsMargins(0, 0, 0, 0)
-
-        title_label = QLabel("المطالبات")
-        title_label.setFont(create_font(size=14, weight=FontManager.WEIGHT_BOLD))
-        title_label.setStyleSheet("color: #E74C3C; background: transparent; border: none;")
-
-        view_btn = QPushButton("عرض")
-        view_btn.setCursor(Qt.PointingHandCursor)
-        view_btn.setFont(create_font(size=FontManager.SIZE_BODY, weight=FontManager.WEIGHT_SEMIBOLD))
-        view_btn.setStyleSheet(f"""
-            QPushButton {{
-                color: {Colors.PRIMARY_BLUE};
-                background: transparent;
-                border: none;
-                padding: 0;
-            }}
-            QPushButton:hover {{
-                text-decoration: underline;
-            }}
-        """)
-        view_btn.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
-        view_btn.clicked.connect(self._on_view_comparison_clicked)
-
-        title_row.addWidget(title_label)
-        title_row.addStretch()
-        title_row.addWidget(view_btn)
-        card_layout.addLayout(title_row)
-
-        # Subtitle
-        subtitle = QLabel("اختيار السجل الأساسي")
-        subtitle.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
-        subtitle.setStyleSheet(f"color: {Colors.WIZARD_SUBTITLE}; background: transparent; border: none;")
-        card_layout.addWidget(subtitle)
-
-        # Load real person duplicates
-        self._claims_container = QVBoxLayout()
-        self._claims_container.setSpacing(8)
-        card_layout.addLayout(self._claims_container)
-        self._load_person_duplicates()
-
-        return card
-
-    def _load_person_duplicates(self):
-        """Load real person duplicate data."""
-        # Clear existing
-        while self._claims_container.count():
-            item = self._claims_container.takeAt(0)
-            if item.widget():
-                item.widget().deleteLater()
-            elif item.layout():
-                while item.layout().count():
-                    child = item.layout().takeAt(0)
-                    if child.widget():
-                        child.widget().deleteLater()
-
-        if not self.duplicate_service:
-            no_dup = QLabel("لا توجد تكرارات في الأشخاص")
-            no_dup.setAlignment(Qt.AlignCenter)
-            no_dup.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
-            no_dup.setStyleSheet("color: #27AE60; background: transparent; padding: 20px;")
-            self._claims_container.addWidget(no_dup)
-            return
-
-        try:
-            self._person_groups = self.duplicate_service.detect_person_duplicates()
-        except Exception as e:
-            logger.warning(f"Failed to detect person duplicates: {e}")
-            self._person_groups = []
-
-        if not self._person_groups:
-            no_dup = QLabel("لا توجد تكرارات في الأشخاص - جميع السجلات فريدة")
-            no_dup.setAlignment(Qt.AlignCenter)
-            no_dup.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
-            no_dup.setStyleSheet("color: #27AE60; background: transparent; padding: 20px;")
-            self._claims_container.addWidget(no_dup)
-            return
-
-        # Show first duplicate group
-        group = self._person_groups[0]
-        for idx, person in enumerate(group.records):
-            row_layout = QHBoxLayout()
-            row_layout.setSpacing(16)
-            row_layout.setContentsMargins(0, 0, 0, 0)
-
-            radio = QRadioButton()
-            radio.setStyleSheet(RADIO_STYLE)
-            self.claim_radio_group.addButton(radio, idx)
-            row_layout.addWidget(radio)
-
-            # Build a claim-like card from person data
-            claim_data = {
-                "claim_id": person.get("national_id", ""),
-                "claimant_name": f"{person.get('first_name_ar', '')} {person.get('last_name_ar', '')}",
-                "date": str(person.get("created_at", "")),
-                "governorate_name_ar": person.get("nationality", ""),
-                "district_name_ar": person.get("gender", ""),
-                "subdistrict_name_ar": f"مواليد: {person.get('year_of_birth', '')}",
-                "neighborhood_name_ar": person.get("mobile_number", ""),
-                "building_id": "",
-                "unit_number": "",
-            }
-            claim_card = ClaimListCard(claim_data, icon_name="yelow")
-            claim_card.setFixedHeight(112)
-            row_layout.addWidget(claim_card, 1)
-
-            self._claims_container.addLayout(row_layout)
+        diff_fields = set()
+        for key in field_keys:
+            values = {str(r.get(key, "")) for r in records}
+            if len(values) > 1:
+                diff_fields.add(key)
+        return diff_fields
 
     # ────────────────────────────────────────────
     # Actions
     # ────────────────────────────────────────────
     def _on_view_comparison_clicked(self):
         """Emit view comparison with the current person duplicate group."""
-        if self._person_groups:
-            self.view_comparison_requested.emit(self._person_groups[0])
+        if self._person_groups and self._current_person_idx < len(self._person_groups):
+            self.view_comparison_requested.emit(self._person_groups[self._current_person_idx])
         else:
             Toast.show_toast(self, "لا توجد تكرارات للمقارنة", Toast.WARNING)
 
-    def _on_merge_clicked(self):
-        """Handle merge button click."""
-        selected_unit = self.unit_radio_group.checkedId()
-        selected_claim = self.claim_radio_group.checkedId()
-        logger.info(f"Merge clicked - unit: {selected_unit}, claim: {selected_claim}")
-
-        if not self.duplicate_service:
-            Toast.show_toast(self, "خدمة كشف التكرارات غير متوفرة", Toast.WARNING)
+    def _on_action_clicked(self):
+        """Handle resolution action based on selected option."""
+        justification = self._justification_edit.toPlainText().strip()
+        if not justification:
+            Toast.show_toast(self, "يرجى إدخال مبرر القرار", Toast.WARNING)
             return
 
+        # Get resolution type
+        selected_radio = self._resolution_group.checkedButton()
+        if not selected_radio:
+            Toast.show_toast(self, "يرجى اختيار نوع الإجراء", Toast.WARNING)
+            return
+
+        resolution_type = selected_radio.property("resolution_type")
+
+        success = False
+
+        if resolution_type == "merge":
+            success = self._execute_merge(justification)
+        elif resolution_type == "keep_separate":
+            success = self._execute_keep_separate(justification)
+        elif resolution_type == "field_verification":
+            success = self._execute_field_verification(justification)
+
+        if success:
+            self._justification_edit.clear()
+            Toast.show_toast(self, "تم تنفيذ الإجراء بنجاح", Toast.SUCCESS)
+
+    def _execute_merge(self, justification: str) -> bool:
+        """Execute merge for both unit and person selections."""
         merged = False
-        if self._unit_groups and selected_unit >= 0:
-            group = self._unit_groups[0]
-            if group.entity_type == "person_unit_relation":
-                master_id = group.records[selected_unit].get("relation_id", "")
-            else:
-                master_id = group.records[selected_unit].get("unit_id", "")
-            if master_id:
-                self.duplicate_service.resolve_as_merge(group, master_id, "User selected master")
-                merged = True
 
-        if self._person_groups and selected_claim >= 0:
-            group = self._person_groups[0]
-            master_id = group.records[selected_claim].get("person_id", "")
-            if master_id:
-                self.duplicate_service.resolve_as_merge(group, master_id, "User selected master")
-                merged = True
+        # Merge unit group
+        if self._unit_groups and self._current_unit_idx < len(self._unit_groups):
+            selected_unit = self.unit_radio_group.checkedId()
+            if selected_unit >= 0:
+                group = self._unit_groups[self._current_unit_idx]
+                master_id = group.records[selected_unit].get("id", "")
+                if master_id:
+                    if self.duplicate_service.resolve_as_merge(group, master_id, justification, self._user_id):
+                        self._unit_groups.pop(self._current_unit_idx)
+                        if self._current_unit_idx >= len(self._unit_groups):
+                            self._current_unit_idx = max(0, len(self._unit_groups) - 1)
+                        self._display_unit_group()
+                        merged = True
 
-        if merged:
-            Toast.show_toast(self, "تم الدمج بنجاح", Toast.SUCCESS)
-            self.refresh()
-        else:
+        # Merge person group
+        if self._person_groups and self._current_person_idx < len(self._person_groups):
+            selected_claim = self.claim_radio_group.checkedId()
+            if selected_claim >= 0:
+                group = self._person_groups[self._current_person_idx]
+                master_id = group.records[selected_claim].get("id", "")
+                if master_id:
+                    if self.duplicate_service.resolve_as_merge(group, master_id, justification, self._user_id):
+                        self._person_groups.pop(self._current_person_idx)
+                        if self._current_person_idx >= len(self._person_groups):
+                            self._current_person_idx = max(0, len(self._person_groups) - 1)
+                        self._display_person_group()
+                        merged = True
+
+        if not merged:
             Toast.show_toast(self, "يرجى اختيار السجلات المراد دمجها", Toast.WARNING)
 
+        return merged
+
+    def _execute_keep_separate(self, justification: str) -> bool:
+        """Mark current groups as intentionally separate."""
+        success = False
+
+        if self._unit_groups and self._current_unit_idx < len(self._unit_groups):
+            group = self._unit_groups[self._current_unit_idx]
+            if self.duplicate_service.resolve_as_separate(group, justification, self._user_id):
+                self._unit_groups.pop(self._current_unit_idx)
+                if self._current_unit_idx >= len(self._unit_groups):
+                    self._current_unit_idx = max(0, len(self._unit_groups) - 1)
+                self._display_unit_group()
+                success = True
+
+        if self._person_groups and self._current_person_idx < len(self._person_groups):
+            group = self._person_groups[self._current_person_idx]
+            if self.duplicate_service.resolve_as_separate(group, justification, self._user_id):
+                self._person_groups.pop(self._current_person_idx)
+                if self._current_person_idx >= len(self._person_groups):
+                    self._current_person_idx = max(0, len(self._person_groups) - 1)
+                self._display_person_group()
+                success = True
+
+        return success
+
+    def _execute_field_verification(self, justification: str) -> bool:
+        """Request field verification for current groups."""
+        success = False
+
+        if self._unit_groups and self._current_unit_idx < len(self._unit_groups):
+            group = self._unit_groups[self._current_unit_idx]
+            if self.duplicate_service.request_field_verification(group, justification, self._user_id):
+                self._unit_groups.pop(self._current_unit_idx)
+                if self._current_unit_idx >= len(self._unit_groups):
+                    self._current_unit_idx = max(0, len(self._unit_groups) - 1)
+                self._display_unit_group()
+                success = True
+
+        if self._person_groups and self._current_person_idx < len(self._person_groups):
+            group = self._person_groups[self._current_person_idx]
+            if self.duplicate_service.request_field_verification(group, justification, self._user_id):
+                self._person_groups.pop(self._current_person_idx)
+                if self._current_person_idx >= len(self._person_groups):
+                    self._current_person_idx = max(0, len(self._person_groups) - 1)
+                self._display_person_group()
+                success = True
+
+        return success
+
     def refresh(self, data=None):
-        """Refresh page data."""
+        """Refresh page data by starting detection."""
         logger.debug("Refreshing duplicates page")
-        self._load_unit_duplicates()
-        self._load_person_duplicates()
+        self._start_detection()
 
     def update_language(self, is_arabic: bool):
         """Update UI language — placeholder."""
