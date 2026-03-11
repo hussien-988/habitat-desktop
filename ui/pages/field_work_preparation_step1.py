@@ -1262,14 +1262,14 @@ class FieldWorkPreparationStep1(QWidget):
         return list(self._selected_building_ids)
 
     def get_selected_buildings(self):
-        """Get list of selected building objects."""
+        """Get list of confirmed (checked) building objects."""
         if not hasattr(self, '_all_buildings'):
             return []
 
-        # Return building objects that match selected IDs
+        # Return only confirmed (checked) buildings
         return [
             building for building in self._all_buildings
-            if building.building_id in self._selected_building_ids
+            if building.building_id in self._confirmed_building_ids
         ]
 
     def eventFilter(self, obj, event):

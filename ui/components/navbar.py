@@ -602,12 +602,12 @@ class Navbar(QFrame):
         "office_clerk":     [1],
         "field_supervisor": [0, 1, 4],
         "field_researcher": [1],
-        "analyst":          [0, 2],
+        "analyst":          [0],
     }
 
     def configure_for_role(self, role: str):
         """Show/hide tabs based on user role."""
-        allowed = self.TAB_PERMISSIONS.get(role, [0, 1, 2, 3, 4, 5])
+        allowed = self.TAB_PERMISSIONS.get(role, [0, 1, 2, 3, 4])
         for i, btn in enumerate(self.tab_buttons):
             btn.setVisible(i in allowed)
         # Select the first visible tab

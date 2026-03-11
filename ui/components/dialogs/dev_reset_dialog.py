@@ -43,6 +43,20 @@ class _ResetWorker(QThread):
         self._cancelled = True
 
     def run(self):
+        # Direct SQL mode: bypass API entirely
+        if self.options.get("direct_sql"):
+            self.progress.emit(0, "حذف مباشر من PostgreSQL...")
+            stats = self._reset_all_direct_sql()
+            if stats:
+                # Also clear local SQLite
+                if self.db:
+                    self.progress.emit(90, "مسح السجلات المحلية (SQLite)...")
+                    stats["local_claims"] = self._clear_local_claims()
+                self.finished.emit(stats)
+            else:
+                self.error.emit("فشل الحذف المباشر من PostgreSQL")
+            return
+
         from services.api_client import get_api_client
         api = get_api_client()
         if not api:
@@ -50,7 +64,6 @@ class _ResetWorker(QThread):
             return
 
         stats = {"local_claims": 0, "claims": 0, "assignments": 0, "surveys": 0, "buildings": 0}
-        # Deletion order: local SQLite first, then API (claims → assignments → surveys → buildings)
         STEPS = ("local_claims", "claims", "assignments", "surveys", "buildings")
         steps = [k for k in STEPS if self.options.get(k)]
         total = len(steps)
@@ -226,6 +239,7 @@ class _ResetWorker(QThread):
 
     def _delete_buildings(self, api, base_pct: int, end_pct: int) -> int:
         count = 0
+        api_failed = False
         max_iterations = 500
         for _ in range(max_iterations):
             if self._cancelled:
@@ -244,15 +258,141 @@ class _ResetWorker(QThread):
                         count += 1
                         deleted_in_batch += 1
                     except Exception as e:
+                        if "500" in str(e):
+                            api_failed = True
+                            break
                         logger.warning(f"Failed to delete building {b.get('id')}: {e}")
-                if deleted_in_batch == 0:
+                if api_failed or deleted_in_batch == 0:
                     break
                 pct = base_pct + (end_pct - base_pct) * min(count, 100) // 100
                 self.progress.emit(pct, f"جاري حذف المباني... ({count})")
             except Exception as e:
                 logger.warning(f"Building listing error: {e}")
                 break
+
+        if api_failed:
+            self.progress.emit(base_pct, "API فشل — حذف المباني مباشرة من PostgreSQL...")
+            count += self._delete_buildings_direct_sql()
+
         return count
+
+    def _delete_buildings_direct_sql(self) -> int:
+        """Direct PostgreSQL deletion when API DELETE has bugs."""
+        try:
+            import psycopg2
+            conn = psycopg2.connect(
+                host="localhost", port=5432,
+                dbname="TRRCMS_Dev", user="postgres", password="3123124"
+            )
+            conn.autocommit = False
+            cur = conn.cursor()
+
+            cur.execute('SELECT COUNT(*) FROM "Buildings"')
+            building_count = cur.fetchone()[0]
+
+            if building_count == 0:
+                cur.close()
+                conn.close()
+                return 0
+
+            # Delete in FK order
+            cur.execute('DELETE FROM "PropertyUnits"')
+            cur.execute('DELETE FROM "Buildings"')
+            conn.commit()
+
+            cur.close()
+            conn.close()
+            logger.info(f"Direct SQL: deleted {building_count} buildings + property units")
+            return building_count
+        except ImportError:
+            logger.error("psycopg2 not installed")
+            return 0
+        except Exception as e:
+            logger.error(f"Direct SQL delete failed: {e}")
+            return 0
+
+    def _reset_all_direct_sql(self) -> dict:
+        """Delete ALL test data directly from PostgreSQL, preserving system tables."""
+        try:
+            import psycopg2
+            conn = psycopg2.connect(
+                host="localhost", port=5432,
+                dbname="TRRCMS_Dev", user="postgres", password="3123124"
+            )
+            conn.autocommit = False
+            cur = conn.cursor()
+
+            # Count before delete
+            counts = {}
+            for table in ("Claims", "Surveys", "Buildings", "PropertyUnits", "Persons",
+                          "Households", "Evidences", "PersonPropertyRelations"):
+                cur.execute(f'SELECT COUNT(*) FROM "{table}"')
+                counts[table] = cur.fetchone()[0]
+
+            self.progress.emit(10, "كسر المفاتيح الأجنبية الدائرية...")
+
+            # Break circular FKs
+            cur.execute('UPDATE "Persons" SET "HouseholdId" = NULL')
+            cur.execute('UPDATE "Buildings" SET "BuildingDocumentId" = NULL')
+
+            self.progress.emit(20, "حذف الجداول الفرعية...")
+
+            # Delete in FK dependency order (leaf → parent)
+            tables_to_delete = [
+                "Certificate",
+                "Referrals",
+                "EvidenceRelations",
+                "Documents",
+                "Evidences",
+                "PersonPropertyRelations",
+                "Households",
+                "Surveys",
+                "Claims",
+                "BuildingAssignments",
+                "PropertyUnits",
+                "Persons",
+                "BuildingDocuments",
+                "Buildings",
+                "AuditLogs",
+            ]
+
+            for i, table in enumerate(tables_to_delete):
+                if self._cancelled:
+                    conn.rollback()
+                    cur.close()
+                    conn.close()
+                    return None
+                try:
+                    cur.execute(f'DELETE FROM "{table}"')
+                    pct = 20 + (i + 1) * 60 // len(tables_to_delete)
+                    self.progress.emit(pct, f'حذف {table}...')
+                except Exception as e:
+                    logger.warning(f"Could not delete from {table}: {e}")
+                    conn.rollback()
+                    conn.autocommit = False
+
+            conn.commit()
+            cur.close()
+            conn.close()
+
+            logger.info(f"Direct SQL reset complete: {counts}")
+            self.progress.emit(85, "تم الحذف من PostgreSQL بنجاح")
+
+            return {
+                "local_claims": 0,
+                "claims": counts.get("Claims", 0),
+                "assignments": 0,
+                "surveys": counts.get("Surveys", 0),
+                "buildings": counts.get("Buildings", 0),
+                "direct_sql": True,
+            }
+        except ImportError:
+            logger.error("psycopg2 not installed")
+            self.error.emit("psycopg2 غير مثبت — لا يمكن الحذف المباشر")
+            return None
+        except Exception as e:
+            logger.error(f"Direct SQL reset failed: {e}", exc_info=True)
+            return None
 
 
 class DevResetDialog(QDialog):
@@ -346,7 +486,8 @@ class DevResetDialog(QDialog):
         self.cb_assignments = QCheckBox("التعيينات الميدانية  (Building Assignments)")
         self.cb_surveys = QCheckBox("الاستبيانات + الأسر + الأشخاص + الأدلة")
         self.cb_buildings = QCheckBox("المباني + الوحدات العقارية")
-        for cb in (self.cb_local_claims, self.cb_claims, self.cb_assignments, self.cb_surveys, self.cb_buildings):
+        self._api_checkboxes = [self.cb_local_claims, self.cb_claims, self.cb_assignments, self.cb_surveys, self.cb_buildings]
+        for cb in self._api_checkboxes:
             cb.setChecked(True)
             cb.setFont(create_font(size=10))
             cb.setStyleSheet("""
@@ -363,6 +504,30 @@ class DevResetDialog(QDialog):
             """)
             layout.addWidget(cb)
         self.cb_local_claims.setToolTip("سجلات المطالبات في قاعدة البيانات المحلية (data/trrcms.db) — السبب الرئيسي لظهور مطالبات 'غير محدد'")
+
+        # --- Direct SQL option ---
+        sep2 = QFrame()
+        sep2.setFrameShape(QFrame.HLine)
+        sep2.setStyleSheet("color: #E5E7EB;")
+        layout.addWidget(sep2)
+
+        self.cb_direct_sql = QCheckBox("حذف مباشر من PostgreSQL (تجاوز API)")
+        self.cb_direct_sql.setChecked(False)
+        self.cb_direct_sql.setFont(create_font(size=10, weight=QFont.Medium))
+        self.cb_direct_sql.setStyleSheet("""
+            QCheckBox { color: #DC2626; spacing: 8px; }
+            QCheckBox::indicator { width: 16px; height: 16px; border-radius: 3px; }
+            QCheckBox::indicator:unchecked {
+                border: 1.5px solid #FCA5A5; background: white;
+            }
+            QCheckBox::indicator:checked {
+                border: 1.5px solid #DC2626;
+                background-color: #DC2626;
+            }
+        """)
+        self.cb_direct_sql.setToolTip("يحذف جميع البيانات مباشرة من PostgreSQL — يتجاوز API ويحل مشاكل 403/500")
+        self.cb_direct_sql.toggled.connect(self._on_direct_sql_toggled)
+        layout.addWidget(self.cb_direct_sql)
 
         # --- What will NOT be deleted ---
         safe_frame = QFrame()
@@ -523,6 +688,12 @@ class DevResetDialog(QDialog):
         y = rect.y() + (rect.height() - self.height()) // 2
         self.move(x, y)
 
+    def _on_direct_sql_toggled(self, checked: bool):
+        """When direct SQL is checked, disable individual API checkboxes."""
+        for cb in self._api_checkboxes:
+            cb.setChecked(True)
+            cb.setEnabled(not checked)
+
     def _on_confirm_changed(self, text: str):
         self.reset_btn.setEnabled(text.strip() == self.CONFIRM_WORD)
 
@@ -533,6 +704,7 @@ class DevResetDialog(QDialog):
             self.cb_assignments.isChecked(),
             self.cb_surveys.isChecked(),
             self.cb_buildings.isChecked(),
+            self.cb_direct_sql.isChecked(),
         ]):
             return
 
@@ -545,6 +717,7 @@ class DevResetDialog(QDialog):
         self.cb_assignments.setEnabled(False)
         self.cb_surveys.setEnabled(False)
         self.cb_buildings.setEnabled(False)
+        self.cb_direct_sql.setEnabled(False)
         self.progress_frame.setVisible(True)
         self.adjustSize()
         self._center_on_parent()
@@ -556,6 +729,7 @@ class DevResetDialog(QDialog):
             "assignments": self.cb_assignments.isChecked(),
             "surveys": self.cb_surveys.isChecked(),
             "buildings": self.cb_buildings.isChecked(),
+            "direct_sql": self.cb_direct_sql.isChecked(),
         }
 
         self._worker = _ResetWorker(options, db=self._db)
@@ -579,10 +753,11 @@ class DevResetDialog(QDialog):
         self.progress_bar.setValue(100)
 
         lines = []
-        if stats.get("local_claims") is not None:
+        method = "PostgreSQL مباشر" if stats.get("direct_sql") else "API"
+        if stats.get("local_claims"):
             lines.append(f"تم مسح {stats['local_claims']} سجل من SQLite المحلية")
         if stats.get("claims"):
-            lines.append(f"تم حذف {stats['claims']} مطالبة (API)")
+            lines.append(f"تم حذف {stats['claims']} مطالبة ({method})")
         if stats.get("assignments"):
             lines.append(f"تم حذف {stats['assignments']} تعيين ميداني")
         if stats.get("surveys"):

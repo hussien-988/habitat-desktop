@@ -49,8 +49,7 @@ def initialize_vocabularies():
             _build_from_translation_keys()
             logger.info("Using locally cached vocabularies (offline mode)")
         else:
-            logger.warning("No local cache found. Using hardcoded fallback.")
-            _build_cache_from_hardcoded()
+            logger.error("API unavailable and no local cache. Vocabularies not loaded.")
         _initialized = True
 
 
@@ -215,51 +214,6 @@ def get_next_code(vocab_name: str) -> int:
     return max(normal_codes) + 1
 
 
-def load_db_customizations(db):
-    """Merge user-added vocabulary terms from DB into the cache.
-    Called after initialize_vocabularies() to restore user edits."""
-    if not db:
-        return
-    try:
-        rows = db.fetch_all(
-            "SELECT vocabulary_name, term_code, term_label, term_label_ar, status "
-            "FROM vocabulary_terms WHERE source = 'manual' ORDER BY vocabulary_name, term_code"
-        )
-        added = 0
-        for row in rows:
-            vocab_name = row[0]
-            term_code = row[1]
-            term_label = row[2]
-            term_label_ar = row[3]
-            status = row[4]
-
-            try:
-                code = int(term_code)
-            except (ValueError, TypeError):
-                continue
-
-            key = _normalize_name(vocab_name)
-            if status == "deleted":
-                if key in _lookup and code in _lookup[key]:
-                    remove_term(vocab_name, code)
-                continue
-
-            label_ar = term_label_ar or term_label or ""
-            label_en = term_label or label_ar
-
-            if key in _lookup and code in _lookup[key]:
-                update_term(vocab_name, code, label_ar, label_en)
-            else:
-                existing = _options_cache.get(key, [])
-                max_order = max((t[3] for t in existing), default=0)
-                add_term(vocab_name, code, label_ar, label_en, order=max_order + 1)
-            added += 1
-        if added:
-            logger.info(f"Loaded {added} user vocabulary customizations from DB")
-    except Exception as e:
-        logger.warning(f"Failed to load DB vocabulary customizations: {e}")
-
-
 # ============ Internal helpers ============
 
 def _normalize_name(name: str) -> str:
@@ -320,65 +274,6 @@ def _build_cache(api_data: List[Dict]):
         if real_key in _lookup and alias not in _lookup:
             _lookup[alias] = _lookup[real_key]
             _options_cache[alias] = _options_cache[real_key]
-
-
-def _build_cache_from_hardcoded():
-    """Build cache from hardcoded Vocabularies class + translation keys as fallback."""
-    global _raw_vocabularies, _lookup, _options_cache
-    _raw_vocabularies = []
-    _lookup = {}
-    _options_cache = {}
-
-    # --- From app/config.py Vocabularies class (code, en, ar) tuples ---
-    try:
-        from app.config import Vocabularies
-        _vocabs_from_config = {
-            "buildingtype": getattr(Vocabularies, "BUILDING_TYPES", []),
-            "buildingstatus": getattr(Vocabularies, "BUILDING_STATUS", []),
-            "gender": getattr(Vocabularies, "GENDERS", []),
-            "relationtype": getattr(Vocabularies, "RELATION_TYPES", []),
-            "documenttype": getattr(Vocabularies, "DOCUMENT_TYPES", []),
-            "casestatus": getattr(Vocabularies, "CASE_STATUS", []),
-            "verificationstatus": getattr(Vocabularies, "VERIFICATION_STATUS", []),
-            "unittype": getattr(Vocabularies, "UNIT_TYPES", []),
-            "unitstatus": getattr(Vocabularies, "UNIT_STATUS", []),
-        }
-        for key, tuples in _vocabs_from_config.items():
-            if not tuples:
-                continue
-            code_map = {}
-            options_list = []
-            for idx, (code, en, ar) in enumerate(tuples):
-                entry = {"ar": ar, "en": en, "order": idx + 1}
-                code_map[code] = entry
-                options_list.append((code, ar, en, idx + 1))
-            _lookup[key] = code_map
-            _options_cache[key] = options_list
-    except Exception as e:
-        logger.warning(f"Failed to load from Vocabularies class: {e}")
-
-    # --- Roles (user_role vocab — matches API vocabularyName: "user_role") ---
-    try:
-        _role_items = [
-            ("1", "جامع بيانات ميداني", "Field Collector",  0),
-            ("2", "مشرف ميداني",        "Field Supervisor", 1),
-            ("3", "موظف مكتب",          "Office Clerk",     2),
-            ("4", "مدير بيانات",        "Data Manager",     3),
-            ("5", "محلل",               "Analyst",          4),
-            ("6", "مدير النظام",        "Administrator",    5),
-        ]
-        role_code_map = {}
-        role_options = []
-        for code, ar, en, order in _role_items:
-            role_code_map[code] = {"ar": ar, "en": en, "order": order}
-            role_options.append((code, ar, en, order))
-        _lookup["user_role"] = role_code_map
-        _options_cache["user_role"] = role_options
-    except Exception as e:
-        logger.warning(f"Failed to load user_role vocab: {e}")
-
-    # --- From display_mappings translation keys (vocabs not in config) ---
-    _build_from_translation_keys()
 
 
 def _build_from_translation_keys():

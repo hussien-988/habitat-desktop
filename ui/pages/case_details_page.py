@@ -30,6 +30,7 @@ class CaseDetailsPage(QWidget):
     """Standalone page that displays case/survey details in read-only mode."""
 
     back_requested = pyqtSignal()
+    edit_requested = pyqtSignal(str)  # claim_id
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -135,6 +136,10 @@ class CaseDetailsPage(QWidget):
                 background-color: #F1F5F9;
             }
         """)
+        self._edit_action = menu.addAction(tr("page.case_details.edit_claim"))
+        self._edit_action.triggered.connect(self._on_edit_clicked)
+        self._edit_action.setVisible(False)
+
         back_action = menu.addAction(tr("page.case_details.back_to_list"))
         back_action.triggered.connect(self.back_requested.emit)
         self._menu_btn.setMenu(menu)
@@ -149,6 +154,37 @@ class CaseDetailsPage(QWidget):
 
     def _build_breadcrumb(self) -> str:
         return f"{tr('page.case_details.breadcrumb')}  ·  {tr('page.case_details.title')}"
+
+    def _on_edit_clicked(self):
+        """Handle edit claim action — extract claim_id and emit signal."""
+        claim_id = self._get_claim_id_from_context()
+        if claim_id:
+            self.edit_requested.emit(claim_id)
+        else:
+            logger.warning("No claim_id found in current context for editing")
+
+    def _get_claim_id_from_context(self) -> str:
+        """Extract claim_id from current survey context."""
+        if self._context and self._context.claims:
+            for claim in self._context.claims:
+                cid = claim.get("claimId") or claim.get("claim_id") or claim.get("id")
+                if cid:
+                    return str(cid)
+        if self._context:
+            survey_id = self._context.get_data("survey_id")
+            if survey_id:
+                return str(survey_id)
+        return ""
+
+    def _update_edit_visibility(self):
+        """Show/hide edit action based on user role (admin/data_manager only)."""
+        main_window = self.window()
+        if hasattr(main_window, 'current_user') and main_window.current_user:
+            role = getattr(main_window.current_user, 'role', '')
+            can_edit = role in ("admin", "data_manager")
+            self._edit_action.setVisible(can_edit)
+        else:
+            self._edit_action.setVisible(False)
 
     def refresh(self, survey_data=None):
         """
@@ -172,6 +208,7 @@ class CaseDetailsPage(QWidget):
 
             self._review.context = self._context
             self._review._populate_review()
+            self._update_edit_visibility()
             logger.info("Case details page refreshed successfully")
         except Exception as e:
             logger.error(f"Error refreshing case details: {e}", exc_info=True)

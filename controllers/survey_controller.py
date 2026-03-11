@@ -128,23 +128,43 @@ class SurveyController:
             # 6) Claim data mapped from survey detail + linked claim
             claim_data = self._map_survey_to_claim_data(detail, persons, claim_dto)
 
-            # 7) Build claims list
-            claims = []
-            if detail.get("claimNumber") or (claim_dto and claim_dto.get("claimNumber")):
-                claims.append({
-                    "claim_id": detail.get("claimNumber") or claim_dto.get("claimNumber", ""),
-                    "claim_type": claim_data.get("claim_type", ""),
-                    "status": claim_data.get("case_status", ""),
-                })
+            # 7) Build applicant from survey detail
+            applicant = None
+            interviewee_name = detail.get("intervieweeName", "")
+            if interviewee_name:
+                name_parts = interviewee_name.split()
+                applicant = {
+                    "first_name_ar": name_parts[0] if len(name_parts) > 0 else "",
+                    "father_name_ar": name_parts[1] if len(name_parts) > 1 else "",
+                    "last_name_ar": " ".join(name_parts[2:]) if len(name_parts) > 2 else "",
+                    "full_name": interviewee_name,
+                    "national_id": "",
+                    "phone": "",
+                    "email": "",
+                }
+            elif persons:
+                p = persons[0]
+                applicant = {
+                    "first_name_ar": p.get("first_name", ""),
+                    "father_name_ar": p.get("father_name", ""),
+                    "last_name_ar": p.get("last_name", ""),
+                    "full_name": p.get("full_name", ""),
+                    "national_id": p.get("national_id", ""),
+                    "phone": "",
+                    "email": "",
+                }
 
             context = {
+                "survey_id": detail.get("id", ""),
+                "data": {"survey_id": detail.get("id", "")},
                 "building": building_data,
                 "unit": unit_data,
                 "households": households,
                 "persons": persons,
                 "relations": relations,
                 "claim_data": claim_data,
-                "claims": claims,
+                "claims": [claim_data] if claim_data else [],
+                "applicant": applicant,
             }
             logger.info(
                 f"Built survey context: building={bool(building_data)}, "

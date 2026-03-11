@@ -384,25 +384,34 @@ class AssignmentService:
 
     def get_available_tablets(self) -> List[Dict[str, str]]:
         """
-        Get list of available tablet devices.
-
-        TODO: Implement LAN device discovery (mDNS/Bonjour).
-        For now, returns simulated list + manual IP entry option.
+        Get list of available tablet devices from the sync server.
+        Falls back to manual IP entry if no devices are connected.
         """
-        # Simulated tablets for development
-        tablets = [
-            {"device_id": "tablet_001", "device_name": "Tablet 001 (192.168.1.50)", "status": "connected", "ip": "192.168.1.50"},
-            {"device_id": "tablet_002", "device_name": "Tablet 002 (192.168.1.51)", "status": "connected", "ip": "192.168.1.51"},
-            {"device_id": "manual", "device_name": "إدخال IP يدوياً...", "status": "manual", "ip": None},
-        ]
+        tablets = []
 
-        # TODO: Add real LAN discovery using zeroconf/mDNS
-        # try:
-        #     from services.sync_server_service import SyncServerService
-        #     discovered = SyncServerService.discover_tablets_on_lan()
-        #     tablets.extend(discovered)
-        # except Exception as e:
-        #     logger.warning(f"Failed to discover tablets: {e}")
+        try:
+            from services.sync_manager import get_sync_server
+            server = get_sync_server()
+            if server:
+                for device in server.get_connected_devices():
+                    device_id = device.get("device_id", "")
+                    device_name = device.get("device_name", device_id)
+                    tablets.append({
+                        "device_id": device_id,
+                        "device_name": device_name,
+                        "status": "connected",
+                        "ip": device.get("ip"),
+                    })
+        except Exception as e:
+            logger.warning(f"Failed to query sync server for devices: {e}")
+
+        # Always include manual IP entry option
+        tablets.append({
+            "device_id": "manual",
+            "device_name": "إدخال IP يدوياً...",
+            "status": "manual",
+            "ip": None,
+        })
 
         return tablets
 

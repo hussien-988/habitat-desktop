@@ -780,6 +780,7 @@ EN_TRANSLATIONS = {
     "navbar.tab.user_management": "User Management",
     "navbar.tab.map": "Map",
     "navbar.tab.field_assignment": "Field Work Preparation",
+    "page.case_details.edit_claim": "Edit Claim",
     "navbar.search.default": "Search by code or name...",
     "navbar.search.by_name": "Search by recipient name...",
     "navbar.search.by_claim_id": "Search by claim number...",

@@ -1308,14 +1308,17 @@ class ReviewStep(BaseStep):
         return card
 
     def _populate_claim_card(self):
-        """Populate claim information card - show all claims from step 6."""
+        """Populate claim information card."""
         self._clear_layout(self.claim_content)
 
-        # Use claims list (all claims), fallback to single claim_data
-        claims = getattr(self.context, 'claims', [])
-        if not claims and self.context.claim_data:
-            claims = [self.context.claim_data]
+        # Prefer full claim_data over sparse claims list
+        if self.context.claim_data:
+            self.claim_content.setSpacing(10)
+            claim_card = self._create_claim_data_card(self.context.claim_data)
+            self.claim_content.addWidget(claim_card)
+            return
 
+        claims = getattr(self.context, 'claims', [])
         if not claims:
             no_data = QLabel(tr("wizard.review.no_claim"))
             no_data.setFont(create_font(size=FontManager.SIZE_BODY))
@@ -1325,7 +1328,6 @@ class ReviewStep(BaseStep):
             return
 
         self.claim_content.setSpacing(10)
-
         for claim_data in claims:
             claim_card = self._create_claim_data_card(claim_data)
             self.claim_content.addWidget(claim_card)

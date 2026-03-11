@@ -19,6 +19,9 @@ from PyQt5.QtGui import QColor, QFont
 from ui.components.icon import Icon
 from ui.design_system import Colors
 from ui.font_utils import create_font, FontManager
+from utils.logger import get_logger
+
+logger = get_logger(__name__)
 
 
 # Input field stylesheet (DRY — shared across both fields)
@@ -55,8 +58,8 @@ class PasswordDialog(QDialog):
         self._visibility = {}  # field_name → bool
 
         self.setModal(True)
-        # Figma: SET=589×320, CHANGE=589×406, +24 for shadow margin
-        height = 430 if mode == self.CHANGE else 344
+        # Figma: SET=589×320, CHANGE=589×406, +24 shadow +40 error label
+        height = 470 if mode == self.CHANGE else 384
         self.setFixedSize(613, height)
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.Dialog)
         self.setAttribute(Qt.WA_TranslucentBackground)
@@ -99,6 +102,16 @@ class PasswordDialog(QDialog):
             self._build_set_mode(layout)
         else:
             self._build_change_mode(layout)
+
+        # Policy error label (hidden by default)
+        self._policy_error_label = QLabel("")
+        self._policy_error_label.setWordWrap(True)
+        self._policy_error_label.setAlignment(Qt.AlignRight)
+        self._policy_error_label.setStyleSheet(
+            "color: #E74C3C; font-size: 11px; background: transparent; padding: 0 4px;"
+        )
+        self._policy_error_label.hide()
+        layout.addWidget(self._policy_error_label)
 
         # Buttons
         btn_layout = QHBoxLayout()
@@ -255,6 +268,8 @@ class PasswordDialog(QDialog):
         confirm = self.confirm_input.text().strip()
         if pwd != confirm:
             self._highlight_error(self.confirm_input)
+            self._policy_error_label.setText("كلمات المرور غير متطابقة")
+            self._policy_error_label.show()
             return
 
         if self._mode == self.CHANGE:
@@ -265,8 +280,29 @@ class PasswordDialog(QDialog):
 
             self.current_password = current
 
+        # Validate against security policy (UC-011 S08)
+        is_valid, errors = self._validate_against_policy(pwd)
+        if not is_valid:
+            self._highlight_error(self.password_input)
+            self._policy_error_label.setText("\n".join(errors))
+            self._policy_error_label.show()
+            return
+
+        self._policy_error_label.hide()
         self.password = pwd
         self.accept()
+
+    def _validate_against_policy(self, password: str) -> tuple:
+        """Validate password against SecurityService policy (UC-011 S08)."""
+        try:
+            from repositories.database import Database
+            from services.security_service import SecurityService
+            db = Database()
+            svc = SecurityService(db)
+            return svc.validate_password(password)
+        except Exception as e:
+            logger.warning(f"Could not validate password policy: {e}")
+            return True, []
 
     def _highlight_error(self, field: QLineEdit):
         field.setStyleSheet("""

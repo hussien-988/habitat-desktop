@@ -102,17 +102,36 @@ class ClaimController(BaseController):
             message_ar="يتم إنشاء المطالبات عبر معالج المسح"
         )
 
-    def update_claim(self, claim_uuid: str, data: Dict[str, Any]) -> OperationResult[Claim]:
+    def update_claim(self, claim_id: str, update_data: Dict[str, Any],
+                     reason: str = "") -> OperationResult:
         """
-        Not supported directly - no claim update API endpoint.
+        Update claim via PUT /api/Claims/{id} (UC-006 S08-S10).
+
+        Args:
+            claim_id: Claim UUID
+            update_data: Fields to update (claimType, priority, caseStatus, etc.)
+            reason: Mandatory modification reason (S08)
 
         Returns:
-            OperationResult failure
+            OperationResult with updated claim data
         """
-        return OperationResult.fail(
-            message="Direct claim update is not supported via API",
-            message_ar="تحديث المطالبة المباشر غير مدعوم عبر API"
-        )
+        try:
+            if reason:
+                update_data["reasonForModification"] = reason
+            result = self._api.update_claim(claim_id, update_data)
+            self.claim_updated.emit(claim_id)
+            return OperationResult.ok(data=result)
+        except Exception as e:
+            error_msg = str(e)
+            # Extract backend response details for API errors
+            if hasattr(e, 'status_code'):
+                error_msg = f"HTTP {e.status_code}: {error_msg}"
+            if hasattr(e, 'response_data') and e.response_data:
+                detail = e.response_data.get('detail') or e.response_data.get('title') or ''
+                if detail:
+                    error_msg = f"{error_msg} — {detail}"
+            logger.error(f"Failed to update claim {claim_id}: {error_msg}", exc_info=True)
+            return OperationResult.fail(message=error_msg)
 
     def delete_claim(self, claim_uuid: str) -> OperationResult[bool]:
         """
@@ -364,33 +383,32 @@ class ClaimController(BaseController):
 
     # ==================== Workflow Operations ====================
 
-    def submit_claim(self, claim_uuid: str) -> OperationResult[Claim]:
-        """Submit a draft claim for review."""
-        return OperationResult.fail(
-            message="Claim workflow transitions require API endpoint not yet implemented",
-            message_ar="انتقالات سير عمل المطالبة تتطلب endpoint API"
-        )
+    def submit_claim(self, claim_id: str, user_id: str) -> OperationResult:
+        """Submit a claim for processing via PUT /api/Claims/{id}/submit."""
+        try:
+            result = self._api.submit_claim(claim_id, user_id)
+            self.status_changed.emit(claim_id, "draft", "submitted")
+            return OperationResult.ok(data=result)
+        except Exception as e:
+            return OperationResult.fail(message=str(e))
 
-    def approve_claim(self, claim_uuid: str, notes: str = "") -> OperationResult[Claim]:
-        """Approve a claim."""
-        return OperationResult.fail(
-            message="Claim workflow transitions require API endpoint not yet implemented",
-            message_ar="انتقالات سير عمل المطالبة تتطلب endpoint API"
-        )
+    def verify_claim(self, claim_id: str, user_id: str,
+                     notes: str = "") -> OperationResult:
+        """Verify a claim via PUT /api/Claims/{id}/verify."""
+        try:
+            result = self._api.verify_claim(claim_id, user_id, notes)
+            return OperationResult.ok(data=result)
+        except Exception as e:
+            return OperationResult.fail(message=str(e))
 
-    def reject_claim(self, claim_uuid: str, reason: str) -> OperationResult[Claim]:
-        """Reject a claim."""
-        return OperationResult.fail(
-            message="Claim workflow transitions require API endpoint not yet implemented",
-            message_ar="انتقالات سير عمل المطالبة تتطلب endpoint API"
-        )
-
-    def request_review(self, claim_uuid: str) -> OperationResult[Claim]:
-        """Request review for a claim."""
-        return OperationResult.fail(
-            message="Claim workflow transitions require API endpoint not yet implemented",
-            message_ar="انتقالات سير عمل المطالبة تتطلب endpoint API"
-        )
+    def assign_claim(self, claim_id: str, user_id: str,
+                     target_date: Optional[str] = None) -> OperationResult:
+        """Assign a claim via PUT /api/Claims/{id}/assign."""
+        try:
+            result = self._api.assign_claim(claim_id, user_id, target_date)
+            return OperationResult.ok(data=result)
+        except Exception as e:
+            return OperationResult.fail(message=str(e))
 
     def _can_change_status(self, from_status: str, to_status: str) -> bool:
         """Check if status transition is allowed."""
@@ -404,6 +422,147 @@ class ClaimController(BaseController):
             "cancelled": []
         }
         return to_status in allowed_transitions.get(from_status, [])
+
+    # ==================== UC-006: Search & Update ====================
+
+    def search_claims_from_api(self, case_status: Optional[int] = None,
+                               claim_source: Optional[int] = None,
+                               building_code: Optional[str] = None,
+                               page: int = 1, page_size: int = 20) -> OperationResult:
+        """
+        Search claims from API with filters (UC-006 S01).
+
+        Returns OperationResult with list of claim summary dicts.
+        """
+        try:
+            dtos = self._api.get_claims_summaries(
+                claim_status=case_status,
+                claim_source=claim_source,
+                building_code=building_code,
+            )
+            return OperationResult.ok(data=dtos if isinstance(dtos, list) else [])
+        except Exception as e:
+            logger.error(f"Failed to search claims: {e}", exc_info=True)
+            return OperationResult.fail(message=str(e))
+
+    def get_claim_full_detail(self, claim_id: str) -> OperationResult:
+        """
+        Get full claim detail with all enrichment data (UC-006 S02-S03).
+
+        Returns OperationResult with dict containing:
+        claim_dto, person_dto, unit_dto, building_dto, survey_id, evidences
+        """
+        try:
+            claim_dto = self._api.get_claim_by_id(claim_id)
+            if not claim_dto:
+                return OperationResult.fail(message="Claim not found")
+
+            result = {"claim": claim_dto}
+
+            # Person enrichment
+            primary_claimant_id = claim_dto.get("primaryClaimantId")
+            if primary_claimant_id:
+                try:
+                    result["person"] = self._api._request(
+                        "GET", f"/v1/Persons/{primary_claimant_id}")
+                except Exception as e:
+                    logger.warning(f"Failed to fetch person {primary_claimant_id}: {e}")
+
+            # Unit enrichment
+            unit_id = claim_dto.get("propertyUnitId")
+            if unit_id:
+                try:
+                    result["unit"] = self._api._request(
+                        "GET", f"/v1/PropertyUnits/{unit_id}")
+                except Exception as e:
+                    logger.warning(f"Failed to fetch unit {unit_id}: {e}")
+
+                # Building from unit
+                building_id = (result.get("unit") or {}).get("buildingId")
+                if building_id:
+                    try:
+                        result["building"] = self._api.get_building_by_id(building_id)
+                    except Exception as e:
+                        logger.warning(f"Failed to fetch building {building_id}: {e}")
+
+            # Survey ID from summaries
+            survey_id = claim_dto.get("surveyId")
+            if not survey_id:
+                try:
+                    summaries = self._api.get_claims_summaries()
+                    for s in summaries:
+                        if s.get("claimId") == claim_id:
+                            survey_id = s.get("surveyId")
+                            break
+                except Exception:
+                    pass
+            result["survey_id"] = survey_id
+
+            # Evidences
+            if survey_id:
+                try:
+                    result["evidences"] = self._api.get_survey_evidences(survey_id)
+                except Exception as e:
+                    logger.warning(f"Failed to fetch evidences: {e}")
+                    if hasattr(e, 'status_code') and e.status_code == 403:
+                        result["evidence_access_denied"] = True
+
+            return OperationResult.ok(data=result)
+        except Exception as e:
+            logger.error(f"Failed to get claim detail {claim_id}: {e}", exc_info=True)
+            return OperationResult.fail(message=str(e))
+
+    def update_person(self, person_id: str,
+                      person_data: Dict[str, Any]) -> OperationResult:
+        """Update person via PUT /v1/Persons/{id} (UC-006 S04)."""
+        try:
+            result = self._api.update_person(person_id, person_data)
+            return OperationResult.ok(data=result)
+        except Exception as e:
+            logger.error(f"Failed to update person {person_id}: {e}", exc_info=True)
+            return OperationResult.fail(message=str(e))
+
+    def update_property_unit(self, unit_id: str,
+                             unit_data: Dict[str, Any]) -> OperationResult:
+        """Update property unit via PUT /v1/PropertyUnits/{id} (UC-006 S05)."""
+        try:
+            result = self._api.update_property_unit(unit_id, unit_data)
+            return OperationResult.ok(data=result)
+        except Exception as e:
+            logger.error(f"Failed to update unit {unit_id}: {e}", exc_info=True)
+            return OperationResult.fail(message=str(e))
+
+    def add_tenure_evidence(self, survey_id: str, relation_id: str,
+                            file_path: str, **kwargs) -> OperationResult:
+        """Add tenure evidence document (UC-006 S06)."""
+        try:
+            result = self._api.upload_relation_document(
+                survey_id, relation_id, file_path, **kwargs)
+            return OperationResult.ok(data=result)
+        except Exception as e:
+            logger.error(f"Failed to add tenure evidence: {e}", exc_info=True)
+            return OperationResult.fail(message=str(e))
+
+    def add_identification_evidence(self, survey_id: str, person_id: str,
+                                    file_path: str, **kwargs) -> OperationResult:
+        """Add identification evidence document (UC-006 S06)."""
+        try:
+            result = self._api.upload_identification_document(
+                survey_id, person_id, file_path, **kwargs)
+            return OperationResult.ok(data=result)
+        except Exception as e:
+            logger.error(f"Failed to add identification evidence: {e}", exc_info=True)
+            return OperationResult.fail(message=str(e))
+
+    def delete_evidence(self, survey_id: str,
+                        evidence_id: str) -> OperationResult:
+        """Delete evidence document (UC-006 S06)."""
+        try:
+            self._api.delete_evidence(survey_id, evidence_id)
+            return OperationResult.ok(data=True)
+        except Exception as e:
+            logger.error(f"Failed to delete evidence {evidence_id}: {e}", exc_info=True)
+            return OperationResult.fail(message=str(e))
 
     # ==================== Backend API Methods ====================
 

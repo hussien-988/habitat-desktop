@@ -36,6 +36,10 @@ class LoginPage(QWidget):
         self.password_visible = False
         self._arabic_re = re.compile(r"[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF]")
 
+        # Login lockout tracking (UC-011 S08)
+        self._failed_attempts = 0
+        self._lockout_until = None
+
         # Load custom fonts
         self._load_fonts()
         self._setup_ui()
@@ -400,7 +404,15 @@ class LoginPage(QWidget):
             self.password_input.setEchoMode(QLineEdit.Password)
 
     def _on_login(self):
-        """Handle login attempt"""
+        """Handle login attempt with lockout enforcement (UC-011 S08)."""
+        from datetime import datetime, timedelta
+
+        # Check lockout
+        if self._lockout_until and datetime.now() < self._lockout_until:
+            remaining = int((self._lockout_until - datetime.now()).total_seconds()) // 60 + 1
+            self._show_error(f"الحساب مقفل. حاول بعد {remaining} دقيقة")
+            return
+
         username = self.username_input.text().strip()
         password = self.password_input.text()
 
@@ -411,13 +423,43 @@ class LoginPage(QWidget):
         user, error = self.auth_service.authenticate(username, password)
 
         if user:
+            self._failed_attempts = 0
+            self._lockout_until = None
             logger.info(f"Login successful: {username}")
             self.error_label.hide()
             self._clear_form()
             self.login_successful.emit(user)
         else:
-            logger.warning(f"Login failed: {username}")
-            self._show_error("اسم المستخدم أو كلمة المرور غير صحيحة")
+            self._failed_attempts += 1
+            logger.warning(f"Login failed: {username} (attempt {self._failed_attempts})")
+
+            # Check if lockout threshold reached
+            max_attempts, lockout_minutes = self._get_lockout_settings()
+            if max_attempts > 0 and self._failed_attempts >= max_attempts:
+                self._lockout_until = datetime.now() + timedelta(minutes=lockout_minutes)
+                self._show_error(f"تم قفل الحساب لمدة {lockout_minutes} دقيقة بسبب تجاوز عدد المحاولات المسموحة")
+                logger.warning(f"Account locked for {lockout_minutes} min after {self._failed_attempts} failed attempts")
+            else:
+                remaining = max_attempts - self._failed_attempts
+                if max_attempts > 0 and remaining <= 3:
+                    self._show_error(f"اسم المستخدم أو كلمة المرور غير صحيحة ({remaining} محاولات متبقية)")
+                else:
+                    self._show_error("اسم المستخدم أو كلمة المرور غير صحيحة")
+
+    def _get_lockout_settings(self) -> tuple:
+        """Get lockout settings from SecurityService. Returns (max_attempts, lockout_minutes)."""
+        try:
+            from services.security_service import SecurityService
+            if self.db:
+                svc = SecurityService(self.db)
+            else:
+                from repositories.database import Database
+                svc = SecurityService(Database())
+            settings = svc.get_settings()
+            return settings.max_failed_login_attempts, settings.account_lockout_duration_minutes
+        except Exception as e:
+            logger.warning(f"Could not load lockout settings: {e}")
+            return 5, 15
 
     def _show_error(self, message: str):
         """Show error message"""

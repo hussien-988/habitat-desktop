@@ -11,7 +11,7 @@ from PyQt5.QtWidgets import (
     QFrame, QGraphicsDropShadowEffect, QSizeGrip
 )
 
-from PyQt5.QtCore import Qt, pyqtSignal, QPoint
+from PyQt5.QtCore import Qt, pyqtSignal, QPoint, QTimer, QEvent
 
 from PyQt5.QtGui import QKeySequence, QColor, QMouseEvent
 
@@ -38,6 +38,9 @@ class MainWindow(QMainWindow):
         Pages.FIELD_ASSIGNMENT: {"admin", "data_manager", "field_supervisor"},
         Pages.DATA_MANAGEMENT: {"admin", "data_manager"},
         Pages.REPORTS: {"admin", "data_manager", "field_supervisor", "analyst"},
+        Pages.CLAIM_EDIT: {"admin", "data_manager"},
+        Pages.DUPLICATES: {"admin", "data_manager"},
+        Pages.CLAIM_COMPARISON: {"admin", "data_manager"},
     }
 
     def __init__(self, db: Database, i18n: I18n, parent=None):
@@ -50,6 +53,11 @@ class MainWindow(QMainWindow):
 
         # For window dragging
         self._drag_position = QPoint()
+
+        # Session timeout tracking (UC-011 S08)
+        self._session_timer = None
+        self._last_activity = None
+        self._session_timeout_ms = 0
 
         self._setup_window()
         self._setup_shortcuts()
@@ -118,6 +126,7 @@ class MainWindow(QMainWindow):
         # Developer reset tool: Ctrl+Shift+R (DEV_MODE only)
         if Config.DEV_MODE:
             self.dev_reset_shortcut = QShortcut(QKeySequence("Ctrl+Shift+R"), self)
+            self.dev_reset_shortcut.setContext(Qt.ApplicationShortcut)
             self.dev_reset_shortcut.activated.connect(self._open_dev_reset_dialog)
 
     def _open_dev_reset_dialog(self):
@@ -156,6 +165,7 @@ class MainWindow(QMainWindow):
         from controllers.user_controller import UserController
         from ui.wizards.office_survey import OfficeSurveyWizard
         from ui.pages.import_wizard_page import ImportWizardPage
+        from ui.pages.claim_edit_page import ClaimEditPage
 
         self._user_controller = UserController(parent=self)
 
@@ -304,6 +314,10 @@ class MainWindow(QMainWindow):
         self.pages[Pages.IMPORT_WIZARD] = ImportWizardPage(self.db, self.i18n, self)
         self.stack.addWidget(self.pages[Pages.IMPORT_WIZARD])
 
+        # Claim Edit page (UC-006: Edit existing claim)
+        self.pages[Pages.CLAIM_EDIT] = ClaimEditPage(self.db, self.i18n, self)
+        self.stack.addWidget(self.pages[Pages.CLAIM_EDIT])
+
         # Office Survey Wizard (UC-004, UC-005) - NEW wizard framework
         self.office_survey_wizard = OfficeSurveyWizard(self.db, self)
         self.stack.addWidget(self.office_survey_wizard)
@@ -399,6 +413,19 @@ class MainWindow(QMainWindow):
         self.office_survey_wizard.survey_cancelled.connect(self._on_survey_cancelled)
         self.office_survey_wizard.survey_saved_draft.connect(self._on_survey_saved_draft)
 
+        # UC-006: Edit claim from CaseDetailsPage
+        self.pages[Pages.CASE_DETAILS].edit_requested.connect(
+            lambda cid: self.navigate_to(Pages.CLAIM_EDIT, {"claim_id": cid})
+        )
+
+        # Claim Edit (UC-006) - back to case details / save completed
+        self.pages[Pages.CLAIM_EDIT].back_requested.connect(
+            lambda: self.navigate_to(Pages.CASES)
+        )
+        self.pages[Pages.CLAIM_EDIT].save_completed.connect(
+            lambda: self.navigate_to(Pages.CASES)
+        )
+
         # Duplicates page - view comparison
         self.pages[Pages.DUPLICATES].view_comparison_requested.connect(
             lambda group: self.navigate_to(Pages.CLAIM_COMPARISON, group)
@@ -482,6 +509,83 @@ class MainWindow(QMainWindow):
             if page and hasattr(page, 'configure_for_role'):
                 page.configure_for_role(user.role)
 
+        # Start session timeout timer (UC-011 S08)
+        self._start_session_timer()
+
+    def _start_session_timer(self):
+        """Start session inactivity timer based on security settings."""
+        from datetime import datetime
+        try:
+            from services.security_service import SecurityService
+            svc = SecurityService(self.db)
+            settings = svc.get_settings()
+            timeout_minutes = settings.session_timeout_minutes
+        except Exception as e:
+            logger.warning(f"Could not load session timeout setting: {e}")
+            timeout_minutes = 30
+
+        self._session_timeout_ms = timeout_minutes * 60 * 1000
+        self._last_activity = datetime.now()
+
+        # Install app-wide event filter for activity tracking
+        from PyQt5.QtWidgets import QApplication
+        QApplication.instance().installEventFilter(self)
+
+        # Check every 60 seconds
+        if self._session_timer is None:
+            self._session_timer = QTimer(self)
+            self._session_timer.timeout.connect(self._check_session_timeout)
+        self._session_timer.start(60000)
+        logger.info(f"Session timeout set to {timeout_minutes} minutes")
+
+    def _stop_session_timer(self):
+        """Stop session inactivity timer."""
+        if self._session_timer:
+            self._session_timer.stop()
+        from PyQt5.QtWidgets import QApplication
+        app = QApplication.instance()
+        if app:
+            app.removeEventFilter(self)
+
+    def eventFilter(self, obj, event):
+        """Track user activity for session timeout."""
+        from datetime import datetime
+        etype = event.type()
+        if etype in (QEvent.MouseMove, QEvent.KeyPress,
+                     QEvent.MouseButtonPress, QEvent.Wheel):
+            self._last_activity = datetime.now()
+        return super().eventFilter(obj, event)
+
+    def _check_session_timeout(self):
+        """Check if session has timed out due to inactivity."""
+        from datetime import datetime
+        if not self.current_user or not self._last_activity:
+            return
+        elapsed_ms = (datetime.now() - self._last_activity).total_seconds() * 1000
+        if elapsed_ms >= self._session_timeout_ms:
+            self._session_timer.stop()
+            logger.warning("Session timed out due to inactivity")
+            from PyQt5.QtWidgets import QMessageBox
+            QMessageBox.warning(
+                self,
+                "انتهاء الجلسة",
+                "انتهت مهلة الجلسة بسبب عدم النشاط. سيتم تسجيل الخروج تلقائياً."
+            )
+            self._force_logout()
+
+    def _force_logout(self):
+        """Force logout without confirmation dialog (session timeout)."""
+        if self.current_user:
+            logger.info(f"Force logout (session timeout): {self.current_user.username}")
+            try:
+                from services.api_client import get_api_client
+                get_api_client().logout()
+            except Exception as e:
+                logger.warning(f"API logout failed: {e}")
+            self.current_user = None
+            self._stop_session_timer()
+            self._show_login()
+
     def _set_api_token_for_controllers(self, token: str):
         """Pass API token to all controllers that use API backend."""
         logger.info(f"Setting API token for controllers (token length: {len(token)})")
@@ -525,6 +629,7 @@ class MainWindow(QMainWindow):
                 except Exception as e:
                     logger.warning(f"API logout failed (proceeding with local logout): {e}")
                 self.current_user = None
+                self._stop_session_timer()
                 self._show_login()
 
     def _navigate_to_user(self, user_data: dict, mode: str):
@@ -574,42 +679,103 @@ class MainWindow(QMainWindow):
             Toast.show_toast(self, f"{fail_prefix}: {result.message}", Toast.ERROR)
 
     def _on_field_work_completed(self, workflow_data):
-        """Handle field work wizard completion - save assignment and navigate to sync page."""
+        """Handle field work wizard completion - create assignment via API (UC-012)."""
         try:
+            from ui.components.toast import Toast
+            from services.api_client import get_api_client
+
             logger.info(f"_on_field_work_completed received: {type(workflow_data)}")
             buildings = workflow_data.get('buildings', [])
             researcher = workflow_data.get('researcher', {})
+            revisit_buildings = workflow_data.get('revisit_buildings', [])
             researcher_name = researcher.get('name', 'N/A')
+            researcher_id = researcher.get('id', '')
             building_count = len(buildings)
-            logger.info(f"Field work assigned: {building_count} buildings to {researcher_name}")
 
-            # Save assignment to sync_log for tracking
-            from datetime import datetime
-            sync_date = datetime.now().strftime("%Y-%m-%d %H:%M")
+            if not buildings or not researcher_id:
+                logger.error("Missing buildings or researcher ID for assignment")
+                Toast.show_toast(self, "بيانات غير مكتملة للتعيين", Toast.ERROR)
+                return
 
-            self.db.execute(
-                """INSERT INTO sync_log (device_id, action, details, sync_date, status)
-                   VALUES (?, ?, ?, ?, ?)""",
-                (
-                    researcher_name,
-                    f"تمت مزامنة {building_count} مبنى من قبل {researcher_name}",
-                    "",
-                    sync_date,
-                    "success"
+            # Create assignment via backend API
+            building_ids = [
+                getattr(b, 'building_id', None) or b.get('building_id', '') if isinstance(b, dict) else b.building_id
+                for b in buildings
+            ]
+
+            # Build notes with revisit info
+            notes = None
+            if revisit_buildings:
+                revisit_info = [
+                    f"{r['building_id']}: {r.get('reason', '')}" for r in revisit_buildings
+                ]
+                notes = "مباني تحتاج إعادة زيارة: " + " | ".join(revisit_info)
+
+            logger.info(f"Creating API assignment: {building_count} buildings -> {researcher_name} ({researcher_id})")
+
+            try:
+                api = get_api_client()
+                api.create_assignment(
+                    building_ids=building_ids,
+                    assigned_to=researcher_id,
+                    notes=notes
                 )
-            )
-            logger.info("Saved to sync_log successfully")
+                logger.info("Assignment created on backend API successfully")
+            except Exception as api_err:
+                logger.error(f"API assignment creation failed: {api_err}")
+                Toast.show_toast(
+                    self,
+                    f"فشل إنشاء التعيين في الخادم: {str(api_err)}",
+                    Toast.ERROR
+                )
+                return
+
+            # Create local building_assignments records for transfer tracking (S08-S12)
+            assignment_ids = []
+            try:
+                from services.assignment_service import AssignmentService
+                svc = AssignmentService(db=self.db)
+                current_user_id = getattr(self.current_user, 'user_id', None) if self.current_user else None
+
+                revisit_map = {r['building_id']: r.get('reason', '') for r in revisit_buildings}
+
+                for building in buildings:
+                    bid = (
+                        getattr(building, 'building_id', None)
+                        or building.get('building_id', '') if isinstance(building, dict) else building.building_id
+                    )
+                    is_revisit = bid in revisit_map
+                    reason = revisit_map.get(bid)
+                    try:
+                        assignment = svc.create_assignment(
+                            building_id=bid,
+                            field_team_name=researcher_id,
+                            assigned_by=current_user_id,
+                            requires_revisit=is_revisit,
+                            revisit_reason=reason,
+                            notes=notes
+                        )
+                        assignment_ids.append(assignment.assignment_id)
+                    except Exception as local_err:
+                        logger.warning(f"Could not create local assignment for {bid}: {local_err}")
+            except Exception as e:
+                logger.warning(f"Could not create local assignment records: {e}")
 
             # Show success toast
-            from ui.components.toast import Toast
             Toast.show_toast(
                 self,
                 f"تم إسناد {building_count} مبنى إلى {researcher_name}",
                 Toast.SUCCESS
             )
 
-            # Navigate to sync page so user can verify
-            self.navigate_to(Pages.SYNC_DATA)
+            # Show completion & transfer status view (instead of resetting wizard)
+            if Pages.FIELD_ASSIGNMENT in self.pages:
+                field_page = self.pages[Pages.FIELD_ASSIGNMENT]
+                if hasattr(field_page, 'show_completion'):
+                    field_page.show_completion(buildings, researcher_name, assignment_ids)
+                elif hasattr(field_page, 'refresh'):
+                    field_page.refresh()
+
         except Exception as e:
             logger.error(f"Error in _on_field_work_completed: {e}", exc_info=True)
 
@@ -636,12 +802,15 @@ class MainWindow(QMainWindow):
             ErrorHandler.show_error(self, str(e))
 
     def _on_security_settings_requested(self):
-        """Handle security settings request from navbar menu."""
+        """Handle security settings request from navbar menu (UC-011)."""
         from ui.components.dialogs.security_dialog import SecurityDialog
         result = SecurityDialog.show_settings(parent=self)
         if result:
-            session_days, max_attempts = result
-            logger.info(f"Security settings updated: session={session_days}d, attempts={max_attempts}")
+            timeout_min, max_attempts = result
+            logger.info(f"Security settings updated: timeout={timeout_min}min, attempts={max_attempts}")
+            # Restart session timer with new timeout
+            if self.current_user:
+                self._start_session_timer()
 
     def _on_data_management_requested(self):
         """Handle data management request from navbar menu."""
@@ -903,12 +1072,7 @@ class MainWindow(QMainWindow):
             except Exception as e:
                 logger.warning(f"Survey context fetch failed: {e}")
 
-        # Fallback: navigate with claim_data directly (for claims without survey context)
-        if claim_data:
-            self.navigate_to(Pages.CASE_DETAILS, claim_data)
-            return
-
-        logger.warning(f"Could not load claim details for: {claim_id}")
+        logger.warning(f"Could not load survey context for completed claim: {claim_id}")
 
     def _start_new_office_survey(self):
         """
