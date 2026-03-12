@@ -1,9 +1,9 @@
-# -*- coding: utf-8 -*-
+    # -*- coding: utf-8 -*-
 """
-Tile Server Manager - Centralized tile server management.
+    Tile Server Manager - Centralized tile server management.
 
-Provides a single point of access to the tile server for all UI components.
-Makes it easy to switch between local and production servers.
+    Provides a single point of access to the tile server for all UI components.
+    Makes it easy to switch between local and production servers.
 """
 
 import json
@@ -190,8 +190,8 @@ class TileServer(BaseHTTPRequestHandler):
     def _get_basic_map_html(self, lat, lon, mode):
         """Generate basic map HTML for picker."""
         return f"""<!DOCTYPE html>
-<html>
-<head>
+    <html>
+    <head>
     <meta charset="utf-8">
     <link rel="stylesheet" href="/leaflet.css" />
     <link rel="stylesheet" href="/leaflet.draw.css" />
@@ -199,8 +199,8 @@ class TileServer(BaseHTTPRequestHandler):
         body {{ margin: 0; padding: 0; }}
         #map {{ width: 100%; height: 100vh; }}
     </style>
-</head>
-<body>
+    </head>
+    <body>
     <div id="map"></div>
     <script src="/leaflet.js"></script>
     <script src="/leaflet.draw.js"></script>
@@ -212,22 +212,22 @@ class TileServer(BaseHTTPRequestHandler):
             attribution: 'UN-Habitat'
         }}).addTo(map);
     </script>
-</body>
-</html>"""
+    </body>
+    </html>"""
 
     def _get_buildings_map_html(self, geojson):
         """Generate buildings map HTML."""
         return f"""<!DOCTYPE html>
-<html dir="rtl">
-<head>
+    <html dir="rtl">
+    <head>
     <meta charset="utf-8">
     <link rel="stylesheet" href="/leaflet.css" />
     <style>
         body {{ margin: 0; padding: 0; }}
         #map {{ width: 100%; height: 100vh; }}
     </style>
-</head>
-<body>
+    </head>
+    <body>
     <div id="map"></div>
     <script src="/leaflet.js"></script>
     <script>
@@ -241,8 +241,8 @@ class TileServer(BaseHTTPRequestHandler):
         var buildingsData = {geojson};
         L.geoJSON(buildingsData).addTo(map);
     </script>
-</body>
-</html>"""
+    </body>
+    </html>"""
 
     def _serve_static_file_cached(self, filepath, content_type):
         """Serve a static file with caching."""
@@ -387,15 +387,10 @@ class TileServerManager:
                     logger.warning(f"Docker tile server port unreachable ({production_url}): {e}")
 
             if use_production:
-                print(f"\n[DEBUG] Tile Server: DOCKER/EXTERNAL")
-                print(f"[DEBUG] URL: {production_url}")
-                print(f"[DEBUG] Health Check: PASSED\n")
                 logger.info(f"Using external tile server: {production_url}")
                 self._is_production = True
                 self._production_url = production_url
             else:
-                print(f"\n[DEBUG] Tile Server: EMBEDDED/LOCAL")
-                print(f"[DEBUG] Starting local tile server on random port\n")
                 logger.info("Using embedded local tile server")
                 self._is_production = False
 
@@ -447,8 +442,8 @@ class TileServerManager:
         TileServer.assets_path = base_path / "assets" / "leaflet"
 
         # Create server - listen on all interfaces (0.0.0.0) to allow network access
-        # ✅ NETWORK ACCESS: 0.0.0.0 allows other team members to connect
-        # 🔒 SECURITY: Only use on trusted networks (not public Wi-Fi!)
+        # NETWORK ACCESS: 0.0.0.0 allows other team members to connect
+        # SECURITY: Only use on trusted networks (not public Wi-Fi!)
         self._server = HTTPServer(('0.0.0.0', self._port), TileServer)
 
         # Start server in background thread
@@ -480,14 +475,12 @@ class TileServerManager:
 
         if metadata and metadata.get('minzoom') is not None:
             self._tile_metadata = metadata
-            print(f"[DEBUG] Tile metadata detected: zoom {metadata.get('minzoom')}-{metadata.get('maxzoom')}")
             logger.info(f"Tile metadata: zoom {metadata.get('minzoom')}-{metadata.get('maxzoom')}")
         else:
             self._tile_metadata = {
                 'minzoom': Config.MAP_MIN_ZOOM,
                 'maxzoom': Config.MAP_MAX_ZOOM,
             }
-            print(f"[DEBUG] Tile metadata: using .env defaults (zoom {Config.MAP_MIN_ZOOM}-{Config.MAP_MAX_ZOOM})")
             logger.warning("Could not detect tile metadata, using .env defaults")
 
         return self._tile_metadata
@@ -539,7 +532,6 @@ class TileServerManager:
             p = Path(Config.MBTILES_PATH)
             if p.exists():
                 mbtiles_path = p
-                print(f"[DEBUG] MBTiles from .env: {p.name} ({p.stat().st_size // (1024*1024)} MB)")
 
         # 2) Fallback: search app data dir
         if not mbtiles_path:
@@ -580,7 +572,6 @@ class TileServerManager:
                     if row and row[0] is not None:
                         result['minzoom'] = int(row[0])
                         result['maxzoom'] = int(row[1])
-                        print(f"[DEBUG] Detected zoom from tiles table: {row[0]}-{row[1]}")
                 except Exception:
                     pass
 
@@ -607,7 +598,7 @@ class TileServerManager:
         return cls._instance
 
 
-# Global helper functions for easy access
+    # Global helper functions for easy access
 def get_tile_server_url() -> str:
     """
     Get the tile server URL.

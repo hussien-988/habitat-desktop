@@ -119,6 +119,25 @@ class CaseDetailsPage(QWidget):
         """)
         self._menu_btn.setCursor(Qt.PointingHandCursor)
 
+        # Standalone edit button (admin/data_manager only)
+        self._edit_btn = QPushButton(tr("page.case_details.edit_claim"))
+        self._edit_btn.setFixedSize(160, 40)
+        self._edit_btn.setCursor(Qt.PointingHandCursor)
+        self._edit_btn.setVisible(False)
+        self._edit_btn.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {Colors.PRIMARY_BLUE};
+                color: white;
+                border: none;
+                border-radius: 8px;
+                font-size: 13px;
+                font-weight: 600;
+            }}
+            QPushButton:hover {{ background-color: #2A7BC8; }}
+        """)
+        self._edit_btn.clicked.connect(self._on_edit_clicked)
+        layout.addWidget(self._edit_btn)
+
         menu = QMenu(self._menu_btn)
         menu.setLayoutDirection(Qt.RightToLeft)
         menu.setStyleSheet("""
@@ -136,10 +155,6 @@ class CaseDetailsPage(QWidget):
                 background-color: #F1F5F9;
             }
         """)
-        self._edit_action = menu.addAction(tr("page.case_details.edit_claim"))
-        self._edit_action.triggered.connect(self._on_edit_clicked)
-        self._edit_action.setVisible(False)
-
         back_action = menu.addAction(tr("page.case_details.back_to_list"))
         back_action.triggered.connect(self.back_requested.emit)
         self._menu_btn.setMenu(menu)
@@ -167,24 +182,22 @@ class CaseDetailsPage(QWidget):
         """Extract claim_id from current survey context."""
         if self._context and self._context.claims:
             for claim in self._context.claims:
-                cid = claim.get("claimId") or claim.get("claim_id") or claim.get("id")
+                cid = (claim.get("claimId") or claim.get("claim_id")
+                       or claim.get("ClaimId") or claim.get("id"))
                 if cid:
                     return str(cid)
-        if self._context:
-            survey_id = self._context.get_data("survey_id")
-            if survey_id:
-                return str(survey_id)
+        logger.warning("No claim_id found in context; cannot navigate to edit")
         return ""
 
     def _update_edit_visibility(self):
-        """Show/hide edit action based on user role (admin/data_manager only)."""
+        """Show/hide edit button based on user role (admin/data_manager only)."""
         main_window = self.window()
         if hasattr(main_window, 'current_user') and main_window.current_user:
             role = getattr(main_window.current_user, 'role', '')
             can_edit = role in ("admin", "data_manager")
-            self._edit_action.setVisible(can_edit)
+            self._edit_btn.setVisible(can_edit)
         else:
-            self._edit_action.setVisible(False)
+            self._edit_btn.setVisible(False)
 
     def refresh(self, survey_data=None):
         """

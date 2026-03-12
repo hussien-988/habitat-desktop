@@ -22,8 +22,8 @@ except ImportError:
 _API_BASE_URL = os.getenv("API_BASE_URL", "http://localhost:8080/api")
 _API_TIMEOUT = int(os.getenv("API_TIMEOUT", "30"))
 _API_MAX_RETRIES = int(os.getenv("API_MAX_RETRIES", "3"))
-_API_USERNAME = os.getenv("API_USERNAME", "admin")
-_API_PASSWORD = os.getenv("API_PASSWORD", "Admin@123")
+_API_USERNAME = os.getenv("API_USERNAME", "")
+_API_PASSWORD = os.getenv("API_PASSWORD", "")
 
 # Tile Server Settings
 _TILE_SERVER_URL = os.getenv("TILE_SERVER_URL", None)
@@ -61,20 +61,17 @@ class Config:
     VERSION: str = "1.0.0"
     ORGANIZATION: str = "UN-Habitat"
 
-    # Development Mode
-    # WARNING: Set to False in production! Only use True during development/testing
-    DEV_MODE: bool = True
-    DEV_AUTO_LOGIN: bool = True
-    DEV_USERNAME: str = "admin"
-    DEV_PASSWORD: str = "Admin@123"
+    # Development Mode (reads from .env, defaults to False for production safety)
+    DEV_MODE: bool = os.getenv("DEV_MODE", "false").lower() in ("true", "1", "yes")
+    DEV_AUTO_LOGIN: bool = os.getenv("DEV_AUTO_LOGIN", "false").lower() in ("true", "1", "yes")
+    DEV_USERNAME: str = os.getenv("DEV_USERNAME", "")
+    DEV_PASSWORD: str = os.getenv("DEV_PASSWORD", "")
 
     # Data Mode: always API (Docker backend)
     DATA_MODE: str = "api"
     DATA_PROVIDER: str = "http"
 
-    # HTTP API Backend Settings
-    # ✅ DYNAMIC: Reads from .env file (API_BASE_URL, API_TIMEOUT, API_MAX_RETRIES, etc.)
-    # If .env not found, uses default (http://localhost:8080/api)
+    # HTTP API Backend Settings (from .env)
     API_BASE_URL: str = _API_BASE_URL  # From .env or default
     API_VERSION: str = "v1"
     API_TIMEOUT: int = _API_TIMEOUT  # From .env or default (30)
@@ -122,11 +119,11 @@ class Config:
     # PostgreSQL (production) - FSD 5.2
     # Set TRRCMS_DB_TYPE=postgresql to use PostgreSQL
     DB_TYPE: str = "sqlite"  # "sqlite" or "postgresql"
-    POSTGRES_HOST: str = "localhost"
-    POSTGRES_PORT: int = 5432
-    POSTGRES_DB: str = "trrcms"
-    POSTGRES_USER: str = "trrcms_user"
-    POSTGRES_PASSWORD: str = "trrcms_password"
+    POSTGRES_HOST: str = os.getenv("POSTGRES_HOST", "localhost")
+    POSTGRES_PORT: int = int(os.getenv("POSTGRES_PORT", "5432"))
+    POSTGRES_DB: str = os.getenv("POSTGRES_DB", "trrcms")
+    POSTGRES_USER: str = os.getenv("POSTGRES_USER", "")
+    POSTGRES_PASSWORD: str = os.getenv("POSTGRES_PASSWORD", "")
     POSTGRES_MIN_CONN: int = 1
     POSTGRES_MAX_CONN: int = 10
 

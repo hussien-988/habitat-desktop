@@ -1,16 +1,16 @@
 # -*- coding: utf-8 -*-
 """
-Base Map Dialog - Unified Dialog for All Map Operations.
+    Base Map Dialog - Unified Dialog for All Map Operations.
 
-Matches BuildingMapWidget design exactly - DRY principle.
+    Matches BuildingMapWidget design exactly - DRY principle.
 
-Design Specifications (من BuildingMapWidget):
-- Size: 1100×700px
-- Border-radius: 32px
-- Padding: 24px
-- Title bar + optional search bar + map
-- Map size: 1052×526px
-- Clean, professional design
+    Design Specifications (من BuildingMapWidget):
+    - Size: 1100×700px
+    - Border-radius: 32px
+    - Padding: 24px
+    - Title bar + optional search bar + map
+    - Map size: 1052×526px
+    - Clean, professional design
 """
 
 from typing import Optional, List
@@ -18,7 +18,7 @@ from PyQt5.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QWidget, QLabel,
     QPushButton, QLineEdit, QFrame, QToolButton, QListWidget,
     QListWidgetItem, QScrollArea
-)
+    )
 from PyQt5.QtCore import Qt, pyqtSignal, QObject, pyqtSlot, QUrl, QSize
 from PyQt5.QtGui import QPainter, QColor, QPainterPath, QIcon
 
@@ -93,11 +93,11 @@ class MapBridge(QObject):
     @pyqtSlot(str, str)
     def onGeometryDrawn(self, geom_type: str, wkt: str):
         """Called from JavaScript when geometry is drawn."""
-        logger.info(f"🎨 MapBridge.onGeometryDrawn called from JavaScript!")
+        logger.info(f"MapBridge.onGeometryDrawn called from JavaScript!")
         logger.info(f"   geom_type: {geom_type}")
         logger.info(f"   wkt: {wkt[:100] if wkt else 'None'}...")
         self.geometry_drawn.emit(geom_type, wkt)
-        logger.info(f"   ✅ geometry_drawn signal emitted")
+        logger.info(f"geometry_drawn signal emitted")
 
     @pyqtSlot(float, float, int)
     def onCoordinatesUpdate(self, lat: float, lon: float, zoom: int):
@@ -141,7 +141,7 @@ class MapBridge(QObject):
     @pyqtSlot()
     def onBridgeReady(self):
         """Called from JavaScript when QWebChannel bridge is fully initialized and ready."""
-        logger.info("✅ QWebChannel bridge confirmed ready by JavaScript")
+        logger.info("QWebChannel bridge confirmed ready by JavaScript")
         self.bridge_ready.emit()
 
 
@@ -204,7 +204,7 @@ class BaseMapDialog(QDialog):
         self._current_coordinates = None  # Store current selected coordinates
         self._selected_building_ids = []  # Store selected building IDs
         self._viewport_loader = None  # ViewportMapLoader instance
-        self._auth_token = None  # ✅ Store auth token for API calls (set by subclass)
+        self._auth_token = None # Store auth token for API calls (set by subclass)
 
         # Initialize viewport loader if enabled (Best Practice: with cache + spatial sampling)
         if self.enable_viewport_loading:
@@ -220,9 +220,9 @@ class BaseMapDialog(QDialog):
                 building_cache_service=building_cache,  # Disabled - needs db instance
                 use_spatial_sampling=True  # Grid-based sampling (Best Practice!)
             )
-            logger.info("✅ Viewport loading enabled (cache disabled - needs db instance)")
+        logger.info("Viewport loading enabled (cache disabled - needs db instance)")
 
-        # ✅ UNIFIED: Get auth token if not provided (DRY principle)
+        # UNIFIED: Get auth token if not provided (DRY principle)
         if not self._auth_token and parent:
             self._auth_token = self._get_auth_token_from_parent(parent)
 
@@ -403,7 +403,7 @@ class BaseMapDialog(QDialog):
 
         # Search input
         self.search_input = QLineEdit()
-        self.search_input.setPlaceholderText("بحث عن اسم المنطقة (مثال: Al-Jamiliyah)")
+        self.search_input.setPlaceholderText("بحث: حي، معلم، أو شارع")
         self.search_input.setAlignment(Qt.AlignRight)
         self.search_input.setFont(create_font(size=10, weight=FontManager.WEIGHT_REGULAR))
         self.search_input.setStyleSheet(f"""
@@ -658,12 +658,12 @@ class BaseMapDialog(QDialog):
     def _on_map_loaded(self, success: bool):
         """Called when map finishes loading - WAIT for QWebChannel bridge ready."""
         if success:
-            logger.info("✅ Map HTML loaded - checking QWebChannel bridge status...")
+            logger.info("Map HTML loaded - checking QWebChannel bridge status...")
 
             # Check if QWebChannel is ready using proper async check
             # Reference: https://doc.qt.io/qt-6/qtwebchannel-javascript.html
             check_js = """
-            console.log('🔍 Checking QWebChannel bridge after map load...');
+            console.log(' Checking QWebChannel bridge after map load...');
             console.log('  - qt:', typeof qt);
             console.log('  - qt.webChannelTransport:', typeof qt !== 'undefined' ? typeof qt.webChannelTransport : 'N/A');
             console.log('  - QWebChannel:', typeof QWebChannel);
@@ -681,7 +681,7 @@ class BaseMapDialog(QDialog):
             if self.web_view:
                 self.web_view.show()
         else:
-            logger.error("❌ Map failed to load")
+            logger.error("Map failed to load")
             if hasattr(self, '_loading_label'):
                 self._loading_label.setText("❌ فشل تحميل الخريطة")
                 self._loading_label.setStyleSheet(f"""
@@ -692,7 +692,7 @@ class BaseMapDialog(QDialog):
 
     def _on_geometry_drawn(self, geom_type: str, wkt: str):
         """Handle geometry drawn - emit signal."""
-        logger.info(f"📍 BaseMapDialog._on_geometry_drawn called")
+        logger.info(f"BaseMapDialog._on_geometry_drawn called")
         logger.info(f"   geom_type: {geom_type}")
         logger.info(f"   wkt: {wkt[:100] if wkt else 'None'}...")
 
@@ -702,7 +702,7 @@ class BaseMapDialog(QDialog):
 
         logger.info(f"   Emitting geometry_selected signal...")
         self.geometry_selected.emit(geom_type, wkt)
-        logger.info(f"   ✅ geometry_selected signal emitted")
+        logger.info(f"geometry_selected signal emitted")
 
     def _on_coordinates_update(self, lat: float, lon: float, zoom: int):
         """Handle coordinates update - emit signal."""
@@ -760,7 +760,7 @@ class BaseMapDialog(QDialog):
             return
 
         try:
-            # ✅ FIX: Use stored auth token first, fallback to parent
+            # FIX: Use stored auth token first, fallback to parent
             auth_token = self._auth_token
 
             # Fallback: Get auth token from parent if not set
@@ -776,9 +776,9 @@ class BaseMapDialog(QDialog):
                     logger.debug(f"Could not get auth token from parent: {e}")
 
             if auth_token:
-                logger.debug("✅ Using auth token for viewport loading")
+                logger.debug("Using auth token for viewport loading")
             else:
-                logger.warning("⚠️ No auth token available for viewport loading")
+                logger.warning("No auth token available for viewport loading")
 
             # Load buildings for viewport (with cache + spatial sampling)
             buildings = self._viewport_loader.load_buildings_for_viewport(
@@ -817,7 +817,7 @@ class BaseMapDialog(QDialog):
 
         self.buildings_list_widget.clear()
         for building_id in building_ids:
-            item = QListWidgetItem(f"🏢 {building_id}")
+            item = QListWidgetItem(f" {building_id}")
             item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
             self.buildings_list_widget.addItem(item)
 
@@ -856,6 +856,79 @@ class BaseMapDialog(QDialog):
         except Exception as e:
             logger.error(f"Error updating map buildings: {e}", exc_info=True)
 
+    def _fly_to(self, lat, lng, zoom=17):
+        """Execute smooth flyTo on the Leaflet map."""
+        js_code = f"""
+        if (typeof window._isFlying === 'undefined') {{
+            window._isFlying = false;
+        }}
+        if (typeof map !== 'undefined') {{
+            window._isFlying = true;
+            map.flyTo([{lat}, {lng}], {zoom}, {{
+                duration: 2.0,
+                easeLinearity: 0.25
+            }});
+            setTimeout(function() {{
+                window._isFlying = false;
+            }}, 2200);
+        }}
+        """
+        self.web_view.page().runJavaScript(js_code)
+
+    def _search_landmark_or_street(self, search_text):
+        """Search landmarks via API then streets via JS layer. Returns (found, name) or starts JS callback."""
+        try:
+            from services.api_client import get_api_client
+            from services.map_utils import normalize_landmark
+            api = get_api_client()
+
+            landmarks = api.search_landmarks(search_text, max_results=5)
+            if landmarks and isinstance(landmarks, list):
+                lm = normalize_landmark(landmarks[0])
+                lat = lm.get("latitude")
+                lng = lm.get("longitude")
+                if lat and lng:
+                    self._fly_to(float(lat), float(lng), 17)
+                    return True, lm.get("name", search_text)
+
+            return False, None
+        except Exception as e:
+            logger.warning(f"Landmark/street search error: {e}")
+            return False, None
+
+    def _search_streets_js(self, search_text, not_found_callback=None):
+        """Search loaded streets layer via JavaScript."""
+        safe_text = search_text.replace("\\", "\\\\").replace("'", "\\'")
+        js = f"""
+        (function() {{
+            if (typeof streetsLayer !== 'undefined') {{
+                var found = false;
+                streetsLayer.eachLayer(function(layer) {{
+                    if (!found) {{
+                        var name = '';
+                        if (layer.getTooltip()) {{
+                            name = layer.getTooltip().getContent() || '';
+                        }}
+                        if (name.indexOf('{safe_text}') !== -1) {{
+                            var center = layer.getBounds().getCenter();
+                            map.flyTo(center, 16, {{duration: 2.0}});
+                            layer.openTooltip();
+                            found = true;
+                        }}
+                    }}
+                }});
+                return found ? 'found' : 'not_found';
+            }}
+            return 'no_layer';
+        }})()
+        """
+
+        def on_result(result):
+            if result != 'found' and not_found_callback:
+                not_found_callback()
+
+        self.web_view.page().runJavaScript(js, on_result)
+
     def _on_search_submitted(self):
         """Handle search submission - subclass should override."""
         pass
@@ -879,7 +952,7 @@ class BaseMapDialog(QDialog):
                 self._current_coordinates = {'latitude': lat, 'longitude': lon, 'type': 'Point'}
 
                 self.coordinates_display.setText(
-                    f"📍 الإحداثيات: {lat:.6f}°, {lon:.6f}°"
+                f" الإحداثيات: {lat:.6f}°, {lon:.6f}°"
                 )
                 self.confirm_btn.setEnabled(True)
                 logger.info(f"Coordinates updated: Point ({lat}, {lon})")
@@ -908,7 +981,7 @@ class BaseMapDialog(QDialog):
                     }
 
                     self.coordinates_display.setText(
-                        f"⬡ المضلع: المركز ({center_lat:.6f}°, {center_lon:.6f}°) - {len(lats)} نقاط"
+                    f" المضلع: المركز ({center_lat:.6f}°, {center_lon:.6f}°) - {len(lats)} نقاط"
                     )
                     self.confirm_btn.setEnabled(True)
                     logger.info(f"Coordinates updated: Polygon centroid ({center_lat}, {center_lon})")
@@ -1047,7 +1120,7 @@ class BaseMapDialog(QDialog):
                 })
 
         if features:
-            logger.info(f"🏘️ Created {len(features)} neighborhood features from API data")
+            logger.info(f"Created {len(features)} neighborhood features from API data")
             return _json.dumps({"type": "FeatureCollection", "features": features})
         return None
 
@@ -1055,7 +1128,7 @@ class BaseMapDialog(QDialog):
         """
         Get auth token from parent window (MainWindow.current_user).
 
-        ✅ DRY: Single source of truth for auth_token retrieval (Best Practice).
+ DRY: Single source of truth for auth_token retrieval (Best Practice).
 
         Args:
             parent: Parent widget
@@ -1074,7 +1147,7 @@ class BaseMapDialog(QDialog):
             if main_window and hasattr(main_window, 'current_user') and main_window.current_user:
                 token = getattr(main_window.current_user, '_api_token', None)
                 if token:
-                    logger.debug(f"✅ Auth token retrieved from MainWindow (length: {len(token)})")
+                    logger.debug(f"Auth token retrieved from MainWindow (length: {len(token)})")
                 return token
         except Exception as e:
             logger.warning(f"Could not get auth token from parent: {e}")

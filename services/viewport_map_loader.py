@@ -1,18 +1,18 @@
-# -*- coding: utf-8 -*-
+    # -*- coding: utf-8 -*-
 """
-Viewport-Based Map Loader Service
-==================================
+    Viewport-Based Map Loader Service
+    ==================================
 
-Professional service for loading buildings based on map viewport.
-Optimized for performance with millions of buildings.
+    Professional service for loading buildings based on map viewport.
+    Optimized for performance with millions of buildings.
 
-Best Practices Applied:
-- SOLID: Single Responsibility (only handles viewport-based loading)
-- DRY: Reusable across all map components
-- Performance: Smart caching + debouncing
-- Scalability: Works with millions of buildings
+    Best Practices Applied:
+    - SOLID: Single Responsibility (only handles viewport-based loading)
+    - DRY: Reusable across all map components
+    - Performance: Smart caching + debouncing
+    - Scalability: Works with millions of buildings
 
-Usage:
+    Usage:
     loader = ViewportMapLoader(map_service_api)
     buildings = loader.load_buildings_for_viewport(
         north_east_lat=36.5,
@@ -153,11 +153,11 @@ class ViewportMapLoader:
         Load buildings for viewport with professional optimizations.
 
         Professional Best Practices (2026):
-        - ✅ Application-wide cache (Singleton BuildingCacheService)
-        - ✅ Spatial sampling (grid-based even distribution)
-        - ✅ Zoom-adaptive density (20-100 buildings based on zoom)
-        - ✅ Min zoom threshold (prevent loading at low zoom)
-        - ✅ Priority-based sampling (prefer damaged buildings)
+            - Application-wide cache (Singleton BuildingCacheService)
+            - Spatial sampling (grid-based even distribution)
+            - Zoom-adaptive density (20-100 buildings based on zoom)
+            - Min zoom threshold (prevent loading at low zoom)
+            - Priority-based sampling (prefer damaged buildings)
 
         Args:
             north_east_lat: NE latitude
@@ -300,7 +300,7 @@ class ViewportMapLoader:
     def clear_cache(self):
         """Clear all cached viewport data."""
         self._cache.clear()
-        logger.info("🗑️ Viewport cache cleared")
+        logger.info("Viewport cache cleared")
 
     def get_cache_stats(self) -> Dict[str, any]:
         """Get cache statistics."""

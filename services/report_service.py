@@ -494,7 +494,8 @@ class ReportService:
                 SELECT COUNT(*) FROM documents WHERE date(created_at) >= ?
             """, (start_str,))
             stats["new_documents"] = cursor.fetchone()[0]
-        except:
+        except Exception as e:
+            logger.warning(f"Failed to count new documents: {e}")
             stats["new_documents"] = 0
 
         # Generate PDF
@@ -607,7 +608,8 @@ class ReportService:
             stats["units_with_stdm"] = cursor.fetchone()[0]
             cursor.execute("SELECT COUNT(*) FROM property_units WHERE legacy_stdm_id IS NULL OR legacy_stdm_id = ''")
             stats["units_without_stdm"] = cursor.fetchone()[0]
-        except:
+        except Exception as e:
+            logger.warning(f"Failed to query units STDM stats: {e}")
             stats["units_with_stdm"] = 0
             stats["units_without_stdm"] = 0
 
@@ -617,7 +619,8 @@ class ReportService:
             stats["persons_with_stdm"] = cursor.fetchone()[0]
             cursor.execute("SELECT COUNT(*) FROM persons WHERE legacy_stdm_id IS NULL OR legacy_stdm_id = ''")
             stats["persons_without_stdm"] = cursor.fetchone()[0]
-        except:
+        except Exception as e:
+            logger.warning(f"Failed to query persons STDM stats: {e}")
             stats["persons_with_stdm"] = 0
             stats["persons_without_stdm"] = 0
 
@@ -627,7 +630,8 @@ class ReportService:
             stats["claims_with_stdm"] = cursor.fetchone()[0]
             cursor.execute("SELECT COUNT(*) FROM claims WHERE legacy_stdm_id IS NULL OR legacy_stdm_id = ''")
             stats["claims_without_stdm"] = cursor.fetchone()[0]
-        except:
+        except Exception as e:
+            logger.warning(f"Failed to query claims STDM stats: {e}")
             stats["claims_with_stdm"] = 0
             stats["claims_without_stdm"] = 0
 
@@ -704,19 +708,22 @@ class ReportService:
         try:
             cursor.execute("SELECT COUNT(*) FROM property_units")
             stats["total_units"] = cursor.fetchone()[0]
-        except:
+        except Exception as e:
+            logger.warning(f"Failed to count total units: {e}")
             stats["total_units"] = 0
 
         try:
             cursor.execute("SELECT COUNT(*) FROM persons")
             stats["total_persons"] = cursor.fetchone()[0]
-        except:
+        except Exception as e:
+            logger.warning(f"Failed to count total persons: {e}")
             stats["total_persons"] = 0
 
         try:
             cursor.execute("SELECT COUNT(*) FROM claims")
             stats["total_claims"] = cursor.fetchone()[0]
-        except:
+        except Exception as e:
+            logger.warning(f"Failed to count total claims: {e}")
             stats["total_claims"] = 0
 
         # Claims by status
@@ -726,7 +733,8 @@ class ReportService:
                 GROUP BY case_status
             """)
             stats["claims_by_status"] = {row[0]: row[1] for row in cursor.fetchall()}
-        except:
+        except Exception as e:
+            logger.warning(f"Failed to query claims by status: {e}")
             stats["claims_by_status"] = {}
 
         # Recent activity (last 7 days)
@@ -738,7 +746,8 @@ class ReportService:
         try:
             cursor.execute("SELECT COUNT(*) FROM claims WHERE date(created_at) >= ?", (week_ago,))
             stats["new_claims_week"] = cursor.fetchone()[0]
-        except:
+        except Exception as e:
+            logger.warning(f"Failed to count new claims this week: {e}")
             stats["new_claims_week"] = 0
 
         return stats

@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-Sync Manager - لإدارة تشغيل Sync Server.
+    Sync Manager - لإدارة تشغيل Sync Server.
 """
 
 from typing import Optional
@@ -35,10 +35,10 @@ def start_sync_server(db, uhc_service, port=8443) -> bool:
         success = _sync_server_instance.start()
 
         if success:
-            logger.info(f"✅ Sync Server started on port {port}")
+            logger.info(f"Sync Server started on port {port}")
             logger.info(f"   Tablets can connect to: {_sync_server_instance.local_ip}:{port}")
         else:
-            logger.error("❌ Failed to start Sync Server")
+            logger.error("Failed to start Sync Server")
 
         return success
 
@@ -54,7 +54,7 @@ def stop_sync_server():
     if _sync_server_instance:
         try:
             _sync_server_instance.stop()
-            logger.info("✅ Sync Server stopped")
+            logger.info("Sync Server stopped")
         except Exception as e:
             logger.error(f"Error stopping Sync Server: {e}")
         finally:

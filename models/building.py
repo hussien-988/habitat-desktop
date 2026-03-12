@@ -27,8 +27,8 @@ class Building:
 
     # Primary identifiers
     building_uuid: str = field(default_factory=lambda: str(uuid.uuid4()))
-    building_id: str = ""  # ✅ 17-digit numeric ID (NO dashes): 01010010010000001
-    building_id_formatted: str = ""  # ✅ Display format (WITH dashes): 01-01-01-001-001-00001
+    building_id: str = ""  # 17-digit numeric ID (NO dashes): 01010010010000001
+    building_id_formatted: str = ""  # Display format (WITH dashes): 01-01-01-001-001-00001
 
     # Administrative hierarchy
     governorate_code: str = "01"
@@ -86,15 +86,15 @@ class Building:
         """
         Generate building_id if not provided and ensure no dashes.
 
-        ✅ FIXED: Clean existing data by removing dashes for API compatibility.
+        Clean existing data by removing dashes for API compatibility.
         """
         if not self.building_id:
             self.building_id = self.generate_building_id()
         else:
-            # ✅ FIX: Remove dashes if present (clean existing data)
+            # Remove dashes if present (clean existing data)
             self.building_id = self.building_id.replace("-", "")
 
-        # ✅ Ensure building_id_formatted is set (for backward compatibility)
+        # Ensure building_id_formatted is set (for backward compatibility)
         if not self.building_id_formatted and self.building_id:
             self.building_id_formatted = self.building_id_display
 
@@ -102,7 +102,7 @@ class Building:
         """
         Generate the 17-digit UN-Habitat building ID (NO dashes).
 
-        ✅ FIXED: Removed dashes for API compatibility.
+        Removed dashes for API compatibility.
         Format: 01010010010000001 (17 digits)
         Example: governorate(01) + district(01) + subdistrict(01) +
                  community(001) + neighborhood(001) + building(00001)
@@ -121,7 +121,7 @@ class Building:
         """
         Get formatted building ID with dashes for display (UI only).
 
-        ✅ Best Practice: Separate storage format (no dashes) from display format (with dashes).
+        Separate storage format (no dashes) from display format (with dashes).
         This property is for UI display only - NEVER use it for API calls!
 
         Returns:
@@ -217,10 +217,10 @@ class Building:
         """
         Create Building from dictionary.
 
-        ✅ SOLID: Handles API field name mapping (DRY principle)
+        Handles API field name mapping (DRY principle)
         Maps API response field names to Building dataclass field names.
         """
-        # ✅ Field mapping: API → Building dataclass
+        # Field mapping: API -> Building dataclass
         # This ensures compatibility with BuildingAssignments API response
         field_mapping = {
             "id": "building_uuid",  # API uses "id" for UUID
@@ -240,5 +240,5 @@ class Building:
         if isinstance(mapped_data.get("updated_at"), str):
             mapped_data["updated_at"] = datetime.fromisoformat(mapped_data["updated_at"])
 
-        # ✅ SOLID: Only use fields that exist in dataclass (prevents errors)
+        # Only use fields that exist in dataclass (prevents errors)
         return cls(**{k: v for k, v in mapped_data.items() if k in cls.__dataclass_fields__})

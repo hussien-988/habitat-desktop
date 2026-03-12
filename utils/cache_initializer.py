@@ -43,7 +43,7 @@ def initialize_application_cache(
         True if successful, False otherwise
     """
     try:
-        logger.info("🚀 Initializing application cache...")
+        logger.info("Initializing application cache...")
 
         # Get singleton cache instance
         cache = get_building_cache(db)
@@ -58,14 +58,14 @@ def initialize_application_cache(
         if success:
             stats = cache.get_cache_stats()
             logger.info(
-                f"✅ Cache initialized successfully!\n"
+                f"Cache initialized successfully!\n"
                 f"   - Buildings cached: {stats['cache_size']}\n"
                 f"   - Spatial index size: {stats['spatial_index_size']}\n"
                 f"   - Max cache size: {stats['max_cache_size']}\n"
                 f"   - Ready for high-performance map operations!"
             )
         else:
-            logger.warning("⚠️ Cache initialization failed (will use API/DB fallback)")
+            logger.warning("Cache initialization failed (will use API/DB fallback)")
 
         return success
 
@@ -86,7 +86,7 @@ def get_cache_stats_summary() -> str:
         stats = cache.get_cache_stats()
 
         return (
-            f"📊 Cache Statistics:\n"
+            f"Cache Statistics:\n"
             f"  Buildings: {stats['cache_size']}/{stats['max_cache_size']}\n"
             f"  Hit Rate: {stats['hit_rate']}\n"
             f"  Cache Age: {stats['cache_age_hours']:.1f} hours\n"

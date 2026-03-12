@@ -129,6 +129,7 @@ class VocabularyManagementPage(QWidget):
         self.i18n = i18n or I18n()
         self.current_vocabulary = None
         self.security_service = SecurityService(db)
+        self._user_role = None
         self._setup_ui()
         self._load_vocabularies()
 
@@ -442,8 +443,13 @@ class VocabularyManagementPage(QWidget):
                 logger.error(f"Failed to update term: {e}")
                 ErrorHandler.show_error(self, str(e), self.i18n.t("error"))
 
+    def configure_for_role(self, role: str):
+        self._user_role = role
+
     def _delete_term(self):
         """Deactivate selected term via API (UC-010 S05)."""
+        if self._user_role and self._user_role not in ("admin", "data_manager"):
+            return
         selected = self.terms_table.selectedItems()
         if not selected:
             return

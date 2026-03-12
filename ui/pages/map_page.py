@@ -1,25 +1,26 @@
 # -*- coding: utf-8 -*-
 """
-صفحة عرض الخريطة - Offline باستخدام Leaflet.js + MBTiles.
-يعمل بدون اتصال بالإنترنت باستخدام خرائط tiles مخزنة محلياً.
+    صفحة عرض الخريطة - Offline باستخدام Leaflet.js + MBTiles.
+    يعمل بدون اتصال بالإنترنت باستخدام خرائط tiles مخزنة محلياً.
 """
 
 import json
+import re
 from pathlib import Path
 
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QFrame, QListWidget, QListWidgetItem, QComboBox,
     QLineEdit, QSplitter
-)
-from PyQt5.QtCore import Qt, pyqtSignal, QUrl
+    )
+from PyQt5.QtCore import Qt, pyqtSignal, QUrl, QTimer
 from PyQt5.QtGui import QColor
 
 # Try to import WebEngine
 try:
     from PyQt5.QtWebEngineWidgets import QWebEngineView
     from PyQt5.QtWebChannel import QWebChannel
-    from ui.components.viewport_bridge import ViewportBridge  # ✅ جديد
+    from ui.components.viewport_bridge import ViewportBridge
     HAS_WEBENGINE = True
 except ImportError:
     HAS_WEBENGINE = False
@@ -267,9 +268,9 @@ def get_leaflet_html(tile_server_url: str, buildings_geojson: str, **kwargs) -> 
 
     # Original implementation (deprecated, keeping as fallback):
     return f'''
-<!DOCTYPE html>
-<html dir="rtl">
-<head>
+    <!DOCTYPE html>
+    <html dir="rtl">
+    <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>خريطة حلب - UN-Habitat</title>
@@ -347,8 +348,8 @@ def get_leaflet_html(tile_server_url: str, buildings_geojson: str, **kwargs) -> 
             box-shadow: 0 2px 4px rgba(0,0,0,0.2);
         }}
     </style>
-</head>
-<body>
+    </head>
+    <body>
     <div class="offline-badge">وضع Offline</div>
     <div id="map"></div>
     <script>
@@ -481,9 +482,12 @@ def get_leaflet_html(tile_server_url: str, buildings_geojson: str, **kwargs) -> 
             }});
         }}
     </script>
-</body>
-</html>
+    </body>
+    </html>
 '''
+
+
+from services.map_utils import LANDMARK_TYPE_MAP, normalize_landmark as _normalize_landmark, normalize_street as _normalize_street
 
 
 class MapPage(QWidget):
@@ -500,7 +504,7 @@ class MapPage(QWidget):
         self.map_controller = MapController(db)
         self.buildings = []
 
-        # ✅ جديد: Viewport-based loading (المرحلة 2)
+        # جديد: Viewport-based loading (المرحلة 2)
         self.viewport_bridge: Optional['ViewportBridge'] = None
         self.web_channel: Optional['QWebChannel'] = None
 
@@ -543,6 +547,77 @@ class MapPage(QWidget):
 
         header_layout.addStretch()
 
+        # Search type selector
+        self.search_type_combo = QComboBox()
+        self.search_type_combo.addItem("معلم", "landmark")
+        self.search_type_combo.addItem("حي", "neighborhood")
+        self.search_type_combo.addItem("شارع", "street")
+        self.search_type_combo.setFixedWidth(80)
+        self.search_type_combo.setStyleSheet(f"""
+            QComboBox {{
+                padding: 5px 8px;
+                border: 1px solid {Config.BORDER_COLOR};
+                border-radius: 6px;
+                font-size: {Config.FONT_SIZE_SMALL}pt;
+                direction: rtl;
+            }}
+        """)
+        self.search_type_combo.currentIndexChanged.connect(self._on_search_type_changed)
+        header_layout.addWidget(self.search_type_combo)
+
+        # Search input
+        self.landmark_search = QLineEdit()
+        self.landmark_search.setPlaceholderText("بحث المعالم...")
+        self.landmark_search.setFixedWidth(200)
+        self.landmark_search.setStyleSheet(f"""
+            QLineEdit {{
+                padding: 6px 10px;
+                border: 1px solid {Config.BORDER_COLOR};
+                border-radius: 6px;
+                font-size: {Config.FONT_SIZE_SMALL}pt;
+                direction: rtl;
+            }}
+            QLineEdit:focus {{
+                border-color: {Config.PRIMARY_COLOR};
+            }}
+        """)
+        header_layout.addWidget(self.landmark_search)
+
+        # Landmark search results dropdown
+        self.landmark_results = QListWidget()
+        self.landmark_results.setFixedWidth(280)
+        self.landmark_results.setMaximumHeight(200)
+        self.landmark_results.setStyleSheet(f"""
+            QListWidget {{
+                background: white;
+                border: 1px solid {Config.BORDER_COLOR};
+                border-radius: 6px;
+                font-size: {Config.FONT_SIZE_SMALL}pt;
+                direction: rtl;
+            }}
+            QListWidget::item {{
+                padding: 6px 8px;
+                border-bottom: 1px solid #f0f0f0;
+            }}
+            QListWidget::item:selected {{
+                background-color: {Config.PRIMARY_COLOR};
+                color: white;
+            }}
+            QListWidget::item:hover:!selected {{
+                background-color: #F0F7FF;
+            }}
+        """)
+        self.landmark_results.setWindowFlags(Qt.Popup)
+        self.landmark_results.hide()
+        self.landmark_results.itemClicked.connect(self._on_landmark_result_clicked)
+
+        # Debounce timer for landmark search
+        self._landmark_search_timer = QTimer(self)
+        self._landmark_search_timer.setSingleShot(True)
+        self._landmark_search_timer.setInterval(500)
+        self._landmark_search_timer.timeout.connect(self._do_landmark_search)
+        self.landmark_search.textChanged.connect(self._on_landmark_search_changed)
+
         # زر تحديث
         refresh_btn = QPushButton(tr("page.map.refresh"))
         refresh_btn.setStyleSheet(f"""
@@ -581,7 +656,7 @@ class MapPage(QWidget):
             self.web_view.setMinimumSize(600, 400)
             map_layout.addWidget(self.web_view)
 
-            # ✅ جديد: Setup ViewportBridge for dynamic loading
+            # جديد: Setup ViewportBridge for dynamic loading
             self._setup_viewport_bridge()
         else:
             # Fallback message
@@ -792,13 +867,13 @@ class MapPage(QWidget):
             bbox = (Config.MAP_BOUNDS_MIN_LAT, Config.MAP_BOUNDS_MIN_LNG,
                     Config.MAP_BOUNDS_MAX_LAT, Config.MAP_BOUNDS_MAX_LNG)
 
-        # ✅ استخدام page_size محسّن = 2000 (زيادة من 1000)
-        # ✅ تمرير zoom_level للتحسينات المستقبلية
+        # استخدام page_size محسّن = 2000 (زيادة من 1000)
+        # تمرير zoom_level للتحسينات المستقبلية
         logger.info(f"[MAP_PAGE] Requesting buildings with bbox: {bbox} | page_size=2000")
         result = self.map_controller.get_buildings_in_view(
             bbox=bbox,
-            page_size=2000,  # ⚡ محسّن: 2000 بدلاً من الافتراضي
-            zoom_level=15    # ⚡ للتحسينات المستقبلية (polygon simplification)
+        page_size=2000, # محسّن: 2000 بدلاً من الافتراضي
+        zoom_level=15 # للتحسينات المستقبلية (polygon simplification)
         )
         logger.info(f"[MAP_PAGE] Result success: {result.success}, data count: {len(result.data) if result.success else 0}")
 
@@ -828,10 +903,10 @@ class MapPage(QWidget):
             logger.info(f"Buildings summary: {polygon_count} with polygons, {point_count} with points only")
 
             buildings_with_geometry = [b for b in self.buildings if b.geo_location or (b.latitude and b.longitude)]
-            logger.info(f"✅ Loaded {len(buildings_with_geometry)} buildings with geometry from MapController")
+            logger.info(f"Loaded {len(buildings_with_geometry)} buildings with geometry from MapController")
             geo_buildings = buildings_with_geometry
         else:
-            logger.error(f"❌ Failed to load buildings: {result.message}")
+            logger.error(f"Failed to load buildings: {result.message}")
             self.buildings = []
             geo_buildings = []
 
@@ -895,6 +970,34 @@ class MapPage(QWidget):
             # Load populated places for map labels at zoom 8-12
             places_json = boundary_service.get_places_json() if boundary_service.is_available('populated_places') else None
 
+            # Load landmarks for map overlay
+            landmarks_json = None
+            try:
+                landmarks = api.get_landmarks_for_map(
+                    north_east_lat=bbox[2], north_east_lng=bbox[3],
+                    south_west_lat=bbox[0], south_west_lng=bbox[1]
+                )
+                if landmarks:
+                    landmarks = [_normalize_landmark(lm) for lm in landmarks]
+                    landmarks_json = json.dumps(landmarks, ensure_ascii=False)
+                    logger.info(f"Loaded {len(landmarks)} landmarks for map overlay")
+            except Exception as e:
+                logger.warning(f"Could not load landmarks: {e}")
+
+            # Load streets for map overlay
+            streets_json = None
+            try:
+                streets = api.get_streets_for_map(
+                    north_east_lat=bbox[2], north_east_lng=bbox[3],
+                    south_west_lat=bbox[0], south_west_lng=bbox[1]
+                )
+                if streets:
+                    streets = [_normalize_street(s) for s in streets]
+                    streets_json = json.dumps(streets, ensure_ascii=False)
+                    logger.info(f"Loaded {len(streets)} streets for map overlay")
+            except Exception as e:
+                logger.warning(f"Could not load streets: {e}")
+
             # Generate and load HTML
             geojson = self._buildings_to_geojson(geo_buildings)
             html = get_leaflet_html(
@@ -905,7 +1008,9 @@ class MapPage(QWidget):
                 initial_bounds=initial_bounds,
                 boundaries_geojson=boundaries_geojson,
                 boundary_level=boundary_level,
-                places_json=places_json
+                places_json=places_json,
+                landmarks_json=landmarks_json,
+                streets_json=streets_json
             )
 
             self.web_view.setHtml(html, QUrl(self.local_asset_url))
@@ -928,7 +1033,7 @@ class MapPage(QWidget):
 
     def _setup_viewport_bridge(self):
         """
-        ✅ المرحلة 2: إعداد ViewportBridge للتحميل الديناميكي.
+        المرحلة 2: إعداد ViewportBridge للتحميل الديناميكي.
 
         Professional Best Practice:
         - QWebChannel للتواصل بين JavaScript و Python
@@ -936,7 +1041,7 @@ class MapPage(QWidget):
         - Dynamic loading عند تغيير viewport
         """
         if not HAS_WEBENGINE or not self.web_view:
-            logger.warning("⚠️ WebEngine not available, viewport loading disabled")
+            logger.warning("WebEngine not available, viewport loading disabled")
             return
 
         try:
@@ -951,10 +1056,10 @@ class MapPage(QWidget):
             # ربط channel مع web page
             self.web_view.page().setWebChannel(self.web_channel)
 
-            logger.info("✅ ViewportBridge setup complete (debounce=300ms)")
+            logger.info("ViewportBridge setup complete (debounce=300ms)")
 
         except Exception as e:
-            logger.error(f"❌ Failed to setup ViewportBridge: {e}")
+            logger.error(f"Failed to setup ViewportBridge: {e}")
             self.viewport_bridge = None
             self.web_channel = None
 
@@ -975,7 +1080,7 @@ class MapPage(QWidget):
                 - center_lat, center_lng: Map center
         """
         try:
-            logger.info(f"🗺️ Loading buildings for viewport (zoom={viewport_data['zoom']})")
+            logger.info(f"Loading buildings for viewport (zoom={viewport_data['zoom']})")
 
             # تحويل viewport إلى bbox
             bbox = (
@@ -988,7 +1093,7 @@ class MapPage(QWidget):
             # تحميل المباني في viewport
             result = self.map_controller.get_buildings_in_view(
                 bbox=bbox,
-                page_size=2000,  # ⚡ محسّن من المرحلة 1
+                page_size=2000, # محسّن من المرحلة 1
                 zoom_level=viewport_data['zoom']
             )
 
@@ -1003,17 +1108,269 @@ class MapPage(QWidget):
                     js_code = f"if (typeof updateBuildingsOnMap === 'function') {{ updateBuildingsOnMap({geojson_str}); }}"
                     self.web_view.page().runJavaScript(js_code)
 
-                    logger.info(f"✅ Updated map with {len(result.data)} buildings")
+                logger.info(f"Updated map with {len(result.data)} buildings")
 
                 # تحديث الـ status
                 self.info_label.setText(tr("page.map.loaded_in_viewport", count=len(result.data)))
             else:
-                logger.warning(f"⚠️ No buildings found in viewport")
+                logger.warning(f"No buildings found in viewport")
                 self.info_label.setText(tr("page.map.no_buildings_viewport"))
 
+            # Reload landmarks/streets for new viewport
+            self._update_viewport_landmarks_streets(viewport_data)
+
         except Exception as e:
-            logger.error(f"❌ Error loading viewport buildings: {e}", exc_info=True)
+            logger.error(f"Error loading viewport buildings: {e}", exc_info=True)
             self.info_label.setText(tr("page.map.viewport_load_error"))
+
+    def _on_landmark_search_changed(self, text):
+        """Debounce landmark search input."""
+        if len(text.strip()) < 2:
+            self.landmark_results.hide()
+            return
+        self._landmark_search_timer.start()
+
+    def _on_search_type_changed(self, index):
+        """Update placeholder when search type changes."""
+        search_type = self.search_type_combo.currentData()
+        placeholders = {
+            "neighborhood": "بحث الأحياء...",
+            "street": "بحث الشوارع...",
+        }
+        self.landmark_search.setPlaceholderText(placeholders.get(search_type, "بحث المعالم..."))
+        self.landmark_search.clear()
+        self.landmark_results.hide()
+
+    def _do_landmark_search(self):
+        """Execute search after debounce."""
+        query = self.landmark_search.text().strip()
+        if len(query) < 2:
+            self.landmark_results.hide()
+            return
+
+        search_type = self.search_type_combo.currentData()
+        if search_type == "neighborhood":
+            self._do_neighborhood_search(query)
+        elif search_type == "street":
+            self._do_street_search(query)
+        else:
+            self._do_landmark_api_search(query)
+
+    def _do_landmark_api_search(self, query):
+        """Search landmarks via API."""
+        try:
+            from services.api_client import get_api_client
+            api = get_api_client()
+            results = api.search_landmarks(query, max_results=10)
+
+            self.landmark_results.clear()
+            if not results:
+                self.landmark_results.hide()
+                return
+
+            for lm in results:
+                lm = _normalize_landmark(lm)
+                name = lm.get('name', '')
+                type_name = lm.get('typeName', '')
+                display = f"{name} ({type_name})" if type_name else name
+                item = QListWidgetItem(display)
+                item.setData(Qt.UserRole, lm)
+                self.landmark_results.addItem(item)
+
+            pos = self.landmark_search.mapToGlobal(self.landmark_search.rect().bottomLeft())
+            self.landmark_results.move(pos)
+            self.landmark_results.show()
+
+        except Exception as e:
+            logger.warning(f"Landmark search failed: {e}")
+            self.landmark_results.hide()
+
+    def _do_street_search(self, query):
+        """Search streets by fetching all streets and filtering by name locally."""
+        try:
+            from services.api_client import get_api_client
+            api = get_api_client()
+
+            streets = api.get_streets_for_map(
+                north_east_lat=Config.MAP_BOUNDS_MAX_LAT,
+                north_east_lng=Config.MAP_BOUNDS_MAX_LNG,
+                south_west_lat=Config.MAP_BOUNDS_MIN_LAT,
+                south_west_lng=Config.MAP_BOUNDS_MIN_LNG
+            )
+
+            self.landmark_results.clear()
+            if not streets:
+                self.landmark_results.hide()
+                return
+
+            query_lower = query.lower()
+            matches = []
+            for s in streets:
+                s = _normalize_street(s)
+                name = s.get('name', '')
+                if query_lower in (name or '').lower():
+                    wkt = s.get('geometryWkt', '')
+                    lat, lng = self._extract_center_from_linestring(wkt)
+                    if lat and lng:
+                        matches.append({
+                            'name': name,
+                            'latitude': lat,
+                            'longitude': lng,
+                            '_type': 'street',
+                        })
+                    if len(matches) >= 10:
+                        break
+
+            if not matches:
+                self.landmark_results.hide()
+                return
+
+            for st in matches:
+                item = QListWidgetItem(st['name'])
+                item.setData(Qt.UserRole, st)
+                self.landmark_results.addItem(item)
+
+            pos = self.landmark_search.mapToGlobal(self.landmark_search.rect().bottomLeft())
+            self.landmark_results.move(pos)
+            self.landmark_results.show()
+
+        except Exception as e:
+            logger.warning(f"Street search failed: {e}")
+            self.landmark_results.hide()
+
+    @staticmethod
+    def _extract_center_from_linestring(wkt):
+        """Extract center point from a WKT LINESTRING."""
+        if not wkt:
+            return None, None
+        match = re.match(r'LINESTRING\s*\((.+)\)', wkt, re.IGNORECASE)
+        if not match:
+            return None, None
+        coords = match.group(1).split(',')
+        mid = len(coords) // 2
+        parts = coords[mid].strip().split()
+        if len(parts) >= 2:
+            return float(parts[1]), float(parts[0])
+        return None, None
+
+    def _do_neighborhood_search(self, query):
+        """Search neighborhoods from local GeoJSON."""
+        try:
+            from services import boundary_service
+            raw = boundary_service.get('neighbourhoods')
+            if not raw:
+                self.landmark_results.hide()
+                return
+
+            data = json.loads(raw)
+            features = data.get('features', [])
+            query_lower = query.lower()
+
+            matches = []
+            for f in features:
+                props = f.get('properties', {})
+                name_ar = props.get('NAME_AR', '')
+                name_en = props.get('NAME_EN', '')
+                if query_lower in (name_ar or '').lower() or query_lower in (name_en or '').lower():
+                    matches.append({
+                        'name_ar': name_ar,
+                        'name_en': name_en,
+                        'latitude': props.get('LATITUDE'),
+                        'longitude': props.get('LONGITUDE'),
+                        'adm1_ar': props.get('ADM1_AR', ''),
+                        '_type': 'neighborhood',
+                    })
+                    if len(matches) >= 10:
+                        break
+
+            self.landmark_results.clear()
+            if not matches:
+                self.landmark_results.hide()
+                return
+
+            for nb in matches:
+                display = f"{nb['name_ar']} - {nb['adm1_ar']}" if nb['adm1_ar'] else nb['name_ar']
+                item = QListWidgetItem(display)
+                item.setData(Qt.UserRole, nb)
+                self.landmark_results.addItem(item)
+
+            pos = self.landmark_search.mapToGlobal(self.landmark_search.rect().bottomLeft())
+            self.landmark_results.move(pos)
+            self.landmark_results.show()
+
+        except Exception as e:
+            logger.warning(f"Neighborhood search failed: {e}")
+            self.landmark_results.hide()
+
+    def _on_landmark_result_clicked(self, item):
+        """Handle search result click — pan map to location."""
+        data = item.data(Qt.UserRole)
+        if not data:
+            return
+
+        self.landmark_results.hide()
+        self.landmark_search.clear()
+
+        lat = data.get('latitude')
+        lng = data.get('longitude')
+
+        if not self.web_view or not lat or not lng:
+            return
+
+        result_type = data.get('_type', '')
+        if result_type == 'neighborhood':
+            js = f"map.setView([{lat}, {lng}], 15);"
+            self.web_view.page().runJavaScript(js)
+        elif result_type == 'street':
+            js = f"map.setView([{lat}, {lng}], 16);"
+            self.web_view.page().runJavaScript(js)
+        else:
+            lm_id = data.get('id', '')
+            js = f"if (typeof panToLandmark === 'function') {{ panToLandmark('{lm_id}'); }} else {{ map.setView([{lat}, {lng}], 16); }}"
+            self.web_view.page().runJavaScript(js)
+
+    def _update_viewport_landmarks_streets(self, viewport_data: dict):
+        """Reload landmarks and streets for the current viewport."""
+        if not self.web_view:
+            return
+
+        zoom = viewport_data.get('zoom', 0)
+
+        try:
+            from services.api_client import get_api_client
+            api = get_api_client()
+
+            ne_lat = viewport_data['ne_lat']
+            ne_lng = viewport_data['ne_lng']
+            sw_lat = viewport_data['sw_lat']
+            sw_lng = viewport_data['sw_lng']
+
+            # Only load landmarks when zoom >= 14 (layer visibility threshold)
+            if zoom >= 14:
+                landmarks = api.get_landmarks_for_map(
+                    north_east_lat=ne_lat, north_east_lng=ne_lng,
+                    south_west_lat=sw_lat, south_west_lng=sw_lng
+                )
+                if landmarks:
+                    landmarks = [_normalize_landmark(lm) for lm in landmarks]
+                    landmarks_str = json.dumps(landmarks, ensure_ascii=False)
+                    js = f"if (typeof updateLandmarksOnMap === 'function') {{ updateLandmarksOnMap({landmarks_str}); }}"
+                    self.web_view.page().runJavaScript(js)
+
+            # Only load streets when zoom >= 13 (layer visibility threshold)
+            if zoom >= 13:
+                streets = api.get_streets_for_map(
+                    north_east_lat=ne_lat, north_east_lng=ne_lng,
+                    south_west_lat=sw_lat, south_west_lng=sw_lng
+                )
+                if streets:
+                    streets = [_normalize_street(s) for s in streets]
+                    streets_str = json.dumps(streets, ensure_ascii=False)
+                    js = f"if (typeof updateStreetsOnMap === 'function') {{ updateStreetsOnMap({streets_str}); }}"
+                    self.web_view.page().runJavaScript(js)
+
+        except Exception as e:
+            logger.warning(f"Could not update landmarks/streets for viewport: {e}")
 
     def update_language(self, is_arabic: bool):
         """تحديث اللغة."""
