@@ -514,6 +514,7 @@ class HouseholdsPage(QWidget):
         self.household_repo = HouseholdRepository(db)
         self.unit_repo = UnitRepository(db)
         self._units_cache = {}
+        self._user_role = None
 
         self._setup_ui()
 
@@ -691,8 +692,13 @@ class HouseholdsPage(QWidget):
 
         menu.exec_(self.table.viewport().mapToGlobal(pos))
 
+    def configure_for_role(self, role: str):
+        self._user_role = role
+
     def _delete_household(self, index):
         """Delete a household."""
+        if self._user_role and self._user_role not in ("admin", "data_manager"):
+            return
         household = self.table_model.get_household(index.row())
         if not household:
             return

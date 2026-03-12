@@ -407,6 +407,10 @@ class ClaimStep(BaseStep):
 
     def _populate_card_with_data(self, card: QFrame, claim_data: Dict[str, Any]):
         """Populate a claim card with data from API response."""
+        logger.info(f"Populating claim card with: relationType={claim_data.get('relationType')}, "
+                     f"caseStatus={claim_data.get('caseStatus')}, "
+                     f"casePriority={claim_data.get('casePriority')}, "
+                     f"claimSource={claim_data.get('claimSource')}")
         # Store raw data for collect_data
         card._claim_raw_data = claim_data
 
@@ -422,28 +426,46 @@ class ClaimStep(BaseStep):
 
         # Relation type -> claim type display text
         relation_type = claim_data.get('relationType')
+        is_ownership = False
+        is_tenant = False
+        is_occupant = False
+
         if isinstance(relation_type, int):
-            ownership_types = (1, 5)
-            tenant_types = (3,)
-            occupant_types = (2,)
-            is_ownership = relation_type in ownership_types
-            is_tenant = relation_type in tenant_types
-            is_occupant = relation_type in occupant_types
-        else:
-            rt = str(relation_type).lower() if relation_type else ''
+            is_ownership = relation_type in (1, 5)
+            is_tenant = relation_type in (3,)
+            is_occupant = relation_type in (2,)
+        elif relation_type is not None:
+            rt = str(relation_type).lower()
             is_ownership = rt in ('owner', 'co_owner', 'heir')
             is_tenant = rt == 'tenant'
             is_occupant = rt == 'occupant'
 
+        # Hardcoded Arabic fallbacks in case vocab service isn't loaded
+        _TYPE_FALLBACK = {
+            "Ownership": "ملكية",
+            "Tenancy": "إيجار",
+            "Occupancy": "إشغال",
+        }
+
         if is_ownership:
             code = _find_combo_code_by_english("ClaimType", "Ownership")
-            card.claim_type_field.setText(get_claim_type_display(code))
+            label = get_claim_type_display(code) if code else _TYPE_FALLBACK["Ownership"]
+            card.claim_type_field.setText(label)
         elif is_tenant:
             code = _find_combo_code_by_english("ClaimType", "Tenancy")
-            card.claim_type_field.setText(get_claim_type_display(code))
+            label = get_claim_type_display(code) if code else _TYPE_FALLBACK["Tenancy"]
+            card.claim_type_field.setText(label)
         elif is_occupant:
             code = _find_combo_code_by_english("ClaimType", "Occupancy")
-            card.claim_type_field.setText(get_claim_type_display(code))
+            label = get_claim_type_display(code) if code else _TYPE_FALLBACK["Occupancy"]
+            card.claim_type_field.setText(label)
+        else:
+            # relationType unknown or 0 — default to Ownership for office claims
+            logger.warning(f"Unknown relationType={relation_type}, defaulting to Ownership")
+            code = _find_combo_code_by_english("ClaimType", "Ownership")
+            label = get_claim_type_display(code) if code else _TYPE_FALLBACK["Ownership"]
+            card.claim_type_field.setText(label)
+            is_ownership = True
 
         # Case category: closed for ownership, open otherwise
         if is_ownership:
@@ -641,19 +663,24 @@ class ClaimStep(BaseStep):
                 first_card.claim_survey_date.setText(str(survey_date_str))
 
         # Auto-select claim type based on relations
+        _TYPE_FB = {"Ownership": "ملكية", "Tenancy": "إيجار", "Occupancy": "إشغال"}
         owners_or_heirs = [r for r in self.context.relations if _is_owner_relation(r.get('relation_type'))]
         tenants = [r for r in self.context.relations if r.get('relation_type') in ('tenant', 3)]
         occupants = [r for r in self.context.relations if r.get('relation_type') in ('occupant', 2)]
 
         if owners_or_heirs:
             code = _find_combo_code_by_english("ClaimType", "Ownership")
-            first_card.claim_type_field.setText(get_claim_type_display(code))
+            first_card.claim_type_field.setText(get_claim_type_display(code) if code else _TYPE_FB["Ownership"])
         elif tenants:
             code = _find_combo_code_by_english("ClaimType", "Tenancy")
-            first_card.claim_type_field.setText(get_claim_type_display(code))
+            first_card.claim_type_field.setText(get_claim_type_display(code) if code else _TYPE_FB["Tenancy"])
         elif occupants:
             code = _find_combo_code_by_english("ClaimType", "Occupancy")
-            first_card.claim_type_field.setText(get_claim_type_display(code))
+            first_card.claim_type_field.setText(get_claim_type_display(code) if code else _TYPE_FB["Occupancy"])
+        else:
+            # No matching relations — default to Ownership
+            code = _find_combo_code_by_english("ClaimType", "Ownership")
+            first_card.claim_type_field.setText(get_claim_type_display(code) if code else _TYPE_FB["Ownership"])
 
         # Store raw data for collect_data
         first_card._claim_raw_data = {
@@ -714,6 +741,7 @@ class ClaimStep(BaseStep):
             first_card.claim_person_search.setText(full_name.strip())
 
         # Set claim type display text based on relations
+        _TYPE_FB = {"Ownership": "ملكية", "Tenancy": "إيجار", "Occupancy": "إشغال"}
         claim_type_english = None
         if owners_or_heirs:
             claim_type_english = "Ownership"
@@ -721,10 +749,13 @@ class ClaimStep(BaseStep):
             claim_type_english = "Tenancy"
         elif occupants:
             claim_type_english = "Occupancy"
+        else:
+            claim_type_english = "Ownership"
 
-        if claim_type_english:
-            code = _find_combo_code_by_english("ClaimType", claim_type_english)
-            first_card.claim_type_field.setText(get_claim_type_display(code))
+        code = _find_combo_code_by_english("ClaimType", claim_type_english)
+        first_card.claim_type_field.setText(
+            get_claim_type_display(code) if code else _TYPE_FB[claim_type_english]
+        )
 
         # Case category: closed for ownership, open otherwise
         if owners_or_heirs:

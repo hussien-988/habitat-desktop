@@ -59,6 +59,7 @@ class UserManagementPage(QWidget):
             'role': None,
             'status': None,
         }
+        self._user_role = None
 
         self._setup_ui()
 
@@ -661,7 +662,12 @@ class UserManagementPage(QWidget):
             logger.error(f"Password change failed: {result.message}")
             Toast.show_toast(self, f"فشل تغيير كلمة المرور: {result.message}", Toast.ERROR)
 
+    def configure_for_role(self, role: str):
+        self._user_role = role
+
     def _on_delete_user(self, user: dict):
+        if self._user_role and self._user_role != "admin":
+            return
         from ui.components.dialogs.confirmation_dialog import ConfirmationDialog, DialogResult
         username = user.get("username", "")
         display_name = user.get('full_name', username)

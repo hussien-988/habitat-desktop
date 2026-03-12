@@ -1,10 +1,10 @@
 # -*- coding: utf-8 -*-
 """
-Field Work Preparation - Step 1: Select Buildings
-UC-012: Assign Buildings to Field Teams
+    Field Work Preparation - Step 1: Select Buildings
+    UC-012: Assign Buildings to Field Teams
 
-Filter and search buildings for field work assignment.
-REUSES design from BuildingSelectionStep (office_survey wizard)
+    Filter and search buildings for field work assignment.
+    REUSES design from BuildingSelectionStep (office_survey wizard)
 """
 
 from PyQt5.QtWidgets import (
@@ -12,7 +12,7 @@ from PyQt5.QtWidgets import (
     QPushButton, QComboBox, QFrame, QToolButton, QSizePolicy,
     QListWidget, QListWidgetItem, QCheckBox, QGraphicsDropShadowEffect,
     QScrollArea
-)
+    )
 from PyQt5.QtCore import Qt, pyqtSignal, QSize
 from PyQt5.QtGui import QIcon, QColor
 
@@ -706,7 +706,7 @@ class FieldWorkPreparationStep1(QWidget):
             }
             self._subdistricts = sorted(subdistricts_set, key=lambda x: x[1])
 
-            # ✅ Survey Status (حالة المسح الميداني) - from Backend API
+            # Survey Status (حالة المسح الميداني) - from Backend API
             # Used for BuildingAssignment API filtering (UC-012)
             self._survey_statuses = [
                 ("not_surveyed", "لم يتم المسح"),
@@ -731,7 +731,7 @@ class FieldWorkPreparationStep1(QWidget):
         for code, name_ar in self._subdistricts:
             self.subdistrict_combo.addItem(name_ar, code)
 
-        # ✅ Populate survey statuses (حالة المسح)
+        # Populate survey statuses (حالة المسح)
         for status_code, status_name_ar in self._survey_statuses:
             self.building_status_combo.addItem(status_name_ar, status_code)
 
@@ -928,7 +928,7 @@ class FieldWorkPreparationStep1(QWidget):
 
         row_layout.addStretch()
 
-        # ✅ No remove button - checkbox is enough for unselecting
+        # No remove button - checkbox is enough for unselecting
 
         # Add row to table
         self.selected_table_layout.addWidget(row)
@@ -1157,7 +1157,7 @@ class FieldWorkPreparationStep1(QWidget):
         """
         Open map dialog with polygon drawing for multi-building selection.
 
-        ✅ BEST PRACTICE: Same as wizard - NO pre-loading of buildings!
+        BEST PRACTICE: Same as wizard - NO pre-loading of buildings!
         - Dialog loads buildings dynamically with viewport loading
         - Fast instant opening (no 6+ second wait)
         - DRY principle: unified with BuildingMapDialog
@@ -1165,7 +1165,7 @@ class FieldWorkPreparationStep1(QWidget):
         try:
             from ui.components.polygon_map_dialog_v2 import show_polygon_map_dialog
 
-            # ✅ BEST PRACTICE: Get auth token only (like wizard - NO building loading!)
+            # BEST PRACTICE: Get auth token only (like wizard - NO building loading!)
             auth_token = None
             try:
                 main_window = self
@@ -1173,11 +1173,11 @@ class FieldWorkPreparationStep1(QWidget):
                     main_window = main_window.parent()
                 if main_window and hasattr(main_window, 'current_user') and main_window.current_user:
                     auth_token = getattr(main_window.current_user, '_api_token', None)
-                    logger.debug(f"✅ Auth token available for PolygonMapDialog")
+                    logger.debug(f"Auth token available for PolygonMapDialog")
             except Exception as e:
                 logger.warning(f"Could not get auth token: {e}")
 
-            # ✅ FAST: Open dialog immediately (like wizard)
+            # FAST: Open dialog immediately (like wizard)
             # Dialog handles building loading internally with viewport loading
             selected_buildings = show_polygon_map_dialog(
                 db=self.building_controller.db,
@@ -1186,15 +1186,15 @@ class FieldWorkPreparationStep1(QWidget):
             )
 
             # User cancelled or no buildings selected
-            logger.info(f"📥 Received from polygon map dialog: {type(selected_buildings)}")
+            logger.info(f"Received from polygon map dialog: {type(selected_buildings)}")
             logger.info(f"   Buildings count: {len(selected_buildings) if selected_buildings else 0}")
 
             if not selected_buildings:
-                logger.info("❌ No buildings selected from polygon")
+                logger.info("No buildings selected from polygon")
                 return
 
-            # ✅ SOLID: Log received buildings for debugging
-            logger.info(f"✅ Received {len(selected_buildings)} buildings from polygon")
+            # SOLID: Log received buildings for debugging
+            logger.info(f"Received {len(selected_buildings)} buildings from polygon")
             for i, bldg in enumerate(selected_buildings[:3]):
                 logger.info(f"   Building {i+1}: ID={bldg.building_id}")
 
@@ -1229,9 +1229,9 @@ class FieldWorkPreparationStep1(QWidget):
             self._update_selection_count()
             self._update_selected_card_visibility()
 
-            # ✅ NO MESSAGE: Buildings are added directly to the list (silent operation)
+            # NO MESSAGE: Buildings are added directly to the list (silent operation)
             # User can see them in "العناصر المحفوظة" section
-            logger.info(f"✅ Added {added_count} buildings from polygon to selection (silent)")
+            logger.info(f"Added {added_count} buildings from polygon to selection (silent)")
 
         except Exception as e:
             logger.error(f"Error opening map selector: {e}", exc_info=True)

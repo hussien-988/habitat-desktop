@@ -68,7 +68,9 @@ class LeafletHTMLGenerator:
         tile_layer_url: str = None,  # Separate URL for map tiles (defaults to tile_server_url)
         boundaries_geojson: str = None,  # GeoJSON for administrative boundary polygons
         boundary_level: str = None,  # Level name: 'governorates'|'subdistricts'|etc.
-        places_json: str = None  # JSON array of populated places for map labels
+        places_json: str = None,  # JSON array of populated places for map labels
+        landmarks_json: str = None,  # JSON array of landmarks for map overlay
+        streets_json: str = None  # JSON array of streets for map overlay
     ) -> str:
         """
         Generate Leaflet HTML with unified geometry display.
@@ -147,7 +149,9 @@ class LeafletHTMLGenerator:
         tile_layer_url,
         boundaries_geojson,
         boundary_level,
-        places_json
+        places_json,
+        landmarks_json,
+        streets_json
     )}
 </body>
 </html>
@@ -528,6 +532,65 @@ class LeafletHTMLGenerator:
             min-width: 120px;
             font-family: 'Segoe UI', Tahoma, sans-serif;
         }}
+
+        /* Landmark Pin Marker */
+        .landmark-pin-icon {{
+            background: transparent !important;
+            border: none !important;
+        }}
+
+        /* Landmark Layer Styles */
+        .landmark-tooltip {{
+            background: rgba(255, 255, 255, 0.95) !important;
+            border: 1px solid #7C3AED !important;
+            border-radius: 6px !important;
+            padding: 3px 8px !important;
+            font-size: 11px !important;
+            font-weight: 600 !important;
+            color: #333 !important;
+            direction: rtl !important;
+            font-family: 'Segoe UI', Tahoma, sans-serif !important;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.15) !important;
+            white-space: nowrap !important;
+        }}
+        .landmark-popup {{
+            min-width: 160px;
+            direction: rtl;
+            text-align: right;
+            font-family: 'Segoe UI', Tahoma, sans-serif;
+        }}
+        .landmark-popup h4 {{
+            margin: 0 0 6px 0;
+            color: #7C3AED;
+            font-size: 13px;
+            font-weight: 600;
+        }}
+        .landmark-popup p {{
+            margin: 3px 0;
+            font-size: 11px;
+            color: #333;
+        }}
+        .landmark-popup .type-badge {{
+            display: inline-block;
+            padding: 1px 8px;
+            border-radius: 10px;
+            font-size: 10px;
+            color: white;
+            font-weight: 600;
+        }}
+
+        /* Street Layer Styles */
+        .street-tooltip {{
+            background: rgba(255, 255, 255, 0.95) !important;
+            border: 1px solid #3B82F6 !important;
+            border-radius: 4px !important;
+            padding: 2px 8px !important;
+            font-size: 11px !important;
+            color: #1E40AF !important;
+            direction: rtl !important;
+            font-family: 'Segoe UI', Tahoma, sans-serif !important;
+            white-space: nowrap !important;
+        }}
     </style>
 '''
 
@@ -555,7 +618,9 @@ class LeafletHTMLGenerator:
         tile_layer_url: str = None,
         boundaries_geojson: str = None,
         boundary_level: str = None,
-        places_json: str = None
+        places_json: str = None,
+        landmarks_json: str = None,
+        streets_json: str = None
     ) -> str:
         """Get JavaScript code for map initialization."""
         import json
@@ -596,7 +661,8 @@ class LeafletHTMLGenerator:
         try:
             buildings_dict = json.loads(buildings_geojson)
             buildings_json = json.dumps(buildings_dict)
-        except:
+        except Exception as e:
+            logger.warning(f"Failed to parse buildings GeoJSON: {e}")
             buildings_json = '{"type":"FeatureCollection","features":[]}'
 
         # Parse existing polygons if provided
@@ -604,7 +670,8 @@ class LeafletHTMLGenerator:
             try:
                 existing_polygons_dict = json.loads(existing_polygons_geojson)
                 existing_polygons_json = json.dumps(existing_polygons_dict)
-            except:
+            except Exception as e:
+                logger.warning(f"Failed to parse existing polygons GeoJSON: {e}")
                 existing_polygons_json = None
         else:
             existing_polygons_json = None
@@ -897,6 +964,12 @@ class LeafletHTMLGenerator:
         // Administrative boundary layer (polygons from Shapefiles)
         {LeafletHTMLGenerator._get_boundaries_layer_js(boundaries_geojson, boundary_level) if boundaries_geojson else '// No boundary layer'}
 
+        // Streets layer (line features — below landmarks)
+        {LeafletHTMLGenerator._get_streets_layer_js(streets_json) if streets_json else '// No streets layer'}
+
+        // Landmarks layer (point features — above streets)
+        {LeafletHTMLGenerator._get_landmarks_layer_js(landmarks_json) if landmarks_json else '// No landmarks layer'}
+
         // Populated places layer (city/town labels at low zoom)
         {LeafletHTMLGenerator._get_places_layer_js(places_json) if places_json else '// No places layer'}
 
@@ -1014,7 +1087,8 @@ class LeafletHTMLGenerator:
         try:
             neighborhoods_dict = json.loads(neighborhoods_geojson)
             neighborhoods_json = json.dumps(neighborhoods_dict)
-        except:
+        except Exception as e:
+            logger.warning(f"Failed to parse neighborhoods GeoJSON: {e}")
             return '// Invalid neighborhoods GeoJSON'
 
         selected_code = selected_neighborhood_code or ''
@@ -1110,7 +1184,8 @@ class LeafletHTMLGenerator:
         try:
             existing_polygons_dict = json.loads(existing_polygons_geojson)
             existing_polygons_json = json.dumps(existing_polygons_dict)
-        except:
+        except Exception as e:
+            logger.warning(f"Failed to parse existing polygons GeoJSON: {e}")
             existing_polygons_json = '{"type":"FeatureCollection","features":[]}'
 
         return f'''
@@ -1304,6 +1379,237 @@ class LeafletHTMLGenerator:
         updatePlacesVisibility();
 
         console.log('Places layer loaded: ' + (placesData ? placesData.length : 0) + ' places');
+'''
+
+    @staticmethod
+    def _get_landmarks_layer_js(landmarks_json: str) -> str:
+        """
+        Generate JavaScript for landmarks point layer.
+
+        Shows colored circle markers per landmark type with tooltips and popups.
+        Visible at zoom >= 14.
+        """
+        try:
+            landmarks_list = json.loads(landmarks_json)
+            landmarks_embedded = json.dumps(landmarks_list, ensure_ascii=False)
+        except Exception:
+            return '// Invalid landmarks JSON'
+
+        return f'''
+        // Landmarks layer — visible at zoom >= 14
+        var landmarksData = {landmarks_embedded};
+        var landmarksLayer = L.featureGroup();
+
+        var landmarkTypeColors = {{
+            'Police station': '#1E40AF', 'PoliceStation': '#1E40AF',
+            'Mosque': '#059669',
+            'Public building': '#7C3AED', 'PublicBuilding': '#7C3AED',
+            'Shop': '#D97706',
+            'School': '#DC2626',
+            'Clinic': '#DB2777',
+            'Water Tank': '#0891B2', 'WaterTank': '#0891B2',
+            'Fuel Station': '#EA580C', 'FuelStation': '#EA580C'
+        }};
+
+        var landmarkTypeLabelsAr = {{
+            'Police station': 'مركز شرطة', 'PoliceStation': 'مركز شرطة',
+            'Mosque': 'مسجد',
+            'Public building': 'مبنى عام', 'PublicBuilding': 'مبنى عام',
+            'Shop': 'محل تجاري',
+            'School': 'مدرسة',
+            'Clinic': 'عيادة',
+            'Water Tank': 'خزان مياه', 'WaterTank': 'خزان مياه',
+            'Fuel Station': 'محطة وقود', 'FuelStation': 'محطة وقود'
+        }};
+
+        function createLandmarkPin(color) {{
+            return L.divIcon({{
+                className: 'landmark-pin-icon',
+                html: '<div style="position:relative;width:28px;height:36px;">' +
+                    '<svg viewBox="0 0 28 36" width="28" height="36">' +
+                    '<path d="M14 0C6.3 0 0 6.3 0 14c0 10.5 14 22 14 22s14-11.5 14-22C28 6.3 21.7 0 14 0z" fill="' + color + '" stroke="#fff" stroke-width="2"/>' +
+                    '<circle cx="14" cy="13" r="5" fill="#fff"/>' +
+                    '</svg></div>',
+                iconSize: [28, 36],
+                iconAnchor: [14, 36],
+                popupAnchor: [0, -36],
+                tooltipAnchor: [0, -30]
+            }});
+        }}
+
+        function addLandmarkMarker(lm) {{
+            if (!lm.latitude || !lm.longitude) return;
+            var typeName = lm.typeName || '';
+            var color = landmarkTypeColors[typeName] || '#6B7280';
+            var typeAr = landmarkTypeLabelsAr[typeName] || typeName;
+
+            var icon = createLandmarkPin(color);
+            var marker = L.marker([lm.latitude, lm.longitude], {{ icon: icon }});
+
+            var label = lm.name || '';
+            if (label) {{
+                marker.bindTooltip(label, {{
+                    permanent: false,
+                    direction: 'top',
+                    className: 'landmark-tooltip',
+                    offset: [0, -30]
+                }});
+            }}
+
+            var popupHtml = '<div class="landmark-popup">' +
+                '<h4>' + (lm.name || '') + '</h4>' +
+                '<p><span class="type-badge" style="background:' + color + ';color:#fff;padding:2px 8px;border-radius:4px;font-size:11px;">' + typeAr + '</span></p>' +
+                '<p style="color:#666;font-size:10px;">ID: ' + (lm.identifier || '') + '</p>' +
+                '</div>';
+            marker.bindPopup(popupHtml);
+
+            marker.landmarkData = lm;
+            landmarksLayer.addLayer(marker);
+        }}
+
+        if (landmarksData && landmarksData.length > 0) {{
+            landmarksData.forEach(addLandmarkMarker);
+        }}
+
+        function updateLandmarksVisibility() {{
+            var zoom = map.getZoom();
+            if (zoom >= 13) {{
+                if (!map.hasLayer(landmarksLayer)) landmarksLayer.addTo(map);
+            }} else {{
+                if (map.hasLayer(landmarksLayer)) map.removeLayer(landmarksLayer);
+            }}
+        }}
+
+        map.on('zoomend', updateLandmarksVisibility);
+        updateLandmarksVisibility();
+
+        if (typeof overlayMaps !== 'undefined') {{
+            overlayMaps['معالم'] = landmarksLayer;
+        }}
+
+        function panToLandmark(landmarkId) {{
+            landmarksLayer.eachLayer(function(layer) {{
+                if (layer.landmarkData && layer.landmarkData.id === landmarkId) {{
+                    map.setView(layer.getLatLng(), 16);
+                    layer.openPopup();
+                }}
+            }});
+        }}
+        window.panToLandmark = panToLandmark;
+
+        function updateLandmarksOnMap(newData) {{
+            landmarksLayer.clearLayers();
+            if (!newData || !newData.length) return;
+            newData.forEach(addLandmarkMarker);
+            console.log('Landmarks updated: ' + newData.length);
+        }}
+        window.updateLandmarksOnMap = updateLandmarksOnMap;
+
+        console.log('Landmarks layer loaded: ' + (landmarksData ? landmarksData.length : 0) + ' landmarks');
+'''
+
+    @staticmethod
+    def _get_streets_layer_js(streets_json: str) -> str:
+        """
+        Generate JavaScript for streets line layer.
+
+        Parses WKT LINESTRING geometry and renders as polylines.
+        Visible at zoom >= 13.
+        """
+        try:
+            streets_list = json.loads(streets_json)
+            streets_embedded = json.dumps(streets_list, ensure_ascii=False)
+        except Exception:
+            return '// Invalid streets JSON'
+
+        return f'''
+        // Streets layer — visible at zoom >= 13
+        var streetsData = {streets_embedded};
+        var streetsLayer = L.featureGroup();
+
+        function wktLineToLatLngs(wkt) {{
+            if (!wkt) return null;
+            var match = wkt.match(/LINESTRING\\s*\\((.+)\\)/i);
+            if (!match) return null;
+            var coords = match[1].split(',');
+            var latLngs = [];
+            for (var i = 0; i < coords.length; i++) {{
+                var parts = coords[i].trim().split(/\\s+/);
+                if (parts.length >= 2) {{
+                    latLngs.push([parseFloat(parts[1]), parseFloat(parts[0])]);
+                }}
+            }}
+            return latLngs.length >= 2 ? latLngs : null;
+        }}
+
+        if (streetsData && streetsData.length > 0) {{
+            streetsData.forEach(function(street) {{
+                var latLngs = wktLineToLatLngs(street.geometryWkt);
+                if (!latLngs) return;
+
+                var polyline = L.polyline(latLngs, {{
+                    color: '#3B82F6',
+                    weight: 3,
+                    opacity: 0.7
+                }});
+
+                var label = street.name || '';
+                if (label) {{
+                    polyline.bindTooltip(label, {{
+                        sticky: true,
+                        direction: 'auto',
+                        className: 'street-tooltip'
+                    }});
+                }}
+
+                polyline.on('mouseover', function() {{
+                    this.setStyle({{ weight: 5, opacity: 1.0 }});
+                }});
+                polyline.on('mouseout', function() {{
+                    this.setStyle({{ weight: 3, opacity: 0.7 }});
+                }});
+
+                streetsLayer.addLayer(polyline);
+            }});
+        }}
+
+        function updateStreetsVisibility() {{
+            var zoom = map.getZoom();
+            if (zoom >= 13) {{
+                if (!map.hasLayer(streetsLayer)) streetsLayer.addTo(map);
+            }} else {{
+                if (map.hasLayer(streetsLayer)) map.removeLayer(streetsLayer);
+            }}
+        }}
+
+        map.on('zoomend', updateStreetsVisibility);
+        updateStreetsVisibility();
+
+        if (typeof overlayMaps !== 'undefined') {{
+            overlayMaps['شوارع'] = streetsLayer;
+        }}
+
+        // Dynamic update from Python viewport change
+        function updateStreetsOnMap(newData) {{
+            streetsLayer.clearLayers();
+            if (!newData || !newData.length) return;
+            newData.forEach(function(street) {{
+                var latLngs = wktLineToLatLngs(street.geometryWkt);
+                if (!latLngs) return;
+                var polyline = L.polyline(latLngs, {{ color: '#3B82F6', weight: 3, opacity: 0.7 }});
+                var label = street.name || '';
+                if (label) {{
+                    polyline.bindTooltip(label, {{ sticky: true, direction: 'auto', className: 'street-tooltip' }});
+                }}
+                polyline.on('mouseover', function() {{ this.setStyle({{ weight: 5, opacity: 1.0 }}); }});
+                polyline.on('mouseout', function() {{ this.setStyle({{ weight: 3, opacity: 0.7 }}); }});
+                streetsLayer.addLayer(polyline);
+            }});
+            console.log('Streets updated: ' + newData.length);
+        }}
+        window.updateStreetsOnMap = updateStreetsOnMap;
+
+        console.log('Streets layer loaded: ' + (streetsData ? streetsData.length : 0) + ' streets');
 '''
 
     @staticmethod

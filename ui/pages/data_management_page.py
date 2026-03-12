@@ -53,6 +53,7 @@ class DataManagementPage(QWidget):
         self._vocab_terms_widgets = {}
         self._accordion_contents = {}
         self._accordion_arrows = {}
+        self._user_role = None
         self._setup_ui()
 
     def _setup_ui(self):
@@ -374,8 +375,13 @@ class DataManagementPage(QWidget):
 
         return chip
 
+    def configure_for_role(self, role: str):
+        self._user_role = role
+
     def _on_delete_term(self, code: int, vocab_name: str):
         """Delete a vocabulary term after confirmation."""
+        if self._user_role and self._user_role not in ("admin", "data_manager"):
+            return
         from ui.components.dialogs.confirmation_dialog import ConfirmationDialog, DialogResult
         result = ConfirmationDialog.confirm(
             parent=self,

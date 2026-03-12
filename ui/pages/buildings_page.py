@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-Buildings page with modern UI design - QStackedWidget implementation.
+    Buildings page with modern UI design - QStackedWidget implementation.
 """
 
 import json
@@ -13,7 +13,7 @@ from PyQt5.QtWidgets import (
     QDialog, QDoubleSpinBox, QSpinBox, QScrollArea,
     QMenu, QAction, QTabWidget, QStackedWidget, QStyleOptionHeader, QStyle,
     QStylePainter, QStyleOptionComboBox
-)
+    )
 from PyQt5.QtCore import Qt, pyqtSignal, QPoint, QRect, QSize, QLocale
 from PyQt5.QtGui import QColor, QCursor, QPainter, QFont, QIcon, QPixmap
 
@@ -30,7 +30,7 @@ from services.vocab_service import get_options as vocab_get_options, get_label a
 from services.display_mappings import (
     get_building_type_display, get_building_status_display,
     get_building_type_options, get_building_status_options
-)
+    )
 from services.divisions_service import DivisionsService
 from services.api_client import get_api_client
 from models.building import Building
@@ -113,7 +113,7 @@ class AddBuildingPage(QWidget):
 
     def _setup_ui(self):
         """Setup the add/edit building UI with 3 cards."""
-        # ✅ FIX: Wrap content in scroll area to show all cards including radio buttons
+        # FIX: Wrap content in scroll area to show all cards including radio buttons
         main_layout = QVBoxLayout(self)
         main_layout.setContentsMargins(0, 0, 0, 0)
         main_layout.setSpacing(0)
@@ -962,7 +962,7 @@ class AddBuildingPage(QWidget):
         layout.addWidget(card3)
         layout.addStretch()
 
-        # ✅ FIX: Set container in scroll area and add to main layout
+        # FIX: Set container in scroll area and add to main layout
         scroll.setWidget(container)
         main_layout.addWidget(scroll)
 
@@ -1490,13 +1490,13 @@ class AddBuildingPage(QWidget):
 
                     # Show success message
                     self.location_status_label.setText(
-                        f"✓ تم رسم المضلع (مركزه: {centroid_lat:.6f}, {centroid_lon:.6f})"
+                    f" تم رسم المضلع (مركزه: {centroid_lat:.6f}, {centroid_lon:.6f})"
                     )
                     self.location_status_label.setStyleSheet(
                         f"color: {Config.SUCCESS_COLOR}; font-size: 10pt;"
                     )
                     self.geometry_type_label.setText("🔷 مضلع")
-                    logger.info(f"✅ Polygon drawn and saved: {polygon_wkt[:100]}...")
+                    logger.info(f"Polygon drawn and saved: {polygon_wkt[:100]}...")
 
                 # Handle Point geometry (only if NOT polygon)
                 elif result and 'latitude' in result and 'longitude' in result:

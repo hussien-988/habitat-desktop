@@ -1,17 +1,17 @@
-# -*- coding: utf-8 -*-
+    # -*- coding: utf-8 -*-
 """
-Viewport Bridge - للتواصل بين JavaScript و Python
-====================================================
+    Viewport Bridge - للتواصل بين JavaScript و Python
+    ====================================================
 
-يتيح للخريطة إرسال معلومات الـ viewport إلى Python عند:
-- Pan (تحريك الخريطة)
-- Zoom (تكبير/تصغير)
-- Initial load (التحميل الأولي)
+    يتيح للخريطة إرسال معلومات الـ viewport إلى Python عند:
+    - Pan (تحريك الخريطة)
+    - Zoom (تكبير/تصغير)
+    - Initial load (التحميل الأولي)
 
-Professional Best Practice:
-- QWebChannel for JavaScript ↔ Python communication
-- Debounced events to prevent excessive API calls
-- Thread-safe signal/slot mechanism
+    Professional Best Practice:
+    - QWebChannel for JavaScript Python communication
+    - Debounced events to prevent excessive API calls
+    - Thread-safe signal/slot mechanism
 """
 
 from PyQt5.QtCore import QObject, pyqtSignal, pyqtSlot, QTimer
@@ -73,7 +73,7 @@ class ViewportBridge(QObject):
             'ignored_events': 0     # الأحداث المتجاهلة (نفس الـ viewport)
         }
 
-        logger.info(f"✅ ViewportBridge initialized (debounce={debounce_ms}ms)")
+        logger.info(f"ViewportBridge initialized (debounce={debounce_ms}ms)")
 
     @pyqtSlot(float, float, float, float, int, float, float)
     def onViewportChanged(
@@ -119,7 +119,7 @@ class ViewportBridge(QObject):
         # تحقق: هل تغير الـ viewport فعلاً؟
         if self._is_same_viewport(viewport_data, self._last_viewport):
             self._stats['ignored_events'] += 1
-            logger.debug(f"⏭️ Viewport unchanged, ignoring (event #{self._stats['total_events']})")
+            logger.debug(f"Viewport unchanged, ignoring (event #{self._stats['total_events']})")
             return
 
         # حفظ البيانات المعلقة
@@ -136,7 +136,7 @@ class ViewportBridge(QObject):
         self._debounce_timer.start(self.debounce_ms)
 
         logger.debug(
-            f"⏱️ Viewport change pending (zoom={zoom}, "
+        f" Viewport change pending (zoom={zoom}, "
             f"bbox=[{sw_lat:.3f},{sw_lng:.3f} - {ne_lat:.3f},{ne_lng:.3f}])"
         )
 
@@ -147,7 +147,7 @@ class ViewportBridge(QObject):
             self._last_viewport = self._pending_viewport.copy()
 
             logger.info(
-                f"🗺️ Viewport changed (#{self._stats['debounced_events']}): "
+            f" Viewport changed (#{self._stats['debounced_events']}): "
                 f"zoom={self._pending_viewport['zoom']}, "
                 f"bbox=[{self._pending_viewport['sw_lat']:.4f},{self._pending_viewport['sw_lng']:.4f} - "
                 f"{self._pending_viewport['ne_lat']:.4f},{self._pending_viewport['ne_lng']:.4f}]"
@@ -214,7 +214,7 @@ class ViewportBridge(QObject):
             'debounced_events': 0,
             'ignored_events': 0
         }
-        logger.debug("📊 ViewportBridge stats reset")
+        logger.debug("ViewportBridge stats reset")
 
     @pyqtSlot()
     def requestInitialLoad(self):
@@ -223,7 +223,7 @@ class ViewportBridge(QObject):
 
         يُستدعى من JavaScript عند تحميل الخريطة لأول مرة.
         """
-        logger.info("🔄 Initial viewport load requested")
+        logger.info("Initial viewport load requested")
         # يمكن معالجة هذا بشكل خاص (مثل تحميل أكبر في البداية)
         # حالياً: ننتظر أول viewport change event
 
@@ -234,7 +234,7 @@ class ViewportBridge(QObject):
 
         stats = self.get_stats()
         logger.info(
-            f"🏁 ViewportBridge destroyed - Stats: "
+        f" ViewportBridge destroyed - Stats: "
             f"{stats['debounced_events']}/{stats['total_events']} events "
             f"({stats['reduction']}% reduction)"
         )

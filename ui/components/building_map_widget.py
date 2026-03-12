@@ -1,11 +1,11 @@
 # -*- coding: utf-8 -*-
 """
-Building Map Widget - Shared Component for Map Services.
+    Building Map Widget - Shared Component for Map Services.
 
-Reusable component that provides interactive building selection map.
-Follows DRY and SOLID principles - single source of truth for map functionality.
+    Reusable component that provides interactive building selection map.
+    Follows DRY and SOLID principles - single source of truth for map functionality.
 
-Usage:
+    Usage:
     widget = BuildingMapWidget(db)
     widget.building_selected.connect(on_building_selected)
     widget.show_dialog()
@@ -15,7 +15,7 @@ from typing import Optional, Callable
 from PyQt5.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QFrame, QLineEdit, QWidget
-)
+    )
 from PyQt5.QtCore import Qt, QObject, pyqtSignal, pyqtSlot, QUrl
 from PyQt5.QtGui import QPixmap, QPainter, QColor, QPainterPath, QRegion
 
@@ -144,9 +144,9 @@ class BuildingMapWidget(QObject):
         if self.api_settings.DATA_PROVIDER == "http":
             try:
                 self.map_service_api = MapServiceAPI()
-                logger.info("✅ BuildingMapWidget initialized in API mode")
+                logger.info("BuildingMapWidget initialized in API mode")
             except Exception as e:
-                logger.error(f"❌ Failed to initialize MapServiceAPI: {e}")
+                logger.error(f"Failed to initialize MapServiceAPI: {e}")
                 logger.warning("Falling back to local database mode")
         else:
             logger.info("BuildingMapWidget initialized in local database mode")
@@ -600,7 +600,7 @@ class BuildingMapWidget(QObject):
             logger.warning("Map view not available for search")
             return
 
-        logger.info(f"🔍 SEARCH TRIGGERED: '{search_text}'")
+        logger.info(f"SEARCH TRIGGERED: '{search_text}'")
 
         # Search in buildings for matching neighborhood
         try:
@@ -642,15 +642,15 @@ class BuildingMapWidget(QObject):
                     safe_zoom = min(self.MAX_SAFE_ZOOM, 16)  # Never exceed 16 for local tiles
 
                     js_code = f"""
-                    console.log('🔍 SEARCH: Flying to [{center_lat}, {center_lon}] with {len(matching_buildings)} buildings');
+                    console.log(' SEARCH: Flying to [{center_lat}, {center_lon}] with {len(matching_buildings)} buildings');
                     if (typeof map !== 'undefined') {{
                         map.flyTo([{center_lat}, {center_lon}], {safe_zoom}, {{
                             duration: 2.0,
                             easeLinearity: 0.25
                         }});
-                        console.log('✅ Map flyTo executed successfully (zoom: {safe_zoom})');
+                    console.log(' Map flyTo executed successfully (zoom: {safe_zoom})');
                     }} else {{
-                        console.error('❌ Map object not found!');
+                    console.error(' Map object not found!');
                     }}
                     """
 
@@ -659,7 +659,7 @@ class BuildingMapWidget(QObject):
 
                     self._map_view.page().runJavaScript(js_code, log_js_result)
 
-                    logger.info(f"✅ Search successful: {len(matching_buildings)} buildings in '{search_text}'")
+                    logger.info(f"Search successful: {len(matching_buildings)} buildings in '{search_text}'")
 
                     # Visual feedback: briefly change search bar color
                     self.search_input.setStyleSheet(f"""
@@ -676,12 +676,12 @@ class BuildingMapWidget(QObject):
                         }}
                     """)
                 else:
-                    logger.warning(f"⚠️ Buildings found but no coordinates available")
+                    logger.warning(f"Buildings found but no coordinates available")
             else:
-                logger.warning(f"❌ No buildings found for neighborhood: '{search_text}'")
+                logger.warning(f"No buildings found for neighborhood: '{search_text}'")
 
         except Exception as e:
-            logger.error(f"❌ Error searching for neighborhood: {e}", exc_info=True)
+            logger.error(f"Error searching for neighborhood: {e}", exc_info=True)
 
     def _setup_webchannel(self):
         """Setup WebChannel for JavaScript-Python communication."""
@@ -776,14 +776,6 @@ class BuildingMapWidget(QObject):
         # Use API or local database based on configuration
         if self.api_settings.DATA_PROVIDER == "http" and self.map_service_api:
             # Fetch buildings from Backend API using Aleppo bounds
-            print("\n" + "="*60)
-            print("[DEBUG] Fetching buildings from Backend API")
-            print(f"[DEBUG] API Mode: {self.api_settings.DATA_PROVIDER == "http"}")
-            print(f"[DEBUG] Base URL: {self.api_settings.API_BASE_URL}")
-            print(f"[DEBUG] Request: POST /api/v1/Buildings/map")
-            print(f"[DEBUG] BBox: NE(36.5, 37.5) - SW(36.0, 36.8)")
-            print("="*60)
-
             logger.info("Fetching buildings from Backend API...")
             buildings = self.map_service_api.get_buildings_in_bbox(
                 north_east_lat=36.5,
@@ -792,22 +784,9 @@ class BuildingMapWidget(QObject):
                 south_west_lng=36.8
             )
 
-            print(f"\n[DEBUG] Response received:")
-            print(f"[DEBUG] Total buildings: {len(buildings)}")
-            if buildings:
-                print(f"[DEBUG] Sample building:")
-                b = buildings[0]
-                # ✅ FIX: Use correct attribute names (snake_case)
-                print(f"  - ID: {b.building_id}")
-                print(f"  - UUID: {b.building_uuid}")
-                print(f"  - Location: ({b.latitude}, {b.longitude})")
-                print(f"  - Has Polygon: {bool(getattr(b, 'geo_location', None))}")
-            print("="*60 + "\n")
-
-            logger.info(f"✅ Fetched {len(buildings)} buildings from API")
+            logger.info(f"Fetched {len(buildings)} buildings from API")
         else:
             # Fetch from local database
-            print("\n[DEBUG] Fetching buildings from LOCAL DATABASE")
             logger.info("Fetching buildings from local database...")
             buildings = self.building_repo.get_all(limit=200)
 
@@ -904,7 +883,7 @@ class BuildingMapWidget(QObject):
                 3. Open popup after centering completes
                 """
                 js = f"""
-                console.log('🎯 Centering building {self._focus_building_id} at [{self._focus_lat}, {self._focus_lon}]');
+                console.log(' Centering building {self._focus_building_id} at [{self._focus_lat}, {self._focus_lon}]');
 
                 if (typeof map !== 'undefined') {{
                     // Step 1: Force center the map on building (instant, no animation for precision)
@@ -915,13 +894,13 @@ class BuildingMapWidget(QObject):
                         easeLinearity: 0.25
                     }});
 
-                    console.log('✅ Map centered on building coordinates');
+                    console.log(' Map centered on building coordinates');
 
                     // Step 2: Find and enhance the building marker/polygon
                     if (typeof buildingsLayer !== 'undefined') {{
                         buildingsLayer.eachLayer(function(layer) {{
                             if (layer.feature && layer.feature.properties.building_id === '{self._focus_building_id}') {{
-                                console.log('✅ Found building layer');
+                            console.log(' Found building layer');
 
                                 // In view-only mode, enhance marker for better visibility
                                 if ({str(self._is_view_only).lower()}) {{
@@ -949,7 +928,7 @@ class BuildingMapWidget(QObject):
                                             popupAnchor: [0, -54]
                                         }});
                                         layer.setIcon(largeIcon);
-                                        console.log('✅ Enhanced point marker (1.5x size)');
+                                    console.log(' Enhanced point marker (1.5x size)');
                                     }} else if (layer.setStyle) {{
                                         // For polygon markers - enhance style
                                         layer.setStyle({{
@@ -957,14 +936,14 @@ class BuildingMapWidget(QObject):
                                             fillOpacity: 0.8,
                                             color: '#0072BC'
                                         }});
-                                        console.log('✅ Enhanced polygon style');
+                                    console.log(' Enhanced polygon style');
                                     }}
                                 }}
 
                                 // Step 3: Open popup after centering animation completes
                                 setTimeout(function() {{
                                     layer.openPopup();
-                                    console.log('✅ Popup opened for building {self._focus_building_id}');
+                                    console.log(' Popup opened for building {self._focus_building_id}');
 
                                     // Ensure popup is visible by panning if needed
                                     map.panTo([{self._focus_lat}, {self._focus_lon}], {{
@@ -974,10 +953,10 @@ class BuildingMapWidget(QObject):
                             }}
                         }});
                     }} else {{
-                        console.warn('⚠️ buildingsLayer not found');
+                    console.warn(' buildingsLayer not found');
                     }}
                 }} else {{
-                    console.error('❌ Map object not found!');
+                console.error(' Map object not found!');
                 }}
                 """
                 self._map_view.page().runJavaScript(js)

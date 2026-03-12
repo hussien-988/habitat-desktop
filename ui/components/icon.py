@@ -154,7 +154,7 @@ class Icon(QLabel):
                 }}
             """)
         else:
-            print(f"Warning: Icon '{self.icon_name}' not found and no fallback provided")
+            pass
 
     def _find_icon_path(self) -> Optional[str]:
         """

@@ -1,11 +1,11 @@
 # -*- coding: utf-8 -*-
 """
-Map Constants - ثوابت موحدة لجميع الخرائط في التطبيق
+    Map Constants - ثوابت موحدة لجميع الخرائط في التطبيق
 
-DRY Principle: مصدر واحد للحقيقة (Single Source of Truth)
-SOLID Principle: فصل الثوابت عن المنطق
+    DRY Principle: مصدر واحد للحقيقة (Single Source of Truth)
+    SOLID Principle: فصل الثوابت عن المنطق
 
-Usage:
+    Usage:
     from ui.constants.map_constants import MapConstants
     dialog.setFixedSize(MapConstants.DIALOG_WIDTH, MapConstants.DIALOG_HEIGHT)
 """
@@ -94,13 +94,13 @@ class MapConstants:
     MAP_ZOOM_ANIMATION_THRESHOLD = 4  # Max zoom diff for animation (avoids long animations)
 
     # ===== Performance Limits =====
-    MAX_MARKERS_PER_VIEWPORT = 2000  # ✅ محسّن: زيادة من 1000 إلى 2000 للأداء الأفضل
+    MAX_MARKERS_PER_VIEWPORT = 2000
 
     # ===== Clustering Configuration =====
-    CLUSTER_MAX_RADIUS = 60  # ✅ محسّن: تقليل من 80 إلى 60 (أقل تداخل)
-    DISABLE_CLUSTERING_AT_ZOOM = 15  # ✅ محسّن: تغيير من 17 إلى 15 (تفاصيل أبكر)
-    CHUNK_INTERVAL = 100  # ✅ جديد: Chunk loading interval (ms)
-    CHUNK_DELAY = 25  # ✅ جديد: Delay between chunks (ms)
+    CLUSTER_MAX_RADIUS = 60
+    DISABLE_CLUSTERING_AT_ZOOM = 15
+    CHUNK_INTERVAL = 100  # Chunk loading interval (ms)
+    CHUNK_DELAY = 25  # Delay between chunks (ms)
 
     # ===== Overlay =====
     OVERLAY_COLOR = 'rgba(45, 45, 45, 0.6)'  # رمادي شفاف

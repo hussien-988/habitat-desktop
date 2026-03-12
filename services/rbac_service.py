@@ -591,13 +591,13 @@ class RBACService:
             if data.get("old_value"):
                 try:
                     data["old_value"] = json.loads(data["old_value"])
-                except:
-                    pass
+                except Exception as e:
+                    logger.warning(f"Failed to parse JSON for old_value: {e}")
             if data.get("new_value"):
                 try:
                     data["new_value"] = json.loads(data["new_value"])
-                except:
-                    pass
+                except Exception as e:
+                    logger.warning(f"Failed to parse JSON for new_value: {e}")
             logs.append(data)
         return logs
 

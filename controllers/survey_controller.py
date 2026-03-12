@@ -233,7 +233,11 @@ class SurveyController:
                 []
             )
 
+        claim_id = (detail.get("claimId") or
+                    (claim_dto.get("id") or claim_dto.get("claimId") if claim_dto else None))
+
         return {
+            "claim_id": claim_id,
             "claim_type": claim_type,
             "priority": priority,
             "source": source,  # integer → vocab resolves (e.g. 2 → "تقديم مكتبي")

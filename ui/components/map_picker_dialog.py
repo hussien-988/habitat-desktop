@@ -1,10 +1,10 @@
 # -*- coding: utf-8 -*-
 """
-Map Picker Dialog - UC-000 S04 Implementation.
+    Map Picker Dialog - UC-000 S04 Implementation.
 
-Allows users to pick a location or draw a polygon on an interactive map.
-Uses Leaflet.js via QWebEngineView for the map interface.
-Works OFFLINE using local tiles and libraries.
+    Allows users to pick a location or draw a polygon on an interactive map.
+    Uses Leaflet.js via QWebEngineView for the map interface.
+    Works OFFLINE using local tiles and libraries.
 """
 
 from typing import Dict, Optional
@@ -13,7 +13,7 @@ from PyQt5.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QFrame, QLineEdit, QGroupBox, QRadioButton,
     QButtonGroup
-)
+    )
 from ui.error_handler import ErrorHandler
 from PyQt5.QtCore import QObject, pyqtSignal, pyqtSlot, QUrl
 from PyQt5.QtWebEngineWidgets import QWebEngineView, QWebEngineSettings, QWebEnginePage, QWebEngineProfile
@@ -76,7 +76,7 @@ class MapBridge(QObject):
     @pyqtSlot(str)
     def set_polygon(self, wkt: str):
         """Called from JavaScript when a polygon is drawn."""
-        logger.info(f"✅ Polygon received from JavaScript: {wkt[:100]}...")
+        logger.info(f"Polygon received from JavaScript: {wkt[:100]}...")
         self._polygon_wkt = wkt
         # Extract centroid for lat/lon
         try:
@@ -91,12 +91,12 @@ class MapBridge(QObject):
                 lats.append(float(parts[1]))
             self._latitude = sum(lats) / len(lats)
             self._longitude = sum(lons) / len(lons)
-            logger.info(f"✅ Centroid calculated: lat={self._latitude}, lon={self._longitude}")
+            logger.info(f"Centroid calculated: lat={self._latitude}, lon={self._longitude}")
         except Exception as e:
-            logger.error(f"❌ Could not extract centroid: {e}")
+            logger.error(f"Could not extract centroid: {e}")
 
         self.polygon_selected.emit(wkt)
-        logger.info(f"✅ Polygon signal emitted")
+        logger.info(f"Polygon signal emitted")
 
     @pyqtSlot(str)
     def geometryDrawn(self, geojson_str: str):
@@ -105,7 +105,7 @@ class MapBridge(QObject):
         Converts GeoJSON to WKT and processes it.
         """
         import json
-        logger.info(f"✅ Geometry drawn from Leaflet.draw: {geojson_str[:100]}...")
+        logger.info(f"Geometry drawn from Leaflet.draw: {geojson_str[:100]}...")
 
         try:
             geom = json.loads(geojson_str)
@@ -129,7 +129,7 @@ class MapBridge(QObject):
                 logger.warning(f"Unsupported geometry type: {geom_type}")
 
         except Exception as e:
-            logger.error(f"❌ Failed to parse drawn geometry: {e}")
+            logger.error(f"Failed to parse drawn geometry: {e}")
 
     # Alias for compatibility
     shapeDrawn = geometryDrawn

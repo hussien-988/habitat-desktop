@@ -364,8 +364,8 @@ class MainWindow(QMainWindow):
         self.navbar.tab_changed.connect(self._on_tab_changed)
         self.navbar.search_requested.connect(self._on_search_requested)
         self.navbar.filter_applied.connect(self._on_filter_applied)
-        self.navbar.logout_requested.connect(self._handle_logout)  # ✅ Connect logout
-        self.navbar.language_change_requested.connect(self.toggle_language)  # ✅ Connect language toggle
+        self.navbar.logout_requested.connect(self._handle_logout)
+        self.navbar.language_change_requested.connect(self.toggle_language)
         self.navbar.sync_requested.connect(self._on_sync_requested)
         self.navbar.password_change_requested.connect(self._on_password_change_requested)
         self.navbar.security_settings_requested.connect(self._on_security_settings_requested)
@@ -415,7 +415,7 @@ class MainWindow(QMainWindow):
 
         # UC-006: Edit claim from CaseDetailsPage
         self.pages[Pages.CASE_DETAILS].edit_requested.connect(
-            lambda cid: self.navigate_to(Pages.CLAIM_EDIT, {"claim_id": cid})
+            self._on_edit_claim_requested
         )
 
         # Claim Edit (UC-006) - back to case details / save completed
@@ -1043,6 +1043,16 @@ class MainWindow(QMainWindow):
     def _on_case_details_back(self):
         """Navigate back to the Cases page from CaseDetailsPage."""
         self.navigate_to(Pages.CASES)
+
+    def _on_edit_claim_requested(self, claim_id: str):
+        """Navigate to ClaimEditPage, passing claim_id + survey_id from current context."""
+        case_page = self.pages.get(Pages.CASE_DETAILS)
+        data = {"claim_id": claim_id}
+        if case_page and case_page._context:
+            survey_id = case_page._context.get_data("survey_id")
+            if survey_id:
+                data["survey_id"] = survey_id
+        self.navigate_to(Pages.CLAIM_EDIT, data)
 
     def _on_completed_claim_selected(self, claim_id: str):
         """Navigate to case details for a completed claim."""

@@ -4,13 +4,13 @@ Building Controller
 ===================
 Controller for building management operations.
 
-Handles:
-- Building CRUD operations
-- Building search and filtering
-- Building validation
-- Building statistics
+    Handles:
+    - Building CRUD operations
+    - Building search and filtering
+    - Building validation
+    - Building statistics
 
-Uses API backend for all data operations.
+    Uses API backend for all data operations.
 """
 
 from dataclasses import dataclass
@@ -597,7 +597,7 @@ class BuildingController(BaseController):
                 building = self._api_dto_to_building(item)
                 buildings.append(building)
 
-            logger.info(f"✅ Found {len(buildings)} buildings via API (total: {response.get('totalCount', 0)})")
+            logger.info(f"Found {len(buildings)} buildings via API (total: {response.get('totalCount', 0)})")
             self._emit_completed("search_for_assignment", True)
 
             return OperationResult.ok(data=buildings)
@@ -618,7 +618,7 @@ class BuildingController(BaseController):
         page_size: int = 100
     ) -> OperationResult[List[Building]]:
         """
-        ✅ البحث عن مباني للتعيين باستخدام الفلاتر فقط (بدون polygon).
+        البحث عن مباني للتعيين باستخدام الفلاتر فقط (بدون polygon).
 
         أفضل ممارسة: يقلل الحمل على قاعدة البيانات المحلية بالبحث مباشرة في Backend.
         مثالي لـ Step 1 حيث يستخدم المستخدم الفلاتر بدون رسم polygon.
@@ -660,7 +660,7 @@ class BuildingController(BaseController):
                 building = self._api_dto_to_building(item)
                 buildings.append(building)
 
-            logger.info(f"✅ Found {len(buildings)} buildings via filter API (total: {response.get('totalCount', 0)})")
+            logger.info(f"Found {len(buildings)} buildings via filter API (total: {response.get('totalCount', 0)})")
             self._emit_completed("search_for_assignment_by_filters", True)
 
             return OperationResult.ok(

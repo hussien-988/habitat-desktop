@@ -4,13 +4,13 @@ Map Controller
 ==============
 Controller for map and GIS operations.
 
-Handles:
-- Map layer management
-- Spatial queries
-- Geometry operations
-- GPS integration
-- GeoJSON export/import
-- Coordinate validation
+    Handles:
+    - Map layer management
+    - Spatial queries
+    - Geometry operations
+    - GPS integration
+    - GeoJSON export/import
+    - Coordinate validation
 """
 
 from dataclasses import dataclass
@@ -92,9 +92,9 @@ class MapController(BaseController):
         if Config.DATA_PROVIDER == "http":  # API mode
             try:
                 self.map_service = MapServiceAPI()
-                logger.info("✅ MapController initialized in API mode")
+                logger.info("MapController initialized in API mode")
             except Exception as e:
-                logger.error(f"❌ Failed to initialize MapServiceAPI: {e}")
+                logger.error(f"Failed to initialize MapServiceAPI: {e}")
                 logger.warning("Falling back to local database mode")
                 self.map_service = MapService(db)
         else:
@@ -321,7 +321,7 @@ class MapController(BaseController):
 
         Args:
             bbox: Optional bounding box (min_lat, min_lng, max_lat, max_lng)
-            page_size: Maximum buildings to load (default: 2000) ✅ محسّن للأداء
+            page_size: Maximum buildings to load (default: 2000) محسّن للأداء
             zoom_level: Optional zoom level for optimization
 
         Returns:
@@ -344,7 +344,7 @@ class MapController(BaseController):
             zoom = zoom_level if zoom_level is not None else self._state.zoom
 
             # Query buildings with optimized parameters
-            # ✅ استخدام MapServiceAPI إذا كان مُفعّل (يدعم page_size)
+            # استخدام MapServiceAPI إذا كان مُفعّل (يدعم page_size)
             if isinstance(self.map_service, MapServiceAPI):
                 # Use API optimized method with page_size
                 buildings = self.map_service.get_buildings_in_bbox_optimized(
@@ -372,11 +372,11 @@ class MapController(BaseController):
             self._emit_completed("get_buildings_in_view", True)
             self.buildings_in_view.emit(buildings_geodata)
 
-            logger.info(f"✅ Loaded {len(buildings_geodata)} buildings (page_size={page_size}, zoom={zoom})")
+            logger.info(f"Loaded {len(buildings_geodata)} buildings (page_size={page_size}, zoom={zoom})")
             return OperationResult.ok(data=buildings_geodata)
 
         except Exception as e:
-            logger.error(f"❌ Error getting buildings in view: {e}")
+            logger.error(f"Error getting buildings in view: {e}")
             self._emit_error("get_buildings_in_view", str(e))
             return OperationResult.fail(message=str(e))
 

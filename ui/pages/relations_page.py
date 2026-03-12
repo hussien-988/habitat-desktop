@@ -825,6 +825,7 @@ class RelationsPage(QWidget):
         self._persons_cache = {}
         self._units_cache = {}
         self._selected_relation = None  # Currently selected relation for evidence
+        self._user_role = None
 
         self._setup_ui()
 
@@ -1131,8 +1132,13 @@ class RelationsPage(QWidget):
 
         menu.exec_(self.table.viewport().mapToGlobal(pos))
 
+    def configure_for_role(self, role: str):
+        self._user_role = role
+
     def _delete_relation(self, index):
         """Delete a relation."""
+        if self._user_role and self._user_role not in ("admin", "data_manager"):
+            return
         relation = self.table_model.get_relation(index.row())
         if not relation:
             return
@@ -1393,6 +1399,8 @@ class RelationsPage(QWidget):
 
     def _delete_evidence(self, index):
         """Delete an evidence record."""
+        if self._user_role and self._user_role not in ("admin", "data_manager"):
+            return
         evidence = self.evidence_model.get_evidence(index.row())
         if not evidence:
             return

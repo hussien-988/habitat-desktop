@@ -63,6 +63,7 @@ class ClaimEditPage(QWidget):
         self._survey_id = None
         self._evidences = []
         self._evidence_access_denied = False
+        self._user_role = None
 
         # Original values for change detection
         self._original_person = {}
@@ -137,27 +138,10 @@ class ClaimEditPage(QWidget):
 
         layout = QHBoxLayout(header)
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(16)
-
-        # Back button
-        back_btn = QPushButton("→ العودة")
-        back_btn.setCursor(Qt.PointingHandCursor)
-        back_btn.setStyleSheet(f"""
-            QPushButton {{
-                background: transparent;
-                color: {Colors.PRIMARY_BLUE};
-                border: none;
-                font-size: 13px;
-                font-weight: 600;
-            }}
-            QPushButton:hover {{ color: #2A7BC8; }}
-        """)
-        back_btn.clicked.connect(self.back_requested.emit)
-        layout.addWidget(back_btn)
+        layout.setSpacing(0)
 
         self._title_label = QLabel("تعديل المطالبة")
-        title_font = create_font(size=FontManager.SIZE_TITLE, weight=QFont.Bold)
-        self._title_label.setFont(title_font)
+        self._title_label.setFont(create_font(size=FontManager.SIZE_TITLE, weight=QFont.Bold))
         self._title_label.setStyleSheet(f"color: {Colors.PAGE_TITLE}; border: none;")
         layout.addWidget(self._title_label)
 
@@ -358,7 +342,12 @@ class ClaimEditPage(QWidget):
         """Load claim data for editing. Called from navigate_to()."""
         if not data:
             return
-        claim_id = data if isinstance(data, str) else data.get("claim_id")
+        if isinstance(data, str):
+            claim_id = data
+            hint_survey_id = None
+        else:
+            claim_id = data.get("claim_id")
+            hint_survey_id = data.get("survey_id")
         if not claim_id:
             return
 
@@ -368,7 +357,7 @@ class ClaimEditPage(QWidget):
         try:
             from controllers.claim_controller import ClaimController
             ctrl = ClaimController()
-            result = ctrl.get_claim_full_detail(claim_id)
+            result = ctrl.get_claim_full_detail(claim_id, hint_survey_id=hint_survey_id)
 
             if not result.success:
                 Toast.show_toast(self, f"خطأ: {result.message}", Toast.ERROR)
@@ -383,6 +372,11 @@ class ClaimEditPage(QWidget):
             self._evidences = detail.get("evidences") or []
             self._evidence_access_denied = detail.get("evidence_access_denied", False)
 
+            logger.debug(f"claim keys: {list(self._claim_dto.keys())}")
+            logger.debug(f"person keys: {list(self._person_dto.keys())}")
+            logger.debug(f"unit keys: {list(self._unit_dto.keys())}")
+            logger.debug(f"survey_id={self._survey_id}, evidences={len(self._evidences)}")
+
             self._populate_fields()
             self._snapshot_originals()
 
@@ -394,29 +388,45 @@ class ClaimEditPage(QWidget):
         """Fill all form fields from loaded DTOs."""
         # Person (S04)
         p = self._person_dto
-        self._person_first_name.setText(p.get("firstNameArabic") or "")
-        self._person_father_name.setText(p.get("fatherNameArabic") or "")
-        self._person_family_name.setText(p.get("familyNameArabic") or "")
-        self._person_mother_name.setText(p.get("motherNameArabic") or "")
-        self._person_national_id.setText(p.get("nationalId") or "")
-        self._set_combo_value(self._person_gender, p.get("gender"))
-        self._person_dob.setText((p.get("dateOfBirth") or "")[:10])
+        self._person_first_name.setText(
+            p.get("firstNameArabic") or p.get("firstName") or p.get("first_name") or "")
+        self._person_father_name.setText(
+            p.get("fatherNameArabic") or p.get("fatherName") or p.get("father_name") or "")
+        self._person_family_name.setText(
+            p.get("familyNameArabic") or p.get("familyName") or p.get("family_name") or "")
+        self._person_mother_name.setText(
+            p.get("motherNameArabic") or p.get("motherName") or p.get("mother_name") or "")
+        self._person_national_id.setText(
+            p.get("nationalId") or p.get("national_id") or "")
+        self._set_combo_value(self._person_gender,
+                              p.get("gender") or p.get("genderId"))
+        dob = p.get("dateOfBirth") or p.get("date_of_birth") or ""
+        self._person_dob.setText(str(dob)[:10])
 
         # Unit (S05)
         u = self._unit_dto
-        self._unit_floor.setText(str(u.get("floorNumber") or ""))
-        self._set_combo_value(self._unit_type, u.get("unitType"))
-        self._set_combo_value(self._unit_status, u.get("status") or u.get("unitStatus"))
-        self._unit_area.setText(str(u.get("areaSquareMeters") or u.get("areaSqm") or ""))
-        self._unit_rooms.setText(str(u.get("numberOfRooms") or ""))
+        floor_val = u.get("floorNumber") or u.get("floor_number") or u.get("floor") or ""
+        self._unit_floor.setText(str(floor_val) if floor_val != "" else "")
+        self._set_combo_value(self._unit_type,
+                              u.get("unitType") or u.get("unit_type") or u.get("type"))
+        self._set_combo_value(self._unit_status,
+                              u.get("status") or u.get("unitStatus") or u.get("unit_status"))
+        area = u.get("areaSquareMeters") or u.get("areaSqm") or u.get("area") or ""
+        self._unit_area.setText(str(area) if area else "")
+        rooms = u.get("numberOfRooms") or u.get("number_of_rooms") or u.get("rooms") or ""
+        self._unit_rooms.setText(str(rooms) if rooms else "")
         self._unit_description.setText(u.get("description") or "")
 
         # Claim (S07)
         c = self._claim_dto
-        self._set_combo_value(self._claim_status_combo, c.get("status") or c.get("caseStatus"))
-        self._set_combo_value(self._claim_priority_combo, c.get("priority"))
-        self._processing_notes.setPlainText(c.get("processingNotes") or "")
-        self._public_remarks.setPlainText(c.get("publicRemarks") or "")
+        self._set_combo_value(self._claim_status_combo,
+                              c.get("status") or c.get("caseStatus") or c.get("case_status"))
+        self._set_combo_value(self._claim_priority_combo,
+                              c.get("priority") or c.get("priorityId"))
+        self._processing_notes.setPlainText(
+            c.get("processingNotes") or c.get("processing_notes") or "")
+        self._public_remarks.setPlainText(
+            c.get("publicRemarks") or c.get("public_remarks") or "")
 
         # Evidence list (S06)
         self._refresh_evidence_list()
@@ -424,13 +434,13 @@ class ClaimEditPage(QWidget):
     def _snapshot_originals(self):
         """Save current field values for change detection."""
         self._original_person = {
-            "firstNameArabic": self._person_first_name.text(),
-            "fatherNameArabic": self._person_father_name.text(),
-            "familyNameArabic": self._person_family_name.text(),
-            "motherNameArabic": self._person_mother_name.text(),
-            "nationalId": self._person_national_id.text(),
+            "first_name": self._person_first_name.text(),
+            "father_name": self._person_father_name.text(),
+            "last_name": self._person_family_name.text(),
+            "mother_name": self._person_mother_name.text(),
+            "national_id": self._person_national_id.text(),
             "gender": self._person_gender.currentData(),
-            "dateOfBirth": self._person_dob.text(),
+            "birth_date": self._person_dob.text(),
         }
         self._original_unit = {
             "floorNumber": self._unit_floor.text(),
@@ -549,6 +559,14 @@ class ClaimEditPage(QWidget):
             Toast.show_toast(self, "لا يوجد معرف المسح", Toast.WARNING)
             return
 
+        from PyQt5.QtWidgets import QInputDialog
+        ev_type, ok = QInputDialog.getItem(
+            self, "نوع المستند", "اختر نوع المستند:",
+            ["هوية (Identification)", "حيازة (Tenure)"], 0, False
+        )
+        if not ok:
+            return
+
         file_path, _ = QFileDialog.getOpenFileName(
             self, "اختر مستند", "",
             "Documents (*.pdf *.jpg *.jpeg *.png *.doc *.docx);;All Files (*)"
@@ -560,15 +578,22 @@ class ClaimEditPage(QWidget):
             from controllers.claim_controller import ClaimController
             ctrl = ClaimController()
 
-            # Default to tenure evidence linked to first relation
-            person_id = self._person_dto.get("id") or self._claim_dto.get("primaryClaimantId")
-            if person_id:
+            if "Tenure" in ev_type:
+                relation_id = self._get_tenure_relation_id()
+                if not relation_id:
+                    Toast.show_toast(self, "لا يوجد معرف الارتباط لمستند الحيازة", Toast.WARNING)
+                    return
+                result = ctrl.add_tenure_evidence(
+                    self._survey_id, relation_id, file_path,
+                    description=os.path.basename(file_path))
+            else:
+                person_id = self._person_dto.get("id") or self._claim_dto.get("primaryClaimantId")
+                if not person_id:
+                    Toast.show_toast(self, "لا يوجد شخص مرتبط", Toast.WARNING)
+                    return
                 result = ctrl.add_identification_evidence(
                     self._survey_id, person_id, file_path,
                     description=os.path.basename(file_path))
-            else:
-                Toast.show_toast(self, "لا يوجد شخص مرتبط", Toast.WARNING)
-                return
 
             if result.success:
                 Toast.show_toast(self, "تم إضافة المستند بنجاح", Toast.SUCCESS)
@@ -578,7 +603,21 @@ class ClaimEditPage(QWidget):
         except Exception as e:
             Toast.show_toast(self, f"خطأ: {e}", Toast.ERROR)
 
+    def _get_tenure_relation_id(self) -> str:
+        """Extract relation_id from loaded tenure evidences."""
+        for ev in self._evidences:
+            if "tenure" in str(ev.get("evidenceType", "")).lower():
+                rid = ev.get("relationId") or ev.get("relation_id")
+                if rid:
+                    return str(rid)
+        return ""
+
+    def configure_for_role(self, role: str):
+        self._user_role = role
+
     def _on_delete_evidence(self, evidence_id: str):
+        if self._user_role and self._user_role not in ("admin", "data_manager"):
+            return
         if self._evidence_access_denied:
             Toast.show_toast(self, "ليس لديك صلاحية حذف مستندات هذا المسح", Toast.WARNING)
             return
@@ -640,11 +679,16 @@ class ClaimEditPage(QWidget):
                     if not result.success:
                         errors.append(f"شخص: {result.message}")
 
-            # Save unit changes (S05)
+            # Save unit changes (S05) — include required buildingId for PUT
             if changes.get("unit"):
                 unit_id = self._claim_dto.get("propertyUnitId")
                 if unit_id:
-                    result = ctrl.update_property_unit(unit_id, changes["unit"])
+                    unit_payload = dict(changes["unit"])
+                    bld_id = (self._building_dto.get("id")
+                              or self._building_dto.get("buildingId"))
+                    if bld_id:
+                        unit_payload["buildingId"] = bld_id
+                    result = ctrl.update_property_unit(unit_id, unit_payload)
                     if not result.success:
                         errors.append(f"وحدة: {result.message}")
 
@@ -674,15 +718,15 @@ class ClaimEditPage(QWidget):
         """Compare current fields to originals, return only changed sections."""
         changes = {}
 
-        # Person changes
+        # Person changes — keys match api_client.update_person() snake_case expectations
         person_now = {
-            "firstNameArabic": self._person_first_name.text(),
-            "fatherNameArabic": self._person_father_name.text(),
-            "familyNameArabic": self._person_family_name.text(),
-            "motherNameArabic": self._person_mother_name.text(),
-            "nationalId": self._person_national_id.text(),
+            "first_name": self._person_first_name.text(),
+            "father_name": self._person_father_name.text(),
+            "last_name": self._person_family_name.text(),
+            "mother_name": self._person_mother_name.text(),
+            "national_id": self._person_national_id.text(),
             "gender": self._person_gender.currentData(),
-            "dateOfBirth": self._person_dob.text(),
+            "birth_date": self._person_dob.text(),
         }
         person_diff = {k: v for k, v in person_now.items()
                        if v != self._original_person.get(k)}
@@ -726,9 +770,15 @@ class ClaimEditPage(QWidget):
 
     def _build_change_summary(self, changes: dict) -> list:
         """Build human-readable list of changes for the reason dialog."""
+        _person_labels = {
+            "first_name": "الاسم الأول", "father_name": "اسم الأب",
+            "last_name": "اسم العائلة", "mother_name": "اسم الأم",
+            "national_id": "الرقم الوطني", "gender": "الجنس",
+            "birth_date": "تاريخ الميلاد",
+        }
         summary = []
         if "person" in changes:
-            fields = ", ".join(changes["person"].keys())
+            fields = ", ".join(_person_labels.get(k, k) for k in changes["person"])
             summary.append(f"تعديل البيانات الشخصية: {fields}")
         if "unit" in changes:
             fields = ", ".join(changes["unit"].keys())

@@ -78,7 +78,7 @@ class MapPickerDialog(BaseMapDialog):
         # Initialize base dialog (no search bar, but show confirm button)
         super().__init__(
             title="تحديد الموقع على الخريطة",
-            show_search=False,
+            show_search=True,
             show_confirm_button=True,  # Show confirm button and coordinates
             parent=parent
         )
@@ -133,6 +133,38 @@ class MapPickerDialog(BaseMapDialog):
             else:
                 logger.info("No existing polygon (new building)")
 
+            # Load landmarks and streets for map overlay
+            landmarks_json = None
+            streets_json = None
+            import json
+            sw_lat, sw_lng = self.initial_lat - 0.5, self.initial_lon - 0.5
+            ne_lat, ne_lng = self.initial_lat + 0.5, self.initial_lon + 0.5
+            logger.info(f"Loading landmarks/streets for map picker (bbox={sw_lat},{sw_lng}-{ne_lat},{ne_lng})")
+            try:
+                from services.api_client import get_api_client
+                from services.map_utils import normalize_landmark, normalize_street
+                api = get_api_client()
+
+                landmarks = api.get_landmarks_for_map(
+                    south_west_lat=sw_lat, south_west_lng=sw_lng,
+                    north_east_lat=ne_lat, north_east_lng=ne_lng
+                )
+                logger.info(f"Landmarks: {len(landmarks) if landmarks else 0} items")
+                if landmarks and isinstance(landmarks, list):
+                    landmarks = [normalize_landmark(lm) for lm in landmarks]
+                    landmarks_json = json.dumps(landmarks, ensure_ascii=False)
+
+                streets = api.get_streets_for_map(
+                    south_west_lat=sw_lat, south_west_lng=sw_lng,
+                    north_east_lat=ne_lat, north_east_lng=ne_lng
+                )
+                logger.info(f"Streets: {len(streets) if streets else 0} items")
+                if streets and isinstance(streets, list):
+                    streets = [normalize_street(s) for s in streets]
+                    streets_json = json.dumps(streets, ensure_ascii=False)
+            except Exception as e:
+                logger.error(f"Failed to load landmarks/streets for map picker: {e}", exc_info=True)
+
             # Generate map HTML using LeafletHTMLGenerator
             html = generate_leaflet_html(
                 tile_server_url=tile_server_url.rstrip('/'),
@@ -152,7 +184,9 @@ class MapPickerDialog(BaseMapDialog):
                 neighborhoods_geojson=self.neighborhoods_geojson,
                 selected_neighborhood_code=self.selected_neighborhood_code,
                 skip_fit_bounds=self._skip_fit_bounds,
-                tile_layer_url=docker_url
+                tile_layer_url=docker_url,
+                landmarks_json=landmarks_json,
+                streets_json=streets_json
             )
 
             # Load into web view
@@ -307,6 +341,56 @@ class MapPickerDialog(BaseMapDialog):
         except Exception as e:
             logger.warning(f"Failed to convert geo_location to GeoJSON: {e}")
             return None
+
+    def _on_search_submitted(self):
+        """Handle search - search neighborhoods, landmarks, then streets with fly-to."""
+        if not hasattr(self, 'search_input'):
+            return
+
+        search_text = self.search_input.text().strip()
+        if not search_text:
+            return
+
+        self.search_input.setEnabled(False)
+        self.search_input.setPlaceholderText("جاري البحث...")
+
+        try:
+            from ui.components.toast import Toast
+            from services import boundary_service
+
+            # Step 1: Search populated places (neighborhoods/places - local, fast)
+            places = boundary_service.get_places_list()
+            place_matches = [
+                p for p in places
+                if search_text in p.get('name_ar', '')
+                or search_text.lower() in p.get('name_en', '').lower()
+            ]
+            if place_matches:
+                best = place_matches[0]
+                label = best.get('name_ar') or best.get('name_en') or search_text
+                self._fly_to(float(best['lat']), float(best['lng']), zoom=13)
+                Toast.show_toast(self, label, "success")
+                return
+
+            # Step 2: Search landmarks via API
+            found, name = self._search_landmark_or_street(search_text)
+            if found:
+                Toast.show_toast(self, name or search_text, "success")
+                return
+
+            # Step 3: Search streets in loaded JS layer
+            def _on_street_not_found():
+                Toast.show_toast(self, f"لم يتم العثور على: {search_text}", "warning")
+
+            self._search_streets_js(search_text, not_found_callback=_on_street_not_found)
+
+        except Exception as e:
+            logger.error(f"Error searching: {e}", exc_info=True)
+
+        finally:
+            if hasattr(self, 'search_input'):
+                self.search_input.setEnabled(True)
+                self.search_input.setPlaceholderText("بحث: حي، معلم، أو شارع")
 
     def get_result(self) -> Optional[Dict]:
         """

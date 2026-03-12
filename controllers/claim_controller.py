@@ -445,9 +445,14 @@ class ClaimController(BaseController):
             logger.error(f"Failed to search claims: {e}", exc_info=True)
             return OperationResult.fail(message=str(e))
 
-    def get_claim_full_detail(self, claim_id: str) -> OperationResult:
+    def get_claim_full_detail(self, claim_id: str,
+                              hint_survey_id: str = None) -> OperationResult:
         """
         Get full claim detail with all enrichment data (UC-006 S02-S03).
+
+        Args:
+            claim_id: Claim UUID
+            hint_survey_id: Survey UUID passed from navigation context (avoids expensive summaries lookup)
 
         Returns OperationResult with dict containing:
         claim_dto, person_dto, unit_dto, building_dto, survey_id, evidences
@@ -485,17 +490,10 @@ class ClaimController(BaseController):
                     except Exception as e:
                         logger.warning(f"Failed to fetch building {building_id}: {e}")
 
-            # Survey ID from summaries
-            survey_id = claim_dto.get("surveyId")
-            if not survey_id:
-                try:
-                    summaries = self._api.get_claims_summaries()
-                    for s in summaries:
-                        if s.get("claimId") == claim_id:
-                            survey_id = s.get("surveyId")
-                            break
-                except Exception:
-                    pass
+            # Survey ID — use hint from navigation context first (GET /Claims/{id} has no surveyId)
+            survey_id = (hint_survey_id or
+                         claim_dto.get("surveyId") or claim_dto.get("SurveyId")
+                         or claim_dto.get("survey_id"))
             result["survey_id"] = survey_id
 
             # Evidences

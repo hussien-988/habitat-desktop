@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 """
-TRRCMS API Client - للاتصال بالـ Backend API
-==================================================
+    TRRCMS API Client - للاتصال بالـ Backend API
+    ==================================================
 
-يوفر وصولاً كاملاً لجميع endpoints الخاصة بالخريطة والمباني.
+    يوفر وصولاً كاملاً لجميع endpoints الخاصة بالخريطة والمباني.
 """
 
 import requests
@@ -25,8 +25,8 @@ class ApiConfig:
     """
     تكوين الاتصال بالـ API.
 
-    ✅ DYNAMIC: Reads from .env file via Config
-    🔧 TEAM READY: Each member sets their own API_BASE_URL in .env
+ DYNAMIC: Reads from .env file via Config
+    TEAM READY: Each member sets their own API_BASE_URL in .env
 
     Example .env:
         API_BASE_URL=http://192.168.100.221:8080  # Team member's .env
@@ -40,7 +40,7 @@ class ApiConfig:
 
     def __post_init__(self):
         """Load from Config if not provided."""
-        # ✅ Load from Config (which reads from .env)
+        # Load from Config (which reads from .env)
         if self.base_url is None or self.username is None or self.password is None:
             from app.config import Config
 
@@ -56,7 +56,7 @@ class ApiConfig:
 
 class TRRCMSApiClient:
     """
-API للاتصال بـ TRRCMS Backend.
+    API للاتصال بـ TRRCMS Backend.
 
     الميزات:
     - تسجيل دخول تلقائي
@@ -114,11 +114,11 @@ API للاتصال بـ TRRCMS Backend.
             expires_in = data.get("expiresIn", 3600)  # default 1 hour
             self.token_expires_at = datetime.now() + timedelta(seconds=expires_in)
 
-            logger.info(f"✅ Logged in as {username}")
+            logger.info(f"Logged in as {username}")
             return data
 
         except requests.exceptions.RequestException as e:
-            logger.error(f"❌ Login failed: {e}")
+            logger.error(f"Login failed: {e}")
             raise
 
     def set_access_token(self, token: str, expires_in: int = 3600):
@@ -133,7 +133,7 @@ API للاتصال بـ TRRCMS Backend.
         """
         self.access_token = token
         self.token_expires_at = datetime.now() + timedelta(seconds=expires_in)
-        logger.debug(f"✅ Access token updated externally (expires in {expires_in}s)")
+        logger.debug(f"Access token updated externally (expires in {expires_in}s)")
 
     def refresh_access_token(self) -> bool:
         """
@@ -162,11 +162,11 @@ API للاتصال بـ TRRCMS Backend.
             expires_in = data.get("expiresIn", 3600)
             self.token_expires_at = datetime.now() + timedelta(seconds=expires_in)
 
-            logger.info("✅ Token refreshed")
+            logger.info("Token refreshed")
             return True
 
         except requests.exceptions.RequestException as e:
-            logger.error(f"❌ Token refresh failed: {e}")
+            logger.error(f"Token refresh failed: {e}")
             return False
 
     def logout(self) -> Dict[str, Any]:
@@ -342,9 +342,115 @@ API للاتصال بـ TRRCMS Backend.
 
         logger.debug(f"Fetching buildings for map: bbox={payload}")
         buildings = self._request("POST", "/v1/Buildings/map", json_data=payload)
-        logger.info(f"✅ Fetched {len(buildings)} buildings from API")
+        logger.info(f"Fetched {len(buildings)} buildings from API")
 
         return buildings
+
+    # ==================== Landmarks ====================
+
+    def get_landmarks_for_map(
+        self,
+        north_east_lat: float,
+        north_east_lng: float,
+        south_west_lat: float,
+        south_west_lng: float,
+        landmark_type: Optional[int] = None
+    ) -> List[Dict[str, Any]]:
+        """
+        Fetch landmarks within bounding box for map display.
+
+        Args:
+            north_east_lat: NE corner latitude
+            north_east_lng: NE corner longitude
+            south_west_lat: SW corner latitude
+            south_west_lng: SW corner longitude
+            landmark_type: Optional type filter (int)
+
+        Returns:
+            List of LandmarkMapDto
+        """
+        params = {
+            "southWestLat": south_west_lat,
+            "southWestLng": south_west_lng,
+            "northEastLat": north_east_lat,
+            "northEastLng": north_east_lng
+        }
+        if landmark_type is not None:
+            params["type"] = landmark_type
+
+        try:
+            result = self._request("GET", "/v1/Landmarks/map", params=params)
+            landmarks = result if isinstance(result, list) else []
+            logger.info(f"Fetched {len(landmarks)} landmarks for map")
+            return landmarks
+        except Exception as e:
+            logger.error(f"Failed to fetch landmarks for map: {e}", exc_info=True)
+            return []
+
+    def search_landmarks(
+        self,
+        query: str,
+        landmark_type: Optional[int] = None,
+        max_results: int = 20
+    ) -> List[Dict[str, Any]]:
+        """
+        Search landmarks by name/description.
+
+        Args:
+            query: Search text
+            landmark_type: Optional type filter (int)
+            max_results: Max results to return
+
+        Returns:
+            List of LandmarkDto
+        """
+        params = {"query": query, "maxResults": max_results}
+        if landmark_type is not None:
+            params["type"] = landmark_type
+
+        try:
+            result = self._request("GET", "/v1/Landmarks/search", params=params)
+            return result if isinstance(result, list) else []
+        except Exception as e:
+            logger.warning(f"Failed to search landmarks: {e}")
+            return []
+
+    # ==================== Streets ====================
+
+    def get_streets_for_map(
+        self,
+        north_east_lat: float,
+        north_east_lng: float,
+        south_west_lat: float,
+        south_west_lng: float
+    ) -> List[Dict[str, Any]]:
+        """
+        Fetch streets within bounding box for map display.
+
+        Args:
+            north_east_lat: NE corner latitude
+            north_east_lng: NE corner longitude
+            south_west_lat: SW corner latitude
+            south_west_lng: SW corner longitude
+
+        Returns:
+            List of StreetMapDto with geometryWkt
+        """
+        params = {
+            "southWestLat": south_west_lat,
+            "southWestLng": south_west_lng,
+            "northEastLat": north_east_lat,
+            "northEastLng": north_east_lng
+        }
+
+        try:
+            result = self._request("GET", "/v1/Streets/map", params=params)
+            streets = result if isinstance(result, list) else []
+            logger.info(f"Fetched {len(streets)} streets for map")
+            return streets
+        except Exception as e:
+            logger.error(f"Failed to fetch streets for map: {e}", exc_info=True)
+            return []
 
     def get_buildings_in_polygon(
         self,
@@ -396,7 +502,7 @@ API للاتصال بـ TRRCMS Backend.
         buildings = response.get("buildings", [])
         total_count = response.get("totalCount", 0)
 
-        logger.info(f"✅ Fetched {len(buildings)} buildings (total: {total_count}) from polygon API")
+        logger.info(f"Fetched {len(buildings)} buildings (total: {total_count}) from polygon API")
 
         if buildings:
             sample = buildings[0]
@@ -459,7 +565,7 @@ API للاتصال بـ TRRCMS Backend.
         items = response.get("items", [])
         total_count = response.get("totalCount", 0)
 
-        logger.info(f"✅ Found {len(items)} buildings for assignment (total: {total_count}) using BuildingAssignments API")
+        logger.info(f"Found {len(items)} buildings for assignment (total: {total_count}) using BuildingAssignments API")
 
         return response
 
@@ -473,7 +579,7 @@ API للاتصال بـ TRRCMS Backend.
         page_size: int = 100
     ) -> Dict[str, Any]:
         """
-        ✅ الحصول على المباني للتعيين مع دعم الفلاتر (بدون polygon).
+        الحصول على المباني للتعيين مع دعم الفلاتر (بدون polygon).
 
         هذا هو الـ endpoint المُخصص لـ Field Assignment مع فلاتر!
         لا يحتاج polygon - مناسب تماماً للـ Step 1 filters.
@@ -536,7 +642,7 @@ API للاتصال بـ TRRCMS Backend.
         items = response.get("items", [])
         total_count = response.get("totalCount", 0)
 
-        logger.info(f"✅ Found {len(items)} buildings for assignment (total: {total_count}) using filter API")
+        logger.info(f"Found {len(items)} buildings for assignment (total: {total_count}) using filter API")
 
         return response
 
@@ -603,7 +709,7 @@ API للاتصال بـ TRRCMS Backend.
             f"/v1/Buildings/{building_id}/geometry",
             json_data=payload
         )
-        logger.info(f"✅ Geometry updated for building {building_id}")
+        logger.info(f"Geometry updated for building {building_id}")
 
         return result
 
@@ -655,7 +761,7 @@ API للاتصال بـ TRRCMS Backend.
         api_data = self._convert_building_to_api_format(building_data)
         logger.info(f"Creating building: {api_data.get('buildingId', 'N/A')}")
         result = self._request("POST", "/v1/Buildings", json_data=api_data)
-        logger.info(f"✅ Created building: {result.get('buildingId')}")
+        logger.info(f"Created building: {result.get('buildingId')}")
         return result
 
     def update_building(self, building_id: str, building_data: Dict[str, Any]) -> Dict[str, Any]:
@@ -677,7 +783,7 @@ API للاتصال بـ TRRCMS Backend.
                 logger.info(f"Step 1: Updating building data: {building_id}")
                 logger.info(f"  Payload: {update_data}")
                 result = self._request("PUT", f"/v1/Buildings/{building_id}", json_data=update_data)
-                logger.info(f"✅ Step 1: Building data updated")
+                logger.info(f"Step 1: Building data updated")
             except Exception as e:
                 logger.warning(f"Step 1 failed: {e}")
 
@@ -695,7 +801,7 @@ API للاتصال بـ TRRCMS Backend.
                     longitude=lng,
                     building_geometry_wkt=geo_wkt
                 )
-                logger.info(f"✅ Step 2: Geometry updated")
+                logger.info(f"Step 2: Geometry updated")
             except Exception as e:
                 logger.warning(f"Step 2 failed: {e}")
 
@@ -776,7 +882,7 @@ API للاتصال بـ TRRCMS Backend.
         """
         logger.info(f"Deleting building: {building_id}")
         self._request("DELETE", f"/v1/Buildings/{building_id}")
-        logger.info(f"✅ Building deleted: {building_id}")
+        logger.info(f"Building deleted: {building_id}")
         return True
 
     # ==================== Property Units ====================
@@ -821,10 +927,10 @@ API للاتصال بـ TRRCMS Backend.
         try:
             # Try to get current user info as health check
             self._request("GET", "/v1/Auth/me")
-            logger.info("✅ API health check passed")
+            logger.info("API health check passed")
             return True
         except Exception as e:
-            logger.error(f"❌ API health check failed: {e}")
+            logger.error(f"API health check failed: {e}")
             return False
 
     def get_current_user(self) -> Dict[str, Any]:
@@ -2164,7 +2270,7 @@ API للاتصال بـ TRRCMS Backend.
                 pass
 
         if person_data.get("birth_year"):
-            api_data["dateOfBirth"] = f"{person_data['birth_year']}-01-01"
+            api_data["dateOfBirth"] = f"{person_data['birth_year']}-01-01T00:00:00Z"
 
         email = person_data.get("email", "").strip()
         if email and _re.match(r'^[^@\s]+@[^@\s]+\.[^@\s]+$', email):

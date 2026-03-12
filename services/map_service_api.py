@@ -1,9 +1,9 @@
-# -*- coding: utf-8 -*-
+    # -*- coding: utf-8 -*-
 """
-Map Service API - نسخة MapService تستخدم Backend API بدلاً من قاعدة البيانات المحلية
-====================================================================================
+    Map Service API - نسخة MapService تستخدم Backend API بدلاً من قاعدة البيانات المحلية
+    ====================================================================================
 
-يوفر نفس الواجهة (interface) مثل MapService الأصلي، لكن يتصل بالـ Backend API.
+    يوفر نفس الواجهة (interface) مثل MapService الأصلي، لكن يتصل بالـ Backend API.
 """
 
 from typing import List, Optional, Dict, Any, Tuple
@@ -86,7 +86,7 @@ class MapServiceAPI:
             if building_data.get("buildingGeometryWkt"):
                 polygon = GeoPolygon.from_wkt(building_data["buildingGeometryWkt"])
 
-            # ✅ CRITICAL FIX: Try 'buildingCode' first (BuildingAssignments API), then 'buildingId'
+            # CRITICAL FIX: Try 'buildingCode' first (BuildingAssignments API), then 'buildingId'
             building_id = building_data.get("buildingCode") or building_data.get("buildingId", "")
 
             return BuildingGeoData(
@@ -134,11 +134,11 @@ class MapServiceAPI:
                 building_geometry_wkt=polygon.to_wkt() if polygon else None
             )
 
-            logger.info(f"✅ Updated geometry for building {building_uuid}")
+            logger.info(f"Updated geometry for building {building_uuid}")
             return True
 
         except Exception as e:
-            logger.error(f"❌ Error updating building geometry: {e}", exc_info=True)
+            logger.error(f"Error updating building geometry: {e}", exc_info=True)
             return False
 
     # ==================== Spatial Queries ====================
@@ -158,7 +158,7 @@ class MapServiceAPI:
         Uses /Buildings/polygon endpoint with PostGIS spatial filtering.
 
         Professional Best Practice:
-        - ✅ Default page_size increased to 2000 for better coverage (محسّن)
+            - Default page_size increased to 2000 for better coverage (محسّن)
         - Configurable for different use cases
 
         Args:
@@ -207,20 +207,20 @@ class MapServiceAPI:
         status_filter: Optional[str] = None
     ) -> List[Building]:
         """
-        ✅ النسخة المحسّنة: الحصول على المباني مع page_size أكبر وتحسينات للأداء.
+        النسخة المحسّنة: الحصول على المباني مع page_size أكبر وتحسينات للأداء.
 
         Professional Optimizations:
-        - ✅ page_size = 2000 (زيادة من 1000)
-        - ✅ Support zoom_level for future simplification
-        - ✅ Uses PostGIS ST_Contains() in backend
-        - ✅ Lightweight data transfer
+            - page_size = 2000 (زيادة من 1000)
+            - Support zoom_level for future simplification
+            - Uses PostGIS ST_Contains() in backend
+            - Lightweight data transfer
 
         Args:
             north_east_lat: حد الشمال الشرقي (latitude)
             north_east_lng: حد الشمال الشرقي (longitude)
             south_west_lat: حد الجنوب الغربي (latitude)
             south_west_lng: حد الجنوب الغربي (longitude)
-            page_size: Maximum buildings to load (default: 2000) ⚡
+            page_size: Maximum buildings to load (default: 2000) 
             zoom_level: Zoom level (for future simplification optimization)
             status_filter: فلتر حسب حالة المبنى
 
@@ -228,7 +228,7 @@ class MapServiceAPI:
             قائمة بـ Building objects
         """
         try:
-            logger.info(f"🗺️ MapServiceAPI.get_buildings_in_bbox_optimized()")
+            logger.info(f"MapServiceAPI.get_buildings_in_bbox_optimized()")
             logger.info(f"   BBox: NE({north_east_lat:.4f}, {north_east_lng:.4f}) - SW({south_west_lat:.4f}, {south_west_lng:.4f})")
             logger.info(f"   Page Size: {page_size} | Zoom: {zoom_level}")
 
@@ -240,7 +240,7 @@ class MapServiceAPI:
                 polygon_wkt=polygon_wkt,
                 status=status_filter,
                 page=1,
-                page_size=page_size  # ✅ 2000 بدلاً من 1000
+            page_size=page_size # 2000 بدلاً من 1000
             )
 
             buildings = []
@@ -248,11 +248,11 @@ class MapServiceAPI:
                 building = self._convert_api_building_to_model(data)
                 buildings.append(building)
 
-            logger.info(f"✅ Fetched {len(buildings)} buildings from API (optimized)")
+            logger.info(f"Fetched {len(buildings)} buildings from API (optimized)")
             return buildings
 
         except Exception as e:
-            logger.error(f"❌ Error fetching buildings (optimized): {e}", exc_info=True)
+            logger.error(f"Error fetching buildings (optimized): {e}", exc_info=True)
             return []
 
     def get_buildings_for_map_lightweight(
@@ -264,12 +264,12 @@ class MapServiceAPI:
         status_filter: Optional[str] = None
     ) -> List[Building]:
         """
-        ✅ Lightweight: يستخدم /Buildings/map endpoint (BuildingMapDto بدلاً من BuildingDto الكامل).
+        Lightweight: يستخدم /Buildings/map endpoint (BuildingMapDto بدلاً من BuildingDto الكامل).
 
         Professional Optimization:
-        - 📦 حجم أقل بـ 50-70% (لا يحتوي على polygons/details)
-        - ⚡ أسرع في النقل والمعالجة
-        - 🎯 مخصص لعرض الخرائط فقط
+            - حجم أقل بـ 50-70% (لا يحتوي على polygons/details)
+            - أسرع في النقل والمعالجة
+            - مخصص لعرض الخرائط فقط
 
         Args:
             north_east_lat: حد الشمال الشرقي (latitude)
@@ -282,7 +282,7 @@ class MapServiceAPI:
             قائمة بـ Building objects (lightweight - points only)
         """
         try:
-            logger.info(f"📍 MapServiceAPI.get_buildings_for_map_lightweight()")
+            logger.info(f"MapServiceAPI.get_buildings_for_map_lightweight()")
             logger.info(f"   BBox: NE({north_east_lat:.4f}, {north_east_lng:.4f}) - SW({south_west_lat:.4f}, {south_west_lng:.4f})")
 
             # استدعاء /Buildings/map endpoint (Lightweight DTO)
@@ -299,7 +299,7 @@ class MapServiceAPI:
             for dto in map_dtos:
                 building = Building()
                 building.building_uuid = dto.get("id")
-                # ✅ CRITICAL FIX: Try 'buildingCode' first (BuildingAssignments API), then 'buildingId'
+                # CRITICAL FIX: Try 'buildingCode' first (BuildingAssignments API), then 'buildingId'
                 building.building_id = dto.get("buildingCode") or dto.get("buildingId")
                 building.latitude = dto.get("latitude")
                 building.longitude = dto.get("longitude")
@@ -309,11 +309,11 @@ class MapServiceAPI:
                 # لا نضيف polygon - lightweight
                 buildings.append(building)
 
-            logger.info(f"✅ Fetched {len(buildings)} buildings (lightweight DTO)")
+            logger.info(f"Fetched {len(buildings)} buildings (lightweight DTO)")
             return buildings
 
         except Exception as e:
-            logger.error(f"❌ Error fetching buildings (lightweight): {e}", exc_info=True)
+            logger.error(f"Error fetching buildings (lightweight): {e}", exc_info=True)
             return []
 
     def search_buildings_by_location(
@@ -751,7 +751,7 @@ class MapServiceAPI:
         """
         تحويل API response إلى BuildingGeoData.
 
-        ✅ FIX: BuildingAssignments API uses 'buildingCode' not 'buildingId'!
+ FIX: BuildingAssignments API uses 'buildingCode' not 'buildingId'!
         """
         point = None
         polygon = None
@@ -765,7 +765,7 @@ class MapServiceAPI:
         if data.get("buildingGeometryWkt"):
             polygon = GeoPolygon.from_wkt(data["buildingGeometryWkt"])
 
-        # ✅ CRITICAL FIX: Try 'buildingCode' first (BuildingAssignments API), then 'buildingId'
+        # CRITICAL FIX: Try 'buildingCode' first (BuildingAssignments API), then 'buildingId'
         building_id = data.get("buildingCode") or data.get("buildingId", "")
 
         return BuildingGeoData(
@@ -790,15 +790,12 @@ class MapServiceAPI:
         south_west_lng: float
     ) -> List[BuildingGeoData]:
         """جلب المباني كـ BuildingGeoData."""
-        print(f"[DEBUG] _fetch_buildings_as_geodata: NE({north_east_lat}, {north_east_lng}) SW({south_west_lat}, {south_west_lng})")
         buildings_data = self.api.get_buildings_for_map(
             north_east_lat, north_east_lng,
             south_west_lat, south_west_lng
         )
-        print(f"[DEBUG] API returned {len(buildings_data)} buildings")
 
         result = [self._convert_api_building_to_geodata(b) for b in buildings_data]
-        print(f"[DEBUG] Converted to {len(result)} BuildingGeoData objects")
         return result
 
     # ==================== Neighborhood Methods ====================

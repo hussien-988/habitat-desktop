@@ -1,23 +1,23 @@
-# -*- coding: utf-8 -*-
+    # -*- coding: utf-8 -*-
 """
-Building Cache Service - Application-Wide Singleton Cache
-==========================================================
+    Building Cache Service - Application-Wide Singleton Cache
+    ==========================================================
 
-Professional caching solution for building data across the entire application.
+    Professional caching solution for building data across the entire application.
 
-Best Practices Applied:
-- Singleton Pattern (one instance per application)
-- LRU Cache (Least Recently Used eviction)
-- Spatial Indexing (fast viewport queries)
-- Thread-Safe operations
-- Progressive loading strategy
+    Best Practices Applied:
+    - Singleton Pattern (one instance per application)
+    - LRU Cache (Least Recently Used eviction)
+    - Spatial Indexing (fast viewport queries)
+    - Thread-Safe operations
+    - Progressive loading strategy
 
-References:
-- https://realpython.com/lru-cache-python/
-- https://dev.to/mustafaelghrib/how-to-implement-a-cache-manager-with-the-singleton-pattern-using-python-5635
-- https://github.com/jazzycamel/PyQt5Singleton
+    References:
+    - https://realpython.com/lru-cache-python/
+    - https://dev.to/mustafaelghrib/how-to-implement-a-cache-manager-with-the-singleton-pattern-using-python-5635
+    - https://github.com/jazzycamel/PyQt5Singleton
 
-Architecture:
+    Architecture:
     Application Startup:
         ↓
     Load 150 buildings (initial cache)
@@ -174,7 +174,7 @@ class BuildingCacheService(metaclass=BuildingCacheServiceMeta):
                 for building in buildings:
                     self._add_to_cache(building)
 
-            logger.info(f"✅ Cache initialized with {len(buildings)} buildings")
+            logger.info(f"Cache initialized with {len(buildings)} buildings")
             logger.info(f"   Cache stats: {self.get_cache_stats()}")
             return True
 
@@ -484,7 +484,7 @@ class BuildingCacheService(metaclass=BuildingCacheServiceMeta):
         }
 
 
-# Convenience function
+    # Convenience function
 def get_building_cache(db: Database = None) -> BuildingCacheService:
     """
     Get singleton instance of BuildingCacheService.

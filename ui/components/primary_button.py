@@ -80,5 +80,4 @@ class PrimaryButton(QPushButton):
             self.setIcon(q_icon)
             self.setIconSize(QSize(20, 20))  # Icon size for 48px button
         else:
-            # If icon not found, log warning but don't fail
-            print(f"Warning: Icon '{self.icon_name}' not found in assets folder")
+            pass

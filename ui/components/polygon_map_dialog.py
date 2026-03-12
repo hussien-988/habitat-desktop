@@ -1,16 +1,16 @@
-# -*- coding: utf-8 -*-
+    # -*- coding: utf-8 -*-
 """
-Polygon Map Dialog - Dialog لاختيار المباني برسم مضلع على الخريطة.
+    Polygon Map Dialog - Dialog لاختيار المباني برسم مضلع على الخريطة.
 
-يستخدم نفس التصميم الحديث من MapPickerDialog مع إضافة وظيفة:
-- رسم مضلع لتحديد المباني
-- استعلام المباني داخل المضلع
-- إرجاع قائمة المباني المختارة
+    يستخدم نفس التصميم الحديث من MapPickerDialog مع إضافة وظيفة:
+    - رسم مضلع لتحديد المباني
+    - استعلام المباني داخل المضلع
+    - إرجاع قائمة المباني المختارة
 
-Best Practices:
-- نفس التصميم: Radio buttons + Orange instruction + Bottom buttons
-- DRY: يعيد استخدام MapBridge و LeafletHTMLGenerator
-- SOLID: مسؤولية واحدة - اختيار المباني بالمضلع
+    Best Practices:
+    - نفس التصميم: Radio buttons + Orange instruction + Bottom buttons
+    - DRY: يعيد استخدام MapBridge و LeafletHTMLGenerator
+    - SOLID: مسؤولية واحدة - اختيار المباني بالمضلع
 """
 
 from typing import List, Optional
@@ -18,7 +18,7 @@ from PyQt5.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QFrame, QLineEdit, QGroupBox, QRadioButton,
     QButtonGroup
-)
+    )
 from ui.error_handler import ErrorHandler
 from PyQt5.QtCore import QObject, pyqtSignal, pyqtSlot, QUrl, Qt
 from PyQt5.QtWebEngineWidgets import QWebEngineView, QWebEngineSettings, QWebEnginePage, QWebEngineProfile
@@ -63,7 +63,7 @@ class BuildingSelectionBridge(QObject):
         Converts GeoJSON to WKT and emits signal.
         """
         import json
-        logger.info(f"✅ Geometry drawn: {geojson_str[:100]}...")
+        logger.info(f"Geometry drawn: {geojson_str[:100]}...")
 
         try:
             geom = json.loads(geojson_str)
@@ -76,13 +76,13 @@ class BuildingSelectionBridge(QObject):
                 wkt_coords = ', '.join([f"{lon} {lat}" for lon, lat in ring])
                 wkt = f"POLYGON(({wkt_coords}))"
                 self._polygon_wkt = wkt
-                logger.info(f"✅ Polygon WKT: {wkt[:100]}...")
+                logger.info(f"Polygon WKT: {wkt[:100]}...")
                 self.polygon_drawn.emit(wkt)
             else:
                 logger.warning(f"Unsupported geometry type for building selection: {geom_type}")
 
         except Exception as e:
-            logger.error(f"❌ Failed to parse drawn geometry: {e}")
+            logger.error(f"Failed to parse drawn geometry: {e}")
 
 
 class PolygonMapDialog(QDialog):
@@ -468,7 +468,7 @@ def show_polygon_map_dialog(
     db: Database,
     buildings: List[Building],
     parent=None
-) -> Optional[List[Building]]:
+    ) -> Optional[List[Building]]:
     """
     Convenience function to show polygon map dialog and get selected buildings.
 

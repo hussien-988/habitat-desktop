@@ -318,6 +318,37 @@ class BuildingMapDialog(BaseMapDialog):
             # Load neighborhoods for map overlay (DRY - shared helper from BaseMapDialog)
             neighborhoods_geojson = self.load_neighborhoods_geojson(auth_token=self._auth_token)
 
+            # Load landmarks and streets for map overlay
+            landmarks_json = None
+            streets_json = None
+            sw_lat, sw_lng = center_lat - 0.5, center_lon - 0.5
+            ne_lat, ne_lng = center_lat + 0.5, center_lon + 0.5
+            logger.info(f"Loading landmarks/streets for map (bbox={sw_lat},{sw_lng}-{ne_lat},{ne_lng})")
+            try:
+                from services.api_client import get_api_client
+                from services.map_utils import normalize_landmark, normalize_street
+                api = get_api_client()
+
+                landmarks = api.get_landmarks_for_map(
+                    south_west_lat=sw_lat, south_west_lng=sw_lng,
+                    north_east_lat=ne_lat, north_east_lng=ne_lng
+                )
+                logger.info(f"Landmarks: {len(landmarks) if landmarks else 0} items")
+                if landmarks and isinstance(landmarks, list):
+                    landmarks = [normalize_landmark(lm) for lm in landmarks]
+                    landmarks_json = json.dumps(landmarks, ensure_ascii=False)
+
+                streets = api.get_streets_for_map(
+                    south_west_lat=sw_lat, south_west_lng=sw_lng,
+                    north_east_lat=ne_lat, north_east_lng=ne_lng
+                )
+                logger.info(f"Streets: {len(streets) if streets else 0} items")
+                if streets and isinstance(streets, list):
+                    streets = [normalize_street(s) for s in streets]
+                    streets_json = json.dumps(streets, ensure_ascii=False)
+            except Exception as e:
+                logger.error(f"Failed to load landmarks/streets: {e}", exc_info=True)
+
             # Generate map HTML using LeafletHTMLGenerator
             html = generate_leaflet_html(
                 tile_server_url=tile_server_url.rstrip('/'),
@@ -332,7 +363,9 @@ class BuildingMapDialog(BaseMapDialog):
                 enable_viewport_loading=(not self._is_view_only),
                 enable_drawing=False,
                 neighborhoods_geojson=neighborhoods_geojson,
-                skip_fit_bounds=self._is_view_only
+                skip_fit_bounds=self._is_view_only,
+                landmarks_json=landmarks_json,
+                streets_json=streets_json
             )
 
             # Load into web view
@@ -662,25 +695,6 @@ class BuildingMapDialog(BaseMapDialog):
 
         return {"code": code, "name": name, "lat": lat, "lng": lng}
 
-    def _fly_to(self, lat, lng, zoom=17):
-        """Execute smooth flyTo on the Leaflet map."""
-        js_code = f"""
-        if (typeof window._isFlying === 'undefined') {{
-            window._isFlying = false;
-        }}
-        if (typeof map !== 'undefined') {{
-            window._isFlying = true;
-            map.flyTo([{lat}, {lng}], {zoom}, {{
-                duration: 2.0,
-                easeLinearity: 0.25
-            }});
-            setTimeout(function() {{
-                window._isFlying = false;
-            }}, 2200);
-        }}
-        """
-        self.web_view.page().runJavaScript(js_code)
-
     def _on_search_submitted(self):
         """Handle search submission - search neighborhoods via API then flyTo."""
         if not self.show_search or not hasattr(self, 'search_input'):
@@ -722,8 +736,17 @@ class BuildingMapDialog(BaseMapDialog):
                     Toast.show_toast(self, label, "success")
                     return
 
-                logger.warning(f"No match for: '{search_text}'")
-                Toast.show_toast(self, f"لم يتم العثور على: {search_text}", "warning")
+                # Fallback: search landmarks via API
+                found, name = self._search_landmark_or_street(search_text)
+                if found:
+                    Toast.show_toast(self, name or search_text, "success")
+                    return
+
+                # Fallback: search streets in loaded JS layer
+                def _on_street_not_found():
+                    Toast.show_toast(self, f"لم يتم العثور على: {search_text}", "warning")
+
+                self._search_streets_js(search_text, not_found_callback=_on_street_not_found)
                 return
 
             logger.info(f"Matched '{search_text}' -> {match['name']} (code: {match['code']})")
@@ -791,7 +814,7 @@ class BuildingMapDialog(BaseMapDialog):
         finally:
             if hasattr(self, 'search_input'):
                 self.search_input.setEnabled(True)
-                self.search_input.setPlaceholderText("البحث عن منطقة (مثال: الجميلية)")
+                self.search_input.setPlaceholderText("بحث: حي، معلم، أو شارع")
 
     def get_selected_building(self) -> Optional[Building]:
         """
