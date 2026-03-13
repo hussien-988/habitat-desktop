@@ -70,7 +70,7 @@ class LeafletHTMLGenerator:
         boundary_level: str = None,  # Level name: 'governorates'|'subdistricts'|etc.
         places_json: str = None,  # JSON array of populated places for map labels
         landmarks_json: str = None,  # JSON array of landmarks for map overlay
-        streets_json: str = None  # JSON array of streets for map overlay
+        streets_json: str = None,  # JSON array of streets for map overlay
     ) -> str:
         """
         Generate Leaflet HTML with unified geometry display.

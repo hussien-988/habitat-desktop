@@ -610,53 +610,26 @@ class BuildingController(BaseController):
 
     def search_for_assignment_by_filters(
         self,
-        governorate_code: Optional[str] = None,
-        subdistrict_code: Optional[str] = None,
-        survey_status: Optional[str] = None,
+        district_code: Optional[str] = None,
+        neighborhood_code: Optional[str] = None,
         has_active_assignment: Optional[bool] = None,
         page: int = 1,
         page_size: int = 100
     ) -> OperationResult[List[Building]]:
-        """
-        البحث عن مباني للتعيين باستخدام الفلاتر فقط (بدون polygon).
-
-        أفضل ممارسة: يقلل الحمل على قاعدة البيانات المحلية بالبحث مباشرة في Backend.
-        مثالي لـ Step 1 حيث يستخدم المستخدم الفلاتر بدون رسم polygon.
-
-        Args:
-            governorate_code: كود المحافظة (optional)
-            subdistrict_code: كود المنطقة الفرعية (optional)
-            survey_status: حالة المسح (optional) - not_surveyed, in_progress, completed
-            has_active_assignment: فلتر حسب assignment (optional)
-            page: رقم الصفحة
-            page_size: عدد النتائج في الصفحة
-
-        Returns:
-            OperationResult with list of Buildings from API
-
-        Example:
-            # البحث عن مباني غير مُعيّنة في محافظة حلب
-            result = controller.search_for_assignment_by_filters(
-                governorate_code="01",
-                has_active_assignment=False
-            )
-        """
+        """Search buildings for assignment via API filters (district, neighborhood, assignment status)."""
         try:
             self._emit_started("search_for_assignment_by_filters")
 
-            # Call Backend API with filters only (no polygon needed)
             response = self._api_service.get_buildings_for_assignment(
-                governorate_code=governorate_code,
-                subdistrict_code=subdistrict_code,
-                survey_status=survey_status,
+                district_code=district_code,
+                neighborhood_code=neighborhood_code,
                 has_active_assignment=has_active_assignment,
                 page=page,
                 page_size=page_size
             )
 
-            # Convert API response to Building objects
             buildings = []
-            for item in response.get("buildings", response.get("items", [])):
+            for item in response.get("items", []):
                 building = self._api_dto_to_building(item)
                 buildings.append(building)
 

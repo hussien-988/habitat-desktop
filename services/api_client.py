@@ -571,78 +571,66 @@ class TRRCMSApiClient:
 
     def get_buildings_for_assignment(
         self,
-        governorate_code: Optional[str] = None,
-        subdistrict_code: Optional[str] = None,
-        survey_status: Optional[str] = None,
-        has_active_assignment: Optional[bool] = None,
-        page: int = 1,
-        page_size: int = 100
+        governorate_code=None,
+        district_code=None,
+        sub_district_code=None,
+        community_code=None,
+        neighborhood_code=None,
+        building_code=None,
+        building_type=None,
+        building_status=None,
+        has_active_assignment=None,
+        latitude=None,
+        longitude=None,
+        radius_meters=None,
+        polygon_wkt=None,
+        page=1,
+        page_size=100,
+        sort_by=None,
+        sort_descending=None
     ) -> Dict[str, Any]:
         """
-        الحصول على المباني للتعيين مع دعم الفلاتر (بدون polygon).
-
-        هذا هو الـ endpoint المُخصص لـ Field Assignment مع فلاتر!
-        لا يحتاج polygon - مناسب تماماً للـ Step 1 filters.
-
-        Args:
-            governorate_code: كود المحافظة (optional)
-            subdistrict_code: كود المنطقة الفرعية (optional)
-            survey_status: فلتر حالة المسح (optional)
-                          not_surveyed, in_progress, completed, verified, etc.
-            has_active_assignment: فلتر حسب وجود assignment نشط (optional)
-                                  True: فقط المباني المُعيّنة
-                                  False: فقط المباني غير المُعيّنة
-                                  None: جميع المباني
-            page: رقم الصفحة (default: 1)
-            page_size: عدد النتائج في الصفحة (default: 100)
-
-        Returns:
-            {
-                "items": [...],  # List of BuildingDto
-                "totalCount": int,
-                "page": int,
-                "pageSize": int,
-                "totalPages": int
-            }
-
-        Example:
-            # بحث عن مباني غير مُعيّنة في محافظة حلب
-            result = client.get_buildings_for_assignment(
-                governorate_code="01",
-                has_active_assignment=False,
-                page=1,
-                page_size=100
-            )
-            buildings = result.get("items", [])
-
-        Endpoint: GET /api/v1/BuildingAssignment/buildings
+        GET /api/v1/BuildingAssignments/buildings — all Swagger parameters.
         """
-        params = {
-            "page": page,
-            "pageSize": page_size
-        }
+        params = {"page": page, "pageSize": page_size}
 
-        # Add optional filters
         if governorate_code:
             params["governorateCode"] = governorate_code
-
-        if subdistrict_code:
-            params["subdistrictCode"] = subdistrict_code
-
-        if survey_status:
-            params["surveyStatus"] = survey_status
-
+        if district_code:
+            params["districtCode"] = district_code
+        if sub_district_code:
+            params["subDistrictCode"] = sub_district_code
+        if community_code:
+            params["communityCode"] = community_code
+        if neighborhood_code:
+            params["neighborhoodCode"] = neighborhood_code
+        if building_code:
+            params["buildingCode"] = building_code
+        if building_type is not None:
+            params["buildingType"] = building_type
+        if building_status is not None:
+            params["buildingStatus"] = building_status
         if has_active_assignment is not None:
             params["hasActiveAssignment"] = str(has_active_assignment).lower()
+        if latitude is not None:
+            params["latitude"] = latitude
+        if longitude is not None:
+            params["longitude"] = longitude
+        if radius_meters is not None:
+            params["radiusMeters"] = radius_meters
+        if polygon_wkt:
+            params["polygonWkt"] = polygon_wkt
+        if sort_by:
+            params["sortBy"] = sort_by
+        if sort_descending is not None:
+            params["sortDescending"] = str(sort_descending).lower()
 
         logger.debug(f"Fetching buildings for assignment with filters: {params}")
         response = self._request("GET", "/v1/BuildingAssignments/buildings", params=params)
 
-        # API returns paginated response
         items = response.get("items", [])
         total_count = response.get("totalCount", 0)
-
-        logger.info(f"Found {len(items)} buildings for assignment (total: {total_count}) using filter API")
+        logger.info(f"Found {len(items)} buildings for assignment (total: {total_count})")
 
         return response
 
@@ -977,6 +965,19 @@ class TRRCMSApiClient:
         logger.info(f"Creating assignment for {len(buildings)} buildings → researcher: {field_collector_id}")
         return self._request("POST", "/v1/BuildingAssignments/assign", json_data=payload)
 
+    def get_all_assignments(
+        self,
+        page: int = 1,
+        page_size: int = 100
+    ) -> Dict[str, Any]:
+        """
+        جلب جميع تعيينات المباني مع التصفية والتقسيم.
+
+        Endpoint: GET /api/v1/BuildingAssignments
+        """
+        params = {"page": page, "pageSize": page_size}
+        return self._request("GET", "/v1/BuildingAssignments", params=params)
+
     def get_assignment(self, assignment_id: str) -> Dict[str, Any]:
         """
         جلب تفاصيل تعيين محدد.
@@ -1045,7 +1046,7 @@ class TRRCMSApiClient:
 
         logger.info(f"Updating assignment {assignment_id} transfer status → {transfer_status}")
         return self._request(
-            "PUT",
+            "POST",
             f"/v1/BuildingAssignments/{assignment_id}/transfer-status",
             json_data=payload
         )

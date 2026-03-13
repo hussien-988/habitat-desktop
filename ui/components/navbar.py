@@ -672,6 +672,12 @@ class Navbar(QFrame):
         """Handle sync data request from ID badge dropdown"""
         self.sync_requested.emit()
 
+    def show_sync_notification(self, count: int):
+        self.id_badge.show_notification(count)
+
+    def hide_sync_notification(self):
+        self.id_badge.hide_notification()
+
     def _on_password_change_requested(self):
         """Handle password change request from ID badge dropdown"""
         self.password_change_requested.emit()

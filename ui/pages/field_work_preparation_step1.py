@@ -17,6 +17,7 @@ from PyQt5.QtCore import Qt, pyqtSignal, QSize
 from PyQt5.QtGui import QIcon, QColor
 
 from controllers.building_controller import BuildingController
+from services.api_client import get_api_client
 from ui.components.icon import Icon
 from ui.components.wizard_header import WizardHeader
 from ui.design_system import Colors, PageDimensions
@@ -167,14 +168,12 @@ class FieldWorkPreparationStep1(QWidget):
         self._selected_building_ids = set()  # Buildings shown in table (may be unchecked)
         self._confirmed_building_ids = set()  # Buildings confirmed for transfer (checked only)
 
-        # Cache for filter data
-        self._governorates = []
-        self._subdistricts = []
-        self._building_statuses = []
+        # Cache for filter data (from API)
+        self._all_communities = []  # [(code, name_ar), ...]
+        self._all_neighborhoods = []  # [(code, name_ar, community_code), ...]
 
         self._setup_ui()
         self._load_filter_data()
-        self._load_buildings()
 
         # Install event filter to detect clicks outside suggestions
         from PyQt5.QtWidgets import QApplication
@@ -221,31 +220,34 @@ class FieldWorkPreparationStep1(QWidget):
         filters_layout = QHBoxLayout()
         filters_layout.setSpacing(12)
 
-        # Filter 1: الناحية (Subdistrict)
-        filter1_container = self._create_filter_field("الناحية")
-        self.subdistrict_combo = QComboBox()
-        self.subdistrict_combo.setPlaceholderText("اسم الناحية")
-        self._style_combo(self.subdistrict_combo, "اسم الناحية")
-        self.subdistrict_combo.currentIndexChanged.connect(self._on_filter_changed)
-        filter1_container.layout().addWidget(self.subdistrict_combo)
+        # Filter 1: المجتمع (Community)
+        filter1_container = self._create_filter_field("المجتمع")
+        self.community_combo = QComboBox()
+        self.community_combo.setPlaceholderText("اختر المجتمع")
+        self._style_combo(self.community_combo, "اختر المجتمع")
+        self.community_combo.currentIndexChanged.connect(self._on_community_changed)
+        filter1_container.layout().addWidget(self.community_combo)
         filters_layout.addWidget(filter1_container, 1)
 
-        # Filter 2: المحافظة (Governorate)
-        filter2_container = self._create_filter_field("المحافظة")
-        self.governorate_combo = QComboBox()
-        self.governorate_combo.setPlaceholderText("اسم المحافظة")
-        self._style_combo(self.governorate_combo, "اسم المحافظة")
-        self.governorate_combo.currentIndexChanged.connect(self._on_filter_changed)
-        filter2_container.layout().addWidget(self.governorate_combo)
+        # Filter 2: الحي (Neighborhood) — cascading from community
+        filter2_container = self._create_filter_field("الحي")
+        self.neighborhood_combo = QComboBox()
+        self.neighborhood_combo.setPlaceholderText("اختر الحي")
+        self._style_combo(self.neighborhood_combo, "اختر الحي")
+        self.neighborhood_combo.currentIndexChanged.connect(self._on_filter_changed)
+        filter2_container.layout().addWidget(self.neighborhood_combo)
         filters_layout.addWidget(filter2_container, 1)
 
-        # Filter 3: حالة المسح (Survey Status)
-        filter3_container = self._create_filter_field("حالة المسح")
-        self.building_status_combo = QComboBox()
-        self.building_status_combo.setPlaceholderText("حالة المسح")
-        self._style_combo(self.building_status_combo, "حالة المسح")
-        self.building_status_combo.currentIndexChanged.connect(self._on_filter_changed)
-        filter3_container.layout().addWidget(self.building_status_combo)
+        # Filter 3: حالة التعيين (Assignment Status)
+        filter3_container = self._create_filter_field("حالة التعيين")
+        self.assignment_status_combo = QComboBox()
+        self.assignment_status_combo.setPlaceholderText("حالة التعيين")
+        self._style_combo(self.assignment_status_combo, "حالة التعيين")
+        self.assignment_status_combo.addItem("الكل", None)
+        self.assignment_status_combo.addItem("غير معيّن", "false")
+        self.assignment_status_combo.addItem("معيّن", "true")
+        self.assignment_status_combo.currentIndexChanged.connect(self._on_filter_changed)
+        filter3_container.layout().addWidget(self.assignment_status_combo)
         filters_layout.addWidget(filter3_container, 1)
 
         card_layout.addLayout(filters_layout)
@@ -374,10 +376,27 @@ class FieldWorkPreparationStep1(QWidget):
         # Position list: overlaps with card's bottom padding
         cards_layout.addSpacing(-27)
 
+        # Empty state label (shown when no buildings found)
+        self.empty_label = QLabel("لا يوجد مباني")
+        self.empty_label.setFixedWidth(1225)
+        self.empty_label.setFixedHeight(179)
+        self.empty_label.setAlignment(Qt.AlignCenter)
+        self.empty_label.setFont(create_font(size=11, weight=FontManager.WEIGHT_REGULAR))
+        self.empty_label.setStyleSheet(f"""
+            QLabel {{
+                color: #9CA3AF;
+                background-color: {Colors.SURFACE};
+                border: 1px solid {Colors.BORDER_DEFAULT};
+                border-radius: 8px;
+            }}
+        """)
+        self.empty_label.setVisible(False)
+
         # Center the list horizontally
         list_container = QHBoxLayout()
         list_container.addStretch(1)
         list_container.addWidget(self.buildings_list)
+        list_container.addWidget(self.empty_label)
         list_container.addStretch(1)
 
         cards_layout.addLayout(list_container)
@@ -572,6 +591,7 @@ class FieldWorkPreparationStep1(QWidget):
         combo.setEditable(True)
         combo.lineEdit().setReadOnly(True)
         combo.lineEdit().setPlaceholderText(placeholder)
+        combo.lineEdit().installEventFilter(self)
 
         # Load down.png icon
         down_icon_path = self._get_down_icon_path()
@@ -680,86 +700,72 @@ class FieldWorkPreparationStep1(QWidget):
             """)
 
     def _load_filter_data(self):
-        """Load filter data from database (DRY - best practice)."""
+        """Load communities and neighborhoods from API."""
         try:
-            # Load all buildings to extract unique values
-            result = self.building_controller.load_buildings()
-            if not result.success:
-                logger.error(f"Failed to load buildings for filter data: {result.message}")
-                return
+            api = get_api_client()
 
-            buildings = result.data
+            # Load communities (Aleppo: gov=01, dist=01, subdist=01)
+            communities = api.get_communities(
+                governorate_code="01", district_code="01", sub_district_code="01"
+            )
+            for c in communities:
+                if c.get("isActive", True):
+                    code = c.get("code", "")
+                    name_ar = c.get("nameArabic", "") or c.get("nameEnglish", "")
+                    if code and name_ar:
+                        self._all_communities.append((code, name_ar))
+            self._all_communities.sort(key=lambda x: x[1])
 
-            # Extract unique governorates (DRY - using set comprehension)
-            governorates_set = {
-                (b.governorate_code, b.governorate_name_ar)
-                for b in buildings
-                if b.governorate_code and b.governorate_name_ar
-            }
-            self._governorates = sorted(governorates_set, key=lambda x: x[1])
+            # Populate community combo
+            self.community_combo.addItem("الكل", None)
+            for code, name_ar in self._all_communities:
+                self.community_combo.addItem(name_ar, code)
 
-            # Extract unique subdistricts
-            subdistricts_set = {
-                (b.subdistrict_code, b.subdistrict_name_ar)
-                for b in buildings
-                if b.subdistrict_code and b.subdistrict_name_ar
-            }
-            self._subdistricts = sorted(subdistricts_set, key=lambda x: x[1])
+            # Load all neighborhoods (Aleppo)
+            neighborhoods = api.get_neighborhoods(
+                governorate_code="01", district_code="01", subdistrict_code="01"
+            )
+            for n in neighborhoods:
+                code = n.get("neighborhoodCode") or n.get("code", "")
+                name_ar = n.get("nameArabic", "") or n.get("nameEnglish", "")
+                comm_code = n.get("communityCode", "")
+                if code and name_ar:
+                    self._all_neighborhoods.append((code, name_ar, comm_code))
+            self._all_neighborhoods.sort(key=lambda x: x[1])
 
-            # Survey Status (حالة المسح الميداني) - from Backend API
-            # Used for BuildingAssignment API filtering (UC-012)
-            self._survey_statuses = [
-                ("not_surveyed", "لم يتم المسح"),
-                ("in_progress", "جاري المسح"),
-                ("completed", "تم المسح"),
-                ("verified", "تم التحقق"),
-            ]
+            # Populate neighborhood combo (all initially)
+            self.neighborhood_combo.addItem("الكل", None)
+            for code, name_ar, _ in self._all_neighborhoods:
+                self.neighborhood_combo.addItem(name_ar, code)
 
-            # Populate combo boxes
-            self._populate_filter_combos()
-
-        except Exception as e:
-            logger.error(f"Error loading filter data: {e}", exc_info=True)
-
-    def _populate_filter_combos(self):
-        """Populate filter combo boxes with data (DRY)."""
-        # Populate governorates
-        for code, name_ar in self._governorates:
-            self.governorate_combo.addItem(name_ar, code)
-
-        # Populate subdistricts
-        for code, name_ar in self._subdistricts:
-            self.subdistrict_combo.addItem(name_ar, code)
-
-        # Populate survey statuses (حالة المسح)
-        for status_code, status_name_ar in self._survey_statuses:
-            self.building_status_combo.addItem(status_name_ar, status_code)
-
-    def _load_buildings(self):
-        """Load buildings into the list."""
-        result = self.building_controller.load_buildings()
-        self.buildings_list.clear()
-
-        if not result.success:
-            logger.error(f"Failed to load buildings: {result.message}")
-            return
-
-        self._all_buildings = result.data
-
-        for building in self._all_buildings:
-            item = QListWidgetItem(self.buildings_list)
-
-            # Create custom widget with checkbox
-            widget = BuildingCheckboxItem(building, self)
-            widget.checkbox.stateChanged.connect(
-                lambda state, b=building: self._on_checkbox_changed(b, state)
+            logger.info(
+                f"Loaded {len(self._all_communities)} communities, "
+                f"{len(self._all_neighborhoods)} neighborhoods from API"
             )
 
-            # Set item size
-            item.setSizeHint(widget.sizeHint())
+        except Exception as e:
+            logger.error(f"Error loading filter data from API: {e}", exc_info=True)
 
-            self.buildings_list.addItem(item)
-            self.buildings_list.setItemWidget(item, widget)
+    def _on_community_changed(self, index):
+        """Cascade: update neighborhoods based on selected community."""
+        community_code = self.community_combo.currentData()
+
+        self.neighborhood_combo.blockSignals(True)
+        self.neighborhood_combo.clear()
+        self.neighborhood_combo.addItem("الكل", None)
+
+        if community_code:
+            # Filter neighborhoods by community
+            for code, name_ar, comm_code in self._all_neighborhoods:
+                if comm_code == community_code:
+                    self.neighborhood_combo.addItem(name_ar, code)
+        else:
+            # Show all neighborhoods
+            for code, name_ar, _ in self._all_neighborhoods:
+                self.neighborhood_combo.addItem(name_ar, code)
+
+        self.neighborhood_combo.blockSignals(False)
+        self._on_filter_changed()
 
     def _on_checkbox_changed(self, building, state):
         """Handle checkbox state change in suggestions list."""
@@ -878,6 +884,7 @@ class FieldWorkPreparationStep1(QWidget):
         # Create row container (clickable)
         row = ClickableRowWidget(checkbox)
         row.setObjectName(f"row_{building.building_id}")
+        row._building_obj = building
         row.setStyleSheet("""
             QWidget {
                 background: transparent;
@@ -1006,95 +1013,94 @@ class FieldWorkPreparationStep1(QWidget):
         self.buildings_list.setVisible(visible)
         # Adjust height to prevent spacing gaps when hidden
         self.buildings_list.setFixedHeight(179 if visible else 0)
+        if not visible:
+            self.empty_label.setVisible(False)
 
     def _on_search_text_changed(self, text):
-        """
-        Show/hide suggestions on text change.
-
-        Rules:
-        - Show suggestions if: search text OR active filters
-        - Hide suggestions if: no search text AND no active filters
-        - Update selected card visibility based on suggestions visibility
-        """
+        """Show/hide suggestions on text change."""
         filters = self.get_filters()
         has_active_filter = any([
-            filters['subdistrict'],
-            filters['governorate'],
-            filters['building_status']
+            filters['community'],
+            filters['neighborhood'],
+            filters['assignment_status'] is not None
         ])
 
-        # Show suggestions only if there's search text OR active filters
         should_show = bool(text.strip()) or has_active_filter
         self._set_suggestions_visible(should_show)
-        self._filter_buildings_local()
 
-        # Update selected card visibility (depends on suggestions visibility)
+        if has_active_filter or text.strip():
+            self._load_buildings_from_api()
+
         self._update_selected_card_visibility()
 
     def _load_buildings_from_api(self):
-        """
-        Load buildings from Backend API with filters.
-        Falls back to local DB filtering when API is unavailable.
-        """
+        """Load buildings from Backend API with current filters."""
         filters = self.get_filters()
 
+        # Parse assignment status
+        has_active = None
+        assignment_val = filters.get('assignment_status')
+        if assignment_val == "false":
+            has_active = False
+        elif assignment_val == "true":
+            has_active = True
+
         try:
-            result = self.building_controller.search_for_assignment_by_filters(
-                governorate_code=filters['governorate'],
-                subdistrict_code=filters['subdistrict'],
-                survey_status=filters['building_status'],
-                has_active_assignment=False,
+            api = get_api_client()
+            response = api.get_buildings_for_assignment(
+                community_code=filters['community'],
+                neighborhood_code=filters['neighborhood'],
+                has_active_assignment=has_active,
                 page=1,
                 page_size=500
             )
 
-            if not result.success:
-                logger.warning(f"API search failed: {result.message}, using local fallback")
-                self._filter_buildings_local()
-                return
+            items = response.get("items", [])
+            buildings = [self._api_dto_to_building(item) for item in items]
 
-            self.buildings_list.clear()
-            buildings = result.data
-
-            search_text = self.building_search.text().lower()
+            # Apply local text search on top of API results
+            search_text = self.building_search.text().lower().strip()
             if search_text:
                 buildings = [
                     b for b in buildings
                     if search_text in (b.building_id.lower() if b.building_id else "")
                 ]
 
-            logger.info(f"Loaded {len(buildings)} buildings from API with filters")
-            self._populate_buildings_list(buildings)
+            logger.info(f"Loaded {len(buildings)} buildings from API")
+            self.buildings_list.clear()
+
+            if buildings:
+                self.empty_label.setVisible(False)
+                self.buildings_list.setVisible(True)
+                self.buildings_list.setFixedHeight(179)
+                self._populate_buildings_list(buildings)
+            else:
+                self.buildings_list.setVisible(False)
+                self.buildings_list.setFixedHeight(0)
+                self.empty_label.setVisible(True)
 
         except Exception as e:
-            logger.warning(f"API error: {e}, using local fallback")
-            self._filter_buildings_local()
+            logger.error(f"Failed to load buildings from API: {e}", exc_info=True)
+            self.buildings_list.clear()
 
-    def _filter_buildings_local(self):
-        """
-        Fallback: rebuild list from cached local buildings with filters applied.
-        Used when Backend API is unavailable.
-        """
-        if not hasattr(self, '_all_buildings') or not self._all_buildings:
-            logger.warning("No cached buildings for local filtering")
-            return
+    def _api_dto_to_building(self, dto):
+        """Convert API BuildingDto to Building object for UI."""
+        from models.building import Building
 
-        filters = self.get_filters()
-        search_text = self.building_search.text().lower()
+        building = Building(
+            building_id=dto.get("buildingCode", ""),
+            building_uuid=dto.get("id", ""),
+            building_type=dto.get("buildingType", 1),
+            building_status=dto.get("buildingStatus", 1),
+            latitude=dto.get("latitude"),
+            longitude=dto.get("longitude"),
+            number_of_units=dto.get("numberOfPropertyUnits", 0),
+        )
+        building.has_active_assignment = dto.get("hasActiveAssignment", False)
+        building.current_assignment_id = dto.get("currentAssignmentId")
+        building.current_assignee_name = dto.get("currentAssigneeName")
 
-        filtered = []
-        for b in self._all_buildings:
-            if filters['governorate'] and b.governorate_code != filters['governorate']:
-                continue
-            if filters['subdistrict'] and b.subdistrict_code != filters['subdistrict']:
-                continue
-            if search_text and search_text not in (b.building_id.lower() if b.building_id else ""):
-                continue
-            filtered.append(b)
-
-        self.buildings_list.clear()
-        logger.info(f"Local filter: {len(filtered)}/{len(self._all_buildings)} buildings match")
-        self._populate_buildings_list(filtered)
+        return building
 
     def _populate_buildings_list(self, buildings):
         """Populate the suggestions list with building items."""
@@ -1111,23 +1117,17 @@ class FieldWorkPreparationStep1(QWidget):
             self.buildings_list.setItemWidget(item, widget)
 
     def _on_filter_changed(self):
-        """
-        Handle filter change - pre-loads filtered data without opening suggestions.
-
-        Filters are applied silently. Suggestions only open when user types in
-        the search field or clicks the search icon.
-        """
+        """Handle filter change — calls API directly."""
         filters = self.get_filters()
         logger.debug(f"Filters changed: {filters}")
 
         has_active_filter = any([
-            filters['subdistrict'],
-            filters['governorate'],
-            filters['building_status']
+            filters['community'],
+            filters['neighborhood'],
+            filters['assignment_status'] is not None
         ])
 
         if has_active_filter or filters['search_text']:
-            # Pre-load filtered data but do NOT auto-open suggestions
             self._load_buildings_from_api()
         else:
             self.buildings_list.clear()
@@ -1137,35 +1137,16 @@ class FieldWorkPreparationStep1(QWidget):
         search_text = self.building_search.text().strip()
         logger.debug(f"Searching for: {search_text}")
 
-        filters = self.get_filters()
-        has_active_filter = any([
-            filters['subdistrict'],
-            filters['governorate'],
-            filters['building_status']
-        ])
+        self._load_buildings_from_api()
 
-        if has_active_filter:
-            self._load_buildings_from_api()
-        else:
-            self._filter_buildings_local()
-
-        # Show suggestions when user explicitly clicks search
         self._set_suggestions_visible(True)
         self._update_selected_card_visibility()
 
     def _on_open_map(self):
-        """
-        Open map dialog with polygon drawing for multi-building selection.
-
-        BEST PRACTICE: Same as wizard - NO pre-loading of buildings!
-        - Dialog loads buildings dynamically with viewport loading
-        - Fast instant opening (no 6+ second wait)
-        - DRY principle: unified with BuildingMapDialog
-        """
+        """Open map dialog with polygon drawing for multi-building selection."""
         try:
             from ui.components.polygon_map_dialog_v2 import show_polygon_map_dialog
 
-            # BEST PRACTICE: Get auth token only (like wizard - NO building loading!)
             auth_token = None
             try:
                 main_window = self
@@ -1173,12 +1154,9 @@ class FieldWorkPreparationStep1(QWidget):
                     main_window = main_window.parent()
                 if main_window and hasattr(main_window, 'current_user') and main_window.current_user:
                     auth_token = getattr(main_window.current_user, '_api_token', None)
-                    logger.debug(f"Auth token available for PolygonMapDialog")
             except Exception as e:
                 logger.warning(f"Could not get auth token: {e}")
 
-            # FAST: Open dialog immediately (like wizard)
-            # Dialog handles building loading internally with viewport loading
             selected_buildings = show_polygon_map_dialog(
                 db=self.building_controller.db,
                 auth_token=auth_token,
@@ -1248,12 +1226,11 @@ class FieldWorkPreparationStep1(QWidget):
             self.next_clicked.emit()
 
     def get_filters(self) -> dict:
-        """Get current filter values (SOLID - consistent interface)."""
-        # Get values only if index > -1 (item selected, not placeholder)
+        """Get current filter values."""
         return {
-            'subdistrict': self.subdistrict_combo.currentData() if self.subdistrict_combo.currentIndex() >= 0 else None,
-            'governorate': self.governorate_combo.currentData() if self.governorate_combo.currentIndex() >= 0 else None,
-            'building_status': self.building_status_combo.currentData() if self.building_status_combo.currentIndex() >= 0 else None,
+            'community': self.community_combo.currentData() if self.community_combo.currentIndex() >= 0 else None,
+            'neighborhood': self.neighborhood_combo.currentData() if self.neighborhood_combo.currentIndex() >= 0 else None,
+            'assignment_status': self.assignment_status_combo.currentData() if self.assignment_status_combo.currentIndex() >= 0 else None,
             'search_text': self.building_search.text().strip()
         }
 
@@ -1262,23 +1239,41 @@ class FieldWorkPreparationStep1(QWidget):
         return list(self._selected_building_ids)
 
     def get_selected_buildings(self):
-        """Get list of confirmed (checked) building objects."""
-        if not hasattr(self, '_all_buildings'):
-            return []
+        """Get list of confirmed (checked) building objects from suggestions list."""
+        confirmed = []
+        for i in range(self.buildings_list.count()):
+            item = self.buildings_list.item(i)
+            widget = self.buildings_list.itemWidget(item)
+            if widget and hasattr(widget, 'building'):
+                if widget.building.building_id in self._confirmed_building_ids:
+                    confirmed.append(widget.building)
 
-        # Return only confirmed (checked) buildings
-        return [
-            building for building in self._all_buildings
-            if building.building_id in self._confirmed_building_ids
-        ]
+        # Also include buildings added via polygon map (not in suggestions)
+        suggestion_ids = {b.building_id for b in confirmed}
+        for bid in self._confirmed_building_ids:
+            if bid not in suggestion_ids:
+                # Check table rows for buildings added via polygon
+                for j in range(self.selected_table_layout.count()):
+                    row_widget = self.selected_table_layout.itemAt(j).widget()
+                    if row_widget and hasattr(row_widget, '_building_obj'):
+                        if row_widget._building_obj.building_id == bid:
+                            confirmed.append(row_widget._building_obj)
+
+        return confirmed
 
     def eventFilter(self, obj, event):
         """
-        Global event filter to detect clicks outside the suggestions list.
-
-        Installed on QApplication to intercept all mouse events.
+        Event filter for:
+        1. Combo box line edits — click anywhere opens dropdown
+        2. Clicks outside suggestions list — dismiss suggestions
         """
         from PyQt5.QtCore import QEvent, QRect
+
+        if event.type() == QEvent.MouseButtonPress:
+            parent = obj.parent()
+            if isinstance(parent, QComboBox):
+                parent.showPopup()
+                return True
 
         if event.type() == QEvent.MouseButtonPress and self.buildings_list.isVisible():
             # Check if click is inside suggestions list or search bar

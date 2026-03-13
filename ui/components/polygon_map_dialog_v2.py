@@ -47,9 +47,6 @@ class PolygonMapDialog(BaseMapDialog):
         """
         Initialize polygon map dialog.
 
-        BEST PRACTICE: Same as BuildingMapDialog (wizard) - NO buildings parameter!
-        Buildings are loaded dynamically with viewport loading.
-
         Args:
             db: Database instance
             auth_token: Optional API authentication token (REQUIRED for BuildingAssignments API)
@@ -58,7 +55,7 @@ class PolygonMapDialog(BaseMapDialog):
         self.db = db
         self._selected_buildings = []
         self._building_id_to_building = {}  # Quick lookup (populated during selection)
-        self.buildings = [] # FIX: Initialize buildings list for fallback method
+        self.buildings = []
 
         # CRITICAL FIX: Store auth_token BEFORE super().__init__ temporarily
         # We'll reassign after super().__init__ because BaseMapDialog.__init__ resets it to None!
@@ -264,7 +261,7 @@ class PolygonMapDialog(BaseMapDialog):
         """
         Load map with multi-select mode.
 
-        
+
         - Load 200 buildings initially (fast QWebChannel init)
         - Cache initial buildings for multi-select lookup
         - More buildings loaded dynamically via viewport loading
@@ -718,9 +715,6 @@ def show_polygon_map_dialog(
     ) -> Optional[List[Building]]:
     """
     Convenience function to show polygon map dialog.
-
-    BEST PRACTICE: Same signature as wizard - NO buildings parameter!
-    Buildings are loaded dynamically with viewport loading for fast performance.
 
     Args:
         db: Database instance

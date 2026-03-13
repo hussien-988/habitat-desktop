@@ -27,17 +27,17 @@ _STATUS_CONFIG = {
         'bg': '#F3F4F6',
     },
     'transferring': {
-        'label': 'قيد النقل',
+        'label': 'قيد المزامنة',
         'color': '#3890DF',
         'bg': '#EBF5FF',
     },
     'transferred': {
-        'label': 'تم النقل',
+        'label': 'تمت المزامنة',
         'color': '#10B981',
         'bg': '#ECFDF5',
     },
     'failed': {
-        'label': 'فشل النقل',
+        'label': 'فشلت المزامنة',
         'color': '#EF4444',
         'bg': '#FEF2F2',
     },
