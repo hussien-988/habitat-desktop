@@ -378,6 +378,7 @@ class MainWindow(QMainWindow):
         self.navbar.logout_requested.connect(self._handle_logout)
         self.navbar.language_change_requested.connect(self.toggle_language)
         self.navbar.sync_requested.connect(self._on_sync_requested)
+        self.pages[Pages.SYNC_DATA].sync_notification.connect(self._on_sync_notification)
         self.navbar.password_change_requested.connect(self._on_password_change_requested)
         self.navbar.security_settings_requested.connect(self._on_security_settings_requested)
         self.navbar.data_management_requested.connect(self._on_data_management_requested)
@@ -811,7 +812,7 @@ class MainWindow(QMainWindow):
                             assigned_by=current_user_id,
                             requires_revisit=is_revisit,
                             revisit_reason=reason,
-                            notes=notes
+                            notes=assignment_notes
                         )
                         assignment_ids.append(assignment.assignment_id)
                     except Exception as local_err:
@@ -829,13 +830,13 @@ class MainWindow(QMainWindow):
             # Prefer API assignment IDs over local ones
             effective_ids = api_assignment_ids if api_assignment_ids else assignment_ids
 
-            # Show completion & transfer status view (instead of resetting wizard)
+            # Reset wizard and navigate to sync data page
             if Pages.FIELD_ASSIGNMENT in self.pages:
                 field_page = self.pages[Pages.FIELD_ASSIGNMENT]
-                if hasattr(field_page, 'show_completion'):
-                    field_page.show_completion(buildings, researcher_name, effective_ids)
-                elif hasattr(field_page, 'refresh'):
+                if hasattr(field_page, 'refresh'):
                     field_page.refresh()
+
+            self.navigate_to(Pages.SYNC_DATA)
 
         except Exception as e:
             logger.error(f"Error in _on_field_work_completed: {e}", exc_info=True)
@@ -846,7 +847,17 @@ class MainWindow(QMainWindow):
 
     def _on_sync_requested(self):
         """Handle sync data request from navbar menu."""
+        self.navbar.hide_sync_notification()
+        sync_page = self.pages.get(Pages.SYNC_DATA)
+        if sync_page:
+            sync_page.clear_notifications()
         self.navigate_to(Pages.SYNC_DATA)
+
+    def _on_sync_notification(self, count: int):
+        if count > 0:
+            self.navbar.show_sync_notification(count)
+        else:
+            self.navbar.hide_sync_notification()
 
     def _on_password_change_requested(self):
         """Handle password change request from navbar menu (admin only)."""
@@ -986,6 +997,12 @@ class MainWindow(QMainWindow):
             return
 
         page = self.pages[page_id]
+
+        # Clear sync notification badge when navigating to sync page
+        if page_id == Pages.SYNC_DATA:
+            self.navbar.hide_sync_notification()
+            if hasattr(page, 'clear_notifications'):
+                page.clear_notifications()
 
         # Refresh page data if method exists
         if hasattr(page, 'refresh'):

@@ -62,10 +62,33 @@ class _MenuItem(QWidget):
         self._text_label.setStyleSheet(f"color: {Colors.TEXT_PRIMARY}; background: transparent;")
         layout.addWidget(self._text_label, stretch=1)
 
+        # Optional notification badge
+        self._badge = QLabel()
+        self._badge.setAlignment(Qt.AlignCenter)
+        self._badge.setFixedSize(16, 16)
+        self._badge.setStyleSheet("""
+            QLabel {
+                background-color: #EF4444;
+                color: white;
+                border-radius: 8px;
+                font-size: 9px;
+                font-weight: bold;
+            }
+        """)
+        self._badge.hide()
+        layout.addWidget(self._badge)
+
         self._apply_style()
 
     def set_text(self, text: str):
         self._text_label.setText(text)
+
+    def show_badge(self, count: int):
+        self._badge.setText(str(count) if count <= 9 else "9+")
+        self._badge.show()
+
+    def hide_badge(self):
+        self._badge.hide()
 
     def _apply_style(self):
         if self._hovered:
@@ -298,6 +321,43 @@ class IDBadgeWidget(QWidget):
         self.setCursor(QCursor(Qt.PointingHandCursor))
         self.setFixedHeight(22)
 
+        # Notification badge (red circle on arrow)
+        self._notif_badge = QLabel(self)
+        self._notif_badge.setAlignment(Qt.AlignCenter)
+        self._notif_badge.setFixedSize(16, 16)
+        self._notif_badge.setStyleSheet("""
+            QLabel {
+                background-color: #EF4444;
+                color: white;
+                border-radius: 8px;
+                font-size: 9px;
+                font-weight: bold;
+            }
+        """)
+        self._notif_badge.hide()
+
+    def show_notification(self, count: int):
+        self._notif_badge.setText(str(count) if count <= 9 else "9+")
+        self._notif_badge.show()
+        self._notif_badge.raise_()
+        self._position_badge()
+        if hasattr(self, '_sync_menu_item'):
+            self._sync_menu_item.show_badge(count)
+
+    def hide_notification(self):
+        self._notif_badge.hide()
+        if hasattr(self, '_sync_menu_item'):
+            self._sync_menu_item.hide_badge()
+
+    def _position_badge(self):
+        arrow_geo = self.arrow_label.geometry()
+        self._notif_badge.move(arrow_geo.x() - 5, max(0, arrow_geo.y() - 4))
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        if hasattr(self, '_notif_badge') and self._notif_badge.isVisible():
+            self._position_badge()
+
     def _apply_styling(self):
         self.setStyleSheet(f"""
             IDBadgeWidget {{
@@ -322,6 +382,7 @@ class IDBadgeWidget(QWidget):
 
         self._menu_item_widgets = []
         self._import_item = None
+        self._sync_menu_item = None
 
         for icon_name, tr_key, signal in self._menu_items_config:
             item = _MenuItem(icon_name, tr(tr_key))
@@ -330,6 +391,8 @@ class IDBadgeWidget(QWidget):
             self._menu_item_widgets.append((item, tr_key))
             if tr_key == "navbar.menu.import_data":
                 self._import_item = item
+            if tr_key == "navbar.menu.sync_data":
+                self._sync_menu_item = item
 
         self._popup.add_separator()
 
