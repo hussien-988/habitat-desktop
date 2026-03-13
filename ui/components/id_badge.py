@@ -98,7 +98,7 @@ class _MenuItem(QWidget):
 ARROW_HEIGHT = 10
 ARROW_WIDTH = 16
 POPUP_WIDTH = 191
-POPUP_BODY_HEIGHT = 245
+POPUP_BODY_HEIGHT = 283
 POPUP_RADIUS = 12
 SHADOW_MARGIN = 12
 
@@ -218,6 +218,7 @@ class IDBadgeWidget(QWidget):
     password_change_requested = pyqtSignal()
     security_settings_requested = pyqtSignal()
     data_management_requested = pyqtSignal()
+    import_requested = pyqtSignal()
     logout_requested = pyqtSignal()
 
     def __init__(self, user_id="12345", parent=None):
@@ -316,15 +317,19 @@ class IDBadgeWidget(QWidget):
             ("fluent", "navbar.menu.sync_data",         self.sync_requested),
             ("safe",   "navbar.menu.security_policies", self.security_settings_requested),
             ("data",   "navbar.menu.data_management",   self.data_management_requested),
+            ("data",   "navbar.menu.import_data",       self.import_requested),
         ]
 
         self._menu_item_widgets = []
+        self._import_item = None
 
         for icon_name, tr_key, signal in self._menu_items_config:
             item = _MenuItem(icon_name, tr(tr_key))
             item.clicked.connect(signal.emit)
             self._popup.add_item(item)
             self._menu_item_widgets.append((item, tr_key))
+            if tr_key == "navbar.menu.import_data":
+                self._import_item = item
 
         self._popup.add_separator()
 
@@ -357,6 +362,11 @@ class IDBadgeWidget(QWidget):
         for item, tr_key in self._menu_item_widgets:
             item.set_text(tr(tr_key))
         self._logout_item.set_text(tr("navbar.menu.logout"))
+
+    def configure_for_role(self, role: str):
+        """Show/hide role-restricted menu items."""
+        if self._import_item:
+            self._import_item.setVisible(role in {"admin", "data_manager"})
 
     def set_user_id(self, user_id):
         self.user_id = user_id

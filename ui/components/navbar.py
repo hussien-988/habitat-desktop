@@ -103,6 +103,7 @@ class Navbar(QFrame):
     password_change_requested = pyqtSignal()
     security_settings_requested = pyqtSignal()
     data_management_requested = pyqtSignal()
+    import_requested = pyqtSignal()
 
     def __init__(self, user_id=None, parent=None):
         super().__init__(parent)
@@ -176,6 +177,7 @@ class Navbar(QFrame):
         self.id_badge.password_change_requested.connect(self._on_password_change_requested)
         self.id_badge.security_settings_requested.connect(self._on_security_settings_requested)
         self.id_badge.data_management_requested.connect(self._on_data_management_requested)
+        self.id_badge.import_requested.connect(self._on_import_requested)
         layout.addWidget(self.id_badge)
 
         # Divider line between ID and Logo (Figma spec)
@@ -606,7 +608,7 @@ class Navbar(QFrame):
     }
 
     def configure_for_role(self, role: str):
-        """Show/hide tabs based on user role."""
+        """Show/hide tabs and menu items based on user role."""
         allowed = self.TAB_PERMISSIONS.get(role, [0, 1, 2, 3, 4])
         for i, btn in enumerate(self.tab_buttons):
             btn.setVisible(i in allowed)
@@ -616,6 +618,9 @@ class Navbar(QFrame):
                 self._set_active_tab(idx)
                 self.tab_changed.emit(idx)
                 break
+        # Propagate to ID badge menu
+        if hasattr(self, 'id_badge'):
+            self.id_badge.configure_for_role(role)
 
     # Public API methods
 
@@ -678,6 +683,10 @@ class Navbar(QFrame):
     def _on_data_management_requested(self):
         """Handle data management request from ID badge dropdown"""
         self.data_management_requested.emit()
+
+    def _on_import_requested(self):
+        """Handle import data request from ID badge dropdown"""
+        self.import_requested.emit()
 
 
 class SimpleNavbar(QFrame):

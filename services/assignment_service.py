@@ -264,17 +264,12 @@ class AssignmentService:
     def initiate_transfer(
         self,
         assignment_ids: List[str],
-        tablet_device_id: str
+        tablet_device_id: str = "",
+        field_collector_id: str = ""
     ) -> Dict[str, Any]:
         """
         Initiate transfer of assignments to tablet (UC-012 S08).
-
-        In a real implementation, this would:
-        1. Prepare payload with building data
-        2. Connect to tablet via LAN
-        3. Send data and await acknowledgment
-
-        For this simulation, we mark as transferring.
+        Calls API first, then updates local DB as cache.
         """
         results = {
             "success": [],
@@ -282,6 +277,16 @@ class AssignmentService:
             "payload_prepared": True
         }
 
+        # Call API
+        if field_collector_id:
+            try:
+                from services.api_client import get_api_client
+                api = get_api_client()
+                api.initiate_transfer(assignment_ids, field_collector_id=field_collector_id)
+            except Exception as api_err:
+                logger.warning(f"API initiate_transfer failed: {api_err}")
+
+        # Update local DB cache
         for assignment_id in assignment_ids:
             try:
                 query = """
@@ -338,7 +343,17 @@ class AssignmentService:
     def retry_transfer(self, assignment_id: str) -> bool:
         """
         Reset transfer status for retry (UC-012 S12).
+        Calls API first, then updates local DB as cache.
         """
+        # Call API
+        try:
+            from services.api_client import get_api_client
+            api = get_api_client()
+            api.retry_transfer([assignment_id])
+        except Exception as api_err:
+            logger.warning(f"API retry_transfer failed: {api_err}")
+
+        # Update local DB cache
         query = """
             UPDATE building_assignments
             SET transfer_status = 'not_transferred',

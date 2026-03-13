@@ -130,28 +130,49 @@ class FieldWorkPreparationStep2(QWidget):
         self._is_initialized = True  # Mark as initialized
 
     def _fetch_researchers_from_db(self):
-        """Fetch field researchers and data collectors from API."""
+        """Fetch field collectors from BuildingAssignments API."""
         try:
             from services.api_client import get_api_client
             api = get_api_client()
+            collectors = api.get_field_collectors()
+            items = collectors if isinstance(collectors, list) else collectors.get("items", []) if isinstance(collectors, dict) else []
             researchers = []
-            for role in ("field_researcher", "data_collector"):
-                result = api.get_all_users(role=role, is_active=True)
-                items = result.get("items", []) if isinstance(result, dict) else []
-                for user in items:
-                    user_id = user.get("id") or user.get("userId") or ""
-                    display_name = (
-                        user.get("fullNameArabic")
-                        or user.get("fullName")
-                        or user.get("userName")
-                        or user_id
-                    )
-                    if user_id:
-                        researchers.append((user_id, display_name, True))
+            for user in items:
+                user_id = user.get("id") or user.get("userId") or ""
+                display_name = (
+                    user.get("fullNameArabic")
+                    or user.get("fullName")
+                    or user.get("userName")
+                    or user_id
+                )
+                if user_id:
+                    researchers.append((user_id, display_name, True))
             if researchers:
                 return researchers
         except Exception as e:
-            logger.warning(f"Failed to load researchers from API: {e}")
+            logger.warning(f"Failed to load field collectors from API: {e}")
+            # Fallback to Users API
+            try:
+                from services.api_client import get_api_client
+                api = get_api_client()
+                researchers = []
+                for role in ("field_researcher", "data_collector"):
+                    result = api.get_all_users(role=role, is_active=True)
+                    items = result.get("items", []) if isinstance(result, dict) else []
+                    for user in items:
+                        user_id = user.get("id") or user.get("userId") or ""
+                        display_name = (
+                            user.get("fullNameArabic")
+                            or user.get("fullName")
+                            or user.get("userName")
+                            or user_id
+                        )
+                        if user_id:
+                            researchers.append((user_id, display_name, True))
+                if researchers:
+                    return researchers
+            except Exception as fallback_err:
+                logger.warning(f"Fallback to Users API also failed: {fallback_err}")
 
         return []
 

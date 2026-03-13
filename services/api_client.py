@@ -941,31 +941,41 @@ class TRRCMSApiClient:
 
     def create_assignment(
         self,
-        building_ids: List[str],
-        assigned_to: str,
-        notes: Optional[str] = None
+        buildings: List[Dict[str, Any]],
+        field_collector_id: str,
+        assignment_notes: Optional[str] = None,
+        priority: Optional[str] = None,
+        target_completion_date: Optional[str] = None
     ) -> Dict[str, Any]:
         """
         إنشاء تعيين مباني لباحث ميداني.
 
         Args:
-            building_ids: قائمة UUIDs للمباني
-            assigned_to: User ID للباحث الميداني
-            notes: ملاحظات إضافية
+            buildings: قائمة BuildingAssignmentItem objects
+                       [{buildingId, propertyUnitIdsForRevisit, revisitReason, notes}]
+            field_collector_id: UUID للباحث الميداني
+            assignment_notes: ملاحظات التعيين
+            priority: أولوية التعيين
+            target_completion_date: تاريخ الإنجاز المستهدف
 
         Returns:
-            Assignment response من API
+            AssignBuildingsResult من API
 
-        Endpoint: POST /api/v1/BuildingAssignments
+        Endpoint: POST /api/v1/BuildingAssignments/assign
         """
         payload = {
-            "buildingIds": building_ids,
-            "assignedTo": assigned_to,
-            "notes": notes
+            "fieldCollectorId": field_collector_id,
+            "buildings": buildings,
         }
+        if assignment_notes:
+            payload["assignmentNotes"] = assignment_notes
+        if priority:
+            payload["priority"] = priority
+        if target_completion_date:
+            payload["targetCompletionDate"] = target_completion_date
 
-        logger.info(f"Creating assignment for {len(building_ids)} buildings → researcher: {assigned_to}")
-        return self._request("POST", "/v1/BuildingAssignments", json_data=payload)
+        logger.info(f"Creating assignment for {len(buildings)} buildings → researcher: {field_collector_id}")
+        return self._request("POST", "/v1/BuildingAssignments/assign", json_data=payload)
 
     def get_assignment(self, assignment_id: str) -> Dict[str, Any]:
         """
@@ -1040,23 +1050,34 @@ class TRRCMSApiClient:
             json_data=payload
         )
 
-    def delete_building_assignment(self, assignment_id: str) -> bool:
+    def unassign_building(
+        self,
+        assignment_id: str,
+        cancellation_reason: Optional[str] = None
+    ) -> Dict[str, Any]:
         """
-        حذف تعيين ميداني.
+        إلغاء تعيين ميداني.
 
         Args:
             assignment_id: UUID للتعيين
+            cancellation_reason: سبب الإلغاء
 
         Returns:
-            True إذا تم الحذف بنجاح
+            UnassignBuildingResult من API
 
-        Endpoint: DELETE /api/v1/BuildingAssignments/{id}
+        Endpoint: POST /api/v1/BuildingAssignments/{id}/unassign
         """
         if not assignment_id:
             raise ValueError("assignment_id is required")
-        self._request("DELETE", f"/v1/BuildingAssignments/{assignment_id}")
-        logger.info(f"Assignment {assignment_id} deleted")
-        return True
+        payload = {}
+        if cancellation_reason:
+            payload["cancellationReason"] = cancellation_reason
+        result = self._request(
+            "POST", f"/v1/BuildingAssignments/{assignment_id}/unassign",
+            json_data=payload if payload else None
+        )
+        logger.info(f"Assignment {assignment_id} unassigned")
+        return result
 
     def get_assignment_statistics(self) -> Dict[str, Any]:
         """
@@ -1068,6 +1089,124 @@ class TRRCMSApiClient:
         Endpoint: GET /api/v1/BuildingAssignments/statistics
         """
         return self._request("GET", "/v1/BuildingAssignments/statistics")
+
+    def get_field_collectors(self) -> List[Dict[str, Any]]:
+        """
+        جلب قائمة الباحثين الميدانيين المتاحين للتعيين.
+
+        Returns:
+            قائمة الباحثين الميدانيين
+
+        Endpoint: GET /api/v1/BuildingAssignments/field-collectors
+        """
+        return self._request("GET", "/v1/BuildingAssignments/field-collectors")
+
+    def get_field_collector_assignments(
+        self, collector_id: str
+    ) -> List[Dict[str, Any]]:
+        """
+        جلب تعيينات باحث ميداني محدد.
+
+        Args:
+            collector_id: UUID للباحث الميداني
+
+        Returns:
+            قائمة التعيينات
+
+        Endpoint: GET /api/v1/BuildingAssignments/field-collectors/{id}/assignments
+        """
+        return self._request(
+            "GET",
+            f"/v1/BuildingAssignments/field-collectors/{collector_id}/assignments"
+        )
+
+    def get_assignment_property_units(
+        self, building_id: str
+    ) -> List[Dict[str, Any]]:
+        """
+        جلب الوحدات العقارية لمبنى معين (عبر BuildingAssignments API).
+
+        Args:
+            building_id: UUID للمبنى
+
+        Returns:
+            قائمة الوحدات العقارية
+
+        Endpoint: GET /api/v1/BuildingAssignments/buildings/{id}/property-units
+        """
+        return self._request(
+            "GET",
+            f"/v1/BuildingAssignments/buildings/{building_id}/property-units"
+        )
+
+    def initiate_transfer(
+        self,
+        assignment_ids: List[str],
+        field_collector_id: str
+    ) -> Dict[str, Any]:
+        """
+        بدء نقل التعيينات إلى الأجهزة اللوحية.
+
+        Args:
+            assignment_ids: قائمة UUIDs للتعيينات
+            field_collector_id: UUID للباحث الميداني
+
+        Returns:
+            InitiateTransferResult من API
+
+        Endpoint: POST /api/v1/BuildingAssignments/initiate-transfer
+        """
+        payload = {
+            "fieldCollectorId": field_collector_id,
+            "assignmentIds": assignment_ids
+        }
+        logger.info(f"Initiating transfer for {len(assignment_ids)} assignments")
+        return self._request(
+            "POST", "/v1/BuildingAssignments/initiate-transfer", json_data=payload
+        )
+
+    def check_transfer_timeout(
+        self,
+        timeout_minutes: int = 30,
+        field_collector_id: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """
+        فحص التعيينات المنتهية المهلة.
+
+        Args:
+            timeout_minutes: مدة المهلة بالدقائق
+            field_collector_id: UUID للباحث (اختياري — للفلترة)
+
+        Returns:
+            TransferTimeoutCheckResult من API
+
+        Endpoint: POST /api/v1/BuildingAssignments/check-transfer-timeout
+        """
+        payload = {"timeoutMinutes": timeout_minutes}
+        if field_collector_id:
+            payload["fieldCollectorId"] = field_collector_id
+        return self._request(
+            "POST", "/v1/BuildingAssignments/check-transfer-timeout",
+            json_data=payload
+        )
+
+    def retry_transfer(self, assignment_ids: List[str]) -> Dict[str, Any]:
+        """
+        إعادة محاولة نقل التعيينات الفاشلة.
+
+        Args:
+            assignment_ids: قائمة UUIDs للتعيينات
+
+        Returns:
+            Retry response
+
+        Endpoint: POST /api/v1/BuildingAssignments/retry-transfer
+        """
+        payload = {"assignmentIds": assignment_ids}
+        logger.info(f"Retrying transfer for {len(assignment_ids)} assignments")
+        return self._request(
+            "POST", "/v1/BuildingAssignments/retry-transfer", json_data=payload
+        )
 
     # ==================== PropertyUnits APIs ====================
 
@@ -2908,6 +3047,168 @@ class TRRCMSApiClient:
     def import_vocabularies(self, data: Any) -> Dict[str, Any]:
         """POST /v1/Vocabularies/import"""
         return self._request("POST", "/v1/Vocabularies/import", data) or {}
+
+    # ==================== Import Pipeline API ====================
+
+    def import_upload(self, file_path: str) -> Dict[str, Any]:
+        """
+        Upload a .uhc package for import.
+        Performs integrity checks (checksum, signature, vocabulary compatibility).
+
+        Args:
+            file_path: Path to the .uhc file
+
+        Returns:
+            Package metadata with ID
+
+        Endpoint: POST /api/v1/import/upload
+        """
+        import os
+        import mimetypes
+        import requests
+
+        file_name = os.path.basename(file_path)
+        mime_type = mimetypes.guess_type(file_path)[0] or "application/octet-stream"
+        url = f"{self.config.base_url}/v1/import/upload"
+        headers = self._get_headers()
+        headers.pop("Content-Type", None)
+
+        logger.info(f"Uploading import package: {file_name}")
+        try:
+            with open(file_path, "rb") as f:
+                files = {"file": (file_name, f, mime_type)}
+                response = requests.post(
+                    url, files=files, headers=headers,
+                    timeout=self.config.timeout, verify=False
+                )
+            response.raise_for_status()
+            result = response.json() if response.text else {}
+            logger.info(f"Import package uploaded: {result.get('id', 'N/A')}")
+            return result
+        except requests.exceptions.HTTPError as e:
+            response_data = None
+            try:
+                response_data = e.response.json()
+            except Exception:
+                pass
+            raise ApiException(
+                status_code=e.response.status_code if e.response else 0,
+                message=str(e),
+                response_data=response_data
+            )
+        except (requests.exceptions.ConnectionError, requests.exceptions.Timeout) as e:
+            raise NetworkException(message=str(e), original_error=e)
+
+    def get_import_packages(
+        self,
+        page: int = 1,
+        page_size: int = 20,
+        status_filter: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """
+        List all import packages with optional filtering.
+
+        Endpoint: GET /api/v1/import/packages
+        """
+        params: Dict[str, Any] = {"page": page, "pageSize": page_size}
+        if status_filter:
+            params["status"] = status_filter
+        return self._request("GET", "/v1/import/packages", params=params)
+
+    def get_import_package(self, package_id: str) -> Dict[str, Any]:
+        """
+        Get import package details by ID.
+
+        Endpoint: GET /api/v1/import/packages/{id}
+        """
+        return self._request("GET", f"/v1/import/packages/{package_id}")
+
+    def stage_import_package(self, package_id: str) -> Dict[str, Any]:
+        """
+        Trigger staging (unpack .uhc -> staging tables) and row-level validation.
+
+        Endpoint: POST /api/v1/import/packages/{id}/stage
+        """
+        logger.info(f"Staging import package: {package_id}")
+        return self._request("POST", f"/v1/import/packages/{package_id}/stage")
+
+    def get_validation_report(self, package_id: str) -> Dict[str, Any]:
+        """
+        Get the current validation report for a package.
+
+        Endpoint: GET /api/v1/import/packages/{id}/validation-report
+        """
+        return self._request("GET", f"/v1/import/packages/{package_id}/validation-report")
+
+    def get_staged_entities(self, package_id: str) -> List[Dict[str, Any]]:
+        """
+        Get all staged entities with IDs, identifiers, and status.
+
+        Endpoint: GET /api/v1/import/packages/{id}/staged-entities
+        """
+        return self._request("GET", f"/v1/import/packages/{package_id}/staged-entities")
+
+    def detect_duplicates(self, package_id: str) -> Dict[str, Any]:
+        """
+        Trigger duplicate detection (person + property matching).
+
+        Endpoint: POST /api/v1/import/packages/{id}/detect-duplicates
+        """
+        logger.info(f"Detecting duplicates for package: {package_id}")
+        return self._request("POST", f"/v1/import/packages/{package_id}/detect-duplicates")
+
+    def approve_import_package(self, package_id: str) -> Dict[str, Any]:
+        """
+        Approve staging records for commit. Requires all conflicts resolved.
+
+        Endpoint: POST /api/v1/import/packages/{id}/approve
+        """
+        logger.info(f"Approving import package: {package_id}")
+        return self._request("POST", f"/v1/import/packages/{package_id}/approve")
+
+    def commit_import_package(self, package_id: str) -> Dict[str, Any]:
+        """
+        Commit approved staging records to production tables.
+
+        Endpoint: POST /api/v1/import/packages/{id}/commit
+        """
+        logger.info(f"Committing import package: {package_id}")
+        return self._request("POST", f"/v1/import/packages/{package_id}/commit")
+
+    def get_commit_report(self, package_id: str) -> Dict[str, Any]:
+        """
+        Get the commit report for a completed/failed import package.
+
+        Endpoint: GET /api/v1/import/packages/{id}/commit-report
+        """
+        return self._request("GET", f"/v1/import/packages/{package_id}/commit-report")
+
+    def reset_commit(self, package_id: str) -> Dict[str, Any]:
+        """
+        Reset a package stuck in Committing or Failed status back to ReadyToCommit.
+
+        Endpoint: POST /api/v1/import/packages/{id}/reset-commit
+        """
+        logger.info(f"Resetting commit for package: {package_id}")
+        return self._request("POST", f"/v1/import/packages/{package_id}/reset-commit")
+
+    def cancel_import_package(self, package_id: str) -> Dict[str, Any]:
+        """
+        Cancel an active import package.
+
+        Endpoint: POST /api/v1/import/packages/{id}/cancel
+        """
+        logger.info(f"Cancelling import package: {package_id}")
+        return self._request("POST", f"/v1/import/packages/{package_id}/cancel")
+
+    def quarantine_import_package(self, package_id: str) -> Dict[str, Any]:
+        """
+        Quarantine a suspicious import package.
+
+        Endpoint: POST /api/v1/import/packages/{id}/quarantine
+        """
+        logger.info(f"Quarantining import package: {package_id}")
+        return self._request("POST", f"/v1/import/packages/{package_id}/quarantine")
 
 
 # ==================== Singleton Instance ====================
