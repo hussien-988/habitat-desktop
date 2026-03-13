@@ -60,7 +60,7 @@ class FieldWorkPreparationStep3(QWidget):
                 if not building_uuid:
                     continue
                 try:
-                    units = api.get_property_units_by_building(building_uuid)
+                    units = api.get_assignment_property_units(building_uuid)
                     bid = getattr(building, 'building_id', '') or str(building)
                     self._building_units[bid] = units if isinstance(units, list) else []
                 except Exception as e:

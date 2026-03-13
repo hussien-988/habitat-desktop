@@ -41,6 +41,8 @@ class MainWindow(QMainWindow):
         Pages.CLAIM_EDIT: {"admin", "data_manager"},
         Pages.DUPLICATES: {"admin", "data_manager"},
         Pages.CLAIM_COMPARISON: {"admin", "data_manager"},
+        Pages.IMPORT_WIZARD: {"admin", "data_manager"},
+        Pages.IMPORT_PACKAGES: {"admin", "data_manager"},
     }
 
     def __init__(self, db: Database, i18n: I18n, parent=None):
@@ -310,9 +312,18 @@ class MainWindow(QMainWindow):
         self.pages[Pages.DATA_MANAGEMENT] = DataManagementPage(self.db, self.i18n, self)
         self.stack.addWidget(self.pages[Pages.DATA_MANAGEMENT])
 
-        # Import Wizard page (stub)
-        self.pages[Pages.IMPORT_WIZARD] = ImportWizardPage(self.db, self.i18n, self)
+        # Import Wizard page (UC-003)
+        from controllers.import_controller import ImportController
+        self._import_controller = ImportController(self.db)
+        self.pages[Pages.IMPORT_WIZARD] = ImportWizardPage(
+            import_controller=self._import_controller, db=self.db, i18n=self.i18n, parent=self
+        )
         self.stack.addWidget(self.pages[Pages.IMPORT_WIZARD])
+
+        # Import Packages list page
+        from ui.pages.import_packages_page import ImportPackagesPage
+        self.pages[Pages.IMPORT_PACKAGES] = ImportPackagesPage(self.db, self.i18n, self)
+        self.stack.addWidget(self.pages[Pages.IMPORT_PACKAGES])
 
         # Claim Edit page (UC-006: Edit existing claim)
         self.pages[Pages.CLAIM_EDIT] = ClaimEditPage(self.db, self.i18n, self)
@@ -370,6 +381,21 @@ class MainWindow(QMainWindow):
         self.navbar.password_change_requested.connect(self._on_password_change_requested)
         self.navbar.security_settings_requested.connect(self._on_security_settings_requested)
         self.navbar.data_management_requested.connect(self._on_data_management_requested)
+        self.navbar.import_requested.connect(self._on_import_requested)
+
+        # Import pages signals
+        self.pages[Pages.IMPORT_PACKAGES].open_wizard.connect(
+            lambda: self.navigate_to(Pages.IMPORT_WIZARD)
+        )
+        self.pages[Pages.IMPORT_PACKAGES].view_package.connect(
+            lambda pkg_id: self.navigate_to(Pages.IMPORT_WIZARD)
+        )
+        self.pages[Pages.IMPORT_WIZARD].completed.connect(
+            lambda _: self.navigate_to(Pages.IMPORT_PACKAGES)
+        )
+        self.pages[Pages.IMPORT_WIZARD].cancelled.connect(
+            lambda: self.navigate_to(Pages.IMPORT_PACKAGES)
+        )
 
         # Buildings page - view details
         self.pages[Pages.BUILDINGS].view_building.connect(self._on_view_building)
@@ -504,7 +530,8 @@ class MainWindow(QMainWindow):
         self.navbar.configure_for_role(user.role)
 
         # Apply role-based CRUD button visibility to content pages
-        for page_id in (Pages.BUILDINGS, Pages.UNITS, Pages.PERSONS):
+        for page_id in (Pages.BUILDINGS, Pages.UNITS, Pages.PERSONS,
+                        Pages.IMPORT_WIZARD, Pages.IMPORT_PACKAGES):
             page = self.pages.get(page_id)
             if page and hasattr(page, 'configure_for_role'):
                 page.configure_for_role(user.role)
@@ -697,30 +724,61 @@ class MainWindow(QMainWindow):
                 Toast.show_toast(self, "بيانات غير مكتملة للتعيين", Toast.ERROR)
                 return
 
-            # Create assignment via backend API
-            building_ids = [
-                getattr(b, 'building_id', None) or b.get('building_id', '') if isinstance(b, dict) else b.building_id
-                for b in buildings
-            ]
+            # Build buildings payload per BuildingAssignmentItem schema (UC-012 S03-S05)
+            revisit_map = {r['building_id']: r for r in revisit_buildings}
+            buildings_payload = []
+            for b in buildings:
+                b_uuid = getattr(b, 'building_uuid', None) or (
+                    b.get('building_uuid') if isinstance(b, dict) else None
+                )
+                b_id = getattr(b, 'building_id', None) or (
+                    b.get('building_id') if isinstance(b, dict) else None
+                )
+                item = {"buildingId": b_uuid}
+                revisit_info = revisit_map.get(b_id)
+                if revisit_info:
+                    item["revisitReason"] = revisit_info.get('reason', '')
+                buildings_payload.append(item)
 
-            # Build notes with revisit info
-            notes = None
+            # Build assignment notes
+            assignment_notes = None
             if revisit_buildings:
-                revisit_info = [
+                info_parts = [
                     f"{r['building_id']}: {r.get('reason', '')}" for r in revisit_buildings
                 ]
-                notes = "مباني تحتاج إعادة زيارة: " + " | ".join(revisit_info)
+                assignment_notes = "مباني تحتاج إعادة زيارة: " + " | ".join(info_parts)
 
             logger.info(f"Creating API assignment: {building_count} buildings -> {researcher_name} ({researcher_id})")
 
             try:
                 api = get_api_client()
-                api.create_assignment(
-                    building_ids=building_ids,
-                    assigned_to=researcher_id,
-                    notes=notes
+                api_response = api.create_assignment(
+                    buildings=buildings_payload,
+                    field_collector_id=researcher_id,
+                    assignment_notes=assignment_notes
                 )
                 logger.info("Assignment created on backend API successfully")
+
+                # Extract assignment IDs from response (S08)
+                api_assignment_ids = []
+                if isinstance(api_response, dict):
+                    api_assignment_ids = api_response.get("createdAssignmentIds", [])
+                    if not api_assignment_ids:
+                        for a in api_response.get("assignments", []):
+                            aid = a.get("id") or a.get("assignmentId")
+                            if aid:
+                                api_assignment_ids.append(aid)
+
+                # Initiate transfer to tablets (S08-S09)
+                if api_assignment_ids:
+                    try:
+                        api.initiate_transfer(
+                            api_assignment_ids,
+                            field_collector_id=researcher_id
+                        )
+                        logger.info(f"Transfer initiated for {len(api_assignment_ids)} assignments")
+                    except Exception as transfer_err:
+                        logger.warning(f"initiate_transfer failed: {transfer_err}")
             except Exception as api_err:
                 logger.error(f"API assignment creation failed: {api_err}")
                 Toast.show_toast(
@@ -768,16 +826,23 @@ class MainWindow(QMainWindow):
                 Toast.SUCCESS
             )
 
+            # Prefer API assignment IDs over local ones
+            effective_ids = api_assignment_ids if api_assignment_ids else assignment_ids
+
             # Show completion & transfer status view (instead of resetting wizard)
             if Pages.FIELD_ASSIGNMENT in self.pages:
                 field_page = self.pages[Pages.FIELD_ASSIGNMENT]
                 if hasattr(field_page, 'show_completion'):
-                    field_page.show_completion(buildings, researcher_name, assignment_ids)
+                    field_page.show_completion(buildings, researcher_name, effective_ids)
                 elif hasattr(field_page, 'refresh'):
                     field_page.refresh()
 
         except Exception as e:
             logger.error(f"Error in _on_field_work_completed: {e}", exc_info=True)
+
+    def _on_import_requested(self):
+        """Handle import data request from navbar menu."""
+        self.navigate_to(Pages.IMPORT_PACKAGES)
 
     def _on_sync_requested(self):
         """Handle sync data request from navbar menu."""

@@ -230,20 +230,43 @@ class FieldWorkPreparationStep4(QWidget):
         return row
 
     def _load_transfer_status(self):
-        """Load transfer status from local building_assignments table."""
-        if not self.db or not self.assignment_ids:
+        """Load transfer status from API, fallback to local DB."""
+        if not self.assignment_ids:
             return
 
         try:
-            from services.assignment_service import AssignmentService
-            svc = AssignmentService(db=self.db)
+            from services.api_client import get_api_client
+            api = get_api_client()
+
+            # Check for timed-out transfers
+            try:
+                api.check_transfer_timeout()
+            except Exception:
+                pass
 
             for assignment_id in self.assignment_ids:
-                assignment = svc.get_assignment(assignment_id)
-                if not assignment:
-                    continue
+                try:
+                    assignment = api.get_assignment(assignment_id)
+                except Exception:
+                    assignment = None
 
-                status = assignment.transfer_status or 'not_transferred'
+                if not assignment:
+                    # Fallback to local DB
+                    if self.db:
+                        try:
+                            from services.assignment_service import AssignmentService
+                            svc = AssignmentService(db=self.db)
+                            local = svc.get_assignment(assignment_id)
+                            if local:
+                                assignment = {
+                                    "transferStatus": local.transfer_status or "not_transferred"
+                                }
+                        except Exception:
+                            pass
+                    if not assignment:
+                        continue
+
+                status = assignment.get("transferStatus") or "not_transferred"
                 config = _STATUS_CONFIG.get(status, _STATUS_CONFIG['not_transferred'])
 
                 if assignment_id in self._status_rows:
@@ -261,18 +284,24 @@ class FieldWorkPreparationStep4(QWidget):
             logger.warning(f"Could not load transfer status: {e}")
 
     def _on_retry(self, assignment_id: str):
-        """Retry a failed transfer (S12)."""
-        if not self.db:
-            return
-
+        """Retry a failed transfer via API (S12)."""
         try:
-            from services.assignment_service import AssignmentService
-            svc = AssignmentService(db=self.db)
-            svc.retry_transfer(assignment_id)
+            from services.api_client import get_api_client
+            api = get_api_client()
+            api.retry_transfer([assignment_id])
             logger.info(f"Retried transfer for assignment {assignment_id}")
             self._load_transfer_status()
         except Exception as e:
-            logger.warning(f"Retry failed for {assignment_id}: {e}")
+            logger.warning(f"API retry failed for {assignment_id}: {e}")
+            # Fallback to local DB
+            if self.db:
+                try:
+                    from services.assignment_service import AssignmentService
+                    svc = AssignmentService(db=self.db)
+                    svc.retry_transfer(assignment_id)
+                    self._load_transfer_status()
+                except Exception as fallback_err:
+                    logger.warning(f"Local retry also failed: {fallback_err}")
 
     def stop_refresh(self):
         """Stop the auto-refresh timer."""

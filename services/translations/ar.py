@@ -279,7 +279,7 @@ AR_TRANSLATIONS = {
 
     # ===== Wizard - Step Names =====
     "wizard.step.building_info": "معلومات البناء",
-    "wizard.step.applicant_info": "معلومات مقدم الطلب",
+    "wizard.step.applicant_info": "مقدم الطلب",
     "wizard.step.building_registration": "اختيار بناء",
     "wizard.step.property_unit": "المقاسم",
     "wizard.step.household_details": "تفاصيل الاشغال",
@@ -801,6 +801,7 @@ AR_TRANSLATIONS = {
     "navbar.menu.change_password": "تغيير كلمة المرور",
     "navbar.menu.security_policies": "سياسات الأمان",
     "navbar.menu.data_management": "إدارة البيانات المرجعية",
+    "navbar.menu.import_data": "استيراد البيانات",
     "navbar.menu.logout": "تسجيل خروج",
 
     # ===== Building Documents =====

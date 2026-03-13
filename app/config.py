@@ -243,6 +243,7 @@ class Pages:
     SYNC_DATA = "sync_data"
     DATA_MANAGEMENT = "data_management"
     IMPORT_WIZARD = "import_wizard"
+    IMPORT_PACKAGES = "import_packages"
     CLAIM_SEARCH = "claim_search"  # UC-006: Search existing claims
     CLAIM_EDIT = "claim_edit"      # UC-006: Edit existing claim
 

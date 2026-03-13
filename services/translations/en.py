@@ -801,6 +801,7 @@ EN_TRANSLATIONS = {
     "navbar.menu.change_password": "Change Password",
     "navbar.menu.security_policies": "Security Policies",
     "navbar.menu.data_management": "Reference Data Management",
+    "navbar.menu.import_data": "Import Data",
     "navbar.menu.logout": "Logout",
 
     # ===== Building Documents =====
