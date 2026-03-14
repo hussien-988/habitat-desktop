@@ -1,46 +1,47 @@
 # -*- coding: utf-8 -*-
 """
-Import Wizard - Step 5: Approve and Commit Confirmation
+Import Wizard - Step 4 (Commit Confirmation)
 UC-003: Import Pipeline
 
-Confirmation view before committing staged entities to production.
+Display-only confirmation view before committing staged entities to production.
+The orchestrator handles approve + commit API calls — this step only displays
+the summary and progress.
 """
 
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QFrame,
     QProgressBar, QSizePolicy
 )
-from PyQt5.QtCore import Qt, pyqtSignal
+from PyQt5.QtCore import Qt
 
-from ui.design_system import Colors, PageDimensions
 from ui.font_utils import create_font, FontManager
-from ui.style_manager import StyleManager
 from utils.logger import get_logger
 
 logger = get_logger(__name__)
 
-# Entity type Arabic labels
-_ENTITY_TYPE_AR = {
-    'building': 'مبنى',
-    'person': 'شخص',
-    'property_unit': 'وحدة عقارية',
-    'claim': 'مطالبة',
-    'survey': 'مسح',
-}
+# Entity sections matching API response keys
+_ENTITY_SECTIONS = [
+    ('surveys', 'المسوحات'),
+    ('buildings', 'المباني'),
+    ('propertyUnits', 'الوحدات العقارية'),
+    ('persons', 'الأشخاص'),
+    ('households', 'الأسر'),
+    ('personPropertyRelations', 'علاقات الأشخاص بالعقارات'),
+    ('evidences', 'المستندات'),
+    ('claims', 'المطالبات'),
+]
 
 
 class ImportStep5Commit(QWidget):
-    """Step 5: Approve and commit confirmation."""
+    """Step 4 (Commit): Confirmation view (display-only, orchestrator handles API calls)."""
 
-    commit_completed = pyqtSignal(str)  # package_id
-    commit_failed = pyqtSignal(str)  # error message
-
-    def __init__(self, import_controller, parent=None):
+    def __init__(self, import_controller, package_id, parent=None):
         super().__init__(parent)
         self.import_controller = import_controller
-        self._entities = []
-        self._package_id = None
+        self._package_id = package_id
+        self._data = {}
         self._setup_ui()
+        self.load_summary(package_id)
 
     def _setup_ui(self):
         self.setLayoutDirection(Qt.RightToLeft)
@@ -73,19 +74,25 @@ class ImportStep5Commit(QWidget):
         sep.setStyleSheet("color: #E1E8ED;")
         card_layout.addWidget(sep)
 
-        # Summary counts
+        # Total count
+        self._total_label = QLabel("إجمالي الكيانات: 0")
+        self._total_label.setFont(create_font(size=12, weight=FontManager.WEIGHT_SEMIBOLD))
+        self._total_label.setStyleSheet("color: #212B36; background: transparent;")
+        card_layout.addWidget(self._total_label)
+
+        # Summary counts by entity type
         self._counts_layout = QVBoxLayout()
         self._counts_layout.setSpacing(8)
 
         self._count_labels = {}
-        for key, ar_name in _ENTITY_TYPE_AR.items():
+        for key, ar_name in _ENTITY_SECTIONS:
             row = QHBoxLayout()
             row.setSpacing(12)
 
             name_label = QLabel(f"{ar_name}:")
             name_label.setFont(create_font(size=11, weight=FontManager.WEIGHT_SEMIBOLD))
             name_label.setStyleSheet("color: #637381; background: transparent;")
-            name_label.setFixedWidth(140)
+            name_label.setFixedWidth(200)
             row.addWidget(name_label)
 
             count_label = QLabel("0")
@@ -135,7 +142,7 @@ class ImportStep5Commit(QWidget):
 
         card_layout.addWidget(warning_frame)
 
-        # Progress bar (hidden initially)
+        # Progress bar (hidden initially, shown by orchestrator during commit)
         self._progress_bar = QProgressBar()
         self._progress_bar.setFixedHeight(8)
         self._progress_bar.setRange(0, 0)  # indeterminate
@@ -153,7 +160,7 @@ class ImportStep5Commit(QWidget):
         """)
         card_layout.addWidget(self._progress_bar)
 
-        # Status label
+        # Status label (hidden initially, shown during commit)
         self._status_label = QLabel("")
         self._status_label.setFont(create_font(size=10, weight=FontManager.WEIGHT_REGULAR))
         self._status_label.setStyleSheet("color: #637381; background: transparent;")
@@ -163,86 +170,50 @@ class ImportStep5Commit(QWidget):
         main_layout.addWidget(card)
         main_layout.addStretch()
 
-    def load_summary(self, package_id: str, entities: list = None):
-        """Load commit summary from staged entities."""
+    def load_summary(self, package_id: str, staged_data: dict = None):
+        """Load commit summary from staged entities (grouped response)."""
         self._package_id = package_id
 
-        if entities:
-            self._entities = entities
+        if staged_data:
+            self._data = staged_data
         else:
             result = self.import_controller.get_staged_entities(package_id)
             if result.success:
-                self._entities = result.data or []
+                self._data = result.data or {}
             else:
-                self._entities = []
+                self._data = {}
                 logger.error(f"Failed to load entities for summary: {result.message}")
 
         self._update_counts()
 
     def _update_counts(self):
-        """Update entity count labels."""
-        counts = {}
-        for entity in self._entities:
-            entity_type = entity.get("entityType", "unknown")
-            counts[entity_type] = counts.get(entity_type, 0) + 1
+        """Update entity count labels from grouped data."""
+        d = self._data
+        total = d.get("totalCount", 0)
+        self._total_label.setText(f"إجمالي الكيانات: {total}")
 
-        for key, label in self._count_labels.items():
-            label.setText(str(counts.get(key, 0)))
+        for key, _ in _ENTITY_SECTIONS:
+            section_items = d.get(key, [])
+            count = len(section_items) if isinstance(section_items, list) else 0
+            if key in self._count_labels:
+                self._count_labels[key].setText(str(count))
 
-    def start_commit(self, package_id: str = None):
-        """Approve and then commit the package."""
-        pkg_id = package_id or self._package_id
-        if not pkg_id:
-            logger.error("No package_id provided for commit")
-            return
-
-        self._set_committing(True)
-
-        # Step 1: Approve
-        approve_result = self.import_controller.approve_package(pkg_id)
-        if not approve_result.success:
-            self._set_committing(False)
-            self._status_label.setText(approve_result.message_ar or "فشل الموافقة على الحزمة")
-            self._status_label.setStyleSheet("color: #EF4444; background: transparent;")
-            self._status_label.setVisible(True)
-            self.commit_failed.emit(approve_result.message)
-            return
-
-        # Step 2: Commit
-        self._status_label.setText("جاري إدخال البيانات...")
-        self._status_label.setStyleSheet("color: #3890DF; background: transparent;")
-        self._status_label.setVisible(True)
-
-        commit_result = self.import_controller.commit_package(pkg_id)
-
-        self._set_committing(False)
-
-        if commit_result.success:
-            self._status_label.setText(commit_result.message_ar or "تم إدخال البيانات بنجاح")
-            self._status_label.setStyleSheet("color: #10B981; background: transparent;")
-            self._status_label.setVisible(True)
-            logger.info(f"Commit succeeded for package {pkg_id}")
-            self.commit_completed.emit(pkg_id)
-        else:
-            self._status_label.setText(commit_result.message_ar or "فشل إدخال البيانات")
-            self._status_label.setStyleSheet("color: #EF4444; background: transparent;")
-            self._status_label.setVisible(True)
-            logger.error(f"Commit failed: {commit_result.message}")
-            self.commit_failed.emit(commit_result.message)
-
-    def _set_committing(self, committing: bool):
-        """Toggle committing state."""
+    def set_committing(self, committing: bool):
+        """Toggle committing state (called by orchestrator)."""
         self._progress_bar.setVisible(committing)
 
         if committing:
-            self._status_label.setText("جاري الموافقة والإدخال...")
+            self._status_label.setText("جاري إدخال البيانات...")
             self._status_label.setStyleSheet("color: #3890DF; background: transparent;")
             self._status_label.setVisible(True)
+        else:
+            self._status_label.setVisible(False)
 
     def reset(self):
         """Reset the step to initial state."""
-        self._entities = []
+        self._data = {}
         self._package_id = None
+        self._total_label.setText("إجمالي الكيانات: 0")
         self._progress_bar.setVisible(False)
         self._status_label.setText("")
         self._status_label.setVisible(False)

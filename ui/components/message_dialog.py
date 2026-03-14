@@ -1,170 +1,178 @@
 # -*- coding: utf-8 -*-
 """
-Reusable message dialog component.
+Reusable message dialog component matching Figma design.
 """
 
-from PyQt5.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton
+from PyQt5.QtWidgets import (
+    QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
+    QGraphicsDropShadowEffect, QWidget
+)
 from PyQt5.QtCore import Qt
+from PyQt5.QtGui import QFont, QColor
+
+from ui.font_utils import create_font, FontManager
+
+
+# Dialog type definitions: (icon_char, icon_bg_color, title_color, btn_color, btn_hover)
+_TYPES = {
+    "error":   ("!", "#FEE2E2", "#DC2626", "#DC2626", "#B91C1C"),
+    "warning": ("!", "#FEF3C7", "#D97706", "#D97706", "#B45309"),
+    "info":    ("i", "#DBEAFE", "#2563EB", "#2563EB", "#1D4ED8"),
+    "success": ("\u2713", "#D1FAE5", "#059669", "#059669", "#047857"),
+    "confirm": ("?", "#FEF3C7", "#D97706", "#374151", "#1F2937"),
+}
 
 
 class MessageDialog(QDialog):
     """
-    Reusable message dialog with customizable icon, title, and message.
+    Reusable message dialog matching Figma design style.
 
     Usage:
-        # Confirmation dialog
-        if MessageDialog.confirm(self, "هل أنت متأكد؟", "سيتم حذف البيانات"):
-            # User clicked OK
-
-        # Warning dialog
-        MessageDialog.warning(self, "تحذير", "لا يمكن إتمام العملية")
-
-        # Error dialog
         MessageDialog.error(self, "خطأ", "حدث خطأ غير متوقع")
-
-        # Info dialog
-        MessageDialog.info(self, "نجاح", "تم الحفظ بنجاح")
+        MessageDialog.warning(self, "تحذير", "لا يمكن إتمام العملية")
+        MessageDialog.info(self, "معلومة", "تم الحفظ بنجاح")
+        if MessageDialog.confirm(self, "تأكيد", "هل أنت متأكد؟"):
+            ...
     """
 
-    # Dialog types with icons
-    CONFIRM = ("⚠️", "#f39c12")
-    WARNING = ("⚠️", "#e67e22")
-    ERROR = ("❌", "#e74c3c")
-    INFO = ("ℹ️", "#3498db")
-    SUCCESS = ("✓", "#27ae60")
-
-    def __init__(self, parent, title, message, dialog_type=INFO, ok_text="موافق", cancel_text="إلغاء", show_cancel=False):
-        """
-        Create a message dialog.
-
-        Args:
-            parent: Parent widget
-            title: Dialog title
-            message: Message text (supports HTML)
-            dialog_type: Tuple of (icon, color) or use predefined types
-            ok_text: Text for OK button
-            cancel_text: Text for Cancel button
-            show_cancel: Show cancel button
-        """
+    def __init__(self, parent, title, message, dialog_type="info",
+                 ok_text="حسناً", cancel_text="إلغاء", show_cancel=False):
         super().__init__(parent)
 
-        self.setWindowTitle(title)
+        self.setWindowFlags(Qt.Dialog | Qt.FramelessWindowHint)
+        self.setAttribute(Qt.WA_TranslucentBackground)
         self.setModal(True)
-        self.setStyleSheet("background-color: white;")
+        self.setFixedWidth(420)
 
-        # Calculate height based on message length
-        message_length = len(message)
-        if message_length < 100:
-            height = 200
-        elif message_length < 200:
-            height = 240
-        else:
-            height = 280
+        icon_char, icon_bg, title_color, btn_color, btn_hover = _TYPES.get(
+            dialog_type, _TYPES["info"]
+        )
 
-        self.setFixedSize(450, height)
+        container = QWidget(self)
+        container.setObjectName("msg_dialog_container")
+        container.setStyleSheet("""
+            QWidget#msg_dialog_container {
+                background-color: #FFFFFF;
+                border-radius: 12px;
+            }
+        """)
 
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(30, 25, 30, 25)
-        layout.setSpacing(20)
+        layout = QVBoxLayout(container)
+        layout.setContentsMargins(32, 36, 32, 28)
+        layout.setSpacing(0)
+        layout.setAlignment(Qt.AlignCenter)
 
-        # Icon
-        icon, color = dialog_type
-        icon_label = QLabel(icon)
-        icon_label.setStyleSheet("font-size: 48px;")
+        # Icon circle
+        icon_container = QWidget()
+        icon_container.setFixedSize(72, 72)
+        icon_container.setStyleSheet(
+            f"QWidget {{ background-color: {icon_bg}; border-radius: 36px; }}"
+        )
+        icon_layout = QVBoxLayout(icon_container)
+        icon_layout.setAlignment(Qt.AlignCenter)
+        icon_layout.setContentsMargins(0, 0, 0, 0)
+
+        icon_label = QLabel(icon_char)
         icon_label.setAlignment(Qt.AlignCenter)
-        layout.addWidget(icon_label)
+        icon_label.setFont(create_font(size=28, weight=FontManager.WEIGHT_BOLD))
+        icon_label.setStyleSheet(f"color: {title_color}; background: transparent;")
+        icon_layout.addWidget(icon_label)
+
+        layout.addWidget(icon_container, 0, Qt.AlignCenter)
+        layout.addSpacing(20)
 
         # Title
         title_label = QLabel(title)
-        title_label.setStyleSheet(f"font-size: 16px; font-weight: bold; color: {color};")
         title_label.setAlignment(Qt.AlignCenter)
+        title_label.setFont(create_font(size=FontManager.SIZE_TITLE, weight=FontManager.WEIGHT_BOLD))
+        title_label.setStyleSheet(f"color: {title_color}; background: transparent;")
         layout.addWidget(title_label)
+        layout.addSpacing(10)
 
         # Message
         message_label = QLabel(message)
-        message_label.setStyleSheet("font-size: 13px; color: #555; line-height: 1.6;")
         message_label.setAlignment(Qt.AlignCenter)
         message_label.setWordWrap(True)
+        message_label.setFont(create_font(size=12, weight=FontManager.WEIGHT_REGULAR))
+        message_label.setStyleSheet("color: #7F8C9B; background: transparent;")
         layout.addWidget(message_label)
-
-        layout.addSpacing(10)
+        layout.addSpacing(28)
 
         # Buttons
         btn_layout = QHBoxLayout()
-        btn_layout.setSpacing(15)
+        btn_layout.setSpacing(12)
 
         if show_cancel:
             cancel_btn = QPushButton(cancel_text)
-            cancel_btn.setFixedSize(120, 40)
+            cancel_btn.setFixedHeight(42)
+            cancel_btn.setCursor(Qt.PointingHandCursor)
+            cancel_btn.setFont(create_font(size=12, weight=FontManager.WEIGHT_SEMIBOLD))
             cancel_btn.setStyleSheet("""
                 QPushButton {
-                    background-color: #f0f0f0;
-                    color: #333;
+                    background-color: #F3F4F6;
+                    color: #4B5563;
                     border: none;
-                    border-radius: 6px;
-                    font-size: 13px;
-                    font-weight: bold;
+                    border-radius: 8px;
+                    padding: 10px 24px;
                 }
-                QPushButton:hover {
-                    background-color: #e0e0e0;
-                }
+                QPushButton:hover { background-color: #E5E7EB; }
+                QPushButton:pressed { background-color: #D1D5DB; }
             """)
-            cancel_btn.setCursor(Qt.PointingHandCursor)
             cancel_btn.clicked.connect(self.reject)
-            btn_layout.addWidget(cancel_btn)
+            btn_layout.addWidget(cancel_btn, 1)
 
         ok_btn = QPushButton(ok_text)
-        ok_btn.setFixedSize(120, 40)
+        ok_btn.setFixedHeight(42)
+        ok_btn.setCursor(Qt.PointingHandCursor)
+        ok_btn.setFont(create_font(size=12, weight=FontManager.WEIGHT_SEMIBOLD))
         ok_btn.setStyleSheet(f"""
             QPushButton {{
-                background-color: {color};
+                background-color: {btn_color};
                 color: white;
                 border: none;
-                border-radius: 6px;
-                font-size: 13px;
-                font-weight: bold;
+                border-radius: 8px;
+                padding: 10px 24px;
             }}
-            QPushButton:hover {{
-                opacity: 0.9;
-            }}
+            QPushButton:hover {{ background-color: {btn_hover}; }}
         """)
-        ok_btn.setCursor(Qt.PointingHandCursor)
         ok_btn.clicked.connect(self.accept)
-
-        btn_layout.addStretch()
-        if show_cancel:
-            btn_layout.addWidget(cancel_btn)
-        btn_layout.addWidget(ok_btn)
-        btn_layout.addStretch()
+        btn_layout.addWidget(ok_btn, 1)
 
         layout.addLayout(btn_layout)
+
+        main_layout = QVBoxLayout(self)
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        main_layout.addWidget(container)
+
+        # Shadow
+        shadow = QGraphicsDropShadowEffect()
+        shadow.setBlurRadius(40)
+        shadow.setColor(QColor(0, 0, 0, 50))
+        shadow.setOffset(0, 8)
+        container.setGraphicsEffect(shadow)
 
     @staticmethod
     def confirm(parent, title, message, ok_text="تأكيد", cancel_text="إلغاء"):
         """Show confirmation dialog and return True if OK clicked."""
-        dialog = MessageDialog(parent, title, message, MessageDialog.CONFIRM, ok_text, cancel_text, show_cancel=True)
-        return dialog.exec_() == QDialog.Accepted
+        dlg = MessageDialog(parent, title, message, "confirm", ok_text, cancel_text, show_cancel=True)
+        return dlg.exec_() == QDialog.Accepted
 
     @staticmethod
-    def warning(parent, title, message, ok_text="موافق"):
+    def warning(parent, title, message, ok_text="حسناً"):
         """Show warning dialog."""
-        dialog = MessageDialog(parent, title, message, MessageDialog.WARNING, ok_text)
-        dialog.exec_()
+        MessageDialog(parent, title, message, "warning", ok_text).exec_()
 
     @staticmethod
-    def error(parent, title, message, ok_text="موافق"):
+    def error(parent, title, message, ok_text="حسناً"):
         """Show error dialog."""
-        dialog = MessageDialog(parent, title, message, MessageDialog.ERROR, ok_text)
-        dialog.exec_()
+        MessageDialog(parent, title, message, "error", ok_text).exec_()
 
     @staticmethod
-    def info(parent, title, message, ok_text="موافق"):
+    def info(parent, title, message, ok_text="حسناً"):
         """Show info dialog."""
-        dialog = MessageDialog(parent, title, message, MessageDialog.INFO, ok_text)
-        dialog.exec_()
+        MessageDialog(parent, title, message, "info", ok_text).exec_()
 
     @staticmethod
-    def success(parent, title, message, ok_text="موافق"):
+    def success(parent, title, message, ok_text="حسناً"):
         """Show success dialog."""
-        dialog = MessageDialog(parent, title, message, MessageDialog.SUCCESS, ok_text)
-        dialog.exec_()
+        MessageDialog(parent, title, message, "success", ok_text).exec_()

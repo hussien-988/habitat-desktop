@@ -776,6 +776,7 @@ EN_TRANSLATIONS = {
     "cases.badge.open":  "Open",
     "navbar.tab.buildings": "Buildings",
     "navbar.tab.residential_units": "Residential Units",
+    "navbar.tab.import": "Import",
     "navbar.tab.duplicates": "Duplicates",
     "navbar.tab.user_management": "User Management",
     "navbar.tab.map": "Map",

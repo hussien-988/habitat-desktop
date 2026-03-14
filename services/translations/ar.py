@@ -776,6 +776,7 @@ AR_TRANSLATIONS = {
     "cases.badge.open":  "مفتوحة",
     "navbar.tab.buildings": "المباني",
     "navbar.tab.residential_units": "الوحدات السكنية",
+    "navbar.tab.import": "الاستيراد",
     "navbar.tab.duplicates": "التكرارات",
     "navbar.tab.user_management": "إدارة المستخدمين",
     "navbar.tab.map": "الخريطة",

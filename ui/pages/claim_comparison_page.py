@@ -12,13 +12,14 @@ Data source: REST API via DuplicateService.
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QFrame, QRadioButton, QButtonGroup, QScrollArea,
-    QSizePolicy, QGraphicsDropShadowEffect, QTextEdit
+    QSizePolicy, QGraphicsDropShadowEffect, QTextEdit,
+    QMessageBox
 )
-from PyQt5.QtCore import Qt, pyqtSignal, QSize
+from PyQt5.QtCore import Qt, pyqtSignal, QSize, QThread
 from PyQt5.QtGui import QColor, QIcon
 
 from repositories.database import Database
-from services.duplicate_service import DuplicateService, DuplicateGroup
+from services.duplicate_service import DuplicateService
 from ui.font_utils import create_font, FontManager
 from ui.style_manager import StyleManager
 from ui.design_system import Colors, PageDimensions
@@ -115,6 +116,10 @@ class ClaimComparisonPage(QWidget):
         # Comparison section
         self._comparison_wrapper = self._build_comparison_container()
         self._content_layout.addWidget(self._comparison_wrapper)
+
+        # Document comparison section
+        self._doc_comparison_card = self._build_document_comparison()
+        self._content_layout.addWidget(self._doc_comparison_card)
 
         # Resolution section
         self._resolution_card = self._build_resolution_section()
@@ -236,6 +241,293 @@ class ClaimComparisonPage(QWidget):
         wrapper_layout.addLayout(self._comparison_cards_layout)
 
         return wrapper
+
+    # ────────────────────────────────────────────
+    # Document Comparison Section
+    # ────────────────────────────────────────────
+    def _build_document_comparison(self) -> QFrame:
+        card = QFrame()
+        card.setObjectName("docCompCard")
+        card.setStyleSheet("""
+            QFrame#docCompCard {
+                background-color: white;
+                border-radius: 16px;
+                border: none;
+            }
+        """)
+
+        card_layout = QVBoxLayout(card)
+        card_layout.setSpacing(16)
+        card_layout.setContentsMargins(16, 16, 16, 16)
+
+        title_row = QHBoxLayout()
+        title_label = QLabel("مقارنة المستندات")
+        title_label.setFont(create_font(size=14, weight=FontManager.WEIGHT_BOLD))
+        title_label.setStyleSheet(f"color: {Colors.PAGE_TITLE}; background: transparent; border: none;")
+
+        self._doc_load_btn = QPushButton("تحميل المقارنة")
+        self._doc_load_btn.setCursor(Qt.PointingHandCursor)
+        self._doc_load_btn.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
+        self._doc_load_btn.setStyleSheet(f"""
+            QPushButton {{
+                color: {Colors.PRIMARY_BLUE};
+                background: {Colors.PRIMARY_BLUE}0D;
+                border: 1px solid {Colors.PRIMARY_BLUE}33;
+                border-radius: 8px;
+                padding: 6px 16px;
+            }}
+            QPushButton:hover {{
+                background: {Colors.PRIMARY_BLUE}1A;
+                border-color: {Colors.PRIMARY_BLUE}66;
+            }}
+        """)
+        self._doc_load_btn.clicked.connect(self._load_document_comparison)
+
+        title_row.addWidget(title_label)
+        title_row.addStretch()
+        title_row.addWidget(self._doc_load_btn)
+        card_layout.addLayout(title_row)
+
+        subtitle = QLabel("المستندات والأدلة المرتبطة بكل سجل")
+        subtitle.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
+        subtitle.setStyleSheet(f"color: {Colors.WIZARD_SUBTITLE}; background: transparent; border: none;")
+        card_layout.addWidget(subtitle)
+
+        # Two-column layout for documents
+        self._doc_columns_layout = QHBoxLayout()
+        self._doc_columns_layout.setSpacing(20)
+
+        # First entity docs
+        self._doc_first_frame = self._build_doc_entity_column("مستندات السجل الأول")
+        self._doc_columns_layout.addWidget(self._doc_first_frame, 1)
+
+        # VS divider
+        vs = QLabel("VS")
+        vs.setAlignment(Qt.AlignCenter)
+        vs.setFixedWidth(40)
+        vs.setFont(create_font(size=11, weight=FontManager.WEIGHT_BOLD))
+        vs.setStyleSheet(f"color: {Colors.PRIMARY_BLUE}; background: {Colors.PRIMARY_BLUE}10; border-radius: 20px; padding: 8px; border: none;")
+        self._doc_columns_layout.addWidget(vs)
+
+        # Second entity docs
+        self._doc_second_frame = self._build_doc_entity_column("مستندات السجل الثاني")
+        self._doc_columns_layout.addWidget(self._doc_second_frame, 1)
+
+        card_layout.addLayout(self._doc_columns_layout)
+
+        # Empty state
+        self._doc_empty_label = QLabel("اضغط 'تحميل المقارنة' لعرض مستندات السجلين")
+        self._doc_empty_label.setAlignment(Qt.AlignCenter)
+        self._doc_empty_label.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
+        self._doc_empty_label.setStyleSheet("color: #9CA3AF; background: transparent; padding: 30px;")
+        card_layout.addWidget(self._doc_empty_label)
+
+        # Initially hide columns, show empty state
+        self._doc_first_frame.setVisible(False)
+        self._doc_second_frame.setVisible(False)
+
+        return card
+
+    def _build_doc_entity_column(self, title: str) -> QFrame:
+        frame = QFrame()
+        frame.setStyleSheet("QFrame { background: #F8FAFC; border-radius: 12px; border: 1px solid #E5E7EB; }")
+
+        layout = QVBoxLayout(frame)
+        layout.setContentsMargins(12, 12, 12, 12)
+        layout.setSpacing(8)
+
+        title_lbl = QLabel(title)
+        title_lbl.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
+        title_lbl.setStyleSheet(f"color: {Colors.PAGE_TITLE}; background: transparent; border: none;")
+        layout.addWidget(title_lbl)
+
+        count_lbl = QLabel("0 مستندات")
+        count_lbl.setObjectName("doc_count")
+        count_lbl.setFont(create_font(size=8, weight=FontManager.WEIGHT_SEMIBOLD))
+        count_lbl.setStyleSheet(f"color: {Colors.WIZARD_SUBTITLE}; background: transparent; border: none;")
+        layout.addWidget(count_lbl)
+
+        # Container for evidence cards
+        docs_container = QVBoxLayout()
+        docs_container.setSpacing(6)
+        docs_container.setObjectName("docs_list")
+        layout.addLayout(docs_container)
+
+        layout.addStretch()
+        return frame
+
+    def _build_evidence_card(self, evidence: dict) -> QFrame:
+        card = QFrame()
+        card.setStyleSheet("""
+            QFrame {
+                background: white;
+                border-radius: 10px;
+                border: 1px solid #E5E7EB;
+            }
+            QFrame:hover {
+                border-color: #93C5FD;
+                background: #F0F9FF;
+            }
+        """)
+
+        layout = QVBoxLayout(card)
+        layout.setContentsMargins(10, 8, 10, 8)
+        layout.setSpacing(4)
+
+        # File name row
+        name_row = QHBoxLayout()
+        name_row.setSpacing(8)
+
+        file_name = evidence.get("originalFileName", "")
+        mime = evidence.get("mimeType", "")
+        icon_text = self._get_file_icon(mime)
+
+        icon_lbl = QLabel(icon_text)
+        icon_lbl.setFont(create_font(size=12, weight=FontManager.WEIGHT_REGULAR))
+        icon_lbl.setStyleSheet("background: transparent; border: none;")
+        icon_lbl.setFixedWidth(20)
+        name_row.addWidget(icon_lbl)
+
+        name_lbl = QLabel(file_name or "-")
+        name_lbl.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
+        name_lbl.setStyleSheet(f"color: {Colors.PAGE_TITLE}; background: transparent; border: none;")
+        name_lbl.setWordWrap(True)
+        name_row.addWidget(name_lbl, 1)
+
+        # Version badge
+        version = evidence.get("versionNumber", 1)
+        ver_lbl = QLabel(f"v{version}")
+        ver_lbl.setFont(create_font(size=7, weight=FontManager.WEIGHT_BOLD))
+        ver_lbl.setFixedWidth(28)
+        ver_lbl.setAlignment(Qt.AlignCenter)
+        is_current = evidence.get("isCurrentVersion", True)
+        ver_color = "#10B981" if is_current else "#9CA3AF"
+        ver_lbl.setStyleSheet(f"color: {ver_color}; background: {ver_color}15; border-radius: 4px; padding: 2px; border: none;")
+        name_row.addWidget(ver_lbl)
+
+        layout.addLayout(name_row)
+
+        # Details row
+        details_parts = []
+        desc = evidence.get("description", "")
+        if desc:
+            details_parts.append(desc)
+        authority = evidence.get("issuingAuthority", "")
+        if authority:
+            details_parts.append(authority)
+        ref = evidence.get("documentReferenceNumber", "")
+        if ref:
+            details_parts.append(f"#{ref}")
+
+        if details_parts:
+            details_lbl = QLabel(" | ".join(details_parts))
+            details_lbl.setFont(create_font(size=8, weight=FontManager.WEIGHT_REGULAR))
+            details_lbl.setStyleSheet(f"color: {Colors.WIZARD_SUBTITLE}; background: transparent; border: none;")
+            details_lbl.setWordWrap(True)
+            layout.addWidget(details_lbl)
+
+        # Date + size row
+        meta_parts = []
+        issued = evidence.get("documentIssuedDate", "")
+        if issued and "T" in str(issued):
+            meta_parts.append(str(issued).split("T")[0])
+        size_bytes = evidence.get("fileSizeBytes", 0)
+        if size_bytes:
+            if size_bytes > 1048576:
+                meta_parts.append(f"{size_bytes / 1048576:.1f} MB")
+            elif size_bytes > 1024:
+                meta_parts.append(f"{size_bytes / 1024:.0f} KB")
+            else:
+                meta_parts.append(f"{size_bytes} B")
+
+        is_expired = evidence.get("isExpired", False)
+        if is_expired:
+            meta_parts.append("منتهي الصلاحية")
+
+        if meta_parts:
+            meta_lbl = QLabel(" | ".join(meta_parts))
+            meta_lbl.setFont(create_font(size=7, weight=FontManager.WEIGHT_REGULAR))
+            expired_color = "#EF4444" if is_expired else "#9CA3AF"
+            meta_lbl.setStyleSheet(f"color: {expired_color}; background: transparent; border: none;")
+            layout.addWidget(meta_lbl)
+
+        return card
+
+    @staticmethod
+    def _get_file_icon(mime_type: str) -> str:
+        if not mime_type:
+            return "📄"
+        if "pdf" in mime_type:
+            return "📕"
+        if "image" in mime_type:
+            return "🖼"
+        if "word" in mime_type or "document" in mime_type:
+            return "📘"
+        if "excel" in mime_type or "spreadsheet" in mime_type:
+            return "📗"
+        return "📄"
+
+    def _populate_doc_column(self, frame: QFrame, evidences: list):
+        layout = frame.layout()
+        # Find docs_list container
+        docs_layout = None
+        for i in range(layout.count()):
+            item = layout.itemAt(i)
+            if item and item.layout() and item.layout().objectName() == "docs_list":
+                docs_layout = item.layout()
+                break
+
+        if not docs_layout:
+            return
+
+        # Clear existing
+        while docs_layout.count():
+            child = docs_layout.takeAt(0)
+            if child.widget():
+                child.widget().deleteLater()
+
+        # Update count
+        count_lbl = frame.findChild(QLabel, "doc_count")
+        if count_lbl:
+            count_lbl.setText(f"{len(evidences)} مستند" if len(evidences) != 0 else "لا توجد مستندات")
+
+        # Add evidence cards
+        for ev in evidences:
+            ev_card = self._build_evidence_card(ev)
+            docs_layout.addWidget(ev_card)
+
+    def _load_document_comparison(self):
+        if not self._current_group:
+            return
+
+        conflict_id = self._current_group.get("id", "")
+        if not conflict_id:
+            Toast.show_toast(self, "معرف التعارض غير متوفر", Toast.WARNING)
+            return
+
+        try:
+            doc_data = self.duplicate_service.get_document_comparison(conflict_id)
+        except Exception as e:
+            logger.error(f"Failed to load document comparison: {e}")
+            Toast.show_toast(self, "فشل تحميل مقارنة المستندات", Toast.ERROR)
+            return
+
+        if not doc_data:
+            Toast.show_toast(self, "لا توجد بيانات مستندات", Toast.WARNING)
+            return
+
+        first_entity = doc_data.get("firstEntity", {})
+        second_entity = doc_data.get("secondEntity", {})
+
+        first_evidences = first_entity.get("evidences", [])
+        second_evidences = second_entity.get("evidences", [])
+
+        self._doc_empty_label.setVisible(False)
+        self._doc_first_frame.setVisible(True)
+        self._doc_second_frame.setVisible(True)
+
+        self._populate_doc_column(self._doc_first_frame, first_evidences)
+        self._populate_doc_column(self._doc_second_frame, second_evidences)
 
     # ────────────────────────────────────────────
     # Resolution Section
@@ -608,7 +900,7 @@ class ClaimComparisonPage(QWidget):
     # Actions
     # ────────────────────────────────────────────
     def _on_action_clicked(self):
-        """Handle resolution action."""
+        """Handle resolution action using Conflicts API."""
         justification = self._justification_edit.toPlainText().strip()
         if not justification:
             Toast.show_toast(self, "يرجى إدخال مبرر القرار", Toast.WARNING)
@@ -624,29 +916,63 @@ class ClaimComparisonPage(QWidget):
             Toast.show_toast(self, "لا توجد بيانات للمعالجة", Toast.WARNING)
             return
 
-        success = False
+        conflict_id = self._current_group.get("id", "")
+        if not conflict_id:
+            Toast.show_toast(self, "معرف التعارض غير متوفر", Toast.WARNING)
+            return
 
+        action_labels = {
+            "merge": "دمج السجلات",
+            "keep_separate": "إبقاء السجلات منفصلة",
+            "field_verification": "تصعيد التعارض للمشرف",
+        }
+        action_label = action_labels.get(resolution_type, "تنفيذ الإجراء")
+
+        msg_box = QMessageBox(self)
+        msg_box.setLayoutDirection(Qt.RightToLeft)
+        msg_box.setWindowTitle("تأكيد الإجراء")
+        msg_box.setText(f"هل أنت متأكد من {action_label}؟")
+        msg_box.setInformativeText("لا يمكن التراجع عن هذا الإجراء.")
+        msg_box.setIcon(QMessageBox.Question)
+        msg_box.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
+        msg_box.setDefaultButton(QMessageBox.No)
+        msg_box.button(QMessageBox.Yes).setText("نعم، تنفيذ")
+        msg_box.button(QMessageBox.No).setText("لا، تراجع")
+
+        if msg_box.exec_() != QMessageBox.Yes:
+            return
+
+        master_id = ""
+        # Map field_verification to escalate for the worker
+        action = resolution_type
         if resolution_type == "merge":
             selected_idx = self.claim_radio_group.checkedId()
-            if selected_idx < 0 or selected_idx >= len(self._current_group.records):
+            entity_ids = [
+                self._current_group.get("firstEntityId", ""),
+                self._current_group.get("secondEntityId", ""),
+            ]
+            if selected_idx < 0 or selected_idx >= len(entity_ids):
                 Toast.show_toast(self, "يرجى اختيار السجل الأساسي", Toast.WARNING)
                 return
-            master_id = self._current_group.records[selected_idx].get("id", "")
+            master_id = entity_ids[selected_idx]
             if not master_id:
                 Toast.show_toast(self, "لم يتم العثور على معرف السجل", Toast.WARNING)
                 return
-            success = self.duplicate_service.resolve_as_merge(
-                self._current_group, master_id, justification, self._user_id
-            )
-        elif resolution_type == "keep_separate":
-            success = self.duplicate_service.resolve_as_separate(
-                self._current_group, justification, self._user_id
-            )
         elif resolution_type == "field_verification":
-            success = self.duplicate_service.request_field_verification(
-                self._current_group, justification, self._user_id
-            )
+            action = "escalate"
 
+        self.action_btn.setEnabled(False)
+        from ui.pages.duplicates_page import _ResolutionWorker
+        self._resolution_worker = _ResolutionWorker(
+            self.duplicate_service, action,
+            conflict_id, justification, master_id
+        )
+        self._resolution_worker.finished.connect(self._on_resolution_done)
+        self._resolution_worker.error.connect(self._on_resolution_err)
+        self._resolution_worker.start()
+
+    def _on_resolution_done(self, success: bool):
+        self.action_btn.setEnabled(True)
         if success:
             self._justification_edit.clear()
             Toast.show_toast(self, "تم تنفيذ الإجراء بنجاح", Toast.SUCCESS)
@@ -654,25 +980,36 @@ class ClaimComparisonPage(QWidget):
         else:
             Toast.show_toast(self, "فشلت عملية المعالجة", Toast.WARNING)
 
+    def _on_resolution_err(self, error_msg: str):
+        self.action_btn.setEnabled(True)
+        Toast.show_toast(self, f"فشلت عملية المعالجة: {error_msg}", Toast.ERROR)
+
     # ────────────────────────────────────────────
     # Refresh — populate with real data from API
     # ────────────────────────────────────────────
     def refresh(self, data=None):
-        """Refresh page with duplicate group data from API."""
+        """Refresh page with conflict data from API.
+
+        Args:
+            data: Conflict dict from API (has id, firstEntityId, secondEntityId, etc.)
+        """
         logger.debug("Refreshing claim comparison page")
         if data is None:
             return
 
-        if not isinstance(data, DuplicateGroup):
+        if not isinstance(data, dict):
             return
 
         self._current_group = data
 
-        try:
-            self._comparison_data = self.duplicate_service.get_person_comparison_data(data)
-        except Exception as e:
-            logger.error(f"Failed to fetch comparison data: {e}")
-            return
+        # Fetch detailed comparison from API
+        conflict_id = data.get("id", "")
+        details = {}
+        if conflict_id:
+            try:
+                details = self.duplicate_service.get_conflict_details(conflict_id)
+            except Exception as e:
+                logger.error(f"Failed to fetch conflict details: {e}")
 
         # --- Populate claims section ---
         self._clear_layout(self._claims_rows_layout)
@@ -680,12 +1017,38 @@ class ClaimComparisonPage(QWidget):
         for btn in self.claim_radio_group.buttons():
             self.claim_radio_group.removeButton(btn)
 
-        for idx, person_data in enumerate(self._comparison_data):
-            person = person_data["person"]
-            claims = person_data["claims"]
-            buildings = person_data["buildings"]
-            units = person_data["units"]
+        # Build two record entries from the conflict data
+        records = []
+        first_id = data.get("firstEntityIdentifier", data.get("firstEntityId", "-"))
+        second_id = data.get("secondEntityIdentifier", data.get("secondEntityId", "-"))
 
+        # dataComparison from API may be a JSON string or a list
+        raw_comparison = details.get("dataComparison", "")
+        data_comparison = []
+        if raw_comparison:
+            if isinstance(raw_comparison, list):
+                data_comparison = raw_comparison
+            elif isinstance(raw_comparison, str):
+                import json as _json
+                try:
+                    parsed = _json.loads(raw_comparison)
+                    if isinstance(parsed, list):
+                        data_comparison = parsed
+                except (ValueError, TypeError):
+                    pass
+
+        records.append({
+            "id": data.get("firstEntityId", ""),
+            "identifier": first_id,
+            "label": "السجل الأول",
+        })
+        records.append({
+            "id": data.get("secondEntityId", ""),
+            "identifier": second_id,
+            "label": "السجل الثاني",
+        })
+
+        for idx, record in enumerate(records):
             row = QHBoxLayout()
             row.setSpacing(16)
             row.setContentsMargins(0, 0, 0, 0)
@@ -697,24 +1060,22 @@ class ClaimComparisonPage(QWidget):
                 radio.setChecked(True)
             row.addWidget(radio)
 
-            first_claim = claims[0] if claims else {}
-            first_building = buildings[0] if buildings else {}
-
-            name = f"{person.get('firstNameArabic', '')} {person.get('fatherNameArabic', '')} {person.get('familyNameArabic', '')}".strip()
+            conflict_type = data.get("conflictType", "")
+            icon_name = "blue" if "Property" in conflict_type else "yelow"
 
             claim_card_data = {
-                "claim_id": first_claim.get("claimNumber", person.get("nationalId", "")),
-                "claimant_name": name or "-",
-                "date": str(first_claim.get("createdAt", person.get("dateOfBirth", ""))),
-                "governorate_name_ar": first_building.get("governorateName", ""),
-                "district_name_ar": first_building.get("districtName", ""),
-                "subdistrict_name_ar": first_building.get("subDistrictName", ""),
+                "claim_id": record["identifier"],
+                "claimant_name": record["label"],
+                "date": data.get("detectedDate", "").split("T")[0] if "T" in str(data.get("detectedDate", "")) else "",
+                "governorate_name_ar": conflict_type,
+                "district_name_ar": "",
+                "subdistrict_name_ar": "",
                 "neighborhood_name_ar": "",
-                "building_id": first_building.get("buildingId", ""),
+                "building_id": record["id"],
                 "unit_number": "",
             }
 
-            claim_card = ClaimListCard(claim_card_data, icon_name="yelow")
+            claim_card = ClaimListCard(claim_card_data, icon_name=icon_name)
             claim_card.setFixedHeight(112)
             row.addWidget(claim_card, 1)
 
@@ -723,18 +1084,38 @@ class ClaimComparisonPage(QWidget):
         # --- Populate comparison section ---
         self._clear_layout(self._comparison_cards_layout)
 
-        # Build comparison dicts and compute diffs
-        comparison_dicts = []
-        for person_data in self._comparison_data:
-            building = person_data["buildings"][0] if person_data["buildings"] else {}
-            unit = person_data["units"][0] if person_data["units"] else {}
-            comparison_dicts.append(self._map_to_comparison_dict(building, unit))
+        if data_comparison:
+            # Build comparison from API dataComparison field
+            comparison_dicts = []
+            for dc in data_comparison[:2]:
+                comp_dict = {}
+                if isinstance(dc, dict):
+                    # Direct dict with field values (e.g. {"buildingId": "...", ...})
+                    if "fieldName" in dc:
+                        # Single fieldName/value item
+                        comp_dict[dc.get("fieldName", "")] = str(dc.get("value", "-"))
+                    else:
+                        comp_dict = dc
+                elif isinstance(dc, list):
+                    # List of fieldName/value dicts
+                    for field_item in dc:
+                        if isinstance(field_item, dict):
+                            key = field_item.get("fieldName", "")
+                            val = field_item.get("value", "-")
+                            comp_dict[key] = str(val) if val else "-"
+                comparison_dicts.append(self._map_to_comparison_dict(comp_dict, {}))
 
-        diff_fields = self._compute_comparison_diff_fields(comparison_dicts)
+            diff_fields = self._compute_comparison_diff_fields(comparison_dicts)
 
-        for comp_dict in comparison_dicts:
-            outer_card = self._build_outer_comparison_card(comp_dict, diff_fields)
-            self._comparison_cards_layout.addWidget(outer_card, 1)
+            for comp_dict in comparison_dicts:
+                outer_card = self._build_outer_comparison_card(comp_dict, diff_fields)
+                self._comparison_cards_layout.addWidget(outer_card, 1)
+        else:
+            # Fallback: show basic info from conflict
+            for record in records:
+                basic = {"building_code": record["identifier"]}
+                outer_card = self._build_outer_comparison_card(basic, set())
+                self._comparison_cards_layout.addWidget(outer_card, 1)
 
     def update_language(self, is_arabic: bool):
         pass

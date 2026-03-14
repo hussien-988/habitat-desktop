@@ -1,44 +1,73 @@
 # -*- coding: utf-8 -*-
 """
-Import Wizard - Step 6: Final Commit Report
+Import Wizard - Step 5 (Report): Final Commit Report
 UC-003: Import Pipeline
 
-Displays the final commit report with success/error summary.
+Displays the final commit report matching the API response from
+GET /api/v1/import/packages/{id}/commit-report.
 """
 
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QFrame,
-    QScrollArea, QSizePolicy
+    QScrollArea, QTableWidget, QTableWidgetItem, QHeaderView,
+    QAbstractItemView, QSizePolicy
 )
 from PyQt5.QtCore import Qt
 
-from ui.design_system import Colors, PageDimensions
 from ui.font_utils import create_font, FontManager
 from ui.style_manager import StyleManager
 from utils.logger import get_logger
 
 logger = get_logger(__name__)
 
+# Entity sections in commit-report (9 types)
+_ENTITY_SECTIONS = [
+    ('surveys', 'المسوحات'),
+    ('buildings', 'المباني'),
+    ('buildingDocuments', 'مستندات المباني'),
+    ('propertyUnits', 'الوحدات العقارية'),
+    ('persons', 'الأشخاص'),
+    ('households', 'الأسر'),
+    ('personPropertyRelations', 'علاقات الأشخاص بالعقارات'),
+    ('evidences', 'المستندات'),
+    ('claims', 'المطالبات'),
+]
+
 
 class ImportStep6Report(QWidget):
-    """Step 6: Final commit report."""
+    """Step 5 (Report): Final commit report."""
 
-    def __init__(self, import_controller, parent=None):
+    def __init__(self, import_controller, package_id, parent=None):
         super().__init__(parent)
         self.import_controller = import_controller
+        self._package_id = package_id
         self._report_data = None
-        self._is_success = True
         self._setup_ui()
+        self.load_report(package_id)
 
     def _setup_ui(self):
         self.setLayoutDirection(Qt.RightToLeft)
         self.setStyleSheet("background: transparent;")
 
-        main_layout = QVBoxLayout(self)
-        main_layout.setContentsMargins(0, 24, 0, 0)
+        outer_layout = QVBoxLayout(self)
+        outer_layout.setContentsMargins(0, 0, 0, 0)
+        outer_layout.setSpacing(0)
+
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.NoFrame)
+        scroll.setStyleSheet(
+            "QScrollArea { background: transparent; border: none; }"
+            + StyleManager.scrollbar()
+        )
+
+        container = QWidget()
+        container.setStyleSheet("background: transparent;")
+        main_layout = QVBoxLayout(container)
+        main_layout.setContentsMargins(0, 24, 0, 24)
         main_layout.setSpacing(20)
 
-        # Result header card (success or error)
+        # --- Card 1: Result header (success/partial/fail) ---
         self._result_card = QFrame()
         self._result_card_layout = QVBoxLayout(self._result_card)
         self._result_card_layout.setContentsMargins(32, 24, 32, 24)
@@ -52,110 +81,232 @@ class ImportStep6Report(QWidget):
         self._result_subtitle.setFont(create_font(size=11, weight=FontManager.WEIGHT_REGULAR))
         self._result_card_layout.addWidget(self._result_subtitle)
 
-        # Set default success style
-        self._set_result_style(True)
+        # Meta info row (duration, date, package number)
+        self._meta_layout = QHBoxLayout()
+        self._meta_layout.setSpacing(24)
 
+        self._duration_label = QLabel("")
+        self._duration_label.setFont(create_font(size=9, weight=FontManager.WEIGHT_REGULAR))
+        self._meta_layout.addWidget(self._duration_label)
+
+        self._date_label = QLabel("")
+        self._date_label.setFont(create_font(size=9, weight=FontManager.WEIGHT_REGULAR))
+        self._meta_layout.addWidget(self._date_label)
+
+        self._pkg_number_label = QLabel("")
+        self._pkg_number_label.setFont(create_font(size=9, weight=FontManager.WEIGHT_REGULAR))
+        self._meta_layout.addWidget(self._pkg_number_label)
+
+        self._meta_layout.addStretch()
+        self._result_card_layout.addLayout(self._meta_layout)
+
+        self._set_result_style(True)
         main_layout.addWidget(self._result_card)
 
-        # Stats card
-        stats_card = QFrame()
-        stats_card.setStyleSheet("""
-            QFrame {
-                background-color: #FFFFFF;
-                border-radius: 16px;
-            }
-        """)
-        stats_card_layout = QVBoxLayout(stats_card)
-        stats_card_layout.setContentsMargins(32, 24, 32, 24)
-        stats_card_layout.setSpacing(16)
+        # --- Card 2: Summary stats ---
+        stats_card = self._create_card()
+        stats_layout = QVBoxLayout(stats_card)
+        stats_layout.setContentsMargins(32, 24, 32, 24)
+        stats_layout.setSpacing(16)
 
         stats_title = QLabel("ملخص النتائج")
         stats_title.setFont(create_font(size=12, weight=FontManager.WEIGHT_SEMIBOLD))
         stats_title.setStyleSheet("color: #212B36; background: transparent;")
-        stats_card_layout.addWidget(stats_title)
+        stats_layout.addWidget(stats_title)
 
         sep = QFrame()
         sep.setFrameShape(QFrame.HLine)
         sep.setStyleSheet("color: #E1E8ED;")
-        stats_card_layout.addWidget(sep)
+        stats_layout.addWidget(sep)
 
-        # Stats row
+        # Stat boxes row
         stats_row = QHBoxLayout()
-        stats_row.setSpacing(24)
+        stats_row.setSpacing(16)
 
-        # Imported count
-        self._imported_count = self._create_stat_box(
-            "تم الإدخال", "0", "#10B981", "#ECFDF5"
-        )
-        stats_row.addWidget(self._imported_count)
+        self._approved_box = self._create_stat_box("معتمد", "0", "#3B82F6", "#EFF6FF")
+        stats_row.addWidget(self._approved_box)
 
-        # Failed count
-        self._failed_count = self._create_stat_box(
-            "فشل الإدخال", "0", "#EF4444", "#FEF2F2"
-        )
-        stats_row.addWidget(self._failed_count)
+        self._committed_box = self._create_stat_box("تم الإدخال", "0", "#10B981", "#ECFDF5")
+        stats_row.addWidget(self._committed_box)
 
-        # Skipped count
-        self._skipped_count = self._create_stat_box(
-            "تم التخطي", "0", "#F59E0B", "#FFFBEB"
-        )
-        stats_row.addWidget(self._skipped_count)
+        self._failed_box = self._create_stat_box("فشل", "0", "#EF4444", "#FEF2F2")
+        stats_row.addWidget(self._failed_box)
+
+        self._skipped_box = self._create_stat_box("تم التخطي", "0", "#F59E0B", "#FFFBEB")
+        stats_row.addWidget(self._skipped_box)
+
+        self._rate_box = self._create_stat_box("نسبة النجاح", "0%", "#8B5CF6", "#F5F3FF")
+        stats_row.addWidget(self._rate_box)
 
         stats_row.addStretch()
-        stats_card_layout.addLayout(stats_row)
+        stats_layout.addLayout(stats_row)
 
         main_layout.addWidget(stats_card)
 
-        # Details card (scrollable)
-        details_card = QFrame()
-        details_card.setStyleSheet("""
+        # --- Card 3: Per-entity breakdown table ---
+        breakdown_card = self._create_card()
+        breakdown_layout = QVBoxLayout(breakdown_card)
+        breakdown_layout.setContentsMargins(32, 24, 32, 24)
+        breakdown_layout.setSpacing(16)
+
+        breakdown_title = QLabel("تفصيل حسب نوع الكيان")
+        breakdown_title.setFont(create_font(size=12, weight=FontManager.WEIGHT_SEMIBOLD))
+        breakdown_title.setStyleSheet("color: #212B36; background: transparent;")
+        breakdown_layout.addWidget(breakdown_title)
+
+        self._breakdown_table = QTableWidget()
+        self._breakdown_table.setColumnCount(5)
+        self._breakdown_table.setHorizontalHeaderLabels([
+            "نوع الكيان", "معتمد", "تم الإدخال", "فشل", "تم التخطي"
+        ])
+        self._breakdown_table.setLayoutDirection(Qt.RightToLeft)
+        self._breakdown_table.setEditTriggers(QAbstractItemView.NoEditTriggers)
+        self._breakdown_table.setSelectionBehavior(QAbstractItemView.SelectRows)
+        self._breakdown_table.verticalHeader().setVisible(False)
+        self._breakdown_table.setAlternatingRowColors(True)
+
+        header = self._breakdown_table.horizontalHeader()
+        header.setSectionResizeMode(0, QHeaderView.Stretch)
+        for col in range(1, 5):
+            header.setSectionResizeMode(col, QHeaderView.Fixed)
+            self._breakdown_table.setColumnWidth(col, 100)
+
+        self._breakdown_table.setStyleSheet("""
+            QTableWidget {
+                background-color: #FFFFFF;
+                border: 1px solid #E1E8ED;
+                border-radius: 8px;
+                gridline-color: #F4F6F8;
+            }
+            QTableWidget::item {
+                padding: 8px 12px;
+                border: none;
+            }
+            QHeaderView::section {
+                background-color: #F8F9FA;
+                color: #637381;
+                padding: 8px 12px;
+                border: none;
+                border-bottom: 2px solid #E1E8ED;
+                font-weight: 600;
+            }
+        """)
+        self._breakdown_table.setFont(create_font(size=10, weight=FontManager.WEIGHT_REGULAR))
+        header.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
+        self._breakdown_table.setMaximumHeight(340)
+
+        breakdown_layout.addWidget(self._breakdown_table)
+        main_layout.addWidget(breakdown_card)
+
+        # --- Card 4: Additional info ---
+        self._extra_card = self._create_card()
+        extra_layout = QVBoxLayout(self._extra_card)
+        extra_layout.setContentsMargins(32, 24, 32, 24)
+        extra_layout.setSpacing(12)
+
+        extra_title = QLabel("معلومات إضافية")
+        extra_title.setFont(create_font(size=12, weight=FontManager.WEIGHT_SEMIBOLD))
+        extra_title.setStyleSheet("color: #212B36; background: transparent;")
+        extra_layout.addWidget(extra_title)
+
+        sep2 = QFrame()
+        sep2.setFrameShape(QFrame.HLine)
+        sep2.setStyleSheet("color: #E1E8ED;")
+        extra_layout.addWidget(sep2)
+
+        self._extra_rows_layout = QVBoxLayout()
+        self._extra_rows_layout.setSpacing(8)
+        extra_layout.addLayout(self._extra_rows_layout)
+
+        # Pre-create extra info labels
+        self._extra_labels = {}
+        extra_items = [
+            ('duplicateAttachmentsFound', 'مرفقات مكررة'),
+            ('deduplicationBytesSaved', 'حجم التوفير من إزالة التكرار'),
+            ('conflictResolutionsApplied', 'حلول تكرارات مطبّقة'),
+            ('mergesPerformed', 'عمليات دمج'),
+            ('isArchived', 'تم الأرشفة'),
+            ('archivePath', 'مسار الأرشيف'),
+        ]
+        for key, ar_label in extra_items:
+            row = QHBoxLayout()
+            row.setSpacing(12)
+            name = QLabel(f"{ar_label}:")
+            name.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
+            name.setStyleSheet("color: #637381; background: transparent;")
+            name.setFixedWidth(200)
+            row.addWidget(name)
+
+            value = QLabel("-")
+            value.setFont(create_font(size=10, weight=FontManager.WEIGHT_REGULAR))
+            value.setStyleSheet("color: #212B36; background: transparent;")
+            row.addWidget(value)
+            row.addStretch()
+
+            self._extra_labels[key] = value
+            self._extra_rows_layout.addLayout(row)
+
+        main_layout.addWidget(self._extra_card)
+
+        # --- Card 5: Errors (hidden if none) ---
+        self._errors_card = self._create_card()
+        errors_card_layout = QVBoxLayout(self._errors_card)
+        errors_card_layout.setContentsMargins(32, 24, 32, 24)
+        errors_card_layout.setSpacing(12)
+
+        errors_title_row = QHBoxLayout()
+        errors_title_label = QLabel("الأخطاء")
+        errors_title_label.setFont(create_font(size=12, weight=FontManager.WEIGHT_SEMIBOLD))
+        errors_title_label.setStyleSheet("color: #EF4444; background: transparent;")
+        errors_title_row.addWidget(errors_title_label)
+
+        self._errors_count_label = QLabel("")
+        self._errors_count_label.setFont(create_font(size=10, weight=FontManager.WEIGHT_REGULAR))
+        self._errors_count_label.setStyleSheet("color: #9CA3AF; background: transparent;")
+        errors_title_row.addWidget(self._errors_count_label)
+        errors_title_row.addStretch()
+        errors_card_layout.addLayout(errors_title_row)
+
+        self._errors_scroll = QScrollArea()
+        self._errors_scroll.setWidgetResizable(True)
+        self._errors_scroll.setFrameShape(QFrame.NoFrame)
+        self._errors_scroll.setStyleSheet(
+            "QScrollArea { background: transparent; border: none; }"
+        )
+        self._errors_scroll.setMaximumHeight(250)
+
+        self._errors_container = QWidget()
+        self._errors_container.setStyleSheet("background: transparent;")
+        self._errors_layout = QVBoxLayout(self._errors_container)
+        self._errors_layout.setContentsMargins(0, 0, 0, 0)
+        self._errors_layout.setSpacing(6)
+
+        self._errors_scroll.setWidget(self._errors_container)
+        errors_card_layout.addWidget(self._errors_scroll)
+
+        self._errors_card.setVisible(False)
+        main_layout.addWidget(self._errors_card)
+
+        main_layout.addStretch()
+        scroll.setWidget(container)
+        outer_layout.addWidget(scroll)
+
+    def _create_card(self) -> QFrame:
+        card = QFrame()
+        card.setStyleSheet("""
             QFrame {
                 background-color: #FFFFFF;
                 border-radius: 16px;
             }
         """)
-        details_card_layout = QVBoxLayout(details_card)
-        details_card_layout.setContentsMargins(32, 24, 32, 24)
-        details_card_layout.setSpacing(12)
-
-        details_title = QLabel("التفاصيل")
-        details_title.setFont(create_font(size=12, weight=FontManager.WEIGHT_SEMIBOLD))
-        details_title.setStyleSheet("color: #212B36; background: transparent;")
-        details_card_layout.addWidget(details_title)
-
-        self._details_scroll = QScrollArea()
-        self._details_scroll.setWidgetResizable(True)
-        self._details_scroll.setFrameShape(QFrame.NoFrame)
-        self._details_scroll.setStyleSheet(
-            "QScrollArea { background: transparent; border: none; }"
-        )
-        self._details_scroll.setMaximumHeight(300)
-
-        self._details_container = QWidget()
-        self._details_container.setStyleSheet("background: transparent;")
-        self._details_layout = QVBoxLayout(self._details_container)
-        self._details_layout.setContentsMargins(0, 0, 0, 0)
-        self._details_layout.setSpacing(6)
-
-        empty_label = QLabel("لا توجد تفاصيل بعد")
-        empty_label.setFont(create_font(size=10, weight=FontManager.WEIGHT_REGULAR))
-        empty_label.setStyleSheet("color: #9CA3AF; background: transparent;")
-        empty_label.setAlignment(Qt.AlignCenter)
-        self._details_layout.addWidget(empty_label)
-        self._details_layout.addStretch()
-
-        self._details_scroll.setWidget(self._details_container)
-        details_card_layout.addWidget(self._details_scroll)
-
-        main_layout.addWidget(details_card)
-        main_layout.addStretch()
+        return card
 
     def _create_stat_box(self, label_text: str, value_text: str,
                          color: str, bg: str) -> QFrame:
         """Create a stat box with value and label."""
         box = QFrame()
         box.setFixedHeight(70)
-        box.setMinimumWidth(150)
+        box.setMinimumWidth(120)
         box.setStyleSheet(f"""
             QFrame {{
                 background-color: {bg};
@@ -190,8 +341,6 @@ class ImportStep6Report(QWidget):
 
     def _set_result_style(self, success: bool):
         """Apply success or error styling to the result card."""
-        self._is_success = success
-
         if success:
             self._result_card.setStyleSheet("""
                 QFrame {
@@ -199,9 +348,11 @@ class ImportStep6Report(QWidget):
                     border-radius: 16px;
                     border: 1px solid #A7F3D0;
                 }
+                QFrame QLabel { border: none; background: transparent; }
             """)
             self._result_title.setStyleSheet("color: #065F46; background: transparent;")
             self._result_subtitle.setStyleSheet("color: #047857; background: transparent;")
+            meta_color = "#047857"
         else:
             self._result_card.setStyleSheet("""
                 QFrame {
@@ -209,9 +360,14 @@ class ImportStep6Report(QWidget):
                     border-radius: 16px;
                     border: 1px solid #FECACA;
                 }
+                QFrame QLabel { border: none; background: transparent; }
             """)
             self._result_title.setStyleSheet("color: #991B1B; background: transparent;")
             self._result_subtitle.setStyleSheet("color: #B91C1C; background: transparent;")
+            meta_color = "#B91C1C"
+
+        for lbl in (self._duration_label, self._date_label, self._pkg_number_label):
+            lbl.setStyleSheet(f"color: {meta_color}; background: transparent;")
 
     def load_report(self, package_id: str):
         """Load the commit report from the controller."""
@@ -230,103 +386,187 @@ class ImportStep6Report(QWidget):
 
     def _update_ui(self):
         """Update UI with report data."""
-        if not self._report_data:
+        d = self._report_data
+        if not d:
             return
 
-        imported = self._report_data.get("importedCount", 0)
-        failed = self._report_data.get("failedCount", 0)
-        skipped = self._report_data.get("skippedCount", 0)
+        total_approved = d.get("totalRecordsApproved", 0)
+        total_committed = d.get("totalRecordsCommitted", 0)
+        total_failed = d.get("totalRecordsFailed", 0)
+        total_skipped = d.get("totalRecordsSkipped", 0)
+        success_rate = d.get("successRate", 0)
+        is_fully_ok = d.get("isFullySuccessful", False)
 
-        # Determine success state
-        has_failures = failed > 0
-        if imported == 0 and failed > 0:
-            self._set_result_style(False)
-            self._result_title.setText("فشل الإدخال")
-            self._result_subtitle.setText(f"فشل إدخال {failed} سجل")
-        elif has_failures:
+        # Result header
+        if is_fully_ok and total_failed == 0:
+            self._set_result_style(True)
+            self._result_title.setText("تم الإدخال بنجاح")
+            self._result_subtitle.setText(
+                f"تم إدخال {total_committed} سجل بنجاح"
+            )
+        elif total_committed > 0 and total_failed > 0:
             self._set_result_style(True)
             self._result_title.setText("تم الإدخال مع بعض الأخطاء")
             self._result_subtitle.setText(
-                f"تم إدخال {imported} سجل بنجاح، فشل {failed} سجل"
+                f"تم إدخال {total_committed} سجل، فشل {total_failed} سجل"
             )
         else:
-            self._set_result_style(True)
-            self._result_title.setText("تم الإدخال بنجاح")
-            self._result_subtitle.setText(f"تم إدخال {imported} سجل بنجاح")
+            self._set_result_style(False)
+            self._result_title.setText("فشل الإدخال")
+            self._result_subtitle.setText(f"فشل إدخال {total_failed} سجل")
 
-        # Update stat boxes
-        self._update_stat_value(self._imported_count, str(imported))
-        self._update_stat_value(self._failed_count, str(failed))
-        self._update_stat_value(self._skipped_count, str(skipped))
+        # Meta info
+        duration = d.get("duration", "")
+        committed_at = d.get("committedAtUtc", "")
+        pkg_number = d.get("packageNumber", "")
 
-        # Update details
-        self._clear_details()
-        details = self._report_data.get("details", [])
-        if details:
-            for detail in details:
-                row = self._create_detail_row(detail)
-                self._details_layout.addWidget(row)
-        else:
-            empty = QLabel("لا توجد تفاصيل إضافية")
-            empty.setFont(create_font(size=10, weight=FontManager.WEIGHT_REGULAR))
-            empty.setStyleSheet("color: #9CA3AF; background: transparent;")
-            empty.setAlignment(Qt.AlignCenter)
-            self._details_layout.addWidget(empty)
+        if duration:
+            self._duration_label.setText(f"المدة: {duration}")
+        if committed_at:
+            date_part = committed_at[:10] if len(committed_at) >= 10 else committed_at
+            self._date_label.setText(f"التاريخ: {date_part}")
+        if pkg_number:
+            self._pkg_number_label.setText(f"رقم الحزمة: {pkg_number}")
 
-        self._details_layout.addStretch()
+        # Summary stat boxes
+        self._update_stat_value(self._approved_box, str(total_approved))
+        self._update_stat_value(self._committed_box, str(total_committed))
+        self._update_stat_value(self._failed_box, str(total_failed))
+        self._update_stat_value(self._skipped_box, str(total_skipped))
+        rate_str = f"{success_rate}%" if isinstance(success_rate, int) else f"{success_rate:.1f}%"
+        self._update_stat_value(self._rate_box, rate_str)
+
+        # Per-entity breakdown table
+        self._populate_breakdown_table(d)
+
+        # Extra info
+        self._update_extra_info(d)
+
+        # Errors
+        errors = d.get("errors", [])
+        self._populate_errors(errors)
 
     def _update_stat_value(self, stat_box: QFrame, value: str):
-        """Update the value label inside a stat box."""
         value_label = stat_box.findChild(QLabel, "stat_value")
         if value_label:
             value_label.setText(value)
 
-    def _create_detail_row(self, detail: dict) -> QFrame:
-        """Create a row for a detail entry."""
-        row = QFrame()
-        row.setFixedHeight(40)
-        row.setStyleSheet("""
-            QFrame {
-                background-color: #FAFBFC;
-                border: 1px solid #F4F6F8;
-                border-radius: 6px;
-            }
-            QFrame QLabel {
-                border: none;
-                background: transparent;
-            }
-        """)
+    def _populate_breakdown_table(self, d: dict):
+        """Fill the per-entity breakdown table."""
+        rows = []
+        for key, ar_name in _ENTITY_SECTIONS:
+            section = d.get(key)
+            if not isinstance(section, dict):
+                continue
+            approved = section.get("approved", 0)
+            committed = section.get("committed", 0)
+            failed = section.get("failed", 0)
+            skipped = section.get("skipped", 0)
+            if approved or committed or failed or skipped:
+                rows.append((ar_name, approved, committed, failed, skipped))
 
-        row_layout = QHBoxLayout(row)
-        row_layout.setContentsMargins(12, 0, 12, 0)
-        row_layout.setSpacing(12)
+        self._breakdown_table.setRowCount(len(rows))
+        for row_idx, (name, approved, committed, failed, skipped) in enumerate(rows):
+            name_item = QTableWidgetItem(name)
+            name_item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
+            self._breakdown_table.setItem(row_idx, 0, name_item)
 
-        # Detail message
-        message = detail.get("message", "") or str(detail)
-        msg_label = QLabel(message)
-        msg_label.setFont(create_font(size=10, weight=FontManager.WEIGHT_REGULAR))
-        msg_label.setStyleSheet("color: #212B36;")
-        msg_label.setWordWrap(True)
-        row_layout.addWidget(msg_label, 1)
+            for col, val in enumerate([approved, committed, failed, skipped], start=1):
+                item = QTableWidgetItem(str(val))
+                item.setTextAlignment(Qt.AlignCenter)
+                if col == 3 and val > 0:
+                    item.setForeground(Qt.red)
+                self._breakdown_table.setItem(row_idx, col, item)
 
-        # Status indicator
-        status = detail.get("status", "")
-        if status:
-            is_ok = status.lower() in ("success", "ok", "imported")
-            color = "#10B981" if is_ok else "#EF4444"
-            status_label = QLabel(status)
-            status_label.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
-            status_label.setStyleSheet(f"color: {color};")
-            row_layout.addWidget(status_label)
+            self._breakdown_table.setRowHeight(row_idx, 40)
 
-        return row
+    def _update_extra_info(self, d: dict):
+        """Update extra info labels."""
+        dup_attachments = d.get("duplicateAttachmentsFound", 0)
+        self._extra_labels["duplicateAttachmentsFound"].setText(str(dup_attachments))
 
-    def _clear_details(self):
-        """Remove all detail widgets from the layout."""
-        while self._details_layout.count():
-            item = self._details_layout.takeAt(0)
+        dedup_bytes = d.get("deduplicationBytesSaved", 0)
+        if dedup_bytes > 1_048_576:
+            size_str = f"{dedup_bytes / 1_048_576:.1f} MB"
+        elif dedup_bytes > 1024:
+            size_str = f"{dedup_bytes / 1024:.1f} KB"
+        else:
+            size_str = f"{dedup_bytes} bytes"
+        self._extra_labels["deduplicationBytesSaved"].setText(size_str)
+
+        self._extra_labels["conflictResolutionsApplied"].setText(
+            str(d.get("conflictResolutionsApplied", 0))
+        )
+        self._extra_labels["mergesPerformed"].setText(
+            str(d.get("mergesPerformed", 0))
+        )
+
+        is_archived = d.get("isArchived", False)
+        self._extra_labels["isArchived"].setText("نعم" if is_archived else "لا")
+
+        archive_path = d.get("archivePath", "")
+        self._extra_labels["archivePath"].setText(archive_path or "-")
+
+    def _populate_errors(self, errors: list):
+        """Populate the errors section."""
+        # Clear existing
+        while self._errors_layout.count():
+            item = self._errors_layout.takeAt(0)
             if item.widget():
                 item.widget().deleteLater()
+
+        if not errors:
+            self._errors_card.setVisible(False)
+            return
+
+        self._errors_card.setVisible(True)
+        self._errors_count_label.setText(f"({len(errors)} خطأ)")
+
+        entity_names = {k: v for k, v in _ENTITY_SECTIONS}
+
+        for err in errors:
+            row = QFrame()
+            row.setFixedHeight(48)
+            row.setStyleSheet("""
+                QFrame {
+                    background-color: #FEF2F2;
+                    border: 1px solid #FECACA;
+                    border-radius: 6px;
+                }
+                QFrame QLabel {
+                    border: none;
+                    background: transparent;
+                }
+            """)
+            row_layout = QHBoxLayout(row)
+            row_layout.setContentsMargins(12, 4, 12, 4)
+            row_layout.setSpacing(12)
+
+            entity_type = err.get("entityType", "")
+            entity_label = QLabel(entity_names.get(entity_type, entity_type))
+            entity_label.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
+            entity_label.setStyleSheet("color: #991B1B;")
+            entity_label.setFixedWidth(140)
+            row_layout.addWidget(entity_label)
+
+            original_id = err.get("originalEntityId", "")
+            if original_id:
+                id_label = QLabel(str(original_id)[:12])
+                id_label.setFont(create_font(size=9, weight=FontManager.WEIGHT_REGULAR))
+                id_label.setStyleSheet("color: #B91C1C;")
+                id_label.setFixedWidth(100)
+                row_layout.addWidget(id_label)
+
+            msg = err.get("errorMessage", "")
+            msg_label = QLabel(msg)
+            msg_label.setFont(create_font(size=9, weight=FontManager.WEIGHT_REGULAR))
+            msg_label.setStyleSheet("color: #7F1D1D;")
+            msg_label.setWordWrap(True)
+            row_layout.addWidget(msg_label, 1)
+
+            self._errors_layout.addWidget(row)
+
+        self._errors_layout.addStretch()
 
     def set_error(self, error_message: str):
         """Set the report to error state with a message."""
@@ -337,3 +577,22 @@ class ImportStep6Report(QWidget):
     def get_report_data(self) -> dict:
         """Return the loaded report data."""
         return self._report_data or {}
+
+    def reset(self):
+        """Reset the step to initial state."""
+        self._report_data = None
+        self._set_result_style(True)
+        self._result_title.setText("تم الإدخال بنجاح")
+        self._result_subtitle.setText("")
+        self._duration_label.setText("")
+        self._date_label.setText("")
+        self._pkg_number_label.setText("")
+        self._update_stat_value(self._approved_box, "0")
+        self._update_stat_value(self._committed_box, "0")
+        self._update_stat_value(self._failed_box, "0")
+        self._update_stat_value(self._skipped_box, "0")
+        self._update_stat_value(self._rate_box, "0%")
+        self._breakdown_table.setRowCount(0)
+        for label in self._extra_labels.values():
+            label.setText("-")
+        self._errors_card.setVisible(False)

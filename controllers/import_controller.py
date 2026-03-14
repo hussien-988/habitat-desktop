@@ -26,6 +26,31 @@ class ImportController(BaseController):
         super().__init__(parent)
         self.db = db
 
+    @staticmethod
+    def _api_error_msg(e: Exception, default_msg: str) -> str:
+        """Return user-facing Arabic message based on API status code."""
+        if not hasattr(e, "status_code"):
+            return default_msg
+        code = e.status_code
+        detail = ""
+        if hasattr(e, "response_data") and e.response_data:
+            detail = (
+                e.response_data.get("detail", "")
+                or e.response_data.get("message", "")
+                or ""
+            )
+        if code == 409:
+            if detail:
+                return f"تعارض في حالة الحزمة: {detail}"
+            return "تعارض في حالة الحزمة"
+        if code == 400:
+            return "طلب غير صالح — يرجى المحاولة لاحقاً"
+        if code == 404:
+            return "الحزمة غير موجودة"
+        if code == 500:
+            return "خطأ في الخادم — يرجى إبلاغ الدعم الفني"
+        return default_msg
+
     def upload_package(self, file_path: str) -> OperationResult[Dict]:
         """Upload a .uhc package."""
         try:
@@ -36,7 +61,12 @@ class ImportController(BaseController):
             return OperationResult.ok(data=result, message_ar="تم رفع الملف بنجاح")
         except Exception as e:
             logger.error(f"Upload failed: {e}")
-            return OperationResult.fail(str(e), message_ar="فشل رفع الملف")
+            msg = "فشل رفع الملف"
+            if hasattr(e, "status_code") and e.status_code == 409:
+                msg = "الحزمة مرفوعة مسبقاً (مكررة)"
+            else:
+                msg = self._api_error_msg(e, msg)
+            return OperationResult.fail(str(e), message_ar=msg)
 
     def get_packages(
         self, page: int = 1, page_size: int = 20, status_filter: str = None
@@ -69,7 +99,9 @@ class ImportController(BaseController):
             return OperationResult.ok(data=result, message_ar="تم تدريج الحزمة بنجاح")
         except Exception as e:
             logger.error(f"Staging failed: {e}")
-            return OperationResult.fail(str(e), message_ar="فشل تدريج الحزمة")
+            return OperationResult.fail(
+                str(e), message_ar=self._api_error_msg(e, "فشل تدريج الحزمة")
+            )
 
     def get_validation_report(self, package_id: str) -> OperationResult[Dict]:
         """Get validation report."""
@@ -81,16 +113,24 @@ class ImportController(BaseController):
             logger.error(f"Get validation report failed: {e}")
             return OperationResult.fail(str(e), message_ar="فشل تحميل تقرير التحقق")
 
-    def get_staged_entities(self, package_id: str) -> OperationResult[List]:
-        """Get staged entities."""
+    def get_staged_entities(self, package_id: str) -> OperationResult[Dict]:
+        """Get staged entities (grouped by type).
+
+        Returns the raw API response dict with keys:
+        buildings, propertyUnits, persons, households,
+        personPropertyRelations, claims, surveys, evidences, totalCount.
+        """
         try:
             api = get_api_client()
             result = api.get_staged_entities(package_id)
-            items = result if isinstance(result, list) else result.get("items", []) if isinstance(result, dict) else []
-            return OperationResult.ok(data=items)
+            if not isinstance(result, dict):
+                result = {}
+            return OperationResult.ok(data=result)
         except Exception as e:
             logger.error(f"Get staged entities failed: {e}")
-            return OperationResult.fail(str(e), message_ar="فشل تحميل الكيانات المرحلية")
+            return OperationResult.fail(
+                str(e), message_ar=self._api_error_msg(e, "فشل تحميل الكيانات المرحلية")
+            )
 
     def detect_duplicates(self, package_id: str) -> OperationResult[Dict]:
         """Run duplicate detection."""
@@ -100,7 +140,9 @@ class ImportController(BaseController):
             return OperationResult.ok(data=result, message_ar="تم كشف التكرارات")
         except Exception as e:
             logger.error(f"Duplicate detection failed: {e}")
-            return OperationResult.fail(str(e), message_ar="فشل كشف التكرارات")
+            return OperationResult.fail(
+                str(e), message_ar=self._api_error_msg(e, "فشل كشف التكرارات")
+            )
 
     def approve_package(self, package_id: str) -> OperationResult[Dict]:
         """Approve package for commit."""
@@ -110,7 +152,9 @@ class ImportController(BaseController):
             return OperationResult.ok(data=result, message_ar="تمت الموافقة على الحزمة")
         except Exception as e:
             logger.error(f"Approve failed: {e}")
-            return OperationResult.fail(str(e), message_ar="فشل الموافقة على الحزمة")
+            return OperationResult.fail(
+                str(e), message_ar=self._api_error_msg(e, "فشل الموافقة على الحزمة")
+            )
 
     def commit_package(self, package_id: str) -> OperationResult[Dict]:
         """Commit package to production."""
@@ -121,7 +165,9 @@ class ImportController(BaseController):
             return OperationResult.ok(data=result, message_ar="تم إدخال البيانات في الإنتاج")
         except Exception as e:
             logger.error(f"Commit failed: {e}")
-            return OperationResult.fail(str(e), message_ar="فشل إدخال البيانات")
+            return OperationResult.fail(
+                str(e), message_ar=self._api_error_msg(e, "فشل إدخال البيانات")
+            )
 
     def get_commit_report(self, package_id: str) -> OperationResult[Dict]:
         """Get commit report."""
@@ -152,7 +198,9 @@ class ImportController(BaseController):
             return OperationResult.ok(data=result, message_ar="تم إلغاء الحزمة")
         except Exception as e:
             logger.error(f"Cancel failed: {e}")
-            return OperationResult.fail(str(e), message_ar="فشل إلغاء الحزمة")
+            return OperationResult.fail(
+                str(e), message_ar=self._api_error_msg(e, "فشل إلغاء الحزمة")
+            )
 
     def quarantine_package(self, package_id: str) -> OperationResult[Dict]:
         """Quarantine a suspicious package."""
@@ -162,4 +210,6 @@ class ImportController(BaseController):
             return OperationResult.ok(data=result, message_ar="تم حجر الحزمة")
         except Exception as e:
             logger.error(f"Quarantine failed: {e}")
-            return OperationResult.fail(str(e), message_ar="فشل حجر الحزمة")
+            return OperationResult.fail(
+                str(e), message_ar=self._api_error_msg(e, "فشل حجر الحزمة")
+            )
