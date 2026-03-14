@@ -335,16 +335,18 @@ class MainWindow(QMainWindow):
 
         # Map tabs to pages
         # Tab 0: المطالبات المكتملة (Completed Claims)
-        # Tab 1: الحالات (Cases — مفتوحة/مغلقة)
-        # Tab 2: التكرارات (Duplicates)
-        # Tab 3: إدارة المستخدمين (User Management)
-        # Tab 4: تجهيز العمل الميداني (Field Work Preparation)
+        # Tab 1: الحالات (Cases)
+        # Tab 2: الاستيراد (Import)
+        # Tab 3: التكرارات (Duplicates)
+        # Tab 4: إدارة المستخدمين (User Management)
+        # Tab 5: تجهيز العمل الميداني (Field Work Preparation)
         self.tab_page_mapping = {
             0: Pages.CLAIMS,
             1: Pages.CASES,
-            2: Pages.DUPLICATES,
-            3: Pages.USER_MANAGEMENT,
-            4: Pages.FIELD_ASSIGNMENT,
+            2: Pages.IMPORT_PACKAGES,
+            3: Pages.DUPLICATES,
+            4: Pages.USER_MANAGEMENT,
+            5: Pages.FIELD_ASSIGNMENT,
         }
 
     def _setup_layout(self):
@@ -1003,6 +1005,10 @@ class MainWindow(QMainWindow):
             self.navbar.hide_sync_notification()
             if hasattr(page, 'clear_notifications'):
                 page.clear_notifications()
+
+        # Sync navbar tab when navigating to import pages
+        if page_id in (Pages.IMPORT_PACKAGES, Pages.IMPORT_WIZARD):
+            self.navbar.set_current_tab(2)
 
         # Refresh page data if method exists
         if hasattr(page, 'refresh'):

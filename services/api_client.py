@@ -3071,7 +3071,7 @@ class TRRCMSApiClient:
         file_name = os.path.basename(file_path)
         mime_type = mimetypes.guess_type(file_path)[0] or "application/octet-stream"
         url = f"{self.config.base_url}/v1/import/upload"
-        headers = self._get_headers()
+        headers = self._headers()
         headers.pop("Content-Type", None)
 
         logger.info(f"Uploading import package: {file_name}")
@@ -3084,7 +3084,7 @@ class TRRCMSApiClient:
                 )
             response.raise_for_status()
             result = response.json() if response.text else {}
-            logger.info(f"Import package uploaded: {result.get('id', 'N/A')}")
+            logger.info(f"Import package uploaded: {result}")
             return result
         except requests.exceptions.HTTPError as e:
             response_data = None
@@ -3165,7 +3165,11 @@ class TRRCMSApiClient:
         Endpoint: POST /api/v1/import/packages/{id}/approve
         """
         logger.info(f"Approving import package: {package_id}")
-        return self._request("POST", f"/v1/import/packages/{package_id}/approve")
+        return self._request(
+            "POST",
+            f"/v1/import/packages/{package_id}/approve",
+            json_data={"packageId": package_id}
+        )
 
     def commit_import_package(self, package_id: str) -> Dict[str, Any]:
         """
@@ -3174,7 +3178,11 @@ class TRRCMSApiClient:
         Endpoint: POST /api/v1/import/packages/{id}/commit
         """
         logger.info(f"Committing import package: {package_id}")
-        return self._request("POST", f"/v1/import/packages/{package_id}/commit")
+        return self._request(
+            "POST",
+            f"/v1/import/packages/{package_id}/commit",
+            json_data={"packageId": package_id}
+        )
 
     def get_commit_report(self, package_id: str) -> Dict[str, Any]:
         """
@@ -3210,6 +3218,149 @@ class TRRCMSApiClient:
         """
         logger.info(f"Quarantining import package: {package_id}")
         return self._request("POST", f"/v1/import/packages/{package_id}/quarantine")
+
+
+    # ==================== Conflicts / Duplicates API (UC-007/UC-008) ====================
+
+    def get_conflicts(
+        self,
+        page: int = 1,
+        page_size: int = 20,
+        conflict_type: Optional[str] = None,
+        status: Optional[str] = None,
+        priority: Optional[str] = None,
+        import_package_id: Optional[str] = None,
+        assigned_to_user_id: Optional[str] = None,
+        is_escalated: Optional[bool] = None,
+        is_overdue: Optional[bool] = None,
+        sort_by: Optional[str] = None,
+        sort_descending: bool = True,
+    ) -> Dict[str, Any]:
+        """
+        List conflict resolution queue with filtering and pagination.
+
+        Endpoint: GET /api/v1/conflicts
+        """
+        params: Dict[str, Any] = {"page": page, "pageSize": page_size}
+        if conflict_type:
+            params["conflictType"] = conflict_type
+        if status:
+            params["status"] = status
+        if priority:
+            params["priority"] = priority
+        if import_package_id:
+            params["importPackageId"] = import_package_id
+        if assigned_to_user_id:
+            params["assignedToUserId"] = assigned_to_user_id
+        if is_escalated is not None:
+            params["isEscalated"] = is_escalated
+        if is_overdue is not None:
+            params["isOverdue"] = is_overdue
+        if sort_by:
+            params["sortBy"] = sort_by
+        params["sortDescending"] = sort_descending
+        return self._request("GET", "/v1/conflicts", params=params)
+
+    def get_conflicts_summary(self) -> Dict[str, Any]:
+        """
+        Get aggregate conflict counts for dashboard.
+
+        Endpoint: GET /api/v1/conflicts/summary
+        """
+        return self._request("GET", "/v1/conflicts/summary")
+
+    def get_property_duplicates(
+        self, page: int = 1, page_size: int = 20
+    ) -> Dict[str, Any]:
+        """
+        Get property duplicate conflicts (UC-007).
+
+        Endpoint: GET /api/v1/conflicts/property-duplicates
+        """
+        params = {"page": page, "pageSize": page_size}
+        return self._request("GET", "/v1/conflicts/property-duplicates", params=params)
+
+    def get_person_duplicates(
+        self, page: int = 1, page_size: int = 20
+    ) -> Dict[str, Any]:
+        """
+        Get person duplicate conflicts (UC-008).
+
+        Endpoint: GET /api/v1/conflicts/person-duplicates
+        """
+        params = {"page": page, "pageSize": page_size}
+        return self._request("GET", "/v1/conflicts/person-duplicates", params=params)
+
+    def get_escalated_conflicts(
+        self, page: int = 1, page_size: int = 20
+    ) -> Dict[str, Any]:
+        """
+        Get escalated conflicts awaiting senior review.
+
+        Endpoint: GET /api/v1/conflicts/escalated
+        """
+        params = {"page": page, "pageSize": page_size}
+        return self._request("GET", "/v1/conflicts/escalated", params=params)
+
+    def get_conflict_details(self, conflict_id: str) -> Dict[str, Any]:
+        """
+        Get side-by-side comparison details for a conflict.
+
+        Endpoint: GET /api/v1/conflicts/{id}/details
+        """
+        return self._request("GET", f"/v1/conflicts/{conflict_id}/details")
+
+    def get_conflict_document_comparison(self, conflict_id: str) -> Dict[str, Any]:
+        """
+        Get document comparison for a conflict.
+
+        Endpoint: GET /api/v1/conflicts/{id}/document-comparison
+        """
+        return self._request("GET", f"/v1/conflicts/{conflict_id}/document-comparison")
+
+    def merge_conflict(
+        self, conflict_id: str, master_record_id: str, justification: str = ""
+    ) -> Dict[str, Any]:
+        """
+        Merge duplicate records (choose master record).
+
+        Endpoint: POST /api/v1/conflicts/{id}/merge
+        """
+        body = {"masterRecordId": master_record_id, "justification": justification}
+        return self._request("POST", f"/v1/conflicts/{conflict_id}/merge", json=body)
+
+    def keep_separate_conflict(
+        self, conflict_id: str, justification: str = ""
+    ) -> Dict[str, Any]:
+        """
+        Mark conflict records as intentionally separate.
+
+        Endpoint: POST /api/v1/conflicts/{id}/keep-separate
+        """
+        body = {"justification": justification}
+        return self._request("POST", f"/v1/conflicts/{conflict_id}/keep-separate", json=body)
+
+    def resolve_conflict(
+        self, conflict_id: str, resolution_type: str = "", justification: str = ""
+    ) -> Dict[str, Any]:
+        """
+        General conflict resolution.
+
+        Endpoint: POST /api/v1/conflicts/{id}/resolve
+        """
+        body = {"resolutionType": resolution_type, "justification": justification}
+        return self._request("POST", f"/v1/conflicts/{conflict_id}/resolve", json=body)
+
+    def escalate_conflict(
+        self, conflict_id: str, justification: str = ""
+    ) -> Dict[str, Any]:
+        """
+        Escalate conflict to supervisor for review.
+
+        Endpoint: POST /api/v1/conflicts/{id}/escalate
+        """
+        body = {"justification": justification}
+        return self._request("POST", f"/v1/conflicts/{conflict_id}/escalate", json=body)
 
 
 # ==================== Singleton Instance ====================

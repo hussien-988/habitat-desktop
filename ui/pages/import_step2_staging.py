@@ -1,14 +1,17 @@
 # -*- coding: utf-8 -*-
 """
-Import Wizard - Step 2: Staging Results and Validation Report
+Import Wizard - Step 2: Staging Results, Validation Report & Duplicates
 UC-003: Import Pipeline
 
 Displays the validation report after staging a package.
+Validation-report response includes per-entity breakdowns,
+level results (validators), and duplicate detection counts.
 """
 
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QFrame,
-    QScrollArea, QSizePolicy
+    QScrollArea, QTableWidget, QTableWidgetItem, QHeaderView,
+    QAbstractItemView, QSizePolicy
 )
 from PyQt5.QtCore import Qt
 
@@ -19,34 +22,30 @@ from utils.logger import get_logger
 
 logger = get_logger(__name__)
 
-# Validation issue type configuration
-_ISSUE_TYPE_CONFIG = {
-    'error': {
-        'label': 'خطأ',
-        'color': '#EF4444',
-        'bg': '#FEF2F2',
-    },
-    'warning': {
-        'label': 'تحذير',
-        'color': '#F59E0B',
-        'bg': '#FFFBEB',
-    },
-    'info': {
-        'label': 'معلومة',
-        'color': '#3B82F6',
-        'bg': '#EFF6FF',
-    },
-}
+# Entity type labels (key in API → Arabic)
+_ENTITY_SECTIONS = [
+    ('surveys', 'المسوحات'),
+    ('buildings', 'المباني'),
+    ('propertyUnits', 'الوحدات العقارية'),
+    ('persons', 'الأشخاص'),
+    ('households', 'الأسر'),
+    ('personPropertyRelations', 'علاقات الأشخاص بالعقارات'),
+    ('evidences', 'المستندات'),
+    ('claims', 'المطالبات'),
+]
 
 
 class ImportStep2Staging(QWidget):
-    """Step 2: Staging results and validation report."""
+    """Step 2: Staging results, validation report, and duplicate detection."""
 
-    def __init__(self, import_controller, parent=None):
+    def __init__(self, import_controller, package_id, duplicates_data=None, parent=None):
         super().__init__(parent)
         self.import_controller = import_controller
+        self._package_id = package_id
         self._report_data = None
+        self._duplicates_data = duplicates_data
         self._setup_ui()
+        self.load_report(package_id)
 
     def _setup_ui(self):
         self.setLayoutDirection(Qt.RightToLeft)
@@ -54,87 +53,331 @@ class ImportStep2Staging(QWidget):
 
         main_layout = QVBoxLayout(self)
         main_layout.setContentsMargins(0, 24, 0, 0)
-        main_layout.setSpacing(20)
+        main_layout.setSpacing(0)
 
-        # Validation report card
+        # Main scroll area
+        main_scroll = QScrollArea()
+        main_scroll.setWidgetResizable(True)
+        main_scroll.setFrameShape(QFrame.NoFrame)
+        main_scroll.setStyleSheet(
+            "QScrollArea { background: transparent; border: none; }"
+            + StyleManager.scrollbar()
+        )
+
+        scroll_content = QWidget()
+        scroll_content.setStyleSheet("background: transparent;")
+        scroll_layout = QVBoxLayout(scroll_content)
+        scroll_layout.setContentsMargins(0, 0, 0, 0)
+        scroll_layout.setSpacing(20)
+
+        # ── Card 1: Summary Stats ──
+        summary_card = self._build_summary_card()
+        scroll_layout.addWidget(summary_card)
+
+        # ── Card 2: Entity Breakdown Table ──
+        entity_card = self._build_entity_table_card()
+        scroll_layout.addWidget(entity_card)
+
+        # ── Card 3: Duplicates / Conflicts ──
+        dup_card = self._build_duplicates_card()
+        scroll_layout.addWidget(dup_card)
+
+        # ── Card 4: Validator Level Results ──
+        level_card = self._build_level_results_card()
+        scroll_layout.addWidget(level_card)
+
+        scroll_layout.addStretch()
+        main_scroll.setWidget(scroll_content)
+        main_layout.addWidget(main_scroll, 1)
+
+    # ── Card builders ────────────────────────────────────────────────
+
+    def _build_summary_card(self) -> QFrame:
+        """Card with total summary stats."""
         card = QFrame()
-        card.setStyleSheet("""
-            QFrame {
-                background-color: #FFFFFF;
-                border-radius: 16px;
-            }
-        """)
-        card_layout = QVBoxLayout(card)
-        card_layout.setContentsMargins(32, 24, 32, 24)
-        card_layout.setSpacing(16)
+        card.setStyleSheet(self._card_style())
+        layout = QVBoxLayout(card)
+        layout.setContentsMargins(32, 24, 32, 24)
+        layout.setSpacing(16)
 
-        # Title
         title = QLabel("تقرير التحقق")
         title.setFont(create_font(size=14, weight=FontManager.WEIGHT_SEMIBOLD))
         title.setStyleSheet("color: #212B36; background: transparent;")
-        card_layout.addWidget(title)
+        layout.addWidget(title)
 
         sep = QFrame()
         sep.setFrameShape(QFrame.HLine)
         sep.setStyleSheet("color: #E1E8ED;")
-        card_layout.addWidget(sep)
+        layout.addWidget(sep)
 
-        # Summary stats row
-        self._stats_layout = QHBoxLayout()
-        self._stats_layout.setSpacing(24)
+        # Status badge (isClean)
+        self._clean_badge = QLabel("")
+        self._clean_badge.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
+        self._clean_badge.setAlignment(Qt.AlignCenter)
+        self._clean_badge.setFixedHeight(32)
+        self._clean_badge.setMinimumWidth(200)
+        self._clean_badge.setVisible(False)
+        layout.addWidget(self._clean_badge, alignment=Qt.AlignRight)
 
-        self._total_label = self._create_stat_widget("إجمالي السجلات", "0")
-        self._errors_label = self._create_stat_widget("أخطاء", "0", "#EF4444")
-        self._warnings_label = self._create_stat_widget("تحذيرات", "0", "#F59E0B")
+        # Stats row
+        stats_row = QHBoxLayout()
+        stats_row.setSpacing(16)
 
-        self._stats_layout.addStretch()
-        card_layout.addLayout(self._stats_layout)
+        self._stat_total = self._create_stat_box("إجمالي السجلات", "0", "#3890DF", "#EBF5FF")
+        stats_row.addWidget(self._stat_total)
+        self._stat_valid = self._create_stat_box("صالح", "0", "#10B981", "#ECFDF5")
+        stats_row.addWidget(self._stat_valid)
+        self._stat_invalid = self._create_stat_box("غير صالح", "0", "#EF4444", "#FEF2F2")
+        stats_row.addWidget(self._stat_invalid)
+        self._stat_warning = self._create_stat_box("تحذيرات", "0", "#F59E0B", "#FFFBEB")
+        stats_row.addWidget(self._stat_warning)
+        self._stat_skipped = self._create_stat_box("تخطي", "0", "#9CA3AF", "#F3F4F6")
+        stats_row.addWidget(self._stat_skipped)
+        self._stat_pending = self._create_stat_box("قيد الانتظار", "0", "#8B5CF6", "#F5F3FF")
+        stats_row.addWidget(self._stat_pending)
 
-        # Issues list (scrollable)
-        self._issues_scroll = QScrollArea()
-        self._issues_scroll.setWidgetResizable(True)
-        self._issues_scroll.setFrameShape(QFrame.NoFrame)
-        self._issues_scroll.setStyleSheet("QScrollArea { background: transparent; border: none; }")
-        self._issues_scroll.setMaximumHeight(420)
+        stats_row.addStretch()
+        layout.addLayout(stats_row)
 
-        self._issues_container = QWidget()
-        self._issues_container.setStyleSheet("background: transparent;")
-        self._issues_layout = QVBoxLayout(self._issues_container)
-        self._issues_layout.setContentsMargins(0, 0, 0, 0)
-        self._issues_layout.setSpacing(8)
+        # Attachments info
+        self._attachments_label = QLabel("")
+        self._attachments_label.setFont(create_font(size=9, weight=FontManager.WEIGHT_REGULAR))
+        self._attachments_label.setStyleSheet("color: #9CA3AF; background: transparent;")
+        self._attachments_label.setVisible(False)
+        layout.addWidget(self._attachments_label)
 
-        # Initial empty state
-        empty_label = QLabel("لا توجد بيانات بعد")
-        empty_label.setFont(create_font(size=11, weight=FontManager.WEIGHT_REGULAR))
-        empty_label.setStyleSheet("color: #9CA3AF; background: transparent;")
-        empty_label.setAlignment(Qt.AlignCenter)
-        self._issues_layout.addWidget(empty_label)
-        self._issues_layout.addStretch()
+        return card
 
-        self._issues_scroll.setWidget(self._issues_container)
-        card_layout.addWidget(self._issues_scroll)
+    def _build_entity_table_card(self) -> QFrame:
+        """Card with per-entity breakdown table."""
+        card = QFrame()
+        card.setStyleSheet(self._card_style())
+        layout = QVBoxLayout(card)
+        layout.setContentsMargins(32, 24, 32, 24)
+        layout.setSpacing(12)
 
-        main_layout.addWidget(card)
-        main_layout.addStretch()
+        title = QLabel("تفصيل الكيانات")
+        title.setFont(create_font(size=12, weight=FontManager.WEIGHT_SEMIBOLD))
+        title.setStyleSheet("color: #212B36; background: transparent;")
+        layout.addWidget(title)
 
-    def _create_stat_widget(self, label_text: str, value_text: str,
-                            value_color: str = "#212B36") -> QLabel:
-        """Create a stat display with label and value."""
-        container = QVBoxLayout()
-        container.setSpacing(4)
+        # Table: entity type | total | valid | invalid | warning | skipped | pending
+        self._entity_table = QTableWidget()
+        self._entity_table.setColumnCount(7)
+        self._entity_table.setHorizontalHeaderLabels([
+            "الكيان", "إجمالي", "صالح", "غير صالح", "تحذير", "تخطي", "قيد الانتظار"
+        ])
+        self._entity_table.setRowCount(len(_ENTITY_SECTIONS))
+        self._entity_table.setLayoutDirection(Qt.RightToLeft)
+        self._entity_table.setEditTriggers(QAbstractItemView.NoEditTriggers)
+        self._entity_table.setSelectionMode(QAbstractItemView.NoSelection)
+        self._entity_table.verticalHeader().setVisible(False)
+        self._entity_table.setFixedHeight(44 * len(_ENTITY_SECTIONS) + 36)
 
-        label = QLabel(label_text)
-        label.setFont(create_font(size=9, weight=FontManager.WEIGHT_REGULAR))
-        label.setStyleSheet("color: #637381; background: transparent;")
-        container.addWidget(label)
+        header = self._entity_table.horizontalHeader()
+        header.setSectionResizeMode(0, QHeaderView.Stretch)
+        for col in range(1, 7):
+            header.setSectionResizeMode(col, QHeaderView.Fixed)
+            self._entity_table.setColumnWidth(col, 90)
+
+        self._entity_table.setStyleSheet("""
+            QTableWidget {
+                background-color: #FFFFFF;
+                border: 1px solid #E1E8ED;
+                border-radius: 8px;
+                gridline-color: #F4F6F8;
+            }
+            QTableWidget::item {
+                padding: 6px 8px;
+                border: none;
+            }
+            QHeaderView::section {
+                background-color: #F8F9FA;
+                color: #637381;
+                padding: 8px 8px;
+                border: none;
+                border-bottom: 2px solid #E1E8ED;
+                font-weight: 600;
+            }
+        """)
+        self._entity_table.setFont(create_font(size=10, weight=FontManager.WEIGHT_REGULAR))
+        header.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
+
+        # Pre-populate with entity names
+        for row_idx, (key, ar_name) in enumerate(_ENTITY_SECTIONS):
+            name_item = QTableWidgetItem(ar_name)
+            name_item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
+            self._entity_table.setItem(row_idx, 0, name_item)
+            for col in range(1, 7):
+                item = QTableWidgetItem("0")
+                item.setTextAlignment(Qt.AlignCenter)
+                self._entity_table.setItem(row_idx, col, item)
+            self._entity_table.setRowHeight(row_idx, 40)
+
+        layout.addWidget(self._entity_table)
+        return card
+
+    def _build_duplicates_card(self) -> QFrame:
+        """Card with duplicate/conflict detection results."""
+        card = QFrame()
+        card.setStyleSheet(self._card_style())
+        layout = QVBoxLayout(card)
+        layout.setContentsMargins(32, 24, 32, 24)
+        layout.setSpacing(16)
+
+        title = QLabel("التكرارات والتعارضات")
+        title.setFont(create_font(size=12, weight=FontManager.WEIGHT_SEMIBOLD))
+        title.setStyleSheet("color: #212B36; background: transparent;")
+        layout.addWidget(title)
+
+        sep = QFrame()
+        sep.setFrameShape(QFrame.HLine)
+        sep.setStyleSheet("color: #E1E8ED;")
+        layout.addWidget(sep)
+
+        # Stats row
+        dup_stats = QHBoxLayout()
+        dup_stats.setSpacing(16)
+
+        self._dup_persons = self._create_stat_box("تكرارات الأشخاص", "0", "#F59E0B", "#FFFBEB")
+        dup_stats.addWidget(self._dup_persons)
+        self._dup_properties = self._create_stat_box("تكرارات العقارات", "0", "#F59E0B", "#FFFBEB")
+        dup_stats.addWidget(self._dup_properties)
+        self._dup_total = self._create_stat_box("إجمالي التعارضات", "0", "#EF4444", "#FEF2F2")
+        dup_stats.addWidget(self._dup_total)
+
+        dup_stats.addStretch()
+        layout.addLayout(dup_stats)
+
+        # Status label
+        self._dup_status = QLabel("")
+        self._dup_status.setFont(create_font(size=11, weight=FontManager.WEIGHT_REGULAR))
+        self._dup_status.setAlignment(Qt.AlignCenter)
+        self._dup_status.setStyleSheet("color: #10B981; background: transparent;")
+        layout.addWidget(self._dup_status)
+
+        # Warning banner (shown only when duplicates exist)
+        self._dup_warning = QFrame()
+        self._dup_warning.setStyleSheet("""
+            QFrame {
+                background-color: #FFFBEB;
+                border: 1px solid #FDE68A;
+                border-radius: 8px;
+            }
+            QFrame QLabel {
+                border: none;
+                background: transparent;
+            }
+        """)
+        warning_layout = QHBoxLayout(self._dup_warning)
+        warning_layout.setContentsMargins(16, 12, 16, 12)
+        warning_layout.setSpacing(10)
+
+        warning_icon = QLabel("!")
+        warning_icon.setFont(create_font(size=14, weight=FontManager.WEIGHT_BOLD))
+        warning_icon.setFixedSize(28, 28)
+        warning_icon.setAlignment(Qt.AlignCenter)
+        warning_icon.setStyleSheet("""
+            color: #F59E0B;
+            background-color: #FEF3C7;
+            border-radius: 14px;
+        """)
+        warning_layout.addWidget(warning_icon)
+
+        warning_text = QLabel(
+            "يجب حل التكرارات في تبويب التكرارات قبل الموافقة على الإدخال"
+        )
+        warning_text.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
+        warning_text.setStyleSheet("color: #92400E;")
+        warning_text.setWordWrap(True)
+        warning_layout.addWidget(warning_text, 1)
+
+        layout.addWidget(self._dup_warning)
+        self._dup_warning.setVisible(False)
+
+        return card
+
+    def _build_level_results_card(self) -> QFrame:
+        """Card with validator level results."""
+        card = QFrame()
+        card.setStyleSheet(self._card_style())
+        layout = QVBoxLayout(card)
+        layout.setContentsMargins(32, 24, 32, 24)
+        layout.setSpacing(12)
+
+        title = QLabel("نتائج مستويات التحقق")
+        title.setFont(create_font(size=12, weight=FontManager.WEIGHT_SEMIBOLD))
+        title.setStyleSheet("color: #212B36; background: transparent;")
+        layout.addWidget(title)
+
+        # Container for level rows
+        self._levels_container = QVBoxLayout()
+        self._levels_container.setSpacing(8)
+
+        empty = QLabel("لا توجد بيانات بعد")
+        empty.setFont(create_font(size=10, weight=FontManager.WEIGHT_REGULAR))
+        empty.setStyleSheet("color: #9CA3AF; background: transparent;")
+        empty.setAlignment(Qt.AlignCenter)
+        self._levels_container.addWidget(empty)
+
+        layout.addLayout(self._levels_container)
+        return card
+
+    # ── Reusable widgets ─────────────────────────────────────────────
+
+    def _create_stat_box(self, label_text: str, value_text: str,
+                         color: str, bg: str) -> QFrame:
+        """Create a stat box with value and label."""
+        box = QFrame()
+        box.setFixedHeight(64)
+        box.setMinimumWidth(120)
+        box.setStyleSheet(f"""
+            QFrame {{
+                background-color: {bg};
+                border-radius: 10px;
+                border: none;
+            }}
+            QFrame QLabel {{
+                border: none;
+                background: transparent;
+            }}
+        """)
+
+        box_layout = QVBoxLayout(box)
+        box_layout.setContentsMargins(12, 6, 12, 6)
+        box_layout.setSpacing(2)
+        box_layout.setAlignment(Qt.AlignCenter)
 
         value = QLabel(value_text)
+        value.setObjectName("stat_value")
         value.setFont(create_font(size=16, weight=FontManager.WEIGHT_SEMIBOLD))
-        value.setStyleSheet(f"color: {value_color}; background: transparent;")
-        container.addWidget(value)
+        value.setStyleSheet(f"color: {color};")
+        value.setAlignment(Qt.AlignCenter)
+        box_layout.addWidget(value)
 
-        self._stats_layout.addLayout(container)
-        return value
+        label = QLabel(label_text)
+        label.setFont(create_font(size=8, weight=FontManager.WEIGHT_REGULAR))
+        label.setStyleSheet("color: #637381;")
+        label.setAlignment(Qt.AlignCenter)
+        box_layout.addWidget(label)
+
+        return box
+
+    def _update_stat_value(self, box: QFrame, value: str):
+        """Update the value label inside a stat box."""
+        label = box.findChild(QLabel, "stat_value")
+        if label:
+            label.setText(value)
+
+    def _card_style(self) -> str:
+        return """
+            QFrame {
+                background-color: #FFFFFF;
+                border-radius: 16px;
+            }
+        """
+
+    # ── Data loading ─────────────────────────────────────────────────
 
     def load_report(self, package_id: str):
         """Load validation report from the controller."""
@@ -147,109 +390,223 @@ class ImportStep2Staging(QWidget):
             return
 
         self._report_data = result.data or {}
-        self._update_ui()
+        self._update_summary()
+        self._update_entity_table()
+        self._update_duplicates()
+        self._update_level_results()
 
-    def _update_ui(self):
-        """Update UI with report data."""
-        if not self._report_data:
-            return
+    def _update_summary(self):
+        """Update summary stats from report data."""
+        d = self._report_data
 
-        total = self._report_data.get("totalRecords", 0)
-        errors = self._report_data.get("errorCount", 0)
-        warnings = self._report_data.get("warningCount", 0)
+        self._update_stat_value(self._stat_total, str(d.get("totalRecords", 0)))
+        self._update_stat_value(self._stat_valid, str(d.get("totalValid", 0)))
+        self._update_stat_value(self._stat_invalid, str(d.get("totalInvalid", 0)))
+        self._update_stat_value(self._stat_warning, str(d.get("totalWarning", 0)))
+        self._update_stat_value(self._stat_skipped, str(d.get("totalSkipped", 0)))
+        self._update_stat_value(self._stat_pending, str(d.get("totalPending", 0)))
 
-        self._total_label.setText(str(total))
-        self._errors_label.setText(str(errors))
-        self._warnings_label.setText(str(warnings))
-
-        # Clear existing issues
-        self._clear_issues()
-
-        issues = self._report_data.get("issues", [])
-        if not issues:
-            empty_label = QLabel("لا توجد مشكلات في البيانات")
-            empty_label.setFont(create_font(size=11, weight=FontManager.WEIGHT_REGULAR))
-            empty_label.setStyleSheet("color: #10B981; background: transparent;")
-            empty_label.setAlignment(Qt.AlignCenter)
-            self._issues_layout.addWidget(empty_label)
+        # isClean badge
+        is_clean = d.get("isClean", False)
+        if is_clean:
+            self._clean_badge.setText("البيانات سليمة")
+            self._clean_badge.setStyleSheet("""
+                color: #065F46;
+                background-color: #ECFDF5;
+                border: 1px solid #A7F3D0;
+                border-radius: 16px;
+                padding: 4px 20px;
+            """)
         else:
-            for issue in issues:
-                row = self._create_issue_row(issue)
-                self._issues_layout.addWidget(row)
+            self._clean_badge.setText("توجد مشكلات تحتاج مراجعة")
+            self._clean_badge.setStyleSheet("""
+                color: #991B1B;
+                background-color: #FEF2F2;
+                border: 1px solid #FECACA;
+                border-radius: 16px;
+                padding: 4px 20px;
+            """)
+        self._clean_badge.setVisible(True)
 
-        self._issues_layout.addStretch()
+        # Attachments
+        files = d.get("attachmentFilesExtracted", 0)
+        bytes_val = d.get("attachmentBytesExtracted", 0)
+        if files > 0:
+            size_mb = bytes_val / (1024 * 1024)
+            self._attachments_label.setText(
+                f"المرفقات: {files} ملف ({size_mb:.1f} MB)"
+            )
+            self._attachments_label.setVisible(True)
 
-    def _create_issue_row(self, issue: dict) -> QFrame:
-        """Create a row for a single validation issue."""
-        row = QFrame()
-        row.setFixedHeight(48)
-        row.setStyleSheet("""
-            QFrame {
-                background-color: #FAFBFC;
-                border: 1px solid #E1E8ED;
-                border-radius: 8px;
-            }
-            QFrame QLabel {
-                border: none;
-                background: transparent;
-            }
-        """)
+    def _update_entity_table(self):
+        """Update per-entity breakdown table."""
+        d = self._report_data
+        for row_idx, (key, _) in enumerate(_ENTITY_SECTIONS):
+            section = d.get(key, {})
+            if not isinstance(section, dict):
+                continue
 
-        row_layout = QHBoxLayout(row)
-        row_layout.setContentsMargins(12, 0, 12, 0)
-        row_layout.setSpacing(12)
+            values = [
+                section.get("total", 0),
+                section.get("valid", 0),
+                section.get("invalid", 0),
+                section.get("warning", 0),
+                section.get("skipped", 0),
+                section.get("pending", 0),
+            ]
 
-        # Issue type badge
-        issue_type = issue.get("type", "info").lower()
-        config = _ISSUE_TYPE_CONFIG.get(issue_type, _ISSUE_TYPE_CONFIG['info'])
+            for col, val in enumerate(values, start=1):
+                item = self._entity_table.item(row_idx, col)
+                if item:
+                    item.setText(str(val))
+                    # Color invalid/warning cells
+                    if col == 3 and val > 0:  # invalid
+                        item.setForeground(Qt.red)
+                    elif col == 4 and val > 0:  # warning
+                        from PyQt5.QtGui import QColor
+                        item.setForeground(QColor("#F59E0B"))
 
-        badge = QLabel(config['label'])
-        badge.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
-        badge.setAlignment(Qt.AlignCenter)
-        badge.setFixedHeight(26)
-        badge.setFixedWidth(70)
-        badge.setStyleSheet(f"""
-            padding: 2px 12px;
-            border-radius: 13px;
-            color: {config['color']};
-            background-color: {config['bg']};
-        """)
-        row_layout.addWidget(badge)
+    def _update_duplicates(self):
+        """Update duplicates section from report data."""
+        d = self._report_data
 
-        # Issue message
-        message = issue.get("message", "")
-        msg_label = QLabel(message)
-        msg_label.setFont(create_font(size=10, weight=FontManager.WEIGHT_REGULAR))
-        msg_label.setStyleSheet("color: #212B36;")
-        msg_label.setWordWrap(True)
-        row_layout.addWidget(msg_label, 1)
+        person_dups = d.get("personDuplicatesFound", 0)
+        property_dups = d.get("propertyDuplicatesFound", 0)
+        total_conflicts = d.get("totalConflictsFound", 0)
+        dup_ran = d.get("duplicateDetectionRan", False)
 
-        # Entity reference (if present)
-        entity_ref = issue.get("entityRef", "") or issue.get("sourceId", "")
-        if entity_ref:
-            ref_label = QLabel(entity_ref)
-            ref_label.setFont(create_font(size=9, weight=FontManager.WEIGHT_REGULAR))
-            ref_label.setStyleSheet("color: #9CA3AF;")
-            row_layout.addWidget(ref_label)
+        self._update_stat_value(self._dup_persons, str(person_dups))
+        self._update_stat_value(self._dup_properties, str(property_dups))
+        self._update_stat_value(self._dup_total, str(total_conflicts))
 
-        return row
+        if not dup_ran:
+            self._dup_status.setText("لم يتم تشغيل كشف التكرارات بعد")
+            self._dup_status.setStyleSheet("color: #9CA3AF; background: transparent;")
+            self._dup_warning.setVisible(False)
+        elif total_conflicts == 0:
+            self._dup_status.setText("لا توجد تكرارات — يمكن المتابعة")
+            self._dup_status.setStyleSheet("color: #10B981; background: transparent;")
+            self._dup_warning.setVisible(False)
+        else:
+            self._dup_status.setText(
+                f"تم اكتشاف {total_conflicts} تعارض "
+                f"({person_dups} أشخاص، {property_dups} عقارات)"
+            )
+            self._dup_status.setStyleSheet("color: #F59E0B; background: transparent;")
+            self._dup_warning.setVisible(True)
 
-    def _clear_issues(self):
-        """Remove all issue widgets from the layout."""
-        while self._issues_layout.count():
-            item = self._issues_layout.takeAt(0)
+    def _update_level_results(self):
+        """Update validator level results."""
+        # Clear existing
+        while self._levels_container.count():
+            item = self._levels_container.takeAt(0)
             if item.widget():
                 item.widget().deleteLater()
 
+        levels = self._report_data.get("levelResults", [])
+
+        if not levels:
+            empty = QLabel("لا توجد تفاصيل مستويات التحقق")
+            empty.setFont(create_font(size=10, weight=FontManager.WEIGHT_REGULAR))
+            empty.setStyleSheet("color: #9CA3AF; background: transparent;")
+            empty.setAlignment(Qt.AlignCenter)
+            self._levels_container.addWidget(empty)
+            return
+
+        for level_data in levels:
+            row = self._create_level_row(level_data)
+            self._levels_container.addWidget(row)
+
+    def _create_level_row(self, level_data: dict) -> QFrame:
+        """Create a row for a single validator level result."""
+        row = QFrame()
+        errors = level_data.get("errorCount", 0)
+        warnings = level_data.get("warningCount", 0)
+
+        if errors > 0:
+            border_color = "#FECACA"
+            bg_color = "#FEF2F2"
+        elif warnings > 0:
+            border_color = "#FDE68A"
+            bg_color = "#FFFBEB"
+        else:
+            border_color = "#D1FAE5"
+            bg_color = "#ECFDF5"
+
+        row.setFixedHeight(48)
+        row.setStyleSheet(f"""
+            QFrame {{
+                background-color: {bg_color};
+                border: 1px solid {border_color};
+                border-radius: 8px;
+            }}
+            QFrame QLabel {{
+                border: none;
+                background: transparent;
+            }}
+        """)
+
+        row_layout = QHBoxLayout(row)
+        row_layout.setContentsMargins(16, 0, 16, 0)
+        row_layout.setSpacing(16)
+
+        # Level number
+        level_num = level_data.get("level", 0)
+        level_label = QLabel(f"المستوى {level_num}")
+        level_label.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
+        level_label.setStyleSheet("color: #212B36;")
+        level_label.setFixedWidth(80)
+        row_layout.addWidget(level_label)
+
+        # Validator name
+        name = level_data.get("validatorName", "")
+        name_label = QLabel(name)
+        name_label.setFont(create_font(size=10, weight=FontManager.WEIGHT_REGULAR))
+        name_label.setStyleSheet("color: #637381;")
+        row_layout.addWidget(name_label, 1)
+
+        # Records checked
+        checked = level_data.get("recordsChecked", 0)
+        checked_label = QLabel(f"{checked} سجل")
+        checked_label.setFont(create_font(size=9, weight=FontManager.WEIGHT_REGULAR))
+        checked_label.setStyleSheet("color: #9CA3AF;")
+        row_layout.addWidget(checked_label)
+
+        # Errors
+        if errors > 0:
+            err_label = QLabel(f"{errors} خطأ")
+            err_label.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
+            err_label.setStyleSheet("color: #EF4444;")
+            row_layout.addWidget(err_label)
+
+        # Warnings
+        if warnings > 0:
+            warn_label = QLabel(f"{warnings} تحذير")
+            warn_label.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
+            warn_label.setStyleSheet("color: #F59E0B;")
+            row_layout.addWidget(warn_label)
+
+        # Duration
+        duration = level_data.get("durationMs", 0)
+        if duration > 0:
+            dur_label = QLabel(f"{duration}ms")
+            dur_label.setFont(create_font(size=8, weight=FontManager.WEIGHT_REGULAR))
+            dur_label.setStyleSheet("color: #D1D5DB;")
+            row_layout.addWidget(dur_label)
+
+        return row
+
     def _show_error(self, message: str):
-        """Display an error message in the issues area."""
-        self._clear_issues()
-        error_label = QLabel(message)
-        error_label.setFont(create_font(size=11, weight=FontManager.WEIGHT_REGULAR))
-        error_label.setStyleSheet("color: #EF4444; background: transparent;")
-        error_label.setAlignment(Qt.AlignCenter)
-        self._issues_layout.addWidget(error_label)
-        self._issues_layout.addStretch()
+        """Display an error message."""
+        self._clean_badge.setText(message)
+        self._clean_badge.setStyleSheet("""
+            color: #991B1B;
+            background-color: #FEF2F2;
+            border: 1px solid #FECACA;
+            border-radius: 16px;
+            padding: 4px 20px;
+        """)
+        self._clean_badge.setVisible(True)
 
     def get_report_data(self) -> dict:
         """Return the loaded report data."""

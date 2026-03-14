@@ -1,135 +1,157 @@
 # -*- coding: utf-8 -*-
 """
-Import Wizard - Step 4: Review Staged Entities
+Import Wizard - Step 3 (Review): Review Staged Entities
 UC-003: Import Pipeline
 
-Displays all staged entities in a table for review before committing.
+Displays all staged entities grouped by type in a table for review
+before committing. Uses the grouped API response from GET .../staged-entities.
 """
 
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QFrame,
     QTableWidget, QTableWidgetItem, QHeaderView, QAbstractItemView,
-    QSizePolicy
+    QScrollArea, QSizePolicy
 )
 from PyQt5.QtCore import Qt
 
 from ui.design_system import Colors, PageDimensions
 from ui.font_utils import create_font, FontManager
-from ui.style_manager import StyleManager
 from utils.logger import get_logger
 
 logger = get_logger(__name__)
 
-# Entity type Arabic labels
-_ENTITY_TYPE_AR = {
-    'building': 'مبنى',
-    'person': 'شخص',
-    'property_unit': 'وحدة عقارية',
-    'claim': 'مطالبة',
-    'survey': 'مسح',
+# Entity sections matching API response keys
+_ENTITY_SECTIONS = [
+    ('surveys', 'المسوحات', '#6366F1', '#EEF2FF'),
+    ('buildings', 'المباني', '#3890DF', '#EBF5FF'),
+    ('propertyUnits', 'الوحدات العقارية', '#10B981', '#ECFDF5'),
+    ('persons', 'الأشخاص', '#8B5CF6', '#F5F3FF'),
+    ('households', 'الأسر', '#EC4899', '#FDF2F8'),
+    ('personPropertyRelations', 'علاقات الأشخاص بالعقارات', '#14B8A6', '#F0FDFA'),
+    ('evidences', 'المستندات', '#F97316', '#FFF7ED'),
+    ('claims', 'المطالبات', '#F59E0B', '#FFFBEB'),
+]
+
+# Validation status display
+_STATUS_CONFIG = {
+    'Valid': {'label': 'صالح', 'color': '#10B981', 'bg': '#ECFDF5'},
+    'Invalid': {'label': 'غير صالح', 'color': '#EF4444', 'bg': '#FEF2F2'},
+    'Warning': {'label': 'تحذير', 'color': '#F59E0B', 'bg': '#FFFBEB'},
+    'Pending': {'label': 'قيد الانتظار', 'color': '#9CA3AF', 'bg': '#F3F4F6'},
+    'Skipped': {'label': 'تم تخطيه', 'color': '#6B7280', 'bg': '#F9FAFB'},
 }
 
-# Status display configuration
-_STATUS_CONFIG = {
-    'pending': {
-        'label': 'قيد الانتظار',
-        'color': '#9CA3AF',
-        'bg': '#F3F4F6',
-    },
-    'valid': {
-        'label': 'صالح',
-        'color': '#10B981',
-        'bg': '#ECFDF5',
-    },
-    'invalid': {
-        'label': 'غير صالح',
-        'color': '#EF4444',
-        'bg': '#FEF2F2',
-    },
-    'duplicate': {
-        'label': 'مكرر',
-        'color': '#F59E0B',
-        'bg': '#FFFBEB',
-    },
-    'staged': {
-        'label': 'مرحلي',
-        'color': '#3B82F6',
-        'bg': '#EFF6FF',
-    },
-}
+_DEFAULT_STATUS = {'label': 'غير معروف', 'color': '#9CA3AF', 'bg': '#F3F4F6'}
 
 
 class ImportStep4Review(QWidget):
-    """Step 4: Review all staged entities."""
+    """Step 3 (Review): Review all staged entities before commit."""
 
-    def __init__(self, import_controller, parent=None):
+    def __init__(self, import_controller, package_id, parent=None):
         super().__init__(parent)
         self.import_controller = import_controller
-        self._entities = []
+        self._package_id = package_id
+        self._data = {}
         self._setup_ui()
+        self.load_entities(package_id)
 
     def _setup_ui(self):
         self.setLayoutDirection(Qt.RightToLeft)
         self.setStyleSheet("background: transparent;")
 
-        main_layout = QVBoxLayout(self)
-        main_layout.setContentsMargins(0, 24, 0, 0)
+        outer_layout = QVBoxLayout(self)
+        outer_layout.setContentsMargins(0, 0, 0, 0)
+        outer_layout.setSpacing(0)
+
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.NoFrame)
+        scroll.setStyleSheet("QScrollArea { background: transparent; border: none; }")
+
+        container = QWidget()
+        container.setStyleSheet("background: transparent;")
+        main_layout = QVBoxLayout(container)
+        main_layout.setContentsMargins(0, 24, 0, 24)
         main_layout.setSpacing(20)
 
-        # Review card
-        card = QFrame()
-        card.setStyleSheet("""
-            QFrame {
-                background-color: #FFFFFF;
-                border-radius: 16px;
-            }
-        """)
-        card_layout = QVBoxLayout(card)
-        card_layout.setContentsMargins(32, 24, 32, 24)
-        card_layout.setSpacing(16)
+        # --- Card 1: Summary counts ---
+        summary_card = self._create_card()
+        summary_layout = QVBoxLayout(summary_card)
+        summary_layout.setContentsMargins(32, 24, 32, 24)
+        summary_layout.setSpacing(16)
 
-        # Title
         title = QLabel("مراجعة الكيانات المرحلية")
         title.setFont(create_font(size=14, weight=FontManager.WEIGHT_SEMIBOLD))
         title.setStyleSheet("color: #212B36; background: transparent;")
-        card_layout.addWidget(title)
+        summary_layout.addWidget(title)
 
         sep = QFrame()
         sep.setFrameShape(QFrame.HLine)
         sep.setStyleSheet("color: #E1E8ED;")
-        card_layout.addWidget(sep)
+        summary_layout.addWidget(sep)
 
-        # Summary counts row
-        self._summary_layout = QHBoxLayout()
-        self._summary_layout.setSpacing(20)
+        # Total count
+        self._total_label = QLabel("إجمالي الكيانات: 0")
+        self._total_label.setFont(create_font(size=12, weight=FontManager.WEIGHT_SEMIBOLD))
+        self._total_label.setStyleSheet("color: #212B36; background: transparent;")
+        summary_layout.addWidget(self._total_label)
 
-        self._buildings_count = self._create_count_badge("مبنى", "0", "#3890DF", "#EBF5FF")
-        self._persons_count = self._create_count_badge("شخص", "0", "#8B5CF6", "#F5F3FF")
-        self._units_count = self._create_count_badge("وحدة عقارية", "0", "#10B981", "#ECFDF5")
-        self._claims_count = self._create_count_badge("مطالبة", "0", "#F59E0B", "#FFFBEB")
+        # Count badges (2 rows of 4)
+        self._count_labels = {}
 
-        self._summary_layout.addStretch()
-        card_layout.addLayout(self._summary_layout)
+        row1_layout = QHBoxLayout()
+        row1_layout.setSpacing(16)
+        for key, ar_name, color, bg in _ENTITY_SECTIONS[:4]:
+            badge, count_label = self._create_count_badge(ar_name, "0", color, bg)
+            self._count_labels[key] = count_label
+            row1_layout.addWidget(badge)
+        row1_layout.addStretch()
+        summary_layout.addLayout(row1_layout)
 
-        # Entities table
+        row2_layout = QHBoxLayout()
+        row2_layout.setSpacing(16)
+        for key, ar_name, color, bg in _ENTITY_SECTIONS[4:]:
+            badge, count_label = self._create_count_badge(ar_name, "0", color, bg)
+            self._count_labels[key] = count_label
+            row2_layout.addWidget(badge)
+        row2_layout.addStretch()
+        summary_layout.addLayout(row2_layout)
+
+        main_layout.addWidget(summary_card)
+
+        # --- Card 2: Entities table ---
+        table_card = self._create_card()
+        table_layout = QVBoxLayout(table_card)
+        table_layout.setContentsMargins(32, 24, 32, 24)
+        table_layout.setSpacing(16)
+
+        table_title = QLabel("تفاصيل الكيانات")
+        table_title.setFont(create_font(size=12, weight=FontManager.WEIGHT_SEMIBOLD))
+        table_title.setStyleSheet("color: #212B36; background: transparent;")
+        table_layout.addWidget(table_title)
+
         self._table = QTableWidget()
-        self._table.setColumnCount(3)
-        self._table.setHorizontalHeaderLabels(["النوع", "المعرّف", "الحالة"])
+        self._table.setColumnCount(5)
+        self._table.setHorizontalHeaderLabels([
+            "النوع", "المعرّف", "الوصف", "حالة التحقق", "معتمد للإدخال"
+        ])
         self._table.setLayoutDirection(Qt.RightToLeft)
         self._table.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self._table.setSelectionBehavior(QAbstractItemView.SelectRows)
         self._table.setAlternatingRowColors(True)
         self._table.verticalHeader().setVisible(False)
-        self._table.setMinimumHeight(300)
-        self._table.setMaximumHeight(450)
+        self._table.setMinimumHeight(350)
 
-        # Column widths
         header = self._table.horizontalHeader()
         header.setSectionResizeMode(0, QHeaderView.Fixed)
-        header.setSectionResizeMode(1, QHeaderView.Stretch)
-        header.setSectionResizeMode(2, QHeaderView.Fixed)
-        self._table.setColumnWidth(0, 140)
-        self._table.setColumnWidth(2, 140)
+        header.setSectionResizeMode(1, QHeaderView.Interactive)
+        header.setSectionResizeMode(2, QHeaderView.Stretch)
+        header.setSectionResizeMode(3, QHeaderView.Fixed)
+        header.setSectionResizeMode(4, QHeaderView.Fixed)
+        self._table.setColumnWidth(0, 160)
+        self._table.setColumnWidth(1, 180)
+        self._table.setColumnWidth(3, 120)
+        self._table.setColumnWidth(4, 120)
 
         self._table.setStyleSheet("""
             QTableWidget {
@@ -158,14 +180,26 @@ class ImportStep4Review(QWidget):
         self._table.setFont(create_font(size=10, weight=FontManager.WEIGHT_REGULAR))
         header.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
 
-        card_layout.addWidget(self._table)
+        table_layout.addWidget(self._table)
+        main_layout.addWidget(table_card)
 
-        main_layout.addWidget(card)
         main_layout.addStretch()
+        scroll.setWidget(container)
+        outer_layout.addWidget(scroll)
+
+    def _create_card(self) -> QFrame:
+        card = QFrame()
+        card.setStyleSheet("""
+            QFrame {
+                background-color: #FFFFFF;
+                border-radius: 16px;
+            }
+        """)
+        return card
 
     def _create_count_badge(self, label_text: str, count_text: str,
-                            color: str, bg: str) -> QLabel:
-        """Create a summary count badge."""
+                            color: str, bg: str):
+        """Create a summary count badge. Returns (container, count_label)."""
         container = QFrame()
         container.setFixedHeight(50)
         container.setMinimumWidth(130)
@@ -195,12 +229,12 @@ class ImportStep4Review(QWidget):
         name_label.setStyleSheet("color: #637381;")
         c_layout.addWidget(name_label)
 
-        self._summary_layout.addWidget(container)
-        return count_label
+        return container, count_label
 
     def load_entities(self, package_id: str):
-        """Load staged entities from the controller."""
+        """Load staged entities from the controller (grouped response)."""
         logger.info(f"Loading staged entities for package {package_id}")
+        self._package_id = package_id
 
         result = self.import_controller.get_staged_entities(package_id)
 
@@ -208,56 +242,68 @@ class ImportStep4Review(QWidget):
             logger.error(f"Failed to load entities: {result.message}")
             return
 
-        self._entities = result.data or []
+        self._data = result.data or {}
         self._update_ui()
 
     def _update_ui(self):
-        """Update UI with entity data."""
-        # Count by type
-        counts = {
-            'building': 0,
-            'person': 0,
-            'property_unit': 0,
-            'claim': 0,
-            'survey': 0,
-        }
-        for entity in self._entities:
-            entity_type = entity.get("entityType", "unknown")
-            if entity_type in counts:
-                counts[entity_type] += 1
+        """Update UI with grouped entity data."""
+        d = self._data
+        total = d.get("totalCount", 0)
+        self._total_label.setText(f"إجمالي الكيانات: {total}")
 
-        self._buildings_count.setText(str(counts['building']))
-        self._persons_count.setText(str(counts['person']))
-        self._units_count.setText(str(counts['property_unit']))
-        self._claims_count.setText(str(counts['claim']))
+        # Update count badges
+        for key, _, _, _ in _ENTITY_SECTIONS:
+            section_items = d.get(key, [])
+            count = len(section_items) if isinstance(section_items, list) else 0
+            if key in self._count_labels:
+                self._count_labels[key].setText(str(count))
 
-        # Populate table
-        self._table.setRowCount(len(self._entities))
-        for row_idx, entity in enumerate(self._entities):
-            entity_type = entity.get("entityType", "unknown")
-            source_id = entity.get("sourceId", "") or entity.get("id", "")
-            status = entity.get("status", "pending")
+        # Flatten all entities for the table
+        all_rows = []
+        section_names = {k: ar for k, ar, _, _ in _ENTITY_SECTIONS}
+
+        for key, ar_name, _, _ in _ENTITY_SECTIONS:
+            section_items = d.get(key, [])
+            if not isinstance(section_items, list):
+                continue
+            for entity in section_items:
+                all_rows.append((ar_name, entity))
+
+        self._table.setRowCount(len(all_rows))
+        for row_idx, (type_name, entity) in enumerate(all_rows):
+            identifier = entity.get("identifier", "")
+            display_info = entity.get("displayInfo", "")
+            validation_status = entity.get("validationStatus", "Pending")
+            is_approved = entity.get("isApprovedForCommit", False)
 
             # Type column
-            type_text = _ENTITY_TYPE_AR.get(entity_type, entity_type)
-            type_item = QTableWidgetItem(type_text)
+            type_item = QTableWidgetItem(type_name)
             type_item.setTextAlignment(Qt.AlignCenter)
             self._table.setItem(row_idx, 0, type_item)
 
-            # ID column
-            id_item = QTableWidgetItem(str(source_id))
+            # Identifier column
+            id_item = QTableWidgetItem(str(identifier))
             id_item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
             self._table.setItem(row_idx, 1, id_item)
 
-            # Status column (text-only, styled via delegate or cell widget)
-            status_config = _STATUS_CONFIG.get(status, _STATUS_CONFIG['pending'])
+            # Display info column
+            info_item = QTableWidgetItem(str(display_info))
+            info_item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
+            self._table.setItem(row_idx, 2, info_item)
+
+            # Validation status column
+            status_config = _STATUS_CONFIG.get(validation_status, _DEFAULT_STATUS)
             status_widget = self._create_status_badge(status_config)
-            self._table.setCellWidget(row_idx, 2, status_widget)
+            self._table.setCellWidget(row_idx, 3, status_widget)
+
+            # Approved column
+            approved_widget = self._create_approval_badge(is_approved)
+            self._table.setCellWidget(row_idx, 4, approved_widget)
 
             self._table.setRowHeight(row_idx, 44)
 
     def _create_status_badge(self, config: dict) -> QWidget:
-        """Create a status badge widget for table cell."""
+        """Create a validation status badge widget for table cell."""
         container = QWidget()
         container.setStyleSheet("background: transparent;")
         layout = QHBoxLayout(container)
@@ -276,9 +322,47 @@ class ImportStep4Review(QWidget):
             background-color: {config['bg']};
         """)
         layout.addWidget(badge)
-
         return container
 
-    def get_entities(self) -> list:
-        """Return the loaded entities list."""
-        return self._entities
+    def _create_approval_badge(self, is_approved: bool) -> QWidget:
+        """Create an approval status badge."""
+        container = QWidget()
+        container.setStyleSheet("background: transparent;")
+        layout = QHBoxLayout(container)
+        layout.setContentsMargins(4, 4, 4, 4)
+        layout.setAlignment(Qt.AlignCenter)
+
+        if is_approved:
+            label = "معتمد"
+            color = "#10B981"
+            bg = "#ECFDF5"
+        else:
+            label = "غير معتمد"
+            color = "#9CA3AF"
+            bg = "#F3F4F6"
+
+        badge = QLabel(label)
+        badge.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
+        badge.setAlignment(Qt.AlignCenter)
+        badge.setFixedHeight(26)
+        badge.setMinimumWidth(80)
+        badge.setStyleSheet(f"""
+            padding: 2px 12px;
+            border-radius: 13px;
+            color: {color};
+            background-color: {bg};
+        """)
+        layout.addWidget(badge)
+        return container
+
+    def get_entities(self) -> dict:
+        """Return the loaded grouped entities dict."""
+        return self._data
+
+    def reset(self):
+        """Reset the step to initial state."""
+        self._data = {}
+        self._total_label.setText("إجمالي الكيانات: 0")
+        for label in self._count_labels.values():
+            label.setText("0")
+        self._table.setRowCount(0)
