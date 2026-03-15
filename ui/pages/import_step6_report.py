@@ -10,9 +10,10 @@ GET /api/v1/import/packages/{id}/commit-report.
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QFrame,
     QScrollArea, QTableWidget, QTableWidgetItem, QHeaderView,
-    QAbstractItemView, QSizePolicy
+    QAbstractItemView, QSizePolicy, QGraphicsDropShadowEffect,
 )
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import Qt, QTimer
+from PyQt5.QtGui import QColor
 
 from ui.font_utils import create_font, FontManager
 from ui.style_manager import StyleManager
@@ -42,7 +43,9 @@ class ImportStep6Report(QWidget):
         self.import_controller = import_controller
         self._package_id = package_id
         self._report_data = None
+        self._dots_count = 0
         self._setup_ui()
+        self._loading_overlay = self._create_loading_overlay()
         self.load_report(package_id)
 
     def _setup_ui(self):
@@ -100,7 +103,7 @@ class ImportStep6Report(QWidget):
         self._meta_layout.addStretch()
         self._result_card_layout.addLayout(self._meta_layout)
 
-        self._set_result_style(True)
+        self._set_result_style("success")
         main_layout.addWidget(self._result_card)
 
         # --- Card 2: Summary stats ---
@@ -272,6 +275,7 @@ class ImportStep6Report(QWidget):
         self._errors_scroll.setFrameShape(QFrame.NoFrame)
         self._errors_scroll.setStyleSheet(
             "QScrollArea { background: transparent; border: none; }"
+            + StyleManager.scrollbar()
         )
         self._errors_scroll.setMaximumHeight(250)
 
@@ -339,9 +343,9 @@ class ImportStep6Report(QWidget):
 
         return box
 
-    def _set_result_style(self, success: bool):
-        """Apply success or error styling to the result card."""
-        if success:
+    def _set_result_style(self, status: str = "success"):
+        """Apply styling to the result card. status: 'success', 'partial', 'error'."""
+        if status == "success":
             self._result_card.setStyleSheet("""
                 QFrame {
                     background-color: #ECFDF5;
@@ -353,6 +357,18 @@ class ImportStep6Report(QWidget):
             self._result_title.setStyleSheet("color: #065F46; background: transparent;")
             self._result_subtitle.setStyleSheet("color: #047857; background: transparent;")
             meta_color = "#047857"
+        elif status == "partial":
+            self._result_card.setStyleSheet("""
+                QFrame {
+                    background-color: #FFFBEB;
+                    border-radius: 16px;
+                    border: 1px solid #FDE68A;
+                }
+                QFrame QLabel { border: none; background: transparent; }
+            """)
+            self._result_title.setStyleSheet("color: #92400E; background: transparent;")
+            self._result_subtitle.setStyleSheet("color: #B45309; background: transparent;")
+            meta_color = "#B45309"
         else:
             self._result_card.setStyleSheet("""
                 QFrame {
@@ -369,16 +385,87 @@ class ImportStep6Report(QWidget):
         for lbl in (self._duration_label, self._date_label, self._pkg_number_label):
             lbl.setStyleSheet(f"color: {meta_color}; background: transparent;")
 
+    def _create_loading_overlay(self):
+        overlay = QWidget(self)
+        overlay.setStyleSheet("background-color: rgba(255,255,255,200);")
+        overlay.setVisible(False)
+
+        ol = QVBoxLayout(overlay)
+        ol.setAlignment(Qt.AlignCenter)
+
+        card = QFrame()
+        card.setFixedSize(240, 90)
+        card.setStyleSheet(
+            "QFrame { background: white; border-radius: 16px; }"
+        )
+        shadow = QGraphicsDropShadowEffect()
+        shadow.setBlurRadius(24)
+        shadow.setColor(QColor(0, 0, 0, 30))
+        shadow.setOffset(0, 4)
+        card.setGraphicsEffect(shadow)
+
+        cl = QVBoxLayout(card)
+        cl.setAlignment(Qt.AlignCenter)
+        cl.setSpacing(6)
+
+        self._ld_label = QLabel("جاري التحميل")
+        self._ld_label.setAlignment(Qt.AlignCenter)
+        self._ld_label.setFont(create_font(size=11, weight=FontManager.WEIGHT_SEMIBOLD))
+        self._ld_label.setStyleSheet("color: #3890DF; background: transparent;")
+        cl.addWidget(self._ld_label)
+
+        self._ld_dots = QLabel("")
+        self._ld_dots.setAlignment(Qt.AlignCenter)
+        self._ld_dots.setFont(create_font(size=16, weight=FontManager.WEIGHT_BOLD))
+        self._ld_dots.setStyleSheet("color: #3890DF; background: transparent;")
+        cl.addWidget(self._ld_dots)
+
+        ol.addWidget(card)
+        return overlay
+
+    def _show_loading(self, msg="جاري التحميل"):
+        self._ld_label.setText(msg)
+        self._dots_count = 0
+        self._loading_overlay.setVisible(True)
+        self._loading_overlay.raise_()
+        self._loading_overlay.setGeometry(self.rect())
+        if not hasattr(self, '_dots_timer'):
+            self._dots_timer = QTimer(self)
+            self._dots_timer.timeout.connect(self._animate_dots)
+        self._dots_timer.start(400)
+
+    def _hide_loading(self):
+        self._loading_overlay.setVisible(False)
+        if hasattr(self, '_dots_timer'):
+            self._dots_timer.stop()
+
+    def _animate_dots(self):
+        self._dots_count = (self._dots_count % 3) + 1
+        self._ld_dots.setText("." * self._dots_count)
+
+    def resizeEvent(self, e):
+        super().resizeEvent(e)
+        if hasattr(self, '_loading_overlay'):
+            self._loading_overlay.setGeometry(self.rect())
+
     def load_report(self, package_id: str):
         """Load the commit report from the controller."""
         logger.info(f"Loading commit report for package {package_id}")
 
+        self._show_loading("جاري تحميل التقرير")
+
         result = self.import_controller.get_commit_report(package_id)
+        self._hide_loading()
 
         if not result.success:
-            self._set_result_style(False)
+            self._set_result_style("error")
             self._result_title.setText("فشل تحميل التقرير")
             self._result_subtitle.setText(result.message_ar or result.message)
+            from ui.components.message_dialog import MessageDialog
+            MessageDialog.error(
+                self, "خطأ",
+                result.message_ar or "فشل تحميل تقرير الإدخال"
+            )
             return
 
         self._report_data = result.data or {}
@@ -399,19 +486,19 @@ class ImportStep6Report(QWidget):
 
         # Result header
         if is_fully_ok and total_failed == 0:
-            self._set_result_style(True)
+            self._set_result_style("success")
             self._result_title.setText("تم الإدخال بنجاح")
             self._result_subtitle.setText(
                 f"تم إدخال {total_committed} سجل بنجاح"
             )
         elif total_committed > 0 and total_failed > 0:
-            self._set_result_style(True)
+            self._set_result_style("partial")
             self._result_title.setText("تم الإدخال مع بعض الأخطاء")
             self._result_subtitle.setText(
                 f"تم إدخال {total_committed} سجل، فشل {total_failed} سجل"
             )
         else:
-            self._set_result_style(False)
+            self._set_result_style("error")
             self._result_title.setText("فشل الإدخال")
             self._result_subtitle.setText(f"فشل إدخال {total_failed} سجل")
 
@@ -570,7 +657,7 @@ class ImportStep6Report(QWidget):
 
     def set_error(self, error_message: str):
         """Set the report to error state with a message."""
-        self._set_result_style(False)
+        self._set_result_style("error")
         self._result_title.setText("فشل الإدخال")
         self._result_subtitle.setText(error_message)
 
@@ -581,7 +668,7 @@ class ImportStep6Report(QWidget):
     def reset(self):
         """Reset the step to initial state."""
         self._report_data = None
-        self._set_result_style(True)
+        self._set_result_style("success")
         self._result_title.setText("تم الإدخال بنجاح")
         self._result_subtitle.setText("")
         self._duration_label.setText("")

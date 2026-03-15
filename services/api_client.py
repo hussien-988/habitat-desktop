@@ -3201,14 +3201,18 @@ class TRRCMSApiClient:
         logger.info(f"Resetting commit for package: {package_id}")
         return self._request("POST", f"/v1/import/packages/{package_id}/reset-commit")
 
-    def cancel_import_package(self, package_id: str) -> Dict[str, Any]:
+    def cancel_import_package(self, package_id: str, reason: str = "Cancelled by user") -> Dict[str, Any]:
         """
         Cancel an active import package.
 
         Endpoint: POST /api/v1/import/packages/{id}/cancel
         """
         logger.info(f"Cancelling import package: {package_id}")
-        return self._request("POST", f"/v1/import/packages/{package_id}/cancel")
+        return self._request(
+            "POST",
+            f"/v1/import/packages/{package_id}/cancel",
+            json_data={"packageId": package_id, "reason": reason},
+        )
 
     def quarantine_import_package(self, package_id: str) -> Dict[str, Any]:
         """

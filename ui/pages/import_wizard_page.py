@@ -18,14 +18,14 @@ Steps:
 
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QStackedWidget, QFrame, QPushButton,
-    QHBoxLayout, QLabel, QGraphicsDropShadowEffect, QApplication,
-    QMessageBox
+    QHBoxLayout, QLabel, QGraphicsDropShadowEffect,
 )
-from PyQt5.QtCore import Qt, pyqtSignal, QTimer
+from PyQt5.QtCore import Qt, pyqtSignal, QTimer, QThread
 from PyQt5.QtGui import QColor
 
 from ui.components.wizard_header import WizardHeader
 from ui.font_utils import create_font, FontManager
+from services.exceptions import NetworkException, ApiException
 from utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -39,6 +39,55 @@ _STEP_NAMES = [
     "التأكيد",
     "التقرير",
 ]
+
+
+class _PkgStatus:
+    """Package status codes from backend."""
+    PENDING = 1
+    VALIDATING = 2
+    STAGING = 3
+    VALIDATION_FAILED = 4
+    QUARANTINED = 5
+    REVIEWING_CONFLICTS = 6
+    READY_TO_COMMIT = 7
+    COMMITTING = 8
+    COMPLETED = 9
+    FAILED = 10
+    PARTIALLY_COMPLETED = 11
+    CANCELLED = 12
+
+    # Transient states (backend is processing)
+    TRANSIENT = {VALIDATING, STAGING, COMMITTING}
+    # Terminal states (no more actions)
+    TERMINAL = {COMPLETED, FAILED, PARTIALLY_COMPLETED, CANCELLED}
+
+
+_STATUS_POLL_INTERVAL_MS = 5000  # 5 seconds
+_MAX_POLL_COUNT = 60  # 60 polls × 5s = 5 minutes max
+
+
+class _ApiWorker(QThread):
+    """Worker thread for non-blocking API calls."""
+    finished = pyqtSignal(object)
+    error = pyqtSignal(str, str)  # error_type ('network'|'api'|'unknown'), message_ar
+
+    def __init__(self, fn):
+        super().__init__()
+        self._fn = fn
+
+    def run(self):
+        try:
+            result = self._fn()
+            self.finished.emit(result)
+        except NetworkException as e:
+            self.error.emit("network", "فشل الاتصال بالخادم — تحقق من الشبكة")
+        except ApiException as e:
+            from controllers.import_controller import ImportController
+            msg = ImportController._api_error_msg(e, "خطأ في الخادم")
+            self.error.emit("api", msg)
+        except Exception as e:
+            logger.error(f"Unexpected worker error: {e}")
+            self.error.emit("unknown", f"خطأ غير متوقع: {e}")
 
 
 class ImportWizardPage(QWidget):
@@ -62,6 +111,10 @@ class ImportWizardPage(QWidget):
         self.i18n = i18n
         self._user_role = None
         self._current_package_id = None
+        self._current_package_status = 0
+        self._status_poll_timer = None
+        self._poll_count = 0
+        self._active_worker = None
 
         self._setup_ui()
         self._create_steps()
@@ -287,7 +340,6 @@ class ImportWizardPage(QWidget):
         self._loading_overlay.setVisible(True)
         self._dots_count = 0
         self._dots_timer.start(400)
-        QApplication.processEvents()
 
     def _hide_loading(self):
         """Hide loading overlay."""
@@ -304,6 +356,68 @@ class ImportWizardPage(QWidget):
         super().resizeEvent(event)
         if self._loading_overlay.isVisible():
             self._loading_overlay.setGeometry(self.rect())
+
+    # -- Async API helpers ----------------------------------------------------
+
+    def _run_api(self, fn, on_success, on_error=None, loading_msg=""):
+        """Run an API call on a worker thread without blocking the UI.
+
+        Args:
+            fn: callable (no args) to run in the worker thread
+            on_success: callback(result) on the main thread
+            on_error: optional callback(error_type, msg_ar) override
+            loading_msg: if set, show loading overlay with this message
+        """
+        self._cancel_active_worker()
+        self._set_buttons_enabled(False)
+
+        if loading_msg:
+            self._show_loading(loading_msg)
+
+        worker = _ApiWorker(fn)
+        self._active_worker = worker
+
+        error_handler = on_error or self._on_api_error
+        worker.finished.connect(lambda result: self._on_worker_done(result, on_success))
+        worker.error.connect(lambda t, m: self._on_worker_error(t, m, error_handler))
+        worker.start()
+
+    def _on_worker_done(self, result, on_success):
+        """Handle successful worker completion on the main thread."""
+        self._active_worker = None
+        self._hide_loading()
+        on_success(result)
+
+    def _on_worker_error(self, error_type, msg_ar, error_handler):
+        """Handle worker error on the main thread."""
+        self._active_worker = None
+        self._hide_loading()
+        error_handler(error_type, msg_ar)
+
+    def _cancel_active_worker(self):
+        """Cancel any running worker (best-effort)."""
+        if self._active_worker is not None and self._active_worker.isRunning():
+            self._active_worker.finished.disconnect()
+            self._active_worker.error.disconnect()
+            self._active_worker.quit()
+            self._active_worker.wait(2000)
+            self._active_worker = None
+
+    def _on_api_error(self, error_type, msg_ar):
+        """Default error handler for API worker errors."""
+        self._set_buttons_enabled(True)
+        if error_type == "network":
+            self._show_error(f"{msg_ar}\n\nيمكنك المحاولة مرة أخرى.")
+        else:
+            self._show_error(msg_ar)
+        if self.current_step == 0:
+            self.step1._start_polling()
+
+    def _set_buttons_enabled(self, enabled: bool):
+        """Enable or disable navigation buttons (prevents double-click)."""
+        self.btn_next.setEnabled(enabled)
+        self.btn_back.setEnabled(enabled and self.current_step > 0 and self.current_step < 3)
+        self.btn_cancel.setEnabled(enabled)
 
     # -- Footer ---------------------------------------------------------------
 
@@ -480,14 +594,19 @@ class ImportWizardPage(QWidget):
             self._transition_commit_to_report()
 
         elif self.current_step == 4:
-            self.refresh()
+            if self._current_package_status == _PkgStatus.FAILED:
+                self._retry_failed_commit()
+            else:
+                self.refresh()
 
     def _on_package_selected(self, package_id: str):
         """Handle package selection from Step 1."""
         self.btn_next.setEnabled(bool(package_id))
 
+    # -- State-aware routing --------------------------------------------------
+
     def _transition_step1_to_step2(self):
-        """Step 1 -> 2: stage the package + detect duplicates, then show results."""
+        """Step 1 -> next: health check, fetch fresh status, route accordingly (async)."""
         package_id = self.step1.get_selected_package_id()
         if not package_id:
             return
@@ -495,36 +614,274 @@ class ImportWizardPage(QWidget):
         self._current_package_id = package_id
         self.step1._stop_polling()
 
-        self.btn_next.setEnabled(False)
-        self._show_loading("جاري تدريج الحزمة...")
+        def do_health_and_status():
+            from services.api_client import get_api_client
+            api = get_api_client()
+            if not api.health_check():
+                raise NetworkException("Server unreachable")
+            return self.import_controller.get_package(package_id)
 
-        # Stage (package already uploaded by tablet via /sync/upload)
-        stage_result = self.import_controller.stage_package(self._current_package_id)
-        if not stage_result.success:
-            logger.error(f"Staging failed: {stage_result.message}")
-            self._hide_loading()
-            self.btn_next.setEnabled(True)
-            self._show_error(stage_result.message_ar or "فشل تدريج الحزمة")
+        def on_status_fetched(pkg_result):
+            if not pkg_result.success:
+                self._set_buttons_enabled(True)
+                self._show_error(pkg_result.message_ar or "فشل تحميل بيانات الحزمة")
+                self.step1._start_polling()
+                return
+            status = pkg_result.data.get("status", 1)
+            self._route_by_status(status)
+
+        def on_health_error(error_type, msg_ar):
+            self._set_buttons_enabled(True)
+            if error_type == "network":
+                self._show_error("لا يمكن الاتصال بالخادم.\nتحقق من اتصال الشبكة وحاول مرة أخرى.")
+            else:
+                self._show_error(msg_ar)
             self.step1._start_polling()
-            return
 
-        # Detect duplicates
-        self._loading_label.setText("جاري كشف التكرارات...")
-        QApplication.processEvents()
-        dup_result = self.import_controller.detect_duplicates(self._current_package_id)
-        duplicates_data = None
-        if dup_result.success:
-            duplicates_data = dup_result.data
+        self._run_api(
+            do_health_and_status,
+            on_status_fetched,
+            on_error=on_health_error,
+            loading_msg="جاري التحقق من الاتصال..."
+        )
+
+    def _route_by_status(self, status: int):
+        """Central router: direct to the correct wizard step based on package status."""
+        self._current_package_status = status
+        logger.info(f"Routing package {self._current_package_id} with status {status}")
+
+        if status == _PkgStatus.PENDING:
+            self._handle_pending()
+        elif status in (_PkgStatus.VALIDATING, _PkgStatus.STAGING):
+            self._handle_in_progress(status)
+        elif status == _PkgStatus.VALIDATION_FAILED:
+            self._handle_validation_failed()
+        elif status == _PkgStatus.QUARANTINED:
+            self._handle_quarantined()
+        elif status == _PkgStatus.REVIEWING_CONFLICTS:
+            self._handle_reviewing_conflicts()
+        elif status == _PkgStatus.READY_TO_COMMIT:
+            self._handle_ready_to_commit()
+        elif status == _PkgStatus.COMMITTING:
+            self._handle_committing()
+        elif status in (_PkgStatus.COMPLETED, _PkgStatus.PARTIALLY_COMPLETED):
+            self._handle_terminal_report()
+        elif status == _PkgStatus.FAILED:
+            self._handle_failed()
+        elif status == _PkgStatus.CANCELLED:
+            self._handle_cancelled()
         else:
-            logger.warning(f"Duplicate detection failed: {dup_result.message}")
+            logger.warning(f"Unknown package status: {status}")
+            self._show_error(f"حالة الحزمة غير معروفة ({status})")
+            self.btn_next.setEnabled(True)
+            self.step1._start_polling()
 
-        self._hide_loading()
+    def _handle_pending(self):
+        """Status 1: Fresh package — run staging then duplicate detection (async)."""
+        pkg_id = self._current_package_id
 
-        # Create Step 2 (staging + validation + duplicates)
+        def do_stage():
+            return self.import_controller.stage_package(pkg_id)
+
+        def on_stage_done(stage_result):
+            if not stage_result.success:
+                logger.error(f"Staging failed: {stage_result.message}")
+                self._set_buttons_enabled(True)
+                self._show_error(stage_result.message_ar or "فشل تدريج الحزمة")
+                self.step1._start_polling()
+                return
+            self._show_loading("جاري كشف التكرارات...")
+            self._run_api(
+                lambda: self.import_controller.detect_duplicates(pkg_id),
+                on_dup_done,
+                on_error=on_dup_error,
+                loading_msg=""
+            )
+
+        def on_dup_done(dup_result):
+            duplicates_data = dup_result.data if dup_result.success else None
+            if not dup_result.success:
+                logger.warning(f"Duplicate detection failed: {dup_result.message}")
+            self._navigate_to_step2(duplicates_data)
+            self._update_navigation()
+
+        def on_dup_error(error_type, msg_ar):
+            logger.warning(f"Duplicate detection error ({error_type}): {msg_ar}")
+            self._navigate_to_step2(duplicates_data=None)
+            self._update_navigation()
+
+        self._run_api(do_stage, on_stage_done, loading_msg="جاري تدريج الحزمة...")
+
+    def _handle_in_progress(self, status: int):
+        """Status 2/3: Backend is processing — trigger stage if needed, then poll."""
+        pkg_id = self._current_package_id
+
+        if status == _PkgStatus.VALIDATING:
+            # Backend may need explicit /stage call to start actual processing.
+            # Try stage; whether it succeeds or fails (409 = already processing), poll.
+            def on_stage_result(result):
+                if result.success:
+                    logger.info(f"Stage triggered for package {pkg_id}")
+                else:
+                    logger.info(f"Stage returned: {result.message} — polling anyway")
+                self._show_loading("جاري التحقق في الخادم...")
+                self._start_status_poll()
+
+            def on_stage_error(error_type, msg_ar):
+                logger.info(f"Stage error ({error_type}): {msg_ar} — polling anyway")
+                self._show_loading("جاري التحقق في الخادم...")
+                self._start_status_poll()
+
+            self._run_api(
+                lambda: self.import_controller.stage_package(pkg_id),
+                on_stage_result,
+                on_error=on_stage_error,
+                loading_msg="جاري بدء المعالجة..."
+            )
+        else:
+            self._show_loading("جاري التدريج في الخادم...")
+            self._start_status_poll()
+
+    def _handle_validation_failed(self):
+        """Status 4: Validation failed — show report, block forward."""
+        self._navigate_to_step2(duplicates_data=None, block_next=True)
+
+    def _handle_quarantined(self):
+        """Status 5: Quarantined — show message, block completely."""
+        self._show_error(
+            "هذه الحزمة محجورة من قبل المسؤول.\n"
+            "لا يمكن متابعة المعالجة. يرجى التواصل مع مدير النظام."
+        )
+        self.btn_next.setEnabled(True)
+        self.step1._start_polling()
+
+    def _handle_reviewing_conflicts(self):
+        """Status 6: Staged with conflicts — show report + duplicates."""
+        self._navigate_to_step2(duplicates_data=None)
+
+    def _handle_ready_to_commit(self):
+        """Status 7: Approved — show validation report, user navigates forward."""
+        self._navigate_to_step2(duplicates_data=None)
+
+    def _handle_committing(self):
+        """Status 8: Commit in progress — show progress and poll."""
+        self._ensure_step2(duplicates_data=None)
+        self._ensure_step_review()
+        self._ensure_step_commit()
+        self.current_step = 3
+        self.step_container.setCurrentIndex(self.current_step)
+        self._update_navigation()
+        if self.step_commit and hasattr(self.step_commit, 'set_committing'):
+            self.step_commit.set_committing(True)
+        self._show_loading("جاري إدخال البيانات في الخادم...")
+        self._start_status_poll()
+
+    def _handle_terminal_report(self):
+        """Status 9/11: Completed or partially completed — show report."""
+        self._navigate_to_report()
+
+    def _handle_failed(self):
+        """Status 10: Commit failed — show report with retry option."""
+        self._navigate_to_report()
+
+    def _handle_cancelled(self):
+        """Status 12: Cancelled — should not reach here (filtered)."""
+        self._show_error("هذه الحزمة ملغاة ولا يمكن معالجتها.")
+        self.btn_next.setEnabled(True)
+        self.step1._start_polling()
+
+    # -- Navigation helpers ---------------------------------------------------
+
+    def _navigate_to_step2(self, duplicates_data=None, block_next=False):
+        """Navigate to Step 2 (staging/validation) and optionally block next."""
         self._ensure_step2(duplicates_data)
         self.current_step = 1
         self.step_container.setCurrentIndex(self.current_step)
         self._update_navigation()
+        if block_next:
+            self.btn_next.setEnabled(False)
+
+    def _navigate_to_report(self):
+        """Navigate directly to the report step (for terminal/completed statuses)."""
+        self._ensure_step2(duplicates_data=None)
+        self._ensure_step_review()
+        self._ensure_step_commit()
+        self._ensure_step_report()
+        self.current_step = 4
+        self.step_container.setCurrentIndex(self.current_step)
+        self._update_navigation()
+
+    # -- Status polling for transient states ----------------------------------
+
+    def _start_status_poll(self):
+        """Start polling package status for in-progress operations."""
+        self._poll_count = 0
+        if self._status_poll_timer is None:
+            self._status_poll_timer = QTimer(self)
+            self._status_poll_timer.timeout.connect(self._poll_package_status)
+        self._status_poll_timer.start(_STATUS_POLL_INTERVAL_MS)
+
+    def _stop_status_poll(self):
+        """Stop status polling."""
+        if self._status_poll_timer is not None:
+            self._status_poll_timer.stop()
+
+    def _poll_package_status(self):
+        """Check current package status (async) and re-route if changed."""
+        self._poll_count += 1
+        if self._poll_count >= _MAX_POLL_COUNT:
+            self._stop_status_poll()
+            self._hide_loading()
+            if self.step_commit and hasattr(self.step_commit, 'set_committing'):
+                self.step_commit.set_committing(False)
+            self._set_buttons_enabled(True)
+            self._show_error(
+                "انتهت مهلة الانتظار.\n"
+                "يرجى المحاولة لاحقاً أو التواصل مع الدعم الفني."
+            )
+            return
+
+        # Pause timer during the API call, resume if still transient
+        self._stop_status_poll()
+        pkg_id = self._current_package_id
+
+        def on_poll_result(result):
+            if not result.success:
+                logger.warning(f"Status poll failed: {result.message}")
+                self._show_loading("جاري المعالجة في الخادم...")
+                self._status_poll_timer.start(_STATUS_POLL_INTERVAL_MS)
+                return
+
+            new_status = result.data.get("status", 0)
+            logger.info(f"Status poll #{self._poll_count}: package {pkg_id} -> status {new_status}")
+
+            if new_status in _PkgStatus.TRANSIENT:
+                # Re-show loading (hidden by _on_worker_done)
+                status_label = "التحقق" if new_status == _PkgStatus.VALIDATING else (
+                    "التدريج" if new_status == _PkgStatus.STAGING else "الإدخال"
+                )
+                self._show_loading(f"جاري {status_label} في الخادم... (محاولة {self._poll_count})")
+                self._status_poll_timer.start(_STATUS_POLL_INTERVAL_MS)
+                return
+
+            self._hide_loading()
+            if self.step_commit and hasattr(self.step_commit, 'set_committing'):
+                self.step_commit.set_committing(False)
+            self._route_by_status(new_status)
+
+        def on_poll_error(error_type, msg_ar):
+            logger.warning(f"Status poll error ({error_type}): {msg_ar}")
+            self._show_loading("جاري المعالجة في الخادم...")
+            self._status_poll_timer.start(_STATUS_POLL_INTERVAL_MS)
+
+        self._run_api(
+            lambda: self.import_controller.get_package(pkg_id),
+            on_poll_result,
+            on_error=on_poll_error,
+            loading_msg=""
+        )
+
+    # -- Step transitions (with status guards) --------------------------------
 
     def _transition_step2_to_review(self):
         """Step 2 -> Review: show staged entities for review."""
@@ -534,52 +891,168 @@ class ImportWizardPage(QWidget):
         self._update_navigation()
 
     def _transition_review_to_commit(self):
-        """Review -> Commit: approve the package, then show commit confirmation."""
-        self.btn_next.setEnabled(False)
-        self._show_loading("جاري الموافقة على الحزمة...")
+        """Review -> Commit: check status (async), approve if needed, then show confirmation."""
+        pkg_id = self._current_package_id
 
-        approve_result = self.import_controller.approve_package(self._current_package_id)
+        def on_status_fetched(pkg_result):
+            if pkg_result.success:
+                status = pkg_result.data.get("status", 0)
+                self._current_package_status = status
 
-        self._hide_loading()
+                if status == _PkgStatus.READY_TO_COMMIT:
+                    self._ensure_step_commit()
+                    self.current_step = 3
+                    self.step_container.setCurrentIndex(self.current_step)
+                    self._update_navigation()
+                    return
 
-        if not approve_result.success:
-            logger.error(f"Approve failed: {approve_result.message}")
-            self.btn_next.setEnabled(True)
-            self._show_error(approve_result.message_ar or "فشل الموافقة على الحزمة")
-            return
+                if status in _PkgStatus.TERMINAL:
+                    self._navigate_to_report()
+                    return
 
-        self._ensure_step_commit()
-        self.current_step = 3
-        self.step_container.setCurrentIndex(self.current_step)
-        self._update_navigation()
+                if status == _PkgStatus.VALIDATION_FAILED:
+                    self._set_buttons_enabled(True)
+                    self._show_error(
+                        "لا يمكن الموافقة — يوجد أخطاء في التحقق.\n"
+                        "يرجى مراجعة تقرير التحقق أولاً."
+                    )
+                    return
+
+            # Proceed to approve
+            self._run_api(
+                lambda: self.import_controller.approve_package(pkg_id),
+                on_approve_done,
+                loading_msg="جاري الموافقة على الحزمة..."
+            )
+
+        def on_approve_done(approve_result):
+            if not approve_result.success:
+                logger.error(f"Approve failed: {approve_result.message}")
+                self._set_buttons_enabled(True)
+                self._show_error(approve_result.message_ar or "فشل الموافقة على الحزمة")
+                return
+
+            self._current_package_status = _PkgStatus.READY_TO_COMMIT
+            self._ensure_step_commit()
+            self.current_step = 3
+            self.step_container.setCurrentIndex(self.current_step)
+            self._update_navigation()
+
+        self._run_api(
+            lambda: self.import_controller.get_package(pkg_id),
+            on_status_fetched,
+            loading_msg="جاري التحقق من حالة الحزمة..."
+        )
 
     def _transition_commit_to_report(self):
-        """Commit -> Report: commit the package, then show report."""
-        self.btn_next.setEnabled(False)
-        self._show_loading("جاري إدخال البيانات...")
+        """Commit -> Report: approve first, then commit, then show report."""
+        pkg_id = self._current_package_id
 
-        # Show progress on commit step
-        if self.step_commit and hasattr(self.step_commit, 'set_committing'):
-            self.step_commit.set_committing(True)
+        def on_status_fetched(pkg_result):
+            if pkg_result.success:
+                status = pkg_result.data.get("status", 0)
+                self._current_package_status = status
 
-        commit_result = self.import_controller.commit_package(self._current_package_id)
+                if status in _PkgStatus.TERMINAL:
+                    self._navigate_to_report()
+                    self.completed.emit({"package_id": pkg_id})
+                    return
 
-        if self.step_commit and hasattr(self.step_commit, 'set_committing'):
-            self.step_commit.set_committing(False)
+                if status == _PkgStatus.COMMITTING:
+                    if self.step_commit and hasattr(self.step_commit, 'set_committing'):
+                        self.step_commit.set_committing(True)
+                    self._show_loading("جاري إدخال البيانات في الخادم...")
+                    self._start_status_poll()
+                    return
 
-        self._hide_loading()
+            # Always approve first, then commit
+            self._run_api(
+                lambda: self.import_controller.approve_package(pkg_id),
+                on_approve_done,
+                on_error=on_approve_error,
+                loading_msg="جاري الموافقة على الحزمة..."
+            )
 
-        if not commit_result.success:
-            logger.error(f"Commit failed: {commit_result.message}")
-            self.btn_next.setEnabled(True)
-            self._show_error(commit_result.message_ar or "فشل إدخال البيانات")
-            return
+        def on_approve_done(approve_result):
+            if not approve_result.success:
+                logger.warning(f"Approve returned: {approve_result.message}")
+                # Continue to commit anyway (might already be approved)
 
-        self._ensure_step_report()
-        self.current_step = 4
-        self.step_container.setCurrentIndex(self.current_step)
-        self._update_navigation()
-        self.completed.emit({"package_id": self._current_package_id})
+            if self.step_commit and hasattr(self.step_commit, 'set_committing'):
+                self.step_commit.set_committing(True)
+
+            self._run_api(
+                lambda: self.import_controller.commit_package(pkg_id),
+                on_commit_done,
+                on_error=on_commit_error,
+                loading_msg="جاري إدخال البيانات..."
+            )
+
+        def on_approve_error(error_type, msg_ar):
+            logger.warning(f"Approve error ({error_type}): {msg_ar} — proceeding to commit")
+            # Proceed to commit even if approve fails (might already be approved)
+            if self.step_commit and hasattr(self.step_commit, 'set_committing'):
+                self.step_commit.set_committing(True)
+
+            self._run_api(
+                lambda: self.import_controller.commit_package(pkg_id),
+                on_commit_done,
+                on_error=on_commit_error,
+                loading_msg="جاري إدخال البيانات..."
+            )
+
+        def on_commit_done(commit_result):
+            if self.step_commit and hasattr(self.step_commit, 'set_committing'):
+                self.step_commit.set_committing(False)
+
+            if not commit_result.success:
+                logger.error(f"Commit failed: {commit_result.message}")
+                self._set_buttons_enabled(True)
+                self._show_error(commit_result.message_ar or "فشل إدخال البيانات")
+                return
+
+            self._current_package_status = _PkgStatus.COMPLETED
+            self._ensure_step_report()
+            self.current_step = 4
+            self.step_container.setCurrentIndex(self.current_step)
+            self._update_navigation()
+            self.completed.emit({"package_id": pkg_id})
+
+        def on_commit_error(error_type, msg_ar):
+            if self.step_commit and hasattr(self.step_commit, 'set_committing'):
+                self.step_commit.set_committing(False)
+            self._set_buttons_enabled(True)
+            self._show_error(msg_ar)
+
+        self._run_api(
+            lambda: self.import_controller.get_package(pkg_id),
+            on_status_fetched,
+            loading_msg="جاري التحقق من حالة الحزمة..."
+        )
+
+    # -- Retry failed commit --------------------------------------------------
+
+    def _retry_failed_commit(self):
+        """Reset a failed commit (async) and navigate back to commit step."""
+        pkg_id = self._current_package_id
+
+        def on_reset_done(result):
+            if not result.success:
+                self._set_buttons_enabled(True)
+                self._show_error(result.message_ar or "فشل إعادة التعيين")
+                return
+
+            self._current_package_status = _PkgStatus.READY_TO_COMMIT
+            self._ensure_step_commit()
+            self.current_step = 3
+            self.step_container.setCurrentIndex(self.current_step)
+            self._update_navigation()
+
+        self._run_api(
+            lambda: self.import_controller.reset_commit(pkg_id),
+            on_reset_done,
+            loading_msg="جاري إعادة تعيين الحزمة..."
+        )
 
     # -- Lazy step creation ---------------------------------------------------
 
@@ -661,8 +1134,12 @@ class ImportWizardPage(QWidget):
 
         elif self.current_step == 1:
             self.btn_back.setEnabled(True)
-            self.btn_next.setText("التالي   >")
-            self.btn_next.setEnabled(True)
+            if self._current_package_status == _PkgStatus.VALIDATION_FAILED:
+                self.btn_next.setText("فشل التحقق")
+                self.btn_next.setEnabled(False)
+            else:
+                self.btn_next.setText("التالي   >")
+                self.btn_next.setEnabled(True)
 
         elif self.current_step == 2:
             self.btn_back.setEnabled(True)
@@ -677,7 +1154,10 @@ class ImportWizardPage(QWidget):
         elif self.current_step == 4:
             self.btn_back.setEnabled(False)
             self.btn_cancel.setVisible(False)
-            self.btn_next.setText("استيراد جديد")
+            if self._current_package_status == _PkgStatus.FAILED:
+                self.btn_next.setText("إعادة المحاولة")
+            else:
+                self.btn_next.setText("استيراد جديد")
             self.btn_next.setEnabled(True)
 
     def enable_next_button(self, enabled: bool):
@@ -687,37 +1167,37 @@ class ImportWizardPage(QWidget):
     # -- Cancel package -------------------------------------------------------
 
     def _on_cancel_package(self):
-        """Cancel the current import package and reset the wizard."""
+        """Cancel the current import package (async) and reset the wizard."""
         if not self._current_package_id:
             return
 
-        msg_box = QMessageBox(self)
-        msg_box.setLayoutDirection(Qt.RightToLeft)
-        msg_box.setWindowTitle("تأكيد الإلغاء")
-        msg_box.setText("هل أنت متأكد من إلغاء هذه الحزمة؟")
-        msg_box.setInformativeText("لا يمكن التراجع عن هذا الإجراء.")
-        msg_box.setIcon(QMessageBox.Warning)
-        msg_box.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
-        msg_box.setDefaultButton(QMessageBox.No)
-        msg_box.button(QMessageBox.Yes).setText("نعم، إلغاء")
-        msg_box.button(QMessageBox.No).setText("لا، تراجع")
-
-        if msg_box.exec_() != QMessageBox.Yes:
+        from ui.components.message_dialog import MessageDialog
+        if not MessageDialog.confirm(
+            self, "تأكيد الإلغاء",
+            "هل أنت متأكد من إلغاء هذه الحزمة؟\nلا يمكن التراجع عن هذا الإجراء.",
+            ok_text="نعم، إلغاء", cancel_text="لا، تراجع"
+        ):
             return
 
         logger.info(f"Cancelling package: {self._current_package_id}")
-        self._show_loading("جاري إلغاء الحزمة...")
-        cancel_result = self.import_controller.cancel_package(self._current_package_id)
-        self._hide_loading()
+        pkg_id = self._current_package_id
 
-        if not cancel_result.success:
-            logger.error(f"Cancel failed: {cancel_result.message}")
-            self._show_error(cancel_result.message_ar or "فشل إلغاء الحزمة")
-            return
+        def on_cancel_done(cancel_result):
+            if not cancel_result.success:
+                logger.error(f"Cancel failed: {cancel_result.message}")
+                self._set_buttons_enabled(True)
+                self._show_error(cancel_result.message_ar or "فشل إلغاء الحزمة")
+                return
 
-        self._show_success("تم إلغاء الحزمة بنجاح")
-        self.cancelled.emit()
-        self.refresh()
+            self._show_success("تم إلغاء الحزمة بنجاح")
+            self.cancelled.emit()
+            self.refresh()
+
+        self._run_api(
+            lambda: self.import_controller.cancel_package(pkg_id),
+            on_cancel_done,
+            loading_msg="جاري إلغاء الحزمة..."
+        )
 
     # -- Error/Success display ------------------------------------------------
 
@@ -735,6 +1215,10 @@ class ImportWizardPage(QWidget):
 
     def refresh(self, data=None):
         """Reset wizard to step 1 for a new import."""
+        self._cancel_active_worker()
+        self._stop_status_poll()
+        self._hide_loading()
+
         for step_attr in ('step_report', 'step_commit', 'step_review', 'step2'):
             step = getattr(self, step_attr, None)
             if step is not None:
@@ -743,6 +1227,7 @@ class ImportWizardPage(QWidget):
                 setattr(self, step_attr, None)
 
         self._current_package_id = None
+        self._current_package_status = 0
         self.current_step = 0
         self.step_container.setCurrentIndex(0)
         self._update_navigation()

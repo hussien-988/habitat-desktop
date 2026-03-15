@@ -136,7 +136,8 @@ class SyncDataPage(QWidget):
 
         self._refresh_timer = QTimer(self)
         self._refresh_timer.timeout.connect(self._smart_refresh)
-        self._refresh_timer.start(10000)
+        # Auto-refresh disabled temporarily for import testing
+        # self._refresh_timer.start(10000)
 
     # ------------------------------------------------------------------
     # UI Setup

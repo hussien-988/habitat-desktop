@@ -10,12 +10,14 @@ before committing. Uses the grouped API response from GET .../staged-entities.
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QFrame,
     QTableWidget, QTableWidgetItem, QHeaderView, QAbstractItemView,
-    QScrollArea, QSizePolicy
+    QScrollArea, QSizePolicy, QGraphicsDropShadowEffect,
 )
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import Qt, QTimer
+from PyQt5.QtGui import QColor
 
 from ui.design_system import Colors, PageDimensions
 from ui.font_utils import create_font, FontManager
+from ui.style_manager import StyleManager
 from utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -52,7 +54,9 @@ class ImportStep4Review(QWidget):
         self.import_controller = import_controller
         self._package_id = package_id
         self._data = {}
+        self._dots_count = 0
         self._setup_ui()
+        self._loading_overlay = self._create_loading_overlay()
         self.load_entities(package_id)
 
     def _setup_ui(self):
@@ -66,7 +70,10 @@ class ImportStep4Review(QWidget):
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QFrame.NoFrame)
-        scroll.setStyleSheet("QScrollArea { background: transparent; border: none; }")
+        scroll.setStyleSheet(
+            "QScrollArea { background: transparent; border: none; }"
+            + StyleManager.scrollbar()
+        )
 
         container = QWidget()
         container.setStyleSheet("background: transparent;")
@@ -130,6 +137,15 @@ class ImportStep4Review(QWidget):
         table_title.setStyleSheet("color: #212B36; background: transparent;")
         table_layout.addWidget(table_title)
 
+        # Empty state label
+        self._empty_label = QLabel("لا توجد كيانات مرحلية")
+        self._empty_label.setFont(create_font(size=11, weight=FontManager.WEIGHT_REGULAR))
+        self._empty_label.setStyleSheet("color: #9CA3AF; background: transparent;")
+        self._empty_label.setAlignment(Qt.AlignCenter)
+        self._empty_label.setMinimumHeight(200)
+        self._empty_label.setVisible(False)
+        table_layout.addWidget(self._empty_label)
+
         self._table = QTableWidget()
         self._table.setColumnCount(5)
         self._table.setHorizontalHeaderLabels([
@@ -176,7 +192,7 @@ class ImportStep4Review(QWidget):
                 border-bottom: 2px solid #E1E8ED;
                 font-weight: 600;
             }
-        """)
+        """ + StyleManager.scrollbar())
         self._table.setFont(create_font(size=10, weight=FontManager.WEIGHT_REGULAR))
         header.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
 
@@ -231,15 +247,91 @@ class ImportStep4Review(QWidget):
 
         return container, count_label
 
+    # -- Loading overlay -------------------------------------------------------
+
+    def _create_loading_overlay(self) -> QFrame:
+        overlay = QFrame(self)
+        overlay.setStyleSheet("QFrame { background-color: rgba(255, 255, 255, 200); }")
+        overlay.setVisible(False)
+
+        overlay_layout = QVBoxLayout(overlay)
+        overlay_layout.setAlignment(Qt.AlignCenter)
+
+        card = QFrame()
+        card.setFixedSize(240, 90)
+        card.setStyleSheet("""
+            QFrame {
+                background-color: #FFFFFF;
+                border-radius: 12px;
+                border: 1px solid #E1E8ED;
+            }
+        """)
+        shadow = QGraphicsDropShadowEffect()
+        shadow.setBlurRadius(20)
+        shadow.setXOffset(0)
+        shadow.setYOffset(4)
+        shadow.setColor(QColor(0, 0, 0, 40))
+        card.setGraphicsEffect(shadow)
+
+        card_layout = QVBoxLayout(card)
+        card_layout.setAlignment(Qt.AlignCenter)
+        card_layout.setSpacing(6)
+
+        self._loading_label = QLabel("جاري التحميل...")
+        self._loading_label.setFont(create_font(size=11, weight=FontManager.WEIGHT_SEMIBOLD))
+        self._loading_label.setStyleSheet("color: #3890DF; background: transparent; border: none;")
+        self._loading_label.setAlignment(Qt.AlignCenter)
+        card_layout.addWidget(self._loading_label)
+
+        self._loading_dots = QLabel("")
+        self._loading_dots.setFont(create_font(size=14, weight=FontManager.WEIGHT_BOLD))
+        self._loading_dots.setStyleSheet("color: #3890DF; background: transparent; border: none;")
+        self._loading_dots.setAlignment(Qt.AlignCenter)
+        card_layout.addWidget(self._loading_dots)
+
+        overlay_layout.addWidget(card)
+
+        self._dots_timer = QTimer(self)
+        self._dots_timer.timeout.connect(self._animate_dots)
+
+        return overlay
+
+    def _show_loading(self, message: str):
+        self._loading_label.setText(message)
+        self._loading_overlay.setGeometry(self.rect())
+        self._loading_overlay.raise_()
+        self._loading_overlay.setVisible(True)
+        self._dots_count = 0
+        self._dots_timer.start(400)
+
+    def _hide_loading(self):
+        self._dots_timer.stop()
+        self._loading_overlay.setVisible(False)
+
+    def _animate_dots(self):
+        self._dots_count = (self._dots_count + 1) % 4
+        self._loading_dots.setText("." * self._dots_count)
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        if hasattr(self, '_loading_overlay') and self._loading_overlay.isVisible():
+            self._loading_overlay.setGeometry(self.rect())
+
+    # -- Data loading ----------------------------------------------------------
+
     def load_entities(self, package_id: str):
         """Load staged entities from the controller (grouped response)."""
         logger.info(f"Loading staged entities for package {package_id}")
         self._package_id = package_id
 
+        self._show_loading("جاري تحميل الكيانات...")
         result = self.import_controller.get_staged_entities(package_id)
+        self._hide_loading()
 
         if not result.success:
             logger.error(f"Failed to load entities: {result.message}")
+            from ui.components.message_dialog import MessageDialog
+            MessageDialog.error(self, "خطأ", result.message_ar or "فشل تحميل الكيانات المرحلية")
             return
 
         self._data = result.data or {}
@@ -260,7 +352,6 @@ class ImportStep4Review(QWidget):
 
         # Flatten all entities for the table
         all_rows = []
-        section_names = {k: ar for k, ar, _, _ in _ENTITY_SECTIONS}
 
         for key, ar_name, _, _ in _ENTITY_SECTIONS:
             section_items = d.get(key, [])
@@ -268,6 +359,15 @@ class ImportStep4Review(QWidget):
                 continue
             for entity in section_items:
                 all_rows.append((ar_name, entity))
+
+        # Empty state
+        if not all_rows:
+            self._table.setVisible(False)
+            self._empty_label.setVisible(True)
+            return
+
+        self._table.setVisible(True)
+        self._empty_label.setVisible(False)
 
         self._table.setRowCount(len(all_rows))
         for row_idx, (type_name, entity) in enumerate(all_rows):
@@ -366,3 +466,5 @@ class ImportStep4Review(QWidget):
         for label in self._count_labels.values():
             label.setText("0")
         self._table.setRowCount(0)
+        self._table.setVisible(True)
+        self._empty_label.setVisible(False)
