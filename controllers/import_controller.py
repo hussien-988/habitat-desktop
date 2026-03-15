@@ -3,12 +3,14 @@
 Import Controller — orchestrates the import pipeline (UC-003).
 """
 
+import time
 from typing import Any, Dict, List, Optional
 
 from PyQt5.QtCore import pyqtSignal
 
 from controllers.base_controller import BaseController, OperationResult
 from services.api_client import get_api_client
+from services.exceptions import NetworkException, ApiException
 from utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -51,22 +53,32 @@ class ImportController(BaseController):
             return "خطأ في الخادم — يرجى إبلاغ الدعم الفني"
         return default_msg
 
+    @staticmethod
+    def _with_retry(fn, max_retries=2, backoff_base=1.0):
+        """Retry on NetworkException with exponential backoff."""
+        for attempt in range(max_retries + 1):
+            try:
+                return fn()
+            except NetworkException:
+                if attempt == max_retries:
+                    raise
+                wait = backoff_base * (2 ** attempt)
+                logger.info(f"Network error, retrying in {wait}s (attempt {attempt + 1}/{max_retries})")
+                time.sleep(wait)
+
     def upload_package(self, file_path: str) -> OperationResult[Dict]:
         """Upload a .uhc package."""
         try:
             api = get_api_client()
-            result = api.import_upload(file_path)
+            result = self._with_retry(lambda: api.import_upload(file_path))
             pkg_id = result.get("id") or result.get("packageId") or ""
             self.package_uploaded.emit(pkg_id)
             return OperationResult.ok(data=result, message_ar="تم رفع الملف بنجاح")
+        except (NetworkException, ApiException):
+            raise
         except Exception as e:
             logger.error(f"Upload failed: {e}")
-            msg = "فشل رفع الملف"
-            if hasattr(e, "status_code") and e.status_code == 409:
-                msg = "الحزمة مرفوعة مسبقاً (مكررة)"
-            else:
-                msg = self._api_error_msg(e, msg)
-            return OperationResult.fail(str(e), message_ar=msg)
+            return OperationResult.fail(str(e), message_ar="فشل رفع الملف")
 
     def get_packages(
         self, page: int = 1, page_size: int = 20, status_filter: str = None
@@ -76,6 +88,8 @@ class ImportController(BaseController):
             api = get_api_client()
             result = api.get_import_packages(page, page_size, status_filter)
             return OperationResult.ok(data=result)
+        except (NetworkException, ApiException):
+            raise
         except Exception as e:
             logger.error(f"Get packages failed: {e}")
             return OperationResult.fail(str(e), message_ar="فشل تحميل قائمة الحزم")
@@ -86,6 +100,8 @@ class ImportController(BaseController):
             api = get_api_client()
             result = api.get_import_package(package_id)
             return OperationResult.ok(data=result)
+        except (NetworkException, ApiException):
+            raise
         except Exception as e:
             logger.error(f"Get package failed: {e}")
             return OperationResult.fail(str(e), message_ar="فشل تحميل تفاصيل الحزمة")
@@ -94,14 +110,14 @@ class ImportController(BaseController):
         """Stage a package (unpack + validate)."""
         try:
             api = get_api_client()
-            result = api.stage_import_package(package_id)
+            result = self._with_retry(lambda: api.stage_import_package(package_id))
             self.package_staged.emit(package_id)
             return OperationResult.ok(data=result, message_ar="تم تدريج الحزمة بنجاح")
+        except (NetworkException, ApiException):
+            raise
         except Exception as e:
             logger.error(f"Staging failed: {e}")
-            return OperationResult.fail(
-                str(e), message_ar=self._api_error_msg(e, "فشل تدريج الحزمة")
-            )
+            return OperationResult.fail(str(e), message_ar="فشل تدريج الحزمة")
 
     def get_validation_report(self, package_id: str) -> OperationResult[Dict]:
         """Get validation report."""
@@ -109,6 +125,8 @@ class ImportController(BaseController):
             api = get_api_client()
             result = api.get_validation_report(package_id)
             return OperationResult.ok(data=result)
+        except (NetworkException, ApiException):
+            raise
         except Exception as e:
             logger.error(f"Get validation report failed: {e}")
             return OperationResult.fail(str(e), message_ar="فشل تحميل تقرير التحقق")
@@ -126,11 +144,11 @@ class ImportController(BaseController):
             if not isinstance(result, dict):
                 result = {}
             return OperationResult.ok(data=result)
+        except (NetworkException, ApiException):
+            raise
         except Exception as e:
             logger.error(f"Get staged entities failed: {e}")
-            return OperationResult.fail(
-                str(e), message_ar=self._api_error_msg(e, "فشل تحميل الكيانات المرحلية")
-            )
+            return OperationResult.fail(str(e), message_ar="فشل تحميل الكيانات المرحلية")
 
     def detect_duplicates(self, package_id: str) -> OperationResult[Dict]:
         """Run duplicate detection."""
@@ -138,36 +156,36 @@ class ImportController(BaseController):
             api = get_api_client()
             result = api.detect_duplicates(package_id)
             return OperationResult.ok(data=result, message_ar="تم كشف التكرارات")
+        except (NetworkException, ApiException):
+            raise
         except Exception as e:
             logger.error(f"Duplicate detection failed: {e}")
-            return OperationResult.fail(
-                str(e), message_ar=self._api_error_msg(e, "فشل كشف التكرارات")
-            )
+            return OperationResult.fail(str(e), message_ar="فشل كشف التكرارات")
 
     def approve_package(self, package_id: str) -> OperationResult[Dict]:
         """Approve package for commit."""
         try:
             api = get_api_client()
-            result = api.approve_import_package(package_id)
+            result = self._with_retry(lambda: api.approve_import_package(package_id))
             return OperationResult.ok(data=result, message_ar="تمت الموافقة على الحزمة")
+        except (NetworkException, ApiException):
+            raise
         except Exception as e:
             logger.error(f"Approve failed: {e}")
-            return OperationResult.fail(
-                str(e), message_ar=self._api_error_msg(e, "فشل الموافقة على الحزمة")
-            )
+            return OperationResult.fail(str(e), message_ar="فشل الموافقة على الحزمة")
 
     def commit_package(self, package_id: str) -> OperationResult[Dict]:
         """Commit package to production."""
         try:
             api = get_api_client()
-            result = api.commit_import_package(package_id)
+            result = self._with_retry(lambda: api.commit_import_package(package_id))
             self.package_committed.emit(package_id)
             return OperationResult.ok(data=result, message_ar="تم إدخال البيانات في الإنتاج")
+        except (NetworkException, ApiException):
+            raise
         except Exception as e:
             logger.error(f"Commit failed: {e}")
-            return OperationResult.fail(
-                str(e), message_ar=self._api_error_msg(e, "فشل إدخال البيانات")
-            )
+            return OperationResult.fail(str(e), message_ar="فشل إدخال البيانات")
 
     def get_commit_report(self, package_id: str) -> OperationResult[Dict]:
         """Get commit report."""
@@ -175,6 +193,8 @@ class ImportController(BaseController):
             api = get_api_client()
             result = api.get_commit_report(package_id)
             return OperationResult.ok(data=result)
+        except (NetworkException, ApiException):
+            raise
         except Exception as e:
             logger.error(f"Get commit report failed: {e}")
             return OperationResult.fail(str(e), message_ar="فشل تحميل تقرير الإدخال")
@@ -183,8 +203,10 @@ class ImportController(BaseController):
         """Reset a stuck commit."""
         try:
             api = get_api_client()
-            result = api.reset_commit(package_id)
+            result = self._with_retry(lambda: api.reset_commit(package_id))
             return OperationResult.ok(data=result, message_ar="تم إعادة تعيين حالة الإدخال")
+        except (NetworkException, ApiException):
+            raise
         except Exception as e:
             logger.error(f"Reset commit failed: {e}")
             return OperationResult.fail(str(e), message_ar="فشل إعادة التعيين")
@@ -196,11 +218,11 @@ class ImportController(BaseController):
             result = api.cancel_import_package(package_id)
             self.package_cancelled.emit(package_id)
             return OperationResult.ok(data=result, message_ar="تم إلغاء الحزمة")
+        except (NetworkException, ApiException):
+            raise
         except Exception as e:
             logger.error(f"Cancel failed: {e}")
-            return OperationResult.fail(
-                str(e), message_ar=self._api_error_msg(e, "فشل إلغاء الحزمة")
-            )
+            return OperationResult.fail(str(e), message_ar="فشل إلغاء الحزمة")
 
     def quarantine_package(self, package_id: str) -> OperationResult[Dict]:
         """Quarantine a suspicious package."""
@@ -208,8 +230,8 @@ class ImportController(BaseController):
             api = get_api_client()
             result = api.quarantine_import_package(package_id)
             return OperationResult.ok(data=result, message_ar="تم حجر الحزمة")
+        except (NetworkException, ApiException):
+            raise
         except Exception as e:
             logger.error(f"Quarantine failed: {e}")
-            return OperationResult.fail(
-                str(e), message_ar=self._api_error_msg(e, "فشل حجر الحزمة")
-            )
+            return OperationResult.fail(str(e), message_ar="فشل حجر الحزمة")

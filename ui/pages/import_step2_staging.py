@@ -11,9 +11,10 @@ level results (validators), and duplicate detection counts.
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QFrame,
     QScrollArea, QTableWidget, QTableWidgetItem, QHeaderView,
-    QAbstractItemView, QSizePolicy
+    QAbstractItemView, QSizePolicy, QGraphicsDropShadowEffect,
 )
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import Qt, QTimer
+from PyQt5.QtGui import QColor
 
 from ui.design_system import Colors, PageDimensions
 from ui.font_utils import create_font, FontManager
@@ -44,7 +45,9 @@ class ImportStep2Staging(QWidget):
         self._package_id = package_id
         self._report_data = None
         self._duplicates_data = duplicates_data
+        self._dots_count = 0
         self._setup_ui()
+        self._loading_overlay = self._create_loading_overlay()
         self.load_report(package_id)
 
     def _setup_ui(self):
@@ -379,14 +382,89 @@ class ImportStep2Staging(QWidget):
 
     # ── Data loading ─────────────────────────────────────────────────
 
+    # -- Loading overlay -------------------------------------------------------
+
+    def _create_loading_overlay(self) -> QFrame:
+        overlay = QFrame(self)
+        overlay.setStyleSheet("QFrame { background-color: rgba(255, 255, 255, 200); }")
+        overlay.setVisible(False)
+
+        overlay_layout = QVBoxLayout(overlay)
+        overlay_layout.setAlignment(Qt.AlignCenter)
+
+        card = QFrame()
+        card.setFixedSize(240, 90)
+        card.setStyleSheet("""
+            QFrame {
+                background-color: #FFFFFF;
+                border-radius: 12px;
+                border: 1px solid #E1E8ED;
+            }
+        """)
+        shadow = QGraphicsDropShadowEffect()
+        shadow.setBlurRadius(20)
+        shadow.setXOffset(0)
+        shadow.setYOffset(4)
+        shadow.setColor(QColor(0, 0, 0, 40))
+        card.setGraphicsEffect(shadow)
+
+        card_layout = QVBoxLayout(card)
+        card_layout.setAlignment(Qt.AlignCenter)
+        card_layout.setSpacing(6)
+
+        self._ld_label = QLabel("جاري التحميل...")
+        self._ld_label.setFont(create_font(size=11, weight=FontManager.WEIGHT_SEMIBOLD))
+        self._ld_label.setStyleSheet("color: #3890DF; background: transparent; border: none;")
+        self._ld_label.setAlignment(Qt.AlignCenter)
+        card_layout.addWidget(self._ld_label)
+
+        self._ld_dots = QLabel("")
+        self._ld_dots.setFont(create_font(size=14, weight=FontManager.WEIGHT_BOLD))
+        self._ld_dots.setStyleSheet("color: #3890DF; background: transparent; border: none;")
+        self._ld_dots.setAlignment(Qt.AlignCenter)
+        card_layout.addWidget(self._ld_dots)
+
+        overlay_layout.addWidget(card)
+
+        self._dots_timer = QTimer(self)
+        self._dots_timer.timeout.connect(self._animate_dots)
+        return overlay
+
+    def _show_loading(self, message: str):
+        self._ld_label.setText(message)
+        self._loading_overlay.setGeometry(self.rect())
+        self._loading_overlay.raise_()
+        self._loading_overlay.setVisible(True)
+        self._dots_count = 0
+        self._dots_timer.start(400)
+
+    def _hide_loading(self):
+        self._dots_timer.stop()
+        self._loading_overlay.setVisible(False)
+
+    def _animate_dots(self):
+        self._dots_count = (self._dots_count + 1) % 4
+        self._ld_dots.setText("." * self._dots_count)
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        if hasattr(self, '_loading_overlay') and self._loading_overlay.isVisible():
+            self._loading_overlay.setGeometry(self.rect())
+
+    # -- Data loading ----------------------------------------------------------
+
     def load_report(self, package_id: str):
         """Load validation report from the controller."""
         logger.info(f"Loading validation report for package {package_id}")
 
+        self._show_loading("جاري تحميل تقرير التحقق...")
         result = self.import_controller.get_validation_report(package_id)
+        self._hide_loading()
 
         if not result.success:
             self._show_error(result.message_ar or "فشل تحميل تقرير التحقق")
+            from ui.components.message_dialog import MessageDialog
+            MessageDialog.error(self, "خطأ", result.message_ar or "فشل تحميل تقرير التحقق")
             return
 
         self._report_data = result.data or {}

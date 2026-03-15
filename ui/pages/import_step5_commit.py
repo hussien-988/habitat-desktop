@@ -10,9 +10,10 @@ the summary and progress.
 
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QFrame,
-    QProgressBar, QSizePolicy
+    QProgressBar, QSizePolicy, QGraphicsDropShadowEffect,
 )
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import Qt, QTimer
+from PyQt5.QtGui import QColor
 
 from ui.font_utils import create_font, FontManager
 from utils.logger import get_logger
@@ -40,7 +41,9 @@ class ImportStep5Commit(QWidget):
         self.import_controller = import_controller
         self._package_id = package_id
         self._data = {}
+        self._dots_count = 0
         self._setup_ui()
+        self._loading_overlay = self._create_loading_overlay()
         self.load_summary(package_id)
 
     def _setup_ui(self):
@@ -170,19 +173,93 @@ class ImportStep5Commit(QWidget):
         main_layout.addWidget(card)
         main_layout.addStretch()
 
+    def _create_loading_overlay(self):
+        overlay = QWidget(self)
+        overlay.setStyleSheet("background-color: rgba(255,255,255,200);")
+        overlay.setVisible(False)
+
+        ol = QVBoxLayout(overlay)
+        ol.setAlignment(Qt.AlignCenter)
+
+        card = QFrame()
+        card.setFixedSize(240, 90)
+        card.setStyleSheet(
+            "QFrame { background: white; border-radius: 16px; }"
+        )
+        shadow = QGraphicsDropShadowEffect()
+        shadow.setBlurRadius(24)
+        shadow.setColor(QColor(0, 0, 0, 30))
+        shadow.setOffset(0, 4)
+        card.setGraphicsEffect(shadow)
+
+        cl = QVBoxLayout(card)
+        cl.setAlignment(Qt.AlignCenter)
+        cl.setSpacing(6)
+
+        self._ld_label = QLabel("جاري التحميل")
+        self._ld_label.setAlignment(Qt.AlignCenter)
+        self._ld_label.setFont(create_font(size=11, weight=FontManager.WEIGHT_SEMIBOLD))
+        self._ld_label.setStyleSheet("color: #3890DF; background: transparent;")
+        cl.addWidget(self._ld_label)
+
+        self._ld_dots = QLabel("")
+        self._ld_dots.setAlignment(Qt.AlignCenter)
+        self._ld_dots.setFont(create_font(size=16, weight=FontManager.WEIGHT_BOLD))
+        self._ld_dots.setStyleSheet("color: #3890DF; background: transparent;")
+        cl.addWidget(self._ld_dots)
+
+        ol.addWidget(card)
+        return overlay
+
+    def _show_loading(self, msg="جاري التحميل"):
+        self._ld_label.setText(msg)
+        self._dots_count = 0
+        self._loading_overlay.setVisible(True)
+        self._loading_overlay.raise_()
+        self._loading_overlay.setGeometry(self.rect())
+        if not hasattr(self, '_dots_timer'):
+            self._dots_timer = QTimer(self)
+            self._dots_timer.timeout.connect(self._animate_dots)
+        self._dots_timer.start(400)
+
+    def _hide_loading(self):
+        self._loading_overlay.setVisible(False)
+        if hasattr(self, '_dots_timer'):
+            self._dots_timer.stop()
+
+    def _animate_dots(self):
+        self._dots_count = (self._dots_count % 3) + 1
+        self._ld_dots.setText("." * self._dots_count)
+
+    def resizeEvent(self, e):
+        super().resizeEvent(e)
+        if hasattr(self, '_loading_overlay'):
+            self._loading_overlay.setGeometry(self.rect())
+
     def load_summary(self, package_id: str, staged_data: dict = None):
         """Load commit summary from staged entities (grouped response)."""
         self._package_id = package_id
 
         if staged_data:
             self._data = staged_data
+            self._update_counts()
+            return
+
+        self._show_loading("جاري تحميل الملخص")
+
+        result = self.import_controller.get_staged_entities(package_id)
+        self._hide_loading()
+
+        if result.success:
+            self._data = result.data or {}
         else:
-            result = self.import_controller.get_staged_entities(package_id)
-            if result.success:
-                self._data = result.data or {}
-            else:
-                self._data = {}
-                logger.error(f"Failed to load entities for summary: {result.message}")
+            self._data = {}
+            logger.error(f"Failed to load entities for summary: {result.message}")
+            from ui.components.message_dialog import MessageDialog
+            MessageDialog.error(
+                self, "خطأ",
+                result.message_ar or "فشل تحميل ملخص الكيانات"
+            )
 
         self._update_counts()
 

@@ -10,7 +10,7 @@ User selects a package to begin processing (staging, validation, etc.).
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QFrame,
     QPushButton, QScrollArea, QSizePolicy, QFileDialog,
-    QGraphicsDropShadowEffect, QApplication
+    QGraphicsDropShadowEffect,
 )
 from PyQt5.QtCore import Qt, pyqtSignal, QTimer
 from PyQt5.QtGui import QColor
@@ -23,7 +23,7 @@ from utils.logger import get_logger
 
 logger = get_logger(__name__)
 
-_POLL_INTERVAL_MS = 30_000  # 30 seconds
+_POLL_INTERVAL_MS = 300_000  # 5 minutes
 
 
 class _PackageCard(QFrame):
@@ -34,6 +34,7 @@ class _PackageCard(QFrame):
     def __init__(self, pkg_data: dict, parent=None):
         super().__init__(parent)
         self._pkg_id = pkg_data.get("id") or pkg_data.get("packageId") or ""
+        self._status = pkg_data.get("status", 1)
         self._selected = False
         self._setup_ui(pkg_data)
 
@@ -136,6 +137,9 @@ class _PackageCard(QFrame):
     def get_package_id(self) -> str:
         return self._pkg_id
 
+    def get_status(self) -> int:
+        return self._status
+
     def mousePressEvent(self, event):
         self.clicked.emit(self._pkg_id)
         super().mousePressEvent(event)
@@ -151,12 +155,14 @@ class ImportStep1Packages(QWidget):
         super().__init__(parent)
         self.import_controller = import_controller
         self._selected_package_id = None
+        self._selected_status = 0
         self._cards: list[_PackageCard] = []
         self._poll_timer = None
         self._dots_count = 0
         self._setup_ui()
         self._loading_overlay = self._create_loading_overlay()
-        self._start_polling()
+        # Auto-polling disabled temporarily for import testing
+        # self._start_polling()
 
     def _setup_ui(self):
         self.setLayoutDirection(Qt.RightToLeft)
@@ -258,7 +264,7 @@ class ImportStep1Packages(QWidget):
         card_layout.addWidget(scroll, 1)
 
         # Empty state label
-        self._empty_label = QLabel("لا توجد حزم واردة حالياً\nسيتم التحديث تلقائياً كل 30 ثانية")
+        self._empty_label = QLabel("لا توجد حزم واردة حالياً\nسيتم التحديث تلقائياً كل 5 دقائق")
         self._empty_label.setFont(create_font(size=11, weight=FontManager.WEIGHT_REGULAR))
         self._empty_label.setStyleSheet("color: #9CA3AF; background: transparent;")
         self._empty_label.setAlignment(Qt.AlignCenter)
@@ -266,7 +272,7 @@ class ImportStep1Packages(QWidget):
         card_layout.addWidget(self._empty_label)
 
         # Auto-refresh hint
-        hint = QLabel("تحديث تلقائي كل 30 ثانية")
+        hint = QLabel("تحديث تلقائي كل 5 دقائق")
         hint.setFont(create_font(size=8, weight=FontManager.WEIGHT_REGULAR))
         hint.setStyleSheet("color: #D1D5DB; background: transparent;")
         hint.setAlignment(Qt.AlignCenter)
@@ -330,7 +336,6 @@ class ImportStep1Packages(QWidget):
         self._loading_overlay.setVisible(True)
         self._dots_count = 0
         self._dots_timer.start(400)
-        QApplication.processEvents()
 
     def _hide_loading(self):
         self._dots_timer.stop()
@@ -425,7 +430,10 @@ class ImportStep1Packages(QWidget):
     def _on_card_clicked(self, package_id: str):
         """Handle card selection."""
         for card in self._cards:
-            card.set_selected(card.get_package_id() == package_id)
+            is_match = card.get_package_id() == package_id
+            card.set_selected(is_match)
+            if is_match:
+                self._selected_status = card.get_status()
 
         self._selected_package_id = package_id
         self.package_selected.emit(package_id)
@@ -433,6 +441,10 @@ class ImportStep1Packages(QWidget):
     def get_selected_package_id(self) -> str:
         """Return the currently selected package ID."""
         return self._selected_package_id or ""
+
+    def get_selected_status(self) -> int:
+        """Return the currently selected package status code."""
+        return self._selected_status
 
     def _start_polling(self):
         """Start auto-refresh timer."""
@@ -454,11 +466,25 @@ class ImportStep1Packages(QWidget):
         if not file_path:
             return
 
+        from services.exceptions import NetworkException, ApiException
+        from ui.components.message_dialog import MessageDialog
+
         self._show_loading("جاري رفع الملف...")
-        result = self.import_controller.upload_package(file_path)
+        try:
+            result = self.import_controller.upload_package(file_path)
+        except NetworkException:
+            self._hide_loading()
+            MessageDialog.error(self, "خطأ في الاتصال", "لا يمكن الاتصال بالخادم.\nتحقق من اتصال الشبكة وحاول مرة أخرى.")
+            return
+        except ApiException as e:
+            self._hide_loading()
+            if e.status_code == 409:
+                MessageDialog.error(self, "خطأ في الرفع", "هذه الحزمة موجودة مسبقاً في النظام.")
+            else:
+                MessageDialog.error(self, "خطأ في الرفع", f"خطأ من الخادم ({e.status_code})")
+            return
         self._hide_loading()
 
-        from ui.components.message_dialog import MessageDialog
         if result.success:
             MessageDialog.success(self, "تم الرفع", result.message_ar or "تم رفع الملف بنجاح")
             self.refresh()
