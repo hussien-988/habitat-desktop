@@ -149,6 +149,16 @@ def get_relation_type_options() -> list:
     return _vocab_options("RelationType")
 
 
+# ============ Relationship to Head (Household) ============
+
+def get_relationship_to_head_options() -> list:
+    return _vocab_options("RelationshipToHead")
+
+
+def get_relationship_to_head_display(rel_key) -> str:
+    return _vocab_label("RelationshipToHead", rel_key, {})
+
+
 # ============ Contract Type ============
 
 def get_contract_type_options() -> list:
@@ -277,3 +287,22 @@ def get_claim_status_display(status_key) -> str:
         "draft": "mapping.claim_status.draft",
     }
     return _vocab_label("ClaimStatus", status_key, _str_fallback)
+
+
+# ============ Survey Status ============
+
+def get_survey_status_display(status_key) -> str:
+    _int_map = {1: "مسودة", 3: "نهائي"}
+    if isinstance(status_key, int) and status_key in _int_map:
+        return _int_map[status_key]
+    _str_map = {"draft": "مسودة", "finalized": "نهائي"}
+    return _str_map.get(str(status_key).lower(), str(status_key))
+
+
+# ============ Survey Type ============
+
+def get_survey_type_display(type_key) -> str:
+    _int_map = {1: "مسح ميداني", 2: "مسح مكتبي"}
+    if isinstance(type_key, int) and type_key in _int_map:
+        return _int_map[type_key]
+    return str(type_key)

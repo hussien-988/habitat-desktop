@@ -162,6 +162,7 @@ class MainWindow(QMainWindow):
         from ui.pages.field_work_preparation_page import FieldWorkPreparationPage
         from controllers.building_controller import BuildingController
         from ui.pages.case_details_page import CaseDetailsPage
+        from ui.pages.claim_details_page import ClaimDetailsPage
         from ui.pages.user_management_page import UserManagementPage
         from ui.pages.add_user_page import AddUserPage
         from controllers.user_controller import UserController
@@ -292,6 +293,10 @@ class MainWindow(QMainWindow):
         self.pages[Pages.CASE_DETAILS] = CaseDetailsPage(self)
         self.stack.addWidget(self.pages[Pages.CASE_DETAILS])
 
+        # Claim Details page — dedicated view for claims from Claims API
+        self.pages[Pages.CLAIM_DETAILS] = ClaimDetailsPage(self)
+        self.stack.addWidget(self.pages[Pages.CLAIM_DETAILS])
+
         # User Management page
         self.pages[Pages.USER_MANAGEMENT] = UserManagementPage(
             self.db, self.i18n, user_controller=self._user_controller, parent=self
@@ -375,8 +380,7 @@ class MainWindow(QMainWindow):
 
         # Navbar signals
         self.navbar.tab_changed.connect(self._on_tab_changed)
-        self.navbar.search_requested.connect(self._on_search_requested)
-        self.navbar.filter_applied.connect(self._on_filter_applied)
+        # Search/filter removed from navbar — each page has its own filters
         self.navbar.logout_requested.connect(self._handle_logout)
         self.navbar.language_change_requested.connect(self.toggle_language)
         self.navbar.sync_requested.connect(self._on_sync_requested)
@@ -433,17 +437,24 @@ class MainWindow(QMainWindow):
         # Completed Claims - view claim details
         self.pages[Pages.CLAIMS].claim_selected.connect(self._on_completed_claim_selected)
 
-        # Add Claim buttons - start new office survey (UC-004 S01)
+        # Add Claim button - start new office survey (UC-004 S01)
         self.pages[Pages.CASES].add_claim_clicked.connect(self._start_new_office_survey)
-        self.pages[Pages.CLAIMS].add_claim_clicked.connect(self._start_new_office_survey)
 
         # Office Survey Wizard signals
         self.office_survey_wizard.survey_completed.connect(self._on_survey_completed)
         self.office_survey_wizard.survey_cancelled.connect(self._on_survey_cancelled)
         self.office_survey_wizard.survey_saved_draft.connect(self._on_survey_saved_draft)
 
-        # UC-006: Edit claim from CaseDetailsPage
-        self.pages[Pages.CASE_DETAILS].edit_requested.connect(
+        # Resume draft survey from CaseDetailsPage
+        self.pages[Pages.CASE_DETAILS].resume_requested.connect(
+            self._on_resume_draft_survey
+        )
+
+        # Claim Details page signals
+        self.pages[Pages.CLAIM_DETAILS].back_requested.connect(
+            lambda: self.navigate_to(Pages.CLAIMS)
+        )
+        self.pages[Pages.CLAIM_DETAILS].edit_requested.connect(
             self._on_edit_claim_requested
         )
 
@@ -1143,8 +1154,12 @@ class MainWindow(QMainWindow):
         self.navigate_to(Pages.CLAIM_EDIT, data)
 
     def _on_completed_claim_selected(self, claim_id: str):
-        """Navigate to case details for a completed claim."""
-        logger.info(f"Completed claim selected: {claim_id}")
+        """Navigate to claim details page using Claims API.
+
+        Uses ClaimController.get_claim_full_detail() to fetch enriched data,
+        then navigates to the dedicated ClaimDetailsPage.
+        """
+        logger.info(f"Claim selected: {claim_id}")
 
         claims_page = self.pages[Pages.CLAIMS]
         claim_data = None
@@ -1157,20 +1172,27 @@ class MainWindow(QMainWindow):
             logger.warning(f"Claim data not found for: {claim_id}")
             return
 
-        # Try loading via survey_uuid (if available from survey-based claims)
-        survey_uuid = claim_data.get('claim_uuid') or claim_data.get('survey_id')
-        if survey_uuid:
-            try:
-                from controllers.survey_controller import SurveyController
-                ctrl = SurveyController(self.db)
-                result = ctrl.get_survey_full_context(survey_uuid)
-                if result.success and result.data:
-                    self.navigate_to(Pages.CASE_DETAILS, result.data)
-                    return
-            except Exception as e:
-                logger.warning(f"Survey context fetch failed: {e}")
+        claim_uuid = claim_data.get('claim_uuid', '')
+        survey_id = claim_data.get('survey_id', '')
 
-        logger.warning(f"Could not load survey context for completed claim: {claim_id}")
+        try:
+            from controllers.claim_controller import ClaimController
+            ctrl = ClaimController()
+            result = ctrl.get_claim_full_detail(claim_uuid, hint_survey_id=survey_id)
+            if result.success and result.data:
+                self.navigate_to(Pages.CLAIM_DETAILS, result.data)
+                return
+            logger.warning(f"ClaimController returned failure: {result.message}")
+        except Exception as e:
+            logger.warning(f"Could not load claim details: {e}")
+
+        # Step 3: Error toast
+        from ui.components.toast import Toast
+        Toast.show_toast(
+            self,
+            f"تعذّر تحميل تفاصيل المطالبة {claim_id}",
+            toast_type=Toast.ERROR
+        )
 
     def _start_new_office_survey(self):
         """

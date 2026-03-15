@@ -159,14 +159,7 @@ class Navbar(QFrame):
         win_controls = self._create_window_controls()
         layout.addWidget(win_controls)
 
-        # Spacer before search
-        layout.addSpacerItem(QSpacerItem(40, 20, QSizePolicy.Expanding, QSizePolicy.Minimum))
-
-        # Search bar (centered)
-        self.search_bar = self._create_search_bar()
-        layout.addWidget(self.search_bar)
-
-        # Spacer after search
+        # Spacer (search bar removed — each page has its own filters)
         layout.addSpacerItem(QSpacerItem(40, 20, QSizePolicy.Expanding, QSizePolicy.Minimum))
 
         # ID Badge - Reusable dropdown component

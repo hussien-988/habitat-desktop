@@ -259,8 +259,8 @@ class TRRCMSApiClient:
             if result:
                 try:
                     res_str = _json.dumps(result, indent=2, ensure_ascii=False, default=str)
-                    if len(res_str) > 1000:
-                        logger.info(f"[API RES] Body (truncated): {res_str[:1000]}...")
+                    if len(res_str) > 5000:
+                        logger.info(f"[API RES] Body (truncated): {res_str[:5000]}...")
                     else:
                         logger.info(f"[API RES] Body: {res_str}")
                 except Exception:
@@ -2135,6 +2135,14 @@ class TRRCMSApiClient:
         )
         return result if isinstance(result, list) else []
 
+    def get_evidence_by_id(self, evidence_id: str) -> Dict[str, Any]:
+        """
+        Get evidence metadata by ID.
+
+        Endpoint: GET /api/v1/Surveys/evidence/{evidenceId}
+        """
+        return self._request("GET", f"/v1/Surveys/evidence/{evidence_id}")
+
     def delete_evidence(self, survey_id: str, evidence_id: str) -> bool:
         """
         Soft delete an evidence record.
@@ -2438,6 +2446,8 @@ class TRRCMSApiClient:
         to_date: Optional[str] = None,
         reference_code: Optional[str] = None,
         interviewee_name: Optional[str] = None,
+        sort_by: Optional[str] = None,
+        sort_direction: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         Get paginated list of office surveys.
@@ -2459,6 +2469,10 @@ class TRRCMSApiClient:
             params["referenceCode"] = reference_code
         if interviewee_name:
             params["intervieweeName"] = interviewee_name
+        if sort_by:
+            params["sortBy"] = sort_by
+        if sort_direction:
+            params["sortDirection"] = sort_direction
         return self._request("GET", "/v1/Surveys/office", params=params)
 
     def get_office_survey_detail(self, survey_id: str) -> Dict[str, Any]:
@@ -2781,6 +2795,8 @@ class TRRCMSApiClient:
         created_by_user_id: Optional[str] = None,
         survey_visit_id: Optional[str] = None,
         building_code: Optional[str] = None,
+        page: int = 1,
+        page_size: int = 30,
     ) -> List[Dict[str, Any]]:
         """
         Get claim summaries for list pages.
@@ -2791,13 +2807,18 @@ class TRRCMSApiClient:
             created_by_user_id: Filter by creator UUID
             survey_visit_id: Filter by survey visit UUID
             building_code: Filter by 17-digit building code
+            page: Page number (1-based)
+            page_size: Max results per page
 
         Returns:
             List of CreatedClaimSummaryDto
 
         Endpoint: GET /api/Claims/summaries
         """
-        params = {}
+        params = {
+            "page": page,
+            "pageSize": page_size,
+        }
         if claim_status is not None:
             params["caseStatus"] = claim_status
         if claim_source is not None:
@@ -2810,7 +2831,7 @@ class TRRCMSApiClient:
             params["buildingCode"] = building_code
 
         logger.info(f"Fetching claims summaries with filters: {params or 'none'}")
-        result = self._request("GET", "/Claims/summaries", params=params)
+        result = self._request("GET", "/v1/Claims/summaries", params=params)
 
         # Handle both array and paginated response
         if isinstance(result, list):
@@ -2819,6 +2840,11 @@ class TRRCMSApiClient:
             summaries = result.get("items", result.get("data", []))
         else:
             summaries = []
+
+        # Fallback: if backend ignores pagination, slice locally
+        if len(summaries) > page_size:
+            start = (page - 1) * page_size
+            summaries = summaries[start:start + page_size]
 
         logger.info(f"Fetched {len(summaries)} claim summaries")
         return summaries
@@ -2859,7 +2885,7 @@ class TRRCMSApiClient:
             params["HasConflicts"] = str(has_conflicts).lower()
 
         logger.info(f"Fetching claims with filters: {params or 'none'}")
-        result = self._request("GET", "/Claims", params=params)
+        result = self._request("GET", "/v1/Claims", params=params)
         if isinstance(result, list):
             claims = result
         elif isinstance(result, dict):
@@ -2885,7 +2911,7 @@ class TRRCMSApiClient:
             raise ValueError("claim_id is required")
 
         logger.info(f"Fetching claim details: {claim_id}")
-        result = self._request("GET", f"/Claims/{claim_id}")
+        result = self._request("GET", f"/v1/Claims/{claim_id}")
         logger.info(f"Fetched claim: {result.get('claimNumber', 'N/A')}")
         return result
 
@@ -2903,7 +2929,7 @@ class TRRCMSApiClient:
         """
         if not claim_id:
             raise ValueError("claim_id is required")
-        self._request("DELETE", f"/Claims/{claim_id}")
+        self._request("DELETE", f"/v1/Claims/{claim_id}")
         logger.info(f"Claim {claim_id} deleted")
         return True
 
@@ -2924,24 +2950,24 @@ class TRRCMSApiClient:
             raise ValueError("claim_id is required")
         payload = {"claimId": claim_id, **update_data}
         logger.info(f"Updating claim: {claim_id}")
-        return self._request("PUT", f"/Claims/{claim_id}", json_data=payload)
+        return self._request("PUT", f"/v1/Claims/{claim_id}", json_data=payload)
 
     def submit_claim(self, claim_id: str, user_id: str) -> Dict[str, Any]:
         """
         Submit claim for processing.
 
-        Endpoint: PUT /api/Claims/{id}/submit
+        Endpoint: PUT /api/v1/Claims/{id}/submit
         """
-        return self._request("PUT", f"/Claims/{claim_id}/submit",
+        return self._request("PUT", f"/v1/Claims/{claim_id}/submit",
                              json_data={"claimId": claim_id, "submittedByUserId": user_id})
 
     def verify_claim(self, claim_id: str, user_id: str, notes: str = "") -> Dict[str, Any]:
         """
         Verify claim.
 
-        Endpoint: PUT /api/Claims/{id}/verify
+        Endpoint: PUT /api/v1/Claims/{id}/verify
         """
-        return self._request("PUT", f"/Claims/{claim_id}/verify",
+        return self._request("PUT", f"/v1/Claims/{claim_id}/verify",
                              json_data={"claimId": claim_id, "verifiedByUserId": user_id,
                                         "verificationNotes": notes})
 
@@ -2950,12 +2976,12 @@ class TRRCMSApiClient:
         """
         Assign claim to case officer.
 
-        Endpoint: PUT /api/Claims/{id}/assign
+        Endpoint: PUT /api/v1/Claims/{id}/assign
         """
         payload = {"claimId": claim_id, "assignToUserId": user_id}
         if target_date:
             payload["targetCompletionDate"] = target_date
-        return self._request("PUT", f"/Claims/{claim_id}/assign", json_data=payload)
+        return self._request("PUT", f"/v1/Claims/{claim_id}/assign", json_data=payload)
 
     # ==================== Users ====================
 

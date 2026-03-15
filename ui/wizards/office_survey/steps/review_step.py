@@ -24,7 +24,6 @@ from ui.style_manager import StyleManager
 from ui.font_utils import FontManager, create_font
 from ui.components.icon import Icon
 from utils.logger import get_logger
-from app.config import Config
 from services.api_client import get_api_client
 from services.translation_manager import tr
 from services.error_mapper import map_exception
@@ -46,12 +45,11 @@ class ReviewStep(BaseStep):
     edit_requested = pyqtSignal(int)  # Emits step index to edit
 
     def __init__(self, context: SurveyContext, parent=None, read_only=False):
-        self._read_only = True  # Disabled for client build
+        self._read_only = False
         super().__init__(context, parent)
 
         # Initialize API service for finalizing survey
         self._api_service = get_api_client()
-        self._use_api = getattr(Config, 'DATA_PROVIDER', 'local_db') == 'http'
 
     def setup_ui(self):
         """Setup the step's UI with scrollable summary cards."""
@@ -113,9 +111,6 @@ class ReviewStep(BaseStep):
 
         self.persons_card = self._create_persons_card()
         scroll_layout.addWidget(self.persons_card)
-
-        self.claim_card = self._create_claim_card()
-        scroll_layout.addWidget(self.claim_card)
 
         scroll_layout.addStretch()
         scroll.setWidget(scroll_content)
@@ -449,21 +444,21 @@ class ReviewStep(BaseStep):
     def _create_unit_card(self) -> QFrame:
         """Create unit information summary card (Step 2) - matching step 2 header."""
         card, content_layout = self._create_card_base("move", tr("wizard.review.unit_card_title"), tr("wizard.review.unit_card_subtitle"),
-                                                       edit_callback=None if self._read_only else lambda: self._request_edit(1))
+                                                       edit_callback=None if self._read_only else lambda: self._request_edit(2))
         self.unit_content = content_layout
         return card
 
     def _create_household_card(self) -> QFrame:
         """Create household information summary card (Step 3)."""
         card, content_layout = self._create_card_base("user-group", tr("wizard.review.household_card_title"), tr("wizard.review.household_card_subtitle"),
-                                                       edit_callback=None if self._read_only else lambda: self._request_edit(2))
+                                                       edit_callback=None if self._read_only else lambda: self._request_edit(3))
         self.household_content = content_layout
         return card
 
     def _create_persons_card(self) -> QFrame:
         """Create persons list summary card (Step 4)."""
         card, content_layout = self._create_card_base("user-account", tr("wizard.review.persons_card_title"), tr("wizard.review.persons_card_subtitle"),
-                                                       edit_callback=None if self._read_only else lambda: self._request_edit(3))
+                                                       edit_callback=None if self._read_only else lambda: self._request_edit(4))
         self.persons_content = content_layout
         return card
 
@@ -513,7 +508,6 @@ class ReviewStep(BaseStep):
         self._populate_unit_card()
         self._populate_household_card()
         self._populate_persons_card()
-        self._populate_claim_card()
 
     def _populate_case_status_banner(self):
         """Update case status banner based on claim/owner/evidence state.
@@ -1123,7 +1117,7 @@ class ReviewStep(BaseStep):
             updated_data['person_id'] = person_id
 
             # Update person via API
-            if self._use_api and person_id:
+            if person_id:
                 try:
                     self._set_auth_token()
                     if survey_id and household_id:
@@ -1359,9 +1353,6 @@ class ReviewStep(BaseStep):
         if not survey_id:
             logger.error("No survey_id found in context. Cannot finalize.")
             ErrorHandler.show_error(self, tr("wizard.review.no_survey_id"), tr("common.error"))
-            return
-
-        if not self._use_api:
             return
 
         # Save intervieweeName before finalizing (draft endpoint only works while Draft)

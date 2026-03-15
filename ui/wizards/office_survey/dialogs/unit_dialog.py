@@ -63,7 +63,6 @@ class UnitDialog(QDialog):
         if self._api_service and auth_token:
             self._api_service.set_access_token(auth_token)
             self.unit_controller.set_auth_token(auth_token)
-        self._use_api = getattr(Config, 'DATA_PROVIDER', 'local_db') == 'http'
 
         # إزالة الشريط العلوي (title bar)
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.Dialog)

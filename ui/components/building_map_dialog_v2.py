@@ -155,20 +155,22 @@ class BuildingMapDialog(BaseMapDialog):
                 buildings = []
                 try:
                     from services.map_service_api import MapServiceAPI
+                    from ui.constants.map_constants import MapConstants
 
                     map_service = MapServiceAPI()
                     if self._auth_token:
                         map_service.set_auth_token(self._auth_token)
 
                     buildings = map_service.get_buildings_in_bbox(
-                        north_east_lat=36.5,
-                        north_east_lng=37.5,
-                        south_west_lat=36.0,
-                        south_west_lng=36.8,
+                        north_east_lat=MapConstants.MAX_LAT,
+                        north_east_lng=MapConstants.MAX_LON,
+                        south_west_lat=MapConstants.MIN_LAT,
+                        south_west_lng=MapConstants.MIN_LON,
                         page_size=200
                     )
                 except Exception as e:
                     logger.warning(f"API map loading failed: {e}")
+                    QTimer.singleShot(1000, lambda: self._show_load_warning())
 
                 # CRITICAL: Cache buildings for selection lookup!
                 self._buildings_cache = buildings
@@ -242,26 +244,10 @@ class BuildingMapDialog(BaseMapDialog):
                         # Update buildings_geojson with merged data
                         buildings_geojson = json.dumps(geojson_data)
 
-            # DEBUG: Check if buildings were loaded
-            import json
-            geojson_data = json.loads(buildings_geojson) if isinstance(buildings_geojson, str) else buildings_geojson
-            num_features = len(geojson_data.get('features', []))
-            logger.info(f"Loaded {num_features} buildings into GeoJSON")
-
-            if num_features == 0:
-                logger.error("NO BUILDINGS LOADED! GeoJSON is empty!")
-            else:
-                # Check if buildings have coordinates
-                features_with_coords = sum(
-                    1 for f in geojson_data['features']
-                    if f.get('geometry') and f['geometry'].get('coordinates')
-                )
-                logger.info(f"Buildings with coordinates: {features_with_coords}/{num_features}")
-
             # Determine center and zoom
-            #
-            center_lat = 36.2021
-            center_lon = 37.1343
+            from ui.constants.map_constants import MapConstants
+            center_lat = MapConstants.DEFAULT_CENTER_LAT
+            center_lon = MapConstants.DEFAULT_CENTER_LON
             zoom = 15  #
             focus_building_id = None
 
@@ -318,6 +304,23 @@ class BuildingMapDialog(BaseMapDialog):
             # Load neighborhoods for map overlay (DRY - shared helper from BaseMapDialog)
             neighborhoods_geojson = self.load_neighborhoods_geojson(auth_token=self._auth_token)
 
+            # Load neighbourhood boundary polygons from local GeoJSON
+            boundaries_geojson = None
+            try:
+                from services import boundary_service
+                if boundary_service.is_available('neighbourhoods'):
+                    raw = boundary_service.get('neighbourhoods')
+                    if raw:
+                        boundary_data = json.loads(raw)
+                        boundary_data['features'] = [
+                            f for f in boundary_data['features']
+                            if f.get('properties', {}).get('ADM1_PCODE') == 'SY02'
+                        ]
+                        boundaries_geojson = json.dumps(boundary_data, ensure_ascii=False)
+                        logger.info(f"Loaded {len(boundary_data['features'])} neighbourhood boundaries for Aleppo")
+            except Exception as e:
+                logger.warning(f"Failed to load neighbourhood boundaries: {e}")
+
             # Load landmarks and streets for map overlay
             landmarks_json = None
             streets_json = None
@@ -365,7 +368,9 @@ class BuildingMapDialog(BaseMapDialog):
                 neighborhoods_geojson=neighborhoods_geojson,
                 skip_fit_bounds=self._is_view_only,
                 landmarks_json=landmarks_json,
-                streets_json=streets_json
+                streets_json=streets_json,
+                boundaries_geojson=boundaries_geojson,
+                boundary_level='neighbourhoods',
             )
 
             # Load into web view
@@ -643,6 +648,14 @@ class BuildingMapDialog(BaseMapDialog):
             f"قد يكون المبنى محذوفاً أو غير مسجّل.",
             "لم يتم العثور على المبنى"
         )
+
+    def _show_load_warning(self):
+        """Show warning toast when initial building load fails."""
+        try:
+            from ui.components.toast import Toast
+            Toast.show_toast(self, "تعذر تحميل المباني — حاول التحريك للتحميل", Toast.WARNING)
+        except Exception:
+            pass
 
     def _load_neighborhoods_cache(self):
         """Load all neighborhoods from API (lazy, called once on first search)."""

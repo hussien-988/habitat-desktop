@@ -1,50 +1,48 @@
 # -*- coding: utf-8 -*-
 """
-Cases Page — grid of Draft and Open cases with colored top-border cards.
-
-Shows only:
-  drafts — Draft surveys  (GET /api/v1/Surveys/office?status=Draft)
-  open   — Open claims    (GET /api/Claims?CaseStatus=1)
-
-Completed claims have their own dedicated navbar tab.
+Surveys Page — displays all surveys (Draft & Finalized) using Surveys/office API.
+Features Underline Tab Bar for switching between draft/finalized surveys,
+plus filter bar with reference code, person name, and building number search.
 """
 
 import logging
-from typing import List, Dict, Optional
+from typing import List, Dict
 
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel,
     QScrollArea, QSpacerItem, QSizePolicy, QFrame, QGridLayout,
-    QPushButton, QGraphicsDropShadowEffect
+    QLineEdit, QComboBox,
 )
-from PyQt5.QtCore import Qt, pyqtSignal
-from PyQt5.QtGui import QFont, QColor
+from PyQt5.QtCore import Qt, pyqtSignal, QTimer
+from PyQt5.QtGui import QFont
 
 from ..design_system import Colors, PageDimensions
 from ..components.empty_state import EmptyState
 from ..components.claim_list_card import ClaimListCard
 from ..components.primary_button import PrimaryButton
+from ..components.underline_tab_bar import UnderlineTabBar
 from ..font_utils import create_font, FontManager
 from ..style_manager import StyleManager
 from services.translation_manager import tr
+from services.display_mappings import get_survey_type_display
 
 logger = logging.getLogger(__name__)
 
 _STATUS_CONFIG = {
-    "draft": {"color": "#94A3B8", "badge_key": "cases.badge.draft", "icon": "yelow"},
-    "open":  {"color": "#F97316", "badge_key": "cases.badge.open",  "icon": "blue"},
+    "draft":     {"icon": "yelow"},
+    "finalized": {"icon": "blue"},
 }
 
 
 class CasesPage(QWidget):
     """
-    Cases page: card grid with colored top-border per status.
+    Surveys page with Underline Tab Bar (Draft / Finalized).
 
     Signals:
-        claim_selected(str): emitted when a survey/claim card is clicked
+        claim_selected(str): emitted when a finalized survey card is clicked
         add_claim_clicked():  emitted when the add-case button is clicked
         survey_finalized(str): emitted after a draft survey is finalized
-        resume_survey(str):    emitted when resume button clicked on draft card
+        resume_survey(str):    emitted when a draft survey card is clicked
     """
 
     claim_selected = pyqtSignal(str)
@@ -57,6 +55,10 @@ class CasesPage(QWidget):
         self.db = db
         self.i18n = i18n
         self._all_data: List[Dict] = []
+        self._active_tab = "draft"  # "draft" or "finalized"
+        self._buildings_cache: Dict[str, object] = {}
+        self._last_refresh_ms = 0
+        self._search_timer = None
         self._setup_ui()
 
     # -------------------------------------------------------------------------
@@ -71,12 +73,30 @@ class CasesPage(QWidget):
             PageDimensions.CONTENT_PADDING_H,
             PageDimensions.CONTENT_PADDING_V_BOTTOM
         )
-        main_layout.setSpacing(PageDimensions.HEADER_GAP)
+        main_layout.setSpacing(16)
         self.setStyleSheet(StyleManager.page_background())
 
+        # Header
         self.header = self._create_header()
         main_layout.addWidget(self.header)
 
+        # Filter bar
+        filter_bar = self._create_filter_bar()
+        main_layout.addWidget(filter_bar)
+
+        # Underline Tab Bar
+        self._tab_bar = UnderlineTabBar(["مسودة", "منتهية"], self)
+        self._tab_bar.tab_changed.connect(self._on_tab_changed)
+        main_layout.addWidget(self._tab_bar)
+
+        # Separator line
+        separator = QFrame()
+        separator.setFrameShape(QFrame.HLine)
+        separator.setFixedHeight(1)
+        separator.setStyleSheet("background-color: #E8E8E8; border: none;")
+        main_layout.addWidget(separator)
+
+        # Content area (scrollable)
         self.content_area = QScrollArea()
         self.content_area.setWidgetResizable(True)
         self.content_area.setFrameShape(QFrame.NoFrame)
@@ -91,7 +111,7 @@ class CasesPage(QWidget):
 
         self.content_widget = QWidget()
         self.content_layout = QGridLayout(self.content_widget)
-        self.content_layout.setContentsMargins(0, 0, 0, 0)
+        self.content_layout.setContentsMargins(0, 8, 0, 0)
         self.content_layout.setVerticalSpacing(PageDimensions.CARD_GAP_VERTICAL)
         self.content_layout.setHorizontalSpacing(PageDimensions.CARD_GAP_HORIZONTAL)
         self.content_area.setWidget(self.content_widget)
@@ -109,7 +129,9 @@ class CasesPage(QWidget):
         layout.setSpacing(16)
 
         self.title_label = QLabel(tr("cases.page.title"))
-        self.title_label.setFont(create_font(size=FontManager.SIZE_TITLE, weight=QFont.Bold, letter_spacing=0))
+        self.title_label.setFont(create_font(
+            size=FontManager.SIZE_TITLE, weight=QFont.Bold, letter_spacing=0
+        ))
         self.title_label.setStyleSheet(f"color: {Colors.PAGE_TITLE}; border: none;")
         layout.addWidget(self.title_label)
 
@@ -121,219 +143,238 @@ class CasesPage(QWidget):
 
         return header
 
+    def _create_filter_bar(self) -> QWidget:
+        form_style = StyleManager.form_input()
+
+        bar = QWidget()
+        bar.setStyleSheet(f"background-color: {Colors.BACKGROUND}; border: none;")
+
+        layout = QHBoxLayout(bar)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(10)
+
+        # 1. Search by reference code (API: referenceCode)
+        self._ref_search = QLineEdit()
+        self._ref_search.setLayoutDirection(Qt.RightToLeft)
+        self._ref_search.setPlaceholderText("بحث بالرمز المرجعي...")
+        self._ref_search.setFixedWidth(220)
+        self._ref_search.setStyleSheet(form_style)
+        self._ref_search.textChanged.connect(self._on_search_changed)
+        layout.addWidget(self._ref_search)
+
+        # 2. Search by person name (API: intervieweeName)
+        self._name_filter = QLineEdit()
+        self._name_filter.setLayoutDirection(Qt.RightToLeft)
+        self._name_filter.setPlaceholderText("بحث باسم الشخص...")
+        self._name_filter.setFixedWidth(200)
+        self._name_filter.setStyleSheet(form_style)
+        self._name_filter.textChanged.connect(self._on_search_changed)
+        layout.addWidget(self._name_filter)
+
+        # 3. Search by building number (API: buildingId)
+        self._building_filter = QLineEdit()
+        self._building_filter.setLayoutDirection(Qt.RightToLeft)
+        self._building_filter.setPlaceholderText("رقم المبنى...")
+        self._building_filter.setFixedWidth(160)
+        self._building_filter.setStyleSheet(form_style)
+        self._building_filter.textChanged.connect(self._on_search_changed)
+        layout.addWidget(self._building_filter)
+
+        # 4. Survey type filter (local: 1=Field, 2=Office)
+        self._type_filter = QComboBox()
+        self._type_filter.setLayoutDirection(Qt.RightToLeft)
+        self._type_filter.setFixedWidth(170)
+        self._type_filter.setStyleSheet(form_style)
+        self._type_filter.addItem("الكل", None)
+        self._type_filter.addItem(get_survey_type_display(1), 1)
+        self._type_filter.addItem(get_survey_type_display(2), 2)
+        self._type_filter.currentIndexChanged.connect(self._on_type_changed)
+        layout.addWidget(self._type_filter)
+
+        layout.addStretch()
+        return bar
+
+    # -------------------------------------------------------------------------
+    # Filter handling
+    # -------------------------------------------------------------------------
+
+    def _on_search_changed(self):
+        """Debounced search — sends to API after 500ms pause."""
+        if self._search_timer and self._search_timer.isActive():
+            self._search_timer.stop()
+        self._search_timer = QTimer()
+        self._search_timer.setSingleShot(True)
+        self._search_timer.timeout.connect(self._load_surveys)
+        self._search_timer.start(500)
+
+    def _on_type_changed(self):
+        """Survey type dropdown changed — re-filter locally."""
+        self._apply_type_filter()
+
+    # -------------------------------------------------------------------------
+    # Tab handling
+    # -------------------------------------------------------------------------
+
+    def _on_tab_changed(self, index: int):
+        self._active_tab = "draft" if index == 0 else "finalized"
+        self._load_surveys()
+
     # -------------------------------------------------------------------------
     # Data loading
     # -------------------------------------------------------------------------
 
     def showEvent(self, event):
         super().showEvent(event)
-        self.refresh()
+        import time
+        now = int(time.time() * 1000)
+        if now - self._last_refresh_ms > 500:
+            self.refresh()
 
     def refresh(self, data=None):
+        """Refresh surveys from API."""
+        import time
+        self._last_refresh_ms = int(time.time() * 1000)
+        self._load_surveys()
+
+    def _load_surveys(self):
+        """Load surveys from API based on active tab and filters."""
         self._all_data = []
-        self._all_data.extend(self._fetch_surveys(status="Draft"))
+        status = "Draft" if self._active_tab == "draft" else "Finalized"
+        ref_code = self._ref_search.text().strip() or None
+        name = self._name_filter.text().strip() or None
+        building = self._building_filter.text().strip() or None
 
-        if self._all_data:
-            self._show_cards(self._all_data)
-        else:
-            self._show_empty_state()
-
-    def _fetch_surveys(self, status: str) -> List[Dict]:
-        surveys = []
         try:
             from controllers.survey_controller import SurveyController
             ctrl = SurveyController(self.db)
-            result = ctrl.load_office_surveys(status=status)
+            result = ctrl.load_office_surveys(
+                status=status,
+                page=1,
+                page_size=30,
+                sort_by="SurveyDate",
+                sort_direction="desc",
+                reference_code=ref_code,
+                interviewee_name=name,
+                building_id=building,
+            )
             if result.success and result.data:
-                surveys = result.data
+                building_ids = {s.get("buildingId", "") for s in result.data if s.get("buildingId")}
+                self._enrich_buildings_cache(building_ids)
+
+                for s in result.data:
+                    self._all_data.append(self._map_survey(s))
+
+            logger.info(f"Loaded {len(self._all_data)} surveys (status={status})")
         except Exception as e:
-            logger.warning(f"Failed to fetch surveys (status={status}): {e}")
-            return []
+            logger.warning(f"Error loading surveys (status={status}): {e}")
 
-        if not surveys:
-            return []
+        self._apply_type_filter()
 
-        building_ids = {s.get("buildingId", "") for s in surveys if s.get("buildingId")}
-        buildings_cache = self._fetch_buildings_by_ids(building_ids)
+    def _apply_type_filter(self):
+        """Filter displayed cards by survey type (local filter)."""
+        type_val = self._type_filter.currentData()
+        if type_val is not None:
+            filtered = [c for c in self._all_data if c.get("survey_type") == type_val]
+        else:
+            filtered = self._all_data
 
-        items = []
-        for s in surveys:
-            building_obj = buildings_cache.get(s.get("buildingId"))
-            unit_num = s.get("unitIdentifier", "")
-            unit_obj = None
-            if unit_num:
-                class _NS:
-                    def __init__(self, **kw): self.__dict__.update(kw)
-                unit_obj = _NS(unit_number=unit_num)
-            items.append({
-                "claim_id":      s.get("referenceCode") or s.get("id", "N/A"),
-                "claim_uuid":    s.get("id", ""),
-                "claimant_name": s.get("intervieweeName") or "غير محدد",
-                "date":          (s.get("surveyDate") or "")[:10],
-                "status":        "draft",
-                "building":      building_obj,
-                "unit":          unit_obj,
-                "unit_id":       s.get("propertyUnitId", ""),
-                "unit_number":   unit_num,
-                "building_id":   s.get("buildingNumber") or (building_obj.building_id if building_obj else ""),
-            })
+        if filtered:
+            self._show_cards(filtered)
+        else:
+            self._show_empty_state()
 
-        # Enrich missing names from survey detail
-        self._enrich_missing_names(items)
-
-        return items
-
-    def _enrich_missing_names(self, items: List[Dict]):
-        """For items with no intervieweeName, fetch name from survey detail/persons."""
-        missing = [item for item in items if item.get("claimant_name") == "غير محدد"]
-        if not missing:
-            return
-        try:
-            from services.api_client import get_api_client
-            api = get_api_client()
-        except Exception:
-            return
-        for item in missing:
-            try:
-                detail = api.get_office_survey_detail(item["claim_uuid"])
-                if detail.get("intervieweeName"):
-                    item["claimant_name"] = detail["intervieweeName"]
-                    continue
-                for rel in (detail.get("relations") or []):
-                    pid = rel.get("personId")
-                    if pid:
-                        person = api._request("GET", f"/v1/Persons/{pid}")
-                        parts = [
-                            person.get("firstNameArabic", ""),
-                            person.get("fatherNameArabic", ""),
-                            person.get("familyNameArabic", ""),
-                        ]
-                        name = " ".join(p for p in parts if p)
-                        if name:
-                            item["claimant_name"] = name
-                            break
-            except Exception:
-                pass
-
-    def _fetch_claims(self, case_status: int) -> List[Dict]:
-        try:
-            from services.api_client import get_api_client
-            api = get_api_client()
-            result = api.get_claims(status=case_status)
-            raw = result if isinstance(result, list) else result.get("items", [])
-            items = []
-            for c in raw:
-                items.append({
-                    "claim_id":      c.get("claimNumber", ""),
-                    "claim_uuid":    c.get("id", ""),
-                    "claimant_name": c.get("primaryClaimantName") or "غير محدد",
-                    "date":          (c.get("createdAtUtc") or "")[:10],
-                    "status":        "open",
-                    "unit_number":   c.get("propertyUnitCode", ""),
-                })
-            return items
-        except Exception as e:
-            logger.warning(f"Failed to fetch claims (caseStatus={case_status}): {e}")
-            return []
-
-    def _fetch_buildings_by_ids(self, building_ids) -> dict:
-        cache = {}
+    def _enrich_buildings_cache(self, building_ids):
+        """Fetch building details for IDs not yet cached."""
         if not building_ids:
-            return cache
+            return
         try:
             from services.api_client import get_api_client
             from controllers.building_controller import BuildingController
             api = get_api_client()
             bc = BuildingController(self.db)
             for bid in building_ids:
-                if not bid:
+                if not bid or bid in self._buildings_cache:
                     continue
                 try:
                     dto = api.get_building_by_id(bid)
-                    cache[bid] = bc._api_dto_to_building(dto)
+                    self._buildings_cache[bid] = bc._api_dto_to_building(dto)
                 except Exception:
                     pass
         except Exception:
             pass
-        missing = [b for b in building_ids if b and b not in cache]
-        if missing:
-            try:
-                from repositories.building_repository import BuildingRepository
-                repo = BuildingRepository(self.db)
-                for bid in missing:
-                    building = repo.get_by_uuid(bid) or repo.get_by_id(bid)
-                    if building:
-                        cache[bid] = building
-            except Exception:
-                pass
-        return cache
+
+    def _map_survey(self, s: Dict) -> Dict:
+        """Map Surveys API summary to card data format."""
+        building_id = s.get("buildingId", "")
+        building_obj = self._buildings_cache.get(building_id)
+
+        unit_num = s.get("unitIdentifier", "")
+        unit_obj = None
+        if unit_num:
+            class _NS:
+                def __init__(self, **kw): self.__dict__.update(kw)
+            unit_obj = _NS(unit_number=unit_num)
+
+        return {
+            "claim_id": s.get("referenceCode") or s.get("id", "N/A"),
+            "claim_uuid": s.get("id", ""),
+            "claimant_name": s.get("intervieweeName") or "غير محدد",
+            "date": (s.get("surveyDate") or "")[:10],
+            "status": self._active_tab,
+            "building_id": s.get("buildingNumber") or (building_obj.building_id if building_obj else ""),
+            "unit_number": unit_num,
+            "source_label": get_survey_type_display(s.get("surveyType", 0)),
+            "survey_type": s.get("surveyType"),
+            "building": building_obj,
+            "unit": unit_obj,
+            "unit_id": s.get("propertyUnitId", ""),
+        }
 
     # -------------------------------------------------------------------------
     # Display
     # -------------------------------------------------------------------------
 
-    def _show_empty_state(self):
-        self._clear_content()
-        empty_state = EmptyState(
-            icon_text="+",
-            title="لا توجد بيانات بعد",
-            description="لا يوجد سجلات لهذه الحالة"
-        )
-        self.content_layout.addItem(QSpacerItem(20, 40, QSizePolicy.Minimum, QSizePolicy.Expanding), 0, 0, 1, 2)
-        self.content_layout.addWidget(empty_state, 1, 0, 1, 2, Qt.AlignCenter)
-        self.content_layout.addItem(QSpacerItem(20, 40, QSizePolicy.Minimum, QSizePolicy.Expanding), 2, 0, 1, 2)
-
-    def _make_card_wrapper(self, item: Dict, color: str, badge_text: str, icon: str) -> QFrame:
-        outer = QFrame()
-        outer.setStyleSheet("""
-            QFrame {
-                background: #FFFFFF;
-                border: 1px solid #E2E8F0;
-                border-radius: 10px;
-            }
-        """)
-
-        shadow = QGraphicsDropShadowEffect()
-        shadow.setBlurRadius(8)
-        shadow.setXOffset(0)
-        shadow.setYOffset(4)
-        sc = QColor("#919EAB")
-        sc.setAlpha(41)
-        shadow.setColor(sc)
-        outer.setGraphicsEffect(shadow)
-
-        layout = QVBoxLayout(outer)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(0)
-
-        card = ClaimListCard(item, icon_name=icon)
-        card.setGraphicsEffect(None)
-        card.setStyleSheet("QFrame#ClaimCard { background: transparent; border: none; }")
-        card.clicked.connect(self._on_card_clicked)
-        layout.addWidget(card)
-
-        return outer
-
     def _show_cards(self, data: List[Dict]):
         self._clear_content()
-        self.content_layout.setColumnStretch(0, 1)
-        self.content_layout.setColumnStretch(1, 1)
+
+        cfg = _STATUS_CONFIG.get(self._active_tab, _STATUS_CONFIG["draft"])
+        icon = cfg["icon"]
 
         for index, item in enumerate(data):
             row = index // PageDimensions.CARD_COLUMNS
             col = index % PageDimensions.CARD_COLUMNS
-            status = item.get("status", "draft")
-            cfg = _STATUS_CONFIG.get(status, _STATUS_CONFIG["draft"])
-            badge_text = tr(cfg["badge_key"])
 
-            wrapper = self._make_card_wrapper(item, cfg["color"], badge_text, cfg["icon"])
-            self.content_layout.addWidget(wrapper, row, col)
+            card = ClaimListCard(item, icon_name=icon)
+            card.clicked.connect(self._on_card_clicked)
+            self.content_layout.addWidget(card, row, col)
 
         final_row = (len(data) + PageDimensions.CARD_COLUMNS - 1) // PageDimensions.CARD_COLUMNS
         self.content_layout.addItem(
             QSpacerItem(20, 40, QSizePolicy.Minimum, QSizePolicy.Expanding),
             final_row, 0, 1, PageDimensions.CARD_COLUMNS
         )
+
+    def _show_empty_state(self):
+        self._clear_content()
+
+        msg = "لا توجد مسودات حالياً" if self._active_tab == "draft" else "لا توجد مسوحات منتهية بعد"
+        empty_state = EmptyState(
+            icon_text="+",
+            title=msg,
+            description="ابدأ بإضافة المسوحات للظهور هنا"
+        )
+
+        self.content_layout.addItem(
+            QSpacerItem(20, 40, QSizePolicy.Minimum, QSizePolicy.Expanding), 0, 0, 1, 2
+        )
+        self.content_layout.addWidget(empty_state, 1, 0, 1, 2, Qt.AlignCenter)
+        self.content_layout.addItem(
+            QSpacerItem(20, 40, QSizePolicy.Minimum, QSizePolicy.Expanding), 2, 0, 1, 2
+        )
+
+    def _on_card_clicked(self, claim_id: str):
+        """Navigate to CaseDetailsPage for both draft and finalized surveys."""
+        self.claim_selected.emit(claim_id)
 
     def _clear_content(self):
         while self.content_layout.count():
@@ -342,111 +383,14 @@ class CasesPage(QWidget):
                 item.widget().deleteLater()
 
     # -------------------------------------------------------------------------
-    # Event handlers
-    # -------------------------------------------------------------------------
-
-    def _on_card_clicked(self, claim_id: str):
-        self.claim_selected.emit(claim_id)
-
-    # -------------------------------------------------------------------------
-    # Search / Filter (called from main window toolbar)
+    # Public interface (backward compatibility)
     # -------------------------------------------------------------------------
 
     def search_claims(self, query: str, mode: str = "name"):
-        if not query.strip():
-            self.title_label.setText(tr("cases.page.title"))
-            self.refresh()
-            return
-        try:
-            from controllers.survey_controller import SurveyController
-            ctrl = SurveyController(self.db)
-            result = ctrl.load_office_surveys(status="Draft")
-            all_surveys = result.data if (result.success and result.data) else []
-            q = query.strip().lower()
-            filtered = []
-            for s in all_surveys:
-                if mode == "name":
-                    if q in (s.get("intervieweeName") or "").lower():
-                        filtered.append(s)
-                elif mode == "claim_id":
-                    if q in (s.get("referenceCode") or "").lower() or q in (s.get("id") or "").lower():
-                        filtered.append(s)
-                elif mode == "building":
-                    if q in (s.get("buildingNumber") or "").lower() or q in (s.get("buildingId") or "").lower():
-                        filtered.append(s)
-            self._display_search_results(filtered)
-        except Exception as e:
-            logger.warning(f"Search failed: {e}")
+        pass
 
     def apply_filters(self, filters: dict):
-        has_filter = any(v for v in filters.values() if v)
-        if not has_filter:
-            self.title_label.setText(tr("cases.page.title"))
-            self.refresh()
-            return
-        try:
-            from controllers.survey_controller import SurveyController
-            ctrl = SurveyController(self.db)
-            result = ctrl.load_office_surveys(status="Draft")
-            if not result.success or not result.data:
-                self._display_search_results([])
-                return
-            surveys = result.data
-            building_code = filters.get("building_code", "").strip()
-            gov_code = filters.get("governorate_code", "").strip()
-            filter_date = filters.get("date", "").strip()
-            filtered = []
-            for s in surveys:
-                if building_code:
-                    bid = s.get("buildingNumber", "") or ""
-                    buid = s.get("buildingId", "") or ""
-                    if building_code not in bid and building_code not in buid:
-                        continue
-                if gov_code:
-                    bid = s.get("buildingNumber", "") or ""
-                    if not bid.startswith(gov_code):
-                        continue
-                if filter_date:
-                    if (s.get("surveyDate") or "")[:10] != filter_date:
-                        continue
-                filtered.append(s)
-            self._display_search_results(filtered)
-        except Exception as e:
-            logger.warning(f"Filter failed: {e}")
-
-    def _display_search_results(self, surveys):
-        building_ids = {s.get("buildingId", "") for s in surveys if s.get("buildingId")}
-        buildings_cache = self._fetch_buildings_by_ids(building_ids)
-        items = []
-        for s in surveys:
-            building_obj = buildings_cache.get(s.get("buildingId"))
-            unit_num = s.get("unitIdentifier", "")
-            unit_obj = None
-            if unit_num:
-                class _NS:
-                    def __init__(self, **kw): self.__dict__.update(kw)
-                unit_obj = _NS(unit_number=unit_num)
-            items.append({
-                "claim_id":      s.get("referenceCode") or s.get("id", "N/A"),
-                "claim_uuid":    s.get("id", ""),
-                "claimant_name": s.get("intervieweeName") or "غير محدد",
-                "date":          (s.get("surveyDate") or "")[:10],
-                "status":        "draft",
-                "building":      building_obj,
-                "unit":          unit_obj,
-                "unit_id":       s.get("propertyUnitId", ""),
-                "unit_number":   unit_num,
-                "building_id":   s.get("buildingNumber") or (building_obj.building_id if building_obj else ""),
-            })
-        self.title_label.setText(f"نتائج البحث ({len(items)})")
-        if items:
-            self._show_cards(items)
-        else:
-            self._show_empty_state()
-
-    # -------------------------------------------------------------------------
-    # Language
-    # -------------------------------------------------------------------------
+        pass
 
     def update_language(self, is_arabic=True):
         self.title_label.setText(tr("cases.page.title"))

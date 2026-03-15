@@ -44,13 +44,13 @@ class PrimaryButton(QPushButton):
         self._setup_ui()
 
     def _setup_ui(self):
-        """Setup button UI with Figma specifications (exact: 199×48px)."""
+        """Setup button UI with Figma specifications."""
 
         # Set unique ObjectName for CSS specificity
         self.setObjectName("PrimaryButton")
 
-        # Figma: Exact dimensions (199×48px - no adjustment)
-        self.setFixedSize(ButtonDimensions.PRIMARY_WIDTH, ButtonDimensions.PRIMARY_HEIGHT)
+        # Fixed height, auto width based on content
+        self.setFixedHeight(ButtonDimensions.PRIMARY_HEIGHT)
 
         # Cursor
         self.setCursor(Qt.PointingHandCursor)
@@ -59,11 +59,9 @@ class PrimaryButton(QPushButton):
         if self.icon_name:
             self._load_icon()
 
-        # Use centralized font utility (DRY + eliminates stylesheet conflicts)
-        # Figma: 16px SemiBold → PyQt5: 10pt weight 600
         btn_font = create_font(
-            size=FontManager.SIZE_BODY,  # 10pt
-            weight=FontManager.WEIGHT_SEMIBOLD,  # 600
+            size=11,
+            weight=FontManager.WEIGHT_SEMIBOLD,
             letter_spacing=0,
         )
         self.setFont(btn_font)

@@ -54,7 +54,6 @@ class HouseholdStep(BaseStep):
 
         # Initialize API client for creating households
         self._api_client = get_api_client()
-        self._use_api = getattr(Config, 'DATA_PROVIDER', 'local_db') == 'http'
 
     def setup_ui(self):
         """
@@ -793,37 +792,36 @@ class HouseholdStep(BaseStep):
         survey_id = self.context.get_data("survey_id")
         saved = False
 
-        if self._use_api:
-            self._set_auth_token()
+        self._set_auth_token()
 
-            if existing_household_id:
-                stored = self.context.households[0] if self.context.households else {}
-                if self._household_data_changed(household, stored):
-                    try:
-                        self._api_client.update_household(existing_household_id, household, survey_id=survey_id)
-                        logger.info(f"Household {existing_household_id} updated via API")
-                        saved = True
-                    except Exception as e:
-                        logger.error(f"Failed to update household via API: {e}")
-                        result.add_error("فشل تحديث بيانات الأسرة. يرجى المحاولة مجدداً.")
-                        return result
-                else:
-                    logger.info(f"Household unchanged ({existing_household_id}), skipping")
-                    saved = True
-                household["api_id"] = existing_household_id
-            else:
-                logger.info(f"Creating household via API: property_unit_id={property_unit_id}, survey_id={survey_id}, size={household['size']}")
+        if existing_household_id:
+            stored = self.context.households[0] if self.context.households else {}
+            if self._household_data_changed(household, stored):
                 try:
-                    api_response = self._api_client.create_household(household, survey_id=survey_id)
-                    logger.info("Household created successfully via API")
-                    household_id = api_response.get("id") or api_response.get("householdId", "")
-                    household["api_id"] = household_id
-                    self.context.update_data("household_id", household_id)
+                    self._api_client.update_household(existing_household_id, household, survey_id=survey_id)
+                    logger.info(f"Household {existing_household_id} updated via API")
                     saved = True
                 except Exception as e:
-                    logger.error(f"Failed to create household via API: {e}")
-                    result.add_error("فشل حفظ بيانات الأسرة. يرجى المحاولة مجدداً.")
+                    logger.error(f"Failed to update household via API: {e}")
+                    result.add_error("فشل تحديث بيانات الأسرة. يرجى المحاولة مجدداً.")
                     return result
+            else:
+                logger.info(f"Household unchanged ({existing_household_id}), skipping")
+                saved = True
+            household["api_id"] = existing_household_id
+        else:
+            logger.info(f"Creating household via API: property_unit_id={property_unit_id}, survey_id={survey_id}, size={household['size']}")
+            try:
+                api_response = self._api_client.create_household(household, survey_id=survey_id)
+                logger.info("Household created successfully via API")
+                household_id = api_response.get("id") or api_response.get("householdId", "")
+                household["api_id"] = household_id
+                self.context.update_data("household_id", household_id)
+                saved = True
+            except Exception as e:
+                logger.error(f"Failed to create household via API: {e}")
+                result.add_error("فشل حفظ بيانات الأسرة. يرجى المحاولة مجدداً.")
+                return result
 
         # Update or add household data
         if self.context.households:
