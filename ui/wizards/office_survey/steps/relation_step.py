@@ -23,7 +23,6 @@ from ui.components.rtl_combo import RtlCombo
 from ui.style_manager import StyleManager
 from ui.wizards.framework import BaseStep, StepValidationResult
 from ui.wizards.office_survey.survey_context import SurveyContext
-from app.config import Config
 from services.api_client import get_api_client
 from utils.logger import get_logger
 from ui.components.toast import Toast
@@ -48,7 +47,6 @@ class RelationStep(BaseStep):
 
         # Initialize API service for finalizing survey
         self._api_service = get_api_client()
-        self._use_api = getattr(Config, 'DATA_PROVIDER', 'local_db') == 'http'
 
     def setup_ui(self):
         """Setup the step's UI - matching person_step styling."""
@@ -521,8 +519,7 @@ class RelationStep(BaseStep):
         if hasattr(self.context, 'finalize_response') and self.context.finalize_response:
             logger.info("Claims already processed, skipping duplicate process-claims call")
             return
-        if self._use_api:
-            self._process_claims_via_api()
+        self._process_claims_via_api()
 
     def _process_claims_via_api(self):
         """Process claims for the survey by calling the API and store response for Step 6."""

@@ -8,7 +8,7 @@ Main entry point for the application
 import sys
 from pathlib import Path
 
-# Add trrcms directory to Python path (MUST be before any trrcms imports)
+# Add trrcms directory to Python path 
 trrcms_path = Path(__file__).parent / "trrcms"
 sys.path.insert(0, str(trrcms_path))
 

@@ -21,7 +21,7 @@ from PyQt5.QtGui import QIcon
 from ui.wizards.framework import BaseStep, StepValidationResult
 from ui.wizards.office_survey.survey_context import SurveyContext
 from ui.wizards.office_survey.dialogs.person_dialog import PersonDialog
-from ui.wizards.office_survey.dialogs.person_selection_dialog import PersonSelectionDialog
+
 from app.config import Config
 from ui.style_manager import StyleManager
 from services.api_client import get_api_client
@@ -42,7 +42,7 @@ def _is_owner_relation(relation_type) -> bool:
         return relation_type.lower() in ('owner', 'co_owner', 'coowner', 'heir')
     return False
 from services.translation_manager import tr
-from services.display_mappings import get_relation_type_display
+from services.display_mappings import get_relation_type_display, get_relationship_to_head_display
 from services.error_mapper import map_exception
 from ui.components.toast import Toast
 from ui.components.success_popup import SuccessPopup
@@ -56,7 +56,6 @@ class OccupancyClaimsStep(BaseStep):
     def __init__(self, context: SurveyContext, parent=None):
         super().__init__(context, parent)
         self._api_service = get_api_client()
-        self._use_api = getattr(Config, 'DATA_PROVIDER', 'local_db') == 'http'
 
     def setup_ui(self):
         """Setup the step UI - same card pattern as PersonStep."""
@@ -335,16 +334,16 @@ class OccupancyClaimsStep(BaseStep):
 
         person_data = {
             'person_id': contact_person_id or str(uuid.uuid4()),
-            'first_name': applicant.get('first_name_ar', ''),
-            'father_name': applicant.get('father_name_ar', ''),
-            'last_name': applicant.get('last_name_ar', ''),
-            'mother_name': applicant.get('mother_name_ar', ''),
-            'national_id': applicant.get('national_id', ''),
+            'first_name': applicant.get('first_name_ar') or '',
+            'father_name': applicant.get('father_name_ar') or '',
+            'last_name': applicant.get('last_name_ar') or '',
+            'mother_name': applicant.get('mother_name_ar') or '',
+            'national_id': applicant.get('national_id') or '',
             'gender': applicant.get('gender'),
             'nationality': applicant.get('nationality'),
-            'phone': applicant.get('phone', ''),
-            'email': applicant.get('email', ''),
-            'landline': applicant.get('landline', ''),
+            'phone': applicant.get('phone') or '',
+            'email': applicant.get('email') or '',
+            'landline': applicant.get('landline') or '',
         }
 
         dialog = PersonDialog(
@@ -355,7 +354,7 @@ class OccupancyClaimsStep(BaseStep):
             survey_id=survey_id,
             household_id=household_id,
             unit_id=unit_id,
-            existing_person_mode=True,
+            initial_tab=0,
         )
         if dialog.exec_() != QDialog.Accepted:
             return
@@ -406,100 +405,10 @@ class OccupancyClaimsStep(BaseStep):
             for p in self.context.persons
         )
 
-    def _fetch_unit_persons(self) -> list:
-        """Fetch persons already linked to this unit from API."""
-        if not self._use_api:
-            return []
-        survey_id = self.context.get_data("survey_id")
-        if not survey_id:
-            return []
-        try:
-            self._set_auth_token()
-            detail = self._api_service.get_office_survey_detail(survey_id)
-            relations = detail.get('relations', [])
-            result = []
-            for r in relations:
-                pid = r.get('personId') or r.get('person_id')
-                if not pid:
-                    continue
-                result.append({
-                    'person_id': pid,
-                    'first_name': r.get('firstNameArabic') or r.get('first_name', ''),
-                    'father_name': r.get('fatherNameArabic') or r.get('father_name', ''),
-                    'last_name': r.get('familyNameArabic') or r.get('last_name', ''),
-                    'mother_name': r.get('motherNameArabic') or r.get('mother_name', ''),
-                    'national_id': r.get('nationalId') or r.get('national_id', ''),
-                    'gender': r.get('gender'),
-                    'nationality': r.get('nationality'),
-                    'phone': r.get('mobileNumber') or r.get('phone', ''),
-                    'email': r.get('email', ''),
-                    'person_role': r.get('relationType') or r.get('relation_type'),
-                    'relationship_type': r.get('relationType') or r.get('relation_type'),
-                    '_relation_id': r.get('id') or r.get('relationId'),
-                })
-            return result
-        except Exception as e:
-            logger.warning(f"Could not fetch unit persons: {e}")
-            return []
-
-    def _add_existing_person(self, person_data: dict):
-        """Add an existing person from the unit, opening PersonDialog in existing_person_mode."""
-        auth_token, survey_id, household_id, unit_id = self._get_context_ids()
-        dialog = PersonDialog(
-            person_data=person_data,
-            existing_persons=self.context.persons,
-            parent=self,
-            auth_token=auth_token,
-            survey_id=survey_id,
-            household_id=household_id,
-            unit_id=unit_id,
-            existing_person_mode=True,
-        )
-        if dialog.exec_() != QDialog.Accepted:
-            return
-        result_data = dialog.get_person_data()
-        result_data['person_id'] = person_data.get('person_id') or dialog.get_api_person_id() or str(uuid.uuid4())
-        rel_id = dialog.get_api_relation_id() or person_data.get('_relation_id')
-        if rel_id:
-            result_data['_relation_id'] = rel_id
-        rel_files = dialog.get_relation_uploaded_files()
-        if rel_files:
-            result_data['_relation_uploaded_files'] = rel_files
-        self.context.persons.append(result_data)
-        self.context.finalize_response = None
-        self._refresh_persons_list()
-        logger.info(f"Existing person added: {result_data.get('first_name')} {result_data.get('last_name')}")
-
     def _add_person(self):
-        """Show PersonSelectionDialog, then open PersonDialog based on selection."""
+        """Open PersonDialog directly to add a new person."""
         auth_token, survey_id, household_id, unit_id = self._get_context_ids()
 
-        # Fetch existing persons linked to this unit
-        unit_persons = self._fetch_unit_persons()
-
-        # Show selection dialog
-        selection_dialog = PersonSelectionDialog(
-            applicant=self.context.applicant if not self._is_applicant_added() else None,
-            existing_persons=unit_persons,
-            already_added_ids=[p.get('person_id') for p in self.context.persons],
-            parent=self,
-        )
-        if selection_dialog.exec_() != QDialog.Accepted:
-            return
-
-        selection = selection_dialog.get_selection()
-        if not selection:
-            return
-
-        if selection['type'] == 'applicant':
-            self._add_applicant_as_person()
-            return
-
-        if selection['type'] == 'existing':
-            self._add_existing_person(selection['person_data'])
-            return
-
-        # 'new' — current behavior
         dialog = PersonDialog(
             person_data=None,
             existing_persons=self.context.persons,
@@ -544,16 +453,21 @@ class OccupancyClaimsStep(BaseStep):
 
         auth_token, survey_id, household_id, unit_id = self._get_context_ids()
 
+        is_applicant = person_data.get('_is_applicant', False)
         has_relation = bool(
             person_data.get('person_role')
             or person_data.get('relationship_type')
             or person_data.get('relation_data', {}).get('rel_type')
             or person_data.get('_relation_id')
         )
-        initial_tab = 2 if has_relation else 1
 
-        # No relation yet → open in existing_person_mode so link_person_to_unit() is called
-        open_as_existing = not has_relation
+        if is_applicant:
+            initial_tab = 0
+            open_as_existing = False
+        else:
+            initial_tab = 2 if has_relation else 1
+            # No relation yet → open in existing_person_mode so link_person_to_unit() is called
+            open_as_existing = not has_relation
 
         person_data_copy = dict(person_data)
         if person_data.get('_is_applicant') and self.context.applicant:
@@ -587,7 +501,7 @@ class OccupancyClaimsStep(BaseStep):
                 if rel_id:
                     updated_data['_relation_id'] = rel_id
             else:
-                if self._use_api and person_id:
+                if person_id:
                     try:
                         self._set_auth_token()
                         self._api_service.update_person(person_id, updated_data)
@@ -613,16 +527,25 @@ class OccupancyClaimsStep(BaseStep):
 
     def _delete_person(self, person_id: str):
         """Delete a person with confirmation."""
-        has_relations = any(r['person_id'] == person_id for r in self.context.relations)
+        person = next((p for p in self.context.persons if p.get('person_id') == person_id), None)
+        if not person:
+            return
 
-        if has_relations:
+        has_relation = bool(
+            person.get('_relation_id')
+            or person.get('person_role')
+            or person.get('relationship_type')
+            or person.get('relation_data', {}).get('rel_type')
+        )
+
+        if has_relation:
             if not ErrorHandler.confirm(
                 self,
                 tr("wizard.person.delete_with_relations_confirm"),
                 tr("common.warning")
             ):
                 return
-            self.context.relations = [r for r in self.context.relations if r['person_id'] != person_id]
+            self.context.relations = [r for r in self.context.relations if r.get('person_id') != person_id]
         else:
             if not ErrorHandler.confirm(
                 self,
@@ -631,7 +554,7 @@ class OccupancyClaimsStep(BaseStep):
             ):
                 return
 
-        if self._use_api and person_id:
+        if person_id:
             try:
                 self._set_auth_token()
                 self._api_service.delete_person(person_id)
@@ -707,13 +630,9 @@ class OccupancyClaimsStep(BaseStep):
         name_lbl.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent;")
         name_lbl.setAlignment(Qt.AlignRight)
 
-        # Show role from person_role or relationship_type
-        role_key = (
-            person.get('person_role')
-            or person.get('relationship_type')
-            or person.get('relation_data', {}).get('rel_type')
-        )
-        role_text = get_relation_type_display(role_key) if role_key else ""
+        # Show household role (person_role), not claim type (rel_type)
+        role_key = person.get('person_role') or person.get('relationship_type')
+        role_text = get_relationship_to_head_display(role_key) if role_key else ""
         role_lbl = QLabel(role_text)
         role_lbl.setFont(create_font(size=FontManager.WIZARD_CARD_VALUE, weight=FontManager.WEIGHT_REGULAR))
         role_lbl.setStyleSheet(f"color: {Colors.WIZARD_SUBTITLE}; background: transparent;")
@@ -832,7 +751,6 @@ class OccupancyClaimsStep(BaseStep):
                 "relation_type": rel_type,
                 "ownership_share": rel_data.get('ownership_share', 0.0),
                 "start_date": rel_data.get('start_date'),
-                "contract_type": rel_data.get('contract_type'),
                 "evidence_type": rel_data.get('evidence_type'),
                 "evidence_description": rel_data.get('evidence_desc'),
                 "notes": rel_data.get('notes'),
@@ -899,9 +817,6 @@ class OccupancyClaimsStep(BaseStep):
     def _enrich_persons_with_server_evidences(self):
         """Fetch server evidences once and populate _relation_uploaded_files
         for persons that have a _relation_id but no local evidence entries."""
-        if not self._use_api:
-            return
-
         survey_id = self.context.get_data("survey_id")
         if not survey_id:
             return
@@ -1000,7 +915,7 @@ class OccupancyClaimsStep(BaseStep):
         self._refresh_persons_list()
 
     def validate(self) -> StepValidationResult:
-        """Validate - at least one person with a relation required."""
+        """Validate - at least one person required, at least one with a property relation."""
         result = self.create_validation_result()
 
         if len(self.context.persons) == 0:
@@ -1009,6 +924,10 @@ class OccupancyClaimsStep(BaseStep):
         # Collect relations from person data into context
         self.context.relations = self._collect_relations_from_persons()
         self.context.claims = self._build_claims_preview()
+
+        # At least one person must have a relation to the property (claim)
+        if self.context.persons and not self.context.relations:
+            result.add_error("يجب أن يكون لدى شخص واحد على الأقل علاقة بالمقسم (ادعاء)")
 
         return result
 
@@ -1107,10 +1026,15 @@ class OccupancyClaimsStep(BaseStep):
         for person in orphaned:
             person_id = person['person_id']
             rel_data = person.get('relation_data', {})
+            rel_type = rel_data.get('rel_type') or person.get('person_role') or person.get('relationship_type')
+
+            if not rel_type:
+                logger.warning(f"Skipping auto-relink for person {person_id}: no relation type")
+                continue
 
             relation_data = {
                 'person_id': person_id,
-                'rel_type': rel_data.get('rel_type') or person.get('person_role') or person.get('relationship_type'),
+                'rel_type': rel_type,
                 'ownership_share': rel_data.get('ownership_share', 0),
                 'contract_type': rel_data.get('contract_type'),
                 'evidence_desc': rel_data.get('evidence_desc'),
@@ -1127,12 +1051,8 @@ class OccupancyClaimsStep(BaseStep):
                 logger.error(f"Failed to auto-relink person {person_id}: {e}")
 
     def on_next(self):
-        """Called when user clicks Next - process claims via API."""
-        # Guard: only process claims once to prevent duplicate creation
-        if hasattr(self.context, 'finalize_response') and self.context.finalize_response:
-            logger.info("Claims already processed, skipping duplicate process-claims call")
-            return
-        self._process_claims_via_api()
+        """Called when user clicks Next."""
+        pass
 
     def get_step_title(self) -> str:
         return tr("wizard.occupancy_claims.step_title")

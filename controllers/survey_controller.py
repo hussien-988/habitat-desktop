@@ -28,7 +28,17 @@ class SurveyController:
     # List: draft office surveys for the cards page
     # ------------------------------------------------------------------
 
-    def load_office_surveys(self, status: str = "Draft", page: int = 1, page_size: int = 100) -> OperationResult:
+    def load_office_surveys(
+        self,
+        status=None,
+        page: int = 1,
+        page_size: int = 30,
+        sort_by: str = "SurveyDate",
+        sort_direction: str = "desc",
+        reference_code=None,
+        interviewee_name=None,
+        building_id=None,
+    ) -> OperationResult:
         """
         Fetch paginated list of office surveys from API.
 
@@ -37,7 +47,16 @@ class SurveyController:
         try:
             from services.api_client import get_api_client
             api = get_api_client()
-            response = api.get_office_surveys(status=status, page=page, page_size=page_size)
+            response = api.get_office_surveys(
+                status=status,
+                page=page,
+                page_size=page_size,
+                sort_by=sort_by,
+                sort_direction=sort_direction,
+                reference_code=reference_code,
+                interviewee_name=interviewee_name,
+                building_id=building_id,
+            )
             surveys = response.get("surveys", [])
             logger.info(f"Loaded {len(surveys)} office surveys from API (status={status})")
             return OperationResult.ok(data=surveys)
@@ -154,8 +173,12 @@ class SurveyController:
                     "email": "",
                 }
 
+            survey_status = detail.get("status", 1)
+            status_str = "finalized" if survey_status == 3 else "draft"
+
             context = {
                 "survey_id": detail.get("id", ""),
+                "status": status_str,
                 "data": {"survey_id": detail.get("id", "")},
                 "building": building_data,
                 "unit": unit_data,
@@ -216,7 +239,10 @@ class SurveyController:
             # e.g. "Ownership Claim" → "ownership"
             raw_type = claim_dto.get("claimType", "")
             if raw_type:
-                claim_type = raw_type.lower().replace(" claim", "").strip() or raw_type
+                if isinstance(raw_type, int):
+                    claim_type = raw_type
+                else:
+                    claim_type = raw_type.lower().replace(" claim", "").strip() or raw_type
             priority = claim_dto.get("priority")
             source = claim_dto.get("claimSource") or source
 

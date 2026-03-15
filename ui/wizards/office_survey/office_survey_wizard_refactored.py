@@ -149,7 +149,14 @@ class OfficeSurveyWizard(BaseWizard):
             # If ReviewStep.on_next() already finalized the survey on the backend,
             # skip all draft-save logic and show success directly
             if self.context.status == "finalized":
-                claim_number = self.context.reference_number or self.context.get_data("survey_id") or ""
+                finalize_resp = getattr(self.context, 'finalize_response', None) or {}
+                claim_number = (
+                    finalize_resp.get("claimNumber")
+                    or finalize_resp.get("claimId")
+                    or self.context.reference_number
+                    or self.context.get_data("survey_id")
+                    or ""
+                )
                 SuccessPopup.show_success(
                     claim_number=claim_number,
                     title=tr("wizard.success.title"),
@@ -1079,20 +1086,16 @@ class OfficeSurveyWizard(BaseWizard):
         self.btn_next.setText(f"{tr('wizard.button.next')}   >")
 
         # ========== Previous Button Logic ==========
-        # Make transparent on first step, visible on other steps
-        if current_step == 0:
-            # First step: make button invisible (transparent) but keep in layout
+        # Make transparent on first step and last step (ClaimStep), visible on other steps
+        if current_step == 0 or current_step == len(self.steps) - 1:
             self.btn_previous.setStyleSheet(self.btn_previous_hidden_style)
             self.btn_previous.setEnabled(False)
-            self.btn_previous.setCursor(Qt.ArrowCursor)  # Normal cursor when invisible
-            # Disable shadow when invisible
+            self.btn_previous.setCursor(Qt.ArrowCursor)
             self.prev_shadow.setEnabled(False)
         else:
-            # Other steps: make button visible with proper styling
             self.btn_previous.setStyleSheet(self.btn_previous_visible_style)
             self.btn_previous.setEnabled(True)
-            self.btn_previous.setCursor(Qt.PointingHandCursor)  # Pointer cursor when visible
-            # Enable shadow when visible
+            self.btn_previous.setCursor(Qt.PointingHandCursor)
             self.prev_shadow.setEnabled(True)
 
         # ========== Next Button Logic ==========

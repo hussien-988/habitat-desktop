@@ -23,7 +23,6 @@ from ui.wizards.framework import BaseStep, StepValidationResult
 from ui.wizards.office_survey.survey_context import SurveyContext
 from controllers.unit_controller import UnitController
 from models.unit import PropertyUnit as Unit
-from app.config import Config
 from services.api_client import get_api_client
 from utils.logger import get_logger
 from utils.helpers import build_hierarchical_address
@@ -58,7 +57,6 @@ class UnitSelectionStep(BaseStep):
 
         # Initialize API client for linking units to survey
         self._api_service = get_api_client()
-        self._use_api = getattr(Config, 'DATA_PROVIDER', 'local_db') == 'http'
         self._loaded_building_uuid = None  # Track which building's units are loaded
 
         # Set auth token for API calls if available
@@ -838,25 +836,22 @@ class UnitSelectionStep(BaseStep):
             # Refresh units list to show the newly created unit
             self._load_units()
 
-            # Auto-select the newly created unit from the refreshed list
-            # This ensures self.context.unit has the correct API object
+            # Auto-select the newly created unit from the cached list
+            # _load_units() already fetched from API, use cached result
             api_uuid = self.context.new_unit_data.get('unit_uuid')
-            if api_uuid:
-                result = self.unit_controller.get_units_for_building(self.context.building.building_uuid)
-                if result.success and result.data:
-                    for unit in result.data:
-                        if getattr(unit, 'unit_uuid', None) == api_uuid:
-                            self.context.unit = unit
-                            self.context.is_new_unit = False  # Now it's a real API unit
-                            self.selected_unit = unit
-                            logger.info(f"Auto-selected newly created unit: {unit.unit_uuid}")
-                            self._refresh_unit_card_styles()  # Update highlight without re-fetch
-                            break
+            if api_uuid and self.unit_controller._units_cache:
+                for unit in self.unit_controller._units_cache:
+                    if getattr(unit, 'unit_uuid', None) == api_uuid:
+                        self.context.unit = unit
+                        self.context.is_new_unit = False
+                        self.selected_unit = unit
+                        logger.info(f"Auto-selected newly created unit: {unit.unit_uuid}")
+                        self._refresh_unit_card_styles()
+                        break
 
             # Enable next button
-            if not self.selected_unit:
-                self.selected_unit = "new_unit"  # Fallback placeholder
-            self.emit_validation_changed(True)
+            if self.selected_unit:
+                self.emit_validation_changed(True)
 
     def update_language(self, is_arabic: bool):
         """Update all translatable texts when language changes."""
@@ -904,12 +899,11 @@ class UnitSelectionStep(BaseStep):
                 # Unit changed - cleanup relations
                 logger.info(f"Unit changed ({previous_unit_id} -> {current_unit_id}), cleaning up relations")
                 cleaned = False
-                if self._use_api:
-                    try:
-                        self.context.cleanup_on_unit_change(self._api_service)
-                        cleaned = True
-                    except Exception as e:
-                        logger.warning(f"API cleanup failed, doing local cleanup: {e}")
+                try:
+                    self.context.cleanup_on_unit_change(self._api_service)
+                    cleaned = True
+                except Exception as e:
+                    logger.warning(f"API cleanup failed, doing local cleanup: {e}")
 
                 if not cleaned:
                     for person in self.context.persons:
@@ -923,20 +917,19 @@ class UnitSelectionStep(BaseStep):
 
         if not self.context.get_data("unit_linked"):
             linked = False
-            if self._use_api:
-                self._set_auth_token()
-                if survey_id and current_unit_id:
-                    try:
-                        response = self._api_service.link_unit_to_survey(survey_id, current_unit_id)
-                        logger.info(f"Unit {current_unit_id} linked to survey {survey_id}")
-                        linked = True
-                    except Exception as e:
-                        logger.error(f"API link failed: {e}")
-                        result.add_error("فشل ربط الوحدة بالمسح. يرجى المحاولة مجدداً.")
-                        return result
-                else:
-                    result.add_error("لم يتم إنشاء المسح أو الوحدة. يرجى العودة للخطوة الأولى والمحاولة مجدداً.")
+            self._set_auth_token()
+            if survey_id and current_unit_id:
+                try:
+                    response = self._api_service.link_unit_to_survey(survey_id, current_unit_id)
+                    logger.info(f"Unit {current_unit_id} linked to survey {survey_id}")
+                    linked = True
+                except Exception as e:
+                    logger.error(f"API link failed: {e}")
+                    result.add_error("فشل ربط الوحدة بالمسح. يرجى المحاولة مجدداً.")
                     return result
+            else:
+                result.add_error("لم يتم إنشاء المسح أو الوحدة. يرجى العودة للخطوة الأولى والمحاولة مجدداً.")
+                return result
 
             if linked:
                 self.context.update_data("unit_linked", True)

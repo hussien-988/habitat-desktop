@@ -9,10 +9,9 @@ Data: refresh() receives SurveyContext from API via main_window navigation.
 
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel,
-    QPushButton, QMenu, QSpacerItem, QSizePolicy
+    QPushButton, QSpacerItem, QSizePolicy
 )
 from PyQt5.QtCore import Qt, pyqtSignal
-from PyQt5.QtGui import QFont
 
 from ui.wizards.office_survey.steps.review_step import ReviewStep
 from ui.wizards.office_survey.survey_context import SurveyContext
@@ -30,12 +29,11 @@ class CaseDetailsPage(QWidget):
     """Standalone page that displays case/survey details in read-only mode."""
 
     back_requested = pyqtSignal()
-    edit_requested = pyqtSignal(str)  # claim_id
+    resume_requested = pyqtSignal(str)  # survey_id
 
     def __init__(self, parent=None):
         super().__init__(parent)
 
-        # Start empty — real data arrives via refresh()
         self._context = SurveyContext()
         self._review = ReviewStep(self._context, read_only=True)
         self._review.initialize()
@@ -43,7 +41,7 @@ class CaseDetailsPage(QWidget):
         self._setup_ui()
 
     # =========================================================================
-    # UI Setup — matches PageDimensions / StyleManager (DRY with other pages)
+    # UI Setup
     # =========================================================================
 
     def _setup_ui(self):
@@ -58,14 +56,10 @@ class CaseDetailsPage(QWidget):
 
         self.setStyleSheet(StyleManager.page_background())
 
-        # Header (transparent bg — same pattern as CompletedClaimsPage)
         main_layout.addWidget(self._create_header())
-
-        # Body: ReviewStep (has its own internal scroll area)
         main_layout.addWidget(self._review, 1)
 
     def _create_header(self) -> QWidget:
-        """Page header: title + breadcrumb (right) and ⋮ menu (left)."""
         header = QWidget()
         header.setFixedHeight(PageDimensions.PAGE_HEADER_HEIGHT)
         header.setStyleSheet(f"background-color: {Colors.BACKGROUND}; border: none;")
@@ -74,7 +68,7 @@ class CaseDetailsPage(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(16)
 
-        # Right side: title + breadcrumb
+        # Title + breadcrumb
         text_box = QVBoxLayout()
         text_box.setSpacing(2)
 
@@ -97,34 +91,14 @@ class CaseDetailsPage(QWidget):
         text_box.addWidget(self._breadcrumb_label)
         layout.addLayout(text_box)
 
-        # Spacer
         layout.addSpacerItem(QSpacerItem(40, 20, QSizePolicy.Expanding, QSizePolicy.Minimum))
 
-        # Menu button (⋮)
-        self._menu_btn = QPushButton("⋮")
-        self._menu_btn.setFixedSize(36, 36)
-        self._menu_btn.setStyleSheet("""
-            QPushButton {
-                border: none;
-                color: #475569;
-                font-size: 24px;
-                font-weight: 700;
-                background: transparent;
-                border-radius: 18px;
-            }
-            QPushButton:hover {
-                color: #1e293b;
-                background-color: #F1F5F9;
-            }
-        """)
-        self._menu_btn.setCursor(Qt.PointingHandCursor)
-
-        # Standalone edit button (admin/data_manager only)
-        self._edit_btn = QPushButton(tr("page.case_details.edit_claim"))
-        self._edit_btn.setFixedSize(160, 40)
-        self._edit_btn.setCursor(Qt.PointingHandCursor)
-        self._edit_btn.setVisible(False)
-        self._edit_btn.setStyleSheet(f"""
+        # Resume button (draft only)
+        self._resume_btn = QPushButton("استئناف التعديل")
+        self._resume_btn.setFixedSize(160, 40)
+        self._resume_btn.setCursor(Qt.PointingHandCursor)
+        self._resume_btn.setVisible(False)
+        self._resume_btn.setStyleSheet(f"""
             QPushButton {{
                 background-color: {Colors.PRIMARY_BLUE};
                 color: white;
@@ -135,31 +109,28 @@ class CaseDetailsPage(QWidget):
             }}
             QPushButton:hover {{ background-color: #2A7BC8; }}
         """)
-        self._edit_btn.clicked.connect(self._on_edit_clicked)
-        layout.addWidget(self._edit_btn)
+        self._resume_btn.clicked.connect(self._on_resume_clicked)
+        layout.addWidget(self._resume_btn)
 
-        menu = QMenu(self._menu_btn)
-        menu.setLayoutDirection(Qt.RightToLeft)
-        menu.setStyleSheet("""
-            QMenu {
-                background-color: white;
-                border: 1px solid #E5E7EB;
-                border-radius: 6px;
-                padding: 4px;
-            }
-            QMenu::item {
-                padding: 8px 24px;
-                border-radius: 4px;
-            }
-            QMenu::item:selected {
+        # Back button
+        self._back_btn = QPushButton("رجوع")
+        self._back_btn.setFixedSize(100, 40)
+        self._back_btn.setCursor(Qt.PointingHandCursor)
+        self._back_btn.setStyleSheet("""
+            QPushButton {
                 background-color: #F1F5F9;
+                color: #475569;
+                border: 1px solid #E2E8F0;
+                border-radius: 8px;
+                font-size: 13px;
+                font-weight: 600;
+            }
+            QPushButton:hover {
+                background-color: #E2E8F0;
             }
         """)
-        back_action = menu.addAction(tr("page.case_details.back_to_list"))
-        back_action.triggered.connect(self.back_requested.emit)
-        self._menu_btn.setMenu(menu)
-
-        layout.addWidget(self._menu_btn)
+        self._back_btn.clicked.connect(self.back_requested.emit)
+        layout.addWidget(self._back_btn)
 
         return header
 
@@ -170,43 +141,28 @@ class CaseDetailsPage(QWidget):
     def _build_breadcrumb(self) -> str:
         return f"{tr('page.case_details.breadcrumb')}  ·  {tr('page.case_details.title')}"
 
-    def _on_edit_clicked(self):
-        """Handle edit claim action — extract claim_id and emit signal."""
-        claim_id = self._get_claim_id_from_context()
-        if claim_id:
-            self.edit_requested.emit(claim_id)
+    def _on_resume_clicked(self):
+        survey_id = None
+        if self._context:
+            survey_id = self._context.get_data("survey_id")
+            if not survey_id:
+                survey_id = getattr(self._context, 'wizard_id', None)
+        if survey_id:
+            logger.info(f"Resume requested for survey: {survey_id}")
+            self.resume_requested.emit(survey_id)
         else:
-            logger.warning("No claim_id found in current context for editing")
+            logger.warning("No survey_id in context for resume")
 
-    def _get_claim_id_from_context(self) -> str:
-        """Extract claim_id from current survey context."""
-        if self._context and self._context.claims:
-            for claim in self._context.claims:
-                cid = (claim.get("claimId") or claim.get("claim_id")
-                       or claim.get("ClaimId") or claim.get("id"))
-                if cid:
-                    return str(cid)
-        logger.warning("No claim_id found in context; cannot navigate to edit")
-        return ""
-
-    def _update_edit_visibility(self):
-        """Show/hide edit button based on user role (admin/data_manager only)."""
-        main_window = self.window()
-        if hasattr(main_window, 'current_user') and main_window.current_user:
-            role = getattr(main_window.current_user, 'role', '')
-            can_edit = role in ("admin", "data_manager")
-            self._edit_btn.setVisible(can_edit)
-        else:
-            self._edit_btn.setVisible(False)
+    def _update_button_visibility(self):
+        """Show resume button only for draft surveys."""
+        status = ""
+        if self._context:
+            status = getattr(self._context, 'status', '') or self._context.get_data("status") or ""
+        is_draft = str(status).lower() in ("draft", "1")
+        self._resume_btn.setVisible(is_draft)
 
     def refresh(self, survey_data=None):
-        """
-        Called by main_window.navigate_to() — loads survey data into ReviewStep.
-
-        Args:
-            survey_data: dict (context_data JSON from API) or SurveyContext.
-                         When None, keeps current data.
-        """
+        """Called by main_window.navigate_to() — loads survey data into ReviewStep."""
         if survey_data is None:
             return
 
@@ -221,14 +177,12 @@ class CaseDetailsPage(QWidget):
 
             self._review.context = self._context
             self._review._populate_review()
-            self._update_edit_visibility()
+            self._update_button_visibility()
             logger.info("Case details page refreshed successfully")
         except Exception as e:
             logger.error(f"Error refreshing case details: {e}", exc_info=True)
 
     def update_language(self, is_arabic=True):
-        """Support language switching."""
         self._title_label.setText(tr("page.case_details.title"))
         self._breadcrumb_label.setText(self._build_breadcrumb())
         self._review._populate_review()
-

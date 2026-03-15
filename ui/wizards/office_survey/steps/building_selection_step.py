@@ -25,7 +25,6 @@ from ui.wizards.office_survey.survey_context import SurveyContext
 from controllers.building_controller import BuildingController, BuildingFilter
 from controllers.unit_controller import UnitController
 from models.building import Building
-from app.config import Config
 from services.api_client import get_api_client
 from services.error_mapper import map_exception
 from ui.error_handler import ErrorHandler
@@ -65,7 +64,6 @@ class BuildingSelectionStep(BaseStep):
 
         # Initialize survey API service
         self._survey_api_service = get_api_client()
-        self._use_api = getattr(Config, 'DATA_PROVIDER', 'local_db') == 'http'
 
     def setup_ui(self):
         """
@@ -1136,9 +1134,6 @@ class BuildingSelectionStep(BaseStep):
 
         if not self.selected_building:
             result.add_error(tr("wizard.building.must_select"))
-            return result
-
-        if not self._use_api:
             return result
 
         building_uuid = getattr(self.selected_building, 'building_uuid', '') or ''

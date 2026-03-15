@@ -339,14 +339,10 @@ class DraftClaimsPage(QWidget):
             result = self._search_via_api(ctrl, query, mode)
             if result is not None:
                 self._display_search_results(result)
-                return
-
-            # Fallback: local DB search
-            from repositories.survey_repository import SurveyRepository
-            repo = SurveyRepository(self.db)
-            rows = repo.search_drafts(source='office', **kwargs)
-            surveys = self._map_local_rows_to_surveys(rows, ctrl)
-            self._display_search_results(surveys)
+            else:
+                from ui.components.toast import Toast
+                Toast.show_toast(self, "خدمة البحث غير متاحة. تحقق من اتصال الشبكة.", Toast.ERROR)
+                self._show_empty_state()
 
         except Exception as e:
             import logging
@@ -447,24 +443,6 @@ class DraftClaimsPage(QWidget):
             return filtered
         except Exception:
             return None
-
-    def _map_local_rows_to_surveys(self, rows, ctrl):
-        """Convert local DB rows to API-format survey dicts."""
-        surveys = []
-        for row in rows:
-            context = row.get("context", {})
-            surveys.append({
-                "id": row.get("survey_id", ""),
-                "buildingId": row.get("building_id") or context.get("building_uuid") or "",
-                "propertyUnitId": row.get("unit_id", ""),
-                "unitIdentifier": context.get("unit", {}).get("unit_number", "") if isinstance(context.get("unit"), dict) else "",
-                "referenceCode": row.get("reference_code", ""),
-                "intervieweeName": ctrl._extract_interviewee_name(context),
-                "surveyDate": str(row.get("survey_date", "")),
-                "status": row.get("status", "draft"),
-                "buildingNumber": context.get("building", {}).get("building_id", "") if isinstance(context.get("building"), dict) else "",
-            })
-        return surveys
 
     def _display_search_results(self, surveys):
         """Display search/filter results using the same card format as refresh()."""

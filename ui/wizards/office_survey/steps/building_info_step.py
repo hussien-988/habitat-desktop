@@ -24,7 +24,6 @@ from ui.style_manager import StyleManager
 from services.display_mappings import get_building_type_display, get_building_status_display
 from services.translation_manager import tr
 from services.api_client import get_api_client
-from app.config import Config
 from utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -80,7 +79,6 @@ class BuildingInfoStep(BaseStep):
     def __init__(self, context: SurveyContext, parent=None):
         super().__init__(context, parent)
         self._survey_api_service = get_api_client()
-        self._use_api = getattr(Config, 'DATA_PROVIDER', 'local_db') == 'http'
 
     # ------------------------------------------------------------------
     # UI construction
@@ -251,47 +249,35 @@ class BuildingInfoStep(BaseStep):
 
         content_row.addLayout(map_section, stretch=1)
 
-        # --- Section 2: وثائق المبنى ---
+        # --- Section 2: وثائق المبنى (button) ---
+        from PyQt5.QtWidgets import QPushButton
+        from PyQt5.QtGui import QCursor
+
         docs_section = QVBoxLayout()
-        docs_section.setSpacing(4)
+        docs_section.setSpacing(8)
 
         docs_lbl = QLabel("وثائق المبنى")
         docs_lbl.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
         docs_lbl.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent;")
         docs_section.addWidget(docs_lbl)
 
-        self.docs_scroll = QScrollArea()
-        self.docs_scroll.setFixedHeight(130)
-        self.docs_scroll.setWidgetResizable(True)
-        self.docs_scroll.setFrameShape(QFrame.NoFrame)
-        self.docs_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
-        self.docs_scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        self.docs_scroll.setStyleSheet("""
-            QScrollArea {
+        self._docs_btn = QPushButton("عرض وثائق المبنى")
+        self._docs_btn.setFixedHeight(40)
+        self._docs_btn.setCursor(QCursor(Qt.PointingHandCursor))
+        self._docs_btn.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
+        self._docs_btn.setStyleSheet("""
+            QPushButton {
                 background-color: #F8FAFF;
-                border: 1px solid #dcdfe6;
+                color: #3890DF;
+                border: 1.5px solid #3890DF;
                 border-radius: 8px;
+                padding: 0 16px;
             }
+            QPushButton:hover { background-color: #EBF5FF; }
+            QPushButton:pressed { background-color: #D6ECFF; }
         """)
-
-        self.docs_container = QWidget()
-        self.docs_container.setStyleSheet("background: transparent;")
-        self.docs_layout = QHBoxLayout(self.docs_container)
-        self.docs_layout.setContentsMargins(8, 8, 8, 8)
-        self.docs_layout.setSpacing(8)
-        self.docs_layout.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
-
-        self._docs_empty_lbl = QLabel("لا توجد وثائق")
-        self._docs_empty_lbl.setFont(create_font(size=9, weight=FontManager.WEIGHT_REGULAR))
-        self._docs_empty_lbl.setStyleSheet(
-            f"color: {Colors.TEXT_SECONDARY}; background: transparent;"
-        )
-        self._docs_empty_lbl.setAlignment(Qt.AlignCenter)
-        self.docs_layout.addWidget(self._docs_empty_lbl)
-        self.docs_layout.addStretch()
-
-        self.docs_scroll.setWidget(self.docs_container)
-        docs_section.addWidget(self.docs_scroll)
+        self._docs_btn.clicked.connect(self._on_show_documents)
+        docs_section.addWidget(self._docs_btn)
         docs_section.addStretch(1)
 
         content_row.addLayout(docs_section, stretch=1)
@@ -479,108 +465,158 @@ class BuildingInfoStep(BaseStep):
         )
         self.f_description.setPlainText(desc)
 
-        # Card 3 — documents
-        uuid = getattr(b, "building_uuid", None)
-        if uuid:
-            self._load_building_documents(uuid)
+    def _on_show_documents(self):
+        """Fetch building documents from API and show in dialog."""
+        b = self.context.building
+        if not b:
+            return
 
-    def _load_building_documents(self, building_uuid: str):
-        """Fetch and display building document thumbnails (mirrors AddBuildingPage)."""
-        while self.docs_layout.count() > 0:
-            item = self.docs_layout.takeAt(0)
-            if item.widget():
-                item.widget().deleteLater()
+        uuid = getattr(b, "building_uuid", None)
+        if not uuid:
+            from ui.components.toast import Toast
+            Toast.show_toast(self, "لا يتوفر معرف المبنى", Toast.WARNING)
+            return
+
+        self._docs_btn.setEnabled(False)
+        self._docs_btn.setText("جاري التحميل...")
 
         try:
-            from services.api_client import get_api_client
             api = get_api_client()
             if not api:
-                self._add_no_docs_label()
+                from ui.components.toast import Toast
+                Toast.show_toast(self, "خدمة API غير متوفرة", Toast.WARNING)
                 return
-            docs = api.get_building_documents(building_uuid)
+
+            docs = api.get_building_documents(uuid)
+
+            if not docs:
+                from ui.components.toast import Toast
+                Toast.show_toast(self, "لا يوجد مرفقات لهذا المبنى", Toast.INFO)
+                return
+
+            self._show_documents_dialog(docs)
+
         except Exception as e:
             logger.warning(f"Failed to load building documents: {e}")
-            self._add_no_docs_label()
-            return
+            from ui.components.toast import Toast
+            Toast.show_toast(self, "تعذر تحميل وثائق المبنى", Toast.WARNING)
+        finally:
+            self._docs_btn.setEnabled(True)
+            self._docs_btn.setText("عرض وثائق المبنى")
 
-        if not docs:
-            self._add_no_docs_label()
-            return
+    def _show_documents_dialog(self, docs: list):
+        """Show building documents in a simple dialog."""
+        from PyQt5.QtWidgets import QDialog, QScrollArea, QPushButton
+        from PyQt5.QtGui import QCursor
 
-        from PyQt5.QtWidgets import QSizePolicy
-        from PyQt5.QtGui import QPixmap
-        from PyQt5.QtCore import QUrl
-        from PyQt5.QtGui import QDesktopServices
+        dlg = QDialog(self)
+        dlg.setWindowFlags(Qt.FramelessWindowHint | Qt.Dialog)
+        dlg.setFixedSize(500, 400)
+        dlg.setStyleSheet("""
+            QDialog {
+                background-color: white;
+                border: 1px solid #dcdfe6;
+                border-radius: 12px;
+            }
+        """)
+
+        main_lay = QVBoxLayout(dlg)
+        main_lay.setContentsMargins(20, 16, 20, 16)
+        main_lay.setSpacing(12)
+
+        # Header
+        header = QHBoxLayout()
+        title = QLabel(f"وثائق المبنى ({len(docs)})")
+        title.setFont(create_font(size=12, weight=FontManager.WEIGHT_SEMIBOLD))
+        title.setStyleSheet(f"color: {Colors.WIZARD_TITLE};")
+        header.addWidget(title)
+        header.addStretch()
+
+        close_btn = QPushButton("X")
+        close_btn.setFixedSize(32, 32)
+        close_btn.setCursor(QCursor(Qt.PointingHandCursor))
+        close_btn.setStyleSheet("""
+            QPushButton {
+                background: #f0f0f0; border: none; border-radius: 16px;
+                font-size: 14px; font-weight: bold; color: #666;
+            }
+            QPushButton:hover { background: #e0e0e0; }
+        """)
+        close_btn.clicked.connect(dlg.close)
+        header.addWidget(close_btn)
+        main_lay.addLayout(header)
+
+        # Docs list
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.NoFrame)
+        scroll.setStyleSheet("QScrollArea { background: transparent; border: none; }")
+
+        container = QWidget()
+        container.setStyleSheet("background: transparent;")
+        list_lay = QVBoxLayout(container)
+        list_lay.setContentsMargins(0, 0, 0, 0)
+        list_lay.setSpacing(8)
 
         for doc in docs:
-            card = self._make_doc_card(doc)
-            self.docs_layout.addWidget(card)
-        self.docs_layout.addStretch()
+            row = self._make_doc_row(doc)
+            list_lay.addWidget(row)
 
-    def _add_no_docs_label(self):
-        lbl = QLabel("لا يوجد وثائق مرفقة")
-        lbl.setFont(create_font(size=9, weight=FontManager.WEIGHT_REGULAR))
-        lbl.setStyleSheet(f"color: #909399; background: transparent;")
-        lbl.setAlignment(Qt.AlignCenter)
-        self.docs_layout.addWidget(lbl)
-        self.docs_layout.addStretch()
+        list_lay.addStretch()
+        scroll.setWidget(container)
+        main_lay.addWidget(scroll)
 
-    def _make_doc_card(self, doc: dict) -> QFrame:
-        from PyQt5.QtGui import QPixmap
-        from PyQt5.QtCore import QUrl
-        from PyQt5.QtGui import QDesktopServices
+        dlg.exec_()
 
-        card = QFrame()
-        card.setFixedSize(70, 100)
-        card.setStyleSheet("""
+    def _make_doc_row(self, doc: dict) -> QFrame:
+        """Create a row widget for a single document."""
+        row = QFrame()
+        row.setFixedHeight(50)
+        row.setStyleSheet("""
             QFrame {
-                background-color: #ffffff;
+                background-color: #F8FAFF;
                 border: 1px solid #E1E8ED;
-                border-radius: 6px;
+                border-radius: 8px;
             }
-            QFrame:hover { border-color: #3890DF; }
+            QFrame:hover { border-color: #3890DF; background-color: #EBF5FF; }
         """)
-        card.setCursor(Qt.PointingHandCursor)
+        row.setCursor(Qt.PointingHandCursor)
 
-        layout = QVBoxLayout(card)
-        layout.setContentsMargins(4, 4, 4, 4)
-        layout.setSpacing(2)
+        lay = QHBoxLayout(row)
+        lay.setContentsMargins(12, 4, 12, 4)
+        lay.setSpacing(10)
 
         mime_type = doc.get("mimeType", "")
+        file_name = doc.get("originalFileName", "") or "مستند"
         file_path = doc.get("filePath", "")
-        file_name = doc.get("originalFileName", "")
 
-        thumb = QLabel()
-        thumb.setFixedSize(60, 60)
-        thumb.setAlignment(Qt.AlignCenter)
-        thumb.setStyleSheet("border: none; background: transparent;")
+        icon_text = "IMG" if mime_type.startswith("image/") else "PDF" if "pdf" in mime_type else "DOC"
+        icon_bg = "#DBEAFE" if mime_type.startswith("image/") else "#FEE2E2" if "pdf" in mime_type else "#E5E7EB"
+        icon_fg = "#1D4ED8" if mime_type.startswith("image/") else "#DC2626" if "pdf" in mime_type else "#374151"
 
-        if mime_type.startswith("image/") and file_path:
-            px = QPixmap(file_path)
-            if not px.isNull():
-                thumb.setPixmap(px.scaled(60, 60, Qt.KeepAspectRatio, Qt.SmoothTransformation))
-            else:
-                thumb.setText("🖼")
-                thumb.setFont(create_font(size=20, weight=FontManager.WEIGHT_REGULAR))
-        else:
-            thumb.setText("📄")
-            thumb.setFont(create_font(size=20, weight=FontManager.WEIGHT_REGULAR))
-
-        layout.addWidget(thumb, alignment=Qt.AlignCenter)
-
-        name_lbl = QLabel(file_name[:10] + "..." if len(file_name) > 10 else file_name)
-        name_lbl.setFont(create_font(size=7, weight=FontManager.WEIGHT_REGULAR))
-        name_lbl.setStyleSheet(
-            f"color: {Colors.TEXT_SECONDARY}; border: none; background: transparent;"
+        icon_lbl = QLabel(icon_text)
+        icon_lbl.setFixedSize(36, 36)
+        icon_lbl.setAlignment(Qt.AlignCenter)
+        icon_lbl.setFont(create_font(size=8, weight=FontManager.WEIGHT_SEMIBOLD))
+        icon_lbl.setStyleSheet(
+            f"background: {icon_bg}; color: {icon_fg}; border-radius: 6px; border: none;"
         )
-        name_lbl.setAlignment(Qt.AlignCenter)
-        name_lbl.setWordWrap(True)
-        layout.addWidget(name_lbl)
+        lay.addWidget(icon_lbl)
 
-        card.mousePressEvent = lambda event, fp=file_path: (
-            QDesktopServices.openUrl(QUrl.fromLocalFile(fp)) if fp else None
-        )
-        return card
+        name_lbl = QLabel(file_name)
+        name_lbl.setFont(create_font(size=10, weight=FontManager.WEIGHT_REGULAR))
+        name_lbl.setStyleSheet("color: #303133; border: none; background: transparent;")
+        lay.addWidget(name_lbl, stretch=1)
+
+        row.mousePressEvent = lambda event, fp=file_path: self._open_doc_file(fp)
+        return row
+
+    def _open_doc_file(self, file_path: str):
+        """Open document file if available."""
+        if file_path:
+            from PyQt5.QtCore import QUrl
+            from PyQt5.QtGui import QDesktopServices
+            QDesktopServices.openUrl(QUrl.fromLocalFile(file_path))
 
     # ------------------------------------------------------------------
     # Map viewer
@@ -616,9 +652,6 @@ class BuildingInfoStep(BaseStep):
         result = StepValidationResult(is_valid=True, errors=[])
         if not self.context.building:
             result.add_error("لم يتم اختيار البناء")
-            return result
-
-        if not self._use_api:
             return result
 
         building_uuid = getattr(self.context.building, 'building_uuid', '') or ''

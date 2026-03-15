@@ -142,12 +142,14 @@ class ApplicantInfoStep(BaseStep):
         row += 1
 
         # --- Row 2: اسم الأب | اسم الأم ---
-        grid.addWidget(self._lbl(tr("wizard.person_dialog.father_name")), row, 0)
+        grid.addWidget(self._lbl(tr("wizard.person_dialog.father_name") + " *"), row, 0)
         grid.addWidget(self._lbl(tr("wizard.person_dialog.mother_name") + " *"), row, 1)
         row += 1
 
         self.father_name = self._field(tr("wizard.person_dialog.father_name_placeholder"), _name_v)
-        grid.addWidget(self.father_name, row, 0)
+        self._father_name_error = self._err_lbl()
+        fn_box = self._field_box(self.father_name, self._father_name_error)
+        grid.addLayout(fn_box, row, 0)
 
         self.mother_name = self._field(tr("wizard.person_dialog.mother_name_placeholder"), _name_v)
         self._mother_name_error = self._err_lbl()
@@ -245,6 +247,7 @@ class ApplicantInfoStep(BaseStep):
         # Connect clear-error signals
         self.first_name.textChanged.connect(lambda: self._clear_err(self.first_name, self._first_name_error))
         self.last_name.textChanged.connect(lambda: self._clear_err(self.last_name, self._last_name_error))
+        self.father_name.textChanged.connect(lambda: self._clear_err(self.father_name, self._father_name_error))
         self.mother_name.textChanged.connect(lambda: self._clear_err(self.mother_name, self._mother_name_error))
         self.national_id.textChanged.connect(lambda: self._clear_err(self.national_id, self._nid_error))
         self.phone.textChanged.connect(lambda: self._clear_err(self.phone, self._mobile_error))
@@ -438,6 +441,7 @@ class ApplicantInfoStep(BaseStep):
                 max-height: 20px;
             }}
             QComboBox {{ padding-left: 4px; }}
+            QComboBox QLineEdit {{ border: none; background: transparent; padding: 0px 4px; min-height: 20px; max-height: 20px; }}
             QLineEdit:focus, QComboBox:focus, QSpinBox:focus {{ border: 1px solid #4a90e2; }}
             QComboBox::drop-down {{ border: none; width: 30px; subcontrol-position: right center; }}
             QComboBox::down-arrow {{ image: url({down_img}); width: 12px; height: 12px; }}
@@ -488,9 +492,35 @@ class ApplicantInfoStep(BaseStep):
         if not self.last_name.text().strip():
             self._set_err(self.last_name, self._last_name_error)
             result.add_error("الكنية مطلوبة")
+        if not self.father_name.text().strip():
+            self._set_err(self.father_name, self._father_name_error)
+            result.add_error("اسم الأب مطلوب")
         if not self.mother_name.text().strip():
             self._set_err(self.mother_name, self._mother_name_error)
             result.add_error("اسم الأم مطلوب")
+
+        # Optional field format validation
+        phone_text = self.phone.text().strip()
+        if phone_text and len(phone_text) != 8:
+            self._set_err(self.phone, self._mobile_error)
+            result.add_error("رقم الجوال يجب أن يكون 8 أرقام")
+
+        landline_text = self.landline.text().strip()
+        if landline_text and len(landline_text) != 7:
+            self._set_err(self.landline, self._landline_error)
+            result.add_error("رقم الهاتف الثابت يجب أن يكون 7 أرقام")
+
+        nid_text = self.national_id.text().strip()
+        if nid_text and len(nid_text) != 11:
+            self._set_err(self.national_id, self._nid_error)
+            result.add_error("الرقم الوطني يجب أن يكون 11 رقماً")
+
+        year_text = self.birth_year.text().strip()
+        if year_text:
+            if not year_text.isdigit() or len(year_text) != 4:
+                result.add_error("سنة الميلاد غير صالحة")
+            elif int(year_text) < 1920 or int(year_text) > 2010:
+                result.add_error("سنة الميلاد يجب أن تكون بين 1920 و 2010")
 
         if not result.is_valid:
             return result
@@ -507,18 +537,40 @@ class ApplicantInfoStep(BaseStep):
         # 4. Set auth token
         self._set_auth_token()
 
-        # 5. Call API
-        try:
-            response = self._api_client.create_contact_person(survey_id, self.context.applicant)
-            self.context.update_data(
-                "contact_person_id",
-                response.get("id") or response.get("contactPersonId", "")
-            )
-        except Exception as e:
-            logger.error(f"Contact person API failed: {e}")
-            result.add_error("فشل حفظ بيانات مقدم الطلب. يرجى المحاولة مجدداً.")
+        # 5. Call API (skip if contact person already created for this survey)
+        existing_cp_id = self.context.get_data("contact_person_id")
+        if not existing_cp_id:
+            try:
+                response = self._api_client.create_contact_person(survey_id, self.context.applicant)
+                self.context.update_data(
+                    "contact_person_id",
+                    response.get("id") or response.get("contactPersonId", "")
+                )
+            except Exception as e:
+                logger.error(f"Contact person API failed: {e}")
+                result.add_error("فشل حفظ بيانات مقدم الطلب. يرجى المحاولة مجدداً.")
+        else:
+            logger.info(f"Contact person already exists: {existing_cp_id}, skipping creation")
 
-        # 6. Save intervieweeName so it appears in the surveys list
+        # 6. Upload ID photos (if any and not already uploaded)
+        person_id = self.context.get_data("contact_person_id")
+        if person_id and self.uploaded_files:
+            already_uploaded = set(self.context.get_data("uploaded_id_photos") or [])
+            new_files = [f for f in self.uploaded_files if f not in already_uploaded]
+            for fp in new_files:
+                try:
+                    self._api_client.upload_identification_document(
+                        survey_id=survey_id,
+                        person_id=person_id,
+                        file_path=fp,
+                    )
+                    already_uploaded.add(fp)
+                    logger.info(f"ID photo uploaded: {os.path.basename(fp)}")
+                except Exception as e:
+                    logger.error(f"Failed to upload ID photo {fp}: {e}")
+            self.context.update_data("uploaded_id_photos", list(already_uploaded))
+
+        # 7. Save intervieweeName so it appears in the surveys list
         try:
             a = self.context.applicant or {}
             parts = [a.get("first_name_ar", ""), a.get("father_name_ar", ""), a.get("last_name_ar", "")]
@@ -548,7 +600,7 @@ class ApplicantInfoStep(BaseStep):
             "gender":         self.gender.currentData(),
             "nationality":    self.nationality.currentData(),
             "national_id":    self.national_id.text().strip(),
-            "phone":          self.phone.text().strip(),
+            "phone":          f"09{self.phone.text().strip()}" if self.phone.text().strip() else "",
             "landline":       self.landline.text().strip(),
             "in_person":      self.in_person_check.isChecked(),
             "id_photo_paths": list(self.uploaded_files),
@@ -583,7 +635,10 @@ class ApplicantInfoStep(BaseStep):
                 break
 
         self.national_id.setText(a.get("national_id", ""))
-        self.phone.setText(a.get("phone", ""))
+        phone_val = a.get("phone", "")
+        if phone_val.startswith("09"):
+            phone_val = phone_val[2:]
+        self.phone.setText(phone_val)
         self.landline.setText(a.get("landline", ""))
         self.in_person_check.setChecked(a.get("in_person", True))
 

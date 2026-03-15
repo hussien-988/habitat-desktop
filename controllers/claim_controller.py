@@ -490,8 +490,9 @@ class ClaimController(BaseController):
                     except Exception as e:
                         logger.warning(f"Failed to fetch building {building_id}: {e}")
 
-            # Survey ID — use hint from navigation context first (GET /Claims/{id} has no surveyId)
+            # Survey ID — use hint from navigation context first
             survey_id = (hint_survey_id or
+                         claim_dto.get("originatingSurveyId") or
                          claim_dto.get("surveyId") or claim_dto.get("SurveyId")
                          or claim_dto.get("survey_id"))
             result["survey_id"] = survey_id

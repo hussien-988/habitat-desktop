@@ -24,7 +24,6 @@ from PyQt5.QtGui import QPixmap
 from ui.wizards.framework import BaseStep, StepValidationResult
 from ui.wizards.office_survey.survey_context import SurveyContext
 from ui.wizards.office_survey.dialogs.person_dialog import PersonDialog
-from app.config import Config
 from services.api_client import get_api_client
 from utils.logger import get_logger
 from ui.error_handler import ErrorHandler
@@ -55,7 +54,6 @@ class PersonStep(BaseStep):
 
         # Initialize API service for fetching persons
         self._api_service = get_api_client()
-        self._use_api = getattr(Config, 'DATA_PROVIDER', 'local_db') == 'http'
 
     def setup_ui(self):
         """Setup the step's UI - matching Step 1 styling."""
@@ -466,8 +464,7 @@ class PersonStep(BaseStep):
         """Called when step is shown. Fetches persons from API if available."""
         super().on_show()
 
-        if self._use_api:
-            self._fetch_persons_from_api()
+        self._fetch_persons_from_api()
 
         self._refresh_persons_list()
 

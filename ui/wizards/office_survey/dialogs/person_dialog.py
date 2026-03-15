@@ -18,7 +18,7 @@ from PyQt5.QtWidgets import (
     QRadioButton, QButtonGroup, QSizePolicy
 )
 from PyQt5.QtCore import Qt, QDate, QUrl
-from PyQt5.QtGui import QColor, QPixmap, QRegExpValidator, QDoubleValidator
+from PyQt5.QtGui import QColor, QPixmap, QRegExpValidator, QDoubleValidator, QIntValidator
 from PyQt5.QtCore import QRegExp as QtRegExp
 
 from app.config import Config
@@ -27,7 +27,8 @@ from services.api_client import get_api_client
 from services.translation_manager import tr
 from services.error_mapper import map_exception
 from services.display_mappings import (
-    get_relation_type_options, get_contract_type_options, get_evidence_type_options,
+    get_relation_type_options, get_relationship_to_head_options,
+    get_evidence_type_options,
     get_gender_options, get_nationality_options
 )
 from ui.components.rtl_combo import RtlCombo
@@ -64,7 +65,6 @@ class PersonDialog(QDialog):
         self._api_service = get_api_client()
         if self._api_service and auth_token:
             self._api_service.set_access_token(auth_token)
-        self._use_api = getattr(Config, 'DATA_PROVIDER', 'local_db') == 'http'
         self._api_person_id = None
         self._api_relation_id = None
         self._evidence_ids = {}       # {normalized_path: evidence_id} for ID files
@@ -290,8 +290,6 @@ class PersonDialog(QDialog):
         self.landline.textChanged.connect(self._update_all_progress)
 
         # Tab 3 fields
-        self.contract_type.currentIndexChanged.connect(self._update_all_progress)
-        self.contract_type.currentIndexChanged.connect(self._on_contract_type_changed)
         self.rel_type_combo.currentIndexChanged.connect(self._update_all_progress)
         self.ownership_share.textChanged.connect(self._update_all_progress)
         self.evidence_type.currentIndexChanged.connect(self._update_all_progress)
@@ -301,6 +299,7 @@ class PersonDialog(QDialog):
         # Clear inline errors when user starts typing
         self.first_name.textChanged.connect(lambda: self._clear_field_error(self.first_name, self._first_name_error))
         self.last_name.textChanged.connect(lambda: self._clear_field_error(self.last_name, self._last_name_error))
+        self.father_name.textChanged.connect(lambda: self._clear_field_error(self.father_name, self._father_name_error))
         self.national_id.textChanged.connect(lambda: self._clear_field_error(self.national_id, self._nid_error))
         self.phone.textChanged.connect(lambda: self._clear_field_error(self.phone, self._mobile_error))
         self.landline.textChanged.connect(lambda: self._clear_field_error(self.landline, self._landline_error))
@@ -328,7 +327,6 @@ class PersonDialog(QDialog):
             ]
         else:
             fields = [
-                self.contract_type.currentIndex() > 0,
                 self.rel_type_combo.currentIndex() > 0,
                 bool(self.ownership_share.text().strip()),
                 self.evidence_type.currentIndex() > 0,
@@ -433,7 +431,15 @@ class PersonDialog(QDialog):
         self.father_name.setPlaceholderText(tr("wizard.person_dialog.father_name_placeholder"))
         self.father_name.setValidator(_name_validator)
         self.father_name.setStyleSheet(self._input_style())
-        grid.addWidget(self.father_name, row, 0)
+        self._father_name_error = QLabel("")
+        self._father_name_error.setStyleSheet(self._error_label_style())
+        self._father_name_error.setVisible(False)
+        fn_father_container = QVBoxLayout()
+        fn_father_container.setSpacing(2)
+        fn_father_container.setContentsMargins(0, 0, 0, 0)
+        fn_father_container.addWidget(self.father_name)
+        fn_father_container.addWidget(self._father_name_error)
+        grid.addLayout(fn_father_container, row, 0)
 
         self.mother_name = QLineEdit()
         self.mother_name.setPlaceholderText(tr("wizard.person_dialog.mother_name_placeholder"))
@@ -531,12 +537,12 @@ class PersonDialog(QDialog):
 
         row = 0
 
-        # Person Role (full width)
+        # Relationship to household head (full width)
         grid.addWidget(self._label(tr("wizard.person_dialog.person_role"), label_style), row, 0, 1, 2)
         row += 1
         self.person_role = RtlCombo()
         self.person_role.addItem(tr("wizard.person_dialog.select"), None)
-        for code, display_name in get_relation_type_options():
+        for code, display_name in get_relationship_to_head_options():
             self.person_role.addItem(display_name, code)
         self.person_role.setStyleSheet(self._input_style())
         grid.addWidget(self.person_role, row, 0, 1, 2)
@@ -626,7 +632,7 @@ class PersonDialog(QDialog):
     # Tab 3: Relation & Evidence
 
     def _setup_tab3_relation(self):
-        """Tab 3: Occupancy nature, claim type, dates, ownership, documents."""
+        """Tab 3: Claim type, ownership share, dates, documents."""
         tab = QWidget()
         tab.setLayoutDirection(Qt.RightToLeft)
         tab.setStyleSheet("background-color: transparent;")
@@ -645,45 +651,22 @@ class PersonDialog(QDialog):
 
         row = 0
 
-        # Row: Occupancy Nature | Claim Type
-        grid.addWidget(self._label(tr("wizard.person_dialog.occupancy_nature"), label_style), row, 0)
-        grid.addWidget(self._label(tr("wizard.person_dialog.claim_type_label"), label_style), row, 1)
+        # Row: Claim Type | Ownership Share
+        grid.addWidget(self._label(tr("wizard.person_dialog.claim_type_label"), label_style), row, 0)
+        grid.addWidget(self._label(tr("wizard.person_dialog.ownership_share"), label_style), row, 1)
         row += 1
-        self.contract_type = RtlCombo()
-        self.contract_type.addItem(tr("wizard.person_dialog.select"), None)
-        for code, display_name in get_contract_type_options():
-            if code == 0:
-                continue
-            self.contract_type.addItem(display_name, code)
-        self.contract_type.setStyleSheet(self._input_style())
-        grid.addWidget(self.contract_type, row, 0)
-
         self.rel_type_combo = RtlCombo()
         self.rel_type_combo.addItem(tr("wizard.person_dialog.select"), None)
         for code, display_name in get_relation_type_options():
             self.rel_type_combo.addItem(display_name, code)
         self.rel_type_combo.setStyleSheet(self._input_style())
-        grid.addWidget(self.rel_type_combo, row, 1)
-        row += 1
-
-        # Row: Start Date | Ownership Share
-        grid.addWidget(self._label(tr("wizard.person_dialog.relation_start_date"), label_style), row, 0)
-        grid.addWidget(self._label(tr("wizard.person_dialog.ownership_share"), label_style), row, 1)
-        row += 1
-        self.start_date = QDateEdit()
-        self.start_date.setCalendarPopup(True)
-        self.start_date.setDate(QDate.currentDate())
-        self.start_date.setMinimumDate(QDate(1900, 1, 1))
-        self.start_date.setDisplayFormat("yyyy-MM-dd")
-        self.start_date.setStyleSheet(self._date_input_style())
-        grid.addWidget(self.start_date, row, 0)
+        grid.addWidget(self.rel_type_combo, row, 0)
 
         self.ownership_share = QLineEdit()
         self.ownership_share.setPlaceholderText("%")
         self.ownership_share.setValidator(QDoubleValidator(0, 100, 2, self))
         self.ownership_share.editingFinished.connect(self._clamp_ownership_share)
         self.ownership_share.setStyleSheet(self._input_style())
-        self.ownership_share.setEnabled(False)
         self._ownership_error = QLabel("")
         self._ownership_error.setStyleSheet(self._error_label_style())
         self._ownership_error.setVisible(False)
@@ -695,10 +678,37 @@ class PersonDialog(QDialog):
         grid.addLayout(ownership_container, row, 1)
         row += 1
 
-        # Row: Supporting Docs | Description
-        grid.addWidget(self._label(tr("wizard.person_dialog.evidence_type"), label_style), row, 0)
-        grid.addWidget(self._label(tr("wizard.person_dialog.evidence_description"), label_style), row, 1)
+        # Row: Start Date (3 fields) | Evidence Type
+        grid.addWidget(self._label(tr("wizard.person_dialog.relation_start_date"), label_style), row, 0)
+        grid.addWidget(self._label(tr("wizard.person_dialog.evidence_type"), label_style), row, 1)
         row += 1
+        date_layout = QHBoxLayout()
+        date_layout.setSpacing(6)
+        date_layout.setContentsMargins(0, 0, 0, 0)
+        input_style = self._input_style()
+        self.start_year = QLineEdit()
+        self.start_year.setPlaceholderText("السنة")
+        self.start_year.setValidator(QIntValidator(1900, 2100, self))
+        self.start_year.setMaxLength(4)
+        self.start_year.setStyleSheet(input_style)
+        self.start_month = QLineEdit()
+        self.start_month.setPlaceholderText("الشهر")
+        self.start_month.setValidator(QIntValidator(1, 12, self))
+        self.start_month.setMaxLength(2)
+        self.start_month.setStyleSheet(input_style)
+        self.start_day = QLineEdit()
+        self.start_day.setPlaceholderText("اليوم")
+        self.start_day.setValidator(QIntValidator(1, 31, self))
+        self.start_day.setMaxLength(2)
+        self.start_day.setStyleSheet(input_style)
+        date_layout.addWidget(self.start_year, 2)
+        date_layout.addWidget(self.start_month, 1)
+        date_layout.addWidget(self.start_day, 1)
+        date_container = QWidget()
+        date_container.setStyleSheet("background-color: transparent;")
+        date_container.setLayout(date_layout)
+        grid.addWidget(date_container, row, 0)
+
         self.evidence_type = RtlCombo()
         self.evidence_type.addItem(tr("wizard.person_dialog.select"), None)
         for code, display_name in get_evidence_type_options():
@@ -706,12 +716,16 @@ class PersonDialog(QDialog):
                 continue
             self.evidence_type.addItem(display_name, code)
         self.evidence_type.setStyleSheet(self._input_style())
-        grid.addWidget(self.evidence_type, row, 0)
+        grid.addWidget(self.evidence_type, row, 1)
+        row += 1
 
+        # Row: Evidence Description (full width)
+        grid.addWidget(self._label(tr("wizard.person_dialog.evidence_description"), label_style), row, 0, 1, 2)
+        row += 1
         self.evidence_desc = QLineEdit()
         self.evidence_desc.setPlaceholderText(tr("wizard.person_dialog.evidence_desc_placeholder"))
         self.evidence_desc.setStyleSheet(self._input_style())
-        grid.addWidget(self.evidence_desc, row, 1)
+        grid.addWidget(self.evidence_desc, row, 0, 1, 2)
         row += 1
 
         # Notes (full width)
@@ -769,6 +783,25 @@ class PersonDialog(QDialog):
 
         # Upload frame for relation documents
         self._rel_upload_frame = self._create_upload_frame(self._browse_relation_files, "rel_upload", button_text=tr("wizard.person_dialog.attach_document"))
+        # Add "Choose Existing Document" link to the upload frame
+        choose_btn = QPushButton("اختيار مستند موجود")
+        choose_btn.setStyleSheet("""
+            QPushButton {
+                color: #059669;
+                text-decoration: underline;
+                border: none;
+                background: transparent;
+                font-size: 12px;
+                font-weight: 500;
+                padding: 0px;
+            }
+            QPushButton:hover { color: #047857; }
+        """)
+        choose_btn.setCursor(Qt.PointingHandCursor)
+        choose_btn.clicked.connect(self._choose_existing_document)
+        # Insert into the upload frame's row layout (before the trailing stretch)
+        row_layout = self._rel_upload_frame.layout().itemAt(0).layout()
+        row_layout.insertWidget(row_layout.count() - 1, choose_btn)
         grid.addWidget(self._rel_upload_frame, row, 0, 1, 2)
 
         # Toggle upload frame visibility based on radio
@@ -825,7 +858,11 @@ class PersonDialog(QDialog):
 
     def _load_existing_docs(self):
         """Fetch existing survey evidences and populate checkboxes."""
-        if not self._use_api or not self._survey_id:
+        if not self._survey_id:
+            return
+        if self.relation_uploaded_files:
+            return
+        if not self._api_relation_id:
             return
         try:
             self._refresh_token()
@@ -1097,7 +1134,7 @@ class PersonDialog(QDialog):
         In create mode: deletes from server immediately."""
         import os
         norm = os.path.normpath(file_path)
-        if self._use_api and norm in self._evidence_ids and self._survey_id:
+        if norm in self._evidence_ids and self._survey_id:
             evidence_id = self._evidence_ids[norm]
             if self.editing_mode:
                 self._pending_id_replacements.append(evidence_id)
@@ -1117,9 +1154,15 @@ class PersonDialog(QDialog):
     def _remove_relation_file(self, file_path: str):
         """Remove a relation evidence file and refresh thumbnails.
         In edit mode: defers delete for possible replacement via PUT.
-        In create mode: deletes from server immediately."""
-        entry = next((f for f in self.relation_uploaded_files if f["path"] == file_path), None)
-        if self._use_api and entry and entry.get("evidence_id") and self._survey_id:
+        In create mode: deletes from server immediately.
+        Existing selected docs are just unlinked (not deleted)."""
+        entry = next((f for f in self.relation_uploaded_files if f.get("path") == file_path), None)
+        if entry and entry.get('_selected_existing'):
+            # Existing doc: just remove from list, don't delete from server
+            self.relation_uploaded_files = [f for f in self.relation_uploaded_files if f is not entry]
+            self._refresh_relation_thumbnails()
+            return
+        if entry and entry.get("evidence_id") and self._survey_id:
             evidence_id = entry["evidence_id"]
             if self.editing_mode:
                 self._pending_rel_replacements.append(evidence_id)
@@ -1131,9 +1174,8 @@ class PersonDialog(QDialog):
                     logger.info(f"Tenure evidence deleted from server: {evidence_id}")
                 except Exception as e:
                     logger.error(f"Failed to delete tenure evidence: {e}")
-        self.relation_uploaded_files = [f for f in self.relation_uploaded_files if f["path"] != file_path]
-        file_paths_for_thumbs = [f["path"] for f in self.relation_uploaded_files]
-        self._update_upload_thumbnails("rel_upload", file_paths_for_thumbs)
+        self.relation_uploaded_files = [f for f in self.relation_uploaded_files if f.get("path") != file_path]
+        self._refresh_relation_thumbnails()
 
     def _input_style(self) -> str:
         """Custom input style with light blue background."""
@@ -1151,6 +1193,13 @@ class PersonDialog(QDialog):
             }}
             QComboBox {{
                 padding-left: 4px;
+            }}
+            QComboBox QLineEdit {{
+                border: none;
+                background: transparent;
+                padding: 0px 4px;
+                min-height: 20px;
+                max-height: 20px;
             }}
             QLineEdit:focus, QComboBox:focus, QDateEdit:focus, QDoubleSpinBox:focus {{
                 border: 1px solid #E0E6ED;
@@ -1230,6 +1279,13 @@ class PersonDialog(QDialog):
             QComboBox {{
                 padding-left: 4px;
             }}
+            QComboBox QLineEdit {{
+                border: none;
+                background: transparent;
+                padding: 0px 4px;
+                min-height: 20px;
+                max-height: 20px;
+            }}
             QLineEdit:focus, QComboBox:focus, QDateEdit:focus, QDoubleSpinBox:focus {{
                 border: 2px solid #e74c3c;
             }}
@@ -1267,6 +1323,7 @@ class PersonDialog(QDialog):
         error_pairs = [
             (self.first_name, self._first_name_error),
             (self.last_name, self._last_name_error),
+            (self.father_name, self._father_name_error),
             (self.national_id, self._nid_error),
             (self.phone, self._mobile_error),
             (self.landline, self._landline_error),
@@ -1390,6 +1447,7 @@ class PersonDialog(QDialog):
         if self.read_only:
             self.tab_widget.setCurrentIndex(1)
             return
+        self._clear_all_errors()
         has_error = False
         first = self.first_name.text().strip()
         last = self.last_name.text().strip()
@@ -1408,6 +1466,14 @@ class PersonDialog(QDialog):
         elif not name_pattern.match(last):
             self._set_field_error(self.last_name, self._last_name_error, tr("wizard.person_dialog.invalid_last_name"))
             has_error = True
+        # Required: father_name
+        father = self.father_name.text().strip()
+        if not father:
+            self._set_field_error(self.father_name, self._father_name_error, tr("wizard.person_dialog.enter_father_name"))
+            has_error = True
+        elif not name_pattern.match(father):
+            self._set_field_error(self.father_name, self._father_name_error, tr("wizard.person_dialog.invalid_father_name"))
+            has_error = True
         # Optional format: national_id (only validate if filled)
         if self.national_id.text().strip() and not self._validate_national_id():
             self._set_field_error(self.national_id, self._nid_error, tr("wizard.person_dialog.nid_invalid"))
@@ -1423,6 +1489,7 @@ class PersonDialog(QDialog):
         if self.read_only:
             self.tab_widget.setCurrentIndex(2)
             return
+        self._clear_all_errors()
         has_error = False
         # Optional format: mobile (if filled, must be 8 digits)
         if not self._validate_mobile(self.phone.text().strip()):
@@ -1561,8 +1628,202 @@ class PersonDialog(QDialog):
                     return
 
         self.relation_uploaded_files.extend(new_files)
-        file_paths_for_thumbs = [f["path"] for f in self.relation_uploaded_files]
-        self._update_upload_thumbnails("rel_upload", file_paths_for_thumbs)
+        self._refresh_relation_thumbnails()
+
+    def _choose_existing_document(self):
+        """Show dialog to select an existing survey document and link it."""
+        if not self._survey_id:
+            Toast.show_toast(self, "غير متاح بدون اتصال", Toast.WARNING)
+            return
+
+        try:
+            self._refresh_token()
+            evidences = self._api_service.get_survey_evidences(self._survey_id)
+        except Exception as e:
+            logger.warning(f"Could not load existing docs: {e}")
+            Toast.show_toast(self, "تعذر تحميل المستندات", Toast.ERROR)
+            return
+
+        if not evidences:
+            Toast.show_toast(self, "لا توجد مستندات محفوظة لهذا المسح", Toast.INFO)
+            return
+
+        # Filter out already-selected evidence IDs
+        already_selected = {
+            f.get("evidence_id") for f in self.relation_uploaded_files
+            if f.get("_selected_existing")
+        }
+        available = [ev for ev in evidences if self._extract_evidence_id(ev) not in already_selected]
+        if not available:
+            Toast.show_toast(self, "تم اختيار جميع المستندات المتاحة", Toast.INFO)
+            return
+
+        selected = self._show_document_selection_dialog(available)
+        if not selected:
+            return
+
+        for ev in selected:
+            ev_id = self._extract_evidence_id(ev)
+            file_name = ev.get('originalFileName') or ev.get('OriginalFileName') or ''
+            issue_date = ev.get('documentIssuedDate') or ev.get('DocumentIssuedDate') or ''
+            ev_type = ev.get('evidenceType') or ev.get('EvidenceType') or ''
+            display = file_name or f"مستند ({ev_id[:8]})"
+            self.relation_uploaded_files.append({
+                'path': '',
+                'evidence_id': ev_id,
+                'issue_date': str(issue_date)[:10] if issue_date else '',
+                '_selected_existing': True,
+                '_display_name': display,
+            })
+
+        self._refresh_relation_thumbnails()
+
+    def _extract_evidence_id(self, ev: dict) -> str:
+        """Extract evidence ID from API response dict."""
+        return (ev.get('id') or ev.get('evidenceId')
+                or ev.get('Id') or ev.get('EvidenceId') or '')
+
+    def _show_document_selection_dialog(self, evidences: list) -> list:
+        """Show a dialog to select existing documents. Returns list of selected evidence dicts."""
+        from PyQt5.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QLabel,
+                                     QPushButton, QCheckBox, QScrollArea, QWidget)
+
+        dlg = QDialog(self)
+        dlg.setWindowTitle("اختيار مستند موجود")
+        dlg.setMinimumSize(450, 350)
+        dlg.setLayoutDirection(Qt.RightToLeft)
+        dlg.setStyleSheet("""
+            QDialog { background-color: #FAFBFC; }
+            QLabel { background: transparent; }
+            QCheckBox { background: transparent; font-size: 12px; color: #334155; }
+        """)
+
+        layout = QVBoxLayout(dlg)
+        layout.setContentsMargins(16, 16, 16, 16)
+        layout.setSpacing(10)
+
+        header = QLabel("اختر المستندات المراد ربطها بالعلاقة:")
+        header.setStyleSheet("font-size: 13px; font-weight: 700; color: #1E293B;")
+        header.setAlignment(Qt.AlignRight)
+        layout.addWidget(header)
+
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setStyleSheet("QScrollArea { border: 1px solid #E2E8F0; border-radius: 6px; background: white; }")
+        scroll_widget = QWidget()
+        scroll_layout = QVBoxLayout(scroll_widget)
+        scroll_layout.setContentsMargins(8, 8, 8, 8)
+        scroll_layout.setSpacing(6)
+
+        checkboxes = []
+        for ev in evidences:
+            ev_id = self._extract_evidence_id(ev)
+            file_name = ev.get('originalFileName') or ev.get('OriginalFileName') or ''
+            issue_date = ev.get('documentIssuedDate') or ev.get('DocumentIssuedDate') or ''
+            ev_type = ev.get('evidenceType') or ev.get('EvidenceType') or ''
+
+            parts = []
+            if file_name:
+                parts.append(file_name)
+            if ev_type:
+                parts.append(f"[{ev_type}]")
+            if issue_date:
+                parts.append(str(issue_date)[:10])
+            label = " - ".join(parts) if parts else f"مستند ({ev_id[:8]})"
+
+            cb = QCheckBox(label)
+            cb.setLayoutDirection(Qt.RightToLeft)
+            cb._evidence = ev
+            checkboxes.append(cb)
+            scroll_layout.addWidget(cb)
+
+        scroll_layout.addStretch()
+        scroll.setWidget(scroll_widget)
+        layout.addWidget(scroll)
+
+        btn_layout = QHBoxLayout()
+        btn_layout.setSpacing(8)
+        cancel_btn = QPushButton("إلغاء")
+        cancel_btn.setStyleSheet("""
+            QPushButton { background: #F1F5F9; color: #475569; border: 1px solid #CBD5E1;
+                border-radius: 6px; padding: 8px 20px; font-size: 12px; font-weight: 600; }
+            QPushButton:hover { background: #E2E8F0; }
+        """)
+        cancel_btn.clicked.connect(dlg.reject)
+
+        confirm_btn = QPushButton("تأكيد الاختيار")
+        confirm_btn.setStyleSheet("""
+            QPushButton { background: #059669; color: white; border: none;
+                border-radius: 6px; padding: 8px 20px; font-size: 12px; font-weight: 600; }
+            QPushButton:hover { background: #047857; }
+        """)
+        confirm_btn.clicked.connect(dlg.accept)
+
+        btn_layout.addWidget(cancel_btn)
+        btn_layout.addStretch()
+        btn_layout.addWidget(confirm_btn)
+        layout.addLayout(btn_layout)
+
+        if dlg.exec_() != QDialog.Accepted:
+            return []
+
+        return [cb._evidence for cb in checkboxes if cb.isChecked()]
+
+    def _refresh_relation_thumbnails(self):
+        """Refresh relation document thumbnails including existing doc labels."""
+        frame = self.findChild(QFrame, "rel_upload")
+        if not frame or not hasattr(frame, '_thumbnails_layout'):
+            return
+
+        layout = frame._thumbnails_layout
+        while layout.count():
+            item = layout.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+
+        for entry in self.relation_uploaded_files:
+            if entry.get('_selected_existing'):
+                # Existing doc: show as a styled label with remove button
+                display = entry.get('_display_name', 'مستند')
+                widget = self._create_existing_doc_widget(display, entry)
+            elif entry.get('path'):
+                widget = self._create_thumbnail_widget(entry['path'], self._remove_relation_file)
+            else:
+                continue
+            layout.addWidget(widget)
+
+    def _create_existing_doc_widget(self, display_name: str, entry: dict) -> QWidget:
+        """Create a small widget showing an existing doc name with a remove button."""
+        from PyQt5.QtWidgets import QHBoxLayout
+        widget = QWidget()
+        widget.setFixedHeight(32)
+        widget.setStyleSheet("background: #ECFDF5; border: 1px solid #A7F3D0; border-radius: 4px;")
+        h = QHBoxLayout(widget)
+        h.setContentsMargins(6, 2, 6, 2)
+        h.setSpacing(4)
+
+        name_lbl = QLabel(display_name)
+        name_lbl.setStyleSheet("font-size: 10px; color: #065F46; border: none; background: transparent;")
+        h.addWidget(name_lbl)
+
+        remove_btn = QPushButton("✕")
+        remove_btn.setFixedSize(18, 18)
+        remove_btn.setStyleSheet("""
+            QPushButton { background: #FEE2E2; color: #991B1B; border: none;
+                border-radius: 9px; font-size: 10px; font-weight: bold; }
+            QPushButton:hover { background: #FECACA; }
+        """)
+        remove_btn.setCursor(Qt.PointingHandCursor)
+        remove_btn.clicked.connect(lambda: self._remove_existing_doc(entry))
+        h.addWidget(remove_btn)
+        return widget
+
+    def _remove_existing_doc(self, entry: dict):
+        """Remove a selected existing document (just unlink, don't delete from server)."""
+        self.relation_uploaded_files = [
+            f for f in self.relation_uploaded_files if f is not entry
+        ]
+        self._refresh_relation_thumbnails()
 
     def _show_duplicate_file_dialog(self, file_names: list) -> bool:
         """Show a small floating dialog for duplicate files. Returns True to replace, False to cancel."""
@@ -1689,14 +1950,16 @@ class PersonDialog(QDialog):
 
     def _show_issue_date_dialog(self, filename: str = None) -> str:
         """Show a mini popup to enter document issue date. Returns ISO date string or None if cancelled."""
-        from PyQt5.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QGraphicsDropShadowEffect
-        from PyQt5.QtGui import QFont, QColor
+        from PyQt5.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QLabel,
+                                     QPushButton, QGraphicsDropShadowEffect, QComboBox)
+        from PyQt5.QtGui import QColor
         from ui.font_utils import create_font, FontManager
+        from datetime import date as _date
 
         dlg = QDialog(self)
         dlg.setWindowFlags(Qt.Dialog | Qt.FramelessWindowHint)
         dlg.setAttribute(Qt.WA_TranslucentBackground)
-        dlg.setFixedWidth(320)
+        dlg.setFixedWidth(340)
 
         container = QWidget(dlg)
         container.setObjectName("date_container")
@@ -1717,14 +1980,12 @@ class PersonDialog(QDialog):
         c_layout.setContentsMargins(20, 20, 20, 16)
         c_layout.setSpacing(12)
 
-        # Title
         title_lbl = QLabel(tr("wizard.person_dialog.issue_date_title"))
         title_lbl.setAlignment(Qt.AlignCenter)
         title_lbl.setFont(create_font(size=11, weight=FontManager.WEIGHT_SEMIBOLD))
         title_lbl.setStyleSheet("color: #1F2937; background: transparent;")
         c_layout.addWidget(title_lbl)
 
-        # Filename subtitle (when per-file mode)
         if filename:
             file_lbl = QLabel(filename)
             file_lbl.setAlignment(Qt.AlignCenter)
@@ -1733,28 +1994,71 @@ class PersonDialog(QDialog):
             file_lbl.setWordWrap(True)
             c_layout.addWidget(file_lbl)
 
-        # Date picker
-        date_edit = QDateEdit()
-        date_edit.setCalendarPopup(True)
-        date_edit.setDate(QDate.currentDate())
-        date_edit.setDisplayFormat("yyyy-MM-dd")
-        date_edit.setLayoutDirection(Qt.LeftToRight)
-        date_edit.setStyleSheet("""
-            QDateEdit {
+        combo_style = """
+            QComboBox {
                 border: 1px solid #D1D5DB;
                 border-radius: 8px;
-                padding: 8px 12px;
+                padding: 6px 10px;
                 background-color: #F9FAFB;
-                font-size: 14px;
+                font-size: 13px;
                 min-height: 20px;
             }
-            QDateEdit:focus { border-color: #3B82F6; }
-        """)
-        c_layout.addWidget(date_edit)
+            QComboBox:focus { border-color: #3B82F6; }
+            QComboBox::drop-down { subcontrol-origin: padding; subcontrol-position: center left; width: 20px; border: none; }
+        """
+
+        # Labels row
+        labels_row = QHBoxLayout()
+        labels_row.setSpacing(8)
+        label_style = "color: #6B7280; font-size: 10px; font-weight: 600; background: transparent;"
+        lbl_year = QLabel("السنة")
+        lbl_year.setStyleSheet(label_style)
+        lbl_year.setAlignment(Qt.AlignCenter)
+        lbl_month = QLabel("الشهر")
+        lbl_month.setStyleSheet(label_style)
+        lbl_month.setAlignment(Qt.AlignCenter)
+        lbl_day = QLabel("اليوم")
+        lbl_day.setStyleSheet(label_style)
+        lbl_day.setAlignment(Qt.AlignCenter)
+        labels_row.addWidget(lbl_year, 2)
+        labels_row.addWidget(lbl_month, 1)
+        labels_row.addWidget(lbl_day, 1)
+        c_layout.addLayout(labels_row)
+
+        # Combo row
+        date_row = QHBoxLayout()
+        date_row.setSpacing(8)
+
+        current_year = _date.today().year
+        year_combo = QComboBox()
+        year_combo.setStyleSheet(combo_style)
+        year_combo.setLayoutDirection(Qt.LeftToRight)
+        year_combo.addItem("--", None)
+        for y in range(current_year, 1949, -1):
+            year_combo.addItem(str(y), y)
+        year_combo.setCurrentIndex(1)
+
+        month_combo = QComboBox()
+        month_combo.setStyleSheet(combo_style)
+        month_combo.setLayoutDirection(Qt.LeftToRight)
+        month_combo.addItem("--", None)
+        for m in range(1, 13):
+            month_combo.addItem(str(m), m)
+
+        day_combo = QComboBox()
+        day_combo.setStyleSheet(combo_style)
+        day_combo.setLayoutDirection(Qt.LeftToRight)
+        day_combo.addItem("--", None)
+        for d in range(1, 32):
+            day_combo.addItem(str(d), d)
+
+        date_row.addWidget(year_combo, 2)
+        date_row.addWidget(month_combo, 1)
+        date_row.addWidget(day_combo, 1)
+        c_layout.addLayout(date_row)
 
         c_layout.addSpacing(4)
 
-        # Buttons
         btn_row = QHBoxLayout()
         btn_row.setSpacing(8)
 
@@ -1799,7 +2103,14 @@ class PersonDialog(QDialog):
         main_layout.addWidget(container)
 
         if dlg.exec_() == QDialog.Accepted:
-            return date_edit.date().toPyDate().isoformat()
+            y = year_combo.currentData()
+            m = month_combo.currentData()
+            d = day_combo.currentData()
+            if y:
+                month = m if m else 1
+                day = d if d else 1
+                return f"{y:04d}-{month:02d}-{day:02d}"
+            return ""
         return None
 
     def _ask_same_or_separate_dates(self, file_count: int):
@@ -1897,13 +2208,6 @@ class PersonDialog(QDialog):
 
     # Validation
 
-    def _on_contract_type_changed(self):
-        """Enable ownership_share only when shared ownership is selected."""
-        is_shared = self.contract_type.currentData() == 2
-        self.ownership_share.setEnabled(is_shared)
-        if not is_shared:
-            self.ownership_share.clear()
-
     def _clamp_ownership_share(self):
         """Clamp ownership share to 0-100 range on focus out."""
         try:
@@ -1914,6 +2218,17 @@ class PersonDialog(QDialog):
                 self.ownership_share.setText("0")
         except ValueError:
             self.ownership_share.setText("")
+
+    def _build_start_date_iso(self) -> str:
+        """Build ISO date string from the 3 separate date fields (year/month/day)."""
+        y = self.start_year.text().strip()
+        m = self.start_month.text().strip()
+        d = self.start_day.text().strip()
+        if y:
+            month = int(m) if m else 1
+            day = int(d) if d else 1
+            return f"{int(y):04d}-{month:02d}-{day:02d}"
+        return None
 
     def _validate_mobile(self, value: str) -> bool:
         """Validate mobile number: exactly 8 digits (prefix 09 is fixed in UI)."""
@@ -1948,11 +2263,11 @@ class PersonDialog(QDialog):
     def _load_person_data(self, data: Dict):
         """Load person data into form fields."""
         # Tab 1
-        self.first_name.setText(data.get('first_name', ''))
-        self.father_name.setText(data.get('father_name', ''))
-        self.mother_name.setText(data.get('mother_name', ''))
-        self.last_name.setText(data.get('last_name', ''))
-        self.national_id.setText(data.get('national_id', ''))
+        self.first_name.setText(data.get('first_name') or '')
+        self.father_name.setText(data.get('father_name') or '')
+        self.mother_name.setText(data.get('mother_name') or '')
+        self.last_name.setText(data.get('last_name') or '')
+        self.national_id.setText(data.get('national_id') or '')
 
         # Birth date
         if data.get('birth_date'):
@@ -1975,9 +2290,12 @@ class PersonDialog(QDialog):
                 self.nationality.setCurrentIndex(idx)
 
         # Tab 2
-        self.phone.setText(data.get('phone', ''))
-        self.email.setText(data.get('email', ''))
-        self.landline.setText(data.get('landline', ''))
+        phone_val = data.get('phone') or ''
+        if phone_val.startswith('09'):
+            phone_val = phone_val[2:]
+        self.phone.setText(phone_val)
+        self.email.setText(data.get('email') or '')
+        self.landline.setText(data.get('landline') or '')
 
         # Person role
         role = data.get('person_role') or data.get('relationship_type')
@@ -1988,10 +2306,6 @@ class PersonDialog(QDialog):
 
         # Tab 3 - relation data
         rel = data.get('relation_data', {})
-        if rel.get('contract_type') is not None:
-            idx = self.contract_type.findData(rel['contract_type'])
-            if idx >= 0:
-                self.contract_type.setCurrentIndex(idx)
 
         rel_type = rel.get('rel_type')
         if rel_type:
@@ -2001,9 +2315,13 @@ class PersonDialog(QDialog):
                     break
 
         if rel.get('start_date'):
-            d = QDate.fromString(rel['start_date'], 'yyyy-MM-dd')
-            if d.isValid():
-                self.start_date.setDate(d)
+            parts = rel['start_date'].split('-')
+            if len(parts) >= 1:
+                self.start_year.setText(parts[0])
+            if len(parts) >= 2:
+                self.start_month.setText(str(int(parts[1])))
+            if len(parts) >= 3:
+                self.start_day.setText(str(int(parts[2])))
 
         if rel.get('ownership_share') is not None:
             self.ownership_share.setText(str(rel['ownership_share']))
@@ -2033,17 +2351,13 @@ class PersonDialog(QDialog):
                 f for f in data['_relation_uploaded_files']
                 if os.path.exists(f.get("path", "")) or f.get("evidence_id")
             ]
-            file_paths = [
-                f["path"] for f in self.relation_uploaded_files
-                if os.path.exists(f.get("path", ""))
-            ]
-            self._update_upload_thumbnails("rel_upload", file_paths)
+            self._refresh_relation_thumbnails()
 
         if data.get('_relation_id'):
             self._api_relation_id = data['_relation_id']
 
         # Fetch evidence count from server for logging
-        if self._use_api and self._survey_id:
+        if self._survey_id:
             try:
                 evidences = self._api_service.get_survey_evidences(self._survey_id)
                 person_id = data.get('person_id')
@@ -2080,9 +2394,8 @@ class PersonDialog(QDialog):
             'is_contact_person': False,
             # Tab 3
             'relation_data': {
-                'contract_type': self.contract_type.currentData() if self.contract_type.currentIndex() > 0 else None,
                 'rel_type': self.rel_type_combo.currentData(),
-                'start_date': self.start_date.date().toPyDate().isoformat(),
+                'start_date': self._build_start_date_iso(),
                 'ownership_share': float(self.ownership_share.text() or 0),
                 'evidence_type': self.evidence_type.currentData() if self.evidence_type.currentIndex() > 0 else None,
                 'evidence_desc': self.evidence_desc.text().strip() or None,
@@ -2189,10 +2502,10 @@ class PersonDialog(QDialog):
                 self.tab_widget.setCurrentIndex(1)
             has_error = True
 
-        # Ownership share: required when shared ownership is selected
+        # Ownership share: required when claim type is Owner (1)
         ownership_text = self.ownership_share.text().strip()
-        is_shared_ownership = self.contract_type.currentData() == 2
-        if is_shared_ownership and not ownership_text:
+        is_owner = self.rel_type_combo.currentData() == 1
+        if is_owner and not ownership_text:
             self._set_field_error(self.ownership_share, self._ownership_error, tr("wizard.person_dialog.ownership_share_required"))
             if not has_error:
                 self.tab_widget.setCurrentIndex(2)
@@ -2211,7 +2524,7 @@ class PersonDialog(QDialog):
         if has_error:
             return
 
-        if self._use_api and self._existing_person_mode:
+        if self._existing_person_mode:
             self._refresh_token()
             person_id = (self.person_data or {}).get('person_id', '')
             if not person_id:
@@ -2220,12 +2533,15 @@ class PersonDialog(QDialog):
                 return
             self._api_person_id = person_id
             person_data = self.get_person_data()
+            # Only link to unit if person has a relation type (claim)
+            # Otherwise person is just a household member
+            relation_data = person_data.get('relation_data', {})
+            rel_type = relation_data.get('rel_type') or person_data.get('relationship_type')
+
             link_success = True
-            if self._survey_id and self._unit_id:
-                relation_data = person_data.get('relation_data', {})
+            if rel_type and self._survey_id and self._unit_id:
                 relation_data['person_id'] = person_id
-                if not relation_data.get('rel_type'):
-                    relation_data['rel_type'] = person_data.get('relationship_type')
+                relation_data['rel_type'] = rel_type
                 relation_data['is_contact'] = True
                 try:
                     relation_response = self._api_service.link_person_to_unit(
@@ -2266,6 +2582,8 @@ class PersonDialog(QDialog):
                     ErrorHandler.show_error(
                         self, tr("wizard.person_dialog.link_failed", error_msg=map_exception(e)), tr("common.error")
                     )
+            elif not rel_type:
+                logger.info(f"No relation type set for person {person_id}, added as household member only")
             else:
                 logger.warning(f"Skipping relation link: survey_id={self._survey_id}, unit_id={self._unit_id}")
             if not link_success:
@@ -2277,7 +2595,7 @@ class PersonDialog(QDialog):
             self.accept()
             return
 
-        if self._use_api and not self.editing_mode:
+        if not self.editing_mode:
             self._refresh_token()
             person_data = self.get_person_data()
             logger.info(f"Creating person via API: {person_data.get('first_name')} {person_data.get('last_name')}")
@@ -2314,13 +2632,15 @@ class PersonDialog(QDialog):
             if self.uploaded_files and self._survey_id and person_id:
                 self._upload_identification_files(person_id)
 
-            # Step 2: Link person to property unit with relation
+            # Step 2: Link person to property unit only if relation type is set
+            # Persons without rel_type are household members only
             link_success = True
-            if self._survey_id and self._unit_id and person_id:
-                relation_data = person_data.get('relation_data', {})
+            relation_data = person_data.get('relation_data', {})
+            rel_type = relation_data.get('rel_type') or person_data.get('relationship_type')
+
+            if rel_type and self._survey_id and self._unit_id and person_id:
                 relation_data['person_id'] = person_id
-                if not relation_data.get('rel_type'):
-                    relation_data['rel_type'] = person_data.get('relationship_type')
+                relation_data['rel_type'] = rel_type
 
                 try:
                     relation_response = self._api_service.link_person_to_unit(
@@ -2360,6 +2680,8 @@ class PersonDialog(QDialog):
                     ErrorHandler.show_error(
                         self, tr("wizard.person_dialog.link_failed", error_msg=map_exception(e)), tr("common.error")
                     )
+            elif not rel_type:
+                logger.info(f"No relation type for person {person_id}, added as household member only")
             else:
                 logger.warning(f"Skipping relation link: survey_id={self._survey_id}, unit_id={self._unit_id}, person_id={person_id}")
 
@@ -2371,7 +2693,7 @@ class PersonDialog(QDialog):
                 )
 
         # Handle evidence files in edit mode: replace via PUT, or upload/delete as needed
-        if self._use_api and self.editing_mode:
+        if self.editing_mode:
             self._refresh_token()
             import os
             person_id = self.person_data.get('person_id')
@@ -2414,10 +2736,10 @@ class PersonDialog(QDialog):
                         logger.error(f"Failed to delete orphaned ID evidence {old_id}: {e}")
                 self._pending_id_replacements.clear()
 
-            # Tenure files: new files without evidence_id
+            # Tenure files: new files without evidence_id (exclude existing selected)
             relation_id = self._api_relation_id
             new_rel_files = [f for f in self.relation_uploaded_files
-                             if not f.get("evidence_id")]
+                             if not f.get("evidence_id") and not f.get("_selected_existing")]
 
             if self._survey_id and relation_id:
                 # Replace: pair new tenure files with pending replacement IDs (PUT)
@@ -2445,6 +2767,17 @@ class PersonDialog(QDialog):
                     self.relation_uploaded_files = new_rel_files
                     self._upload_tenure_files(relation_id)
                     self.relation_uploaded_files = saved
+
+                # Link newly selected existing documents
+                for entry in self.relation_uploaded_files:
+                    if entry.get('_selected_existing') and entry.get('evidence_id'):
+                        try:
+                            self._api_service.link_evidence_to_relation(
+                                self._survey_id, entry['evidence_id'], relation_id
+                            )
+                            logger.info(f"Existing evidence {entry['evidence_id']} linked to relation {relation_id}")
+                        except Exception as e:
+                            logger.error(f"Failed to link existing evidence: {e}")
 
                 # Delete leftover pending tenure IDs
                 for old_id in self._pending_rel_replacements:
@@ -2481,7 +2814,7 @@ class PersonDialog(QDialog):
                 logger.error(f"Failed to upload identification file {file_path}: {e}")
 
     def _upload_tenure_files(self, relation_id: str):
-        """Upload tenure evidence files for the created relation."""
+        """Upload new tenure files and link existing selected documents."""
         if not self.relation_uploaded_files:
             return
 
@@ -2491,8 +2824,13 @@ class PersonDialog(QDialog):
         success_count = 0
         fail_count = 0
 
+        # Upload new files
         for file_entry in self.relation_uploaded_files:
-            file_path = file_entry["path"]
+            if file_entry.get('_selected_existing'):
+                continue
+            file_path = file_entry.get("path", "")
+            if not file_path:
+                continue
             issue_date = file_entry.get("issue_date", "")
             file_hash = file_entry.get("hash", "")
 
@@ -2522,6 +2860,23 @@ class PersonDialog(QDialog):
                 fail_count += 1
                 logger.error(f"Failed to upload {file_path}: {e}")
 
+        # Link existing selected documents to this relation
+        for file_entry in self.relation_uploaded_files:
+            if not file_entry.get('_selected_existing'):
+                continue
+            ev_id = file_entry.get('evidence_id')
+            if not ev_id:
+                continue
+            try:
+                self._api_service.link_evidence_to_relation(
+                    self._survey_id, ev_id, relation_id
+                )
+                success_count += 1
+                logger.info(f"Existing evidence {ev_id} linked to relation {relation_id}")
+            except Exception as e:
+                fail_count += 1
+                logger.error(f"Failed to link evidence {ev_id}: {e}")
+
         if fail_count > 0:
             logger.warning(f"Document upload: {success_count} succeeded, {fail_count} failed")
             Toast.show_toast(
@@ -2530,4 +2885,4 @@ class PersonDialog(QDialog):
                 Toast.WARNING
             )
         elif success_count > 0:
-            logger.info(f"All {success_count} document(s) uploaded successfully")
+            logger.info(f"All {success_count} document(s) processed successfully")

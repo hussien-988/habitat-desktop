@@ -1,19 +1,16 @@
 # -*- coding: utf-8 -*-
 """
-صفحة المطالبات المكتملة - Completed Claims Page
-Displays completed/approved claims in a 2-column grid layout.
-
-Figma Specifications Applied:
-- Background: #F0F7FF (BACKGROUND color)
-- Typography: IBM Plex Sans Arabic, Letter spacing: 0px
-- Layout: Clean, professional spacing
-
-Note: Navbar is managed by MainWindow, not by individual pages
+Claims Page — displays all claims (Open & Closed) using Claims API.
+Features Underline Tab Bar for switching between open/closed claims.
 """
+
+import logging
+from typing import List, Dict
 
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel,
-    QScrollArea, QSpacerItem, QSizePolicy, QFrame, QGridLayout
+    QScrollArea, QSpacerItem, QSizePolicy, QFrame, QGridLayout,
+    QLineEdit, QComboBox
 )
 from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtGui import QFont
@@ -22,20 +19,26 @@ from ..design_system import Colors, PageDimensions
 from ..components.empty_state import EmptyState
 from ..components.claim_list_card import ClaimListCard
 from ..components.primary_button import PrimaryButton
+from ..components.underline_tab_bar import UnderlineTabBar
 from ..font_utils import create_font, FontManager
 from ..style_manager import StyleManager
 from services.translation_manager import tr
+from services.display_mappings import get_source_display
+
+logger = logging.getLogger(__name__)
+
+# CaseStatus enum values from backend
+CASE_STATUS_OPEN = 1
+CASE_STATUS_CLOSED = 2
 
 
 class CompletedClaimsPage(QWidget):
     """
-    Completed claims page with grid layout.
+    Claims page with Underline Tab Bar (Open / Closed).
 
     Signals:
         claim_selected(str): Emitted when a claim card is clicked
         add_claim_clicked(): Emitted when add button is clicked
-
-    Note: Navbar is managed by MainWindow, not by this page
     """
 
     claim_selected = pyqtSignal(str)
@@ -45,42 +48,45 @@ class CompletedClaimsPage(QWidget):
         super().__init__(parent)
         self.db = db
         self.i18n = i18n
-        self.claims_data = []
-        self.current_tab_title = "المطالبات المكتملة"
+        self.claims_data: List[Dict] = []
+        self._active_tab = "open"  # "open" or "closed"
+        self._buildings_cache: Dict[str, object] = {}
+        self._last_refresh_ms = 0
         self._setup_ui()
 
     def _setup_ui(self):
-        """
-        Setup page UI.
-
-        Structure:
-        - Header (80px height with title and add button)
-        - Content area (scrollable grid of claim cards)
-
-        Note: Navbar is managed by MainWindow
-        """
         main_layout = QVBoxLayout(self)
-        # Apply unified padding (DRY - using PageDimensions constants):
-        # - Horizontal: 131px each side
-        # - Top: 32px (gap between navbar and content - unified across all pages)
-        # - Bottom: 0px
         main_layout.setContentsMargins(
-            PageDimensions.CONTENT_PADDING_H,        # Left: 131px
-            PageDimensions.CONTENT_PADDING_V_TOP,    # Top: 32px (unified)
-            PageDimensions.CONTENT_PADDING_H,        # Right: 131px
-            PageDimensions.CONTENT_PADDING_V_BOTTOM  # Bottom: 0px
+            PageDimensions.CONTENT_PADDING_H,
+            PageDimensions.CONTENT_PADDING_V_TOP,
+            PageDimensions.CONTENT_PADDING_H,
+            PageDimensions.CONTENT_PADDING_V_BOTTOM
         )
-        main_layout.setSpacing(PageDimensions.HEADER_GAP)  # 30px gap after header
+        main_layout.setSpacing(16)
 
-        # Background color from Figma via StyleManager
         self.setStyleSheet(StyleManager.page_background())
 
-        # Header with title and add button
+        # Header
         self.header = self._create_header()
         main_layout.addWidget(self.header)
 
-        # Content area (scrollable with hidden scrollbar)
-        # Best Practice: Hide scrollbar for cleaner UI while maintaining scroll functionality
+        # Filter bar
+        filter_bar = self._create_filter_bar()
+        main_layout.addWidget(filter_bar)
+
+        # Underline Tab Bar
+        self._tab_bar = UnderlineTabBar(["مفتوحة", "مغلقة"], self)
+        self._tab_bar.tab_changed.connect(self._on_tab_changed)
+        main_layout.addWidget(self._tab_bar)
+
+        # Separator line
+        separator = QFrame()
+        separator.setFrameShape(QFrame.HLine)
+        separator.setFixedHeight(1)
+        separator.setStyleSheet("background-color: #E8E8E8; border: none;")
+        main_layout.addWidget(separator)
+
+        # Content area (scrollable)
         self.content_area = QScrollArea()
         self.content_area.setWidgetResizable(True)
         self.content_area.setFrameShape(QFrame.NoFrame)
@@ -93,225 +99,284 @@ class CompletedClaimsPage(QWidget):
             }}
         """)
 
-        # Content widget with Grid Layout (Figma: 2 columns, 16px gaps)
         self.content_widget = QWidget()
         self.content_layout = QGridLayout(self.content_widget)
-        # No additional padding inside content (padding applied to main_layout)
-        self.content_layout.setContentsMargins(0, 0, 0, 0)
-        # Using Figma values: 16px gap both vertical and horizontal
-        self.content_layout.setVerticalSpacing(PageDimensions.CARD_GAP_VERTICAL)      # 16px
-        self.content_layout.setHorizontalSpacing(PageDimensions.CARD_GAP_HORIZONTAL)  # 16px
-
+        self.content_layout.setContentsMargins(0, 8, 0, 0)
+        self.content_layout.setVerticalSpacing(PageDimensions.CARD_GAP_VERTICAL)
+        self.content_layout.setHorizontalSpacing(PageDimensions.CARD_GAP_HORIZONTAL)
         self.content_area.setWidget(self.content_widget)
         main_layout.addWidget(self.content_area)
 
-        # Show empty state by default
         self._show_empty_state()
 
     def showEvent(self, event):
-        """تحديث البيانات عند عرض الصفحة"""
         super().showEvent(event)
-        # تحديث البيانات تلقائياً عند فتح الصفحة
-        self.refresh()
+        # Debounce: skip if refresh was called in the last 500ms (navigate_to already called it)
+        import time
+        now = int(time.time() * 1000)
+        if now - self._last_refresh_ms > 500:
+            self.refresh()
 
     def _create_header(self):
-        """
-        Create page header with dynamic title and add button.
-
-        Figma Specs:
-        - Height: 48px (button + title height)
-        - Gap after header: 30px (handled by main_layout spacing)
-        - Font: IBM Plex Sans Arabic, 16px Bold, Letter spacing 0
-        - Button: Border-radius 8px, Height 40px
-        """
         header = QWidget()
-        header.setFixedHeight(PageDimensions.PAGE_HEADER_HEIGHT)  # 48px
+        header.setFixedHeight(PageDimensions.PAGE_HEADER_HEIGHT)
         header.setStyleSheet(f"background-color: {Colors.BACKGROUND}; border: none;")
 
         layout = QHBoxLayout(header)
-        layout.setContentsMargins(0, 0, 0, 0)  # No extra padding
+        layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(16)
 
-        # Page title (dynamic based on tab)
-        self.title_label = QLabel(self.current_tab_title)
-
-        # Use centralized font utility (DRY + eliminates stylesheet conflicts)
-        # Figma: IBM Plex Sans Arabic, 24px Bold, Letter spacing 0
-        # Font conversion: 24px × 0.75 = 18pt
+        self.title_label = QLabel(tr("navbar.tab.claims"))
         title_font = create_font(
-            size=FontManager.SIZE_TITLE,  # 18pt
-            weight=QFont.Bold,             # 700
+            size=FontManager.SIZE_TITLE,
+            weight=QFont.Bold,
             letter_spacing=0
         )
         self.title_label.setFont(title_font)
-
         self.title_label.setStyleSheet(f"color: {Colors.PAGE_TITLE}; border: none;")
         layout.addWidget(self.title_label)
 
-        # Spacer
         layout.addSpacerItem(QSpacerItem(40, 20, QSizePolicy.Expanding, QSizePolicy.Minimum))
-
-        # Add button - Using reusable PrimaryButton component (DRY + SOLID)
-        # Figma: 199×48px, padding 24×12, font 16px, icon instead of "+"
-        add_btn = PrimaryButton(tr("wizard.button.add_case"), icon_name="icon")
-        add_btn.clicked.connect(self.add_claim_clicked.emit)
-        layout.addWidget(add_btn)
 
         return header
 
-    def _show_empty_state(self):
-        """Show empty state when no claims exist"""
-        # Clear existing content
-        self._clear_content()
+    def _create_filter_bar(self):
+        form_style = StyleManager.form_input()
 
-        # Create empty state
-        empty_state = EmptyState(
-            icon_text="+",
-            title="لا توجد بيانات بعد",
-            description="ابدأ بإضافة الحالات للظهور هنا"
+        bar = QWidget()
+        bar.setStyleSheet(f"background-color: {Colors.BACKGROUND}; border: none;")
+
+        layout = QHBoxLayout(bar)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(10)
+
+        # 1. Search by claim number
+        self._search_input = QLineEdit()
+        self._search_input.setLayoutDirection(Qt.RightToLeft)
+        self._search_input.setPlaceholderText("بحث برقم المطالبة...")
+        self._search_input.setFixedWidth(220)
+        self._search_input.setStyleSheet(form_style)
+        self._search_input.textChanged.connect(self._on_search_changed)
+        layout.addWidget(self._search_input)
+
+        # 2. Source filter (FieldCollection=1, OfficeSubmission=2 per Swagger)
+        self._source_filter = QComboBox()
+        self._source_filter.setLayoutDirection(Qt.RightToLeft)
+        self._source_filter.setFixedWidth(170)
+        self._source_filter.setStyleSheet(form_style)
+        self._source_filter.addItem("الكل", None)
+        self._source_filter.addItem(get_source_display(1), 1)
+        self._source_filter.addItem(get_source_display(2), 2)
+        self._source_filter.currentIndexChanged.connect(self._on_source_changed)
+        layout.addWidget(self._source_filter)
+
+        # 3. Person name filter
+        self._name_filter = QLineEdit()
+        self._name_filter.setLayoutDirection(Qt.RightToLeft)
+        self._name_filter.setPlaceholderText("بحث باسم المُطالِب...")
+        self._name_filter.setFixedWidth(200)
+        self._name_filter.setStyleSheet(form_style)
+        self._name_filter.textChanged.connect(self._on_search_changed)
+        layout.addWidget(self._name_filter)
+
+        layout.addStretch()
+        return bar
+
+    def _on_search_changed(self):
+        """Local filter — re-display without API call."""
+        self._apply_local_filter()
+
+    def _on_source_changed(self):
+        """Source dropdown changed — reload from API."""
+        self._load_claims()
+
+    def _apply_local_filter(self):
+        """Filter displayed cards by claim number, person name, and source."""
+        search_text = self._search_input.text().strip()
+        name_text = self._name_filter.text().strip()
+        source_val = self._source_filter.currentData()
+
+        filtered = self.claims_data
+        if search_text:
+            filtered = [c for c in filtered
+                        if search_text in (c.get("claim_id") or "")]
+        if name_text:
+            filtered = [c for c in filtered
+                        if name_text in (c.get("claimant_name") or "")]
+        if source_val is not None:
+            filtered = [c for c in filtered
+                        if c.get("source") == source_val]
+
+        if filtered:
+            self._show_claims_list(filtered)
+        else:
+            self._show_empty_state()
+
+    # -------------------------------------------------------------------------
+    # Tab handling
+    # -------------------------------------------------------------------------
+
+    def _on_tab_changed(self, index: int):
+        self._active_tab = "open" if index == 0 else "closed"
+        self._load_claims()
+
+    # -------------------------------------------------------------------------
+    # Data loading
+    # -------------------------------------------------------------------------
+
+    def refresh(self, data=None):
+        """Refresh claims from Claims API."""
+        import time
+        self._last_refresh_ms = int(time.time() * 1000)
+        self._load_claims()
+
+    def _load_claims(self):
+        """Load claims from API based on active tab and source filter."""
+        self.claims_data = []
+        case_status = CASE_STATUS_OPEN if self._active_tab == "open" else CASE_STATUS_CLOSED
+        source = self._source_filter.currentData()
+
+        try:
+            from services.api_client import get_api_client
+            api = get_api_client()
+            summaries = api.get_claims_summaries(
+                claim_status=case_status,
+                claim_source=source,
+            )
+
+            # Enrich with building details
+            building_codes = {s.get("buildingCode", "") for s in summaries if s.get("buildingCode")}
+            self._enrich_buildings_cache(api, building_codes)
+
+            for s in summaries:
+                self.claims_data.append(self._map_summary(s))
+            logger.info(f"Loaded {len(self.claims_data)} claims (status={case_status}, source={source})")
+        except Exception as e:
+            logger.warning(f"Error loading claims (status={case_status}): {e}")
+
+        self._apply_local_filter()
+
+    def _enrich_buildings_cache(self, api, building_codes):
+        """Fetch building details for codes not yet cached."""
+        from controllers.building_controller import BuildingController
+        bc = BuildingController(self.db)
+
+        for code in building_codes:
+            if not code or code in self._buildings_cache:
+                continue
+            try:
+                result = api.search_buildings(building_id=code, page_size=1)
+                buildings = result.get("buildings", [])
+                if buildings:
+                    self._buildings_cache[code] = bc._api_dto_to_building(buildings[0])
+            except Exception as e:
+                logger.debug(f"Building lookup failed for {code}: {e}")
+
+    def _map_summary(self, s: Dict) -> Dict:
+        """Map Claims API summary DTO to card data format."""
+        source = s.get("claimSource", 0)
+        source_label = get_source_display(source)
+
+        claimant = (
+            s.get("primaryClaimantName")
+            or s.get("fullNameArabic")
+            or "غير محدد"
         )
+        date_str = s.get("createdAtUtc") or s.get("surveyDate") or ""
 
-        # Center the empty state in grid layout
-        # Add top spacer (row 0, spans 2 columns)
-        self.content_layout.addItem(QSpacerItem(20, 40, QSizePolicy.Minimum, QSizePolicy.Expanding), 0, 0, 1, 2)
-        # Add empty state widget (row 1, spans 2 columns, centered)
-        self.content_layout.addWidget(empty_state, 1, 0, 1, 2, Qt.AlignCenter)
-        # Add bottom spacer (row 2, spans 2 columns)
-        self.content_layout.addItem(QSpacerItem(20, 40, QSizePolicy.Minimum, QSizePolicy.Expanding), 2, 0, 1, 2)
+        building_code = s.get("buildingCode", "")
+        building_obj = self._buildings_cache.get(building_code)
 
-    def _show_claims_list(self):
-        """Show claims in 2-column grid layout with Figma spacing"""
-        # Clear existing content
+        unit_number = s.get("propertyUnitIdNumber", "") or s.get("unitCode", "")
+        unit_obj = None
+        if unit_number:
+            class _NS:
+                def __init__(self, **kw): self.__dict__.update(kw)
+            unit_obj = _NS(unit_number=unit_number)
+
+        return {
+            "claim_id": s.get("claimNumber", "") or s.get("claimId", "N/A"),
+            "claim_uuid": s.get("claimId", "") or s.get("id", ""),
+            "claimant_name": claimant,
+            "date": date_str[:10] if date_str and not date_str.startswith("0001") else "",
+            "status": "open" if s.get("caseStatus") == CASE_STATUS_OPEN else "closed",
+            "building_code": building_code,
+            "unit_number": unit_number,
+            "source": source,
+            "source_label": source_label,
+            "building_id": building_obj.building_id if building_obj else building_code,
+            "building": building_obj,
+            "unit": unit_obj,
+            "survey_id": s.get("surveyId", ""),
+        }
+
+    # -------------------------------------------------------------------------
+    # Display
+    # -------------------------------------------------------------------------
+
+    def _show_claims_list(self, data=None):
         self._clear_content()
 
-        if not self.claims_data:
+        display = data if data is not None else self.claims_data
+        if not display:
             self._show_empty_state()
             return
 
-        # Add cards directly to content_layout (which is already QGridLayout)
-        # Grid layout was set up in _setup_ui with 16px gaps
-        for index, claim in enumerate(self.claims_data):
-            row = index // PageDimensions.CARD_COLUMNS  # Integer division for row
-            col = index % PageDimensions.CARD_COLUMNS   # Modulo for column (0 or 1)
+        icon = "blue" if self._active_tab == "closed" else "yelow"
 
-            card = ClaimListCard(claim)
+        for index, claim in enumerate(display):
+            row = index // PageDimensions.CARD_COLUMNS
+            col = index % PageDimensions.CARD_COLUMNS
+
+            card = ClaimListCard(claim, icon_name=icon)
             card.clicked.connect(self._on_card_clicked)
             self.content_layout.addWidget(card, row, col)
 
-        # Add spacer at the bottom to push content up
         spacer = QSpacerItem(20, 40, QSizePolicy.Minimum, QSizePolicy.Expanding)
-        final_row = (len(self.claims_data) + PageDimensions.CARD_COLUMNS - 1) // PageDimensions.CARD_COLUMNS
+        final_row = (len(display) + PageDimensions.CARD_COLUMNS - 1) // PageDimensions.CARD_COLUMNS
         self.content_layout.addItem(spacer, final_row, 0, 1, PageDimensions.CARD_COLUMNS)
 
+    def _show_empty_state(self):
+        self._clear_content()
+
+        msg = "لا توجد مطالبات مفتوحة حالياً" if self._active_tab == "open" else "لا توجد مطالبات مغلقة بعد"
+        empty_state = EmptyState(
+            icon_text="+",
+            title=msg,
+            description="ابدأ بإضافة الحالات للظهور هنا"
+        )
+
+        self.content_layout.addItem(
+            QSpacerItem(20, 40, QSizePolicy.Minimum, QSizePolicy.Expanding), 0, 0, 1, 2
+        )
+        self.content_layout.addWidget(empty_state, 1, 0, 1, 2, Qt.AlignCenter)
+        self.content_layout.addItem(
+            QSpacerItem(20, 40, QSizePolicy.Minimum, QSizePolicy.Expanding), 2, 0, 1, 2
+        )
+
     def _on_card_clicked(self, claim_id: str):
-        """Handle card click"""
         self.claim_selected.emit(claim_id)
 
     def _clear_content(self):
-        """Clear all content from layout"""
         while self.content_layout.count():
             item = self.content_layout.takeAt(0)
             if item.widget():
                 item.widget().deleteLater()
-            elif item.spacerItem():
-                pass
+
+    # -------------------------------------------------------------------------
+    # Public interface (kept for backward compatibility)
+    # -------------------------------------------------------------------------
 
     def load_claims(self, claims_data):
-        """
-        Load claims data and display
-
-        Args:
-            claims_data: List of claim dictionaries with keys:
-                - claim_id: str
-                - claimant_name: str
-                - date: str
-                - metadata: list of strings
-        """
         self.claims_data = claims_data
-
         if claims_data:
             self._show_claims_list()
         else:
             self._show_empty_state()
 
     def search_claims(self, query: str, mode: str = "name"):
-        """
-        Search claims based on query and mode.
-
-        Args:
-            query: Search query string
-            mode: Search mode (name, claim_id, building)
-        """
         pass
 
     def set_tab_title(self, title: str):
-        """Update page title."""
-        self.current_tab_title = title
         if hasattr(self, 'title_label'):
             self.title_label.setText(title)
-
-    def refresh(self, data=None):
-        """Refresh the claims list from Finalized office surveys."""
-        self.claims_data = []
-        try:
-            from controllers.survey_controller import SurveyController
-            ctrl = SurveyController(self.db)
-            result = ctrl.load_office_surveys(status="Finalized")
-            summaries = result.data if result.success and result.data else []
-            for s in summaries:
-                self.claims_data.append({
-                    "claim_id":      s.get("referenceCode") or s.get("id", "N/A"),
-                    "claim_uuid":    s.get("id", ""),
-                    "survey_id":     s.get("id", ""),
-                    "claimant_name": s.get("intervieweeName") or "غير محدد",
-                    "date":          (s.get("surveyDate") or "")[:10],
-                    "status":        "approved",
-                    "building_id":   s.get("buildingId", ""),
-                    "unit_number":   s.get("unitIdentifier", "") or s.get("propertyUnitCode", ""),
-                    "building":      None,
-                    "unit":          None,
-                    "unit_id":       s.get("propertyUnitId", ""),
-                })
-        except Exception as e:
-            import logging
-            logging.getLogger(__name__).warning(f"Error loading finalized surveys: {e}")
-
-        # Enrich missing names from survey detail
-        self._enrich_missing_names(self.claims_data)
-
-        if self.claims_data:
-            self._show_claims_list()
-        else:
-            self._show_empty_state()
-
-    def _enrich_missing_names(self, items):
-        """For items with no intervieweeName, fetch name from survey detail/persons."""
-        missing = [item for item in items if item.get("claimant_name") == "غير محدد"]
-        if not missing:
-            return
-        try:
-            from services.api_client import get_api_client
-            api = get_api_client()
-        except Exception:
-            return
-        for item in missing:
-            try:
-                detail = api.get_office_survey_detail(item["claim_uuid"])
-                if detail.get("intervieweeName"):
-                    item["claimant_name"] = detail["intervieweeName"]
-                    continue
-                for rel in (detail.get("relations") or []):
-                    pid = rel.get("personId")
-                    if pid:
-                        person = api._request("GET", f"/v1/Persons/{pid}")
-                        parts = [
-                            person.get("firstNameArabic", ""),
-                            person.get("fatherNameArabic", ""),
-                            person.get("familyNameArabic", ""),
-                        ]
-                        name = " ".join(p for p in parts if p)
-                        if name:
-                            item["claimant_name"] = name
-                            break
-            except Exception:
-                pass
