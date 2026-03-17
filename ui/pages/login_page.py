@@ -47,8 +47,6 @@ class LoginPage(QWidget):
         self._position_login_watermark()
         self._setup_login_navbar()
 
-        # Apply development mode settings (auto-fill credentials)
-        self._apply_dev_mode_settings()
 
     def _load_fonts(self):
         """Load Noto Kufi Arabic fonts"""
@@ -365,33 +363,9 @@ class LoginPage(QWidget):
 
         return card
 
-    def _apply_dev_mode_settings(self):
-        """
-        Apply development mode settings for easier testing.
-
-        - Only enabled when Config.DEV_MODE = True
-        - Auto-fills login credentials to skip manual entry during development
-        - MUST be disabled in production (set Config.DEV_MODE = False)
-
-        Security Note:
-        This feature is ONLY for development/testing environments.
-        Never enable DEV_MODE in production deployments.
-        """
-        if not Config.DEV_MODE or not Config.DEV_AUTO_LOGIN:
-            return
-
-        # Auto-fill credentials from Config
-        self.username_input.setText(Config.DEV_USERNAME)
-        self.password_input.setText(Config.DEV_PASSWORD)
-
-        logger.info("DEV MODE: Auto-filled login credentials")
-
     def set_data_mode(self, mode: str, db=None):
         """Set auth service (always API)."""
         self.auth_service = ApiAuthService()
-        if Config.DEV_MODE and Config.DEV_AUTO_LOGIN:
-            self.username_input.setText(Config.DEV_USERNAME)
-            self.password_input.setText(Config.DEV_PASSWORD)
         logger.info("Login: using API auth")
 
     def _toggle_password_visibility(self):
@@ -422,6 +396,11 @@ class LoginPage(QWidget):
         user, error = self.auth_service.authenticate(username, password)
 
         if user:
+            from app.config import Roles
+            if user.role in Roles.NON_LOGIN_ROLES:
+                self._show_error("هذا الحساب غير مخوّل لاستخدام تطبيق سطح المكتب")
+                return
+
             self._failed_attempts = 0
             self._lockout_until = None
             logger.info(f"Login successful: {username}")
