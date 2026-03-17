@@ -857,6 +857,19 @@ class HouseholdStep(BaseStep):
             "households_count": len(self.context.households)
         }
 
+    def reset(self):
+        """Clear all household form fields for a new wizard session."""
+        if not self._is_initialized:
+            return
+        for spin in [self.hh_total_members, self.hh_adult_males, self.hh_adult_females,
+                     self.hh_male_children_under18, self.hh_female_children_under18,
+                     self.hh_male_elderly_over65, self.hh_female_elderly_over65,
+                     self.hh_disabled_males, self.hh_disabled_females]:
+            spin.setValue(0)
+        self.hh_occupancy_nature.setCurrentIndex(0)
+        self.hh_occupancy_type.setCurrentIndex(0)
+        self.hh_notes.clear()
+
     def populate_data(self):
         """Populate the step with data from context."""
         # Update building address and stats

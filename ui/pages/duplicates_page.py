@@ -19,8 +19,7 @@ from PyQt5.QtWidgets import (
     QTableWidget, QTableWidgetItem, QHeaderView, QFrame,
     QRadioButton, QButtonGroup, QAbstractItemView,
     QSizePolicy, QTextEdit, QApplication, QComboBox,
-    QScrollArea, QGraphicsDropShadowEffect, QGraphicsOpacityEffect,
-    QMessageBox
+    QScrollArea, QGraphicsDropShadowEffect, QGraphicsOpacityEffect
 )
 from PyQt5.QtCore import (
     Qt, pyqtSignal, QThread, pyqtSignal as Signal,
@@ -42,6 +41,7 @@ logger = get_logger(__name__)
 # Status display config
 _STATUS_CONFIG = {
     "Pending": {"label": "معلق", "color": "#F59E0B", "bg": "#FEF3C7"},
+    "PendingReview": {"label": "بانتظار المراجعة", "color": "#F59E0B", "bg": "#FEF3C7"},
     "InReview": {"label": "قيد المراجعة", "color": "#3B82F6", "bg": "#DBEAFE"},
     "Resolved": {"label": "تم الحل", "color": "#10B981", "bg": "#D1FAE5"},
     "Escalated": {"label": "مصعّد", "color": "#EF4444", "bg": "#FEE2E2"},
@@ -57,8 +57,13 @@ _PRIORITY_CONFIG = {
 
 _TYPE_CONFIG = {
     "PropertyDuplicate": {"label": "تكرار عقاري", "icon": "🏠"},
-    "PersonDuplicate": {"label": "تكرار شخص", "icon": "👤"},
+    "PersonDuplicate": {"label": "تكرار أشخاص", "icon": "👤"},
 }
+
+# Case-insensitive lookup indexes
+_STATUS_LOOKUP = {k.lower(): v for k, v in _STATUS_CONFIG.items()}
+_PRIORITY_LOOKUP = {k.lower(): v for k, v in _PRIORITY_CONFIG.items()}
+_TYPE_LOOKUP = {k.lower(): v for k, v in _TYPE_CONFIG.items()}
 
 RADIO_STYLE = f"""
     QRadioButton {{
@@ -120,11 +125,14 @@ class _ShimmerWidget(QWidget):
 
 
 class _GlowCard(QFrame):
-    """Summary card with subtle glow effect on hover."""
+    """Summary card with subtle glow effect on hover. Clickable for filtering."""
+
+    clicked = Signal()
 
     def __init__(self, title: str, count: int, color: str, parent=None):
         super().__init__(parent)
         self._color = color
+        self._active = False
         self._setup(title, count, color)
 
     def _setup(self, title: str, count: int, color: str):
@@ -170,6 +178,36 @@ class _GlowCard(QFrame):
 
     def update_count(self, count: int):
         self.count_label.setText(str(count))
+
+    def set_active(self, active: bool):
+        self._active = active
+        color = self._color
+        if active:
+            self.setStyleSheet(f"""
+                QFrame {{
+                    background: {color}15;
+                    border-radius: 14px;
+                    border: 2px solid {color};
+                }}
+            """)
+        else:
+            self.setStyleSheet(f"""
+                QFrame {{
+                    background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
+                        stop:0 white, stop:1 #FAFBFC);
+                    border-radius: 14px;
+                    border: 1px solid {color}33;
+                }}
+                QFrame:hover {{
+                    border: 1.5px solid {color}88;
+                    background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
+                        stop:0 white, stop:1 {color}0D);
+                }}
+            """)
+
+    def mousePressEvent(self, event):
+        super().mousePressEvent(event)
+        self.clicked.emit()
 
 
 class _ConflictWorker(QThread):
@@ -222,9 +260,6 @@ class _ResolutionWorker(QThread):
             elif self.action == "keep_separate":
                 result = self.service.keep_separate(
                     self.conflict_id, self.justification)
-            elif self.action == "escalate":
-                result = self.service.escalate_conflict(
-                    self.conflict_id, self.justification)
             else:
                 result = False
             self.finished.emit(result)
@@ -236,6 +271,7 @@ class DuplicatesPage(QWidget):
     """Duplicates/Conflicts resolution page with API-driven queue."""
 
     view_comparison_requested = pyqtSignal(object)
+    return_to_import = pyqtSignal()
 
     def __init__(self, db: Database, i18n: I18n, parent=None):
         super().__init__(parent)
@@ -250,6 +286,7 @@ class DuplicatesPage(QWidget):
         self._page_size = 15
         self._selected_conflict_idx = -1
         self._detail_data = None
+        self._exclude_resolved = False
         self._setup_ui()
 
     def set_user_id(self, user_id: str):
@@ -271,6 +308,11 @@ class DuplicatesPage(QWidget):
         header = self._build_header()
         main_layout.addLayout(header)
 
+        # Return-to-import banner (hidden by default)
+        self._import_banner = self._build_import_banner()
+        main_layout.addWidget(self._import_banner)
+        self._import_banner.setVisible(False)
+
         # Summary cards row
         self._summary_container = self._build_summary_cards()
         main_layout.addWidget(self._summary_container)
@@ -288,7 +330,10 @@ class DuplicatesPage(QWidget):
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        scroll.setStyleSheet("QScrollArea { border: none; background: transparent; }")
+        scroll.setStyleSheet(
+            "QScrollArea { border: none; background: transparent; }"
+            + StyleManager.scrollbar()
+        )
         scroll.setFrameShape(QFrame.NoFrame)
 
         scroll_content = QWidget()
@@ -349,6 +394,57 @@ class DuplicatesPage(QWidget):
 
         return header
 
+    # ─── Import Banner ────────────────────────────────
+
+    def _build_import_banner(self) -> QFrame:
+        banner = QFrame()
+        banner.setFixedHeight(48)
+        banner.setStyleSheet(f"""
+            QFrame {{
+                background-color: {Colors.PRIMARY_BLUE}15;
+                border: 1px solid {Colors.PRIMARY_BLUE}44;
+                border-radius: 10px;
+            }}
+        """)
+
+        layout = QHBoxLayout(banner)
+        layout.setContentsMargins(16, 0, 16, 0)
+        layout.setSpacing(12)
+
+        icon_lbl = QLabel("\u2190")
+        icon_lbl.setFont(create_font(size=14, weight=FontManager.WEIGHT_BOLD))
+        icon_lbl.setStyleSheet(f"color: {Colors.PRIMARY_BLUE}; background: transparent; border: none;")
+        layout.addWidget(icon_lbl)
+
+        msg_lbl = QLabel("تم الانتقال من صفحة الاستيراد — قم بحل التكرارات ثم عُد لمتابعة الاستيراد")
+        msg_lbl.setFont(create_font(size=FontManager.SIZE_BODY, weight=FontManager.WEIGHT_SEMIBOLD))
+        msg_lbl.setStyleSheet(f"color: {Colors.PRIMARY_BLUE}; background: transparent; border: none;")
+        layout.addWidget(msg_lbl, 1)
+
+        btn_return = QPushButton("العودة للاستيراد")
+        btn_return.setCursor(Qt.PointingHandCursor)
+        btn_return.setFont(create_font(size=FontManager.SIZE_BODY, weight=FontManager.WEIGHT_SEMIBOLD))
+        btn_return.setFixedSize(150, 36)
+        btn_return.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {Colors.PRIMARY_BLUE};
+                color: white;
+                border: none;
+                border-radius: 8px;
+            }}
+            QPushButton:hover {{
+                background-color: #1A56DB;
+            }}
+        """)
+        btn_return.clicked.connect(self.return_to_import.emit)
+        layout.addWidget(btn_return)
+
+        return banner
+
+    def set_return_to_import(self, enabled: bool):
+        """Show or hide the return-to-import banner."""
+        self._import_banner.setVisible(enabled)
+
     # ─── Summary Cards ───────────────────────────────
     def _build_summary_cards(self) -> QFrame:
         container = QFrame()
@@ -359,15 +455,22 @@ class DuplicatesPage(QWidget):
         layout.setSpacing(12)
 
         self._card_total = _GlowCard("إجمالي التعارضات", 0, Colors.PRIMARY_BLUE)
-        self._card_property = _GlowCard("تكرار عقاري", 0, "#F59E0B")
-        self._card_person = _GlowCard("تكرار أشخاص", 0, "#8B5CF6")
-        self._card_escalated = _GlowCard("مصعّد", 0, "#EF4444")
+        self._card_property = _GlowCard("تعارضات المقاسم", 0, "#F59E0B")
+        self._card_person = _GlowCard("تكرار الأشخاص", 0, "#8B5CF6")
         self._card_resolved = _GlowCard("تم الحل", 0, "#10B981")
         self._card_overdue = _GlowCard("متأخر", 0, "#DC2626")
 
-        for card in [self._card_total, self._card_property, self._card_person,
-                     self._card_escalated, self._card_resolved, self._card_overdue]:
+        self._summary_cards = [self._card_total, self._card_property, self._card_person,
+                               self._card_resolved, self._card_overdue]
+        for card in self._summary_cards:
             layout.addWidget(card)
+
+        # Connect cards to filter actions
+        self._card_total.clicked.connect(lambda: self._filter_by_card("all"))
+        self._card_property.clicked.connect(lambda: self._filter_by_card("PropertyDuplicate"))
+        self._card_person.clicked.connect(lambda: self._filter_by_card("PersonDuplicate"))
+        self._card_resolved.clicked.connect(lambda: self._filter_by_card("Resolved"))
+        self._card_overdue.clicked.connect(lambda: self._filter_by_card("overdue"))
 
         return container
 
@@ -415,8 +518,8 @@ class DuplicatesPage(QWidget):
 
         self._type_filter = QComboBox()
         self._type_filter.addItem("جميع الأنواع", "")
-        self._type_filter.addItem("تكرار عقاري", "PropertyDuplicate")
-        self._type_filter.addItem("تكرار شخص", "PersonDuplicate")
+        self._type_filter.addItem("تعارضات المقاسم", "PropertyDuplicate")
+        self._type_filter.addItem("تكرار الأشخاص", "PersonDuplicate")
         self._type_filter.setStyleSheet(combo_style)
         self._type_filter.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
         self._type_filter.currentIndexChanged.connect(self._on_filter_changed)
@@ -425,8 +528,8 @@ class DuplicatesPage(QWidget):
         self._status_filter = QComboBox()
         self._status_filter.addItem("جميع الحالات", "")
         self._status_filter.addItem("معلق", "Pending")
+        self._status_filter.addItem("بانتظار المراجعة", "PendingReview")
         self._status_filter.addItem("قيد المراجعة", "InReview")
-        self._status_filter.addItem("مصعّد", "Escalated")
         self._status_filter.addItem("تم الحل", "Resolved")
         self._status_filter.addItem("حل تلقائي", "AutoResolved")
         self._status_filter.setStyleSheet(combo_style)
@@ -690,7 +793,6 @@ class DuplicatesPage(QWidget):
         resolution_options = [
             ("دمج السجلات", "merge", Colors.PRIMARY_BLUE),
             ("إبقاء منفصل", "keep_separate", "#10B981"),
-            ("تصعيد للمشرف", "escalate", "#EF4444"),
         ]
 
         for idx, (label, value, color) in enumerate(resolution_options):
@@ -887,8 +989,12 @@ class DuplicatesPage(QWidget):
         return filters
 
     def _load_conflicts(self):
+        # Cancel previous worker if still running
         if self._worker and self._worker.isRunning():
-            return
+            self._worker.finished.disconnect()
+            self._worker.error.disconnect()
+            self._worker.quit()
+            self._worker.wait(500)
 
         self._shimmer_container.setVisible(True)
         self._conflict_list_card.setVisible(False)
@@ -911,20 +1017,33 @@ class DuplicatesPage(QWidget):
         self._shimmer_container.setVisible(False)
         self._conflict_list_card.setVisible(True)
 
-        # Update summary cards
+        # Update summary cards — show pending (unresolved) counts
         summary = data.get("summary", {})
-        self._card_total.update_count(summary.get("totalConflicts", 0))
-        self._card_property.update_count(summary.get("propertyDuplicateCount", 0))
-        self._card_person.update_count(summary.get("personDuplicateCount", 0))
-        self._card_escalated.update_count(summary.get("escalatedCount", 0))
+        pending_total = summary.get("pendingReviewCount", summary.get("totalConflicts", 0))
+        pending_property = summary.get("pendingPropertyDuplicates", summary.get("propertyDuplicateCount", 0))
+        pending_person = summary.get("pendingPersonDuplicates", summary.get("personDuplicateCount", 0))
+        self._card_total.update_count(pending_total)
+        self._card_property.update_count(pending_property)
+        self._card_person.update_count(pending_person)
         self._card_resolved.update_count(summary.get("resolvedCount", 0))
         self._card_overdue.update_count(summary.get("overdueCount", 0))
 
         # Update conflict list
         conflicts_data = data.get("conflicts", {})
-        self._conflicts = conflicts_data.get("items", [])
+        all_items = conflicts_data.get("items", [])
         self._total_pages = conflicts_data.get("totalPages", 1)
         total_count = conflicts_data.get("totalCount", 0)
+
+        # Exclude resolved items when viewing from type cards
+        if self._exclude_resolved:
+            _resolved = {"resolved", "autoresolved"}
+            self._conflicts = [
+                c for c in all_items
+                if c.get("status", "").lower() not in _resolved
+            ]
+        else:
+            self._conflicts = all_items
+
         self._count_label.setText(f"عرض {len(self._conflicts)} من {total_count}")
 
         self._populate_table()
@@ -966,7 +1085,7 @@ class DuplicatesPage(QWidget):
 
             # Type
             ctype = conflict.get("conflictType", "")
-            type_cfg = _TYPE_CONFIG.get(ctype, {"label": ctype, "icon": ""})
+            type_cfg = _TYPE_LOOKUP.get(ctype.lower(), {"label": ctype, "icon": ""}) if ctype else {"label": "-", "icon": ""}
             type_item = QTableWidgetItem(f"{type_cfg['icon']} {type_cfg['label']}")
             type_item.setTextAlignment(Qt.AlignCenter)
             type_item.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
@@ -999,7 +1118,7 @@ class DuplicatesPage(QWidget):
 
             # Priority
             priority = conflict.get("priority", "Medium")
-            pri_cfg = _PRIORITY_CONFIG.get(priority, {"label": priority, "color": "#6B7280"})
+            pri_cfg = _PRIORITY_LOOKUP.get(priority.lower(), {"label": priority, "color": "#6B7280"}) if priority else {"label": "-", "color": "#6B7280"}
             pri_item = QTableWidgetItem(pri_cfg["label"])
             pri_item.setTextAlignment(Qt.AlignCenter)
             pri_item.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
@@ -1008,7 +1127,7 @@ class DuplicatesPage(QWidget):
 
             # Status
             status = conflict.get("status", "Pending")
-            st_cfg = _STATUS_CONFIG.get(status, {"label": status, "color": "#6B7280"})
+            st_cfg = _STATUS_LOOKUP.get(status.lower(), {"label": status, "color": "#6B7280"}) if status else {"label": "-", "color": "#6B7280"}
             st_item = QTableWidgetItem(st_cfg["label"])
             st_item.setTextAlignment(Qt.AlignCenter)
             st_item.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
@@ -1046,7 +1165,7 @@ class DuplicatesPage(QWidget):
         # Update conflict info
         cnum = conflict.get("conflictNumber", "")
         ctype = conflict.get("conflictType", "")
-        type_label = _TYPE_CONFIG.get(ctype, {"label": ctype}).get("label", ctype)
+        type_label = _TYPE_LOOKUP.get(ctype.lower(), {"label": ctype}).get("label", ctype) if ctype else "-"
         self._conflict_info_label.setText(f"#{cnum} — {type_label}")
 
         # Update record previews
@@ -1109,22 +1228,16 @@ class DuplicatesPage(QWidget):
         action_labels = {
             "merge": "دمج السجلات",
             "keep_separate": "إبقاء السجلات منفصلة",
-            "escalate": "تصعيد التعارض للمشرف",
         }
         action_label = action_labels.get(resolution_type, "تنفيذ الإجراء")
 
-        msg_box = QMessageBox(self)
-        msg_box.setLayoutDirection(Qt.RightToLeft)
-        msg_box.setWindowTitle("تأكيد الإجراء")
-        msg_box.setText(f"هل أنت متأكد من {action_label}؟")
-        msg_box.setInformativeText("لا يمكن التراجع عن هذا الإجراء.")
-        msg_box.setIcon(QMessageBox.Question)
-        msg_box.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
-        msg_box.setDefaultButton(QMessageBox.No)
-        msg_box.button(QMessageBox.Yes).setText("نعم، تنفيذ")
-        msg_box.button(QMessageBox.No).setText("لا، تراجع")
-
-        if msg_box.exec_() != QMessageBox.Yes:
+        from ui.components.dialogs.confirmation_dialog import ConfirmationDialog, DialogResult
+        result = ConfirmationDialog.confirm(
+            parent=self,
+            title="تأكيد الإجراء",
+            message=f"هل أنت متأكد من {action_label}؟\nلا يمكن التراجع عن هذا الإجراء."
+        )
+        if result != DialogResult.YES:
             return
 
         master_id = ""
@@ -1163,7 +1276,55 @@ class DuplicatesPage(QWidget):
         self.view_comparison_requested.emit(conflict)
 
     # ─── Filter & Pagination ─────────────────────────
+    def _filter_by_card(self, card_type: str):
+        """Filter conflicts by clicking a summary card."""
+        # Block signals to prevent multiple _on_filter_changed calls
+        self._type_filter.blockSignals(True)
+        self._status_filter.blockSignals(True)
+
+        # Reset active state on all cards
+        for card in self._summary_cards:
+            card.set_active(False)
+
+        # Track whether to exclude resolved items from display
+        self._exclude_resolved = False
+
+        if card_type == "all":
+            self._type_filter.setCurrentIndex(0)
+            self._status_filter.setCurrentIndex(0)
+            self._exclude_resolved = True
+            self._card_total.set_active(True)
+        elif card_type == "PropertyDuplicate":
+            self._type_filter.setCurrentIndex(self._type_filter.findData("PropertyDuplicate"))
+            self._status_filter.setCurrentIndex(0)
+            self._exclude_resolved = True
+            self._card_property.set_active(True)
+        elif card_type == "PersonDuplicate":
+            self._type_filter.setCurrentIndex(self._type_filter.findData("PersonDuplicate"))
+            self._status_filter.setCurrentIndex(0)
+            self._exclude_resolved = True
+            self._card_person.set_active(True)
+        elif card_type == "Resolved":
+            self._type_filter.setCurrentIndex(0)
+            self._status_filter.setCurrentIndex(self._status_filter.findData("Resolved"))
+            self._card_resolved.set_active(True)
+        elif card_type == "overdue":
+            self._type_filter.setCurrentIndex(0)
+            self._status_filter.setCurrentIndex(0)
+            self._card_overdue.set_active(True)
+
+        # Unblock signals
+        self._type_filter.blockSignals(False)
+        self._status_filter.blockSignals(False)
+
+        self._current_page = 1
+        self._load_conflicts()
+
     def _on_filter_changed(self):
+        # Reset card active states when user changes filter manually
+        for card in self._summary_cards:
+            card.set_active(False)
+        self._exclude_resolved = False
         self._current_page = 1
         self._load_conflicts()
 

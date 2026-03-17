@@ -23,7 +23,7 @@ from utils.logger import get_logger
 
 logger = get_logger(__name__)
 
-_POLL_INTERVAL_MS = 300_000  # 5 minutes
+_POLL_INTERVAL_MS = 30_000  # 30 seconds
 
 
 class _PackageCard(QFrame):
@@ -149,6 +149,7 @@ class ImportStep1Packages(QWidget):
     """Step 1: View and select incoming packages from field researchers."""
 
     package_selected = pyqtSignal(str)  # package_id
+    upload_completed = pyqtSignal(str)  # package_id — auto-advance after upload
     new_packages_count = pyqtSignal(int)  # for notification badge
 
     def __init__(self, import_controller, parent=None):
@@ -264,7 +265,7 @@ class ImportStep1Packages(QWidget):
         card_layout.addWidget(scroll, 1)
 
         # Empty state label
-        self._empty_label = QLabel("لا توجد حزم واردة حالياً\nسيتم التحديث تلقائياً كل 5 دقائق")
+        self._empty_label = QLabel("لا توجد حزم واردة حالياً\nسيتم التحديث تلقائياً كل 30 ثانية")
         self._empty_label.setFont(create_font(size=11, weight=FontManager.WEIGHT_REGULAR))
         self._empty_label.setStyleSheet("color: #9CA3AF; background: transparent;")
         self._empty_label.setAlignment(Qt.AlignCenter)
@@ -272,7 +273,7 @@ class ImportStep1Packages(QWidget):
         card_layout.addWidget(self._empty_label)
 
         # Auto-refresh hint
-        hint = QLabel("تحديث تلقائي كل 5 دقائق")
+        hint = QLabel("تحديث تلقائي كل 30 ثانية")
         hint.setFont(create_font(size=8, weight=FontManager.WEIGHT_REGULAR))
         hint.setStyleSheet("color: #D1D5DB; background: transparent;")
         hint.setAlignment(Qt.AlignCenter)
@@ -459,37 +460,43 @@ class ImportStep1Packages(QWidget):
             self._poll_timer.stop()
 
     def _on_upload_file(self):
-        """Open file dialog, upload .uhc to backend, then refresh list."""
+        """Upload .uhc file then auto-advance to processing."""
         file_path, _ = QFileDialog.getOpenFileName(
             self, "اختيار ملف .uhc", "", "UHC Files (*.uhc);;All Files (*)"
         )
         if not file_path:
             return
 
-        from services.exceptions import NetworkException, ApiException
         from ui.components.message_dialog import MessageDialog
 
         self._show_loading("جاري رفع الملف...")
-        try:
-            result = self.import_controller.upload_package(file_path)
-        except NetworkException:
-            self._hide_loading()
-            MessageDialog.error(self, "خطأ في الاتصال", "لا يمكن الاتصال بالخادم.\nتحقق من اتصال الشبكة وحاول مرة أخرى.")
-            return
-        except ApiException as e:
-            self._hide_loading()
-            if e.status_code == 409:
-                MessageDialog.error(self, "خطأ في الرفع", "هذه الحزمة موجودة مسبقاً في النظام.")
-            else:
-                MessageDialog.error(self, "خطأ في الرفع", f"خطأ من الخادم ({e.status_code})")
-            return
+        result = self.import_controller.upload_package(file_path)
         self._hide_loading()
 
         if result.success:
-            MessageDialog.success(self, "تم الرفع", result.message_ar or "تم رفع الملف بنجاح")
+            pkg_id = ""
+            if result.data:
+                pkg_id = result.data.get("id") or result.data.get("packageId") or ""
+            logger.info(f"Upload succeeded, package_id={pkg_id}")
             self.refresh()
+            if pkg_id:
+                self._auto_select(pkg_id)
+                self.upload_completed.emit(pkg_id)
+            else:
+                MessageDialog.success(self, "تم الرفع", result.message_ar or "تم رفع الملف بنجاح")
         else:
             MessageDialog.error(self, "خطأ في الرفع", result.message_ar or "فشل رفع الملف")
+            self.refresh()
+
+    def _auto_select(self, package_id: str):
+        """Auto-select a package card by ID."""
+        for card in self._cards:
+            is_match = card.get_package_id() == package_id
+            card.set_selected(is_match)
+            if is_match:
+                self._selected_status = card.get_status()
+        self._selected_package_id = package_id
+        self.package_selected.emit(package_id)
 
     def reset(self):
         """Reset to initial state."""

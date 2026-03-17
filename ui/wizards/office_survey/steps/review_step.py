@@ -29,7 +29,8 @@ from services.translation_manager import tr
 from services.error_mapper import map_exception
 from ui.wizards.office_survey.steps.occupancy_claims_step import _is_owner_relation
 from services.display_mappings import (
-    get_relation_type_display, get_unit_status_display,
+    get_relation_type_display, get_relationship_to_head_display,
+    get_unit_status_display,
     get_claim_type_display, get_priority_display,
     get_business_type_display, get_source_display,
     get_claim_status_display,
@@ -408,8 +409,8 @@ class ReviewStep(BaseStep):
         name_lbl.setFont(create_font(size=FontManager.WIZARD_CARD_LABEL, weight=FontManager.WEIGHT_SEMIBOLD))
         name_lbl.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent;")
 
-        role_key = person.get('person_role') or person.get('relationship_type') or person.get('role', '')
-        role_text = get_relation_type_display(role_key) if role_key else get_relation_type_display('occupant')
+        role_key = person.get('person_role') or person.get('relationship_type')
+        role_text = get_relationship_to_head_display(role_key) if role_key else ""
         role_lbl = QLabel(role_text)
         role_lbl.setFont(create_font(size=FontManager.WIZARD_CARD_VALUE, weight=FontManager.WEIGHT_REGULAR))
         role_lbl.setStyleSheet(f"color: {Colors.WIZARD_SUBTITLE}; background: transparent;")
@@ -584,9 +585,11 @@ class ReviewStep(BaseStep):
             lbl = QLabel(label_text + ":")
             lbl.setFont(create_font(size=FontManager.WIZARD_CARD_LABEL, weight=FontManager.WEIGHT_SEMIBOLD))
             lbl.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent; border: none;")
+            lbl.setAlignment(Qt.AlignCenter)
             val = QLabel(value_text or "-")
             val.setFont(create_font(size=FontManager.WIZARD_CARD_LABEL, weight=FontManager.WEIGHT_REGULAR))
             val.setStyleSheet(f"color: {Colors.TEXT_SECONDARY}; background: transparent; border: none;")
+            val.setAlignment(Qt.AlignCenter)
             self._applicant_grid.addWidget(lbl, row // 2, (row % 2) * 2)
             self._applicant_grid.addWidget(val, row // 2, (row % 2) * 2 + 1)
 
@@ -1033,23 +1036,23 @@ class ReviewStep(BaseStep):
         # --- Aggregate demographics ---
         demographics = {}
         for h in self.context.households:
-            for key in ['adult_male', 'adult_female', 'minor_male', 'minor_female',
-                        'elderly_male', 'elderly_female', 'disabled_male', 'disabled_female']:
+            for key in ['adult_males', 'adult_females', 'male_children_under18', 'female_children_under18',
+                        'male_elderly_over65', 'female_elderly_over65', 'disabled_males', 'disabled_females']:
                 demographics[key] = demographics.get(key, 0) + h.get(key, 0)
 
         # --- Two cards side by side: Males (right) + Females (left) ---
         male_items = [
-            (tr("wizard.household.adult_males"), demographics.get('adult_male', 0)),
-            (tr("wizard.household.male_children"), demographics.get('minor_male', 0)),
-            (tr("wizard.household.male_elderly"), demographics.get('elderly_male', 0)),
-            (tr("wizard.household.disabled_males"), demographics.get('disabled_male', 0)),
+            (tr("wizard.household.adult_males"), demographics.get('adult_males', 0)),
+            (tr("wizard.household.male_children"), demographics.get('male_children_under18', 0)),
+            (tr("wizard.household.male_elderly"), demographics.get('male_elderly_over65', 0)),
+            (tr("wizard.household.disabled_males"), demographics.get('disabled_males', 0)),
         ]
 
         female_items = [
-            (tr("wizard.household.adult_females"), demographics.get('adult_female', 0)),
-            (tr("wizard.household.female_children"), demographics.get('minor_female', 0)),
-            (tr("wizard.household.female_elderly"), demographics.get('elderly_female', 0)),
-            (tr("wizard.household.disabled_females"), demographics.get('disabled_female', 0)),
+            (tr("wizard.household.adult_females"), demographics.get('adult_females', 0)),
+            (tr("wizard.household.female_children"), demographics.get('female_children_under18', 0)),
+            (tr("wizard.household.female_elderly"), demographics.get('female_elderly_over65', 0)),
+            (tr("wizard.household.disabled_females"), demographics.get('disabled_females', 0)),
         ]
 
         cards_container = QWidget()
@@ -1116,11 +1119,20 @@ class ReviewStep(BaseStep):
             person_id = person.get('person_id')
             updated_data['person_id'] = person_id
 
+            # Detect applicant (contact person - not a household member)
+            is_applicant = person.get('_is_applicant', False)
+            if not is_applicant:
+                contact_person_id = self.context.get_data('contact_person_id')
+                if contact_person_id and person_id == contact_person_id:
+                    is_applicant = True
+
             # Update person via API
             if person_id:
                 try:
                     self._set_auth_token()
-                    if survey_id and household_id:
+                    if is_applicant:
+                        self._api_service.update_person(person_id, updated_data)
+                    elif survey_id and household_id:
                         self._api_service.update_person_in_survey(
                             survey_id, household_id, person_id, updated_data)
                     else:
@@ -1186,7 +1198,7 @@ class ReviewStep(BaseStep):
         grid = QGridLayout()
         grid.setHorizontalSpacing(8)
         grid.setVerticalSpacing(8)
-        for i in range(4):
+        for i in range(3):
             grid.setColumnStretch(i, 1)
 
         def add_field(label_text, value_text, row, col):
@@ -1219,18 +1231,18 @@ class ReviewStep(BaseStep):
         if not unit_display:
             unit_display = claim_data.get('unit_id', '-') or "-"
 
+        # Row 0: claimant, unit, claim type
         add_field(tr("wizard.review.claimant_id"), claimant_name, 0, 0)
         add_field(tr("wizard.review.unit_claim_id"), unit_display, 0, 1)
         add_field(tr("wizard.review.claim_type"), get_claim_type_display(claim_data.get('claim_type', '')), 0, 2)
-        add_field(tr("wizard.review.business_nature"), get_business_type_display(claim_data.get('business_nature', '')), 0, 3)
 
+        # Row 1: case status, source, survey date
         add_field(tr("wizard.review.case_status"), get_claim_status_display(claim_data.get('case_status', 'new')), 1, 0)
         add_field(tr("wizard.review.source"), get_source_display(claim_data.get('source', '')), 1, 1)
         add_field(tr("wizard.review.survey_date"), str(claim_data.get('survey_date', '-') or '-'), 1, 2)
-        add_field(tr("wizard.review.priority"), get_priority_display(claim_data.get('priority', '')), 1, 3)
 
         card_layout.addLayout(grid)
-        card_layout.addSpacing(8)
+        card_layout.addSpacing(4)
 
         # Notes
         notes_text = claim_data.get('notes', '')
@@ -1240,8 +1252,8 @@ class ReviewStep(BaseStep):
         notes_val = QLabel(notes_text if notes_text else tr("wizard.review.review_notes_placeholder"))
         notes_val.setAlignment(Qt.AlignTop)
         notes_val.setWordWrap(True)
-        notes_val.setMinimumHeight(100)
-        notes_val.setMaximumHeight(120)
+        notes_val.setMinimumHeight(80)
+        notes_val.setMaximumHeight(100)
         notes_val.setStyleSheet(f"""
             QLabel {{
                 background-color: {ro_bg};
@@ -1253,17 +1265,7 @@ class ReviewStep(BaseStep):
             }}
         """)
         card_layout.addWidget(notes_val)
-        card_layout.addSpacing(8)
-
-        # Next Action Date
-        next_date_title = self._create_section_label(tr("wizard.review.next_action_date"))
-        card_layout.addWidget(next_date_title)
-
-        next_date = claim_data.get('next_action_date', '00-00-0000') or '00-00-0000'
-        next_date_val = QLabel(next_date)
-        next_date_val.setStyleSheet(ro_field_style)
-        card_layout.addWidget(next_date_val)
-        card_layout.addSpacing(8)
+        card_layout.addSpacing(4)
 
         # Evidence status bar (pill shape matching ClaimStep)
         evidence_count = claim_data.get('evidence_count', 0)
@@ -1378,7 +1380,7 @@ class ReviewStep(BaseStep):
         """Call process-claims endpoint (S17-S18)."""
         finalize_options = {
             "finalNotes": "Survey completed successfully",
-            "durationMinutes": 0,
+            "durationMinutes": 10,
             "autoCreateClaim": True
         }
         try:

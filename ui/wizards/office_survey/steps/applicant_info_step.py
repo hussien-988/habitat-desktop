@@ -609,9 +609,29 @@ class ApplicantInfoStep(BaseStep):
         self.context.applicant = data
         return data
 
+    def reset(self):
+        """Clear all applicant UI fields for a new wizard session."""
+        if not self._is_initialized:
+            return
+        for field in [self.first_name, self.father_name, self.last_name,
+                      self.mother_name, self.national_id, self.phone,
+                      self.landline, self.birth_year]:
+            field.clear()
+        self.gender.setCurrentIndex(0)
+        self.nationality.setCurrentIndex(0)
+        self.in_person_check.setChecked(True)
+        self.uploaded_files.clear()
+        self._update_upload_thumbnails("id_upload", [])
+        for err_lbl in [self._first_name_error, self._last_name_error,
+                        self._father_name_error, self._mother_name_error,
+                        self._mobile_error, self._landline_error]:
+            err_lbl.setText("")
+            err_lbl.setVisible(False)
+
     def populate_data(self):
         a = self.context.applicant
         if not a:
+            self.reset()
             return
 
         self.first_name.setText(a.get("first_name_ar", ""))

@@ -74,8 +74,16 @@ class ImportController(BaseController):
             pkg_id = result.get("id") or result.get("packageId") or ""
             self.package_uploaded.emit(pkg_id)
             return OperationResult.ok(data=result, message_ar="تم رفع الملف بنجاح")
-        except (NetworkException, ApiException):
-            raise
+        except ApiException as e:
+            logger.error(f"Upload API error: {e}")
+            if e.status_code == 409:
+                msg_ar = "هذه الحزمة مرفوعة مسبقاً ولا يمكن رفعها مرة أخرى"
+            else:
+                msg_ar = f"فشل رفع الملف: خطأ من الخادم ({e.status_code})"
+            return OperationResult.fail(str(e), message_ar=msg_ar)
+        except NetworkException as e:
+            logger.error(f"Upload network error: {e}")
+            return OperationResult.fail(str(e), message_ar="فشل رفع الملف: خطأ في الاتصال بالخادم")
         except Exception as e:
             logger.error(f"Upload failed: {e}")
             return OperationResult.fail(str(e), message_ar="فشل رفع الملف")

@@ -20,7 +20,7 @@ from ui.wizards.office_survey.survey_context import SurveyContext
 from services.translation_manager import tr
 from services.display_mappings import (
     get_claim_type_display, get_claim_status_display,
-    get_source_display, get_business_type_display, get_priority_display
+    get_source_display
 )
 from ui.style_manager import StyleManager
 from utils.logger import get_logger
@@ -278,7 +278,7 @@ class ClaimStep(BaseStep):
             }}
         """
 
-        # Row 1: معرف المطالب | معرف الوحدة المطالب بها | نوع الحالة | طبيعة الأعمال
+        # Row 1: معرف المطالب | معرف المقسم | نوع الحالة
         claim_person_search = QLineEdit()
         claim_person_search.setPlaceholderText("اسم الشخص")
         claim_person_search.setStyleSheet(ro_input_style)
@@ -297,17 +297,7 @@ class ClaimStep(BaseStep):
         claim_type_field.setStyleSheet(ro_input_style)
         add_field("نوع الحالة", claim_type_field, 0, 2)
 
-        case_category_field = QLineEdit()
-        case_category_field.setReadOnly(True)
-        case_category_field.setStyleSheet(ro_input_style)
-        add_field("حالة القضية", case_category_field, 2, 2)
-
-        claim_business_nature_field = QLineEdit()
-        claim_business_nature_field.setReadOnly(True)
-        claim_business_nature_field.setStyleSheet(ro_input_style)
-        add_field("طبيعة الأعمال", claim_business_nature_field, 0, 3)
-
-        # Row 2: حالة الحالة | المصدر | تاريخ المسح | الأولوية
+        # Row 2: حالة الحالة | المصدر | تاريخ المسح
         claim_status_field = QLineEdit()
         claim_status_field.setReadOnly(True)
         claim_status_field.setStyleSheet(ro_input_style)
@@ -323,10 +313,11 @@ class ClaimStep(BaseStep):
         claim_survey_date.setStyleSheet(ro_input_style)
         add_field("تاريخ المسح", claim_survey_date, 1, 2)
 
-        claim_priority_field = QLineEdit()
-        claim_priority_field.setReadOnly(True)
-        claim_priority_field.setStyleSheet(ro_input_style)
-        add_field("الأولوية", claim_priority_field, 1, 3)
+        # Row 3: حالة القضية
+        case_category_field = QLineEdit()
+        case_category_field.setReadOnly(True)
+        case_category_field.setStyleSheet(ro_input_style)
+        add_field("حالة القضية", case_category_field, 2, 0)
 
         card_layout.addLayout(grid)
         card_layout.addSpacing(8)
@@ -358,17 +349,6 @@ class ClaimStep(BaseStep):
         card_layout.addWidget(claim_notes)
         card_layout.addSpacing(8)
 
-        # Next Action Date Section
-        next_date_label = QLabel("تاريخ الإجراء التالي")
-        next_date_label.setFont(create_font(size=FontManager.WIZARD_CARD_LABEL, weight=FontManager.WEIGHT_SEMIBOLD))
-        next_date_label.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent;")
-        card_layout.addWidget(next_date_label)
-
-        claim_next_action_date = QLineEdit()
-        claim_next_action_date.setPlaceholderText("")
-        claim_next_action_date.setReadOnly(True)
-        claim_next_action_date.setStyleSheet(ro_input_style)
-        card_layout.addWidget(claim_next_action_date)
         card_layout.addSpacing(8)
 
         # Status Bar - Evidence available indicator (pill shape)
@@ -390,13 +370,10 @@ class ClaimStep(BaseStep):
         card.claim_unit_search = claim_unit_search
         card.claim_type_field = claim_type_field
         card.case_category_field = case_category_field
-        card.claim_business_nature_field = claim_business_nature_field
         card.claim_status_field = claim_status_field
         card.claim_source_field = claim_source_field
         card.claim_survey_date = claim_survey_date
-        card.claim_priority_field = claim_priority_field
         card.claim_notes = claim_notes
-        card.claim_next_action_date = claim_next_action_date
         card.claim_eval_label = claim_eval_label
 
         # Populate with claim data if provided
@@ -510,15 +487,6 @@ class ClaimStep(BaseStep):
             card.claim_source_field.setText(get_source_display(claim_source))
 
         # Business nature
-        business_nature = claim_data.get('businessNature')
-        if business_nature:
-            card.claim_business_nature_field.setText(get_business_type_display(business_nature))
-
-        # Priority
-        priority = claim_data.get('priority') or claim_data.get('casePriority')
-        if priority:
-            card.claim_priority_field.setText(get_priority_display(priority))
-
         # Survey date
         survey_date_str = claim_data.get('surveyDate', '')
         if survey_date_str:
@@ -529,16 +497,6 @@ class ClaimStep(BaseStep):
             except Exception as e:
                 logger.warning(f"Failed to parse survey date: {e}")
                 card.claim_survey_date.setText(str(survey_date_str))
-
-        # Next action date
-        next_date_str = claim_data.get('nextActionDate', '')
-        if next_date_str:
-            try:
-                from datetime import datetime
-                next_date = datetime.fromisoformat(next_date_str.replace('Z', '+00:00'))
-                card.claim_next_action_date.setText(f"{next_date.year}-{next_date.month:02d}-{next_date.day:02d}")
-            except Exception:
-                card.claim_next_action_date.setText(str(next_date_str))
 
         # Notes
         notes = claim_data.get('notes', '')
@@ -801,14 +759,6 @@ class ClaimStep(BaseStep):
         from datetime import datetime
         first_card.claim_survey_date.setText(datetime.now().strftime("%Y-%m-%d"))
 
-        # Priority: Normal
-        priority_code = _find_combo_code_by_english("CasePriority", "Normal")
-        first_card.claim_priority_field.setText(get_priority_display(priority_code))
-
-        # Business nature: Residential (default)
-        biz_code = _find_combo_code_by_english("BusinessNature", "Residential")
-        first_card.claim_business_nature_field.setText(get_business_type_display(biz_code))
-
         # Store raw data for collect_data
         first_card._claim_raw_data = {'from_context': True}
 
@@ -830,6 +780,27 @@ class ClaimStep(BaseStep):
                     border-radius: 18px;
                 }
             """)
+
+    def reset(self):
+        """Reset claim cards to initial state for a new wizard session."""
+        if not self._is_initialized:
+            return
+        while len(self._claim_cards) > 1:
+            card = self._claim_cards.pop()
+            self.cards_layout.removeWidget(card)
+            card.deleteLater()
+        if self._claim_cards:
+            first_card = self._claim_cards[0]
+            first_card.claim_person_search.clear()
+            first_card.claim_unit_search.clear()
+            first_card.claim_type_field.clear()
+            first_card.claim_status_field.clear()
+            first_card.claim_survey_date.clear()
+            first_card.claim_source_field.clear()
+            first_card.claim_notes.clear()
+            first_card.claim_eval_label.clear()
+        self.scroll_area.show()
+        self.empty_state_widget.hide()
 
     def on_show(self):
         """Called when step is shown."""
@@ -885,12 +856,9 @@ class ClaimStep(BaseStep):
 
             claim_data = {
                 "claim_type": raw.get('claimType') or _find_combo_code_by_english("ClaimType", "Ownership"),
-                "priority": raw.get('priority') or raw.get('casePriority'),
-                "business_nature": raw.get('businessNature'),
                 "source": raw.get('source') or raw.get('claimSource') or _find_combo_code_by_english("ClaimSource", "Office Submission"),
                 "case_status": raw.get('claimStatus') or raw.get('caseStatus') or _find_combo_code_by_english("ClaimStatus", "New"),
                 "survey_date": card.claim_survey_date.text().strip() or None,
-                "next_action_date": card.claim_next_action_date.text().strip() or None,
                 "notes": card.claim_notes.toPlainText().strip(),
                 "status": "draft",
                 "person_name": card.claim_person_search.text().strip(),

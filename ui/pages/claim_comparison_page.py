@@ -12,8 +12,7 @@ Data source: REST API via DuplicateService.
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QFrame, QRadioButton, QButtonGroup, QScrollArea,
-    QSizePolicy, QGraphicsDropShadowEffect, QTextEdit,
-    QMessageBox
+    QSizePolicy, QGraphicsDropShadowEffect, QTextEdit
 )
 from PyQt5.QtCore import Qt, pyqtSignal, QSize, QThread
 from PyQt5.QtGui import QColor, QIcon
@@ -71,6 +70,7 @@ class ClaimComparisonPage(QWidget):
         self._current_group = None
         self._comparison_data = []
         self._user_id = None
+        self._current_conflict_type = ""
         self._setup_ui()
 
     def set_user_id(self, user_id: str):
@@ -505,22 +505,94 @@ class ClaimComparisonPage(QWidget):
             Toast.show_toast(self, "معرف التعارض غير متوفر", Toast.WARNING)
             return
 
+        first_evidences = []
+        second_evidences = []
+
+        # Try document-comparison endpoint first
         try:
             doc_data = self.duplicate_service.get_document_comparison(conflict_id)
+            logger.info(f"Document comparison response: {str(doc_data)[:500]}")
+
+            if isinstance(doc_data, dict):
+                # Try multiple possible response structures
+                first_entity = doc_data.get("firstEntity") or doc_data.get("firstRecord") or {}
+                second_entity = doc_data.get("secondEntity") or doc_data.get("secondRecord") or {}
+
+                first_evidences = (
+                    first_entity.get("evidences", [])
+                    or first_entity.get("documents", [])
+                    or first_entity.get("attachments", [])
+                )
+                second_evidences = (
+                    second_entity.get("evidences", [])
+                    or second_entity.get("documents", [])
+                    or second_entity.get("attachments", [])
+                )
+
+                # Handle flat list: [{entityId, evidences}, ...]
+                if not first_evidences and not second_evidences:
+                    entities_list = doc_data.get("entities", doc_data.get("records", []))
+                    if isinstance(entities_list, list) and len(entities_list) >= 2:
+                        first_evidences = entities_list[0].get("evidences", entities_list[0].get("documents", []))
+                        second_evidences = entities_list[1].get("evidences", entities_list[1].get("documents", []))
+
+                # Handle direct evidences/documents keys at root
+                if not first_evidences and not second_evidences:
+                    root_docs = doc_data.get("evidences", doc_data.get("documents", []))
+                    if isinstance(root_docs, list) and len(root_docs) >= 2:
+                        mid = len(root_docs) // 2
+                        first_evidences = root_docs[:mid]
+                        second_evidences = root_docs[mid:]
+
+            elif isinstance(doc_data, list):
+                if len(doc_data) >= 2 and isinstance(doc_data[0], dict):
+                    if "evidences" in doc_data[0] or "documents" in doc_data[0]:
+                        first_evidences = doc_data[0].get("evidences", doc_data[0].get("documents", []))
+                        second_evidences = doc_data[1].get("evidences", doc_data[1].get("documents", []))
+                    else:
+                        mid = len(doc_data) // 2
+                        first_evidences = doc_data[:mid]
+                        second_evidences = doc_data[mid:]
+
         except Exception as e:
-            logger.error(f"Failed to load document comparison: {e}")
-            Toast.show_toast(self, "فشل تحميل مقارنة المستندات", Toast.ERROR)
+            logger.warning(f"Document comparison endpoint failed: {e}")
+
+        # Fallback: fetch building documents directly from each entity
+        if not first_evidences and not second_evidences:
+            is_person = self._current_conflict_type == "PersonDuplicate"
+            if not is_person:
+                entity_ids = [
+                    self._current_group.get("firstEntityId", ""),
+                    self._current_group.get("secondEntityId", ""),
+                ]
+                try:
+                    from services.api_client import get_api_client
+                    api = get_api_client()
+                    if api:
+                        for idx, eid in enumerate(entity_ids):
+                            if not eid:
+                                continue
+                            try:
+                                unit_dto = api.get_property_unit_by_id(eid)
+                                building_id = ""
+                                if unit_dto:
+                                    building_id = unit_dto.get("buildingId", unit_dto.get("building_id", ""))
+                                if building_id:
+                                    docs = api.get_building_documents(building_id)
+                                    if docs:
+                                        if idx == 0:
+                                            first_evidences = docs
+                                        else:
+                                            second_evidences = docs
+                                        logger.info(f"Fetched {len(docs)} building docs for entity {idx}")
+                            except Exception as be:
+                                logger.warning(f"Failed to fetch building docs for {eid}: {be}")
+                except Exception as e:
+                    logger.warning(f"Building documents fallback failed: {e}")
+
+        if not first_evidences and not second_evidences:
+            Toast.show_toast(self, "لا توجد مستندات مرتبطة بالسجلات", Toast.WARNING)
             return
-
-        if not doc_data:
-            Toast.show_toast(self, "لا توجد بيانات مستندات", Toast.WARNING)
-            return
-
-        first_entity = doc_data.get("firstEntity", {})
-        second_entity = doc_data.get("secondEntity", {})
-
-        first_evidences = first_entity.get("evidences", [])
-        second_evidences = second_entity.get("evidences", [])
 
         self._doc_empty_label.setVisible(False)
         self._doc_first_frame.setVisible(True)
@@ -556,7 +628,6 @@ class ClaimComparisonPage(QWidget):
         resolution_options = [
             ("دمج السجلات", "merge"),
             ("إبقاء منفصل", "keep_separate"),
-            ("طلب تحقق ميداني", "field_verification"),
         ]
 
         options_layout = QHBoxLayout()
@@ -806,6 +877,81 @@ class ClaimComparisonPage(QWidget):
         card_layout.addStretch()
         return card
 
+    def _build_person_comparison_card(self, data: dict, diff_fields: set) -> QFrame:
+        card = self._create_inner_card_frame()
+        card_layout = QVBoxLayout(card)
+        card_layout.setContentsMargins(20, 20, 20, 20)
+        card_layout.setSpacing(16)
+
+        header = self._create_card_header("yelow", "بيانات الشخص", "معلومات الشخص المكرر")
+        card_layout.addWidget(header)
+
+        person_items = [
+            ("full_name_ar", "الاسم الكامل", data.get("full_name_ar", "-")),
+            ("mother_name", "اسم الأم", data.get("mother_name", "-")),
+            ("national_id", "الرقم الوطني", data.get("national_id", "-")),
+            ("date_of_birth", "تاريخ الميلاد", data.get("date_of_birth", "-")),
+            ("gender", "الجنس", data.get("gender", "-")),
+            ("nationality", "الجنسية", data.get("nationality", "-")),
+            ("phone_number", "رقم الهاتف", data.get("phone_number", "-")),
+        ]
+
+        for field_key, label_text, value_text in person_items:
+            field = self._create_field_vertical(
+                label_text, str(value_text),
+                is_diff=(field_key in diff_fields)
+            )
+            card_layout.addWidget(field)
+
+        card_layout.addStretch()
+        return card
+
+    def _map_person_to_comparison_dict(self, record: dict) -> dict:
+        from services.vocab_service import get_label
+
+        full_name_ar = record.get("fullNameArabic") or ""
+        if not full_name_ar:
+            parts = filter(None, [
+                record.get("firstNameArabic", ""),
+                record.get("fatherNameArabic", ""),
+                record.get("familyNameArabic", ""),
+            ])
+            full_name_ar = " ".join(parts) or "-"
+
+        dob = record.get("dateOfBirth") or ""
+        if dob and "T" in str(dob):
+            dob = str(dob).split("T")[0]
+
+        gender_raw = record.get("gender")
+        gender_label = get_label("Gender", gender_raw, lang="ar") if gender_raw else "-"
+
+        nationality_raw = record.get("nationality")
+        nationality_label = get_label("Nationality", nationality_raw, lang="ar") if nationality_raw else "-"
+
+        return {
+            "full_name_ar": str(full_name_ar),
+            "mother_name": str(record.get("motherNameArabic") or "-"),
+            "national_id": str(record.get("nationalId") or "-"),
+            "date_of_birth": dob or "-",
+            "gender": gender_label,
+            "nationality": nationality_label,
+            "phone_number": str(record.get("mobileNumber") or "-"),
+        }
+
+    def _compute_person_diff_fields(self, comparison_dicts: list) -> set:
+        if len(comparison_dicts) < 2:
+            return set()
+        diff_fields = set()
+        all_keys = [
+            "full_name_ar", "mother_name", "national_id",
+            "date_of_birth", "gender", "nationality", "phone_number",
+        ]
+        for key in all_keys:
+            values = {str(d.get(key, "")) for d in comparison_dicts}
+            if len(values) > 1:
+                diff_fields.add(key)
+        return diff_fields
+
     def _build_outer_comparison_card(self, data: dict, diff_fields: set) -> QFrame:
         outer = QFrame()
         outer.setObjectName("outerCompCard")
@@ -827,17 +973,16 @@ class ClaimComparisonPage(QWidget):
         outer_layout.setContentsMargins(12, 12, 12, 12)
         outer_layout.setSpacing(16)
 
-        card1 = self._build_building_info_card(data, diff_fields)
-        card1.setFixedHeight(170)
-        outer_layout.addWidget(card1)
+        if self._current_conflict_type == "PersonDuplicate":
+            person_card = self._build_person_comparison_card(data, diff_fields)
+            outer_layout.addWidget(person_card, 1)
+        else:
+            card1 = self._build_building_info_card(data, diff_fields)
+            card1.setFixedHeight(170)
+            outer_layout.addWidget(card1)
 
-        card2 = self._build_building_details_card(data, diff_fields)
-        card2.setFixedHeight(614)
-        outer_layout.addWidget(card2)
-
-        card3 = self._build_unit_info_card(data, diff_fields)
-        card3.setFixedHeight(527)
-        outer_layout.addWidget(card3)
+            card3 = self._build_unit_info_card(data, diff_fields)
+            outer_layout.addWidget(card3, 1)
 
         return outer
 
@@ -854,7 +999,16 @@ class ClaimComparisonPage(QWidget):
                 self._clear_layout(item.layout())
 
     def _map_to_comparison_dict(self, building: dict, unit: dict) -> dict:
-        """Map API records to the format expected by comparison cards."""
+        """Map API records to the format expected by comparison cards.
+
+        When data comes from dataComparison (flat dict), pass the same dict
+        as both building and unit so all fields are found.
+        """
+        from services.display_mappings import (
+            get_building_type_display, get_building_status_display,
+            get_unit_type_display, get_unit_status_display,
+        )
+
         # Handle both camelCase (API) and snake_case (legacy) field names
         address_parts = filter(None, [
             building.get("governorateName", building.get("governorate_name_ar", "")),
@@ -863,23 +1017,64 @@ class ClaimComparisonPage(QWidget):
             building.get("address", ""),
         ])
 
+        # Building type/status with vocab resolution
+        raw_btype = building.get("buildingType", building.get("building_type", ""))
+        raw_bstatus = building.get("buildingStatus", building.get("building_status",
+                       building.get("status", "")))
+        building_type_label = get_building_type_display(raw_btype) if raw_btype else "-"
+        building_status_label = get_building_status_display(raw_bstatus) if raw_bstatus else "-"
+
+        # Unit fields: look in unit dict first, then building dict (for flat dicts)
+        def _get_unit(key1, key2="", key3=""):
+            val = unit.get(key1, "")
+            if not val and key2:
+                val = unit.get(key2, "")
+            if not val and key3:
+                val = unit.get(key3, "")
+            if not val:
+                val = building.get(key1, "")
+            if not val and key2:
+                val = building.get(key2, "")
+            if not val and key3:
+                val = building.get(key3, "")
+            return val
+
+        raw_ustatus = _get_unit("unitStatus", "status", "apartment_status")
+        raw_utype = _get_unit("unitType", "unit_type")
+        unit_status_label = get_unit_status_display(raw_ustatus) if raw_ustatus else "-"
+        unit_type_label = get_unit_type_display(raw_utype) if raw_utype else "-"
+
+        raw_area = _get_unit("areaSquareMeters", "area_sqm", "areaSqm")
+        raw_rooms = _get_unit("numberOfRooms", "number_of_rooms", "roomCount")
+        raw_floor = _get_unit("floorNumber", "floor_number")
+        raw_unit_num = _get_unit("unitIdentifier", "unit_number", "unitNumber")
+
         return {
-            "building_code": building.get("buildingId", building.get("building_id", "-")),
+            "building_code": building.get("buildingId", building.get("building_id",
+                             building.get("buildingCode", "-"))),
             "address": " - ".join(address_parts) or "-",
-            "residential_units": str(building.get("residentialUnitsCount", building.get("number_of_apartments", "-"))),
-            "commercial_units": str(building.get("commercialUnitsCount", building.get("number_of_shops", "-"))),
-            "total_units": str(building.get("totalUnitsCount", building.get("number_of_units", "-"))),
-            "building_type": str(building.get("buildingType", building.get("building_type", "-"))),
-            "building_status": str(building.get("status", building.get("building_status", "-"))),
-            "general_description": building.get("description", building.get("general_description", "-")),
+            "residential_units": str(building.get("residentialUnitsCount",
+                                    building.get("numberOfApartments",
+                                    building.get("number_of_apartments", "-")))),
+            "commercial_units": str(building.get("commercialUnitsCount",
+                                   building.get("numberOfShops",
+                                   building.get("number_of_shops", "-")))),
+            "total_units": str(building.get("totalUnitsCount",
+                              building.get("numberOfPropertyUnits",
+                              building.get("number_of_units", "-")))),
+            "building_type": building_type_label,
+            "building_status": building_status_label,
+            "general_description": building.get("description",
+                                   building.get("notes",
+                                   building.get("general_description", "-"))),
             "lat": building.get("latitude", 0),
             "lng": building.get("longitude", 0),
-            "unit_status": str(unit.get("status", unit.get("apartment_status", "-"))),
-            "unit_type": str(unit.get("unitType", unit.get("unit_type", "-"))),
-            "area_sqm": str(unit.get("areaSquareMeters", unit.get("area_sqm", "-"))),
-            "rooms": str(unit.get("numberOfRooms", unit.get("number_of_rooms", "-"))),
-            "floor": str(unit.get("floorNumber", unit.get("floor_number", "-"))),
-            "unit_number": str(unit.get("unitIdentifier", unit.get("unit_number", "-"))),
+            "unit_status": unit_status_label,
+            "unit_type": unit_type_label,
+            "area_sqm": str(raw_area) if raw_area else "-",
+            "rooms": str(raw_rooms) if raw_rooms else "-",
+            "floor": str(raw_floor) if raw_floor else "-",
+            "unit_number": str(raw_unit_num) if raw_unit_num else "-",
         }
 
     def _compute_comparison_diff_fields(self, comparison_dicts: list) -> set:
@@ -924,27 +1119,19 @@ class ClaimComparisonPage(QWidget):
         action_labels = {
             "merge": "دمج السجلات",
             "keep_separate": "إبقاء السجلات منفصلة",
-            "field_verification": "تصعيد التعارض للمشرف",
         }
         action_label = action_labels.get(resolution_type, "تنفيذ الإجراء")
 
-        msg_box = QMessageBox(self)
-        msg_box.setLayoutDirection(Qt.RightToLeft)
-        msg_box.setWindowTitle("تأكيد الإجراء")
-        msg_box.setText(f"هل أنت متأكد من {action_label}؟")
-        msg_box.setInformativeText("لا يمكن التراجع عن هذا الإجراء.")
-        msg_box.setIcon(QMessageBox.Question)
-        msg_box.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
-        msg_box.setDefaultButton(QMessageBox.No)
-        msg_box.button(QMessageBox.Yes).setText("نعم، تنفيذ")
-        msg_box.button(QMessageBox.No).setText("لا، تراجع")
-
-        if msg_box.exec_() != QMessageBox.Yes:
+        from ui.components.dialogs.confirmation_dialog import ConfirmationDialog, DialogResult
+        result = ConfirmationDialog.confirm(
+            parent=self,
+            title="تأكيد الإجراء",
+            message=f"هل أنت متأكد من {action_label}؟\nلا يمكن التراجع عن هذا الإجراء."
+        )
+        if result != DialogResult.YES:
             return
 
         master_id = ""
-        # Map field_verification to escalate for the worker
-        action = resolution_type
         if resolution_type == "merge":
             selected_idx = self.claim_radio_group.checkedId()
             entity_ids = [
@@ -958,13 +1145,11 @@ class ClaimComparisonPage(QWidget):
             if not master_id:
                 Toast.show_toast(self, "لم يتم العثور على معرف السجل", Toast.WARNING)
                 return
-        elif resolution_type == "field_verification":
-            action = "escalate"
 
         self.action_btn.setEnabled(False)
         from ui.pages.duplicates_page import _ResolutionWorker
         self._resolution_worker = _ResolutionWorker(
-            self.duplicate_service, action,
+            self.duplicate_service, resolution_type,
             conflict_id, justification, master_id
         )
         self._resolution_worker.finished.connect(self._on_resolution_done)
@@ -1001,15 +1186,19 @@ class ClaimComparisonPage(QWidget):
             return
 
         self._current_group = data
+        self._current_conflict_type = data.get("conflictType", "")
+        is_person = self._current_conflict_type == "PersonDuplicate"
 
         # Fetch detailed comparison from API
         conflict_id = data.get("id", "")
         details = {}
         if conflict_id:
-            try:
-                details = self.duplicate_service.get_conflict_details(conflict_id)
-            except Exception as e:
-                logger.error(f"Failed to fetch conflict details: {e}")
+            details = self.duplicate_service.get_conflict_details(conflict_id)
+            logger.info(f"Conflict details keys: {list(details.keys()) if details else 'empty'}")
+            if details:
+                raw_dc = details.get("dataComparison", "")
+                logger.info(f"dataComparison type={type(raw_dc).__name__}, "
+                            f"preview={str(raw_dc)[:300] if raw_dc else 'null/empty'}")
 
         # --- Populate claims section ---
         self._clear_layout(self._claims_rows_layout)
@@ -1037,16 +1226,50 @@ class ClaimComparisonPage(QWidget):
                 except (ValueError, TypeError):
                     pass
 
+        entity_ids = [data.get("firstEntityId", ""), data.get("secondEntityId", "")]
         records.append({
-            "id": data.get("firstEntityId", ""),
+            "id": entity_ids[0],
             "identifier": first_id,
             "label": "السجل الأول",
         })
         records.append({
-            "id": data.get("secondEntityId", ""),
+            "id": entity_ids[1],
             "identifier": second_id,
             "label": "السجل الثاني",
         })
+
+        # Always fetch person records from Persons API for reliable data
+        _fetched_persons = {}
+        if is_person:
+            for eid in entity_ids:
+                if eid:
+                    try:
+                        person = self.duplicate_service.get_person_data(eid)
+                        if person:
+                            _fetched_persons[eid] = person
+                        else:
+                            logger.warning(f"Person {eid} not found (404)")
+                    except Exception as pe:
+                        logger.warning(f"Failed to fetch person {eid}: {pe}")
+
+        # Extract national IDs for person duplicates
+        person_national_ids = []
+        if is_person:
+            if data_comparison:
+                for dc in data_comparison[:2]:
+                    comp = dc if isinstance(dc, dict) else {}
+                    if isinstance(dc, list):
+                        comp = {}
+                        for fi in dc:
+                            if isinstance(fi, dict):
+                                comp[fi.get("fieldName", "")] = fi.get("value", "")
+                    nid = comp.get("nationalId", comp.get("nationalID", ""))
+                    person_national_ids.append(str(nid) if nid else "")
+            else:
+                for eid in entity_ids:
+                    p = _fetched_persons.get(eid, {})
+                    nid = p.get("nationalId", "") if p else ""
+                    person_national_ids.append(str(nid) if nid else "")
 
         for idx, record in enumerate(records):
             row = QHBoxLayout()
@@ -1060,14 +1283,18 @@ class ClaimComparisonPage(QWidget):
                 radio.setChecked(True)
             row.addWidget(radio)
 
-            conflict_type = data.get("conflictType", "")
-            icon_name = "blue" if "Property" in conflict_type else "yelow"
+            icon_name = "blue" if not is_person else "yelow"
+
+            # For person duplicates: show national ID as subtitle
+            subtitle = ""
+            if is_person and idx < len(person_national_ids) and person_national_ids[idx]:
+                subtitle = person_national_ids[idx]
 
             claim_card_data = {
                 "claim_id": record["identifier"],
                 "claimant_name": record["label"],
                 "date": data.get("detectedDate", "").split("T")[0] if "T" in str(data.get("detectedDate", "")) else "",
-                "governorate_name_ar": conflict_type,
+                "governorate_name_ar": subtitle if is_person else self._current_conflict_type,
                 "district_name_ar": "",
                 "subdistrict_name_ar": "",
                 "neighborhood_name_ar": "",
@@ -1084,38 +1311,91 @@ class ClaimComparisonPage(QWidget):
         # --- Populate comparison section ---
         self._clear_layout(self._comparison_cards_layout)
 
-        if data_comparison:
-            # Build comparison from API dataComparison field
-            comparison_dicts = []
-            for dc in data_comparison[:2]:
-                comp_dict = {}
-                if isinstance(dc, dict):
-                    # Direct dict with field values (e.g. {"buildingId": "...", ...})
-                    if "fieldName" in dc:
-                        # Single fieldName/value item
-                        comp_dict[dc.get("fieldName", "")] = str(dc.get("value", "-"))
-                    else:
-                        comp_dict = dc
-                elif isinstance(dc, list):
-                    # List of fieldName/value dicts
-                    for field_item in dc:
-                        if isinstance(field_item, dict):
-                            key = field_item.get("fieldName", "")
-                            val = field_item.get("value", "-")
-                            comp_dict[key] = str(val) if val else "-"
-                comparison_dicts.append(self._map_to_comparison_dict(comp_dict, {}))
+        comparison_dicts = []
+
+        if is_person:
+            # Person duplicates: always fetch from API for reliable data
+            # dataComparison as fallback only if API fetch fails
+            for idx, record in enumerate(records):
+                person_dto = _fetched_persons.get(record["id"])
+                if person_dto:
+                    comparison_dicts.append(self._map_person_to_comparison_dict(person_dto))
+                elif data_comparison and idx < len(data_comparison):
+                    dc = data_comparison[idx]
+                    comp_dict = {}
+                    if isinstance(dc, dict):
+                        if "fieldName" in dc:
+                            comp_dict[dc.get("fieldName", "")] = str(dc.get("value", "-"))
+                        else:
+                            comp_dict = dc
+                    elif isinstance(dc, list):
+                        for field_item in dc:
+                            if isinstance(field_item, dict):
+                                key = field_item.get("fieldName", "")
+                                val = field_item.get("value", "-")
+                                comp_dict[key] = str(val) if val else "-"
+                    comparison_dicts.append(self._map_person_to_comparison_dict(comp_dict))
+                else:
+                    logger.warning(f"Person {record['id']} not available")
+                    comparison_dicts.append(self._map_person_to_comparison_dict({}))
+
+            diff_fields = self._compute_person_diff_fields(comparison_dicts)
+        else:
+            # Property duplicates
+            for idx, record in enumerate(records):
+                unit_dto = self._fetch_property_unit_data(record["id"])
+                if unit_dto:
+                    building_data = unit_dto.get("_building", {})
+                    comparison_dicts.append(self._map_to_comparison_dict(
+                        building_data or unit_dto, unit_dto
+                    ))
+                elif data_comparison and idx < len(data_comparison):
+                    dc = data_comparison[idx]
+                    comp_dict = dc if isinstance(dc, dict) else {}
+                    if isinstance(dc, list):
+                        comp_dict = {}
+                        for fi in dc:
+                            if isinstance(fi, dict):
+                                comp_dict[fi.get("fieldName", "")] = str(fi.get("value", "-"))
+                    comparison_dicts.append(self._map_to_comparison_dict(comp_dict, comp_dict))
+                else:
+                    logger.warning(f"Property unit {record['id']} not available")
+                    comparison_dicts.append(self._map_to_comparison_dict({}, {}))
 
             diff_fields = self._compute_comparison_diff_fields(comparison_dicts)
 
-            for comp_dict in comparison_dicts:
-                outer_card = self._build_outer_comparison_card(comp_dict, diff_fields)
-                self._comparison_cards_layout.addWidget(outer_card, 1)
-        else:
-            # Fallback: show basic info from conflict
-            for record in records:
-                basic = {"building_code": record["identifier"]}
-                outer_card = self._build_outer_comparison_card(basic, set())
-                self._comparison_cards_layout.addWidget(outer_card, 1)
+        for comp_dict in comparison_dicts:
+            outer_card = self._build_outer_comparison_card(comp_dict, diff_fields)
+            self._comparison_cards_layout.addWidget(outer_card, 1)
+
+    def _fetch_property_unit_data(self, entity_id: str) -> dict:
+        """Fetch property unit data by ID for comparison display."""
+        if not entity_id:
+            return {}
+        try:
+            from services.api_client import get_api_client
+            api = get_api_client()
+            if not api:
+                return {}
+
+            unit_dto = api.get_property_unit_by_id(entity_id)
+            if not unit_dto:
+                return {}
+
+            # Try to fetch building data for address/building info
+            building_id = unit_dto.get("buildingId", unit_dto.get("building_id", ""))
+            if building_id:
+                try:
+                    building_dto = api.get_building_by_id(building_id)
+                    if building_dto:
+                        unit_dto["_building"] = building_dto
+                except Exception as be:
+                    logger.warning(f"Failed to fetch building {building_id}: {be}")
+
+            return unit_dto
+        except Exception as e:
+            logger.error(f"Failed to fetch property unit {entity_id}: {e}")
+            return {}
 
     def update_language(self, is_arabic: bool):
         pass

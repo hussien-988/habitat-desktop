@@ -149,7 +149,7 @@ class SurveyController:
 
             # 7) Build applicant from survey detail
             applicant = None
-            interviewee_name = detail.get("intervieweeName", "")
+            interviewee_name = detail.get("contactPersonFullName") or detail.get("intervieweeName", "")
             if interviewee_name:
                 name_parts = interviewee_name.split()
                 applicant = {
@@ -179,7 +179,11 @@ class SurveyController:
             context = {
                 "survey_id": detail.get("id", ""),
                 "status": status_str,
-                "data": {"survey_id": detail.get("id", "")},
+                "data": {
+                    "survey_id": detail.get("id", ""),
+                    "survey_building_uuid": building_id or "",
+                    "household_id": households[0].get("household_id", "") if households else "",
+                },
                 "building": building_data,
                 "unit": unit_data,
                 "households": households,

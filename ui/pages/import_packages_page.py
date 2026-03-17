@@ -8,7 +8,7 @@ from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel,
     QFrame, QTableWidget, QTableWidgetItem, QHeaderView,
     QComboBox, QMenu, QAction, QStackedWidget, QPushButton,
-    QGraphicsDropShadowEffect, QApplication
+    QGraphicsDropShadowEffect, QApplication, QAbstractItemView
 )
 from PyQt5.QtCore import Qt, pyqtSignal, QPoint, QTimer
 from PyQt5.QtGui import QColor, QFont
@@ -183,6 +183,7 @@ class ImportPackagesListPage(QWidget):
         self.table.setColumnCount(6)
         self.table.setRowCount(11)
         self.table.setLayoutDirection(Qt.RightToLeft)
+        self.table.setEditTriggers(QAbstractItemView.NoEditTriggers)
 
         headers = [
             "اسم الملف",

@@ -427,7 +427,7 @@ class DraftClaimsPage(QWidget):
             q = query.strip().lower()
             for s in surveys:
                 if mode == "name":
-                    name = (s.get('intervieweeName') or '').lower()
+                    name = (s.get('contactPersonFullName') or s.get('intervieweeName') or '').lower()
                     if q in name:
                         filtered.append(s)
                 elif mode == "claim_id":
@@ -463,7 +463,7 @@ class DraftClaimsPage(QWidget):
             self.claims_data.append({
                 'claim_id': s.get('referenceCode') or s.get('id', 'N/A'),
                 'claim_uuid': s.get('id', ''),
-                'claimant_name': s.get('intervieweeName') or 'غير محدد',
+                'claimant_name': s.get('contactPersonFullName') or s.get('intervieweeName') or 'غير محدد',
                 'date': (s.get('surveyDate') or '')[:10],
                 'status': 'draft',
                 'building': building_obj,
@@ -520,7 +520,7 @@ class DraftClaimsPage(QWidget):
                 self.claims_data.append({
                     'claim_id': s.get('referenceCode') or s.get('id', 'N/A'),
                     'claim_uuid': s.get('id', ''),
-                    'claimant_name': s.get('intervieweeName') or 'غير محدد',
+                    'claimant_name': s.get('contactPersonFullName') or s.get('intervieweeName') or 'غير محدد',
                     'date': (s.get('surveyDate') or '')[:10],
                     'status': 'draft',
                     'building': building_obj,

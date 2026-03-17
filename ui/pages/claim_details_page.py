@@ -990,7 +990,13 @@ class ClaimDetailsPage(QWidget):
     # =========================================================================
 
     def _extract_relation_id(self):
-        """Extract personPropertyRelationId from evidence data."""
+        """Extract relation_id from claim data or evidence relations."""
+        # Primary: from claim's sourceRelationId
+        rel_id = self._claim_data.get("sourceRelationId")
+        if rel_id:
+            self._relation_id = rel_id
+            return
+        # Fallback: from evidence relations
         for ev in self._evidences:
             for rel in (ev.get("evidenceRelations") or []):
                 rel_id = rel.get("personPropertyRelationId")
@@ -1174,12 +1180,12 @@ class ClaimDetailsPage(QWidget):
         return card
 
     def _on_save_edit(self):
-        """Save all pending changes (claim type + evidence uploads/deletes/links)."""
+        """Save all pending changes via single PUT /api/v1/Claims/{id}."""
         import os
+        import hashlib
         from controllers.claim_controller import ClaimController
 
         ctrl = ClaimController()
-        has_changes = False
 
         # Check claim type change
         new_type = self._claim_type_combo.currentData() if self._claim_type_combo else None
@@ -1187,92 +1193,86 @@ class ClaimDetailsPage(QWidget):
         logger.info(f"[SAVE] new_type={new_type!r}, original={self._original_claim_type!r}, changed={type_changed}")
         logger.info(f"[SAVE] pending_uploads={len(self._pending_uploads)}, pending_deletes={len(self._pending_deletes)}, pending_links={len(self._pending_links)}")
 
-        if type_changed:
-            has_changes = True
-
-        if self._pending_uploads or self._pending_deletes or self._pending_links:
-            has_changes = True
-
+        has_changes = type_changed or self._pending_uploads or self._pending_deletes or self._pending_links
         if not has_changes:
             Toast.show_toast(self, "لا توجد تعديلات للحفظ", Toast.INFO)
             self._on_cancel_edit()
             return
 
-        # Modification reason dialog (required for claim changes)
-        reason = ""
+        # Modification reason dialog (required by backend for all changes)
+        from ui.components.dialogs.modification_reason_dialog import ModificationReasonDialog
+        summary = []
         if type_changed:
-            from ui.components.dialogs.modification_reason_dialog import ModificationReasonDialog
             old_label = get_claim_type_display(self._original_claim_type)
             new_label = get_claim_type_display(new_type)
-            summary = [f"تغيير نوع المطالبة: {old_label} → {new_label}"]
-            dialog = ModificationReasonDialog(summary, parent=self)
-            if dialog.exec_() != ModificationReasonDialog.Accepted:
-                return
-            reason = dialog.get_reason()
+            summary.append(f"تغيير نوع المطالبة: {old_label} → {new_label}")
+        if self._pending_uploads:
+            summary.append(f"رفع {len(self._pending_uploads)} مستند جديد")
+        if self._pending_links:
+            summary.append(f"ربط {len(self._pending_links)} مستند موجود")
+        if self._pending_deletes:
+            summary.append(f"إزالة {len(self._pending_deletes)} مستند")
+        dialog = ModificationReasonDialog(summary, parent=self)
+        if dialog.exec_() != ModificationReasonDialog.Accepted:
+            return
+        reason = dialog.get_reason()
 
-        errors = []
+        # Build single update command for PUT /api/v1/Claims/{id}
+        update_data = {}
 
-        # Update claim type (+ auto-close if ownership with evidence)
         if type_changed:
-            update_data = {"claimType": new_type}
-            # Auto-close: ownership (1) + has evidence → caseStatus=2
-            effective_type = new_type
-            active_ev_count = len([ev for ev in self._evidences
-                                   if str(ev.get("id") or ev.get("evidenceId") or "") not in self._pending_deletes])
-            total_evidence = active_ev_count + len(self._pending_uploads) + len(self._pending_links)
-            if effective_type == 1 and total_evidence > 0:
-                update_data["caseStatus"] = 2
-                logger.info("[SAVE] Auto-closing claim: ownership + evidence present")
-            logger.info(f"[SAVE] Updating claim: {update_data}")
-            result = ctrl.update_claim(self._claim_id, update_data, reason)
-            logger.info(f"[SAVE] update_claim result: success={result.success}, msg={result.message}")
-            if not result.success:
-                errors.append(f"تحديث النوع: {result.message}")
+            update_data["relationType"] = new_type
 
-        # Upload new evidence files
-        if self._pending_uploads and self._survey_id:
+        # New evidence from uploaded files
+        if self._pending_uploads:
+            new_evidence = []
             for fp in self._pending_uploads:
-                logger.info(f"[SAVE] Uploading evidence: {os.path.basename(fp)}")
-                result = ctrl.add_tenure_evidence(
-                    self._survey_id, self._relation_id or "", fp)
-                logger.info(f"[SAVE] Upload result: success={result.success}")
-                if not result.success:
-                    errors.append(f"رفع {os.path.basename(fp)}: {result.message}")
+                try:
+                    file_size = os.path.getsize(fp)
+                    file_name = os.path.basename(fp)
+                    ext = os.path.splitext(file_name)[1].lower()
+                    mime_map = {".jpg": "image/jpeg", ".jpeg": "image/jpeg",
+                                ".png": "image/png", ".pdf": "application/pdf"}
+                    mime_type = mime_map.get(ext, "application/octet-stream")
+                    with open(fp, "rb") as f:
+                        file_hash = hashlib.sha256(f.read()).hexdigest()
+                    new_evidence.append({
+                        "evidenceType": 2,
+                        "description": file_name,
+                        "originalFileName": file_name,
+                        "filePath": fp,
+                        "fileSizeBytes": file_size,
+                        "mimeType": mime_type,
+                        "fileHash": file_hash,
+                    })
+                except Exception as e:
+                    logger.error(f"[SAVE] Failed to read file {fp}: {e}")
+            if new_evidence:
+                update_data["newEvidence"] = new_evidence
 
-        # Link existing evidence documents
-        if self._pending_links and self._survey_id and self._relation_id:
-            from services.api_client import get_api_client
-            api = get_api_client()
+        # Link existing evidence
+        if self._pending_links:
+            link_ids = []
             for ev_data in self._pending_links:
                 ev_id = str(ev_data.get("id") or ev_data.get("evidenceId") or "")
                 if ev_id:
-                    try:
-                        logger.info(f"[SAVE] Linking evidence {ev_id} to relation {self._relation_id}")
-                        api.link_evidence_to_relation(self._survey_id, ev_id, self._relation_id)
-                        logger.info(f"[SAVE] Link successful")
-                    except Exception as e:
-                        logger.error(f"[SAVE] Link failed: {e}")
-                        errors.append(f"ربط مستند: {str(e)}")
+                    link_ids.append(ev_id)
+            if link_ids:
+                update_data["linkExistingEvidenceIds"] = link_ids
 
-        # Delete evidence files
-        if self._pending_deletes and self._survey_id:
-            for ev_id in self._pending_deletes:
-                result = ctrl.delete_evidence(self._survey_id, ev_id)
-                if not result.success:
-                    errors.append(f"حذف مستند: {result.message}")
+        # Unlink evidence
+        if self._pending_deletes:
+            update_data["unlinkEvidenceRelationIds"] = list(self._pending_deletes)
 
-        # Auto-close: if type is already ownership and evidence was added (not type change)
-        final_type = new_type if type_changed else self._original_claim_type
-        if not type_changed and final_type == 1 and (self._pending_uploads or self._pending_links):
-            current_status = self._claim_data.get("caseStatus") or self._claim_data.get("status", 1)
-            if current_status == 1:
-                logger.info("[SAVE] Auto-closing: type already ownership + new evidence added")
-                result = ctrl.update_claim(self._claim_id, {"caseStatus": 2}, "إغلاق تلقائي — إضافة مستند إثبات")
-                if not result.success:
-                    errors.append(f"إغلاق المطالبة: {result.message}")
+        if reason:
+            update_data["reasonForModification"] = reason
 
-        if errors:
-            Toast.show_toast(self, "\n".join(errors), Toast.ERROR)
+        logger.info(f"[SAVE] Update command: {update_data}")
+        result = ctrl.update_claim(self._claim_id, update_data)
+        logger.info(f"[SAVE] Result: success={result.success}, msg={result.message}")
+
+        if not result.success:
+            Toast.show_toast(self, f"فشل حفظ التعديلات: {result.message}", Toast.ERROR)
         else:
             Toast.show_toast(self, "تم حفظ التعديلات بنجاح", Toast.SUCCESS)
 

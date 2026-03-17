@@ -19,8 +19,48 @@ from ui.design_system import Colors, PageDimensions
 from ui.font_utils import create_font, FontManager
 from ui.style_manager import StyleManager
 from utils.logger import get_logger
+import re
 
 logger = get_logger(__name__)
+
+
+def _translate_display(entity_type: str, field: str, value: str) -> str:
+    """Translate API display values to Arabic using vocab service."""
+    if not value or value == "-":
+        return value
+
+    # Households: "Size: N" → "N أفراد"
+    size_match = re.match(r"^Size:\s*(\d+)$", value, re.IGNORECASE)
+    if size_match:
+        return f"{size_match.group(1)} أفراد"
+
+    # Use vocab service for known types
+    if entity_type == "personPropertyRelations" and field == "displayInfo":
+        from services.display_mappings import get_relation_type_display
+        label = get_relation_type_display(value)
+        if label and label != value:
+            return label
+
+    if entity_type == "claims" and field == "identifier":
+        _claim_type_map = {
+            "Ownership": "ملكية",
+            "Tenancy": "إيجار",
+            "Occupancy": "إشغال",
+            "Inheritance": "إرث",
+            "Other": "أخرى",
+        }
+        return _claim_type_map.get(value, value)
+
+    if entity_type == "claims" and field == "displayInfo":
+        _collection_map = {
+            "FieldCollection": "جمع ميداني",
+            "OfficeEntry": "إدخال مكتبي",
+            "Import": "استيراد",
+            "Migration": "ترحيل",
+        }
+        return _collection_map.get(value, value)
+
+    return value
 
 # Entity sections matching API response keys
 _ENTITY_SECTIONS = [
@@ -358,7 +398,7 @@ class ImportStep4Review(QWidget):
             if not isinstance(section_items, list):
                 continue
             for entity in section_items:
-                all_rows.append((ar_name, entity))
+                all_rows.append((key, ar_name, entity))
 
         # Empty state
         if not all_rows:
@@ -370,11 +410,15 @@ class ImportStep4Review(QWidget):
         self._empty_label.setVisible(False)
 
         self._table.setRowCount(len(all_rows))
-        for row_idx, (type_name, entity) in enumerate(all_rows):
+        for row_idx, (type_key, type_name, entity) in enumerate(all_rows):
             identifier = entity.get("identifier", "")
             display_info = entity.get("displayInfo", "")
             validation_status = entity.get("validationStatus", "Pending")
             is_approved = entity.get("isApprovedForCommit", False)
+
+            # Translate to Arabic
+            identifier = _translate_display(type_key, "identifier", str(identifier))
+            display_info = _translate_display(type_key, "displayInfo", str(display_info))
 
             # Type column
             type_item = QTableWidgetItem(type_name)
