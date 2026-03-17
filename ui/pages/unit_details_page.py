@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
 Unit Details View Page — displays unit information card.
-DRY: Replicates the unit card section from unit_selection_step.py wizard
+Replicates the unit card section from unit_selection_step.py wizard
 but with a single unit, no selection state, no "add unit" button.
 """
 
@@ -150,7 +150,7 @@ class UnitDetailsPage(QWidget):
         header = self._build_section_header()
         frame_layout.addLayout(header)
 
-        # Unit card (DRY — same as _create_unit_card but without selection)
+        # Unit card (same as _create_unit_card but without selection)
         card = self._build_unit_card(unit)
         frame_layout.addWidget(card)
 

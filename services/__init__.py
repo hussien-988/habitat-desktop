@@ -9,8 +9,6 @@ __all__ = [
     "ValidationService",
     "ExportService",
     "DashboardService",
-    "MatchingService",
-    "ConflictResolutionService",
     "SyncServer",
 ]
 
@@ -29,12 +27,6 @@ def __getattr__(name):
     elif name == "DashboardService":
         from .dashboard_service import DashboardService
         return DashboardService
-    elif name == "MatchingService":
-        from .matching_service import MatchingService
-        return MatchingService
-    elif name == "ConflictResolutionService":
-        from .conflict_resolution import ConflictResolutionService
-        return ConflictResolutionService
     elif name == "SyncServer":
         from .sync_server import SyncServer
         return SyncServer

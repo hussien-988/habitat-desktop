@@ -948,7 +948,7 @@ class PersonDialog(QDialog):
         return lbl
 
     def _create_btn(self, text: str, primary: bool = True, callback=None) -> QPushButton:
-        """Create a styled action button (DRY)."""
+        """Create a styled action button."""
         btn = QPushButton(text)
         btn.setFixedHeight(44)
         btn.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)

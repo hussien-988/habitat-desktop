@@ -2,7 +2,7 @@
 """
     Base Map Dialog - Unified Dialog for All Map Operations.
 
-    Matches BuildingMapWidget design exactly - DRY principle.
+    Matches BuildingMapWidget design exactly.
 
     Design Specifications (من BuildingMapWidget):
     - Size: 1100×700px
@@ -206,7 +206,7 @@ class BaseMapDialog(QDialog):
         self._viewport_loader = None  # ViewportMapLoader instance
         self._auth_token = None # Store auth token for API calls (set by subclass)
 
-        # Initialize viewport loader if enabled (Best Practice: with cache + spatial sampling)
+        # Initialize viewport loader if enabled (with cache + spatial sampling)
         if self.enable_viewport_loading:
             # Get application-wide cache service (Singleton)
             # NOTE: BuildingCacheService disabled for now - Database.get_instance() not available
@@ -218,11 +218,11 @@ class BaseMapDialog(QDialog):
                 cache_max_size=50,
                 cache_max_age_minutes=10,
                 building_cache_service=building_cache,  # Disabled - needs db instance
-                use_spatial_sampling=True  # Grid-based sampling (Best Practice!)
+                use_spatial_sampling=True  # Grid-based sampling
             )
         logger.info("Viewport loading enabled (cache disabled - needs db instance)")
 
-        # UNIFIED: Get auth token if not provided (DRY principle)
+        # Get auth token if not provided
         if not self._auth_token and parent:
             self._auth_token = self._get_auth_token_from_parent(parent)
 
@@ -1127,7 +1127,7 @@ class BaseMapDialog(QDialog):
         """
         Get auth token from parent window (MainWindow.current_user).
 
- DRY: Single source of truth for auth_token retrieval (Best Practice).
+ Single source of truth for auth_token retrieval.
 
         Args:
             parent: Parent widget

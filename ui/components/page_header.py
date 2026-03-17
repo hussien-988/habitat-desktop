@@ -3,7 +3,6 @@
 Page Header Component - رأس الصفحة القابل لإعادة الاستخدام
 Reusable page header component with title and optional add button.
 
-Implements DRY, SOLID, Clean Code principles.
 """
 
 from PyQt5.QtWidgets import QWidget, QHBoxLayout, QLabel, QSpacerItem, QSizePolicy
@@ -78,7 +77,7 @@ class PageHeader(QWidget):
         # Page title
         self.title_label = QLabel(self.title_text)
 
-        # Use centralized font utility (DRY + eliminates stylesheet conflicts)
+        # Use centralized font utility
         # Figma: IBM Plex Sans Arabic, 24px Bold, Letter spacing 0
         # Font conversion: 24px × 0.75 = 18pt
         title_font = create_font(

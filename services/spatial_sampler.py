@@ -5,7 +5,7 @@ Spatial Sampler - Grid-Based Building Distribution
 
 Professional spatial sampling for displaying buildings on map.
 
-Best Practices Applied:
+Features:
 - Grid-based sampling (ensures even distribution)
 - Zoom-level adaptive density
 - Performance-optimized (O(n) complexity)
@@ -52,7 +52,7 @@ class SpatialSampler:
     - Performance optimized for large datasets
     """
 
-    # Zoom-level based density configuration (Best Practice)
+    # Zoom-level based density configuration
     DENSITY_CONFIG = {
         # zoom_level: (grid_rows, grid_cols, max_buildings)
         12: (4, 4, 20),    # Zoomed out: 4x4 grid, max 20 buildings
@@ -87,7 +87,7 @@ class SpatialSampler:
         """
         Sample buildings using grid-based distribution.
 
-        Professional Best Practice:
+        Algorithm:
         - Divides viewport into grid cells
         - Selects one building per cell (evenly distributed)
         - Uses priority weighting (damaged buildings preferred)

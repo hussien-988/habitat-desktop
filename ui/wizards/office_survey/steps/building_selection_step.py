@@ -76,7 +76,7 @@ class BuildingSelectionStep(BaseStep):
         widget.setLayoutDirection(Qt.RightToLeft)
 
         layout = self.main_layout
-        # No horizontal padding - wizard applies 131px (DRY principle)
+        # No horizontal padding - wizard applies 131px
         # Only vertical spacing between elements
         # Top gap: 15px (reduced to accommodate multiple cards)
         layout.setContentsMargins(0, 15, 0, 16)  # Top: 15px, Bottom: 16px
@@ -320,7 +320,7 @@ class BuildingSelectionStep(BaseStep):
         self.buildings_list.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.buildings_list.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
 
-        # DRY: Using Colors constants and removing border-bottom separator
+        # Using Colors constants and removing border-bottom separator
         # Border-radius only on bottom corners (flows from search bar)
         self.buildings_list.setStyleSheet(f"""
             QListWidget {{
@@ -367,7 +367,7 @@ class BuildingSelectionStep(BaseStep):
         self.stats_card.setVisible(False)  # Hidden initially
         self.stats_card.setFixedHeight(73)  # Height from Figma
 
-        # DRY: Using Colors constants
+        # Using Colors constants
         self.stats_card.setStyleSheet(f"""
             QFrame#statsCard {{
                 background-color: {Colors.SURFACE};
@@ -434,7 +434,7 @@ class BuildingSelectionStep(BaseStep):
         self.location_card.setVisible(False)  # Hidden initially
         self.location_card.setFixedHeight(187)  # Height from Figma
 
-        # DRY: Using Colors constants
+        # Using Colors constants
         self.location_card.setStyleSheet(f"""
             QFrame#locationCard {{
                 background-color: {Colors.SURFACE};
@@ -461,7 +461,7 @@ class BuildingSelectionStep(BaseStep):
         content_row = QHBoxLayout()
         content_row.setSpacing(24)  # Gap: 24px between sections
 
-        # Helper function for info section (DRY)
+        # Helper function for info section
         def _create_info_section(label_text, value_text="-"):
             """Create info section with label and value."""
             section = QVBoxLayout()
@@ -537,7 +537,6 @@ class BuildingSelectionStep(BaseStep):
         map_button.setText(tr("wizard.building.open_map"))
         map_button.setFont(create_font(size=FontManager.WIZARD_FIELD_LABEL, weight=FontManager.WEIGHT_REGULAR))
 
-        # DRY: Using Colors.PRIMARY_BLUE
         # Professional shadow effect for floating appearance
         map_button.setStyleSheet(f"""
             QPushButton {{
@@ -624,7 +623,7 @@ class BuildingSelectionStep(BaseStep):
         """
         Open professional map search dialog for building selection.
 
-        Uses BuildingMapDialog V2 (DRY principle) - unified component with:
+        Uses BuildingMapDialog V2 - unified component with:
         - Clean design (no clutter, matches screenshot 2)
         - Live coordinate updates
         - PostGIS-compatible WKT output
@@ -783,13 +782,13 @@ class BuildingSelectionStep(BaseStep):
             )
             item = QListWidgetItem(item_text)
 
-            # Add blue.png icon (DRY: same icon as card header)
+            # Add blue.png icon (same icon as card header)
             from ui.components.icon import Icon
             icon_pixmap = Icon.load_pixmap("blue", size=24)
             if icon_pixmap and not icon_pixmap.isNull():
                 item.setIcon(QIcon(icon_pixmap))
 
-            # Apply font: same as subtitle (DRY: create_font + Colors.WIZARD_SUBTITLE)
+            # Apply font: same as subtitle
             font = create_font(size=FontManager.WIZARD_CARD_VALUE, weight=FontManager.WEIGHT_REGULAR)
             item.setFont(font)
             item.setForeground(QColor(Colors.WIZARD_SUBTITLE))
@@ -837,13 +836,13 @@ class BuildingSelectionStep(BaseStep):
             )
             item = QListWidgetItem(item_text)
 
-            # Add blue.png icon (DRY: same icon as card header)
+            # Add blue.png icon (same icon as card header)
             from ui.components.icon import Icon
             icon_pixmap = Icon.load_pixmap("blue", size=24)
             if icon_pixmap and not icon_pixmap.isNull():
                 item.setIcon(QIcon(icon_pixmap))
 
-            # Apply font: same as subtitle (DRY: create_font + Colors.WIZARD_SUBTITLE)
+            # Apply font: same as subtitle
             font = create_font(size=FontManager.WIZARD_CARD_VALUE, weight=FontManager.WEIGHT_REGULAR)
             item.setFont(font)
             item.setForeground(QColor(Colors.WIZARD_SUBTITLE))

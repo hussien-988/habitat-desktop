@@ -2,18 +2,13 @@
 """
 Polygon Map Dialog V2 - Unified Design for Polygon Selection.
 
-Matches BuildingMapWidget design exactly - DRY principle.
+Matches BuildingMapWidget design exactly.
 
 Uses:
     - BaseMapDialog for consistent UI
     - LeafletHTMLGenerator for map rendering
     - Leaflet.draw for polygon drawing tools
     - PostGIS-compatible WKT output
-
-    Best Practices (DRY + SOLID):
-    - Extends BaseMapDialog (no duplication)
-    - Single Responsibility: Select buildings in polygon
-    - Open/Closed: Extended BaseMapDialog, not modified
 """
 
 import json
@@ -282,7 +277,7 @@ class PolygonMapDialog(BaseMapDialog):
             #Load initial buildings AND cache them for multi-select lookup
             buildings_geojson = self._load_and_cache_initial_buildings()
 
-            # Load neighborhoods for map overlay (DRY - shared helper)
+            # Load neighborhoods for map overlay (shared helper)
             neighborhoods_geojson = self.load_neighborhoods_geojson(auth_token=self._auth_token)
             logger.info(f"Neighborhoods result: {'loaded' if neighborhoods_geojson else 'None/failed'}")
 

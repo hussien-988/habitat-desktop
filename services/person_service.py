@@ -3,8 +3,6 @@
 Person Service - Business Logic Layer
 ======================================
 Centralized business logic for Person operations.
-Follows DRY, SOLID, Clean Code principles.
-
 This service sits between Controllers and Repositories,
 handling all business rules, validation, and data transformations.
 """

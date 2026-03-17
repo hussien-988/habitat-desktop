@@ -125,7 +125,7 @@ class TRRCMSApiClient:
         """
         Set access token from external source (e.g., current_user._api_token).
 
-        Professional Best Practice: Allow setting token from authenticated user session.
+        Allow setting token from authenticated user session.
 
         Args:
             token: Access token to use

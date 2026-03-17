@@ -3,7 +3,7 @@
     Building Map Widget - Shared Component for Map Services.
 
     Reusable component that provides interactive building selection map.
-    Follows DRY and SOLID principles - single source of truth for map functionality.
+    Single source of truth for map functionality.
 
     Usage:
     widget = BuildingMapWidget(db)
@@ -79,9 +79,8 @@ class RoundedDialog(QDialog):
         """
         Override keyPressEvent to prevent Enter/Return from closing dialog.
 
-        Senior PyQt5 Best Practice:
-        - Intercept Enter key BEFORE dialog's default behavior
-        - Only let search field handle Enter, not dialog
+        Intercept Enter key BEFORE dialog's default behavior.
+        Only let search field handle Enter, not dialog.
         """
         from PyQt5.QtCore import Qt
 
@@ -242,7 +241,7 @@ class BuildingMapWidget(QObject):
         """
         Create the map dialog UI.
 
-        Enhanced Specifications (Senior PyQt5 Best Practice):
+        Enhanced Specifications:
         - Size: 1100×700px (width × height) - Larger for better map visibility
         - Border-radius: 32px (زيادة للشكل الخارجي)
         - Internal padding: 24px
@@ -284,7 +283,7 @@ class BuildingMapWidget(QObject):
         search_bar = self._create_search_bar()
         content_layout.addWidget(search_bar)
 
-        # Senior PyQt5 Best Practice: Link search input to dialog for key handling
+        # Link search input to dialog for key handling
         dialog.search_input = self.search_input
 
         # Map view (remaining space)
@@ -396,7 +395,7 @@ class BuildingMapWidget(QObject):
         """)
         close_btn.clicked.connect(dialog.reject)
 
-        # Senior PyQt5 Best Practice: Prevent this button from being default
+        # Prevent this button from being default
         # This ensures Enter key doesn't trigger close
         close_btn.setDefault(False)
         close_btn.setAutoDefault(False)
@@ -585,10 +584,7 @@ class BuildingMapWidget(QObject):
 
         Search for neighborhood/area and fly to location on map.
 
-        Senior PyQt5 Best Practice:
-        - Explicit logging for debugging
-        - Visual feedback to user
-        - Error handling with user notification
+        Search for neighborhood/area and fly to location on map.
         """
         search_text = self.search_input.text().strip()
 
@@ -874,7 +870,7 @@ class BuildingMapWidget(QObject):
                 """
                 Center building perfectly in middle of viewport and open popup.
 
-                Best Practice: Force map to center on building AFTER initial load
+                Force map to center on building AFTER initial load
                 to ensure building appears exactly in the middle of the screen.
 
                 Steps:

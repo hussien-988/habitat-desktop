@@ -3,8 +3,6 @@
 Building Service - Business Logic Layer
 ========================================
 Centralized business logic for Building operations.
-Follows DRY, SOLID, Clean Code principles.
-
 This service handles:
 - Building ID generation (17 digits)
 - Geometry validation (polygons via PostGIS)

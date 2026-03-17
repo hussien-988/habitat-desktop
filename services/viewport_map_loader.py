@@ -6,11 +6,10 @@
     Professional service for loading buildings based on map viewport.
     Optimized for performance with millions of buildings.
 
-    Best Practices Applied:
-    - SOLID: Single Responsibility (only handles viewport-based loading)
-    - DRY: Reusable across all map components
-    - Performance: Smart caching + debouncing
-    - Scalability: Works with millions of buildings
+    Features:
+    - Smart caching + debouncing
+    - Reusable across all map components
+    - Works with millions of buildings
 
     Usage:
     loader = ViewportMapLoader(map_service_api)
@@ -85,11 +84,6 @@ class ViewportMapLoader:
     """
     Service for loading buildings based on map viewport.
 
-    SOLID Principles:
-    - Single Responsibility: Only handles viewport-based loading
-    - Open/Closed: Extensible without modification
-    - Dependency Inversion: Depends on MapServiceAPI abstraction
-
     Features:
     - Smart caching (LRU with expiry)
     - Debouncing support
@@ -115,7 +109,7 @@ class ViewportMapLoader:
             cache_max_size: Maximum cache entries (LRU)
             cache_max_age_minutes: Cache expiry time
             building_cache_service: Optional BuildingCacheService (uses singleton if not provided)
-            use_spatial_sampling: Enable grid-based spatial sampling (Best Practice!)
+            use_spatial_sampling: Enable grid-based spatial sampling
             db: Database instance for local fallback when API unavailable
         """
         self.map_service = map_service or MapServiceAPI()
@@ -125,7 +119,7 @@ class ViewportMapLoader:
         self.cache_max_age_minutes = cache_max_age_minutes
         self.use_spatial_sampling = use_spatial_sampling
 
-        # Use application-wide cache service (Singleton Pattern - Best Practice!)
+        # Use application-wide cache service (singleton)
         self.building_cache = building_cache_service
 
         # Fallback to local cache if building_cache not available
@@ -152,7 +146,7 @@ class ViewportMapLoader:
         """
         Load buildings for viewport with professional optimizations.
 
-        Professional Best Practices (2026):
+        Optimizations:
             - Application-wide cache (Singleton BuildingCacheService)
             - Spatial sampling (grid-based even distribution)
             - Zoom-adaptive density (20-100 buildings based on zoom)
@@ -174,8 +168,7 @@ class ViewportMapLoader:
         Returns:
             List of buildings (spatially sampled for optimal performance)
         """
-        # Professional Best Practice: Min zoom check
-        # Prevent loading buildings when zoomed out too far (performance optimization)
+        # Min zoom check: prevent loading buildings when zoomed out too far
         if zoom_level is not None and zoom_level < min_zoom_threshold:
             logger.debug(f"Zoom {zoom_level} < {min_zoom_threshold}, skipping building load")
             return []
@@ -187,7 +180,7 @@ class ViewportMapLoader:
                 self.map_service.set_auth_token(auth_token)
                 logger.debug("Auth token synchronized with MapServiceAPI (before cache check)")
 
-            # BEST PRACTICE 1: Use application-wide cache (Singleton)
+            # Use application-wide cache (singleton)
             buildings = []
 
             if self.building_cache:

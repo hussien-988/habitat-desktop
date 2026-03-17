@@ -352,8 +352,6 @@ class UnitDialog(QDialog):
         """
         Create a field container with label and widget.
 
-        DRY: Single method for all field containers.
-
         Args:
             label_text: Text for the label
             widget: The input widget (QComboBox, QLineEdit, etc.)
@@ -375,8 +373,6 @@ class UnitDialog(QDialog):
     def _create_field_container_with_validation(self, label_text: str, widget, validation_label: QLabel) -> QVBoxLayout:
         """
         Create a field container with label, widget, and validation message.
-
-        DRY: Single method for field containers that need validation feedback.
 
         Args:
             label_text: Text for the label
@@ -401,8 +397,6 @@ class UnitDialog(QDialog):
     def _create_save_button(self) -> QPushButton:
         """
         Create save button with consistent styling.
-
-        DRY: Single method for save button creation.
 
         Returns:
             QPushButton configured as save button
@@ -434,8 +428,6 @@ class UnitDialog(QDialog):
     def _create_cancel_button(self) -> QPushButton:
         """
         Create cancel button with consistent styling.
-
-        DRY: Single method for cancel button creation.
 
         Returns:
             QPushButton configured as cancel button

@@ -29,7 +29,7 @@ from utils.logger import get_logger
 logger = get_logger(__name__)
 
 # ---------------------------------------------------------------------------
-# Shared styles (DRY — mirrors AddBuildingPage._get_card_style / field style)
+# Shared styles (mirrors AddBuildingPage._get_card_style / field style)
 # ---------------------------------------------------------------------------
 
 _CARD_STYLE = """
@@ -305,7 +305,7 @@ class BuildingInfoStep(BaseStep):
         return card
 
     # ------------------------------------------------------------------
-    # Reusable builders (DRY)
+    # Reusable builders
     # ------------------------------------------------------------------
 
     def _make_card_shell(self, title: str, subtitle: str, icon_name: str, columns: int):

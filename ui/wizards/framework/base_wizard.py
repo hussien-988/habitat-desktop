@@ -239,7 +239,7 @@ class BaseWizard(QWidget, metaclass=ABCQWidgetMeta):
         layout.setContentsMargins(20, 16, 20, 16)
         layout.setSpacing(12)
 
-        # DRY: Use ActionButton component for all footer buttons
+        # Use ActionButton component for all footer buttons
         # Left buttons (Cancel, Save Draft)
         self.btn_cancel = ActionButton("إلغاء", variant="secondary", width=114, height=44)
         self.btn_cancel.clicked.connect(self._handle_cancel)

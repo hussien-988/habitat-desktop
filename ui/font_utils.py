@@ -1,15 +1,14 @@
 # -*- coding: utf-8 -*-
 """
 Font Utilities - أدوات الخطوط
-Centralized font management following DRY, SOLID, Clean Code principles.
+Centralized font management.
 
 This module provides a single source of truth for font configuration
 and eliminates stylesheet conflicts by using QFont directly.
 
-Best Practice:
     ALWAYS use these utility functions instead of:
     - Setting fonts in QSS (causes conflicts)
-    - Creating QFont instances manually (violates DRY)
+    - Creating QFont instances manually
     - Using QFont constructor with font name (unreliable)
 
 Usage:
@@ -38,7 +37,7 @@ class FontManager:
     - Apply fonts to widgets and application
     """
 
-    # Font configuration (Single Source of Truth - DRY)
+    # Font configuration (Single Source of Truth)
     PRIMARY_FONT_FAMILY = "IBM Plex Sans Arabic"
     FALLBACK_FONT_FAMILY = "Calibri"
 
@@ -51,7 +50,7 @@ class FontManager:
     SIZE_TITLE = 18
     SIZE_LARGE_TITLE = 24
 
-    # Wizard-specific sizes (DRY: Single Source of Truth for all wizard steps)
+    # Wizard-specific sizes (Single Source of Truth for all wizard steps)
     WIZARD_STEP_TITLE = 12          # Step title: "بيانات البناء", "اختر مقسما"
     WIZARD_STEP_SUBTITLE = 10      # Step subtitle description
     WIZARD_CARD_LABEL = 10         # Card info labels: "حالة البناء", "نوع البناء"
@@ -106,7 +105,7 @@ class FontManager:
         families: Optional[List[str]] = None
     ) -> QFont:
         """
-        Create a QFont with proper configuration (DRY - Single Source of Truth).
+        Create a QFont with proper configuration.
 
         Args:
             size: Font size in points (default: 10pt)

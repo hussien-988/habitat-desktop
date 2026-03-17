@@ -2,9 +2,6 @@
 """
     Map Constants - ثوابت موحدة لجميع الخرائط في التطبيق
 
-    DRY Principle: مصدر واحد للحقيقة (Single Source of Truth)
-    SOLID Principle: فصل الثوابت عن المنطق
-
     Usage:
     from ui.constants.map_constants import MapConstants
     dialog.setFixedSize(MapConstants.DIALOG_WIDTH, MapConstants.DIALOG_HEIGHT)

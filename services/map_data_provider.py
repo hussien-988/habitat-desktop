@@ -3,7 +3,6 @@
 Map Data Provider - Strategy Pattern for Map APIs
 
 Provides different implementations for map data retrieval based on use case.
-Implements SOLID principles for clean architecture.
 """
 
 from abc import ABC, abstractmethod
@@ -28,7 +27,6 @@ class IMapDataProvider(ABC):
     """
     Interface for map data providers.
 
-    Implements Interface Segregation Principle (SOLID).
     Different providers can implement this interface for different use cases.
     """
 
@@ -58,7 +56,6 @@ class BuildingsMapProvider(IMapDataProvider):
     Provider for general map viewing using Buildings APIs.
 
     Uses lightweight Buildings/map API for optimal performance.
-    Implements Single Responsibility Principle (SOLID).
     """
 
     def __init__(self, api_client):
@@ -131,7 +128,6 @@ class FieldAssignmentMapProvider(IMapDataProvider):
     Provider for field assignment workflow.
 
     Uses BuildingAssignments API with assignment-specific data.
-    Implements Single Responsibility Principle (SOLID).
     """
 
     def __init__(self, api_client):

@@ -10,9 +10,9 @@ for all UI components in the application. It eliminates:
 - Hard-to-maintain inline stylesheets
 
 Architecture:
-- DRY: Each style is defined once
-- SOLID: Single Responsibility - each method handles one component type
-- Clean Code: Clear naming, comprehensive documentation
+- Each style is defined once
+- Each method handles one component type
+- Clear naming, comprehensive documentation
 
 Usage:
     from ui.style_manager import StyleManager
@@ -71,8 +71,8 @@ class StyleManager:
 
     Principles:
     - Single Source of Truth: All styles defined here
-    - DRY: No duplicate style definitions
-    - SOLID: Each method has single responsibility
+    - No duplicate style definitions
+    - Each method has single responsibility
     - Maintainable: Easy to update styles application-wide
     """
 
@@ -742,7 +742,7 @@ class StyleManager:
     @staticmethod
     def form_input() -> str:
         """
-        Unified search/filter input stylesheet (DRY).
+        Unified search/filter input stylesheet.
 
         Used for QLineEdit, QComboBox, QDateEdit, QDoubleSpinBox across
         all pages — filter bars, search inputs, combo filters.

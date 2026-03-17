@@ -2,20 +2,8 @@
 """
 Leaflet HTML Generator - Unified Map Display.
 
-Generates Leaflet HTML with support for both Point and Polygon geometries.
-Follows best practices from Leaflet.js documentation.
-
-Best Practices Applied:
-1. L.geoJSON() with pointToLayer for points (markers/circle markers)
-2. style function for polygons
-3. FeatureGroup for unified layer management
-4. Proper event handling with onEachFeature
-5. Layer control for toggling between views
-
-References:
-- https://leafletjs.com/examples/geojson/
-- https://leafletjs.com/reference.html#geojson
-- https://github.com/skylarkdrones/pyqtlet
+Generates Leaflet HTML with support for both Point and Polygon geometries,
+including clustering, drawing tools, and viewport-based loading.
 """
 
 import json
@@ -27,20 +15,9 @@ logger = get_logger(__name__)
 
 
 class LeafletHTMLGenerator:
-    """
-    Generates Leaflet HTML for unified building visualization.
+    """Generates Leaflet HTML for unified building visualization."""
 
-    Design Pattern: Builder Pattern
-    - Builds complex HTML structure step by step
-    - Allows customization while maintaining consistency
-
-    Best Practices:
-    - DRY: Uses MapConstants for colors (Single Source of Truth)
-    - Professional clustering for handling thousands of buildings
-    - Optimized for performance and scalability
-    """
-
-    # Import status colors from MapConstants (DRY principle)
+    # Import status colors from MapConstants
     STATUS_COLORS = MapConstants.STATUS_COLORS
     STATUS_LABELS_AR = MapConstants.STATUS_LABELS_AR
 
@@ -475,7 +452,7 @@ class LeafletHTMLGenerator:
             box-shadow: 0 0 2px rgba(0,0,0,0.3);
         }}
 
-        /* ✅ SVG Pin Icon Styling */
+        /* SVG Pin Icon Styling */
         .building-pin-icon {{
             background: transparent !important;
             border: none !important;
@@ -734,8 +711,7 @@ class LeafletHTMLGenerator:
         L.Icon.Default.imagePath = '{tile_server_url}/images/';
 
         // Initialize map centered on Aleppo with zoom constraints
-        // PERFORMANCE: preferCanvas for 10x faster rendering (Canvas vs SVG/DOM)
-        // Reference: https://leafletjs.com/reference.html#map-prefercanvas
+        // preferCanvas for faster rendering
         var map = L.map('map', {{
             preferCanvas: true,
             maxZoom: {effective_max_zoom},
@@ -840,11 +816,7 @@ class LeafletHTMLGenerator:
         var _ptCount = buildingsData.features.filter(f => f.geometry.type === 'Point').length;
         console.log('GeoJSON: ' + buildingsData.features.length + ' features (' + _polyCount + ' polygons, ' + _ptCount + ' points)');
 
-        // =========================================================
-        // Professional Marker Clustering Configuration
-        // =========================================================
-        // Best Practice: Use marker clustering for handling thousands of buildings
-        // Reference: https://github.com/Leaflet/Leaflet.markercluster
+        // Marker Clustering Configuration
 
         var markers;
         if (typeof L.markerClusterGroup === 'function') {{
@@ -872,11 +844,8 @@ class LeafletHTMLGenerator:
         var polygonsLayer = L.featureGroup();
 
         // Add buildings layer with unified geometry handling
-        // Best Practice: Use L.geoJSON with pointToLayer and style
-        // Reference: https://leafletjs.com/examples/geojson/
         var buildingsLayer = L.geoJSON(buildingsData, {{
             // Style function for Polygon/MultiPolygon features
-            // Reference: https://leafletjs.com/reference.html#geojson-style
             style: function(feature) {{
                 var status = getStatusKey(feature.properties.status || 1);
                 var color = statusColors[status] || '#0072BC';
@@ -891,9 +860,7 @@ class LeafletHTMLGenerator:
                 }};
             }},
 
-            // pointToLayer for Point features - استخدام Pin Markers (أجمل وأوضح)
-            //
-            // Reference: https://leafletjs.com/reference.html#marker
+            // pointToLayer for Point features - استخدام Pin Markers
             pointToLayer: function(feature, latlng) {{
                 var status = getStatusKey(feature.properties.status || 1);
                 var color = statusColors[status] || '#0072BC';
@@ -904,7 +871,7 @@ class LeafletHTMLGenerator:
                     html: '<div style="position: relative; width: 24px; height: 36px;">' +
                           '<svg width="24" height="36" viewBox="0 0 24 36" xmlns="http://www.w3.org/2000/svg">' +
                           '<path d="M12 0C5.4 0 0 5.4 0 12c0 8 12 24 12 24s12-16 12-24c0-6.6-5.4-12-12-12z" ' +
-                          'fill="' + color + '" stroke="#fff" stroke-width="2"/>' +  // ✅ Color from status
+                          'fill="' + color + '" stroke="#fff" stroke-width="2"/>' +
                           '<circle cx="12" cy="12" r="4" fill="#fff"/>' +
                           '</svg></div>',
                     iconSize: [24, 36],
@@ -916,7 +883,6 @@ class LeafletHTMLGenerator:
             }},
 
             // onEachFeature for popups and events
-            // Reference: https://leafletjs.com/reference.html#geojson-oneachfeature
             onEachFeature: function(feature, layer) {{
                 var props = feature.properties;
                 var status = props.status || 'intact';
@@ -927,9 +893,9 @@ class LeafletHTMLGenerator:
 
                 // Per-building logging removed for performance
 
-                // ✅ Use building_id_display (with dashes) for UI, building_id (no dashes) for API
+                // Use building_id_display (with dashes) for UI, building_id (no dashes) for API
                 var buildingIdDisplay = props.building_id_display || props.building_id || 'مبنى';
-                var buildingIdForApi = props.building_id;  // ✅ NO dashes for API
+                var buildingIdForApi = props.building_id;  // No dashes for API
 
                 {popup_js_block}
 
@@ -1634,13 +1600,13 @@ class LeafletHTMLGenerator:
         var initAttempts = 0;
         var maxInitAttempts = 100;  // 5 seconds max (100 × 50ms)
 
-        // ✅ FIX: Wait for qt.webChannelTransport to be ready (prevents timing issues)
+        // Wait for qt.webChannelTransport to be ready (prevents timing issues)
         function initializeQWebChannel() {{
             initAttempts++;
 
             // Check for max attempts
             if (initAttempts > maxInitAttempts) {{
-                console.error('❌ QWebChannel initialization failed after ' + (maxInitAttempts * 50) + 'ms');
+                console.error('QWebChannel initialization failed after ' + (maxInitAttempts * 50) + 'ms');
                 console.error('   typeof QWebChannel:', typeof QWebChannel);
                 console.error('   typeof qt:', typeof qt);
                 console.error('   qt.webChannelTransport:', typeof qt !== 'undefined' ? qt.webChannelTransport : 'N/A');
@@ -1648,25 +1614,25 @@ class LeafletHTMLGenerator:
             }}
 
             if (typeof QWebChannel === 'undefined') {{
-                console.log('⏳ QWebChannel not loaded yet (attempt ' + initAttempts + '), waiting...');
+                console.log('QWebChannel not loaded yet (attempt ' + initAttempts + '), waiting...');
                 setTimeout(initializeQWebChannel, 50);
                 return;
             }}
 
             if (typeof qt === 'undefined' || !qt.webChannelTransport) {{
                 if (initAttempts % 20 === 0) {{  // Log every second
-                    console.log('⏳ Waiting for qt.webChannelTransport (attempt ' + initAttempts + ')...');
+                    console.log('Waiting for qt.webChannelTransport (attempt ' + initAttempts + ')...');
                 }}
                 setTimeout(initializeQWebChannel, 50);  // Retry in 50ms
                 return;
             }}
 
             try {{
-                console.log('🔄 Initializing QWebChannel (attempt ' + initAttempts + ')...');
+                console.log('Initializing QWebChannel (attempt ' + initAttempts + ')...');
                 new QWebChannel(qt.webChannelTransport, function(channel) {{
                     bridge = channel.objects.buildingBridge || channel.objects.bridge;
                     if (!bridge) {{
-                        console.error('❌ Bridge object not found in channel!');
+                        console.error('Bridge object not found in channel!');
                         console.error('   Available objects:', Object.keys(channel.objects));
                         return;
                     }}
@@ -1674,7 +1640,7 @@ class LeafletHTMLGenerator:
                     window.bridge = bridge;  // Make bridge globally accessible
                     bridgeReady = true;
                     window.bridgeReady = true;  // Make bridgeReady globally accessible
-                    console.log('✅ QWebChannel bridge ready for selection (attempt ' + initAttempts + ')');
+                    console.log('QWebChannel bridge ready for selection (attempt ' + initAttempts + ')');
                     console.log('   Bridge methods:', Object.keys(bridge));
 
                     // Notify Python that bridge is ready
@@ -1688,7 +1654,7 @@ class LeafletHTMLGenerator:
                     }}
                 }});
             }} catch (error) {{
-                console.error('❌ Failed to initialize QWebChannel:', error);
+                console.error('Failed to initialize QWebChannel:', error);
                 console.error('   Error details:', error.message, error.stack);
             }}
         }}
@@ -1697,11 +1663,11 @@ class LeafletHTMLGenerator:
         setTimeout(initializeQWebChannel, 100);
 
         // Function to select building (called from popup button)
-        // ✅ FIX: Wait for bridge or retry with timeout
+        // Wait for bridge or retry with timeout
         function selectBuilding(buildingId) {{
-            console.log('🏢 Selecting building:', buildingId);
+            console.log('Selecting building:', buildingId);
 
-            // ✅ Check if bridge is ready
+            // Check if bridge is ready
             if (bridgeReady && bridge && (bridge.selectBuilding || bridge.buildingSelected)) {{
                 // Bridge ready - select immediately
                 if (bridge.selectBuilding) {{
@@ -1710,10 +1676,10 @@ class LeafletHTMLGenerator:
                     bridge.buildingSelected(buildingId);
                 }}
                 map.closePopup();
-                console.log('✅ Building selected via bridge');
+                console.log('Building selected via bridge');
             }} else if (!bridgeReady) {{
                 // Bridge not ready yet - wait 500ms and retry
-                console.warn('⏳ Bridge not ready, waiting 500ms...');
+                console.warn('Bridge not ready, waiting 500ms...');
                 setTimeout(function() {{
                     if (bridgeReady && bridge && (bridge.selectBuilding || bridge.buildingSelected)) {{
                         if (bridge.selectBuilding) {{
@@ -1722,14 +1688,14 @@ class LeafletHTMLGenerator:
                             bridge.buildingSelected(buildingId);
                         }}
                         map.closePopup();
-                        console.log('✅ Building selected after retry');
+                        console.log('Building selected after retry');
                     }} else {{
-                        console.error('❌ Bridge still not ready after 500ms');
+                        console.error('Bridge still not ready after 500ms');
                         // Don't show alert - just log error (user can try again)
                     }}
                 }}, 500);
             }} else {{
-                console.error('❌ Bridge initialized but methods not found');
+                console.error('Bridge initialized but methods not found');
             }}
         }}
 
@@ -1773,7 +1739,7 @@ class LeafletHTMLGenerator:
         """
         Get JavaScript for viewport-based loading.
 
-        Implements industry best practices for handling millions of buildings:
+        Handles viewport-based loading for large building datasets:
         - Only loads buildings in current viewport
         - Debounces requests during rapid pan/zoom
         - Updates markers dynamically without page reload

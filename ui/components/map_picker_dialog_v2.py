@@ -2,7 +2,7 @@
 """
 Map Picker Dialog V2 - Unified Design for Location/Polygon Selection.
 
-Matches BuildingMapWidget design exactly - DRY principle.
+Matches BuildingMapWidget design exactly.
 
 Uses:
 - BaseMapDialog for consistent UI
@@ -99,7 +99,7 @@ class MapPickerDialog(BaseMapDialog):
             # Tile URL may be Docker when available, or local as fallback
             docker_url = get_tile_server_url()
 
-            # Load buildings using shared method (DRY principle) - BEST PRACTICE!
+            # Load buildings using shared method
             buildings_geojson = '{"type":"FeatureCollection","features":[]}'  # Default empty
             if self.db:
                 logger.info("Loading buildings for map picker...")

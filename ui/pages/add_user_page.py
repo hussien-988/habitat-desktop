@@ -2,7 +2,7 @@
 """
 Add User Page — إضافة مستخدم جديد
 Form page with user info fields + collapsible CRUD permissions.
-Same detail-page pattern as unit_details_page.py (DRY).
+Same detail-page pattern as unit_details_page.py.
 """
 
 from PyQt5.QtWidgets import (
@@ -173,7 +173,7 @@ class AddUserPage(QWidget):
         header_layout.addLayout(title_area)
         header_layout.addStretch()
 
-        # Save button (DRY — same as wizard save button, 114×48)
+        # Save button (same as wizard save button, 114x48)
         self.save_btn = QPushButton(" حفظ")
         self.save_btn.setCursor(Qt.PointingHandCursor)
         self.save_btn.setFixedSize(ButtonDimensions.SAVE_WIDTH, ButtonDimensions.SAVE_HEIGHT)

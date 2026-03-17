@@ -217,7 +217,6 @@ class Building:
         """
         Create Building from dictionary.
 
-        Handles API field name mapping (DRY principle)
         Maps API response field names to Building dataclass field names.
         """
         # Field mapping: API -> Building dataclass

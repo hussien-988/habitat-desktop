@@ -3,14 +3,6 @@
 GeoJSON Converter Service - Unified Building Geometry Conversion.
 
 Converts buildings to GeoJSON format supporting both Point and Polygon geometries.
-Follows SOLID principles and DRY methodology.
-
-Best Practices:
-- Single Responsibility: Only handles GeoJSON conversion
-- Open/Closed: Extensible for new geometry types
-- Liskov Substitution: Works with any Building model
-- Interface Segregation: Clear, focused interface
-- Dependency Inversion: Depends on abstractions (Building model)
 
 References:
 - https://leafletjs.com/examples/geojson/
@@ -65,8 +57,8 @@ class GeoJSONConverter:
             GeoJSON string (FeatureCollection)
 
         Design:
-            - Uses pointToLayer for points (Leaflet best practice)
-            - Uses style function for polygons (Leaflet best practice)
+            - Uses pointToLayer for points
+            - Uses style function for polygons
             - Unified layer management via FeatureGroup
         """
         features = []

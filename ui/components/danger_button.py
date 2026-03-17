@@ -3,7 +3,6 @@
 Danger Button Component - زر خطر قابل لإعادة الاستخدام
 Reusable danger button component for destructive actions.
 
-Implements DRY, SOLID, Clean Code principles.
 """
 
 from PyQt5.QtWidgets import QPushButton
@@ -48,7 +47,7 @@ class DangerButton(QPushButton):
         # Cursor
         self.setCursor(Qt.PointingHandCursor)
 
-        # Use centralized font utility (DRY + eliminates stylesheet conflicts)
+        # Use centralized font utility
         btn_font = create_font(
             size=FontManager.SIZE_BODY,  # 10pt
             weight=FontManager.WEIGHT_MEDIUM,  # 500

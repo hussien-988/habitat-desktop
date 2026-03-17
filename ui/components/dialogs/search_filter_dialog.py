@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
 Search Filter Dialog — ديالوغ الفلتر
-Follows SecurityDialog/PasswordDialog container pattern (DRY).
+Follows SecurityDialog/PasswordDialog container pattern.
 
 Fields (matching Figma):
   1. رمز البناء — Building code text field with search icon
@@ -25,7 +25,7 @@ from ui.font_utils import create_font, FontManager
 from services.translation_manager import tr
 
 
-# Input field stylesheet (DRY — shared with PasswordDialog)
+# Input field stylesheet (shared with PasswordDialog)
 _INPUT_STYLE = """
     QLineEdit {
         background-color: #f0f7ff;
@@ -133,7 +133,7 @@ class SearchFilterDialog(QDialog):
         overlay_layout = QVBoxLayout(overlay)
         overlay_layout.setAlignment(Qt.AlignCenter)
 
-        # White container card (DRY: same pattern as SecurityDialog/PasswordDialog)
+        # White container card (same pattern as SecurityDialog/PasswordDialog)
         container = QFrame()
         container.setObjectName("filterContainer")
         container.setFixedWidth(476)
@@ -256,7 +256,7 @@ class SearchFilterDialog(QDialog):
             pass
 
     def _create_button(self, text: str, primary: bool) -> QPushButton:
-        """DRY: Same button pattern as SecurityDialog/PasswordDialog."""
+        """Same button pattern as SecurityDialog/PasswordDialog."""
         btn = QPushButton(text)
         btn.setFixedSize(170, 50)
         btn.setCursor(Qt.PointingHandCursor)

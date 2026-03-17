@@ -2,7 +2,6 @@
 """
 Wizard Header Component - Reusable header for wizards and multi-step forms.
 
-Follows DRY and SOLID principles.
 """
 
 from PyQt5.QtWidgets import QWidget, QVBoxLayout, QLabel
@@ -50,7 +49,7 @@ class WizardHeader(QWidget):
         self._setup_ui()
 
     def _setup_ui(self):
-        """Setup header UI (DRY - extracted from base_wizard.py)."""
+        """Setup header UI."""
         # Same styling as BaseWizard header
         self.setStyleSheet("""
             QWidget {
@@ -64,13 +63,13 @@ class WizardHeader(QWidget):
         layout.setContentsMargins(20, 16, 20, 16)
         layout.setSpacing(8)  # Gap between title and subtitle
 
-        # Title - Updated: 24px (~18pt), PAGE_TITLE, SemiBold (DRY)
+        # Title - 24px (~18pt), PAGE_TITLE, SemiBold
         self.title_label = QLabel(self.title_text)
         self.title_label.setFont(create_font(size=18, weight=FontManager.WEIGHT_SEMIBOLD))
         self.title_label.setStyleSheet(f"background: transparent; border: none; color: {Colors.PAGE_TITLE};")
         layout.addWidget(self.title_label)
 
-        # Subtitle/breadcrumb - Updated: 14px (~11pt), PAGE_SUBTITLE, SemiBold, with spacing (DRY)
+        # Subtitle/breadcrumb - 14px (~11pt), PAGE_SUBTITLE, SemiBold, with spacing
         if self.subtitle_text:
             self.subtitle_label = QLabel(self.subtitle_text)
             self.subtitle_label.setFont(create_font(size=11, weight=FontManager.WEIGHT_SEMIBOLD))

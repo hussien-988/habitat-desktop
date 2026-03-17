@@ -72,9 +72,8 @@ class UnitSelectionStep(BaseStep):
         Only vertical spacing for step content.
         """
         layout = self.main_layout
-        # No horizontal padding - wizard applies 131px (DRY principle)
-        # Only vertical spacing between elements
-        # Best Practice: Adjusted top margin to match visual spacing of building_selection_step
+        # No horizontal padding - wizard applies 131px
+        # Adjusted top margin to match visual spacing of building_selection_step
         layout.setContentsMargins(0, 8, 0, 16)  # Top: 8px (reduced for visual consistency), Bottom: 16px
         layout.setSpacing(10)  # Reduced spacing: 10px between cards (was 15px)
 
@@ -92,7 +91,7 @@ class UnitSelectionStep(BaseStep):
         """)
 
         # Apply subtle shadow effect for visual separation from tabs
-        # Best Practice: Consistent shadow across all wizard steps
+        # Consistent shadow across all wizard steps
         shadow = QGraphicsDropShadowEffect()
         shadow.setBlurRadius(8)  # Soft blur
         shadow.setXOffset(0)  # Centered shadow
@@ -107,7 +106,7 @@ class UnitSelectionStep(BaseStep):
 
         # ===== ROW 1: Building Address =====
         # Height: 28px, full width, border-radius 8px (suitable for 28px height), background #F8FAFF
-        # Best Practice: border-radius should be proportional to height (28/3.5 ≈ 8px)
+        # border-radius proportional to height (28/3.5 = 8px)
         address_container = QFrame()
         address_container.setFixedHeight(28)
         address_container.setStyleSheet("""
@@ -118,7 +117,7 @@ class UnitSelectionStep(BaseStep):
             }
         """)
 
-        # DRY: Centered layout with icon + text
+        # Centered layout with icon + text
         address_row = QHBoxLayout(address_container)
         address_row.setContentsMargins(12, 0, 12, 0)
         address_row.setSpacing(8)
@@ -138,7 +137,7 @@ class UnitSelectionStep(BaseStep):
         address_row.addWidget(address_icon)
 
         # Building address text - centered, color #667281
-        # SOLID: Single Responsibility - displays building address only
+        # Displays building address only
         self.unit_building_address = QLabel(tr("wizard.unit.address_label"))
         self.unit_building_address.setAlignment(Qt.AlignCenter)
         self.unit_building_address.setFont(create_font(size=FontManager.WIZARD_CARD_LABEL, weight=FontManager.WEIGHT_REGULAR))
@@ -210,9 +209,8 @@ class UnitSelectionStep(BaseStep):
         # Gap from Card 1: 15px (handled by layout.setSpacing(15))
         units_main_frame = QFrame()
         units_main_frame.setObjectName("unitsContainerCard")
-        # DRY: Fixed dimensions from Figma (width × height)
+        # Fixed dimensions from Figma (width x height)
         units_main_frame.setFixedSize(1249, 372)
-        # SOLID: Separation of concerns - styling in stylesheet, spacing in layout
         units_main_frame.setStyleSheet("""
             QFrame#unitsContainerCard {
                 background-color: white;
@@ -222,7 +220,7 @@ class UnitSelectionStep(BaseStep):
         """)
 
         # Apply subtle shadow effect for visual depth
-        # Best Practice: Consistent shadow across all cards
+        # Consistent shadow across all cards
         shadow2 = QGraphicsDropShadowEffect()
         shadow2.setBlurRadius(8)
         shadow2.setXOffset(0)
@@ -230,7 +228,7 @@ class UnitSelectionStep(BaseStep):
         shadow2.setColor(QColor(0, 0, 0, 30))  # Lighter shadow (alpha: 30 - reduced from 60)
         units_main_frame.setGraphicsEffect(shadow2)
 
-        # Best Practice: Use layout margins instead of CSS padding (more predictable)
+        # Use layout margins instead of CSS padding (more predictable)
         units_main_layout = QVBoxLayout(units_main_frame)
         units_main_layout.setSpacing(12)
         # Adjusted: Internal padding 11px all sides (reduced to prevent card clipping)
@@ -245,8 +243,7 @@ class UnitSelectionStep(BaseStep):
         right_header = QHBoxLayout()
         right_header.setSpacing(8)  # Gap between icon container and text
 
-        # DRY: Icon container (48×48, background #F0F7FF, small border-radius)
-        # Best Practice: Reusable pattern for icon containers
+        # Icon container (48x48, background #F0F7FF, small border-radius)
         icon_container = QFrame()
         icon_container.setFixedSize(48, 48)
         icon_container.setStyleSheet(f"""
@@ -279,7 +276,7 @@ class UnitSelectionStep(BaseStep):
         title_subtitle_layout.setSpacing(2)
         title_subtitle_layout.setContentsMargins(0, 0, 0, 0)
 
-        # DRY: Use FontManager for consistent font sizing
+        # Use FontManager for consistent font sizing
         # Figma: 14px × 0.75 = 10.5pt (rounded to 10pt for cleaner rendering)
         # Increased weight to emphasize title (SemiBold instead of Regular)
         # RTL: Text ends at the same point as subtitle, but starts further right
@@ -314,7 +311,7 @@ class UnitSelectionStep(BaseStep):
         header_layout.addStretch()
 
         # Left side: Add unit button (Figma: 125×44, outline variant)
-        # DRY: Use ActionButton component (Single Source of Truth)
+        # Use ActionButton component
         # Figma specs: background #F0F7FF, border #3890DF, border-radius 8px
         self.add_unit_btn = ActionButton(
             text="اضف مقسما",
@@ -445,13 +442,11 @@ class UnitSelectionStep(BaseStep):
             return
 
         # Populate building info card
-        # SOLID: Single Responsibility - each field displays one piece of data
-        # DRY: Reuse building object instead of repeating property access
+        # Populate building info card
         building = self.context.building
 
-        # Update address using DRY helper function (Single Source of Truth)
+        # Update address using helper function
         # Format: "حلب - المنطقة - الناحية - الحي - رقم البناء"
-        # Best Practice: Use centralized helper instead of duplicating logic
         address = build_hierarchical_address(
             building_obj=building,
             unit_obj=None,  # Don't include unit number in building info card
@@ -460,7 +455,7 @@ class UnitSelectionStep(BaseStep):
         )
         self.unit_building_address.setText(address)
 
-        # Update stats - DRY: consistent pattern for all fields
+        # Update stats
         self.ui_building_type.setText(building.building_type_display or "-")
         self.ui_building_status.setText(building.building_status_display or "-")
         self.ui_units_count.setText(str(getattr(building, 'number_of_apartments', 0) + (building.number_of_shops or 0)))
@@ -514,7 +509,7 @@ class UnitSelectionStep(BaseStep):
 
     def _to_arabic_numerals(self, text: str) -> str:
         """
-        DRY: Convert English/Latin numerals to Arabic-Indic numerals.
+        Convert English/Latin numerals to Arabic-Indic numerals.
 
         Args:
             text: Text containing numerals
@@ -529,7 +524,7 @@ class UnitSelectionStep(BaseStep):
 
     def _create_field_label(self, text: str, is_title: bool = True) -> QLabel:
         """
-        DRY: Create a label with consistent styling.
+        Create a label with consistent styling.
 
         Args:
             text: Label text
@@ -604,7 +599,7 @@ class UnitSelectionStep(BaseStep):
             """)
 
         # Apply subtle shadow effect for depth
-        # Best Practice: Consistent shadow like other cards
+        # Consistent shadow like other cards
         card_shadow = QGraphicsDropShadowEffect()
         card_shadow.setBlurRadius(8)
         card_shadow.setXOffset(0)
@@ -623,10 +618,10 @@ class UnitSelectionStep(BaseStep):
         main_layout.setContentsMargins(12, 12, 12, 12)  # Padding: 12px
 
         # Get unit data with Arabic text
-        # DRY: Use Arabic display properties from model
+        # Use Arabic display properties from model
         unit_type_val = unit.unit_type_display_ar if hasattr(unit, 'unit_type_display_ar') else (unit.unit_type or "-")
 
-        # Get status display using centralized mapping (DRY)
+        # Get status display using centralized mapping
         if hasattr(unit, 'apartment_status') and unit.apartment_status is not None:
             status_val = get_unit_status_display(unit.apartment_status)
         else:
@@ -662,14 +657,14 @@ class UnitSelectionStep(BaseStep):
             ("حالة المقسم", status_val),
         ]
 
-        # DRY: Use helper method for consistent label styling
+        # Use helper method for consistent label styling
         for label_text, value_text in data_points:
             col = QVBoxLayout()
             col.setSpacing(2)  # Small gap between title and value
             col.setContentsMargins(8, 0, 8, 0)  # Padding for better spacing
             col.setAlignment(Qt.AlignCenter)  # Center labels and values in column
 
-            # DRY: Create labels using helper method
+            # Create labels using helper method
             lbl_title = self._create_field_label(label_text, is_title=True)
             lbl_val = self._create_field_label(str(value_text), is_title=False)
 
@@ -680,7 +675,7 @@ class UnitSelectionStep(BaseStep):
         main_layout.addLayout(grid_layout)
 
         # Dotted divider line - subtle separator
-        # Best Practice: Use dotted style for visual separation without being intrusive
+        # Use dotted style for visual separation without being intrusive
         divider = QFrame()
         divider.setFixedHeight(1)
         divider.setStyleSheet("""

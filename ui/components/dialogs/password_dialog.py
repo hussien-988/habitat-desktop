@@ -4,7 +4,7 @@ Password Dialog — ديالوغ كلمة المرور
 Two modes:
   - SET: Single field (new user) — "حفظ المستخدم"
   - CHANGE: Two fields with confirmation — "تغيير كلمة المرور"
-Follows PersonDialog/ConfirmationDialog container pattern (DRY).
+Follows PersonDialog/ConfirmationDialog container pattern.
 """
 
 from typing import Optional
@@ -24,7 +24,7 @@ from utils.logger import get_logger
 logger = get_logger(__name__)
 
 
-# Input field stylesheet (DRY — shared across both fields)
+# Input field stylesheet (shared across both fields)
 _INPUT_STYLE = """
     QLineEdit {
         background-color: #f0f7ff;
@@ -171,7 +171,7 @@ class PasswordDialog(QDialog):
         self.confirm_input = self._create_password_field("أدخل كلمة المرور", "confirm")
         layout.addWidget(self.confirm_input)
 
-    # --- Reusable widget builders (DRY) ---
+    # --- Reusable widget builders ---
 
     def _create_title(self, text: str) -> QLabel:
         label = QLabel(text)

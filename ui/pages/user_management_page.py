@@ -2,7 +2,7 @@
 """
 User Management Page — إدارة المستخدمين
 Table-based user management with CRUD and filters.
-Same pattern as units_page.py (DRY).
+Same pattern as units_page.py.
 """
 
 from PyQt5.QtWidgets import (
@@ -80,7 +80,7 @@ class UserManagementPage(QWidget):
         )
         layout.setSpacing(15)
 
-        # Header (DRY — PageHeader component)
+        # Header (PageHeader component)
         header = PageHeader(
             title="إدارة المستخدمين",
             show_add_button=True,
@@ -124,7 +124,7 @@ class UserManagementPage(QWidget):
                 item.setIcon(QIcon(str(icon_path)))
             self.table.setHorizontalHeaderItem(i, item)
 
-        # Styling (DRY — same as units_page)
+        # Styling (same as units_page)
         self.table.setStyleSheet("""
             QTableWidget {
                 border: none;

@@ -232,10 +232,9 @@ def build_hierarchical_address(
     """
     Build hierarchical address from building and unit objects.
 
-    DRY + SOLID Principle:
-    - Single Source of Truth for address formatting
-    - Reusable across all components (cards, steps, forms)
-    - Consistent format: "حلب - المنطقة - الناحية - الحي - رقم البناء - رقم الوحدة"
+    Single source of truth for address formatting.
+    Reusable across all components (cards, steps, forms).
+    Format: "حلب - المنطقة - الناحية - الحي - رقم البناء - رقم الوحدة"
 
     Args:
         building_obj: Building model object with location attributes

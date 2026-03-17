@@ -64,7 +64,7 @@ class HouseholdStep(BaseStep):
         """
         widget = self
         layout = self.main_layout
-        # No horizontal padding - wizard applies 131px (DRY principle)
+        # No horizontal padding - wizard applies 131px
         # Only vertical spacing between elements
         layout.setContentsMargins(0, 16, 0, 16)  # Top: 16px, Bottom: 16px
         layout.setSpacing(8)
@@ -145,7 +145,7 @@ class HouseholdStep(BaseStep):
         stats_row = QHBoxLayout()
         stats_row.setSpacing(0)
 
-        # Create 5 stat sections (DRY: using helper method)
+        # Create 5 stat sections (using helper method)
         section_type, self.ui_building_type = self._create_stat_section(tr("wizard.building.type"))
         section_status, self.ui_building_status = self._create_stat_section(tr("wizard.building.status"))
         section_units, self.ui_units_count = self._create_stat_section(tr("wizard.building.units_count"))
@@ -521,7 +521,7 @@ class HouseholdStep(BaseStep):
 
     def _create_stat_section(self, label_text: str, value_text: str = "-"):
         """
-        DRY: Create a stat section with label on top and value below.
+        Create a stat section with label on top and value below.
 
         Same design as unit_selection_step for consistency.
 
@@ -655,7 +655,7 @@ class HouseholdStep(BaseStep):
 
     def _create_gender_card(self, title: str, fields: list) -> QFrame:
         """
-        DRY: Create a gender-specific card (Male/Female) with demographic fields.
+        Create a gender-specific card (Male/Female) with demographic fields.
 
         Args:
             title: Card title (e.g., "ذكور" or "إناث")
@@ -888,7 +888,7 @@ class HouseholdStep(BaseStep):
             self.ui_parcels_count.setText(str(getattr(building, 'number_of_apartments', 0)))
             self.ui_shops_count.setText(str(building.number_of_shops or 0))
 
-        # Update unit information (Row 3) - DRY: use centralized display_mappings
+        # Update unit information (Row 3) - use centralized display_mappings
         # Get unit data from context
         if self.context.unit:
             unit = self.context.unit

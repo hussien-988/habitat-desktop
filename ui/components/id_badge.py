@@ -145,15 +145,27 @@ class _DropdownPopup(QWidget):
         self._layout.setSpacing(4)
 
         self._items = []
+        self._fixed_body_h = 0
+
+    def _calc_fixed_height(self):
+        """Calculate and cache popup height based on ALL items (called once)."""
+        margins = self._layout.contentsMargins()
+        spacing = self._layout.spacing()
+        body_h = margins.top() + margins.bottom()
+        count = self._layout.count()
+        for i in range(count):
+            w = self._layout.itemAt(i).widget()
+            if w:
+                body_h += w.sizeHint().height()
+                if i < count - 1:
+                    body_h += spacing
+        self._fixed_body_h = max(body_h, 50)
 
     def _recalc_size(self):
-        """Recalculate popup size based on visible items."""
-        visible_h = 16  # top+bottom padding
-        for i in range(self._layout.count()):
-            w = self._layout.itemAt(i).widget()
-            if w and w.isVisible():
-                visible_h += w.sizeHint().height() + 2  # spacing
-        body_h = max(visible_h, 50)
+        """Apply the fixed popup size."""
+        if self._fixed_body_h == 0:
+            self._calc_fixed_height()
+        body_h = self._fixed_body_h
         total_w = POPUP_WIDTH + SHADOW_MARGIN * 2
         total_h = ARROW_HEIGHT + body_h + SHADOW_MARGIN * 2
         self.setFixedSize(total_w, total_h)
@@ -398,6 +410,9 @@ class IDBadgeWidget(QWidget):
         self._logout_item = _MenuItem("logout", tr("navbar.menu.logout"))
         self._logout_item.clicked.connect(self.logout_requested.emit)
         self._popup.add_item(self._logout_item)
+
+        # Lock the popup height so it never changes when items are hidden
+        self._popup._calc_fixed_height()
 
     def mousePressEvent(self, event):
         if event.button() == Qt.LeftButton:
