@@ -81,7 +81,7 @@ class ClaimListCard(QFrame):
         top_row = QHBoxLayout()
         top_row.setSpacing(PageDimensions.CARD_GAP_INTERNAL)  # 12px from Figma
 
-        # Icon button using reusable Icon component (DRY + SOLID)
+        # Icon button using reusable Icon component
         # Icon varies by claim type: "blue" for completed, "yellow" for drafts
         icon_btn = QPushButton()
         icon_btn.setCursor(Qt.PointingHandCursor)
@@ -108,7 +108,7 @@ class ClaimListCard(QFrame):
 
         name = self.claim_data.get('claimant_name', 'غير محدد')
         name_label = QLabel(name)
-        # DRY: Use Typography constants for font family
+        # Use Typography constants for font family
         name_label.setStyleSheet(f"""
             QLabel {{
                 color: #212121;
@@ -124,7 +124,7 @@ class ClaimListCard(QFrame):
 
         claim_id = self.claim_data.get('claim_id', 'CL-2025-000001')
         id_label = QLabel(claim_id)
-        # DRY: Use Typography constants for font family
+        # Use Typography constants for font family
         id_label.setStyleSheet(f"""
             QLabel {{
                 color: #9e9e9e;
@@ -142,7 +142,7 @@ class ClaimListCard(QFrame):
 
         date = self.claim_data.get('date', '2024-12-01')
         date_label = QLabel(date)
-        # DRY: Use Typography constants for font family
+        # Use Typography constants for font family
         date_label.setStyleSheet(f"""
             QLabel {{
                 color: #9e9e9e;
@@ -165,7 +165,7 @@ class ClaimListCard(QFrame):
         details_container.setFrameShape(QFrame.NoFrame)  # NoFrame allows full stylesheet control
         details_container.setAttribute(Qt.WA_StyledBackground, True)  # Enable custom stylesheet painting
 
-        # Apply Figma styling via StyleManager (DRY + Single Source of Truth)
+        # Apply Figma styling via StyleManager
         details_container.setStyleSheet(StyleManager.card_details_container())
 
         details_layout = QHBoxLayout(details_container)
@@ -180,14 +180,12 @@ class ClaimListCard(QFrame):
         # Gap between elements: 8px (Figma)
         details_layout.setSpacing(PageDimensions.CARD_DETAILS_GAP)
 
-        # Details icon using reusable Icon component (DRY + SOLID)
-        # Use "dec" icon (same as unit selection step - DRY principle)
+        # Details icon using reusable Icon component
         folder_icon = Icon("dec", size=14, fallback_text="▣")
         details_layout.addWidget(folder_icon)
 
-        # Build hierarchical address using DRY helper function
+        # Build hierarchical address
         # Format: "حلب - المنطقة - الناحية - الحي - رقم البناء - رقم الوحدة"
-        # SOLID: Single Responsibility - helper function builds address
         from utils.helpers import build_hierarchical_address
 
         # Get building and unit objects from claim_data (if available)
@@ -218,7 +216,7 @@ class ClaimListCard(QFrame):
                 unit_number=self.claim_data.get('unit_number')
             )
 
-        # Use DRY helper to build address (Single Source of Truth)
+        # Build address using helper
         details_text = build_hierarchical_address(
             building_obj=building_obj,
             unit_obj=unit_obj,
@@ -226,10 +224,10 @@ class ClaimListCard(QFrame):
             include_unit=True
         )
 
-        # Apply Figma styling with constants (DRY principle)
+        # Apply Figma styling with constants
         details_label = QLabel(details_text)
 
-        # Set font with Typography constants (DRY + SOLID)
+        # Set font with Typography constants
         # IBM Plex Sans Arabic only (no Noto Kufi Arabic)
         details_font = QFont(
             Typography.FONT_FAMILY_ARABIC,  # IBM Plex Sans Arabic

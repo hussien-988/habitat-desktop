@@ -132,7 +132,7 @@ class AddBuildingPage(QWidget):
         # Container widget for scroll area
         container = QWidget()
         layout = QVBoxLayout(container)
-        # Apply unified padding from PageDimensions (DRY principle)
+        # Apply unified padding from PageDimensions
         layout.setContentsMargins(
             PageDimensions.CONTENT_PADDING_H,        # Left: 131px
             PageDimensions.CONTENT_PADDING_V_TOP,    # Top: 32px
@@ -141,10 +141,10 @@ class AddBuildingPage(QWidget):
         )
         layout.setSpacing(12)
 
-        # Background color from Figma via StyleManager (DRY principle)
+        # Background color from Figma via StyleManager
         container.setStyleSheet(StyleManager.page_background())
 
-        # Header - matching wizard style (DRY: Using design system constants)
+        # Header - matching wizard style
         title_row = QHBoxLayout()
         title_row.setSpacing(16)
         title_row.setContentsMargins(0, 0, 0, 0)
@@ -154,7 +154,7 @@ class AddBuildingPage(QWidget):
         title_subtitle_container.setSpacing(4)
 
         # Title: always "معلومات البناء" (read-only informational screen)
-        # Figma: Desktop/H4 24px = 18pt Bold (DRY: Using FontManager)
+        # Figma: Desktop/H4 24px = 18pt Bold
         title_label = QLabel("معلومات البناء")
         title_font = create_font(
             size=FontManager.SIZE_TITLE,  # 18pt (24px Figma)
@@ -166,7 +166,7 @@ class AddBuildingPage(QWidget):
         title_subtitle_container.addWidget(title_label)
 
         # Subtitle: "المباني  •  إضافة بناء جديد"
-        # Desktop/Body2 (DRY: Using FontManager)
+        # Desktop/Body2
         subtitle_layout = QHBoxLayout()
         subtitle_layout.setSpacing(8)
         subtitle_layout.setContentsMargins(0, 0, 0, 0)
@@ -199,7 +199,7 @@ class AddBuildingPage(QWidget):
         title_row.addLayout(title_subtitle_container)
         title_row.addStretch()
 
-        # Close button (X) - LEFT SIDE FIRST (DRY: Using ButtonDimensions and Colors)
+        # Close button (X) - LEFT SIDE FIRST
         # Figma specs: 52×48px, White background
         close_btn = QPushButton("✕")
         close_btn.setCursor(Qt.PointingHandCursor)
@@ -227,7 +227,7 @@ class AddBuildingPage(QWidget):
         close_btn.clicked.connect(self.cancelled.emit)
         title_row.addWidget(close_btn)
 
-        # Save button with icon - LEFT SIDE SECOND (DRY: Using ButtonDimensions)
+        # Save button with icon - LEFT SIDE SECOND
         # Figma specs: 114×48px
         save_btn = QPushButton(" حفظ")
         save_btn.setCursor(Qt.PointingHandCursor)
@@ -271,7 +271,7 @@ class AddBuildingPage(QWidget):
         layout.addSpacing(24)
 
         # === CARD 1: بيانات البناء ===
-        # DRY: Using same card style as wizard (building_selection_step.py)
+        # Same card style as wizard (building_selection_step.py)
         card1 = QFrame()
         card1.setObjectName("buildingCard")
         card1.setStyleSheet("""
@@ -283,16 +283,16 @@ class AddBuildingPage(QWidget):
         """)
 
         card1_layout = QVBoxLayout(card1)
-        # Padding: 12px from all sides (matching wizard - DRY principle)
+        # Padding: 12px from all sides (matching wizard)
         card1_layout.setContentsMargins(12, 12, 12, 12)
         # No default spacing - we'll control gaps manually for precision
         card1_layout.setSpacing(0)
 
-        # Header (title + subtitle) - DRY: Same structure as wizard
+        # Header (title + subtitle) - same structure as wizard
         card_header = QHBoxLayout()
         card_header.setSpacing(8)
 
-        # Icon FIRST (left side in RTL) - DRY: Using Icon.load_pixmap
+        # Icon FIRST (left side in RTL)
         from ui.components.icon import Icon
         icon_label = QLabel()
         icon_label.setFixedSize(40, 40)  # Wizard spec: 40×40px
@@ -304,7 +304,7 @@ class AddBuildingPage(QWidget):
                 border-radius: 10px;
             }
         """)
-        # Load blue.png icon (DRY: reusing wizard's icon loading pattern)
+        # Load blue.png icon
         icon_pixmap = Icon.load_pixmap("blue", size=24)
         if icon_pixmap and not icon_pixmap.isNull():
             icon_label.setPixmap(icon_pixmap)
@@ -319,7 +319,7 @@ class AddBuildingPage(QWidget):
         header_text_col = QVBoxLayout()
         header_text_col.setSpacing(1)
 
-        # Title: "بيانات البناء" - DRY: Using create_font and Colors
+        # Title: "بيانات البناء"
         info_title = QLabel("بيانات البناء")
         # Title: 14px from Figma = 10pt, weight 600, color WIZARD_TITLE (matching wizard)
         info_title.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
@@ -340,14 +340,14 @@ class AddBuildingPage(QWidget):
 
         card1_layout.addLayout(card_header)
 
-        # Gap: 12px between header and fields (matching wizard - DRY principle)
+        # Gap: 12px between header and fields (matching wizard)
         card1_layout.addSpacing(12)
 
         # شبكة الحقول - 6 في صف واحد (بدون containers)
         fields_row = QHBoxLayout()
         fields_row.setSpacing(12)
 
-        # Shared label font (DRY: same as card title)
+        # Shared label font (same as card title)
         label_font = create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD)
 
         # Shared input style for QLineEdit fields
@@ -555,7 +555,7 @@ class AddBuildingPage(QWidget):
         card2_layout.setContentsMargins(12, 12, 12, 12)  # توحيد padding مع الكاردات الأخرى
         card2_layout.setSpacing(15)
 
-        # Shared label font for card 2 (DRY: same as card 1)
+        # Shared label font for card 2 (same as card 1)
         card2_label_font = create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD)
 
         # Shared combobox style (same as unit_dialog.py - height 45px)
@@ -713,7 +713,7 @@ class AddBuildingPage(QWidget):
 
         layout.addWidget(card2)
 
-        # === CARD 3: موقع البناء === (DRY: نفس تنسيق building_selection_step.py بالضبط)
+        # === CARD 3: موقع البناء === (نفس تنسيق building_selection_step.py بالضبط)
         card3 = QFrame()
         card3.setStyleSheet(self._get_card_style())
         card3_layout = QVBoxLayout(card3)
@@ -787,7 +787,6 @@ class AddBuildingPage(QWidget):
         map_button.setText("فتح الخريطة")
         map_button.setFont(create_font(size=9, weight=FontManager.WEIGHT_REGULAR))
 
-        # DRY: Using Colors.PRIMARY_BLUE
         map_button.setStyleSheet(f"""
             QPushButton {{
                 background-color: white;
@@ -1777,7 +1776,7 @@ class AddBuildingPage(QWidget):
     def _create_spinbox_with_arrows(self, spinbox: QSpinBox) -> QFrame:
         """
         Create a spinbox widget with icon arrows on the RIGHT side.
-        DRY: Same pattern as unit_dialog.py
+        Same pattern as unit_dialog.py.
 
         Args:
             spinbox: The QSpinBox to wrap with custom arrows
@@ -1926,7 +1925,7 @@ class AddBuildingPage(QWidget):
             self._show_validation_error_dialog([f"فشل في حفظ المبنى: {str(e)}"])
 
     def get_data(self):
-        """Get form data (DRY: adapted for manual entry fields)."""
+        """Get form data."""
         # استخراج building_id من الـ label (بعد "رمز البناء: ")
         building_id_text = self.building_id_label.text()
         if ":" in building_id_text:
@@ -2295,7 +2294,7 @@ class FilterableHeaderView(QHeaderView):
     """
     Custom header view that displays down.png icon AFTER text (RTL-compatible).
 
-    DRY Principle: Reusable header for any table with filterable columns.
+    Reusable header for any table with filterable columns.
     """
 
     def __init__(self, orientation, parent=None):
@@ -2371,12 +2370,12 @@ class BuildingsListPage(QWidget):
         self.i18n = i18n
         self.map_view = None
         self._buildings = []  # Store buildings list
-        self._all_buildings = []  # Store unfiltered buildings (DRY principle)
+        self._all_buildings = []  # Store unfiltered buildings
         self._current_page = 1
         self._rows_per_page = 11
         self._total_pages = 1
 
-        # Active filters (DRY - same as field_work_preparation_page)
+        # Active filters (same as field_work_preparation_page)
         self._active_filters = {
             'area': None,           # المنطقة/district (column 2)
             'neighborhood': None,   # الحي/neighborhood (column 3)
@@ -2393,7 +2392,7 @@ class BuildingsListPage(QWidget):
     def _setup_ui(self):
         """Setup buildings list UI."""
         layout = QVBoxLayout(self)
-        # Apply unified padding from PageDimensions (DRY principle)
+        # Apply unified padding from PageDimensions
         # Same as completed_claims_page.py and draft_claims_page.py
         layout.setContentsMargins(
             PageDimensions.CONTENT_PADDING_H,        # Left: 131px
@@ -2407,7 +2406,7 @@ class BuildingsListPage(QWidget):
         top_row = QHBoxLayout()
         top_row.setSpacing(20)
 
-        # العنوان - DRY: Using unified page title styling (18pt, PAGE_TITLE color)
+        # العنوان - unified page title styling (18pt, PAGE_TITLE color)
         title = QLabel("المباني")
         title.setFont(create_font(size=FontManager.SIZE_TITLE, weight=FontManager.WEIGHT_SEMIBOLD))
         title.setStyleSheet(f"color: {Colors.PAGE_TITLE}; background: transparent; border: none;")
@@ -2420,12 +2419,12 @@ class BuildingsListPage(QWidget):
         btn_layout.setSpacing(16)
 
         # زر تجهيز العمل الميداني (شفاف مع بوردر أزرق)
-        # DRY: Apply unified button dimensions from Figma (199×48px, border-radius 8px)
+        # Apply unified button dimensions from Figma (199x48px, border-radius 8px)
         btn_field = CustomButton.secondary("تجهيز العمل الميداني", self, width=199, height=48)
         btn_field.clicked.connect(self.prepare_field_work.emit)
 
         # زر إضافة بناء جديد (أزرق solid)
-        # DRY: Exact copy of "Add New Case" button from claims pages (PrimaryButton component)
+        # Same as "Add New Case" button from claims pages (PrimaryButton component)
         self.add_btn = PrimaryButton("إضافة بناء جديد", icon_name="icon")
         self.add_btn.clicked.connect(self.add_building.emit)
         self.add_btn.hide()
@@ -2559,7 +2558,7 @@ class BuildingsListPage(QWidget):
         self.table.cellClicked.connect(self._on_cell_clicked)
         self.table.cellDoubleClicked.connect(self._on_cell_double_click)
 
-        # Connect header click for filtering (DRY - same pattern as field_work_preparation)
+        # Connect header click for filtering (same pattern as field_work_preparation)
         header.sectionClicked.connect(self._on_header_clicked)
 
         card_layout.addWidget(self.table)
@@ -2732,7 +2731,7 @@ class BuildingsListPage(QWidget):
             logger.error(f"Failed to load buildings: {result.message}")
             all_buildings = []
 
-        self._all_buildings = all_buildings  # Store unfiltered buildings (DRY)
+        self._all_buildings = all_buildings  # Store unfiltered buildings
 
         # Apply filters (CRITICAL: Filter BEFORE pagination)
         self._buildings = self._apply_filters(all_buildings)
@@ -2816,7 +2815,7 @@ class BuildingsListPage(QWidget):
 
     def _get_down_icon_path(self) -> str:
         """
-        Get absolute path to down.png icon (DRY - reused from field_work_preparation_page).
+        Get absolute path to down.png icon.
 
         Single source of truth for icon paths.
         """
@@ -2843,7 +2842,7 @@ class BuildingsListPage(QWidget):
 
     def _on_header_hover(self, logical_index: int):
         """
-        Change cursor to pointer only on filterable columns (DRY principle).
+        Change cursor to pointer only on filterable columns.
 
         Args:
             logical_index: Column index being hovered
@@ -2858,7 +2857,7 @@ class BuildingsListPage(QWidget):
 
     def _on_header_clicked(self, logical_index: int):
         """
-        Handle header click to show filter menu (DRY - same pattern as field_work_preparation).
+        Handle header click to show filter menu.
 
         Filterable columns:
         - Column 2: المنطقة (District)
@@ -2874,7 +2873,7 @@ class BuildingsListPage(QWidget):
 
     def _show_filter_menu(self, column_index: int):
         """
-        Show filter menu for the clicked column (DRY principle).
+        Show filter menu for the clicked column.
 
         Args:
             column_index: Index of the column (2=Area, 3=Type, 4=Status)
@@ -2983,7 +2982,7 @@ class BuildingsListPage(QWidget):
 
     def _apply_filter(self, filter_key: str, filter_value):
         """
-        Apply filter and reload table (DRY principle).
+        Apply filter and reload table.
 
         Args:
             filter_key: Key in _active_filters dict
@@ -2995,7 +2994,7 @@ class BuildingsListPage(QWidget):
 
     def _apply_filters(self, buildings: list) -> list:
         """
-        Apply active filters to buildings list (DRY principle).
+        Apply active filters to buildings list.
 
         Returns:
             Filtered list of buildings
@@ -3304,7 +3303,7 @@ class BuildingsPage(QWidget):
 
     def _setup_ui(self):
         """Setup UI."""
-        # Background color from Figma via StyleManager (DRY principle)
+        # Background color from Figma via StyleManager
         self.setStyleSheet(StyleManager.page_background())
 
         layout = QVBoxLayout(self)

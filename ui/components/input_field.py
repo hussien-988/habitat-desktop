@@ -3,7 +3,6 @@
 Input Field Component - حقل إدخال قابل لإعادة الاستخدام
 Reusable input field component following Figma design system.
 
-Implements DRY, SOLID, Clean Code principles.
 """
 
 from PyQt5.QtWidgets import QLineEdit
@@ -53,7 +52,7 @@ class InputField(QLineEdit):
         if placeholder:
             self.setPlaceholderText(placeholder)
 
-        # Use centralized font utility (DRY + eliminates stylesheet conflicts)
+        # Use centralized font utility
         input_font = create_font(
             size=FontManager.SIZE_BODY,  # 10pt
             weight=FontManager.WEIGHT_REGULAR,  # 400

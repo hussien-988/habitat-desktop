@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-Centralized display mappings for status/type dictionaries (DRY).
+Centralized display mappings for status/type dictionaries.
 
 Display functions delegate to vocab_service for API-sourced labels,
 with string-key fallback for legacy data. Options functions delegate

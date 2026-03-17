@@ -6,7 +6,6 @@ TRRCMS Repository Layer
 # Lazy imports to avoid circular dependencies
 __all__ = [
     "Database",
-    "PostgresDatabase",
     "DatabaseFactory",
     "BuildingRepository",
     "UnitRepository",
@@ -21,9 +20,6 @@ def __getattr__(name):
     if name == "Database":
         from .database import Database
         return Database
-    elif name == "PostgresDatabase":
-        from .postgres_database import PostgresDatabase
-        return PostgresDatabase
     elif name == "DatabaseFactory":
         from .db_factory import DatabaseFactory
         return DatabaseFactory

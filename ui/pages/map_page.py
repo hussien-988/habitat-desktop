@@ -261,7 +261,7 @@ def get_leaflet_html(tile_server_url: str, buildings_geojson: str, **kwargs) -> 
     DEPRECATED: Use LeafletHTMLGenerator.generate() instead for better maintainability.
     This function is kept for backward compatibility.
 
-    Best Practice (DRY): Delegates to centralized HTML generator
+    Delegates to centralized HTML generator.
     """
     from services.leaflet_html_generator import generate_leaflet_html
     return generate_leaflet_html(tile_server_url, buildings_geojson, **kwargs)
@@ -499,7 +499,7 @@ class MapPage(QWidget):
         super().__init__(parent)
         self.db = db
         self.i18n = i18n
-        # DRY + SOLID: Use MapController (single source of truth for map data)
+        # Use MapController (single source of truth for map data)
         # MapController automatically selects API or local DB based on configuration
         self.map_controller = MapController(db)
         self.buildings = []
@@ -1032,7 +1032,6 @@ class MapPage(QWidget):
         """
         المرحلة 2: إعداد ViewportBridge للتحميل الديناميكي.
 
-        Professional Best Practice:
         - QWebChannel للتواصل بين JavaScript و Python
         - Debouncing في ViewportBridge (300ms)
         - Dynamic loading عند تغيير viewport
@@ -1064,7 +1063,6 @@ class MapPage(QWidget):
         """
         معالجة تغيير viewport - تحميل المباني في المنطقة الجديدة.
 
-        Professional Best Practice:
         - يُستدعى بعد debouncing (300ms)
         - يُحمّل فقط المباني في viewport الحالي
         - يُحدّث الخريطة ديناميكياً بدون reload

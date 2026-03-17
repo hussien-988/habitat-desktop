@@ -13,9 +13,8 @@ Exact Figma Specifications (المطالبات المكتملة page):
 - Font: IBM Plex Sans Arabic, Letter spacing: 0px
 
 Architecture:
-- DRY: Reusable components (LogoWidget, IDBadgeWidget)
-- SOLID: Single responsibility, dependency injection
-- Clean Code: Clear naming, proper separation of concerns
+- Reusable components (LogoWidget, IDBadgeWidget)
+- Clear naming, proper separation of concerns
 """
 
 from pathlib import Path
@@ -449,7 +448,7 @@ class Navbar(QFrame):
         tab_btn.setFixedHeight(NavbarDimensions.TAB_HEIGHT)  # 32px
         tab_btn.setCursor(QCursor(Qt.PointingHandCursor))
 
-        # Use centralized font utility (DRY + eliminates conflicts)
+        # Use centralized font utility
         # Figma: 14px SemiBold, Line height 22px, Letter spacing 0
         tab_font = create_font(
             size=NavbarDimensions.TAB_FONT_SIZE,  # 11pt (14px × 0.75)

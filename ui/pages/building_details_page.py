@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
 Building Details Page — عرض تفاصيل المبنى
-Card-based view matching review_step.py pattern (DRY).
+Card-based view matching review_step.py pattern.
 3 cards: building info, stats, location + units table toggle.
 """
 
@@ -191,7 +191,7 @@ class BuildingDetailsPage(QWidget):
         self._spinner = LoadingSpinnerOverlay(self)
 
     # =========================================================================
-    # Card Builders (DRY — same pattern as review_step.py)
+    # Card Builders (same pattern as review_step.py)
     # =========================================================================
 
     def _create_card_base(self, icon_name: str, title: str, subtitle: str) -> tuple:

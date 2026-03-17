@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
 Security Policies Dialog — ديالوغ سياسات الأمان
-Follows PasswordDialog/LanguageDialog container pattern (DRY).
+Follows PasswordDialog/LanguageDialog container pattern.
 Custom spinbox arrows match unit_dialog / household_step pattern.
 """
 
@@ -136,7 +136,7 @@ class SecurityDialog(QDialog):
         return {"layout": col, "spin": spin}
 
     def _create_spinbox_with_arrows(self, spinbox: QSpinBox) -> QFrame:
-        """Custom spinbox container with icon arrows (DRY: matches unit_dialog pattern)."""
+        """Custom spinbox container with icon arrows (matches unit_dialog pattern)."""
         container = QFrame()
         container.setFixedHeight(42)
         container.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)

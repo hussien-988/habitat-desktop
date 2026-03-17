@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
-"""Template for Leaflet drawing JavaScript - يتم استيراده من leaflet_html_generator.py"""
+"""Leaflet drawing JavaScript template, imported by leaflet_html_generator.py."""
 
 DRAWING_JS_TEMPLATE = """
-        // ✅ Drawing JS: Initialize tools immediately, bridge will be available when needed
-        console.log('🔧 Drawing JS: Initializing drawing tools...');
+        // Drawing JS: Initialize tools immediately, bridge will be available when needed
+        console.log('Drawing JS: Initializing drawing tools...');
         console.log('   window.bridge:', window.bridge);
         console.log('   window.bridgeReady:', window.bridgeReady);
 
@@ -15,17 +15,17 @@ DRAWING_JS_TEMPLATE = """
         // Register callback to be called when bridge is ready
         if (typeof window.onBridgeReady !== 'function') {
             window.onBridgeReady = function() {
-                console.log('🎉 Drawing JS: Bridge is now ready (via callback)!');
+                console.log('Drawing JS: Bridge is now ready (via callback)');
                 // Send any pending geometry
                 if (pendingGeometry) {
-                    console.log('📤 Sending pending geometry...');
+                    console.log('Sending pending geometry...');
                     sendGeometryToPython(pendingGeometry.geomType, pendingGeometry.wkt);
                     pendingGeometry = null;
                 }
             };
         }
 
-        // ✅ AGGRESSIVE POLLING: Check for bridge every 500ms
+        // Polling: Check for bridge every 500ms
         // This ensures we catch the bridge even if callback doesn't fire
         var bridgePollingInterval = setInterval(function() {
             bridgeCheckAttempts++;
@@ -33,17 +33,17 @@ DRAWING_JS_TEMPLATE = """
             if (window.bridge && typeof window.bridge.onGeometryDrawn === 'function') {
                 // Bridge found!
                 clearInterval(bridgePollingInterval);
-                console.log('🎉 Drawing JS: Bridge found via polling (attempt ' + bridgeCheckAttempts + ')!');
+                console.log('Drawing JS: Bridge found via polling (attempt ' + bridgeCheckAttempts + ')');
 
                 // Process any pending geometry
                 if (pendingGeometry) {
-                    console.log('📤 Sending pending geometry from polling...');
+                    console.log('Sending pending geometry from polling...');
                     sendGeometryToPython(pendingGeometry.geomType, pendingGeometry.wkt);
                     pendingGeometry = null;
                 }
             } else if (bridgeCheckAttempts >= maxBridgeCheckAttempts) {
                 clearInterval(bridgePollingInterval);
-                console.error('❌ Bridge not found after ' + (maxBridgeCheckAttempts * 0.5) + ' seconds of polling');
+                console.error('Bridge not found after ' + (maxBridgeCheckAttempts * 0.5) + ' seconds of polling');
                 console.log('   This is a critical error - QWebChannel failed to initialize');
             }
         }, 500); // Check every 500ms
@@ -61,15 +61,15 @@ DRAWING_JS_TEMPLATE = """
             // Always use window.bridge (set by Selection JS)
             if (window.bridge && typeof window.bridge.onGeometryDrawn === 'function') {
                 try {
-                    console.log('📡 Sending to Python via bridge.onGeometryDrawn');
+                    console.log('Sending to Python via bridge.onGeometryDrawn');
                     console.log('   geomType:', geomType);
                     console.log('   wkt:', wkt ? wkt.substring(0, 100) + '...' : 'null');
                     window.bridge.onGeometryDrawn(geomType, wkt);
-                    console.log('✅ Successfully sent geometry to Python');
+                    console.log('Successfully sent geometry to Python');
                     // Clear any pending geometry
                     pendingGeometry = null;
                 } catch (error) {
-                    console.error('❌ Error sending geometry:', error);
+                    console.error('Error sending geometry:', error);
                     // Retry on error
                     if (retryCount < maxRetries) {
                         console.warn('   Retrying in 500ms...');
@@ -81,13 +81,13 @@ DRAWING_JS_TEMPLATE = """
             } else {
                 // Bridge not ready yet - wait and retry, or queue it
                 if (retryCount < maxRetries) {
-                    console.warn('⏳ Bridge not ready (attempt ' + (retryCount + 1) + '/' + maxRetries + '), waiting 500ms...');
+                    console.warn('Bridge not ready (attempt ' + (retryCount + 1) + '/' + maxRetries + '), waiting 500ms...');
                     setTimeout(function() {
                         sendGeometryToPython(geomType, wkt, retryCount + 1);
                     }, 500);
                 } else {
                     // Max retries reached - queue it for later
-                    console.warn('⏰ Bridge not ready after ' + (maxRetries * 500) + 'ms, queuing geometry...');
+                    console.warn('Bridge not ready after ' + (maxRetries * 500) + 'ms, queuing geometry...');
                     console.log('   Geometry will be sent when bridge is ready');
                     pendingGeometry = {geomType: geomType, wkt: wkt};
                 }
@@ -101,7 +101,7 @@ DRAWING_JS_TEMPLATE = """
         console.log('Drawing mode: __DRAWING_MODE__');
 
         if (typeof L.Control.Draw !== 'undefined') {
-            console.log('✅ Leaflet.draw library loaded successfully');
+            console.log('Leaflet.draw library loaded successfully');
 
             // تحديد الأدوات المفعلة بناءً على الوضع
             var enableMarker = __ENABLE_MARKER__;
@@ -170,7 +170,7 @@ DRAWING_JS_TEMPLATE = """
                 // إزالة المضلع الحالي (القديم) عند رسم شكل جديد
                 if (typeof existingPolygonsLayer !== 'undefined' && existingPolygonsLayer && map.hasLayer(existingPolygonsLayer)) {
                     map.removeLayer(existingPolygonsLayer);
-                    console.log('✅ Existing polygon removed (replaced by new drawing)');
+                    console.log('Existing polygon removed (replaced by new drawing)');
                 }
 
                 // إضافة الشكل الجديد
@@ -185,7 +185,7 @@ DRAWING_JS_TEMPLATE = """
                     geomType = 'Point';
                     wkt = 'POINT(' + latlng.lng + ' ' + latlng.lat + ')';
 
-                    // ✨ تحسين UX: جعل النقطة draggable مع popup للحذف
+                    // تحسين UX: جعل النقطة draggable مع popup للحذف
                     layer.dragging.enable();
 
                     // إضافة popup مع زر حذف
@@ -199,7 +199,7 @@ DRAWING_JS_TEMPLATE = """
                     layer.on('dragend', function(e) {
                         var newLatLng = e.target.getLatLng();
                         var newWkt = 'POINT(' + newLatLng.lng + ' ' + newLatLng.lat + ')';
-                        console.log('✅ Marker dragged to new position:', newWkt);
+                        console.log('Marker dragged to new position:', newWkt);
 
                         sendGeometryToPython('Point', newWkt);
                     });
@@ -216,7 +216,7 @@ DRAWING_JS_TEMPLATE = """
                     wkt = 'POLYGON((' + coords + '))';
                 }
 
-                console.log('✅ Shape created:', geomType, wkt);
+                console.log('Shape created:', geomType, wkt);
 
                 // Send to Python via QWebChannel (wait for bridge if not ready)
                 sendGeometryToPython(geomType, wkt);
@@ -225,7 +225,7 @@ DRAWING_JS_TEMPLATE = """
             // دالة لحذف النقطة الحالية (يتم استدعاؤها من popup)
             window.deleteCurrentMarker = function() {
                 drawnItems.clearLayers();
-                console.log('✅ Marker deleted by user');
+                console.log('Marker deleted by user');
 
                 // إخطار Python بأن الهندسة تم حذفها
                 sendGeometryToPython(null, null);
@@ -257,7 +257,7 @@ DRAWING_JS_TEMPLATE = """
                     }
 
                     if (geomType && wkt) {
-                        console.log('✅ Edited shape:', geomType, wkt);
+                        console.log('Edited shape:', geomType, wkt);
                         sendGeometryToPython(geomType, wkt);
                     }
                 });
@@ -270,7 +270,7 @@ DRAWING_JS_TEMPLATE = """
                 sendGeometryToPython(null, null);
             });
         } else {
-            console.warn('⚠️ Leaflet.draw library not loaded. Using fallback: click to add marker');
+            console.warn('Leaflet.draw library not loaded. Using fallback: click to add marker');
 
             // Fallback: Simple click-to-add marker mode
             var currentMarker = null;
@@ -288,7 +288,7 @@ DRAWING_JS_TEMPLATE = """
                         iconSize: [25, 41],
                         iconAnchor: [12, 41]
                     }),
-                    draggable: true  // ✨ تحسين UX: draggable في fallback mode أيضاً
+                    draggable: true  // تحسين UX: draggable في fallback mode أيضاً
                 }).addTo(map);
 
                 drawnItems.addLayer(currentMarker);
@@ -304,7 +304,7 @@ DRAWING_JS_TEMPLATE = """
                 currentMarker.on('dragend', function(e) {
                     var newLatLng = e.target.getLatLng();
                     var newWkt = 'POINT(' + newLatLng.lng + ' ' + newLatLng.lat + ')';
-                    console.log('✅ Marker dragged to new position (fallback):', newWkt);
+                    console.log('Marker dragged to new position (fallback):', newWkt);
 
                     sendGeometryToPython('Point', newWkt);
                 });
@@ -313,7 +313,7 @@ DRAWING_JS_TEMPLATE = """
                 var geomType = 'Point';
                 var wkt = 'POINT(' + e.latlng.lng + ' ' + e.latlng.lat + ')';
 
-                console.log('✅ Point created (fallback mode):', geomType, wkt);
+                console.log('Point created (fallback mode):', geomType, wkt);
 
                 // Send to Python via QWebChannel
                 sendGeometryToPython(geomType, wkt);
@@ -324,7 +324,7 @@ DRAWING_JS_TEMPLATE = """
                 if (currentMarker) {
                     map.removeLayer(currentMarker);
                     currentMarker = null;
-                    console.log('✅ Marker deleted by user (fallback)');
+                    console.log('Marker deleted by user (fallback)');
 
                     // إخطار Python بأن الهندسة تم حذفها
                     sendGeometryToPython(null, null);

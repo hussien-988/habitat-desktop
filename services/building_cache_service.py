@@ -5,7 +5,7 @@
 
     Professional caching solution for building data across the entire application.
 
-    Best Practices Applied:
+    Features:
     - Singleton Pattern (one instance per application)
     - LRU Cache (Least Recently Used eviction)
     - Spatial Indexing (fast viewport queries)
@@ -48,7 +48,6 @@ class BuildingCacheServiceMeta(type):
     Thread-safe Singleton metaclass for BuildingCacheService.
 
     Ensures only one instance exists across the entire application.
-    Professional Best Practice for PyQt5 applications.
     """
     _instances: Dict[type, 'BuildingCacheService'] = {}
     _lock: Lock = Lock()
@@ -86,7 +85,7 @@ class BuildingCacheService(metaclass=BuildingCacheServiceMeta):
         )
     """
 
-    # Configuration (Best Practices)
+    # Configuration
     INITIAL_CACHE_SIZE = 150      # Load on startup (fast startup!)
     MAX_CACHE_SIZE = 1000         # LRU eviction beyond this
     CACHE_TTL_HOURS = 24          # Cache invalidation time
@@ -259,8 +258,8 @@ class BuildingCacheService(metaclass=BuildingCacheServiceMeta):
         """
         Get buildings within viewport bounds (cache-first strategy).
 
-        Professional Best Practice:
-        1. Check cache first (FAST!)
+        Strategy:
+        1. Check cache first
         2. If cache miss, load from API/DB
         3. Update cache for future requests
 

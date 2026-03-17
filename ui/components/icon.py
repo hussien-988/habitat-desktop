@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
 Icon Component - مكون الأيقونة القابل لإعادة الاستخدام
-Reusable icon component following DRY, SOLID, Clean Code principles.
+Reusable icon component.
 
 Features:
 - Automatic icon loading from multiple locations
@@ -66,7 +66,7 @@ class Icon(QLabel):
         icon = Icon("blue", size=IconSize.LARGE.value)
     """
 
-    # Icon search paths (following DRY - centralized configuration)
+    # Icon search paths (centralized configuration)
     # Using absolute paths relative to project root for reliability
     @staticmethod
     def _get_search_paths():
@@ -205,7 +205,7 @@ class Icon(QLabel):
                 button.setIcon(icon)
                 button.setIconSize(QSize(20, 20))
         """
-        # Reuse the same search logic (DRY principle)
+        # Reuse the same search logic
         search_paths = Icon._get_search_paths()
 
         for search_path in search_paths:
@@ -242,7 +242,7 @@ class Icon(QLabel):
             if pixmap and not pixmap.isNull():
                 label.setPixmap(pixmap)
         """
-        # Reuse the same search logic (DRY principle)
+        # Reuse the same search logic
         search_paths = Icon._get_search_paths()
 
         for search_path in search_paths:

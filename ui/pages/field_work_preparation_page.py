@@ -33,7 +33,7 @@ logger = get_logger(__name__)
 
 class FieldWorkPreparationPage(QWidget):
     """
-    Field Work Preparation - Wizard-like Structure (DRY).
+    Field Work Preparation - Wizard-like Structure.
 
     Same structure as BaseWizard:
     1. Fixed header

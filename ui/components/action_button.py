@@ -2,11 +2,6 @@
 """
 Action Button Component - Reusable button with consistent styling.
 
-DRY + SOLID Principle:
-- Single Source of Truth for button styling
-- Reusable across wizard footer, forms, dialogs, and pages
-- Consistent dimensions, colors, and behavior
-
 Figma Specifications:
 - Dimensions: 114×44 (width×height)
 - Border-radius: 4px

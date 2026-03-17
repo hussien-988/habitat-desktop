@@ -8,7 +8,6 @@
     - Zoom (تكبير/تصغير)
     - Initial load (التحميل الأولي)
 
-    Professional Best Practice:
     - QWebChannel for JavaScript Python communication
     - Debounced events to prevent excessive API calls
     - Thread-safe signal/slot mechanism
@@ -89,7 +88,7 @@ class ViewportBridge(QObject):
         """
         يُستدعى من JavaScript عند تغيير viewport.
 
-        Professional Best Practice: Debouncing
+        Debouncing:
         - لا نُرسل البيانات فوراً
         - ننتظر {debounce_ms}ms قبل الإرسال
         - إذا حدث تغيير آخر قبل انتهاء المؤقت، نُلغي المؤقت القديم
@@ -161,7 +160,7 @@ class ViewportBridge(QObject):
         """
         تحقق: هل viewport1 و viewport2 متطابقان؟
 
-        Professional Best Practice: Avoid unnecessary updates
+        Avoid unnecessary updates.
         - نقارن بدقة 4 أرقام عشرية (~11 متر)
         - zoom يجب أن يكون متطابقاً تماماً
 

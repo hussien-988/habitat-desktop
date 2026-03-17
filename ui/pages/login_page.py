@@ -369,7 +369,6 @@ class LoginPage(QWidget):
         """
         Apply development mode settings for easier testing.
 
-        Best Practice:
         - Only enabled when Config.DEV_MODE = True
         - Auto-fills login credentials to skip manual entry during development
         - MUST be disabled in production (set Config.DEV_MODE = False)
@@ -427,7 +426,6 @@ class LoginPage(QWidget):
             self._lockout_until = None
             logger.info(f"Login successful: {username}")
             self.error_label.hide()
-            self._clear_form()
             self.login_successful.emit(user)
         else:
             self._failed_attempts += 1

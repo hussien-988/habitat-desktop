@@ -361,7 +361,7 @@ class ApplicantInfoStep(BaseStep):
         return container
 
     # ------------------------------------------------------------------
-    # Widget factory helpers (DRY)
+    # Widget factory helpers
     # ------------------------------------------------------------------
 
     def _lbl(self, text: str) -> QLabel:

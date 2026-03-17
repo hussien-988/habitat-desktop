@@ -2,7 +2,6 @@
 """
 Wizard Footer Component - Reusable footer for wizards and multi-step forms.
 
-Follows DRY and SOLID principles.
 """
 
 from PyQt5.QtWidgets import QWidget, QHBoxLayout, QLabel
@@ -72,7 +71,7 @@ class WizardFooter(QWidget):
         self._setup_ui()
 
     def _setup_ui(self):
-        """Setup footer UI (DRY - extracted from base_wizard.py)."""
+        """Setup footer UI."""
         # Same styling as BaseWizard footer
         self.setStyleSheet("""
             QWidget {

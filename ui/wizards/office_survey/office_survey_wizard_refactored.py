@@ -524,7 +524,7 @@ class OfficeSurveyWizard(BaseWizard):
 
         layout = QVBoxLayout(header)
         layout.setContentsMargins(0, 0, 0, 0)
-        # DRY: Using PageDimensions.HEADER_GAP (30px from Figma) for gap between elements
+        # PageDimensions.HEADER_GAP (30px from Figma) for gap between elements
         layout.setSpacing(PageDimensions.HEADER_GAP)  # 30px: title → tabs, same as completed_claims_page
 
         # ========== TITLE ROW: Title + Save button ==========
@@ -584,15 +584,15 @@ class OfficeSurveyWizard(BaseWizard):
         title_row.addLayout(title_subtitle_container)
         title_row.addStretch()
 
-        # Close button FIRST (DRY: Using ButtonDimensions and Colors constants)
+        # Close button FIRST
         # Figma specs: 52×48px, White background, X in Primary/Main color
         self.close_btn = QPushButton("✕")
         self.close_btn.setCursor(Qt.PointingHandCursor)
 
-        # Fixed dimensions from Figma (DRY: ButtonDimensions)
+        # Fixed dimensions from Figma
         self.close_btn.setFixedSize(ButtonDimensions.CLOSE_WIDTH, ButtonDimensions.CLOSE_HEIGHT)
 
-        # Apply font (DRY: Using create_font utility + ButtonDimensions)
+        # Apply font
         close_btn_font = create_font(
             size=ButtonDimensions.CLOSE_FONT_SIZE,  # 12pt (16px Figma)
             weight=QFont.Normal,  # 400 - lighter weight
@@ -600,7 +600,7 @@ class OfficeSurveyWizard(BaseWizard):
         )
         self.close_btn.setFont(close_btn_font)
 
-        # Figma styling (DRY: Using Colors and ButtonDimensions constants)
+        # Figma styling
         self.close_btn.setStyleSheet(f"""
             QPushButton {{
                 background-color: {Colors.SURFACE};
@@ -616,24 +616,24 @@ class OfficeSurveyWizard(BaseWizard):
         self.close_btn.clicked.connect(self._handle_close)
         title_row.addWidget(self.close_btn)
 
-        # Save button SECOND with icon (DRY: Using ButtonDimensions constants)
+        # Save button SECOND with icon
         # Figma specs: 114×48px, padding 24×12, icon 14×14, spacing 10px
         self.save_btn = QPushButton(f" {tr('wizard.button.save')}")  # Space for icon
         self.save_btn.setCursor(Qt.PointingHandCursor)
 
-        # Fixed dimensions from Figma (DRY: ButtonDimensions)
+        # Fixed dimensions from Figma
         self.save_btn.setFixedSize(ButtonDimensions.SAVE_WIDTH, ButtonDimensions.SAVE_HEIGHT)
 
-        # Load save icon from assets (DRY: reusing Icon component pattern)
+        # Load save icon from assets
         from PyQt5.QtGui import QIcon
         import os
         save_icon_path = os.path.join("assets", "images", "save.png")
         if os.path.exists(save_icon_path):
             self.save_btn.setIcon(QIcon(save_icon_path))
-            # DRY: Using ButtonDimensions.SAVE_ICON_SIZE
+            # ButtonDimensions.SAVE_ICON_SIZE
             self.save_btn.setIconSize(QSize(ButtonDimensions.SAVE_ICON_SIZE, ButtonDimensions.SAVE_ICON_SIZE))
 
-        # Apply font (DRY: Using create_font utility + ButtonDimensions)
+        # Apply font
         save_btn_font = create_font(
             size=ButtonDimensions.SAVE_FONT_SIZE,  # 12pt (16px Figma)
             weight=QFont.Normal,  # 400 - lighter weight
@@ -641,7 +641,7 @@ class OfficeSurveyWizard(BaseWizard):
         )
         self.save_btn.setFont(save_btn_font)
 
-        # Figma styling (DRY: Using Colors and ButtonDimensions constants)
+        # Figma styling
         self.save_btn.setStyleSheet(f"""
             QPushButton {{
                 background-color: {Colors.PRIMARY_BLUE};
@@ -672,12 +672,12 @@ class OfficeSurveyWizard(BaseWizard):
             }
         """)
 
-        # Horizontal layout for step indicators (DRY: respecting main_layout padding)
+        # Horizontal layout for step indicators (respecting main_layout padding)
         steps_layout = QHBoxLayout(steps_frame)
         # Add vertical margins to accommodate shadow effect (prevent clipping)
         # Top: 2px, Bottom: 4px to prevent shadow from being cut off
         steps_layout.setContentsMargins(0, 2, 0, 4)
-        # DRY: Using ButtonDimensions.STEP_TAB_GAP (20px from Figma)
+        # ButtonDimensions.STEP_TAB_GAP (20px from Figma)
         steps_layout.setSpacing(ButtonDimensions.STEP_TAB_GAP)  # 20px gap between tabs
 
         # Create step indicator tabs (Figma: white background, 111×35px, border-radius 14px)
@@ -690,7 +690,7 @@ class OfficeSurveyWizard(BaseWizard):
             step_widget = QLabel(name)
             step_widget.setAlignment(Qt.AlignCenter)
 
-            # Fixed dimensions from Figma (DRY: ButtonDimensions)
+            # Fixed dimensions from Figma
             step_widget.setFixedSize(ButtonDimensions.STEP_TAB_WIDTH, ButtonDimensions.STEP_TAB_HEIGHT)
 
             # Smaller font for long step names (تفاصيل الإشغال، ادعاءات الإشغال)
@@ -698,7 +698,6 @@ class OfficeSurveyWizard(BaseWizard):
             self._step_font_sizes.append(tab_font_size)
 
             # Default state: White background, gray text, no border
-            # DRY: Using Colors and ButtonDimensions constants
             # Padding: 16px horizontal, 10px vertical (Figma)
             step_widget.setStyleSheet(f"""
                 background-color: {Colors.SURFACE};
@@ -710,7 +709,7 @@ class OfficeSurveyWizard(BaseWizard):
             """)
 
             # Apply subtle shadow effect for visual depth
-            # Best Practice: Consistent shadow across step tabs
+            # Consistent shadow across step tabs
             from PyQt5.QtWidgets import QGraphicsDropShadowEffect
             from PyQt5.QtGui import QColor
             tab_shadow = QGraphicsDropShadowEffect()
@@ -750,7 +749,7 @@ class OfficeSurveyWizard(BaseWizard):
         # Height from Figma: 74px
         footer.setFixedHeight(ButtonDimensions.FOOTER_HEIGHT)
 
-        # Apply white card styling with border (DRY: StyleManager)
+        # Apply white card styling with border
         footer.setStyleSheet(StyleManager.wizard_footer())
 
         # Apply drop shadow effect (Figma shadow specs from PageDimensions)
@@ -774,7 +773,7 @@ class OfficeSurveyWizard(BaseWizard):
         )
         layout.setSpacing(0)  # No spacing in main layout
 
-        # Apply font for navigation buttons (DRY: Using create_font utility)
+        # Apply font for navigation buttons
         # Figma: 16px font size, Normal weight (400)
         nav_btn_font = create_font(
             size=ButtonDimensions.NAV_BUTTON_FONT_SIZE,  # 12pt (16px Figma)
@@ -789,7 +788,7 @@ class OfficeSurveyWizard(BaseWizard):
         self.btn_previous = QPushButton(f"<   {tr('wizard.button.previous')}")
         self.btn_previous.setCursor(Qt.PointingHandCursor)
 
-        # Fixed dimensions from Figma (DRY: ButtonDimensions)
+        # Fixed dimensions from Figma
         self.btn_previous.setFixedSize(
             ButtonDimensions.NAV_BUTTON_WIDTH,   # 252px
             ButtonDimensions.NAV_BUTTON_HEIGHT   # 50px
@@ -862,7 +861,7 @@ class OfficeSurveyWizard(BaseWizard):
         self.btn_next = QPushButton(f"{tr('wizard.button.next')}   >")
         self.btn_next.setCursor(Qt.PointingHandCursor)
 
-        # Fixed dimensions from Figma (DRY: ButtonDimensions)
+        # Fixed dimensions from Figma
         self.btn_next.setFixedSize(
             ButtonDimensions.NAV_BUTTON_WIDTH,   # 252px
             ButtonDimensions.NAV_BUTTON_HEIGHT   # 50px
@@ -1027,7 +1026,7 @@ class OfficeSurveyWizard(BaseWizard):
         - Inactive: Gray text + no border
         - Border-radius: 14px (same as pill)
 
-        DRY: Uses Colors and ButtonDimensions constants.
+        Uses Colors and ButtonDimensions constants.
         """
         current_step = self.navigator.current_index
 
@@ -1079,7 +1078,7 @@ class OfficeSurveyWizard(BaseWizard):
         - Last step: Next button is HIDDEN (removed from layout)
         - Other steps: Next button is VISIBLE (enabled based on validation)
 
-        Best Practice: Uses CSS transparency for Previous button to maintain fixed layout,
+        Uses CSS transparency for Previous button to maintain fixed layout,
         avoiding container widgets or dynamic layout changes.
         """
         current_step = self.navigator.current_index

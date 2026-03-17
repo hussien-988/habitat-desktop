@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
 Logout Dialog — ديالوغ تأكيد تسجيل الخروج / إغلاق التطبيق
-Follows LanguageDialog/PasswordDialog container pattern (DRY).
+Follows LanguageDialog/PasswordDialog container pattern.
 """
 
 from PyQt5.QtWidgets import (

@@ -302,7 +302,7 @@ class FieldWorkPreparationStep1(QWidget):
         self.building_search = QLineEdit()
         self.building_search.setPlaceholderText("ابحث عن رمز البناء ...")
         self.building_search.setLayoutDirection(Qt.RightToLeft)
-        # Hide suggestions when Enter is pressed (Best Practice)
+        # Hide suggestions when Enter is pressed
         self.building_search.returnPressed.connect(self._on_search_enter)
         self.building_search.setStyleSheet("""
             QLineEdit {
@@ -550,7 +550,7 @@ class FieldWorkPreparationStep1(QWidget):
         return footer
 
     def _create_filter_field(self, label_text: str) -> QFrame:
-        """Create filter field container with label (DRY)."""
+        """Create filter field container with label."""
         container = QFrame()
         container.setStyleSheet("background: transparent; border: none;")
 
@@ -964,7 +964,7 @@ class FieldWorkPreparationStep1(QWidget):
             return building_id
 
     def _remove_building_from_table(self, building_id: str):
-        """Remove building row from table (DRY helper)."""
+        """Remove building row from table."""
         # Find and remove the widget
         for i in range(self.selected_table_layout.count()):
             widget = self.selected_table_layout.itemAt(i).widget()
@@ -1176,7 +1176,7 @@ class FieldWorkPreparationStep1(QWidget):
                 logger.info("No buildings selected from polygon")
                 return
 
-            # SOLID: Log received buildings for debugging
+            # Log received buildings for debugging
             logger.info(f"Received {len(selected_buildings)} buildings from polygon")
             for i, bldg in enumerate(selected_buildings[:3]):
                 logger.info(f"   Building {i+1}: ID={bldg.building_id}")
@@ -1304,7 +1304,7 @@ class FieldWorkPreparationStep1(QWidget):
 
     def _on_search_enter(self):
         """
-        Handle Enter key press in search field (Best Practice).
+        Handle Enter key press in search field.
 
         Clears search, hides suggestions, shows selected buildings card.
         """

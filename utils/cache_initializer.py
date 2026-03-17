@@ -28,7 +28,6 @@ def initialize_application_cache(
     """
     Initialize application-wide building cache on startup.
 
-    Professional Best Practice:
     - Loads small initial set of buildings (150) during startup
     - Provides instant responsiveness for map operations
     - Reduces API calls and database queries

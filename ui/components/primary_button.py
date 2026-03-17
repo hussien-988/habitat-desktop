@@ -3,7 +3,6 @@
 Primary Button Component - زر أساسي قابل لإعادة الاستخدام
 Reusable button component following Figma design system.
 
-Implements DRY, SOLID, Clean Code principles.
 """
 
 from PyQt5.QtWidgets import QPushButton
@@ -70,8 +69,7 @@ class PrimaryButton(QPushButton):
         self.setStyleSheet(StyleManager.button_primary())
 
     def _load_icon(self):
-        """Load icon from assets folder using reusable Icon component (DRY + SOLID)."""
-        # Use Icon component static method for loading (follows DRY principle)
+        """Load icon from assets folder using reusable Icon component."""
         q_icon = Icon.load_qicon(self.icon_name)
 
         if q_icon:

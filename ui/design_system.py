@@ -47,7 +47,7 @@ class Colors:
     TEXT_ON_DARK = "#FFFFFF"  # White text on dark backgrounds
     TEXT_ON_PRIMARY = "#FFFFFF"  # White text on primary blue
 
-    # Page Title Colors (Unified across all pages - DRY)
+    # Page Title Colors (Unified across all pages)
     PAGE_TITLE = "#212B36"  # Unified color for all page titles (24px/18pt, SemiBold)
     PAGE_SUBTITLE = "#7F8C9B"  # Unified color for all page subtitles (14px/10pt, SemiBold)
 
@@ -380,10 +380,10 @@ class PageDimensions:
     CARD_DETAILS_BORDER_WIDTH = 1    # Border width (Figma: 1px, Inside)
 
     # Card details text styling (text inside details container - from Figma)
-    # Updated to match unit selection address color for consistency (DRY principle)
+    # Updated to match unit selection address color for consistency
     CARD_DETAILS_TEXT_COLOR = "#667281"                          # Text color (Updated: #667281)
     CARD_DETAILS_TEXT_SIZE = 6                                   # Font size (PyQt5: 6pt - adjusted for smaller display)
-    # DRY: Use primary Arabic font (IBM Plex Sans Arabic) from Typography
+    # Use primary Arabic font (IBM Plex Sans Arabic) from Typography
     # Fallback: Calibri (system fallback only)
     CARD_DETAILS_TEXT_WEIGHT = Typography.WEIGHT_LIGHT           # Font weight: Light (300)
     CARD_DETAILS_TEXT_LETTER_SPACING = 0                         # Letter spacing (Figma: 0)
@@ -393,7 +393,7 @@ class WizardDimensions:
     """
     Wizard-specific dimensions from Figma specifications.
 
-    Note: Wizard uses same page padding as claims pages (DRY principle).
+    Note: Wizard uses same page padding as claims pages.
     Reuses PageDimensions.CONTENT_PADDING_H, CONTENT_PADDING_V_TOP, etc.
 
     Figma Specs (Office Survey Wizard):
@@ -431,7 +431,7 @@ class WizardDimensions:
     TABS_BAR_HEIGHT = 66                  # Tabs bar height (Figma: 66px Hug)
     TABS_GAP = 8                          # Gap between tab items (Figma: 8px)
 
-    # DRY: Reuse page padding from PageDimensions
+    # Reuse page padding from PageDimensions
     # No need to duplicate - use PageDimensions.CONTENT_PADDING_H, etc.
 
 

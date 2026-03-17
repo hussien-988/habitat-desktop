@@ -2,7 +2,7 @@
 """
 Confirmation Dialog Component - مكون حوار التأكيد
 
-Reusable confirmation dialog following DRY and SOLID principles.
+Reusable confirmation dialog.
 
 Features:
 - Warning/Info/Question icons
@@ -313,7 +313,7 @@ class ConfirmationDialog(QDialog):
         return self.result_code
 
     # =========================================================================
-    # Static Factory Methods (following Factory Pattern for DRY)
+    # Static Factory Methods
     # =========================================================================
 
     @staticmethod

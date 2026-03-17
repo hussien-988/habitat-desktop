@@ -559,6 +559,9 @@ class MainWindow(QMainWindow):
         else:
             logger.warning("No API token found in user object - API calls may fail with 401")
 
+        # Freeze repainting to prevent login-to-main transition flicker
+        self.setUpdatesEnabled(False)
+
         # Show navbar
         self.navbar.setVisible(True)
 
@@ -574,6 +577,9 @@ class MainWindow(QMainWindow):
             page = self.pages.get(page_id)
             if page and hasattr(page, 'configure_for_role'):
                 page.configure_for_role(user.role)
+
+        # Resume repainting - user sees the final state directly
+        self.setUpdatesEnabled(True)
 
         # Start session timeout timer (UC-011 S08)
         self._start_session_timer()
@@ -988,7 +994,7 @@ class MainWindow(QMainWindow):
         """
         Navigate to a specific page.
 
-        Best Practice: Prevents data loss by showing save confirmation dialog
+        Prevents data loss by showing save confirmation dialog
         when leaving wizard with unsaved data.
         """
         # Check if currently in wizard with unsaved data
@@ -1085,7 +1091,7 @@ class MainWindow(QMainWindow):
         """
         Check if wizard has unsaved data.
 
-        Best Practice: Only warn if user has progressed beyond first step
+        Only warn if user has progressed beyond first step
         or selected a building.
         """
         # If finalization was completed, no need to show save dialog
@@ -1103,7 +1109,7 @@ class MainWindow(QMainWindow):
         return False
 
     def _reset_wizard(self, building=None):
-        """Reset wizard to clean state (Best Practice: DRY)."""
+        """Reset wizard to clean state."""
         new_context = self.office_survey_wizard.create_context()
         if building is not None:
             new_context.building = building

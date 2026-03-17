@@ -6,8 +6,8 @@ Uses the survey-centric approach: one detail call returns households, relations,
 and evidence bundled together (properly scoped to a single survey).
 Building, Unit, and Person details are enriched via separate calls.
 
-DRY: Reuses BuildingController for building mapping (with admin name resolution)
-     and ClaimController's static methods for unit/person/household mapping.
+Reuses BuildingController for building mapping (with admin name resolution)
+and ClaimController's static methods for unit/person/household mapping.
 """
 
 from typing import Any, Dict, List, Optional

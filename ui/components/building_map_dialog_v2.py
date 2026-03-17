@@ -2,18 +2,13 @@
 """
 Building Map Dialog V2 - Unified Design for Building Selection.
 
-Matches BuildingMapWidget design exactly - DRY principle.
+Matches BuildingMapWidget design exactly.
 
 Uses:
 - BaseMapDialog for consistent UI
 - LeafletHTMLGenerator for map rendering
 - PostGIS-compatible WKT output
 - Single building selection
-
-Best Practices (DRY + SOLID):
-- Extends BaseMapDialog (no duplication)
-- Single Responsibility: Select single building by clicking
-- Open/Closed: Extended BaseMapDialog, not modified
 """
 
 from typing import Optional
@@ -143,7 +138,7 @@ class BuildingMapDialog(BaseMapDialog):
             # Use self._auth_token (already set in __init__)
             logger.debug(f"Using auth token for loading buildings: {bool(self._auth_token)}")
 
-            # Load buildings using shared method (DRY principle)
+            # Load buildings using shared method
             # VIEW-ONLY MODE: Load ONLY the selected building (no others!)
             # SELECTION MODE: 200 buildings for initial load
             if self._is_view_only and self._selected_building_id:
@@ -301,7 +296,7 @@ class BuildingMapDialog(BaseMapDialog):
                     focus_building_id = self._selected_building_id
                     logger.info(f"Focusing on building {focus_building_id} at ({center_lat}, {center_lon}) with max zoom {zoom}")
 
-            # Load neighborhoods for map overlay (DRY - shared helper from BaseMapDialog)
+            # Load neighborhoods for map overlay (shared helper from BaseMapDialog)
             neighborhoods_geojson = self.load_neighborhoods_geojson(auth_token=self._auth_token)
 
             # Load neighbourhood boundary polygons from local GeoJSON

@@ -157,9 +157,9 @@ class MapServiceAPI:
 
         Uses /Buildings/polygon endpoint with PostGIS spatial filtering.
 
-        Professional Best Practice:
+        Notes:
             - Default page_size increased to 2000 for better coverage (محسّن)
-        - Configurable for different use cases
+            - Configurable for different use cases
 
         Args:
             north_east_lat: حد الشمال الشرقي (latitude)
@@ -678,8 +678,7 @@ class MapServiceAPI:
         """
         تحويل API response إلى Building model.
 
-        SOLID Principle: Single Responsibility - converts API data to domain model
-        DRY Principle: Centralized conversion logic
+        Centralized conversion from API response to domain model.
         """
         building_id = data.get("buildingCode") or data.get("buildingId", "")
         geo_location = data.get("buildingGeometryWkt")

@@ -1,28 +1,17 @@
 # -*- coding: utf-8 -*-
 """
-Leaflet Viewport Loading Template
-==================================
+Leaflet Viewport Loading Template.
 
 JavaScript template for viewport-based building loading.
-Implements industry best practices for handling millions of buildings.
-
-Best Practices Applied:
-- Viewport-based loading (only load visible buildings)
-- Debouncing for performance (prevent too many requests)
-- Smart caching on client side
-- Dynamic marker updates without full page reload
-
-References:
-- https://leafletjs.com/reference.html#map-event
-- https://developers.google.com/maps/documentation/javascript/examples/layer-data-dynamic
+Loads only visible buildings, with debouncing and dynamic marker updates.
 """
 
 VIEWPORT_LOADING_JS_TEMPLATE = '''
         // =========================================================
-        // Viewport-Based Loading (Professional Best Practice)
+        // Viewport-Based Loading
         // =========================================================
 
-        // ✅ CRITICAL: Define getStatusKey if not already defined (for viewport loading)
+        // Define getStatusKey if not already defined (for viewport loading)
         if (typeof getStatusKey === 'undefined') {
             var statusMapping = {
                 1: 'intact',
@@ -39,12 +28,12 @@ VIEWPORT_LOADING_JS_TEMPLATE = '''
             function getStatusKey(status) {
                 return typeof status === 'number' ? (statusMapping[status] || 'intact') : status;
             }
-            console.log('✅ getStatusKey defined for viewport loading');
+            console.log('getStatusKey defined for viewport loading');
         }
 
-        // Professional Configuration (✅ محدّث من MapConstants)
+        // Configuration (from MapConstants)
         var MIN_ZOOM_FOR_LOADING = 17;      // Don't load buildings below this zoom (buildings appear at 17+)
-        var MAX_MARKERS_PER_VIEWPORT = 2000; // ✅ محسّن: زيادة من 1000 إلى 2000
+        var MAX_MARKERS_PER_VIEWPORT = 2000; // محسّن: زيادة من 1000 إلى 2000
 
         // Viewport loading state
         var viewportLoadingEnabled = true;
@@ -54,7 +43,7 @@ VIEWPORT_LOADING_JS_TEMPLATE = '''
         var currentMarkersCluster = null;
         var isLoadingViewport = false;
 
-        // ✅ IMPORTANT: Reuse bridge from selection JS (already initialized)
+        // Reuse bridge from selection JS (already initialized)
         // Don't create a new QWebChannel - use the existing 'bridge' variable
         // The selection JS (loaded before this) already created 'bridge' and 'bridgeReady'
 
@@ -62,11 +51,11 @@ VIEWPORT_LOADING_JS_TEMPLATE = '''
         var viewportBridgeCheckInterval = setInterval(function() {
             if (typeof bridgeReady !== 'undefined' && bridgeReady && typeof bridge !== 'undefined' && bridge) {
                 clearInterval(viewportBridgeCheckInterval);
-                console.log('✅ Viewport loading: Reusing existing bridge (ready)');
+                console.log('Viewport loading: Reusing existing bridge (ready)');
 
                 // Trigger initial viewport load after bridge is confirmed ready
                 if (viewportLoadingEnabled) {
-                    console.log('🔄 Triggering initial viewport load');
+                    console.log('Triggering initial viewport load');
                     setTimeout(function() {
                         loadBuildingsForViewport();
                     }, 100);
@@ -78,7 +67,7 @@ VIEWPORT_LOADING_JS_TEMPLATE = '''
         setTimeout(function() {
             clearInterval(viewportBridgeCheckInterval);
             if (typeof bridgeReady === 'undefined' || !bridgeReady) {
-                console.error('❌ Bridge not ready after 5 seconds - viewport loading disabled');
+                console.error('Bridge not ready after 5 seconds - viewport loading disabled');
             }
         }, 5000);
 
@@ -86,7 +75,6 @@ VIEWPORT_LOADING_JS_TEMPLATE = '''
          * Load buildings for current viewport bounds.
          * Called on map moveend/zoomend events.
          *
-         * Professional Best Practices:
          * - Min zoom check (don't load at low zoom levels)
          * - Max markers limit per viewport
          * - Debouncing to prevent too many requests
@@ -96,16 +84,16 @@ VIEWPORT_LOADING_JS_TEMPLATE = '''
                 return;
             }
 
-            // PROFESSIONAL FIX: Skip viewport loading during flyTo (prevents jitter!)
+            // Skip viewport loading during flyTo (prevents jitter)
             if (typeof window._isFlying !== 'undefined' && window._isFlying === true) {
-                console.log('⏸️ Skipping viewport load during flyTo animation (prevents jitter)');
+                console.log('Skipping viewport load during flyTo animation (prevents jitter)');
                 return;
             }
 
-            // Professional: Min zoom check - don't load buildings when zoomed out too far
+            // Min zoom check - don't load buildings when zoomed out too far
             var currentZoom = map.getZoom();
             if (currentZoom < MIN_ZOOM_FOR_LOADING) {
-                console.log('⚠️ Zoom level ' + currentZoom + ' < ' + MIN_ZOOM_FOR_LOADING + ', skipping building load');
+                console.log('Zoom level ' + currentZoom + ' < ' + MIN_ZOOM_FOR_LOADING + ', skipping building load');
 
                 // Clear existing buildings when zoomed out too far
                 if (currentBuildingsLayer) {
@@ -124,19 +112,19 @@ VIEWPORT_LOADING_JS_TEMPLATE = '''
             var bounds = map.getBounds();
             var northEast = bounds.getNorthEast();
             var southWest = bounds.getSouthWest();
-            var center = map.getCenter();  // ✅ إضافة center للتوافق مع ViewportBridge
+            var center = map.getCenter();  // إضافة center للتوافق مع ViewportBridge
 
-            console.log('📍 Viewport bounds:', {
+            console.log('Viewport bounds:', {
                 northEast: northEast,
                 southWest: southWest,
-                center: center,  // ✅ جديد
+                center: center,
                 zoom: currentZoom,
                 minZoom: MIN_ZOOM_FOR_LOADING,
                 maxMarkers: MAX_MARKERS_PER_VIEWPORT
             });
 
             // Send bounds to Python via WebChannel
-            // ✅ Use shared 'bridge' variable from selection JS
+            // Use shared 'bridge' variable from selection JS
             if (typeof bridgeReady !== 'undefined' && bridgeReady && bridge && bridge.onViewportChanged) {
                 isLoadingViewport = true;
 
@@ -146,16 +134,16 @@ VIEWPORT_LOADING_JS_TEMPLATE = '''
                     southWest.lat,
                     southWest.lng,
                     currentZoom,
-                    center.lat,     // ✅ 7 parameters
+                    center.lat,
                     center.lng
                 );
 
-                console.log('📡 Requesting buildings for viewport (max: ' + MAX_MARKERS_PER_VIEWPORT + ')...');
+                console.log('Requesting buildings for viewport (max: ' + MAX_MARKERS_PER_VIEWPORT + ')...');
             } else if (typeof bridgeReady === 'undefined' || !bridgeReady) {
-                console.warn('⚠️ Bridge not ready yet, skipping viewport load');
+                console.warn('Bridge not ready yet, skipping viewport load');
                 isLoadingViewport = false;
             } else {
-                console.error('❌ Bridge not available or missing onViewportChanged method');
+                console.error('Bridge not available or missing onViewportChanged method');
                 isLoadingViewport = false;
             }
         }
@@ -164,7 +152,6 @@ VIEWPORT_LOADING_JS_TEMPLATE = '''
          * Update buildings on map with new GeoJSON data.
          * Called from Python when new viewport data is loaded.
          *
-         * Professional Best Practices:
          * - Uses marker clustering for points
          * - Separates points and polygons
          * - Limits to MAX_MARKERS_PER_VIEWPORT
@@ -173,7 +160,7 @@ VIEWPORT_LOADING_JS_TEMPLATE = '''
          */
         function updateBuildingsOnMap(buildingsGeoJSON) {
             try {
-                console.log('🔄 Updating buildings on map with clustering...');
+                console.log('Updating buildings on map with clustering...');
 
                 // Parse GeoJSON
                 var newBuildingsData = typeof buildingsGeoJSON === 'string'
@@ -183,9 +170,9 @@ VIEWPORT_LOADING_JS_TEMPLATE = '''
                 console.log('  - New buildings count:', newBuildingsData.features.length);
                 console.log('  - Max markers limit:', MAX_MARKERS_PER_VIEWPORT);
 
-                // Professional: Limit to MAX_MARKERS_PER_VIEWPORT
+                // Limit to MAX_MARKERS_PER_VIEWPORT
                 if (newBuildingsData.features.length > MAX_MARKERS_PER_VIEWPORT) {
-                    console.warn('⚠️ Too many buildings (' + newBuildingsData.features.length + '), limiting to ' + MAX_MARKERS_PER_VIEWPORT);
+                    console.warn('Too many buildings (' + newBuildingsData.features.length + '), limiting to ' + MAX_MARKERS_PER_VIEWPORT);
                     newBuildingsData.features = newBuildingsData.features.slice(0, MAX_MARKERS_PER_VIEWPORT);
                 }
 
@@ -200,19 +187,19 @@ VIEWPORT_LOADING_JS_TEMPLATE = '''
                 }
 
                 // Create marker cluster group for points
-                // ✅ محدّث: نفس إعدادات المرحلة 1 (محسّنة)
+                // محدّث: نفس إعدادات المرحلة 1 (محسّنة)
                 currentMarkersCluster = L.markerClusterGroup({
-                    maxClusterRadius: 60,              // ✅ محسّن: 80 → 60
+                    maxClusterRadius: 60,
                     spiderfyOnMaxZoom: true,
                     showCoverageOnHover: false,
                     zoomToBoundsOnClick: true,
-                    disableClusteringAtZoom: 15,      // ✅ محسّن: 17 → 15
+                    disableClusteringAtZoom: 15,
                     chunkedLoading: true,
-                    chunkInterval: 100,                // ✅ محسّن: 200 → 100ms
-                    chunkDelay: 25,                    // ✅ محسّن: 50 → 25ms
-                    removeOutsideVisibleBounds: true,  // ✅ جديد
+                    chunkInterval: 100,
+                    chunkDelay: 25,
+                    removeOutsideVisibleBounds: true,
                     animate: true,
-                    animateAddingMarkers: false        // ✅ جديد
+                    animateAddingMarkers: false
                 });
 
                 // Separate polygons layer
@@ -222,7 +209,7 @@ VIEWPORT_LOADING_JS_TEMPLATE = '''
                 currentBuildingsLayer = L.geoJSON(newBuildingsData, {
                     // Style function for Polygon/MultiPolygon features
                     style: function(feature) {
-                        var status = getStatusKey(feature.properties.status || 1);  // ✅ FIX: استخدام getStatusKey
+                        var status = getStatusKey(feature.properties.status || 1);
                         var color = statusColors[status] || '#0072BC';
 
                         return {
@@ -322,12 +309,12 @@ VIEWPORT_LOADING_JS_TEMPLATE = '''
                 polygonsGroup.addTo(map);              // Polygons (no clustering)
 
                 isLoadingViewport = false;
-                console.log('✅ Buildings updated successfully with clustering');
+                console.log('Buildings updated successfully with clustering');
                 console.log('   - Markers in cluster:', currentMarkersCluster.getLayers().length);
                 console.log('   - Polygons on map:', polygonsGroup.getLayers().length);
 
             } catch (error) {
-                console.error('❌ Error updating buildings:', error);
+                console.error('Error updating buildings:', error);
                 isLoadingViewport = false;
             }
         }
@@ -356,7 +343,7 @@ VIEWPORT_LOADING_JS_TEMPLATE = '''
             map.on('moveend', onViewportChanged);
             map.on('zoomend', onViewportChanged);
 
-            console.log('✅ Viewport-based loading enabled');
+            console.log('Viewport-based loading enabled');
             console.log('   - Debounce delay:', viewportLoadingDebounceDelay, 'ms');
 
             // Load initial viewport (optional - can skip if initial buildings already loaded)

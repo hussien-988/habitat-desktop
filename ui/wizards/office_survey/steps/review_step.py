@@ -118,11 +118,11 @@ class ReviewStep(BaseStep):
         layout.addWidget(scroll)
 
     # =========================================================================
-    # DRY: Shared Styles & Helpers
+    # Shared Styles & Helpers
     # =========================================================================
 
     def _create_section_label(self, text: str) -> QLabel:
-        """DRY: Create section label with WIZARD_TITLE style (reused across all cards)."""
+        """Create section label with WIZARD_TITLE style (reused across all cards)."""
         lbl = QLabel(text)
         lbl.setFont(create_font(size=FontManager.WIZARD_CARD_LABEL, weight=FontManager.WEIGHT_SEMIBOLD))
         lbl.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent; border: none;")
@@ -201,7 +201,7 @@ class ReviewStep(BaseStep):
         self.edit_requested.emit(step_index)
 
     def _create_edit_menu_button(self, callback) -> QPushButton:
-        """DRY: Create a ⋮ menu button with a single 'تعديل' action."""
+        """Create a menu button with a single 'تعديل' action."""
         menu_btn = QPushButton("⋮")
         menu_btn.setFixedSize(36, 36)
         menu_btn.setStyleSheet("""

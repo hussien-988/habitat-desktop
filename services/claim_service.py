@@ -3,8 +3,6 @@
 Claim Service - Business Logic Layer
 =====================================
 Centralized business logic for Claim operations.
-Follows DRY, SOLID, Clean Code principles.
-
 This service handles:
 - Claim lifecycle management
 - Status transitions with business rules

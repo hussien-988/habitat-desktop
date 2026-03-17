@@ -3,7 +3,7 @@
 Case Details Page — displays survey/claim details using ReviewStep in read-only mode.
 
 Design: Matches project design system (PageDimensions, StyleManager).
-Architecture: Reuses ReviewStep via Composition (DRY) — no code duplication.
+Architecture: Reuses ReviewStep via Composition — no code duplication.
 Data: refresh() receives SurveyContext from API via main_window navigation.
 """
 

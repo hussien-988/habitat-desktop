@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
 Language Dialog — ديالوغ تغيير اللغة
-Follows PasswordDialog/ConfirmationDialog container pattern (DRY).
+Follows PasswordDialog/ConfirmationDialog container pattern.
 """
 
 from typing import Optional
