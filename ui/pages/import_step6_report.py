@@ -1,11 +1,5 @@
 # -*- coding: utf-8 -*-
-"""
-Import Wizard - Step 5 (Report): Final Commit Report
-UC-003: Import Pipeline
-
-Displays the final commit report matching the API response from
-GET /api/v1/import/packages/{id}/commit-report.
-"""
+"""Import wizard final commit report step."""
 
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QFrame,

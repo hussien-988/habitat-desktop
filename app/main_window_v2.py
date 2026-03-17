@@ -1,9 +1,5 @@
 # -*- coding: utf-8 -*-
-"""
-Main application window with navbar navigation (NEW DESIGN)
-Based on Figma design pages 1-31
-Replaces sidebar with top navbar and tabs
-"""
+"""Main application window with navbar navigation."""
 
 from PyQt5.QtWidgets import (
     QMainWindow, QWidget, QHBoxLayout, QVBoxLayout,
@@ -26,11 +22,11 @@ logger = get_logger(__name__)
 
 
 class MainWindow(QMainWindow):
-    """Main application window with navbar navigation (NEW DESIGN)."""
+    """Main application window with navbar navigation."""
 
     language_changed = pyqtSignal(bool)  # True for Arabic, False for English
 
-    # Pages restricted to specific roles only (RBAC - page level)
+    # Pages restricted to specific roles
     _PAGE_ROLE_ACCESS = {
         Pages.ADMIN: {"admin", "data_manager"},
         Pages.USER_MANAGEMENT: {"admin"},
@@ -57,7 +53,7 @@ class MainWindow(QMainWindow):
         # For window dragging
         self._drag_position = QPoint()
 
-        # Session timeout tracking (UC-011 S08)
+        # Session timeout tracking
         self._session_timer = None
         self._last_activity = None
         self._session_timeout_ms = 0
@@ -77,10 +73,8 @@ class MainWindow(QMainWindow):
 
     def _setup_window(self):
         """Configure window properties."""
-        # Set window title to match Figma design
         self.setWindowTitle("UN-HABITAT")
 
-        # Set exact dimensions from Figma: 1512 x 982
         window_width = 1512
         window_height = 982
         self.setMinimumSize(window_width, window_height)
@@ -221,7 +215,7 @@ class MainWindow(QMainWindow):
         self.pages[Pages.BUILDING_DETAILS] = BuildingDetailsPage(self.db, self.i18n, self)
         self.stack.addWidget(self.pages[Pages.BUILDING_DETAILS])
 
-        # Units page (UC-002)
+        # Units page
         self.pages[Pages.UNITS] = UnitsPage(self.db, self.i18n, self)
         self.stack.addWidget(self.pages[Pages.UNITS])
 
@@ -229,7 +223,7 @@ class MainWindow(QMainWindow):
         self.pages[Pages.UNIT_DETAILS] = UnitDetailsPage(self.db, self.i18n, self)
         self.stack.addWidget(self.pages[Pages.UNIT_DETAILS])
 
-        # Persons page (UC-003)
+        # Persons page
         self.pages[Pages.PERSONS] = PersonsPage(self.db, self.i18n, self)
         self.stack.addWidget(self.pages[Pages.PERSONS])
 
@@ -237,11 +231,11 @@ class MainWindow(QMainWindow):
         self.pages[Pages.RELATIONS] = RelationsPage(self.db, self.i18n, self)
         self.stack.addWidget(self.pages[Pages.RELATIONS])
 
-        # Households page (FSD 6.1.6)
+        # Households page
         self.pages[Pages.HOUSEHOLDS] = HouseholdsPage(self.db, self.i18n, self)
         self.stack.addWidget(self.pages[Pages.HOUSEHOLDS])
 
-        # Completed Claims page (UC-007, UC-008)
+        # Completed Claims page
         self.pages[Pages.CLAIMS] = CompletedClaimsPage(self.db, self.i18n, self)
         self.stack.addWidget(self.pages[Pages.CLAIMS])
 
@@ -249,31 +243,31 @@ class MainWindow(QMainWindow):
         self.pages[Pages.CASES] = CasesPage(self.db, self.i18n, self)
         self.stack.addWidget(self.pages[Pages.CASES])
 
-        # Search page (UC-011)
+        # Search page
         self.pages[Pages.SEARCH] = SearchPage(self.db, self.i18n, self)
         self.stack.addWidget(self.pages[Pages.SEARCH])
 
-        # Reports page (UC-012, UC-013)
+        # Reports page
         self.pages[Pages.REPORTS] = ReportsPage(self.db, self.i18n, self)
         self.stack.addWidget(self.pages[Pages.REPORTS])
 
-        # Admin page (UC-015)
+        # Admin page
         self.pages[Pages.ADMIN] = AdminPage(self.db, self.i18n, self)
         self.stack.addWidget(self.pages[Pages.ADMIN])
 
-        # Map view page (UC-014)
+        # Map view page
         self.pages[Pages.MAP_VIEW] = MapPage(self.db, self.i18n, self)
         self.stack.addWidget(self.pages[Pages.MAP_VIEW])
 
-        # Duplicates page (UC-007, UC-008)
+        # Duplicates page
         self.pages[Pages.DUPLICATES] = DuplicatesPage(self.db, self.i18n, self)
         self.stack.addWidget(self.pages[Pages.DUPLICATES])
 
-        # Claim Comparison page (UC-007)
+        # Claim Comparison page
         self.pages[Pages.CLAIM_COMPARISON] = ClaimComparisonPage(self.db, self.i18n, self)
         self.stack.addWidget(self.pages[Pages.CLAIM_COMPARISON])
 
-        # Field Work Preparation wizard (UC-012)
+        # Field Work Preparation wizard
         field_bc = BuildingController(self.db)
         self.pages[Pages.FIELD_ASSIGNMENT] = FieldWorkPreparationPage(field_bc, self.i18n, self)
         self.stack.addWidget(self.pages[Pages.FIELD_ASSIGNMENT])
@@ -307,7 +301,7 @@ class MainWindow(QMainWindow):
         self.pages[Pages.DATA_MANAGEMENT] = DataManagementPage(self.db, self.i18n, self)
         self.stack.addWidget(self.pages[Pages.DATA_MANAGEMENT])
 
-        # Import Wizard page (UC-003)
+        # Import Wizard page
         from controllers.import_controller import ImportController
         self._import_controller = ImportController(self.db)
         self.pages[Pages.IMPORT_WIZARD] = ImportWizardPage(
@@ -328,11 +322,11 @@ class MainWindow(QMainWindow):
         self.pages[Pages.IMPORT_PACKAGES] = ImportPackagesPage(self.db, self.i18n, self)
         self.stack.addWidget(self.pages[Pages.IMPORT_PACKAGES])
 
-        # Claim Edit page (UC-006: Edit existing claim)
+        # Claim Edit page
         self.pages[Pages.CLAIM_EDIT] = ClaimEditPage(self.db, self.i18n, self)
         self.stack.addWidget(self.pages[Pages.CLAIM_EDIT])
 
-        # Office Survey Wizard (UC-004, UC-005) - NEW wizard framework
+        # Office Survey Wizard
         self.office_survey_wizard = OfficeSurveyWizard(self.db, self)
         self.stack.addWidget(self.office_survey_wizard)
 
@@ -424,7 +418,7 @@ class MainWindow(QMainWindow):
         # Cases - view survey details (works for all 3 sub-tabs)
         self.pages[Pages.CASES].claim_selected.connect(self._on_draft_claim_selected)
 
-        # Cases - resume draft survey in wizard for editing (UC-005)
+        # Cases - resume draft survey in wizard for editing
         self.pages[Pages.CASES].resume_survey.connect(self._on_resume_draft_survey)
 
         # Cases - finalize survey → stay on cases page (switch to finalized sub-tab)
@@ -435,7 +429,7 @@ class MainWindow(QMainWindow):
         # Completed Claims - view claim details
         self.pages[Pages.CLAIMS].claim_selected.connect(self._on_completed_claim_selected)
 
-        # Add Claim button - start new office survey (UC-004 S01)
+        # Add Claim button - start new office survey
         self.pages[Pages.CASES].add_claim_clicked.connect(self._start_new_office_survey)
 
         # Office Survey Wizard signals
@@ -461,7 +455,7 @@ class MainWindow(QMainWindow):
             self._on_edit_claim_requested
         )
 
-        # Claim Edit (UC-006) - back to case details / save completed
+        # Claim Edit - back to case details / save completed
         self.pages[Pages.CLAIM_EDIT].back_requested.connect(
             lambda: self.navigate_to(Pages.CASES)
         )
@@ -560,7 +554,7 @@ class MainWindow(QMainWindow):
         # Configure tabs based on user role (RBAC)
         self.navbar.configure_for_role(user.role)
 
-        # Apply role-based CRUD button visibility to content pages
+        # Apply role-based button visibility to content pages
         for page_id in (Pages.BUILDINGS, Pages.UNITS, Pages.PERSONS,
                         Pages.IMPORT_WIZARD, Pages.IMPORT_PACKAGES):
             page = self.pages.get(page_id)
@@ -570,7 +564,7 @@ class MainWindow(QMainWindow):
         # Resume repainting - user sees the final state directly
         self.setUpdatesEnabled(True)
 
-        # Start session timeout timer (UC-011 S08)
+        # Start session timeout timer
         self._start_session_timer()
 
     def _start_session_timer(self):
@@ -747,7 +741,7 @@ class MainWindow(QMainWindow):
             Toast.show_toast(self, f"{fail_prefix}: {result.message}", Toast.ERROR)
 
     def _on_field_work_completed(self, workflow_data):
-        """Handle field work wizard completion - create assignment via API (UC-012)."""
+        """Handle field work wizard completion - create assignment via API."""
         try:
             from ui.components.toast import Toast
             from services.api_client import get_api_client
@@ -765,7 +759,7 @@ class MainWindow(QMainWindow):
                 Toast.show_toast(self, "بيانات غير مكتملة للتعيين", Toast.ERROR)
                 return
 
-            # Build buildings payload per BuildingAssignmentItem schema (UC-012 S03-S05)
+            # Build buildings payload
             revisit_map = {r['building_id']: r for r in revisit_buildings}
             buildings_payload = []
             for b in buildings:
@@ -800,7 +794,7 @@ class MainWindow(QMainWindow):
                 )
                 logger.info("Assignment created on backend API successfully")
 
-                # Extract assignment IDs from response (S08)
+                # Extract assignment IDs from response
                 api_assignment_ids = []
                 if isinstance(api_response, dict):
                     api_assignment_ids = api_response.get("createdAssignmentIds", [])
@@ -810,7 +804,7 @@ class MainWindow(QMainWindow):
                             if aid:
                                 api_assignment_ids.append(aid)
 
-                # Initiate transfer to tablets (S08-S09)
+                # Initiate transfer to tablets
                 if api_assignment_ids:
                     try:
                         api.initiate_transfer(
@@ -829,7 +823,7 @@ class MainWindow(QMainWindow):
                 )
                 return
 
-            # Create local building_assignments records for transfer tracking (S08-S12)
+            # Create local building_assignments records for transfer tracking
             assignment_ids = []
             try:
                 from services.assignment_service import AssignmentService
@@ -938,7 +932,7 @@ class MainWindow(QMainWindow):
             ErrorHandler.show_error(self, str(e))
 
     def _on_security_settings_requested(self):
-        """Handle security settings request from navbar menu (UC-011)."""
+        """Handle security settings request from navbar menu."""
         from ui.components.dialogs.security_dialog import SecurityDialog
         result = SecurityDialog.show_settings(parent=self)
         if result:
@@ -980,12 +974,7 @@ class MainWindow(QMainWindow):
             current_page.apply_filters(filters)
 
     def navigate_to(self, page_id: str, data=None):
-        """
-        Navigate to a specific page.
-
-        Prevents data loss by showing save confirmation dialog
-        when leaving wizard with unsaved data.
-        """
+        """Navigate to a specific page."""
         # Check if currently in wizard with unsaved data
         current_widget = self.stack.currentWidget()
         if current_widget == self.office_survey_wizard and page_id != "office_survey_wizard":
@@ -1038,7 +1027,7 @@ class MainWindow(QMainWindow):
                 if result != DialogResult.YES:
                     return
 
-        # RBAC: block restricted pages for unauthorized roles
+        # Block restricted pages for unauthorized roles
         if page_id in self._PAGE_ROLE_ACCESS and self.current_user:
             role = getattr(self.current_user, 'role', None)
             if role not in self._PAGE_ROLE_ACCESS[page_id]:
@@ -1077,12 +1066,7 @@ class MainWindow(QMainWindow):
         logger.debug(f"Navigated to: {page_id}")
 
     def _has_unsaved_wizard_data(self) -> bool:
-        """
-        Check if wizard has unsaved data.
-
-        Only warn if user has progressed beyond first step
-        or selected a building.
-        """
+        """Check if wizard has unsaved data."""
         # If finalization was completed, no need to show save dialog
         if hasattr(self.office_survey_wizard, '_finalization_complete') and self.office_survey_wizard._finalization_complete:
             return False
@@ -1158,7 +1142,7 @@ class MainWindow(QMainWindow):
         logger.warning(f"Could not load survey details for: {claim_id}")
 
     def _on_resume_draft_survey(self, survey_uuid: str):
-        """UC-005: Load draft survey into wizard for editing and resumption."""
+        """Load draft survey into wizard for editing and resumption."""
         if not survey_uuid:
             return
         try:
@@ -1218,11 +1202,7 @@ class MainWindow(QMainWindow):
         self.navigate_to(Pages.CLAIM_EDIT, data)
 
     def _on_completed_claim_selected(self, claim_id: str):
-        """Navigate to claim details page using Claims API.
-
-        Uses ClaimController.get_claim_full_detail() to fetch enriched data,
-        then navigates to the dedicated ClaimDetailsPage.
-        """
+        """Navigate to claim details page."""
         logger.info(f"Claim selected: {claim_id}")
 
         claims_page = self.pages[Pages.CLAIMS]
@@ -1250,7 +1230,7 @@ class MainWindow(QMainWindow):
         except Exception as e:
             logger.warning(f"Could not load claim details: {e}")
 
-        # Step 3: Error toast
+        # Error toast
         from ui.components.toast import Toast
         Toast.show_toast(
             self,
@@ -1259,10 +1239,7 @@ class MainWindow(QMainWindow):
         )
 
     def _start_new_office_survey(self):
-        """
-        Start a new office survey (UC-004 S01).
-        Flow: BuildingMapDialog → Wizard (Step 0 = BuildingInfoStep → Step 1 = ApplicantInfo).
-        """
+        """Start a new office survey."""
         from PyQt5.QtWidgets import QDialog
         from ui.components.building_map_dialog_v2 import BuildingMapDialog
 

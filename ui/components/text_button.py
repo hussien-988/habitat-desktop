@@ -1,9 +1,5 @@
 # -*- coding: utf-8 -*-
-"""
-Text Button Component - زر نصي قابل لإعادة الاستخدام
-Reusable text-only button component following Figma design system.
-
-"""
+"""Text Button Component - زر نصي قابل لإعادة الاستخدام."""
 
 from PyQt5.QtWidgets import QPushButton
 from PyQt5.QtCore import Qt
@@ -13,34 +9,15 @@ from ..font_utils import create_font, FontManager
 
 
 class TextButton(QPushButton):
-    """
-    Text button component with Figma styling.
-
-    Features:
-    - No background, text only
-    - Configurable text
-    - Hover state (subtle background)
-    - Figma-compliant styling
-    - Reusable across the application
-
-    Usage:
-        btn = TextButton("تخطي")
-        btn.clicked.connect(self.on_skip)
-    """
+    """Reusable text-only button."""
 
     def __init__(self, text: str = "", parent=None):
-        """
-        Initialize text button.
-
-        Args:
-            text: Button text (Arabic RTL supported)
-            parent: Parent widget
-        """
+        """Initialize text button."""
         super().__init__(text, parent)
         self._setup_ui()
 
     def _setup_ui(self):
-        """Setup button UI with Figma specifications."""
+        """Setup button UI."""
         # Set unique ObjectName for CSS specificity
         self.setObjectName("TextButton")
 

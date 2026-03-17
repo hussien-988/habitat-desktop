@@ -1,14 +1,7 @@
 # -*- coding: utf-8 -*-
 """
-Polygon Map Dialog V2 - Unified Design for Polygon Selection.
-
-Matches BuildingMapWidget design exactly.
-
-Uses:
-    - BaseMapDialog for consistent UI
-    - LeafletHTMLGenerator for map rendering
-    - Leaflet.draw for polygon drawing tools
-    - PostGIS-compatible WKT output
+Polygon Map Dialog V2 - حوار اختيار المباني عبر الخريطة
+Dialog for selecting buildings by polygon or click on map.
 """
 
 import json
@@ -30,31 +23,16 @@ logger = get_logger(__name__)
 
 
 class PolygonMapDialog(BaseMapDialog):
-    """
-    Dialog for selecting multiple buildings by drawing polygon.
-
-    Design matches BuildingMapWidget exactly.
-
-    Returns:
-        List[Building]: Buildings within drawn polygon
-    """
+    """Dialog for selecting multiple buildings on map."""
 
     def __init__(self, db: Database, auth_token: Optional[str] = None, parent=None):
-        """
-        Initialize polygon map dialog.
-
-        Args:
-            db: Database instance
-            auth_token: Optional API authentication token (REQUIRED for BuildingAssignments API)
-            parent: Parent widget
-        """
+        """Initialize polygon map dialog."""
         self.db = db
         self._selected_buildings = []
         self._building_id_to_building = {}  # Quick lookup (populated during selection)
         self.buildings = []
 
-        # CRITICAL FIX: Store auth_token BEFORE super().__init__ temporarily
-        # We'll reassign after super().__init__ because BaseMapDialog.__init__ resets it to None!
+        # Store auth_token before super().__init__ (BaseMapDialog resets it)
         _temp_auth_token = auth_token
         if not _temp_auth_token:
             try:
@@ -67,7 +45,6 @@ class PolygonMapDialog(BaseMapDialog):
             except Exception as e:
                 logger.warning(f"Could not get auth token from parent: {e}")
 
-        # Initialize base dialog - clean map only, no extra panels
         super().__init__(
             title="اختيار المباني على الخريطة",
             show_search=False,
@@ -77,20 +54,16 @@ class PolygonMapDialog(BaseMapDialog):
             parent=parent
         )
 
-        # Set auth_token AFTER super().__init__ (BaseMapDialog resets it to None)
+        # Set auth_token after super().__init__
         self._auth_token = _temp_auth_token
-
-        # Set auth token and db on viewport loader (same as BuildingMapDialog)
         if hasattr(self, '_viewport_loader') and self._viewport_loader:
             if self._viewport_loader.map_service and self._auth_token:
                 self._viewport_loader.map_service.set_auth_token(self._auth_token)
             self._viewport_loader.db = self.db
 
-        # Connect multi-select signal (polygon drawing disabled)
         self._clicked_building_ids = []
         self.buildings_multiselected.connect(self._on_buildings_clicked)
 
-        # Add custom confirm button for selected buildings
         self._add_confirm_button()
 
         # Load map
@@ -254,34 +227,24 @@ class PolygonMapDialog(BaseMapDialog):
             super().closeEvent(event)
 
     def _load_map(self):
-        """
-        Load map with multi-select mode.
-
-
-        - Load 200 buildings initially (fast QWebChannel init)
-        - Cache initial buildings for multi-select lookup
-        - More buildings loaded dynamically via viewport loading
-        """
+        """Load map with multi-select mode."""
         from services.tile_server_manager import get_tile_server_url
 
         try:
             # Get tile server URL
             tile_server_url = get_tile_server_url()
 
-            # CRITICAL: Log auth token status
             if self._auth_token:
                 logger.info(f"_load_map: Auth token available (length: {len(self._auth_token)})")
             else:
                 logger.error(f"_load_map: NO AUTH TOKEN! Viewport loading will fail!")
 
-            #Load initial buildings AND cache them for multi-select lookup
             buildings_geojson = self._load_and_cache_initial_buildings()
 
             # Load neighborhoods for map overlay (shared helper)
             neighborhoods_geojson = self.load_neighborhoods_geojson(auth_token=self._auth_token)
             logger.info(f"Neighborhoods result: {'loaded' if neighborhoods_geojson else 'None/failed'}")
 
-            # Load neighbourhood boundary polygons from local GeoJSON
             boundaries_geojson = None
             try:
                 from services import boundary_service
@@ -298,7 +261,6 @@ class PolygonMapDialog(BaseMapDialog):
             except Exception as e:
                 logger.warning(f"Failed to load neighbourhood boundaries: {e}")
 
-            # Load landmarks and streets for map overlay
             center_lat, center_lon = 36.2021, 37.1343
             landmarks_json = None
             streets_json = None
@@ -325,7 +287,6 @@ class PolygonMapDialog(BaseMapDialog):
             except Exception as e:
                 logger.warning(f"Failed to load landmarks/streets: {e}")
 
-            # Generate map HTML using LeafletHTMLGenerator
             html = generate_leaflet_html(
                 tile_server_url=tile_server_url.rstrip('/'),
                 buildings_geojson=buildings_geojson,
@@ -413,13 +374,7 @@ class PolygonMapDialog(BaseMapDialog):
         return '{"type":"FeatureCollection","features":[]}'
 
     def _on_geometry_selected(self, geom_type: str, wkt: str):
-        """
-        Handle polygon drawn - query buildings within polygon.
-
-        Args:
-            geom_type: Geometry type ('Polygon')
-            wkt: WKT string (PostGIS-compatible)
-        """
+        """Handle polygon drawn - query buildings within polygon."""
         logger.info(f"_on_geometry_selected called!")
         logger.info(f"   geom_type: {geom_type}")
         logger.info(f"   wkt: {wkt[:100] if wkt else 'None'}...")
@@ -479,19 +434,7 @@ class PolygonMapDialog(BaseMapDialog):
             )
 
     def _query_buildings_in_polygon(self, polygon_wkt: str) -> List[Building]:
-        """
-        Query buildings within polygon using CORRECT BuildingAssignments API.
-
-        
-        CORRECT API: /api/v1/BuildingAssignments/buildings/search
-
-        Args:
-            polygon_wkt: WKT string (PostGIS-compatible)
-                        Example: "POLYGON((lon1 lat1, lon2 lat2, ...))"
-
-        Returns:
-            List of buildings within polygon
-        """
+        """Query buildings within polygon using BuildingAssignments API."""
         logger.info(f"_query_buildings_in_polygon called")
         logger.info(f"FULL WKT STRING:")
         logger.info(f"   {polygon_wkt}")
@@ -502,10 +445,8 @@ class PolygonMapDialog(BaseMapDialog):
             from services.api_client import get_api_client
             from models.building import Building
 
-            # Get API client
             api_client = get_api_client()
 
-            # CRITICAL: Set auth token before API call
             if hasattr(self, '_auth_token') and self._auth_token:
                 api_client.set_access_token(self._auth_token)
                 logger.debug("Auth token set for BuildingAssignments API")
@@ -520,7 +461,6 @@ class PolygonMapDialog(BaseMapDialog):
                 page_size=10000  # Get all buildings in polygon (up to 10k)
             )
 
-            # Extract buildings from API response
             buildings_data = result.get("items", [])
             total_count = result.get("totalCount", 0)
             polygon_area = result.get("polygonAreaSquareMeters", 0)
@@ -529,7 +469,6 @@ class PolygonMapDialog(BaseMapDialog):
             logger.info(f"   Total count: {total_count}")
             logger.info(f"   Polygon area: {polygon_area:.2f} m²")
 
-            # Convert to Building objects
             buildings_in_polygon = []
             for i, building_data in enumerate(buildings_data):
                 try:
@@ -554,16 +493,11 @@ class PolygonMapDialog(BaseMapDialog):
         except Exception as e:
             logger.error(f"Error querying BuildingAssignments API: {e}", exc_info=True)
 
-            # FALLBACK: Use local point-in-polygon check if API fails
             logger.warning("Falling back to local point-in-polygon check...")
             return self._query_buildings_in_polygon_local(polygon_wkt)
 
     def _query_buildings_in_polygon_local(self, polygon_wkt: str) -> List[Building]:
-        """
-        Fallback: Query buildings using local point-in-polygon check.
-
-        Only used if BuildingAssignments API fails.
-        """
+        """Fallback: query buildings using local point-in-polygon check."""
         logger.info(f"Using fallback local point-in-polygon check")
         logger.info(f"   Total buildings to check: {len(self.buildings)}")
 
@@ -621,28 +555,15 @@ class PolygonMapDialog(BaseMapDialog):
             return []
 
     def _fetch_building_from_api(self, building_id: str) -> Optional[Building]:
-        """
-        Fetch single building using BuildingController (SAME AS POLYGON PATTERN).
-
- CORRECT: Uses BuildingController.get_building_by_id (API or DB)
-
-        Args:
-            building_id: Building ID to fetch (e.g., "01-01-01-001-001-00001")
-
-        Returns:
-            Building object if found, None otherwise
-        """
+        """Fetch single building using BuildingController."""
         try:
             from controllers.building_controller import BuildingController
 
-            # Create controller (will use API if available)
             controller = BuildingController(self.db)
 
-            # Set auth token if available
             if hasattr(self, '_auth_token') and self._auth_token:
                 controller.set_auth_token(self._auth_token)
 
-            # Use get_building_by_id (searches in API/DB)
             result = controller.get_building_by_id(building_id)
 
             if result.success and result.data:
@@ -657,15 +578,7 @@ class PolygonMapDialog(BaseMapDialog):
             return None
 
     def _on_buildings_clicked(self, building_ids: List[str]):
-        """
-        Handle buildings selected by clicking directly on map.
-
-        Stores building IDs immediately. Full Building objects are fetched
-        on confirm (deferred) to keep clicking responsive.
-
-        Args:
-            building_ids: List of building IDs selected by clicking
-        """
+        """Handle buildings selected by clicking on map."""
         logger.info(f"Buildings clicked: {building_ids}")
 
         # Store IDs for deferred fetch on confirm
@@ -682,11 +595,7 @@ class PolygonMapDialog(BaseMapDialog):
         logger.info(f"Stored {len(building_ids)} building IDs for selection")
 
     def _highlight_selected_buildings(self):
-        """
-        Highlight selected buildings on map with blue color.
-
-        Visual Feedback: Shows user which buildings are selected!
-        """
+        """Highlight selected buildings on map with blue color."""
         if not self._selected_buildings:
             return
 
@@ -736,12 +645,7 @@ class PolygonMapDialog(BaseMapDialog):
             logger.warning(f"Failed to highlight buildings: {e}")
 
     def get_selected_buildings(self) -> List[Building]:
-        """
-        Get selected buildings.
-
-        Returns:
-            List of buildings within drawn polygon
-        """
+        """Get selected buildings."""
         logger.info(f"get_selected_buildings() called")
         logger.info(f"   Returning {len(self._selected_buildings)} buildings")
         if self._selected_buildings:
@@ -757,17 +661,7 @@ def show_polygon_map_dialog(
     auth_token: Optional[str] = None,
     parent=None
     ) -> Optional[List[Building]]:
-    """
-    Convenience function to show polygon map dialog.
-
-    Args:
-        db: Database instance
-        auth_token: Optional API authentication token (REQUIRED for BuildingAssignments API)
-        parent: Parent widget
-
-    Returns:
-        List of selected buildings, or None if cancelled
-    """
+    """Show polygon map dialog and return selected buildings or None."""
     logger.info("show_polygon_map_dialog() called")
     dialog = PolygonMapDialog(db, auth_token, parent)
     result = dialog.exec_()

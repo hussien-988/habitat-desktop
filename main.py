@@ -42,7 +42,7 @@ def main():
         app.setOrganizationName("UN-Habitat")
         app.setOrganizationDomain("unhabitat.org")
 
-        # CRITICAL: Set application-wide default font BEFORE creating any widgets
+        # Set application-wide default font
         set_application_default_font()
 
         # Initialize database

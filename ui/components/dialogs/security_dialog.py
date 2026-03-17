@@ -1,8 +1,6 @@
 # -*- coding: utf-8 -*-
 """
 Security Policies Dialog — ديالوغ سياسات الأمان
-Follows PasswordDialog/LanguageDialog container pattern.
-Custom spinbox arrows match unit_dialog / household_step pattern.
 """
 
 from typing import Optional
@@ -24,7 +22,7 @@ logger = get_logger(__name__)
 
 
 class SecurityDialog(QDialog):
-    """Dialog for configuring security policies (UC-011)."""
+    """Dialog for configuring security policies."""
 
     def __init__(self, parent=None, session_timeout_minutes: int = 30, max_attempts: int = 5):
         super().__init__(parent)
@@ -136,7 +134,7 @@ class SecurityDialog(QDialog):
         return {"layout": col, "spin": spin}
 
     def _create_spinbox_with_arrows(self, spinbox: QSpinBox) -> QFrame:
-        """Custom spinbox container with icon arrows (matches unit_dialog pattern)."""
+        """Custom spinbox container with icon arrows."""
         container = QFrame()
         container.setFixedHeight(42)
         container.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
@@ -270,7 +268,7 @@ class SecurityDialog(QDialog):
         self.session_timeout_minutes = self._session_spin.value()
         self.max_attempts = self._attempts_spin.value()
 
-        # Persist to SecurityService (UC-011 S07)
+        # Persist to SecurityService
         try:
             from repositories.database import Database
             from services.security_service import SecurityService

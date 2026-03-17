@@ -117,8 +117,7 @@ class Config:
     DB_NAME: str = "trrcms.db"
     DB_PATH: Path = DATA_DIR / DB_NAME
 
-    # PostgreSQL (production) - FSD 5.2
-    # Set TRRCMS_DB_TYPE=postgresql to use PostgreSQL
+    # PostgreSQL (production)
     DB_TYPE: str = "sqlite"  # "sqlite" or "postgresql"
     POSTGRES_HOST: str = os.getenv("POSTGRES_HOST", "localhost")
     POSTGRES_PORT: int = int(os.getenv("POSTGRES_PORT", "5432"))
@@ -231,9 +230,9 @@ class Pages:
     HOUSEHOLDS = "households"
     RELATIONS = "relations"
     CONFLICTS = "conflicts"
-    DUPLICATES = "duplicates"  # UC-007, UC-008: Property & Person duplicates
-    CLAIM_COMPARISON = "claim_comparison"  # UC-007: Claim comparison for merge
-    FIELD_ASSIGNMENT = "field_assignment"  # UC-012: Assign buildings to field teams
+    DUPLICATES = "duplicates"
+    CLAIM_COMPARISON = "claim_comparison"
+    FIELD_ASSIGNMENT = "field_assignment"
     USER_MANAGEMENT = "user_management"
     ADD_USER = "add_user"
     SEARCH = "search"
@@ -245,8 +244,8 @@ class Pages:
     DATA_MANAGEMENT = "data_management"
     IMPORT_WIZARD = "import_wizard"
     IMPORT_PACKAGES = "import_packages"
-    CLAIM_SEARCH = "claim_search"  # UC-006: Search existing claims
-    CLAIM_EDIT = "claim_edit"      # UC-006: Edit existing claim
+    CLAIM_SEARCH = "claim_search"
+    CLAIM_EDIT = "claim_edit"
 
 
 # User roles
@@ -412,6 +411,7 @@ class AleppoDivisions:
 # Local settings file (per-device, not synced via API)
 _SETTINGS_FILE = Config.DATA_DIR / "settings.json"
 _DEFAULT_TILE_PORT = 5000
+_DEFAULT_API_PORT = 8080
 
 
 def load_local_settings() -> dict:
@@ -445,5 +445,26 @@ def get_tile_server_port() -> int:
         except Exception:
             pass
     return _DEFAULT_TILE_PORT
+
+
+def get_api_port() -> int:
+    """Get API backend port: settings.json > .env > default 8080."""
+    settings = load_local_settings()
+    if "api_port" in settings:
+        return int(settings["api_port"])
+    env_url = os.getenv("API_BASE_URL", "")
+    if env_url:
+        try:
+            from urllib.parse import urlparse
+            return urlparse(env_url).port or _DEFAULT_API_PORT
+        except Exception:
+            pass
+    return _DEFAULT_API_PORT
+
+
+def get_api_base_url() -> str:
+    """Get API base URL with the configured port."""
+    port = get_api_port()
+    return f"http://localhost:{port}/api"
 
 

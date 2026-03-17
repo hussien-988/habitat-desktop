@@ -1,12 +1,6 @@
 # -*- coding: utf-8 -*-
 """
 Search Filter Dialog — ديالوغ الفلتر
-Follows SecurityDialog/PasswordDialog container pattern.
-
-Fields (matching Figma):
-  1. رمز البناء — Building code text field with search icon
-  2. العنوان — Address/governorate combo
-  3. التاريخ — Single date picker
 """
 
 from typing import Optional
@@ -223,7 +217,7 @@ class SearchFilterDialog(QDialog):
         outer.addWidget(overlay)
 
     def _create_field_with_icon(self, parent_layout, label_text, placeholder):
-        """Create building code field with search icon (matching Figma)."""
+        """Create building code field with search icon."""
         label = QLabel(label_text)
         label.setFont(create_font(size=FontManager.SIZE_BODY, weight=FontManager.WEIGHT_REGULAR))
         label.setStyleSheet(f"color: {Colors.TEXT_SECONDARY};")
@@ -256,7 +250,7 @@ class SearchFilterDialog(QDialog):
             pass
 
     def _create_button(self, text: str, primary: bool) -> QPushButton:
-        """Same button pattern as SecurityDialog/PasswordDialog."""
+        """Create styled button."""
         btn = QPushButton(text)
         btn.setFixedSize(170, 50)
         btn.setCursor(Qt.PointingHandCursor)

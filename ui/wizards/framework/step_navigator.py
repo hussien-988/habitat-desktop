@@ -1,12 +1,6 @@
 # -*- coding: utf-8 -*-
 """
 Step Navigator - Manages navigation between wizard steps.
-
-Handles:
-- Step progression (next/previous)
-- Step validation before navigation
-- Progress tracking
-- Step state management
 """
 
 from typing import List, Optional
@@ -20,15 +14,7 @@ logger = get_logger(__name__)
 
 
 class StepNavigator(QObject):
-    """
-    Manages navigation between wizard steps.
-
-    Responsibilities:
-    - Track current step
-    - Validate before navigation
-    - Emit signals for UI updates
-    - Manage step lifecycle (show/hide)
-    """
+    """Manages navigation between wizard steps."""
 
     # Signals
     step_changed = pyqtSignal(int, int)  # old_index, new_index
@@ -37,13 +23,7 @@ class StepNavigator(QObject):
     validation_failed = pyqtSignal(StepValidationResult)
 
     def __init__(self, context: WizardContext, steps: List[BaseStep]):
-        """
-        Initialize the navigator.
-
-        Args:
-            context: Wizard context
-            steps: List of wizard steps
-        """
+        """Initialize the navigator."""
         super().__init__()
         self.context = context
         self.steps = steps
@@ -73,15 +53,7 @@ class StepNavigator(QObject):
         return self.current_index > 0
 
     def next_step(self, skip_validation: bool = False) -> bool:
-        """
-        Navigate to the next step.
-
-        Args:
-            skip_validation: If True, skip validation
-
-        Returns:
-            True if navigation was successful
-        """
+        """Navigate to the next step."""
         if not self.can_go_next():
             logger.debug(f"Cannot go next: already at last step ({self.current_index})")
             return False
@@ -129,16 +101,7 @@ class StepNavigator(QObject):
         return result
 
     def goto_step(self, index: int, skip_validation: bool = False) -> bool:
-        """
-        Navigate to a specific step.
-
-        Args:
-            index: Target step index
-            skip_validation: If True, skip validation
-
-        Returns:
-            True if navigation was successful
-        """
+        """Navigate to a specific step."""
         if index < 0 or index >= len(self.steps):
             return False
 
@@ -157,15 +120,7 @@ class StepNavigator(QObject):
         return self._navigate_to(index)
 
     def _navigate_to(self, new_index: int) -> bool:
-        """
-        Internal method to navigate to a step.
-
-        Args:
-            new_index: Target step index
-
-        Returns:
-            True if navigation was successful
-        """
+        """Navigate to a specific step index."""
         if new_index < 0 or new_index >= len(self.steps):
             logger.error(f"Invalid step index: {new_index} (valid range: 0-{len(self.steps)-1})")
             return False
@@ -206,12 +161,7 @@ class StepNavigator(QObject):
         self._navigate_to(0)
 
     def get_progress_percentage(self) -> float:
-        """
-        Get current progress as percentage.
-
-        Returns:
-            Progress percentage (0.0 to 100.0)
-        """
+        """Get current progress as percentage (0.0 to 100.0)."""
         if len(self.steps) == 0:
             return 0.0
         return (self.current_index / (len(self.steps) - 1)) * 100.0

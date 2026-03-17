@@ -1,8 +1,5 @@
 # -*- coding: utf-8 -*-
-"""
-Property Units list page with filters and CRUD operations.
-Implements UC-002: Property Unit Management
-"""
+"""Property Units list page with filters and CRUD operations."""
 
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel,

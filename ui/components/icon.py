@@ -1,24 +1,7 @@
 # -*- coding: utf-8 -*-
 """
 Icon Component - مكون الأيقونة القابل لإعادة الاستخدام
-Reusable icon component.
-
-Features:
-- Automatic icon loading from multiple locations
-- Fallback support (text/emoji)
-- Configurable size
-- Type safety with Enum
-
-Usage:
-    # Load icon by name
-    icon = Icon("blue", size=20)
-
-    # Use as QLabel
-    layout.addWidget(icon)
-
-    # Get QIcon object for buttons
-    q_icon = Icon.load_qicon("blue")
-    button.setIcon(q_icon)
+Reusable icon component with automatic loading and fallback.
 """
 
 from PyQt5.QtWidgets import QLabel
@@ -40,34 +23,8 @@ class IconSize(Enum):
 
 
 class Icon(QLabel):
-    """
-    Reusable icon component with automatic loading and fallback.
+    """Reusable icon component with automatic loading and fallback."""
 
-    Responsibilities (Single Responsibility Principle):
-    - Load icons from assets folder
-    - Provide fallback mechanism
-    - Handle multiple file formats (png, svg)
-    - Scale icons to specified size
-
-    Args:
-        icon_name: Name of the icon file (without extension)
-        size: Icon size in pixels (default: 20)
-        fallback_text: Text to display if icon not found (default: "")
-        parent: Parent widget
-
-    Examples:
-        # Simple icon
-        icon = Icon("blue")
-
-        # Larger icon with fallback
-        icon = Icon("user", size=32, fallback_text="👤")
-
-        # Using standard size
-        icon = Icon("blue", size=IconSize.LARGE.value)
-    """
-
-    # Icon search paths (centralized configuration)
-    # Using absolute paths relative to project root for reliability
     @staticmethod
     def _get_search_paths():
         """Get absolute search paths based on project root."""
@@ -120,14 +77,7 @@ class Icon(QLabel):
         self.setStyleSheet("background: transparent; border: none;")
 
     def _load_icon(self):
-        """
-        Load icon from assets folder with automatic fallback.
-
-        Search strategy:
-        1. Try all possible paths with supported extensions
-        2. If found: load and scale pixmap
-        3. If not found: use fallback text
-        """
+        """Load icon from assets folder with automatic fallback."""
         icon_path = self._find_icon_path()
 
         if icon_path:
@@ -157,12 +107,7 @@ class Icon(QLabel):
             pass
 
     def _find_icon_path(self) -> Optional[str]:
-        """
-        Find icon file path from search locations.
-
-        Returns:
-            Full path to icon file if found, None otherwise
-        """
+        """Find icon file path from search locations."""
         search_paths = Icon._get_search_paths()
 
         for search_path in search_paths:
@@ -186,26 +131,7 @@ class Icon(QLabel):
 
     @staticmethod
     def load_qicon(icon_name: str, size: int = IconSize.MEDIUM.value) -> Optional[QIcon]:
-        """
-        Static method to load QIcon for use in buttons/actions.
-
-        This follows the Open/Closed Principle - extending functionality
-        without modifying the core Icon class.
-
-        Args:
-            icon_name: Name of the icon file (without extension)
-            size: Icon size for scaling (optional)
-
-        Returns:
-            QIcon if found, None otherwise
-
-        Example:
-            icon = Icon.load_qicon("blue")
-            if icon:
-                button.setIcon(icon)
-                button.setIconSize(QSize(20, 20))
-        """
-        # Reuse the same search logic
+        """Load QIcon for use in buttons/actions."""
         search_paths = Icon._get_search_paths()
 
         for search_path in search_paths:
@@ -227,22 +153,7 @@ class Icon(QLabel):
 
     @staticmethod
     def load_pixmap(icon_name: str, size: int = IconSize.MEDIUM.value) -> Optional[QPixmap]:
-        """
-        Static method to load QPixmap for use in QLabels.
-
-        Args:
-            icon_name: Name of the icon file (without extension)
-            size: Icon size for scaling (optional)
-
-        Returns:
-            QPixmap if found, None otherwise
-
-        Example:
-            pixmap = Icon.load_pixmap("search", size=16)
-            if pixmap and not pixmap.isNull():
-                label.setPixmap(pixmap)
-        """
-        # Reuse the same search logic
+        """Load QPixmap for use in QLabels."""
         search_paths = Icon._get_search_paths()
 
         for search_path in search_paths:
@@ -273,15 +184,7 @@ class Icon(QLabel):
 
     @staticmethod
     def get_all_search_paths(icon_name: str) -> List[str]:
-        """
-        Get all possible search paths for an icon (useful for debugging).
-
-        Args:
-            icon_name: Name of the icon file
-
-        Returns:
-            List of all paths that will be searched
-        """
+        """Get all possible search paths for an icon (useful for debugging)."""
         paths = []
         search_paths = Icon._get_search_paths()
 

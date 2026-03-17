@@ -1,13 +1,6 @@
 # -*- coding: utf-8 -*-
 """
 Base Wizard - Abstract base class for all wizards.
-
-Provides unified wizard UI with:
-- Header with title and progress
-- Step container
-- Navigation buttons (Previous, Next, Cancel, Save Draft)
-- Validation handling
-- Draft persistence
 """
 
 from typing import List, Optional, Callable
@@ -35,14 +28,7 @@ class ABCQWidgetMeta(type(QWidget), ABCMeta):
 
 
 class BaseWizard(QWidget, metaclass=ABCQWidgetMeta):
-    """
-    Abstract base class for wizards.
-
-    Subclasses must implement:
-    - create_steps(): Create and return list of wizard steps
-    - create_context(): Create and return wizard context
-    - on_submit(): Handle final submission
-    """
+    """Abstract base class for wizards."""
 
     # Signals
     wizard_completed = pyqtSignal(dict)  # Emitted when wizard is submitted
@@ -78,35 +64,17 @@ class BaseWizard(QWidget, metaclass=ABCQWidgetMeta):
 
     @abstractmethod
     def create_steps(self) -> List[BaseStep]:
-        """
-        Create and return list of wizard steps.
-
-        Returns:
-            List of BaseStep instances
-        """
+        """Create and return list of wizard steps."""
         pass
 
     @abstractmethod
     def create_context(self) -> WizardContext:
-        """
-        Create and return wizard context.
-
-        Returns:
-            WizardContext instance
-        """
+        """Create and return wizard context."""
         pass
 
     @abstractmethod
     def on_submit(self) -> bool:
-        """
-        Handle wizard submission.
-
-        This method is called when the user clicks the Finish button
-        and all steps are validated.
-
-        Returns:
-            True if submission was successful, False otherwise
-        """
+        """Handle wizard submission."""
         pass
 
     # =========================================================================
@@ -122,25 +90,11 @@ class BaseWizard(QWidget, metaclass=ABCQWidgetMeta):
         return "إنهاء"
 
     def on_cancel(self) -> bool:
-        """
-        Handle wizard cancellation.
-
-        Override to customize cancellation behavior.
-
-        Returns:
-            True if cancellation should proceed, False to prevent
-        """
+        """Handle wizard cancellation."""
         return True
 
     def on_save_draft(self) -> Optional[str]:
-        """
-        Handle draft saving.
-
-        Override to implement custom draft saving logic.
-
-        Returns:
-            Draft ID if successful, None otherwise
-        """
+        """Handle draft saving."""
         return None
 
     # =========================================================================

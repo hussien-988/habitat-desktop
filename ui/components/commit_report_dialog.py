@@ -1,8 +1,5 @@
 # -*- coding: utf-8 -*-
-"""
-Commit Report Dialog (UC-003 S17 + Post-condition)
-Displays detailed commit report with option to download/print.
-"""
+"""Commit Report Dialog - displays detailed commit report with download/print options."""
 
 from PyQt5.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
@@ -17,17 +14,7 @@ from ui.font_utils import create_font, FontManager
 
 
 class CommitReportDialog(QDialog):
-    """
-    Detailed Commit Report Dialog (UC-003 S17, Post-conditions).
-
-    Shows:
-    - Import summary statistics
-    - Records imported by type
-    - Skipped/failed records
-    - Archive information
-    - Audit trail reference
-    - Download/Print options
-    """
+    """Detailed commit report dialog with import summary and export options."""
 
     def __init__(self, commit_result: dict, import_metadata: dict, parent=None):
         super().__init__(parent)

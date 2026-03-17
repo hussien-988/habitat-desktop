@@ -1,8 +1,5 @@
 # -*- coding: utf-8 -*-
-"""
-Validation Error Dialog for Import Wizard (UC-003 S12b)
-Displays detailed error information for invalid signature/hash failures.
-"""
+"""Validation Error Dialog - displays detailed error information for validation failures."""
 
 from PyQt5.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
@@ -17,16 +14,7 @@ from ui.style_manager import StyleManager
 
 
 class ValidationErrorDialog(QDialog):
-    """
-    Dialog to display detailed validation errors (UC-003 S12b).
-
-    Shows:
-    - Error type (Invalid Signature vs Invalid Hash)
-    - Detailed error message
-    - Package information
-    - Quarantine location
-    - Recommended actions
-    """
+    """Dialog to display detailed validation errors."""
 
     def __init__(self, error_type: str, error_details: dict, parent=None):
         super().__init__(parent)

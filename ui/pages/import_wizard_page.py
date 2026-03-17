@@ -1,20 +1,5 @@
 # -*- coding: utf-8 -*-
-"""
-Import Wizard Page - 5-Step Wizard Pattern
-UC-003: Bulk Data Import
-
-Structure (SAME as FieldWorkPreparationPage):
-- Header (fixed) + Step Indicator
-- QStackedWidget (content changes between steps)
-- Footer (fixed)
-
-Steps:
-  1. Packages — select incoming package (uploaded by tablet via /sync/upload)
-  2. Staging — staging + validation report + duplicate detection (merged)
-  3. Review — staged entities review
-  4. Commit — approve + commit confirmation
-  5. Report — commit report
-"""
+"""Import wizard page with 5-step processing pipeline."""
 
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QStackedWidget, QFrame, QPushButton,

@@ -10,15 +10,7 @@ import os
 
 
 class SuccessPopup(QDialog):
-    """
-    Success popup dialog shown after survey finalization.
-
-    Displays a clean popup with:
-    - Success icon
-    - Title message
-    - Claim/Reference number
-    - Description text
-    """
+    """Success popup dialog shown after survey finalization."""
 
     def __init__(self,
                  claim_number: str = "",
@@ -26,16 +18,7 @@ class SuccessPopup(QDialog):
                  description: str = "تم حفظ جميع المعلومات،\nويمكنك الآن المتابعة أو إضافة عنصر جديد",
                  auto_close_ms: int = 0,
                  parent=None):
-        """
-        Initialize the success popup.
-
-        Args:
-            claim_number: The claim or reference number to display
-            title: The success title text
-            description: The description text
-            auto_close_ms: Auto-close after this many milliseconds (0 = no auto-close)
-            parent: Parent widget
-        """
+        """Initialize the success popup."""
         super().__init__(parent)
         self.claim_number = claim_number
         self.title_text = title
@@ -164,19 +147,7 @@ class SuccessPopup(QDialog):
                      description: str = "تم حفظ جميع المعلومات،\nويمكنك الآن المتابعة أو إضافة عنصر جديد",
                      auto_close_ms: int = 0,
                      parent=None) -> int:
-        """
-        Static method to show the success popup.
-
-        Args:
-            claim_number: The claim or reference number to display
-            title: The success title text
-            description: The description text
-            auto_close_ms: Auto-close after this many milliseconds (0 = no auto-close)
-            parent: Parent widget
-
-        Returns:
-            QDialog result code
-        """
+        """Show the success popup and return the dialog result code."""
         popup = SuccessPopup(
             claim_number=claim_number,
             title=title,

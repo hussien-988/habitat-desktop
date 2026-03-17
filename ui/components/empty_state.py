@@ -1,8 +1,5 @@
 # -*- coding: utf-8 -*-
-"""
-Empty State Component - Figma Design (Page 3)
-Component shown when there is no data to display
-"""
+"""Empty State Component - shown when there is no data to display."""
 
 from PyQt5.QtWidgets import QWidget, QVBoxLayout, QLabel
 from PyQt5.QtCore import Qt
@@ -14,15 +11,7 @@ from ..style_manager import StyleManager
 
 
 class EmptyState(QWidget):
-    """
-    Empty state component with icon, title, and description.
-    Matches Figma design specifications exactly.
-
-    From Figma Page 3:
-    - Centered circular blue icon (120px)
-    - Title below icon
-    - Description text
-    """
+    """Empty state component with icon, title, and description."""
 
     def __init__(self,
                  icon_text: str = "+",
@@ -36,7 +25,7 @@ class EmptyState(QWidget):
         self._setup_ui()
 
     def _setup_ui(self):
-        """Setup the empty state UI matching Figma Page 3 exactly."""
+        """Setup the empty state UI."""
         # Main layout - centered
         layout = QVBoxLayout(self)
         layout.setAlignment(Qt.AlignCenter)
@@ -73,7 +62,7 @@ class EmptyState(QWidget):
 
         layout.addWidget(icon_container, 0, Qt.AlignCenter)
 
-        # Spacing after icon (24px from Figma)
+        # Spacing after icon
         layout.addSpacing(24)
 
         # Title
@@ -85,7 +74,7 @@ class EmptyState(QWidget):
         title_label.setStyleSheet(StyleManager.label_title())
         layout.addWidget(title_label)
 
-        # Spacing between title and description (8px from Figma)
+        # Spacing between title and description
         layout.addSpacing(8)
 
         # Description

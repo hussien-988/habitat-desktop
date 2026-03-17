@@ -1,15 +1,5 @@
 # -*- coding: utf-8 -*-
-"""
-Geometry Validation Service - Validates geometric data.
-
-Provides validation for:
-- Polygon validity (self-intersection, area, bounds)
-- Coordinate validation
-- WKT/GeoJSON parsing
-- Topological checks
-
-Implements FSD requirements for geometry validation.
-"""
+"""Geometry validation service for polygons, coordinates, and WKT/GeoJSON."""
 
 from dataclasses import dataclass
 from typing import List, Tuple, Optional

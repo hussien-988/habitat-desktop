@@ -1,8 +1,7 @@
 # -*- coding: utf-8 -*-
 """
-Modification Reason Dialog — UC-006 S08.
+Modification Reason Dialog — ديالوغ سبب التعديل
 Mandatory reason input (min 10 chars) before saving claim modifications.
-Follows frameless container pattern (LogoutDialog / PasswordDialog).
 """
 
 from PyQt5.QtWidgets import (

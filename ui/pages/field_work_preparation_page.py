@@ -1,19 +1,5 @@
 # -*- coding: utf-8 -*-
-"""
-Field Work Preparation Page - Like Wizard Pattern
-UC-012: Assign Buildings to Field Teams
-
-Structure (SAME as BaseWizard):
-- Header (fixed)
-- QStackedWidget (content changes between steps)
-- Footer (fixed)
-
-Steps:
-  1. Select Buildings (S01-S03)
-  2. Select Researcher (S06-S07)
-  3. Summary with units + revisit (S03-S05)
-  4. Completion & Transfer Status (S08-S12)
-"""
+"""Field work preparation page with wizard-style multi-step flow."""
 
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QStackedWidget, QFrame, QPushButton,
@@ -32,14 +18,7 @@ logger = get_logger(__name__)
 
 
 class FieldWorkPreparationPage(QWidget):
-    """
-    Field Work Preparation - Wizard-like Structure.
-
-    Same structure as BaseWizard:
-    1. Fixed header
-    2. QStackedWidget for steps
-    3. Fixed footer
-    """
+    """Field work preparation wizard with header, steps, and footer."""
 
     # Signals (use 'object' to pass Python dicts with complex values)
     completed = pyqtSignal(object)
@@ -55,7 +34,7 @@ class FieldWorkPreparationPage(QWidget):
         self._create_steps()
 
     def _setup_ui(self):
-        """Setup UI (SAME structure as BaseWizard)."""
+        """Setup UI layout."""
         self.setLayoutDirection(Qt.RightToLeft)
 
         # Background
@@ -102,7 +81,7 @@ class FieldWorkPreparationPage(QWidget):
         outer_layout.addWidget(footer)
 
     def _create_footer(self):
-        """Create footer (SAME as BaseFieldWorkStep)."""
+        """Create footer with navigation buttons."""
         footer = QFrame()
         footer.setStyleSheet("""
             QFrame {
@@ -317,7 +296,7 @@ class FieldWorkPreparationPage(QWidget):
         self.btn_next.setEnabled(enabled)
 
     def show_completion(self, buildings, researcher_name, assignment_ids):
-        """Show completion & transfer status view after successful assignment (S08-S12)."""
+        """Show completion and transfer status view after successful assignment."""
         # Stop step4 refresh timer if exists from previous run
         if self.step4 is not None:
             if hasattr(self.step4, 'stop_refresh'):

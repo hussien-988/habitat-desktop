@@ -1,16 +1,5 @@
 # -*- coding: utf-8 -*-
-"""
-Claim Details Page — displays claim details from Claims API.
-
-Sections:
-  1. Claim header (number, type, status, source, date) — badges
-  2. Claimant info (person data — read-only)
-  3. Property unit (building + unit — read-only)
-  4. Relation type & evidence (editable for open claims)
-  5. Claim status summary
-
-Data source: ClaimController.get_claim_full_detail()
-"""
+"""Claim details page."""
 
 from utils.logger import get_logger
 

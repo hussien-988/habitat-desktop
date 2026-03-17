@@ -1,8 +1,5 @@
 # -*- coding: utf-8 -*-
-"""
-Claims/Cases management page with workflow and lifecycle.
-Implements UC-007: Claim Creation, UC-008: Claim Lifecycle Management
-"""
+"""Claims/Cases management page with workflow and lifecycle."""
 
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
@@ -313,10 +310,7 @@ class ClaimDialog(QDialog):
 
 
 class ClaimDetailsDialog(QDialog):
-    """
-    Dialog for viewing/editing claim details with workflow actions.
-    Implements UC-006: Update Existing Claim.
-    """
+    """Dialog for viewing/editing claim details with workflow actions."""
 
     def __init__(self, db: Database, i18n: I18n, claim: Claim, parent=None):
         super().__init__(parent)
@@ -353,7 +347,7 @@ class ClaimDetailsDialog(QDialog):
 
         header.addStretch()
 
-        # Edit button (UC-006 S03)
+        # Edit button
         self.edit_btn = QPushButton("تعديل المطالبة")
         self.edit_btn.setStyleSheet(f"""
             QPushButton {{
@@ -402,13 +396,13 @@ class ClaimDetailsDialog(QDialog):
         # Details tab (editable fields)
         self._create_details_tab()
 
-        # Documents tab (UC-006 S06)
+        # Documents tab
         self._create_documents_tab()
 
         # Workflow tab
         self._create_workflow_tab()
 
-        # History tab (UC-006 audit trail)
+        # History tab
         self._create_history_tab()
 
         layout.addWidget(self.tabs)
@@ -461,7 +455,7 @@ class ClaimDetailsDialog(QDialog):
         details_layout.addRow("رقم المطالبة:", QLabel(self.claim.claim_id))
         details_layout.addRow("رقم الوحدة:", QLabel(self.claim.unit_id or "-"))
 
-        # Editable fields (UC-006 S04, S05)
+        # Editable fields
         self.type_combo = QComboBox()
         for code, label in vocab_get_options("ClaimType"):
             self.type_combo.addItem(label, code)
@@ -502,7 +496,7 @@ class ClaimDetailsDialog(QDialog):
         self.tabs.addTab(scroll, "التفاصيل")
 
     def _create_documents_tab(self):
-        """Create documents management tab (UC-006 S06)."""
+        """Create documents management tab."""
         docs_widget = QWidget()
         docs_layout = QVBoxLayout(docs_widget)
         docs_layout.setContentsMargins(20, 20, 20, 20)
@@ -610,7 +604,7 @@ class ClaimDetailsDialog(QDialog):
         self.tabs.addTab(workflow_widget, "سير العمل")
 
     def _create_history_tab(self):
-        """Create history/audit trail tab (UC-006 audit requirement)."""
+        """Create history/audit trail tab."""
         history_widget = QWidget()
         history_layout = QVBoxLayout(history_widget)
         history_layout.setContentsMargins(20, 20, 20, 20)
@@ -700,7 +694,7 @@ class ClaimDetailsDialog(QDialog):
         self._toggle_edit_mode()
 
     def _add_document(self):
-        """Add a new document (UC-006 S06)."""
+        """Add a new document."""
         dialog = AddDocumentDialog(self.i18n, self)
         if dialog.exec_() == QDialog.Accepted:
             doc_data = dialog.get_data()
@@ -720,8 +714,8 @@ class ClaimDetailsDialog(QDialog):
             Toast.show(self, "تمت إضافة الوثيقة (سيتم الحفظ عند تأكيد التعديلات)", Toast.INFO)
 
     def _save_changes(self):
-        """Save changes with audit trail (UC-006 S08-S11)."""
-        # Get reason for modification (mandatory per UC-006 S08)
+        """Save changes with audit trail."""
+        # Get reason for modification (mandatory)
         reason, ok = self._get_modification_reason()
         if not ok or not reason.strip():
             MessageDialog.show_warning(parent=self, title="خطأ", message="يجب إدخال سبب التعديل")
@@ -768,7 +762,7 @@ class ClaimDetailsDialog(QDialog):
             MessageDialog.show_error(parent=self, title="خطأ", message=f"فشل في حفظ التعديلات: {str(e)}")
 
     def _get_modification_reason(self):
-        """Get modification reason from user (UC-006 S08)."""
+        """Get modification reason from user."""
         from PyQt5.QtWidgets import QInputDialog
         reason, ok = QInputDialog.getMultiLineText(
             self,

@@ -1,8 +1,5 @@
 # -*- coding: utf-8 -*-
-"""
-Login Page - Based on Figma Design Reference
-Exact implementation matching the provided screenshot
-"""
+"""Login page."""
 
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QLabel, QLineEdit,
@@ -36,7 +33,7 @@ class LoginPage(QWidget):
         self.password_visible = False
         self._arabic_re = re.compile(r"[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF]")
 
-        # Login lockout tracking (UC-011 S08)
+        # Login lockout tracking
         self._failed_attempts = 0
         self._lockout_until = None
 
@@ -64,14 +61,14 @@ class LoginPage(QWidget):
                 QFontDatabase.addApplicationFont(font_path)
 
     def paintEvent(self, event: QPaintEvent):
-        """Paint background with blue section (Professional Stack)"""
+        """Paint background with blue section."""
         painter = QPainter(self)
         painter.setRenderHint(QPainter.Antialiasing)
 
         width = self.width()
         height = self.height()
 
-        # Blue section height from Figma (approximately 547px in 982px window = ~55%)
+        # Blue section height (~55% of window)
         blue_height = int(height * 0.55)
 
         # Top section - Primary blue
@@ -81,7 +78,7 @@ class LoginPage(QWidget):
         painter.fillRect(0, 33 + blue_height, width, height - (33 + blue_height), QColor(Colors.BACKGROUND))
 
     def _setup_ui(self):
-        """Setup the login UI - Professional Stack Layout"""
+        """Setup the login UI."""
         # Set background color for the entire page
         self.setStyleSheet(f"""
             QWidget#LoginPage {{
@@ -129,9 +126,9 @@ class LoginPage(QWidget):
 
         self._bg_logo_src = pix
 
-        # شفافية خفيفة (متل التصميم) - Figma: Opacity 4% → PyQt5 needs higher value
+        # شفافية خفيفة
         eff = QGraphicsOpacityEffect(self.bg_logo)
-        eff.setOpacity(0.8)  # PyQt5: 15% for visible watermark (Figma 4% too low)
+        eff.setOpacity(0.8)
         self.bg_logo.setGraphicsEffect(eff)
 
         # خليه ورا الكارد
@@ -142,20 +139,19 @@ class LoginPage(QWidget):
         if not hasattr(self, "bg_logo") or not hasattr(self, "_bg_logo_src"):
             return
 
-        # Figma exact dimensions: W=657.04, H=515
         target_w = 657
         target_h = 515
 
         pix = self._bg_logo_src.scaled(
             target_w, target_h,
-            Qt.IgnoreAspectRatio,  # Use exact dimensions from Figma
+            Qt.IgnoreAspectRatio,
             Qt.SmoothTransformation
         )
 
         self.bg_logo.setPixmap(pix)
         self.bg_logo.resize(pix.size())
 
-        # Figma exact position: X=427, Y=65
+        # Position watermark
         x = 427
         y = 65
         self.bg_logo.move(x, y)
@@ -170,10 +166,10 @@ class LoginPage(QWidget):
 
 
     def _create_login_card(self) -> QFrame:
-        """Create the white login card matching Figma specs"""
+        """Create the white login card."""
         card = QFrame()
         card.setObjectName("login_card")
-        # Figma: W=475, H=538 Hug (content-based)
+        # Card size
         card.setFixedWidth(475)
         card.setFixedHeight(538)
         card.setStyleSheet("""
@@ -192,14 +188,13 @@ class LoginPage(QWidget):
         card.setGraphicsEffect(shadow)
 
         card_layout = QVBoxLayout(card)
-        card_layout.setSpacing(24)  # Figma: Gap=32px → PyQt5 24px spacing
+        card_layout.setSpacing(24)
+        card_layout.setContentsMargins(32, 32, 32, 32)
 
-        card_layout.setContentsMargins(32, 32, 32, 32)  # Figma: Padding=32px (exact)
-
-        # ===== Login Card Top Logo (Figma: W=122.54, H=120) =====
+        # Login Card Top Logo
         logo_label = QLabel()
         logo_label.setAlignment(Qt.AlignCenter)
-        logo_label.setFixedSize(92, 90)  # Figma: 122.54×120 scaled down ~25% for PyQt5
+        logo_label.setFixedSize(92, 90)
         logo_label.setStyleSheet("background: transparent;")
 
         current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -210,34 +205,33 @@ class LoginPage(QWidget):
 
         pixmap = QPixmap(logo_path)
         if not pixmap.isNull():
-            # Scale to PyQt5 appropriate size (Figma 122.54×120 → PyQt5 92×90)
+            # Scale logo
             logo_label.setPixmap(pixmap.scaled(95, 90, Qt.IgnoreAspectRatio, Qt.SmoothTransformation))
         else:
             logo_label.setText("UN-HABITAT")
             logo_label.setStyleSheet("color: #3890DF; font-size: 14px; font-weight: bold; background: transparent;")
 
         card_layout.addWidget(logo_label, 0, Qt.AlignCenter)
-        # =====================================
-        # Title - Figma: Body/Body 2 -18px, W=315 Fill, H=21 Hug
+
+        # Title
         title = QLabel("تسجيل الدخول إلى الحساب")
         title.setAlignment(Qt.AlignCenter)
-        title.setMaximumWidth(315)  # Figma: W=315 Fill
+        title.setMaximumWidth(315)
         title_font = create_font(size=FontManager.SIZE_HEADING, weight=QFont.Bold, letter_spacing=0)
         title.setFont(title_font)
-        title.setStyleSheet("color: #172A47; background: transparent;")  # Grey/Dark - 900 (s-text)
+        title.setStyleSheet("color: #172A47; background: transparent;")
         card_layout.addWidget(title,0, Qt.AlignCenter)
 
-        # Figma: Gap between Title and Subtitle = 4px
-        card_layout.addSpacing(-20)  # Negative spacing: 24px (default) - 20 = 4px gap
+        card_layout.addSpacing(-20)
 
-        # Subtitle - Figma: Body/Body 4 -14px, W=315 Fill, H=56 Hug (Single line, DemiBold weight)
+        # Subtitle
         subtitle = QLabel("يرجى إدخال بيانات الدخول للمتابعة واستخدام النظام")
         subtitle.setAlignment(Qt.AlignCenter)
         subtitle.setWordWrap(False)  # Single line only
         subtitle.setMinimumWidth(315)  # Ensure minimum width for single line
         subtitle_font = create_font(size=FontManager.SIZE_BODY, weight=QFont.DemiBold, letter_spacing=0)
         subtitle.setFont(subtitle_font)
-        subtitle.setStyleSheet("color: #86909B; background: transparent;")  # Grey/Dark - 500 (s-text)-(nav)
+        subtitle.setStyleSheet("color: #86909B; background: transparent;")
         card_layout.addWidget(subtitle,0, Qt.AlignCenter)
 
         # Reduce gap before form fields
@@ -256,7 +250,7 @@ class LoginPage(QWidget):
         self.username_input = QLineEdit()
         self.username_input.setPlaceholderText("أدخل اسم المستخدم")
         self.username_input.setLayoutDirection(Qt.RightToLeft)
-        self.username_input.setFixedHeight(40)  # Figma appropriate height
+        self.username_input.setFixedHeight(40)
         username_input_font = create_font(size=10, weight=FontManager.WEIGHT_REGULAR, letter_spacing=0)
         self.username_input.setFont(username_input_font)
         self.username_input.setStyleSheet("""
@@ -293,7 +287,7 @@ class LoginPage(QWidget):
         self.password_input = QLineEdit()
         self.password_input.setPlaceholderText("أدخل كلمة المرور")
         self.password_input.setEchoMode(QLineEdit.Password)
-        self.password_input.setFixedHeight(40)  # Figma appropriate height
+        self.password_input.setFixedHeight(40)
         password_input_font = create_font(size=10, weight=FontManager.WEIGHT_REGULAR, letter_spacing=0)
         self.password_input.setFont(password_input_font)
 
@@ -336,7 +330,7 @@ class LoginPage(QWidget):
         card_layout.addSpacing(16)
         # Login button
         self.login_btn = QPushButton("تسجيل دخول")
-        self.login_btn.setFixedHeight(48)  # Figma: ~50px button height
+        self.login_btn.setFixedHeight(48)
         self.login_btn.setFixedWidth(411)  # Card width (475) - Padding (32×2) = 411
         self.login_btn.setCursor(Qt.PointingHandCursor)
         button_font = create_font(size=12, weight=QFont.Bold, letter_spacing=0)
@@ -377,7 +371,7 @@ class LoginPage(QWidget):
             self.password_input.setEchoMode(QLineEdit.Password)
 
     def _on_login(self):
-        """Handle login attempt with lockout enforcement (UC-011 S08)."""
+        """Handle login attempt with lockout enforcement."""
         from datetime import datetime, timedelta
 
         # Check lockout
@@ -464,13 +458,13 @@ class LoginPage(QWidget):
         pass
 
     def _setup_login_navbar(self):
-        """Setup navbar title bar for login page - reusing Navbar components"""
+        """Setup navbar title bar for login page."""
         from ui.components.navbar import DraggableFrame
 
-        # Create title bar using DraggableFrame (from Navbar)
+        # Create title bar
         self.titlebar = DraggableFrame(self)
         self.titlebar.setLayoutDirection(Qt.LeftToRight)
-        self.titlebar.setFixedHeight(33)  # Figma: 33px
+        self.titlebar.setFixedHeight(33)
         self.titlebar.setObjectName("login_titlebar")
         self.titlebar.setStyleSheet("""
             QFrame#login_titlebar {
@@ -504,15 +498,13 @@ class LoginPage(QWidget):
         """)
 
         lay = QHBoxLayout(self.titlebar)
-        # Figma: Left padding = 12px for logo position
         lay.setContentsMargins(12, 0, 0, 0)
         lay.setSpacing(0)
 
-        # Logo image from assets (header.png)
-        # Figma specs: X=12, Y=5.62, Width=142.77, Height=21.77
+        # Logo image
         logo_label = QLabel()
         logo_label.setStyleSheet("background: transparent;")
-        logo_label.setFixedSize(143, 22)  # Figma: 142.77 × 21.77
+        logo_label.setFixedSize(143, 22)
 
         logo_path = os.path.join(
             os.path.dirname(__file__), "..", "..",
@@ -522,7 +514,7 @@ class LoginPage(QWidget):
 
         logo_pixmap = QPixmap(logo_path)
         if not logo_pixmap.isNull():
-            # Scale to exact Figma dimensions
+            # Scale logo
             scaled_logo = logo_pixmap.scaled(
                 143, 22, Qt.IgnoreAspectRatio, Qt.SmoothTransformation
             )
@@ -552,7 +544,7 @@ class LoginPage(QWidget):
 
         lay.addStretch(1)
 
-        # Window control buttons - Figma specs: 46×32px each
+        # Window control buttons
         btn_min = QPushButton("–")
         btn_max = QPushButton("□")
         btn_close = QPushButton("✕")
@@ -569,7 +561,6 @@ class LoginPage(QWidget):
         btn_max.setObjectName("win_btn")
         btn_close.setObjectName("win_close")
 
-        # Figma dimensions: 46 × 32 px
         for b in (btn_min, btn_max, btn_close):
             b.setFixedSize(46, 32)
             b.setCursor(QCursor(Qt.PointingHandCursor))
@@ -591,7 +582,7 @@ class LoginPage(QWidget):
     def resizeEvent(self, event):
         super().resizeEvent(event)
         if hasattr(self, "titlebar") and self.titlebar:
-            self.titlebar.setGeometry(0, 0, self.width(), 33)  # Figma: 33px height
+            self.titlebar.setGeometry(0, 0, self.width(), 33)
             self.titlebar.raise_()
         self._position_login_watermark()
 

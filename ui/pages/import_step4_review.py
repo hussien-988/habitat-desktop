@@ -1,11 +1,5 @@
 # -*- coding: utf-8 -*-
-"""
-Import Wizard - Step 3 (Review): Review Staged Entities
-UC-003: Import Pipeline
-
-Displays all staged entities grouped by type in a table for review
-before committing. Uses the grouped API response from GET .../staged-entities.
-"""
+"""Import wizard step 3: review staged entities before commit."""
 
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QFrame,

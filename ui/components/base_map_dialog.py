@@ -1,17 +1,5 @@
 # -*- coding: utf-8 -*-
-"""
-    Base Map Dialog - Unified Dialog for All Map Operations.
-
-    Matches BuildingMapWidget design exactly.
-
-    Design Specifications (من BuildingMapWidget):
-    - Size: 1100×700px
-    - Border-radius: 32px
-    - Padding: 24px
-    - Title bar + optional search bar + map
-    - Map size: 1052×526px
-    - Clean, professional design
-"""
+"""Base Map Dialog - unified dialog for all map operations."""
 
 from typing import Optional, List
 from PyQt5.QtWidgets import (
@@ -47,7 +35,7 @@ except ImportError:
 
 
 class RoundedDialog(QDialog):
-    """Custom QDialog with rounded corners - من BuildingMapWidget."""
+    """Custom QDialog with rounded corners."""
 
     def __init__(self, radius: int = 32, parent=None):
         super().__init__(parent)

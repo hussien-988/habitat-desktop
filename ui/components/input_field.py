@@ -1,8 +1,7 @@
 # -*- coding: utf-8 -*-
 """
 Input Field Component - حقل إدخال قابل لإعادة الاستخدام
-Reusable input field component following Figma design system.
-
+Reusable input field component.
 """
 
 from PyQt5.QtWidgets import QLineEdit
@@ -13,42 +12,16 @@ from ..font_utils import create_font, FontManager
 
 
 class InputField(QLineEdit):
-    """
-    Input field component with Figma styling.
-
-    Features:
-    - Configurable placeholder
-    - Error/success states
-    - Figma-compliant styling (border, padding, colors)
-    - Reusable across the application
-
-    Usage:
-        # Default input
-        field = InputField(placeholder="أدخل الاسم...")
-
-        # Error state
-        field = InputField(placeholder="البريد الإلكتروني...", variant="error")
-
-        # Success state
-        field = InputField(placeholder="كلمة المرور...", variant="success")
-    """
+    """Reusable input field component with variant styling."""
 
     def __init__(self, placeholder: str = "", variant: str = "default", parent=None):
-        """
-        Initialize input field.
-
-        Args:
-            placeholder: Placeholder text (Arabic RTL supported)
-            variant: Input variant ("default", "error", "success")
-            parent: Parent widget
-        """
+        """Initialize input field."""
         super().__init__(parent)
         self.variant = variant
         self._setup_ui(placeholder)
 
     def _setup_ui(self, placeholder: str):
-        """Setup input field UI with Figma specifications."""
-        # Set placeholder
+        """Setup input field UI."""
         if placeholder:
             self.setPlaceholderText(placeholder)
 
@@ -73,12 +46,7 @@ class InputField(QLineEdit):
             self.setStyleSheet(StyleManager.input_field(InputVariant.DEFAULT))
 
     def set_variant(self, variant: str):
-        """
-        Change input variant dynamically.
-
-        Args:
-            variant: New variant ("default", "error", "success")
-        """
+        """Change input variant dynamically."""
         self.variant = variant
         self._apply_variant()
 

@@ -1,22 +1,5 @@
 # -*- coding: utf-8 -*-
-"""
-Advanced Dashboard Service
-==========================
-Implements comprehensive dashboard and analytics as per FSD requirements.
-
-Features:
-- Real-time statistics and KPIs
-- Claims status tracking by region
-- Building registration progress
-- Field team performance metrics
-- Data quality indicators
-- Trend analysis and charts
-- Export to various formats
-- Configurable dashboard widgets
-- Multi-level filtering (governorate, district, subdistrict)
-- Date range filtering
-- Comparison reports
-"""
+"""Dashboard service for statistics, analytics, and KPIs."""
 
 import json
 from typing import Dict, Any, List, Optional, Tuple

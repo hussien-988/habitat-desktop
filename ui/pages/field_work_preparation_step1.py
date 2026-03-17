@@ -1,11 +1,5 @@
 # -*- coding: utf-8 -*-
-"""
-    Field Work Preparation - Step 1: Select Buildings
-    UC-012: Assign Buildings to Field Teams
-
-    Filter and search buildings for field work assignment.
-    REUSES design from BuildingSelectionStep (office_survey wizard)
-"""
+"""Field work preparation step 1: select buildings for assignment."""
 
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
@@ -151,11 +145,7 @@ class ClickableRowWidget(QWidget):
 
 
 class FieldWorkPreparationStep1(QWidget):
-    """
-    Step 1: Filter and search buildings.
-
-    Original structure with its own header and footer.
-    """
+    """Filter and search buildings for field assignment."""
 
     next_clicked = pyqtSignal()
     cancelled = pyqtSignal()
@@ -790,12 +780,7 @@ class FieldWorkPreparationStep1(QWidget):
         self.building_search.setFocus()
 
     def _on_table_checkbox_changed(self, building_id: str, state):
-        """
-        Handle checkbox state change in selected buildings table.
-
-        NOTE: Unlike suggestions list, unchecking here does NOT remove the row.
-        It only toggles the "confirmed for transfer" status.
-        """
+        """Handle checkbox state change in selected buildings table."""
         if state == Qt.Checked:
             # Add to confirmed set (for transfer)
             self._confirmed_building_ids.add(building_id)
@@ -814,12 +799,7 @@ class FieldWorkPreparationStep1(QWidget):
             self.page.enable_next_button(count > 0)
 
     def _update_selected_card_visibility(self):
-        """
-        Show/hide selected buildings card based on selection count.
-
-        Card is visible whenever there are selected buildings, regardless of
-        whether the suggestions list is open or closed.
-        """
+        """Show/hide selected buildings card based on selection count."""
         has_selection = len(self._selected_building_ids) > 0
         self.selected_buildings_card.setVisible(has_selection)
 
@@ -828,14 +808,7 @@ class FieldWorkPreparationStep1(QWidget):
         self.selected_count_label.setText(f"{count} بناء")
 
     def _add_building_to_table(self, building):
-        """
-        Add building row to selected buildings table.
-
-        Row format (from Figma):
-        - Checkbox (to unselect - cleaner UX)
-        - Building icon (32×32px with #f0f7ff background)
-        - Building ID (formatted: 01-01-01-...)
-        """
+        """Add building row to selected buildings table."""
         # Skip if already in table (prevents duplicates on list rebuild)
         for i in range(self.selected_table_layout.count()):
             widget = self.selected_table_layout.itemAt(i).widget()
@@ -944,11 +917,7 @@ class FieldWorkPreparationStep1(QWidget):
         self.selected_table_layout.addWidget(row)
 
     def _format_building_id(self, building_id: str) -> str:
-        """
-        Format building ID with dashes (17 digits: XX-XX-XX-XX-XX-XX-XX-XX-X).
-
-        Example: 01010101010101010 → 01-01-01-01-01-01-01-01-0
-        """
+        """Format building ID with dashes."""
         if not building_id:
             return ""
 
@@ -974,15 +943,7 @@ class FieldWorkPreparationStep1(QWidget):
                 break
 
     def _remove_building_selection(self, building_id: str):
-        """
-        Remove building from selection (triggered when unchecking from suggestions list).
-
-        Updates:
-        - Both selection sets (selected and confirmed)
-        - Checkbox in list
-        - Table row
-        - Card visibility
-        """
+        """Remove building from selection and update UI."""
         # Remove from both sets
         self._selected_building_ids.discard(building_id)
         self._confirmed_building_ids.discard(building_id)
@@ -1005,14 +966,7 @@ class FieldWorkPreparationStep1(QWidget):
         self._update_selected_card_visibility()
 
     def _set_suggestions_visible(self, visible: bool):
-        """
-        Show/hide suggestions list with proper height adjustment.
-
-        This prevents spacing gaps when suggestions are hidden by collapsing the widget completely.
-
-        Args:
-            visible: True to show suggestions, False to hide
-        """
+        """Show/hide suggestions list with proper height adjustment."""
         self.buildings_list.setVisible(visible)
         # Adjust height to prevent spacing gaps when hidden
         self.buildings_list.setFixedHeight(179 if visible else 0)
@@ -1267,11 +1221,7 @@ class FieldWorkPreparationStep1(QWidget):
         return confirmed
 
     def eventFilter(self, obj, event):
-        """
-        Event filter for:
-        1. Combo box line edits — click anywhere opens dropdown
-        2. Clicks outside suggestions list — dismiss suggestions
-        """
+        """Event filter for combo dropdowns and dismissing suggestions."""
         from PyQt5.QtCore import QEvent, QRect
 
         if event.type() == QEvent.MouseButtonPress:
@@ -1303,11 +1253,7 @@ class FieldWorkPreparationStep1(QWidget):
         return super().eventFilter(obj, event)
 
     def _on_search_enter(self):
-        """
-        Handle Enter key press in search field.
-
-        Clears search, hides suggestions, shows selected buildings card.
-        """
+        """Handle Enter key press in search field."""
         # Block signals to prevent textChanged from re-showing suggestions
         self.building_search.blockSignals(True)
         self.building_search.clear()

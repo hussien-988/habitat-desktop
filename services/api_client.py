@@ -22,17 +22,7 @@ logger = get_logger(__name__)
 
 @dataclass
 class ApiConfig:
-    """
-    تكوين الاتصال بالـ API.
-
- DYNAMIC: Reads from .env file via Config
-    TEAM READY: Each member sets their own API_BASE_URL in .env
-
-    Example .env:
-        API_BASE_URL=http://192.168.100.221:8080  # Team member's .env
-        API_USERNAME=admin
-        API_PASSWORD=Admin@123
-    """
+    """API connection configuration."""
     base_url: str = None  # Will be loaded from Config
     username: str = None  # Will be loaded from Config
     password: str = None  # Will be loaded from Config
@@ -45,7 +35,8 @@ class ApiConfig:
             from app.config import Config
 
             if self.base_url is None:
-                self.base_url = Config.API_BASE_URL
+                from app.config import get_api_base_url
+                self.base_url = get_api_base_url()
             if self.username is None:
                 self.username = Config.API_USERNAME
             if self.password is None:
@@ -55,20 +46,7 @@ class ApiConfig:
 
 
 class TRRCMSApiClient:
-    """
-    API للاتصال بـ TRRCMS Backend.
-
-    الميزات:
-    - تسجيل دخول تلقائي
-    - إدارة Token
-    - إعادة محاولة عند انتهاء Token
-    - معالجة الأخطاء
-
-    Usage:
-        config = ApiConfig(base_url="http://localhost:8080")
-        client = TRRCMSApiClient(config)
-        buildings = client.get_buildings_for_map(36.5, 37.5, 36.0, 36.8)
-    """
+    """API client for TRRCMS Backend."""
 
     def __init__(self, config: ApiConfig):
         self.config = config
@@ -87,16 +65,7 @@ class TRRCMSApiClient:
     # ==================== Authentication ====================
 
     def login(self, username: str, password: str) -> Dict[str, Any]:
-        """
-        تسجيل الدخول والحصول على Token.
-
-        Args:
-            username: اسم المستخدم
-            password: كلمة المرور
-
-        Returns:
-            بيانات المستخدم والـ Token
-        """
+        """Authenticate and obtain access token."""
         try:
             response = requests.post(
                 f"{self.base_url}/v1/Auth/login",
@@ -122,26 +91,13 @@ class TRRCMSApiClient:
             raise
 
     def set_access_token(self, token: str, expires_in: int = 3600):
-        """
-        Set access token from external source (e.g., current_user._api_token).
-
-        Allow setting token from authenticated user session.
-
-        Args:
-            token: Access token to use
-            expires_in: Token expiration time in seconds (default: 3600 = 1 hour)
-        """
+        """Set access token from external source."""
         self.access_token = token
         self.token_expires_at = datetime.now() + timedelta(seconds=expires_in)
         logger.debug(f"Access token updated externally (expires in {expires_in}s)")
 
     def refresh_access_token(self) -> bool:
-        """
-        تحديث الـ Access Token باستخدام Refresh Token.
-
-        Returns:
-            True إذا نجح التحديث
-        """
+        """Refresh the access token using the refresh token."""
         if not self.refresh_token:
             logger.warning("No refresh token available")
             return False
@@ -213,18 +169,7 @@ class TRRCMSApiClient:
         json_data: Optional[Dict] = None,
         params: Optional[Dict] = None
     ) -> Any:
-        """
-        تنفيذ HTTP request مع معالجة الأخطاء.
-
-        Args:
-            method: HTTP method (GET, POST, PUT, DELETE)
-            endpoint: API endpoint (e.g., "/v1/Buildings/map")
-            json_data: JSON payload
-            params: Query parameters
-
-        Returns:
-            Response JSON data
-        """
+        """Execute HTTP request with error handling."""
         url = f"{self.base_url}{endpoint}"
 
         # Log request
@@ -309,27 +254,7 @@ class TRRCMSApiClient:
         south_west_lng: float,
         status: Optional[str] = None
     ) -> List[Dict[str, Any]]:
-        """
-        الحصول على المباني للعرض على الخريطة (محسّن للأداء).
-
-        Args:
-            north_east_lat: حد الشمال الشرقي (latitude)
-            north_east_lng: حد الشمال الشرقي (longitude)
-            south_west_lat: حد الجنوب الغربي (latitude)
-            south_west_lng: حد الجنوب الغربي (longitude)
-            status: فلتر حسب حالة المبنى (optional)
-
-        Returns:
-            قائمة بـ BuildingMapDto
-
-        Example:
-            buildings = client.get_buildings_for_map(
-                north_east_lat=36.5,
-                north_east_lng=37.5,
-                south_west_lat=36.0,
-                south_west_lng=36.8
-            )
-        """
+        """Get buildings within bounding box for map display."""
         payload = {
             "northEastLat": north_east_lat,
             "northEastLng": north_east_lng,
@@ -356,19 +281,7 @@ class TRRCMSApiClient:
         south_west_lng: float,
         landmark_type: Optional[int] = None
     ) -> List[Dict[str, Any]]:
-        """
-        Fetch landmarks within bounding box for map display.
-
-        Args:
-            north_east_lat: NE corner latitude
-            north_east_lng: NE corner longitude
-            south_west_lat: SW corner latitude
-            south_west_lng: SW corner longitude
-            landmark_type: Optional type filter (int)
-
-        Returns:
-            List of LandmarkMapDto
-        """
+        """Fetch landmarks within bounding box for map display."""
         params = {
             "southWestLat": south_west_lat,
             "southWestLng": south_west_lng,
@@ -461,27 +374,7 @@ class TRRCMSApiClient:
         page: int = 1,
         page_size: int = 100
     ) -> List[Dict[str, Any]]:
-        """
-        الحصول على المباني داخل polygon (محسّن للأداء مع PostGIS).
-
-        Args:
-            polygon_wkt: Polygon في صيغة WKT
-            status: فلتر حسب حالة المبنى (optional)
-            building_type: فلتر حسب نوع المبنى (optional)
-            damage_level: فلتر حسب مستوى الضرر (optional)
-            page: رقم الصفحة
-            page_size: عدد النتائج في الصفحة
-
-        Returns:
-            قائمة بـ BuildingDto
-
-        Example:
-            buildings = client.get_buildings_in_polygon(
-                polygon_wkt="POLYGON((37.0 36.1, 37.3 36.1, 37.3 36.3, 37.0 36.3, 37.0 36.1))",
-                page=1,
-                page_size=100
-            )
-        """
+        """Get buildings within a polygon area."""
         payload = {
             "polygonWkt": polygon_wkt,
             "page": page,
@@ -635,15 +528,7 @@ class TRRCMSApiClient:
         return response
 
     def get_building_by_id(self, building_id: str) -> Dict[str, Any]:
-        """
-        الحصول على تفاصيل مبنى محدد.
-
-        Args:
-            building_id: UUID للمبنى
-
-        Returns:
-            BuildingDto
-        """
+        """Get building details by ID."""
         return self._request("GET", f"/v1/Buildings/{building_id}")
 
     def update_building_geometry(
@@ -653,32 +538,7 @@ class TRRCMSApiClient:
         longitude: Optional[float] = None,
         building_geometry_wkt: Optional[str] = None
     ) -> Dict[str, Any]:
-        """
-        تحديث موقع المبنى (Point أو Polygon).
-
-        Args:
-            building_id: UUID للمبنى
-            latitude: GPS latitude (optional)
-            longitude: GPS longitude (optional)
-            building_geometry_wkt: Polygon في صيغة WKT (optional)
-
-        Returns:
-            BuildingDto المُحدّث
-
-        Example:
-            # Update point location
-            client.update_building_geometry(
-                building_id="uuid",
-                latitude=36.2021,
-                longitude=37.1343
-            )
-
-            # Update with polygon
-            client.update_building_geometry(
-                building_id="uuid",
-                building_geometry_wkt="POLYGON((37.13 36.20, 37.14 36.20, ...))"
-            )
-        """
+        """Update building location (point or polygon)."""
         payload = {}
 
         if latitude is not None:
@@ -709,19 +569,7 @@ class TRRCMSApiClient:
         page: int = 1,
         page_size: int = 50
     ) -> Dict[str, Any]:
-        """
-        البحث عن المباني بمعايير متعددة.
-
-        Args:
-            building_id: رمز المبنى (17 رقم)
-            neighborhood_code: رمز الحي
-            building_status: حالة المبنى
-            page: رقم الصفحة
-            page_size: عدد النتائج في الصفحة
-
-        Returns:
-            نتائج البحث مع pagination
-        """
+        """Search buildings with multiple criteria."""
         payload = {
             "page": page,
             "pageSize": page_size
@@ -737,15 +585,7 @@ class TRRCMSApiClient:
         return self._request("POST", "/v1/Buildings/search", json_data=payload)
 
     def create_building(self, building_data: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        إنشاء مبنى جديد.
-
-        Args:
-            building_data: بيانات المبنى (CreateBuildingCommand)
-
-        Returns:
-            BuildingDto المُنشأ
-        """
+        """Create a new building."""
         api_data = self._convert_building_to_api_format(building_data)
         logger.info(f"Creating building: {api_data.get('buildingId', 'N/A')}")
         result = self._request("POST", "/v1/Buildings", json_data=api_data)
@@ -753,45 +593,37 @@ class TRRCMSApiClient:
         return result
 
     def update_building(self, building_id: str, building_data: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        تحديث مبنى موجود.
-
-        Uses two independent API calls:
-        1. PUT /v1/Buildings/{id} - UpdateBuildingCommand (general data)
-        2. PUT /v1/Buildings/{id}/geometry - UpdateBuildingGeometryCommand (coordinates + polygon)
-
-        Both are independent - if one fails, the other still runs.
-        """
+        """Update an existing building."""
         result = None
 
-        # Step 1: Update general building data (UpdateBuildingCommand)
+        # Update general building data
         update_data = self._build_update_command(building_data)
         if update_data:
             try:
-                logger.info(f"Step 1: Updating building data: {building_id}")
+                logger.info(f"Updating building data: {building_id}")
                 logger.info(f"  Payload: {update_data}")
                 result = self._request("PUT", f"/v1/Buildings/{building_id}", json_data=update_data)
-                logger.info(f"Step 1: Building data updated")
+                logger.info(f"Building data updated")
             except Exception as e:
-                logger.warning(f"Step 1 failed: {e}")
+                logger.warning(f"Building data update failed: {e}")
 
-        # Step 2: Update geometry separately (UpdateBuildingGeometryCommand)
+        # Update geometry separately
         geo_wkt = building_data.get('geo_location') or building_data.get('buildingGeometryWkt')
         lat = building_data.get('latitude')
         lng = building_data.get('longitude')
 
         if geo_wkt or (lat is not None and lng is not None):
             try:
-                logger.info(f"Step 2: Updating geometry: lat={lat}, lng={lng}, wkt={'YES' if geo_wkt else 'NO'}")
+                logger.info(f"Updating geometry: lat={lat}, lng={lng}, wkt={'YES' if geo_wkt else 'NO'}")
                 result = self.update_building_geometry(
                     building_id=building_id,
                     latitude=lat,
                     longitude=lng,
                     building_geometry_wkt=geo_wkt
                 )
-                logger.info(f"Step 2: Geometry updated")
+                logger.info(f"Geometry updated")
             except Exception as e:
-                logger.warning(f"Step 2 failed: {e}")
+                logger.warning(f"Geometry update failed: {e}")
 
         if result is None:
             raise Exception(f"Both update steps failed for building {building_id}")
@@ -859,15 +691,7 @@ class TRRCMSApiClient:
         return {k: v for k, v in api_data.items() if v is not None}
 
     def delete_building(self, building_id: str) -> bool:
-        """
-        حذف مبنى.
-
-        Args:
-            building_id: UUID للمبنى
-
-        Returns:
-            True إذا تم الحذف بنجاح
-        """
+        """Delete a building."""
         logger.info(f"Deleting building: {building_id}")
         self._request("DELETE", f"/v1/Buildings/{building_id}")
         logger.info(f"Building deleted: {building_id}")
@@ -876,27 +700,11 @@ class TRRCMSApiClient:
     # ==================== Property Units ====================
 
     def get_property_units_by_building(self, building_id: str) -> List[Dict[str, Any]]:
-        """
-        الحصول على الوحدات العقارية لمبنى معين.
-
-        Args:
-            building_id: UUID للمبنى
-
-        Returns:
-            قائمة بالوحدات العقارية
-        """
+        """Get property units for a building."""
         return self._request("GET", f"/v1/PropertyUnits/building/{building_id}")
 
     def get_building_documents(self, building_id: str) -> List[Dict[str, Any]]:
-        """
-        Get documents attached to a building.
-
-        Args:
-            building_id: Building UUID
-
-        Returns:
-            List of BuildingDocumentDto with originalFileName, filePath, mimeType
-        """
+        """Get documents attached to a building."""
         try:
             return self._request("GET", f"/v1/building-documents/by-building/{building_id}") or []
         except Exception as e:
@@ -906,12 +714,7 @@ class TRRCMSApiClient:
     # ==================== Utility ====================
 
     def health_check(self) -> bool:
-        """
-        فحص حالة الاتصال بالـ API.
-
-        Returns:
-            True إذا كان الاتصال يعمل
-        """
+        """Check API connectivity."""
         try:
             # Try to get current user info as health check
             self._request("GET", "/v1/Auth/me")
@@ -935,22 +738,7 @@ class TRRCMSApiClient:
         priority: Optional[str] = None,
         target_completion_date: Optional[str] = None
     ) -> Dict[str, Any]:
-        """
-        إنشاء تعيين مباني لباحث ميداني.
-
-        Args:
-            buildings: قائمة BuildingAssignmentItem objects
-                       [{buildingId, propertyUnitIdsForRevisit, revisitReason, notes}]
-            field_collector_id: UUID للباحث الميداني
-            assignment_notes: ملاحظات التعيين
-            priority: أولوية التعيين
-            target_completion_date: تاريخ الإنجاز المستهدف
-
-        Returns:
-            AssignBuildingsResult من API
-
-        Endpoint: POST /api/v1/BuildingAssignments/assign
-        """
+        """Create building assignments for a field researcher."""
         payload = {
             "fieldCollectorId": field_collector_id,
             "buildings": buildings,
@@ -970,26 +758,12 @@ class TRRCMSApiClient:
         page: int = 1,
         page_size: int = 100
     ) -> Dict[str, Any]:
-        """
-        جلب جميع تعيينات المباني مع التصفية والتقسيم.
-
-        Endpoint: GET /api/v1/BuildingAssignments
-        """
+        """Get all building assignments with pagination."""
         params = {"page": page, "pageSize": page_size}
         return self._request("GET", "/v1/BuildingAssignments", params=params)
 
     def get_assignment(self, assignment_id: str) -> Dict[str, Any]:
-        """
-        جلب تفاصيل تعيين محدد.
-
-        Args:
-            assignment_id: UUID للتعيين
-
-        Returns:
-            Assignment details
-
-        Endpoint: GET /api/v1/BuildingAssignments/{id}
-        """
+        """Get assignment details by ID."""
         return self._request("GET", f"/v1/BuildingAssignments/{assignment_id}")
 
     def get_pending_assignments(
@@ -998,19 +772,7 @@ class TRRCMSApiClient:
         page: int = 1,
         page_size: int = 50
     ) -> Dict[str, Any]:
-        """
-        جلب التعيينات المعلقة (جاهزة للنقل).
-
-        Args:
-            researcher_id: User ID للباحث (optional - لجلب مهام باحث محدد)
-            page: رقم الصفحة
-            page_size: عدد النتائج
-
-        Returns:
-            Paginated list of pending assignments
-
-        Endpoint: GET /api/v1/BuildingAssignments/pending
-        """
+        """Get pending assignments ready for transfer."""
         params = {
             "page": page,
             "pageSize": page_size
@@ -1026,19 +788,7 @@ class TRRCMSApiClient:
         transfer_status: str,
         device_id: Optional[str] = None
     ) -> Dict[str, Any]:
-        """
-        تحديث حالة نقل التعيين.
-
-        Args:
-            assignment_id: UUID للتعيين
-            transfer_status: الحالة (not_transferred, transferring, transferred, failed)
-            device_id: Device/Tablet ID (optional)
-
-        Returns:
-            Updated assignment
-
-        Endpoint: PUT /api/v1/BuildingAssignments/{id}/transfer-status
-        """
+        """Update assignment transfer status."""
         payload = {
             "transferStatus": transfer_status,
             "deviceId": device_id
@@ -1056,18 +806,7 @@ class TRRCMSApiClient:
         assignment_id: str,
         cancellation_reason: Optional[str] = None
     ) -> Dict[str, Any]:
-        """
-        إلغاء تعيين ميداني.
-
-        Args:
-            assignment_id: UUID للتعيين
-            cancellation_reason: سبب الإلغاء
-
-        Returns:
-            UnassignBuildingResult من API
-
-        Endpoint: POST /api/v1/BuildingAssignments/{id}/unassign
-        """
+        """Unassign a field assignment."""
         if not assignment_id:
             raise ValueError("assignment_id is required")
         payload = {}
@@ -1081,41 +820,17 @@ class TRRCMSApiClient:
         return result
 
     def get_assignment_statistics(self) -> Dict[str, Any]:
-        """
-        جلب إحصائيات التعيينات.
-
-        Returns:
-            Statistics object {total, pending, transferred, by_researcher, etc.}
-
-        Endpoint: GET /api/v1/BuildingAssignments/statistics
-        """
+        """Get assignment statistics."""
         return self._request("GET", "/v1/BuildingAssignments/statistics")
 
     def get_field_collectors(self) -> List[Dict[str, Any]]:
-        """
-        جلب قائمة الباحثين الميدانيين المتاحين للتعيين.
-
-        Returns:
-            قائمة الباحثين الميدانيين
-
-        Endpoint: GET /api/v1/BuildingAssignments/field-collectors
-        """
+        """Get available field collectors."""
         return self._request("GET", "/v1/BuildingAssignments/field-collectors")
 
     def get_field_collector_assignments(
         self, collector_id: str
     ) -> List[Dict[str, Any]]:
-        """
-        جلب تعيينات باحث ميداني محدد.
-
-        Args:
-            collector_id: UUID للباحث الميداني
-
-        Returns:
-            قائمة التعيينات
-
-        Endpoint: GET /api/v1/BuildingAssignments/field-collectors/{id}/assignments
-        """
+        """Get assignments for a specific field collector."""
         return self._request(
             "GET",
             f"/v1/BuildingAssignments/field-collectors/{collector_id}/assignments"
@@ -1124,17 +839,7 @@ class TRRCMSApiClient:
     def get_assignment_property_units(
         self, building_id: str
     ) -> List[Dict[str, Any]]:
-        """
-        جلب الوحدات العقارية لمبنى معين (عبر BuildingAssignments API).
-
-        Args:
-            building_id: UUID للمبنى
-
-        Returns:
-            قائمة الوحدات العقارية
-
-        Endpoint: GET /api/v1/BuildingAssignments/buildings/{id}/property-units
-        """
+        """Get property units for an assigned building."""
         return self._request(
             "GET",
             f"/v1/BuildingAssignments/buildings/{building_id}/property-units"
@@ -1145,18 +850,7 @@ class TRRCMSApiClient:
         assignment_ids: List[str],
         field_collector_id: str
     ) -> Dict[str, Any]:
-        """
-        بدء نقل التعيينات إلى الأجهزة اللوحية.
-
-        Args:
-            assignment_ids: قائمة UUIDs للتعيينات
-            field_collector_id: UUID للباحث الميداني
-
-        Returns:
-            InitiateTransferResult من API
-
-        Endpoint: POST /api/v1/BuildingAssignments/initiate-transfer
-        """
+        """Initiate transfer of assignments to tablets."""
         payload = {
             "fieldCollectorId": field_collector_id,
             "assignmentIds": assignment_ids
@@ -1171,18 +865,7 @@ class TRRCMSApiClient:
         timeout_minutes: int = 30,
         field_collector_id: Optional[str] = None
     ) -> Dict[str, Any]:
-        """
-        فحص التعيينات المنتهية المهلة.
-
-        Args:
-            timeout_minutes: مدة المهلة بالدقائق
-            field_collector_id: UUID للباحث (اختياري — للفلترة)
-
-        Returns:
-            TransferTimeoutCheckResult من API
-
-        Endpoint: POST /api/v1/BuildingAssignments/check-transfer-timeout
-        """
+        """Check for timed-out assignments."""
         payload = {"timeoutMinutes": timeout_minutes}
         if field_collector_id:
             payload["fieldCollectorId"] = field_collector_id
@@ -1192,17 +875,7 @@ class TRRCMSApiClient:
         )
 
     def retry_transfer(self, assignment_ids: List[str]) -> Dict[str, Any]:
-        """
-        إعادة محاولة نقل التعيينات الفاشلة.
-
-        Args:
-            assignment_ids: قائمة UUIDs للتعيينات
-
-        Returns:
-            Retry response
-
-        Endpoint: POST /api/v1/BuildingAssignments/retry-transfer
-        """
+        """Retry failed assignment transfers."""
         payload = {"assignmentIds": assignment_ids}
         logger.info(f"Retrying transfer for {len(assignment_ids)} assignments")
         return self._request(
@@ -1212,22 +885,7 @@ class TRRCMSApiClient:
     # ==================== PropertyUnits APIs ====================
 
     def create_property_unit(self, unit_data: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        Create a new property unit via API.
-
-        Args:
-            unit_data: Property unit data (snake_case or camelCase supported)
-                - building_id/buildingId: Building UUID
-                - unit_number/unitNumber: Unit identifier
-                - unit_type/unitType: Type code (1=Apartment, 2=Shop, etc.)
-                - floor_number/floorNumber (optional)
-                - owner_name/ownerName (optional)
-                - occupancy_status/occupancyStatus (optional)
-                - Other fields as needed
-
-        Returns:
-            Created property unit data with id
-        """
+        """Create a new property unit."""
         api_data = self._convert_property_unit_to_api_format(unit_data)
         logger.info(f"Creating property unit: {api_data.get('unitNumber', 'N/A')}")
         result = self._request("POST", "/v1/PropertyUnits", json_data=api_data)
@@ -1235,16 +893,7 @@ class TRRCMSApiClient:
         return result
 
     def update_property_unit(self, unit_id: str, unit_data: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        Update an existing property unit.
-
-        Args:
-            unit_id: Property unit UUID
-            unit_data: Fields to update
-
-        Returns:
-            Updated property unit data
-        """
+        """Update an existing property unit."""
         api_data = self._convert_property_unit_to_api_format(unit_data)
         api_data["id"] = unit_id
         result = self._request("PUT", f"/v1/PropertyUnits/{unit_id}", json_data=api_data)
@@ -1252,18 +901,7 @@ class TRRCMSApiClient:
         return result
 
     def _convert_property_unit_to_api_format(self, unit_data: Dict[str, Any]) -> Dict[str, Any]:
-        """Convert property unit data to API format (camelCase).
-
-        API Schema (CreatePropertyUnitCommand):
-            buildingId: uuid (REQUIRED)
-            unitIdentifier: string max 50 (REQUIRED)
-            unitType: int 1-5 (REQUIRED)
-            status: int 1-6 or 99 (REQUIRED)
-            floorNumber: int -5 to 200 (optional)
-            areaSquareMeters: double > 0 (optional)
-            numberOfRooms: int 0-100 (optional)
-            description: string max 2000 (optional)
-        """
+        """Convert property unit data to API format (camelCase)."""
         def get_value(snake_key: str, camel_key: str, default=None):
             return unit_data.get(snake_key) or unit_data.get(camel_key) or default
 
@@ -1287,18 +925,7 @@ class TRRCMSApiClient:
         return {k: v for k, v in api_data.items() if v is not None and v != ''}
 
     def link_unit_to_survey(self, survey_id: str, unit_id: str) -> Dict[str, Any]:
-        """
-        Link an existing property unit to a survey.
-
-        Args:
-            survey_id: Survey UUID
-            unit_id: Property Unit UUID
-
-        Returns:
-            Updated survey data
-
-        Endpoint: POST /api/v1/Surveys/{surveyId}/property-units/{unitId}/link
-        """
+        """Link a property unit to a survey."""
         if not survey_id or not unit_id:
             raise ValueError("survey_id and unit_id are required")
 
@@ -1315,11 +942,7 @@ class TRRCMSApiClient:
         group_by_building: bool = False,
         limit: int = 1000
     ) -> List[Dict[str, Any]]:
-        """
-        Get property units as a flat list (flattens grouped response).
-
-        Endpoint: GET /api/v1/PropertyUnits?groupByBuilding=false
-        """
+        """Get property units as a flat list."""
         params: Dict[str, Any] = {"groupByBuilding": "false"}
         if building_id:
             params["buildingId"] = building_id
@@ -1356,12 +979,6 @@ class TRRCMSApiClient:
     ) -> Dict[str, Any]:
         """
         Get property units grouped by building.
-
-        Returns:
-            GroupedPropertyUnitsResponseDto:
-            {groupedByBuilding: [BuildingWithUnitsDto], totalUnits, totalBuildings}
-
-        Endpoint: GET /api/v1/PropertyUnits?groupByBuilding=true
         """
         params: Dict[str, Any] = {"groupByBuilding": "true"}
         if building_id:
@@ -1378,22 +995,14 @@ class TRRCMSApiClient:
         return {"groupedByBuilding": [], "totalUnits": 0, "totalBuildings": 0}
 
     def get_property_unit_by_id(self, unit_id: str) -> Optional[Dict[str, Any]]:
-        """
-        Get a single property unit by UUID.
-
-        Endpoint: GET /api/v1/PropertyUnits/{id}
-        """
+        """Get a single property unit by UUID."""
         if not unit_id:
             return None
         logger.info(f"Fetching property unit: {unit_id}")
         return self._request("GET", f"/v1/PropertyUnits/{unit_id}")
 
     def delete_property_unit(self, unit_id: str) -> bool:
-        """
-        Soft-delete a property unit.
-
-        Endpoint: DELETE /api/v1/PropertyUnits/{id}
-        """
+        """Soft-delete a property unit."""
         if not unit_id:
             return False
         try:
@@ -1405,17 +1014,7 @@ class TRRCMSApiClient:
             return False
 
     def get_units_for_building(self, building_id: str) -> List[Dict[str, Any]]:
-        """
-        Get all property units for a building.
-
-        Args:
-            building_id: Building UUID
-
-        Returns:
-            List of property unit dictionaries
-
-        Endpoint: GET /api/v1/PropertyUnits/building/{buildingId}
-        """
+        """Get all property units for a building."""
         if not building_id:
             logger.warning("No building_id provided")
             return []
@@ -1437,20 +1036,7 @@ class TRRCMSApiClient:
     # ==================== Households APIs ====================
 
     def create_household(self, household_data: Dict[str, Any], survey_id: Optional[str] = None) -> Dict[str, Any]:
-        """
-        Create a new household via API.
-
-        Args:
-            household_data: Household data (snake_case or camelCase supported)
-                - property_unit_id/propertyUnitId: Property unit UUID
-                - head_name/headOfHouseholdName: Head of household name
-                - size/householdSize: Number of members
-                - Other demographic fields (optional)
-            survey_id: Optional survey UUID
-
-        Returns:
-            Created household data with id
-        """
+        """Create a new household."""
         api_data = self._convert_household_to_api_format(household_data, survey_id)
         endpoint = f"/v1/Surveys/{survey_id}/households" if survey_id else "/v1/Households"
 
@@ -1472,7 +1058,7 @@ class TRRCMSApiClient:
         return result
 
     def delete_household(self, household_id: str, survey_id: str) -> bool:
-        """Delete a household via API. DELETE /api/v1/Surveys/{surveyId}/households/{householdId}"""
+        """Delete a household."""
         if not household_id or not survey_id:
             raise ValueError("household_id and survey_id are required")
         endpoint = f"/v1/Surveys/{survey_id}/households/{household_id}"
@@ -1481,15 +1067,7 @@ class TRRCMSApiClient:
         return True
 
     def get_households_for_unit(self, unit_id: str) -> List[Dict[str, Any]]:
-        """
-        Get all households for a property unit.
-
-        Args:
-            unit_id: Property unit UUID
-
-        Returns:
-            List of household dictionaries
-        """
+        """Get all households for a property unit."""
         if not unit_id:
             logger.warning("No unit_id provided")
             return []
@@ -1549,20 +1127,7 @@ class TRRCMSApiClient:
     # ==================== Persons APIs ====================
 
     def create_person(self, person_data: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        Create a new person via API.
-
-        Args:
-            person_data: Person data (snake_case or camelCase supported)
-                - full_name/fullName: Person's full name
-                - full_name_ar/fullNameAr: Arabic name
-                - national_id/nationalId: National ID number
-                - household_id/householdId: Link to household (optional)
-                - Other fields as needed
-
-        Returns:
-            Created person data with id
-        """
+        """Create a new person."""
         api_data = self._convert_person_to_api_format(person_data)
         logger.info(f"Creating person: {api_data.get('fullName', 'N/A')}")
         result = self._request("POST", "/v1/Persons", json_data=api_data)
@@ -1570,19 +1135,7 @@ class TRRCMSApiClient:
         return result
 
     def create_person_in_household(self, person_data: Dict[str, Any], survey_id: str, household_id: str) -> Dict[str, Any]:
-        """
-        Create a new person in a household via survey-scoped API.
-
-        Args:
-            person_data: Person data (snake_case or camelCase supported)
-            survey_id: Survey UUID
-            household_id: Household UUID
-
-        Returns:
-            Created person data with id
-
-        Endpoint: POST /api/v1/Surveys/{surveyId}/households/{householdId}/persons
-        """
+        """Create a new person in a household."""
         if not survey_id or not household_id:
             raise ValueError("survey_id and household_id are required")
 
@@ -1595,18 +1148,7 @@ class TRRCMSApiClient:
         return result
 
     def get_persons_for_household(self, survey_id: str, household_id: str) -> List[Dict[str, Any]]:
-        """
-        Get all persons in a household.
-
-        Args:
-            survey_id: Survey UUID
-            household_id: Household UUID
-
-        Returns:
-            List of person dictionaries
-
-        Endpoint: GET /api/v1/Surveys/{surveyId}/households/{householdId}/persons
-        """
+        """Get all persons in a household."""
         if not survey_id or not household_id:
             logger.warning(f"Missing survey_id or household_id")
             return []
@@ -1633,19 +1175,7 @@ class TRRCMSApiClient:
             return []
 
     def link_person_to_unit(self, survey_id: str, unit_id: str, relation_data: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        Link a person to a property unit with relation type.
-
-        Args:
-            survey_id: Survey UUID
-            unit_id: Property Unit UUID
-            relation_data: Relation details (person_id, relation_type, contract_type, etc.)
-
-        Returns:
-            Created relation data
-
-        Endpoint: POST /api/v1/Surveys/{surveyId}/property-units/{unitId}/relations
-        """
+        """Link a person to a property unit with relation type."""
         if not survey_id or not unit_id:
             raise ValueError("survey_id and unit_id are required")
 
@@ -1694,9 +1224,7 @@ class TRRCMSApiClient:
 
     def update_person_in_survey(self, survey_id: str, household_id: str,
                                person_id: str, person_data: Dict[str, Any]) -> Dict[str, Any]:
-        """Update person within survey context.
-        Endpoint: PUT /api/v1/Surveys/{surveyId}/households/{householdId}/persons/{personId}
-        Provides better audit trail than standalone PUT /api/v1/Persons/{id}."""
+        """Update person within survey context."""
         if not all([survey_id, household_id, person_id]):
             raise ValueError("survey_id, household_id, and person_id are all required")
 
@@ -1750,8 +1278,7 @@ class TRRCMSApiClient:
         logger.info(f"Person {person_id} deleted successfully")
 
     def delete_relation(self, survey_id: str, relation_id: str) -> bool:
-        """Delete a person-property relation (cascade deletes evidence).
-        Endpoint: DELETE /api/v1/Surveys/{surveyId}/relations/{relationId}"""
+        """Delete a person-property relation."""
         if not survey_id or not relation_id:
             raise ValueError("survey_id and relation_id are required")
 
@@ -1761,8 +1288,7 @@ class TRRCMSApiClient:
         return True
 
     def update_relation(self, survey_id: str, relation_id: str, relation_data: Dict[str, Any]) -> Dict[str, Any]:
-        """Update a person-property relation (partial update).
-        Endpoint: PATCH /api/v1/Surveys/{surveyId}/relations/{relationId}"""
+        """Update a person-property relation."""
         if not survey_id or not relation_id:
             raise ValueError("survey_id and relation_id are required")
 
@@ -1793,11 +1319,7 @@ class TRRCMSApiClient:
         evidence_type: int = 2,
         description: str = ""
     ) -> Dict[str, Any]:
-        """
-        Upload a tenure/relation evidence document via multipart/form-data.
-
-        Endpoint: POST /api/v1/Surveys/{surveyId}/evidence/tenure
-        """
+        """Upload a tenure evidence document."""
         import os
         import json as _json
         import mimetypes
@@ -1876,11 +1398,7 @@ class TRRCMSApiClient:
         file_path: str,
         description: str = ""
     ) -> Dict[str, Any]:
-        """
-        Upload an identification document for a person.
-
-        Endpoint: POST /api/v1/Surveys/{surveyId}/evidence/identification
-        """
+        """Upload an identification document for a person."""
         import os
         import mimetypes
 
@@ -1951,9 +1469,7 @@ class TRRCMSApiClient:
         description: str = "",
         notes: str = ""
     ) -> Dict[str, Any]:
-        """Update an existing identification document.
-        Endpoint: PUT /api/v1/Surveys/{surveyId}/evidence/identification/{evidenceId}
-        File is optional — send only metadata update if no new file."""
+        """Update an existing identification document."""
         import os
         import mimetypes
 
@@ -2022,9 +1538,7 @@ class TRRCMSApiClient:
         description: str = "",
         notes: str = ""
     ) -> Dict[str, Any]:
-        """Update an existing tenure/ownership document.
-        Endpoint: PUT /api/v1/Surveys/{surveyId}/evidence/tenure/{evidenceId}
-        File is optional — send only metadata update if no new file."""
+        """Update an existing tenure document."""
         import os
         import mimetypes
 
@@ -2104,11 +1618,7 @@ class TRRCMSApiClient:
         return result
 
     def get_survey_evidences(self, survey_id: str, evidence_type: str = None) -> List[Dict[str, Any]]:
-        """
-        Get all evidence records for a survey.
-
-        Endpoint: GET /api/v1/Surveys/{surveyId}/evidence
-        """
+        """Get all evidence records for a survey."""
         params = {}
         if evidence_type:
             params["evidenceType"] = evidence_type
@@ -2122,11 +1632,7 @@ class TRRCMSApiClient:
         evidence_type: str = None,
         only_current: bool = True
     ) -> List[Dict[str, Any]]:
-        """
-        Get evidence records for a person-property relation.
-
-        Endpoint: GET /api/v1/Surveys/{surveyId}/relations/{relationId}/evidences
-        """
+        """Get evidence records for a person-property relation."""
         params = {"onlyCurrentVersions": str(only_current).lower()}
         if evidence_type:
             params["evidenceType"] = evidence_type
@@ -2136,29 +1642,16 @@ class TRRCMSApiClient:
         return result if isinstance(result, list) else []
 
     def get_evidence_by_id(self, evidence_id: str) -> Dict[str, Any]:
-        """
-        Get evidence metadata by ID.
-
-        Endpoint: GET /api/v1/Surveys/evidence/{evidenceId}
-        """
+        """Get evidence metadata by ID."""
         return self._request("GET", f"/v1/Surveys/evidence/{evidence_id}")
 
     def delete_evidence(self, survey_id: str, evidence_id: str) -> bool:
-        """
-        Soft delete an evidence record.
-
-        Endpoint: DELETE /api/v1/Surveys/{surveyId}/evidence/{evidenceId}
-        Returns 204 on success.
-        """
+        """Soft delete an evidence record."""
         self._request("DELETE", f"/v1/Surveys/{survey_id}/evidence/{evidence_id}")
         return True
 
     def download_evidence(self, evidence_id: str, save_path: str) -> str:
-        """
-        Download an evidence file to disk.
-
-        Endpoint: GET /api/v1/Surveys/evidence/{evidenceId}/download
-        """
+        """Download an evidence file to disk."""
         import os
         url = f"{self.base_url}/v1/Surveys/evidence/{evidence_id}/download"
         self._ensure_valid_token()
@@ -2327,19 +1820,7 @@ class TRRCMSApiClient:
     # ==================== Surveys APIs ====================
 
     def create_survey(self, survey_data: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        Create a new survey via API.
-
-        Args:
-            survey_data: Survey data (snake_case or camelCase supported)
-                - building_id/buildingId: Building UUID
-                - surveyor_id/surveyorId: Surveyor user UUID
-                - survey_date/surveyDate: Date of survey
-                - Other fields as needed
-
-        Returns:
-            Created survey data with id
-        """
+        """Create a new survey."""
         api_data = self._convert_survey_to_api_format(survey_data)
         logger.info(f"Creating survey for building: {api_data.get('buildingId', 'N/A')}")
         result = self._request("POST", "/v1/Surveys", json_data=api_data)
@@ -2347,18 +1828,7 @@ class TRRCMSApiClient:
         return result
 
     def create_office_survey(self, survey_data: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        Create a new office survey via API.
-
-        Args:
-            survey_data: Survey data (snake_case or camelCase supported)
-                - building_uuid/buildingId: Building UUID
-
-        Returns:
-            Created survey data with id
-
-        Endpoint: POST /api/v1/Surveys/office
-        """
+        """Create a new office survey."""
         api_data = self._convert_survey_to_api_format(survey_data)
         logger.info(f"Creating office survey for building: {api_data.get('buildingId', 'N/A')}")
         result = self._request("POST", "/v1/Surveys/office", json_data=api_data)
@@ -2366,20 +1836,7 @@ class TRRCMSApiClient:
         return result
 
     def create_contact_person(self, survey_id: str, person_data: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        Set the contact person (applicant) for an office survey.
-
-        Args:
-            survey_id: Survey UUID (from context, created in BuildingInfoStep)
-            person_data: Dict with keys:
-                Required: first_name_ar, father_name_ar, last_name_ar, mother_name_ar
-                Optional: national_id, gender, nationality, birth_year, email, phone, landline
-
-        Returns:
-            API response dict
-
-        Endpoint: POST /api/v1/Surveys/{surveyId}/contact-person
-        """
+        """Set the contact person for an office survey."""
         if not survey_id:
             raise ValueError("survey_id is required")
 
@@ -2452,11 +1909,7 @@ class TRRCMSApiClient:
         sort_by: Optional[str] = None,
         sort_direction: Optional[str] = None,
     ) -> Dict[str, Any]:
-        """
-        Get paginated list of office surveys.
-
-        Endpoint: GET /api/v1/Surveys/office
-        """
+        """Get paginated list of office surveys."""
         params: Dict[str, Any] = {"page": page, "pageSize": page_size}
         if status:
             params["status"] = status
@@ -2479,17 +1932,13 @@ class TRRCMSApiClient:
         return self._request("GET", "/v1/Surveys/office", params=params)
 
     def get_office_survey_detail(self, survey_id: str) -> Dict[str, Any]:
-        """
-        Get full office survey detail including households, relations, evidence.
-
-        Endpoint: GET /api/v1/Surveys/office/{id}
-        """
+        """Get full office survey detail."""
         if not survey_id:
             raise ValueError("survey_id is required")
         return self._request("GET", f"/v1/Surveys/office/{survey_id}")
 
     def delete_survey(self, survey_id: str) -> bool:
-        """Delete a survey. Endpoint: DELETE /api/v1/Surveys/office/{surveyId}"""
+        """Delete a survey."""
         if not survey_id:
             raise ValueError("survey_id is required")
         self._request("DELETE", f"/v1/Surveys/office/{survey_id}")
@@ -2497,21 +1946,7 @@ class TRRCMSApiClient:
         return True
 
     def finalize_office_survey(self, survey_id: str, finalize_options: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
-        """
-        Process claims for an office survey.
-
-        Args:
-            survey_id: Survey UUID
-            finalize_options: Processing options
-                - finalNotes: Final notes for the survey
-                - durationMinutes: Survey duration in minutes
-                - autoCreateClaim: Whether to automatically create a claim
-
-        Returns:
-            Response data with survey details, claim info, warnings, etc.
-
-        Endpoint: POST /api/v1/Surveys/office/{id}/process-claims
-        """
+        """Process claims for an office survey."""
         if not survey_id:
             raise ValueError("survey_id is required")
 
@@ -2537,17 +1972,7 @@ class TRRCMSApiClient:
         return result
 
     def finalize_survey_status(self, survey_id: str) -> Dict[str, Any]:
-        """
-        Finalize an office survey (transition from Draft to Finalized).
-
-        Args:
-            survey_id: Survey UUID
-
-        Returns:
-            Updated survey data
-
-        Endpoint: POST /api/v1/Surveys/office/{id}/finalize
-        """
+        """Finalize an office survey."""
         if not survey_id:
             raise ValueError("survey_id is required")
 
@@ -2557,8 +1982,7 @@ class TRRCMSApiClient:
         return result
 
     def cancel_survey(self, survey_id: str, reason: str) -> Dict[str, Any]:
-        """Cancel a draft survey.
-        Endpoint: POST /api/v1/Surveys/{id}/cancel"""
+        """Cancel a draft survey."""
         if not survey_id:
             raise ValueError("survey_id is required")
         payload = {"surveyId": survey_id, "reason": reason}
@@ -2568,10 +1992,7 @@ class TRRCMSApiClient:
         return result
 
     def save_draft_to_backend(self, survey_id: str, draft_data: Dict[str, Any] = None) -> Dict[str, Any]:
-        """Save survey progress as draft on backend.
-        Endpoint: PUT /api/v1/Surveys/{id}/draft
-        Schema: SaveDraftSurveyCommand {surveyId, propertyUnitId, gpsCoordinates,
-                intervieweeName, intervieweeRelationship, notes, durationMinutes}"""
+        """Save survey progress as draft on backend."""
         if not survey_id:
             raise ValueError("survey_id is required")
 
@@ -2779,9 +2200,7 @@ class TRRCMSApiClient:
         return self._request("GET", "/v1/Persons", params=params) or {}
 
     def get_person_by_id(self, person_id: str) -> Optional[Dict[str, Any]]:
-        """Get a single person by UUID via GET /v1/Persons/{id}.
-        Returns None if person not found (404).
-        """
+        """Get a single person by UUID."""
         from services.exceptions import ApiException
         try:
             return self._request("GET", f"/v1/Persons/{person_id}")
@@ -2800,11 +2219,7 @@ class TRRCMSApiClient:
         page: int = 1,
         page_size: int = 50
     ) -> Dict[str, Any]:
-        """
-        Get households list with optional filters.
-
-        Endpoint: GET /v1/Households
-        """
+        """Get households list with optional filters."""
         params: Dict[str, Any] = {"page": page, "pageSize": page_size}
         if unit_id:
             params["propertyUnitId"] = unit_id
@@ -2825,23 +2240,7 @@ class TRRCMSApiClient:
         page: int = 1,
         page_size: int = 30,
     ) -> List[Dict[str, Any]]:
-        """
-        Get claim summaries for list pages.
-
-        Args:
-            claim_status: 1=Draft, 2=Submitted, 3=UnderReview, 4=Verified, 5=Approved, 6=Rejected, 7=Archived
-            claim_source: 1=FieldSurvey, 2=DirectRequest, 3=Referral, 4=OfficeSubmission
-            created_by_user_id: Filter by creator UUID
-            survey_visit_id: Filter by survey visit UUID
-            building_code: Filter by 17-digit building code
-            page: Page number (1-based)
-            page_size: Max results per page
-
-        Returns:
-            List of CreatedClaimSummaryDto
-
-        Endpoint: GET /api/Claims/summaries
-        """
+        """Get claim summaries for list pages."""
         params = {
             "page": page,
             "pageSize": page_size,
@@ -2884,21 +2283,7 @@ class TRRCMSApiClient:
         primary_claimant_id: Optional[str] = None,
         has_conflicts: Optional[bool] = None,
     ) -> List[Dict[str, Any]]:
-        """
-        Get all claims with filters.
-
-        Args:
-            status: ClaimStatus enum (1=Draft, 2=Submitted, etc.)
-            priority: CasePriority enum (1=Low, 2=Normal, 3=High, 4=Urgent)
-            property_unit_id: Filter by property unit UUID
-            primary_claimant_id: Filter by primary claimant UUID
-            has_conflicts: Filter by conflict status
-
-        Returns:
-            List of ClaimDto
-
-        Endpoint: GET /api/Claims
-        """
+        """Get all claims with filters."""
         params = {}
         if status is not None:
             params["CaseStatus"] = status
@@ -2923,17 +2308,7 @@ class TRRCMSApiClient:
         return claims
 
     def get_claim_by_id(self, claim_id: str) -> Dict[str, Any]:
-        """
-        Get full claim details by ID.
-
-        Args:
-            claim_id: Claim UUID
-
-        Returns:
-            ClaimDto with full details
-
-        Endpoint: GET /api/Claims/{id}
-        """
+        """Get full claim details by ID."""
         if not claim_id:
             raise ValueError("claim_id is required")
 
@@ -2943,27 +2318,13 @@ class TRRCMSApiClient:
         return result
 
     def get_claim_by_number(self, claim_number: str) -> Dict[str, Any]:
-        """
-        Get claim by claim number.
-
-        Endpoint: GET /api/v1/Claims/by-number/{claimNumber}
-        """
+        """Get claim by claim number."""
         if not claim_number:
             raise ValueError("claim_number is required")
         return self._request("GET", f"/v1/Claims/by-number/{claim_number}")
 
     def delete_claim(self, claim_id: str) -> bool:
-        """
-        Delete a claim.
-
-        Args:
-            claim_id: Claim UUID
-
-        Returns:
-            True if deleted successfully
-
-        Endpoint: DELETE /api/Claims/{id}
-        """
+        """Delete a claim."""
         if not claim_id:
             raise ValueError("claim_id is required")
         self._request("DELETE", f"/v1/Claims/{claim_id}")
@@ -2971,18 +2332,7 @@ class TRRCMSApiClient:
         return True
 
     def update_claim(self, claim_id: str, update_data: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        Update existing claim (UC-006).
-
-        Args:
-            claim_id: Claim UUID
-            update_data: UpdateClaimCommand fields:
-                primaryClaimantId, claimType, priority, tenureContractType,
-                tenureContractDetails, caseStatus, processingNotes,
-                publicRemarks, reasonForModification
-
-        Endpoint: PUT /api/Claims/{id}
-        """
+        """Update an existing claim."""
         if not claim_id:
             raise ValueError("claim_id is required")
         payload = {"claimId": claim_id, **update_data}
@@ -2990,31 +2340,19 @@ class TRRCMSApiClient:
         return self._request("PUT", f"/v1/Claims/{claim_id}", json_data=payload)
 
     def submit_claim(self, claim_id: str, user_id: str) -> Dict[str, Any]:
-        """
-        Submit claim for processing.
-
-        Endpoint: PUT /api/v1/Claims/{id}/submit
-        """
+        """Submit claim for processing."""
         return self._request("PUT", f"/v1/Claims/{claim_id}/submit",
                              json_data={"claimId": claim_id, "submittedByUserId": user_id})
 
     def verify_claim(self, claim_id: str, user_id: str, notes: str = "") -> Dict[str, Any]:
-        """
-        Verify claim.
-
-        Endpoint: PUT /api/v1/Claims/{id}/verify
-        """
+        """Verify claim."""
         return self._request("PUT", f"/v1/Claims/{claim_id}/verify",
                              json_data={"claimId": claim_id, "verifiedByUserId": user_id,
                                         "verificationNotes": notes})
 
     def assign_claim(self, claim_id: str, user_id: str,
                      target_date: Optional[str] = None) -> Dict[str, Any]:
-        """
-        Assign claim to case officer.
-
-        Endpoint: PUT /api/v1/Claims/{id}/assign
-        """
+        """Assign claim to case officer."""
         payload = {"claimId": claim_id, "assignToUserId": user_id}
         if target_date:
             payload["targetCompletionDate"] = target_date
@@ -3029,7 +2367,7 @@ class TRRCMSApiClient:
         role: Optional[str] = None,
         is_active: Optional[bool] = None
     ) -> Dict[str, Any]:
-        """GET /v1/Users"""
+        """Get all users with optional filters."""
         params: Dict[str, Any] = {"page": page, "pageSize": page_size}
         if role:
             params["role"] = role
@@ -3038,35 +2376,35 @@ class TRRCMSApiClient:
         return self._request("GET", "/v1/Users", params=params) or {}
 
     def get_user(self, user_id: str) -> Dict[str, Any]:
-        """GET /v1/Users/{id}"""
+        """Get user by ID."""
         return self._request("GET", f"/v1/Users/{user_id}") or {}
 
     def create_user(self, data: Dict[str, Any]) -> Dict[str, Any]:
-        """POST /v1/Users"""
+        """Create a new user."""
         return self._request("POST", "/v1/Users", data) or {}
 
     def update_user(self, user_id: str, data: Dict[str, Any]) -> Dict[str, Any]:
-        """PUT /v1/Users/{id}"""
+        """Update a user."""
         return self._request("PUT", f"/v1/Users/{user_id}", data) or {}
 
     def delete_user(self, user_id: str) -> None:
-        """DELETE /v1/Users/{id}"""
+        """Delete a user."""
         self._request("DELETE", f"/v1/Users/{user_id}")
 
     def activate_user(self, user_id: str) -> Dict[str, Any]:
-        """PUT /v1/Users/{id}/activate"""
+        """Activate a user."""
         return self._request("PUT", f"/v1/Users/{user_id}/activate") or {}
 
     def deactivate_user(self, user_id: str) -> Dict[str, Any]:
-        """PUT /v1/Users/{id}/deactivate"""
+        """Deactivate a user."""
         return self._request("PUT", f"/v1/Users/{user_id}/deactivate") or {}
 
     def unlock_user(self, user_id: str) -> Dict[str, Any]:
-        """PUT /v1/Users/{id}/unlock"""
+        """Unlock a user account."""
         return self._request("PUT", f"/v1/Users/{user_id}/unlock") or {}
 
     def admin_change_user_password(self, user_id: str, new_password: str) -> Dict[str, Any]:
-        """POST /v1/Auth/change-password"""
+        """Change a user's password (admin)."""
         return self._request("POST", "/v1/Auth/change-password", {
             "userId": user_id,
             "newPassword": new_password,
@@ -3074,7 +2412,7 @@ class TRRCMSApiClient:
         }) or {}
 
     def grant_user_permissions(self, user_id: str, permissions: Dict[str, Any]) -> Dict[str, Any]:
-        """POST /v1/Users/{id}/permissions"""
+        """Grant permissions to a user."""
         return self._request("POST", f"/v1/Users/{user_id}/permissions", permissions) or {}
 
     def revoke_user_permission(self, user_id: str, permission: str) -> None:
@@ -3172,64 +2510,36 @@ class TRRCMSApiClient:
         page_size: int = 20,
         status_filter: Optional[str] = None
     ) -> Dict[str, Any]:
-        """
-        List all import packages with optional filtering.
-
-        Endpoint: GET /api/v1/import/packages
-        """
+        """List all import packages with optional filtering."""
         params: Dict[str, Any] = {"page": page, "pageSize": page_size}
         if status_filter:
             params["status"] = status_filter
         return self._request("GET", "/v1/import/packages", params=params)
 
     def get_import_package(self, package_id: str) -> Dict[str, Any]:
-        """
-        Get import package details by ID.
-
-        Endpoint: GET /api/v1/import/packages/{id}
-        """
+        """Get import package details by ID."""
         return self._request("GET", f"/v1/import/packages/{package_id}")
 
     def stage_import_package(self, package_id: str) -> Dict[str, Any]:
-        """
-        Trigger staging (unpack .uhc -> staging tables) and row-level validation.
-
-        Endpoint: POST /api/v1/import/packages/{id}/stage
-        """
+        """Trigger staging and row-level validation."""
         logger.info(f"Staging import package: {package_id}")
         return self._request("POST", f"/v1/import/packages/{package_id}/stage")
 
     def get_validation_report(self, package_id: str) -> Dict[str, Any]:
-        """
-        Get the current validation report for a package.
-
-        Endpoint: GET /api/v1/import/packages/{id}/validation-report
-        """
+        """Get the current validation report for a package."""
         return self._request("GET", f"/v1/import/packages/{package_id}/validation-report")
 
     def get_staged_entities(self, package_id: str) -> List[Dict[str, Any]]:
-        """
-        Get all staged entities with IDs, identifiers, and status.
-
-        Endpoint: GET /api/v1/import/packages/{id}/staged-entities
-        """
+        """Get all staged entities for a package."""
         return self._request("GET", f"/v1/import/packages/{package_id}/staged-entities")
 
     def detect_duplicates(self, package_id: str) -> Dict[str, Any]:
-        """
-        Trigger duplicate detection (person + property matching).
-
-        Endpoint: POST /api/v1/import/packages/{id}/detect-duplicates
-        """
+        """Trigger duplicate detection."""
         logger.info(f"Detecting duplicates for package: {package_id}")
         return self._request("POST", f"/v1/import/packages/{package_id}/detect-duplicates")
 
     def approve_import_package(self, package_id: str) -> Dict[str, Any]:
-        """
-        Approve staging records for commit. Requires all conflicts resolved.
-
-        Endpoint: POST /api/v1/import/packages/{id}/approve
-        """
+        """Approve staging records for commit."""
         logger.info(f"Approving import package: {package_id}")
         return self._request(
             "POST",
@@ -3238,11 +2548,7 @@ class TRRCMSApiClient:
         )
 
     def commit_import_package(self, package_id: str) -> Dict[str, Any]:
-        """
-        Commit approved staging records to production tables.
-
-        Endpoint: POST /api/v1/import/packages/{id}/commit
-        """
+        """Commit approved staging records to production tables."""
         logger.info(f"Committing import package: {package_id}")
         return self._request(
             "POST",
@@ -3251,28 +2557,16 @@ class TRRCMSApiClient:
         )
 
     def get_commit_report(self, package_id: str) -> Dict[str, Any]:
-        """
-        Get the commit report for a completed/failed import package.
-
-        Endpoint: GET /api/v1/import/packages/{id}/commit-report
-        """
+        """Get the commit report for an import package."""
         return self._request("GET", f"/v1/import/packages/{package_id}/commit-report")
 
     def reset_commit(self, package_id: str) -> Dict[str, Any]:
-        """
-        Reset a package stuck in Committing or Failed status back to ReadyToCommit.
-
-        Endpoint: POST /api/v1/import/packages/{id}/reset-commit
-        """
+        """Reset a package back to ReadyToCommit status."""
         logger.info(f"Resetting commit for package: {package_id}")
         return self._request("POST", f"/v1/import/packages/{package_id}/reset-commit")
 
     def cancel_import_package(self, package_id: str, reason: str = "Cancelled by user") -> Dict[str, Any]:
-        """
-        Cancel an active import package.
-
-        Endpoint: POST /api/v1/import/packages/{id}/cancel
-        """
+        """Cancel an active import package."""
         logger.info(f"Cancelling import package: {package_id}")
         return self._request(
             "POST",
@@ -3281,12 +2575,7 @@ class TRRCMSApiClient:
         )
 
     def quarantine_import_package(self, package_id: str, reason: str = "") -> Dict[str, Any]:
-        """
-        Quarantine a suspicious import package.
-
-        Endpoint: POST /api/v1/import/packages/{id}/quarantine
-        Body: QuarantinePackageCommand {importPackageId, reason}
-        """
+        """Quarantine a suspicious import package."""
         logger.info(f"Quarantining import package: {package_id}")
         body = {
             "importPackageId": package_id,
@@ -3295,7 +2584,7 @@ class TRRCMSApiClient:
         return self._request("POST", f"/v1/import/packages/{package_id}/quarantine", json_data=body)
 
 
-    # ==================== Conflicts / Duplicates API (UC-007/UC-008) ====================
+    # ==================== Conflicts / Duplicates API ====================
 
     def get_conflicts(
         self,
@@ -3311,11 +2600,7 @@ class TRRCMSApiClient:
         sort_by: Optional[str] = None,
         sort_descending: bool = True,
     ) -> Dict[str, Any]:
-        """
-        List conflict resolution queue with filtering and pagination.
-
-        Endpoint: GET /api/v1/conflicts
-        """
+        """List conflict resolution queue with filtering."""
         params: Dict[str, Any] = {"page": page, "pageSize": page_size}
         if conflict_type:
             params["conflictType"] = conflict_type
@@ -3337,43 +2622,27 @@ class TRRCMSApiClient:
         return self._request("GET", "/v1/conflicts", params=params)
 
     def get_conflicts_summary(self) -> Dict[str, Any]:
-        """
-        Get aggregate conflict counts for dashboard.
-
-        Endpoint: GET /api/v1/conflicts/summary
-        """
+        """Get aggregate conflict counts for dashboard."""
         return self._request("GET", "/v1/conflicts/summary")
 
     def get_property_duplicates(
         self, page: int = 1, page_size: int = 20
     ) -> Dict[str, Any]:
-        """
-        Get property duplicate conflicts (UC-007).
-
-        Endpoint: GET /api/v1/conflicts/property-duplicates
-        """
+        """Get property duplicate conflicts."""
         params = {"page": page, "pageSize": page_size}
         return self._request("GET", "/v1/conflicts/property-duplicates", params=params)
 
     def get_person_duplicates(
         self, page: int = 1, page_size: int = 20
     ) -> Dict[str, Any]:
-        """
-        Get person duplicate conflicts (UC-008).
-
-        Endpoint: GET /api/v1/conflicts/person-duplicates
-        """
+        """Get person duplicate conflicts."""
         params = {"page": page, "pageSize": page_size}
         return self._request("GET", "/v1/conflicts/person-duplicates", params=params)
 
     def get_escalated_conflicts(
         self, page: int = 1, page_size: int = 20
     ) -> Dict[str, Any]:
-        """
-        Get escalated conflicts awaiting senior review.
-
-        Endpoint: GET /api/v1/conflicts/escalated
-        """
+        """Get escalated conflicts awaiting senior review."""
         params = {"page": page, "pageSize": page_size}
         return self._request("GET", "/v1/conflicts/escalated", params=params)
 

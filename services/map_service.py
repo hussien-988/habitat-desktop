@@ -1,8 +1,5 @@
 # -*- coding: utf-8 -*-
-"""
-Map Integration Service - PostGIS and GIS functionality.
-Implements UC-000 S04, UC-007 S04, UC-012 S02a map-based features.
-"""
+"""Map integration service with PostGIS and GIS functionality."""
 
 import json
 from dataclasses import dataclass
@@ -202,11 +199,7 @@ class MapService:
         polygon: Optional[GeoPolygon] = None,
         user_id: Optional[str] = None
     ) -> bool:
-        """
-        Update building geometry from map selection.
-
-        Implements UC-000 S04: Enter geo location/Geometry
-        """
+        """Update building geometry from map selection."""
         try:
             cursor = self.db.cursor()
 
@@ -316,11 +309,7 @@ class MapService:
             return []
 
     def search_buildings_in_polygon(self, polygon: GeoPolygon) -> List[BuildingGeoData]:
-        """
-        Search buildings within a polygon.
-
-        Implements UC-012 S02a: Locate building on the map
-        """
+        """Search buildings within a polygon."""
         try:
             # Get bounding box for initial filter
             all_coords = [coord for ring in polygon.coordinates for coord in ring]
@@ -411,11 +400,7 @@ class MapService:
         building1_uuid: str,
         building2_uuid: str
     ) -> Dict[str, Any]:
-        """
-        Check proximity/overlap between two buildings.
-
-        Implements UC-007 S04: Check Location, Geometry and Documents
-        """
+        """Check proximity/overlap between two buildings."""
         building1 = self.get_building_location(building1_uuid)
         building2 = self.get_building_location(building2_uuid)
 
@@ -451,11 +436,7 @@ class MapService:
         buildings: List[BuildingGeoData],
         include_properties: bool = True
     ) -> Dict:
-        """
-        Export buildings to GeoJSON format for QGIS.
-
-        Implements FR-D-17: GeoJSON export with full geometry preservation.
-        """
+        """Export buildings to GeoJSON format for QGIS."""
         features = []
 
         for building in buildings:
@@ -670,11 +651,7 @@ class MapService:
         self,
         filters: Optional[Dict[str, Any]] = None
     ) -> Dict:
-        """
-        Get claims as GeoJSON for map visualization.
-
-        Implements FSD 15.1 GIS Dashboard requirements.
-        """
+        """Get claims as GeoJSON for map visualization."""
         try:
             cursor = self.db.cursor()
 

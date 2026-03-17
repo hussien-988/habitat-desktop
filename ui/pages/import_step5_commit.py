@@ -1,12 +1,5 @@
 # -*- coding: utf-8 -*-
-"""
-Import Wizard - Step 4 (Commit Confirmation)
-UC-003: Import Pipeline
-
-Display-only confirmation view before committing staged entities to production.
-The orchestrator handles approve + commit API calls — this step only displays
-the summary and progress.
-"""
+"""Import wizard commit confirmation step."""
 
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QFrame,

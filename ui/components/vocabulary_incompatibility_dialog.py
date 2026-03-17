@@ -1,8 +1,5 @@
 # -*- coding: utf-8 -*-
-"""
-Vocabulary Incompatibility Report Dialog (UC-003 S12c)
-Displays detailed incompatibility report for outdated vocabularies.
-"""
+"""Vocabulary Incompatibility Report Dialog."""
 
 from PyQt5.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
@@ -16,15 +13,7 @@ from ui.font_utils import create_font, FontManager
 
 
 class VocabularyIncompatibilityDialog(QDialog):
-    """
-    Dialog to display detailed vocabulary incompatibility report (UC-003 S12c).
-
-    Shows:
-    - List of outdated vocabularies
-    - Current version vs Required version
-    - Impact assessment
-    - Manual update options
-    """
+    """Dialog to display vocabulary incompatibility report."""
 
     def __init__(self, incompatible_vocabs: list, package_info: dict, parent=None):
         super().__init__(parent)

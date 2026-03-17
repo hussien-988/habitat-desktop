@@ -1,8 +1,5 @@
 # -*- coding: utf-8 -*-
-"""
-Administration page for users, roles, and vocabularies.
-Implements UC-015: User & Role Administration
-"""
+"""Administration page for users, roles, and vocabularies."""
 
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
@@ -34,7 +31,7 @@ logger = get_logger(__name__)
 
 
 class UsersTableModel(BaseTableModel):
-    """Table model for users (UC-009 S03)."""
+    """Table model for users."""
 
     def __init__(self):
         columns = [
@@ -277,7 +274,7 @@ class VocabularyTermDialog(QDialog):
         self.is_active.setChecked(True)
         form.addRow("", self.is_active)
 
-        # Effective dates (UC-010: Set effective dates for vocabulary changes)
+        # Effective dates
         dates_label = QLabel("تواريخ السريان:")
         dates_label.setStyleSheet("font-weight: 600; margin-top: 8px;")
         form.addRow(dates_label)
@@ -426,7 +423,7 @@ class AdminPage(QWidget):
         layout.addWidget(tabs)
 
     def _create_users_tab(self) -> QWidget:
-        """Create users management tab (UC-009 S02-S05)."""
+        """Create users management tab."""
         widget = QWidget()
         layout = QVBoxLayout(widget)
         layout.setContentsMargins(20, 20, 20, 20)
@@ -435,7 +432,7 @@ class AdminPage(QWidget):
         # Header with actions
         header = QHBoxLayout()
 
-        # Action buttons for selected user (UC-009 S04, S05)
+        # Action buttons for selected user
         self.lock_user_btn = QPushButton("قفل الحساب")
         self.lock_user_btn.setStyleSheet(f"""
             QPushButton {{
@@ -526,14 +523,14 @@ class AdminPage(QWidget):
         self.users_model = UsersTableModel()
         self.users_table.setModel(self.users_model)
 
-        # Connect selection changed to update action buttons (UC-009 S03)
+        # Connect selection changed to update action buttons
         selection_model = self.users_table.selectionModel()
         if selection_model:
             selection_model.selectionChanged.connect(self._on_user_selection_changed)
 
         layout.addWidget(self.users_table)
 
-        # Roles info section (UC-009 S06 - read-only display)
+        # Roles info section (read-only display)
         roles_group = QGroupBox("الأدوار المتاحة")
         roles_group.setStyleSheet("""
             QGroupBox { font-weight: 600; border: 1px solid #E5E7EB; border-radius: 8px; margin-top: 10px; padding-top: 10px; }
@@ -561,7 +558,7 @@ class AdminPage(QWidget):
         return widget
 
     def _create_vocab_tab(self) -> QWidget:
-        """Create vocabularies management tab with full CRUD (UC-010)."""
+        """Create vocabularies management tab."""
         widget = QWidget()
         layout = QVBoxLayout(widget)
         layout.setContentsMargins(20, 20, 20, 20)
@@ -582,7 +579,7 @@ class AdminPage(QWidget):
 
         header_layout.addStretch()
 
-        # Import button (UC-010 S04)
+        # Import button
         import_btn = QPushButton("استيراد من ملف")
         import_btn.setStyleSheet(f"""
             QPushButton {{
@@ -596,7 +593,7 @@ class AdminPage(QWidget):
         import_btn.clicked.connect(self._on_import_vocab)
         header_layout.addWidget(import_btn)
 
-        # Export button (UC-010 S09)
+        # Export button
         export_btn = QPushButton("تصدير")
         export_btn.setStyleSheet(f"""
             QPushButton {{
@@ -610,7 +607,7 @@ class AdminPage(QWidget):
         export_btn.clicked.connect(self._on_export_vocab)
         header_layout.addWidget(export_btn)
 
-        # Add term button (UC-010 S05)
+        # Add term button
         add_btn = QPushButton("+ إضافة مصطلح")
         add_btn.setStyleSheet(f"""
             QPushButton {{
@@ -803,7 +800,7 @@ class AdminPage(QWidget):
         self._load_vocab_terms()
 
     def _on_add_term(self):
-        """Add a new vocabulary term via API (UC-010 S05)."""
+        """Add a new vocabulary term via API."""
         if not self.current_vocabulary:
             return
         dialog = VocabularyTermDialog(self.current_vocabulary, parent=self)
@@ -829,7 +826,7 @@ class AdminPage(QWidget):
                 Toast.show_toast(self, f"فشل في إضافة المصطلح: {str(e)}", Toast.ERROR)
 
     def _on_edit_term(self, term_data: dict):
-        """Edit an existing vocabulary term via API (UC-010 S05)."""
+        """Edit an existing vocabulary term via API."""
         dialog = VocabularyTermDialog(self.current_vocabulary, term_data=term_data, parent=self)
         if dialog.exec_() == QDialog.Accepted:
             data = dialog.get_data()
@@ -851,7 +848,7 @@ class AdminPage(QWidget):
                 Toast.show_toast(self, f"فشل في تحديث المصطلح: {str(e)}", Toast.ERROR)
 
     def _on_deprecate_term(self, term_data: dict):
-        """Deprecate a vocabulary term via API (UC-010 S05)."""
+        """Deprecate a vocabulary term via API."""
         label = term_data.get("labelArabic", "")
         code = str(term_data.get("code", ""))
         if ErrorHandler.confirm(
@@ -896,7 +893,7 @@ class AdminPage(QWidget):
             Toast.show_toast(self, f"فشل في تفعيل المصطلح: {str(e)}", Toast.ERROR)
 
     def _on_import_vocab(self):
-        """Import vocabulary terms from file via API (UC-010 S04)."""
+        """Import vocabulary terms from file via API."""
         file_path, _ = QFileDialog.getOpenFileName(
             self,
             "استيراد التصنيف",
@@ -957,7 +954,7 @@ class AdminPage(QWidget):
             Toast.show_toast(self, f"فشل في الاستيراد: {str(e)}", Toast.ERROR)
 
     def _on_export_vocab(self):
-        """Export vocabulary terms to file via API (UC-010 S09)."""
+        """Export vocabulary terms to file via API."""
         file_path, _ = QFileDialog.getSaveFileName(
             self,
             "تصدير التصنيف",
@@ -989,7 +986,7 @@ class AdminPage(QWidget):
             Toast.show_toast(self, f"فشل في التصدير: {str(e)}", Toast.ERROR)
 
     def _create_system_tab(self) -> QWidget:
-        """Create system settings tab with security and audit (UC-011)."""
+        """Create system settings tab with security and audit."""
         widget = QWidget()
         main_layout = QVBoxLayout(widget)
         main_layout.setContentsMargins(20, 20, 20, 20)
@@ -1012,7 +1009,7 @@ class AdminPage(QWidget):
         return widget
 
     def _create_security_settings_widget(self) -> QWidget:
-        """Create security settings panel (UC-011 S03-S05)."""
+        """Create security settings panel."""
         widget = QGroupBox("إعدادات الأمان")
         widget.setStyleSheet("""
             QGroupBox { font-weight: 600; border: 1px solid #E5E7EB; border-radius: 8px; margin-top: 10px; padding-top: 10px; }
@@ -1031,7 +1028,7 @@ class AdminPage(QWidget):
         layout.setSpacing(12)
         layout.setContentsMargins(16, 16, 16, 16)
 
-        # Password settings (UC-011 S03)
+        # Password settings
         pwd_label = QLabel("سياسة كلمة المرور:")
         pwd_label.setStyleSheet("font-weight: 600; margin-top: 10px;")
         layout.addRow(pwd_label)
@@ -1067,7 +1064,7 @@ class AdminPage(QWidget):
         self.password_history.setValue(5)
         layout.addRow("سجل كلمات المرور السابقة:", self.password_history)
 
-        # Session settings (UC-011 S04)
+        # Session settings
         session_label = QLabel("إعدادات الجلسة:")
         session_label.setStyleSheet("font-weight: 600; margin-top: 10px;")
         layout.addRow(session_label)
@@ -1133,7 +1130,7 @@ class AdminPage(QWidget):
         return widget
 
     def _create_audit_log_widget(self) -> QWidget:
-        """Create audit log viewer panel (UC-011 S08)."""
+        """Create audit log viewer panel."""
         widget = QGroupBox("سجل المراجعة")
         widget.setStyleSheet("""
             QGroupBox { font-weight: 600; border: 1px solid #E5E7EB; border-radius: 8px; margin-top: 10px; padding-top: 10px; }
@@ -1234,7 +1231,7 @@ class AdminPage(QWidget):
             self.settings_info_label.setText("")
 
     def _on_save_security_settings(self):
-        """Save security settings (UC-011 S07)."""
+        """Save security settings."""
         settings = SecuritySettings(
             password_min_length=self.password_min_length.value(),
             password_require_uppercase=self.require_uppercase.isChecked(),
@@ -1413,7 +1410,7 @@ class AdminPage(QWidget):
                     Toast.show_toast(self, f"فشل في تحديث المستخدم: {str(e)}", Toast.ERROR)
 
     def _on_user_selection_changed(self, selected, deselected):
-        """Update action buttons based on selected user (UC-009 S03)."""
+        """Update action buttons based on selected user."""
         indexes = self.users_table.selectionModel().selectedRows()
         if not indexes:
             self.lock_user_btn.setEnabled(False)
@@ -1428,7 +1425,7 @@ class AdminPage(QWidget):
             self.deactivate_user_btn.setEnabled(user.is_active)
 
     def _on_lock_user(self):
-        """Lock selected user account (UC-009 S04)."""
+        """Lock selected user account."""
         indexes = self.users_table.selectionModel().selectedRows()
         if not indexes:
             return
@@ -1460,7 +1457,7 @@ class AdminPage(QWidget):
             Toast.show_toast(self, f"فشل في قفل الحساب: {str(e)}", Toast.ERROR)
 
     def _on_unlock_user(self):
-        """Unlock selected user account (UC-009 S04)."""
+        """Unlock selected user account."""
         indexes = self.users_table.selectionModel().selectedRows()
         if not indexes:
             return
@@ -1485,7 +1482,7 @@ class AdminPage(QWidget):
             Toast.show_toast(self, f"فشل في إلغاء القفل: {str(e)}", Toast.ERROR)
 
     def _on_deactivate_user(self):
-        """Deactivate selected user (UC-009 S04)."""
+        """Deactivate selected user."""
         indexes = self.users_table.selectionModel().selectedRows()
         if not indexes:
             return

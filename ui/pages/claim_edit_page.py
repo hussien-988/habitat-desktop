@@ -1,15 +1,5 @@
 # -*- coding: utf-8 -*-
-"""
-Claim Edit Page — UC-006 S03-S07: Edit an existing claim.
-
-Sections:
-  S04 — Personal information (PUT /v1/Persons/{id})
-  S05 — Property unit details (PUT /v1/PropertyUnits/{id})
-  S06 — Evidence documents (POST/DELETE evidence)
-  S07 — Claim status & priority (PUT /api/Claims/{id})
-
-Design: Collapsible sections, RTL, matches project design system.
-"""
+"""Claim edit page with collapsible sections."""
 
 import os
 from PyQt5.QtWidgets import (
@@ -44,7 +34,7 @@ _PRIORITY_OPTIONS = [
 
 
 class ClaimEditPage(QWidget):
-    """UC-006 S03-S07: Edit claim details with collapsible sections."""
+    """Edit claim details with collapsible sections."""
 
     save_completed = pyqtSignal()
     back_requested = pyqtSignal()

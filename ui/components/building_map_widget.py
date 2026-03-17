@@ -1,15 +1,5 @@
 # -*- coding: utf-8 -*-
-"""
-    Building Map Widget - Shared Component for Map Services.
-
-    Reusable component that provides interactive building selection map.
-    Single source of truth for map functionality.
-
-    Usage:
-    widget = BuildingMapWidget(db)
-    widget.building_selected.connect(on_building_selected)
-    widget.show_dialog()
-"""
+"""Building Map Widget - reusable component for interactive building selection map."""
 
 from typing import Optional, Callable
 from PyQt5.QtWidgets import (
@@ -47,13 +37,7 @@ except ImportError:
 
 
 class RoundedDialog(QDialog):
-    """
-    Custom QDialog with rounded corners.
-
-    Args:
-        radius: Border radius in pixels
-        parent: Parent widget
-    """
+    """Custom QDialog with rounded corners."""
 
     def __init__(self, radius: int = 32, parent=None):
         super().__init__(parent)
@@ -76,12 +60,7 @@ class RoundedDialog(QDialog):
         # painter.strokePath(path, QPen(QColor(Colors.BORDER_DEFAULT), 1))
 
     def keyPressEvent(self, event):
-        """
-        Override keyPressEvent to prevent Enter/Return from closing dialog.
-
-        Intercept Enter key BEFORE dialog's default behavior.
-        Only let search field handle Enter, not dialog.
-        """
+        """Override to prevent Enter from closing dialog."""
         from PyQt5.QtCore import Qt
 
         # If Enter/Return pressed and search input has focus
@@ -103,29 +82,12 @@ class RoundedDialog(QDialog):
 
 
 class BuildingMapWidget(QObject):
-    """
-    Shared component for building selection via interactive map.
-
-    Provides:
-    - Interactive Leaflet map with building markers
-    - Color-coded building status
-    - Building selection via popup
-    - Reusable across different parts of the application
-
-    Signals:
-        building_selected: Emitted when user selects a building (Building object)
-    """
+    """Shared component for building selection via interactive map."""
 
     building_selected = pyqtSignal(object)  # Emits Building object
 
     def __init__(self, db: Database, parent=None):
-        """
-        Initialize the map widget.
-
-        Args:
-            db: Database instance
-            parent: Parent QObject
-        """
+        """Initialize the map widget."""
         super().__init__(parent)
         self.db = db
         self.building_repo = BuildingRepository(db)
@@ -151,19 +113,7 @@ class BuildingMapWidget(QObject):
             logger.info("BuildingMapWidget initialized in local database mode")
 
     def show_dialog(self, selected_building_id: Optional[str] = None) -> Optional[Building]:
-        """
-        Show the map selection dialog.
-
-        Args:
-            selected_building_id: Optional building ID to focus on when map loads
-                                 If provided, dialog enters VIEW-ONLY mode:
-                                 - Search bar disabled
-                                 - No selection button
-                                 - Larger marker for selected building
-
-        Returns:
-            Selected Building object, or None if cancelled
-        """
+        """Show the map selection dialog and return selected building, or None if cancelled."""
         if not HAS_WEBENGINE:
             from ui.error_handler import ErrorHandler
             ErrorHandler.show_success(
@@ -213,15 +163,7 @@ class BuildingMapWidget(QObject):
         return None
 
     def _create_overlay(self, parent: QWidget) -> QWidget:
-        """
-        Create gray transparent overlay covering the entire application window.
-
-        Args:
-            parent: Parent widget to find top-level window
-
-        Returns:
-            Overlay widget covering entire window
-        """
+        """Create gray transparent overlay covering the entire application window."""
         # Find the top-level window (MainWindow)
         top_window = parent.window()  # Get the top-level QMainWindow/QWidget
 
@@ -238,17 +180,7 @@ class BuildingMapWidget(QObject):
         return overlay
 
     def _create_dialog(self) -> QDialog:
-        """
-        Create the map dialog UI.
-
-        Enhanced Specifications:
-        - Size: 1100×700px (width × height) - Larger for better map visibility
-        - Border-radius: 32px (زيادة للشكل الخارجي)
-        - Internal padding: 24px
-        - Title: "بحث على الخريطة" with 12px gap below
-        - Search bar: 42px height, border-radius 8px
-        - Map: Remaining space with border-radius 8px
-        """
+        """Create the map dialog UI."""
         # Create custom dialog with rounded corners
         dialog = RoundedDialog(radius=32)
         dialog.setModal(True)
@@ -273,7 +205,7 @@ class BuildingMapWidget(QObject):
         content.setStyleSheet("background: transparent;")
         content_layout = QVBoxLayout(content)
         content_layout.setContentsMargins(24, 24, 24, 24)
-        content_layout.setSpacing(12)  # Gap: 12px (Figma)
+        content_layout.setSpacing(12)
 
         # Title bar with close button (RTL)
         title_bar = self._create_title_bar(dialog)
@@ -351,12 +283,7 @@ class BuildingMapWidget(QObject):
         return dialog
 
     def _create_title_bar(self, dialog: QDialog) -> QWidget:
-        """
-        Create title bar with close button (X).
-
-        Returns:
-            QWidget containing title + close button
-        """
+        """Create title bar with close button."""
         title_bar = QWidget()
         title_bar.setFixedHeight(32)
         title_bar.setStyleSheet("background: transparent;")
@@ -405,17 +332,11 @@ class BuildingMapWidget(QObject):
         return title_bar
 
     def _create_search_bar(self) -> QFrame:
-        """
-        Create search bar (42px height, border-radius 8px).
-
-        Returns:
-            QFrame containing search input + icon
-        """
+        """Create search bar."""
         search_frame = QFrame()
         search_frame.setObjectName("searchBar")
         search_frame.setFixedHeight(42)
 
-        # Figma: border-radius 8px
         search_frame.setStyleSheet(f"""
             QFrame#searchBar {{
                 background-color: {Colors.SEARCH_BAR_BG};
@@ -477,14 +398,7 @@ class BuildingMapWidget(QObject):
         return search_frame
 
     def _update_search_bar_state(self):
-        """
-        Update search bar state based on view mode.
-
-        View-only mode (showing selected building):
-        - Disable search input
-        - Change to light gray background
-        - Add visual indicator
-        """
+        """Update search bar state based on view mode."""
         if not hasattr(self, 'search_input') or not self.search_input:
             return
 
@@ -579,13 +493,7 @@ class BuildingMapWidget(QObject):
         pass
 
     def _on_search_submitted(self):
-        """
-        Handle search submission (Enter key pressed).
-
-        Search for neighborhood/area and fly to location on map.
-
-        Search for neighborhood/area and fly to location on map.
-        """
+        """Handle search submission (Enter key pressed)."""
         search_text = self.search_input.text().strip()
 
         if not search_text:
@@ -699,15 +607,7 @@ class BuildingMapWidget(QObject):
         self._map_view.page().setWebChannel(self._channel)
 
     def _parse_wkt_to_geojson(self, wkt: str) -> Optional[dict]:
-        """
-        تحويل WKT إلى GeoJSON.
-
-        Args:
-            wkt: WKT string (e.g., "POLYGON((lon lat, lon lat, ...))")
-
-        Returns:
-            GeoJSON geometry dict or None if invalid
-        """
+        """تحويل WKT إلى GeoJSON."""
         try:
             wkt = wkt.strip().upper()
 
@@ -747,12 +647,7 @@ class BuildingMapWidget(QObject):
             return None
 
     def _load_map(self, selected_building_id: Optional[str] = None):
-        """
-        Load the interactive map with building markers and polygons.
-
-        Args:
-            selected_building_id: Optional building ID to focus on when map loads
-        """
+        """Load the interactive map with building markers and polygons."""
         if not self._map_view:
             return
 
