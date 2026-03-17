@@ -61,10 +61,7 @@ class ClaimEditPage(QWidget):
         self._original_claim = {}
 
         self._setup_ui()
-
-    # ------------------------------------------------------------------
     # UI Setup
-    # ------------------------------------------------------------------
 
     def _setup_ui(self):
         main_layout = QVBoxLayout(self)
@@ -137,10 +134,7 @@ class ClaimEditPage(QWidget):
 
         layout.addStretch()
         return header
-
-    # ------------------------------------------------------------------
     # S04: Personal Information Section
-    # ------------------------------------------------------------------
 
     def _create_person_section(self) -> QFrame:
         section = self._create_section_frame("البيانات الشخصية")
@@ -161,10 +155,7 @@ class ClaimEditPage(QWidget):
 
         section.layout().addLayout(grid)
         return section
-
-    # ------------------------------------------------------------------
     # S05: Property Unit Section
-    # ------------------------------------------------------------------
 
     def _create_unit_section(self) -> QFrame:
         section = self._create_section_frame("بيانات العقار")
@@ -187,10 +178,7 @@ class ClaimEditPage(QWidget):
 
         section.layout().addLayout(grid)
         return section
-
-    # ------------------------------------------------------------------
     # S06: Evidence Documents Section
-    # ------------------------------------------------------------------
 
     def _create_evidence_section(self) -> QFrame:
         section = self._create_section_frame("المستندات")
@@ -236,10 +224,7 @@ class ClaimEditPage(QWidget):
         section.layout().addWidget(self._add_evidence_btn)
 
         return section
-
-    # ------------------------------------------------------------------
     # S07: Status & Priority Section
-    # ------------------------------------------------------------------
 
     def _create_status_section(self) -> QFrame:
         section = self._create_section_frame("الحالة والأولوية")
@@ -275,10 +260,7 @@ class ClaimEditPage(QWidget):
 
         section.layout().addLayout(grid)
         return section
-
-    # ------------------------------------------------------------------
     # Action Bar
-    # ------------------------------------------------------------------
 
     def _create_action_bar(self) -> QWidget:
         bar = QWidget()
@@ -323,10 +305,7 @@ class ClaimEditPage(QWidget):
         layout.addWidget(save_btn)
 
         return bar
-
-    # ------------------------------------------------------------------
     # Data Loading
-    # ------------------------------------------------------------------
 
     def refresh(self, data=None):
         """Load claim data for editing. Called from navigate_to()."""
@@ -446,10 +425,7 @@ class ClaimEditPage(QWidget):
             "processingNotes": self._processing_notes.toPlainText(),
             "publicRemarks": self._public_remarks.toPlainText(),
         }
-
-    # ------------------------------------------------------------------
     # Evidence Management (S06)
-    # ------------------------------------------------------------------
 
     def _refresh_evidence_list(self):
         """Rebuild evidence list from self._evidences."""
@@ -635,10 +611,7 @@ class ClaimEditPage(QWidget):
         except Exception as e:
             logger.warning(f"Failed to reload evidences: {e}")
         self._refresh_evidence_list()
-
-    # ------------------------------------------------------------------
     # Save (S08-S10)
-    # ------------------------------------------------------------------
 
     def _on_save(self):
         """Collect changes, show reason dialog, save via API."""
@@ -777,10 +750,7 @@ class ClaimEditPage(QWidget):
             fields = ", ".join(changes["claim"].keys())
             summary.append(f"تعديل بيانات المطالبة: {fields}")
         return summary
-
-    # ------------------------------------------------------------------
     # Helpers
-    # ------------------------------------------------------------------
 
     def _create_section_frame(self, title: str) -> QFrame:
         frame = QFrame()

@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-Import Controller — orchestrates the import pipeline (UC-003).
+Import Controller.
 """
 
 import time

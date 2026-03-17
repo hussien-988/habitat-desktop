@@ -133,8 +133,6 @@ class HouseholdDialog(QDialog):
         layout = QVBoxLayout(self)
         layout.setSpacing(16)
         layout.setContentsMargins(24, 24, 24, 24)
-
-        # === Unit Selection Group ===
         unit_group = QGroupBox("الوحدة")
         unit_group.setStyleSheet(f"""
             QGroupBox {{
@@ -164,8 +162,6 @@ class HouseholdDialog(QDialog):
         unit_form.addRow("الوحدة *:", self.unit_combo)
 
         layout.addWidget(unit_group)
-
-        # === Main Occupant Group ===
         occupant_group = QGroupBox("الشاغل الرئيسي")
         occupant_group.setStyleSheet(unit_group.styleSheet())
         occupant_form = QFormLayout(occupant_group)
@@ -188,8 +184,6 @@ class HouseholdDialog(QDialog):
         occupant_form.addRow("الاسم:", self.occupant_name)
 
         layout.addWidget(occupant_group)
-
-        # === Occupancy Counts Group ===
         counts_group = QGroupBox("بيانات الإشغال")
         counts_group.setStyleSheet(unit_group.styleSheet())
         counts_form = QFormLayout(counts_group)
@@ -260,8 +254,6 @@ class HouseholdDialog(QDialog):
         counts_form.addRow("", self.count_hint)
 
         layout.addWidget(counts_group)
-
-        # === Occupancy Details Group ===
         details_group = QGroupBox("تفاصيل الإشغال")
         details_group.setStyleSheet(unit_group.styleSheet())
         details_form = QFormLayout(details_group)
@@ -298,8 +290,6 @@ class HouseholdDialog(QDialog):
         details_form.addRow("الإيجار الشهري:", self.rent_spin)
 
         layout.addWidget(details_group)
-
-        # === Notes ===
         self.notes = QTextEdit()
         self.notes.setMaximumHeight(60)
         self.notes.setPlaceholderText("ملاحظات إضافية...")

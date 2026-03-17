@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 """
 Export service for CSV, Excel, and GeoJSON exports.
-Implements FR-D-15 Data Export requirements.
 """
 
 import json
@@ -215,15 +214,13 @@ class ExportService:
         """Get count of records to be exported."""
         return self.building_repo.count(filters)
 
-    # ==================== GeoJSON Export (FR-D-15.3) ====================
-
     def export_buildings_geojson(
         self,
         file_path: Path,
         filters: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
         """
-        Export buildings to GeoJSON file (FR-D-15.3).
+        Export buildings to GeoJSON file.
 
         Args:
             file_path: Output file path
@@ -310,7 +307,7 @@ class ExportService:
         filters: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
         """
-        Export units to GeoJSON file (FR-D-15.3).
+        Export units to GeoJSON file.
 
         Args:
             file_path: Output file path
@@ -400,7 +397,7 @@ class ExportService:
         filters: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
         """
-        Export claims to GeoJSON file (FR-D-15.3).
+        Export claims to GeoJSON file.
 
         Args:
             file_path: Output file path
@@ -487,8 +484,6 @@ class ExportService:
             "exported_at": datetime.now().isoformat()
         }
 
-    # ==================== Claims Export (FR-D-15.2) ====================
-
     def export_claims_csv(
         self,
         file_path: Path,
@@ -536,7 +531,7 @@ class ExportService:
         file_path: Path,
         filters: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
-        """Export claims to Excel file (FR-D-15.2)."""
+        """Export claims to Excel file."""
         try:
             from openpyxl import Workbook
             from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
@@ -606,8 +601,6 @@ class ExportService:
             "format": "xlsx",
             "exported_at": datetime.now().isoformat()
         }
-
-    # ==================== Persons Export ====================
 
     def export_persons_csv(
         self,

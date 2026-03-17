@@ -36,10 +36,7 @@ class CaseDetailsPage(QWidget):
         self._review.initialize()
 
         self._setup_ui()
-
-    # =========================================================================
     # UI Setup
-    # =========================================================================
 
     def _setup_ui(self):
         main_layout = QVBoxLayout(self)
@@ -152,10 +149,7 @@ class CaseDetailsPage(QWidget):
         layout.addWidget(self._back_btn)
 
         return header
-
-    # =========================================================================
     # Data
-    # =========================================================================
 
     def _build_breadcrumb(self) -> str:
         return f"{tr('page.case_details.breadcrumb')}  ·  {tr('page.case_details.title')}"

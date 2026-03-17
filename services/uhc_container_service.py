@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-UHC Container Service - UC-003 Export Surveys Implementation.
+UHC Container Service.
 Implements SQLite container (.uhc) with Manifest, SHA-256 checksum, and digital signature.
 """
 
@@ -31,7 +31,7 @@ SIGNATURE_KEY = b"UN-HABITAT-TRRCMS-2025"  # In production, use secure key manag
 
 @dataclass
 class PackageManifest:
-    """Manifest structure for .uhc containers (FR-M-9)."""
+    """Manifest structure for .uhc containers."""
     package_id: str
     schema_version: str
     created_utc: str
@@ -68,7 +68,6 @@ class ExportResult:
 class UHCContainerService:
     """
     Service for creating and validating .uhc container files.
-    Implements UC-003: Export Surveys with full FSD compliance.
     """
 
     def __init__(self, db_connection, vocab_repo=None, attachment_storage_path: str = None):

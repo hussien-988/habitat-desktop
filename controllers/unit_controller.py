@@ -69,8 +69,6 @@ class UnitController(BaseController):
             self._api_service.set_access_token(token)
             logger.info("API token set for UnitController")
 
-    # ==================== Properties ====================
-
     @property
     def current_unit(self) -> Optional[PropertyUnit]:
         """Get currently selected unit."""
@@ -80,8 +78,6 @@ class UnitController(BaseController):
     def units(self) -> List[PropertyUnit]:
         """Get cached units list."""
         return self._units_cache
-
-    # ==================== CRUD Operations ====================
 
     def create_unit(self, data: Dict[str, Any]) -> OperationResult[PropertyUnit]:
         """
@@ -228,8 +224,6 @@ class UnitController(BaseController):
         except Exception as e:
             return OperationResult.fail(message=str(e))
 
-    # ==================== Selection ====================
-
     def select_unit(self, unit_uuid: str) -> OperationResult[PropertyUnit]:
         """
         Select a unit as current.
@@ -253,8 +247,6 @@ class UnitController(BaseController):
         """Clear current unit selection."""
         self._current_unit = None
         self.unit_selected.emit(None)
-
-    # ==================== Search and Filter ====================
 
     def load_units(self, filter_: Optional[UnitFilter] = None) -> OperationResult[List[PropertyUnit]]:
         """
@@ -394,8 +386,6 @@ class UnitController(BaseController):
             area_sqm=dto.get("areaSquareMeters") or dto.get("areaSqm"),
         )
 
-    # ==================== Validation ====================
-
     def _validate_unit_data(
         self,
         data: Dict[str, Any],
@@ -431,8 +421,6 @@ class UnitController(BaseController):
             )
 
         return OperationResult.ok()
-
-    # ==================== Statistics ====================
 
     def get_statistics(self) -> OperationResult[Dict[str, Any]]:
         """

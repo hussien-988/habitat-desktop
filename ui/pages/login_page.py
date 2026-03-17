@@ -164,7 +164,6 @@ class LoginPage(QWidget):
             self.titlebar.raise_()
 
 
-
     def _create_login_card(self) -> QFrame:
         """Create the white login card."""
         card = QFrame()
@@ -353,8 +352,6 @@ class LoginPage(QWidget):
         card_layout.addWidget(self.login_btn)
 
 
-
-
         return card
 
     def set_data_mode(self, mode: str, db=None):
@@ -533,7 +530,7 @@ class LoginPage(QWidget):
         btn_settings.setFixedSize(46, 32)
         btn_settings.setCursor(QCursor(Qt.PointingHandCursor))
         btn_settings.setFocusPolicy(Qt.NoFocus)
-        btn_settings.setToolTip("إعدادات سيرفر الخريطة")
+        btn_settings.setToolTip("إعدادات الاتصال")
         btn_settings.setStyleSheet("""
             QPushButton {
                 font-size: 16px;

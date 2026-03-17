@@ -129,10 +129,7 @@ class ClaimDetailsPage(QWidget):
         self._scroll_layout.addStretch()
         scroll.setWidget(scroll_content)
         main_layout.addWidget(scroll)
-
-    # =========================================================================
     # Header
-    # =========================================================================
 
     def _create_header(self) -> QWidget:
         header = QWidget()
@@ -221,10 +218,7 @@ class ClaimDetailsPage(QWidget):
         layout.addWidget(back_btn)
 
         return header
-
-    # =========================================================================
     # Card builders (same pattern as BuildingDetailsPage)
-    # =========================================================================
 
     def _create_card_base(self, icon_name, title, subtitle):
         card = QFrame()
@@ -319,10 +313,7 @@ class ClaimDetailsPage(QWidget):
         shadow.setYOffset(4)
         shadow.setColor(QColor(0, 0, 0, 25))
         widget.setGraphicsEffect(shadow)
-
-    # =========================================================================
     # Field helpers
-    # =========================================================================
 
     def _create_field_pair(self, label_text, value_text):
         container = QWidget()
@@ -370,10 +361,7 @@ class ClaimDetailsPage(QWidget):
                 w.deleteLater()
             elif item.layout():
                 self._clear_layout(item.layout())
-
-    # =========================================================================
     # Data loading
-    # =========================================================================
 
     def refresh(self, data=None):
         """Load claim data from ClaimController.get_claim_full_detail() result."""
@@ -396,10 +384,7 @@ class ClaimDetailsPage(QWidget):
         self._update_edit_visibility()
 
         logger.info(f"Claim details loaded: {self._claim_data.get('claimNumber', 'N/A')}")
-
-    # =========================================================================
     # Populate sections
-    # =========================================================================
 
     def _populate_header_card(self):
         self._clear_layout(self._header_content)
@@ -977,10 +962,7 @@ class ClaimDetailsPage(QWidget):
         stats_widget.setStyleSheet("background: transparent; border: none;")
         stats_widget.setLayout(stats_grid)
         self._status_content.addWidget(stats_widget)
-
-    # =========================================================================
     # Actions
-    # =========================================================================
 
     def _on_edit_or_save_clicked(self):
         if self._is_editing:
@@ -1021,10 +1003,7 @@ class ClaimDetailsPage(QWidget):
             can_edit = role in ("admin", "data_manager") and case_status == 1
         self._edit_btn.setVisible(can_edit)
         self._cancel_edit_btn.setVisible(False)
-
-    # =========================================================================
     # Edit mode handlers
-    # =========================================================================
 
     def _on_claim_type_changed_in_edit(self):
         """Enable/disable ownership share input based on selected claim type."""

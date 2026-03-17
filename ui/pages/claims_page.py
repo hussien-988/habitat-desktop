@@ -33,7 +33,7 @@ from utils.logger import get_logger
 logger = get_logger(__name__)
 
 
-# Document types from FSD vocabulary
+# Document types
 DOCUMENT_TYPES = [
     ("TAPU_GREEN", "صك ملكية (طابو أخضر)"),
     ("PROPERTY_REG", "بيان قيد عقاري"),

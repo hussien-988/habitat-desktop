@@ -2,7 +2,7 @@
 """
 GPS Service - Hardware GPS Integration
 =======================================
-Implements GPS hardware integration for coordinate capture as per FSD requirements.
+Implements GPS hardware integration for coordinate capture.
 
 Features:
 - Multiple GPS source support (USB GPS, Bluetooth, NMEA)
@@ -29,9 +29,6 @@ from queue import Queue
 from utils.logger import get_logger
 
 logger = get_logger(__name__)
-
-
-# ==================== Enums and Constants ====================
 
 class GPSStatus(Enum):
     """GPS connection status."""
@@ -63,9 +60,6 @@ class FixQuality(Enum):
     ESTIMATED = 6
     MANUAL = 7
     SIMULATION = 8
-
-
-# ==================== Data Classes ====================
 
 @dataclass
 class GPSPosition:
@@ -146,9 +140,6 @@ class TrackPoint:
     position: GPSPosition
     timestamp: datetime
     note: Optional[str] = None
-
-
-# ==================== NMEA Parser ====================
 
 class NMEAParser:
     """Parser for NMEA GPS sentences."""
@@ -301,9 +292,6 @@ class NMEAParser:
         except Exception:
             return None
 
-
-# ==================== GPS Service ====================
-
 class GPSService:
     """
     GPS hardware integration service.
@@ -338,8 +326,6 @@ class GPSService:
             'min_accuracy': float('inf'),
             'total_distance': 0
         }
-
-    # ==================== Connection Management ====================
 
     def connect(self) -> bool:
         """Connect to GPS source."""
@@ -465,8 +451,6 @@ class GPSService:
 
         return ports
 
-    # ==================== Reading Loops ====================
-
     def _serial_read_loop(self):
         """Read NMEA sentences from serial port."""
         last_valid_time = time.time()
@@ -581,8 +565,6 @@ class GPSService:
 
         if self.config.source == GPSSource.USB_SERIAL:
             self._connect_serial()
-
-    # ==================== Data Processing ====================
 
     def _process_nmea_data(self, data: Dict[str, Any]):
         """Process parsed NMEA data."""
@@ -707,8 +689,6 @@ class GPSService:
         if distance > self.config.geofence_radius:
             logger.warning(f"Position outside geofence: {distance:.0f}m from center")
 
-    # ==================== Public API ====================
-
     def get_current_position(self) -> Optional[GPSPosition]:
         """Get current GPS position."""
         return self._current_position
@@ -750,8 +730,6 @@ class GPSService:
         """Remove status callback."""
         if callback in self._status_callbacks:
             self._status_callbacks.remove(callback)
-
-    # ==================== Track Logging ====================
 
     def start_track(self):
         """Start logging GPS track."""
@@ -819,8 +797,6 @@ class GPSService:
             }
         }
 
-    # ==================== Manual Position Entry ====================
-
     def set_manual_position(
         self,
         latitude: float,
@@ -842,8 +818,6 @@ class GPSService:
             return True
 
         return False
-
-    # ==================== Available Ports ====================
 
     def get_available_ports(self) -> List[Dict[str, str]]:
         """Get list of available serial ports."""

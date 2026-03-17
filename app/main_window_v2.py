@@ -542,6 +542,17 @@ class MainWindow(QMainWindow):
         else:
             logger.warning("No API token found in user object - API calls may fail with 401")
 
+        # Show loading overlay while preparing data
+        self._show_login_loading()
+
+        # Refresh vocabularies now that we have a valid API token/port
+        try:
+            from services.vocab_service import refresh_vocabularies
+            refresh_vocabularies()
+            logger.info("Vocabularies refreshed after login")
+        except Exception as e:
+            logger.warning(f"Failed to refresh vocabularies after login: {e}")
+
         # Freeze repainting to prevent login-to-main transition flicker
         self.setUpdatesEnabled(False)
 
@@ -564,8 +575,43 @@ class MainWindow(QMainWindow):
         # Resume repainting - user sees the final state directly
         self.setUpdatesEnabled(True)
 
+        # Hide loading overlay
+        self._hide_login_loading()
+
         # Start session timeout timer
         self._start_session_timer()
+
+    def _show_login_loading(self):
+        """Show a loading overlay during post-login data preparation."""
+        from PyQt5.QtWidgets import QFrame, QLabel, QVBoxLayout, QApplication
+        from PyQt5.QtCore import Qt
+        from ui.font_utils import create_font, FontManager
+
+        self._loading_overlay = QFrame(self)
+        self._loading_overlay.setStyleSheet(
+            "background-color: rgba(255, 255, 255, 230); border: none;"
+        )
+        self._loading_overlay.setGeometry(self.rect())
+
+        lay = QVBoxLayout(self._loading_overlay)
+        lay.setAlignment(Qt.AlignCenter)
+
+        msg = QLabel("جاري تحميل البيانات...")
+        msg.setFont(create_font(size=14, weight=FontManager.WEIGHT_MEDIUM))
+        msg.setStyleSheet("color: #2C3E50; background: transparent;")
+        msg.setAlignment(Qt.AlignCenter)
+        lay.addWidget(msg)
+
+        self._loading_overlay.raise_()
+        self._loading_overlay.show()
+        QApplication.processEvents()
+
+    def _hide_login_loading(self):
+        """Hide the loading overlay."""
+        if hasattr(self, '_loading_overlay') and self._loading_overlay:
+            self._loading_overlay.hide()
+            self._loading_overlay.deleteLater()
+            self._loading_overlay = None
 
     def _start_session_timer(self):
         """Start session inactivity timer based on security settings."""
@@ -1278,13 +1324,16 @@ class MainWindow(QMainWindow):
             Toast.SUCCESS
         )
 
-        # Navigate to المطالبات المكتملة (Tab 0) if survey was finalized (claim created),
-        # otherwise to الحالات (Tab 1)
+        # Navigate to the appropriate tab based on finalization and role access
         is_finalized = (
             isinstance(data, dict) and data.get('status') == 'finalized'
         )
 
-        if is_finalized:
+        from ui.components.navbar import Navbar
+        user_role = getattr(self.current_user, 'role', '') if self.current_user else ''
+        allowed_tabs = Navbar.TAB_PERMISSIONS.get(user_role, [0, 1])
+
+        if is_finalized and 0 in allowed_tabs:
             if hasattr(self.pages.get(Pages.CLAIMS), 'refresh'):
                 self.pages[Pages.CLAIMS].refresh()
             self.navbar.set_current_tab(0)
@@ -1401,10 +1450,7 @@ class MainWindow(QMainWindow):
         path.addRoundedRect(rect, r, r)
 
         self.window_frame.setMask(QRegion(path.toFillPolygon().toPolygon()))
-
-    # =========================================================================
     # Mouse Events - Window Dragging
-    # =========================================================================
 
     def mousePressEvent(self, event: QMouseEvent):
         """Handle mouse press for window dragging."""

@@ -76,16 +76,12 @@ class StyleManager:
     - Maintainable: Easy to update styles application-wide
     """
 
-    # ==================== BUTTONS ====================
-
     @staticmethod
     def button_primary() -> str:
         """
         Get primary button stylesheet (PrimaryButton component).
 
         Usage: Main action buttons (e.g., "إضافة حالة جديدة")
-
-        Figma Specs:
         - Size: 199×48px
         - Border-radius: 8px
         - Padding: 24×12px
@@ -122,8 +118,6 @@ class StyleManager:
         Get secondary button stylesheet.
 
         Usage: Secondary actions (e.g., "إلغاء", "رجوع")
-
-        Figma Specs:
         - Border: 1px solid PRIMARY_BLUE
         - Background: Transparent/White
         - Text: PRIMARY_BLUE
@@ -241,8 +235,6 @@ class StyleManager:
             }
         """
 
-    # ==================== INPUTS ====================
-
     @staticmethod
     def input_field(variant: InputVariant = InputVariant.DEFAULT) -> str:
         """
@@ -307,8 +299,6 @@ class StyleManager:
             }}
         """
 
-    # ==================== NAVBAR ====================
-
     @staticmethod
     def navbar() -> str:
         """
@@ -367,8 +357,6 @@ class StyleManager:
         Get active tab stylesheet.
 
         Usage: Active/selected tab in navbar
-
-        Figma Specs:
         - Background: #DEEBFF
         - Text: #3B86FF
         - Border-radius: 8px
@@ -418,16 +406,12 @@ class StyleManager:
             }}
         """
 
-    # ==================== CARDS ====================
-
     @staticmethod
     def card() -> str:
         """
         Get card container stylesheet.
 
         Usage: Claim cards, data cards
-
-        Figma Specs:
         - Background: White (#FFFFFF)
         - Border: 1px solid #E1E8ED
         - Border-radius: 8px
@@ -450,8 +434,6 @@ class StyleManager:
         Get card details container stylesheet (inner pill-shaped box).
 
         Usage: Details section inside claim cards
-
-        Figma Specs:
         - Background: #F8FAFF
         - Border: 1px solid #E5EAF6
         - Border-radius: 14px (pill shape - maximum for 28px height)
@@ -471,16 +453,12 @@ class StyleManager:
             }}
         """
 
-    # ==================== PAGES ====================
-
     @staticmethod
     def page_background() -> str:
         """
         Get page background stylesheet.
 
         Usage: Main content pages
-
-        Figma Specs:
         - Background: #F0F7FF (BACKGROUND color)
 
         Returns:
@@ -504,8 +482,6 @@ class StyleManager:
                 border: none;
             }}
         """
-
-    # ==================== TABLES ====================
 
     @staticmethod
     def table() -> str:
@@ -554,8 +530,6 @@ class StyleManager:
             }}
         """
 
-    # ==================== DIALOGS ====================
-
     @staticmethod
     def dialog() -> str:
         """
@@ -572,8 +546,6 @@ class StyleManager:
                 border-radius: {BorderRadius.LG}px;
             }}
         """
-
-    # ==================== SCROLLBARS ====================
 
     @staticmethod
     def scrollbar() -> str:
@@ -625,8 +597,6 @@ class StyleManager:
             }}
         """
 
-    # ==================== LABELS ====================
-
     @staticmethod
     def label_title() -> str:
         """
@@ -675,8 +645,6 @@ class StyleManager:
         """
         return f"color: {Colors.SUCCESS}; border: none;"
 
-    # ==================== EMPTY STATE ====================
-
     @staticmethod
     def empty_state() -> str:
         """
@@ -692,8 +660,6 @@ class StyleManager:
                 background-color: transparent;
             }}
         """
-
-    # ==================== COMBO BOX ====================
 
     @staticmethod
     def combo_box() -> str:
@@ -736,8 +702,6 @@ class StyleManager:
                 selection-color: {Colors.PRIMARY_BLUE};
             }}
         """
-
-    # ==================== FORM INPUTS ====================
 
     @staticmethod
     def form_input() -> str:
@@ -802,8 +766,6 @@ class StyleManager:
         Get date input stylesheet with calendar icon on the left.
 
         Usage: QDateEdit in forms
-
-        Figma Specs:
         - Background: #F8FAFC
         - Border: 1px solid #E0E6ED
         - Calendar icon: Left side, 25px width
@@ -841,8 +803,6 @@ class StyleManager:
         Get mobile number input container stylesheet.
 
         Usage: QFrame wrapping mobile input with prefix
-
-        Figma Specs:
         - Background: #F8FAFC
         - Border: 1px solid #E0E6ED
         - Border-radius: 8px
@@ -865,8 +825,6 @@ class StyleManager:
         Get mobile number prefix label stylesheet.
 
         Usage: QLabel showing "+963 | 09"
-
-        Figma Specs:
         - Color: #4A5568 (bold)
         - Width: 90px
         - No border
@@ -889,8 +847,6 @@ class StyleManager:
         Get mobile number input field stylesheet.
 
         Usage: QLineEdit for phone number (inside container)
-
-        Figma Specs:
         - Background: transparent
         - No border
         - Padding: 10px
@@ -913,8 +869,6 @@ class StyleManager:
         Get file upload frame stylesheet.
 
         Usage: QFrame for file upload area
-
-        Figma Specs:
         - Background: #F0F7FF
         - Border: 2px dashed #BEE3F8
         - Border-radius: 10px
@@ -942,8 +896,6 @@ class StyleManager:
         Get file upload button stylesheet.
 
         Usage: QPushButton for "ارفع صور المستندات"
-
-        Figma Specs:
         - Color: #2D9CDB (blue)
         - Font-weight: bold
         - Background: transparent
@@ -972,8 +924,6 @@ class StyleManager:
         Get numeric input stylesheet with percentage icon.
 
         Usage: QDoubleSpinBox for ownership share (حصة الملكية)
-
-        Figma Specs:
         - Background: #F8FAFC
         - Border: 1px solid #E0E6ED
         - Border-radius: 8px
@@ -1028,8 +978,6 @@ class StyleManager:
         Get spinbox input container stylesheet with stacked arrows.
 
         Usage: QFrame wrapping QLineEdit + stacked up/down arrow buttons
-
-        Figma Specs:
         - Background: #F8FAFC
         - Border: 1px solid #E0E6ED
         - Border-radius: 8px
@@ -1053,8 +1001,6 @@ class StyleManager:
         Get spinbox input field stylesheet.
 
         Usage: QLineEdit for numeric value (inside spinbox container)
-
-        Figma Specs:
         - Background: transparent
         - No border
         - Color: #999
@@ -1079,8 +1025,6 @@ class StyleManager:
         Get spinbox arrow button stylesheet.
 
         Usage: QPushButton for up/down arrows (inside spinbox container)
-
-        Figma Specs:
         - Background: transparent
         - No border
         - Size: 20x15 each
@@ -1097,16 +1041,12 @@ class StyleManager:
             }
         """
 
-    # ==================== FOOTER ====================
-
     @staticmethod
     def wizard_footer() -> str:
         """
         Get wizard footer card stylesheet.
 
         Usage: Footer card in wizard with navigation buttons
-
-        Figma Specs:
         - Size: 1512×74px
         - Background: White (#FFFFFF)
         - Border: 1px solid #E1E8ED
@@ -1124,16 +1064,12 @@ class StyleManager:
             }}
         """
 
-    # ==================== DIALOGS ====================
-
     @staticmethod
     def dialog_overlay() -> str:
         """
         Get dialog overlay stylesheet (semi-transparent dark background).
 
         Usage: Fullscreen overlay that covers the page when dialog is shown
-
-        Figma Specs:
         - Background: rgba(0, 0, 0, 0.5) - 50% opacity black
         - Full screen coverage
         - Blocks interaction with underlying content
@@ -1155,8 +1091,6 @@ class StyleManager:
         Get dialog card stylesheet (white card containing dialog content).
 
         Usage: The white card that contains icon, title, message, and buttons
-
-        Figma Specs:
         - Width: 480px (fixed)
         - Background: White (#FFFFFF)
         - Border-radius: 12px
@@ -1182,8 +1116,6 @@ class StyleManager:
         Get primary button stylesheet for dialogs.
 
         Usage: Buttons inside dialogs (OK, Yes, Confirm, etc.)
-
-        Figma Specs:
         - Height: 48px
         - Min-width: 120px
         - Background: Primary Blue (#3890DF)
@@ -1224,8 +1156,6 @@ class StyleManager:
         Get secondary button stylesheet for dialogs.
 
         Usage: Secondary buttons inside dialogs (Cancel, No, etc.)
-
-        Figma Specs:
         - Height: 48px
         - Min-width: 120px
         - Background: Transparent/White

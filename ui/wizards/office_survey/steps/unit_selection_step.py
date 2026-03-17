@@ -103,8 +103,6 @@ class UnitSelectionStep(BaseStep):
         card_layout = QVBoxLayout(self.unit_building_frame)
         card_layout.setContentsMargins(12, 12, 12, 12)  # Padding: 12px all sides
         card_layout.setSpacing(12)  # Gap between rows
-
-        # ===== ROW 1: Building Address =====
         # Height: 28px, full width, border-radius 8px (suitable for 28px height), background #F8FAFF
         # border-radius proportional to height (28/3.5 = 8px)
         address_container = QFrame()
@@ -154,8 +152,6 @@ class UnitSelectionStep(BaseStep):
         address_row.addStretch()
 
         card_layout.addWidget(address_container)
-
-        # ===== ROW 2: Building Stats (5 sections) =====
         # Same design as building_selection_step stats sections
         stats_row = QHBoxLayout()
         stats_row.setSpacing(0)  # Equal distribution
@@ -551,9 +547,7 @@ class UnitSelectionStep(BaseStep):
 
     def _create_unit_card(self, unit) -> QFrame:
         """
-        Create a unit card widget with Figma specifications.
-
-        Figma specs:
+        Create a unit card widget.
         - Dimensions: 1225×138 (width×height)
         - Padding: 12px all sides
         - Border-radius: 10px
@@ -564,8 +558,6 @@ class UnitSelectionStep(BaseStep):
 
         # Check if this is the selected unit
         is_selected = bool(self.context.unit and self.context.unit.unit_id == unit.unit_id)
-
-        # Create card frame - Figma: 1225×138
         card = QFrame()
         card.setObjectName("unitCard")
         card.setFixedSize(1225, 138)
@@ -611,8 +603,6 @@ class UnitSelectionStep(BaseStep):
         card.mousePressEvent = lambda _: self._on_unit_card_clicked(unit)
         card.setProperty("unit_id", unit.unit_id)
         card.setLayoutDirection(Qt.RightToLeft)
-
-        # Main layout - Figma: padding 12px all sides
         main_layout = QVBoxLayout(card)
         main_layout.setSpacing(8)  # Gap between top and bottom: 8px
         main_layout.setContentsMargins(12, 12, 12, 12)  # Padding: 12px

@@ -62,8 +62,6 @@ class TRRCMSApiClient:
         except Exception as e:
             logger.warning(f"API not available at {self.base_url}: {e}. Client created without token.")
 
-    # ==================== Authentication ====================
-
     def login(self, username: str, password: str) -> Dict[str, Any]:
         """Authenticate and obtain access token."""
         try:
@@ -225,7 +223,8 @@ class TRRCMSApiClient:
                 response_text = e.response.text[:500] if e.response is not None else ''
             except Exception:
                 pass
-            logger.error(f"[API ERR] {status_code} {method} {endpoint} | Response: {response_data or response_text}")
+            log_fn = logger.warning if status_code in (403, 404) else logger.error
+            log_fn(f"[API ERR] {status_code} {method} {endpoint} | Response: {response_data or response_text}")
             raise ApiException(
                 message=str(e),
                 status_code=status_code,
@@ -243,8 +242,6 @@ class TRRCMSApiClient:
                 message=str(e),
                 original_error=e
             )
-
-    # ==================== Buildings - Map APIs ====================
 
     def get_buildings_for_map(
         self,
@@ -270,8 +267,6 @@ class TRRCMSApiClient:
         logger.info(f"Fetched {len(buildings)} buildings from API")
 
         return buildings
-
-    # ==================== Landmarks ====================
 
     def get_landmarks_for_map(
         self,
@@ -327,8 +322,6 @@ class TRRCMSApiClient:
         except Exception as e:
             logger.warning(f"Failed to search landmarks: {e}")
             return []
-
-    # ==================== Streets ====================
 
     def get_streets_for_map(
         self,
@@ -697,8 +690,6 @@ class TRRCMSApiClient:
         logger.info(f"Building deleted: {building_id}")
         return True
 
-    # ==================== Property Units ====================
-
     def get_property_units_by_building(self, building_id: str) -> List[Dict[str, Any]]:
         """Get property units for a building."""
         return self._request("GET", f"/v1/PropertyUnits/building/{building_id}")
@@ -710,8 +701,6 @@ class TRRCMSApiClient:
         except Exception as e:
             logger.warning(f"Failed to fetch building documents for {building_id}: {e}")
             return []
-
-    # ==================== Utility ====================
 
     def health_check(self) -> bool:
         """Check API connectivity."""
@@ -727,8 +716,6 @@ class TRRCMSApiClient:
     def get_current_user(self) -> Dict[str, Any]:
         """الحصول على معلومات المستخدم الحالي."""
         return self._request("GET", "/v1/Auth/me")
-
-    # ==================== Building Assignments API ====================
 
     def create_assignment(
         self,
@@ -882,8 +869,6 @@ class TRRCMSApiClient:
             "POST", "/v1/BuildingAssignments/retry-transfer", json_data=payload
         )
 
-    # ==================== PropertyUnits APIs ====================
-
     def create_property_unit(self, unit_data: Dict[str, Any]) -> Dict[str, Any]:
         """Create a new property unit."""
         api_data = self._convert_property_unit_to_api_format(unit_data)
@@ -1033,8 +1018,6 @@ class TRRCMSApiClient:
         logger.info(f"Fetched {len(units)} units for building {building_id}")
         return units if isinstance(units, list) else []
 
-    # ==================== Households APIs ====================
-
     def create_household(self, household_data: Dict[str, Any], survey_id: Optional[str] = None) -> Dict[str, Any]:
         """Create a new household."""
         api_data = self._convert_household_to_api_format(household_data, survey_id)
@@ -1123,8 +1106,6 @@ class TRRCMSApiClient:
 
         logger.info(f"Household API payload: {api_data}")
         return api_data
-
-    # ==================== Persons APIs ====================
 
     def create_person(self, person_data: Dict[str, Any]) -> Dict[str, Any]:
         """Create a new person."""
@@ -1817,8 +1798,6 @@ class TRRCMSApiClient:
         }
         return {k: v for k, v in api_data.items() if v is not None}
 
-    # ==================== Surveys APIs ====================
-
     def create_survey(self, survey_data: Dict[str, Any]) -> Dict[str, Any]:
         """Create a new survey."""
         api_data = self._convert_survey_to_api_format(survey_data)
@@ -2046,8 +2025,6 @@ class TRRCMSApiClient:
         }
         return {k: v for k, v in api_data.items() if v is not None and v != ''}
 
-    # ==================== Administrative Divisions APIs ====================
-
     def get_governorates(self) -> List[Dict[str, Any]]:
         """Get all governorates."""
         return self._request("GET", "/v1/administrative-divisions/governorates")
@@ -2081,8 +2058,6 @@ class TRRCMSApiClient:
         if sub_district_code:
             params["subDistrictCode"] = sub_district_code
         return self._request("GET", "/v1/administrative-divisions/communities", params=params)
-
-    # ==================== Neighborhoods APIs ====================
 
     def get_neighborhoods_by_bounds(self, sw_lat: float, sw_lng: float, ne_lat: float, ne_lng: float) -> List[Dict[str, Any]]:
         """
@@ -2174,8 +2149,6 @@ class TRRCMSApiClient:
             logger.warning(f"Neighborhood not found: {full_code}")
             return None
 
-    # ==================== Persons APIs (standalone) ====================
-
     def get_persons(
         self,
         search: Optional[str] = None,
@@ -2210,8 +2183,6 @@ class TRRCMSApiClient:
                 return None
             raise
 
-    # ==================== Households APIs (standalone) ====================
-
     def get_households(
         self,
         unit_id: Optional[str] = None,
@@ -2227,8 +2198,6 @@ class TRRCMSApiClient:
             params["buildingId"] = building_id
         logger.info(f"Fetching households with filters: {params}")
         return self._request("GET", "/v1/Households", params=params) or {}
-
-    # ==================== Claims APIs ====================
 
     def get_claims_summaries(
         self,
@@ -2358,8 +2327,6 @@ class TRRCMSApiClient:
             payload["targetCompletionDate"] = target_date
         return self._request("PUT", f"/v1/Claims/{claim_id}/assign", json_data=payload)
 
-    # ==================== Users ====================
-
     def get_all_users(
         self,
         page: int = 1,
@@ -2419,8 +2386,6 @@ class TRRCMSApiClient:
         """DELETE /v1/Users/{id}/permissions/{permission}"""
         self._request("DELETE", f"/v1/Users/{user_id}/permissions/{permission}")
 
-    # ==================== Vocabularies ====================
-
     def get_vocabulary_terms(self, vocab_name: str) -> Dict[str, Any]:
         """GET /v1/Vocabularies/{name}"""
         return self._request("GET", f"/v1/Vocabularies/{vocab_name}") or {}
@@ -2452,8 +2417,6 @@ class TRRCMSApiClient:
     def import_vocabularies(self, data: Any) -> Dict[str, Any]:
         """POST /v1/Vocabularies/import"""
         return self._request("POST", "/v1/Vocabularies/import", data) or {}
-
-    # ==================== Import Pipeline API ====================
 
     def import_upload(self, file_path: str) -> Dict[str, Any]:
         """
@@ -2583,9 +2546,6 @@ class TRRCMSApiClient:
         }
         return self._request("POST", f"/v1/import/packages/{package_id}/quarantine", json_data=body)
 
-
-    # ==================== Conflicts / Duplicates API ====================
-
     def get_conflicts(
         self,
         page: int = 1,
@@ -2705,9 +2665,6 @@ class TRRCMSApiClient:
         """
         body = {"reason": justification}
         return self._request("POST", f"/v1/conflicts/{conflict_id}/escalate", json_data=body)
-
-
-# ==================== Singleton Instance ====================
 
 _api_client_instance: Optional[TRRCMSApiClient] = None
 

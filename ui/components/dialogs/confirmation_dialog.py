@@ -98,7 +98,7 @@ class ConfirmationDialog(QDialog):
         # Row 1: Icon (centered)
         icon_layout = QHBoxLayout()
         icon_layout.addStretch()
-        icon = Icon(icon_name, size=64, fallback_text="⚠️")  # Larger icon as in Figma
+        icon = Icon(icon_name, size=64, fallback_text="⚠️")
         icon.setAlignment(Qt.AlignCenter)
         icon_layout.addWidget(icon)
         icon_layout.addStretch()
@@ -231,10 +231,7 @@ class ConfirmationDialog(QDialog):
     def get_result(self) -> int:
         """Get dialog result code."""
         return self.result_code
-
-    # =========================================================================
     # Static Factory Methods
-    # =========================================================================
 
     @staticmethod
     def confirm(
@@ -269,7 +266,7 @@ class ConfirmationDialog(QDialog):
             parent=parent,
             title=title,
             message=message,
-            icon_name="wirning",  # wirning.png from Figma (typo preserved)
+            icon_name="wirning",  # typo preserved in asset name
             buttons=[
                 ("عدم الحفظ", DialogResult.DISCARD),  # White button (secondary)
                 ("حفظ كمسودة", DialogResult.SAVE)      # Yellow button (primary)

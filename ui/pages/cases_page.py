@@ -62,10 +62,7 @@ class CasesPage(QWidget):
         self._search_timer.setSingleShot(True)
         self._search_timer.timeout.connect(self._load_surveys)
         self._setup_ui()
-
-    # -------------------------------------------------------------------------
     # UI Setup
-    # -------------------------------------------------------------------------
 
     def _setup_ui(self):
         main_layout = QVBoxLayout(self)
@@ -180,10 +177,7 @@ class CasesPage(QWidget):
 
         layout.addStretch()
         return bar
-
-    # -------------------------------------------------------------------------
     # Filter handling
-    # -------------------------------------------------------------------------
 
     def _on_search_changed(self):
         """Debounced search — sends to API after 500ms pause."""
@@ -192,18 +186,12 @@ class CasesPage(QWidget):
     def _on_type_changed(self):
         """Survey type dropdown changed — re-filter locally."""
         self._apply_type_filter()
-
-    # -------------------------------------------------------------------------
     # Tab handling
-    # -------------------------------------------------------------------------
 
     def _on_tab_changed(self, index: int):
         self._active_tab = "draft" if index == 0 else "finalized"
         self._load_surveys()
-
-    # -------------------------------------------------------------------------
     # Data loading
-    # -------------------------------------------------------------------------
 
     def refresh(self, data=None):
         """Refresh surveys from API."""
@@ -304,10 +292,7 @@ class CasesPage(QWidget):
             "unit": unit_obj,
             "unit_id": s.get("propertyUnitId", ""),
         }
-
-    # -------------------------------------------------------------------------
     # Display
-    # -------------------------------------------------------------------------
 
     def _show_cards(self, data: List[Dict]):
         self._clear_content()
@@ -356,10 +341,7 @@ class CasesPage(QWidget):
             item = self.content_layout.takeAt(0)
             if item.widget():
                 item.widget().deleteLater()
-
-    # -------------------------------------------------------------------------
     # Public interface (backward compatibility)
-    # -------------------------------------------------------------------------
 
     def search_claims(self, query: str, mode: str = "name"):
         pass

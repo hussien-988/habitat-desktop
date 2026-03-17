@@ -134,8 +134,6 @@ class BuildingController(BaseController):
 
         return result
 
-    # ==================== Properties ====================
-
     @property
     def current_building(self) -> Optional[Building]:
         """Get currently selected building."""
@@ -160,8 +158,6 @@ class BuildingController(BaseController):
         """
         if self._api_service:
             self._api_service.set_access_token(token)
-
-    # ==================== CRUD Operations ====================
 
     def create_building(self, data: Dict[str, Any]) -> OperationResult[Building]:
         """
@@ -447,8 +443,6 @@ class BuildingController(BaseController):
         except Exception as e:
             return OperationResult.fail(message=str(e))
 
-    # ==================== Selection ====================
-
     def select_building(self, building_uuid: str) -> OperationResult[Building]:
         """
         Select a building as current.
@@ -472,8 +466,6 @@ class BuildingController(BaseController):
         """Clear current building selection."""
         self._current_building = None
         self.building_selected.emit(None)
-
-    # ==================== Search and Filter ====================
 
     def load_buildings(self, filter_: Optional[BuildingFilter] = None) -> OperationResult[List[Building]]:
         """
@@ -732,8 +724,6 @@ class BuildingController(BaseController):
             general_description=dto.get("generalDescription") or dto.get("general_description"),
         )
 
-    # ==================== Statistics ====================
-
     def get_statistics(self) -> OperationResult[Dict[str, Any]]:
         """
         Get building statistics.
@@ -772,8 +762,6 @@ class BuildingController(BaseController):
         except Exception as e:
             return OperationResult.fail(message=str(e))
 
-    # ==================== Geometry Operations ====================
-
     def update_geometry(
         self,
         building_uuid: str,
@@ -803,8 +791,6 @@ class BuildingController(BaseController):
             data["geo_location"] = polygon_wkt
 
         return self.update_building(building_uuid, data)
-
-    # ==================== Validation ====================
 
     def _validate_building_data(
         self,
@@ -1002,8 +988,6 @@ class BuildingController(BaseController):
                 logger.warning(
                     f"Could only remove {removed}/{to_remove} {unit_type} units "
                     f"(remaining have associated data)")
-
-    # ==================== Export ====================
 
     def export_buildings(
         self,

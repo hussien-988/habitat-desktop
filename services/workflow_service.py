@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 """
 Workflow service for claim lifecycle management.
-Implements UC-008: Claim Lifecycle Management
 """
 
 from typing import List, Tuple, Optional

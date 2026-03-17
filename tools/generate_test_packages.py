@@ -231,11 +231,7 @@ def create_uhc(file_path, pkg_id, buildings, units, persons):
 
     return {"path": file_path, "pkg_id": pkg_id, "total": total,
             "buildings": len(buildings), "units": len(units), "persons": len(persons)}
-
-
-# ----------------------------------------------------------------
 # Package generators
-# ----------------------------------------------------------------
 
 # Fixed national IDs for clean package (reused in duplicates package)
 CLEAN_NATIONAL_IDS = [
@@ -387,11 +383,7 @@ def generate_batch2_package():
     path = os.path.join(OUTPUT_DIR, "test_pkg_batch2.uhc")
     pkg_id = str(uuid.uuid4())
     return create_uhc(path, pkg_id, buildings, units, persons)
-
-
-# ----------------------------------------------------------------
 # Main
-# ----------------------------------------------------------------
 
 def main():
     random.seed(42)

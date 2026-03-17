@@ -345,8 +345,6 @@ class ClaimService:
             'completeness_percentage': completeness
         }
 
-    # ==================== Private Methods ====================
-
     def _apply_business_rules(self, data: Dict[str, Any]) -> Dict[str, Any]:
         """
         Apply business transformations to claim data.

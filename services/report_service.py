@@ -2,7 +2,6 @@
 """
 Report Generation Service
 ==========================
-Implements FR-D-14 Reports requirements including PDF generation and audit trail reports.
 
 Features:
 - PDF report generation with Arabic support
@@ -55,10 +54,6 @@ class ReportService:
     Report generation service.
 
     Implements:
-    - FR-D-14.1: PDF report generation
-    - FR-D-14.4: Audit trail reports
-    - FR-D-14.5: Progress reports
-    - FR-D-8.6: STDM comparison reports
     """
 
     def __init__(self, db: Database):
@@ -76,8 +71,6 @@ class ReportService:
             pass
         except Exception as e:
             logger.warning(f"Could not register Arabic fonts: {e}")
-
-    # ==================== PDF Report Generation (FR-D-14.1) ====================
 
     def generate_buildings_pdf(
         self,
@@ -254,8 +247,6 @@ class ReportService:
             "generated_at": datetime.now().isoformat()
         }
 
-    # ==================== Audit Trail Reports (FR-D-14.4) ====================
-
     def generate_audit_trail_report(
         self,
         file_path: Path,
@@ -266,7 +257,7 @@ class ReportService:
         format: str = "pdf"
     ) -> Dict[str, Any]:
         """
-        Generate audit trail report (FR-D-14.4).
+        Generate audit trail report.
 
         Args:
             file_path: Output file path
@@ -402,8 +393,6 @@ class ReportService:
             "generated_at": datetime.now().isoformat()
         }
 
-    # ==================== Progress Reports (FR-D-14.5) ====================
-
     def generate_progress_report(
         self,
         file_path: Path,
@@ -411,7 +400,7 @@ class ReportService:
         config: Optional[ReportConfig] = None
     ) -> Dict[str, Any]:
         """
-        Generate progress report (FR-D-14.5).
+        Generate progress report.
 
         Args:
             file_path: Output file path
@@ -568,15 +557,13 @@ class ReportService:
             "generated_at": datetime.now().isoformat()
         }
 
-    # ==================== STDM Comparison Report (FR-D-8.6) ====================
-
     def generate_stdm_comparison_report(
         self,
         file_path: Path,
         config: Optional[ReportConfig] = None
     ) -> Dict[str, Any]:
         """
-        Generate STDM comparison report (FR-D-8.6).
+        Generate STDM comparison report.
 
         Shows records with and without legacy STDM IDs.
 
@@ -693,8 +680,6 @@ class ReportService:
         if total == 0:
             return "0"
         return str(round((with_count / total) * 100, 1))
-
-    # ==================== Statistics Summary ====================
 
     def get_dashboard_statistics(self) -> Dict[str, Any]:
         """Get statistics for dashboard display."""

@@ -32,7 +32,6 @@ from ui.style_manager import StyleManager, PageDimensions
 logger = get_logger(__name__)
 
 
-
 class UnitsPage(QWidget):
     """Property Units management page — grouped by building, API-backed."""
 

@@ -106,8 +106,6 @@ class MapController(BaseController):
         self._state = MapState()
         self._cached_features: Dict[str, List[BuildingGeoData]] = {}
 
-    # ==================== Properties ====================
-
     @property
     def state(self) -> MapState:
         """Get current map state."""
@@ -137,8 +135,6 @@ class MapController(BaseController):
     def current_gps_position(self) -> Optional[GPSPosition]:
         """Get current GPS position."""
         return self.gps_service.get_current_position() if self.gps_service else None
-
-    # ==================== Map State ====================
 
     def set_center(self, lat: float, lng: float, zoom: Optional[int] = None) -> OperationResult:
         """
@@ -220,8 +216,6 @@ class MapController(BaseController):
         except Exception as e:
             return OperationResult.fail(message=str(e))
 
-    # ==================== Layer Management ====================
-
     def toggle_layer(self, layer_name: str, visible: bool) -> OperationResult:
         """
         Toggle layer visibility.
@@ -277,8 +271,6 @@ class MapController(BaseController):
             }
         ]
 
-    # ==================== Feature Selection ====================
-
     def select_feature(self, layer: str, feature_id: str) -> OperationResult:
         """
         Select a feature on the map.
@@ -307,8 +299,6 @@ class MapController(BaseController):
         self._state.selected_feature_id = None
         self.feature_deselected.emit()
         self._trigger_callbacks("on_feature_deselected")
-
-    # ==================== Spatial Queries ====================
 
     def get_buildings_in_view(
         self,
@@ -479,8 +469,6 @@ class MapController(BaseController):
         except Exception as e:
             return OperationResult.fail(message=str(e))
 
-    # ==================== Coordinate Picking ====================
-
     def set_drawing_mode(self, mode: Optional[str]) -> OperationResult:
         """
         Set drawing mode.
@@ -522,8 +510,6 @@ class MapController(BaseController):
         """
         self.polygon_drawn.emit(points)
         self._trigger_callbacks("on_polygon_drawn", points)
-
-    # ==================== Geometry Operations ====================
 
     def update_building_geometry(
         self,
@@ -588,8 +574,6 @@ class MapController(BaseController):
     def _validate_coordinates(self, lat: float, lng: float) -> bool:
         """Internal coordinate validation."""
         return -90 <= lat <= 90 and -180 <= lng <= 180
-
-    # ==================== GPS Integration ====================
 
     def connect_gps(self, config: Optional[GPSConfig] = None) -> OperationResult[bool]:
         """
@@ -676,8 +660,6 @@ class MapController(BaseController):
         """Handle GPS status change."""
         self.gps_status_changed.emit(status.value)
         self._trigger_callbacks("on_gps_status", status)
-
-    # ==================== Export ====================
 
     def export_to_geojson(
         self,

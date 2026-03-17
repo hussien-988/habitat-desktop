@@ -113,8 +113,6 @@ EN_TRANSLATIONS = {
     "warning.uniqueness_check_error": "Error checking uniqueness",
     "warning.unit_number_taken": "A unit with the same number and floor exists",
     "warning.unit_number_available": "Unit number is available",
-
-    # ===== Display Mappings =====
     "mapping.select": "Select",
     "mapping.not_specified": "Not specified",
 
@@ -201,6 +199,12 @@ EN_TRANSLATIONS = {
     "mapping.business_type.commercial": "Commercial",
     "mapping.business_type.agricultural": "Agricultural",
 
+    "mapping.import_status.pending": "Pending",
+    "mapping.import_status.validated": "Validated",
+    "mapping.import_status.imported": "Imported",
+    "mapping.import_status.failed": "Failed",
+    "mapping.import_status.partial": "Partial",
+
     # Source Types
     "mapping.source.field_survey": "Field Survey",
     "mapping.source.direct_request": "Direct Request",
@@ -276,8 +280,6 @@ EN_TRANSLATIONS = {
 
     # Relation Type (guest)
     "mapping.relation_type.guest": "Guest",
-
-    # ===== Wizard - Step Names =====
     "wizard.step.building_info": "Building Information",
     "wizard.step.applicant_info": "Applicant Info",
     "wizard.step.building_registration": "Select a Building",
@@ -289,8 +291,6 @@ EN_TRANSLATIONS = {
     "wizard.step.relations_evidence": "Relations & Evidence",
     "wizard.step.claim": "Claim",
     "wizard.step.final_review": "Final Review",
-
-    # ===== Applicant Info Step =====
     "wizard.applicant.subtitle": "Enter visitor information",
     "wizard.applicant.full_name": "Full Name",
     "wizard.applicant.national_id": "National ID",
@@ -325,8 +325,6 @@ EN_TRANSLATIONS = {
     "wizard.confirm.save_title": "Save Changes?",
     "wizard.confirm.save_message": "You have unsaved changes.\nWould you like to save them as a draft?",
     "wizard.draft.saved_success": "Draft saved successfully!",
-
-    # ===== Building Selection Step =====
     "wizard.building.card_title": "Building Data",
     "wizard.building.card_subtitle": "Search for building information and location",
     "wizard.building.subtitle": "Review selected building data",
@@ -364,8 +362,6 @@ EN_TRANSLATIONS = {
     "wizard.building.step_description": "Search for the building to survey and select it",
     "wizard.building.not_selected": "No building selected",
     "wizard.building.label": "Building: {building_id}",
-
-    # ===== Unit Selection Step =====
     "wizard.unit.address_label": "Building Address",
     "wizard.unit.select_title": "Select Property Unit",
     "wizard.unit.select_subtitle": "Select or add property unit information",
@@ -387,8 +383,6 @@ EN_TRANSLATIONS = {
     "wizard.unit.step_description": "Select an existing unit or create a new one in the selected building",
     "wizard.unit.not_selected": "No unit selected",
     "wizard.unit.area_format": "{value} sqm",
-
-    # ===== Household Step =====
     "wizard.household.select": "Select",
     "wizard.household.head_title": "Head of Household",
     "wizard.household.subtitle": "Register Household Details",
@@ -432,8 +426,6 @@ EN_TRANSLATIONS = {
     "wizard.household.unit_status_label": "Unit Status",
     "wizard.household.members_required": "Number of household members must be greater than zero",
     "wizard.household.members_mismatch": "Ensure member count matches the details",
-
-    # ===== Person Step =====
     "wizard.person.card_title": "Persons Data",
     "wizard.person.subtitle": "Registered Persons List",
     "wizard.person.add_button": "+ Add New Person",
@@ -451,8 +443,6 @@ EN_TRANSLATIONS = {
     "wizard.person.duplicate_title": "Warning",
     "wizard.person.duplicate_national_id": "Person with national ID {national_id} already added",
     "wizard.person.duplicate_name": "Person {first} {last} already added",
-
-    # ===== Relation Step =====
     "wizard.relation.title": "Relations & Evidence",
     "wizard.relation.subtitle": "Register person's property ownership details",
     "wizard.relation.no_persons": "No persons found. Please add persons in the previous step.",
@@ -474,8 +464,6 @@ EN_TRANSLATIONS = {
     "wizard.relation.has_documents": "Has Documents",
     "wizard.relation.no_documents": "No Documents",
     "wizard.relation.upload_documents": "Upload Document Photos",
-
-    # ===== Review Step =====
     "wizard.review.building_card_title": "Building Data",
     "wizard.review.building_card_subtitle": "Selected building information",
     "wizard.review.unit_card_title": "Select Property Unit",
@@ -529,8 +517,6 @@ EN_TRANSLATIONS = {
     "wizard.review.new_unit": "New",
     "common.error": "Error",
     "common.success": "Success",
-
-    # ===== Person Dialog =====
     "wizard.person_dialog.title_add": "Add New Person",
     "wizard.person_dialog.title_edit": "Edit Person Data",
     "wizard.person_dialog.title_view": "View Person Data",
@@ -613,16 +599,12 @@ EN_TRANSLATIONS = {
     "wizard.person_dialog.same_date": "Same date",
     "wizard.person_dialog.separate_dates": "Separate dates",
     "wizard.person_dialog.upload_partial": "{success} document(s) uploaded, {failed} failed",
-
-    # ===== Occupancy Details =====
     "wizard.occupation.type": "Occupancy Type",
     "wizard.occupation.residential": "Residential",
     "wizard.occupation.non_residential": "Non-Residential",
     "wizard.occupation.nature": "Occupancy Nature",
     "wizard.occupation.ownership": "Ownership",
     "wizard.occupation.other": "Other",
-
-    # ===== Occupancy Claims Step =====
     "wizard.occupancy_claims.title": "Individual Data",
     "wizard.occupancy_claims.subtitle": "List of registered persons",
     "wizard.occupancy_claims.add_person": "Add New Person",
@@ -646,8 +628,6 @@ EN_TRANSLATIONS = {
     "wizard.occupancy_claims.empty_desc": "Please add the occupants data for this unit\nby clicking the \"Add New Person\" button above",
     "wizard.claims.no_claims_created": "Survey processed but no claims created.\n\nReason: {reason}",
     "wizard.claims.process_title": "Process Claims",
-
-    # ===== Unit Dialog =====
     "wizard.unit_dialog.title_add": "Add Property Unit Information",
     "wizard.unit_dialog.title_edit": "Edit Property Unit Information",
     "wizard.unit_dialog.select": "Select",
@@ -673,8 +653,6 @@ EN_TRANSLATIONS = {
     "common.save": "Save",
     "common.confirm": "Confirm",
     "common.warning": "Warning",
-
-    # ===== Drafts Page =====
     "page.drafts.title": "Drafts",
     "page.drafts.add_new": "+ Add a Claim",
     "page.drafts.filter": "Filter",
@@ -705,8 +683,6 @@ EN_TRANSLATIONS = {
     "page.drafts.confirm_delete_message": "Are you sure you want to delete this draft?\n\nReference: {ref_code}\n\nThis action cannot be undone.",
     "page.drafts.delete_success": "Draft deleted successfully",
     "page.drafts.delete_error": "Error deleting draft: {details}",
-
-    # ===== Map Page =====
     "page.map.buildings_list": "Buildings List",
     "page.map.search": "Search...",
     "page.map.status_label": "Status:",
@@ -729,8 +705,6 @@ EN_TRANSLATIONS = {
     "page.map.loaded_in_viewport": "Loaded {count} buildings in the current area",
     "page.map.no_buildings_viewport": "No buildings in the current area",
     "page.map.viewport_load_error": "Error loading data",
-
-    # ===== Field Work Page =====
     "page.field_work.title": "Field Work Preparation",
     "page.field_work.governorate": "Governorate",
     "page.field_work.subdistrict": "Sub-district",
@@ -744,8 +718,6 @@ EN_TRANSLATIONS = {
     "page.field_work.no_buildings": "No buildings found",
     "page.field_work.assignment_success": "Assignment successful",
     "page.field_work.assignment_failed": "Assignment failed: {details}",
-
-    # ===== Buildings Page =====
     "page.buildings.title": "Buildings",
     "page.buildings.search_placeholder": "Search for building...",
     "page.buildings.add_building": "Add Building",
@@ -762,8 +734,6 @@ EN_TRANSLATIONS = {
     "page.buildings.delete_confirm": "Are you sure you want to delete this building?",
     "page.buildings.units_count": "Units Count",
     "page.buildings.floors_count": "Floors Count",
-
-    # ===== Navbar & ID Badge =====
     "navbar.tab.completed_claims": "Claims",
     "navbar.tab.claims": "Claims",
     "navbar.tab.cases": "Surveys",
@@ -807,24 +777,16 @@ EN_TRANSLATIONS = {
     "navbar.menu.data_management": "Reference Data Management",
     "navbar.menu.import_data": "Import Data",
     "navbar.menu.logout": "Logout",
-
-    # ===== Building Documents =====
     "building.docs.section_title": "Building Documents",
     "building.docs.none": "No documents available",
     "building.docs.view_details": "View Details",
-
-    # ===== Review Step - Case Status =====
     "review.case.closed": "Case Closed — Tenure claim registered",
     "review.case.pending_evidence": "Pending Evidence — Owner registered without documents",
     "review.case.open": "Case Open — Awaiting owner identification",
     "review.applicant.title": "Applicant",
-
-    # ===== Case Details Page =====
     "page.case_details.title": "Case Details",
     "page.case_details.breadcrumb": "Drafts",
     "page.case_details.back_to_list": "Back to List",
-
-    # ===== Error Boundary =====
     "error_boundary.step_error": "Error in {step_name}",
     "error_boundary.operation_error": "Error during {operation}:\n\n{error_type}: {error_msg}\n\nYou can try again or contact support.",
     "error_boundary.operation_error_simple": "Error during {operation}:\n\n{error_msg}\n\nPlease try again or contact support.",

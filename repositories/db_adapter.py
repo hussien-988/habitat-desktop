@@ -1,8 +1,6 @@
 # -*- coding: utf-8 -*-
 """
 Unified Database Adapter - Backend-agnostic database abstraction layer.
-
-Implements FSD 5.2: Central DB is PostgreSQL 16 with PostGIS extension.
 Provides a consistent interface for both SQLite (development/fallback) and PostgreSQL (production).
 
 This module is the ONLY place that should import sqlite3 or psycopg2 for the main database.
@@ -635,7 +633,7 @@ class SQLiteAdapter(DatabaseAdapter):
             )
         """)
 
-        # Households/Occupancy table (FSD 6.1.6)
+        # Households/Occupancy table
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS households (
                 household_id TEXT PRIMARY KEY,
@@ -820,7 +818,7 @@ class SQLiteAdapter(DatabaseAdapter):
             )
         """)
 
-        # Surveys table (UC-004, UC-005)
+        # Surveys table
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS surveys (
                 survey_id TEXT PRIMARY KEY,
@@ -1799,7 +1797,7 @@ class PostgreSQLAdapter(DatabaseAdapter):
 class DatabaseFactory:
     """
     Factory for creating database adapters.
-    Defaults to PostgreSQL as per FSD 5.2.
+    Defaults to PostgreSQL 5.2.
     """
 
     _instance: Optional[DatabaseAdapter] = None

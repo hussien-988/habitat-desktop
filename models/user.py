@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 """
 User entity model for authentication.
-Implements FR-D-16 security requirements with bcrypt hashing and 2FA support.
 """
 
 from dataclasses import dataclass, field
@@ -31,7 +30,6 @@ except ImportError:
 class User:
     """
     User entity for system authentication and authorization.
-    Implements FR-D-16 security requirements:
     - Bcrypt password hashing with salt
     - Two-factor authentication (2FA) support
     - Password history tracking
@@ -43,7 +41,7 @@ class User:
 
     # Credentials
     username: str = ""
-    password_hash: str = ""  # Bcrypt hash with salt (FR-D-16.1)
+    password_hash: str = ""  # Bcrypt hash with salt
     password_salt: str = ""  # Explicit salt storage for compatibility
     email: Optional[str] = None
 
@@ -58,12 +56,12 @@ class User:
     is_locked: bool = False
     failed_attempts: int = 0
 
-    # Two-Factor Authentication (FR-D-16.3)
+    # Two-Factor Authentication
     totp_secret: Optional[str] = None  # Base32 encoded secret for TOTP
     is_2fa_enabled: bool = False
     backup_codes: str = ""  # Comma-separated hashed backup codes
 
-    # Password Management (UC-011)
+    # Password Management
     password_history: str = ""  # Comma-separated previous password hashes
     password_changed_at: Optional[datetime] = None
     password_expires_at: Optional[datetime] = None
@@ -84,7 +82,7 @@ class User:
     @staticmethod
     def hash_password(password: str, salt: Optional[str] = None) -> tuple:
         """
-        Hash a password using bcrypt with salt (FR-D-16.1).
+        Hash a password using bcrypt with salt.
         Falls back to SHA-256 with salt if bcrypt is not available.
 
         Returns:
@@ -110,7 +108,7 @@ class User:
 
     def set_password(self, password: str, track_history: bool = True):
         """
-        Set user password with history tracking (UC-011).
+        Set user password with history tracking.
 
         Args:
             password: New password
@@ -120,7 +118,7 @@ class User:
         if track_history and self.password_hash:
             history = self.get_password_history()
             history.insert(0, self.password_hash)
-            # Keep only last 5 passwords (UC-011 password_reuse_history)
+            # Keep only last 5 passwords
             history = history[:5]
             self.password_history = ",".join(history)
 
@@ -146,7 +144,7 @@ class User:
             return secrets.compare_digest(computed_hash, self.password_hash)
 
     def is_password_in_history(self, password: str) -> bool:
-        """Check if password was used recently (UC-011)."""
+        """Check if password was used recently."""
         history = self.get_password_history()
         for old_hash in history:
             if BCRYPT_AVAILABLE and old_hash.startswith('$2'):
@@ -169,15 +167,13 @@ class User:
         return []
 
     def is_password_expired(self, expiry_days: int = 90) -> bool:
-        """Check if password has expired (UC-011)."""
+        """Check if password has expired."""
         if not self.password_changed_at:
             return False
 
         from datetime import timedelta
         expiry_date = self.password_changed_at + timedelta(days=expiry_days)
         return datetime.now() > expiry_date
-
-    # ==================== Two-Factor Authentication (FR-D-16.3) ====================
 
     def setup_2fa(self) -> str:
         """
@@ -250,7 +246,7 @@ class User:
         self.backup_codes = ""
 
     def requires_2fa(self) -> bool:
-        """Check if user requires 2FA (admins always require it per FR-D-16.3)."""
+        """Check if user requires 2FA (admins always require it)."""
         return self.role == "admin" or self.is_2fa_enabled
 
     @property

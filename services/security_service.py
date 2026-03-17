@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 """
 Security settings and audit log service.
-Implements UC-011: Security Settings
 """
 
 from typing import List, Dict, Any, Optional
@@ -59,7 +58,6 @@ class AuditLogEntry:
 class SecurityService:
     """
     Service for managing security settings and audit logging.
-    Implements UC-011 Security Settings.
     """
 
     # Validation constraints
@@ -73,8 +71,6 @@ class SecurityService:
 
     def __init__(self, db: Database):
         self.db = db
-
-    # ========== Security Settings ==========
 
     def get_settings(self) -> SecuritySettings:
         """Get current security settings."""
@@ -155,7 +151,7 @@ class SecurityService:
         return True, []
 
     def _validate_settings(self, settings: SecuritySettings) -> List[str]:
-        """Validate security settings (UC-011 S06)."""
+        """Validate security settings."""
         errors = []
 
         # Password length validation
@@ -221,8 +217,6 @@ class SecurityService:
                 errors.append("كلمة المرور يجب أن تحتوي على رمز خاص")
 
         return len(errors) == 0, errors
-
-    # ========== Audit Logging ==========
 
     def log_action(
         self,

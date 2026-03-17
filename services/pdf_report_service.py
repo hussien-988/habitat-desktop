@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-PDF Report Generation Service - FR-D-11 Implementation.
+PDF Report Generation Service.
 Generates Arabic PDF reports with QR codes and digital signatures.
 """
 
@@ -63,8 +63,6 @@ class ReportMetadata:
 class PDFReportService:
     """
     PDF Report Generation Service.
-
-    Implements FR-D-11:
     - Arabic PDF reports with proper RTL support
     - QR codes embedding Record IDs
     - Digital signatures for authenticity

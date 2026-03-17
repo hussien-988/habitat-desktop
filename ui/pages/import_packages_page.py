@@ -573,13 +573,16 @@ class ImportPackagesListPage(QWidget):
 
     def _cancel_package(self, package_id):
         """Cancel a package."""
-        result = self.import_controller.cancel_package(package_id)
         from ui.components.message_dialog import MessageDialog
-        if result.success:
-            MessageDialog.success(self, "تم الإلغاء", result.message_ar or "تم إلغاء الحزمة")
-            self._load_packages()
-        else:
-            MessageDialog.error(self, "خطأ", result.message_ar or "فشل إلغاء الحزمة")
+        try:
+            result = self.import_controller.cancel_package(package_id)
+            if result.success:
+                MessageDialog.success(self, "تم الإلغاء", result.message_ar or "تم إلغاء الحزمة")
+                self._load_packages()
+            else:
+                MessageDialog.error(self, "خطأ", result.message_ar or "فشل إلغاء الحزمة")
+        except Exception as e:
+            MessageDialog.error(self, "خطأ", f"فشل إلغاء الحزمة: {e}")
 
     def _quarantine_package(self, package_id):
         """Quarantine a package."""
@@ -596,13 +599,16 @@ class ImportPackagesListPage(QWidget):
 
     def _reset_commit(self, package_id):
         """Reset a stuck commit (admin only)."""
-        result = self.import_controller.reset_commit(package_id)
         from ui.components.message_dialog import MessageDialog
-        if result.success:
-            MessageDialog.success(self, "تم إعادة التعيين", result.message_ar or "تم إعادة التعيين")
-            self._load_packages()
-        else:
-            MessageDialog.error(self, "خطأ", result.message_ar or "فشل إعادة التعيين")
+        try:
+            result = self.import_controller.reset_commit(package_id)
+            if result.success:
+                MessageDialog.success(self, "تم إعادة التعيين", result.message_ar or "تم إعادة التعيين")
+                self._load_packages()
+            else:
+                MessageDialog.error(self, "خطأ", result.message_ar or "فشل إعادة التعيين")
+        except Exception as e:
+            MessageDialog.error(self, "خطأ", f"فشل إعادة التعيين: {e}")
 
     # -- Pagination --
 

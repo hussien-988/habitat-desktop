@@ -2,7 +2,6 @@
 """
 Security Settings Service
 ==========================
-Implements UC-011 Security Settings requirements.
 
 Features:
 - Password policy management
@@ -25,14 +24,14 @@ logger = get_logger(__name__)
 @dataclass
 class SecurityPolicy:
     """
-    Security policy configuration as per UC-011.
+    Security policy configuration.
 
     Implements:
     - S03: Password policies
     - S04: Session/Lockout settings
     - S05: Access control
     """
-    # Password Policy (UC-011 S03)
+    # Password Policy
     password_min_length: int = 8
     password_require_uppercase: bool = True
     password_require_lowercase: bool = True
@@ -41,11 +40,11 @@ class SecurityPolicy:
     password_expiry_days: int = 90  # 0 = never expires
     password_reuse_history: int = 5  # Number of previous passwords to check
 
-    # Session Settings (UC-011 S04)
+    # Session Settings
     session_timeout_minutes: int = 30
     session_max_concurrent: int = 3
 
-    # Lockout Settings (UC-011 S04)
+    # Lockout Settings
     max_failed_attempts: int = 5
     lockout_duration_minutes: int = 30
     auto_unlock: bool = True
@@ -88,8 +87,6 @@ class SecurityPolicy:
 class SecuritySettingsService:
     """
     Security settings management service.
-
-    Implements UC-011 Security Settings use case.
     """
 
     def __init__(self, db: Database):
@@ -232,8 +229,6 @@ class SecuritySettingsService:
             logger.error(f"Failed to update security policy: {e}")
             return False
 
-    # ==================== Password Validation ====================
-
     def validate_password(self, password: str) -> tuple:
         """
         Validate password against security policy.
@@ -279,8 +274,6 @@ class SecuritySettingsService:
             reqs.append("At least one special character")
 
         return "\n".join(f"• {r}" for r in reqs)
-
-    # ==================== Account Lockout ====================
 
     def record_login_attempt(
         self,
@@ -398,8 +391,6 @@ class SecuritySettingsService:
 
         logger.info(f"Account unlocked: {username}")
 
-    # ==================== Session Management ====================
-
     def create_session(
         self,
         user_id: str,
@@ -489,8 +480,6 @@ class SecuritySettingsService:
             WHERE user_id = ?
         """, (user_id,))
         self.db.connection.commit()
-
-    # ==================== Audit Logging ====================
 
     def log_audit(
         self,

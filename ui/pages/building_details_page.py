@@ -50,10 +50,7 @@ class BuildingDetailsPage(QWidget):
         self._units_per_page = 11
 
         self._setup_ui()
-
-    # =========================================================================
     # UI Setup
-    # =========================================================================
 
     def _setup_ui(self):
         self.setLayoutDirection(Qt.RightToLeft)
@@ -189,10 +186,7 @@ class BuildingDetailsPage(QWidget):
 
         from ui.components.loading_spinner import LoadingSpinnerOverlay
         self._spinner = LoadingSpinnerOverlay(self)
-
-    # =========================================================================
     # Card Builders (same pattern as review_step.py)
-    # =========================================================================
 
     def _create_card_base(self, icon_name: str, title: str, subtitle: str) -> tuple:
         """Create card with header (icon + title + subtitle). Returns (card, content_layout)."""
@@ -304,10 +298,7 @@ class BuildingDetailsPage(QWidget):
         shadow.setYOffset(4)
         shadow.setColor(QColor(0, 0, 0, 25))
         widget.setGraphicsEffect(shadow)
-
-    # =========================================================================
     # Units Table Card
-    # =========================================================================
 
     def _create_units_table_card(self) -> QFrame:
         """Create card containing the units table for this building."""
@@ -461,10 +452,7 @@ class BuildingDetailsPage(QWidget):
         card_layout.addWidget(footer)
 
         return card
-
-    # =========================================================================
     # Data Loading
-    # =========================================================================
 
     def refresh(self, data=None):
         """Load building and populate cards.
@@ -560,8 +548,6 @@ class BuildingDetailsPage(QWidget):
         entry_date = format_date(getattr(building, 'created_at', None)) or "-"
         location_desc = getattr(building, 'location_description', '-') or '-'
         general_desc = getattr(building, 'general_description', '-') or '-'
-
-        # ===== Card 1: Building number + address bar =====
         num_label = QLabel(building_code)
         num_label.setFont(create_font(size=FontManager.WIZARD_CARD_VALUE, weight=FontManager.WEIGHT_SEMIBOLD))
         num_label.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent; border: none;")
@@ -592,8 +578,6 @@ class BuildingDetailsPage(QWidget):
         addr_row.addWidget(addr_text)
         addr_row.addStretch()
         self.info_content.addWidget(addr_bar)
-
-        # ===== Card 2: Stats row (6 columns) =====
         stats_row = QHBoxLayout()
         stats_row.setContentsMargins(0, 0, 0, 0)
         stats_row.setSpacing(0)
@@ -630,8 +614,6 @@ class BuildingDetailsPage(QWidget):
             stats_row.addWidget(section, stretch=1)
 
         self.stats_content.addLayout(stats_row)
-
-        # ===== Card 3: Location (map + descriptions) =====
         loc_header = QLabel("موقع البناء")
         loc_header.setFont(create_font(size=FontManager.WIZARD_CARD_LABEL, weight=FontManager.WEIGHT_SEMIBOLD))
         loc_header.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent; border: none;")
@@ -715,10 +697,7 @@ class BuildingDetailsPage(QWidget):
         content_row.addLayout(gen_desc_section, stretch=1)
 
         self.location_content.addLayout(content_row)
-
-    # =========================================================================
     # Units View Toggle
-    # =========================================================================
 
     def _toggle_units_view(self):
         """Toggle between cards view and units table view."""
@@ -838,10 +817,7 @@ class BuildingDetailsPage(QWidget):
         if self._units_page < total_pages:
             self._units_page += 1
             self._update_units_table()
-
-    # =========================================================================
     # Map Dialog
-    # =========================================================================
 
     def _open_map_dialog(self):
         """Open map dialog in read-only mode."""

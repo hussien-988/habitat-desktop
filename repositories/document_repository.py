@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 """
 Document repository for database operations.
-Implements UC-006 document management requirements.
 """
 
 from typing import List, Optional

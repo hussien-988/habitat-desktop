@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-Local Network Sync Server Service - FR-D-15 Implementation.
+Local Network Sync Server Service.
 Provides REST endpoint for tablet synchronization over LAN/Wi-Fi.
 """
 
@@ -244,8 +244,6 @@ class SyncHTTPServer(HTTPServer):
 class LocalNetworkSyncService:
     """
     Local Network Sync Server Service.
-
-    Implements FR-D-15:
     - REST endpoint on configurable port
     - mDNS/Bonjour for automatic discovery
     - TLS encryption
@@ -552,8 +550,6 @@ class LocalNetworkSyncService:
     def receive_package(self, device_id: str, file_data: bytes) -> Dict[str, Any]:
         """
         Receive and process a .uhc package from a tablet.
-
-        Implements S12-S14 from UC-003.
         """
         session = self.sessions.get(device_id)
 

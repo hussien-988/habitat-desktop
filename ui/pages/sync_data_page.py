@@ -138,10 +138,7 @@ class SyncDataPage(QWidget):
         self._refresh_timer = QTimer(self)
         self._refresh_timer.timeout.connect(self._smart_refresh)
         self._refresh_timer.start(10000)
-
-    # ------------------------------------------------------------------
     # UI Setup
-    # ------------------------------------------------------------------
 
     def _setup_ui(self):
         self.setStyleSheet(StyleManager.page_background())
@@ -340,10 +337,7 @@ class SyncDataPage(QWidget):
         layout.addWidget(self._empty_label)
 
         return card
-
-    # ------------------------------------------------------------------
     # Data loading
-    # ------------------------------------------------------------------
 
     def _load_collectors(self):
         try:
@@ -433,10 +427,7 @@ class SyncDataPage(QWidget):
                 self._empty_label.show()
         finally:
             self._spinner.hide_loading()
-
-    # ------------------------------------------------------------------
     # Smart Refresh (polling every 10s)
-    # ------------------------------------------------------------------
 
     def _smart_refresh(self):
         """Poll API and update status badges + overlays in-place."""
@@ -533,10 +524,7 @@ class SyncDataPage(QWidget):
                 background-color: {bg};
                 border: none;
             """)
-
-    # ------------------------------------------------------------------
     # Sync Pulse Overlay
-    # ------------------------------------------------------------------
 
     def _add_sync_overlay(self, assignment_id: str):
         header = self._header_widgets.get(assignment_id)
@@ -563,10 +551,7 @@ class SyncDataPage(QWidget):
         if overlay:
             overlay.stop()
             overlay.deleteLater()
-
-    # ------------------------------------------------------------------
     # Accordion item
-    # ------------------------------------------------------------------
 
     def _create_accordion_item(self, assignment: dict) -> QFrame:
         assignment_id = self._get_assignment_id(assignment)
@@ -730,10 +715,7 @@ class SyncDataPage(QWidget):
         layout.addWidget(status_widget)
 
         return header
-
-    # ------------------------------------------------------------------
     # Accordion toggle + lazy details loading
-    # ------------------------------------------------------------------
 
     def _toggle_accordion(self, assignment_id: str, assignment: dict):
         body = self._accordion_bodies.get(assignment_id)
@@ -878,10 +860,7 @@ class SyncDataPage(QWidget):
             err.setStyleSheet("color: #EF4444; background: transparent; border: none;")
             err.setAlignment(Qt.AlignCenter)
             body_layout.addWidget(err)
-
-    # ------------------------------------------------------------------
     # Unit card (same pattern as Step 3)
-    # ------------------------------------------------------------------
 
     def _create_unit_card(self, unit_data: dict) -> QFrame:
         unit_type = unit_data.get('unitType') or unit_data.get('unit_type') or 'other'
@@ -988,10 +967,7 @@ class SyncDataPage(QWidget):
             card_layout.addLayout(bottom)
 
         return card
-
-    # ------------------------------------------------------------------
     # Unassign
-    # ------------------------------------------------------------------
 
     def _unassign_building(self, assignment_id: str):
         from ui.components.dialogs import ConfirmationDialog
@@ -1014,10 +990,7 @@ class SyncDataPage(QWidget):
         except Exception as e:
             logger.warning(f"Failed to unassign: {e}")
             Toast.show_toast(self.window(), f"فشل إلغاء التعيين: {e}", Toast.ERROR)
-
-    # ------------------------------------------------------------------
     # Helpers
-    # ------------------------------------------------------------------
 
     @staticmethod
     def _get_assignment_id(assignment: dict) -> str:

@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 """
 Property Unit entity model.
-Implements FR-D-8 STDM legacy integration support.
 """
 
 from dataclasses import dataclass, field
@@ -19,8 +18,6 @@ class PropertyUnit:
     BUILDING_ID-UUU
     - BUILDING_ID: 17-digit building ID
     - UUU: Unit number (3 digits)
-
-    Implements FR-D-8.2 STDM Integration for Units.
     """
 
     # Primary identifiers
@@ -41,7 +38,7 @@ class PropertyUnit:
     # Area (optional, approximate)
     area_sqm: Optional[float] = None
 
-    # Legacy STDM Integration (FR-D-8.2)
+    # Legacy STDM Integration
     legacy_stdm_id: Optional[str] = None  # Original STDM unit identifier
     legacy_stdm_party_id: Optional[str] = None  # STDM party reference
     legacy_stdm_spatial_unit_id: Optional[str] = None  # STDM spatial unit reference

@@ -23,10 +23,7 @@ class SurveyController:
 
     def __init__(self, db=None):
         self.db = db
-
-    # ------------------------------------------------------------------
     # List: draft office surveys for the cards page
-    # ------------------------------------------------------------------
 
     def load_office_surveys(
         self,
@@ -63,10 +60,7 @@ class SurveyController:
         except Exception as e:
             logger.error(f"Failed to load office surveys: {e}", exc_info=True)
             return OperationResult.fail(message=str(e))
-
-    # ------------------------------------------------------------------
     # Detail: full survey context for ReviewStep / CaseDetailsPage
-    # ------------------------------------------------------------------
 
     def get_survey_full_context(self, survey_id: str) -> OperationResult:
         """
@@ -203,10 +197,7 @@ class SurveyController:
         except Exception as e:
             logger.error(f"Failed to get survey context: {e}", exc_info=True)
             return OperationResult.fail(message=str(e))
-
-    # ------------------------------------------------------------------
     # Mapping: survey detail → claim_data dict for ReviewStep
-    # ------------------------------------------------------------------
 
     @staticmethod
     def _map_survey_to_claim_data(detail: dict, persons: List[dict],

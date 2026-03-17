@@ -116,10 +116,7 @@ class ReviewStep(BaseStep):
         scroll_layout.addStretch()
         scroll.setWidget(scroll_content)
         layout.addWidget(scroll)
-
-    # =========================================================================
     # Shared Styles & Helpers
-    # =========================================================================
 
     def _create_section_label(self, text: str) -> QLabel:
         """Create section label with WIZARD_TITLE style (reused across all cards)."""
@@ -513,7 +510,7 @@ class ReviewStep(BaseStep):
     def _populate_case_status_banner(self):
         """Update case status banner based on claim/owner/evidence state.
 
-        Three states per UC-004 S17–S18:
+        Three states:
           - Closed:           owner exists AND has uploaded evidence
           - Pending evidence: owner exists BUT no evidence uploaded
           - Open:             no owner relation — no claim created
@@ -621,8 +618,6 @@ class ReviewStep(BaseStep):
         shops_count = str(building.number_of_shops) if hasattr(building, 'number_of_shops') else "0"
         location_desc = getattr(building, 'location_description', '-')
         general_desc = getattr(building, 'general_description', '-')
-
-        # ===== Card 1: Building number + address bar =====
         building_num_label = QLabel(building_code)
         building_num_label.setFont(create_font(size=FontManager.WIZARD_CARD_VALUE, weight=FontManager.WEIGHT_SEMIBOLD))
         building_num_label.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent; border: none;")
@@ -655,8 +650,6 @@ class ReviewStep(BaseStep):
         addr_row.addWidget(addr_text)
         addr_row.addStretch()
         self.building_info_content.addWidget(addr_bar)
-
-        # ===== Card 2: Stats (5 columns) =====
         stats_row = QHBoxLayout()
         stats_row.setContentsMargins(0, 0, 0, 0)
         stats_row.setSpacing(0)
@@ -692,8 +685,6 @@ class ReviewStep(BaseStep):
             stats_row.addWidget(section, stretch=1)
 
         self.building_stats_content.addLayout(stats_row)
-
-        # ===== Card 3: Location (map + descriptions) =====
         loc_header = QLabel(tr("wizard.building.location_title"))
         loc_header.setFont(create_font(size=FontManager.WIZARD_CARD_LABEL, weight=FontManager.WEIGHT_SEMIBOLD))
         loc_header.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent; border: none;")
@@ -889,7 +880,7 @@ class ReviewStep(BaseStep):
 
             self.unit_content.addWidget(unit_info_container)
 
-            # Dotted separator line (matching Figma)
+            # Dotted separator line
             dotted_sep = QFrame()
             dotted_sep.setFixedHeight(1)
             dotted_sep.setStyleSheet("background: transparent; border-top: 1px dashed #E0E6ED;")
@@ -1131,7 +1122,7 @@ class ReviewStep(BaseStep):
                 try:
                     self._set_auth_token()
                     if is_applicant:
-                        self._api_service.update_person(person_id, updated_data)
+                        logger.info(f"Applicant {person_id} updated locally (not a household member)")
                     elif survey_id and household_id:
                         self._api_service.update_person_in_survey(
                             survey_id, household_id, person_id, updated_data)

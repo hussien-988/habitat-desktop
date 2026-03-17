@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-Session Manager Service - UC-011 Security Settings Enforcement.
+Session Manager Service.
 Implements session timeout, auto-logout, and security policy enforcement.
 """
 
@@ -23,7 +23,7 @@ logger = get_logger(__name__)
 
 @dataclass
 class SecurityPolicy:
-    """Security policy configuration (UC-011)."""
+    """Security policy configuration."""
     # Password policies (S03)
     password_min_length: int = 8
     password_require_uppercase: bool = True
@@ -110,8 +110,6 @@ class LoginAttempt:
 class SessionManagerService(QObject):
     """
     Session manager with security policy enforcement.
-
-    Implements UC-011:
     - S03: Password policies
     - S04: Session timeout and lockout
     - S05: Access control policies
@@ -167,8 +165,6 @@ class SessionManagerService(QObject):
     def save_security_policy(self, policy: SecurityPolicy, user_id: str) -> bool:
         """
         Save security policy to database.
-
-        Implements UC-011 S07: Apply Security Policy
         """
         try:
             # Validate policy first
@@ -223,8 +219,6 @@ class SessionManagerService(QObject):
     def _validate_policy(self, policy: SecurityPolicy) -> tuple:
         """
         Validate security policy configuration.
-
-        Implements UC-011 S06: Validate Security Policy Configuration
         """
         errors = []
 
@@ -253,8 +247,6 @@ class SessionManagerService(QObject):
     def validate_password(self, password: str) -> tuple:
         """
         Validate password against security policy.
-
-        Implements UC-011 S03: Password Policies
         """
         errors = []
 
@@ -334,8 +326,6 @@ class SessionManagerService(QObject):
         Authenticate user with security policy enforcement.
 
         Implements:
-        - UC-011 S04: Max failed login attempts and lockout
-        - UC-011 S05: IP restrictions
 
         Returns:
             (success, user_data or error_message)
@@ -491,8 +481,6 @@ class SessionManagerService(QObject):
     def _check_session_timeout(self):
         """
         Check if session has timed out.
-
-        Implements UC-011 S04: Session timeout enforcement
         """
         if not self.current_session:
             return

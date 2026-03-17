@@ -351,8 +351,6 @@ class DocumentVersionService:
         mime_map = {v: k for k, v in self.SUPPORTED_MIME_TYPES.items()}
         return mime_map.get(ext, "application/octet-stream")
 
-    # ==================== Document Operations ====================
-
     def create_document(
         self,
         file_path: str,
@@ -797,8 +795,6 @@ class DocumentVersionService:
         """Get all documents linked to an entity."""
         return self.list_documents(entity_type=entity_type, entity_id=entity_id)
 
-    # ==================== Verification Operations ====================
-
     def verify_document(
         self,
         document_id: str,
@@ -868,8 +864,6 @@ class DocumentVersionService:
 
         return True, "File integrity verified"
 
-    # ==================== Entity Linking ====================
-
     def link_to_entity(
         self,
         document_id: str,
@@ -920,8 +914,6 @@ class DocumentVersionService:
                 )
 
         return True
-
-    # ==================== Status Operations ====================
 
     def update_status(
         self,
@@ -1004,8 +996,6 @@ class DocumentVersionService:
 
         return True
 
-    # ==================== Metadata Operations ====================
-
     def update_metadata(
         self,
         document_id: str,
@@ -1072,8 +1062,6 @@ class DocumentVersionService:
 
         return self.get_document(document_id)
 
-    # ==================== Search and Lookup ====================
-
     def find_by_hash(self, file_hash: str) -> Optional[Document]:
         """Find document by file hash (for duplicate detection)."""
         row = self._adapter.fetch_one("""
@@ -1103,8 +1091,6 @@ class DocumentVersionService:
             })
 
         return duplicates
-
-    # ==================== Version Comparison ====================
 
     def compare_versions(
         self,
@@ -1162,8 +1148,6 @@ class DocumentVersionService:
             restored_by,
             f"Restored from version {version_number}"
         )
-
-    # ==================== Audit Log ====================
 
     def _log_action(
         self,
@@ -1230,8 +1214,6 @@ class DocumentVersionService:
             ))
 
         return entries
-
-    # ==================== Statistics ====================
 
     def get_statistics(self) -> Dict[str, Any]:
         """Get document statistics."""

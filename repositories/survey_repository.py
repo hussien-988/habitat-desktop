@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 """
 Survey repository for database operations.
-Implements UC-005: Complete Draft Office Survey - draft management.
 """
 
 from typing import List, Optional, Dict, Any
@@ -147,7 +146,6 @@ class SurveyRepository:
     def get_drafts_for_office(self, limit: int = 100, offset: int = 0) -> List[Dict[str, Any]]:
         """
         Get all draft office surveys.
-        Implements UC-005 S01: Open Draft Office Surveys List.
 
         Args:
             limit: Maximum number of results
@@ -180,7 +178,6 @@ class SurveyRepository:
     def get_drafts_for_field(self, limit: int = 100, offset: int = 0) -> List[Dict[str, Any]]:
         """
         Get all draft field surveys.
-        Implements UC-002: Complete Draft Field Survey.
 
         Args:
             limit: Maximum number of results
@@ -211,7 +208,6 @@ class SurveyRepository:
     ) -> List[Dict[str, Any]]:
         """
         Search and filter draft surveys.
-        Implements UC-005 S02: Filter or Search Draft Office Surveys.
 
         Args:
             source: 'office' or 'field'

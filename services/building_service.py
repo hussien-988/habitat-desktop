@@ -253,8 +253,6 @@ class BuildingService:
                 'error': f'Database error: {e}'
             }
 
-    # ==================== Private Methods ====================
-
     def _generate_building_id(self, data: Dict[str, Any]) -> str:
         """Generate 17-digit building ID from hierarchy codes."""
         required_codes = [

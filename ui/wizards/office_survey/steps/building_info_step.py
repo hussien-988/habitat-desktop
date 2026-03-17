@@ -27,10 +27,7 @@ from services.api_client import get_api_client
 from utils.logger import get_logger
 
 logger = get_logger(__name__)
-
-# ---------------------------------------------------------------------------
 # Shared styles (mirrors AddBuildingPage._get_card_style / field style)
-# ---------------------------------------------------------------------------
 
 _CARD_STYLE = """
     QFrame {
@@ -62,11 +59,7 @@ _TEXTAREA_STYLE = """
         font-size: 10pt;
     }
 """
-
-
-# ---------------------------------------------------------------------------
 # BuildingInfoStep
-# ---------------------------------------------------------------------------
 
 class BuildingInfoStep(BaseStep):
     """
@@ -79,10 +72,7 @@ class BuildingInfoStep(BaseStep):
     def __init__(self, context: SurveyContext, parent=None):
         super().__init__(context, parent)
         self._survey_api_service = get_api_client()
-
-    # ------------------------------------------------------------------
     # UI construction
-    # ------------------------------------------------------------------
 
     def setup_ui(self):
         self.main_layout.setContentsMargins(0, 4, 0, 16)
@@ -303,10 +293,7 @@ class BuildingInfoStep(BaseStep):
 
         card_layout.addLayout(content_row)
         return card
-
-    # ------------------------------------------------------------------
     # Reusable builders
-    # ------------------------------------------------------------------
 
     def _make_card_shell(self, title: str, subtitle: str, icon_name: str, columns: int):
         """
@@ -410,10 +397,7 @@ class BuildingInfoStep(BaseStep):
 
         grid.addWidget(container, row, col, 1, col_span)
         return field
-
-    # ------------------------------------------------------------------
     # Data population
-    # ------------------------------------------------------------------
 
     def populate_data(self):
         b = self.context.building
@@ -617,10 +601,7 @@ class BuildingInfoStep(BaseStep):
             from PyQt5.QtCore import QUrl
             from PyQt5.QtGui import QDesktopServices
             QDesktopServices.openUrl(QUrl.fromLocalFile(file_path))
-
-    # ------------------------------------------------------------------
     # Map viewer
-    # ------------------------------------------------------------------
 
     def _open_map_view(self):
         """Open BuildingMapDialog in read-only mode to show the selected building."""
@@ -643,10 +624,7 @@ class BuildingInfoStep(BaseStep):
             dialog.exec_()
         except Exception as e:
             logger.warning(f"Could not open map view: {e}")
-
-    # ------------------------------------------------------------------
     # BaseStep interface
-    # ------------------------------------------------------------------
 
     def validate(self) -> StepValidationResult:
         result = StepValidationResult(is_valid=True, errors=[])

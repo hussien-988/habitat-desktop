@@ -119,8 +119,6 @@ class PersonDialog(QDialog):
         scroll_widget = QWidget()
         layout = QVBoxLayout(scroll_widget)
         layout.setSpacing(16)
-
-        # === Personal Information Group ===
         personal_group = QGroupBox("المعلومات الشخصية")
         personal_group.setStyleSheet(f"""
             QGroupBox {{
@@ -180,8 +178,6 @@ class PersonDialog(QDialog):
         personal_form.addRow("الجنسية:", self.nationality_combo)
 
         layout.addWidget(personal_group)
-
-        # === Contact Information Group ===
         contact_group = QGroupBox("معلومات الاتصال")
         contact_group.setStyleSheet(personal_group.styleSheet())
         contact_form = QFormLayout(contact_group)
@@ -238,8 +234,6 @@ class PersonDialog(QDialog):
         contact_form.addRow("العنوان:", self.address)
 
         layout.addWidget(contact_group)
-
-        # === ID Document Group ===
         id_group = QGroupBox("وثائق الهوية")
         id_group.setStyleSheet(personal_group.styleSheet())
         id_form = QFormLayout(id_group)
@@ -328,8 +322,6 @@ class PersonDialog(QDialog):
         id_form.addRow("صورة الوثيقة:", img_container)
 
         layout.addWidget(id_group)
-
-        # === Status Flags ===
         flags_layout = QHBoxLayout()
         self.is_contact = QCheckBox("شخص الاتصال")
         self.is_deceased = QCheckBox("متوفى")

@@ -57,10 +57,7 @@ class BaseWizard(QWidget, metaclass=ABCQWidgetMeta):
 
         # Show first step
         self.navigator.goto_step(0, skip_validation=True)
-
-    # =========================================================================
     # Abstract Methods - Must be implemented by subclasses
-    # =========================================================================
 
     @abstractmethod
     def create_steps(self) -> List[BaseStep]:
@@ -76,10 +73,7 @@ class BaseWizard(QWidget, metaclass=ABCQWidgetMeta):
     def on_submit(self) -> bool:
         """Handle wizard submission."""
         pass
-
-    # =========================================================================
     # Optional Methods - Can be overridden by subclasses
-    # =========================================================================
 
     def get_wizard_title(self) -> str:
         """Get wizard title. Override to customize."""
@@ -96,10 +90,7 @@ class BaseWizard(QWidget, metaclass=ABCQWidgetMeta):
     def on_save_draft(self) -> Optional[str]:
         """Handle draft saving."""
         return None
-
-    # =========================================================================
     # UI Setup
-    # =========================================================================
 
     def _setup_ui(self):
         """Setup the wizard UI."""
@@ -227,10 +218,7 @@ class BaseWizard(QWidget, metaclass=ABCQWidgetMeta):
         layout.addWidget(self.btn_next)
 
         return footer
-
-    # =========================================================================
     # Navigation Handlers
-    # =========================================================================
 
     def _handle_previous(self):
         """Handle previous button click."""
@@ -283,10 +271,7 @@ class BaseWizard(QWidget, metaclass=ABCQWidgetMeta):
                 data = {}
             self.wizard_completed.emit(data)
             self.close()
-
-    # =========================================================================
     # Event Handlers
-    # =========================================================================
 
     def _on_step_changed(self, old_index: int, new_index: int):
         """Handle step change."""

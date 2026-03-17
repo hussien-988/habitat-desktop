@@ -44,8 +44,6 @@ class DivisionsService:
         except Exception:
             return None
 
-    # ==================== Public API ====================
-
     def get_governorates(self) -> List[Tuple[str, str, str]]:
         """Get all governorates as [(code, name_en, name_ar)]."""
         api = self._get_api_client()
@@ -105,8 +103,6 @@ class DivisionsService:
             pass
 
         return []
-
-    # ==================== Name Lookups ====================
 
     def get_governorate_name(self, gov_code: str) -> Tuple[str, str]:
         """Get (name_en, name_ar) for a governorate."""
