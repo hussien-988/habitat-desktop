@@ -108,7 +108,6 @@ class BaseDialog(QWidget):
         main_layout.setSpacing(0)
 
         if self.use_overlay:
-            # ========== OVERLAY MODE (Dark Background) ==========
             overlay = QFrame()
             overlay.setObjectName("DialogOverlay")
             overlay.setStyleSheet(f"""
@@ -134,7 +133,6 @@ class BaseDialog(QWidget):
             """)
             self.dialog_card.mousePressEvent = lambda e: e.accept()
         else:
-            # ========== SHADOW MODE (No overlay, elegant shadow) ==========
             # Add padding around card for shadow to render
             main_layout.setContentsMargins(24, 24, 24, 24)
 
@@ -162,15 +160,11 @@ class BaseDialog(QWidget):
         card_layout = QVBoxLayout(self.dialog_card)
         card_layout.setContentsMargins(24, 24, 24, 24)  # 24px padding
         card_layout.setSpacing(0)
-
-        # ========== ICON ==========
         icon_container = self._create_icon()
         card_layout.addWidget(icon_container, alignment=Qt.AlignCenter)
 
         # Gap after icon
         card_layout.addSpacing(16)  # 16px
-
-        # ========== TITLE ==========
         title_label = QLabel(self.title_text)
         title_label.setAlignment(Qt.AlignCenter)
         title_label.setWordWrap(True)
@@ -188,15 +182,13 @@ class BaseDialog(QWidget):
 
         # Gap after title
         card_layout.addSpacing(8)  # 8px
-
-        # ========== MESSAGE ==========
         message_label = QLabel(self.message_text)
         message_label.setAlignment(Qt.AlignCenter)
         message_label.setWordWrap(True)
 
         # Message font
         message_font = create_font(
-            size=11,  # 11pt (~14px in Figma)
+            size=11,
             weight=QFont.Light,  # Weight 300
             letter_spacing=0
         )
@@ -207,8 +199,6 @@ class BaseDialog(QWidget):
 
         # Gap before buttons
         card_layout.addSpacing(24)
-
-        # ========== BUTTONS ==========
         if self.buttons_config:
             buttons_row = self._create_buttons()
             card_layout.addLayout(buttons_row)

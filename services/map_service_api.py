@@ -55,8 +55,6 @@ class MapServiceAPI:
             self.api.set_access_token(token, expires_in)
             logger.debug("MapServiceAPI: Auth token synchronized")
 
-    # ==================== Building Location ====================
-
     def get_building_location(self, building_uuid: str) -> Optional[BuildingGeoData]:
         """
         الحصول على موقع مبنى من الـ API.
@@ -140,8 +138,6 @@ class MapServiceAPI:
         except Exception as e:
             logger.error(f"Error updating building geometry: {e}", exc_info=True)
             return False
-
-    # ==================== Spatial Queries ====================
 
     def get_buildings_in_bbox(
         self,
@@ -402,8 +398,6 @@ class MapServiceAPI:
             logger.error(f"Error fetching buildings by neighborhood: {e}")
             return []
 
-    # ==================== Proximity & Overlap ====================
-
     def check_proximity_overlap(
         self,
         building1_uuid: str,
@@ -442,8 +436,6 @@ class MapServiceAPI:
             result["distance_meters"] = self._haversine_distance(point1, point2)
 
         return result
-
-    # ==================== GeoJSON Export ====================
 
     def export_to_geojson(
         self,
@@ -498,8 +490,6 @@ class MapServiceAPI:
             "features": features
         }
 
-    # ==================== Validation ====================
-
     def validate_coordinates(
         self,
         latitude: float,
@@ -522,8 +512,6 @@ class MapServiceAPI:
             return False, "الإحداثيات خارج نطاق حلب (خط الطول)"
 
         return True, ""
-
-    # ==================== Helper Methods ====================
 
     def get_building_with_polygon(self, building_id: str) -> Optional[Building]:
         """
@@ -797,8 +785,6 @@ class MapServiceAPI:
         result = [self._convert_api_building_to_geodata(b) for b in buildings_data]
         return result
 
-    # ==================== Neighborhood Methods ====================
-
     def get_neighborhoods_in_viewport(self, north_east_lat: float, north_east_lng: float,
                                      south_west_lat: float, south_west_lng: float) -> List[Dict]:
         """
@@ -849,8 +835,6 @@ class MapServiceAPI:
         except Exception as e:
             logger.warning(f"No neighborhood found at ({latitude}, {longitude}): {e}")
             return None
-
-    # ==================== Helper Methods ====================
 
     def _haversine_distance(self, point1: GeoPoint, point2: GeoPoint) -> float:
         """Calculate distance between two points (Haversine formula)."""

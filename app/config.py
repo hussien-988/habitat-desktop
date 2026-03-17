@@ -6,19 +6,13 @@ from dataclasses import dataclass
 from typing import Dict, Any, Optional
 import os
 import json
-
-# ============================================================================
 # Load .env file for local environment configuration
-# ============================================================================
 try:
     from dotenv import load_dotenv
     load_dotenv()  # Load from .env file in project root
 except ImportError:
     pass  # dotenv not installed - will use defaults
-
-# ============================================================================
 # Read settings from environment variables (from .env or system)
-# ============================================================================
 # API Settings
 _API_BASE_URL = os.getenv("API_BASE_URL", "http://localhost:8080/api")
 _API_TIMEOUT = int(os.getenv("API_TIMEOUT", "30"))
@@ -259,7 +253,7 @@ class Roles:
     ANALYST = "analyst"
 
     # Roles that cannot log in to the desktop application
-    NON_LOGIN_ROLES = ("admin", "data_collector",)
+    NON_LOGIN_ROLES = ("data_collector",)
 
     @classmethod
     def get_display_name(cls, role: str, arabic: bool = False) -> str:

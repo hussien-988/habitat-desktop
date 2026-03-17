@@ -125,10 +125,7 @@ class SurveyContext(WizardContext):
                 logger.warning(f"Failed to restore unit: {e}")
 
         return ctx
-
-    # =========================================================================
     # Convenience Methods
-    # =========================================================================
 
     def set_building(self, building: Building):
         """Set the selected building."""

@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 """
 Claim repository for database operations.
-Implements UC-006: Update Existing Claim with audit trail.
 """
 
 from typing import List, Optional, Dict, Any
@@ -108,7 +107,6 @@ class ClaimRepository:
     ) -> List[Claim]:
         """
         Search claims with filters.
-        Implements UC-006 S01: Search for Existing Claim.
         """
         query = "SELECT * FROM claims WHERE 1=1"
         params = []
@@ -240,7 +238,6 @@ class ClaimRepository:
     def save_history(self, claim: Claim, change_reason: str, user_id: str = None) -> str:
         """
         Save claim snapshot to history table for audit trail.
-        Implements UC-006 S10: Save Updated Claim with Audit Trail.
 
         Args:
             claim: The claim to snapshot
@@ -310,7 +307,6 @@ class ClaimRepository:
     ) -> Claim:
         """
         Update claim and save previous version to history.
-        Implements UC-006 complete update workflow.
 
         Args:
             claim: The claim with updated values

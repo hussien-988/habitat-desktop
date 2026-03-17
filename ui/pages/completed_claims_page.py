@@ -185,18 +185,12 @@ class CompletedClaimsPage(QWidget):
             self._show_claims_list(self.claims_data)
         else:
             self._show_empty_state()
-
-    # -------------------------------------------------------------------------
     # Tab handling
-    # -------------------------------------------------------------------------
 
     def _on_tab_changed(self, index: int):
         self._active_tab = "open" if index == 0 else "closed"
         self._load_claims()
-
-    # -------------------------------------------------------------------------
     # Data loading
-    # -------------------------------------------------------------------------
 
     def refresh(self, data=None):
         """Refresh claims from Claims API."""
@@ -295,10 +289,7 @@ class CompletedClaimsPage(QWidget):
             "unit": unit_obj,
             "survey_id": s.get("surveyId", "") or s.get("originatingSurveyId", ""),
         }
-
-    # -------------------------------------------------------------------------
     # Display
-    # -------------------------------------------------------------------------
 
     def _show_claims_list(self, data=None):
         self._clear_content()
@@ -348,10 +339,7 @@ class CompletedClaimsPage(QWidget):
             item = self.content_layout.takeAt(0)
             if item.widget():
                 item.widget().deleteLater()
-
-    # -------------------------------------------------------------------------
     # Public interface (kept for backward compatibility)
-    # -------------------------------------------------------------------------
 
     def load_claims(self, claims_data):
         self.claims_data = claims_data

@@ -16,9 +16,6 @@ from utils.logger import get_logger
 
 logger = get_logger(__name__)
 
-
-# ==================== Data Classes and Enums ====================
-
 class MetricType(Enum):
     """Types of dashboard metrics."""
     COUNT = "count"
@@ -322,8 +319,6 @@ class DashboardService:
 
         return {}
 
-    # ==================== Advanced KPI Methods ====================
-
     def get_kpi_summary(self, filters: Optional[DashboardFilter] = None) -> List[KPIMetric]:
         """Get summary KPIs for dashboard header."""
         kpis = []
@@ -396,8 +391,6 @@ class DashboardService:
         ))
 
         return kpis
-
-    # ==================== Trend Analysis ====================
 
     def get_claims_trend(
         self,
@@ -515,8 +508,6 @@ class DashboardService:
             }]
         )
 
-    # ==================== Regional Analysis ====================
-
     def get_region_summary(
         self,
         scope: DashboardScope = DashboardScope.GOVERNORATE,
@@ -569,8 +560,6 @@ class DashboardService:
             ))
 
         return summaries
-
-    # ==================== Field Team Performance ====================
 
     def get_field_team_metrics(
         self,
@@ -647,8 +636,6 @@ class DashboardService:
             ]
         )
 
-    # ==================== Registration Progress ====================
-
     def get_buildings_registration_progress(
         self,
         filters: Optional[DashboardFilter] = None
@@ -692,8 +679,6 @@ class DashboardService:
             ]
         }
 
-    # ==================== Claims Donut Chart ====================
-
     def get_claims_status_donut(self, filters: Optional[DashboardFilter] = None) -> ChartData:
         """Get claims breakdown by status as donut chart."""
         stats = self.claim_repo.get_statistics()
@@ -735,8 +720,6 @@ class DashboardService:
             }]
         )
 
-    # ==================== Export ====================
-
     def export_dashboard_data(
         self,
         format: str = "json",
@@ -759,8 +742,6 @@ class DashboardService:
             return json.dumps(data, indent=2, ensure_ascii=False)
         else:
             return json.dumps(data, ensure_ascii=False)
-
-    # ==================== Available Widgets ====================
 
     def get_available_widgets(self) -> List[Dict[str, Any]]:
         """Get list of available dashboard widgets."""

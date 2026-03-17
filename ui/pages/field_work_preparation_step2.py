@@ -129,6 +129,36 @@ class FieldWorkPreparationStep2(QWidget):
             except Exception as fallback_err:
                 logger.warning(f"Fallback to Users API also failed: {fallback_err}")
 
+        # Last resort: load from local database
+        try:
+            from repositories.database import Database
+            db = Database()
+            rows = db.fetch_all(
+                "SELECT user_id, username, full_name, full_name_ar "
+                "FROM users WHERE role IN ('field_researcher', 'data_collector') AND is_active = 1"
+            )
+            researchers = []
+            for row in rows:
+                uid = row.get('user_id') or row.get('username') or ''
+                display = row.get('full_name_ar') or row.get('full_name') or row.get('username') or uid
+                if uid:
+                    researchers.append({
+                        'id': uid,
+                        'display_name': display,
+                        'username': row.get('username', ''),
+                        'is_available': True,
+                        'active_assignments': 0,
+                        'pending_transfers': 0,
+                        'total_units': 0,
+                        'tablet_id': None,
+                        'team_name': None,
+                    })
+            if researchers:
+                logger.info(f"Loaded {len(researchers)} researchers from local DB")
+                return researchers
+        except Exception as db_err:
+            logger.warning(f"Local DB fallback also failed: {db_err}")
+
         return []
 
     def _setup_ui(self):
@@ -145,8 +175,6 @@ class FieldWorkPreparationStep2(QWidget):
         cards_layout = QVBoxLayout(cards_container)
         cards_layout.setContentsMargins(0, 15, 0, 16)
         cards_layout.setSpacing(15)
-
-        # ===== Card: Search bar =====
         search_card = QFrame()
         search_card.setObjectName("researcherCard")
         search_card.setStyleSheet("""
@@ -227,8 +255,6 @@ class FieldWorkPreparationStep2(QWidget):
 
         search_card_layout.addWidget(search_bar)
         cards_layout.addWidget(search_card)
-
-        # ===== Researchers Table =====
         table_card = QFrame()
         table_card.setStyleSheet("background-color: white; border-radius: 16px;")
         table_card_layout = QVBoxLayout(table_card)

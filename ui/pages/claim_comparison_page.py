@@ -1185,8 +1185,12 @@ class ClaimComparisonPage(QWidget):
         conflict_id = data.get("id", "")
         details = {}
         if conflict_id:
-            details = self.duplicate_service.get_conflict_details(conflict_id)
-            logger.info(f"Conflict details keys: {list(details.keys()) if details else 'empty'}")
+            try:
+                details = self.duplicate_service.get_conflict_details(conflict_id)
+                logger.info(f"Conflict details keys: {list(details.keys()) if details else 'empty'}")
+            except Exception as e:
+                logger.error(f"Failed to fetch conflict details: {e}")
+                details = {}
             if details:
                 raw_dc = details.get("dataComparison", "")
                 logger.info(f"dataComparison type={type(raw_dc).__name__}, "

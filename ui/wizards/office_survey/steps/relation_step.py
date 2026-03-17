@@ -88,12 +88,10 @@ class RelationStep(BaseStep):
         title_vbox = QVBoxLayout()
         title_vbox.setSpacing(1)  # Match person_step spacing
         self._title_label = QLabel(tr("wizard.relation.title"))
-        # Title: 14px from Figma = 10pt, weight 600, color WIZARD_TITLE
         self._title_label.setFont(create_font(size=FontManager.WIZARD_STEP_TITLE, weight=FontManager.WEIGHT_SEMIBOLD))
         self._title_label.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent;")
 
         self._subtitle_label = QLabel(tr("wizard.relation.subtitle"))
-        # Subtitle: 14px from Figma = 10pt, weight 400, color WIZARD_SUBTITLE
         self._subtitle_label.setFont(create_font(size=FontManager.WIZARD_STEP_SUBTITLE, weight=FontManager.WEIGHT_REGULAR))
         self._subtitle_label.setStyleSheet(f"color: {Colors.WIZARD_SUBTITLE}; background: transparent;")
         self._subtitle_label.setAlignment(Qt.AlignRight)

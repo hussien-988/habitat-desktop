@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 """
 PostgreSQL + PostGIS Database connection manager.
-Implements FSD Section 5.2: "Central DB is PostgreSQL with PostGIS extension"
 """
 
 import os
@@ -55,10 +54,6 @@ class PostgresDatabase:
     PostgreSQL + PostGIS database connection manager.
 
     Implements:
-    - FSD 5.2: PostgreSQL 16 + PostGIS
-    - FSD 5.2: Support PostgreSQL versions 12+
-    - FSD 13.1: Data Encryption
-    - FSD 13.5: Active Data Retention
     """
 
     def __init__(self, config: Optional[PostgresConfig] = None):
@@ -136,7 +131,6 @@ class PostgresDatabase:
     def initialize(self):
         """
         Initialize database schema with PostGIS extension and all tables.
-        Implements FSD Section 6 Data Model.
         """
         if not self._pool:
             if not self.connect():
@@ -148,7 +142,7 @@ class PostgresDatabase:
         try:
             cursor = conn.cursor()
 
-            # Enable PostGIS extension (FSD 5.2)
+            # Enable PostGIS extension
             self._enable_postgis(cursor)
 
             # Create all tables
@@ -181,9 +175,9 @@ class PostgresDatabase:
             logger.warning(f"PostGIS may already be enabled or not available: {e}")
 
     def _create_tables(self, cursor):
-        """Create all database tables per FSD Section 6."""
+        """Create all database tables."""
 
-        # Users table (FSD 3: System Access Levels)
+        # Users table
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS users (
                 user_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -207,7 +201,7 @@ class PostgresDatabase:
             )
         """)
 
-        # Buildings table (FSD 6.1.1)
+        # Buildings table
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS buildings (
                 building_uuid UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -249,7 +243,7 @@ class PostgresDatabase:
             )
         """)
 
-        # Property Units table (FSD 6.1.2)
+        # Property Units table
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS property_units (
                 unit_uuid UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -275,7 +269,7 @@ class PostgresDatabase:
             )
         """)
 
-        # Persons table (FSD 6.1.3)
+        # Persons table
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS persons (
                 person_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -309,14 +303,14 @@ class PostgresDatabase:
             )
         """)
 
-        # Create unique index on national_id for duplicate detection (FSD FR-D-5)
+        # Create unique index on national_id for duplicate detection
         cursor.execute("""
             CREATE UNIQUE INDEX IF NOT EXISTS idx_persons_national_id
             ON persons(national_id)
             WHERE national_id IS NOT NULL
         """)
 
-        # Person-Unit Relations table (FSD 6.1.4)
+        # Person-Unit Relations table
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS person_unit_relations (
                 relation_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -345,7 +339,7 @@ class PostgresDatabase:
             )
         """)
 
-        # Documents table (FSD 6.2.1)
+        # Documents table
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS documents (
                 document_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -370,7 +364,7 @@ class PostgresDatabase:
             )
         """)
 
-        # Attachments table for SHA-256 deduplication (FSD FR-D-9)
+        # Attachments table for SHA-256 deduplication
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS attachments (
                 attachment_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -385,7 +379,7 @@ class PostgresDatabase:
             )
         """)
 
-        # Evidence table (FSD 6.1.5)
+        # Evidence table
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS evidence (
                 evidence_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -406,7 +400,7 @@ class PostgresDatabase:
             )
         """)
 
-        # Households/Occupancy table (FSD 6.1.6)
+        # Households/Occupancy table
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS households (
                 household_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -432,7 +426,7 @@ class PostgresDatabase:
             )
         """)
 
-        # Claims table (FSD 6.1.7)
+        # Claims table
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS claims (
                 claim_uuid UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -493,7 +487,7 @@ class PostgresDatabase:
             )
         """)
 
-        # Claim conflicts table (FSD FR-D-7)
+        # Claim conflicts table
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS claim_conflicts (
                 conflict_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -526,7 +520,7 @@ class PostgresDatabase:
             )
         """)
 
-        # Claim history for audit trail (FSD 13.4)
+        # Claim history for audit trail
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS claim_history (
                 history_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -541,7 +535,7 @@ class PostgresDatabase:
             )
         """)
 
-        # Referrals table (FSD 6.1.8)
+        # Referrals table
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS referrals (
                 referral_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -558,7 +552,7 @@ class PostgresDatabase:
             )
         """)
 
-        # Surveys table (FSD 6.2.2)
+        # Surveys table
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS surveys (
                 survey_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -578,7 +572,7 @@ class PostgresDatabase:
             )
         """)
 
-        # Building assignments table (FSD 6.2.3, UC-012)
+        # Building assignments table
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS building_assignments (
                 assignment_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -601,7 +595,7 @@ class PostgresDatabase:
             )
         """)
 
-        # Import history table (FSD FR-D-2)
+        # Import history table
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS import_history (
                 import_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -626,7 +620,7 @@ class PostgresDatabase:
             )
         """)
 
-        # Staging tables for import validation (FSD FR-D-4)
+        # Staging tables for import validation
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS staging_buildings (
                 id SERIAL PRIMARY KEY,
@@ -676,7 +670,7 @@ class PostgresDatabase:
             )
         """)
 
-        # Duplicate candidates table (FSD FR-D-5, FR-D-6, UC-007, UC-008)
+        # Duplicate candidates table
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS duplicate_candidates (
                 candidate_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -711,7 +705,7 @@ class PostgresDatabase:
             )
         """)
 
-        # Vocabulary terms table (FSD Section 7, UC-010)
+        # Vocabulary terms table
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS vocabulary_terms (
                 term_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -734,7 +728,7 @@ class PostgresDatabase:
             )
         """)
 
-        # Security settings table (UC-011)
+        # Security settings table
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS security_settings (
                 setting_id VARCHAR(50) PRIMARY KEY DEFAULT 'default',
@@ -753,7 +747,7 @@ class PostgresDatabase:
             )
         """)
 
-        # Audit log table (FSD 13.2, UC-011)
+        # Audit log table
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS audit_log (
                 log_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -774,7 +768,7 @@ class PostgresDatabase:
             )
         """)
 
-        # UHC containers archive (FSD 13.5)
+        # UHC containers archive
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS uhc_archives (
                 archive_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -794,7 +788,7 @@ class PostgresDatabase:
     def _create_indexes(self, cursor):
         """Create indexes for performance optimization."""
 
-        # Spatial indexes for PostGIS (FSD FR-D-6)
+        # Spatial indexes for PostGIS
         cursor.execute("""
             CREATE INDEX IF NOT EXISTS idx_buildings_geo_location
             ON buildings USING GIST (geo_location)

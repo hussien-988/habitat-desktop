@@ -169,10 +169,7 @@ class StepNavigator(QObject):
     def get_completed_steps_count(self) -> int:
         """Get number of completed steps."""
         return len(self.context.completed_steps)
-
-    # =========================================================================
     # Signal Handlers
-    # =========================================================================
 
     def _on_step_validation_changed(self, is_valid: bool):
         """Handle validation changed in a step."""

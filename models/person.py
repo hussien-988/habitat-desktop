@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 """
 Person entity model.
-Implements FR-D-8 STDM legacy integration support.
 """
 
 from dataclasses import dataclass, field
@@ -15,8 +14,6 @@ class Person:
     """
     Person entity representing individuals in the system.
     Supports Arabic names and Syrian national ID format.
-
-    Implements FR-D-8.3 STDM Integration for Persons.
     """
 
     # Primary identifier
@@ -51,7 +48,7 @@ class Person:
     is_contact_person: bool = False
     is_deceased: bool = False
 
-    # Legacy STDM Integration (FR-D-8.3)
+    # Legacy STDM Integration
     legacy_stdm_id: Optional[str] = None  # Original STDM party identifier
     legacy_stdm_party_type: Optional[str] = None  # STDM party type (individual, group, etc.)
     legacy_stdm_social_tenure_id: Optional[str] = None  # STDM social tenure relationship ID

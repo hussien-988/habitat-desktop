@@ -1,7 +1,7 @@
 """
 Role and Permission Management Service
 =======================================
-Implements comprehensive user, role, and permission management as per UC-009a specifications.
+Implements comprehensive user, role, and permission management.
 
 Features:
 - User management (create, edit, activate/deactivate, lock/unlock)
@@ -199,8 +199,6 @@ class AdminAuditLog:
 class RolePermissionService:
     """
     Comprehensive role and permission management service.
-
-    Implements UC-009a requirements:
     - User management with full CRUD operations
     - Role-based access control
     - Granular permissions per module/action
@@ -529,8 +527,6 @@ class RolePermissionService:
             """)
 
             logger.info("System permissions and roles initialized")
-
-    # ==================== User Management ====================
 
     def create_user(
         self,
@@ -935,8 +931,6 @@ class RolePermissionService:
 
             return True
 
-    # ==================== Role Management ====================
-
     def create_role(
         self,
         role_name: str,
@@ -1141,8 +1135,6 @@ class RolePermissionService:
         """Get all users with a specific role."""
         return self.list_users(role_id=role_id)
 
-    # ==================== Permission Checking ====================
-
     def get_user_effective_permissions(self, user_id: str) -> Set[str]:
         """Get all effective permissions for a user (from roles + direct)."""
         user = self.get_user(user_id)
@@ -1190,8 +1182,6 @@ class RolePermissionService:
         """Check if user has all of the specified permissions."""
         permissions = self.get_user_effective_permissions(user_id)
         return all(p in permissions for p in permission_ids)
-
-    # ==================== Password Management ====================
 
     def validate_password(self, password: str) -> Tuple[bool, List[str]]:
         """Validate password against policy."""
@@ -1285,8 +1275,6 @@ class RolePermissionService:
 
             return True
 
-    # ==================== Segregation of Duties ====================
-
     def add_sod_rule(
         self,
         role1_id: str,
@@ -1328,8 +1316,6 @@ class RolePermissionService:
                         violations.append(f"{row['rule_name']}: {role1} conflicts with {role2}")
 
             return violations
-
-    # ==================== Audit Log ====================
 
     def _log_admin_action(
         self,
@@ -1409,8 +1395,6 @@ class RolePermissionService:
                 ))
 
             return logs
-
-    # ==================== Authentication ====================
 
     def authenticate(self, username: str, password: str) -> Tuple[bool, Optional[User], str]:
         """

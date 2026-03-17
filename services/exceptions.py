@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 """Custom exceptions for the application."""
 
-
 class ApiException(Exception):
     """Exception raised for API errors."""
 

@@ -422,10 +422,7 @@ class OfficeSurveyWizard(BaseWizard):
         for step in self.steps:
             if hasattr(step, 'update_language'):
                 step.update_language(is_arabic)
-
-    # =========================================================================
     # UI Overrides - Exact copy from old wizard
-    # =========================================================================
 
     def _setup_ui(self):
         """
@@ -448,14 +445,10 @@ class OfficeSurveyWizard(BaseWizard):
 
         # Background color
         self.setStyleSheet(StyleManager.page_background())
-
-        # ========== OUTER LAYOUT (NO PADDING) ==========
         # This contains everything and ensures footer can extend full width
         outer_layout = QVBoxLayout(self)
         outer_layout.setContentsMargins(0, 0, 0, 0)  # No padding at all
         outer_layout.setSpacing(0)  # No spacing between content and footer
-
-        # ========== CONTENT WIDGET (WITH PADDING) ==========
         # This contains header and steps with proper padding
         content_widget = QWidget()
         content_widget.setStyleSheet("background-color: transparent;")  # Inherit parent background
@@ -479,11 +472,7 @@ class OfficeSurveyWizard(BaseWizard):
         for step in self.steps:
             self.step_container.addWidget(step)
         content_layout.addWidget(self.step_container, 1)
-
-        # ========== ADD CONTENT TO OUTER LAYOUT ==========
         outer_layout.addWidget(content_widget)
-
-        # ========== FOOTER (FULL WIDTH, NO PADDING) ==========
         # Footer is added directly to outer_layout, so it extends to full window width
         footer = self._create_footer()
         outer_layout.addWidget(footer)
@@ -497,8 +486,6 @@ class OfficeSurveyWizard(BaseWizard):
         layout.setContentsMargins(0, 0, 0, 0)
         # PageDimensions.HEADER_GAP (30px) for gap between elements
         layout.setSpacing(PageDimensions.HEADER_GAP)  # 30px: title → tabs, same as completed_claims_page
-
-        # ========== TITLE ROW: Title + Save button ==========
         title_row = QHBoxLayout()
         title_row.setSpacing(16)
 
@@ -739,8 +726,6 @@ class OfficeSurveyWizard(BaseWizard):
             weight=QFont.Normal,  # 400 - lighter weight
             letter_spacing=0
         )
-
-        # ========== "السابق" Button (Previous - Right side) ==========
         # Previous button
         # Text format: "< السابق" with 10px spacing between arrow and text
         # Note: Button uses transparent state instead of hide() to maintain layout position
@@ -813,8 +798,6 @@ class OfficeSurveyWizard(BaseWizard):
             QSizePolicy.Fixed
         )
         layout.addItem(spacer)
-
-        # ========== "التالي" Button (Next - Left side) ==========
         # Next button
         # Text format: "التالي >" with 10px spacing between text and arrow
         self.btn_next = QPushButton(f"{tr('wizard.button.next')}   >")
@@ -850,8 +833,6 @@ class OfficeSurveyWizard(BaseWizard):
         """)
         self.btn_next.clicked.connect(self._handle_next)
         layout.addWidget(self.btn_next)
-
-        # ========== "حفظ" Button (Save - Left side, shown only on final step) ==========
         # Submit button
         from PyQt5.QtGui import QIcon
         import os
@@ -956,13 +937,14 @@ class OfficeSurveyWizard(BaseWizard):
 
         Updates:
         - Step container display
-        - Subtitle with current step name        - Step indicators
+        - Subtitle with current step name
+        - Step indicators
         - Navigation buttons
         """
         # Update step container
         self.step_container.setCurrentIndex(new_index)
 
-        # Update subtitle part 2 with current step name        step_names = self.get_step_names()
+        step_names = self.get_step_names()
         if hasattr(self, 'subtitle_part2') and 0 <= new_index < len(step_names):
             step_name = step_names[new_index][1]
             self.subtitle_part2.setText(step_name)
@@ -1018,8 +1000,6 @@ class OfficeSurveyWizard(BaseWizard):
     def _update_navigation_buttons(self):
         """Update navigation button states based on current step."""
         current_step = self.navigator.current_index
-
-        # ========== Edit Mode Override ==========
         if self._edit_mode:
             # Previous → "إلغاء" (Cancel)
             self.btn_previous.setStyleSheet(self.btn_previous_visible_style)
@@ -1037,12 +1017,8 @@ class OfficeSurveyWizard(BaseWizard):
             if hasattr(self, 'btn_final_save'):
                 self.btn_final_save.hide()
             return
-
-        # ========== Normal Mode: Restore button text ==========
         self.btn_previous.setText(f"<   {tr('wizard.button.previous')}")
         self.btn_next.setText(f"{tr('wizard.button.next')}   >")
-
-        # ========== Previous Button Logic ==========
         # Make transparent on first step and last step (ClaimStep), visible on other steps
         if current_step == 0 or current_step == len(self.steps) - 1:
             self.btn_previous.setStyleSheet(self.btn_previous_hidden_style)
@@ -1054,8 +1030,6 @@ class OfficeSurveyWizard(BaseWizard):
             self.btn_previous.setEnabled(True)
             self.btn_previous.setCursor(Qt.PointingHandCursor)
             self.prev_shadow.setEnabled(True)
-
-        # ========== Next Button Logic ==========
         # Hide on last step, show on all other steps (with validation check)
         if current_step == len(self.steps) - 1:
             # Last step: hide next button, show save button

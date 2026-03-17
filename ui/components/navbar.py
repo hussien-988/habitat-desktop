@@ -511,10 +511,10 @@ class Navbar(QFrame):
     # Role-based tab visibility
     # Tab indices: 0=claims, 1=cases, 2=import, 3=duplicates, 4=user_management, 5=field_assignment
     TAB_PERMISSIONS = {
-        "admin":            [0, 1, 2, 3, 4, 5],
+        "admin":            [0, 1, 2, 3, 5],
         "data_manager":     [0, 1, 2, 3, 5],
         "office_clerk":     [1],
-        "field_supervisor": [1, 5],
+        "field_supervisor": [5],
         "field_researcher": [],
         "analyst":          [],
     }

@@ -2,7 +2,7 @@
 """
 PostGIS Service - PostgreSQL/PostGIS Integration
 =================================================
-Implements PostGIS spatial database integration as per FSD requirements.
+Implements PostGIS spatial database integration.
 
 Features:
 - PostgreSQL/PostGIS connection management
@@ -26,9 +26,6 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 from utils.logger import get_logger
 
 logger = get_logger(__name__)
-
-
-# ==================== Enums and Constants ====================
 
 class SpatialRelation(Enum):
     """PostGIS spatial relationships."""
@@ -87,22 +84,15 @@ class SpatialQueryResult:
     distance: Optional[float] = None
     area: Optional[float] = None
 
-
-# ==================== PostGIS Service ====================
-
 class PostGISService:
     """
     PostGIS spatial database integration service.
-
-    Implements FSD requirements for PostgreSQL/PostGIS spatial queries.
     """
 
     def __init__(self, config: Optional[PostGISConfig] = None):
         self.config = config or PostGISConfig()
         self._connection = None
         self._pool = None
-
-    # ==================== Connection Management ====================
 
     def connect(self) -> bool:
         """Establish connection to PostGIS database."""
@@ -163,8 +153,6 @@ class PostGISService:
     def is_connected(self) -> bool:
         """Check if connected to database."""
         return self._pool is not None
-
-    # ==================== Spatial Queries ====================
 
     def find_buildings_in_radius(
         self,
@@ -377,8 +365,6 @@ class PostGISService:
         finally:
             self._return_connection(conn)
 
-    # ==================== Geometry Operations ====================
-
     def calculate_area(self, geometry_wkt: str) -> float:
         """
         Calculate area of a geometry in square meters.
@@ -554,8 +540,6 @@ class PostGISService:
         finally:
             self._return_connection(conn)
 
-    # ==================== CRS Transformation ====================
-
     def transform_geometry(
         self,
         geometry_wkt: str,
@@ -585,8 +569,6 @@ class PostGISService:
 
         finally:
             self._return_connection(conn)
-
-    # ==================== Spatial Indexing ====================
 
     def create_spatial_index(
         self,
@@ -641,8 +623,6 @@ class PostGISService:
 
         finally:
             self._return_connection(conn)
-
-    # ==================== Clustering ====================
 
     def cluster_buildings_by_location(
         self,
@@ -721,8 +701,6 @@ class PostGISService:
         finally:
             self._return_connection(conn)
 
-    # ==================== Heatmap / Density ====================
-
     def get_density_grid(
         self,
         table_name: str,
@@ -761,8 +739,6 @@ class PostGISService:
 
         finally:
             self._return_connection(conn)
-
-    # ==================== Export Functions ====================
 
     def export_to_geojson(
         self,
@@ -817,8 +793,6 @@ class PostGISService:
 
         finally:
             self._return_connection(conn)
-
-    # ==================== Enhanced Spatial Queries ====================
 
     def get_buildings_stats_in_polygon(
         self,
@@ -1157,8 +1131,6 @@ class PostGISService:
         finally:
             self._return_connection(conn)
 
-    # ==================== Utility Methods ====================
-
     def _execute_spatial_query(
         self,
         query: str,
@@ -1243,9 +1215,6 @@ class PostGISService:
 
         finally:
             self._return_connection(conn)
-
-
-# ==================== SQLite Fallback for PostGIS Functions ====================
 
 class SQLiteSpatialService:
     """

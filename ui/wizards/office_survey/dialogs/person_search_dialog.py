@@ -57,10 +57,7 @@ class PersonSearchDialog(QDialog):
 
         # Defer API load so dialog renders first
         QTimer.singleShot(100, self._load_persons)
-
-    # ------------------------------------------------------------------
     # UI
-    # ------------------------------------------------------------------
 
     def _setup_ui(self):
         outer = QVBoxLayout(self)
@@ -178,10 +175,7 @@ class PersonSearchDialog(QDialog):
         btn_row.addWidget(cancel_btn)
         btn_row.addWidget(self._confirm_btn)
         main.addLayout(btn_row)
-
-    # ------------------------------------------------------------------
     # Data loading
-    # ------------------------------------------------------------------
 
     def _load_persons(self):
         """Load persons from API. Shows applicant at top, then all persons."""
@@ -230,10 +224,7 @@ class PersonSearchDialog(QDialog):
 
         for p in persons:
             self._add_person_card(p, is_applicant=False)
-
-    # ------------------------------------------------------------------
     # List helpers
-    # ------------------------------------------------------------------
 
     def _clear_list(self, keep_applicant: bool = False):
         """Remove all widgets from the list layout."""
@@ -326,10 +317,7 @@ class PersonSearchDialog(QDialog):
         clicked_card.setStyleSheet(clicked_card._selected_style)
         self._selected_person = clicked_card._person_data
         self._confirm_btn.setEnabled(True)
-
-    # ------------------------------------------------------------------
     # Search
-    # ------------------------------------------------------------------
 
     def _on_search_changed(self, text: str):
         text = text.strip().lower()
@@ -343,10 +331,7 @@ class PersonSearchDialog(QDialog):
             or text in (p.get("nationalId") or p.get("national_id", "")).lower()
         ]
         self._render_persons(filtered)
-
-    # ------------------------------------------------------------------
     # Helpers
-    # ------------------------------------------------------------------
 
     @staticmethod
     def _build_full_name(person: Dict[str, Any]) -> str:

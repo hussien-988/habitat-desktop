@@ -36,8 +36,6 @@ class BuildingCheckboxItem(QWidget):
         layout = QHBoxLayout(self)
         layout.setContentsMargins(12, 12, 12, 12)  # Unified padding
         layout.setSpacing(16)  # Unified spacing
-
-        # === Checkbox with checkmark overlay (like wizard) ===
         checkbox_container = QWidget()
         checkbox_container.setFixedSize(20, 20)
 
@@ -175,20 +173,14 @@ class FieldWorkPreparationStep1(QWidget):
 
         # Background
         self.setStyleSheet("background: transparent;")
-
-        # === MAIN LAYOUT (No padding - parent has padding) ===
         main_layout = QVBoxLayout(self)
         main_layout.setContentsMargins(0, 0, 0, 0)
         main_layout.setSpacing(0)
-
-        # === CARDS CONTAINER ===
         cards_container = QWidget()
         cards_container.setStyleSheet("background-color: transparent;")
         cards_layout = QVBoxLayout(cards_container)
         cards_layout.setContentsMargins(0, 15, 0, 16)
         cards_layout.setSpacing(15)
-
-        # ===== Card: تصفية المباني (NO icon, NO title, NO subtitle) =====
         card = QFrame()
         card.setObjectName("filterCard")
         card.setStyleSheet("""
@@ -205,8 +197,6 @@ class FieldWorkPreparationStep1(QWidget):
         # Padding: 12px all sides
         card_layout.setContentsMargins(12, 12, 12, 12)
         card_layout.setSpacing(12)
-
-        # === 3 Filter Fields in ONE ROW ===
         filters_layout = QHBoxLayout()
         filters_layout.setSpacing(12)
 
@@ -241,14 +231,10 @@ class FieldWorkPreparationStep1(QWidget):
         filters_layout.addWidget(filter3_container, 1)
 
         card_layout.addLayout(filters_layout)
-
-        # === Label: رمز البناء ===
         search_label = QLabel("رمز البناء")
         search_label.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
         search_label.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent;")
         card_layout.addWidget(search_label)
-
-        # === Search bar - EXACT COPY from BuildingSelectionStep ===
         search_bar = QFrame()
         search_bar.setObjectName("searchBar")
         search_bar.setFixedHeight(42)
@@ -334,8 +320,6 @@ class FieldWorkPreparationStep1(QWidget):
         card_layout.addWidget(search_bar)
 
         cards_layout.addWidget(card)
-
-        # === Suggestions list (SAME as BuildingSelectionStep, but with checkboxes) ===
         self.buildings_list = QListWidget()
         self.buildings_list.setVisible(False)
         self.buildings_list.setFixedHeight(0)  # Start collapsed (will be 179 when visible)
@@ -393,8 +377,6 @@ class FieldWorkPreparationStep1(QWidget):
 
         # Correct spacing
         cards_layout.addSpacing(42)
-
-        # === Selected Buildings Card ===
         self.selected_buildings_card = QFrame()
         self.selected_buildings_card.setObjectName("selectedBuildingsCard")
         self.selected_buildings_card.setVisible(False)
@@ -814,8 +796,6 @@ class FieldWorkPreparationStep1(QWidget):
             widget = self.selected_table_layout.itemAt(i).widget()
             if widget and widget.objectName() == f"row_{building.building_id}":
                 return
-
-        # === Checkbox with checkmark overlay (unified with suggestions) ===
         checkbox_container = QWidget()
         checkbox_container.setFixedSize(20, 20)
 
@@ -874,8 +854,6 @@ class FieldWorkPreparationStep1(QWidget):
         row_layout.setSpacing(16)  # Logical spacing between elements
 
         row_layout.addWidget(checkbox_container)
-
-        # === Icon in 32×32 square with #f0f7ff background ===
         icon_container = QLabel()
         icon_container.setFixedSize(32, 32)
         icon_container.setStyleSheet("""
@@ -901,8 +879,6 @@ class FieldWorkPreparationStep1(QWidget):
                 }
             """)
         row_layout.addWidget(icon_container)
-
-        # === Building ID (formatted with dashes) - unified with suggestions ===
         formatted_id = self._format_building_id(building.building_id)
         id_label = QLabel(formatted_id)
         id_label.setFont(create_font(size=10, weight=FontManager.WEIGHT_REGULAR))

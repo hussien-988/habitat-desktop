@@ -23,8 +23,6 @@ class DuplicateService:
             raise RuntimeError("API client not available")
         return api
 
-    # ========== List / Query ==========
-
     def get_conflicts(
         self,
         page: int = 1,
@@ -85,8 +83,6 @@ class DuplicateService:
             logger.error(f"Failed to get escalated conflicts: {e}")
             return {"items": [], "totalCount": 0, "page": page, "pageSize": page_size, "totalPages": 0}
 
-    # ========== Summary ==========
-
     def get_conflicts_summary(self) -> Dict[str, Any]:
         """Get aggregate conflict counts for dashboard."""
         try:
@@ -108,8 +104,6 @@ class DuplicateService:
         except Exception as e:
             logger.error(f"Failed to get pending count: {e}")
             return {"property": 0, "person": 0, "total": 0}
-
-    # ========== Details / Comparison ==========
 
     def get_conflict_details(self, conflict_id: str) -> Dict[str, Any]:
         """Get side-by-side comparison details for a conflict."""
@@ -133,8 +127,6 @@ class DuplicateService:
         """Fetch person record by ID for comparison display."""
         api = self._get_api()
         return api.get_person_by_id(person_id)
-
-    # ========== Resolution Actions ==========
 
     def merge_conflict(
         self, conflict_id: str, master_record_id: str, justification: str = ""
@@ -187,8 +179,6 @@ class DuplicateService:
         except Exception as e:
             logger.error(f"Failed to escalate conflict {conflict_id}: {e}")
             return False
-
-    # ========== Local Audit Trail ==========
 
     def _save_local_audit(
         self,

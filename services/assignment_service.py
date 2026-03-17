@@ -60,8 +60,6 @@ class AssignmentService:
         self.api = api_client or get_api_client()
         logger.info("AssignmentService initialized with API backend")
 
-    # ========== Assignment Management ==========
-
     def create_assignment(
         self,
         building_id: str,
@@ -229,8 +227,6 @@ class AssignmentService:
         logger.info(f"Cancelled assignment {assignment_id}")
         return True
 
-    # ========== Transfer Operations ==========
-
     def initiate_transfer(
         self,
         assignment_ids: List[str],
@@ -324,8 +320,6 @@ class AssignmentService:
         logger.info(f"Reset transfer for retry: {assignment_id}")
         return True
 
-    # ========== Field Teams ==========
-
     def get_field_teams(self) -> List[Dict[str, str]]:
         """Get list of field researchers via API."""
         try:
@@ -382,8 +376,6 @@ class AssignmentService:
         })
 
         return tablets
-
-    # ========== Statistics ==========
 
     def get_assignment_statistics(self) -> Dict[str, Any]:
         """Get assignment statistics via API."""

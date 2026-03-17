@@ -82,8 +82,6 @@ class FieldWorkPreparationStep3(QWidget):
         layout = QVBoxLayout(scroll_content)
         layout.setContentsMargins(0, 24, 0, 0)
         layout.setSpacing(16)
-
-        # === Assignment info card ===
         info_card = QFrame()
         info_card.setStyleSheet("""
             QFrame {
@@ -146,8 +144,6 @@ class FieldWorkPreparationStep3(QWidget):
             info_layout.addLayout(row)
 
         layout.addWidget(info_card)
-
-        # === Buildings accordion card ===
         buildings_card = QFrame()
         buildings_card.setStyleSheet("""
             QFrame {
@@ -194,8 +190,6 @@ class FieldWorkPreparationStep3(QWidget):
         container_layout = QVBoxLayout(container)
         container_layout.setContentsMargins(0, 0, 0, 0)
         container_layout.setSpacing(0)
-
-        # === Accordion Header (clickable) ===
         header = QFrame()
         header.setStyleSheet("""
             QFrame {
@@ -274,8 +268,6 @@ class FieldWorkPreparationStep3(QWidget):
                 header_layout.addWidget(badge)
 
         container_layout.addWidget(header)
-
-        # === Accordion Body (hidden by default) ===
         body = QWidget()
         body.setStyleSheet("background: transparent; border: none;")
         body.setVisible(False)

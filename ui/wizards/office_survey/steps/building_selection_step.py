@@ -81,8 +81,6 @@ class BuildingSelectionStep(BaseStep):
         # Top gap: 15px (reduced to accommodate multiple cards)
         layout.setContentsMargins(0, 15, 0, 16)  # Top: 15px, Bottom: 16px
         layout.setSpacing(15)  # Unified spacing: 15px between cards
-
-        # ===== Card: Building Data =====
         card = QFrame()
         card.setObjectName("buildingCard")
         card.setStyleSheet("""
@@ -159,10 +157,10 @@ class BuildingSelectionStep(BaseStep):
 
         # Search bar
         # Height: 42px, padding: 14px left/right & 8px top/bottom
-        # Border-radius: 8px, Background & Border from design system
         search_bar = QFrame()
         search_bar.setObjectName("searchBar")
-        search_bar.setFixedHeight(42)  # Height        search_bar.setStyleSheet(f"""
+        search_bar.setFixedHeight(42)
+        search_bar.setStyleSheet(f"""
             QFrame#searchBar {{
                 background-color: {Colors.SEARCH_BAR_BG};
                 border: 1px solid {Colors.SEARCH_BAR_BORDER};
@@ -172,7 +170,7 @@ class BuildingSelectionStep(BaseStep):
         search_bar.setLayoutDirection(Qt.LeftToRight)
 
         sb = QHBoxLayout(search_bar)
-        # Padding: 14px left/right, 8px top/bottom        sb.setContentsMargins(14, 8, 14, 8)
+        sb.setContentsMargins(14, 8, 14, 8)
         sb.setSpacing(8)
 
         # Search icon button
@@ -309,7 +307,8 @@ class BuildingSelectionStep(BaseStep):
         # Floats above card by 12px (overlaps with card's bottom padding)
         self.buildings_list = QListWidget()
         self.buildings_list.setVisible(False)
-        self.buildings_list.setFixedHeight(179)  # Height        self.buildings_list.setFixedWidth(1225)  # Width
+        self.buildings_list.setFixedHeight(179)
+        self.buildings_list.setFixedWidth(1225)
         # Hide scrollbar but keep scrolling enabled with mouse wheel
         self.buildings_list.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.buildings_list.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
@@ -353,8 +352,6 @@ class BuildingSelectionStep(BaseStep):
         # - Add desired spacing between cards: +15px
         # - Total: +42px
         layout.addSpacing(42)  # Restores normal flow + adds 15px spacing
-
-        # ===== Selected building stats card (Separate card) =====
         # Stats card
         self.stats_card = QFrame()
         self.stats_card.setObjectName("statsCard")
@@ -418,8 +415,6 @@ class BuildingSelectionStep(BaseStep):
 
         # Spacing between stats card and location card: 15px
         layout.addSpacing(15)
-
-        # ===== Location card (Third section) =====
         # Location card
         self.location_card = QFrame()
         self.location_card.setObjectName("locationCard")

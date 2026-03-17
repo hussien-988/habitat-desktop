@@ -443,8 +443,6 @@ class RelationDialog(QDialog):
         layout = QVBoxLayout(self)
         layout.setSpacing(16)
         layout.setContentsMargins(24, 24, 24, 24)
-
-        # === Main Selection Group ===
         main_group = QGroupBox("معلومات العلاقة الأساسية")
         main_group.setStyleSheet(f"""
             QGroupBox {{
@@ -535,8 +533,6 @@ class RelationDialog(QDialog):
         main_form.addRow("وصف آخر:", self.other_desc)
 
         layout.addWidget(main_group)
-
-        # === Ownership Details Group ===
         ownership_group = QGroupBox("تفاصيل الملكية")
         ownership_group.setStyleSheet(main_group.styleSheet())
         ownership_form = QFormLayout(ownership_group)
@@ -567,8 +563,6 @@ class RelationDialog(QDialog):
         ownership_form.addRow("نسبة الحصة:", share_container)
 
         layout.addWidget(ownership_group)
-
-        # === Dates Group ===
         dates_group = QGroupBox("التواريخ")
         dates_group.setStyleSheet(main_group.styleSheet())
         dates_form = QFormLayout(dates_group)
@@ -596,8 +590,6 @@ class RelationDialog(QDialog):
         dates_form.addRow("", dates_hint)
 
         layout.addWidget(dates_group)
-
-        # === Notes ===
         self.notes = QTextEdit()
         self.notes.setMaximumHeight(80)
         self.notes.setPlaceholderText("ملاحظات إضافية...")

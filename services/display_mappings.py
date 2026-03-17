@@ -9,9 +9,6 @@ to vocab_service.get_options().
 
 from services.translation_manager import tr
 
-
-# ============ Helper for vocab_service delegation ============
-
 def _vocab_label(vocab_name: str, key, str_fallback: dict = None) -> str:
     """
     Try vocab_service first (handles int codes from API).
@@ -35,9 +32,6 @@ def _vocab_options(vocab_name: str) -> list:
     from services.vocab_service import get_options
     return get_options(vocab_name)
 
-
-# ============ Building Type ============
-
 def get_building_type_display(type_key) -> str:
     _str_fallback = {
         "residential": "mapping.building_type.residential",
@@ -48,9 +42,6 @@ def get_building_type_display(type_key) -> str:
         "public": "mapping.building_type.public",
     }
     return _vocab_label("BuildingType", type_key, _str_fallback)
-
-
-# ============ Building Status ============
 
 def get_building_status_display(status_key) -> str:
     _str_fallback = {
@@ -85,9 +76,6 @@ def get_building_type_options() -> list:
 def get_building_status_options() -> list:
     return _vocab_options("BuildingStatus")
 
-
-# ============ Unit Type ============
-
 def get_unit_type_display(type_key) -> str:
     _str_fallback = {
         "apartment": "mapping.unit_type.apartment",
@@ -102,9 +90,6 @@ def get_unit_type_display(type_key) -> str:
 
 def get_unit_type_options() -> list:
     return _vocab_options("UnitType")
-
-
-# ============ Unit Status ============
 
 def get_unit_status_display(status_key) -> str:
     _str_fallback = {
@@ -121,9 +106,6 @@ def get_unit_status_display(status_key) -> str:
 
 def get_unit_status_options() -> list:
     return _vocab_options("UnitStatus")
-
-
-# ============ Relation Type ============
 
 def get_relation_type_display(rel_key) -> str:
     _str_fallback = {
@@ -148,9 +130,6 @@ def get_relation_type_display(rel_key) -> str:
 def get_relation_type_options() -> list:
     return _vocab_options("RelationType")
 
-
-# ============ Relationship to Head (Household) ============
-
 def get_relationship_to_head_options() -> list:
     return _vocab_options("RelationshipToHead")
 
@@ -158,20 +137,11 @@ def get_relationship_to_head_options() -> list:
 def get_relationship_to_head_display(rel_key) -> str:
     return _vocab_label("RelationshipToHead", rel_key, {})
 
-
-# ============ Contract Type ============
-
 def get_contract_type_options() -> list:
     return _vocab_options("ContractType")
 
-
-# ============ Evidence Type ============
-
 def get_evidence_type_options() -> list:
     return _vocab_options("EvidenceType")
-
-
-# ============ Occupancy Type ============
 
 def get_occupancy_type_options() -> list:
     return _vocab_options("OccupancyType")
@@ -192,9 +162,6 @@ def get_occupancy_type_display(type_key) -> str:
     }
     return _vocab_label("OccupancyType", type_key, _str_fallback)
 
-
-# ============ Occupancy Nature ============
-
 def get_occupancy_nature_options() -> list:
     return _vocab_options("OccupancyNature")
 
@@ -213,20 +180,11 @@ def get_occupancy_nature_display(nature_key) -> str:
     }
     return _vocab_label("OccupancyNature", nature_key, _str_fallback)
 
-
-# ============ Gender ============
-
 def get_gender_options() -> list:
     return _vocab_options("Gender")
 
-
-# ============ Nationality ============
-
 def get_nationality_options() -> list:
     return _vocab_options("Nationality")
-
-
-# ============ Claim Type ============
 
 def get_claim_type_display(claim_key) -> str:
     _str_fallback = {
@@ -235,9 +193,6 @@ def get_claim_type_display(claim_key) -> str:
         "tenancy": "mapping.claim_type.tenancy",
     }
     return _vocab_label("ClaimType", claim_key, _str_fallback)
-
-
-# ============ Priority ============
 
 def get_priority_display(priority_key) -> str:
     _str_fallback = {
@@ -248,9 +203,6 @@ def get_priority_display(priority_key) -> str:
     }
     return _vocab_label("CasePriority", priority_key, _str_fallback)
 
-
-# ============ Business Type ============
-
 def get_business_type_display(btype_key) -> str:
     _str_fallback = {
         "residential": "mapping.business_type.residential",
@@ -258,9 +210,6 @@ def get_business_type_display(btype_key) -> str:
         "agricultural": "mapping.business_type.agricultural",
     }
     return _vocab_label("BusinessNature", btype_key, _str_fallback)
-
-
-# ============ Source ============
 
 def get_source_display(source_key) -> str:
     _str_fallback = {
@@ -274,9 +223,6 @@ def get_source_display(source_key) -> str:
     }
     return _vocab_label("ClaimSource", source_key, _str_fallback)
 
-
-# ============ Claim Status ============
-
 def get_claim_status_display(status_key) -> str:
     _str_fallback = {
         "new": "mapping.claim_status.new",
@@ -288,18 +234,12 @@ def get_claim_status_display(status_key) -> str:
     }
     return _vocab_label("ClaimStatus", status_key, _str_fallback)
 
-
-# ============ Survey Status ============
-
 def get_survey_status_display(status_key) -> str:
     _int_map = {1: "مسودة", 3: "نهائي"}
     if isinstance(status_key, int) and status_key in _int_map:
         return _int_map[status_key]
     _str_map = {"draft": "مسودة", "finalized": "نهائي"}
     return _str_map.get(str(status_key).lower(), str(status_key))
-
-
-# ============ Survey Type ============
 
 def get_survey_type_display(type_key) -> str:
     _int_map = {1: "مسح ميداني", 2: "مسح مكتبي"}

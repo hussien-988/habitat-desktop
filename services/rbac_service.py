@@ -1,16 +1,5 @@
 # -*- coding: utf-8 -*-
-"""
-Role-Based Access Control (RBAC) Service
-=========================================
-Implements FR-D-5 RBAC requirements and UC-009 User & Role Management.
-
-Features:
-- Granular permission management
-- UI element visibility control
-- Role hierarchy support
-- Permission caching
-- Audit trail for permission changes
-"""
+"""Role-Based Access Control (RBAC) Service."""
 
 from dataclasses import dataclass, field
 from typing import List, Dict, Any, Optional, Set
@@ -25,7 +14,7 @@ logger = get_logger(__name__)
 
 
 class Permission(Enum):
-    """System permissions as per FSD FR-D-5."""
+    """System permissions"""
     # Building permissions
     BUILDING_VIEW = "building:view"
     BUILDING_CREATE = "building:create"
@@ -94,7 +83,7 @@ class Role:
     description: str = ""
     description_ar: str = ""
     permissions: List[str] = field(default_factory=list)
-    is_system_role: bool = False  # UC-009: System roles cannot be deleted
+    is_system_role: bool = False
     is_active: bool = True
     created_at: datetime = field(default_factory=datetime.now)
     updated_at: datetime = field(default_factory=datetime.now)
@@ -123,12 +112,9 @@ class RBACService:
     Role-Based Access Control Service.
 
     Implements:
-    - FR-D-5.1: Role-based access control
-    - FR-D-5.2: UI element visibility based on permissions
-    - UC-009: User & Role Management
     """
 
-    # Default system roles as per FSD
+    # Default system roles
     DEFAULT_ROLES = {
         "admin": Role(
             role_id="admin",
@@ -482,8 +468,6 @@ class RBACService:
             logger.error(f"Failed to delete role: {e}")
             return False, str(e)
 
-    # ==================== User Permission Methods ====================
-
     def get_user_permissions(self, user_role: str) -> Set[str]:
         """Get all permissions for a user's role."""
         if user_role in self._user_permissions_cache:
@@ -516,12 +500,9 @@ class RBACService:
             return True
         return set(permissions).issubset(user_perms)
 
-    # ==================== UI Visibility Methods (FR-D-5.2) ====================
-
     def is_ui_element_visible(self, user_role: str, element_id: str) -> bool:
         """
         Check if a UI element should be visible for the user's role.
-        Implements FR-D-5.2 UI element visibility based on permissions.
         """
         required_permissions = self.UI_PERMISSIONS.get(element_id, [])
         if not required_permissions:
@@ -544,8 +525,6 @@ class RBACService:
             if not self.is_ui_element_visible(user_role, element_id):
                 hidden.append(element_id)
         return hidden
-
-    # ==================== Audit Logging ====================
 
     def _log_action(
         self,

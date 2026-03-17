@@ -94,8 +94,6 @@ class HouseholdStep(BaseStep):
         card_layout = QVBoxLayout(self.household_building_frame)
         card_layout.setContentsMargins(12, 12, 12, 12)
         card_layout.setSpacing(12)
-
-        # ===== ROW 1: Building Address =====
         address_container = QFrame()
         address_container.setFixedHeight(28)
         address_container.setStyleSheet("""
@@ -140,8 +138,6 @@ class HouseholdStep(BaseStep):
         address_row.addStretch()
 
         card_layout.addWidget(address_container)
-
-        # ===== ROW 2: Building Stats (5 sections) =====
         stats_row = QHBoxLayout()
         stats_row.setSpacing(0)
 
@@ -158,8 +154,6 @@ class HouseholdStep(BaseStep):
             stats_row.addWidget(section, stretch=1)
 
         card_layout.addLayout(stats_row)
-
-        # ===== ROW 3: Unit Information (6 sections) =====
         # Same order as unit_selection_step unit cards
         unit_info_container = QFrame()
         unit_info_container.setFixedHeight(73)
@@ -234,8 +228,6 @@ class HouseholdStep(BaseStep):
         family_info_layout = QVBoxLayout(family_info_frame)
         family_info_layout.setSpacing(12)
         family_info_layout.setContentsMargins(12, 12, 12, 12)  # Padding 12px
-
-        # ===== HEADER: Icon + Title/Subtitle =====
         header_layout = QHBoxLayout()
         header_layout.setSpacing(0)
         header_layout.setContentsMargins(0, 0, 0, 0)
@@ -308,8 +300,6 @@ class HouseholdStep(BaseStep):
         header_layout.addStretch()
 
         family_info_layout.addLayout(header_layout)
-
-        # ===== ROW 1.5: Occupancy Type + Occupancy Nature (side by side) =====
         family_info_layout.addSpacing(8)
 
         occupancy_row = QHBoxLayout()
@@ -394,8 +384,6 @@ class HouseholdStep(BaseStep):
         occupancy_row.addLayout(type_col, 1)
 
         family_info_layout.addLayout(occupancy_row)
-
-        # ===== ROW 2: Total Members (full width) =====
         family_info_layout.addSpacing(8)
 
         total_members_layout = QVBoxLayout()
@@ -418,8 +406,6 @@ class HouseholdStep(BaseStep):
         total_members_layout.addWidget(members_widget)
 
         family_info_layout.addLayout(total_members_layout)
-
-        # ===== ROW 3: Notes field =====
         # Gap before row 3: 8px
         family_info_layout.addSpacing(8)
 
@@ -458,11 +444,9 @@ class HouseholdStep(BaseStep):
         family_info_layout.addLayout(notes_field_layout)
 
         scroll_layout.addWidget(family_info_frame)
-
-        # ========== CARD 3: تكوين الأسرة (Family Composition) ==========
         composition_frame = QFrame()
         composition_frame.setObjectName("compositionCard")
-        composition_frame.setFixedHeight(400)  # Figma spec
+        composition_frame.setFixedHeight(400)
         composition_frame.setStyleSheet("""
             QFrame#compositionCard {
                 background-color: white;
@@ -482,15 +466,11 @@ class HouseholdStep(BaseStep):
         composition_layout = QVBoxLayout(composition_frame)
         composition_layout.setSpacing(12)  # Gap: 12px
         composition_layout.setContentsMargins(12, 12, 12, 12)  # Padding: 12px
-
-        # ===== ROW 1: Title (no icon) =====
         title_label = QLabel(tr("wizard.household.composition_title"))
         title_label.setFont(create_font(size=FontManager.WIZARD_CARD_LABEL, weight=FontManager.WEIGHT_SEMIBOLD))
         title_label.setStyleSheet("color: #1A1F1D; background: transparent;")
         title_label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
         composition_layout.addWidget(title_label)
-
-        # ===== ROW 2: Two inner cards (Male + Female) =====
         cards_row = QHBoxLayout()
         cards_row.setSpacing(12)  # Gap between cards: 12px
 
@@ -663,8 +643,6 @@ class HouseholdStep(BaseStep):
 
         Returns:
             QFrame containing the gender card
-
-        Figma specs:
         - Height: 340px (fixed)
         - Width: Auto (fill available space with equal stretch)
         - Border-radius: 12px
@@ -673,7 +651,7 @@ class HouseholdStep(BaseStep):
         """
         card = QFrame()
         card.setObjectName(f"{title}Card")
-        card.setFixedHeight(340)  # Figma spec
+        card.setFixedHeight(340)
         card.setStyleSheet(f"""
             QFrame#{title}Card {{
                 background-color: #F0F7FF;

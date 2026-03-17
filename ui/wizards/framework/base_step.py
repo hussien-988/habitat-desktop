@@ -80,10 +80,7 @@ class BaseStep(QWidget, metaclass=ABCQWidgetMeta):
     def on_hide(self):
         """Called when the step is hidden."""
         pass
-
-    # =========================================================================
     # Abstract Methods - Must be implemented by subclasses
-    # =========================================================================
 
     @abstractmethod
     def setup_ui(self):
@@ -99,10 +96,7 @@ class BaseStep(QWidget, metaclass=ABCQWidgetMeta):
     def collect_data(self) -> Dict[str, Any]:
         """Collect data from the step's UI."""
         pass
-
-    # =========================================================================
     # Optional Methods - Can be overridden by subclasses
-    # =========================================================================
 
     def populate_data(self):
         """Populate the step's UI with data from context."""
@@ -127,10 +121,7 @@ class BaseStep(QWidget, metaclass=ABCQWidgetMeta):
     def is_optional(self) -> bool:
         """Check if the step is optional."""
         return False
-
-    # =========================================================================
     # Helper Methods
-    # =========================================================================
 
     def save_to_context(self, key: str, value: Any):
         """Save data to context."""

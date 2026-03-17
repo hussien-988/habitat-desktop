@@ -61,8 +61,6 @@ class PolygonBuildingSelectorDialog(QDialog):
         main_layout = QVBoxLayout(self)
         main_layout.setSpacing(12)
         main_layout.setContentsMargins(16, 16, 16, 16)
-
-        # ===== Instructions =====
         instructions = QLabel(
             "ارسم مضلعاً على الخريطة لتحديد المباني داخل المنطقة\n"
             "Draw a polygon on the map to select buildings within the area"
@@ -80,8 +78,6 @@ class PolygonBuildingSelectorDialog(QDialog):
         """)
         instructions.setAlignment(Qt.AlignCenter)
         main_layout.addWidget(instructions)
-
-        # ===== Polygon Editor =====
         editor_group = QGroupBox("محرر المضلع - Polygon Editor")
         editor_group.setStyleSheet("""
             QGroupBox {
@@ -111,8 +107,6 @@ class PolygonBuildingSelectorDialog(QDialog):
         editor_layout.addWidget(self.polygon_editor)
 
         main_layout.addWidget(editor_group)
-
-        # ===== Buildings List =====
         buildings_group = QGroupBox("المباني المحددة - Selected Buildings")
         buildings_group.setStyleSheet("""
             QGroupBox {
@@ -171,8 +165,6 @@ class PolygonBuildingSelectorDialog(QDialog):
         buildings_layout.addWidget(self.buildings_list)
 
         main_layout.addWidget(buildings_group)
-
-        # ===== Buttons =====
         buttons_layout = QHBoxLayout()
         buttons_layout.setSpacing(12)
 

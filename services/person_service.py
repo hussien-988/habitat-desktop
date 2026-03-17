@@ -250,8 +250,6 @@ class PersonService:
                 'error': f'Database error: {e}'
             }
 
-    # ==================== Private Helper Methods ====================
-
     def _apply_business_rules(self, data: Dict[str, Any]) -> Dict[str, Any]:
         """
         Apply business transformations to person data.

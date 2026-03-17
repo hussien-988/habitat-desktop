@@ -12,15 +12,10 @@ from typing import Dict, List, Tuple, Any, Optional
 from utils.logger import get_logger
 
 logger = get_logger(__name__)
-
-# ============ Module-level cache ============
 _raw_vocabularies: List[Dict] = []
 _lookup: Dict[str, Dict[int, Dict[str, Any]]] = {}
 _options_cache: Dict[str, List[Tuple[int, str, str, int]]] = {}
 _initialized: bool = False
-
-
-# ============ Public API ============
 
 def initialize_vocabularies():
     """
@@ -213,9 +208,6 @@ def get_next_code(vocab_name: str) -> int:
         return 1
     return max(normal_codes) + 1
 
-
-# ============ Internal helpers ============
-
 def _normalize_name(name: str) -> str:
     """Normalize vocabulary name for case/underscore-insensitive lookup."""
     return name.lower().replace("_", "")
@@ -228,9 +220,6 @@ def _get_current_language() -> str:
         return get_language()
     except Exception:
         return "ar"
-
-
-# ============ Cache builders ============
 
 def _build_cache(api_data: List[Dict]):
     """Build lookup dicts from API response."""
@@ -386,6 +375,13 @@ def _build_from_translation_keys():
             (1, "mapping.business_type.residential"),
             (2, "mapping.business_type.commercial"),
             (3, "mapping.business_type.agricultural"),
+        ],
+        "importstatus": [
+            (0, "mapping.import_status.pending"),
+            (1, "mapping.import_status.validated"),
+            (2, "mapping.import_status.imported"),
+            (3, "mapping.import_status.failed"),
+            (4, "mapping.import_status.partial"),
         ],
     }
 

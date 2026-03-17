@@ -408,7 +408,7 @@ class AdminPage(QWidget):
         users_widget = self._create_users_tab()
         tabs.addTab(users_widget, "المستخدمون")
 
-        # Vocabularies tab (Controlled Vocabularies per FSD Section 7)
+        # Vocabularies tab (Controlled Vocabularies)
         vocab_widget = self._create_vocab_tab()
         tabs.addTab(vocab_widget, "التصنيفات")
 

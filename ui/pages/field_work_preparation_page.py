@@ -40,13 +40,9 @@ class FieldWorkPreparationPage(QWidget):
         # Background
         from ui.style_manager import StyleManager
         self.setStyleSheet(StyleManager.page_background())
-
-        # === OUTER LAYOUT (NO PADDING) for full-width footer ===
         outer_layout = QVBoxLayout(self)
         outer_layout.setContentsMargins(0, 0, 0, 0)
         outer_layout.setSpacing(0)
-
-        # === CONTENT CONTAINER (WITH PADDING) ===
         content_container = QWidget()
         content_container.setStyleSheet("background: transparent;")
 
@@ -59,8 +55,6 @@ class FieldWorkPreparationPage(QWidget):
             0                                         # Bottom: 0
         )
         content_layout.setSpacing(0)
-
-        # === HEADER (FIXED) ===
         self.header = WizardHeader(
             title="تجهيز العمل الميداني",
             subtitle="المباني  •  تجهيز العمل الميداني"
@@ -68,15 +62,11 @@ class FieldWorkPreparationPage(QWidget):
         content_layout.addWidget(self.header)
 
         # No spacing - step1 will handle its own top spacing (15px)
-
-        # === STEP CONTAINER (QStackedWidget) ===
         self.step_container = QStackedWidget()
         content_layout.addWidget(self.step_container, 1)  # Stretch to fill available space
 
         # Add content to outer layout
         outer_layout.addWidget(content_container, 1)
-
-        # === FOOTER (FIXED, FULL WIDTH) ===
         footer = self._create_footer()
         outer_layout.addWidget(footer)
 
@@ -346,3 +336,7 @@ class FieldWorkPreparationPage(QWidget):
             self.step1._selected_building_ids.clear()
             self.step1._confirmed_building_ids.clear()
             self.step1._load_buildings()
+
+        # Reload filter data (communities/neighborhoods) if not yet loaded
+        if hasattr(self.step1, '_load_filter_data') and not self.step1._all_communities:
+            self.step1._load_filter_data()

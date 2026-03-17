@@ -265,8 +265,6 @@ class AddBuildingPage(QWidget):
 
         # مسافة بعد الهيدر قبل الكاردات
         layout.addSpacing(24)
-
-        # === CARD 1: بيانات البناء ===
         # Same card style as wizard (building_selection_step.py)
         card1 = QFrame()
         card1.setObjectName("buildingCard")
@@ -291,7 +289,7 @@ class AddBuildingPage(QWidget):
         # Icon FIRST (left side in RTL)
         from ui.components.icon import Icon
         icon_label = QLabel()
-        icon_label.setFixedSize(40, 40)  # Wizard spec: 40×40px
+        icon_label.setFixedSize(40, 40)
         icon_label.setAlignment(Qt.AlignCenter)
         icon_label.setStyleSheet("""
             QLabel {
@@ -543,8 +541,6 @@ class AddBuildingPage(QWidget):
         self._on_governorate_changed()
 
         layout.addWidget(card1)
-
-        # === CARD 2: حالة البناء ===
         card2 = QFrame()
         card2.setStyleSheet(self._get_card_style())
         card2_layout = QHBoxLayout(card2)

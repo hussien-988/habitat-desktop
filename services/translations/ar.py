@@ -113,8 +113,6 @@ AR_TRANSLATIONS = {
     "warning.uniqueness_check_error": "خطأ في التحقق من التفرد",
     "warning.unit_number_taken": "يوجد وحدة بنفس الرقم والطابق",
     "warning.unit_number_available": "رقم الوحدة متاح",
-
-    # ===== Display Mappings =====
     "mapping.select": "اختر",
     "mapping.not_specified": "غير محدد",
 
@@ -201,6 +199,12 @@ AR_TRANSLATIONS = {
     "mapping.business_type.commercial": "تجاري",
     "mapping.business_type.agricultural": "زراعي",
 
+    "mapping.import_status.pending": "قيد الانتظار",
+    "mapping.import_status.validated": "تم التحقق",
+    "mapping.import_status.imported": "تم الاستيراد",
+    "mapping.import_status.failed": "فشل",
+    "mapping.import_status.partial": "جزئي",
+
     # Source Types
     "mapping.source.field_survey": "مسح ميداني",
     "mapping.source.direct_request": "طلب مباشر",
@@ -276,8 +280,6 @@ AR_TRANSLATIONS = {
 
     # Relation Type (guest)
     "mapping.relation_type.guest": "ضيف",
-
-    # ===== Wizard - Step Names =====
     "wizard.step.building_info": "معلومات البناء",
     "wizard.step.applicant_info": "مقدم الطلب",
     "wizard.step.building_registration": "اختيار بناء",
@@ -289,8 +291,6 @@ AR_TRANSLATIONS = {
     "wizard.step.relations_evidence": "العلاقة و الادلة",
     "wizard.step.claim": "المطالبة",
     "wizard.step.final_review": "المراجعة النهائية",
-
-    # ===== Applicant Info Step =====
     "wizard.applicant.subtitle": "أدخل بيانات الشخص الزائر",
     "wizard.applicant.full_name": "الاسم الكامل",
     "wizard.applicant.national_id": "الرقم الوطني",
@@ -325,8 +325,6 @@ AR_TRANSLATIONS = {
     "wizard.confirm.save_title": "هل تريد الحفظ؟",
     "wizard.confirm.save_message": "لديك تغييرات غير محفوظة.\nهل تريد حفظها كمسودة؟",
     "wizard.draft.saved_success": "تم حفظ المسودة بنجاح!",
-
-    # ===== Building Selection Step =====
     "wizard.building.card_title": "بيانات البناء",
     "wizard.building.card_subtitle": "ابحث عن معلومات البناء والموقع الجغرافي",
     "wizard.building.subtitle": "مراجعة بيانات البناء المختار",
@@ -364,8 +362,6 @@ AR_TRANSLATIONS = {
     "wizard.building.step_description": "ابحث عن المبنى المراد مسحه واختره",
     "wizard.building.not_selected": "لم يتم اختيار مبنى",
     "wizard.building.label": "المبنى: {building_id}",
-
-    # ===== Unit Selection Step =====
     "wizard.unit.address_label": "عنوان البناء",
     "wizard.unit.select_title": "اختر مقسماً",
     "wizard.unit.select_subtitle": "اختر مقسماً أو سجل معلومات مقسم جديد",
@@ -387,8 +383,6 @@ AR_TRANSLATIONS = {
     "wizard.unit.step_description": "اختر مقسما أو أنشئ مقسما جديدا في المبنى المختار",
     "wizard.unit.not_selected": "لم يتم اختيار مقسم",
     "wizard.unit.area_format": "{value} م²",
-
-    # ===== Household Step =====
     "wizard.household.select": "اختر",
     "wizard.household.head_title": "رب الأسرة",
     "wizard.household.subtitle": "تسجيل تفاصيل الاشغال",
@@ -432,8 +426,6 @@ AR_TRANSLATIONS = {
     "wizard.household.unit_status_label": "حالة المقسم",
     "wizard.household.members_required": "يجب أن يكون عدد أفراد الأسرة أكبر من صفر",
     "wizard.household.members_mismatch": "تأكد من مطابقة عدد الأفراد",
-
-    # ===== Person Step =====
     "wizard.person.card_title": "بيانات الأشخاص",
     "wizard.person.subtitle": "قائمة الأشخاص المسجلين",
     "wizard.person.add_button": "+ اضافة شخص جديد",
@@ -451,8 +443,6 @@ AR_TRANSLATIONS = {
     "wizard.person.duplicate_title": "تحذير",
     "wizard.person.duplicate_national_id": "الشخص برقم هوية {national_id} مضاف مسبقاً",
     "wizard.person.duplicate_name": "الشخص {first} {last} مضاف مسبقاً",
-
-    # ===== Relation Step =====
     "wizard.relation.title": "العلاقة والأدلة",
     "wizard.relation.subtitle": "تسجيل تفاصيل ملكية شخص للوحدة عقارية",
     "wizard.relation.no_persons": "لا توجد أشخاص. الرجاء إضافة أشخاص في الخطوة السابقة.",
@@ -474,8 +464,6 @@ AR_TRANSLATIONS = {
     "wizard.relation.has_documents": "يوجد مستندات",
     "wizard.relation.no_documents": "لا يوجد مستندات",
     "wizard.relation.upload_documents": "رفع صور المستندات",
-
-    # ===== Review Step =====
     "wizard.review.building_card_title": "بيانات البناء",
     "wizard.review.building_card_subtitle": "معلومات البناء المختار",
     "wizard.review.unit_card_title": "اختر مقسماً",
@@ -529,8 +517,6 @@ AR_TRANSLATIONS = {
     "wizard.review.new_unit": "جديد",
     "common.error": "خطأ",
     "common.success": "نجح",
-
-    # ===== Person Dialog =====
     "wizard.person_dialog.title_add": "اضافة شخص جديد",
     "wizard.person_dialog.title_edit": "تعديل بيانات الشخص",
     "wizard.person_dialog.title_view": "عرض بيانات الفرد",
@@ -613,16 +599,12 @@ AR_TRANSLATIONS = {
     "wizard.person_dialog.same_date": "تاريخ واحد",
     "wizard.person_dialog.separate_dates": "تواريخ منفصلة",
     "wizard.person_dialog.upload_partial": "تم رفع {success} مستند(ات)، فشل رفع {failed}",
-
-    # ===== Occupancy Details =====
     "wizard.occupation.type": "نوع الإشغال",
     "wizard.occupation.residential": "سكني",
     "wizard.occupation.non_residential": "غير سكني",
     "wizard.occupation.nature": "طبيعة الإشغال",
     "wizard.occupation.ownership": "ملكية",
     "wizard.occupation.other": "أخرى",
-
-    # ===== Occupancy Claims Step =====
     "wizard.occupancy_claims.title": "البيانات الفردية",
     "wizard.occupancy_claims.subtitle": "قائمة الأشخاص المسجلين",
     "wizard.occupancy_claims.add_person": "إضافة فرد جديد",
@@ -646,8 +628,6 @@ AR_TRANSLATIONS = {
     "wizard.occupancy_claims.empty_desc": "يرجى إضافة بيانات الأفراد الشاغلين لهذا المقسم\nبالضغط على زر \"إضافة فرد جديد\" أعلاه",
     "wizard.claims.no_claims_created": "تمت معالجة المسح ولكن لم يتم إنشاء مطالبات.\n\nالسبب: {reason}",
     "wizard.claims.process_title": "معالجة المطالبات",
-
-    # ===== Unit Dialog =====
     "wizard.unit_dialog.title_add": "أضف معلومات المقسم",
     "wizard.unit_dialog.title_edit": "تعديل معلومات المقسم",
     "wizard.unit_dialog.select": "اختر",
@@ -673,8 +653,6 @@ AR_TRANSLATIONS = {
     "common.save": "حفظ",
     "common.confirm": "تأكيد",
     "common.warning": "تحذير",
-
-    # ===== Drafts Page =====
     "page.drafts.title": "المسودة",
     "page.drafts.add_new": "+ إضافة ادعاء",
     "page.drafts.filter": "الفلتر",
@@ -705,8 +683,6 @@ AR_TRANSLATIONS = {
     "page.drafts.confirm_delete_message": "هل أنت متأكد من حذف هذه المسودة؟\n\nالرقم المرجعي: {ref_code}\n\nهذا الإجراء لا يمكن التراجع عنه.",
     "page.drafts.delete_success": "تم حذف المسودة بنجاح",
     "page.drafts.delete_error": "خطأ في حذف المسودة: {details}",
-
-    # ===== Map Page =====
     "page.map.buildings_list": "قائمة المباني",
     "page.map.search": "بحث...",
     "page.map.status_label": "الحالة:",
@@ -729,8 +705,6 @@ AR_TRANSLATIONS = {
     "page.map.loaded_in_viewport": "تم تحميل {count} مبنى في المنطقة الحالية",
     "page.map.no_buildings_viewport": "لا توجد مبانٍ في المنطقة الحالية",
     "page.map.viewport_load_error": "خطأ في تحميل البيانات",
-
-    # ===== Field Work Page =====
     "page.field_work.title": "تحضير العمل الميداني",
     "page.field_work.governorate": "المحافظة",
     "page.field_work.subdistrict": "الناحية",
@@ -744,8 +718,6 @@ AR_TRANSLATIONS = {
     "page.field_work.no_buildings": "لا توجد مباني",
     "page.field_work.assignment_success": "تم التعيين بنجاح",
     "page.field_work.assignment_failed": "فشل في التعيين: {details}",
-
-    # ===== Buildings Page =====
     "page.buildings.title": "المباني",
     "page.buildings.search_placeholder": "بحث عن مبنى...",
     "page.buildings.add_building": "إضافة مبنى",
@@ -762,8 +734,6 @@ AR_TRANSLATIONS = {
     "page.buildings.delete_confirm": "هل أنت متأكد من حذف هذا المبنى؟",
     "page.buildings.units_count": "عدد الوحدات",
     "page.buildings.floors_count": "عدد الطوابق",
-
-    # ===== Navbar & ID Badge =====
     "navbar.tab.completed_claims": "المطالبات",
     "navbar.tab.claims": "المطالبات",
     "navbar.tab.cases": "المسوحات",
@@ -807,24 +777,16 @@ AR_TRANSLATIONS = {
     "navbar.menu.data_management": "إدارة البيانات المرجعية",
     "navbar.menu.import_data": "استيراد البيانات",
     "navbar.menu.logout": "تسجيل خروج",
-
-    # ===== Building Documents =====
     "building.docs.section_title": "وثائق المبنى",
     "building.docs.none": "لا توجد وثائق",
     "building.docs.view_details": "عرض التفاصيل",
-
-    # ===== Review Step - Case Status =====
     "review.case.closed": "القضية مُغلَقة — تم تسجيل ادعاء الحيازة",
     "review.case.pending_evidence": "بانتظار الأدلة — تم تسجيل المالك دون مستندات",
     "review.case.open": "القضية مفتوحة — يُنتظر الوصول للمالك",
     "review.applicant.title": "مقدم الطلب",
-
-    # ===== Case Details Page =====
     "page.case_details.title": "تفاصيل الحالة",
     "page.case_details.breadcrumb": "المسودات",
     "page.case_details.back_to_list": "العودة للقائمة",
-
-    # ===== Error Boundary =====
     "error_boundary.step_error": "خطأ في {step_name}",
     "error_boundary.operation_error": "حدث خطأ أثناء {operation}:\n\n{error_type}: {error_msg}\n\nيمكنك المحاولة مرة أخرى أو الاتصال بالدعم الفني.",
     "error_boundary.operation_error_simple": "حدث خطأ أثناء {operation}:\n\n{error_msg}\n\nيرجى المحاولة مرة أخرى أو الاتصال بالدعم الفني.",

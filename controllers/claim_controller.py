@@ -72,8 +72,6 @@ class ClaimController(BaseController):
         self._claims_cache: List[Claim] = []
         self._current_filter = ClaimFilter()
 
-    # ==================== Properties ====================
-
     @property
     def current_claim(self) -> Optional[Claim]:
         """Get currently selected claim."""
@@ -83,8 +81,6 @@ class ClaimController(BaseController):
     def claims(self) -> List[Claim]:
         """Get cached claims list."""
         return self._claims_cache
-
-    # ==================== CRUD Operations ====================
 
     def create_claim(self, data: Dict[str, Any]) -> OperationResult[Claim]:
         
@@ -183,8 +179,6 @@ class ClaimController(BaseController):
         except Exception as e:
             return OperationResult.fail(message=str(e))
 
-    # ==================== Selection ====================
-
     def select_claim(self, claim_uuid: str) -> OperationResult[Claim]:
         
         result = self.get_claim(claim_uuid)
@@ -200,8 +194,6 @@ class ClaimController(BaseController):
         """Clear current claim selection."""
         self._current_claim = None
         self.claim_selected.emit(None)
-
-    # ==================== Search and Filter ====================
 
     def load_claims(self, filter_: Optional[ClaimFilter] = None) -> OperationResult[List[Claim]]:
         
@@ -315,8 +307,6 @@ class ClaimController(BaseController):
             case_status=case_status,
         )
 
-    # ==================== Workflow Operations ====================
-
     def submit_claim(self, claim_id: str, user_id: str) -> OperationResult:
         """Submit a claim for processing via PUT /api/Claims/{id}/submit."""
         try:
@@ -356,8 +346,6 @@ class ClaimController(BaseController):
             "cancelled": []
         }
         return to_status in allowed_transitions.get(from_status, [])
-
-    # ==================== UC-006: Search & Update ====================
 
     def search_claims_from_api(self, case_status: Optional[int] = None,
                                claim_source: Optional[int] = None,
@@ -426,21 +414,27 @@ class ClaimController(BaseController):
                     result["evidences"] = self._api.get_relation_evidences(
                         survey_id, relation_id)
                 except Exception as e:
-                    logger.warning(f"Failed to fetch relation evidences: {e}")
-                    # Fallback to survey-level evidences
-                    try:
-                        result["evidences"] = self._api.get_survey_evidences(survey_id)
-                    except Exception as e2:
-                        logger.warning(f"Failed to fetch survey evidences: {e2}")
-                        if hasattr(e2, 'status_code') and e2.status_code == 403:
-                            result["evidence_access_denied"] = True
+                    is_403 = hasattr(e, 'status_code') and e.status_code == 403
+                    if is_403:
+                        logger.debug(f"Evidence access denied (not survey owner): {survey_id}")
+                        result["evidence_access_denied"] = True
+                    else:
+                        logger.warning(f"Failed to fetch relation evidences: {e}")
+                        try:
+                            result["evidences"] = self._api.get_survey_evidences(survey_id)
+                        except Exception as e2:
+                            logger.warning(f"Failed to fetch survey evidences: {e2}")
+                            if hasattr(e2, 'status_code') and e2.status_code == 403:
+                                result["evidence_access_denied"] = True
             elif survey_id:
                 try:
                     result["evidences"] = self._api.get_survey_evidences(survey_id)
                 except Exception as e:
-                    logger.warning(f"Failed to fetch evidences: {e}")
                     if hasattr(e, 'status_code') and e.status_code == 403:
+                        logger.debug(f"Evidence access denied (not survey owner): {survey_id}")
                         result["evidence_access_denied"] = True
+                    else:
+                        logger.warning(f"Failed to fetch evidences: {e}")
 
             return OperationResult.ok(data=result)
         except Exception as e:
@@ -449,7 +443,7 @@ class ClaimController(BaseController):
 
     def update_person(self, person_id: str,
                       person_data: Dict[str, Any]) -> OperationResult:
-        """Update person via PUT /v1/Persons/{id} (UC-006 S04)."""
+        """Update person via PUT /v1/Persons/{id}."""
         try:
             result = self._api.update_person(person_id, person_data)
             return OperationResult.ok(data=result)
@@ -459,7 +453,7 @@ class ClaimController(BaseController):
 
     def update_property_unit(self, unit_id: str,
                              unit_data: Dict[str, Any]) -> OperationResult:
-        """Update property unit via PUT /v1/PropertyUnits/{id} (UC-006 S05)."""
+        """Update property unit via PUT /v1/PropertyUnits/{id}."""
         try:
             result = self._api.update_property_unit(unit_id, unit_data)
             return OperationResult.ok(data=result)
@@ -469,7 +463,7 @@ class ClaimController(BaseController):
 
     def add_tenure_evidence(self, survey_id: str, relation_id: str,
                             file_path: str, **kwargs) -> OperationResult:
-        """Add tenure evidence document (UC-006 S06)."""
+        """Add tenure evidence document."""
         try:
             result = self._api.upload_relation_document(
                 survey_id, relation_id, file_path, **kwargs)
@@ -480,7 +474,7 @@ class ClaimController(BaseController):
 
     def add_identification_evidence(self, survey_id: str, person_id: str,
                                     file_path: str, **kwargs) -> OperationResult:
-        """Add identification evidence document (UC-006 S06)."""
+        """Add identification evidence document."""
         try:
             result = self._api.upload_identification_document(
                 survey_id, person_id, file_path, **kwargs)
@@ -491,15 +485,13 @@ class ClaimController(BaseController):
 
     def delete_evidence(self, survey_id: str,
                         evidence_id: str) -> OperationResult:
-        """Delete evidence document (UC-006 S06)."""
+        """Delete evidence document."""
         try:
             self._api.delete_evidence(survey_id, evidence_id)
             return OperationResult.ok(data=True)
         except Exception as e:
             logger.error(f"Failed to delete evidence {evidence_id}: {e}", exc_info=True)
             return OperationResult.fail(message=str(e))
-
-    # ==================== Backend API Methods ====================
 
     def get_claim_full_context(self, claim_id: str) -> OperationResult:
         
@@ -680,8 +672,6 @@ class ClaimController(BaseController):
             "evidence_count": claim.get("evidenceCount", 0),
         }
 
-    # ==================== Statistics ====================
-
     def get_statistics(self) -> OperationResult[Dict[str, Any]]:
         """
         Get claim statistics via API.
@@ -719,8 +709,6 @@ class ClaimController(BaseController):
             return OperationResult.ok(data=result)
         except Exception as e:
             return OperationResult.fail(message=str(e))
-
-    # ==================== Validation ====================
 
     def _validate_claim_data(
         self,

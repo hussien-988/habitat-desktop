@@ -44,10 +44,7 @@ class ApplicantInfoStep(BaseStep):
         self._field_styles: dict = {}
         from services.api_client import get_api_client
         self._api_client = get_api_client()
-
-    # ------------------------------------------------------------------
     # UI construction
-    # ------------------------------------------------------------------
 
     def setup_ui(self):
         self.main_layout.setContentsMargins(0, 4, 0, 16)
@@ -284,10 +281,7 @@ class ApplicantInfoStep(BaseStep):
         self.landline.textChanged.connect(lambda: self._clear_err(self.landline, self._landline_error))
 
         return grid
-
-    # ------------------------------------------------------------------
     # File upload helpers
-    # ------------------------------------------------------------------
 
     def _browse_files(self):
         file_paths, _ = QFileDialog.getOpenFileNames(
@@ -359,10 +353,7 @@ class ApplicantInfoStep(BaseStep):
         x_btn.setCursor(Qt.PointingHandCursor)
         x_btn.mousePressEvent = lambda e, fp=file_path: remove_callback(fp)
         return container
-
-    # ------------------------------------------------------------------
     # Widget factory helpers
-    # ------------------------------------------------------------------
 
     def _lbl(self, text: str) -> QLabel:
         lbl = QLabel(text)
@@ -455,10 +446,7 @@ class ApplicantInfoStep(BaseStep):
         frame._thumbnails_layout = thumbnails_layout
         frame._text_btn = text_btn
         return frame
-
-    # ------------------------------------------------------------------
     # Style helpers
-    # ------------------------------------------------------------------
 
     def _input_style(self) -> str:
         down_img = str(Config.IMAGES_DIR / "down.png").replace("\\", "/")
@@ -510,10 +498,7 @@ class ApplicantInfoStep(BaseStep):
         field.setStyleSheet(self._field_styles.get(field, self._input_style()))
         error_lbl.setText("")
         error_lbl.setVisible(False)
-
-    # ------------------------------------------------------------------
     # BaseStep interface
-    # ------------------------------------------------------------------
 
     def validate(self) -> StepValidationResult:
         result = StepValidationResult(is_valid=True, errors=[])

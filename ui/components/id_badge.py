@@ -18,11 +18,7 @@ from ui.components.icon import Icon
 from ui.design_system import NavbarDimensions, Colors, Typography
 from ui.font_utils import create_font, FontManager
 from services.translation_manager import tr
-
-
-# =========================================================================
 # Menu Item
-# =========================================================================
 
 class _MenuItem(QWidget):
     """Single clickable menu item: icon + text."""
@@ -112,11 +108,7 @@ class _MenuItem(QWidget):
         if event.button() == Qt.LeftButton:
             self.clicked.emit()
         super().mousePressEvent(event)
-
-
-# =========================================================================
 # Dropdown Popup (Cloud/Bubble shape)
-# =========================================================================
 
 ARROW_HEIGHT = 10
 ARROW_WIDTH = 16
@@ -232,11 +224,7 @@ class _DropdownPopup(QWidget):
         painter.drawPath(combined)
 
         painter.end()
-
-
-# =========================================================================
 # ID Badge Widget
-# =========================================================================
 
 class IDBadgeWidget(QWidget):
 
@@ -447,9 +435,9 @@ class IDBadgeWidget(QWidget):
         if self._import_item:
             self._import_item.setVisible(role in {"admin", "data_manager"})
         if self._security_item:
-            self._security_item.setVisible(role == "admin")
+            self._security_item.setVisible(False)
         if self._data_mgmt_item:
-            self._data_mgmt_item.setVisible(role == "admin")
+            self._data_mgmt_item.setVisible(False)
 
     def set_user_id(self, user_id):
         self.user_id = user_id

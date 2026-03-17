@@ -510,7 +510,7 @@ class OccupancyClaimsStep(BaseStep):
                     try:
                         self._set_auth_token()
                         if is_applicant:
-                            self._api_service.update_person(person_id, updated_data)
+                            logger.info(f"Applicant {person_id} updated locally (not a household member)")
                         elif survey_id and household_id:
                             self._api_service.update_person_in_survey(
                                 survey_id, household_id, person_id, updated_data)

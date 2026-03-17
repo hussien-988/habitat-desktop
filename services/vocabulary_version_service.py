@@ -1,18 +1,4 @@
-"""
-Vocabulary Version Management Service
-=====================================
-Implements comprehensive vocabulary versioning system as per UC-009b specifications.
-
-Features:
-- Semantic versioning (MAJOR.MINOR.PATCH)
-- Version history and rollback support
-- Effective date management with no overlap validation
-- Import/export vocabulary definitions (CSV/JSON)
-- Deprecation handling for terms still in use
-- Multi-language support (Arabic, English)
-- Audit trail for all vocabulary changes
-- Mobile sync export generation
-"""
+"""Vocabulary Version Management Service."""
 
 import json
 import csv
@@ -197,8 +183,6 @@ class VocabularyChangeLog:
 class VocabularyVersionService:
     """
     Comprehensive vocabulary version management service.
-
-    Implements UC-009b requirements:
     - Semantic versioning (MAJOR.MINOR.PATCH)
     - Effective date management
     - Import/export functionality
@@ -207,7 +191,7 @@ class VocabularyVersionService:
     - Mobile sync export
     """
 
-    # Standard vocabularies as per FSD
+    # Standard vocabularies
     STANDARD_VOCABULARIES = [
         "building_type",
         "ownership_type",

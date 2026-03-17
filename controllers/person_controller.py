@@ -65,8 +65,6 @@ class PersonController(BaseController):
         self._persons_cache: List[Person] = []
         self._current_filter = PersonFilter()
 
-    # ==================== Properties ====================
-
     @property
     def current_person(self) -> Optional[Person]:
         """Get currently selected person."""
@@ -76,8 +74,6 @@ class PersonController(BaseController):
     def persons(self) -> List[Person]:
         """Get cached persons list."""
         return self._persons_cache
-
-    # ==================== CRUD Operations ====================
 
     def create_person(self, data: Dict[str, Any]) -> OperationResult[Person]:
         """
@@ -244,8 +240,6 @@ class PersonController(BaseController):
         except Exception as e:
             return OperationResult.fail(message=str(e))
 
-    # ==================== Selection ====================
-
     def select_person(self, person_uuid: str) -> OperationResult[Person]:
         """
         Select a person as current.
@@ -269,8 +263,6 @@ class PersonController(BaseController):
         """Clear current person selection."""
         self._current_person = None
         self.person_selected.emit(None)
-
-    # ==================== Search and Filter ====================
 
     def load_persons(self, filter_: Optional[PersonFilter] = None) -> OperationResult[List[Person]]:
         """
@@ -368,8 +360,6 @@ class PersonController(BaseController):
             email=dto.get("email") or "",
         )
 
-    # ==================== Validation ====================
-
     def _validate_person_data(
         self,
         data: Dict[str, Any],
@@ -434,8 +424,6 @@ class PersonController(BaseController):
         except Exception:
             pass
         return None
-
-    # ==================== Statistics ====================
 
     def get_statistics(self) -> OperationResult[Dict[str, Any]]:
         """

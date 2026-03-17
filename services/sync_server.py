@@ -2,7 +2,6 @@
 """
 Local Network Sync Server
 =========================
-Implements FR-D-2(b) from FSD v5.0
 
 Features:
 - Local-network endpoint for receiving .uhc packages from tablets
@@ -52,8 +51,6 @@ class SyncStatus:
 class SyncServer:
     """
     Local Network Sync Server for tablet synchronization.
-
-    Implements FR-D-2(b):
     - Auto-discoverable on LAN
     - Secure authentication
     - Bi-directional sync
@@ -85,8 +82,6 @@ class SyncServer:
 
         # Sync log
         self._sync_log: List[Dict[str, Any]] = []
-
-    # ==================== Server Control ====================
 
     def start(self) -> bool:
         """Start the sync server."""
@@ -141,8 +136,6 @@ class SyncServer:
             "api_version": API_VERSION,
             "sync_count": len(self._sync_log)
         }
-
-    # ==================== Discovery ====================
 
     def _register_discovery(self) -> None:
         """Register service for LAN discovery."""
@@ -210,8 +203,6 @@ class SyncServer:
         ips = self._get_local_ips()
         return ips[0] if ips else "127.0.0.1"
 
-    # ==================== Authentication ====================
-
     def generate_auth_token(self, device_id: str, expires_hours: int = 24) -> str:
         """
         Generate authentication token for a device.
@@ -270,8 +261,6 @@ class SyncServer:
             logger.warning(f"Token verification failed: {e}")
 
         return None
-
-    # ==================== Request Handler ====================
 
     def _create_handler(self):
         """Create HTTP request handler class."""
@@ -549,8 +538,6 @@ class SyncServer:
 
         return SyncRequestHandler
 
-    # ==================== Device Management ====================
-
     def _verify_device(self, device_id: str, device_secret: Optional[str]) -> bool:
         """Verify device credentials."""
         # For now, accept any device with valid device_id
@@ -592,8 +579,6 @@ class SyncServer:
         """, (device_id, device_name, datetime.utcnow().isoformat()))
 
         return self.generate_auth_token(device_id)
-
-    # ==================== Vocabularies ====================
 
     def _get_vocabularies(self) -> Dict[str, Any]:
         """Get all vocabularies for tablet sync."""
@@ -651,8 +636,6 @@ class SyncServer:
         }
 
         return vocabularies
-
-    # ==================== Sync Status ====================
 
     def _get_sync_status(self, device_id: str) -> Dict[str, Any]:
         """Get sync status for a device."""
@@ -712,8 +695,6 @@ class SyncServer:
     def get_sync_log(self, limit: int = 50) -> List[Dict[str, Any]]:
         """Get recent sync log entries."""
         return self._sync_log[-limit:]
-
-    # ==================== Callbacks ====================
 
     def on_sync_started(self, callback: Callable[[str], None]) -> None:
         """Set callback for sync started."""

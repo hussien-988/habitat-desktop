@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 """
 Claim/Case entity model.
-Implements FR-D-8 STDM legacy integration and UC-006 modification tracking.
 """
 
 from dataclasses import dataclass, field
@@ -21,8 +20,7 @@ class Claim:
     - NNNNNN: Sequential number (6 digits)
 
     Implements:
-    - FR-D-8.4 STDM Integration for Claims
-    - UC-006 Modification reason tracking
+   
     """
 
     # Primary identifier
@@ -65,11 +63,11 @@ class Claim:
     has_conflict: bool = False
     conflict_claim_ids: str = ""  # Related conflicting claims
 
-    # Modification Tracking (UC-006 S08-S11)
+    # Modification Tracking
     last_modification_reason: Optional[str] = None  # Required reason for updates
     modification_history: str = ""  # JSON array of modification records
 
-    # Legacy STDM Integration (FR-D-8.4)
+    # Legacy STDM Integration
     legacy_stdm_id: Optional[str] = None  # Original STDM claim/case identifier
     legacy_stdm_tenure_type: Optional[str] = None  # STDM tenure type
     legacy_stdm_relationship_id: Optional[str] = None  # STDM social tenure relationship
@@ -162,7 +160,7 @@ class Claim:
 
     def add_modification_record(self, reason: str, user_id: str, old_values: dict, new_values: dict):
         """
-        Add a modification record to history (UC-006 S11).
+        Add a modification record to history.
 
         Args:
             reason: Reason for modification
