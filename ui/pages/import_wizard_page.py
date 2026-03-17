@@ -102,6 +102,7 @@ class ImportWizardPage(QWidget):
 
     completed = pyqtSignal(object)
     cancelled = pyqtSignal()
+    navigate_to_duplicates = pyqtSignal()
 
     def __init__(self, import_controller=None, db=None, i18n=None, parent=None):
         """Initialize import wizard."""
@@ -560,6 +561,7 @@ class ImportWizardPage(QWidget):
             parent=self
         )
         self.step1.package_selected.connect(self._on_package_selected)
+        self.step1.upload_completed.connect(self._on_upload_completed)
         self.step_container.addWidget(self.step1)
 
         # Steps 2-5: created lazily when needed
@@ -602,6 +604,12 @@ class ImportWizardPage(QWidget):
     def _on_package_selected(self, package_id: str):
         """Handle package selection from Step 1."""
         self.btn_next.setEnabled(bool(package_id))
+
+    def _on_upload_completed(self, package_id: str):
+        """After successful upload, auto-advance to processing."""
+        if package_id:
+            self._current_package_id = package_id
+            self._transition_step1_to_step2()
 
     # -- State-aware routing --------------------------------------------------
 
@@ -756,8 +764,36 @@ class ImportWizardPage(QWidget):
         self.step1._start_polling()
 
     def _handle_reviewing_conflicts(self):
-        """Status 6: Staged with conflicts — show report + duplicates."""
-        self._navigate_to_step2(duplicates_data=None)
+        """Status 6: Staged with conflicts — try approve first, then show report."""
+        pkg_id = self._current_package_id
+        if not pkg_id:
+            self._navigate_to_step2(duplicates_data=None)
+            return
+
+        # Try to approve — backend will succeed only if all conflicts are resolved
+        self._show_loading("جاري التحقق من حالة التعارضات...")
+
+        def on_approve_ok(result):
+            self._hide_loading()
+            if result.success:
+                logger.info(f"Package {pkg_id} approved after conflicts resolved")
+                # Re-poll to get new status (should be READY_TO_COMMIT)
+                self._start_status_poll()
+            else:
+                logger.info(f"Approve rejected (conflicts remain): {result.message}")
+                self._navigate_to_step2(duplicates_data=None)
+
+        def on_approve_err(error_type, msg_ar):
+            self._hide_loading()
+            logger.info(f"Approve failed ({error_type}) — showing conflicts step")
+            self._navigate_to_step2(duplicates_data=None)
+
+        self._run_api(
+            lambda: self.import_controller.approve_package(pkg_id),
+            on_approve_ok,
+            on_error=on_approve_err,
+            loading_msg=""
+        )
 
     def _handle_ready_to_commit(self):
         """Status 7: Approved — show validation report, user navigates forward."""
@@ -1069,6 +1105,7 @@ class ImportWizardPage(QWidget):
             duplicates_data=duplicates_data,
             parent=self
         )
+        self.step2.resolve_duplicates_requested.connect(self._on_resolve_duplicates)
         self.step_container.addWidget(self.step2)
 
     def _ensure_step_review(self):
@@ -1136,6 +1173,9 @@ class ImportWizardPage(QWidget):
             self.btn_back.setEnabled(True)
             if self._current_package_status == _PkgStatus.VALIDATION_FAILED:
                 self.btn_next.setText("فشل التحقق")
+                self.btn_next.setEnabled(False)
+            elif self._current_package_status == _PkgStatus.REVIEWING_CONFLICTS:
+                self.btn_next.setText("يجب حل التعارضات أولاً")
                 self.btn_next.setEnabled(False)
             else:
                 self.btn_next.setText("التالي   >")
@@ -1236,6 +1276,74 @@ class ImportWizardPage(QWidget):
             self.step1.reset()
         if hasattr(self.step1, '_start_polling'):
             self.step1._start_polling()
+
+    def _on_resolve_duplicates(self):
+        """Handle resolve duplicates button from step 2."""
+        from ui.components.dialogs.confirmation_dialog import ConfirmationDialog, DialogResult
+        result = ConfirmationDialog.confirm(
+            parent=self,
+            title="حل التكرارات",
+            message="سيتم نقلك إلى صفحة التكرارات لحل التعارضات المكتشفة.\nبعد حل التكرارات، يمكنك العودة لمتابعة الاستيراد."
+        )
+        if result == DialogResult.YES:
+            self.navigate_to_duplicates.emit()
+
+    def refresh_from_duplicates(self):
+        """Re-check package status after returning from duplicates page.
+
+        If still REVIEWING_CONFLICTS, try to approve (backend verifies
+        all conflicts for this package are resolved). If approve succeeds,
+        the package advances to READY_TO_COMMIT.
+        """
+        if not self._current_package_id:
+            return
+        pkg_id = self._current_package_id
+
+        self._show_loading("جاري التحقق من حالة الحزمة...")
+
+        def on_status_result(result):
+            if not result.success:
+                self._hide_loading()
+                self._start_status_poll()
+                return
+
+            new_status = result.data.get("status", 0)
+            logger.info(f"Post-duplicates status: package {pkg_id} -> status {new_status}")
+
+            if new_status != _PkgStatus.REVIEWING_CONFLICTS:
+                self._hide_loading()
+                self._route_by_status(new_status)
+                return
+
+            # Still REVIEWING_CONFLICTS — try to approve directly
+            # Backend will reject if conflicts remain for this package
+            logger.info(f"Attempting to approve package {pkg_id} after conflict resolution")
+            self._show_loading("جاري الموافقة على الحزمة...")
+            self._run_api(
+                lambda: self.import_controller.approve_package(pkg_id),
+                on_approve_done,
+                on_error=on_approve_error,
+                loading_msg=""
+            )
+
+        def on_approve_done(approve_result):
+            logger.info(f"Approve result: success={approve_result.success}")
+            self._hide_loading()
+            # Re-poll to get the new status after approval
+            self._start_status_poll()
+
+        def on_approve_error(error_type, msg_ar):
+            logger.warning(f"Approve after conflicts failed ({error_type}): {msg_ar}")
+            self._hide_loading()
+            # Conflicts might not all be resolved — show step2 as before
+            self._route_by_status(_PkgStatus.REVIEWING_CONFLICTS)
+
+        self._run_api(
+            lambda: self.import_controller.get_package(pkg_id),
+            on_status_result,
+            on_error=lambda et, m: (self._hide_loading(), self._start_status_poll()),
+            loading_msg=""
+        )
 
     def configure_for_role(self, role: str):
         """Store user role for RBAC and propagate to steps."""

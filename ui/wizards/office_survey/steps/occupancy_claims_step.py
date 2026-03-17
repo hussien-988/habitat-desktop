@@ -354,7 +354,8 @@ class OccupancyClaimsStep(BaseStep):
             survey_id=survey_id,
             household_id=household_id,
             unit_id=unit_id,
-            initial_tab=0,
+            existing_person_mode=True,
+            initial_tab=2,
         )
         if dialog.exec_() != QDialog.Accepted:
             return
@@ -454,6 +455,10 @@ class OccupancyClaimsStep(BaseStep):
         auth_token, survey_id, household_id, unit_id = self._get_context_ids()
 
         is_applicant = person_data.get('_is_applicant', False)
+        if not is_applicant:
+            contact_person_id = self.context.get_data('contact_person_id')
+            if contact_person_id and person_data.get('person_id') == contact_person_id:
+                is_applicant = True
         has_relation = bool(
             person_data.get('person_role')
             or person_data.get('relationship_type')
@@ -470,7 +475,7 @@ class OccupancyClaimsStep(BaseStep):
             open_as_existing = not has_relation
 
         person_data_copy = dict(person_data)
-        if person_data.get('_is_applicant') and self.context.applicant:
+        if is_applicant and self.context.applicant:
             id_photos = self.context.applicant.get('id_photo_paths', [])
             if id_photos:
                 person_data_copy['_uploaded_files'] = id_photos
@@ -504,7 +509,13 @@ class OccupancyClaimsStep(BaseStep):
                 if person_id:
                     try:
                         self._set_auth_token()
-                        self._api_service.update_person(person_id, updated_data)
+                        if is_applicant:
+                            self._api_service.update_person(person_id, updated_data)
+                        elif survey_id and household_id:
+                            self._api_service.update_person_in_survey(
+                                survey_id, household_id, person_id, updated_data)
+                        else:
+                            self._api_service.update_person(person_id, updated_data)
                         logger.info(f"Person {person_id} updated via API")
                         relation_id = updated_data.get('_relation_id') or person_data.get('_relation_id')
                         if relation_id and survey_id:
@@ -513,6 +524,43 @@ class OccupancyClaimsStep(BaseStep):
                                 logger.info(f"Relation {relation_id} updated via API")
                             except Exception as e:
                                 logger.warning(f"Failed to update relation {relation_id}: {e}")
+                        elif not relation_id and survey_id and unit_id:
+                            rel_type = updated_data.get('relation_data', {}).get('rel_type')
+                            if rel_type:
+                                relation_data = dict(updated_data.get('relation_data', {}))
+                                relation_data['person_id'] = person_id
+                                relation_data['rel_type'] = rel_type
+                                try:
+                                    response = self._api_service.link_person_to_unit(
+                                        survey_id, unit_id, relation_data)
+                                    new_rel_id = (
+                                        response.get('id') or response.get('relationId') or
+                                        response.get('personPropertyRelationId') or '')
+                                    if new_rel_id:
+                                        updated_data['_relation_id'] = new_rel_id
+                                        logger.info(f"Created relation for person {person_id}: {new_rel_id}")
+                                        tenure_files = updated_data.get('_relation_uploaded_files', [])
+                                        for f_entry in tenure_files:
+                                            if f_entry.get('evidence_id'):
+                                                continue
+                                            f_path = f_entry.get('path', '')
+                                            if not f_path:
+                                                continue
+                                            try:
+                                                resp = self._api_service.upload_relation_document(
+                                                    survey_id=survey_id,
+                                                    relation_id=new_rel_id,
+                                                    file_path=f_path,
+                                                    issue_date=f_entry.get('issue_date', ''),
+                                                    file_hash=f_entry.get('hash', ''))
+                                                eid = (resp.get('id') or resp.get('evidenceId') or '')
+                                                if eid:
+                                                    f_entry['evidence_id'] = eid
+                                                logger.info(f"Tenure file uploaded for relation {new_rel_id}: {f_path}")
+                                            except Exception as ue:
+                                                logger.error(f"Failed to upload tenure file {f_path}: {ue}")
+                                except Exception as e:
+                                    logger.error(f"Failed to create relation for person {person_id}: {e}")
                     except Exception as e:
                         logger.error(f"Failed to update person via API: {e}")
                         ErrorHandler.show_error(self, map_exception(e), tr("common.error"))
@@ -989,6 +1037,12 @@ class OccupancyClaimsStep(BaseStep):
             "relations": relations,
             "relations_count": len(relations)
         }
+
+    def reset(self):
+        """Clear persons list for a new wizard session."""
+        if not self._is_initialized:
+            return
+        self._refresh_persons_list()
 
     def populate_data(self):
         """Populate step with context data."""

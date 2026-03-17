@@ -162,7 +162,7 @@ class CasesPage(QWidget):
         self._ref_search.textChanged.connect(self._on_search_changed)
         layout.addWidget(self._ref_search)
 
-        # 2. Search by person name (API: intervieweeName)
+        # 2. Search by person name (API: contactPersonFullName)
         self._name_filter = QLineEdit()
         self._name_filter.setLayoutDirection(Qt.RightToLeft)
         self._name_filter.setPlaceholderText("بحث باسم الشخص...")
@@ -318,7 +318,7 @@ class CasesPage(QWidget):
         return {
             "claim_id": s.get("referenceCode") or s.get("id", "N/A"),
             "claim_uuid": s.get("id", ""),
-            "claimant_name": s.get("intervieweeName") or "غير محدد",
+            "claimant_name": s.get("contactPersonFullName") or s.get("intervieweeName") or "غير محدد",
             "date": (s.get("surveyDate") or "")[:10],
             "status": self._active_tab,
             "building_id": s.get("buildingNumber") or (building_obj.building_id if building_obj else ""),

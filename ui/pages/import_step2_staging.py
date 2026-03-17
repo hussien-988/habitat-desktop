@@ -12,8 +12,9 @@ from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QFrame,
     QScrollArea, QTableWidget, QTableWidgetItem, QHeaderView,
     QAbstractItemView, QSizePolicy, QGraphicsDropShadowEffect,
+    QPushButton,
 )
-from PyQt5.QtCore import Qt, QTimer
+from PyQt5.QtCore import Qt, QTimer, pyqtSignal
 from PyQt5.QtGui import QColor
 
 from ui.design_system import Colors, PageDimensions
@@ -38,6 +39,8 @@ _ENTITY_SECTIONS = [
 
 class ImportStep2Staging(QWidget):
     """Step 2: Staging results, validation report, and duplicate detection."""
+
+    resolve_duplicates_requested = pyqtSignal()
 
     def __init__(self, import_controller, package_id, duplicates_data=None, parent=None):
         super().__init__(parent)
@@ -297,6 +300,25 @@ class ImportStep2Staging(QWidget):
 
         layout.addWidget(self._dup_warning)
         self._dup_warning.setVisible(False)
+
+        # "Resolve duplicates" button
+        self._resolve_dups_btn = QPushButton("حل التكرارات")
+        self._resolve_dups_btn.setCursor(Qt.PointingHandCursor)
+        self._resolve_dups_btn.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
+        self._resolve_dups_btn.setFixedSize(180, 40)
+        self._resolve_dups_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #F59E0B;
+                color: white;
+                border: none;
+                border-radius: 8px;
+                font-weight: 600;
+            }
+            QPushButton:hover { background-color: #D97706; }
+        """)
+        self._resolve_dups_btn.clicked.connect(self.resolve_duplicates_requested.emit)
+        self._resolve_dups_btn.setVisible(False)
+        layout.addWidget(self._resolve_dups_btn, alignment=Qt.AlignCenter)
 
         return card
 
@@ -561,10 +583,12 @@ class ImportStep2Staging(QWidget):
             self._dup_status.setText("لم يتم تشغيل كشف التكرارات بعد")
             self._dup_status.setStyleSheet("color: #9CA3AF; background: transparent;")
             self._dup_warning.setVisible(False)
+            self._resolve_dups_btn.setVisible(False)
         elif total_conflicts == 0:
             self._dup_status.setText("لا توجد تكرارات — يمكن المتابعة")
             self._dup_status.setStyleSheet("color: #10B981; background: transparent;")
             self._dup_warning.setVisible(False)
+            self._resolve_dups_btn.setVisible(False)
         else:
             self._dup_status.setText(
                 f"تم اكتشاف {total_conflicts} تعارض "
@@ -572,6 +596,7 @@ class ImportStep2Staging(QWidget):
             )
             self._dup_status.setStyleSheet("color: #F59E0B; background: transparent;")
             self._dup_warning.setVisible(True)
+            self._resolve_dups_btn.setVisible(True)
 
     def _update_level_results(self):
         """Update validator level results."""

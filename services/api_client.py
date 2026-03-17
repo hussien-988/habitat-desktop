@@ -2524,7 +2524,7 @@ class TRRCMSApiClient:
             if 'finalNotes' in finalize_options:
                 api_data['finalNotes'] = finalize_options['finalNotes'] or ""
             if 'durationMinutes' in finalize_options:
-                api_data['durationMinutes'] = finalize_options['durationMinutes'] or 0
+                api_data['durationMinutes'] = finalize_options['durationMinutes'] or 10
             if 'autoCreateClaim' in finalize_options:
                 api_data['autoCreateClaim'] = finalize_options['autoCreateClaim']
 
@@ -2551,6 +2551,17 @@ class TRRCMSApiClient:
         logger.info(f"Finalizing office survey {survey_id}")
         result = self._request("POST", f"/v1/Surveys/office/{survey_id}/finalize")
         logger.info(f"Office survey finalized successfully")
+        return result
+
+    def cancel_survey(self, survey_id: str, reason: str) -> Dict[str, Any]:
+        """Cancel a draft survey.
+        Endpoint: POST /api/v1/Surveys/{id}/cancel"""
+        if not survey_id:
+            raise ValueError("survey_id is required")
+        payload = {"surveyId": survey_id, "reason": reason}
+        logger.info(f"Cancelling survey {survey_id}")
+        result = self._request("POST", f"/v1/Surveys/{survey_id}/cancel", json_data=payload)
+        logger.info(f"Survey {survey_id} cancelled")
         return result
 
     def save_draft_to_backend(self, survey_id: str, draft_data: Dict[str, Any] = None) -> Dict[str, Any]:
@@ -2763,6 +2774,19 @@ class TRRCMSApiClient:
             params["householdId"] = household_id
         logger.info(f"Fetching persons with filters: {params}")
         return self._request("GET", "/v1/Persons", params=params) or {}
+
+    def get_person_by_id(self, person_id: str) -> Optional[Dict[str, Any]]:
+        """Get a single person by UUID via GET /v1/Persons/{id}.
+        Returns None if person not found (404).
+        """
+        from services.exceptions import ApiException
+        try:
+            return self._request("GET", f"/v1/Persons/{person_id}")
+        except ApiException as e:
+            if e.status_code == 404:
+                logger.warning(f"Person {person_id} not found (404)")
+                return None
+            raise
 
     # ==================== Households APIs (standalone) ====================
 
@@ -3356,8 +3380,8 @@ class TRRCMSApiClient:
 
         Endpoint: POST /api/v1/conflicts/{id}/merge
         """
-        body = {"masterRecordId": master_record_id, "justification": justification}
-        return self._request("POST", f"/v1/conflicts/{conflict_id}/merge", json=body)
+        body = {"masterRecordId": master_record_id, "reason": justification}
+        return self._request("POST", f"/v1/conflicts/{conflict_id}/merge", json_data=body)
 
     def keep_separate_conflict(
         self, conflict_id: str, justification: str = ""
@@ -3367,8 +3391,8 @@ class TRRCMSApiClient:
 
         Endpoint: POST /api/v1/conflicts/{id}/keep-separate
         """
-        body = {"justification": justification}
-        return self._request("POST", f"/v1/conflicts/{conflict_id}/keep-separate", json=body)
+        body = {"reason": justification}
+        return self._request("POST", f"/v1/conflicts/{conflict_id}/keep-separate", json_data=body)
 
     def resolve_conflict(
         self, conflict_id: str, resolution_type: str = "", justification: str = ""
@@ -3378,8 +3402,8 @@ class TRRCMSApiClient:
 
         Endpoint: POST /api/v1/conflicts/{id}/resolve
         """
-        body = {"resolutionType": resolution_type, "justification": justification}
-        return self._request("POST", f"/v1/conflicts/{conflict_id}/resolve", json=body)
+        body = {"resolutionType": resolution_type, "reason": justification}
+        return self._request("POST", f"/v1/conflicts/{conflict_id}/resolve", json_data=body)
 
     def escalate_conflict(
         self, conflict_id: str, justification: str = ""
@@ -3389,8 +3413,8 @@ class TRRCMSApiClient:
 
         Endpoint: POST /api/v1/conflicts/{id}/escalate
         """
-        body = {"justification": justification}
-        return self._request("POST", f"/v1/conflicts/{conflict_id}/escalate", json=body)
+        body = {"reason": justification}
+        return self._request("POST", f"/v1/conflicts/{conflict_id}/escalate", json_data=body)
 
 
 # ==================== Singleton Instance ====================

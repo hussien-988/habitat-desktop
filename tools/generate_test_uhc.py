@@ -226,12 +226,27 @@ def _insert_data(conn, ids, collector_user_id, now_utc, scenario="valid"):
     """Insert all data rows. scenario controls whether codes are valid or not."""
     survey_date = (now_utc - timedelta(hours=2)).isoformat()
 
-    # Building codes: valid = Aleppo (14), invalid = fake codes (99)
+    # Building codes per scenario
     if scenario == "invalid":
         gov_code, dist_code, sub_code = "99", "99", "99"
         com_code, neigh_code = "999", "999"
         building_num = "99999"
         building_id_code = "99999999999999999"
+    elif scenario == "clean":
+        gov_code, dist_code, sub_code = "14", "14", "01"
+        com_code, neigh_code = "010", "011"
+        building_num = "00050"
+        building_id_code = "14140101001100050"
+    elif scenario == "property_dup":
+        gov_code, dist_code, sub_code = "14", "14", "01"
+        com_code, neigh_code = "010", "011"
+        building_num = "00001"
+        building_id_code = "14140101001100001"
+    elif scenario == "property_dup_merge":
+        gov_code, dist_code, sub_code = "14", "14", "01"
+        com_code, neigh_code = "010", "011"
+        building_num = "00001"
+        building_id_code = "14140101001100001"
     else:
         gov_code, dist_code, sub_code = "14", "14", "01"
         com_code, neigh_code = "010", "011"
@@ -250,16 +265,33 @@ def _insert_data(conn, ids, collector_user_id, now_utc, scenario="valid"):
     )
 
     # Building
+    if scenario == "clean":
+        bldg_lat, bldg_lng = 36.2150, 37.1500
+        bldg_notes = "مبنى تجاري في حي الشهباء"
+        bldg_neigh_name = "الشهباء"
+    elif scenario == "property_dup":
+        bldg_lat, bldg_lng = 36.2021, 37.1343
+        bldg_notes = "مبنى سكني من 3 طوابق بحالة جيدة"
+        bldg_neigh_name = "الجميلية"
+    elif scenario == "property_dup_merge":
+        bldg_lat, bldg_lng = 36.2021, 37.1343
+        bldg_notes = "مبنى سكني من 3 طوابق بحالة جيدة - للدمج"
+        bldg_neigh_name = "الجميلية"
+    else:
+        bldg_lat, bldg_lng = 36.2021, 37.1343
+        bldg_notes = "مبنى سكني من 3 طوابق بحالة جيدة"
+        bldg_neigh_name = "الجميلية"
+
     conn.execute(
         "INSERT INTO buildings VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
         (
             ids["building"], gov_code, dist_code, sub_code, com_code, neigh_code, building_num,
             1, 1, 2, 2, 0,
-            36.2021, 37.1343,
-            "POINT(37.1343 36.2021)",
-            "مبنى سكني من 3 طوابق بحالة جيدة",
+            bldg_lat, bldg_lng,
+            f"POINT({bldg_lng} {bldg_lat})",
+            bldg_notes,
             building_id_code,
-            "حلب", "حلب", "مركز حلب", "حلب المدينة", "الجميلية",
+            "حلب", "حلب", "مركز حلب", "حلب المدينة", bldg_neigh_name,
         ),
     )
 
@@ -286,53 +318,99 @@ def _insert_data(conn, ids, collector_user_id, now_utc, scenario="valid"):
         (ids["unit2"], ids["building"], "شقة 2", 1, 1, 2, 3, 110.0, "شقة في الطابق الأول"),
     )
 
-    # Persons
-    conn.execute(
-        "INSERT INTO persons VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-        (
-            ids["person1"], "العلي", "أحمد", "محمد", "فاطمة",
-            "01234567890", 1978, None, "+963-944-123456", None,
-            1, 1, ids["household1"], 1, 1,
-        ),
-    )
-    conn.execute(
-        "INSERT INTO persons VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-        (
-            ids["person2"], "الحسن", "فاطمة", "علي", "زينب",
-            "01234567891", 1982, None, "+963-944-123457", None,
-            2, 1, ids["household1"], 2, 0,
-        ),
-    )
-    conn.execute(
-        "INSERT INTO persons VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-        (
-            ids["person3"], "الخالد", "عمر", "خالد", "سعاد",
-            "09876543210", 1985, None, "+963-944-654321", None,
-            1, 1, ids["household2"], 1, 0,
-        ),
-    )
-    conn.execute(
-        "INSERT INTO persons VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-        (
-            ids["person4"], "الرشيد", "مريم", "رشيد", "هدى",
-            None, 1988, None, "+963-944-654322", None,
-            2, 1, ids["household2"], 2, 0,
-        ),
-    )
+    # Persons — different names per scenario to control duplicate detection
+    if scenario == "clean":
+        persons = [
+            (ids["person1"], "الصالح", "يوسف", "إبراهيم", "نورة",
+             "05551112233", 1975, None, "+963-933-111222", None,
+             1, 1, ids["household1"], 1, 1),
+            (ids["person2"], "المصري", "ليلى", "حسين", "رنا",
+             "05551112234", 1980, None, "+963-933-111223", None,
+             2, 1, ids["household1"], 2, 0),
+            (ids["person3"], "الناصر", "سامر", "ناصر", "عبير",
+             "05551112235", 1983, None, "+963-933-111224", None,
+             1, 1, ids["household2"], 1, 0),
+            (ids["person4"], "الحمد", "دانا", "سعيد", "منال",
+             "05551112236", 1990, None, "+963-933-111225", None,
+             2, 1, ids["household2"], 2, 0),
+        ]
+    elif scenario == "property_dup":
+        persons = [
+            (ids["person1"], "الجاسم", "طارق", "جاسم", "هناء",
+             "07771234567", 1976, None, "+963-955-777888", None,
+             1, 1, ids["household1"], 1, 1),
+            (ids["person2"], "القادري", "سمر", "قادر", "أمل",
+             "07771234568", 1981, None, "+963-955-777889", None,
+             2, 1, ids["household1"], 2, 0),
+            (ids["person3"], "الشامي", "باسل", "شامي", "رغد",
+             "07771234569", 1984, None, "+963-955-777890", None,
+             1, 1, ids["household2"], 1, 0),
+            (ids["person4"], "العمري", "هالة", "عمر", "سحر",
+             "07771234570", 1987, None, "+963-955-777891", None,
+             2, 1, ids["household2"], 2, 0),
+        ]
+    elif scenario == "property_dup_merge":
+        persons = [
+            (ids["person1"], "الموسى", "خالد", "موسى", "نجلاء",
+             "08881234567", 1972, None, "+963-966-888999", None,
+             1, 1, ids["household1"], 1, 1),
+            (ids["person2"], "الزهراء", "رنا", "زاهر", "حياة",
+             "08881234568", 1979, None, "+963-966-888990", None,
+             2, 1, ids["household1"], 2, 0),
+            (ids["person3"], "الطيب", "ماهر", "طيب", "وفاء",
+             "08881234569", 1986, None, "+963-966-888991", None,
+             1, 1, ids["household2"], 1, 0),
+            (ids["person4"], "البكري", "سلمى", "بكر", "جميلة",
+             "08881234570", 1991, None, "+963-966-888992", None,
+             2, 1, ids["household2"], 2, 0),
+        ]
+    else:
+        persons = [
+            (ids["person1"], "العلي", "أحمد", "محمد", "فاطمة",
+             "01234567890", 1978, None, "+963-944-123456", None,
+             1, 1, ids["household1"], 1, 1),
+            (ids["person2"], "الحسن", "فاطمة", "علي", "زينب",
+             "01234567891", 1982, None, "+963-944-123457", None,
+             2, 1, ids["household1"], 2, 0),
+            (ids["person3"], "الخالد", "عمر", "خالد", "سعاد",
+             "09876543210", 1985, None, "+963-944-654321", None,
+             1, 1, ids["household2"], 1, 0),
+            (ids["person4"], "الرشيد", "مريم", "رشيد", "هدى",
+             None, 1988, None, "+963-944-654322", None,
+             2, 1, ids["household2"], 2, 0),
+        ]
+
+    for p in persons:
+        conn.execute(
+            "INSERT INTO persons VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)", p
+        )
 
     # Households
+    if scenario == "clean":
+        hh1_name, hh2_name = "يوسف إبراهيم الصالح", "سامر ناصر الناصر"
+        hh1_notes, hh2_notes = "عائلة مقيمة منذ 2010", "عائلة نازحة من إدلب منذ 2018"
+    elif scenario == "property_dup":
+        hh1_name, hh2_name = "طارق جاسم الجاسم", "باسل شامي الشامي"
+        hh1_notes, hh2_notes = "عائلة مستأجرة منذ 2019", "عائلة مالكة منذ 2008"
+    elif scenario == "property_dup_merge":
+        hh1_name, hh2_name = "خالد موسى الموسى", "ماهر طيب الطيب"
+        hh1_notes, hh2_notes = "عائلة مقيمة منذ 2012", "عائلة نازحة من حمص منذ 2015"
+    else:
+        hh1_name, hh2_name = "أحمد محمد العلي", "عمر خالد الخالد"
+        hh1_notes, hh2_notes = "عائلة مقيمة منذ 2005", "عائلة نازحة من الرقة منذ 2016"
+
     conn.execute(
         "INSERT INTO households VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
         (
-            ids["household1"], ids["unit1"], "أحمد محمد العلي", 4, ids["person1"],
-            1, 1, 1, 1, 0, 0, 0, 0, "عائلة مقيمة منذ 2005",
+            ids["household1"], ids["unit1"], hh1_name, 4, ids["person1"],
+            1, 1, 1, 1, 0, 0, 0, 0, hh1_notes,
         ),
     )
     conn.execute(
         "INSERT INTO households VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
         (
-            ids["household2"], ids["unit2"], "عمر خالد الخالد", 3, ids["person3"],
-            1, 1, 1, 0, 0, 0, 0, 0, "عائلة نازحة من الرقة منذ 2016",
+            ids["household2"], ids["unit2"], hh2_name, 3, ids["person3"],
+            1, 1, 1, 0, 0, 0, 0, 0, hh2_notes,
         ),
     )
 
@@ -405,7 +483,11 @@ def generate_package(scenario="valid", output_dir=None):
     collector_user_id = "00000000-0000-0000-0000-000000000000"
     now_utc = datetime.now(timezone.utc)
 
-    suffix = {"valid": "valid", "invalid": "invalid", "quarantine": "quarantine"}
+    suffix = {
+        "valid": "valid", "invalid": "invalid", "quarantine": "quarantine",
+        "clean": "clean", "property_dup": "property-dup",
+        "property_dup_merge": "property-dup-merge",
+    }
     filename = f"test-package-{suffix.get(scenario, scenario)}.uhc"
 
     if output_dir is None:
@@ -442,7 +524,7 @@ def main():
     parser = argparse.ArgumentParser(description="Generate TRRCMS test .uhc packages")
     parser.add_argument(
         "--scenario",
-        choices=["valid", "invalid", "quarantine", "all"],
+        choices=["valid", "invalid", "quarantine", "clean", "property_dup", "property_dup_merge", "all"],
         default="valid",
         help="Test scenario (default: valid)",
     )
@@ -450,11 +532,22 @@ def main():
 
     print("=== TRRCMS Test .uhc Package Generator (Python) ===\n")
 
-    scenarios = ["valid", "invalid", "quarantine"] if args.scenario == "all" else [args.scenario]
+    if args.scenario == "all":
+        scenarios = ["valid", "invalid", "quarantine", "clean", "property_dup", "property_dup_merge"]
+    else:
+        scenarios = [args.scenario]
+
+    label = {
+        "valid": "Happy Path",
+        "invalid": "Validation Failed",
+        "quarantine": "Quarantine",
+        "clean": "Clean (No Conflicts)",
+        "property_dup": "Property Duplicates (Keep Separate)",
+        "property_dup_merge": "Property Duplicates (Merge)",
+    }
 
     for sc in scenarios:
         info = generate_package(scenario=sc)
-        label = {"valid": "Happy Path", "invalid": "Validation Failed", "quarantine": "Quarantine"}
         print(f"--- {label.get(sc, sc)} ---")
         print(f"  File:      {info['path']}")
         print(f"  Size:      {info['size']:,} bytes ({info['size'] / 1024:.1f} KB)")

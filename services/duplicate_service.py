@@ -139,6 +139,11 @@ class DuplicateService:
             logger.error(f"Failed to get document comparison: {e}")
             return {}
 
+    def get_person_data(self, person_id: str) -> Optional[Dict[str, Any]]:
+        """Fetch person record by ID for comparison display."""
+        api = self._get_api()
+        return api.get_person_by_id(person_id)
+
     # ========== Resolution Actions ==========
 
     def merge_conflict(

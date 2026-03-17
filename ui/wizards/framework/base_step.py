@@ -159,6 +159,15 @@ class BaseStep(QWidget, metaclass=ABCQWidgetMeta):
         """
         pass
 
+    def reset(self):
+        """
+        Reset step UI to a clean state for a new wizard session.
+
+        Override in subclasses to clear all form fields, error labels,
+        and internal state. Called by StepNavigator.reset().
+        """
+        pass
+
     def get_step_title(self) -> str:
         """
         Get the step's title.

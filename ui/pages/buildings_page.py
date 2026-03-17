@@ -2445,6 +2445,7 @@ class BuildingsListPage(QWidget):
         self.table.setColumnCount(7)
         self.table.setRowCount(11)  # Fixed 11 rows
         self.table.setLayoutDirection(Qt.RightToLeft)
+        self.table.setEditTriggers(QAbstractItemView.NoEditTriggers)
 
         # Get down.png icon path
         from pathlib import Path

@@ -9,9 +9,11 @@ Data: refresh() receives SurveyContext from API via main_window navigation.
 
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel,
-    QPushButton, QSpacerItem, QSizePolicy
+    QPushButton, QSpacerItem, QSizePolicy,
+    QDialog, QTextEdit, QGraphicsDropShadowEffect
 )
 from PyQt5.QtCore import Qt, pyqtSignal
+from PyQt5.QtGui import QFont, QColor
 
 from ui.wizards.office_survey.steps.review_step import ReviewStep
 from ui.wizards.office_survey.survey_context import SurveyContext
@@ -30,6 +32,7 @@ class CaseDetailsPage(QWidget):
 
     back_requested = pyqtSignal()
     resume_requested = pyqtSignal(str)  # survey_id
+    cancel_requested = pyqtSignal(str, str)  # survey_id, reason
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -112,6 +115,28 @@ class CaseDetailsPage(QWidget):
         self._resume_btn.clicked.connect(self._on_resume_clicked)
         layout.addWidget(self._resume_btn)
 
+        # Cancel survey button (draft only)
+        self._cancel_btn = QPushButton("إلغاء المسح")
+        self._cancel_btn.setFixedSize(140, 40)
+        self._cancel_btn.setCursor(Qt.PointingHandCursor)
+        self._cancel_btn.setVisible(False)
+        self._cancel_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #FEE2E2;
+                color: #DC2626;
+                border: 1px solid #FECACA;
+                border-radius: 8px;
+                font-size: 13px;
+                font-weight: 600;
+            }
+            QPushButton:hover {
+                background-color: #FECACA;
+                border-color: #F87171;
+            }
+        """)
+        self._cancel_btn.clicked.connect(self._on_cancel_clicked)
+        layout.addWidget(self._cancel_btn)
+
         # Back button
         self._back_btn = QPushButton("رجوع")
         self._back_btn.setFixedSize(100, 40)
@@ -153,13 +178,189 @@ class CaseDetailsPage(QWidget):
         else:
             logger.warning("No survey_id in context for resume")
 
+    def _on_cancel_clicked(self):
+        survey_id = None
+        if self._context:
+            survey_id = self._context.get_data("survey_id")
+            if not survey_id:
+                survey_id = getattr(self._context, 'wizard_id', None)
+        if not survey_id:
+            logger.warning("No survey_id in context for cancel")
+            return
+
+        dialog = QDialog(self)
+        dialog.setWindowTitle("إلغاء المسح")
+        dialog.setModal(True)
+        dialog.setFixedWidth(400)
+        dialog.setWindowFlags(Qt.FramelessWindowHint | Qt.Dialog)
+        dialog.setAttribute(Qt.WA_TranslucentBackground)
+
+        # Outer layout with margin for shadow rendering
+        outer_layout = QVBoxLayout(dialog)
+        outer_layout.setContentsMargins(24, 24, 24, 24)
+
+        # White container card
+        container = QWidget()
+        container.setObjectName("cancelDialogContainer")
+        container.setStyleSheet("""
+            QWidget#cancelDialogContainer {
+                background-color: white;
+                border-radius: 12px;
+                border: 1px solid #E5E7EB;
+            }
+            QWidget#cancelDialogContainer QLabel {
+                border: none;
+                background: transparent;
+            }
+        """)
+
+        # Shadow on container
+        shadow = QGraphicsDropShadowEffect()
+        shadow.setBlurRadius(30)
+        shadow.setXOffset(0)
+        shadow.setYOffset(6)
+        shadow.setColor(QColor(0, 0, 0, 80))
+        container.setGraphicsEffect(shadow)
+
+        outer_layout.addWidget(container)
+
+        # Card content layout
+        card_layout = QVBoxLayout(container)
+        card_layout.setContentsMargins(24, 24, 24, 24)
+        card_layout.setSpacing(0)
+
+        # Icon (red circle with X)
+        icon_widget = QWidget()
+        icon_widget.setFixedSize(48, 48)
+        icon_widget.setStyleSheet("""
+            QWidget {
+                background-color: #FFE7E7;
+                border-radius: 24px;
+            }
+        """)
+        icon_inner = QVBoxLayout(icon_widget)
+        icon_inner.setContentsMargins(0, 0, 0, 0)
+        icon_inner.setAlignment(Qt.AlignCenter)
+        icon_label = QLabel("✕")
+        icon_label.setAlignment(Qt.AlignCenter)
+        icon_label.setStyleSheet("color: #E53935; font-size: 24pt; font-weight: bold; background: transparent;")
+        icon_inner.addWidget(icon_label)
+
+        icon_row = QHBoxLayout()
+        icon_row.addStretch()
+        icon_row.addWidget(icon_widget)
+        icon_row.addStretch()
+        card_layout.addLayout(icon_row)
+
+        card_layout.addSpacing(16)
+
+        # Title
+        title_label = QLabel("إلغاء المسح")
+        title_label.setFont(create_font(size=16, weight=QFont.Bold))
+        title_label.setStyleSheet("color: #1A1A1A;")
+        title_label.setAlignment(Qt.AlignCenter)
+        card_layout.addWidget(title_label)
+
+        card_layout.addSpacing(8)
+
+        # Subtitle
+        subtitle = QLabel("هل أنت متأكد من إلغاء هذا المسح؟\nيرجى إدخال سبب الإلغاء أدناه.")
+        subtitle.setFont(create_font(size=10, weight=QFont.Normal))
+        subtitle.setStyleSheet(f"color: {Colors.TEXT_SECONDARY};")
+        subtitle.setAlignment(Qt.AlignCenter)
+        subtitle.setWordWrap(True)
+        card_layout.addWidget(subtitle)
+
+        card_layout.addSpacing(16)
+
+        # Reason text edit
+        reason_edit = QTextEdit()
+        reason_edit.setPlaceholderText("أدخل سبب الإلغاء هنا...")
+        reason_edit.setFixedHeight(80)
+        reason_edit.setFont(create_font(size=10, weight=QFont.Normal))
+        reason_edit.setStyleSheet("""
+            QTextEdit {
+                border: 1px solid #E5E7EB;
+                border-radius: 8px;
+                padding: 8px;
+                background-color: #F9FAFB;
+                color: #1A1A1A;
+            }
+            QTextEdit:focus { border-color: #E53935; }
+        """)
+        card_layout.addWidget(reason_edit)
+
+        card_layout.addSpacing(24)
+
+        # Buttons row
+        btn_layout = QHBoxLayout()
+        btn_layout.setSpacing(12)
+        btn_layout.addStretch()
+
+        # Secondary: dismiss
+        dismiss_btn = QPushButton("تراجع")
+        dismiss_btn.setFixedSize(150, 48)
+        dismiss_btn.setCursor(Qt.PointingHandCursor)
+        dismiss_btn.setFont(create_font(size=10, weight=QFont.Medium))
+        dismiss_btn.setStyleSheet("""
+            QPushButton {
+                background-color: white;
+                color: #6B7280;
+                border: none;
+                border-radius: 8px;
+                font-weight: 500;
+            }
+            QPushButton:hover { background-color: #F9FAFB; }
+            QPushButton:pressed { background-color: #F3F4F6; }
+        """)
+        dismiss_shadow = QGraphicsDropShadowEffect()
+        dismiss_shadow.setBlurRadius(8)
+        dismiss_shadow.setXOffset(0)
+        dismiss_shadow.setYOffset(2)
+        dismiss_shadow.setColor(QColor(0, 0, 0, 25))
+        dismiss_btn.setGraphicsEffect(dismiss_shadow)
+        dismiss_btn.clicked.connect(dialog.reject)
+
+        # Primary: confirm cancel (red)
+        confirm_btn = QPushButton("تأكيد الإلغاء")
+        confirm_btn.setFixedSize(150, 48)
+        confirm_btn.setCursor(Qt.PointingHandCursor)
+        confirm_btn.setFont(create_font(size=10, weight=QFont.Medium))
+        confirm_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #E53935;
+                color: white;
+                border: none;
+                border-radius: 8px;
+                font-weight: 500;
+            }
+            QPushButton:hover { background-color: #EF5350; }
+            QPushButton:pressed { background-color: #C62828; }
+        """)
+        confirm_btn.clicked.connect(dialog.accept)
+
+        btn_layout.addWidget(dismiss_btn)
+        btn_layout.addWidget(confirm_btn)
+        btn_layout.addStretch()
+        card_layout.addLayout(btn_layout)
+
+        if dialog.exec_() == QDialog.Accepted:
+            reason = reason_edit.toPlainText().strip()
+            if not reason:
+                from ui.components.toast import Toast
+                Toast.show_toast(self, "يجب إدخال سبب الإلغاء", Toast.WARNING)
+                return
+            logger.info(f"Cancel requested for survey: {survey_id}")
+            self.cancel_requested.emit(survey_id, reason)
+
     def _update_button_visibility(self):
-        """Show resume button only for draft surveys."""
+        """Show resume/cancel buttons only for draft surveys."""
         status = ""
         if self._context:
             status = getattr(self._context, 'status', '') or self._context.get_data("status") or ""
         is_draft = str(status).lower() in ("draft", "1")
         self._resume_btn.setVisible(is_draft)
+        self._cancel_btn.setVisible(is_draft)
 
     def refresh(self, survey_data=None):
         """Called by main_window.navigate_to() — loads survey data into ReviewStep."""

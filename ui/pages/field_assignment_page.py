@@ -538,6 +538,7 @@ class FieldAssignmentPage(QWidget):
 
         self.recent_table = QTableWidget()
         self.recent_table.setColumnCount(4)
+        self.recent_table.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self.recent_table.setHorizontalHeaderLabels(["المبنى", "الفريق", "الحالة", "النقل"])
         self.recent_table.horizontalHeader().setStretchLastSection(True)
         self.recent_table.setSelectionBehavior(QTableWidget.SelectRows)

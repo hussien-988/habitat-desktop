@@ -200,7 +200,9 @@ class StepNavigator(QObject):
         return True
 
     def reset(self):
-        """Reset navigator to first step."""
+        """Reset navigator and all steps to clean state."""
+        for step in self.steps:
+            step.reset()
         self._navigate_to(0)
 
     def get_progress_percentage(self) -> float:

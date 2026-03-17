@@ -16,7 +16,7 @@ from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QTableWidget, QTableWidgetItem, QComboBox, QLineEdit,
     QGroupBox, QFormLayout, QHeaderView, QDialog, QFileDialog,
-    QDialogButtonBox, QCheckBox, QSpinBox
+    QDialogButtonBox, QCheckBox, QSpinBox, QAbstractItemView
 )
 from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtGui import QColor
@@ -239,6 +239,7 @@ class VocabularyManagementPage(QWidget):
         # Terms table
         self.terms_table = QTableWidget()
         self.terms_table.setColumnCount(5)
+        self.terms_table.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self.terms_table.setHorizontalHeaderLabels([
             self.i18n.t("code"),
             self.i18n.t("label_ar"),

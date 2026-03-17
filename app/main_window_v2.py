@@ -325,6 +325,14 @@ class MainWindow(QMainWindow):
         )
         self.stack.addWidget(self.pages[Pages.IMPORT_WIZARD])
 
+        # Import <-> Duplicates navigation signals
+        self.pages[Pages.IMPORT_WIZARD].navigate_to_duplicates.connect(
+            self._on_import_navigate_to_duplicates
+        )
+        self.pages[Pages.DUPLICATES].return_to_import.connect(
+            self._on_duplicates_return_to_import
+        )
+
         # Import Packages list page
         from ui.pages.import_packages_page import ImportPackagesPage
         self.pages[Pages.IMPORT_PACKAGES] = ImportPackagesPage(self.db, self.i18n, self)
@@ -448,6 +456,11 @@ class MainWindow(QMainWindow):
         # Resume draft survey from CaseDetailsPage
         self.pages[Pages.CASE_DETAILS].resume_requested.connect(
             self._on_resume_draft_survey
+        )
+
+        # Cancel draft survey from CaseDetailsPage
+        self.pages[Pages.CASE_DETAILS].cancel_requested.connect(
+            self._on_cancel_draft_survey
         )
 
         # Claim Details page signals
@@ -858,6 +871,26 @@ class MainWindow(QMainWindow):
         """Handle import data request from navbar menu."""
         self.navigate_to(Pages.IMPORT_PACKAGES)
 
+    def _on_import_navigate_to_duplicates(self):
+        """Navigate from import wizard to duplicates page with return banner."""
+        dup_page = self.pages.get(Pages.DUPLICATES)
+        if dup_page:
+            dup_page.set_return_to_import(True)
+            dup_page.refresh()
+            self.navbar.set_current_tab(3)
+            self.stack.setCurrentWidget(dup_page)
+
+    def _on_duplicates_return_to_import(self):
+        """Return from duplicates page to import wizard without resetting."""
+        dup_page = self.pages.get(Pages.DUPLICATES)
+        if dup_page:
+            dup_page.set_return_to_import(False)
+        import_page = self.pages.get(Pages.IMPORT_WIZARD)
+        if import_page:
+            self.navbar.set_current_tab(2)
+            self.stack.setCurrentWidget(import_page)
+            import_page.refresh_from_duplicates()
+
     def _on_sync_requested(self):
         """Handle sync data request from navbar menu."""
         self.navbar.hide_sync_notification()
@@ -1121,21 +1154,38 @@ class MainWindow(QMainWindow):
                 logger.warning(f"Could not load draft context for: {survey_uuid}")
                 return
 
-            new_context = self.office_survey_wizard.create_context()
-            new_context.from_dict(result.data)
+            from ui.wizards.office_survey.survey_context import SurveyContext
+            new_context = SurveyContext.from_dict(result.data)
 
             self.office_survey_wizard.context = new_context
             for step in self.office_survey_wizard.steps:
                 step.context = new_context
             self.office_survey_wizard.navigator.context = new_context
-            self.office_survey_wizard.navigator.reset()
             self.office_survey_wizard._finalization_complete = False
 
             if hasattr(self, '_api_token') and self._api_token:
                 self.office_survey_wizard.set_auth_token(self._api_token)
 
-            self.navigate_to(Pages.OFFICE_SURVEY_WIZARD)
-            logger.info(f"Draft survey {survey_uuid} loaded into wizard for resumption")
+            # Determine the furthest step with data (resume from where user stopped)
+            resume_step = 0
+            if new_context.building:
+                resume_step = 1
+            if new_context.applicant:
+                resume_step = 2
+            if new_context.unit:
+                resume_step = 3
+            if new_context.households:
+                resume_step = 4
+            if new_context.persons:
+                resume_step = 4
+            if new_context.claim_data:
+                resume_step = 5  # review step
+
+            # Navigate directly to resume step (skip validation, don't reset)
+            self.office_survey_wizard.navigator.goto_step(resume_step, skip_validation=True)
+
+            self.navigate_to("office_survey_wizard")
+            logger.info(f"Draft survey {survey_uuid} resumed at step {resume_step}")
         except Exception as e:
             logger.error(f"Failed to resume draft {survey_uuid}: {e}")
 
@@ -1258,6 +1308,23 @@ class MainWindow(QMainWindow):
         logger.info("Survey cancelled")
         self.navbar.set_current_tab(1)
         self._on_tab_changed(1)
+
+    def _on_cancel_draft_survey(self, survey_id: str, reason: str):
+        """Cancel a draft survey via API."""
+        from ui.components.toast import Toast
+        try:
+            from services.api_client import get_api_client
+            api = get_api_client()
+            if self._api_token:
+                api.set_access_token(self._api_token)
+            api.cancel_survey(survey_id, reason)
+            Toast.show_toast(self, "تم إلغاء المسح بنجاح", Toast.SUCCESS)
+            self.navigate_to(Pages.CASES)
+            if Pages.CASES in self.pages and hasattr(self.pages[Pages.CASES], 'refresh'):
+                self.pages[Pages.CASES].refresh()
+        except Exception as e:
+            logger.error(f"Failed to cancel survey {survey_id}: {e}", exc_info=True)
+            Toast.show_toast(self, f"فشل إلغاء المسح: {e}", Toast.ERROR)
 
     def _on_survey_saved_draft(self, survey_id: str):
         """Handle survey saved as draft."""

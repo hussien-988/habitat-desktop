@@ -153,10 +153,13 @@ class OfficeSurveyWizard(BaseWizard):
                 claim_number = (
                     finalize_resp.get("claimNumber")
                     or finalize_resp.get("claimId")
-                    or self.context.reference_number
-                    or self.context.get_data("survey_id")
                     or ""
                 )
+                # Fallback: fetch claim number from claims API
+                if not claim_number:
+                    claim_number = self._fetch_claim_number_from_api()
+                if not claim_number:
+                    claim_number = self.context.reference_number or ""
                 SuccessPopup.show_success(
                     claim_number=claim_number,
                     title=tr("wizard.success.title"),
@@ -216,6 +219,25 @@ class OfficeSurveyWizard(BaseWizard):
                 tr("common.error")
             )
             return False
+
+    def _fetch_claim_number_from_api(self) -> str:
+        """Fetch claim number from claims summaries API as fallback."""
+        try:
+            survey_id = self.context.get_data("survey_id")
+            if not survey_id:
+                return ""
+            from services.api_client import get_api_client
+            api = get_api_client()
+            main_window = self.window()
+            if main_window and hasattr(main_window, '_api_token'):
+                api.set_token(main_window._api_token)
+            response = api.get_claims_summaries(survey_visit_id=survey_id)
+            items = response if isinstance(response, list) else response.get("items", [])
+            if items:
+                return items[0].get("claimNumber", "")
+        except Exception as e:
+            logger.warning(f"Could not fetch claim number from API: {e}")
+        return ""
 
     def on_cancel(self) -> bool:
         """Handle wizard cancellation."""

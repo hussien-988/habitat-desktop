@@ -2400,7 +2400,10 @@ class PersonDialog(QDialog):
                 'evidence_type': self.evidence_type.currentData() if self.evidence_type.currentIndex() > 0 else None,
                 'evidence_desc': self.evidence_desc.text().strip() or None,
                 'notes': self.notes.toPlainText().strip() or None,
-                'has_documents': self.rb_has_docs.isChecked(),
+                'has_documents': bool(self.relation_uploaded_files) or (
+                    any(cb.isChecked() for cb in self._existing_docs_checkboxes)
+                    if self._existing_docs_checkboxes else False
+                ),
             },
             # Document files (internal, for same-session persistence)
             '_uploaded_files': list(self.uploaded_files),
@@ -2520,6 +2523,22 @@ class PersonDialog(QDialog):
                     has_error = True
             except ValueError:
                 pass
+
+        # Documents: required for Owner (rel_type=1)
+        if is_owner:
+            has_uploaded = bool(self.relation_uploaded_files)
+            has_selected_existing = any(
+                cb.isChecked() for cb in self._existing_docs_checkboxes
+            ) if self._existing_docs_checkboxes else False
+            if not has_uploaded and not has_selected_existing:
+                from ui.error_handler import ErrorHandler as _EH
+                _EH.show_error(
+                    self,
+                    "يجب إرفاق وثائق الملكية عند اختيار نوع الادعاء كمالك",
+                    tr("common.error"))
+                if not has_error:
+                    self.tab_widget.setCurrentIndex(2)
+                has_error = True
 
         if has_error:
             return
