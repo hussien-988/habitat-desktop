@@ -46,9 +46,9 @@ def setup_logger() -> logging.Logger:
     file_handler.setFormatter(file_formatter)
     logger.addHandler(file_handler)
 
-    # Console handler (INFO and above)
+    # Console handler (WARNING and above — reduces terminal noise)
     console_handler = logging.StreamHandler(sys.stdout)
-    console_handler.setLevel(logging.INFO)
+    console_handler.setLevel(logging.WARNING)
     console_formatter = logging.Formatter(
         "%(levelname)-8s | %(message)s"
     )

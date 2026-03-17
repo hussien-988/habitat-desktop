@@ -175,7 +175,7 @@ class ImportWizardPage(QWidget):
     def _create_step_indicator(self) -> QFrame:
         """Create step progress indicator bar."""
         container = QFrame()
-        container.setFixedHeight(64)
+        container.setFixedHeight(80)
         container.setStyleSheet("""
             QFrame {
                 background-color: #FFFFFF;
@@ -208,7 +208,7 @@ class ImportWizardPage(QWidget):
 
             # Circle + label vertical group
             step_group = QVBoxLayout()
-            step_group.setSpacing(2)
+            step_group.setSpacing(6)
             step_group.setAlignment(Qt.AlignCenter)
             step_group.addWidget(circle, 0, Qt.AlignCenter)
             step_group.addWidget(name_label, 0, Qt.AlignCenter)
@@ -230,7 +230,7 @@ class ImportWizardPage(QWidget):
                 line_container = QWidget()
                 line_container.setStyleSheet("background: transparent; border: none;")
                 line_layout = QVBoxLayout(line_container)
-                line_layout.setContentsMargins(0, 12, 0, 18)
+                line_layout.setContentsMargins(0, 16, 0, 26)
                 line_layout.addWidget(line)
 
                 layout.addWidget(line_container, 1)
@@ -562,6 +562,7 @@ class ImportWizardPage(QWidget):
         )
         self.step1.package_selected.connect(self._on_package_selected)
         self.step1.upload_completed.connect(self._on_upload_completed)
+        self.step1.back_requested.connect(self.cancelled.emit)
         self.step_container.addWidget(self.step1)
 
         # Steps 2-5: created lazily when needed

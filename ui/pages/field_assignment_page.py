@@ -324,6 +324,9 @@ class FieldAssignmentPage(QWidget):
         splitter.setSizes([600, 400])
         layout.addWidget(splitter)
 
+        from ui.components.loading_spinner import LoadingSpinnerOverlay
+        self._spinner = LoadingSpinnerOverlay(self)
+
     def _create_building_selection_widget(self) -> QWidget:
         """Create building search and selection panel (UC-012 S01-S03)."""
         widget = QGroupBox("اختيار المباني")
@@ -575,31 +578,35 @@ class FieldAssignmentPage(QWidget):
 
     def _load_buildings(self):
         """Load buildings based on current filters."""
-        neighborhood = self.neighborhood_combo.currentData()
-        search_text = self.search_edit.text().strip()
+        self._spinner.show_loading("جاري تحميل المباني...")
+        try:
+            neighborhood = self.neighborhood_combo.currentData()
+            search_text = self.search_edit.text().strip()
 
-        buildings = self.building_repo.search(
-            neighborhood_code=neighborhood,
-            search_text=search_text if search_text else None,
-            limit=200
-        )
+            buildings = self.building_repo.search(
+                neighborhood_code=neighborhood,
+                search_text=search_text if search_text else None,
+                limit=200
+            )
 
-        # Filter by assignment status if selected
-        status_filter = self.status_combo.currentData()
-        if status_filter:
-            filtered = []
-            for building in buildings:
-                assignment = self.assignment_service.get_assignment_for_building(building.building_id)
-                if status_filter == "unassigned" and not assignment:
-                    filtered.append(building)
-                elif status_filter == "assigned" and assignment and assignment.transfer_status != "transferred":
-                    filtered.append(building)
-                elif status_filter == "transferred" and assignment and assignment.transfer_status == "transferred":
-                    filtered.append(building)
-            buildings = filtered
+            # Filter by assignment status if selected
+            status_filter = self.status_combo.currentData()
+            if status_filter:
+                filtered = []
+                for building in buildings:
+                    assignment = self.assignment_service.get_assignment_for_building(building.building_id)
+                    if status_filter == "unassigned" and not assignment:
+                        filtered.append(building)
+                    elif status_filter == "assigned" and assignment and assignment.transfer_status != "transferred":
+                        filtered.append(building)
+                    elif status_filter == "transferred" and assignment and assignment.transfer_status == "transferred":
+                        filtered.append(building)
+                buildings = filtered
 
-        self.buildings_model.set_buildings(buildings)
-        self.building_count_label.setText(f"{len(buildings)} مبنى")
+            self.buildings_model.set_buildings(buildings)
+            self.building_count_label.setText(f"{len(buildings)} مبنى")
+        finally:
+            self._spinner.hide_loading()
 
     def _on_building_double_click(self, index):
         """Add double-clicked building to queue."""

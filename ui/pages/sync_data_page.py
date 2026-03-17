@@ -180,6 +180,9 @@ class SyncDataPage(QWidget):
         scroll.setWidget(scroll_content)
         main_layout.addWidget(scroll)
 
+        from ui.components.loading_spinner import LoadingSpinnerOverlay
+        self._spinner = LoadingSpinnerOverlay(self)
+
     def _create_header(self) -> QWidget:
         header = QWidget()
         header.setStyleSheet("background: transparent;")
@@ -398,36 +401,38 @@ class SyncDataPage(QWidget):
 
     def _load_assignments(self):
         """Full rebuild of all accordion items."""
-        self._clear_rows()
-
+        self._spinner.show_loading("جاري تحميل البيانات...")
         try:
-            items = self._get_filtered_items()
-            self._current_items = items
+            self._clear_rows()
 
-            if not items:
-                self._empty_label.setText("لا توجد تعيينات")
+            try:
+                items = self._get_filtered_items()
+                self._current_items = items
+
+                if not items:
+                    self._empty_label.setText("لا توجد تعيينات")
+                    self._empty_label.show()
+                    return
+
+                self._empty_label.hide()
+                for assignment in items:
+                    aid = self._get_assignment_id(assignment)
+                    status_str = self._normalize_status(assignment)
+
+                    accordion = self._create_accordion_item(assignment)
+                    self._rows_container.addWidget(accordion)
+
+                    self._previous_statuses[aid] = status_str
+
+                    if status_str in _SYNCING_STATUSES:
+                        self._add_sync_overlay(aid)
+
+            except Exception as e:
+                logger.warning(f"Failed to load assignments: {e}")
+                self._empty_label.setText("فشل تحميل التعيينات")
                 self._empty_label.show()
-                return
-
-            self._empty_label.hide()
-            for assignment in items:
-                aid = self._get_assignment_id(assignment)
-                status_str = self._normalize_status(assignment)
-
-                accordion = self._create_accordion_item(assignment)
-                self._rows_container.addWidget(accordion)
-
-                # Track status for change detection
-                self._previous_statuses[aid] = status_str
-
-                # Add sync overlay if syncing
-                if status_str in _SYNCING_STATUSES:
-                    self._add_sync_overlay(aid)
-
-        except Exception as e:
-            logger.warning(f"Failed to load assignments: {e}")
-            self._empty_label.setText("فشل تحميل التعيينات")
-            self._empty_label.show()
+        finally:
+            self._spinner.hide_loading()
 
     # ------------------------------------------------------------------
     # Smart Refresh (polling every 10s)
@@ -1059,7 +1064,6 @@ class SyncDataPage(QWidget):
 
     def showEvent(self, event):
         super().showEvent(event)
-        self.refresh()
         self._refresh_timer.start(10000)
 
     def hideEvent(self, event):

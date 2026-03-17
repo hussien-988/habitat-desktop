@@ -750,6 +750,9 @@ class PersonsPage(QWidget):
         table_layout.addWidget(self.table)
         layout.addWidget(table_frame)
 
+        from ui.components.loading_spinner import LoadingSpinnerOverlay
+        self._spinner = LoadingSpinnerOverlay(self)
+
     def refresh(self, data=None):
         """Refresh the persons list."""
         logger.debug("Refreshing persons page")
@@ -764,29 +767,32 @@ class PersonsPage(QWidget):
 
     def _load_persons(self):
         """Load persons with filters."""
-        name = self.name_search.text().strip()
-        nid = self.nid_search.text().strip()
-        gender = self.gender_combo.currentData()
+        self._spinner.show_loading("جاري تحميل الأشخاص...")
+        try:
+            name = self.name_search.text().strip()
+            nid = self.nid_search.text().strip()
+            gender = self.gender_combo.currentData()
 
-        # Create filter and use controller
-        filter_ = PersonFilter(
-            full_name=name or None,
-            national_id=nid or None,
-            gender=gender or None,
-            limit=500
-        )
+            filter_ = PersonFilter(
+                full_name=name or None,
+                national_id=nid or None,
+                gender=gender or None,
+                limit=500
+            )
 
-        result = self.person_controller.load_persons(filter_)
+            result = self.person_controller.load_persons(filter_)
 
-        if result.success:
-            persons = result.data
-            self.table_model.set_persons(persons)
-            self.count_label.setText(f"تم العثور على {len(persons)} شخص")
-        else:
-            logger.error(f"Failed to load persons: {result.message}")
-            Toast.show_toast(self, f"فشل في تحميل الأشخاص: {result.message}", Toast.ERROR)
-            self.table_model.set_persons([])
-            self.count_label.setText("تم العثور على 0 شخص")
+            if result.success:
+                persons = result.data
+                self.table_model.set_persons(persons)
+                self.count_label.setText(f"تم العثور على {len(persons)} شخص")
+            else:
+                logger.error(f"Failed to load persons: {result.message}")
+                Toast.show_toast(self, f"فشل في تحميل الأشخاص: {result.message}", Toast.ERROR)
+                self.table_model.set_persons([])
+                self.count_label.setText("تم العثور على 0 شخص")
+        finally:
+            self._spinner.hide_loading()
 
     def _on_filter_changed(self):
         self._load_persons()

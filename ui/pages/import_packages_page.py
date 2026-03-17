@@ -670,10 +670,6 @@ class ImportPackagesListPage(QWidget):
         self.upload_btn.setVisible(can_upload)
         self.upload_btn.setEnabled(can_upload)
 
-    def showEvent(self, event):
-        super().showEvent(event)
-        self.refresh()
-
 
 class ImportPackagesPage(QWidget):
     """Main container with QStackedWidget for import packages."""

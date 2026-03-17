@@ -110,11 +110,8 @@ class DraftClaimsPage(QWidget):
         # Show empty state by default
         self._show_empty_state()
 
-    def showEvent(self, event):
-        """تحديث البيانات عند عرض الصفحة"""
-        super().showEvent(event)
-        # تحديث البيانات تلقائياً عند فتح الصفحة
-        self.refresh()
+        from ui.components.loading_spinner import LoadingSpinnerOverlay
+        self._spinner = LoadingSpinnerOverlay(self)
 
     def _create_header(self):
         """
@@ -489,6 +486,7 @@ class DraftClaimsPage(QWidget):
     def refresh(self, data=None):
         """Refresh survey drafts list from Surveys/office API."""
         self.title_label.setText(self.current_tab_title)
+        self._spinner.show_loading("جاري تحميل المسودات...")
         try:
             from controllers.survey_controller import SurveyController
             ctrl = SurveyController(self.db)
@@ -540,6 +538,8 @@ class DraftClaimsPage(QWidget):
             logging.getLogger(__name__).warning(f"API load failed: {e}")
             self.claims_data = []
             self._show_empty_state()
+        finally:
+            self._spinner.hide_loading()
 
     def _fetch_buildings_by_ids(self, building_ids):
         """Fetch Building objects by UUID from API."""

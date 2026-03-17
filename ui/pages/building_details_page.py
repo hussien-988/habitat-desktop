@@ -187,6 +187,9 @@ class BuildingDetailsPage(QWidget):
         scroll.setWidget(scroll_content)
         layout.addWidget(scroll)
 
+        from ui.components.loading_spinner import LoadingSpinnerOverlay
+        self._spinner = LoadingSpinnerOverlay(self)
+
     # =========================================================================
     # Card Builders (DRY — same pattern as review_step.py)
     # =========================================================================
@@ -471,6 +474,7 @@ class BuildingDetailsPage(QWidget):
         """
         if not data:
             return
+        self._spinner.show_loading("جاري تحميل تفاصيل المبنى...")
 
         if isinstance(data, Building):
             building = data
@@ -531,6 +535,7 @@ class BuildingDetailsPage(QWidget):
         self.title_label.setText(display_id)
 
         self._populate_cards(building)
+        self._spinner.hide_loading()
 
     def _clear_layout(self, layout):
         while layout.count():

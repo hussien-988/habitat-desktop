@@ -2538,42 +2538,6 @@ class PersonDialog(QDialog):
         if has_error:
             return
 
-        # Uniqueness: check full name via API
-        full_name = f"{first} {father} {last}"
-        current_person_id = (self.person_data or {}).get('person_id', '')
-        try:
-            response = self._api_service.get_persons(search=full_name, page_size=10)
-            persons = response.get("items", []) if isinstance(response, dict) else []
-            for p in persons:
-                p_id = p.get("id") or p.get("personId") or ""
-                if p_id == current_person_id:
-                    continue
-                p_first = p.get("firstNameArabic", "").strip()
-                p_father = p.get("fatherNameArabic", "").strip()
-                p_last = p.get("familyNameArabic", "").strip()
-                if p_first == first and p_father == father and p_last == last:
-                    self._set_field_error(self.first_name, self._first_name_error, "هذا الاسم مسجل مسبقاً في النظام")
-                    self.tab_widget.setCurrentIndex(0)
-                    return
-        except Exception as e:
-            logger.warning(f"Name uniqueness check failed: {e}")
-
-        # Uniqueness: check national ID via API
-        nid_text = self.national_id.text().strip()
-        if nid_text and len(nid_text) == 11:
-            try:
-                response = self._api_service.get_persons(national_id=nid_text, page_size=5)
-                persons = response.get("items", []) if isinstance(response, dict) else []
-                for p in persons:
-                    p_id = p.get("id") or p.get("personId") or ""
-                    if p_id == current_person_id:
-                        continue
-                    self._set_field_error(self.national_id, self._nid_error, "الرقم الوطني مسجل مسبقاً")
-                    self.tab_widget.setCurrentIndex(0)
-                    return
-            except Exception as e:
-                logger.warning(f"National ID uniqueness check failed: {e}")
-
         # Optional format: phone, landline, email (only validate if filled)
         if not self._validate_mobile(self.phone.text().strip()):
             self._set_field_error(self.phone, self._mobile_error, tr("wizard.person_dialog.invalid_mobile"))

@@ -356,6 +356,9 @@ class DuplicatesPage(QWidget):
 
         main_layout.addWidget(scroll, 1)
 
+        from ui.components.loading_spinner import LoadingSpinnerOverlay
+        self._spinner = LoadingSpinnerOverlay(self)
+
     # Header
     def _build_header(self) -> QHBoxLayout:
         header = QHBoxLayout()
@@ -1002,11 +1005,13 @@ class DuplicatesPage(QWidget):
             page_size=self._page_size,
             filters=self._get_active_filters(),
         )
+        self._spinner.show_loading("جاري تحميل التعارضات...")
         self._worker.finished.connect(self._on_load_finished)
         self._worker.error.connect(self._on_load_error)
         self._worker.start()
 
     def _on_load_finished(self, data: dict):
+        self._spinner.hide_loading()
         # Stop shimmers
         for s in self._shimmer_widgets:
             s.stop()
@@ -1046,6 +1051,7 @@ class DuplicatesPage(QWidget):
         self._update_pagination()
 
     def _on_load_error(self, error_msg: str):
+        self._spinner.hide_loading()
         for s in self._shimmer_widgets:
             s.stop()
         self._shimmer_container.setVisible(False)

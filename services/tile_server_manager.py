@@ -370,21 +370,20 @@ class TileServerManager:
         if not hasattr(self, '_initialized'):
             self._initialized = True
 
-            # Use smart tile server URL with health check and fallback
-            production_url = Config.TILE_SERVER_URL if Config.USE_DOCKER_TILES else None
+            # Read port from settings.json (user-configurable via UI)
+            from app.config import get_tile_server_port
+            configured_port = get_tile_server_port()
+
+            # Build production URL from configured port
+            production_url = f"http://localhost:{configured_port}"
             use_production = False
 
-            if production_url:
-                try:
-                    from urllib.parse import urlparse
-                    parsed = urlparse(production_url)
-                    host = parsed.hostname or 'localhost'
-                    port = parsed.port or 5000
-                    with socket.create_connection((host, port), timeout=Config.TILE_SERVER_HEALTH_TIMEOUT):
-                        use_production = True
-                        logger.info(f"Docker tile server reachable (TCP {host}:{port}): {production_url}")
-                except (socket.timeout, socket.error, OSError) as e:
-                    logger.warning(f"Docker tile server port unreachable ({production_url}): {e}")
+            try:
+                with socket.create_connection(("localhost", configured_port), timeout=Config.TILE_SERVER_HEALTH_TIMEOUT):
+                    use_production = True
+                    logger.info(f"Tile server reachable (TCP localhost:{configured_port})")
+            except (socket.timeout, socket.error, OSError) as e:
+                logger.warning(f"Tile server port unreachable (localhost:{configured_port}): {e}")
 
             if use_production:
                 logger.info(f"Using external tile server: {production_url}")

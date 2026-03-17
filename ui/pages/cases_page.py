@@ -121,6 +121,9 @@ class CasesPage(QWidget):
 
         self._show_empty_state()
 
+        from ui.components.loading_spinner import LoadingSpinnerOverlay
+        self._spinner = LoadingSpinnerOverlay(self)
+
     def _create_header(self) -> QWidget:
         header = QWidget()
         header.setFixedHeight(PageDimensions.PAGE_HEADER_HEIGHT)
@@ -202,13 +205,6 @@ class CasesPage(QWidget):
     # Data loading
     # -------------------------------------------------------------------------
 
-    def showEvent(self, event):
-        super().showEvent(event)
-        import time
-        now = int(time.time() * 1000)
-        if now - self._last_refresh_ms > 500:
-            self.refresh()
-
     def refresh(self, data=None):
         """Refresh surveys from API."""
         import time
@@ -217,33 +213,37 @@ class CasesPage(QWidget):
 
     def _load_surveys(self):
         """Load surveys from API based on active tab and filters."""
-        self._all_data = []
-        status = "Draft" if self._active_tab == "draft" else "Finalized"
-        name = self._name_filter.text().strip() or None
-
+        self._spinner.show_loading("جاري تحميل المسوحات...")
         try:
-            from controllers.survey_controller import SurveyController
-            ctrl = SurveyController(self.db)
-            result = ctrl.load_office_surveys(
-                status=status,
-                page=1,
-                page_size=30,
-                sort_by="SurveyDate",
-                sort_direction="desc",
-                contact_person_name=name,
-            )
-            if result.success and result.data:
-                building_ids = {s.get("buildingId", "") for s in result.data if s.get("buildingId")}
-                self._enrich_buildings_cache(building_ids)
+            self._all_data = []
+            status = "Draft" if self._active_tab == "draft" else "Finalized"
+            name = self._name_filter.text().strip() or None
 
-                for s in result.data:
-                    self._all_data.append(self._map_survey(s))
+            try:
+                from controllers.survey_controller import SurveyController
+                ctrl = SurveyController(self.db)
+                result = ctrl.load_office_surveys(
+                    status=status,
+                    page=1,
+                    page_size=30,
+                    sort_by="SurveyDate",
+                    sort_direction="desc",
+                    contact_person_name=name,
+                )
+                if result.success and result.data:
+                    building_ids = {s.get("buildingId", "") for s in result.data if s.get("buildingId")}
+                    self._enrich_buildings_cache(building_ids)
 
-            logger.info(f"Loaded {len(self._all_data)} surveys (status={status})")
-        except Exception as e:
-            logger.warning(f"Error loading surveys (status={status}): {e}")
+                    for s in result.data:
+                        self._all_data.append(self._map_survey(s))
 
-        self._apply_type_filter()
+                logger.info(f"Loaded {len(self._all_data)} surveys (status={status})")
+            except Exception as e:
+                logger.warning(f"Error loading surveys (status={status}): {e}")
+
+            self._apply_type_filter()
+        finally:
+            self._spinner.hide_loading()
 
     def _apply_type_filter(self):
         """Filter displayed cards by survey type (local filter)."""

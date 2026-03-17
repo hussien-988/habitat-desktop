@@ -483,7 +483,6 @@ class BaseMapDialog(QDialog):
                 border: 1px solid {Colors.BORDER_DEFAULT};
                 border-radius: 4px;
                 padding: 4px;
-                direction: rtl;
             }}
             QListWidget::item {{
                 padding: 4px;

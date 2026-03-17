@@ -45,41 +45,28 @@ def main():
         # CRITICAL: Set application-wide default font BEFORE creating any widgets
         set_application_default_font()
 
-        # Log startup
-        logger.info("=" * 80)
-        logger.info("Starting TRRCMS Application")
-        logger.info("=" * 80)
-
-        # Initialize database (for users table + vocab customizations only)
-        logger.info("Initializing local database (users + vocab customizations)...")
+        # Initialize database
+        print("[STARTUP] Initializing database...")
         db = Database()
         db.initialize()
-        logger.info(">> Database initialized")
 
         # Initialize i18n
-        logger.info("Initializing internationalization...")
         i18n = I18n()
         i18n.set_language("ar")
-        logger.info(">> Internationalization initialized (Arabic)")
 
         # Fetch vocabularies from backend API (non-fatal if unavailable)
-        logger.info("Fetching vocabularies from API...")
+        print("[STARTUP] Fetching vocabularies from API...")
         try:
             from services.vocab_service import initialize_vocabularies  # type: ignore
             initialize_vocabularies()
-            logger.info(">> Vocabularies initialized")
+            print("[STARTUP] Vocabularies initialized successfully")
         except Exception as e:
-            logger.warning(f">> Vocabularies initialization failed: {e}")
+            print(f"[STARTUP] Vocabularies initialization failed: {e}")
 
         # Create main window
-        logger.info("Creating main window...")
         window = MainWindow(db, i18n)
         window.show()
-        logger.info(">> Main window created and displayed")
-
-        logger.info("=" * 80)
-        logger.info(">> Application started successfully!")
-        logger.info("=" * 80)
+        print("[STARTUP] Application started successfully!")
 
         # Run application event loop
         exit_code = app.exec_()

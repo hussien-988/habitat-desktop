@@ -2387,6 +2387,9 @@ class BuildingsListPage(QWidget):
 
         self._setup_ui()
 
+        from ui.components.loading_spinner import LoadingSpinnerOverlay
+        self._spinner = LoadingSpinnerOverlay(self)
+
     def _setup_ui(self):
         """Setup buildings list UI."""
         layout = QVBoxLayout(self)
@@ -2698,12 +2701,6 @@ class BuildingsListPage(QWidget):
         else:
             self.table.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
 
-    def showEvent(self, event):
-        """تحميل البيانات تلقائياً عند عرض الصفحة"""
-        super().showEvent(event)
-        # تحميل البيانات تلقائياً عند فتح الصفحة
-        self.refresh()
-
     def refresh(self):
         """Refresh list."""
         logger.debug("Refreshing buildings list")
@@ -2719,6 +2716,13 @@ class BuildingsListPage(QWidget):
 
     def _load_buildings(self):
         """Load buildings from repository and populate table."""
+        self._spinner.show_loading("جاري تحميل المباني...")
+        try:
+            self.__do_load_buildings()
+        finally:
+            self._spinner.hide_loading()
+
+    def __do_load_buildings(self):
         # Load buildings using controller
         result = self.building_controller.load_buildings()
 

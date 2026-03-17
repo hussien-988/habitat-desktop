@@ -309,6 +309,9 @@ class UnitsPage(QWidget):
         card_layout.addWidget(footer_frame)
         layout.addWidget(table_card)
 
+        from ui.components.loading_spinner import LoadingSpinnerOverlay
+        self._spinner = LoadingSpinnerOverlay(self)
+
     # ── Data loading ──
 
     def refresh(self, data=None):
@@ -343,28 +346,32 @@ class UnitsPage(QWidget):
         )
 
     def _load_units(self):
-        self._set_auth_token()
+        self._spinner.show_loading("جاري تحميل الوحدات...")
         try:
-            result = self.unit_controller.get_units_grouped(
-                building_id=self._active_filters.get('building_id'),
-                unit_type=self._active_filters.get('unit_type'),
-                status=self._active_filters.get('unit_status'),
-            )
-            if result.success:
-                self._groups = result.data or []
-            else:
-                logger.warning(f"Failed to load grouped units: {result.message}")
+            self._set_auth_token()
+            try:
+                result = self.unit_controller.get_units_grouped(
+                    building_id=self._active_filters.get('building_id'),
+                    unit_type=self._active_filters.get('unit_type'),
+                    status=self._active_filters.get('unit_status'),
+                )
+                if result.success:
+                    self._groups = result.data or []
+                else:
+                    logger.warning(f"Failed to load grouped units: {result.message}")
+                    self._groups = []
+            except Exception as e:
+                logger.warning(f"API grouped load failed: {e}")
                 self._groups = []
-        except Exception as e:
-            logger.warning(f"API grouped load failed: {e}")
-            self._groups = []
 
-        self._total_units = sum(g.get('unitCount', 0) for g in self._groups)
-        self._total_buildings = len(self._groups)
+            self._total_units = sum(g.get('unitCount', 0) for g in self._groups)
+            self._total_buildings = len(self._groups)
 
-        self._rebuild_rows()
-        self._current_page = 1
-        self._update_table()
+            self._rebuild_rows()
+            self._current_page = 1
+            self._update_table()
+        finally:
+            self._spinner.hide_loading()
 
     def _rebuild_rows(self):
         self._rows = []

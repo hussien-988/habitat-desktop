@@ -288,6 +288,9 @@ class UserManagementPage(QWidget):
         card_layout.addWidget(footer_frame)
         layout.addWidget(table_card)
 
+        from ui.components.loading_spinner import LoadingSpinnerOverlay
+        self._spinner = LoadingSpinnerOverlay(self)
+
     # ── Data ──
 
     def refresh(self, data=None):
@@ -295,22 +298,26 @@ class UserManagementPage(QWidget):
         self._load_users()
 
     def _load_users(self):
-        if not self._user_controller:
-            self._all_users = []
-            self._users = []
+        self._spinner.show_loading("جاري تحميل المستخدمين...")
+        try:
+            if not self._user_controller:
+                self._all_users = []
+                self._users = []
+                self._update_table()
+                return
+            result = self._user_controller.get_all_users()
+            if not result.success:
+                logger.error(f"Failed to load users: {result.message}")
+                Toast.show_toast(self, f"فشل تحميل المستخدمين: {result.message}", Toast.ERROR)
+                self._all_users = []
+            else:
+                raw = result.data or []
+                self._all_users = [self._map_api_user(u) for u in raw]
+            self._users = self._apply_filters(self._all_users)
+            self._current_page = 1
             self._update_table()
-            return
-        result = self._user_controller.get_all_users()
-        if not result.success:
-            logger.error(f"Failed to load users: {result.message}")
-            Toast.show_toast(self, f"فشل تحميل المستخدمين: {result.message}", Toast.ERROR)
-            self._all_users = []
-        else:
-            raw = result.data or []
-            self._all_users = [self._map_api_user(u) for u in raw]
-        self._users = self._apply_filters(self._all_users)
-        self._current_page = 1
-        self._update_table()
+        finally:
+            self._spinner.hide_loading()
 
     def _map_api_user(self, u: dict) -> dict:
         user_id = str(u.get("id") or u.get("userId") or u.get("user_id") or "")

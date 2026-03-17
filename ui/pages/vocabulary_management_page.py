@@ -260,6 +260,9 @@ class VocabularyManagementPage(QWidget):
 
         layout.addLayout(content)
 
+        from ui.components.loading_spinner import LoadingSpinnerOverlay
+        self._spinner = LoadingSpinnerOverlay(self)
+
     def _load_vocabularies(self):
         """Load vocabulary list from backend API."""
         self.vocab_list.clear()
@@ -296,40 +299,44 @@ class VocabularyManagementPage(QWidget):
         if not vocabulary_name:
             return
 
-        show_deprecated = self.show_deprecated_check.isChecked()
-
+        self._spinner.show_loading("جاري تحميل المصطلحات...")
         try:
-            api = get_api_client()
-            result = api.get_vocabulary_terms(vocabulary_name)
-            terms = result.get("values", []) if isinstance(result, dict) else []
-        except Exception as e:
-            logger.error(f"Failed to load terms from API: {e}")
-            return
+            show_deprecated = self.show_deprecated_check.isChecked()
 
-        if not show_deprecated:
-            terms = [t for t in terms if t.get("isActive", True)]
+            try:
+                api = get_api_client()
+                result = api.get_vocabulary_terms(vocabulary_name)
+                terms = result.get("values", []) if isinstance(result, dict) else []
+            except Exception as e:
+                logger.error(f"Failed to load terms from API: {e}")
+                return
 
-        self.terms_table.setRowCount(len(terms))
-        for i, t in enumerate(terms):
-            code = str(t.get("code", ""))
-            label_ar = t.get("labelArabic", "") or ""
-            label_en = t.get("labelEnglish", "") or ""
-            order = str(t.get("displayOrder", 0))
-            is_active = t.get("isActive", True)
+            if not show_deprecated:
+                terms = [t for t in terms if t.get("isActive", True)]
 
-            self.terms_table.setItem(i, 0, QTableWidgetItem(code))
-            self.terms_table.setItem(i, 1, QTableWidgetItem(label_ar))
-            self.terms_table.setItem(i, 2, QTableWidgetItem(label_en))
-            self.terms_table.setItem(i, 3, QTableWidgetItem(order))
+            self.terms_table.setRowCount(len(terms))
+            for i, t in enumerate(terms):
+                code = str(t.get("code", ""))
+                label_ar = t.get("labelArabic", "") or ""
+                label_en = t.get("labelEnglish", "") or ""
+                order = str(t.get("displayOrder", 0))
+                is_active = t.get("isActive", True)
 
-            status_text = "نشط" if is_active else "متقادم"
-            status_item = QTableWidgetItem(status_text)
-            status_item.setTextAlignment(Qt.AlignCenter)
-            if not is_active:
-                status_item.setBackground(QColor("#FEE2E2"))
-            self.terms_table.setItem(i, 4, status_item)
+                self.terms_table.setItem(i, 0, QTableWidgetItem(code))
+                self.terms_table.setItem(i, 1, QTableWidgetItem(label_ar))
+                self.terms_table.setItem(i, 2, QTableWidgetItem(label_en))
+                self.terms_table.setItem(i, 3, QTableWidgetItem(order))
 
-        self.term_count_label.setText(str(len(terms)))
+                status_text = "نشط" if is_active else "متقادم"
+                status_item = QTableWidgetItem(status_text)
+                status_item.setTextAlignment(Qt.AlignCenter)
+                if not is_active:
+                    status_item.setBackground(QColor("#FEE2E2"))
+                self.terms_table.setItem(i, 4, status_item)
+
+            self.term_count_label.setText(str(len(terms)))
+        finally:
+            self._spinner.hide_loading()
 
     def _filter_terms(self, search_text: str):
         """Filter terms table by search text."""
