@@ -12,7 +12,7 @@ from PyQt5.QtWidgets import (
     QScrollArea, QSpacerItem, QSizePolicy, QFrame, QGridLayout,
     QLineEdit, QComboBox
 )
-from PyQt5.QtCore import Qt, pyqtSignal
+from PyQt5.QtCore import Qt, pyqtSignal, QTimer
 from PyQt5.QtGui import QFont
 
 from ..design_system import Colors, PageDimensions
@@ -52,6 +52,9 @@ class CompletedClaimsPage(QWidget):
         self._active_tab = "open"  # "open" or "closed"
         self._buildings_cache: Dict[str, object] = {}
         self._last_refresh_ms = 0
+        self._search_timer = QTimer(self)
+        self._search_timer.setSingleShot(True)
+        self._search_timer.timeout.connect(self._load_claims)
         self._setup_ui()
 
     def _setup_ui(self):
@@ -91,13 +94,13 @@ class CompletedClaimsPage(QWidget):
         self.content_area.setWidgetResizable(True)
         self.content_area.setFrameShape(QFrame.NoFrame)
         self.content_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        self.content_area.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.content_area.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
         self.content_area.setStyleSheet(f"""
             QScrollArea {{
                 background-color: {Colors.BACKGROUND};
                 border: none;
             }}
-        """)
+        """ + StyleManager.scrollbar())
 
         self.content_widget = QWidget()
         self.content_layout = QGridLayout(self.content_widget)
@@ -150,16 +153,16 @@ class CompletedClaimsPage(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(10)
 
-        # 1. Search by claim number
+        # Search by claim number
         self._search_input = QLineEdit()
         self._search_input.setLayoutDirection(Qt.RightToLeft)
-        self._search_input.setPlaceholderText("بحث برقم المطالبة...")
-        self._search_input.setFixedWidth(220)
+        self._search_input.setPlaceholderText("بحث برقم المطالبة الكامل...")
+        self._search_input.setFixedWidth(280)
         self._search_input.setStyleSheet(form_style)
         self._search_input.textChanged.connect(self._on_search_changed)
         layout.addWidget(self._search_input)
 
-        # 2. Source filter (FieldCollection=1, OfficeSubmission=2 per Swagger)
+        # Source filter (FieldCollection=1, OfficeSubmission=2)
         self._source_filter = QComboBox()
         self._source_filter.setLayoutDirection(Qt.RightToLeft)
         self._source_filter.setFixedWidth(170)
@@ -170,45 +173,21 @@ class CompletedClaimsPage(QWidget):
         self._source_filter.currentIndexChanged.connect(self._on_source_changed)
         layout.addWidget(self._source_filter)
 
-        # 3. Person name filter
-        self._name_filter = QLineEdit()
-        self._name_filter.setLayoutDirection(Qt.RightToLeft)
-        self._name_filter.setPlaceholderText("بحث باسم المُطالِب...")
-        self._name_filter.setFixedWidth(200)
-        self._name_filter.setStyleSheet(form_style)
-        self._name_filter.textChanged.connect(self._on_search_changed)
-        layout.addWidget(self._name_filter)
-
         layout.addStretch()
         return bar
 
     def _on_search_changed(self):
-        """Local filter — re-display without API call."""
-        self._apply_local_filter()
+        """Debounced search — sends to API after 500ms pause."""
+        self._search_timer.start(500)
 
     def _on_source_changed(self):
         """Source dropdown changed — reload from API."""
         self._load_claims()
 
     def _apply_local_filter(self):
-        """Filter displayed cards by claim number, person name, and source."""
-        search_text = self._search_input.text().strip()
-        name_text = self._name_filter.text().strip()
-        source_val = self._source_filter.currentData()
-
-        filtered = self.claims_data
-        if search_text:
-            filtered = [c for c in filtered
-                        if search_text in (c.get("claim_id") or "")]
-        if name_text:
-            filtered = [c for c in filtered
-                        if name_text in (c.get("claimant_name") or "")]
-        if source_val is not None:
-            filtered = [c for c in filtered
-                        if c.get("source") == source_val]
-
-        if filtered:
-            self._show_claims_list(filtered)
+        """Display loaded claims (all filtering done via API)."""
+        if self.claims_data:
+            self._show_claims_list(self.claims_data)
         else:
             self._show_empty_state()
 
@@ -231,18 +210,27 @@ class CompletedClaimsPage(QWidget):
         self._load_claims()
 
     def _load_claims(self):
-        """Load claims from API based on active tab and source filter."""
+        """Load claims from API based on active tab and all filters."""
         self.claims_data = []
         case_status = CASE_STATUS_OPEN if self._active_tab == "open" else CASE_STATUS_CLOSED
         source = self._source_filter.currentData()
+        claim_number = self._search_input.text().strip()
 
         try:
             from services.api_client import get_api_client
             api = get_api_client()
-            summaries = api.get_claims_summaries(
-                claim_status=case_status,
-                claim_source=source,
-            )
+
+            if claim_number:
+                try:
+                    result = api.get_claim_by_number(claim_number)
+                    summaries = [result] if result else []
+                except Exception:
+                    summaries = []
+            else:
+                summaries = api.get_claims_summaries(
+                    claim_status=case_status,
+                    claim_source=source,
+                )
 
             # Enrich with building details
             building_codes = {s.get("buildingCode", "") for s in summaries if s.get("buildingCode")}
@@ -287,7 +275,7 @@ class CompletedClaimsPage(QWidget):
         building_code = s.get("buildingCode", "")
         building_obj = self._buildings_cache.get(building_code)
 
-        unit_number = s.get("propertyUnitIdNumber", "") or s.get("unitCode", "")
+        unit_number = s.get("propertyUnitIdNumber", "") or s.get("propertyUnitCode", "")
         unit_obj = None
         if unit_number:
             class _NS:
@@ -307,7 +295,7 @@ class CompletedClaimsPage(QWidget):
             "building_id": building_obj.building_id if building_obj else building_code,
             "building": building_obj,
             "unit": unit_obj,
-            "survey_id": s.get("surveyId", ""),
+            "survey_id": s.get("surveyId", "") or s.get("originatingSurveyId", ""),
         }
 
     # -------------------------------------------------------------------------

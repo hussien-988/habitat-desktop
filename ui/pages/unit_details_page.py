@@ -7,7 +7,7 @@ but with a single unit, no selection state, no "add unit" button.
 
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel,
-    QFrame, QGraphicsDropShadowEffect
+    QFrame, QGraphicsDropShadowEffect, QPushButton
 )
 from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtGui import QColor
@@ -52,18 +52,46 @@ class UnitDetailsPage(QWidget):
         )
         layout.setSpacing(15)
 
-        # Title — unit number (e.g. "12"), right-aligned, same font as other pages
+        # Header row
+        header_row = QHBoxLayout()
+        header_row.setSpacing(15)
+
+        title_area = QVBoxLayout()
+        title_area.setSpacing(2)
+
         self.title_label = QLabel("")
         self.title_label.setFont(create_font(size=FontManager.SIZE_TITLE, weight=FontManager.WEIGHT_SEMIBOLD))
         self.title_label.setStyleSheet(f"color: {Colors.PAGE_TITLE}; background: transparent; border: none;")
-        self.title_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
-        layout.addWidget(self.title_label)
+        title_area.addWidget(self.title_label)
 
-        # Breadcrumb — "الوحدات السكنية  •  عرض"
-        self.breadcrumb = QLabel("الوحدات السكنية  •  عرض")
+        self.breadcrumb = QLabel("المقاسم  •  عرض")
         self.breadcrumb.setFont(create_font(size=FontManager.SIZE_BODY, weight=FontManager.WEIGHT_SEMIBOLD))
         self.breadcrumb.setStyleSheet(f"color: {Colors.PAGE_SUBTITLE}; background: transparent; border: none;")
-        layout.addWidget(self.breadcrumb)
+        title_area.addWidget(self.breadcrumb)
+
+        header_row.addLayout(title_area)
+        header_row.addStretch()
+
+        back_btn = QPushButton("رجوع")
+        back_btn.setFixedSize(100, 40)
+        back_btn.setCursor(Qt.PointingHandCursor)
+        back_btn.setFont(create_font(size=FontManager.SIZE_BODY, weight=FontManager.WEIGHT_SEMIBOLD))
+        back_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #F1F5F9;
+                color: #475569;
+                border: 1px solid #E2E8F0;
+                border-radius: 8px;
+                font-weight: 600;
+            }
+            QPushButton:hover {
+                background-color: #E2E8F0;
+            }
+        """)
+        back_btn.clicked.connect(self.back_requested.emit)
+        header_row.addWidget(back_btn)
+
+        layout.addLayout(header_row)
 
         # Card container — populated in refresh()
         self._card_container = QVBoxLayout()

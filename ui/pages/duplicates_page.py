@@ -283,7 +283,7 @@ class DuplicatesPage(QWidget):
         self._conflicts = []
         self._current_page = 1
         self._total_pages = 1
-        self._page_size = 15
+        self._page_size = 11
         self._selected_conflict_idx = -1
         self._detail_data = None
         self._exclude_resolved = False
@@ -356,11 +356,7 @@ class DuplicatesPage(QWidget):
 
         main_layout.addWidget(scroll, 1)
 
-        # Pagination
-        self._pagination_container = self._build_pagination()
-        main_layout.addWidget(self._pagination_container)
-
-    # ─── Header ──────────────────────────────────────
+    # Header
     def _build_header(self) -> QHBoxLayout:
         header = QHBoxLayout()
         header.setContentsMargins(0, 0, 0, 0)
@@ -394,7 +390,7 @@ class DuplicatesPage(QWidget):
 
         return header
 
-    # ─── Import Banner ────────────────────────────────
+    # Import Banner
 
     def _build_import_banner(self) -> QFrame:
         banner = QFrame()
@@ -445,7 +441,7 @@ class DuplicatesPage(QWidget):
         """Show or hide the return-to-import banner."""
         self._import_banner.setVisible(enabled)
 
-    # ─── Summary Cards ───────────────────────────────
+    # Summary Cards
     def _build_summary_cards(self) -> QFrame:
         container = QFrame()
         container.setStyleSheet("QFrame { background: transparent; border: none; }")
@@ -474,7 +470,6 @@ class DuplicatesPage(QWidget):
 
         return container
 
-    # ─── Filters ─────────────────────────────────────
     def _build_filters(self) -> QFrame:
         container = QFrame()
         container.setStyleSheet("""
@@ -486,30 +481,7 @@ class DuplicatesPage(QWidget):
         layout.setContentsMargins(16, 8, 16, 8)
         layout.setSpacing(12)
 
-        combo_style = f"""
-            QComboBox {{
-                border: 1.5px solid #E5E7EB;
-                border-radius: 8px;
-                padding: 4px 12px;
-                background: #FAFBFC;
-                color: #374151;
-                min-width: 130px;
-                font-size: 12px;
-            }}
-            QComboBox:hover {{ border-color: {Colors.PRIMARY_BLUE}88; }}
-            QComboBox:focus {{ border-color: {Colors.PRIMARY_BLUE}; }}
-            QComboBox::drop-down {{
-                border: none;
-                width: 24px;
-            }}
-            QComboBox QAbstractItemView {{
-                background: white;
-                border: 1px solid #E5E7EB;
-                border-radius: 8px;
-                selection-background-color: {Colors.PRIMARY_BLUE}22;
-                selection-color: #374151;
-            }}
-        """
+        form_style = StyleManager.form_input()
 
         filter_label = QLabel("تصفية:")
         filter_label.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
@@ -520,7 +492,8 @@ class DuplicatesPage(QWidget):
         self._type_filter.addItem("جميع الأنواع", "")
         self._type_filter.addItem("تعارضات المقاسم", "PropertyDuplicate")
         self._type_filter.addItem("تكرار الأشخاص", "PersonDuplicate")
-        self._type_filter.setStyleSheet(combo_style)
+        self._type_filter.setStyleSheet(form_style)
+        self._type_filter.setMinimumWidth(130)
         self._type_filter.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
         self._type_filter.currentIndexChanged.connect(self._on_filter_changed)
         layout.addWidget(self._type_filter)
@@ -532,7 +505,8 @@ class DuplicatesPage(QWidget):
         self._status_filter.addItem("قيد المراجعة", "InReview")
         self._status_filter.addItem("تم الحل", "Resolved")
         self._status_filter.addItem("حل تلقائي", "AutoResolved")
-        self._status_filter.setStyleSheet(combo_style)
+        self._status_filter.setStyleSheet(form_style)
+        self._status_filter.setMinimumWidth(130)
         self._status_filter.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
         self._status_filter.currentIndexChanged.connect(self._on_filter_changed)
         layout.addWidget(self._status_filter)
@@ -543,21 +517,17 @@ class DuplicatesPage(QWidget):
         self._priority_filter.addItem("عالي", "High")
         self._priority_filter.addItem("متوسط", "Medium")
         self._priority_filter.addItem("منخفض", "Low")
-        self._priority_filter.setStyleSheet(combo_style)
+        self._priority_filter.setStyleSheet(form_style)
+        self._priority_filter.setMinimumWidth(130)
         self._priority_filter.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
         self._priority_filter.currentIndexChanged.connect(self._on_filter_changed)
         layout.addWidget(self._priority_filter)
 
         layout.addStretch()
 
-        self._count_label = QLabel("")
-        self._count_label.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
-        self._count_label.setStyleSheet(f"color: {Colors.WIZARD_SUBTITLE}; background: transparent; border: none;")
-        layout.addWidget(self._count_label)
-
         return container
 
-    # ─── Shimmer Loading ─────────────────────────────
+    # Shimmer Loading
     def _build_shimmer(self) -> QWidget:
         container = QWidget()
         container.setStyleSheet("background: transparent;")
@@ -590,14 +560,15 @@ class DuplicatesPage(QWidget):
 
         return container
 
-    # ─── Conflict List Table ─────────────────────────
+    # Conflict List Table
     def _build_conflict_list(self) -> QFrame:
         card = QFrame()
         card.setObjectName("conflictListCard")
+        card.setFixedHeight(708)
         card.setStyleSheet("""
             QFrame#conflictListCard {
                 background-color: white;
-                border-radius: 14px;
+                border-radius: 16px;
                 border: none;
             }
         """)
@@ -611,11 +582,12 @@ class DuplicatesPage(QWidget):
 
         card_layout = QVBoxLayout(card)
         card_layout.setSpacing(0)
-        card_layout.setContentsMargins(0, 0, 0, 0)
+        card_layout.setContentsMargins(10, 10, 10, 0)
 
         # Table
         self._table = QTableWidget()
         self._table.setColumnCount(8)
+        self._table.setRowCount(11)
         self._table.setHorizontalHeaderLabels([
             "رقم التعارض",
             "النوع",
@@ -632,44 +604,57 @@ class DuplicatesPage(QWidget):
         self._table.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self._table.setShowGrid(False)
         self._table.setFocusPolicy(Qt.NoFocus)
-        self._table.setAlternatingRowColors(True)
-        self._table.setMinimumHeight(200)
+        self._table.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self._table.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
 
         header = self._table.horizontalHeader()
         header.setDefaultAlignment(Qt.AlignCenter)
+        header.setFixedHeight(56)
         header.setSectionResizeMode(QHeaderView.Stretch)
         header.setSectionResizeMode(0, QHeaderView.ResizeToContents)
         header.setSectionResizeMode(4, QHeaderView.ResizeToContents)
+
+        v_header = self._table.verticalHeader()
+        v_header.setDefaultSectionSize(52)
 
         self._table.setStyleSheet(f"""
             QTableWidget {{
                 background-color: white;
                 border: none;
                 outline: none;
-                border-radius: 14px;
+                font-size: 10.5pt;
+                color: #212B36;
             }}
             QTableWidget::item {{
-                padding: 10px 12px;
-                border-bottom: 1px solid #F3F4F6;
-                color: #374151;
+                padding: 8px 15px;
+                border-bottom: 1px solid #F0F0F0;
+                color: #212B36;
+                font-size: 10.5pt;
             }}
             QTableWidget::item:selected {{
                 background-color: {Colors.PRIMARY_BLUE}15;
                 color: #1F2937;
             }}
             QTableWidget::item:hover {{
-                background-color: #F9FAFB;
+                background-color: #FAFBFC;
+            }}
+            QHeaderView {{
+                border-top-left-radius: 16px;
+                border-top-right-radius: 16px;
             }}
             QHeaderView::section {{
-                background-color: #F8FAFC;
-                color: #6B7280;
-                font-weight: 600;
-                font-size: 12px;
+                background-color: #F8F9FA;
+                padding: 12px;
                 border: none;
-                border-bottom: 2px solid #E5E7EB;
-                padding: 12px 8px;
+                color: #637381;
+                font-weight: 600;
+                font-size: 11pt;
+                height: 56px;
             }}
-        """)
+            QHeaderView::section:hover {{
+                background-color: #EBEEF2;
+            }}
+        """ + StyleManager.scrollbar())
 
         self._table.selectionModel().selectionChanged.connect(self._on_row_selected)
 
@@ -679,7 +664,7 @@ class DuplicatesPage(QWidget):
         self._empty_label = QLabel("لا توجد تعارضات حالياً")
         self._empty_label.setAlignment(Qt.AlignCenter)
         self._empty_label.setFont(create_font(size=12, weight=FontManager.WEIGHT_SEMIBOLD))
-        self._empty_label.setStyleSheet(f"""
+        self._empty_label.setStyleSheet("""
             color: #9CA3AF;
             background: transparent;
             padding: 60px 20px;
@@ -687,9 +672,72 @@ class DuplicatesPage(QWidget):
         self._empty_label.setVisible(False)
         card_layout.addWidget(self._empty_label)
 
+        # Footer with pagination
+        footer = QFrame()
+        footer.setStyleSheet("""
+            QFrame {
+                background-color: #F8F9FA;
+                border-top: 1px solid #E1E8ED;
+                border-bottom-left-radius: 16px;
+                border-bottom-right-radius: 16px;
+            }
+        """)
+        footer.setFixedHeight(58)
+
+        footer_layout = QHBoxLayout(footer)
+        footer_layout.setContentsMargins(10, 10, 10, 10)
+
+        nav_btn_style = """
+            QPushButton {
+                background: transparent;
+                border: 1px solid #E1E8ED;
+                border-radius: 4px;
+                color: #637381;
+                font-size: 10pt;
+                font-weight: 600;
+                padding: 6px 16px;
+            }
+            QPushButton:hover {
+                background-color: #EBEEF2;
+            }
+            QPushButton:disabled {
+                color: #C1C7CD;
+            }
+        """
+
+        self._prev_btn = QPushButton("السابق")
+        self._prev_btn.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
+        self._prev_btn.setCursor(Qt.PointingHandCursor)
+        self._prev_btn.setFixedHeight(36)
+        self._prev_btn.setStyleSheet(nav_btn_style)
+        self._prev_btn.clicked.connect(lambda: self._go_to_page(self._current_page - 1))
+
+        self._page_label = QLabel("1 / 1")
+        self._page_label.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
+        self._page_label.setAlignment(Qt.AlignCenter)
+        self._page_label.setStyleSheet("color: #637381; font-size: 10pt; background: transparent; border: none;")
+
+        self._next_btn = QPushButton("التالي")
+        self._next_btn.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
+        self._next_btn.setCursor(Qt.PointingHandCursor)
+        self._next_btn.setFixedHeight(36)
+        self._next_btn.setStyleSheet(nav_btn_style)
+        self._next_btn.clicked.connect(lambda: self._go_to_page(self._current_page + 1))
+
+        footer_layout.addWidget(self._prev_btn)
+        footer_layout.addWidget(self._page_label)
+        footer_layout.addWidget(self._next_btn)
+        footer_layout.addStretch()
+
+        self._count_label = QLabel("عرض 0 من 0")
+        self._count_label.setStyleSheet("color: #637381; font-size: 10pt; background: transparent; border: none;")
+        footer_layout.addWidget(self._count_label)
+
+        card_layout.addWidget(footer)
+
         return card
 
-    # ─── Resolution Section ──────────────────────────
+    # Resolution Section
     def _build_resolution_section(self) -> QFrame:
         card = QFrame()
         card.setObjectName("resolutionCard")
@@ -922,59 +970,7 @@ class DuplicatesPage(QWidget):
 
         return frame
 
-    # ─── Pagination ──────────────────────────────────
-    def _build_pagination(self) -> QFrame:
-        container = QFrame()
-        container.setStyleSheet("QFrame { background: transparent; border: none; }")
-        container.setFixedHeight(48)
-
-        layout = QHBoxLayout(container)
-        layout.setContentsMargins(0, 4, 0, 4)
-        layout.setSpacing(8)
-
-        nav_btn_style = f"""
-            QPushButton {{
-                background-color: white;
-                color: {Colors.PRIMARY_BLUE};
-                border: 1.5px solid #E5E7EB;
-                border-radius: 8px;
-                padding: 6px 16px;
-                font-weight: 600;
-            }}
-            QPushButton:hover {{ border-color: {Colors.PRIMARY_BLUE}88; background: #F8FAFC; }}
-            QPushButton:disabled {{ color: #D1D5DB; border-color: #F3F4F6; background: #FAFBFC; }}
-        """
-
-        self._prev_btn = QPushButton("السابق")
-        self._prev_btn.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
-        self._prev_btn.setCursor(Qt.PointingHandCursor)
-        self._prev_btn.setFixedHeight(36)
-        self._prev_btn.setStyleSheet(nav_btn_style)
-        self._prev_btn.clicked.connect(lambda: self._go_to_page(self._current_page - 1))
-
-        self._page_label = QLabel("1 / 1")
-        self._page_label.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
-        self._page_label.setAlignment(Qt.AlignCenter)
-        self._page_label.setStyleSheet(f"color: {Colors.PAGE_TITLE}; background: transparent; border: none;")
-
-        self._next_btn = QPushButton("التالي")
-        self._next_btn.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
-        self._next_btn.setCursor(Qt.PointingHandCursor)
-        self._next_btn.setFixedHeight(36)
-        self._next_btn.setStyleSheet(nav_btn_style)
-        self._next_btn.clicked.connect(lambda: self._go_to_page(self._current_page + 1))
-
-        layout.addStretch()
-        layout.addWidget(self._prev_btn)
-        layout.addWidget(self._page_label)
-        layout.addWidget(self._next_btn)
-        layout.addStretch()
-
-        return container
-
-    # ═══════════════════════════════════════════════════
     # Data Loading
-    # ═══════════════════════════════════════════════════
     def _get_active_filters(self) -> dict:
         filters = {}
         ct = self._type_filter.currentData()
@@ -1060,11 +1056,16 @@ class DuplicatesPage(QWidget):
         Toast.show_toast(self, f"فشل تحميل التعارضات: {error_msg}", Toast.ERROR)
         logger.error(f"Conflict load error: {error_msg}")
 
-    # ─── Table Population ────────────────────────────
+    # Table Population
     def _populate_table(self):
-        self._table.setRowCount(0)
         self._selected_conflict_idx = -1
         self._resolution_card.setVisible(False)
+
+        # Clear all fixed rows
+        for r in range(self._page_size):
+            for c in range(self._table.columnCount()):
+                self._table.setItem(r, c, QTableWidgetItem(""))
+            self._table.setRowHeight(r, 52)
 
         if not self._conflicts:
             self._table.setVisible(False)
@@ -1073,8 +1074,6 @@ class DuplicatesPage(QWidget):
 
         self._table.setVisible(True)
         self._empty_label.setVisible(False)
-
-        self._table.setRowCount(len(self._conflicts))
 
         for row_idx, conflict in enumerate(self._conflicts):
             # Conflict number
@@ -1144,11 +1143,7 @@ class DuplicatesPage(QWidget):
             date_item.setForeground(QColor("#9CA3AF"))
             self._table.setItem(row_idx, 7, date_item)
 
-        # Row heights
-        for r in range(self._table.rowCount()):
-            self._table.setRowHeight(r, 52)
-
-    # ─── Selection & Resolution ──────────────────────
+    # Selection & Resolution
     def _on_row_selected(self):
         rows = self._table.selectionModel().selectedRows()
         if not rows:
@@ -1156,7 +1151,14 @@ class DuplicatesPage(QWidget):
             self._resolution_card.setVisible(False)
             return
 
-        self._selected_conflict_idx = rows[0].row()
+        idx = rows[0].row()
+        if idx >= len(self._conflicts):
+            self._table.clearSelection()
+            self._selected_conflict_idx = -1
+            self._resolution_card.setVisible(False)
+            return
+
+        self._selected_conflict_idx = idx
         conflict = self._conflicts[self._selected_conflict_idx]
 
         # Show resolution card with animation
@@ -1275,7 +1277,7 @@ class DuplicatesPage(QWidget):
         conflict = self._conflicts[self._selected_conflict_idx]
         self.view_comparison_requested.emit(conflict)
 
-    # ─── Filter & Pagination ─────────────────────────
+    # Filter & Pagination
     def _filter_by_card(self, card_type: str):
         """Filter conflicts by clicking a summary card."""
         # Block signals to prevent multiple _on_filter_changed calls

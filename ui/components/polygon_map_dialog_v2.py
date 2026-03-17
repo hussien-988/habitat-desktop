@@ -16,6 +16,7 @@ Uses:
     - Open/Closed: Extended BaseMapDialog, not modified
 """
 
+import json
 from typing import List, Optional
 from PyQt5.QtWidgets import QPushButton, QHBoxLayout, QWidget, QLabel
 from ui.error_handler import ErrorHandler
@@ -285,12 +286,56 @@ class PolygonMapDialog(BaseMapDialog):
             neighborhoods_geojson = self.load_neighborhoods_geojson(auth_token=self._auth_token)
             logger.info(f"Neighborhoods result: {'loaded' if neighborhoods_geojson else 'None/failed'}")
 
-            #  Generate map HTML using LeafletHTMLGenerator
+            # Load neighbourhood boundary polygons from local GeoJSON
+            boundaries_geojson = None
+            try:
+                from services import boundary_service
+                if boundary_service.is_available('neighbourhoods'):
+                    raw = boundary_service.get('neighbourhoods')
+                    if raw:
+                        boundary_data = json.loads(raw)
+                        boundary_data['features'] = [
+                            f for f in boundary_data['features']
+                            if f.get('properties', {}).get('ADM1_PCODE') == 'SY02'
+                        ]
+                        boundaries_geojson = json.dumps(boundary_data, ensure_ascii=False)
+                        logger.info(f"Loaded {len(boundary_data['features'])} neighbourhood boundaries for Aleppo")
+            except Exception as e:
+                logger.warning(f"Failed to load neighbourhood boundaries: {e}")
+
+            # Load landmarks and streets for map overlay
+            center_lat, center_lon = 36.2021, 37.1343
+            landmarks_json = None
+            streets_json = None
+            try:
+                from services.api_client import get_api_client
+                from services.map_utils import normalize_landmark, normalize_street
+                api = get_api_client()
+
+                landmarks = api.get_landmarks_for_map(
+                    south_west_lat=center_lat - 0.5, south_west_lng=center_lon - 0.5,
+                    north_east_lat=center_lat + 0.5, north_east_lng=center_lon + 0.5
+                )
+                if landmarks and isinstance(landmarks, list):
+                    landmarks = [normalize_landmark(lm) for lm in landmarks]
+                    landmarks_json = json.dumps(landmarks, ensure_ascii=False)
+
+                streets = api.get_streets_for_map(
+                    south_west_lat=center_lat - 0.5, south_west_lng=center_lon - 0.5,
+                    north_east_lat=center_lat + 0.5, north_east_lng=center_lon + 0.5
+                )
+                if streets and isinstance(streets, list):
+                    streets = [normalize_street(s) for s in streets]
+                    streets_json = json.dumps(streets, ensure_ascii=False)
+            except Exception as e:
+                logger.warning(f"Failed to load landmarks/streets: {e}")
+
+            # Generate map HTML using LeafletHTMLGenerator
             html = generate_leaflet_html(
                 tile_server_url=tile_server_url.rstrip('/'),
                 buildings_geojson=buildings_geojson,
-                center_lat=36.2021,
-                center_lon=37.1343,
+                center_lat=center_lat,
+                center_lon=center_lon,
                 zoom=15,
                 max_zoom=20,
                 show_legend=True,
@@ -300,6 +345,10 @@ class PolygonMapDialog(BaseMapDialog):
                 enable_viewport_loading=True,
                 enable_drawing=False,
                 neighborhoods_geojson=neighborhoods_geojson,
+                landmarks_json=landmarks_json,
+                streets_json=streets_json,
+                boundaries_geojson=boundaries_geojson,
+                boundary_level='neighbourhoods',
             )
 
             # Load into web view

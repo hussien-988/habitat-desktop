@@ -13,11 +13,11 @@ import uuid
 
 from PyQt5.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
-    QPushButton, QDateEdit, QFrame, QWidget,
+    QPushButton, QFrame, QWidget, QComboBox,
     QGridLayout, QTextEdit, QTabWidget,
     QRadioButton, QButtonGroup, QSizePolicy
 )
-from PyQt5.QtCore import Qt, QDate, QUrl
+from PyQt5.QtCore import Qt, QUrl
 from PyQt5.QtGui import QColor, QPixmap, QRegExpValidator, QDoubleValidator, QIntValidator
 from PyQt5.QtCore import QRegExp as QtRegExp
 
@@ -197,15 +197,13 @@ class PersonDialog(QDialog):
 
     def _apply_read_only_mode(self):
         """Disable all input fields and change buttons for read-only viewing."""
-        from PyQt5.QtWidgets import QLineEdit, QComboBox, QDateEdit, QTextEdit, QDoubleSpinBox, QRadioButton
+        from PyQt5.QtWidgets import QLineEdit, QComboBox, QTextEdit, QDoubleSpinBox, QRadioButton
 
         # Disable all input widgets
         for widget in self.findChildren(QLineEdit):
             widget.setReadOnly(True)
         for widget in self.findChildren(QComboBox):
             widget.setEnabled(False)
-        for widget in self.findChildren(QDateEdit):
-            widget.setReadOnly(True)
         for widget in self.findChildren(QTextEdit):
             widget.setReadOnly(True)
         for widget in self.findChildren(QDoubleSpinBox):
@@ -246,7 +244,7 @@ class PersonDialog(QDialog):
 
     def _apply_existing_person_mode(self):
         """Make Tab1 and Tab2 fields read-only when linking an existing person to a unit."""
-        from PyQt5.QtWidgets import QComboBox, QDateEdit as _QDateEdit
+        from PyQt5.QtWidgets import QComboBox
         read_only_style = " background-color: #F3F4F6;"
         for tab_idx in [0, 1]:
             tab = self.tab_widget.widget(tab_idx)
@@ -255,8 +253,6 @@ class PersonDialog(QDialog):
                 w.setStyleSheet(w.styleSheet() + read_only_style)
             for w in tab.findChildren(QComboBox):
                 w.setEnabled(False)
-            for w in tab.findChildren(_QDateEdit):
-                w.setReadOnly(True)
 
     def _setup_progress_indicator(self, layout):
         """Create 3-bar progress indicator with gradient fill."""
@@ -448,17 +444,41 @@ class PersonDialog(QDialog):
         grid.addWidget(self.mother_name, row, 1)
         row += 1
 
-        # Row: Birth Date
+        # Row: Birth Date (3 dropdowns: year, month, day)
         grid.addWidget(self._label(tr("wizard.person_dialog.birth_date"), label_style), row, 0)
         row += 1
-        self.birth_date = QDateEdit()
-        self.birth_date.setCalendarPopup(True)
-        self.birth_date.setDate(QDate(1980, 1, 1))
-        self.birth_date.setMinimumDate(QDate(1900, 1, 1))
-        self.birth_date.setMaximumDate(QDate.currentDate())
-        self.birth_date.setDisplayFormat("yyyy-MM-dd")
-        self.birth_date.setStyleSheet(self._date_input_style())
-        grid.addWidget(self.birth_date, row, 0)
+        birth_layout = QHBoxLayout()
+        birth_layout.setSpacing(6)
+        birth_layout.setContentsMargins(0, 0, 0, 0)
+
+        self.birth_year_combo = QComboBox()
+        self.birth_year_combo.setLayoutDirection(Qt.LeftToRight)
+        self.birth_year_combo.setStyleSheet(self._input_style())
+        self.birth_year_combo.addItem("--", None)
+        for y in range(2010, 1919, -1):
+            self.birth_year_combo.addItem(str(y), y)
+
+        self.birth_month_combo = QComboBox()
+        self.birth_month_combo.setLayoutDirection(Qt.LeftToRight)
+        self.birth_month_combo.setStyleSheet(self._input_style())
+        self.birth_month_combo.addItem("--", None)
+        for m in range(1, 13):
+            self.birth_month_combo.addItem(str(m), m)
+
+        self.birth_day_combo = QComboBox()
+        self.birth_day_combo.setLayoutDirection(Qt.LeftToRight)
+        self.birth_day_combo.setStyleSheet(self._input_style())
+        self.birth_day_combo.addItem("--", None)
+        for d in range(1, 32):
+            self.birth_day_combo.addItem(str(d), d)
+
+        birth_layout.addWidget(self.birth_year_combo, 2)
+        birth_layout.addWidget(self.birth_month_combo, 1)
+        birth_layout.addWidget(self.birth_day_combo, 1)
+        birth_container = QWidget()
+        birth_container.setStyleSheet("background-color: transparent;")
+        birth_container.setLayout(birth_layout)
+        grid.addWidget(birth_container, row, 0)
         row += 1
 
         # Row: Gender | Nationality
@@ -2111,7 +2131,7 @@ class PersonDialog(QDialog):
                 day = d if d else 1
                 return f"{y:04d}-{month:02d}-{day:02d}"
             return ""
-        return None
+        return ""
 
     def _ask_same_or_separate_dates(self, file_count: int):
         """Ask user: same date for all files or separate? Returns True=same, False=separate, None=cancelled."""
@@ -2219,6 +2239,17 @@ class PersonDialog(QDialog):
         except ValueError:
             self.ownership_share.setText("")
 
+    def _build_birth_date_iso(self) -> str:
+        """Build ISO date string from birth date combo boxes."""
+        y = self.birth_year_combo.currentData()
+        m = self.birth_month_combo.currentData()
+        d = self.birth_day_combo.currentData()
+        if y:
+            month = m if m else 1
+            day = d if d else 1
+            return f"{y:04d}-{month:02d}-{day:02d}"
+        return ""
+
     def _build_start_date_iso(self) -> str:
         """Build ISO date string from the 3 separate date fields (year/month/day)."""
         y = self.start_year.text().strip()
@@ -2269,11 +2300,21 @@ class PersonDialog(QDialog):
         self.last_name.setText(data.get('last_name') or '')
         self.national_id.setText(data.get('national_id') or '')
 
-        # Birth date
+        # Birth date (3 combos)
         if data.get('birth_date'):
-            bd = QDate.fromString(data['birth_date'], 'yyyy-MM-dd')
-            if bd.isValid():
-                self.birth_date.setDate(bd)
+            parts = str(data['birth_date'])[:10].split('-')
+            if len(parts) >= 1 and parts[0].isdigit():
+                idx = self.birth_year_combo.findData(int(parts[0]))
+                if idx >= 0:
+                    self.birth_year_combo.setCurrentIndex(idx)
+            if len(parts) >= 2 and parts[1].isdigit():
+                idx = self.birth_month_combo.findData(int(parts[1]))
+                if idx >= 0:
+                    self.birth_month_combo.setCurrentIndex(idx)
+            if len(parts) >= 3 and parts[2].isdigit():
+                idx = self.birth_day_combo.findData(int(parts[2]))
+                if idx >= 0:
+                    self.birth_day_combo.setCurrentIndex(idx)
 
         # Gender
         gender_val = data.get('gender')
@@ -2384,7 +2425,7 @@ class PersonDialog(QDialog):
             'national_id': self.national_id.text().strip() or None,
             'gender': self.gender.currentData(),
             'nationality': self.nationality.currentData(),
-            'birth_date': self.birth_date.date().toPyDate().isoformat(),
+            'birth_date': self._build_birth_date_iso(),
             # Tab 2
             'person_role': self.person_role.currentData(),
             'relationship_type': self.person_role.currentData(),  # backward compat
@@ -2461,9 +2502,11 @@ class PersonDialog(QDialog):
         from ui.error_handler import ErrorHandler
 
         has_error = False
-        # Required: first_name, last_name
+        # Required: first_name, last_name, father_name, mother_name
         first = self.first_name.text().strip()
         last = self.last_name.text().strip()
+        father = self.father_name.text().strip()
+        mother = self.mother_name.text().strip()
         name_pattern = re.compile(r'^[\u0600-\u06FFa-zA-Z\s.\-\']{2,}$')
         if not first:
             self._set_field_error(self.first_name, self._first_name_error, tr("wizard.person_dialog.enter_first_name"))
@@ -2481,6 +2524,55 @@ class PersonDialog(QDialog):
             self._set_field_error(self.last_name, self._last_name_error, tr("wizard.person_dialog.invalid_last_name"))
             self.tab_widget.setCurrentIndex(0)
             has_error = True
+        if not father:
+            self._set_field_error(self.father_name, self._father_name_error, "اسم الأب مطلوب")
+            self.tab_widget.setCurrentIndex(0)
+            has_error = True
+        if not mother:
+            if not has_error:
+                self.tab_widget.setCurrentIndex(0)
+            has_error = True
+            from ui.components.toast import Toast
+            Toast.show_toast(self, "اسم الأم مطلوب", Toast.ERROR)
+
+        if has_error:
+            return
+
+        # Uniqueness: check full name via API
+        full_name = f"{first} {father} {last}"
+        current_person_id = (self.person_data or {}).get('person_id', '')
+        try:
+            response = self._api_service.get_persons(search=full_name, page_size=10)
+            persons = response.get("items", []) if isinstance(response, dict) else []
+            for p in persons:
+                p_id = p.get("id") or p.get("personId") or ""
+                if p_id == current_person_id:
+                    continue
+                p_first = p.get("firstNameArabic", "").strip()
+                p_father = p.get("fatherNameArabic", "").strip()
+                p_last = p.get("familyNameArabic", "").strip()
+                if p_first == first and p_father == father and p_last == last:
+                    self._set_field_error(self.first_name, self._first_name_error, "هذا الاسم مسجل مسبقاً في النظام")
+                    self.tab_widget.setCurrentIndex(0)
+                    return
+        except Exception as e:
+            logger.warning(f"Name uniqueness check failed: {e}")
+
+        # Uniqueness: check national ID via API
+        nid_text = self.national_id.text().strip()
+        if nid_text and len(nid_text) == 11:
+            try:
+                response = self._api_service.get_persons(national_id=nid_text, page_size=5)
+                persons = response.get("items", []) if isinstance(response, dict) else []
+                for p in persons:
+                    p_id = p.get("id") or p.get("personId") or ""
+                    if p_id == current_person_id:
+                        continue
+                    self._set_field_error(self.national_id, self._nid_error, "الرقم الوطني مسجل مسبقاً")
+                    self.tab_widget.setCurrentIndex(0)
+                    return
+            except Exception as e:
+                logger.warning(f"National ID uniqueness check failed: {e}")
 
         # Optional format: phone, landline, email (only validate if filled)
         if not self._validate_mobile(self.phone.text().strip()):

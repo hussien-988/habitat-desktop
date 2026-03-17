@@ -596,9 +596,9 @@ class Navbar(QFrame):
         "admin":            [0, 1, 2, 3, 4, 5],
         "data_manager":     [0, 1, 2, 3, 5],
         "office_clerk":     [1],
-        "field_supervisor": [0, 1, 5],
-        "field_researcher": [1],
-        "analyst":          [0],
+        "field_supervisor": [1, 5],
+        "field_researcher": [],
+        "analyst":          [],
     }
 
     def configure_for_role(self, role: str):

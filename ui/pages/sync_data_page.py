@@ -110,6 +110,7 @@ class SyncDataPage(QWidget):
     """Page displaying all building assignments with sync status."""
 
     sync_notification = pyqtSignal(int)
+    back_requested = pyqtSignal()
 
     def __init__(self, db=None, i18n=None, parent=None):
         super().__init__(parent)
@@ -136,8 +137,7 @@ class SyncDataPage(QWidget):
 
         self._refresh_timer = QTimer(self)
         self._refresh_timer.timeout.connect(self._smart_refresh)
-        # Auto-refresh disabled temporarily for import testing
-        # self._refresh_timer.start(10000)
+        self._refresh_timer.start(10000)
 
     # ------------------------------------------------------------------
     # UI Setup
@@ -202,6 +202,25 @@ class SyncDataPage(QWidget):
         title_row.addStretch()
 
         self._collector_combo = QComboBox()
+        # Back button
+        back_btn = QPushButton("رجوع")
+        back_btn.setFixedSize(100, 40)
+        back_btn.setCursor(Qt.PointingHandCursor)
+        back_btn.setFont(create_font(size=FontManager.SIZE_BODY, weight=FontManager.WEIGHT_SEMIBOLD))
+        back_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #F1F5F9;
+                color: #475569;
+                border: 1px solid #E2E8F0;
+                border-radius: 8px;
+                font-weight: 600;
+            }
+            QPushButton:hover {
+                background-color: #E2E8F0;
+            }
+        """)
+        back_btn.clicked.connect(self.back_requested.emit)
+        title_row.addWidget(back_btn)
         self._collector_combo.setFixedHeight(42)
         self._collector_combo.setFixedWidth(220)
         self._collector_combo.setEditable(True)
@@ -267,6 +286,7 @@ class SyncDataPage(QWidget):
                 border: 1px solid {Colors.BORDER_DEFAULT};
                 background-color: white;
                 selection-background-color: #EFF6FF;
+                selection-color: #212B36;
                 color: #6c757d;
                 font-family: 'IBM Plex Sans Arabic';
                 font-size: 9pt;
@@ -275,6 +295,14 @@ class SyncDataPage(QWidget):
             QComboBox QAbstractItemView::item {{
                 padding: 8px 12px;
                 color: #6c757d;
+            }}
+            QComboBox QAbstractItemView::item:hover {{
+                background-color: #EFF6FF;
+                color: #212B36;
+            }}
+            QComboBox QAbstractItemView::item:selected {{
+                background-color: #EFF6FF;
+                color: #212B36;
             }}
         """)
 
@@ -318,22 +346,26 @@ class SyncDataPage(QWidget):
         try:
             from services.api_client import get_api_client
             api = get_api_client()
-            collectors = api.get_field_collectors()
-            if not isinstance(collectors, list):
-                collectors = []
+            response = api.get_field_collectors()
+            collectors = (
+                response if isinstance(response, list)
+                else response.get("items", []) if isinstance(response, dict)
+                else []
+            )
 
             self._collector_combo.blockSignals(True)
             self._collector_combo.clear()
             self._collector_combo.addItem("جميع جامعي البيانات", None)
             for c in collectors:
                 name = (
-                    c.get("fullNameAr") or c.get("fullName")
+                    c.get("fullNameArabic") or c.get("fullNameAr")
+                    or c.get("fullNameEnglish") or c.get("fullName")
                     or c.get("full_name_ar") or c.get("full_name")
-                    or c.get("username", "")
+                    or c.get("username") or c.get("userName") or ""
                 )
                 cid = c.get("id") or c.get("userId") or c.get("user_id")
-                if name and cid:
-                    self._collector_combo.addItem(name, cid)
+                if cid:
+                    self._collector_combo.addItem(name or cid, cid)
             self._collector_combo.blockSignals(False)
         except Exception as e:
             logger.warning(f"Failed to load field collectors: {e}")
@@ -796,7 +828,7 @@ class SyncDataPage(QWidget):
                     logger.debug(f"Could not fetch units: {e}")
 
             if units:
-                units_label = QLabel("الوحدات العقارية:")
+                units_label = QLabel("المقاسم:")
                 units_label.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
                 units_label.setStyleSheet("color: #637381; background: transparent; border: none;")
                 body_layout.addWidget(units_label)
@@ -834,42 +866,6 @@ class SyncDataPage(QWidget):
                 btn_row.addStretch()
                 body_layout.addLayout(btn_row)
 
-            # --- TEST BUTTONS (temporary — remove after testing) ---
-            test_row = QHBoxLayout()
-            test_row.setSpacing(6)
-
-            test_lbl = QLabel("اختبار:")
-            test_lbl.setFont(create_font(size=8))
-            test_lbl.setStyleSheet("color: #9CA3AF; background: transparent; border: none;")
-            test_row.addWidget(test_lbl)
-
-            for s_key, s_text, s_color in [
-                ('1', 'قيد المزامنة', '#3890DF'),
-                ('2', 'تمت', '#10B981'),
-                ('3', 'فشلت', '#EF4444'),
-                ('0', 'انتظار', '#9CA3AF'),
-            ]:
-                t_btn = QPushButton(s_text)
-                t_btn.setFixedHeight(26)
-                t_btn.setCursor(Qt.PointingHandCursor)
-                t_btn.setFont(create_font(size=8))
-                t_btn.setStyleSheet(f"""
-                    QPushButton {{
-                        color: white; background: {s_color};
-                        border: none; border-radius: 4px; padding: 2px 10px;
-                    }}
-                    QPushButton:hover {{ background: {s_color}; opacity: 0.8; }}
-                """)
-                t_btn.clicked.connect(
-                    lambda _, aid=assignment_id, a=assignment, s=s_key:
-                        self._test_change_status(aid, a, s)
-                )
-                test_row.addWidget(t_btn)
-
-            test_row.addStretch()
-            body_layout.addLayout(test_row)
-            # --- END TEST BUTTONS ---
-
         except Exception as e:
             logger.warning(f"Failed to load assignment details: {e}")
             err = QLabel("فشل تحميل التفاصيل")
@@ -888,7 +884,8 @@ class SyncDataPage(QWidget):
             unit_type = int(unit_type)
         except (ValueError, TypeError):
             pass
-        ar_type = _UNIT_TYPE_AR.get(unit_type, str(unit_type))
+        lookup_key = unit_type if isinstance(unit_type, int) else str(unit_type).lower()
+        ar_type = _UNIT_TYPE_AR.get(lookup_key, str(unit_type))
 
         unit_code = unit_data.get('unitCode') or unit_data.get('unit_code') or '-'
         floor = unit_data.get('floorNumber')
@@ -988,24 +985,6 @@ class SyncDataPage(QWidget):
         return card
 
     # ------------------------------------------------------------------
-    # Test status change (temporary — remove after testing)
-    # ------------------------------------------------------------------
-
-    def _test_change_status(self, assignment_id, assignment, new_status):
-        old_status = self._previous_statuses.get(assignment_id, '0')
-        self._previous_statuses[assignment_id] = new_status
-
-        self._update_status_widget(assignment_id, assignment, new_status)
-
-        if new_status in _SYNCING_STATUSES:
-            self._add_sync_overlay(assignment_id)
-        else:
-            self._remove_sync_overlay(assignment_id)
-
-        if old_status != new_status:
-            self._on_status_changed(assignment, old_status, new_status)
-
-    # ------------------------------------------------------------------
     # Unassign
     # ------------------------------------------------------------------
 
@@ -1081,3 +1060,8 @@ class SyncDataPage(QWidget):
     def showEvent(self, event):
         super().showEvent(event)
         self.refresh()
+        self._refresh_timer.start(10000)
+
+    def hideEvent(self, event):
+        self._refresh_timer.stop()
+        super().hideEvent(event)

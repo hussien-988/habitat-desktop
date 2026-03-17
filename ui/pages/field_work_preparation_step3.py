@@ -174,7 +174,7 @@ class FieldWorkPreparationStep3(QWidget):
         buildings_card_layout.setContentsMargins(24, 16, 24, 16)
         buildings_card_layout.setSpacing(6)
 
-        list_title = QLabel("المباني والوحدات العقارية")
+        list_title = QLabel("المباني والمقاسم")
         list_title.setFont(create_font(size=12, weight=FontManager.WEIGHT_SEMIBOLD))
         list_title.setStyleSheet("color: #212B36; background: transparent; border: none;")
         buildings_card_layout.addWidget(list_title)
@@ -263,7 +263,7 @@ class FieldWorkPreparationStep3(QWidget):
         units = self._building_units.get(building_id, [])
         units_count = len(units)
         if units_count > 0:
-            badge = QLabel(f"{units_count} وحدات")
+            badge = QLabel(f"{units_count} مقاسم")
             badge.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
             badge.setStyleSheet("""
                 color: #3890DF;
@@ -276,7 +276,7 @@ class FieldWorkPreparationStep3(QWidget):
         else:
             num_units = getattr(building, 'number_of_units', 0) or 0
             if num_units > 0:
-                badge = QLabel(f"{num_units} وحدات")
+                badge = QLabel(f"{num_units} مقاسم")
                 badge.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
                 badge.setStyleSheet("""
                     color: #3890DF;
@@ -397,7 +397,7 @@ class FieldWorkPreparationStep3(QWidget):
 
         # Property units cards
         if units:
-            units_label = QLabel("الوحدات العقارية:")
+            units_label = QLabel("المقاسم:")
             units_label.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
             units_label.setStyleSheet("color: #637381; background: transparent; border: none;")
             body_layout.addWidget(units_label)
@@ -420,7 +420,8 @@ class FieldWorkPreparationStep3(QWidget):
             unit_type = int(unit_type)
         except (ValueError, TypeError):
             pass
-        ar_type = _UNIT_TYPE_AR.get(unit_type, str(unit_type))
+        lookup_key = unit_type if isinstance(unit_type, int) else str(unit_type).lower()
+        ar_type = _UNIT_TYPE_AR.get(lookup_key, str(unit_type))
 
         unit_code = unit_data.get('unitCode') or unit_data.get('unit_code') or '-'
         floor = unit_data.get('floorNumber')

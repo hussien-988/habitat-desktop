@@ -87,7 +87,7 @@ class _ApiWorker(QThread):
             self.error.emit("api", msg)
         except Exception as e:
             logger.error(f"Unexpected worker error: {e}")
-            self.error.emit("unknown", f"خطأ غير متوقع: {e}")
+            self.error.emit("unknown", "حدث خطأ غير متوقع. يرجى المحاولة مرة أخرى.")
 
 
 class ImportWizardPage(QWidget):
@@ -587,6 +587,9 @@ class ImportWizardPage(QWidget):
             self._transition_step1_to_step2()
 
         elif self.current_step == 1:
+            if self._current_package_status == _PkgStatus.VALIDATION_FAILED:
+                self._cancel_validation_failed_package()
+                return
             self._transition_step2_to_review()
 
         elif self.current_step == 2:
@@ -1172,8 +1175,8 @@ class ImportWizardPage(QWidget):
         elif self.current_step == 1:
             self.btn_back.setEnabled(True)
             if self._current_package_status == _PkgStatus.VALIDATION_FAILED:
-                self.btn_next.setText("فشل التحقق")
-                self.btn_next.setEnabled(False)
+                self.btn_next.setText("فشل التحقق — إلغاء الحزمة")
+                self.btn_next.setEnabled(True)
             elif self._current_package_status == _PkgStatus.REVIEWING_CONFLICTS:
                 self.btn_next.setText("يجب حل التعارضات أولاً")
                 self.btn_next.setEnabled(False)
@@ -1205,6 +1208,27 @@ class ImportWizardPage(QWidget):
         self.btn_next.setEnabled(enabled)
 
     # -- Cancel package -------------------------------------------------------
+
+    def _cancel_validation_failed_package(self):
+        """Validation failed — cancel package and navigate to packages list."""
+        pkg_id = self._current_package_id
+        logger.info(f"Validation failed — leaving wizard for package: {pkg_id}")
+
+        self.cancelled.emit()
+
+        if pkg_id:
+            def on_cancel_done(cancel_result):
+                if not cancel_result.success:
+                    logger.warning(f"Cancel failed: {cancel_result.message}")
+                self.refresh()
+
+            self._run_api(
+                lambda: self.import_controller.cancel_package(pkg_id),
+                on_cancel_done,
+                loading_msg=""
+            )
+        else:
+            self.refresh()
 
     def _on_cancel_package(self):
         """Cancel the current import package (async) and reset the wizard."""

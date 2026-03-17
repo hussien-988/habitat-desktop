@@ -16,7 +16,7 @@ from utils.logger import get_logger
 
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel,
-    QPushButton, QFrame, QScrollArea,
+    QPushButton, QFrame, QScrollArea, QLineEdit,
     QSpacerItem, QSizePolicy, QGridLayout,
     QGraphicsDropShadowEffect, QComboBox, QFileDialog,
 )
@@ -73,6 +73,8 @@ class ClaimDetailsPage(QWidget):
         self._pending_deletes = []
         self._pending_links = []  # evidence dicts to link (existing docs)
         self._claim_type_combo = None
+        self._ownership_share_input = None
+        self._original_ownership_share = None
         self._setup_ui()
 
     def _setup_ui(self):
@@ -414,11 +416,11 @@ class ClaimDetailsPage(QWidget):
         self._clear_layout(self._header_content)
 
         claim = self._claim_data
-        claim_number = str(claim.get("claimNumber", "N/A"))
-        claim_type = get_claim_type_display(claim.get("claimType", ""))
-        case_status = claim.get("caseStatus") or claim.get("status", 1)
+        claim_number = str(claim.get("claimNumber") or "N/A")
+        claim_type = get_claim_type_display(claim.get("claimType") or "")
+        case_status = claim.get("caseStatus") or claim.get("status") or 1
         status_label = _CASE_STATUS_LABELS.get(case_status, "غير محدد")
-        source = get_source_display(claim.get("claimSource", 0))
+        source = get_source_display(claim.get("claimSource") or 0)
         date_str = (str(claim.get("createdAtUtc") or ""))[:10]
 
         # Claim number
@@ -483,11 +485,11 @@ class ClaimDetailsPage(QWidget):
         dob_display = str(dob)[:10] if dob and not str(dob).startswith("0001") else "-"
 
         fields = [
-            ("الاسم", person.get("firstNameArabic", "-")),
-            ("اسم الأب", person.get("fatherNameArabic", "-")),
-            ("العائلة", person.get("familyNameArabic", "-")),
-            ("اسم الأم", person.get("motherNameArabic", "-")),
-            ("الرقم الوطني", str(person.get("nationalId", "-"))),
+            ("الاسم", person.get("firstNameArabic") or "-"),
+            ("اسم الأب", person.get("fatherNameArabic") or "-"),
+            ("العائلة", person.get("familyNameArabic") or "-"),
+            ("اسم الأم", person.get("motherNameArabic") or "-"),
+            ("الرقم الوطني", str(person.get("nationalId") or "-")),
             ("الجنس", gender_label),
             ("تاريخ الميلاد", dob_display),
         ]
@@ -582,6 +584,8 @@ class ClaimDetailsPage(QWidget):
 
         claim = self._claim_data
         current_type = claim.get("claimType", "")
+        case_status = claim.get("caseStatus") or claim.get("status", 1)
+        is_claim_open = (case_status == 1)
 
         # Claim type row
         type_row = QHBoxLayout()
@@ -597,16 +601,7 @@ class ClaimDetailsPage(QWidget):
             self._claim_type_combo = QComboBox()
             self._claim_type_combo.setFixedHeight(36)
             self._claim_type_combo.setMinimumWidth(160)
-            self._claim_type_combo.setStyleSheet(f"""
-                QComboBox {{
-                    border: 1px solid #E0E6ED; border-radius: 8px;
-                    padding: 6px 10px; background-color: #f0f7ff;
-                    color: #333; font-size: 13px;
-                }}
-                QComboBox:focus {{ border-color: {Colors.PRIMARY_BLUE}; }}
-                QComboBox::drop-down {{ border: none; width: 28px; }}
-            """)
-            # Use display_mappings labels (consistent with view mode)
+            self._claim_type_combo.setStyleSheet(StyleManager.form_input())
             _CLAIM_TYPE_OPTIONS = [
                 (1, get_claim_type_display(1)),
                 (2, get_claim_type_display(2)),
@@ -616,20 +611,20 @@ class ClaimDetailsPage(QWidget):
             logger.info(f"[EDIT] current claimType value: {current_type!r} (type={type(current_type).__name__})")
             for code, label in _CLAIM_TYPE_OPTIONS:
                 self._claim_type_combo.addItem(label, code)
-            # Set current value — handle both int and string types
             idx = self._claim_type_combo.findData(current_type)
             if idx < 0 and isinstance(current_type, str):
-                # Try matching by string-to-int conversion
                 try:
                     idx = self._claim_type_combo.findData(int(current_type))
                 except (ValueError, TypeError):
                     pass
             if idx < 0 and isinstance(current_type, int):
-                # Try matching by int-to-string
                 idx = self._claim_type_combo.findData(str(current_type))
             logger.info(f"[EDIT] ComboBox findData result: idx={idx}")
             if idx >= 0:
                 self._claim_type_combo.setCurrentIndex(idx)
+            if not is_claim_open:
+                self._claim_type_combo.setEnabled(False)
+            self._claim_type_combo.currentIndexChanged.connect(self._on_claim_type_changed_in_edit)
             type_row.addWidget(self._claim_type_combo)
         else:
             type_value = QLabel(get_claim_type_display(current_type))
@@ -643,6 +638,48 @@ class ClaimDetailsPage(QWidget):
         type_widget.setLayout(type_row)
         self._relation_content.addWidget(type_widget)
 
+        # Ownership share row
+        share_row = QHBoxLayout()
+        share_row.setContentsMargins(0, 0, 0, 0)
+        share_row.setSpacing(8)
+
+        share_label = QLabel("حصة الملكية (%):")
+        share_label.setFont(create_font(size=FontManager.WIZARD_CARD_LABEL, weight=FontManager.WEIGHT_SEMIBOLD))
+        share_label.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent; border: none;")
+        share_row.addWidget(share_label)
+
+        raw_share = claim.get("ownershipShare")
+        is_ownership = current_type == 2 or current_type == "2"
+
+        if self._is_editing:
+            from PyQt5.QtGui import QDoubleValidator
+            self._ownership_share_input = QLineEdit()
+            self._ownership_share_input.setFixedHeight(36)
+            self._ownership_share_input.setFixedWidth(120)
+            self._ownership_share_input.setPlaceholderText("0 - 100")
+            self._ownership_share_input.setValidator(QDoubleValidator(0, 100, 2, self))
+            self._ownership_share_input.setStyleSheet(StyleManager.form_input())
+            if raw_share is not None:
+                self._ownership_share_input.setText(str(round(float(raw_share) * 100, 2)))
+            self._ownership_share_input.setEnabled(is_ownership or not is_claim_open)
+            share_row.addWidget(self._ownership_share_input)
+        else:
+            if raw_share is not None and is_ownership:
+                pct = round(float(raw_share) * 100, 2)
+                display = f"{pct}%"
+            else:
+                display = "-"
+            share_value = QLabel(display)
+            share_value.setFont(create_font(size=FontManager.WIZARD_CARD_LABEL, weight=FontManager.WEIGHT_REGULAR))
+            share_value.setStyleSheet(f"color: {Colors.TEXT_SECONDARY}; background: transparent; border: none;")
+            share_row.addWidget(share_value)
+
+        share_row.addStretch()
+        share_widget = QWidget()
+        share_widget.setStyleSheet("background: transparent; border: none;")
+        share_widget.setLayout(share_row)
+        self._relation_content.addWidget(share_widget)
+
         # Divider
         divider = QFrame()
         divider.setFrameShape(QFrame.HLine)
@@ -650,7 +687,7 @@ class ClaimDetailsPage(QWidget):
         divider.setStyleSheet("background-color: #E2E8F0; border: none;")
         self._relation_content.addWidget(divider)
 
-        # Evidence header row (title + upload button in edit mode)
+        # Evidence header row (title + upload/pick buttons in edit mode for open claims)
         ev_header = QHBoxLayout()
         ev_header.setContentsMargins(0, 0, 0, 0)
         ev_title = QLabel("المستندات المرفقة")
@@ -777,8 +814,9 @@ class ClaimDetailsPage(QWidget):
         name_lbl.setWordWrap(True)
         card_layout.addWidget(name_lbl)
 
-        if self._is_editing and ev_id:
-            # Delete button overlay
+        case_status = self._claim_data.get("caseStatus") or self._claim_data.get("status", 1)
+        if self._is_editing and ev_id and case_status == 1:
+            # Delete button overlay (only for open claims)
             del_btn = QPushButton("✕", card)
             del_btn.setFixedSize(18, 18)
             del_btn.move(60, 2)
@@ -794,7 +832,11 @@ class ClaimDetailsPage(QWidget):
         elif local_path:
             from PyQt5.QtCore import QUrl
             from PyQt5.QtGui import QDesktopServices
-            card.mousePressEvent = lambda e, fp=local_path: QDesktopServices.openUrl(QUrl.fromLocalFile(fp))
+
+            def _open_file(event, fp=local_path):
+                QDesktopServices.openUrl(QUrl.fromLocalFile(fp))
+
+            card.mousePressEvent = _open_file
         else:
             def _on_click_unavailable(event, page=self):
                 Toast.show_toast(page, "لا يمكن تحميل المستند حالياً", Toast.WARNING)
@@ -962,7 +1004,10 @@ class ClaimDetailsPage(QWidget):
         logger.info(f"[EDIT] Entering edit mode for claim {self._claim_id}")
         self._is_editing = True
         self._original_claim_type = self._claim_data.get("claimType")
+        raw_share = self._claim_data.get("ownershipShare")
+        self._original_ownership_share = round(float(raw_share) * 100, 2) if raw_share is not None else None
         logger.info(f"[EDIT] Original claimType: {self._original_claim_type!r}")
+        logger.info(f"[EDIT] Original ownershipShare: {self._original_ownership_share!r}")
         logger.info(f"[EDIT] survey_id: {self._survey_id}")
         logger.info(f"[EDIT] evidences count: {len(self._evidences)}")
         self._pending_uploads = []
@@ -970,6 +1015,9 @@ class ClaimDetailsPage(QWidget):
         self._pending_links = []
         self._extract_relation_id()
         logger.info(f"[EDIT] Extracted relation_id: {self._relation_id}")
+        self._relation_card.setStyleSheet(f"""
+            QFrame {{ background-color: {Colors.SURFACE}; border: 2px solid {Colors.PRIMARY_BLUE}; border-radius: 12px; }}
+        """)
         self._populate_relation_card()
         self._edit_btn.setText("حفظ التعديلات")
         self._cancel_edit_btn.setVisible(True)
@@ -980,7 +1028,7 @@ class ClaimDetailsPage(QWidget):
         can_edit = False
         if hasattr(main_window, 'current_user') and main_window.current_user:
             role = getattr(main_window.current_user, 'role', '')
-            case_status = self._claim_data.get("caseStatus") or self._claim_data.get("status", 1)
+            case_status = self._claim_data.get("caseStatus")
             can_edit = role in ("admin", "data_manager") and case_status == 1
         self._edit_btn.setVisible(can_edit)
         self._cancel_edit_btn.setVisible(False)
@@ -988,6 +1036,15 @@ class ClaimDetailsPage(QWidget):
     # =========================================================================
     # Edit mode handlers
     # =========================================================================
+
+    def _on_claim_type_changed_in_edit(self):
+        """Enable/disable ownership share input based on selected claim type."""
+        if not self._ownership_share_input:
+            return
+        is_ownership = self._claim_type_combo and self._claim_type_combo.currentData() == 2
+        self._ownership_share_input.setEnabled(is_ownership)
+        if not is_ownership:
+            self._ownership_share_input.clear()
 
     def _extract_relation_id(self):
         """Extract relation_id from claim data or evidence relations."""
@@ -1011,6 +1068,10 @@ class ClaimDetailsPage(QWidget):
         self._pending_deletes = []
         self._pending_links = []
         self._claim_type_combo = None
+        self._ownership_share_input = None
+        self._relation_card.setStyleSheet(f"""
+            QFrame {{ background-color: {Colors.SURFACE}; border: none; border-radius: 12px; }}
+        """)
         self._populate_relation_card()
         self._edit_btn.setText("تعديل المطالبة")
         self._cancel_edit_btn.setVisible(False)
@@ -1193,7 +1254,13 @@ class ClaimDetailsPage(QWidget):
         logger.info(f"[SAVE] new_type={new_type!r}, original={self._original_claim_type!r}, changed={type_changed}")
         logger.info(f"[SAVE] pending_uploads={len(self._pending_uploads)}, pending_deletes={len(self._pending_deletes)}, pending_links={len(self._pending_links)}")
 
-        has_changes = type_changed or self._pending_uploads or self._pending_deletes or self._pending_links
+        # Check ownership share change
+        new_share_text = self._ownership_share_input.text().strip() if self._ownership_share_input else ""
+        new_share_val = float(new_share_text) if new_share_text else None
+        share_changed = new_share_val != self._original_ownership_share
+        logger.info(f"[SAVE] ownershipShare: new={new_share_val!r}, original={self._original_ownership_share!r}, changed={share_changed}")
+
+        has_changes = type_changed or share_changed or self._pending_uploads or self._pending_deletes or self._pending_links
         if not has_changes:
             Toast.show_toast(self, "لا توجد تعديلات للحفظ", Toast.INFO)
             self._on_cancel_edit()
@@ -1206,6 +1273,10 @@ class ClaimDetailsPage(QWidget):
             old_label = get_claim_type_display(self._original_claim_type)
             new_label = get_claim_type_display(new_type)
             summary.append(f"تغيير نوع المطالبة: {old_label} → {new_label}")
+        if share_changed:
+            old_pct = f"{self._original_ownership_share}%" if self._original_ownership_share is not None else "-"
+            new_pct = f"{new_share_val}%" if new_share_val is not None else "-"
+            summary.append(f"تغيير حصة الملكية: {old_pct} → {new_pct}")
         if self._pending_uploads:
             summary.append(f"رفع {len(self._pending_uploads)} مستند جديد")
         if self._pending_links:
@@ -1222,6 +1293,9 @@ class ClaimDetailsPage(QWidget):
 
         if type_changed:
             update_data["relationType"] = new_type
+
+        if share_changed and new_share_val is not None:
+            update_data["ownershipShare"] = new_share_val / 100.0
 
         # New evidence from uploaded files
         if self._pending_uploads:
@@ -1282,6 +1356,10 @@ class ClaimDetailsPage(QWidget):
         self._pending_deletes = []
         self._pending_links = []
         self._claim_type_combo = None
+        self._ownership_share_input = None
+        self._relation_card.setStyleSheet(f"""
+            QFrame {{ background-color: {Colors.SURFACE}; border: none; border-radius: 12px; }}
+        """)
         self._edit_btn.setText("تعديل المطالبة")
         self._cancel_edit_btn.setVisible(False)
         self._reload_claim_data()
@@ -1290,7 +1368,10 @@ class ClaimDetailsPage(QWidget):
         """Reload claim data from API and refresh the page."""
         from controllers.claim_controller import ClaimController
         ctrl = ClaimController()
-        result = ctrl.get_claim_full_detail(self._claim_id, hint_survey_id=self._survey_id)
+        result = ctrl.get_claim_full_detail(
+            self._claim_id,
+            hint_survey_id=self._survey_id,
+            hint_relation_id=self._relation_id)
         if result.success:
             self.refresh(result.data)
         else:

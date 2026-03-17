@@ -104,6 +104,72 @@ def _extract_validation_from_500(error: ApiException) -> str:
     return ""
 
 
+def sanitize_user_message(msg: str) -> str:
+    """Sanitize a message before showing it to the user.
+
+    Detects technical patterns (HTTP codes, URLs, exception names, tracebacks)
+    and replaces the technical part with a friendly Arabic message,
+    keeping any Arabic prefix that was already there.
+    """
+    import re
+    if not msg or not isinstance(msg, str):
+        return msg or ""
+
+    _TECHNICAL_PATTERNS = [
+        r'\[\d{3}\]\s*\d{3}\s*(Client|Server)\s*Error',
+        r'\d{3}\s*(Client|Server)\s*Error:\s*\w+\s+for\s+url:',
+        r'https?://\S+',
+        r'Traceback\s*\(most\s+recent',
+        r'File\s+"[^"]+",\s*line\s+\d+',
+        r'\w+Error:\s',
+        r'\w+Exception:\s',
+        r'ConnectionRefusedError',
+        r'TimeoutError',
+        r'OSError',
+        r'HTTPSConnectionPool',
+        r'Max retries exceeded',
+        r'errno\s+\d+',
+        r'WinError\s+\d+',
+        r'socket\.timeout',
+        r'requests\.exceptions\.',
+        r'at System\.\w+',
+        r'\.cs:line\s+\d+',
+        r'KeyError',
+        r'AttributeError',
+        r'TypeError',
+        r'ValueError',
+    ]
+
+    has_technical = any(re.search(p, msg) for p in _TECHNICAL_PATTERNS)
+    if not has_technical:
+        return msg
+
+    arabic_prefix_match = re.match(r'^([\u0600-\u06FF\s\u060C\u061B\u061F:\.]+)', msg)
+    prefix = ""
+    if arabic_prefix_match:
+        prefix = arabic_prefix_match.group(1).rstrip(': ').strip()
+
+    fallback = tr("error.api.unknown")
+    if re.search(r'timeout|timed?\s*out', msg, re.IGNORECASE):
+        fallback = tr("error.api.timeout")
+    elif re.search(r'connect|connection|refused|unreachable', msg, re.IGNORECASE):
+        fallback = tr("error.api.connection")
+    elif re.search(r'401|[Uu]nauthorized', msg):
+        fallback = tr("error.api.unauthorized")
+    elif re.search(r'403|[Ff]orbidden', msg):
+        fallback = tr("error.api.forbidden")
+    elif re.search(r'404\s+\w|[Nn]ot\s*[Ff]ound', msg):
+        fallback = tr("error.api.not_found")
+    elif re.search(r'409|[Cc]onflict', msg):
+        fallback = tr("error.api.conflict")
+    elif re.search(r'5\d{2}\s*(Server|Internal)', msg, re.IGNORECASE):
+        fallback = tr("error.api.server")
+
+    if prefix and len(prefix) > 8:
+        return prefix
+    return fallback
+
+
 def _extract_validation_details(response_data: dict) -> str:
     """Extract validation error details from API response."""
     if not response_data:
