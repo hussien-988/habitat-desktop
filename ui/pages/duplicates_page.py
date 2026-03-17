@@ -1,18 +1,5 @@
 # -*- coding: utf-8 -*-
-"""
-Duplicates Page — التكرارات
-Conflict resolution queue powered by Backend Conflicts API.
-Implements UC-007: Resolve Duplicate Properties
-Implements UC-008: Resolve Person Duplicates
-
-Features:
-- Summary dashboard with animated count cards
-- Conflict queue with filters (type, status, priority)
-- Paginated conflict list from API
-- Resolution actions: merge, keep separate, escalate
-- Side-by-side comparison navigation
-- Shimmer loading effects
-"""
+"""Duplicates page for conflict resolution."""
 
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,

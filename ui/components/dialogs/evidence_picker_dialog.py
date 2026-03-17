@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 """
 Evidence Picker Dialog — select existing evidence documents to link to a claim.
-Follows frameless container pattern (ModificationReasonDialog).
 """
 
 from PyQt5.QtWidgets import (

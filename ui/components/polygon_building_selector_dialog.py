@@ -1,16 +1,5 @@
 # -*- coding: utf-8 -*-
-"""
-Polygon Building Selector Dialog.
-
-Allows user to draw a polygon on the map and select buildings within it.
-Integrates PolygonEditorWidget with PostGIS spatial queries.
-
-Usage:
-    dialog = PolygonBuildingSelectorDialog(db, parent)
-    buildings = dialog.exec_and_get_buildings()
-    if buildings:
-        # User selected buildings within drawn polygon
-"""
+"""Polygon Building Selector Dialog - select buildings by drawing a polygon on the map."""
 
 from typing import List, Optional
 import json
@@ -33,25 +22,10 @@ logger = get_logger(__name__)
 
 
 class PolygonBuildingSelectorDialog(QDialog):
-    """
-    Dialog for selecting buildings by drawing a polygon on the map.
-
-    Features:
-    - Interactive polygon drawing with Leaflet.draw
-    - Real-time building count as polygon is drawn
-    - List of buildings within polygon
-    - Spatial validation (area, self-intersection)
-    - Support for both PostGIS and SQLite spatial queries
-    """
+    """Dialog for selecting buildings by drawing a polygon on the map."""
 
     def __init__(self, db: Database, parent=None):
-        """
-        Initialize the dialog.
-
-        Args:
-            db: Database instance
-            parent: Parent widget
-        """
+        """Initialize the dialog."""
         super().__init__(parent)
         self.db = db
         self.selected_buildings: List[Building] = []
@@ -258,11 +232,7 @@ class PolygonBuildingSelectorDialog(QDialog):
 
     @pyqtSlot(str)
     def _on_polygon_changed(self, geojson_str: str):
-        """
-        Handle polygon change event.
-
-        Validates the polygon and queries buildings within it.
-        """
+        """Handle polygon change event."""
         logger.info("Polygon changed, querying buildings...")
 
         try:
@@ -311,15 +281,7 @@ class PolygonBuildingSelectorDialog(QDialog):
         pass
 
     def _geojson_to_wkt(self, geojson: dict) -> Optional[str]:
-        """
-        Convert GeoJSON to WKT format.
-
-        Args:
-            geojson: GeoJSON dict
-
-        Returns:
-            WKT string or None
-        """
+        """Convert GeoJSON to WKT format."""
         try:
             geometry = geojson.get('geometry', {})
             geom_type = geometry.get('type', '')
@@ -342,15 +304,7 @@ class PolygonBuildingSelectorDialog(QDialog):
             return None
 
     def _query_buildings_in_polygon(self, polygon_wkt: str) -> List[Building]:
-        """
-        Query buildings within polygon using spatial service.
-
-        Args:
-            polygon_wkt: Polygon WKT string
-
-        Returns:
-            List of Building objects
-        """
+        """Query buildings within polygon using spatial service."""
         try:
             if isinstance(self.spatial_service, PostGISService):
                 # Use PostGIS
@@ -420,12 +374,7 @@ class PolygonBuildingSelectorDialog(QDialog):
             return []
 
     def _resolve_buildings_address_names(self, buildings: List[Building]):
-        """
-        Resolve address names from codes using the API.
-
-        Extracts codes from building_id (17 digits: GG-DD-SS-CCC-NNN-BBBBB)
-        then resolves names via BuildingController helpers.
-        """
+        """Resolve address names from codes using the API."""
         from controllers.building_controller import BuildingController
         for b in buildings:
             # Extract codes from building_id if spatial query didn't return them
@@ -460,12 +409,7 @@ class PolygonBuildingSelectorDialog(QDialog):
                     b.neighborhood_name_ar = name
 
     def _update_buildings_list(self, buildings: List[Building]):
-        """
-        Update the buildings list widget.
-
-        Args:
-            buildings: List of Building objects
-        """
+        """Update the buildings list widget."""
         self.buildings_list.clear()
         self.selected_buildings = buildings
 
@@ -499,12 +443,7 @@ class PolygonBuildingSelectorDialog(QDialog):
         self.select_btn.setEnabled(False)
 
     def exec_and_get_buildings(self) -> Optional[List[Building]]:
-        """
-        Execute dialog and return selected buildings.
-
-        Returns:
-            List of Building objects if user clicked Select, None if cancelled
-        """
+        """Execute dialog and return selected buildings, or None if cancelled."""
         result = self.exec_()
 
         if result == QDialog.Accepted and self.selected_buildings:

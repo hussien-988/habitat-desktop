@@ -1,8 +1,5 @@
 # -*- coding: utf-8 -*-
-"""
-Confirmation Modal Component - Figma Design (Page 25)
-Warning/Confirmation dialog before destructive actions
-"""
+"""Confirmation Modal Component - warning/confirmation dialog before destructive actions."""
 
 from PyQt5.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
@@ -15,9 +12,7 @@ from ..font_utils import create_font, FontManager
 
 
 class ConfirmationModal(QDialog):
-    """
-    Confirmation modal matching Figma Page 25 design.
-    """
+    """Confirmation modal dialog."""
 
     def __init__(self,
                  title: str = "هل تريد حفظ التغييرات؟",
@@ -36,7 +31,7 @@ class ConfirmationModal(QDialog):
         self._apply_styling()
 
     def _setup_ui(self):
-        """Setup modal UI matching Figma Page 25."""
+        """Setup modal UI."""
         self.setWindowFlags(Qt.Dialog | Qt.FramelessWindowHint)
         self.setAttribute(Qt.WA_TranslucentBackground)
         self.setFixedWidth(420)

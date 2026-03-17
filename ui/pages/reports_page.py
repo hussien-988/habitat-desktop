@@ -1,8 +1,5 @@
 # -*- coding: utf-8 -*-
-"""
-Reports generation page with templates and export.
-Implements UC-012: Report Generation, UC-013: Data Export
-"""
+"""Reports generation page with templates and export."""
 
 from pathlib import Path
 from datetime import datetime

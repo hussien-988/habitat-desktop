@@ -1,11 +1,5 @@
 # -*- coding: utf-8 -*-
-"""
-Field Work Preparation - Step 3: Review Assignment
-UC-012: Assign Buildings to Field Teams
-
-Review buildings with property units (accordion), visit type selection,
-and researcher info before final submission.
-"""
+"""Field work preparation step 3: review assignment before submission."""
 
 from collections import Counter
 from datetime import date
@@ -32,15 +26,7 @@ _UNIT_TYPE_AR = {
 
 
 class FieldWorkPreparationStep3(QWidget):
-    """
-    Step 3: Review Assignment.
-
-    Displays:
-    - Researcher info + availability
-    - Buildings as accordion (expandable rows)
-    - Property units per building
-    - Visit type radio (first visit / revisit) per building
-    """
+    """Review assignment with buildings, units, and visit type selection."""
 
     def __init__(self, buildings: list, researcher: dict, parent=None):
         super().__init__(parent)

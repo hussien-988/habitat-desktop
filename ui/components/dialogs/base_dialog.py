@@ -1,16 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-BaseDialog - Unified dialog component with overlay
-
-Provides a consistent, Figma-spec dialog with:
-- Modal overlay (dark transparent background)
-- Icon with colored background
-- Title and message
-- Customizable buttons
-- Centered positioning
-- Clean animations
-
-Based on Figma design specifications.
+BaseDialog - Unified dialog component with overlay.
 """
 
 from PyQt5.QtWidgets import (
@@ -38,27 +28,7 @@ class DialogType:
 
 
 class BaseDialog(QWidget):
-    """
-    Base dialog component with overlay.
-
-    Features:
-    - Modal overlay that blocks interaction with parent
-    - Centered dialog card
-    - Icon with colored background based on type
-    - Title and message
-    - Customizable buttons
-    - Follows Figma design specifications
-
-    Usage:
-        dialog = BaseDialog(
-            parent=self,
-            dialog_type=DialogType.SUCCESS,
-            title="نجح",
-            message="تم حفظ البيانات بنجاح",
-            buttons=[("حسناً", self.on_ok)]
-        )
-        dialog.show()
-    """
+    """Base dialog component with overlay."""
 
     # Signals
     closed = pyqtSignal()  # Emitted when dialog is closed
@@ -73,19 +43,7 @@ class BaseDialog(QWidget):
         icon_path: str = None,
         use_overlay: bool = False
     ):
-        """
-        Initialize base dialog.
-
-        Args:
-            parent: Parent widget
-            dialog_type: Dialog type (success, error, warning, info, question)
-            title: Dialog title
-            message: Dialog message
-            buttons: List of tuples [(label, callback), ...]
-            icon_path: Optional custom icon path (48x48px PNG)
-            use_overlay: If True, show dark overlay behind dialog (for input/map dialogs).
-                         If False, show dialog card with shadow only (default).
-        """
+        """Initialize base dialog."""
         super().__init__(parent)
 
         self.dialog_type = dialog_type
@@ -236,7 +194,7 @@ class BaseDialog(QWidget):
         message_label.setAlignment(Qt.AlignCenter)
         message_label.setWordWrap(True)
 
-        # Message font: Light weight (300), 11pt (Figma: 14px)
+        # Message font
         message_font = create_font(
             size=11,  # 11pt (~14px in Figma)
             weight=QFont.Light,  # Weight 300
@@ -248,7 +206,7 @@ class BaseDialog(QWidget):
         card_layout.addWidget(message_label)
 
         # Gap before buttons
-        card_layout.addSpacing(24)  # 24px (from Figma requirement)
+        card_layout.addSpacing(24)
 
         # ========== BUTTONS ==========
         if self.buttons_config:
@@ -263,15 +221,10 @@ class BaseDialog(QWidget):
             main_layout.addWidget(self.dialog_card, alignment=Qt.AlignCenter)
 
     def _create_icon(self) -> QWidget:
-        """
-        Create icon with colored circular background.
-
-        Returns:
-            QWidget containing the icon
-        """
+        """Create icon with colored circular background."""
         # Icon container
         icon_widget = QWidget()
-        icon_widget.setFixedSize(48, 48)  # 48px from Figma
+        icon_widget.setFixedSize(48, 48)
 
         # Get colors based on dialog type
         bg_color, icon_color = self._get_icon_colors()
@@ -316,16 +269,11 @@ class BaseDialog(QWidget):
         return icon_widget
 
     def _get_icon_colors(self) -> tuple:
-        """
-        Get background and icon colors based on dialog type.
-
-        Returns:
-            Tuple of (background_color, icon_color)
-        """
+        """Get background and icon colors based on dialog type."""
         type_colors = {
             DialogType.SUCCESS: ("#E7F7EF", "#43A047"),  # Light green bg, green icon
             DialogType.ERROR: ("#FFE7E7", "#E53935"),    # Light red bg, red icon
-            DialogType.WARNING: ("#FFF4E5", "#FFC72C"),  # Light orange bg, YELLOW icon from Figma
+            DialogType.WARNING: ("#FFF4E5", "#FFC72C"),  # Light orange bg, yellow icon
             DialogType.INFO: ("#E3F2FD", "#1E88E5"),     # Light blue bg, blue icon
             DialogType.QUESTION: ("#E3F2FD", "#1E88E5"), # Light blue bg, blue icon
         }
@@ -333,12 +281,7 @@ class BaseDialog(QWidget):
         return type_colors.get(self.dialog_type, ("#E3F2FD", "#1E88E5"))
 
     def _get_icon_symbol(self) -> str:
-        """
-        Get default icon symbol based on dialog type.
-
-        Returns:
-            Icon symbol string
-        """
+        """Get default icon symbol based on dialog type."""
         symbols = {
             DialogType.SUCCESS: "✓",
             DialogType.ERROR: "✕",
@@ -350,17 +293,7 @@ class BaseDialog(QWidget):
         return symbols.get(self.dialog_type, "i")
 
     def _get_button_style(self) -> str:
-        """
-        Get button stylesheet based on dialog type.
-
-        Returns:
-            Button stylesheet string
-        """
-        # Type-specific button colors
-        # WARNING: Yellow (#FFC72C) - from Figma
-        # ERROR: Red
-        # SUCCESS: Green
-        # INFO/QUESTION: Blue
+        """Get button stylesheet based on dialog type."""
         type_button_colors = {
             DialogType.WARNING: ("#FFC72C", "#FFD454"),  # Yellow + lighter yellow hover
             DialogType.ERROR: ("#E53935", "#EF5350"),    # Red + lighter red hover
@@ -394,12 +327,7 @@ class BaseDialog(QWidget):
         """
 
     def _create_buttons(self) -> QHBoxLayout:
-        """
-        Create button row (centered).
-
-        Returns:
-            QHBoxLayout containing buttons
-        """
+        """Create button row (centered)."""
         buttons_layout = QHBoxLayout()
         buttons_layout.setSpacing(16)  # 16px gap
         buttons_layout.setContentsMargins(0, 0, 0, 0)
@@ -416,27 +344,17 @@ class BaseDialog(QWidget):
         return buttons_layout
 
     def _create_button(self, label: str, callback) -> QPushButton:
-        """
-        Create styled button.
-
-        Args:
-            label: Button text
-            callback: Click callback function
-
-        Returns:
-            QPushButton with styling
-        """
+        """Create styled button."""
         btn = QPushButton(label)
         btn.setCursor(Qt.PointingHandCursor)
 
         # Button dimensions
-        btn.setFixedHeight(48)  # 48px from Figma
-        btn.setMinimumWidth(120)  # 120px minimum from Figma
+        btn.setFixedHeight(48)
+        btn.setMinimumWidth(120)
         btn.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Fixed)
 
-        # Button font (weight 300 for consistency)
         btn_font = create_font(
-            size=10,  # 10pt (14px Figma)
+            size=10,
             weight=QFont.Light,  # Weight 300
             letter_spacing=0
         )

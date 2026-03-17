@@ -1,8 +1,5 @@
 # -*- coding: utf-8 -*-
-"""
-Success Modal Component - Figma Design (Page 24)
-Modal dialog shown after successful operations
-"""
+"""Success Modal Component - modal dialog shown after successful operations."""
 
 from PyQt5.QtWidgets import (
     QDialog, QVBoxLayout, QLabel, QPushButton,
@@ -17,19 +14,7 @@ from ..design_system import Colors
 
 
 class SuccessModal(QDialog):
-    """
-    Success modal matching Figma Page 24 design.
-
-    Specifications from Figma:
-    - Modal size: 420px width
-    - White background
-    - Border radius: 12px
-    - Shadow: large
-    - Thumbs up icon in center
-    - Success message
-    - Claim ID display
-    - Close button or auto-close
-    """
+    """Success modal dialog with claim ID display."""
 
     def __init__(self,
                  title: str = "تمت الإضافة بنجاح",
@@ -45,12 +30,11 @@ class SuccessModal(QDialog):
         self._apply_styling()
 
     def _setup_ui(self):
-        """Setup modal UI matching Figma Page 24."""
+        """Setup modal UI."""
         # Remove window decorations for custom dialog
         self.setWindowFlags(Qt.Dialog | Qt.FramelessWindowHint)
         self.setAttribute(Qt.WA_TranslucentBackground)
 
-        # Fixed width from Figma
         self.setFixedWidth(420)
         self.setMinimumHeight(300)
 
@@ -66,7 +50,7 @@ class SuccessModal(QDialog):
 
         # Main layout
         layout = QVBoxLayout(container)
-        layout.setContentsMargins(32, 40, 32, 32)  # Generous padding from Figma
+        layout.setContentsMargins(32, 40, 32, 32)
         layout.setSpacing(0)
         layout.setAlignment(Qt.AlignCenter)
 
@@ -151,7 +135,7 @@ class SuccessModal(QDialog):
         main_layout.addWidget(container)
 
     def _apply_styling(self):
-        """Apply shadow effect matching Figma."""
+        """Apply shadow effect."""
         # Find container widget
         container = self.findChild(QWidget, "modal_container")
         if container:
@@ -163,16 +147,7 @@ class SuccessModal(QDialog):
 
     @staticmethod
     def show_success(parent, title: str, claim_id: str, message: str = None):
-        """
-        Static method to show success modal.
-
-        Usage:
-            SuccessModal.show_success(
-                parent=self,
-                title="تمت الإضافة بنجاح",
-                claim_id="CL-2025-000001"
-            )
-        """
+        """Show success modal."""
         if message is None:
             message = "تم حفظ جميع المعلومات، ويمكنك الآن المتابعة أو إضافة عنصر جديد."
 

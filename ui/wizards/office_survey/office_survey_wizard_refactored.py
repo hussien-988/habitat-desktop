@@ -1,19 +1,7 @@
 # -*- coding: utf-8 -*-
 """
-Office Survey Wizard - UC-004.
-
+Office Survey Wizard - معالج المسح المكتبي
 Multi-step wizard for conducting office-based property surveys.
-
-This implementation uses the unified Wizard Framework.
-
-Steps:
-1. Applicant Info - Collect visitor/applicant information
-2. Unit Selection/Creation - Select existing or create new unit
-3. Occupancy Details - Record occupancy demographics
-4. Occupancy Claims - Add persons with relation data
-5. Review & Submit - Review and submit survey
-
-Note: Building selection happens BEFORE the wizard opens (via BuildingMapDialog).
 """
 
 from typing import List
@@ -50,17 +38,7 @@ logger = get_logger(__name__)
 
 
 class OfficeSurveyWizard(BaseWizard):
-    """
-    Office Survey Wizard (Refactored).
-
-    This wizard guides office clerks through the property survey process:
-    - Building selection
-    - Unit identification
-    - Household registration
-    - Person and relation recording
-    - Evidence collection
-    - Claim creation
-    """
+    """Office Survey Wizard."""
 
     @classmethod
     def get_step_names(cls):
@@ -461,14 +439,14 @@ class OfficeSurveyWizard(BaseWizard):
         This ensures the footer extends to the full window width without being
         affected by the content padding.
 
-        Padding from Figma:
+        Padding:
         - Content horizontal: 131px each side
         - Content top: 32px from navbar
         - Footer: Full width (no horizontal padding)
         """
         from PyQt5.QtWidgets import QVBoxLayout, QStackedWidget
 
-        # Background color from Figma
+        # Background color
         self.setStyleSheet(StyleManager.page_background())
 
         # ========== OUTER LAYOUT (NO PADDING) ==========
@@ -511,20 +489,13 @@ class OfficeSurveyWizard(BaseWizard):
         outer_layout.addWidget(footer)
 
     def _create_header(self) -> QWidget:
-        """
-        Create wizard header with title, subtitle, and save button.
-
-        Figma Specs Applied:
-        - Title: "إضافة حالة جديدة" - 24px (18pt) Bold, Text/Primary
-        - Subtitle: "المطالبات المكتملة • [Step Name]" - Desktop/Body2, Text/Secondary
-        - Save button: Figma button specs
-        """
+        """Create wizard header with title, subtitle, and save button."""
         header = QWidget()
         header.setStyleSheet("background-color: transparent;")
 
         layout = QVBoxLayout(header)
         layout.setContentsMargins(0, 0, 0, 0)
-        # PageDimensions.HEADER_GAP (30px from Figma) for gap between elements
+        # PageDimensions.HEADER_GAP (30px) for gap between elements
         layout.setSpacing(PageDimensions.HEADER_GAP)  # 30px: title → tabs, same as completed_claims_page
 
         # ========== TITLE ROW: Title + Save button ==========
@@ -536,10 +507,10 @@ class OfficeSurveyWizard(BaseWizard):
         title_subtitle_container.setSpacing(4)  # Small gap between title and subtitle
 
         # Title: "إضافة حالة جديدة"
-        # Figma: Desktop/H4 24px = 18pt Bold
+
         self.title_label = QLabel(tr("wizard.header.title"))
         title_font = create_font(
-            size=FontManager.SIZE_TITLE,  # 18pt (24px Figma)
+            size=FontManager.SIZE_TITLE,  # 18pt
             weight=QFont.Bold,
             letter_spacing=0
         )
@@ -556,7 +527,7 @@ class OfficeSurveyWizard(BaseWizard):
         # Part 1: "المطالبات المكتملة" (fixed)
         self._subtitle_part1 = QLabel(tr("wizard.header.breadcrumb"))
         subtitle_font = create_font(
-            size=FontManager.SIZE_BODY,  # 9pt (12px Figma)
+            size=FontManager.SIZE_BODY,  # 9pt
             weight=QFont.Normal,
             letter_spacing=0
         )
@@ -585,22 +556,22 @@ class OfficeSurveyWizard(BaseWizard):
         title_row.addStretch()
 
         # Close button FIRST
-        # Figma specs: 52×48px, White background, X in Primary/Main color
+
         self.close_btn = QPushButton("✕")
         self.close_btn.setCursor(Qt.PointingHandCursor)
 
-        # Fixed dimensions from Figma
+        # Fixed dimensions
         self.close_btn.setFixedSize(ButtonDimensions.CLOSE_WIDTH, ButtonDimensions.CLOSE_HEIGHT)
 
         # Apply font
         close_btn_font = create_font(
-            size=ButtonDimensions.CLOSE_FONT_SIZE,  # 12pt (16px Figma)
+            size=ButtonDimensions.CLOSE_FONT_SIZE,  # 12pt
             weight=QFont.Normal,  # 400 - lighter weight
             letter_spacing=0
         )
         self.close_btn.setFont(close_btn_font)
 
-        # Figma styling
+        # Styling
         self.close_btn.setStyleSheet(f"""
             QPushButton {{
                 background-color: {Colors.SURFACE};
@@ -617,11 +588,11 @@ class OfficeSurveyWizard(BaseWizard):
         title_row.addWidget(self.close_btn)
 
         # Save button SECOND with icon
-        # Figma specs: 114×48px, padding 24×12, icon 14×14, spacing 10px
+
         self.save_btn = QPushButton(f" {tr('wizard.button.save')}")  # Space for icon
         self.save_btn.setCursor(Qt.PointingHandCursor)
 
-        # Fixed dimensions from Figma
+        # Fixed dimensions
         self.save_btn.setFixedSize(ButtonDimensions.SAVE_WIDTH, ButtonDimensions.SAVE_HEIGHT)
 
         # Load save icon from assets
@@ -635,13 +606,13 @@ class OfficeSurveyWizard(BaseWizard):
 
         # Apply font
         save_btn_font = create_font(
-            size=ButtonDimensions.SAVE_FONT_SIZE,  # 12pt (16px Figma)
+            size=ButtonDimensions.SAVE_FONT_SIZE,  # 12pt
             weight=QFont.Normal,  # 400 - lighter weight
             letter_spacing=0
         )
         self.save_btn.setFont(save_btn_font)
 
-        # Figma styling
+        # Styling
         self.save_btn.setStyleSheet(f"""
             QPushButton {{
                 background-color: {Colors.PRIMARY_BLUE};
@@ -677,20 +648,20 @@ class OfficeSurveyWizard(BaseWizard):
         # Add vertical margins to accommodate shadow effect (prevent clipping)
         # Top: 2px, Bottom: 4px to prevent shadow from being cut off
         steps_layout.setContentsMargins(0, 2, 0, 4)
-        # ButtonDimensions.STEP_TAB_GAP (20px from Figma)
+        # ButtonDimensions.STEP_TAB_GAP (20px)
         steps_layout.setSpacing(ButtonDimensions.STEP_TAB_GAP)  # 20px gap between tabs
 
-        # Create step indicator tabs (Figma: white background, 111×35px, border-radius 14px)
+        # Create step indicator tabs
         # No numbers shown, only step names with proper padding
         self.step_labels = []
         # Steps 3,4 (index 2,3) have longer names - use smaller font
         self._step_font_sizes = []
         for num, name in self.get_step_names():
-            # Display only the step name (no number) - Figma spec
+            # Display only the step name (no number)
             step_widget = QLabel(name)
             step_widget.setAlignment(Qt.AlignCenter)
 
-            # Fixed dimensions from Figma
+            # Fixed dimensions
             step_widget.setFixedSize(ButtonDimensions.STEP_TAB_WIDTH, ButtonDimensions.STEP_TAB_HEIGHT)
 
             # Smaller font for long step names (تفاصيل الإشغال، ادعاءات الإشغال)
@@ -698,7 +669,7 @@ class OfficeSurveyWizard(BaseWizard):
             self._step_font_sizes.append(tab_font_size)
 
             # Default state: White background, gray text, no border
-            # Padding: 16px horizontal, 10px vertical (Figma)
+            # Default state styling
             step_widget.setStyleSheet(f"""
                 background-color: {Colors.SURFACE};
                 color: {Colors.TEXT_SECONDARY};
@@ -728,31 +699,19 @@ class OfficeSurveyWizard(BaseWizard):
         return header
 
     def _create_footer(self) -> QWidget:
-        """
-        Create wizard footer as white card with navigation buttons.
-
-        Figma Specs:
-        - White card: Full width × 74px height
-        - Design width: 1512px (reference)
-        - Internal padding: 130px left/right, 12px top/bottom
-        - Drop shadow effect
-        - Navigation buttons inside
-
-        Returns:
-            QFrame: Footer card with navigation buttons
-        """
+        """Create wizard footer with navigation buttons."""
         # Create footer as QFrame (white card)
         footer = QFrame()
         footer.setObjectName("WizardFooter")
 
         # Fixed HEIGHT only - width is responsive (extends to full window width)
-        # Height from Figma: 74px
+        # Height: 74px
         footer.setFixedHeight(ButtonDimensions.FOOTER_HEIGHT)
 
         # Apply white card styling with border
         footer.setStyleSheet(StyleManager.wizard_footer())
 
-        # Apply drop shadow effect (Figma shadow specs from PageDimensions)
+        # Apply drop shadow effect
         shadow = QGraphicsDropShadowEffect()
         shadow.setBlurRadius(PageDimensions.CARD_SHADOW_BLUR)  # 8px blur
         shadow.setXOffset(PageDimensions.CARD_SHADOW_X)  # 0px X offset
@@ -763,7 +722,7 @@ class OfficeSurveyWizard(BaseWizard):
         shadow.setColor(shadow_color)
         footer.setGraphicsEffect(shadow)
 
-        # Internal layout with Figma padding (130px left/right, 12px top/bottom)
+        # Internal layout with padding
         layout = QHBoxLayout(footer)
         layout.setContentsMargins(
             ButtonDimensions.FOOTER_PADDING_H,  # Left: 130px
@@ -774,21 +733,21 @@ class OfficeSurveyWizard(BaseWizard):
         layout.setSpacing(0)  # No spacing in main layout
 
         # Apply font for navigation buttons
-        # Figma: 16px font size, Normal weight (400)
+        # Navigation button font
         nav_btn_font = create_font(
-            size=ButtonDimensions.NAV_BUTTON_FONT_SIZE,  # 12pt (16px Figma)
+            size=ButtonDimensions.NAV_BUTTON_FONT_SIZE,  # 12pt
             weight=QFont.Normal,  # 400 - lighter weight
             letter_spacing=0
         )
 
         # ========== "السابق" Button (Previous - Right side) ==========
-        # Figma: 252×50px, White background, shadow, border-radius 8px, text color #414D5A
+        # Previous button
         # Text format: "< السابق" with 10px spacing between arrow and text
         # Note: Button uses transparent state instead of hide() to maintain layout position
         self.btn_previous = QPushButton(f"<   {tr('wizard.button.previous')}")
         self.btn_previous.setCursor(Qt.PointingHandCursor)
 
-        # Fixed dimensions from Figma
+        # Fixed dimensions
         self.btn_previous.setFixedSize(
             ButtonDimensions.NAV_BUTTON_WIDTH,   # 252px
             ButtonDimensions.NAV_BUTTON_HEIGHT   # 50px
@@ -826,7 +785,7 @@ class OfficeSurveyWizard(BaseWizard):
             }
         """
 
-        # Apply drop shadow to previous button (Figma shadow)
+        # Apply drop shadow to previous button
         # Will be visible only when button is visible
         self.prev_shadow = QGraphicsDropShadowEffect()
         self.prev_shadow.setBlurRadius(8)  # 8px blur
@@ -845,7 +804,7 @@ class OfficeSurveyWizard(BaseWizard):
 
         layout.addWidget(self.btn_previous)
 
-        # Spacer between buttons (748px gap - calculated from Figma)
+        # Spacer between buttons (748px gap - calculated)
         # Formula: 1512 - (130*2 padding) - (252*2 buttons) = 748px
         spacer = QSpacerItem(
             ButtonDimensions.NAV_BUTTON_GAP,  # 748px
@@ -856,12 +815,12 @@ class OfficeSurveyWizard(BaseWizard):
         layout.addItem(spacer)
 
         # ========== "التالي" Button (Next - Left side) ==========
-        # Figma: 252×50px, Light blue background (#F0F7FF), Blue text, Blue border
+        # Next button
         # Text format: "التالي >" with 10px spacing between text and arrow
         self.btn_next = QPushButton(f"{tr('wizard.button.next')}   >")
         self.btn_next.setCursor(Qt.PointingHandCursor)
 
-        # Fixed dimensions from Figma
+        # Fixed dimensions
         self.btn_next.setFixedSize(
             ButtonDimensions.NAV_BUTTON_WIDTH,   # 252px
             ButtonDimensions.NAV_BUTTON_HEIGHT   # 50px
@@ -870,7 +829,7 @@ class OfficeSurveyWizard(BaseWizard):
         # Apply font
         self.btn_next.setFont(nav_btn_font)
 
-        # Figma styling: Light blue background (#F0F7FF), blue text and border
+        # Styling: Light blue background (#F0F7FF), blue text and border
         self.btn_next.setStyleSheet(f"""
             QPushButton {{
                 background-color: #F0F7FF;
@@ -893,14 +852,14 @@ class OfficeSurveyWizard(BaseWizard):
         layout.addWidget(self.btn_next)
 
         # ========== "حفظ" Button (Save - Left side, shown only on final step) ==========
-        # Figma: Same dimensions as next button, Primary blue background, white text
+        # Submit button
         from PyQt5.QtGui import QIcon
         import os
 
         self.btn_final_save = QPushButton(tr("wizard.button.save"))
         self.btn_final_save.setCursor(Qt.PointingHandCursor)
 
-        # Fixed dimensions from Figma (same as next button)
+        # Fixed dimensions (same as next button)
         self.btn_final_save.setFixedSize(
             ButtonDimensions.NAV_BUTTON_WIDTH,   # 252px
             ButtonDimensions.NAV_BUTTON_HEIGHT   # 50px
@@ -915,7 +874,7 @@ class OfficeSurveyWizard(BaseWizard):
             self.btn_final_save.setIcon(QIcon(save_icon_path))
             self.btn_final_save.setIconSize(QSize(16, 16))
 
-        # Figma styling: Primary blue background, white text
+        # Styling: Primary blue background, white text
         self.btn_final_save.setStyleSheet(f"""
             QPushButton {{
                 background-color: {Colors.PRIMARY_BLUE};
@@ -997,15 +956,13 @@ class OfficeSurveyWizard(BaseWizard):
 
         Updates:
         - Step container display
-        - Subtitle with current step name (Figma spec: dynamic subtitle)
-        - Step indicators
+        - Subtitle with current step name        - Step indicators
         - Navigation buttons
         """
         # Update step container
         self.step_container.setCurrentIndex(new_index)
 
-        # Update subtitle part 2 with current step name (Figma: dynamic subtitle)
-        step_names = self.get_step_names()
+        # Update subtitle part 2 with current step name        step_names = self.get_step_names()
         if hasattr(self, 'subtitle_part2') and 0 <= new_index < len(step_names):
             step_name = step_names[new_index][1]
             self.subtitle_part2.setText(step_name)
@@ -1017,23 +974,13 @@ class OfficeSurveyWizard(BaseWizard):
         self._update_navigation_buttons()
 
     def _update_step_display(self):
-        """
-        Update step indicators with proper state styling.
-
-        Figma specs (all tabs):
-        - Background: White (#FFFFFF)
-        - Active: Blue text + blue border
-        - Inactive: Gray text + no border
-        - Border-radius: 14px (same as pill)
-
-        Uses Colors and ButtonDimensions constants.
-        """
+        """Update step indicators with proper state styling."""
         current_step = self.navigator.current_index
 
         for i, label in enumerate(self.step_labels):
             tab_font = self._step_font_sizes[i] if i < len(self._step_font_sizes) else ButtonDimensions.STEP_TAB_FONT_SIZE
             if i == current_step:
-                # Active tab (Figma: white bg, blue text, blue border, padding 10×16)
+                # Active tab
                 label.setStyleSheet(f"""
                     background-color: {Colors.SURFACE};
                     color: {Colors.PRIMARY_BLUE};
@@ -1069,18 +1016,7 @@ class OfficeSurveyWizard(BaseWizard):
                 self.btn_final_save.hide()
 
     def _update_navigation_buttons(self):
-        """
-        Update navigation button states based on current step.
-
-        Figma Specs:
-        - Step 1: Previous button is INVISIBLE (transparent, maintains space)
-        - Step 2+: Previous button is VISIBLE and enabled
-        - Last step: Next button is HIDDEN (removed from layout)
-        - Other steps: Next button is VISIBLE (enabled based on validation)
-
-        Uses CSS transparency for Previous button to maintain fixed layout,
-        avoiding container widgets or dynamic layout changes.
-        """
+        """Update navigation button states based on current step."""
         current_step = self.navigator.current_index
 
         # ========== Edit Mode Override ==========

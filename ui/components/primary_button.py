@@ -1,9 +1,5 @@
 # -*- coding: utf-8 -*-
-"""
-Primary Button Component - زر أساسي قابل لإعادة الاستخدام
-Reusable button component following Figma design system.
-
-"""
+"""Primary Button Component - زر أساسي قابل لإعادة الاستخدام."""
 
 from PyQt5.QtWidgets import QPushButton
 from PyQt5.QtCore import Qt, QSize
@@ -15,35 +11,16 @@ from .icon import Icon
 
 
 class PrimaryButton(QPushButton):
-    """
-    Primary button component with Figma styling.
-
-    Features:
-    - Configurable text and icon
-    - Hover and pressed states
-    - Figma-compliant styling (exact dimensions: 199×48px)
-    - Reusable across the application
-
-    Usage:
-        btn = PrimaryButton("إضافة حالة جديدة", icon_name="icon")
-        btn.clicked.connect(self.on_button_clicked)
-    """
+    """Reusable primary button with icon support."""
 
     def __init__(self, text: str = "", icon_name: str = None, parent=None):
-        """
-        Initialize primary button.
-
-        Args:
-            text: Button text (Arabic RTL supported)
-            icon_name: Icon file name (without extension, looks for .png/.svg in assets/icons)
-            parent: Parent widget
-        """
+        """Initialize primary button."""
         super().__init__(text, parent)
         self.icon_name = icon_name
         self._setup_ui()
 
     def _setup_ui(self):
-        """Setup button UI with Figma specifications."""
+        """Setup button UI."""
 
         # Set unique ObjectName for CSS specificity
         self.setObjectName("PrimaryButton")

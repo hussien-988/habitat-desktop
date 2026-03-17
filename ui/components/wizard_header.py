@@ -13,20 +13,7 @@ from ui.design_system import Colors
 
 
 class WizardHeader(QWidget):
-    """
-    Reusable wizard header component.
-
-    Features:
-    - Title display
-    - Subtitle/breadcrumb support
-    - Consistent styling across all wizards
-
-    Usage:
-        header = WizardHeader(
-            title="تجهيز العمل الميداني",
-            subtitle="المباني  •  تجهيز العمل الميداني"
-        )
-    """
+    """Reusable wizard header with title and optional subtitle."""
 
     def __init__(
         self,
@@ -34,14 +21,7 @@ class WizardHeader(QWidget):
         subtitle: str = "",
         parent=None
     ):
-        """
-        Initialize wizard header.
-
-        Args:
-            title: Main title text
-            subtitle: Optional subtitle/breadcrumb text
-            parent: Parent widget
-        """
+        """Initialize wizard header."""
         super().__init__(parent)
         self.title_text = title
         self.subtitle_text = subtitle
@@ -50,7 +30,6 @@ class WizardHeader(QWidget):
 
     def _setup_ui(self):
         """Setup header UI."""
-        # Same styling as BaseWizard header
         self.setStyleSheet("""
             QWidget {
                 background-color: #f8f9fa;
@@ -59,17 +38,16 @@ class WizardHeader(QWidget):
         """)
 
         layout = QVBoxLayout(self)
-        # Same padding as BaseWizard: 20px horizontal, 16px vertical
         layout.setContentsMargins(20, 16, 20, 16)
-        layout.setSpacing(8)  # Gap between title and subtitle
+        layout.setSpacing(8)
 
-        # Title - 24px (~18pt), PAGE_TITLE, SemiBold
+        # Title
         self.title_label = QLabel(self.title_text)
         self.title_label.setFont(create_font(size=18, weight=FontManager.WEIGHT_SEMIBOLD))
         self.title_label.setStyleSheet(f"background: transparent; border: none; color: {Colors.PAGE_TITLE};")
         layout.addWidget(self.title_label)
 
-        # Subtitle/breadcrumb - 14px (~11pt), PAGE_SUBTITLE, SemiBold, with spacing
+        # Subtitle/breadcrumb
         if self.subtitle_text:
             self.subtitle_label = QLabel(self.subtitle_text)
             self.subtitle_label.setFont(create_font(size=11, weight=FontManager.WEIGHT_SEMIBOLD))

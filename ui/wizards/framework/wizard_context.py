@@ -1,12 +1,6 @@
 # -*- coding: utf-8 -*-
 """
 Wizard Context - Base class for managing wizard state and data.
-
-Provides unified interface for:
-- Data persistence
-- Serialization/deserialization
-- State tracking
-- Reference number generation
 """
 
 from typing import Dict, Any, Optional
@@ -16,13 +10,7 @@ import uuid
 
 
 class WizardContext(ABC):
-    """
-    Base class for wizard context.
-
-    All wizard contexts should inherit from this class and implement:
-    - to_dict(): Serialize context to dictionary
-    - from_dict(): Restore context from dictionary
-    """
+    """Base class for wizard context."""
 
     def __init__(self):
         """Initialize base context properties."""
@@ -41,14 +29,7 @@ class WizardContext(ABC):
         self.data: Dict[str, Any] = {}
 
     def _generate_reference_number(self) -> str:
-        """
-        Generate a unique reference number for the wizard session.
-
-        Format: {PREFIX}-{YYYYMMDDHHMMSS}-{SHORT_UUID}
-        Example: WIZ-20260118153045-A3F2
-
-        Override this method in subclasses to customize the format.
-        """
+        """Generate a unique reference number for the wizard session."""
         timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
         short_id = self.wizard_id[:4].upper()
         prefix = self._get_reference_prefix()
@@ -77,11 +58,7 @@ class WizardContext(ABC):
         return self.data.get(key, default)
 
     def to_dict(self) -> Dict[str, Any]:
-        """
-        Serialize context to dictionary.
-
-        Subclasses should call super().to_dict() and add their own fields.
-        """
+        """Serialize context to dictionary."""
         return {
             "wizard_id": self.wizard_id,
             "reference_number": self.reference_number,
@@ -97,11 +74,7 @@ class WizardContext(ABC):
     @classmethod
     @abstractmethod
     def from_dict(cls, data: Dict[str, Any]) -> 'WizardContext':
-        """
-        Restore context from dictionary.
-
-        Subclasses must implement this method.
-        """
+        """Restore context from dictionary."""
         pass
 
     @classmethod

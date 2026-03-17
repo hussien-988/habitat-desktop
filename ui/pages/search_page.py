@@ -1,8 +1,5 @@
 # -*- coding: utf-8 -*-
-"""
-Global search page for Buildings, Persons, Claims.
-Implements UC-011: Search & Filter
-"""
+"""Global search page for buildings, persons, and claims."""
 
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,

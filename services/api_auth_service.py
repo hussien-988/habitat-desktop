@@ -33,7 +33,8 @@ class ApiAuthService:
     """Authentication service that delegates to the REST API."""
 
     def __init__(self):
-        self.base_url = Config.API_BASE_URL.rstrip("/")
+        from app.config import get_api_base_url
+        self.base_url = get_api_base_url().rstrip("/")
         self.login_url = f"{self.base_url}/v1/Auth/login"
         self.timeout = Config.API_TIMEOUT
 

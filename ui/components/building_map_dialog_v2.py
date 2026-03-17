@@ -1,15 +1,5 @@
 # -*- coding: utf-8 -*-
-"""
-Building Map Dialog V2 - Unified Design for Building Selection.
-
-Matches BuildingMapWidget design exactly.
-
-Uses:
-- BaseMapDialog for consistent UI
-- LeafletHTMLGenerator for map rendering
-- PostGIS-compatible WKT output
-- Single building selection
-"""
+"""Building Map Dialog V2 - dialog for building selection via interactive map."""
 
 from typing import Optional
 from ui.error_handler import ErrorHandler
@@ -27,14 +17,7 @@ logger = get_logger(__name__)
 
 
 class BuildingMapDialog(BaseMapDialog):
-    """
-    Dialog for selecting a single building by clicking on map.
-
-    Design matches BuildingMapWidget exactly.
-
-    Returns:
-        Building: Selected building
-    """
+    """Dialog for selecting a single building by clicking on map."""
 
     def __init__(
         self,
@@ -45,17 +28,7 @@ class BuildingMapDialog(BaseMapDialog):
         selected_building: Optional[Building] = None,
         parent=None
     ):
-        """
-        Initialize building map dialog.
-
-        Args:
-            db: Database instance
-            selected_building_id: Optional building ID to show (view-only mode)
-            auth_token: Optional API authentication token
-            read_only: If True, map is read-only (no selection allowed)
-            selected_building: Optional Building object (fallback for coordinates if API fails)
-            parent: Parent widget
-        """
+        """Initialize building map dialog."""
         self.db = db
         self.building_controller = BuildingController(db)
         self._fallback_building = selected_building
@@ -98,7 +71,7 @@ class BuildingMapDialog(BaseMapDialog):
         temp_auth_token = self._auth_token
 
         # Initialize base dialog (clean design)
-        # PHASE 2: Enable viewport loading for 9000+ buildings (dynamic loading)
+        # Enable viewport loading for dynamic building loading
         super().__init__(
             title=title,
             show_search=show_search,
@@ -385,17 +358,7 @@ class BuildingMapDialog(BaseMapDialog):
             )
 
     def _open_building_popup_immediate(self, building_id: str, lat: float, lon: float):
-        """
-        Open popup for focused building IMMEDIATELY when map loads (no flicker).
-
-        FIX: Uses map.whenReady() to open popup as soon as map is ready.
-        No gray screen, no center transition - direct focus on building!
-
-        Args:
-            building_id: Building ID to focus on
-            lat: Latitude
-            lon: Longitude
-        """
+        """Open popup for focused building when map loads."""
         js = f"""
         (function() {{
             console.log('Focus mode: Opening building {building_id} immediately');
@@ -473,14 +436,7 @@ class BuildingMapDialog(BaseMapDialog):
         self.web_view.page().runJavaScript(js)
 
     def _open_building_popup(self, building_id: str, lat: float, lon: float):
-        """
-        Open popup for focused building in view-only mode (legacy method).
-
-        Args:
-            building_id: Building ID to focus on
-            lat: Latitude
-            lon: Longitude
-        """
+        """Open popup for focused building in view-only mode."""
         def center_and_open():
             js = f"""
             console.log('Centering on building {building_id} at [{lat}, {lon}]');
@@ -546,20 +502,11 @@ class BuildingMapDialog(BaseMapDialog):
         QTimer.singleShot(2000, center_and_open)
 
     def _on_building_selected_from_map(self, building_id: str):
-        """
-        Handle building selection from map click.
-
-        FIX: Use cached buildings from map (loaded from BuildingAssignments API)
-        instead of searching in Buildings API (which has different data)!
-
-        Args:
-            building_id: Building ID clicked (17-digit code from BuildingAssignments API)
-        """
+        """Handle building selection from map click."""
         logger.info(f"Building selected from map: {building_id}")
 
         try:
-            # BEST PRACTICE: Use cached buildings from dialog (loaded from BuildingAssignments API)
-            # These are the SAME buildings shown on the map!
+            # Use cached buildings from dialog (same buildings shown on the map)
             cached_buildings = self._buildings_cache or []
 
             logger.debug(f"Searching in {len(cached_buildings)} cached buildings from dialog")
@@ -602,13 +549,7 @@ class BuildingMapDialog(BaseMapDialog):
             self._show_building_not_found_error(building_id)
 
     def _enrich_building_data(self, cached_building: Building) -> Optional[Building]:
-        """
-        Enrich a cached building with full address data from the detail API.
-
-        The cache (from /Buildings/map) may lack address names. This calls
-        GET /Buildings/{id} to get full details including address codes,
-        then resolves names from local JSON files.
-        """
+        """Enrich a cached building with full address data from the detail API."""
         try:
             # Use the building UUID to get full details
             building_uuid = cached_building.building_uuid
@@ -825,12 +766,7 @@ class BuildingMapDialog(BaseMapDialog):
                 self.search_input.setPlaceholderText("بحث: حي، معلم، أو شارع")
 
     def get_selected_building(self) -> Optional[Building]:
-        """
-        Get selected building.
-
-        Returns:
-            Selected building or None
-        """
+        """Get selected building or None."""
         return self._selected_building
 
 
@@ -842,20 +778,7 @@ def show_building_map_dialog(
     selected_building: Optional[Building] = None,
     parent=None
 ) -> Optional[Building]:
-    """
-    Convenience function to show building map dialog.
-
-    Args:
-        db: Database instance
-        selected_building_id: Optional building ID to show (view-only mode)
-        auth_token: Optional API authentication token
-        read_only: If True, map is read-only (no selection allowed)
-        selected_building: Optional Building object (fallback for coordinates if API fails)
-        parent: Parent widget
-
-    Returns:
-        Selected building, or None if cancelled
-    """
+    """Show building map dialog and return selected building, or None if cancelled."""
     dialog = BuildingMapDialog(db, selected_building_id, auth_token, read_only, selected_building, parent)
     result = dialog.exec_()
 

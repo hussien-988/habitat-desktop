@@ -1,7 +1,5 @@
 # -*- coding: utf-8 -*-
-"""
-Reusable message dialog component matching Figma design.
-"""
+"""Reusable message dialog component."""
 
 from PyQt5.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
@@ -24,16 +22,7 @@ _TYPES = {
 
 
 class MessageDialog(QDialog):
-    """
-    Reusable message dialog matching Figma design style.
-
-    Usage:
-        MessageDialog.error(self, "خطأ", "حدث خطأ غير متوقع")
-        MessageDialog.warning(self, "تحذير", "لا يمكن إتمام العملية")
-        MessageDialog.info(self, "معلومة", "تم الحفظ بنجاح")
-        if MessageDialog.confirm(self, "تأكيد", "هل أنت متأكد؟"):
-            ...
-    """
+    """Reusable message dialog with error, warning, info, success, and confirm variants."""
 
     def __init__(self, parent, title, message, dialog_type="info",
                  ok_text="حسناً", cancel_text="إلغاء", show_cancel=False):

@@ -1,13 +1,6 @@
 # -*- coding: utf-8 -*-
 """
 Office Survey Steps Package.
-
-Contains individual steps for the office survey wizard:
-- Step 1: Applicant Info (visitor information)
-- Step 2: Unit Selection/Creation
-- Step 3: Occupancy Details (Household)
-- Step 4: Occupancy Claims (Person + Relation merged)
-- Step 5: Review & Submit
 """
 
 from .building_info_step import BuildingInfoStep

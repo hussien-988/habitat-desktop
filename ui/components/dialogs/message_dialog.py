@@ -1,35 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-MessageDialog - Helper functions for common dialog types
-
-Provides easy-to-use functions for showing dialogs:
-- Success messages
-- Error messages
-- Warning messages
-- Information messages
-- Yes/No questions
-
-All dialogs follow Figma design specifications and include overlay.
-
-Usage:
-    from ui.components.dialogs import MessageDialog
-
-    # Show success
-    MessageDialog.show_success(self, "نجح", "تم الحفظ بنجاح")
-
-    # Show error
-    MessageDialog.show_error(self, "خطأ", "حدث خطأ أثناء الحفظ")
-
-    # Show warning
-    MessageDialog.show_warning(self, "تحذير", "يجب إدخال البيانات")
-
-    # Show info
-    MessageDialog.show_info(self, "معلومة", "استخدم زر البحث")
-
-    # Ask question
-    if MessageDialog.show_question(self, "تأكيد", "هل تريد الحفظ؟"):
-        # User clicked Yes
-        save_data()
+MessageDialog - Helper functions for common dialog types.
 """
 
 import os
@@ -43,13 +14,7 @@ logger = get_logger(__name__)
 
 
 class MessageDialog:
-    """
-    Static helper class for showing common dialog types.
-
-    All methods are static and return appropriate values:
-    - show_success, show_error, show_warning, show_info: No return value
-    - show_question: Returns True if user confirms, False otherwise
-    """
+    """Static helper class for showing common dialog types."""
 
     @staticmethod
     def show_success(
@@ -58,15 +23,7 @@ class MessageDialog:
         message: str,
         button_text: str = "حسناً"
     ) -> None:
-        """
-        Show success dialog with green checkmark icon.
-
-        Args:
-            parent: Parent widget
-            title: Dialog title (e.g., "نجح")
-            message: Success message (e.g., "تم حفظ البيانات بنجاح")
-            button_text: OK button text (default: "حسناً")
-        """
+        """Show success dialog with green checkmark icon."""
         # Try to load success icon
         icon_path = MessageDialog._get_icon_path("success.png")
 
@@ -92,15 +49,7 @@ class MessageDialog:
         message: str,
         button_text: str = "حسناً"
     ) -> None:
-        """
-        Show error dialog with red X icon.
-
-        Args:
-            parent: Parent widget
-            title: Dialog title (e.g., "خطأ")
-            message: Error message (e.g., "حدث خطأ أثناء الحفظ")
-            button_text: OK button text (default: "حسناً")
-        """
+        """Show error dialog with red X icon."""
         # Try to load error icon
         icon_path = MessageDialog._get_icon_path("error.png")
 
@@ -126,15 +75,7 @@ class MessageDialog:
         message: str,
         button_text: str = "حسناً"
     ) -> None:
-        """
-        Show warning dialog with orange exclamation icon.
-
-        Args:
-            parent: Parent widget
-            title: Dialog title (e.g., "تحذير")
-            message: Warning message (e.g., "يجب إدخال البيانات المطلوبة")
-            button_text: OK button text (default: "حسناً")
-        """
+        """Show warning dialog with orange exclamation icon."""
         # Try to load warning icon
         icon_path = MessageDialog._get_icon_path("warning.png")
 
@@ -160,15 +101,7 @@ class MessageDialog:
         message: str,
         button_text: str = "حسناً"
     ) -> None:
-        """
-        Show info dialog with blue info icon.
-
-        Args:
-            parent: Parent widget
-            title: Dialog title (e.g., "معلومة")
-            message: Information message (e.g., "استخدم زر البحث للمتابعة")
-            button_text: OK button text (default: "حسناً")
-        """
+        """Show info dialog with blue info icon."""
         # Try to load info icon
         icon_path = MessageDialog._get_icon_path("info.png")
 
@@ -195,19 +128,7 @@ class MessageDialog:
         yes_text: str = "نعم",
         no_text: str = "لا"
     ) -> bool:
-        """
-        Show question dialog with Yes/No buttons.
-
-        Args:
-            parent: Parent widget
-            title: Dialog title (e.g., "تأكيد")
-            message: Question message (e.g., "هل تريد حفظ التغييرات؟")
-            yes_text: Yes button text (default: "نعم")
-            no_text: No button text (default: "لا")
-
-        Returns:
-            True if user clicked Yes, False if clicked No
-        """
+        """Show question dialog with Yes/No buttons. Returns True if confirmed."""
         # Try to load question icon
         icon_path = MessageDialog._get_icon_path("info.png")  # Use info icon for questions
 
@@ -235,15 +156,7 @@ class MessageDialog:
 
     @staticmethod
     def _get_icon_path(filename: str) -> str:
-        """
-        Get full path to icon file.
-
-        Args:
-            filename: Icon filename (e.g., "success.png")
-
-        Returns:
-            Full path to icon, or None if not found
-        """
+        """Get full path to icon file, or None if not found."""
         # Try multiple possible locations
         possible_paths = [
             f"assets/images/{filename}",
@@ -262,15 +175,7 @@ class MessageDialog:
 
     @staticmethod
     def _exec_blocking(dialog: BaseDialog):
-        """
-        Execute dialog in blocking mode (like QMessageBox.exec_()).
-
-        This ensures the dialog blocks execution until it's closed,
-        making it work like traditional QMessageBox.
-
-        Args:
-            dialog: BaseDialog instance to execute
-        """
+        """Execute dialog in blocking mode (like QMessageBox.exec_())."""
         # Create event loop to block execution
         loop = QEventLoop()
         dialog.closed.connect(loop.quit)

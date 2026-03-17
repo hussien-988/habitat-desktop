@@ -1,8 +1,5 @@
 # -*- coding: utf-8 -*-
-"""
-Persons management page with search, CRUD, and validation.
-Implements UC-003: Person Management
-"""
+"""Persons management page with search, CRUD, and validation."""
 
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,

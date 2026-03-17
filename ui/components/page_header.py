@@ -16,26 +16,7 @@ from .primary_button import PrimaryButton
 
 
 class PageHeader(QWidget):
-    """
-    Page header component with title and optional add button.
-
-    Features:
-    - Dynamic title
-    - Optional "Add" button with icon
-    - Figma-compliant layout (48px height)
-    - Reusable across all pages
-
-    Signals:
-        add_clicked(): Emitted when add button is clicked
-
-    Usage:
-        # With add button
-        header = PageHeader(title="المطالبات المكتملة", show_add_button=True)
-        header.add_clicked.connect(self.on_add_claim)
-
-        # Without add button
-        header = PageHeader(title="المباني")
-    """
+    """Page header component with title and optional add button."""
 
     add_clicked = pyqtSignal()
 
@@ -47,16 +28,7 @@ class PageHeader(QWidget):
         button_icon: str = "icon",
         parent=None
     ):
-        """
-        Initialize page header.
-
-        Args:
-            title: Page title text (Arabic RTL supported)
-            show_add_button: Whether to show add button
-            button_text: Add button text
-            button_icon: Add button icon name
-            parent: Parent widget
-        """
+        """Initialize page header."""
         super().__init__(parent)
         self.title_text = title
         self.show_add_button = show_add_button
@@ -65,9 +37,8 @@ class PageHeader(QWidget):
         self._setup_ui()
 
     def _setup_ui(self):
-        """Setup header UI with Figma specifications."""
-        # Fixed height from Figma
-        self.setFixedHeight(PageDimensions.PAGE_HEADER_HEIGHT)  # 48px
+        """Setup header UI."""
+        self.setFixedHeight(PageDimensions.PAGE_HEADER_HEIGHT)
         self.setStyleSheet(StyleManager.page_header())
 
         layout = QHBoxLayout(self)
@@ -77,9 +48,6 @@ class PageHeader(QWidget):
         # Page title
         self.title_label = QLabel(self.title_text)
 
-        # Use centralized font utility
-        # Figma: IBM Plex Sans Arabic, 24px Bold, Letter spacing 0
-        # Font conversion: 24px × 0.75 = 18pt
         title_font = create_font(
             size=FontManager.SIZE_TITLE,  # 18pt
             weight=QFont.Bold,             # 700
@@ -99,22 +67,10 @@ class PageHeader(QWidget):
             layout.addWidget(add_btn)
 
     def set_title(self, title: str):
-        """
-        Update page title dynamically.
-
-        Args:
-            title: New title text
-        """
+        """Update page title dynamically."""
         self.title_text = title
         self.title_label.setText(title)
 
     def show_button(self, show: bool = True):
-        """
-        Show/hide add button dynamically.
-
-        Args:
-            show: Whether to show the button
-        """
-        # Note: This requires recreating the layout
-        # For now, just document that button visibility is set at initialization
+        """Show/hide add button dynamically."""
         pass

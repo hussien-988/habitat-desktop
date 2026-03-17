@@ -1,15 +1,7 @@
 # -*- coding: utf-8 -*-
 """
 Developer Reset Dialog - DEV_MODE only.
-
 Deletes all test data from the central database via API.
-Accessible via Ctrl+Shift+R when Config.DEV_MODE is True.
-
-Deletion order (respects FK constraints):
-  1. Claims (independent entities - not cascaded by survey deletion)
-  2. Building Assignments
-  3. Surveys (cascades: households, persons, relations, evidence)
-  4. Buildings (cascades: property units)
 """
 
 from PyQt5.QtWidgets import (

@@ -29,8 +29,8 @@ def initialize_vocabularies():
     Called once at app startup from main.py.
     """
     global _initialized
-    from app.config import Config
-    url = f"{Config.API_BASE_URL}/{Config.API_VERSION}/vocabularies"
+    from app.config import Config, get_api_base_url
+    url = f"{get_api_base_url()}/{Config.API_VERSION}/vocabularies"
     logger.info(f"Fetching vocabularies from: {url}")
     try:
         response = requests.get(url, timeout=10, verify=False)

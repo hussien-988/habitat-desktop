@@ -1,11 +1,5 @@
 # -*- coding: utf-8 -*-
-"""
-Field Work Preparation - Step 2: Select Field Researcher
-UC-012: Assign Buildings to Field Teams
-
-Select researcher to assign buildings for field work.
-Table-based selection with filters (same pattern as user_management_page).
-"""
+"""Field work preparation step 2: select field researcher."""
 
 from pathlib import Path
 import sys
@@ -30,12 +24,7 @@ logger = get_logger(__name__)
 
 
 class FieldWorkPreparationStep2(QWidget):
-    """
-    Step 2: Select field researcher.
-
-    Table-based selection with search and header filters.
-    Content only (no header/footer) - parent manages navigation.
-    """
+    """Select field researcher via table with search and filters."""
 
     researcher_selected = pyqtSignal(str)  # Emits researcher id
 

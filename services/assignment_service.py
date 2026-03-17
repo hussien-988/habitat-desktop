@@ -1,8 +1,5 @@
 # -*- coding: utf-8 -*-
-"""
-Building assignment service for field teams.
-Implements UC-012: Assign Buildings to Field Teams
-"""
+"""Building assignment service for field teams."""
 
 from typing import List, Dict, Any, Optional
 from datetime import datetime
@@ -55,19 +52,10 @@ class FieldTeam:
 
 
 class AssignmentService:
-    """
-    Service for managing building assignments to field teams.
-    Implements UC-012 Assign Buildings to Field Teams.
-    """
+    """Service for managing building assignments to field teams."""
 
     def __init__(self, db: Database = None, api_client=None):
-        """
-        Initialize assignment service.
-
-        Args:
-            db: Local database connection (optional, for legacy read operations)
-            api_client: Optional API client override
-        """
+        """Initialize assignment service."""
         self.db = db
         self.api = api_client or get_api_client()
         logger.info("AssignmentService initialized with API backend")
@@ -83,17 +71,7 @@ class AssignmentService:
         revisit_reason: str = None,
         notes: str = None
     ) -> BuildingAssignment:
-        """
-        Create a building assignment (UC-012 S06).
-
-        Args:
-            building_id: ID of building to assign
-            field_team_name: Name of field team
-            assigned_by: User creating assignment
-            requires_revisit: Whether building needs revisit
-            revisit_reason: Reason for revisit if applicable
-            notes: Additional notes
-        """
+        """Create a building assignment."""
         # Check for existing active assignment
         existing = self.get_assignment_for_building(building_id)
         if existing and existing.assignment_status not in ("completed", "cancelled"):
@@ -146,15 +124,7 @@ class AssignmentService:
         assigned_by: str = None,
         notes: str = None
     ) -> List[BuildingAssignment]:
-        """
-        Create assignments for multiple buildings via API (UC-012 S07).
-
-        Args:
-            building_ids: List of building IDs
-            field_team_name: Researcher user ID (assigned_to)
-            assigned_by: User creating assignments
-            notes: Common notes for all assignments
-        """
+        """Create assignments for multiple buildings via API."""
         self.api.create_assignment(
             building_ids=building_ids,
             assigned_to=field_team_name,
@@ -259,7 +229,7 @@ class AssignmentService:
         logger.info(f"Cancelled assignment {assignment_id}")
         return True
 
-    # ========== Transfer Operations (UC-012 S08-S12) ==========
+    # ========== Transfer Operations ==========
 
     def initiate_transfer(
         self,
@@ -267,10 +237,7 @@ class AssignmentService:
         tablet_device_id: str = "",
         field_collector_id: str = ""
     ) -> Dict[str, Any]:
-        """
-        Initiate transfer of assignments to tablet (UC-012 S08).
-        Calls API first, then updates local DB as cache.
-        """
+        """Initiate transfer of assignments to tablet."""
         results = {
             "success": [],
             "failed": [],
@@ -305,10 +272,7 @@ class AssignmentService:
         return results
 
     def complete_transfer(self, assignment_id: str) -> bool:
-        """
-        Mark transfer as complete (UC-012 S10).
-        Called after tablet acknowledges receipt.
-        """
+        """Mark transfer as complete."""
         query = """
             UPDATE building_assignments
             SET transfer_status = 'transferred',
@@ -326,9 +290,7 @@ class AssignmentService:
         return True
 
     def fail_transfer(self, assignment_id: str, error_message: str) -> bool:
-        """
-        Mark transfer as failed (UC-012 S11).
-        """
+        """Mark transfer as failed."""
         query = """
             UPDATE building_assignments
             SET transfer_status = 'failed',
@@ -341,10 +303,7 @@ class AssignmentService:
         return True
 
     def retry_transfer(self, assignment_id: str) -> bool:
-        """
-        Reset transfer status for retry (UC-012 S12).
-        Calls API first, then updates local DB as cache.
-        """
+        """Reset transfer status for retry."""
         # Call API
         try:
             from services.api_client import get_api_client
@@ -368,10 +327,7 @@ class AssignmentService:
     # ========== Field Teams ==========
 
     def get_field_teams(self) -> List[Dict[str, str]]:
-        """
-        Get list of field researchers via API.
-        Returns users with role='field_researcher'.
-        """
+        """Get list of field researchers via API."""
         try:
             result = self.api.get_all_users(role="field_researcher", is_active=True)
             items = result.get("items", []) if isinstance(result, dict) else []
@@ -398,10 +354,7 @@ class AssignmentService:
             return []
 
     def get_available_tablets(self) -> List[Dict[str, str]]:
-        """
-        Get list of available tablet devices from the sync server.
-        Falls back to manual IP entry if no devices are connected.
-        """
+        """Get list of available tablet devices."""
         tablets = []
 
         try:

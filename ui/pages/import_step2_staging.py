@@ -1,12 +1,5 @@
 # -*- coding: utf-8 -*-
-"""
-Import Wizard - Step 2: Staging Results, Validation Report & Duplicates
-UC-003: Import Pipeline
-
-Displays the validation report after staging a package.
-Validation-report response includes per-entity breakdowns,
-level results (validators), and duplicate detection counts.
-"""
+"""Import wizard step 2: staging results and validation report."""
 
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QFrame,

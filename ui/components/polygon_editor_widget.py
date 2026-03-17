@@ -1,22 +1,5 @@
 # -*- coding: utf-8 -*-
-"""
-Polygon Editor Widget - Interactive Polygon Drawing and Editing.
-
-Provides interactive polygon creation and editing capabilities using Leaflet.draw.
-
-Features:
-- Click to draw polygon vertices
-- Drag vertices to edit shape
-- Add/remove vertices
-- Real-time area calculation
-- Self-intersection detection
-- Undo/redo support
-
-Usage:
-    editor = PolygonEditorWidget()
-    editor.polygon_changed.connect(on_polygon_changed)
-    polygon_wkt = editor.get_polygon_wkt()
-"""
+"""Polygon Editor Widget - interactive polygon drawing and editing using Leaflet.draw."""
 
 from typing import Optional, List, Tuple, Dict, Any
 import json
@@ -74,15 +57,7 @@ class PolygonBridge(QObject):
         self.error_occurred.emit(error_msg)
 
     def _calculate_area(self, coordinates: List[List[float]]) -> float:
-        """
-        Calculate polygon area in square meters using spherical excess formula.
-
-        Args:
-            coordinates: List of [lon, lat] pairs
-
-        Returns:
-            Area in square meters
-        """
+        """Calculate polygon area in square meters using spherical excess formula."""
         if len(coordinates) < 3:
             return 0.0
 
@@ -105,13 +80,7 @@ class PolygonBridge(QObject):
 
 
 class PolygonEditorWidget(QWidget):
-    """
-    Interactive polygon editor widget.
-
-    Signals:
-        polygon_changed: Emitted when polygon is modified (geojson_str)
-        area_changed: Emitted when area changes (area_sqm)
-    """
+    """Interactive polygon editor widget."""
 
     polygon_changed = pyqtSignal(str)  # GeoJSON string
     area_changed = pyqtSignal(float)   # Area in square meters
@@ -540,12 +509,7 @@ class PolygonEditorWidget(QWidget):
     # Public API
 
     def set_polygon(self, geojson_or_wkt: str):
-        """
-        Load a polygon into the editor.
-
-        Args:
-            geojson_or_wkt: GeoJSON string or WKT polygon string
-        """
+        """Load a polygon into the editor from GeoJSON or WKT."""
         if not HAS_WEBENGINE:
             return
 

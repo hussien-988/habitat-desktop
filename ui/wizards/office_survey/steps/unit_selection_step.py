@@ -204,12 +204,12 @@ class UnitSelectionStep(BaseStep):
 
         layout.addWidget(self.unit_building_frame)
 
-        # Figma: Units Container Card (Card 2)
+        # Units Container Card
         # Dimensions: 1249×372 (width×height), border-radius: 8px, padding: 12px
         # Gap from Card 1: 15px (handled by layout.setSpacing(15))
         units_main_frame = QFrame()
         units_main_frame.setObjectName("unitsContainerCard")
-        # Fixed dimensions from Figma (width x height)
+        # Fixed dimensions
         units_main_frame.setFixedSize(1249, 372)
         units_main_frame.setStyleSheet("""
             QFrame#unitsContainerCard {
@@ -234,7 +234,7 @@ class UnitSelectionStep(BaseStep):
         # Adjusted: Internal padding 11px all sides (reduced to prevent card clipping)
         units_main_layout.setContentsMargins(11, 11, 11, 11)
 
-        # Figma: Header with title/subtitle on right and button on left
+        # Header with title/subtitle and button
         header_layout = QHBoxLayout()
         header_layout.setSpacing(0)  # No spacing, manual control
         header_layout.setContentsMargins(0, 0, 0, 0)
@@ -271,13 +271,13 @@ class UnitSelectionStep(BaseStep):
 
         right_header.addWidget(icon_container)
 
-        # Title and subtitle (Figma: 14px → 10.5pt)
+        # Title and subtitle
         title_subtitle_layout = QVBoxLayout()
         title_subtitle_layout.setSpacing(2)
         title_subtitle_layout.setContentsMargins(0, 0, 0, 0)
 
         # Use FontManager for consistent font sizing
-        # Figma: 14px × 0.75 = 10.5pt (rounded to 10pt for cleaner rendering)
+        # 10pt font
         # Increased weight to emphasize title (SemiBold instead of Regular)
         # RTL: Text ends at the same point as subtitle, but starts further right
         self._title_label = QLabel("اختر مقسما")
@@ -310,9 +310,9 @@ class UnitSelectionStep(BaseStep):
         header_layout.addLayout(right_header)
         header_layout.addStretch()
 
-        # Left side: Add unit button (Figma: 125×44, outline variant)
+        # Add unit button
         # Use ActionButton component
-        # Figma specs: background #F0F7FF, border #3890DF, border-radius 8px
+        # Outline button styling
         self.add_unit_btn = ActionButton(
             text="اضف مقسما",
             variant="outline",

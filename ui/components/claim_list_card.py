@@ -20,54 +20,34 @@ class ClaimListCard(QFrame):
     clicked = pyqtSignal(str)
 
     def __init__(self, claim_data: dict, icon_name: str = "blue", parent=None):
-        """
-        Initialize claim card.
-
-        Args:
-            claim_data: Dictionary containing claim information
-            icon_name: Icon name to display (default: "blue" for completed, "yellow" for drafts)
-            parent: Parent widget
-        """
+        """Initialize claim card."""
         super().__init__(parent)
         self.claim_data = claim_data
         self.icon_name = icon_name
         self._setup_ui()
 
     def _setup_ui(self):
-        """
-        Setup card UI with shadow and content layout.
-
-        Figma Specs:
-        - Size: 616.5×112px
-        - Padding: 12px (all sides)
-        - Corner radius: 8px
-        - Gap (internal): 12px
-        - Fill: #FFFFFF
-        - Drop shadow: present
-        """
+        """Setup card UI with shadow and content layout."""
         self.setObjectName("ClaimCard")  # Match StyleManager selector exactly
 
-        # Apply Figma styling via StyleManager (Single Source of Truth)
         self.setStyleSheet(StyleManager.card())
 
-        # Figma: Card dimensions (112px height from Figma)
-        self.setFixedHeight(PageDimensions.CARD_HEIGHT)  # 112px
+        self.setFixedHeight(PageDimensions.CARD_HEIGHT)
         self.setCursor(Qt.PointingHandCursor)
 
-        # Drop shadow (from Figma Effects - exact values)
+        # Drop shadow
         shadow = QGraphicsDropShadowEffect()
-        shadow.setBlurRadius(PageDimensions.CARD_SHADOW_BLUR)  # 8px from Figma
-        shadow.setXOffset(PageDimensions.CARD_SHADOW_X)        # 0 from Figma
-        shadow.setYOffset(PageDimensions.CARD_SHADOW_Y)        # 4px from Figma
+        shadow.setBlurRadius(PageDimensions.CARD_SHADOW_BLUR)
+        shadow.setXOffset(PageDimensions.CARD_SHADOW_X)
+        shadow.setYOffset(PageDimensions.CARD_SHADOW_Y)
 
-        # Color: #919EAB with 16% opacity (Figma)
         shadow_color = QColor(PageDimensions.CARD_SHADOW_COLOR)
-        shadow_color.setAlpha(int(255 * PageDimensions.CARD_SHADOW_OPACITY / 100))  # 16% = 41/255
+        shadow_color.setAlpha(int(255 * PageDimensions.CARD_SHADOW_OPACITY / 100))
         shadow.setColor(shadow_color)
 
         self.setGraphicsEffect(shadow)
 
-        # Card layout with Figma padding: 12px all sides
+        # Card layout
         card_layout = QVBoxLayout(self)
         card_layout.setContentsMargins(
             PageDimensions.CARD_PADDING,  # Left: 12px
@@ -75,19 +55,16 @@ class ClaimListCard(QFrame):
             PageDimensions.CARD_PADDING,  # Right: 12px
             PageDimensions.CARD_PADDING   # Bottom: 12px
         )
-        # Internal gap between elements: 12px (Figma)
         card_layout.setSpacing(PageDimensions.CARD_GAP_INTERNAL)
 
         top_row = QHBoxLayout()
-        top_row.setSpacing(PageDimensions.CARD_GAP_INTERNAL)  # 12px from Figma
+        top_row.setSpacing(PageDimensions.CARD_GAP_INTERNAL)
 
-        # Icon button using reusable Icon component
-        # Icon varies by claim type: "blue" for completed, "yellow" for drafts
+        # Icon button
         icon_btn = QPushButton()
         icon_btn.setCursor(Qt.PointingHandCursor)
         icon_btn.setFixedSize(32, 32)
 
-        # Load icon using Icon component static method
         q_icon = Icon.load_qicon(self.icon_name)
         if q_icon:
             icon_btn.setIcon(q_icon)
@@ -108,7 +85,6 @@ class ClaimListCard(QFrame):
 
         name = self.claim_data.get('claimant_name', 'غير محدد')
         name_label = QLabel(name)
-        # Use Typography constants for font family
         name_label.setStyleSheet(f"""
             QLabel {{
                 color: #212121;
@@ -124,7 +100,6 @@ class ClaimListCard(QFrame):
 
         claim_id = self.claim_data.get('claim_id', 'CL-2025-000001')
         id_label = QLabel(claim_id)
-        # Use Typography constants for font family
         id_label.setStyleSheet(f"""
             QLabel {{
                 color: #9e9e9e;
@@ -142,7 +117,6 @@ class ClaimListCard(QFrame):
 
         date = self.claim_data.get('date', '2024-12-01')
         date_label = QLabel(date)
-        # Use Typography constants for font family
         date_label.setStyleSheet(f"""
             QLabel {{
                 color: #9e9e9e;
@@ -157,44 +131,34 @@ class ClaimListCard(QFrame):
 
         card_layout.addLayout(top_row)
 
-        # Details container with Figma styling (pill-shaped box)
+        # Details container
         details_container = QFrame()
         details_container.setObjectName("detailsFrame")
 
-        # CRITICAL: Enable styled frame (required for border-radius to work)
-        details_container.setFrameShape(QFrame.NoFrame)  # NoFrame allows full stylesheet control
-        details_container.setAttribute(Qt.WA_StyledBackground, True)  # Enable custom stylesheet painting
-
-        # Apply Figma styling via StyleManager
+        details_container.setFrameShape(QFrame.NoFrame)
+        details_container.setAttribute(Qt.WA_StyledBackground, True)
         details_container.setStyleSheet(StyleManager.card_details_container())
 
         details_layout = QHBoxLayout(details_container)
-        # Padding: 8px horizontal, 6px vertical (Figma)
-        # Applied via layout margins for best rendering compatibility
         details_layout.setContentsMargins(
-            PageDimensions.CARD_DETAILS_PADDING_H,  # Left: 8px
-            PageDimensions.CARD_DETAILS_PADDING_V,  # Top: 6px
-            PageDimensions.CARD_DETAILS_PADDING_H,  # Right: 8px
-            PageDimensions.CARD_DETAILS_PADDING_V   # Bottom: 6px
+            PageDimensions.CARD_DETAILS_PADDING_H,
+            PageDimensions.CARD_DETAILS_PADDING_V,
+            PageDimensions.CARD_DETAILS_PADDING_H,
+            PageDimensions.CARD_DETAILS_PADDING_V
         )
-        # Gap between elements: 8px (Figma)
         details_layout.setSpacing(PageDimensions.CARD_DETAILS_GAP)
 
-        # Details icon using reusable Icon component
         folder_icon = Icon("dec", size=14, fallback_text="▣")
         details_layout.addWidget(folder_icon)
 
         # Build hierarchical address
-        # Format: "حلب - المنطقة - الناحية - الحي - رقم البناء - رقم الوحدة"
         from utils.helpers import build_hierarchical_address
 
-        # Get building and unit objects from claim_data (if available)
-        building_obj = self.claim_data.get('building')  # Building model object
-        unit_obj = self.claim_data.get('unit')          # Unit model object
+        building_obj = self.claim_data.get('building')
+        unit_obj = self.claim_data.get('unit')
 
         # If objects not available, create simple namespace with available data
         if not building_obj:
-            # Create a simple object-like structure from dict data
             class SimpleNamespace:
                 def __init__(self, **kwargs):
                     self.__dict__.update(kwargs)
@@ -216,7 +180,6 @@ class ClaimListCard(QFrame):
                 unit_number=self.claim_data.get('unit_number')
             )
 
-        # Build address using helper
         details_text = build_hierarchical_address(
             building_obj=building_obj,
             unit_obj=unit_obj,
@@ -224,30 +187,24 @@ class ClaimListCard(QFrame):
             include_unit=True
         )
 
-        # Apply Figma styling with constants
         details_label = QLabel(details_text)
 
-        # Set font with Typography constants
-        # IBM Plex Sans Arabic only (no Noto Kufi Arabic)
         details_font = QFont(
-            Typography.FONT_FAMILY_ARABIC,  # IBM Plex Sans Arabic
-            PageDimensions.CARD_DETAILS_TEXT_SIZE,  # 6pt
-            PageDimensions.CARD_DETAILS_TEXT_WEIGHT  # Light (300)
+            Typography.FONT_FAMILY_ARABIC,
+            PageDimensions.CARD_DETAILS_TEXT_SIZE,
+            PageDimensions.CARD_DETAILS_TEXT_WEIGHT
         )
-        # Set fallback font family chain (matches login_page.py):
-        # IBM Plex Sans Arabic → Noto Kufi Arabic → Calibri
         details_font.setFamilies([
-            "IBM Plex Sans Arabic",  # System font (same as login)
-            "Noto Kufi Arabic",      # Bundled fallback
-            "Calibri"                # System fallback
+            "IBM Plex Sans Arabic",
+            "Noto Kufi Arabic",
+            "Calibri"
         ])
         details_font.setLetterSpacing(
             QFont.AbsoluteSpacing,
-            PageDimensions.CARD_DETAILS_TEXT_LETTER_SPACING  # 0
+            PageDimensions.CARD_DETAILS_TEXT_LETTER_SPACING
         )
         details_label.setFont(details_font)
 
-        # Set colors and styling via QSS
         details_label.setStyleSheet(f"""
             QLabel {{
                 color: {PageDimensions.CARD_DETAILS_TEXT_COLOR};

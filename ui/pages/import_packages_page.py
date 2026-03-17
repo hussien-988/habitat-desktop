@@ -1,8 +1,5 @@
 # -*- coding: utf-8 -*-
-"""
-Import Packages Page — UC-003 import pipeline list view.
-Two classes: ImportPackagesPage (container) and ImportPackagesListPage (table).
-"""
+"""Import packages list page."""
 
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel,

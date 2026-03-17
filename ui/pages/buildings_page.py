@@ -141,7 +141,6 @@ class AddBuildingPage(QWidget):
         )
         layout.setSpacing(12)
 
-        # Background color from Figma via StyleManager
         container.setStyleSheet(StyleManager.page_background())
 
         # Header - matching wizard style
@@ -153,11 +152,10 @@ class AddBuildingPage(QWidget):
         title_subtitle_container = QVBoxLayout()
         title_subtitle_container.setSpacing(4)
 
-        # Title: always "معلومات البناء" (read-only informational screen)
-        # Figma: Desktop/H4 24px = 18pt Bold
+        # Title
         title_label = QLabel("معلومات البناء")
         title_font = create_font(
-            size=FontManager.SIZE_TITLE,  # 18pt (24px Figma)
+            size=FontManager.SIZE_TITLE,
             weight=QFont.Bold,
             letter_spacing=0
         )
@@ -173,7 +171,7 @@ class AddBuildingPage(QWidget):
 
         subtitle_part1 = QLabel("المباني")
         subtitle_font = create_font(
-            size=FontManager.SIZE_BODY,  # 9pt (12px Figma)
+            size=FontManager.SIZE_BODY,
             weight=QFont.Normal,
             letter_spacing=0
         )
@@ -199,8 +197,7 @@ class AddBuildingPage(QWidget):
         title_row.addLayout(title_subtitle_container)
         title_row.addStretch()
 
-        # Close button (X) - LEFT SIDE FIRST
-        # Figma specs: 52×48px, White background
+        # Close button (X)
         close_btn = QPushButton("✕")
         close_btn.setCursor(Qt.PointingHandCursor)
         close_btn.setFixedSize(ButtonDimensions.CLOSE_WIDTH, ButtonDimensions.CLOSE_HEIGHT)
@@ -227,8 +224,7 @@ class AddBuildingPage(QWidget):
         close_btn.clicked.connect(self.cancelled.emit)
         title_row.addWidget(close_btn)
 
-        # Save button with icon - LEFT SIDE SECOND
-        # Figma specs: 114×48px
+        # Save button with icon
         save_btn = QPushButton(" حفظ")
         save_btn.setCursor(Qt.PointingHandCursor)
         save_btn.setFixedSize(ButtonDimensions.SAVE_WIDTH, ButtonDimensions.SAVE_HEIGHT)
@@ -321,14 +317,14 @@ class AddBuildingPage(QWidget):
 
         # Title: "بيانات البناء"
         info_title = QLabel("بيانات البناء")
-        # Title: 14px from Figma = 10pt, weight 600, color WIZARD_TITLE (matching wizard)
+        # Title
         info_title.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
         info_title.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent;")
 
         # Subtitle: "ادخل معلومات البناء والموقع الجغرافي"
         # Changed from "ابحث عن" to "ادخل" as requested
         info_sub = QLabel("ادخل معلومات البناء والموقع الجغرافي")
-        # Subtitle: 14px from Figma = 10pt, weight 400, color WIZARD_SUBTITLE (matching wizard)
+        # Subtitle
         info_sub.setFont(create_font(size=10, weight=FontManager.WEIGHT_REGULAR))
         info_sub.setStyleSheet(f"color: {Colors.WIZARD_SUBTITLE}; background: transparent;")
 
@@ -745,7 +741,7 @@ class AddBuildingPage(QWidget):
 
         # Map container (QLabel to support QPixmap)
         map_container = QLabel()
-        map_container.setFixedSize(400, 130)  # Width: 400px, Height: 130px (from Figma)
+        map_container.setFixedSize(400, 130)
         map_container.setAlignment(Qt.AlignCenter)
         map_container.setObjectName("mapContainer")
 
@@ -773,7 +769,7 @@ class AddBuildingPage(QWidget):
 
         # White button in top-left corner
         map_button = QPushButton(map_container)
-        map_button.setFixedSize(94, 20)  # Width: 94px, Height: 20px (from Figma)
+        map_button.setFixedSize(94, 20)
         map_button.move(8, 8)  # Position in top-left corner with small margin
         map_button.setCursor(Qt.PointingHandCursor)
 
@@ -783,7 +779,7 @@ class AddBuildingPage(QWidget):
             map_button.setIcon(QIcon(icon_pixmap))
             map_button.setIconSize(QSize(12, 12))
 
-        # Text: "فتح الخريطة" - 12px Figma = 9pt PyQt5
+        # Text: "فتح الخريطة"
         map_button.setText("فتح الخريطة")
         map_button.setFont(create_font(size=9, weight=FontManager.WEIGHT_REGULAR))
 
@@ -2419,7 +2415,7 @@ class BuildingsListPage(QWidget):
         btn_layout.setSpacing(16)
 
         # زر تجهيز العمل الميداني (شفاف مع بوردر أزرق)
-        # Apply unified button dimensions from Figma (199x48px, border-radius 8px)
+        # Apply unified button dimensions
         btn_field = CustomButton.secondary("تجهيز العمل الميداني", self, width=199, height=48)
         btn_field.clicked.connect(self.prepare_field_work.emit)
 
@@ -2438,7 +2434,7 @@ class BuildingsListPage(QWidget):
 
         # البطاقة البيضاء للجدول
         table_card = QFrame()
-        table_card.setFixedHeight(708)  # Figma spec: 708px height
+        table_card.setFixedHeight(708)
         table_card.setStyleSheet("background-color: white; border-radius: 16px;")
         card_layout = QVBoxLayout(table_card)
         card_layout.setContentsMargins(10, 10, 10, 10)
@@ -2519,7 +2515,7 @@ class BuildingsListPage(QWidget):
         # ضبط المحاذاة والعرض
         header = self.table.horizontalHeader()
         header.setDefaultAlignment(Qt.AlignRight | Qt.AlignVCenter)
-        header.setFixedHeight(56)  # Figma spec: 56px header height
+        header.setFixedHeight(56)
         header.setStretchLastSection(True)  # آخر عمود يأخذ المساحة المتبقية
         header.setMouseTracking(True)  # Enable mouse tracking for cursor change
 
@@ -2733,7 +2729,7 @@ class BuildingsListPage(QWidget):
 
         self._all_buildings = all_buildings  # Store unfiltered buildings
 
-        # Apply filters (CRITICAL: Filter BEFORE pagination)
+        # Apply filters before pagination
         self._buildings = self._apply_filters(all_buildings)
 
         # Calculate pagination from FILTERED buildings (not all_buildings)
@@ -3109,7 +3105,7 @@ class BuildingsListPage(QWidget):
 
         # إنشاء القائمة - 3 صفوف فقط
         menu = QMenu(self)
-        menu.setFixedSize(200, 149)  # Figma: 200×149
+        menu.setFixedSize(200, 149)
 
         # Load icons
         from ui.components.icon import Icon
@@ -3303,7 +3299,6 @@ class BuildingsPage(QWidget):
 
     def _setup_ui(self):
         """Setup UI."""
-        # Background color from Figma via StyleManager
         self.setStyleSheet(StyleManager.page_background())
 
         layout = QVBoxLayout(self)

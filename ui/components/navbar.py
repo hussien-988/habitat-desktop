@@ -2,19 +2,6 @@
 """
 Navbar Component - UN-HABITAT TRRCMS
 المكون المشترك للشريط العلوي مع التبويبات
-
-Exact Figma Specifications (المطالبات المكتملة page):
-- Container: W=1512, H=109
-- Top Bar: H=60
-- Tabs Bar: H=48
-- Logo: 142.77×21.77 (scaled to 22px height for PyQt5)
-- ID Badge: 110.69×40, border-radius=10px, padding=8px
-- Background: #122C49 (NAVBAR_BG)
-- Font: IBM Plex Sans Arabic, Letter spacing: 0px
-
-Architecture:
-- Reusable components (LogoWidget, IDBadgeWidget)
-- Clear naming, proper separation of concerns
 """
 
 from pathlib import Path
@@ -34,13 +21,7 @@ from services.translation_manager import tr
 
 
 class DraggableFrame(QFrame):
-    """
-    Draggable frame for window movement
-    فريم قابل للسحب لتحريك النافذة
-
-    Allows dragging the window when frameless
-    Double-click to maximize/restore
-    """
+    """Draggable frame for window movement - فريم قابل للسحب لتحريك النافذة"""
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -78,18 +59,6 @@ class Navbar(QFrame):
     """
     Main Navbar Component with Tabs
     المكون الرئيسي للشريط العلوي مع التبويبات
-
-    Figma Specifications:
-    - Total Height: 109px (60px top + 48px tabs + 1px adjustment)
-    - Background: #122C49
-    - Logo: Reusable LogoWidget
-    - ID Badge: Reusable IDBadgeWidget
-    - Search Bar: 450×32px
-    - Tabs: المطالبات المكتملة (active), المسودة, المباني, الوحدات السكنية, التكرارات, استيراد
-
-    Signals:
-        tab_changed(int): Emitted when tab is changed
-        search_requested(str): Emitted when search is performed
     """
 
     # Signals
@@ -130,16 +99,10 @@ class Navbar(QFrame):
         tabs_bar = self._create_tabs_bar()
         main_layout.addWidget(tabs_bar)
 
-        # Figma: Total height 109px
         self.setFixedHeight(NavbarDimensions.CONTAINER_HEIGHT)
 
     def _create_top_bar(self):
-        """
-        Create top bar with logo, ID badge, search, and window controls
-
-        Figma: H=60px, Padding=24px horizontal
-        Layout (RTL): [Window Controls] [Spacer] [Search] [Spacer] [ID Badge] [Logo]
-        """
+        """Create top bar with logo, ID badge, and window controls."""
         top_bar = DraggableFrame()
         top_bar.setObjectName("navbar_top")
         top_bar.setAttribute(Qt.WA_StyledBackground, True)
@@ -172,7 +135,7 @@ class Navbar(QFrame):
         self.id_badge.import_requested.connect(self._on_import_requested)
         layout.addWidget(self.id_badge)
 
-        # Divider line between ID and Logo (Figma spec)
+        # Divider line
         divider = QFrame()
         divider.setFrameShape(QFrame.VLine)
         divider.setFixedHeight(24)  # Visual height of divider
@@ -191,11 +154,7 @@ class Navbar(QFrame):
         return top_bar
 
     def _create_window_controls(self):
-        """
-        Create window control buttons (minimize, maximize, close)
-
-        Figma: Size 46×32px each (matching login page)
-        """
+        """Create window control buttons (minimize, maximize, close)."""
         box = QWidget()
         box.setObjectName("window_controls")
         box.setLayoutDirection(Qt.LeftToRight)
@@ -209,7 +168,6 @@ class Navbar(QFrame):
         btn_max = QPushButton("□")
         btn_close = QPushButton("✕")
 
-        # Make maximize button icon 2x larger (matching login page)
         btn_max.setStyleSheet("""
             QPushButton {
                 font-size: 28px;
@@ -221,7 +179,6 @@ class Navbar(QFrame):
         btn_max.setObjectName("win_btn")
         btn_close.setObjectName("win_close")
 
-        # Figma dimensions: 46×32px (matching login page)
         for b in (btn_min, btn_max, btn_close):
             b.setFixedSize(46, 32)
             b.setFocusPolicy(Qt.NoFocus)
@@ -247,13 +204,7 @@ class Navbar(QFrame):
             w.showMaximized()
 
     def _create_search_bar(self):
-        """
-        Create search bar with menu and icon
-
-        Figma: W=450px, H=32px, Border-radius=4px
-        Background: #1A3A5C (SEARCH_BG)
-        Layout: [Search Icon] [Input] [Menu Dropdown]
-        """
+        """Create search bar with menu and icon."""
         search_container = QWidget()
         search_container.setFixedWidth(NavbarDimensions.SEARCH_BAR_WIDTH)
         search_container.setFixedHeight(NavbarDimensions.SEARCH_BAR_HEIGHT)
@@ -304,8 +255,6 @@ class Navbar(QFrame):
         self.search_input = QLineEdit()
         self.search_input.setPlaceholderText(tr("navbar.search.default"))
 
-        # Figma: IBM Plex Sans Arabic, 10px, Letter spacing 0
-        # Font conversion: 10px × 0.75 = 7.5pt ≈ 8pt
         search_font = create_font(size=8, weight=QFont.Normal, letter_spacing=0)
         self.search_input.setFont(search_font)
 
@@ -383,16 +332,7 @@ class Navbar(QFrame):
         return search_container
 
     def _create_tabs_bar(self):
-        """
-        Create tabs bar with navigation tabs
-
-        Figma Specs:
-        - Height: 48px
-        - Padding: 24px horizontal
-        - Gap between tabs: 24px
-        - Font: 14px (11pt) SemiBold, Line height 22px
-        - Active tab: Background=#DEEBFF, Text=#3B86FF, Border-radius=8px
-        """
+        """Create tabs bar with navigation tabs."""
         tabs_container = QFrame()
         tabs_container.setObjectName("tabs_bar")
         tabs_container.setFixedHeight(NavbarDimensions.TABS_BAR_HEIGHT)  # 48px
@@ -403,7 +343,7 @@ class Navbar(QFrame):
             Spacing.NAVBAR_HORIZONTAL_PADDING, 8,  # 24px left, 8px top
             Spacing.NAVBAR_HORIZONTAL_PADDING, 8   # 24px right, 8px bottom
         )
-        layout.setSpacing(NavbarDimensions.TAB_GAP)  # 24px gap between tabs (Figma)
+        layout.setSpacing(NavbarDimensions.TAB_GAP)
 
         # Tab titles (translatable)
         # Index mapping: 0=claims, 1=cases, 2=import, 3=duplicates, 4=user_management, 5=field_assignment
@@ -432,24 +372,11 @@ class Navbar(QFrame):
         return tabs_container
 
     def _create_tab_button(self, title: str, index: int) -> QPushButton:
-        """
-        Create a single tab button
-
-        Figma Specs:
-        - Height: 32px (Hug)
-        - Font: IBM Plex Sans Arabic, 14px (11pt in PyQt5), SemiBold (600)
-        - Line Height: 22px
-        - Padding: 5px (V) × 12px (H)
-        - Gap: 24px between tabs
-        - Border-radius: 8px
-        - Letter spacing: 0
-        """
+        """Create a single tab button."""
         tab_btn = QPushButton(title)
         tab_btn.setFixedHeight(NavbarDimensions.TAB_HEIGHT)  # 32px
         tab_btn.setCursor(QCursor(Qt.PointingHandCursor))
 
-        # Use centralized font utility
-        # Figma: 14px SemiBold, Line height 22px, Letter spacing 0
         tab_font = create_font(
             size=NavbarDimensions.TAB_FONT_SIZE,  # 11pt (14px × 0.75)
             weight=NavbarDimensions.TAB_FONT_WEIGHT,  # SemiBold (600)
@@ -464,15 +391,7 @@ class Navbar(QFrame):
         return tab_btn
 
     def _set_active_tab(self, index: int):
-        """
-        Set active tab with Figma styling
-
-        Figma Specs:
-        - Active: bg=#DEEBFF, text=#3B86FF, border-radius=8px, padding=5px 12px
-        - Inactive: bg=transparent, text=rgba(255,255,255,0.7), padding=5px 12px
-        - Font: 14px (11pt) SemiBold (600), Line height 22px
-        - Gap: 24px between tabs
-        """
+        """Set active tab styling."""
         self.current_tab_index = index
 
         for i, btn in enumerate(self.tab_buttons):
@@ -689,13 +608,7 @@ class Navbar(QFrame):
 
 
 class SimpleNavbar(QFrame):
-    """
-    Simplified Navbar without tabs
-    For pages that don't need tab navigation
-
-    Usage:
-        navbar = SimpleNavbar(title="تفاصيل المطالبة", user_id="12345")
-    """
+    """Simplified Navbar without tabs for secondary pages."""
 
     search_requested = pyqtSignal(str)
     back_clicked = pyqtSignal()

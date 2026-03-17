@@ -1,14 +1,5 @@
 # -*- coding: utf-8 -*-
-"""
-Building Service - Business Logic Layer
-========================================
-Centralized business logic for Building operations.
-This service handles:
-- Building ID generation (17 digits)
-- Geometry validation (polygons via PostGIS)
-- Administrative hierarchy validation
-- Building assignment to field teams
-"""
+"""Building service with business logic for building operations."""
 from typing import Dict, Any, Optional, List
 from datetime import datetime
 
@@ -22,64 +13,23 @@ logger = get_logger(__name__)
 
 
 class BuildingService:
-    """
-    Service layer for Building business logic.
-
-    Responsibilities:
-    - Generate unique building IDs (17-digit format)
-    - Validate building geometry (polygons)
-    - Apply administrative hierarchy rules
-    - Calculate building area from geometry
-    - Handle building-field team assignments
-    """
+    """Service layer for building business logic."""
 
     def __init__(
         self,
         repository: BuildingRepository,
         postgis_service: Optional[PostGISService] = None
     ):
-        """
-        Initialize BuildingService.
-
-        Args:
-            repository: BuildingRepository for data access
-            postgis_service: Optional PostGISService for spatial operations
-        """
+        """Initialize BuildingService."""
         self.repository = repository
         self.postgis_service = postgis_service
         self.validator = ValidationFactory.get_validator('building')
 
     def create_building(self, data: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        Create building with complete validation and business rules.
-
-        Args:
-            data: Building data from UI
-                Required:
-                - governorate_code: str (2 digits)
-                - district_code: str (2 digits)
-                - sub_district_code: str (2 digits)
-                - neighborhood_code: str (3 digits)
-                - block_code: str (3 digits)
-                - building_number: str (5 digits)
-                Optional:
-                - building_geometry: str (WKT polygon)
-                - building_type: str
-                - construction_year: int
-
-        Returns:
-            Result dictionary with success, building, error
-
-        Business Rules:
-        1. Building ID auto-generated from hierarchy codes
-        2. Building ID must be unique (17 digits)
-        3. Geometry must be valid polygon (if provided)
-        4. Area calculated from geometry
-        5. All hierarchy codes must exist in vocabulary
-        """
+        """Create building with validation and business rules."""
         logger.info("BuildingService.create_building called")
 
-        # Step 1: Validate input
+        # Validate input
         validation_result = self.validator.validate(data)
         if not validation_result.is_valid:
             logger.warning(f"Building validation failed: {validation_result.errors}")
@@ -90,7 +40,7 @@ class BuildingService:
                 'validation_errors': validation_result.errors
             }
 
-        # Step 2: Generate Building ID
+        # Generate Building ID
         try:
             building_id = self._generate_building_id(data)
             data['building_id'] = building_id
@@ -103,7 +53,7 @@ class BuildingService:
                 'validation_errors': []
             }
 
-        # Step 3: Check uniqueness
+        # Check uniqueness
         existing = self.repository.get(building_id)
         if existing:
             return {
@@ -113,7 +63,7 @@ class BuildingService:
                 'validation_errors': []
             }
 
-        # Step 4: Validate and process geometry
+        # Validate and process geometry
         if data.get('building_geometry'):
             geometry_result = self._process_geometry(data['building_geometry'])
             if not geometry_result['valid']:
@@ -126,7 +76,7 @@ class BuildingService:
             # Add calculated area
             data['area_sqm'] = geometry_result['area_sqm']
 
-        # Step 5: Apply business transformations
+        # Apply business transformations
         try:
             transformed_data = self._apply_business_rules(data)
         except ValueError as e:
@@ -137,7 +87,7 @@ class BuildingService:
                 'validation_errors': []
             }
 
-        # Step 6: Create Building model
+        # Create Building model
         try:
             building = self._create_building_model(transformed_data)
         except Exception as e:
@@ -149,7 +99,7 @@ class BuildingService:
                 'validation_errors': []
             }
 
-        # Step 7: Persist
+        # Persist
         try:
             created_building = self.repository.create(building)
             logger.info(f"Building created successfully: {created_building.building_id}")
@@ -265,19 +215,7 @@ class BuildingService:
         team_id: str,
         user_id: str
     ) -> Dict[str, Any]:
-        """
-        Assign building to field team.
-
-        Business Rule: Building must be in 'pending' or 'unassigned' status.
-
-        Args:
-            building_id: Building to assign
-            team_id: Field team UUID
-            user_id: User performing assignment
-
-        Returns:
-            Result dictionary
-        """
+        """Assign building to field team."""
         building = self.repository.get(building_id)
         if not building:
             return {
@@ -318,26 +256,7 @@ class BuildingService:
     # ==================== Private Methods ====================
 
     def _generate_building_id(self, data: Dict[str, Any]) -> str:
-        """
-        Generate 17-digit building ID from hierarchy codes.
-
-        Format: GG-DD-SS-NNN-BBB-NNNNN
-        - GG: Governorate (2 digits)
-        - DD: District (2 digits)
-        - SS: Sub-district (2 digits)
-        - NNN: Neighborhood (3 digits)
-        - BBB: Block (3 digits)
-        - NNNNN: Building number (5 digits)
-
-        Args:
-            data: Building data with hierarchy codes
-
-        Returns:
-            17-digit building ID
-
-        Raises:
-            ValueError: If any code is missing or invalid format
-        """
+        """Generate 17-digit building ID from hierarchy codes."""
         required_codes = [
             ('governorate_code', 2),
             ('district_code', 2),
@@ -366,18 +285,7 @@ class BuildingService:
         return building_id
 
     def _process_geometry(self, wkt: str) -> Dict[str, Any]:
-        """
-        Validate and process building geometry using PostGIS.
-
-        Args:
-            wkt: WKT string of polygon
-
-        Returns:
-            Dictionary with:
-            - valid: bool
-            - error: str (if invalid)
-            - area_sqm: float (if valid)
-        """
+        """Validate and process building geometry using PostGIS."""
         if not self.postgis_service:
             # No PostGIS - basic validation only
             return {
@@ -390,20 +298,7 @@ class BuildingService:
         return self.postgis_service.validate_polygon(wkt)
 
     def _apply_business_rules(self, data: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        Apply business transformations.
-
-        Rules:
-        1. Set default status if not provided
-        2. Generate reference number
-        3. Set timestamps
-
-        Args:
-            data: Raw building data
-
-        Returns:
-            Transformed data
-        """
+        """Apply business transformations."""
         transformed = data.copy()
 
         # Default values

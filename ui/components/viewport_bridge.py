@@ -1,16 +1,7 @@
     # -*- coding: utf-8 -*-
 """
-    Viewport Bridge - للتواصل بين JavaScript و Python
-    ====================================================
-
-    يتيح للخريطة إرسال معلومات الـ viewport إلى Python عند:
-    - Pan (تحريك الخريطة)
-    - Zoom (تكبير/تصغير)
-    - Initial load (التحميل الأولي)
-
-    - QWebChannel for JavaScript Python communication
-    - Debounced events to prevent excessive API calls
-    - Thread-safe signal/slot mechanism
+Viewport Bridge - للتواصل بين JavaScript و Python
+Bridges Leaflet map viewport changes to Python via QWebChannel.
 """
 
 from PyQt5.QtCore import QObject, pyqtSignal, pyqtSlot, QTimer
@@ -21,43 +12,13 @@ logger = get_logger(__name__)
 
 
 class ViewportBridge(QObject):
-    """
-    جسر التواصل بين Leaflet.js (JavaScript) و PyQt5 (Python).
-
-    الوظائف:
-    - استقبال viewport changes من JavaScript
-    - Debouncing للحد من الطلبات المتكررة
-    - إشارات PyQt لتحديث البيانات
-
-    Signals:
-        viewportChanged: يُطلق عند تغيير viewport
-            Parameters: dict with keys:
-                - ne_lat, ne_lng: North-East corner
-                - sw_lat, sw_lng: South-West corner
-                - zoom: Current zoom level
-                - center_lat, center_lng: Map center
-
-    Usage:
-        bridge = ViewportBridge(debounce_ms=300)
-        bridge.viewportChanged.connect(on_viewport_changed)
-
-        # في QWebEngineView:
-        channel = QWebChannel()
-        channel.registerObject('viewportBridge', bridge)
-        web_view.page().setWebChannel(channel)
-    """
+    """جسر التواصل بين Leaflet.js (JavaScript) و PyQt5 (Python) مع debouncing."""
 
     # Signal يُطلق عند تغيير viewport (بعد debouncing)
     viewportChanged = pyqtSignal(dict)
 
     def __init__(self, debounce_ms: int = 300, parent: Optional[QObject] = None):
-        """
-        Initialize viewport bridge.
-
-        Args:
-            debounce_ms: Debounce delay in milliseconds (default: 300ms)
-            parent: Parent QObject
-        """
+        """Initialize viewport bridge."""
         super().__init__(parent)
 
         self.debounce_ms = debounce_ms
@@ -85,24 +46,7 @@ class ViewportBridge(QObject):
         center_lat: float,
         center_lng: float
     ):
-        """
-        يُستدعى من JavaScript عند تغيير viewport.
-
-        Debouncing:
-        - لا نُرسل البيانات فوراً
-        - ننتظر {debounce_ms}ms قبل الإرسال
-        - إذا حدث تغيير آخر قبل انتهاء المؤقت، نُلغي المؤقت القديم
-        - النتيجة: إرسال واحد فقط بعد توقف المستخدم عن التحريك
-
-        Args:
-            ne_lat: North-East latitude
-            ne_lng: North-East longitude
-            sw_lat: South-West latitude
-            sw_lng: South-West longitude
-            zoom: Current zoom level
-            center_lat: Map center latitude
-            center_lng: Map center longitude
-        """
+        """يُستدعى من JavaScript عند تغيير viewport مع debouncing."""
         self._stats['total_events'] += 1
 
         viewport_data = {
@@ -157,20 +101,7 @@ class ViewportBridge(QObject):
             self._pending_viewport = None
 
     def _is_same_viewport(self, viewport1: Optional[Dict], viewport2: Optional[Dict]) -> bool:
-        """
-        تحقق: هل viewport1 و viewport2 متطابقان؟
-
-        Avoid unnecessary updates.
-        - نقارن بدقة 4 أرقام عشرية (~11 متر)
-        - zoom يجب أن يكون متطابقاً تماماً
-
-        Args:
-            viewport1: First viewport dict
-            viewport2: Second viewport dict
-
-        Returns:
-            True إذا كانا متطابقين
-        """
+        """تحقق: هل viewport1 و viewport2 متطابقان؟"""
         if viewport1 is None or viewport2 is None:
             return False
 
@@ -187,16 +118,7 @@ class ViewportBridge(QObject):
         return True
 
     def get_stats(self) -> Dict[str, int]:
-        """
-        الحصول على إحصائيات الأداء.
-
-        Returns:
-            Dict with keys:
-                - total_events: إجمالي الأحداث
-                - debounced_events: الأحداث المُرسلة
-                - ignored_events: الأحداث المتجاهلة
-                - reduction: نسبة التخفيض (%)
-        """
+        """الحصول على إحصائيات الأداء."""
         total = self._stats['total_events']
         debounced = self._stats['debounced_events']
         reduction = ((total - debounced) / total * 100) if total > 0 else 0

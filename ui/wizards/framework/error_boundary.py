@@ -1,12 +1,6 @@
 # -*- coding: utf-8 -*-
 """
 Error Boundary for Wizard Steps.
-
-Provides graceful error handling and recovery for wizard steps:
-- Catches exceptions during step lifecycle
-- Logs errors with context
-- Shows user-friendly error messages
-- Allows step retry or wizard exit
 """
 
 from typing import Optional, Callable
@@ -23,22 +17,12 @@ logger = get_logger(__name__)
 
 
 class ErrorBoundary(QObject):
-    """
-    Error boundary for wizard steps.
-
-    Wraps step methods with error handling to prevent crashes.
-    """
+    """Error boundary for wizard steps."""
 
     error_occurred = pyqtSignal(str, str)  # error_type, error_message
 
     def __init__(self, step_name: str, parent: Optional[QWidget] = None):
-        """
-        Initialize error boundary.
-
-        Args:
-            step_name: Name of the step being protected
-            parent: Parent widget for error dialogs
-        """
+        """Initialize error boundary."""
         super().__init__(parent)
         self.step_name = step_name
         self.parent_widget = parent
@@ -46,16 +30,7 @@ class ErrorBoundary(QObject):
         self.last_error: Optional[Exception] = None
 
     def protect(self, func: Callable, operation_name: str = "operation") -> Callable:
-        """
-        Wrap a function with error boundary.
-
-        Args:
-            func: Function to protect
-            operation_name: Name of operation for logging
-
-        Returns:
-            Wrapped function that catches errors
-        """
+        """Wrap a function with error boundary."""
         @wraps(func)
         def wrapper(*args, **kwargs):
             try:
@@ -68,13 +43,7 @@ class ErrorBoundary(QObject):
         return wrapper
 
     def _handle_error(self, error: Exception, operation: str):
-        """
-        Handle an error that occurred in a step.
-
-        Args:
-            error: The exception that was raised
-            operation: Name of the operation that failed
-        """
+        """Handle an error that occurred in a step."""
         self.error_count += 1
         self.last_error = error
 
@@ -120,21 +89,7 @@ class ErrorBoundary(QObject):
 
 
 def with_error_boundary(step_name: str, operation_name: str = "operation"):
-    """
-    Decorator to add error boundary to a method.
-
-    Usage:
-        @with_error_boundary("Building Selection", "loading buildings")
-        def load_buildings(self):
-            # ... method code ...
-
-    Args:
-        step_name: Name of the step
-        operation_name: Name of the operation
-
-    Returns:
-        Decorator function
-    """
+    """Decorator to add error boundary to a method."""
     def decorator(func: Callable) -> Callable:
         @wraps(func)
         def wrapper(self, *args, **kwargs):
@@ -174,15 +129,7 @@ def with_error_boundary(step_name: str, operation_name: str = "operation"):
 
 
 class StepErrorRecovery:
-    """
-    Provides error recovery strategies for wizard steps.
-
-    Strategies:
-    - Retry: Retry the failed operation
-    - Skip: Skip the current step
-    - Reset: Reset step to initial state
-    - Exit: Exit the wizard
-    """
+    """Provides error recovery strategies for wizard steps."""
 
     @staticmethod
     def should_retry(error_count: int, max_retries: int = 3) -> bool:
@@ -191,12 +138,7 @@ class StepErrorRecovery:
 
     @staticmethod
     def get_recovery_options(error: Exception) -> list:
-        """
-        Get available recovery options for an error.
-
-        Returns:
-            List of (option_name, option_label) tuples
-        """
+        """Get available recovery options for an error."""
         # Network errors - retry makes sense
         if "Network" in type(error).__name__ or "Connection" in type(error).__name__:
             return [

@@ -98,8 +98,7 @@ class BuildingSelectionStep(BaseStep):
         card.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
 
         card_layout = QVBoxLayout(card)
-        # Padding: 12px from all sides (from Figma)
-        card_layout.setContentsMargins(12, 12, 12, 12)
+        # Padding: 12px from all sides        card_layout.setContentsMargins(12, 12, 12, 12)
         # No default spacing - we'll control gaps manually for precision
         card_layout.setSpacing(0)
 
@@ -147,8 +146,7 @@ class BuildingSelectionStep(BaseStep):
 
         card_layout.addLayout(header_row)
 
-        # Gap: 12px between header and code label (from Figma)
-        card_layout.addSpacing(12)
+        # Gap: 12px between header and code label        card_layout.addSpacing(12)
 
         # Label: building code (same as title - 14px = 10pt, weight 600, color WIZARD_TITLE)
         self._code_label = QLabel(tr("wizard.building.code_label"))
@@ -159,13 +157,12 @@ class BuildingSelectionStep(BaseStep):
         # Gap: 8px between code label and search bar
         card_layout.addSpacing(8)
 
-        # Search bar (one row) - Figma specs:
+        # Search bar
         # Height: 42px, padding: 14px left/right & 8px top/bottom
         # Border-radius: 8px, Background & Border from design system
         search_bar = QFrame()
         search_bar.setObjectName("searchBar")
-        search_bar.setFixedHeight(42)  # Height from Figma
-        search_bar.setStyleSheet(f"""
+        search_bar.setFixedHeight(42)  # Height        search_bar.setStyleSheet(f"""
             QFrame#searchBar {{
                 background-color: {Colors.SEARCH_BAR_BG};
                 border: 1px solid {Colors.SEARCH_BAR_BORDER};
@@ -175,8 +172,7 @@ class BuildingSelectionStep(BaseStep):
         search_bar.setLayoutDirection(Qt.LeftToRight)
 
         sb = QHBoxLayout(search_bar)
-        # Padding: 14px left/right, 8px top/bottom (from Figma)
-        sb.setContentsMargins(14, 8, 14, 8)
+        # Padding: 14px left/right, 8px top/bottom        sb.setContentsMargins(14, 8, 14, 8)
         sb.setSpacing(8)
 
         # Search icon button
@@ -309,13 +305,11 @@ class BuildingSelectionStep(BaseStep):
         layout.addWidget(card)
 
         # Suggestions list (dropdown look) - Flows from search bar, centered, overlaps card
-        # Figma specs: width 1225px, height 179px, border-radius 8px, no scrollbar
+        # Buildings list card
         # Floats above card by 12px (overlaps with card's bottom padding)
         self.buildings_list = QListWidget()
         self.buildings_list.setVisible(False)
-        self.buildings_list.setFixedHeight(179)  # Height from Figma
-        self.buildings_list.setFixedWidth(1225)  # Width from Figma
-
+        self.buildings_list.setFixedHeight(179)  # Height        self.buildings_list.setFixedWidth(1225)  # Width
         # Hide scrollbar but keep scrolling enabled with mouse wheel
         self.buildings_list.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.buildings_list.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
@@ -361,12 +355,11 @@ class BuildingSelectionStep(BaseStep):
         layout.addSpacing(42)  # Restores normal flow + adds 15px spacing
 
         # ===== Selected building stats card (Separate card) =====
-        # Figma specs: height 73px, padding 12px all sides, 5 sections without dividers
+        # Stats card
         self.stats_card = QFrame()
         self.stats_card.setObjectName("statsCard")
         self.stats_card.setVisible(False)  # Hidden initially
-        self.stats_card.setFixedHeight(73)  # Height from Figma
-
+        self.stats_card.setFixedHeight(73)  # Height
         # Using Colors constants
         self.stats_card.setStyleSheet(f"""
             QFrame#statsCard {{
@@ -377,8 +370,7 @@ class BuildingSelectionStep(BaseStep):
         """)
 
         stats_layout = QHBoxLayout(self.stats_card)
-        # Padding: 12px from all sides (from Figma)
-        stats_layout.setContentsMargins(12, 12, 12, 12)
+        # Padding: 12px from all sides        stats_layout.setContentsMargins(12, 12, 12, 12)
         stats_layout.setSpacing(0)  # No spacing - sections will be separated by stretch
 
         # Helper function to create stat section (label on top, value below)
@@ -428,12 +420,11 @@ class BuildingSelectionStep(BaseStep):
         layout.addSpacing(15)
 
         # ===== Location card (Third section) =====
-        # Figma specs: height 187px, padding 12px all sides, gap 12px, border-radius 8px
+        # Location card
         self.location_card = QFrame()
         self.location_card.setObjectName("locationCard")
         self.location_card.setVisible(False)  # Hidden initially
-        self.location_card.setFixedHeight(187)  # Height from Figma
-
+        self.location_card.setFixedHeight(187)  # Height
         # Using Colors constants
         self.location_card.setStyleSheet(f"""
             QFrame#locationCard {{
@@ -444,8 +435,7 @@ class BuildingSelectionStep(BaseStep):
         """)
 
         location_layout = QVBoxLayout(self.location_card)
-        # Padding: 12px from all sides (from Figma)
-        location_layout.setContentsMargins(12, 12, 12, 12)
+        # Padding: 12px from all sides        location_layout.setContentsMargins(12, 12, 12, 12)
         location_layout.setSpacing(0)  # Manual spacing control
 
         # Row 1: Header only - "موقع البناء"
@@ -490,8 +480,7 @@ class BuildingSelectionStep(BaseStep):
 
         # Map container (QLabel to support QPixmap)
         map_container = QLabel()
-        map_container.setFixedSize(400, 130)  # Width: 400px, Height: 130px (from Figma)
-        map_container.setAlignment(Qt.AlignCenter)
+        map_container.setFixedSize(400, 130)  # Width: 400px, Height: 130px        map_container.setAlignment(Qt.AlignCenter)
         map_container.setObjectName("mapContainer")
 
         # Load background map image using Icon component (absolute paths)
@@ -522,8 +511,7 @@ class BuildingSelectionStep(BaseStep):
         # White button in top-left corner (opposite to title)
         # Dimensions: 94×20px, border-radius: 5px, padding: 4px
         map_button = QPushButton(map_container)
-        map_button.setFixedSize(94, 20)  # Width: 94px, Height: 20px (from Figma)
-        map_button.move(8, 8)  # Position in top-left corner with small margin
+        map_button.setFixedSize(94, 20)  # Width: 94px, Height: 20px        map_button.move(8, 8)  # Position in top-left corner with small margin
         map_button.setCursor(Qt.PointingHandCursor)
 
         # Icon: pill.png with PRIMARY_BLUE color using Icon.load_pixmap
@@ -533,7 +521,7 @@ class BuildingSelectionStep(BaseStep):
             map_button.setIcon(QIcon(icon_pixmap))
             map_button.setIconSize(QSize(12, 12))
 
-        # Text: "فتح الخريطة" - 12px Figma = 9pt PyQt5, PRIMARY_BLUE color
+        # Map button text
         map_button.setText(tr("wizard.building.open_map"))
         map_button.setFont(create_font(size=FontManager.WIZARD_FIELD_LABEL, weight=FontManager.WEIGHT_REGULAR))
 

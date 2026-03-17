@@ -1,11 +1,5 @@
 # -*- coding: utf-8 -*-
-"""
-Person Service - Business Logic Layer
-======================================
-Centralized business logic for Person operations.
-This service sits between Controllers and Repositories,
-handling all business rules, validation, and data transformations.
-"""
+"""Person service with business logic for person operations."""
 from typing import Dict, Any, Optional, List
 from datetime import datetime
 
@@ -18,24 +12,10 @@ logger = get_logger(__name__)
 
 
 class PersonService:
-    """
-    Service layer for Person business logic.
-
-    Responsibilities:
-    - Validate person data before persistence
-    - Apply business rules (age calculation, name formatting)
-    - Handle duplicate detection logic
-    - Transform UI data to domain models
-    - Coordinate with validation services
-    """
+    """Service layer for person business logic."""
 
     def __init__(self, repository: PersonRepository):
-        """
-        Initialize PersonService.
-
-        Args:
-            repository: PersonRepository instance for data access
-        """
+        """Initialize PersonService."""
         self.repository = repository
         self.validator = ValidationFactory.get_validator('person')
 

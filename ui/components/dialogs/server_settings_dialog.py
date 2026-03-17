@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
-Server Settings Dialog - إعدادات سيرفر الخريطة
-Allows user to configure tile server port from the UI.
+Server Settings Dialog - إعدادات الاتصال
+Allows user to configure tile server and API backend ports from the UI.
 """
 
 import socket
@@ -16,18 +16,22 @@ from PyQt5.QtGui import QColor, QFont, QIntValidator
 
 from ui.design_system import Colors
 from ui.font_utils import create_font, FontManager
-from app.config import load_local_settings, save_local_settings, get_tile_server_port
+from app.config import (
+    load_local_settings, save_local_settings,
+    get_tile_server_port, get_api_port
+)
 
 
 class ServerSettingsDialog(QDialog):
-    """Dialog for configuring tile server port."""
+    """Dialog for configuring tile server and API backend ports."""
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self._current_port = get_tile_server_port()
+        self._current_tile_port = get_tile_server_port()
+        self._current_api_port = get_api_port()
 
         self.setModal(True)
-        self.setFixedSize(440, 280)
+        self.setFixedSize(440, 400)
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.Dialog)
         self.setAttribute(Qt.WA_TranslucentBackground)
         self.setStyleSheet("QDialog { background-color: transparent; }")
@@ -63,62 +67,86 @@ class ServerSettingsDialog(QDialog):
 
         layout = QVBoxLayout(container)
         layout.setContentsMargins(24, 24, 24, 24)
-        layout.setSpacing(16)
+        layout.setSpacing(14)
 
         # Title
-        title = QLabel("إعدادات سيرفر الخريطة")
+        title = QLabel("إعدادات الاتصال")
         title.setFont(create_font(size=14, weight=FontManager.WEIGHT_BOLD))
         title.setStyleSheet(f"color: {Colors.TEXT_PRIMARY};")
         title.setAlignment(Qt.AlignRight)
         layout.addWidget(title)
 
-        # Port input row
-        port_row = QHBoxLayout()
-        port_row.setSpacing(10)
+        # --- Tile server section ---
+        tile_header = QLabel("سيرفر الخريطة")
+        tile_header.setFont(create_font(size=11, weight=FontManager.WEIGHT_MEDIUM))
+        tile_header.setStyleSheet(f"color: {Colors.TEXT_SECONDARY};")
+        tile_header.setAlignment(Qt.AlignRight)
+        layout.addWidget(tile_header)
 
-        port_label = QLabel("رقم البورت:")
-        port_label.setFont(create_font(size=FontManager.SIZE_BODY, weight=FontManager.WEIGHT_REGULAR))
-        port_label.setStyleSheet(f"color: {Colors.TEXT_PRIMARY};")
-        port_row.addWidget(port_label)
+        tile_row = QHBoxLayout()
+        tile_row.setSpacing(10)
 
-        self._port_input = QLineEdit(str(self._current_port))
-        self._port_input.setFixedSize(120, 36)
-        self._port_input.setAlignment(Qt.AlignCenter)
-        self._port_input.setValidator(QIntValidator(1, 65535))
-        self._port_input.setFont(create_font(size=FontManager.SIZE_BODY, weight=FontManager.WEIGHT_REGULAR))
-        self._port_input.setStyleSheet("""
-            QLineEdit {
-                background-color: #F8FAFF;
-                border: 1px solid #E5EAF6;
-                border-radius: 8px;
-                padding: 0 8px;
-                color: #2C3E50;
-            }
-            QLineEdit:focus {
-                border: 1px solid #3890DF;
-            }
-        """)
-        port_row.addWidget(self._port_input)
-        port_row.addStretch()
+        tile_label = QLabel("رقم البورت:")
+        tile_label.setFont(create_font(size=FontManager.SIZE_BODY, weight=FontManager.WEIGHT_REGULAR))
+        tile_label.setStyleSheet(f"color: {Colors.TEXT_PRIMARY};")
+        tile_row.addWidget(tile_label)
 
-        layout.addLayout(port_row)
+        self._tile_port_input = QLineEdit(str(self._current_tile_port))
+        self._tile_port_input.setFixedSize(120, 36)
+        self._tile_port_input.setAlignment(Qt.AlignCenter)
+        self._tile_port_input.setValidator(QIntValidator(1, 65535))
+        self._tile_port_input.setFont(create_font(size=FontManager.SIZE_BODY, weight=FontManager.WEIGHT_REGULAR))
+        self._tile_port_input.setStyleSheet(self._input_style())
+        tile_row.addWidget(self._tile_port_input)
 
-        # Test connection button + status
-        test_row = QHBoxLayout()
-        test_row.setSpacing(10)
+        tile_test_btn = self._create_button("اختبار", primary=False)
+        tile_test_btn.setFixedSize(80, 36)
+        tile_test_btn.clicked.connect(lambda: self._test_connection(self._tile_port_input, self._tile_status))
+        tile_row.addWidget(tile_test_btn)
 
-        test_btn = self._create_button("اختبار الاتصال", primary=False)
-        test_btn.setFixedSize(140, 40)
-        test_btn.clicked.connect(self._test_connection)
-        test_row.addWidget(test_btn)
+        self._tile_status = QLabel("")
+        self._tile_status.setFont(create_font(size=10, weight=FontManager.WEIGHT_REGULAR))
+        self._tile_status.setStyleSheet(f"color: {Colors.TEXT_SECONDARY};")
+        tile_row.addWidget(self._tile_status)
+        tile_row.addStretch()
 
-        self._status_label = QLabel("")
-        self._status_label.setFont(create_font(size=10, weight=FontManager.WEIGHT_REGULAR))
-        self._status_label.setStyleSheet(f"color: {Colors.TEXT_SECONDARY};")
-        test_row.addWidget(self._status_label)
-        test_row.addStretch()
+        layout.addLayout(tile_row)
 
-        layout.addLayout(test_row)
+        # --- API backend section ---
+        api_header = QLabel("سيرفر البيانات (Backend)")
+        api_header.setFont(create_font(size=11, weight=FontManager.WEIGHT_MEDIUM))
+        api_header.setStyleSheet(f"color: {Colors.TEXT_SECONDARY};")
+        api_header.setAlignment(Qt.AlignRight)
+        layout.addWidget(api_header)
+
+        api_row = QHBoxLayout()
+        api_row.setSpacing(10)
+
+        api_label = QLabel("رقم البورت:")
+        api_label.setFont(create_font(size=FontManager.SIZE_BODY, weight=FontManager.WEIGHT_REGULAR))
+        api_label.setStyleSheet(f"color: {Colors.TEXT_PRIMARY};")
+        api_row.addWidget(api_label)
+
+        self._api_port_input = QLineEdit(str(self._current_api_port))
+        self._api_port_input.setFixedSize(120, 36)
+        self._api_port_input.setAlignment(Qt.AlignCenter)
+        self._api_port_input.setValidator(QIntValidator(1, 65535))
+        self._api_port_input.setFont(create_font(size=FontManager.SIZE_BODY, weight=FontManager.WEIGHT_REGULAR))
+        self._api_port_input.setStyleSheet(self._input_style())
+        api_row.addWidget(self._api_port_input)
+
+        api_test_btn = self._create_button("اختبار", primary=False)
+        api_test_btn.setFixedSize(80, 36)
+        api_test_btn.clicked.connect(lambda: self._test_connection(self._api_port_input, self._api_status))
+        api_row.addWidget(api_test_btn)
+
+        self._api_status = QLabel("")
+        self._api_status.setFont(create_font(size=10, weight=FontManager.WEIGHT_REGULAR))
+        self._api_status.setStyleSheet(f"color: {Colors.TEXT_SECONDARY};")
+        api_row.addWidget(self._api_status)
+        api_row.addStretch()
+
+        layout.addLayout(api_row)
 
         layout.addStretch()
 
@@ -140,22 +168,37 @@ class ServerSettingsDialog(QDialog):
 
         outer.addWidget(container)
 
-    def _test_connection(self):
+    @staticmethod
+    def _input_style() -> str:
+        return """
+            QLineEdit {
+                background-color: #F8FAFF;
+                border: 1px solid #E5EAF6;
+                border-radius: 8px;
+                padding: 0 8px;
+                color: #2C3E50;
+            }
+            QLineEdit:focus {
+                border: 1px solid #3890DF;
+            }
+        """
+
+    def _test_connection(self, port_input: QLineEdit, status_label: QLabel):
         """Test TCP connection to the specified port."""
-        port_text = self._port_input.text().strip()
+        port_text = port_input.text().strip()
         if not port_text:
-            self._status_label.setText("أدخل رقم البورت")
-            self._status_label.setStyleSheet(f"color: {Colors.ERROR};")
+            status_label.setText("أدخل رقم البورت")
+            status_label.setStyleSheet(f"color: {Colors.ERROR};")
             return
 
         port = int(port_text)
         try:
             with socket.create_connection(("localhost", port), timeout=3):
-                self._status_label.setText("متصل ✓")
-                self._status_label.setStyleSheet(f"color: {Colors.SUCCESS};")
+                status_label.setText("متصل ✓")
+                status_label.setStyleSheet(f"color: {Colors.SUCCESS};")
         except (socket.timeout, socket.error, OSError):
-            self._status_label.setText("غير متصل ✗")
-            self._status_label.setStyleSheet(f"color: {Colors.ERROR};")
+            status_label.setText("غير متصل ✗")
+            status_label.setStyleSheet(f"color: {Colors.ERROR};")
 
     def _create_button(self, text: str, primary: bool) -> QPushButton:
         btn = QPushButton(text)
@@ -199,20 +242,21 @@ class ServerSettingsDialog(QDialog):
         return btn
 
     def _on_save(self):
-        """Save port to settings.json."""
-        port_text = self._port_input.text().strip()
-        if not port_text:
+        """Save both ports to settings.json."""
+        tile_text = self._tile_port_input.text().strip()
+        api_text = self._api_port_input.text().strip()
+        if not tile_text or not api_text:
             return
 
-        port = int(port_text)
         settings = load_local_settings()
-        settings["tile_server_port"] = port
+        settings["tile_server_port"] = int(tile_text)
+        settings["api_port"] = int(api_text)
         save_local_settings(settings)
         self.accept()
 
     @staticmethod
     def show_settings(parent=None) -> Optional[int]:
-        """Show dialog and return new port if saved, None if cancelled."""
+        """Show dialog and return new tile port if saved, None if cancelled."""
         dialog = ServerSettingsDialog(parent=parent)
         if dialog.exec_() == QDialog.Accepted:
             return get_tile_server_port()

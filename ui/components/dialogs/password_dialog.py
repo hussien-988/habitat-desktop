@@ -4,7 +4,6 @@ Password Dialog — ديالوغ كلمة المرور
 Two modes:
   - SET: Single field (new user) — "حفظ المستخدم"
   - CHANGE: Two fields with confirmation — "تغيير كلمة المرور"
-Follows PersonDialog/ConfirmationDialog container pattern.
 """
 
 from typing import Optional
@@ -58,7 +57,7 @@ class PasswordDialog(QDialog):
         self._visibility = {}  # field_name → bool
 
         self.setModal(True)
-        # Figma: SET=589×320, CHANGE=589×406, +24 shadow +40 error label
+        # Height varies by mode
         height = 470 if mode == self.CHANGE else 384
         self.setFixedSize(613, height)
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.Dialog)
@@ -280,7 +279,7 @@ class PasswordDialog(QDialog):
 
             self.current_password = current
 
-        # Validate against security policy (UC-011 S08)
+        # Validate against security policy
         is_valid, errors = self._validate_against_policy(pwd)
         if not is_valid:
             self._highlight_error(self.password_input)
@@ -293,7 +292,7 @@ class PasswordDialog(QDialog):
         self.accept()
 
     def _validate_against_policy(self, password: str) -> tuple:
-        """Validate password against SecurityService policy (UC-011 S08)."""
+        """Validate password against SecurityService policy."""
         try:
             from repositories.database import Database
             from services.security_service import SecurityService

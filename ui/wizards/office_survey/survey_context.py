@@ -1,12 +1,6 @@
 # -*- coding: utf-8 -*-
 """
 Survey Context - Manages state and data for office survey wizard.
-
-This context extends WizardContext with survey-specific data:
-- Building and unit selection
-- Household information
-- Persons and relations
-- Claim data
 """
 
 import logging
@@ -24,7 +18,7 @@ logger = logging.getLogger(__name__)
 
 
 class SurveyContext(WizardContext):
-    """Context for office survey wizard (UC-004)."""
+    """Context for office survey wizard."""
 
     def __init__(self, db: 'Database' = None):
         """Initialize survey context."""

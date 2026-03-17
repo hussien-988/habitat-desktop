@@ -13,34 +13,15 @@ from ..font_utils import create_font, FontManager
 
 
 class DangerButton(QPushButton):
-    """
-    Danger button component with Figma styling.
-
-    Features:
-    - Red background for destructive actions
-    - Configurable text
-    - Hover and pressed states
-    - Figma-compliant styling
-    - Reusable across the application
-
-    Usage:
-        btn = DangerButton("حذف")
-        btn.clicked.connect(self.on_delete)
-    """
+    """Reusable danger button for destructive actions."""
 
     def __init__(self, text: str = "", parent=None):
-        """
-        Initialize danger button.
-
-        Args:
-            text: Button text (Arabic RTL supported)
-            parent: Parent widget
-        """
+        """Initialize danger button."""
         super().__init__(text, parent)
         self._setup_ui()
 
     def _setup_ui(self):
-        """Setup button UI with Figma specifications."""
+        """Setup button UI."""
         # Set unique ObjectName for CSS specificity
         self.setObjectName("DangerButton")
 

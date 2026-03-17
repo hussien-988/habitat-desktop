@@ -1,40 +1,6 @@
 # -*- coding: utf-8 -*-
 """
 Confirmation Dialog Component - مكون حوار التأكيد
-
-Reusable confirmation dialog.
-
-Features:
-- Warning/Info/Question icons
-- Customizable title and message
-- Multiple button configurations
-- RTL support for Arabic
-- Follows Figma design system
-
-Usage:
-    # Simple yes/no confirmation
-    result = ConfirmationDialog.confirm(
-        parent=self,
-        title="تأكيد",
-        message="هل أنت متأكد؟"
-    )
-    if result == ConfirmationDialog.YES:
-        # User clicked yes
-        pass
-
-    # Save draft confirmation
-    result = ConfirmationDialog.save_draft_confirmation(
-        parent=self,
-        title="هل تريد الحفظ؟",
-        message="لديك تغييرات غير محفوظة. هل تريد حفظها كمسودة؟"
-    )
-    if result == ConfirmationDialog.SAVE:
-        # Save as draft
-        pass
-    elif result == ConfirmationDialog.DISCARD:
-        # Discard changes
-        pass
-    # else: Cancel (do nothing)
 """
 
 from enum import IntEnum
@@ -62,15 +28,7 @@ class DialogResult(IntEnum):
 
 
 class ConfirmationDialog(QDialog):
-    """
-    Reusable confirmation dialog.
-
-    Single Responsibility: Display confirmation dialogs with icons and buttons
-    Open/Closed: Easily extended via static factory methods
-    Liskov Substitution: Inherits cleanly from QDialog
-    Interface Segregation: Minimal interface (show + result)
-    Dependency Inversion: Uses abstract Icon component
-    """
+    """Reusable confirmation dialog."""
 
     # Result constants for easy access
     CANCEL = DialogResult.CANCEL
@@ -88,17 +46,7 @@ class ConfirmationDialog(QDialog):
         buttons: list = None,
         default_button: int = 0
     ):
-        """
-        Initialize confirmation dialog.
-
-        Args:
-            parent: Parent widget
-            title: Dialog title
-            message: Message to display
-            icon_name: Icon file name (yellow warning by default)
-            buttons: List of (text, result_code) tuples
-            default_button: Index of default button
-        """
+        """Initialize confirmation dialog."""
         super().__init__(parent)
 
         self.result_code = DialogResult.CANCEL
@@ -108,7 +56,7 @@ class ConfirmationDialog(QDialog):
         ]
         self.default_button_index = default_button
 
-        # Dialog setup (Figma dimensions)
+        # Dialog setup
         self.setWindowTitle(title)
         self.setModal(True)
         self.setFixedWidth(400)  # Fixed width for consistent appearance
@@ -121,16 +69,7 @@ class ConfirmationDialog(QDialog):
         self._setup_ui(title, message, icon_name)
 
     def _setup_ui(self, title: str, message: str, icon_name: str):
-        """
-        Setup dialog UI matching Figma design EXACTLY.
-
-        Figma specifications:
-        - Row 1: Icon (centered)
-        - Row 2: Title (centered)
-        - Row 3: Subtitle/Message (centered)
-        - Row 4: Buttons (170×50, border-radius 8)
-        - Layout: Vertical (not horizontal)
-        """
+        """Setup dialog UI."""
         # Create container widget for white background with rounded corners
         container = QWidget()
         container.setObjectName("dialogContainer")
@@ -180,9 +119,8 @@ class ConfirmationDialog(QDialog):
         # Row 3: Subtitle/Message (centered)
         message_label = QLabel(message)
         message_label.setWordWrap(True)
-        # Figma: 10pt font for subtitle
         message_font = create_font(
-            size=10,  # 10pt from Figma
+            size=10,
             weight=QFont.Normal
         )
         message_label.setFont(message_font)
@@ -196,7 +134,7 @@ class ConfirmationDialog(QDialog):
         buttons_layout.setSpacing(12)
         buttons_layout.addStretch()
 
-        # Create buttons from configuration (Figma: 170×50)
+        # Create buttons from configuration
         self.button_widgets = []
         for index, (button_text, result_code) in enumerate(self.buttons_config):
             btn = self._create_button(
@@ -224,32 +162,14 @@ class ConfirmationDialog(QDialog):
         result_code: int,
         is_primary: bool = False
     ) -> QPushButton:
-        """
-        Create styled button matching Figma design EXACTLY.
-
-        Figma specifications:
-        - Size: 170×50 (width × height)
-        - Border radius: 8px
-        - Primary (Save): Yellow (#F9C74F) + white text
-        - Secondary (Discard): White + shadow + gray text
-        - Font: 10pt
-
-        Args:
-            text: Button text
-            result_code: Result code when clicked
-            is_primary: Whether this is the primary button
-
-        Returns:
-            Styled QPushButton
-        """
+        """Create styled button."""
         btn = QPushButton(text)
 
         btn.setFixedSize(150, 48)
         btn.setCursor(Qt.PointingHandCursor)
 
-        # Figma: Font 10pt
         btn_font = create_font(
-            size=10,  # 10pt from Figma
+            size=10,
             weight=QFont.Medium
         )
         btn.setFont(btn_font)
@@ -290,7 +210,7 @@ class ConfirmationDialog(QDialog):
                 }}
             """)
 
-            # Add shadow to secondary button (Figma design)
+            # Add shadow to secondary button
             shadow = QGraphicsDropShadowEffect()
             shadow.setBlurRadius(8)
             shadow.setXOffset(0)
@@ -323,12 +243,7 @@ class ConfirmationDialog(QDialog):
         message: str = "هل أنت متأكد؟",
         icon_name: str = "wirning"
     ) -> int:
-        """
-        Show simple yes/no confirmation dialog.
-
-        Returns:
-            DialogResult.YES or DialogResult.NO or DialogResult.CANCEL
-        """
+        """Show simple yes/no confirmation dialog."""
         dialog = ConfirmationDialog(
             parent=parent,
             title=title,
@@ -349,20 +264,7 @@ class ConfirmationDialog(QDialog):
         title: str = "هل تريد الحفظ؟",
         message: str = "لديك تغييرات غير محفوظة.\nهل تريد حفظها كمسودة؟"
     ) -> int:
-        """
-        Show save draft confirmation dialog (UC-001 S28, UC-004 S22).
-
-        This matches the Figma design shown in the screenshot EXACTLY:
-        - Icon: wirning.png (warning icon with yellow)
-        - Layout: Icon → Title → Subtitle → Buttons
-        - Buttons: "عدم الحفظ" (white) | "حفظ كمسودة" (yellow)
-        - Button size: 170×50, border-radius: 8px
-
-        Returns:
-            DialogResult.SAVE - Save as draft (yellow button)
-            DialogResult.DISCARD - Don't save (white button)
-            DialogResult.CANCEL - Cancel (X or Esc)
-        """
+        """Show save draft confirmation dialog."""
         dialog = ConfirmationDialog(
             parent=parent,
             title=title,
@@ -384,12 +286,7 @@ class ConfirmationDialog(QDialog):
         message: str = "",
         icon_name: str = "wirning"
     ) -> int:
-        """
-        Show warning dialog with OK button.
-
-        Returns:
-            DialogResult.YES (OK was clicked)
-        """
+        """Show warning dialog with OK button."""
         dialog = ConfirmationDialog(
             parent=parent,
             title=title,

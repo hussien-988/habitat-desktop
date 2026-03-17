@@ -1,10 +1,5 @@
 # -*- coding: utf-8 -*-
-"""
-Field Work Preparation - Step 4: Completion & Transfer Status
-UC-012: Assign Buildings to Field Teams (S08-S12)
-
-Shows assignment success confirmation and monitors transfer status to tablets.
-"""
+"""Field work preparation step 4: completion confirmation and transfer status."""
 
 from datetime import date
 
@@ -45,15 +40,7 @@ _STATUS_CONFIG = {
 
 
 class FieldWorkPreparationStep4(QWidget):
-    """
-    Step 4: Completion Confirmation & Transfer Status Monitoring.
-
-    Displays:
-    - Success header with assignment summary
-    - Per-building transfer status with color-coded badges
-    - Retry button for failed transfers (S11/S12)
-    - Auto-refresh every 10 seconds
-    """
+    """Completion confirmation with transfer status monitoring."""
 
     def __init__(self, buildings: list, researcher_name: str,
                  assignment_ids: list, db=None, parent=None):
@@ -284,7 +271,7 @@ class FieldWorkPreparationStep4(QWidget):
             logger.warning(f"Could not load transfer status: {e}")
 
     def _on_retry(self, assignment_id: str):
-        """Retry a failed transfer via API (S12)."""
+        """Retry a failed transfer via API."""
         try:
             from services.api_client import get_api_client
             api = get_api_client()

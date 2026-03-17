@@ -1,12 +1,6 @@
 # -*- coding: utf-8 -*-
 """
 Base Step - Abstract base class for wizard steps.
-
-All wizard steps should inherit from this class and implement:
-- setup_ui(): Create the step's UI
-- validate(): Validate step data
-- collect_data(): Collect data from UI
-- populate_data(): Populate UI with data
 """
 
 from typing import List, Dict, Any, Optional
@@ -53,15 +47,7 @@ class ABCQWidgetMeta(type(QWidget), ABCMeta):
 
 
 class BaseStep(QWidget, metaclass=ABCQWidgetMeta):
-    """
-    Abstract base class for wizard steps.
-
-    Provides common functionality for:
-    - UI setup and lifecycle
-    - Data validation
-    - Data collection
-    - Navigation signals
-    """
+    """Abstract base class for wizard steps."""
 
     # Signals
     step_completed = pyqtSignal()
@@ -69,13 +55,7 @@ class BaseStep(QWidget, metaclass=ABCQWidgetMeta):
     validation_changed = pyqtSignal(bool)
 
     def __init__(self, context: 'WizardContext', parent: Optional[QWidget] = None):
-        """
-        Initialize the step.
-
-        Args:
-            context: The wizard context for data sharing
-            parent: Parent widget
-        """
+        """Initialize the step."""
         super().__init__(parent)
         self.context = context
         self._is_initialized = False
@@ -86,31 +66,19 @@ class BaseStep(QWidget, metaclass=ABCQWidgetMeta):
         self.main_layout.setSpacing(16)
 
     def initialize(self):
-        """
-        Initialize the step (called once).
-
-        This method is called the first time the step is shown.
-        """
+        """Initialize the step (called once when first shown)."""
         if not self._is_initialized:
             self.setup_ui()
             self._is_initialized = True
 
     def on_show(self):
-        """
-        Called when the step is shown.
-
-        Override this method to update UI based on context data.
-        """
+        """Called when the step is shown."""
         if not self._is_initialized:
             self.initialize()
         self.populate_data()
 
     def on_hide(self):
-        """
-        Called when the step is hidden (moving to another step).
-
-        Override this method to perform cleanup if needed.
-        """
+        """Called when the step is hidden."""
         pass
 
     # =========================================================================
@@ -119,32 +87,17 @@ class BaseStep(QWidget, metaclass=ABCQWidgetMeta):
 
     @abstractmethod
     def setup_ui(self):
-        """
-        Setup the step's UI.
-
-        This method is called once during initialization.
-        Create all widgets and layouts here.
-        """
+        """Setup the step's UI."""
         pass
 
     @abstractmethod
     def validate(self) -> StepValidationResult:
-        """
-        Validate the step's data.
-
-        Returns:
-            StepValidationResult with validation status and messages
-        """
+        """Validate the step's data."""
         pass
 
     @abstractmethod
     def collect_data(self) -> Dict[str, Any]:
-        """
-        Collect data from the step's UI.
-
-        Returns:
-            Dictionary containing step data
-        """
+        """Collect data from the step's UI."""
         pass
 
     # =========================================================================
@@ -152,55 +105,27 @@ class BaseStep(QWidget, metaclass=ABCQWidgetMeta):
     # =========================================================================
 
     def populate_data(self):
-        """
-        Populate the step's UI with data from context.
-
-        Override this method to restore data when navigating back to the step.
-        """
+        """Populate the step's UI with data from context."""
         pass
 
     def reset(self):
-        """
-        Reset step UI to a clean state for a new wizard session.
-
-        Override in subclasses to clear all form fields, error labels,
-        and internal state. Called by StepNavigator.reset().
-        """
+        """Reset step UI to a clean state."""
         pass
 
     def get_step_title(self) -> str:
-        """
-        Get the step's title.
-
-        Override this method to provide a custom title.
-        Default implementation returns the class name.
-        """
+        """Get the step's title."""
         return self.__class__.__name__
 
     def get_step_description(self) -> str:
-        """
-        Get the step's description.
-
-        Override this method to provide a description shown to the user.
-        """
+        """Get the step's description."""
         return ""
 
     def can_skip(self) -> bool:
-        """
-        Check if the step can be skipped.
-
-        Override this method to allow conditional skipping.
-        Default: False
-        """
+        """Check if the step can be skipped."""
         return False
 
     def is_optional(self) -> bool:
-        """
-        Check if the step is optional.
-
-        Override this method to mark the step as optional.
-        Default: False
-        """
+        """Check if the step is optional."""
         return False
 
     # =========================================================================

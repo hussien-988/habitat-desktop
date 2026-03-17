@@ -1,16 +1,7 @@
 # -*- coding: utf-8 -*-
 """
-Map Picker Dialog V2 - Unified Design for Location/Polygon Selection.
-
-Matches BuildingMapWidget design exactly.
-
-Uses:
-- BaseMapDialog for consistent UI
-- LeafletHTMLGenerator for map rendering
-- Leaflet.draw for point/polygon drawing
-- PostGIS-compatible WKT output
-
-Returns both point coordinates AND polygon WKT.
+Map Picker Dialog V2 - حوار اختيار الموقع/المضلع
+Dialog for location/polygon selection on map.
 """
 
 from typing import Optional, Dict
@@ -24,14 +15,7 @@ logger = get_logger(__name__)
 
 
 class MapPickerDialog(BaseMapDialog):
-    """
-    Dialog for picking location or drawing polygon.
-
-    Design matches BuildingMapWidget exactly.
-
-    Returns:
-        Dict with 'latitude', 'longitude', and optional 'polygon_wkt'
-    """
+    """Dialog for picking location or drawing polygon."""
 
     def __init__(
         self,
@@ -47,22 +31,7 @@ class MapPickerDialog(BaseMapDialog):
         existing_polygon_wkt: str = None,
         parent=None
     ):
-        """
-        Initialize map picker dialog.
-
-        Args:
-            initial_lat: Initial map center latitude
-            initial_lon: Initial map center longitude
-            initial_zoom: Initial map zoom level (default: 15)
-            allow_polygon: Allow polygon drawing (not just point)
-            initial_bounds: Bounds to fit on load [[south_lat, west_lng], [north_lat, east_lng]]
-            neighborhoods_geojson: GeoJSON FeatureCollection of neighborhood polygons
-            selected_neighborhood_code: Currently selected neighborhood code for highlighting
-            db: Database instance (optional, for loading buildings)
-            skip_fit_bounds: Skip auto fitBounds (respect initial_zoom exactly)
-            existing_polygon_wkt: Existing polygon WKT to display on map (for edit mode)
-            parent: Parent widget
-        """
+        """Initialize map picker dialog."""
         self.initial_lat = initial_lat
         self.initial_lon = initial_lon
         self.initial_zoom = initial_zoom
@@ -75,7 +44,6 @@ class MapPickerDialog(BaseMapDialog):
         self._existing_polygon_wkt = existing_polygon_wkt
         self._result = None
 
-        # Initialize base dialog (no search bar, but show confirm button)
         super().__init__(
             title="تحديد الموقع على الخريطة",
             show_search=True,
@@ -83,7 +51,6 @@ class MapPickerDialog(BaseMapDialog):
             parent=parent
         )
 
-        # Connect geometry signal (but don't auto-close anymore)
         self.geometry_selected.connect(self._on_geometry_selected)
 
         # Load map
@@ -204,14 +171,7 @@ class MapPickerDialog(BaseMapDialog):
             )
 
     def _on_geometry_selected(self, geom_type: str, wkt: str):
-        """
-        Handle geometry drawn (point or polygon).
-        Store result but don't close - wait for user to click confirm.
-
-        Args:
-            geom_type: 'Point' or 'Polygon'
-            wkt: WKT string (PostGIS-compatible)
-        """
+        """Handle geometry drawn. Store result and wait for user confirmation."""
         logger.info(f"Geometry selected: {geom_type} - {wkt[:100] if wkt else 'None'}...")
 
         # Handle deletion (null/empty from JS)
@@ -236,7 +196,6 @@ class MapPickerDialog(BaseMapDialog):
                 }
 
                 logger.info(f"Point selected: ({lat}, {lon}) - waiting for confirmation")
-                # Don't auto-close - user must click confirm button
 
             elif geom_type == 'Polygon':
                 # Parse polygon to get centroid for lat/lon
@@ -264,7 +223,6 @@ class MapPickerDialog(BaseMapDialog):
                     }
 
                     logger.info(f"Polygon selected: centroid=({center_lat}, {center_lon}) - waiting for confirmation")
-                    # Don't auto-close - user must click confirm button
 
         except Exception as e:
             logger.error(f"Error parsing geometry: {e}", exc_info=True)
@@ -393,13 +351,7 @@ class MapPickerDialog(BaseMapDialog):
                 self.search_input.setPlaceholderText("بحث: حي، معلم، أو شارع")
 
     def get_result(self) -> Optional[Dict]:
-        """
-        Get selected location/polygon result.
-
-        Returns:
-            Dict with 'latitude', 'longitude', and optional 'polygon_wkt'
-            or None if cancelled
-        """
+        """Get selected location/polygon result."""
         return self._result
 
 
@@ -410,19 +362,7 @@ def show_map_picker_dialog(
     db = None,
     parent=None
 ) -> Optional[Dict]:
-    """
-    Convenience function to show map picker dialog.
-
-    Args:
-        initial_lat: Initial map center latitude
-        initial_lon: Initial map center longitude
-        allow_polygon: Allow polygon drawing
-        db: Database instance (REQUIRED for showing buildings - BEST PRACTICE!)
-        parent: Parent widget
-
-    Returns:
-        Dict with location/polygon, or None if cancelled
-    """
+    """Show map picker dialog and return selected location or None."""
     dialog = MapPickerDialog(
         initial_lat=initial_lat,
         initial_lon=initial_lon,

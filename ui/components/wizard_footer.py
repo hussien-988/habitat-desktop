@@ -12,28 +12,7 @@ from ui.font_utils import create_font, FontManager
 
 
 class WizardFooter(QWidget):
-    """
-    Reusable wizard footer component.
-
-    Features:
-    - Previous/Next navigation buttons
-    - Optional cancel and save draft buttons
-    - Consistent styling across all wizards
-
-    Signals:
-        previous_clicked: Emitted when Previous button is clicked
-        next_clicked: Emitted when Next button is clicked
-        cancel_clicked: Emitted when Cancel button is clicked
-        save_draft_clicked: Emitted when Save Draft button is clicked
-
-    Usage:
-        footer = WizardFooter(
-            show_cancel=True,
-            show_save_draft=False,
-            next_text="التالي"
-        )
-        footer.next_clicked.connect(self._on_next)
-    """
+    """Reusable wizard footer with navigation buttons."""
 
     # Signals
     previous_clicked = pyqtSignal()
@@ -50,17 +29,7 @@ class WizardFooter(QWidget):
         previous_text: str = "السابق",
         parent=None
     ):
-        """
-        Initialize wizard footer.
-
-        Args:
-            show_cancel: Whether to show cancel button
-            show_save_draft: Whether to show save draft button
-            show_info_label: Whether to show info label (e.g., selection count)
-            next_text: Text for next button
-            previous_text: Text for previous button
-            parent: Parent widget
-        """
+        """Initialize wizard footer."""
         super().__init__(parent)
         self.show_cancel = show_cancel
         self.show_save_draft = show_save_draft
@@ -72,7 +41,6 @@ class WizardFooter(QWidget):
 
     def _setup_ui(self):
         """Setup footer UI."""
-        # Same styling as BaseWizard footer
         self.setStyleSheet("""
             QWidget {
                 background-color: #f8f9fa;
@@ -81,7 +49,6 @@ class WizardFooter(QWidget):
         """)
 
         layout = QHBoxLayout(self)
-        # Same padding as BaseWizard: 20px horizontal, 16px vertical
         layout.setContentsMargins(20, 16, 20, 16)
         layout.setSpacing(12)
 

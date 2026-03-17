@@ -1,15 +1,5 @@
 # -*- coding: utf-8 -*-
-"""
-UN-HABITAT Logo Component - Reusable Logo Widget
-مكون شعار الأمم المتحدة للموئل - قابل لإعادة الاستخدام
-
-This component displays the UN-HABITAT logo with exact Figma specifications.
-Specifications from Figma:
-- Default size: 142.77×21.77 (Figma)
-- Scaled for PyQt5: height=22px for visual balance
-- Supports custom scaling
-- Loads from assets/images/header.png
-"""
+"""UN-HABITAT Logo Component - مكون شعار الأمم المتحدة للموئل."""
 
 from pathlib import Path
 from PyQt5.QtWidgets import QLabel
@@ -21,25 +11,10 @@ from ..font_utils import create_font, FontManager
 
 
 class LogoWidget(QLabel):
-    """
-    Reusable UN-HABITAT Logo Widget
-
-    Usage:
-        logo = LogoWidget()  # Default size
-        logo = LogoWidget(height=30)  # Custom height
-        logo = LogoWidget(scale_factor=1.5)  # Scale by factor
-    """
+    """Reusable UN-HABITAT logo widget."""
 
     def __init__(self, height=None, scale_factor=1.0, fallback_text="UN-HABITAT", parent=None):
-        """
-        Initialize logo widget
-
-        Args:
-            height: Custom height in pixels (overrides scale_factor)
-            scale_factor: Scale multiplier for default size (default: 1.0)
-            fallback_text: Text to display if image not found
-            parent: Parent widget
-        """
+        """Initialize logo widget."""
         super().__init__(parent)
 
         self.fallback_text = fallback_text
@@ -81,21 +56,11 @@ class LogoWidget(QLabel):
         """)
 
     def set_height(self, height):
-        """
-        Update logo height dynamically
-
-        Args:
-            height: New height in pixels
-        """
+        """Update logo height dynamically."""
         self.logo_height = height
         self._setup_logo()
 
     def set_scale(self, scale_factor):
-        """
-        Update logo scale dynamically
-
-        Args:
-            scale_factor: Scale multiplier for default size
-        """
+        """Update logo scale dynamically."""
         self.logo_height = int(NavbarDimensions.LOGO_SCALED_HEIGHT * scale_factor)
         self._setup_logo()

@@ -67,13 +67,13 @@ class UnitDialog(QDialog):
         # إزالة الشريط العلوي (title bar)
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.Dialog)
 
-        # CRITICAL: ضبط RTL صراحةً - الـ Dialog نافذة مستقلة لا ترث RTL من التطبيق
+        # ضبط RTL صراحة
         self.setLayoutDirection(Qt.RightToLeft)
 
-        # CRITICAL: جعل الخلفية شفافة حتى تظهر فقط الزوايا المنحنية
+        # خلفية شفافة للزوايا المنحنية
         self.setAttribute(Qt.WA_TranslucentBackground)
 
-        # الأبعاد حسب Figma: 574×589 + shadow margin (20+20=40 W, 12+28=40 H)
+        # الأبعاد مع هامش الظل
         self.setFixedSize(614, 629)
 
         self.setStyleSheet("""

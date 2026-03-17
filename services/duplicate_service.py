@@ -1,10 +1,5 @@
 # -*- coding: utf-8 -*-
-"""
-Conflict Resolution Service (UC-007 / UC-008).
-
-Uses the Backend Conflicts API instead of local duplicate detection.
-All conflict management flows through /api/v1/conflicts endpoints.
-"""
+"""Conflict resolution service using the Backend Conflicts API."""
 
 from typing import List, Dict, Any, Optional
 from datetime import datetime
@@ -16,12 +11,7 @@ logger = get_logger(__name__)
 
 
 class DuplicateService:
-    """
-    Service for managing conflicts/duplicates via Backend Conflicts API.
-
-    UC-007: Property Duplicates
-    UC-008: Person Duplicates
-    """
+    """Service for managing conflicts/duplicates via Backend Conflicts API."""
 
     def __init__(self, db=None):
         self.db = db
@@ -65,7 +55,7 @@ class DuplicateService:
     def get_property_duplicates(
         self, page: int = 1, page_size: int = 20
     ) -> Dict[str, Any]:
-        """Get property duplicate conflicts (UC-007)."""
+        """Get property duplicate conflicts."""
         try:
             api = self._get_api()
             return api.get_property_duplicates(page, page_size)
@@ -76,7 +66,7 @@ class DuplicateService:
     def get_person_duplicates(
         self, page: int = 1, page_size: int = 20
     ) -> Dict[str, Any]:
-        """Get person duplicate conflicts (UC-008)."""
+        """Get person duplicate conflicts."""
         try:
             api = self._get_api()
             return api.get_person_duplicates(page, page_size)

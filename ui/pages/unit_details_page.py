@@ -1,9 +1,5 @@
 # -*- coding: utf-8 -*-
-"""
-Unit Details View Page — displays unit information card.
-Replicates the unit card section from unit_selection_step.py wizard
-but with a single unit, no selection state, no "add unit" button.
-"""
+"""Unit details view page."""
 
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel,
@@ -248,7 +244,7 @@ class UnitDetailsPage(QWidget):
 
         card.setLayoutDirection(Qt.RightToLeft)
 
-        # Main layout — Figma: padding 12px all sides
+        # Main layout
         main_layout = QVBoxLayout(card)
         main_layout.setSpacing(8)
         main_layout.setContentsMargins(12, 12, 12, 12)

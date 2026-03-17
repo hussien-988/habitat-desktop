@@ -1,19 +1,4 @@
-"""
-Document Version Management Service
-====================================
-Implements comprehensive document versioning and management as per FSD requirements.
-
-Features:
-- Version control for documents with full history
-- Hash-based integrity verification (SHA-256)
-- Verification status tracking
-- Document type classification
-- Multi-format support (PDF, images, scanned documents)
-- Metadata management
-- Audit trail for all document operations
-- Document relationship linking (to buildings, claims, persons)
-- Duplicate detection via hash
-"""
+"""Document version management service with history and integrity verification."""
 
 import json
 import hashlib
@@ -187,16 +172,7 @@ class DocumentAuditEntry:
 
 
 class DocumentVersionService:
-    """
-    Comprehensive document version management service.
-
-    Implements FSD requirements for document management:
-    - Version control with full history
-    - Hash-based integrity verification
-    - Verification workflow
-    - Entity linking
-    - Audit trail
-    """
+    """Document version management service."""
 
     # Supported MIME types
     SUPPORTED_MIME_TYPES = {
@@ -214,13 +190,7 @@ class DocumentVersionService:
     MAX_FILE_SIZE = 50 * 1024 * 1024
 
     def __init__(self, db_path: str = None, storage_path: str = None):
-        """
-        Initialize document version service.
-
-        Args:
-            db_path: Path to SQLite database (optional, uses adapter)
-            storage_path: Base path for document storage
-        """
+        """Initialize document version service."""
         self.db_path = db_path
         self._adapter: DatabaseAdapter = DatabaseFactory.create()
 

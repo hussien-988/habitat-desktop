@@ -1,11 +1,5 @@
 # -*- coding: utf-8 -*-
-"""
-Import Wizard - Step 1: Incoming Packages
-UC-003: Import Pipeline
-
-Display packages uploaded by field researchers via tablet sync.
-User selects a package to begin processing (staging, validation, etc.).
-"""
+"""Import wizard step 1: incoming packages selection."""
 
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QFrame,

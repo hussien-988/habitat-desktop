@@ -1,13 +1,5 @@
 # -*- coding: utf-8 -*-
-"""
-Claim Comparison Page — تفاصيل المطالبات
-Shows person records side-by-side for comparison and merge.
-Navigated from DuplicatesPage via "عرض المقارنة" button.
-Implements UC-007: Resolve Duplicate Properties
-Implements UC-008: Resolve Person Duplicates
-
-Data source: REST API via DuplicateService.
-"""
+"""Claim comparison page for side-by-side record comparison and merge."""
 
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
