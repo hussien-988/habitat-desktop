@@ -39,6 +39,10 @@ class MessageDialog(QDialog):
                  ok_text="حسناً", cancel_text="إلغاء", show_cancel=False):
         super().__init__(parent)
 
+        if dialog_type in ("error", "warning"):
+            from services.error_mapper import sanitize_user_message
+            message = sanitize_user_message(message)
+
         self.setWindowFlags(Qt.Dialog | Qt.FramelessWindowHint)
         self.setAttribute(Qt.WA_TranslucentBackground)
         self.setModal(True)

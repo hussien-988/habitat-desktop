@@ -219,25 +219,6 @@ class ImportStep1Packages(QWidget):
         refresh_btn.clicked.connect(self.refresh)
         header_row.addWidget(refresh_btn)
 
-        upload_btn = QPushButton("رفع ملف من الجهاز")
-        upload_btn.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
-        upload_btn.setFixedHeight(32)
-        upload_btn.setCursor(Qt.PointingHandCursor)
-        upload_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #ECFDF5;
-                color: #059669;
-                border: 1px solid #059669;
-                border-radius: 6px;
-                padding: 0 12px;
-            }
-            QPushButton:hover {
-                background-color: #D1FAE5;
-            }
-        """)
-        upload_btn.clicked.connect(self._on_upload_file)
-        header_row.addWidget(upload_btn)
-
         card_layout.addLayout(header_row)
 
         sep = QFrame()
@@ -248,7 +229,9 @@ class ImportStep1Packages(QWidget):
         # Scroll area for package cards
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.NoFrame)
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
         scroll.setStyleSheet(
             "QScrollArea { border: none; background: transparent; }"
             + StyleManager.scrollbar()

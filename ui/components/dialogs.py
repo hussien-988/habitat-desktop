@@ -76,6 +76,8 @@ class ErrorDialog(BaseDialog):
     """Error message dialog."""
 
     def __init__(self, title: str, message: str, details: str = None, parent=None):
+        from services.error_mapper import sanitize_user_message
+        message = sanitize_user_message(message)
         super().__init__(title, parent)
         self._setup_ui(message, details)
 

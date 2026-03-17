@@ -14,7 +14,7 @@ from typing import List
 
 from PyQt5.QtWidgets import (
     QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
-    QPushButton, QFrame, QWidget,
+    QPushButton, QFrame, QWidget, QComboBox,
     QGridLayout, QCheckBox, QSizePolicy,
     QScrollArea, QFileDialog, QGraphicsDropShadowEffect,
 )
@@ -157,13 +157,43 @@ class ApplicantInfoStep(BaseStep):
         grid.addLayout(mn_box, row, 1)
         row += 1
 
-        # --- Row 3: سنة الميلاد | الجنس ---
+        # --- Row 3: تاريخ الميلاد | الجنس ---
         grid.addWidget(self._lbl(tr("wizard.person_dialog.birth_date")), row, 0)
         grid.addWidget(self._lbl(tr("wizard.person_dialog.gender")), row, 1)
         row += 1
 
-        self.birth_year = self._field("مثال: 1980", QRegExpValidator(QtRegExp(r"\d{0,4}")))
-        grid.addWidget(self.birth_year, row, 0)
+        birth_layout = QHBoxLayout()
+        birth_layout.setSpacing(6)
+        birth_layout.setContentsMargins(0, 0, 0, 0)
+
+        self.birth_year_combo = QComboBox()
+        self.birth_year_combo.setLayoutDirection(Qt.LeftToRight)
+        self.birth_year_combo.setStyleSheet(self._input_style())
+        self.birth_year_combo.addItem("--", None)
+        for y in range(2010, 1919, -1):
+            self.birth_year_combo.addItem(str(y), y)
+
+        self.birth_month_combo = QComboBox()
+        self.birth_month_combo.setLayoutDirection(Qt.LeftToRight)
+        self.birth_month_combo.setStyleSheet(self._input_style())
+        self.birth_month_combo.addItem("--", None)
+        for m in range(1, 13):
+            self.birth_month_combo.addItem(str(m), m)
+
+        self.birth_day_combo = QComboBox()
+        self.birth_day_combo.setLayoutDirection(Qt.LeftToRight)
+        self.birth_day_combo.setStyleSheet(self._input_style())
+        self.birth_day_combo.addItem("--", None)
+        for d in range(1, 32):
+            self.birth_day_combo.addItem(str(d), d)
+
+        birth_layout.addWidget(self.birth_year_combo, 2)
+        birth_layout.addWidget(self.birth_month_combo, 1)
+        birth_layout.addWidget(self.birth_day_combo, 1)
+        birth_container = QWidget()
+        birth_container.setStyleSheet("background-color: transparent;")
+        birth_container.setLayout(birth_layout)
+        grid.addWidget(birth_container, row, 0)
 
         self.gender = RtlCombo()
         self.gender.addItem(tr("wizard.person_dialog.select"), None)
@@ -310,7 +340,10 @@ class ApplicantInfoStep(BaseStep):
             thumb.setPixmap(px.scaled(40, 40, Qt.KeepAspectRatio, Qt.SmoothTransformation))
         else:
             thumb.setText("📄")
-        thumb.mousePressEvent = lambda e, fp=file_path: QDesktopServices.openUrl(QUrl.fromLocalFile(fp))
+        def _open_file(event, fp=file_path):
+            QDesktopServices.openUrl(QUrl.fromLocalFile(fp))
+
+        thumb.mousePressEvent = _open_file
 
         x_btn = QLabel(container)
         x_btn.setFixedSize(18, 18)
@@ -515,12 +548,50 @@ class ApplicantInfoStep(BaseStep):
             self._set_err(self.national_id, self._nid_error)
             result.add_error("الرقم الوطني يجب أن يكون 11 رقماً")
 
-        year_text = self.birth_year.text().strip()
-        if year_text:
-            if not year_text.isdigit() or len(year_text) != 4:
-                result.add_error("سنة الميلاد غير صالحة")
-            elif int(year_text) < 1920 or int(year_text) > 2010:
-                result.add_error("سنة الميلاد يجب أن تكون بين 1920 و 2010")
+        if not result.is_valid:
+            return result
+
+        # Uniqueness: check full name via API
+        first = self.first_name.text().strip()
+        father = self.father_name.text().strip()
+        last = self.last_name.text().strip()
+        full_name = f"{first} {father} {last}"
+        existing_cp_id = self.context.get_data("contact_person_id") or ""
+        try:
+            from services.api_client import get_api_client
+            api = get_api_client()
+            response = api.get_persons(search=full_name, page_size=10)
+            persons = response.get("items", []) if isinstance(response, dict) else []
+            for p in persons:
+                p_id = p.get("id") or p.get("personId") or ""
+                if p_id == existing_cp_id:
+                    continue
+                p_first = p.get("firstNameArabic", "").strip()
+                p_father = p.get("fatherNameArabic", "").strip()
+                p_last = p.get("familyNameArabic", "").strip()
+                if p_first == first and p_father == father and p_last == last:
+                    self._set_err(self.first_name, self._first_name_error)
+                    result.add_error("هذا الاسم مسجل مسبقاً في النظام")
+                    return result
+        except Exception as e:
+            logger.warning(f"Name uniqueness check failed: {e}")
+
+        # Uniqueness: check national ID via API
+        if nid_text and len(nid_text) == 11:
+            try:
+                from services.api_client import get_api_client
+                api = get_api_client()
+                response = api.get_persons(national_id=nid_text, page_size=5)
+                persons = response.get("items", []) if isinstance(response, dict) else []
+                for p in persons:
+                    p_id = p.get("id") or p.get("personId") or ""
+                    if p_id == existing_cp_id:
+                        continue
+                    self._set_err(self.national_id, self._nid_error)
+                    result.add_error("الرقم الوطني مسجل مسبقاً")
+                    return result
+            except Exception as e:
+                logger.warning(f"National ID uniqueness check failed: {e}")
 
         if not result.is_valid:
             return result
@@ -588,15 +659,22 @@ class ApplicantInfoStep(BaseStep):
         fat = self.father_name.text().strip()
         ln  = self.last_name.text().strip()
 
-        year_text = self.birth_year.text().strip()
-        birth_year = int(year_text) if year_text.isdigit() and len(year_text) == 4 else None
+        # Build birth_date from 3 combos
+        y = self.birth_year_combo.currentData()
+        m = self.birth_month_combo.currentData()
+        d = self.birth_day_combo.currentData()
+        birth_date = None
+        if y:
+            month = m if m else 1
+            day = d if d else 1
+            birth_date = f"{y:04d}-{month:02d}-{day:02d}"
 
         data = {
             "first_name_ar":  fn,
             "father_name_ar": fat,
             "mother_name_ar": self.mother_name.text().strip(),
             "last_name_ar":   ln,
-            "birth_year":     birth_year,
+            "birth_date":     birth_date,
             "gender":         self.gender.currentData(),
             "nationality":    self.nationality.currentData(),
             "national_id":    self.national_id.text().strip(),
@@ -615,8 +693,11 @@ class ApplicantInfoStep(BaseStep):
             return
         for field in [self.first_name, self.father_name, self.last_name,
                       self.mother_name, self.national_id, self.phone,
-                      self.landline, self.birth_year]:
+                      self.landline]:
             field.clear()
+        self.birth_year_combo.setCurrentIndex(0)
+        self.birth_month_combo.setCurrentIndex(0)
+        self.birth_day_combo.setCurrentIndex(0)
         self.gender.setCurrentIndex(0)
         self.nationality.setCurrentIndex(0)
         self.in_person_check.setChecked(True)
@@ -639,8 +720,26 @@ class ApplicantInfoStep(BaseStep):
         self.mother_name.setText(a.get("mother_name_ar", ""))
         self.last_name.setText(a.get("last_name_ar", ""))
 
-        if a.get("birth_year"):
-            self.birth_year.setText(str(a["birth_year"]))
+        # Populate birth date combos
+        bd = a.get("birth_date") or ""
+        if bd:
+            parts = str(bd)[:10].split('-')
+            if len(parts) >= 1 and parts[0].isdigit():
+                idx = self.birth_year_combo.findData(int(parts[0]))
+                if idx >= 0:
+                    self.birth_year_combo.setCurrentIndex(idx)
+            if len(parts) >= 2 and parts[1].isdigit():
+                idx = self.birth_month_combo.findData(int(parts[1]))
+                if idx >= 0:
+                    self.birth_month_combo.setCurrentIndex(idx)
+            if len(parts) >= 3 and parts[2].isdigit():
+                idx = self.birth_day_combo.findData(int(parts[2]))
+                if idx >= 0:
+                    self.birth_day_combo.setCurrentIndex(idx)
+        elif a.get("birth_year"):
+            idx = self.birth_year_combo.findData(int(a["birth_year"]))
+            if idx >= 0:
+                self.birth_year_combo.setCurrentIndex(idx)
 
         gender_val = a.get("gender")
         for i in range(self.gender.count()):

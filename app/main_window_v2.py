@@ -36,8 +36,9 @@ class MainWindow(QMainWindow):
         Pages.USER_MANAGEMENT: {"admin"},
         Pages.ADD_USER: {"admin"},
         Pages.FIELD_ASSIGNMENT: {"admin", "data_manager", "field_supervisor"},
+        Pages.SYNC_DATA: {"admin", "data_manager", "field_supervisor"},
         Pages.DATA_MANAGEMENT: {"admin", "data_manager"},
-        Pages.REPORTS: {"admin", "data_manager", "field_supervisor", "analyst"},
+        Pages.REPORTS: {"admin", "data_manager", "field_supervisor"},
         Pages.CLAIM_EDIT: {"admin", "data_manager"},
         Pages.DUPLICATES: {"admin", "data_manager"},
         Pages.CLAIM_COMPARISON: {"admin", "data_manager"},
@@ -499,6 +500,17 @@ class MainWindow(QMainWindow):
             lambda: self.navigate_to(Pages.USER_MANAGEMENT)
         )
 
+        # Sync Data - back to field assignment
+        self.pages[Pages.SYNC_DATA].back_requested.connect(
+            lambda: self.navigate_to(Pages.FIELD_ASSIGNMENT)
+        )
+
+        # Claim Search - back to claims
+        if Pages.CLAIM_SEARCH in self.pages:
+            self.pages[Pages.CLAIM_SEARCH].back_requested.connect(
+                lambda: self.navigate_to(Pages.CLAIMS)
+            )
+
         # User Management - view user details
         self.pages[Pages.USER_MANAGEMENT].view_user.connect(
             lambda user: self._navigate_to_user(user, 'view')
@@ -691,6 +703,13 @@ class MainWindow(QMainWindow):
         user_data['_mode'] = mode
         self.navigate_to(Pages.ADD_USER, user_data)
 
+    # Role string → API integer enum mapping
+    _ROLE_TO_INT = {
+        "admin": 6, "data_manager": 4, "office_clerk": 3,
+        "field_supervisor": 2, "field_researcher": 2,
+        "data_collector": 1, "analyst": 5,
+    }
+
     def _on_save_new_user(self, data: dict):
         """Handle saving a new or updated user from AddUserPage via backend API."""
         from ui.components.toast import Toast
@@ -700,13 +719,13 @@ class MainWindow(QMainWindow):
             return
 
         is_edit = data.get("_mode") == "edit"
-        permissions = data.get("permissions", {})
+        role_int = self._ROLE_TO_INT.get(data.get("role", ""), 5)
 
         if is_edit:
             user_id = data.get("_editing_user_id", "")
             api_data = {
-                "role": data.get("role", ""),
-                "permissions": permissions,
+                "userId": user_id,
+                "role": role_int,
             }
             result = self._user_controller.update_user(user_id, api_data)
             success_msg = "تم تحديث المستخدم بنجاح"
@@ -715,8 +734,8 @@ class MainWindow(QMainWindow):
             api_data = {
                 "username": data.get("user_id", ""),
                 "password": data.get("password", ""),
-                "role": data.get("role", "analyst"),
-                "permissions": permissions,
+                "role": role_int,
+                "hasDesktopAccess": True,
             }
             result = self._user_controller.create_user(api_data)
             success_msg = "تم حفظ المستخدم بنجاح"

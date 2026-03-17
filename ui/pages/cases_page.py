@@ -58,7 +58,9 @@ class CasesPage(QWidget):
         self._active_tab = "draft"  # "draft" or "finalized"
         self._buildings_cache: Dict[str, object] = {}
         self._last_refresh_ms = 0
-        self._search_timer = None
+        self._search_timer = QTimer(self)
+        self._search_timer.setSingleShot(True)
+        self._search_timer.timeout.connect(self._load_surveys)
         self._setup_ui()
 
     # -------------------------------------------------------------------------
@@ -101,13 +103,13 @@ class CasesPage(QWidget):
         self.content_area.setWidgetResizable(True)
         self.content_area.setFrameShape(QFrame.NoFrame)
         self.content_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        self.content_area.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.content_area.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
         self.content_area.setStyleSheet(f"""
             QScrollArea {{
                 background-color: {Colors.BACKGROUND};
                 border: none;
             }}
-        """)
+        """ + StyleManager.scrollbar())
 
         self.content_widget = QWidget()
         self.content_layout = QGridLayout(self.content_widget)
@@ -153,34 +155,16 @@ class CasesPage(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(10)
 
-        # 1. Search by reference code (API: referenceCode)
-        self._ref_search = QLineEdit()
-        self._ref_search.setLayoutDirection(Qt.RightToLeft)
-        self._ref_search.setPlaceholderText("بحث بالرمز المرجعي...")
-        self._ref_search.setFixedWidth(220)
-        self._ref_search.setStyleSheet(form_style)
-        self._ref_search.textChanged.connect(self._on_search_changed)
-        layout.addWidget(self._ref_search)
-
-        # 2. Search by person name (API: contactPersonFullName)
+        # Search by contact person name (API: contactPersonName)
         self._name_filter = QLineEdit()
         self._name_filter.setLayoutDirection(Qt.RightToLeft)
         self._name_filter.setPlaceholderText("بحث باسم الشخص...")
-        self._name_filter.setFixedWidth(200)
+        self._name_filter.setFixedWidth(280)
         self._name_filter.setStyleSheet(form_style)
         self._name_filter.textChanged.connect(self._on_search_changed)
         layout.addWidget(self._name_filter)
 
-        # 3. Search by building number (API: buildingId)
-        self._building_filter = QLineEdit()
-        self._building_filter.setLayoutDirection(Qt.RightToLeft)
-        self._building_filter.setPlaceholderText("رقم المبنى...")
-        self._building_filter.setFixedWidth(160)
-        self._building_filter.setStyleSheet(form_style)
-        self._building_filter.textChanged.connect(self._on_search_changed)
-        layout.addWidget(self._building_filter)
-
-        # 4. Survey type filter (local: 1=Field, 2=Office)
+        # Survey type filter (local: 1=Field, 2=Office)
         self._type_filter = QComboBox()
         self._type_filter.setLayoutDirection(Qt.RightToLeft)
         self._type_filter.setFixedWidth(170)
@@ -200,11 +184,6 @@ class CasesPage(QWidget):
 
     def _on_search_changed(self):
         """Debounced search — sends to API after 500ms pause."""
-        if self._search_timer and self._search_timer.isActive():
-            self._search_timer.stop()
-        self._search_timer = QTimer()
-        self._search_timer.setSingleShot(True)
-        self._search_timer.timeout.connect(self._load_surveys)
         self._search_timer.start(500)
 
     def _on_type_changed(self):
@@ -240,9 +219,7 @@ class CasesPage(QWidget):
         """Load surveys from API based on active tab and filters."""
         self._all_data = []
         status = "Draft" if self._active_tab == "draft" else "Finalized"
-        ref_code = self._ref_search.text().strip() or None
         name = self._name_filter.text().strip() or None
-        building = self._building_filter.text().strip() or None
 
         try:
             from controllers.survey_controller import SurveyController
@@ -253,9 +230,7 @@ class CasesPage(QWidget):
                 page_size=30,
                 sort_by="SurveyDate",
                 sort_direction="desc",
-                reference_code=ref_code,
-                interviewee_name=name,
-                building_id=building,
+                contact_person_name=name,
             )
             if result.success and result.data:
                 building_ids = {s.get("buildingId", "") for s in result.data if s.get("buildingId")}

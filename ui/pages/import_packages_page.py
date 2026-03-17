@@ -104,70 +104,9 @@ class ImportPackagesListPage(QWidget):
         filter_row.setSpacing(10)
 
         self._status_combo = QComboBox()
-        self._status_combo.setEditable(True)
-        self._status_combo.lineEdit().setReadOnly(True)
-        self._status_combo.lineEdit().setAlignment(Qt.AlignRight)
-        self._status_combo.setFixedHeight(42)
+        self._status_combo.setLayoutDirection(Qt.RightToLeft)
         self._status_combo.setMinimumWidth(220)
-
-        import os
-        arrow_path = os.path.join(
-            os.path.dirname(os.path.dirname(__file__)),
-            "assets", "images", "down.png"
-        )
-        arrow_css = (
-            f"image: url({arrow_path.replace(os.sep, '/')}); width: 12px; height: 12px;"
-            if os.path.exists(arrow_path)
-            else "border-left: none;"
-        )
-        self._status_combo.setStyleSheet(f"""
-            QComboBox {{
-                background-color: #f0f7ff;
-                border: 1px solid {Colors.BORDER_DEFAULT};
-                border-radius: 8px;
-                padding: 8px 14px;
-                padding-left: 35px;
-                font-family: 'IBM Plex Sans Arabic';
-                font-size: 9pt;
-                color: #212B36;
-            }}
-            QComboBox:hover {{
-                border-color: #93C5FD;
-            }}
-            QComboBox::drop-down {{
-                border: none;
-                width: 30px;
-            }}
-            QComboBox::down-arrow {{
-                {arrow_css}
-            }}
-            QComboBox QAbstractItemView {{
-                border: 1px solid {Colors.BORDER_DEFAULT};
-                background-color: white;
-                selection-background-color: #EFF6FF;
-                font-family: 'IBM Plex Sans Arabic';
-                font-size: 9pt;
-                outline: none;
-            }}
-            QComboBox QAbstractItemView::item {{
-                padding: 8px 12px;
-                min-height: 32px;
-            }}
-            QScrollBar:vertical {{
-                width: 0px;
-            }}
-            QScrollBar:horizontal {{
-                height: 0px;
-            }}
-            QLineEdit {{
-                border: none;
-                background: transparent;
-                font-family: 'IBM Plex Sans Arabic';
-                font-size: 9pt;
-                padding: 0px;
-                color: #212B36;
-            }}
-        """)
+        self._status_combo.setStyleSheet(StyleManager.form_input())
 
         self._status_combo.addItem("جميع الحالات", "")
         for code, label in vocab_get_options("import_status"):
@@ -245,8 +184,9 @@ class ImportPackagesListPage(QWidget):
         header.setFixedHeight(56)
         header.setStretchLastSection(False)
 
-        # Column widths: col 0 stretches, rest fixed
-        header.setSectionResizeMode(0, QHeaderView.Stretch)
+        # Column widths
+        header.setSectionResizeMode(0, QHeaderView.Fixed)
+        header.resizeSection(0, 200)
 
         header.setSectionResizeMode(1, QHeaderView.Fixed)
         header.resizeSection(1, 150)
@@ -257,8 +197,7 @@ class ImportPackagesListPage(QWidget):
         header.setSectionResizeMode(3, QHeaderView.Fixed)
         header.resizeSection(3, 240)
 
-        header.setSectionResizeMode(4, QHeaderView.Fixed)
-        header.resizeSection(4, 120)
+        header.setSectionResizeMode(4, QHeaderView.Stretch)
 
         header.setSectionResizeMode(5, QHeaderView.Fixed)
         header.resizeSection(5, 50)
@@ -631,12 +570,6 @@ class ImportPackagesListPage(QWidget):
         quarantine_action.triggered.connect(lambda: self._quarantine_package(pkg_id))
         menu.addAction(quarantine_action)
 
-        # Reset commit (admin only)
-        if self._user_role == "admin":
-            reset_action = QAction("\u0625\u0639\u0627\u062f\u0629 \u062a\u0639\u064a\u064a\u0646", self)
-            reset_action.triggered.connect(lambda: self._reset_commit(pkg_id))
-            menu.addAction(reset_action)
-
         menu.exec_(self.table.viewport().mapToGlobal(position))
 
     # -- Package actions --
@@ -653,13 +586,16 @@ class ImportPackagesListPage(QWidget):
 
     def _quarantine_package(self, package_id):
         """Quarantine a package."""
-        result = self.import_controller.quarantine_package(package_id)
         from ui.components.message_dialog import MessageDialog
-        if result.success:
-            MessageDialog.success(self, "تم الحجر", result.message_ar or "تم حجر الحزمة")
-            self._load_packages()
-        else:
-            MessageDialog.error(self, "خطأ", result.message_ar or "فشل حجر الحزمة")
+        try:
+            result = self.import_controller.quarantine_package(package_id)
+            if result.success:
+                MessageDialog.success(self, "تم الحجر", result.message_ar or "تم حجر الحزمة")
+                self._load_packages()
+            else:
+                MessageDialog.error(self, "خطأ", result.message_ar or "فشل حجر الحزمة")
+        except Exception as e:
+            MessageDialog.error(self, "خطأ", f"فشل حجر الحزمة: {e}")
 
     def _reset_commit(self, package_id):
         """Reset a stuck commit (admin only)."""

@@ -121,9 +121,8 @@ class _MenuItem(QWidget):
 ARROW_HEIGHT = 10
 ARROW_WIDTH = 16
 POPUP_WIDTH = 191
-POPUP_BODY_HEIGHT = 283
 POPUP_RADIUS = 12
-SHADOW_MARGIN = 12
+SHADOW_MARGIN = 4
 
 
 class _DropdownPopup(QWidget):
@@ -134,21 +133,11 @@ class _DropdownPopup(QWidget):
         self.setWindowFlags(Qt.Popup | Qt.FramelessWindowHint)
         self.setAttribute(Qt.WA_TranslucentBackground)
 
-        total_w = POPUP_WIDTH + SHADOW_MARGIN * 2
-        total_h = ARROW_HEIGHT + POPUP_BODY_HEIGHT + SHADOW_MARGIN * 2
-        self.setFixedSize(total_w, total_h)
-
-        # Arrow X offset from right edge (centers on badge)
-        self._arrow_x = total_w // 2
+        self._arrow_x = 0
+        self._separators = []
 
         # Container for menu items (inside the body area)
         self._container = QWidget(self)
-        self._container.setGeometry(
-            SHADOW_MARGIN,
-            SHADOW_MARGIN + ARROW_HEIGHT,
-            POPUP_WIDTH,
-            POPUP_BODY_HEIGHT
-        )
         self._container.setStyleSheet("background: transparent;")
 
         self._layout = QVBoxLayout(self._container)
@@ -156,6 +145,27 @@ class _DropdownPopup(QWidget):
         self._layout.setSpacing(2)
 
         self._items = []
+
+    def _recalc_size(self):
+        """Recalculate popup size based on visible items."""
+        visible_h = 16  # top+bottom padding
+        for i in range(self._layout.count()):
+            w = self._layout.itemAt(i).widget()
+            if w and w.isVisible():
+                visible_h += w.sizeHint().height() + 2  # spacing
+        body_h = max(visible_h, 50)
+        total_w = POPUP_WIDTH + SHADOW_MARGIN * 2
+        total_h = ARROW_HEIGHT + body_h + SHADOW_MARGIN * 2
+        self.setFixedSize(total_w, total_h)
+        self._container.setGeometry(
+            SHADOW_MARGIN, SHADOW_MARGIN + ARROW_HEIGHT,
+            POPUP_WIDTH, body_h
+        )
+        self._arrow_x = total_w // 2
+
+    def showEvent(self, event):
+        self._recalc_size()
+        super().showEvent(event)
 
     def add_item(self, item: _MenuItem):
         self._items.append(item)
@@ -166,6 +176,7 @@ class _DropdownPopup(QWidget):
         sep = QFrame()
         sep.setFixedHeight(1)
         sep.setStyleSheet("background-color: #E5E7EB;")
+        self._separators.append(sep)
         self._layout.addWidget(sep)
 
     def set_arrow_x(self, x: int):
@@ -180,26 +191,7 @@ class _DropdownPopup(QWidget):
         body_x = SHADOW_MARGIN
         body_y = SHADOW_MARGIN + ARROW_HEIGHT
         body_w = POPUP_WIDTH
-        body_h = POPUP_BODY_HEIGHT
-
-        # Draw shadow
-        shadow_path = QPainterPath()
-        shadow_path.addRoundedRect(
-            body_x, body_y, body_w, body_h,
-            POPUP_RADIUS, POPUP_RADIUS
-        )
-        for i in range(SHADOW_MARGIN):
-            alpha = 8 - int(8 * i / SHADOW_MARGIN)
-            painter.setPen(QPen(QColor(0, 0, 0, alpha), 1))
-            painter.setBrush(Qt.NoBrush)
-            offset = i * 0.5
-            shadow = QPainterPath()
-            shadow.addRoundedRect(
-                body_x - offset, body_y - offset + 2,
-                body_w + offset * 2, body_h + offset * 2,
-                POPUP_RADIUS + offset, POPUP_RADIUS + offset
-            )
-            painter.drawPath(shadow)
+        body_h = self.height() - ARROW_HEIGHT - SHADOW_MARGIN * 2
 
         # Main body path
         path = QPainterPath()
@@ -383,6 +375,8 @@ class IDBadgeWidget(QWidget):
         self._menu_item_widgets = []
         self._import_item = None
         self._sync_menu_item = None
+        self._security_item = None
+        self._data_mgmt_item = None
 
         for icon_name, tr_key, signal in self._menu_items_config:
             item = _MenuItem(icon_name, tr(tr_key))
@@ -393,6 +387,10 @@ class IDBadgeWidget(QWidget):
                 self._import_item = item
             if tr_key == "navbar.menu.sync_data":
                 self._sync_menu_item = item
+            if tr_key == "navbar.menu.security_policies":
+                self._security_item = item
+            if tr_key == "navbar.menu.data_management":
+                self._data_mgmt_item = item
 
         self._popup.add_separator()
 
@@ -408,6 +406,7 @@ class IDBadgeWidget(QWidget):
 
     def _show_menu(self):
         """Show dropdown popup below the badge with arrow pointing to center."""
+        self._popup._recalc_size()
         badge_center = self.mapToGlobal(QPoint(self.width() // 2, self.height()))
         popup_w = self._popup.width()
 
@@ -428,8 +427,14 @@ class IDBadgeWidget(QWidget):
 
     def configure_for_role(self, role: str):
         """Show/hide role-restricted menu items."""
+        if self._sync_menu_item:
+            self._sync_menu_item.setVisible(role in {"admin", "data_manager", "field_supervisor"})
         if self._import_item:
             self._import_item.setVisible(role in {"admin", "data_manager"})
+        if self._security_item:
+            self._security_item.setVisible(role == "admin")
+        if self._data_mgmt_item:
+            self._data_mgmt_item.setVisible(role == "admin")
 
     def set_user_id(self, user_id):
         self.user_id = user_id

@@ -36,7 +36,7 @@ class SurveyController:
         sort_by: str = "SurveyDate",
         sort_direction: str = "desc",
         reference_code=None,
-        interviewee_name=None,
+        contact_person_name=None,
         building_id=None,
     ) -> OperationResult:
         """
@@ -54,7 +54,7 @@ class SurveyController:
                 sort_by=sort_by,
                 sort_direction=sort_direction,
                 reference_code=reference_code,
-                interviewee_name=interviewee_name,
+                contact_person_name=contact_person_name,
                 building_id=building_id,
             )
             surveys = response.get("surveys", [])

@@ -2417,7 +2417,10 @@ class TRRCMSApiClient:
             except (ValueError, TypeError):
                 pass
 
-        if person_data.get("birth_year"):
+        birth_date = person_data.get("birth_date")
+        if birth_date:
+            api_data["dateOfBirth"] = f"{birth_date}T00:00:00Z" if "T" not in str(birth_date) else str(birth_date)
+        elif person_data.get("birth_year"):
             api_data["dateOfBirth"] = f"{person_data['birth_year']}-01-01T00:00:00Z"
 
         email = person_data.get("email", "").strip()
@@ -2445,7 +2448,7 @@ class TRRCMSApiClient:
         from_date: Optional[str] = None,
         to_date: Optional[str] = None,
         reference_code: Optional[str] = None,
-        interviewee_name: Optional[str] = None,
+        contact_person_name: Optional[str] = None,
         sort_by: Optional[str] = None,
         sort_direction: Optional[str] = None,
     ) -> Dict[str, Any]:
@@ -2467,8 +2470,8 @@ class TRRCMSApiClient:
             params["toDate"] = to_date
         if reference_code:
             params["referenceCode"] = reference_code
-        if interviewee_name:
-            params["intervieweeName"] = interviewee_name
+        if contact_person_name:
+            params["contactPersonName"] = contact_person_name
         if sort_by:
             params["sortBy"] = sort_by
         if sort_direction:
@@ -2939,6 +2942,16 @@ class TRRCMSApiClient:
         logger.info(f"Fetched claim: {result.get('claimNumber', 'N/A')}")
         return result
 
+    def get_claim_by_number(self, claim_number: str) -> Dict[str, Any]:
+        """
+        Get claim by claim number.
+
+        Endpoint: GET /api/v1/Claims/by-number/{claimNumber}
+        """
+        if not claim_number:
+            raise ValueError("claim_number is required")
+        return self._request("GET", f"/v1/Claims/by-number/{claim_number}")
+
     def delete_claim(self, claim_id: str) -> bool:
         """
         Delete a claim.
@@ -3053,9 +3066,12 @@ class TRRCMSApiClient:
         return self._request("PUT", f"/v1/Users/{user_id}/unlock") or {}
 
     def admin_change_user_password(self, user_id: str, new_password: str) -> Dict[str, Any]:
-        """PUT /v1/Users/{id}/change-password (admin action)"""
-        return self._request("PUT", f"/v1/Users/{user_id}/change-password",
-                             {"newPassword": new_password}) or {}
+        """POST /v1/Auth/change-password"""
+        return self._request("POST", "/v1/Auth/change-password", {
+            "userId": user_id,
+            "newPassword": new_password,
+            "confirmPassword": new_password,
+        }) or {}
 
     def grant_user_permissions(self, user_id: str, permissions: Dict[str, Any]) -> Dict[str, Any]:
         """POST /v1/Users/{id}/permissions"""
@@ -3264,14 +3280,19 @@ class TRRCMSApiClient:
             json_data={"packageId": package_id, "reason": reason},
         )
 
-    def quarantine_import_package(self, package_id: str) -> Dict[str, Any]:
+    def quarantine_import_package(self, package_id: str, reason: str = "") -> Dict[str, Any]:
         """
         Quarantine a suspicious import package.
 
         Endpoint: POST /api/v1/import/packages/{id}/quarantine
+        Body: QuarantinePackageCommand {importPackageId, reason}
         """
         logger.info(f"Quarantining import package: {package_id}")
-        return self._request("POST", f"/v1/import/packages/{package_id}/quarantine")
+        body = {
+            "importPackageId": package_id,
+            "reason": reason or "حجر يدوي",
+        }
+        return self._request("POST", f"/v1/import/packages/{package_id}/quarantine", json_data=body)
 
 
     # ==================== Conflicts / Duplicates API (UC-007/UC-008) ====================

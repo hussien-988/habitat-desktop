@@ -55,6 +55,9 @@ class Toast(QLabel):
             toast_type: Type (success, error, warning, info)
             duration: Display duration in milliseconds
         """
+        if toast_type in (self.ERROR, self.WARNING):
+            from services.error_mapper import sanitize_user_message
+            message = sanitize_user_message(message)
         self.setText(message)
         self.setProperty("type", toast_type)
 

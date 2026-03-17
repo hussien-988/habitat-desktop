@@ -278,7 +278,7 @@ class ClaimStep(BaseStep):
             }}
         """
 
-        # Row 1: معرف المطالب | معرف المقسم | نوع الحالة
+        # Row 1: معرف المطالب | معرف المقسم | نوع الحالة | حالة القضية
         claim_person_search = QLineEdit()
         claim_person_search.setPlaceholderText("اسم الشخص")
         claim_person_search.setStyleSheet(ro_input_style)
@@ -297,6 +297,11 @@ class ClaimStep(BaseStep):
         claim_type_field.setStyleSheet(ro_input_style)
         add_field("نوع الحالة", claim_type_field, 0, 2)
 
+        case_category_field = QLineEdit()
+        case_category_field.setReadOnly(True)
+        case_category_field.setStyleSheet(ro_input_style)
+        add_field("حالة القضية", case_category_field, 0, 3)
+
         # Row 2: حالة الحالة | المصدر | تاريخ المسح
         claim_status_field = QLineEdit()
         claim_status_field.setReadOnly(True)
@@ -312,12 +317,6 @@ class ClaimStep(BaseStep):
         claim_survey_date.setReadOnly(True)
         claim_survey_date.setStyleSheet(ro_input_style)
         add_field("تاريخ المسح", claim_survey_date, 1, 2)
-
-        # Row 3: حالة القضية
-        case_category_field = QLineEdit()
-        case_category_field.setReadOnly(True)
-        case_category_field.setStyleSheet(ro_input_style)
-        add_field("حالة القضية", case_category_field, 2, 0)
 
         card_layout.addLayout(grid)
         card_layout.addSpacing(8)

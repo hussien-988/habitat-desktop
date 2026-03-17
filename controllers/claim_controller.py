@@ -54,11 +54,7 @@ class ClaimFilter:
 
 
 class ClaimController(BaseController):
-    """
-    Controller for claim management.
-
-    Provides a clean interface between UI and data layer for claim operations.
-    """
+    
 
     # Signals
     claim_created = pyqtSignal(str)  # claim_uuid
@@ -91,12 +87,7 @@ class ClaimController(BaseController):
     # ==================== CRUD Operations ====================
 
     def create_claim(self, data: Dict[str, Any]) -> OperationResult[Claim]:
-        """
-        Not supported directly - claims are created via Survey wizard.
-
-        Returns:
-            OperationResult failure
-        """
+        
         return OperationResult.fail(
             message="Claims are created via the Survey wizard, not directly",
             message_ar="يتم إنشاء المطالبات عبر معالج المسح"
@@ -104,17 +95,7 @@ class ClaimController(BaseController):
 
     def update_claim(self, claim_id: str, update_data: Dict[str, Any],
                      reason: str = "") -> OperationResult:
-        """
-        Update claim via PUT /api/Claims/{id} (UC-006 S08-S10).
-
-        Args:
-            claim_id: Claim UUID
-            update_data: Fields to update (claimType, priority, caseStatus, etc.)
-            reason: Mandatory modification reason (S08)
-
-        Returns:
-            OperationResult with updated claim data
-        """
+        
         try:
             if reason:
                 update_data["reasonForModification"] = reason
@@ -205,15 +186,7 @@ class ClaimController(BaseController):
     # ==================== Selection ====================
 
     def select_claim(self, claim_uuid: str) -> OperationResult[Claim]:
-        """
-        Select a claim as current.
-
-        Args:
-            claim_uuid: UUID of claim to select
-
-        Returns:
-            OperationResult with selected Claim
-        """
+        
         result = self.get_claim(claim_uuid)
 
         if result.success:
@@ -231,15 +204,8 @@ class ClaimController(BaseController):
     # ==================== Search and Filter ====================
 
     def load_claims(self, filter_: Optional[ClaimFilter] = None) -> OperationResult[List[Claim]]:
-        """
-        Load claims with optional filter via API.
-
-        Args:
-            filter_: Optional filter criteria
-
-        Returns:
-            OperationResult with list of Claims
-        """
+        
+        
         try:
             self._emit_started("load_claims")
 
@@ -287,41 +253,17 @@ class ClaimController(BaseController):
             return OperationResult.fail(message=str(e))
 
     def search_claims(self, search_text: str) -> OperationResult[List[Claim]]:
-        """
-        Search claims by text.
-
-        Args:
-            search_text: Text to search for
-
-        Returns:
-            OperationResult with list of matching Claims
-        """
+        
         filter_ = ClaimFilter(search_text=search_text)
         return self.load_claims(filter_)
 
     def filter_by_status(self, status: str) -> OperationResult[List[Claim]]:
-        """
-        Filter claims by status.
-
-        Args:
-            status: Status string to filter by
-
-        Returns:
-            OperationResult with list of Claims
-        """
+        
         filter_ = ClaimFilter(case_status=status)
         return self.load_claims(filter_)
 
     def get_claims_for_building(self, building_uuid: str) -> OperationResult[List[Claim]]:
-        """
-        Get claims for a specific building via API summaries.
-
-        Args:
-            building_uuid: Building UUID
-
-        Returns:
-            OperationResult with list of Claims
-        """
+        
         try:
             summaries = self._api.get_claims_summaries()
             # Filter by building UUID if available in summary data
@@ -335,15 +277,7 @@ class ClaimController(BaseController):
             return OperationResult.fail(message=str(e))
 
     def get_claims_for_unit(self, unit_uuid: str) -> OperationResult[List[Claim]]:
-        """
-        Get claims for a specific unit via API.
-
-        Args:
-            unit_uuid: Unit UUID
-
-        Returns:
-            OperationResult with list of Claims
-        """
+        
         filter_ = ClaimFilter(unit_uuid=unit_uuid)
         return self.load_claims(filter_)
 
@@ -429,11 +363,7 @@ class ClaimController(BaseController):
                                claim_source: Optional[int] = None,
                                building_code: Optional[str] = None,
                                page: int = 1, page_size: int = 20) -> OperationResult:
-        """
-        Search claims from API with filters (UC-006 S01).
-
-        Returns OperationResult with list of claim summary dicts.
-        """
+        
         try:
             dtos = self._api.get_claims_summaries(
                 claim_status=case_status,
@@ -446,17 +376,9 @@ class ClaimController(BaseController):
             return OperationResult.fail(message=str(e))
 
     def get_claim_full_detail(self, claim_id: str,
-                              hint_survey_id: str = None) -> OperationResult:
-        """
-        Get full claim detail with all enrichment data (UC-006 S02-S03).
-
-        Args:
-            claim_id: Claim UUID
-            hint_survey_id: Survey UUID passed from navigation context (avoids expensive summaries lookup)
-
-        Returns OperationResult with dict containing:
-        claim_dto, person_dto, unit_dto, building_dto, survey_id, evidences
-        """
+                              hint_survey_id: str = None,
+                              hint_relation_id: str = None) -> OperationResult:
+        
         try:
             claim_dto = self._api.get_claim_by_id(claim_id)
             if not claim_dto:
@@ -497,8 +419,22 @@ class ClaimController(BaseController):
                          or claim_dto.get("survey_id"))
             result["survey_id"] = survey_id
 
-            # Evidences
-            if survey_id:
+            # Evidences — prefer relation-specific endpoint when relation_id is available
+            relation_id = hint_relation_id or claim_dto.get("sourceRelationId")
+            if survey_id and relation_id:
+                try:
+                    result["evidences"] = self._api.get_relation_evidences(
+                        survey_id, relation_id)
+                except Exception as e:
+                    logger.warning(f"Failed to fetch relation evidences: {e}")
+                    # Fallback to survey-level evidences
+                    try:
+                        result["evidences"] = self._api.get_survey_evidences(survey_id)
+                    except Exception as e2:
+                        logger.warning(f"Failed to fetch survey evidences: {e2}")
+                        if hasattr(e2, 'status_code') and e2.status_code == 403:
+                            result["evidence_access_denied"] = True
+            elif survey_id:
                 try:
                     result["evidences"] = self._api.get_survey_evidences(survey_id)
                 except Exception as e:
@@ -566,11 +502,7 @@ class ClaimController(BaseController):
     # ==================== Backend API Methods ====================
 
     def get_claim_full_context(self, claim_id: str) -> OperationResult:
-        """
-        Fetch full claim + building + unit + persons + households from API.
-
-        Returns dict compatible with SurveyContext.from_dict().
-        """
+        
         try:
             claim = self._api.get_claim_by_id(claim_id)
             property_unit_id = claim.get("propertyUnitId")

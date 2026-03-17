@@ -205,6 +205,28 @@ class AddUserPage(QWidget):
         self.save_btn.clicked.connect(self._on_save)
         header_layout.addWidget(self.save_btn)
 
+        back_btn = QPushButton("رجوع")
+        back_btn.setFixedSize(100, ButtonDimensions.SAVE_HEIGHT)
+        back_btn.setCursor(Qt.PointingHandCursor)
+        back_btn.setFont(create_font(
+            size=ButtonDimensions.SAVE_FONT_SIZE,
+            weight=FontManager.WEIGHT_SEMIBOLD,
+        ))
+        back_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #F1F5F9;
+                color: #475569;
+                border: 1px solid #E2E8F0;
+                border-radius: 8px;
+                font-weight: 600;
+            }
+            QPushButton:hover {
+                background-color: #E2E8F0;
+            }
+        """)
+        back_btn.clicked.connect(self.back_requested.emit)
+        header_layout.addWidget(back_btn)
+
         layout.addLayout(header_layout)
 
         # Scroll area for form content

@@ -742,34 +742,41 @@ class StyleManager:
     @staticmethod
     def form_input() -> str:
         """
-        Get standard form input stylesheet (matching person dialog design).
+        Unified search/filter input stylesheet (DRY).
 
-        Usage: QLineEdit, QComboBox, QDateEdit, QDoubleSpinBox in forms
+        Used for QLineEdit, QComboBox, QDateEdit, QDoubleSpinBox across
+        all pages — filter bars, search inputs, combo filters.
 
-        Figma Specs:
-        - Background: #F8FAFC
-        - Border: 1px solid #E0E6ED
+        Design:
+        - Background: white (#FFFFFF) for clear contrast on page bg
+        - Border: 1.5px solid #D0D7E2 (visible but not heavy)
         - Border-radius: 8px
-        - Height: 23px (min/max)
-        - Focus border: #2D9CDB
+        - Focus border: Colors.PRIMARY_BLUE
+        - Placeholder: Colors.INPUT_PLACEHOLDER
 
         Returns:
             Complete QSS stylesheet string
         """
         return f"""
             QLineEdit, QComboBox, QDateEdit, QDoubleSpinBox {{
-                border: 1px solid #E0E6ED;
+                border: 1.5px solid #D0D7E2;
                 border-radius: 8px;
-                padding: 10px;
-                background-color: #F8FAFC;
-                color: #333;
-                font-size: 14px;
-                min-height: 23px;
-                max-height: 23px;
+                padding: 6px 12px;
+                background-color: {Colors.SURFACE};
+                color: {Colors.TEXT_PRIMARY};
+                font-size: 13px;
+                min-height: 28px;
+                max-height: 28px;
+            }}
+            QLineEdit:hover, QComboBox:hover, QDateEdit:hover, QDoubleSpinBox:hover {{
+                border-color: #93C5FD;
             }}
             QLineEdit:focus, QComboBox:focus, QDateEdit:focus, QDoubleSpinBox:focus {{
-                border: 1px solid #2D9CDB;
-                background-color: white;
+                border-color: {Colors.PRIMARY_BLUE};
+                background-color: {Colors.SURFACE};
+            }}
+            QLineEdit::placeholder {{
+                color: {Colors.INPUT_PLACEHOLDER};
             }}
             QComboBox::drop-down {{
                 border: none;
@@ -780,6 +787,12 @@ class StyleManager:
                 image: url({_IMAGES_DIR}/down.png);
                 width: 12px;
                 height: 12px;
+            }}
+            QComboBox QAbstractItemView {{
+                background-color: {Colors.SURFACE};
+                border: 1px solid #D0D7E2;
+                selection-background-color: rgba(56, 144, 223, 0.1);
+                selection-color: {Colors.PRIMARY_BLUE};
             }}
         """
 

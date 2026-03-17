@@ -118,6 +118,28 @@ class ClaimSearchPage(QWidget):
             QSpacerItem(40, 20, QSizePolicy.Expanding, QSizePolicy.Minimum)
         )
 
+        back_btn = QPushButton("رجوع")
+        back_btn.setFixedSize(100, 40)
+        back_btn.setCursor(Qt.PointingHandCursor)
+        back_btn.setFont(create_font(
+            size=FontManager.SIZE_BODY,
+            weight=QFont.Bold,
+        ))
+        back_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #F1F5F9;
+                color: #475569;
+                border: 1px solid #E2E8F0;
+                border-radius: 8px;
+                font-weight: 600;
+            }
+            QPushButton:hover {
+                background-color: #E2E8F0;
+            }
+        """)
+        back_btn.clicked.connect(self.back_requested.emit)
+        layout.addWidget(back_btn)
+
         return header
 
     def _create_filter_bar(self) -> QWidget:
@@ -129,20 +151,7 @@ class ClaimSearchPage(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(12)
 
-        combo_style = f"""
-            QComboBox {{
-                background-color: white;
-                border: 1px solid {Colors.BORDER_DEFAULT};
-                border-radius: 6px;
-                padding: 4px 12px;
-                font-size: 12px;
-                min-width: 120px;
-            }}
-            QComboBox::drop-down {{
-                border: none;
-                width: 20px;
-            }}
-        """
+        form_style = StyleManager.form_input()
 
         # Status filter
         status_label = QLabel("الحالة:")
@@ -152,7 +161,8 @@ class ClaimSearchPage(QWidget):
         self._status_combo = QComboBox()
         for val, label in _STATUS_OPTIONS:
             self._status_combo.addItem(label, val)
-        self._status_combo.setStyleSheet(combo_style)
+        self._status_combo.setStyleSheet(form_style)
+        self._status_combo.setMinimumWidth(120)
         self._status_combo.currentIndexChanged.connect(self._on_filter_changed)
         layout.addWidget(self._status_combo)
 
@@ -164,23 +174,16 @@ class ClaimSearchPage(QWidget):
         self._source_combo = QComboBox()
         for val, label in _SOURCE_OPTIONS:
             self._source_combo.addItem(label, val)
-        self._source_combo.setStyleSheet(combo_style)
+        self._source_combo.setStyleSheet(form_style)
+        self._source_combo.setMinimumWidth(120)
         self._source_combo.currentIndexChanged.connect(self._on_filter_changed)
         layout.addWidget(self._source_combo)
 
         # Text search
         self._search_input = QLineEdit()
         self._search_input.setPlaceholderText("بحث بالاسم أو رقم المطالبة...")
-        self._search_input.setStyleSheet(f"""
-            QLineEdit {{
-                background-color: white;
-                border: 1px solid {Colors.BORDER_DEFAULT};
-                border-radius: 6px;
-                padding: 4px 12px;
-                font-size: 12px;
-                min-width: 200px;
-            }}
-        """)
+        self._search_input.setStyleSheet(form_style)
+        self._search_input.setMinimumWidth(200)
         self._search_input.textChanged.connect(self._on_text_search)
         layout.addWidget(self._search_input)
 
