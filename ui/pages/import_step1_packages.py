@@ -151,6 +151,7 @@ class ImportStep1Packages(QWidget):
     package_selected = pyqtSignal(str)  # package_id
     upload_completed = pyqtSignal(str)  # package_id — auto-advance after upload
     new_packages_count = pyqtSignal(int)  # for notification badge
+    back_requested = pyqtSignal()
 
     def __init__(self, import_controller, parent=None):
         super().__init__(parent)
@@ -185,7 +186,7 @@ class ImportStep1Packages(QWidget):
         card_layout.setContentsMargins(24, 24, 24, 24)
         card_layout.setSpacing(16)
 
-        # Header row: title + refresh button
+        # Header row: title + back button
         header_row = QHBoxLayout()
         header_row.setSpacing(12)
 
@@ -201,23 +202,24 @@ class ImportStep1Packages(QWidget):
         self._last_update_label.setStyleSheet("color: #9CA3AF; background: transparent;")
         header_row.addWidget(self._last_update_label)
 
-        refresh_btn = QPushButton("تحديث")
-        refresh_btn.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
-        refresh_btn.setFixedSize(80, 32)
-        refresh_btn.setCursor(Qt.PointingHandCursor)
-        refresh_btn.setStyleSheet("""
+        back_btn = QPushButton("رجوع")
+        back_btn.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
+        back_btn.setFixedSize(80, 32)
+        back_btn.setCursor(Qt.PointingHandCursor)
+        back_btn.setStyleSheet("""
             QPushButton {
-                background-color: #F0F7FF;
-                color: #3890DF;
-                border: 1px solid #3890DF;
+                background-color: #F1F5F9;
+                color: #475569;
+                border: 1px solid #E2E8F0;
                 border-radius: 6px;
+                font-weight: 600;
             }
             QPushButton:hover {
-                background-color: #E3F2FD;
+                background-color: #E2E8F0;
             }
         """)
-        refresh_btn.clicked.connect(self.refresh)
-        header_row.addWidget(refresh_btn)
+        back_btn.clicked.connect(self.back_requested.emit)
+        header_row.addWidget(back_btn)
 
         card_layout.addLayout(header_row)
 

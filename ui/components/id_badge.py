@@ -35,7 +35,7 @@ class _MenuItem(QWidget):
         self._text = text
         self._hovered = False
 
-        self.setFixedHeight(36)
+        self.setFixedHeight(38)
         self.setCursor(QCursor(Qt.PointingHandCursor))
         self.setLayoutDirection(Qt.RightToLeft)
 
@@ -120,7 +120,7 @@ class _MenuItem(QWidget):
 
 ARROW_HEIGHT = 10
 ARROW_WIDTH = 16
-POPUP_WIDTH = 191
+POPUP_WIDTH = 220
 POPUP_RADIUS = 12
 SHADOW_MARGIN = 4
 
@@ -142,7 +142,7 @@ class _DropdownPopup(QWidget):
 
         self._layout = QVBoxLayout(self._container)
         self._layout.setContentsMargins(6, 8, 6, 8)
-        self._layout.setSpacing(2)
+        self._layout.setSpacing(4)
 
         self._items = []
 

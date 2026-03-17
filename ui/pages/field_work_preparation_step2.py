@@ -53,11 +53,22 @@ class FieldWorkPreparationStep2(QWidget):
             'team': None,
         }
 
-        # Load researchers from API
-        self._all_researchers = self._fetch_researchers_from_db()
-        self._researchers = list(self._all_researchers)
+        self._all_researchers = []
+        self._researchers = []
 
         self._setup_ui()
+
+        from ui.components.loading_spinner import LoadingSpinnerOverlay
+        self._spinner = LoadingSpinnerOverlay(self)
+
+        # Load researchers from API
+        self._spinner.show_loading("جاري تحميل الباحثين...")
+        try:
+            self._all_researchers = self._fetch_researchers_from_db()
+            self._researchers = list(self._all_researchers)
+            self._update_table()
+        finally:
+            self._spinner.hide_loading()
 
     def _fetch_researchers_from_db(self):
         """Fetch field collectors from BuildingAssignments API.

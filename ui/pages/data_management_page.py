@@ -792,6 +792,3 @@ class DataManagementPage(QWidget):
         for vocab_name in self._accordion_contents:
             self._populate_vocab_group(vocab_name)
 
-    def showEvent(self, event):
-        super().showEvent(event)
-        self.refresh()

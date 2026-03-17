@@ -323,10 +323,13 @@ class DashboardPage(QWidget):
         main_layout.setContentsMargins(0, 0, 0, 0)
         main_layout.addWidget(scroll)
 
+        from ui.components.loading_spinner import LoadingSpinnerOverlay
+        self._spinner = LoadingSpinnerOverlay(self)
+
     def refresh(self, data=None):
         """Refresh dashboard data."""
         logger.debug("Refreshing dashboard")
-
+        self._spinner.show_loading("جاري تحديث لوحة المعلومات...")
         try:
             # Get overview stats
             stats = self.dashboard_service.get_overview_stats()
@@ -351,6 +354,8 @@ class DashboardPage(QWidget):
 
         except Exception as e:
             logger.error(f"Error refreshing dashboard: {e}")
+        finally:
+            self._spinner.hide_loading()
 
     def _update_chart(self, chart: ChartPlaceholder, data: dict):
         """Update a chart with new data."""

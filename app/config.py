@@ -5,6 +5,7 @@ from pathlib import Path
 from dataclasses import dataclass
 from typing import Dict, Any, Optional
 import os
+import json
 
 # ============================================================================
 # Load .env file for local environment configuration
@@ -406,5 +407,43 @@ class AleppoDivisions:
         ("019", "Al-Shaar", "الشعار"),
         ("020", "Bustan al-Qasr", "بستان القصر"),
     ]
+
+
+# Local settings file (per-device, not synced via API)
+_SETTINGS_FILE = Config.DATA_DIR / "settings.json"
+_DEFAULT_TILE_PORT = 5000
+
+
+def load_local_settings() -> dict:
+    """Load local device settings from data/settings.json."""
+    try:
+        if _SETTINGS_FILE.exists():
+            with open(_SETTINGS_FILE, "r", encoding="utf-8") as f:
+                return json.load(f)
+    except Exception:
+        pass
+    return {}
+
+
+def save_local_settings(settings: dict):
+    """Save local device settings to data/settings.json."""
+    _SETTINGS_FILE.parent.mkdir(parents=True, exist_ok=True)
+    with open(_SETTINGS_FILE, "w", encoding="utf-8") as f:
+        json.dump(settings, f, indent=2, ensure_ascii=False)
+
+
+def get_tile_server_port() -> int:
+    """Get tile server port: settings.json > .env > default 5000."""
+    settings = load_local_settings()
+    if "tile_server_port" in settings:
+        return int(settings["tile_server_port"])
+    env_url = os.getenv("TILE_SERVER_URL", "")
+    if env_url:
+        try:
+            from urllib.parse import urlparse
+            return urlparse(env_url).port or _DEFAULT_TILE_PORT
+        except Exception:
+            pass
+    return _DEFAULT_TILE_PORT
 
 

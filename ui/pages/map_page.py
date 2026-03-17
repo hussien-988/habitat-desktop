@@ -559,7 +559,6 @@ class MapPage(QWidget):
                 border: 1px solid {Config.BORDER_COLOR};
                 border-radius: 6px;
                 font-size: {Config.FONT_SIZE_SMALL}pt;
-                direction: rtl;
             }}
         """)
         self.search_type_combo.currentIndexChanged.connect(self._on_search_type_changed)
@@ -575,7 +574,6 @@ class MapPage(QWidget):
                 border: 1px solid {Config.BORDER_COLOR};
                 border-radius: 6px;
                 font-size: {Config.FONT_SIZE_SMALL}pt;
-                direction: rtl;
             }}
             QLineEdit:focus {{
                 border-color: {Config.PRIMARY_COLOR};
@@ -593,7 +591,6 @@ class MapPage(QWidget):
                 border: 1px solid {Config.BORDER_COLOR};
                 border-radius: 6px;
                 font-size: {Config.FONT_SIZE_SMALL}pt;
-                direction: rtl;
             }}
             QListWidget::item {{
                 padding: 6px 8px;

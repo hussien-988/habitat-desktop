@@ -7,7 +7,7 @@ Pattern: Follows CompletedClaimsPage conventions (grid + cards + search).
 """
 
 from PyQt5.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
+    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton,
     QScrollArea, QSpacerItem, QSizePolicy, QFrame, QGridLayout,
     QComboBox
 )
@@ -94,6 +94,9 @@ class ClaimSearchPage(QWidget):
         main_layout.addWidget(self.content_area)
 
         self._show_empty_state()
+
+        from ui.components.loading_spinner import LoadingSpinnerOverlay
+        self._spinner = LoadingSpinnerOverlay(self)
 
     def _create_header(self) -> QWidget:
         header = QWidget()
@@ -194,14 +197,11 @@ class ClaimSearchPage(QWidget):
     # Data
     # ------------------------------------------------------------------
 
-    def showEvent(self, event):
-        super().showEvent(event)
-        self.refresh()
-
     def refresh(self, data=None):
         """Load claims from API using current filters."""
-        self._all_data = []
+        self._spinner.show_loading("جاري البحث عن المطالبات...")
         try:
+            self._all_data = []
             from controllers.claim_controller import ClaimController
             ctrl = ClaimController()
 
@@ -215,10 +215,13 @@ class ClaimSearchPage(QWidget):
             if result.success and result.data:
                 for dto in result.data:
                     self._all_data.append(self._map_summary_to_card(dto))
+
+            self._apply_text_filter()
         except Exception as e:
             logger.warning(f"Error loading claims: {e}")
-
-        self._apply_text_filter()
+            self._apply_text_filter()
+        finally:
+            self._spinner.hide_loading()
 
     @staticmethod
     def _map_summary_to_card(dto: dict) -> dict:

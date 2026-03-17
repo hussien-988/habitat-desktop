@@ -551,51 +551,6 @@ class ApplicantInfoStep(BaseStep):
         if not result.is_valid:
             return result
 
-        # Uniqueness: check full name via API
-        first = self.first_name.text().strip()
-        father = self.father_name.text().strip()
-        last = self.last_name.text().strip()
-        full_name = f"{first} {father} {last}"
-        existing_cp_id = self.context.get_data("contact_person_id") or ""
-        try:
-            from services.api_client import get_api_client
-            api = get_api_client()
-            response = api.get_persons(search=full_name, page_size=10)
-            persons = response.get("items", []) if isinstance(response, dict) else []
-            for p in persons:
-                p_id = p.get("id") or p.get("personId") or ""
-                if p_id == existing_cp_id:
-                    continue
-                p_first = p.get("firstNameArabic", "").strip()
-                p_father = p.get("fatherNameArabic", "").strip()
-                p_last = p.get("familyNameArabic", "").strip()
-                if p_first == first and p_father == father and p_last == last:
-                    self._set_err(self.first_name, self._first_name_error)
-                    result.add_error("هذا الاسم مسجل مسبقاً في النظام")
-                    return result
-        except Exception as e:
-            logger.warning(f"Name uniqueness check failed: {e}")
-
-        # Uniqueness: check national ID via API
-        if nid_text and len(nid_text) == 11:
-            try:
-                from services.api_client import get_api_client
-                api = get_api_client()
-                response = api.get_persons(national_id=nid_text, page_size=5)
-                persons = response.get("items", []) if isinstance(response, dict) else []
-                for p in persons:
-                    p_id = p.get("id") or p.get("personId") or ""
-                    if p_id == existing_cp_id:
-                        continue
-                    self._set_err(self.national_id, self._nid_error)
-                    result.add_error("الرقم الوطني مسجل مسبقاً")
-                    return result
-            except Exception as e:
-                logger.warning(f"National ID uniqueness check failed: {e}")
-
-        if not result.is_valid:
-            return result
-
         # 2. Require survey_id from previous step
         survey_id = self.context.get_data("survey_id")
         if not survey_id:

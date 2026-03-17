@@ -557,6 +557,22 @@ class LoginPage(QWidget):
             logo_label.setStyleSheet("color: #0072BC; background: transparent;")
 
         lay.addWidget(logo_label)
+
+        # Settings button (gear icon)
+        btn_settings = QPushButton("\u2699")
+        btn_settings.setObjectName("win_btn")
+        btn_settings.setFixedSize(46, 32)
+        btn_settings.setCursor(QCursor(Qt.PointingHandCursor))
+        btn_settings.setFocusPolicy(Qt.NoFocus)
+        btn_settings.setToolTip("إعدادات سيرفر الخريطة")
+        btn_settings.setStyleSheet("""
+            QPushButton {
+                font-size: 16px;
+            }
+        """)
+        btn_settings.clicked.connect(self._open_server_settings)
+        lay.addWidget(btn_settings)
+
         lay.addStretch(1)
 
         # Window control buttons - Figma specs: 46×32px each
@@ -601,6 +617,11 @@ class LoginPage(QWidget):
             self.titlebar.setGeometry(0, 0, self.width(), 33)  # Figma: 33px height
             self.titlebar.raise_()
         self._position_login_watermark()
+
+    def _open_server_settings(self):
+        """Open the server settings dialog."""
+        from ui.components.dialogs.server_settings_dialog import ServerSettingsDialog
+        ServerSettingsDialog.show_settings(parent=self)
 
     def _apply_password_style(self, icon_on_left: bool):
         self.password_input.setStyleSheet(f"""

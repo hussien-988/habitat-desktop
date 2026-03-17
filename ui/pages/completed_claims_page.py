@@ -112,13 +112,8 @@ class CompletedClaimsPage(QWidget):
 
         self._show_empty_state()
 
-    def showEvent(self, event):
-        super().showEvent(event)
-        # Debounce: skip if refresh was called in the last 500ms (navigate_to already called it)
-        import time
-        now = int(time.time() * 1000)
-        if now - self._last_refresh_ms > 500:
-            self.refresh()
+        from ui.components.loading_spinner import LoadingSpinnerOverlay
+        self._spinner = LoadingSpinnerOverlay(self)
 
     def _create_header(self):
         header = QWidget()
@@ -211,38 +206,41 @@ class CompletedClaimsPage(QWidget):
 
     def _load_claims(self):
         """Load claims from API based on active tab and all filters."""
-        self.claims_data = []
-        case_status = CASE_STATUS_OPEN if self._active_tab == "open" else CASE_STATUS_CLOSED
-        source = self._source_filter.currentData()
-        claim_number = self._search_input.text().strip()
-
+        self._spinner.show_loading("جاري تحميل المطالبات...")
         try:
-            from services.api_client import get_api_client
-            api = get_api_client()
+            self.claims_data = []
+            case_status = CASE_STATUS_OPEN if self._active_tab == "open" else CASE_STATUS_CLOSED
+            source = self._source_filter.currentData()
+            claim_number = self._search_input.text().strip()
 
-            if claim_number:
-                try:
-                    result = api.get_claim_by_number(claim_number)
-                    summaries = [result] if result else []
-                except Exception:
-                    summaries = []
-            else:
-                summaries = api.get_claims_summaries(
-                    claim_status=case_status,
-                    claim_source=source,
-                )
+            try:
+                from services.api_client import get_api_client
+                api = get_api_client()
 
-            # Enrich with building details
-            building_codes = {s.get("buildingCode", "") for s in summaries if s.get("buildingCode")}
-            self._enrich_buildings_cache(api, building_codes)
+                if claim_number:
+                    try:
+                        result = api.get_claim_by_number(claim_number)
+                        summaries = [result] if result else []
+                    except Exception:
+                        summaries = []
+                else:
+                    summaries = api.get_claims_summaries(
+                        claim_status=case_status,
+                        claim_source=source,
+                    )
 
-            for s in summaries:
-                self.claims_data.append(self._map_summary(s))
-            logger.info(f"Loaded {len(self.claims_data)} claims (status={case_status}, source={source})")
-        except Exception as e:
-            logger.warning(f"Error loading claims (status={case_status}): {e}")
+                building_codes = {s.get("buildingCode", "") for s in summaries if s.get("buildingCode")}
+                self._enrich_buildings_cache(api, building_codes)
 
-        self._apply_local_filter()
+                for s in summaries:
+                    self.claims_data.append(self._map_summary(s))
+                logger.info(f"Loaded {len(self.claims_data)} claims (status={case_status}, source={source})")
+            except Exception as e:
+                logger.warning(f"Error loading claims (status={case_status}): {e}")
+
+            self._apply_local_filter()
+        finally:
+            self._spinner.hide_loading()
 
     def _enrich_buildings_cache(self, api, building_codes):
         """Fetch building details for codes not yet cached."""

@@ -455,6 +455,9 @@ class FieldWorkPreparationStep1(QWidget):
         # Add stretch to push content to top
         main_layout.addStretch(1)
 
+        from ui.components.loading_spinner import LoadingSpinnerOverlay
+        self._spinner = LoadingSpinnerOverlay(self)
+
     def _create_footer(self):
         """Create footer with navigation buttons."""
         footer = QFrame()
@@ -1035,53 +1038,55 @@ class FieldWorkPreparationStep1(QWidget):
 
     def _load_buildings_from_api(self):
         """Load buildings from Backend API with current filters."""
-        filters = self.get_filters()
-
-        # Parse assignment status
-        has_active = None
-        assignment_val = filters.get('assignment_status')
-        if assignment_val == "false":
-            has_active = False
-        elif assignment_val == "true":
-            has_active = True
-
+        self._spinner.show_loading("جاري البحث عن المباني...")
         try:
-            api = get_api_client()
-            response = api.get_buildings_for_assignment(
-                community_code=filters['community'],
-                neighborhood_code=filters['neighborhood'],
-                has_active_assignment=has_active,
-                page=1,
-                page_size=500
-            )
+            filters = self.get_filters()
 
-            items = response.get("items", [])
-            buildings = [self._api_dto_to_building(item) for item in items]
+            has_active = None
+            assignment_val = filters.get('assignment_status')
+            if assignment_val == "false":
+                has_active = False
+            elif assignment_val == "true":
+                has_active = True
 
-            # Apply local text search on top of API results
-            search_text = self.building_search.text().lower().strip()
-            if search_text:
-                buildings = [
-                    b for b in buildings
-                    if search_text in (b.building_id.lower() if b.building_id else "")
-                ]
+            try:
+                api = get_api_client()
+                response = api.get_buildings_for_assignment(
+                    community_code=filters['community'],
+                    neighborhood_code=filters['neighborhood'],
+                    has_active_assignment=has_active,
+                    page=1,
+                    page_size=500
+                )
 
-            logger.info(f"Loaded {len(buildings)} buildings from API")
-            self.buildings_list.clear()
+                items = response.get("items", [])
+                buildings = [self._api_dto_to_building(item) for item in items]
 
-            if buildings:
-                self.empty_label.setVisible(False)
-                self.buildings_list.setVisible(True)
-                self.buildings_list.setFixedHeight(179)
-                self._populate_buildings_list(buildings)
-            else:
-                self.buildings_list.setVisible(False)
-                self.buildings_list.setFixedHeight(0)
-                self.empty_label.setVisible(True)
+                search_text = self.building_search.text().lower().strip()
+                if search_text:
+                    buildings = [
+                        b for b in buildings
+                        if search_text in (b.building_id.lower() if b.building_id else "")
+                    ]
 
-        except Exception as e:
-            logger.error(f"Failed to load buildings from API: {e}", exc_info=True)
-            self.buildings_list.clear()
+                logger.info(f"Loaded {len(buildings)} buildings from API")
+                self.buildings_list.clear()
+
+                if buildings:
+                    self.empty_label.setVisible(False)
+                    self.buildings_list.setVisible(True)
+                    self.buildings_list.setFixedHeight(179)
+                    self._populate_buildings_list(buildings)
+                else:
+                    self.buildings_list.setVisible(False)
+                    self.buildings_list.setFixedHeight(0)
+                    self.empty_label.setVisible(True)
+
+            except Exception as e:
+                logger.error(f"Failed to load buildings from API: {e}", exc_info=True)
+                self.buildings_list.clear()
+        finally:
+            self._spinner.hide_loading()
 
     def _api_dto_to_building(self, dto):
         """Convert API BuildingDto to Building object for UI."""
