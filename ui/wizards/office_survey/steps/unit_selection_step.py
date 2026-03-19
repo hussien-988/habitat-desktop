@@ -811,7 +811,7 @@ class UnitSelectionStep(BaseStep):
             self.context.is_new_unit = True
             self.context.new_unit_data = dialog.get_unit_data()
 
-            # CRITICAL: Use API-generated UUID (not the local one)
+            # Use API-generated UUID (not the local one)
             # dialog._created_unit_data contains the API response with the real UUID
             if hasattr(dialog, '_created_unit_data') and dialog._created_unit_data:
                 api_uuid = dialog._created_unit_data.get('id') or dialog._created_unit_data.get('unitUuid')

@@ -809,10 +809,14 @@ class PersonsPage(QWidget):
                     warning_msg = "تحذير: تم العثور على أشخاص مشابهين في قاعدة البيانات"
                     Toast.show_toast(self, warning_msg, Toast.WARNING)
             else:
-                error_msg = result.error
-                if hasattr(result, 'validation_errors') and result.validation_errors:
-                    error_msg += "\n" + "\n".join(result.validation_errors)
-                Toast.show_toast(self, f"فشل في إضافة الشخص: {error_msg}", Toast.ERROR)
+                error_msg = result.error or ""
+                if "مسجّل مسبقاً" in error_msg:
+                    from ui.error_handler import ErrorHandler
+                    ErrorHandler.show_warning(self, error_msg, "تحذير")
+                else:
+                    if hasattr(result, 'validation_errors') and result.validation_errors:
+                        error_msg += "\n" + "\n".join(result.validation_errors)
+                    Toast.show_toast(self, f"فشل في إضافة الشخص: {error_msg}", Toast.ERROR)
 
     def _edit_person(self, person: Person):
         """Edit existing person."""

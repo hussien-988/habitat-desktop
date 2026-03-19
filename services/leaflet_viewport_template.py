@@ -256,7 +256,7 @@ VIEWPORT_LOADING_JS_TEMPLATE = '''
                         var geomType = props.geometry_type || 'Point';
 
                         // Add to appropriate layer (points to cluster, polygons to group)
-                        if (geomType === 'Point') {
+                        if (feature.geometry.type === 'Point') {
                             currentMarkersCluster.addLayer(layer);
                         } else {
                             polygonsGroup.addLayer(layer);

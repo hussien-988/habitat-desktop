@@ -71,7 +71,7 @@ class TileServer(BaseHTTPRequestHandler):
         try:
             path = self.path.split('?')[0]
 
-            # DEBUG: Log ALL requests including tiles (temporarily for debugging)
+            # Log requests
             logger.info(f"Tile server request: {path}")
 
             if path == '/leaflet.js':

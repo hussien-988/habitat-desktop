@@ -138,6 +138,13 @@ class SurveyContext(WizardContext):
         self.is_new_unit = is_new
         self.update_data("unit_selected", True)
 
+    def get_all_persons_for_nid_check(self) -> List[Dict]:
+        """Get all persons including applicant for duplicate NID validation."""
+        all_persons = list(self.persons)
+        if self.applicant and self.applicant.get('national_id'):
+            all_persons.append(self.applicant)
+        return all_persons
+
     def add_person(self, person_data: Dict):
         """Add a person to the survey."""
         self.persons.append(person_data)

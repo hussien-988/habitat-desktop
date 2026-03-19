@@ -859,18 +859,15 @@ class MapPage(QWidget):
 
         if tile_bounds and len(tile_bounds) == 4:
             bbox = (tile_bounds[1], tile_bounds[0], tile_bounds[3], tile_bounds[2])
-            logger.info(f"Using tile metadata bounds for bbox: {bbox}")
         else:
             bbox = (Config.MAP_BOUNDS_MIN_LAT, Config.MAP_BOUNDS_MIN_LNG,
                     Config.MAP_BOUNDS_MAX_LAT, Config.MAP_BOUNDS_MAX_LNG)
 
-        # استخدام page_size محسّن = 2000 (زيادة من 1000)
-        # تمرير zoom_level للتحسينات المستقبلية
         logger.info(f"[MAP_PAGE] Requesting buildings with bbox: {bbox} | page_size=2000")
         result = self.map_controller.get_buildings_in_view(
             bbox=bbox,
-        page_size=2000, # محسّن: 2000 بدلاً من الافتراضي
-        zoom_level=15 # للتحسينات المستقبلية (polygon simplification)
+            page_size=2000,
+            zoom_level=15
         )
         logger.info(f"[MAP_PAGE] Result success: {result.success}, data count: {len(result.data) if result.success else 0}")
 
@@ -1088,7 +1085,7 @@ class MapPage(QWidget):
             # تحميل المباني في viewport
             result = self.map_controller.get_buildings_in_view(
                 bbox=bbox,
-                page_size=2000, # محسّن من المرحلة 1
+                page_size=2000,
                 zoom_level=viewport_data['zoom']
             )
 

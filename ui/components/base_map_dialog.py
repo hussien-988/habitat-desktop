@@ -747,7 +747,7 @@ class BaseMapDialog(QDialog):
             return
 
         try:
-            # FIX: Use stored auth token first, fallback to parent
+            # Use stored auth token first, fallback to parent
             auth_token = self._auth_token
 
             # Fallback: Get auth token from parent if not set

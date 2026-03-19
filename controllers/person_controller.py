@@ -110,6 +110,12 @@ class PersonController(BaseController):
             )
 
         except Exception as e:
+            from services.exceptions import ApiException
+            if isinstance(e, ApiException) and e.status_code == 409:
+                from services.error_mapper import build_duplicate_person_message
+                msg = build_duplicate_person_message(e.response_data)
+                self._emit_error("create_person", msg)
+                return OperationResult.fail(message=msg)
             error_msg = f"Error creating person: {str(e)}"
             self._emit_error("create_person", error_msg)
             return OperationResult.fail(message=error_msg)

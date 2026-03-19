@@ -37,7 +37,7 @@ class BuildingMapDialog(BaseMapDialog):
         self._is_view_only = read_only or bool(selected_building_id)  # Support explicit read_only
         self._buildings_cache = []  # Cache loaded buildings for quick lookup
 
-        # FIX: Use provided auth token first, fallback to parent window
+        # Use provided auth token first, fallback to parent window
         self._auth_token = auth_token
         if not self._auth_token:
             try:
@@ -67,7 +67,7 @@ class BuildingMapDialog(BaseMapDialog):
             title = "بحث على الخريطة"
             show_search = True
 
-        # FIX: Store auth token temporarily (BaseMapDialog.__init__ will overwrite it)
+        # Store auth token temporarily (BaseMapDialog.__init__ will overwrite it)
         temp_auth_token = self._auth_token
 
         # Initialize base dialog (clean design)
@@ -79,12 +79,11 @@ class BuildingMapDialog(BaseMapDialog):
             parent=parent
         )
 
-        # FIX: Restore auth token (BaseMapDialog.__init__ sets _auth_token = None)
-        # Now self._auth_token exists (from BaseMapDialog) - set it to our stored token
+        # Restore auth token after BaseMapDialog.__init__
         self._auth_token = temp_auth_token
         logger.debug(f"Auth token set in BaseMapDialog: {bool(self._auth_token)}")
 
-        # FIX: Set token in viewport loader to prevent 401 errors
+        # Set token in viewport loader
         if hasattr(self, '_viewport_loader') and self._viewport_loader:
             if self._viewport_loader.map_service and self._auth_token:
                 self._viewport_loader.map_service.set_auth_token(self._auth_token)
@@ -140,7 +139,7 @@ class BuildingMapDialog(BaseMapDialog):
                     logger.warning(f"API map loading failed: {e}")
                     QTimer.singleShot(1000, lambda: self._show_load_warning())
 
-                # CRITICAL: Cache buildings for selection lookup!
+                # Cache buildings for selection lookup
                 self._buildings_cache = buildings
                 logger.info(f"Cached {len(buildings)} buildings for selection")
 
@@ -150,7 +149,6 @@ class BuildingMapDialog(BaseMapDialog):
                     prefer_polygons=True
                 )
 
-            # DEBUG: Check if buildings were loaded
             import json
             geojson_data = json.loads(buildings_geojson) if isinstance(buildings_geojson, str) else buildings_geojson
             num_features = len(geojson_data.get('features', []))
@@ -185,7 +183,7 @@ class BuildingMapDialog(BaseMapDialog):
                     buildings = [self._fallback_building]
                     logger.info(f"Using fallback building object for GeoJSON (lat={self._fallback_building.latitude}, lon={self._fallback_building.longitude})")
 
-                # FIX: Add selected building to GeoJSON if not already present
+                # Add selected building to GeoJSON if not already present
                 if buildings and len(buildings) > 0:
                     from services.geojson_converter import GeoJSONConverter
                     selected_building_geojson = GeoJSONConverter.buildings_to_geojson(
