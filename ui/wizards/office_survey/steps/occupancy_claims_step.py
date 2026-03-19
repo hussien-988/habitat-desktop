@@ -261,7 +261,7 @@ class OccupancyClaimsStep(BaseStep):
 
         dialog = PersonDialog(
             person_data=None,
-            existing_persons=self.context.persons,
+            existing_persons=self.context.get_all_persons_for_nid_check(),
             parent=self,
             auth_token=auth_token,
             survey_id=survey_id,
@@ -335,7 +335,7 @@ class OccupancyClaimsStep(BaseStep):
 
         dialog = PersonDialog(
             person_data=person_data_copy,
-            existing_persons=self.context.persons,
+            existing_persons=self.context.get_all_persons_for_nid_check(),
             parent=self,
             auth_token=auth_token,
             survey_id=survey_id,

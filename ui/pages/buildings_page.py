@@ -113,7 +113,7 @@ class AddBuildingPage(QWidget):
 
     def _setup_ui(self):
         """Setup the add/edit building UI with 3 cards."""
-        # FIX: Wrap content in scroll area to show all cards including radio buttons
+        # Wrap content in scroll area to show all cards
         main_layout = QVBoxLayout(self)
         main_layout.setContentsMargins(0, 0, 0, 0)
         main_layout.setSpacing(0)
@@ -953,7 +953,7 @@ class AddBuildingPage(QWidget):
         layout.addWidget(card3)
         layout.addStretch()
 
-        # FIX: Set container in scroll area and add to main layout
+        # Set container in scroll area and add to main layout
         scroll.setWidget(container)
         main_layout.addWidget(scroll)
 

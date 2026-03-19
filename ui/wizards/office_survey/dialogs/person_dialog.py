@@ -1329,7 +1329,7 @@ class PersonDialog(QDialog):
         if field not in self._field_styles:
             self._field_styles[field] = field.styleSheet()
         field.setStyleSheet(self._input_error_style())
-        error_label.setText("!")
+        error_label.setText(message)
         error_label.setVisible(True)
 
     def _clear_field_error(self, field, error_label):
@@ -1466,44 +1466,57 @@ class PersonDialog(QDialog):
 
     def _go_to_tab2(self):
         """Tab 1 → Tab 2: Validate required fields + format check, then switch."""
-        import re
         if self.read_only:
             self.tab_widget.setCurrentIndex(1)
             return
         self._clear_all_errors()
-        has_error = False
+        from ui.components.toast import Toast
+
         first = self.first_name.text().strip()
         last = self.last_name.text().strip()
-        name_pattern = re.compile(r'^[\u0600-\u06FFa-zA-Z\s.\-\']{2,}$')
-        # Required: first_name
-        if not first:
-            self._set_field_error(self.first_name, self._first_name_error, tr("wizard.person_dialog.enter_first_name"))
-            has_error = True
-        elif not name_pattern.match(first):
-            self._set_field_error(self.first_name, self._first_name_error, tr("wizard.person_dialog.invalid_first_name"))
-            has_error = True
-        # Required: last_name
-        if not last:
-            self._set_field_error(self.last_name, self._last_name_error, tr("wizard.person_dialog.enter_last_name"))
-            has_error = True
-        elif not name_pattern.match(last):
-            self._set_field_error(self.last_name, self._last_name_error, tr("wizard.person_dialog.invalid_last_name"))
-            has_error = True
-        # Required: father_name
         father = self.father_name.text().strip()
-        if not father:
-            self._set_field_error(self.father_name, self._father_name_error, tr("wizard.person_dialog.enter_father_name"))
-            has_error = True
-        elif not name_pattern.match(father):
-            self._set_field_error(self.father_name, self._father_name_error, tr("wizard.person_dialog.invalid_father_name"))
-            has_error = True
-        # Optional format: national_id (only validate if filled)
-        if self.national_id.text().strip() and not self._validate_national_id():
-            self._set_field_error(self.national_id, self._nid_error, tr("wizard.person_dialog.nid_invalid"))
-            has_error = True
-        # ID photo is optional — removed requirement
-        if has_error:
+        mother = self.mother_name.text().strip()
+
+        if not first or len(first) < 2:
+            Toast.show_toast(self, tr("wizard.person_dialog.enter_first_name"), Toast.ERROR)
             return
+        if not last or len(last) < 2:
+            Toast.show_toast(self, tr("wizard.person_dialog.enter_last_name"), Toast.ERROR)
+            return
+        if not father or len(father) < 2:
+            Toast.show_toast(self, tr("wizard.person_dialog.enter_father_name"), Toast.ERROR)
+            return
+        if not mother or len(mother) < 2:
+            Toast.show_toast(self, tr("wizard.person_dialog.enter_mother_name"), Toast.ERROR)
+            return
+
+        nid = self.national_id.text().strip()
+        if nid:
+            if len(nid) != 11 or not nid.isdigit():
+                Toast.show_toast(self, tr("wizard.person_dialog.nid_invalid"), Toast.ERROR)
+                return
+
+            original_nid = self.person_data.get('national_id') if self.person_data else None
+            if nid != original_nid and self._api_service:
+                try:
+                    result = self._api_service.get_persons(national_id=nid, page_size=1)
+                    items = result.get("items", [])
+                    if items:
+                        from ui.error_handler import ErrorHandler
+                        name_parts = [
+                            items[0].get("firstNameArabic", ""),
+                            items[0].get("fatherNameArabic", ""),
+                            items[0].get("familyNameArabic", "")
+                        ]
+                        full_name = " ".join(p for p in name_parts if p)
+                        msg = "يوجد شخص مسجّل مسبقاً بنفس الرقم الوطني."
+                        if full_name:
+                            msg += f"\nالاسم: {full_name}"
+                        ErrorHandler.show_warning(self, msg, tr("common.warning"))
+                        return
+                except Exception:
+                    pass
+
         self.tab_widget.setCurrentIndex(1)
 
     def _go_to_tab3(self):
@@ -2329,18 +2342,18 @@ class PersonDialog(QDialog):
         return len(digits) == 7
 
     def _validate_national_id(self):
-        """Validate national ID. Returns True if valid or empty."""
+        """Validate national ID format and uniqueness. Returns (valid, error_key)."""
         nid = self.national_id.text().strip()
         if not nid:
-            return True
+            return True, None
         if len(nid) != 11 or not nid.isdigit():
-            return False
+            return False, "wizard.person_dialog.nid_invalid"
         for person in self.existing_persons:
             if person.get('national_id') == nid:
                 if self.editing_mode and self.person_data and person.get('person_id') == self.person_data.get('person_id'):
                     continue
-                return False
-        return True
+                return False, "wizard.person_dialog.nid_duplicate"
+        return True, None
 
     # Load / Save Data
 
@@ -2531,10 +2544,12 @@ class PersonDialog(QDialog):
             self._set_field_error(self.last_name, self._last_name_error, tr("wizard.person_dialog.enter_last_name"))
             has_error = True
         # Optional format checks
-        if self.national_id.text().strip() and not self._validate_national_id():
-            self._set_field_error(self.national_id, self._nid_error, tr("wizard.person_dialog.nid_invalid"))
-            self.tab_widget.setCurrentIndex(0)
-            has_error = True
+        if self.national_id.text().strip():
+            nid_valid, nid_error = self._validate_national_id()
+            if not nid_valid:
+                self._set_field_error(self.national_id, self._nid_error, tr(nid_error))
+                self.tab_widget.setCurrentIndex(0)
+                has_error = True
         if not self._validate_mobile(self.phone.text().strip()):
             self._set_field_error(self.phone, self._mobile_error, tr("wizard.person_dialog.invalid_mobile"))
             self.tab_widget.setCurrentIndex(1)
@@ -2587,6 +2602,13 @@ class PersonDialog(QDialog):
             has_error = True
             from ui.components.toast import Toast
             Toast.show_toast(self, "اسم الأم مطلوب", Toast.ERROR)
+
+        if self.national_id.text().strip():
+            nid_valid, nid_error = self._validate_national_id()
+            if not nid_valid:
+                self._set_field_error(self.national_id, self._nid_error, tr(nid_error))
+                self.tab_widget.setCurrentIndex(0)
+                has_error = True
 
         if has_error:
             return
@@ -2750,6 +2772,11 @@ class PersonDialog(QDialog):
                 self._api_person_id = person_id
 
             except Exception as e:
+                from services.exceptions import ApiException
+                if isinstance(e, ApiException) and e.status_code == 409:
+                    from services.error_mapper import build_duplicate_person_message
+                    ErrorHandler.show_warning(self, build_duplicate_person_message(e.response_data), tr("common.warning"))
+                    return
                 logger.error(f"Failed to create person via API: {e}")
                 ErrorHandler.show_error(
                     self, tr("wizard.person_dialog.create_failed", error_msg=map_exception(e)), tr("common.error")

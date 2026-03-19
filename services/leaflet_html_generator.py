@@ -88,10 +88,10 @@ class LeafletHTMLGenerator:
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>خريطة حلب - UN-Habitat</title>
-    <link rel="stylesheet" href="{tile_server_url}/leaflet.css" />
+    <link rel="stylesheet" href="{local_assets_url}/leaflet.css" />
     {clustering_css}
     {drawing_css}
-    <script src="{tile_server_url}/leaflet.js"></script>
+    <script src="{local_assets_url}/leaflet.js"></script>
     {clustering_js}
     {drawing_js}
     <script src="qrc:///qtwebchannel/qwebchannel.js"></script>
@@ -128,7 +128,8 @@ class LeafletHTMLGenerator:
         boundary_level,
         places_json,
         landmarks_json,
-        streets_json
+        streets_json,
+        local_assets_url=local_assets_url
     )}
 </body>
 </html>
@@ -597,7 +598,8 @@ class LeafletHTMLGenerator:
         boundary_level: str = None,
         places_json: str = None,
         landmarks_json: str = None,
-        streets_json: str = None
+        streets_json: str = None,
+        local_assets_url: str = ''
     ) -> str:
         """Get JavaScript code for map initialization."""
         import json
@@ -707,8 +709,7 @@ class LeafletHTMLGenerator:
 
         return f'''
     <script>
-        // Fix Leaflet icon paths for local serving
-        L.Icon.Default.imagePath = '{tile_server_url}/images/';
+        L.Icon.Default.imagePath = '{local_assets_url}/images/';
 
         // Initialize map centered on Aleppo with zoom constraints
         // preferCanvas for faster rendering

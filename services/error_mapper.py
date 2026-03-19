@@ -170,6 +170,20 @@ def sanitize_user_message(msg: str) -> str:
     return fallback
 
 
+def build_duplicate_person_message(response_data: dict) -> str:
+    """Build Arabic warning message from 409 duplicate national ID response."""
+    msg = "يوجد شخص مسجّل مسبقاً بنفس الرقم الوطني."
+    conflict = (response_data or {}).get("conflictData", {})
+    if conflict:
+        first = conflict.get("firstNameArabic", "")
+        father = conflict.get("fatherNameArabic", "")
+        family = conflict.get("familyNameArabic", "")
+        full_name = " ".join(part for part in [first, father, family] if part)
+        if full_name:
+            msg += f"\nالاسم: {full_name}"
+    return msg
+
+
 def _extract_validation_details(response_data: dict) -> str:
     """Extract validation error details from API response."""
     if not response_data:

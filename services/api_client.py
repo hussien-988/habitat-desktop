@@ -384,19 +384,9 @@ class TRRCMSApiClient:
         logger.debug(f"Fetching buildings in polygon: page={page}, pageSize={page_size}")
         response = self._request("POST", "/v1/Buildings/polygon", json_data=payload)
 
-        # API returns: {"buildings": [...], "totalCount": N, "page": 1, ...}
         buildings = response.get("buildings", [])
         total_count = response.get("totalCount", 0)
-
-        logger.info(f"Fetched {len(buildings)} buildings (total: {total_count}) from polygon API")
-
-        if buildings:
-            sample = buildings[0]
-            has_geometry_wkt = "buildingGeometryWkt" in sample
-            logger.debug(f"[API Response] Sample building keys: {list(sample.keys())[:10]}")
-            logger.debug(f"[API Response] Has 'buildingGeometryWkt': {has_geometry_wkt}")
-            if has_geometry_wkt and sample.get("buildingGeometryWkt"):
-                logger.debug(f"[API Response] Sample WKT: {sample.get('buildingGeometryWkt')[:80]}...")
+        logger.info(f"Fetched {len(buildings)} buildings in polygon (totalCount={total_count})")
 
         return buildings
 

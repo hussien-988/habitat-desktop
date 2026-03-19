@@ -84,7 +84,7 @@ class MapServiceAPI:
             if building_data.get("buildingGeometryWkt"):
                 polygon = GeoPolygon.from_wkt(building_data["buildingGeometryWkt"])
 
-            # CRITICAL FIX: Try 'buildingCode' first (BuildingAssignments API), then 'buildingId'
+            # Try 'buildingCode' first (BuildingAssignments API), then 'buildingId'
             building_id = building_data.get("buildingCode") or building_data.get("buildingId", "")
 
             return BuildingGeoData(
@@ -295,7 +295,7 @@ class MapServiceAPI:
             for dto in map_dtos:
                 building = Building()
                 building.building_uuid = dto.get("id")
-                # CRITICAL FIX: Try 'buildingCode' first (BuildingAssignments API), then 'buildingId'
+                # Try 'buildingCode' first (BuildingAssignments API), then 'buildingId'
                 building.building_id = dto.get("buildingCode") or dto.get("buildingId")
                 building.latitude = dto.get("latitude")
                 building.longitude = dto.get("longitude")
@@ -752,7 +752,7 @@ class MapServiceAPI:
         if data.get("buildingGeometryWkt"):
             polygon = GeoPolygon.from_wkt(data["buildingGeometryWkt"])
 
-        # CRITICAL FIX: Try 'buildingCode' first (BuildingAssignments API), then 'buildingId'
+        # Try 'buildingCode' first (BuildingAssignments API), then 'buildingId'
         building_id = data.get("buildingCode") or data.get("buildingId", "")
 
         return BuildingGeoData(

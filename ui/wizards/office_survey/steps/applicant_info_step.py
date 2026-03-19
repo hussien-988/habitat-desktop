@@ -529,7 +529,7 @@ class ApplicantInfoStep(BaseStep):
             result.add_error("رقم الهاتف الثابت يجب أن يكون 7 أرقام")
 
         nid_text = self.national_id.text().strip()
-        if nid_text and len(nid_text) != 11:
+        if nid_text and (len(nid_text) != 11 or not nid_text.isdigit()):
             self._set_err(self.national_id, self._nid_error)
             result.add_error("الرقم الوطني يجب أن يكون 11 رقماً")
 
@@ -558,8 +558,13 @@ class ApplicantInfoStep(BaseStep):
                     response.get("id") or response.get("contactPersonId", "")
                 )
             except Exception as e:
-                logger.error(f"Contact person API failed: {e}")
-                result.add_error("فشل حفظ بيانات مقدم الطلب. يرجى المحاولة مجدداً.")
+                from services.exceptions import ApiException
+                if isinstance(e, ApiException) and e.status_code == 409:
+                    from services.error_mapper import build_duplicate_person_message
+                    result.add_error(build_duplicate_person_message(e.response_data))
+                else:
+                    logger.error(f"Contact person API failed: {e}")
+                    result.add_error("فشل حفظ بيانات مقدم الطلب. يرجى المحاولة مجدداً.")
         else:
             logger.info(f"Contact person already exists: {existing_cp_id}, skipping creation")
 

@@ -472,7 +472,7 @@ class PolygonMapDialog(BaseMapDialog):
             buildings_in_polygon = []
             for i, building_data in enumerate(buildings_data):
                 try:
-                    # DEBUG: Log first building's raw data
+                    # Log first building's raw data
                     if i == 0:
                         logger.info(f"First building raw data from API:")
                         logger.info(f"   Keys: {list(building_data.keys())[:10]}")
