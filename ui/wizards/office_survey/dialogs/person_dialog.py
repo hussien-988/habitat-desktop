@@ -287,6 +287,7 @@ class PersonDialog(QDialog):
 
         # Tab 3 fields
         self.rel_type_combo.currentIndexChanged.connect(self._update_all_progress)
+        self.rel_type_combo.currentIndexChanged.connect(self._on_claim_type_changed)
         self.ownership_share.textChanged.connect(self._update_all_progress)
         self.evidence_type.currentIndexChanged.connect(self._update_all_progress)
         self.evidence_desc.textChanged.connect(self._update_all_progress)
@@ -455,7 +456,8 @@ class PersonDialog(QDialog):
         self.birth_year_combo.setLayoutDirection(Qt.LeftToRight)
         self.birth_year_combo.setStyleSheet(self._input_style())
         self.birth_year_combo.addItem("--", None)
-        for y in range(2010, 1919, -1):
+        from datetime import datetime as _dt
+        for y in range(_dt.now().year, 1919, -1):
             self.birth_year_combo.addItem(str(y), y)
 
         self.birth_month_combo = QComboBox()
@@ -687,6 +689,7 @@ class PersonDialog(QDialog):
         self.ownership_share.setValidator(QDoubleValidator(0, 100, 2, self))
         self.ownership_share.editingFinished.connect(self._clamp_ownership_share)
         self.ownership_share.setStyleSheet(self._input_style())
+        self.ownership_share.setEnabled(False)
         self._ownership_error = QLabel("")
         self._ownership_error.setStyleSheet(self._error_label_style())
         self._ownership_error.setVisible(False)
@@ -1813,30 +1816,72 @@ class PersonDialog(QDialog):
             layout.addWidget(widget)
 
     def _create_existing_doc_widget(self, display_name: str, entry: dict) -> QWidget:
-        """Create a small widget showing an existing doc name with a remove button."""
-        from PyQt5.QtWidgets import QHBoxLayout
-        widget = QWidget()
-        widget.setFixedHeight(32)
-        widget.setStyleSheet("background: #ECFDF5; border: 1px solid #A7F3D0; border-radius: 4px;")
-        h = QHBoxLayout(widget)
-        h.setContentsMargins(6, 2, 6, 2)
-        h.setSpacing(4)
+        """Create a thumbnail widget for an existing server document with preview."""
+        import os
+        from PyQt5.QtGui import QDesktopServices
+        from utils.helpers import download_evidence_file
 
-        name_lbl = QLabel(display_name)
-        name_lbl.setStyleSheet("font-size: 10px; color: #065F46; border: none; background: transparent;")
-        h.addWidget(name_lbl)
+        evidence_id = entry.get('evidence_id', '')
+        local_path = download_evidence_file(evidence_id, display_name) if evidence_id else None
 
-        remove_btn = QPushButton("✕")
-        remove_btn.setFixedSize(18, 18)
-        remove_btn.setStyleSheet("""
-            QPushButton { background: #FEE2E2; color: #991B1B; border: none;
-                border-radius: 9px; font-size: 10px; font-weight: bold; }
-            QPushButton:hover { background: #FECACA; }
+        container = QWidget()
+        container.setFixedSize(48, 48)
+        container.setStyleSheet("border: none; background: transparent;")
+
+        thumb = QLabel(container)
+        thumb.setFixedSize(44, 44)
+        thumb.move(4, 4)
+        thumb.setAlignment(Qt.AlignCenter)
+        thumb.setStyleSheet("""
+            QLabel {
+                border: 1px solid #A7F3D0;
+                border-radius: 6px;
+                background-color: #ECFDF5;
+            }
         """)
-        remove_btn.setCursor(Qt.PointingHandCursor)
-        remove_btn.clicked.connect(lambda: self._remove_existing_doc(entry))
-        h.addWidget(remove_btn)
-        return widget
+        thumb.setCursor(Qt.PointingHandCursor)
+
+        if local_path and os.path.exists(local_path):
+            pixmap = QPixmap(local_path)
+            if not pixmap.isNull():
+                thumb.setPixmap(pixmap.scaled(40, 40, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+            else:
+                ext = display_name.rsplit(".", 1)[-1].lower() if "." in display_name else ""
+                if ext == "pdf":
+                    thumb.setText("PDF")
+                    thumb.setStyleSheet(thumb.styleSheet() + "color: #E53E3E; font-size: 11px; font-weight: bold;")
+                else:
+                    thumb.setText("DOC")
+                    thumb.setStyleSheet(thumb.styleSheet() + "color: #065F46; font-size: 11px; font-weight: bold;")
+            def _open_file(e, fp=local_path):
+                QDesktopServices.openUrl(QUrl.fromLocalFile(fp))
+            thumb.mousePressEvent = _open_file
+        else:
+            thumb.setText("...")
+            thumb.setStyleSheet(thumb.styleSheet() + "color: #065F46; font-size: 11px; font-weight: bold;")
+            thumb.setToolTip(display_name)
+
+        x_btn = QLabel(container)
+        x_btn.setFixedSize(18, 18)
+        x_btn.move(0, 0)
+        x_btn.setText("✕")
+        x_btn.setAlignment(Qt.AlignCenter)
+        x_btn.setStyleSheet("""
+            QLabel {
+                background-color: rgba(60, 60, 60, 180);
+                color: white;
+                border-radius: 9px;
+                font-size: 10px;
+                font-weight: bold;
+                border: none;
+            }
+        """)
+        x_btn.setCursor(Qt.PointingHandCursor)
+        def _remove(e, ent=entry):
+            self._remove_existing_doc(ent)
+        x_btn.mousePressEvent = _remove
+
+        return container
 
     def _remove_existing_doc(self, entry: dict):
         """Remove a selected existing document (just unlink, don't delete from server)."""
@@ -2227,6 +2272,14 @@ class PersonDialog(QDialog):
         return None
 
     # Validation
+
+    def _on_claim_type_changed(self):
+        """Enable ownership share only when claim type is Owner (1)."""
+        is_owner = self.rel_type_combo.currentData() == 1
+        self.ownership_share.setEnabled(is_owner)
+        if not is_owner:
+            self.ownership_share.clear()
+            self._clear_field_error(self.ownership_share, self._ownership_error)
 
     def _clamp_ownership_share(self):
         """Clamp ownership share to 0-100 range on focus out."""

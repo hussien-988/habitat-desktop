@@ -572,6 +572,16 @@ class MainWindow(QMainWindow):
             if page and hasattr(page, 'configure_for_role'):
                 page.configure_for_role(user.role)
 
+        cases_page = self.pages.get(Pages.CASES)
+        if cases_page and hasattr(cases_page, 'configure_for_user'):
+            cases_page.configure_for_user(user.role, str(user.user_id))
+
+        # Load field assignment filter data (requires valid API token)
+        if Pages.FIELD_ASSIGNMENT in self.pages:
+            field_page = self.pages[Pages.FIELD_ASSIGNMENT]
+            if hasattr(field_page, 'load_data'):
+                field_page.load_data()
+
         # Resume repainting - user sees the final state directly
         self.setUpdatesEnabled(True)
 
@@ -850,16 +860,6 @@ class MainWindow(QMainWindow):
                             if aid:
                                 api_assignment_ids.append(aid)
 
-                # Initiate transfer to tablets
-                if api_assignment_ids:
-                    try:
-                        api.initiate_transfer(
-                            api_assignment_ids,
-                            field_collector_id=researcher_id
-                        )
-                        logger.info(f"Transfer initiated for {len(api_assignment_ids)} assignments")
-                    except Exception as transfer_err:
-                        logger.warning(f"initiate_transfer failed: {transfer_err}")
             except Exception as api_err:
                 logger.error(f"API assignment creation failed: {api_err}")
                 Toast.show_toast(
@@ -869,46 +869,13 @@ class MainWindow(QMainWindow):
                 )
                 return
 
-            # Create local building_assignments records for transfer tracking
-            assignment_ids = []
-            try:
-                from services.assignment_service import AssignmentService
-                svc = AssignmentService(db=self.db)
-                current_user_id = getattr(self.current_user, 'user_id', None) if self.current_user else None
-
-                revisit_map = {r['building_id']: r.get('reason', '') for r in revisit_buildings}
-
-                for building in buildings:
-                    bid = (
-                        getattr(building, 'building_id', None)
-                        or building.get('building_id', '') if isinstance(building, dict) else building.building_id
-                    )
-                    is_revisit = bid in revisit_map
-                    reason = revisit_map.get(bid)
-                    try:
-                        assignment = svc.create_assignment(
-                            building_id=bid,
-                            field_team_name=researcher_id,
-                            assigned_by=current_user_id,
-                            requires_revisit=is_revisit,
-                            revisit_reason=reason,
-                            notes=assignment_notes
-                        )
-                        assignment_ids.append(assignment.assignment_id)
-                    except Exception as local_err:
-                        logger.warning(f"Could not create local assignment for {bid}: {local_err}")
-            except Exception as e:
-                logger.warning(f"Could not create local assignment records: {e}")
-
-            # Show success toast
             Toast.show_toast(
                 self,
                 f"تم إسناد {building_count} مبنى إلى {researcher_name}",
                 Toast.SUCCESS
             )
 
-            # Prefer API assignment IDs over local ones
-            effective_ids = api_assignment_ids if api_assignment_ids else assignment_ids
+            effective_ids = api_assignment_ids
 
             # Reset wizard and navigate to sync data page
             if Pages.FIELD_ASSIGNMENT in self.pages:
@@ -1210,22 +1177,8 @@ class MainWindow(QMainWindow):
             if hasattr(self, '_api_token') and self._api_token:
                 self.office_survey_wizard.set_auth_token(self._api_token)
 
-            # Determine the furthest step with data (resume from where user stopped)
-            resume_step = 0
-            if new_context.building:
-                resume_step = 1
-            if new_context.applicant:
-                resume_step = 2
-            if new_context.unit:
-                resume_step = 3
-            if new_context.households:
-                resume_step = 4
-            if new_context.persons:
-                resume_step = 4
-            if new_context.claim_data:
-                resume_step = 5  # review step
+            resume_step = result.data.get("resume_step", 1)
 
-            # Navigate directly to resume step (skip validation, don't reset)
             self.office_survey_wizard.navigator.goto_step(resume_step, skip_validation=True)
 
             self.navigate_to("office_survey_wizard")
@@ -1369,9 +1322,9 @@ class MainWindow(QMainWindow):
     def _on_survey_saved_draft(self, survey_id: str):
         """Handle survey saved as draft."""
         logger.info(f"Survey saved as draft: {survey_id}")
-        # Refresh the draft list
         if hasattr(self.pages.get(Pages.CASES), 'refresh'):
             self.pages[Pages.CASES].refresh()
+        self.navigate_to(Pages.CASES)
 
     def toggle_language(self):
         """Show language dialog and apply selection."""

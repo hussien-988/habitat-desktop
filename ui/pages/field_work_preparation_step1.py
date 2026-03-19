@@ -161,11 +161,14 @@ class FieldWorkPreparationStep1(QWidget):
         self._all_neighborhoods = []  # [(code, name_ar, community_code), ...]
 
         self._setup_ui()
-        self._load_filter_data()
 
         # Install event filter to detect clicks outside suggestions
         from PyQt5.QtWidgets import QApplication
         QApplication.instance().installEventFilter(self)
+
+    def load_data(self):
+        """Load filter data from API (call after login)."""
+        self._load_filter_data()
 
     def _setup_ui(self):
         """Setup UI - content only (no header/footer)."""
@@ -597,6 +600,7 @@ class FieldWorkPreparationStep1(QWidget):
                     border: 1px solid {Colors.BORDER_DEFAULT};
                     background-color: white;
                     selection-background-color: #EFF6FF;
+                    selection-color: #6c757d;
                     color: #6c757d;
                     font-family: 'IBM Plex Sans Arabic';
                     font-size: 9pt;
@@ -604,6 +608,14 @@ class FieldWorkPreparationStep1(QWidget):
                 }}
                 QComboBox QAbstractItemView::item {{
                     padding: 8px 12px;
+                    color: #6c757d;
+                }}
+                QComboBox QAbstractItemView::item:hover {{
+                    background-color: #EFF6FF;
+                    color: #6c757d;
+                }}
+                QComboBox QAbstractItemView::item:selected {{
+                    background-color: #EFF6FF;
                     color: #6c757d;
                 }}
                 QScrollBar:vertical {{
@@ -649,6 +661,7 @@ class FieldWorkPreparationStep1(QWidget):
                     border: 1px solid {Colors.BORDER_DEFAULT};
                     background-color: white;
                     selection-background-color: #EFF6FF;
+                    selection-color: #6c757d;
                     color: #6c757d;
                     font-family: 'IBM Plex Sans Arabic';
                     font-size: 9pt;
@@ -656,6 +669,14 @@ class FieldWorkPreparationStep1(QWidget):
                 }}
                 QComboBox QAbstractItemView::item {{
                     padding: 8px 12px;
+                    color: #6c757d;
+                }}
+                QComboBox QAbstractItemView::item:hover {{
+                    background-color: #EFF6FF;
+                    color: #6c757d;
+                }}
+                QComboBox QAbstractItemView::item:selected {{
+                    background-color: #EFF6FF;
                     color: #6c757d;
                 }}
                 QScrollBar:vertical {{
@@ -679,7 +700,9 @@ class FieldWorkPreparationStep1(QWidget):
         try:
             api = get_api_client()
 
-            # Load communities (Aleppo: gov=01, dist=01, subdist=01)
+            self._all_communities = []
+            self._all_neighborhoods = []
+
             communities = api.get_communities(
                 governorate_code="01", district_code="01", sub_district_code="01"
             )
@@ -691,12 +714,13 @@ class FieldWorkPreparationStep1(QWidget):
                         self._all_communities.append((code, name_ar))
             self._all_communities.sort(key=lambda x: x[1])
 
-            # Populate community combo
+            self.community_combo.blockSignals(True)
+            self.community_combo.clear()
             self.community_combo.addItem("الكل", None)
             for code, name_ar in self._all_communities:
                 self.community_combo.addItem(name_ar, code)
+            self.community_combo.blockSignals(False)
 
-            # Load all neighborhoods (Aleppo)
             neighborhoods = api.get_neighborhoods(
                 governorate_code="01", district_code="01", subdistrict_code="01"
             )
@@ -708,7 +732,7 @@ class FieldWorkPreparationStep1(QWidget):
                     self._all_neighborhoods.append((code, name_ar, comm_code))
             self._all_neighborhoods.sort(key=lambda x: x[1])
 
-            # Populate neighborhood combo (all initially)
+            self.neighborhood_combo.clear()
             self.neighborhood_combo.addItem("الكل", None)
             for code, name_ar, _ in self._all_neighborhoods:
                 self.neighborhood_combo.addItem(name_ar, code)
@@ -1052,20 +1076,9 @@ class FieldWorkPreparationStep1(QWidget):
             self.buildings_list.setItemWidget(item, widget)
 
     def _on_filter_changed(self):
-        """Handle filter change — calls API directly."""
-        filters = self.get_filters()
-        logger.debug(f"Filters changed: {filters}")
-
-        has_active_filter = any([
-            filters['community'],
-            filters['neighborhood'],
-            filters['assignment_status'] is not None
-        ])
-
-        if has_active_filter or filters['search_text']:
-            self._load_buildings_from_api()
-        else:
-            self.buildings_list.clear()
+        """Handle filter change — clears results, user must click search to load."""
+        self.buildings_list.clear()
+        self._set_suggestions_visible(False)
 
     def _on_search(self):
         """Handle search icon click - show suggestions with filtered results."""

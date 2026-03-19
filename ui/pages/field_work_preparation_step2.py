@@ -129,36 +129,6 @@ class FieldWorkPreparationStep2(QWidget):
             except Exception as fallback_err:
                 logger.warning(f"Fallback to Users API also failed: {fallback_err}")
 
-        # Last resort: load from local database
-        try:
-            from repositories.database import Database
-            db = Database()
-            rows = db.fetch_all(
-                "SELECT user_id, username, full_name, full_name_ar "
-                "FROM users WHERE role IN ('field_researcher', 'data_collector') AND is_active = 1"
-            )
-            researchers = []
-            for row in rows:
-                uid = row.get('user_id') or row.get('username') or ''
-                display = row.get('full_name_ar') or row.get('full_name') or row.get('username') or uid
-                if uid:
-                    researchers.append({
-                        'id': uid,
-                        'display_name': display,
-                        'username': row.get('username', ''),
-                        'is_available': True,
-                        'active_assignments': 0,
-                        'pending_transfers': 0,
-                        'total_units': 0,
-                        'tablet_id': None,
-                        'team_name': None,
-                    })
-            if researchers:
-                logger.info(f"Loaded {len(researchers)} researchers from local DB")
-                return researchers
-        except Exception as db_err:
-            logger.warning(f"Local DB fallback also failed: {db_err}")
-
         return []
 
     def _setup_ui(self):
@@ -388,6 +358,7 @@ class FieldWorkPreparationStep2(QWidget):
         researchers = self._researchers
         total = len(researchers)
 
+        self.table.setRowCount(0)
         self.table.setRowCount(max(total, 1))
         self.table.clearSpans()
 
@@ -467,6 +438,12 @@ class FieldWorkPreparationStep2(QWidget):
             self.table.setItem(row, 4, team_item)
 
         self.count_label.setText(f"{total} نتيجة")
+
+        if self._selected_researcher:
+            selected_id = self._selected_researcher['id']
+            if not any(r['id'] == selected_id for r in researchers):
+                self._selected_researcher = None
+                self._selected_radio = None
 
     def _on_cell_clicked(self, row, col):
         """Handle clicking on a table row — select the radio in that row."""

@@ -71,15 +71,15 @@ class LeafletHTMLGenerator:
         Returns:
             Complete HTML string ready for QWebEngineView
         """
-        # إضافة Leaflet.draw إذا كان الرسم مفعلاً
-        drawing_css = f'<link rel="stylesheet" href="{tile_server_url}/leaflet-draw.css" />' if enable_drawing else ''
-        drawing_js = f'<script src="{tile_server_url}/leaflet-draw.js"></script>' if enable_drawing else ''
+        from services.tile_server_manager import get_local_server_url
+        local_assets_url = get_local_server_url()
 
-        # إضافة Leaflet.markercluster للـ clustering (محلي - offline بالكامل)
+        drawing_css = f'<link rel="stylesheet" href="{local_assets_url}/leaflet-draw.css" />' if enable_drawing else ''
+        drawing_js = f'<script src="{local_assets_url}/leaflet-draw.js"></script>' if enable_drawing else ''
         clustering_css = f'''
-    <link rel="stylesheet" href="{tile_server_url}/MarkerCluster.css" />
-    <link rel="stylesheet" href="{tile_server_url}/MarkerCluster.Default.css" />'''
-        clustering_js = f'<script src="{tile_server_url}/leaflet.markercluster.js"></script>'
+    <link rel="stylesheet" href="{local_assets_url}/MarkerCluster.css" />
+    <link rel="stylesheet" href="{local_assets_url}/MarkerCluster.Default.css" />'''
+        clustering_js = f'<script src="{local_assets_url}/leaflet.markercluster.js"></script>'
 
         html = f'''
 <!DOCTYPE html>
@@ -1245,6 +1245,7 @@ class LeafletHTMLGenerator:
 
         var boundaryLayer = L.geoJSON(boundaryData, {{
             style: boundaryStyle,
+            interactive: false,
             onEachFeature: function(feature, layer) {{
                 var p = feature.properties;
                 var nameAr = p.NAME_AR || p.ADM3_AR || p.ADM4_AR || p.name_ar || '';

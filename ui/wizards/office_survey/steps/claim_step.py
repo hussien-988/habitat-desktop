@@ -523,6 +523,20 @@ class ClaimStep(BaseStep):
                 }
             """)
 
+    def _fetch_evidence_count(self) -> int:
+        """Fetch evidence count from the API."""
+        survey_id = self.context.get_data("survey_id")
+        if not survey_id:
+            return 0
+        try:
+            from services.api_client import get_api_client
+            api = get_api_client()
+            evidences = api.get_survey_evidences(survey_id)
+            return len(evidences)
+        except Exception as e:
+            logger.warning(f"Failed to fetch evidence count: {e}")
+            return 0
+
     def _evaluate_for_claim(self):
         """Evaluate relations for claim creation and populate from API response if available."""
         if hasattr(self.context, 'finalize_response') and self.context.finalize_response:
@@ -647,6 +661,8 @@ class ClaimStep(BaseStep):
 
         # Update status bar
         evidence_count = data_summary.get('evidenceCount', 0)
+        if not evidence_count:
+            evidence_count = self._fetch_evidence_count()
         reason = response.get('claimNotCreatedReason', '')
 
         if evidence_count > 0:
@@ -681,11 +697,7 @@ class ClaimStep(BaseStep):
         tenants = [r for r in self.context.relations if r.get('relation_type') in ('tenant', 3)]
         occupants = [r for r in self.context.relations if r.get('relation_type') in ('occupant', 2)]
 
-        total_evidences = sum(len(r.get('evidences', [])) for r in self.context.relations)
-        # Also check person data for uploaded tenure documents (not reflected in relations)
-        if total_evidences == 0:
-            for person in self.context.persons:
-                total_evidences += len(person.get('_relation_uploaded_files', []))
+        total_evidences = self._fetch_evidence_count()
 
         if self.context.unit:
             unit = self.context.unit
@@ -844,11 +856,9 @@ class ClaimStep(BaseStep):
             for rel in self.context.relations:
                 all_evidences.extend(rel.get('evidences', []))
 
-            # Also count uploaded tenure documents from person data
             evidence_count = len(all_evidences)
-            if evidence_count == 0:
-                for person in self.context.persons:
-                    evidence_count += len(person.get('_relation_uploaded_files', []))
+            if not evidence_count:
+                evidence_count = self._fetch_evidence_count()
 
             # Use stored raw API data if available, otherwise use defaults
             raw = getattr(card, '_claim_raw_data', {}) or {}

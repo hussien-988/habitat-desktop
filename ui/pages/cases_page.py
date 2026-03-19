@@ -58,10 +58,18 @@ class CasesPage(QWidget):
         self._active_tab = "draft"  # "draft" or "finalized"
         self._buildings_cache: Dict[str, object] = {}
         self._last_refresh_ms = 0
+        self._user_role = None
+        self._user_id = None
         self._search_timer = QTimer(self)
         self._search_timer.setSingleShot(True)
         self._search_timer.timeout.connect(self._load_surveys)
         self._setup_ui()
+
+    def configure_for_user(self, role: str, user_id: str):
+        """Set user context for filtering surveys by ownership."""
+        self._user_role = role
+        self._user_id = user_id
+
     # UI Setup
 
     def _setup_ui(self):
@@ -210,6 +218,7 @@ class CasesPage(QWidget):
             try:
                 from controllers.survey_controller import SurveyController
                 ctrl = SurveyController(self.db)
+                clerk_id = self._user_id if self._user_role == "office_clerk" else None
                 result = ctrl.load_office_surveys(
                     status=status,
                     page=1,
@@ -217,6 +226,7 @@ class CasesPage(QWidget):
                     sort_by="SurveyDate",
                     sort_direction="desc",
                     contact_person_name=name,
+                    clerk_id=clerk_id,
                 )
                 if result.success and result.data:
                     building_ids = {s.get("buildingId", "") for s in result.data if s.get("buildingId")}

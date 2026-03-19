@@ -147,10 +147,6 @@ class OccupancyClaimsStep(BaseStep):
         table_layout.addLayout(header)
         table_layout.addSpacing(12)
 
-        self._applicant_section = self._build_applicant_section()
-        self._applicant_section.setVisible(False)
-        table_layout.addWidget(self._applicant_section)
-
         # Scroll area for person cards
         scroll_area = QScrollArea()
         scroll_area.setLayoutDirection(Qt.RightToLeft)
@@ -241,140 +237,6 @@ class OccupancyClaimsStep(BaseStep):
 
         return container
 
-    def _build_applicant_section(self) -> QFrame:
-        """Build the applicant card shown at top of persons list."""
-        frame = QFrame()
-        frame.setObjectName("ApplicantSection")
-        frame.setStyleSheet("""
-            QFrame#ApplicantSection {
-                background-color: #EFF6FF;
-                border: 1px solid #BFDBFE;
-                border-radius: 10px;
-            }
-            QFrame#ApplicantSection QLabel { border: none; background: transparent; }
-        """)
-        row = QHBoxLayout(frame)
-        row.setContentsMargins(12, 10, 12, 10)
-        row.setSpacing(10)
-
-        text_col = QVBoxLayout()
-        text_col.setSpacing(2)
-        self._applicant_name_lbl = QLabel("")
-        self._applicant_name_lbl.setFont(create_font(size=12, weight=FontManager.WEIGHT_SEMIBOLD))
-        self._applicant_name_lbl.setStyleSheet(f"color: {Colors.WIZARD_TITLE};")
-        self._applicant_name_lbl.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
-        self._applicant_nid_lbl = QLabel("")
-        self._applicant_nid_lbl.setFont(create_font(size=10, weight=FontManager.WEIGHT_REGULAR))
-        self._applicant_nid_lbl.setStyleSheet(f"color: #64748B;")
-        self._applicant_nid_lbl.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
-        text_col.addWidget(self._applicant_name_lbl)
-        text_col.addWidget(self._applicant_nid_lbl)
-
-        self._link_applicant_btn = QPushButton(tr("wizard.occupancy_claims.link_applicant"))
-        self._link_applicant_btn.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
-        self._link_applicant_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #3B82F6; color: white;
-                border: none; border-radius: 6px; padding: 8px 16px;
-            }
-            QPushButton:hover { background-color: #2563EB; }
-        """)
-        self._link_applicant_btn.clicked.connect(self._add_applicant_as_person)
-
-        badge = QLabel(tr("wizard.occupancy_claims.applicant_badge"))
-        badge.setStyleSheet("""
-            QLabel {
-                background-color: #3B82F6; color: white;
-                border-radius: 4px; padding: 2px 8px;
-                font-size: 10px; font-weight: 600;
-            }
-        """)
-
-        row.addLayout(text_col)
-        row.addStretch()
-        row.addWidget(badge)
-        row.addWidget(self._link_applicant_btn)
-        return frame
-
-    def _refresh_applicant_section(self):
-        """Show/hide the applicant card based on context state."""
-        if not self.context.applicant:
-            self._applicant_section.setVisible(False)
-            return
-        contact_person_id = self.context.get_data('contact_person_id')
-        applicant_nid = self.context.applicant.get('national_id', '')
-        already_added = any(
-            p.get('_is_applicant')
-            or (contact_person_id and p.get('person_id') == contact_person_id)
-            or (applicant_nid and p.get('national_id') == applicant_nid)
-            for p in self.context.persons
-        )
-        if already_added:
-            self._applicant_section.setVisible(False)
-            return
-        applicant = self.context.applicant
-        name = " ".join(filter(None, [
-            applicant.get('first_name_ar', ''),
-            applicant.get('father_name_ar', ''),
-            applicant.get('last_name_ar', ''),
-        ]))
-        nid = applicant.get('national_id', '')
-        self._applicant_name_lbl.setText(name or "—")
-        self._applicant_nid_lbl.setText(f"رقم وطني: {nid}" if nid else "")
-        self._applicant_section.setVisible(True)
-
-    def _add_applicant_as_person(self):
-        """Open PersonDialog pre-filled with applicant data (relation entry only)."""
-        applicant = self.context.applicant
-        if not applicant:
-            return
-
-        contact_person_id = self.context.get_data('contact_person_id')
-        auth_token, survey_id, household_id, unit_id = self._get_context_ids()
-
-        person_data = {
-            'person_id': contact_person_id or str(uuid.uuid4()),
-            'first_name': applicant.get('first_name_ar') or '',
-            'father_name': applicant.get('father_name_ar') or '',
-            'last_name': applicant.get('last_name_ar') or '',
-            'mother_name': applicant.get('mother_name_ar') or '',
-            'national_id': applicant.get('national_id') or '',
-            'gender': applicant.get('gender'),
-            'nationality': applicant.get('nationality'),
-            'phone': applicant.get('phone') or '',
-            'email': applicant.get('email') or '',
-            'landline': applicant.get('landline') or '',
-        }
-
-        dialog = PersonDialog(
-            person_data=person_data,
-            existing_persons=self.context.persons,
-            parent=self,
-            auth_token=auth_token,
-            survey_id=survey_id,
-            household_id=household_id,
-            unit_id=unit_id,
-            existing_person_mode=True,
-            initial_tab=2,
-        )
-        if dialog.exec_() != QDialog.Accepted:
-            return
-
-        result_data = dialog.get_person_data()
-        result_data['person_id'] = contact_person_id or dialog.get_api_person_id() or person_data['person_id']
-        result_data['_is_applicant'] = True
-        rel_id = dialog.get_api_relation_id()
-        if rel_id:
-            result_data['_relation_id'] = rel_id
-        rel_files = dialog.get_relation_uploaded_files()
-        if rel_files:
-            result_data['_relation_uploaded_files'] = rel_files
-
-        self.context.persons.append(result_data)
-        self.context.finalize_response = None
-        self._refresh_persons_list()
-        logger.info(f"Applicant added as person: {result_data.get('first_name')} {result_data.get('last_name')}")
-
     def _get_context_ids(self):
         """Get survey_id, household_id, unit_id, and auth_token from context."""
         auth_token = None
@@ -392,19 +254,6 @@ class OccupancyClaimsStep(BaseStep):
             unit_id = self.context.new_unit_data.get('unit_uuid')
 
         return auth_token, survey_id, household_id, unit_id
-
-    def _is_applicant_added(self) -> bool:
-        """Check if applicant is already added as a person."""
-        if not self.context.applicant:
-            return True
-        contact_person_id = self.context.get_data('contact_person_id')
-        applicant_nid = self.context.applicant.get('national_id', '')
-        return any(
-            p.get('_is_applicant')
-            or (contact_person_id and p.get('person_id') == contact_person_id)
-            or (applicant_nid and p.get('national_id') == applicant_nid)
-            for p in self.context.persons
-        )
 
     def _add_person(self):
         """Open PersonDialog directly to add a new person."""
@@ -454,11 +303,13 @@ class OccupancyClaimsStep(BaseStep):
 
         auth_token, survey_id, household_id, unit_id = self._get_context_ids()
 
-        is_applicant = person_data.get('_is_applicant', False)
+        is_applicant = person_data.get('_is_applicant', False) or person_data.get('_is_contact_person', False)
         if not is_applicant:
             contact_person_id = self.context.get_data('contact_person_id')
             if contact_person_id and person_data.get('person_id') == contact_person_id:
                 is_applicant = True
+        if not is_applicant and not person_data.get('_household_id'):
+            is_applicant = True
         has_relation = bool(
             person_data.get('person_role')
             or person_data.get('relationship_type')
@@ -480,6 +331,8 @@ class OccupancyClaimsStep(BaseStep):
             if id_photos:
                 person_data_copy['_uploaded_files'] = id_photos
 
+        is_finalized = self.context.status == "finalized"
+
         dialog = PersonDialog(
             person_data=person_data_copy,
             existing_persons=self.context.persons,
@@ -490,9 +343,10 @@ class OccupancyClaimsStep(BaseStep):
             unit_id=unit_id,
             existing_person_mode=open_as_existing,
             initial_tab=initial_tab,
+            read_only=is_finalized,
         )
 
-        if dialog.exec_() == QDialog.Accepted:
+        if dialog.exec_() == QDialog.Accepted and not is_finalized:
             updated_data = dialog.get_person_data()
             updated_data['person_id'] = person_id
 
@@ -509,13 +363,14 @@ class OccupancyClaimsStep(BaseStep):
                 if person_id:
                     try:
                         self._set_auth_token()
-                        if is_applicant:
-                            logger.info(f"Applicant {person_id} updated locally (not a household member)")
+                        if is_applicant and survey_id:
+                            self._api_service.update_contact_person(
+                                survey_id, person_id, updated_data)
                         elif survey_id and household_id:
                             self._api_service.update_person_in_survey(
                                 survey_id, household_id, person_id, updated_data)
                         else:
-                            self._api_service.update_person(person_id, updated_data)
+                            logger.warning(f"Missing survey_id or household_id for person {person_id}")
                         logger.info(f"Person {person_id} updated via API")
                         relation_id = updated_data.get('_relation_id') or person_data.get('_relation_id')
                         if relation_id and survey_id:
@@ -572,50 +427,6 @@ class OccupancyClaimsStep(BaseStep):
             self.context.finalize_response = None
             self._refresh_persons_list()
             logger.info(f"Person updated: {updated_data.get('first_name', '')} {updated_data.get('last_name', '')}")
-
-    def _delete_person(self, person_id: str):
-        """Delete a person with confirmation."""
-        person = next((p for p in self.context.persons if p.get('person_id') == person_id), None)
-        if not person:
-            return
-
-        has_relation = bool(
-            person.get('_relation_id')
-            or person.get('person_role')
-            or person.get('relationship_type')
-            or person.get('relation_data', {}).get('rel_type')
-        )
-
-        if has_relation:
-            if not ErrorHandler.confirm(
-                self,
-                tr("wizard.person.delete_with_relations_confirm"),
-                tr("common.warning")
-            ):
-                return
-            self.context.relations = [r for r in self.context.relations if r.get('person_id') != person_id]
-        else:
-            if not ErrorHandler.confirm(
-                self,
-                tr("wizard.person.delete_confirm"),
-                tr("wizard.confirm.cancel_title")
-            ):
-                return
-
-        if person_id:
-            try:
-                self._set_auth_token()
-                self._api_service.delete_person(person_id)
-                logger.info(f"Person {person_id} deleted from API")
-            except Exception as e:
-                logger.error(f"Failed to delete person from API: {e}")
-                ErrorHandler.show_error(self, map_exception(e), tr("common.error"))
-                return
-
-        self.context.persons = [p for p in self.context.persons if p['person_id'] != person_id]
-        self.context.finalize_response = None
-        self._refresh_persons_list()
-        logger.info(f"Person {person_id} deleted")
 
     def _create_person_row_card(self, person: dict, index: int = 0) -> QFrame:
         """Create a person row card with name, role, and action menu."""
@@ -735,10 +546,6 @@ class OccupancyClaimsStep(BaseStep):
         view_action = menu.addAction(eye_icon, tr("wizard.occupancy_claims.view"))
         view_action.triggered.connect(lambda _, pid=person['person_id']: self._view_person(pid))
 
-        delete_icon = QIcon(str(Config.IMAGES_DIR / "delete.png"))
-        delete_action = menu.addAction(delete_icon, tr("wizard.occupancy_claims.delete"))
-        delete_action.triggered.connect(lambda _, pid=person['person_id']: self._delete_person(pid))
-
         menu_btn.clicked.connect(lambda: menu.exec_(menu_btn.mapToGlobal(menu_btn.rect().bottomRight())))
 
         card_layout.addLayout(right_group)
@@ -763,8 +570,6 @@ class OccupancyClaimsStep(BaseStep):
         for idx, person in enumerate(self.context.persons):
             person_card = self._create_person_row_card(person, idx)
             self.persons_table_layout.insertWidget(idx, person_card)
-
-        self._refresh_applicant_section()
 
     def _collect_relations_from_persons(self) -> List[Dict[str, Any]]:
         """Collect relation data from person records (stored in relation_data)."""
@@ -959,7 +764,6 @@ class OccupancyClaimsStep(BaseStep):
         self._title_label.setText(tr("wizard.occupancy_claims.title"))
         self._subtitle_label.setText(tr("wizard.occupancy_claims.subtitle"))
         self._add_person_btn.setText(tr("wizard.occupancy_claims.add_person"))
-        self._link_applicant_btn.setText(tr("wizard.occupancy_claims.link_applicant"))
         self._refresh_persons_list()
 
     def validate(self) -> StepValidationResult:
@@ -1055,7 +859,6 @@ class OccupancyClaimsStep(BaseStep):
         self._enrich_persons_with_server_evidences()
         self._auto_relink_orphaned_persons()
         self._refresh_persons_list()
-        self._refresh_applicant_section()
 
     def _auto_relink_orphaned_persons(self):
         """Re-create relations for persons that lost them after unit change.
@@ -1077,7 +880,13 @@ class OccupancyClaimsStep(BaseStep):
         logger.info(f"Found {len(orphaned)} persons without relations, auto-relinking to unit {unit_id}")
         self._set_auth_token()
 
+        contact_person_id = self.context.get_data('contact_person_id')
         for person in orphaned:
+            if person.get('_is_contact_person') or person.get('_is_applicant'):
+                continue
+            if contact_person_id and person.get('person_id') == contact_person_id:
+                continue
+
             person_id = person['person_id']
             rel_data = person.get('relation_data', {})
             rel_type = rel_data.get('rel_type') or person.get('person_role') or person.get('relationship_type')

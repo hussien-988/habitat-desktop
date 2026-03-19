@@ -407,34 +407,19 @@ class ClaimController(BaseController):
                          or claim_dto.get("survey_id"))
             result["survey_id"] = survey_id
 
-            # Evidences — prefer relation-specific endpoint when relation_id is available
+            # Evidences — use evidenceIds from claim DTO + get_evidence_by_id()
             relation_id = hint_relation_id or claim_dto.get("sourceRelationId")
-            if survey_id and relation_id:
-                try:
-                    result["evidences"] = self._api.get_relation_evidences(
-                        survey_id, relation_id)
-                except Exception as e:
-                    is_403 = hasattr(e, 'status_code') and e.status_code == 403
-                    if is_403:
-                        logger.debug(f"Evidence access denied (not survey owner): {survey_id}")
-                        result["evidence_access_denied"] = True
-                    else:
-                        logger.warning(f"Failed to fetch relation evidences: {e}")
-                        try:
-                            result["evidences"] = self._api.get_survey_evidences(survey_id)
-                        except Exception as e2:
-                            logger.warning(f"Failed to fetch survey evidences: {e2}")
-                            if hasattr(e2, 'status_code') and e2.status_code == 403:
-                                result["evidence_access_denied"] = True
-            elif survey_id:
-                try:
-                    result["evidences"] = self._api.get_survey_evidences(survey_id)
-                except Exception as e:
-                    if hasattr(e, 'status_code') and e.status_code == 403:
-                        logger.debug(f"Evidence access denied (not survey owner): {survey_id}")
-                        result["evidence_access_denied"] = True
-                    else:
-                        logger.warning(f"Failed to fetch evidences: {e}")
+            evidence_ids = claim_dto.get("evidenceIds") or []
+            if evidence_ids:
+                evidences = []
+                for eid in evidence_ids:
+                    try:
+                        ev = self._api.get_evidence_by_id(eid)
+                        if ev:
+                            evidences.append(ev)
+                    except Exception as e:
+                        logger.warning(f"Failed to fetch evidence {eid}: {e}")
+                result["evidences"] = evidences
 
             return OperationResult.ok(data=result)
         except Exception as e:
@@ -612,7 +597,7 @@ class ClaimController(BaseController):
             "floor_number": dto.get("floorNumber", 0),
             "unit_type": dto.get("unitType", 0),
             "apartment_status": dto.get("status") or dto.get("unitStatus", 0),
-            "apartment_number": str(dto.get("numberOfRooms", 0)),
+            "apartment_number": str(dto.get("numberOfRooms") or 0),
             "area_sqm": dto.get("areaSquareMeters") or dto.get("areaSqm", 0),
             "property_description": dto.get("description", ""),
         }
@@ -634,6 +619,8 @@ class ClaimController(BaseController):
             "person_role": relation_dto.get("relationType", ""),
             "relationship_type": relation_dto.get("relationType", ""),
             "_relation_id": relation_dto.get("id", ""),
+            "_is_contact_person": bool(person_dto.get("isContactPerson")),
+            "_household_id": person_dto.get("householdId"),
         }
 
     @staticmethod

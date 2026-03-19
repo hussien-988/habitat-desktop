@@ -467,9 +467,12 @@ class UnitSelectionStep(BaseStep):
             if child.widget():
                 child.widget().deleteLater()
 
-        # Load units for THIS building only
-        logger.info(f"Loading units for building: {building_uuid}")
-        result = self.unit_controller.get_units_for_building(building_uuid)
+        survey_id = self.context.get_data("survey_id")
+        logger.info(f"Loading units for building: {building_uuid}, survey: {survey_id}")
+        if survey_id:
+            result = self.unit_controller.get_units_for_survey(survey_id)
+        else:
+            result = self.unit_controller.get_units_for_building(building_uuid)
 
         if not result.success:
             logger.error(f"Failed to load units: {result.message}")
@@ -882,10 +885,10 @@ class UnitSelectionStep(BaseStep):
                 return result
             else:
                 # Unit changed - cleanup relations
-                logger.info(f"Unit changed ({previous_unit_id} -> {current_unit_id}), cleaning up relations")
+                logger.info(f"Unit changed ({previous_unit_id} -> {current_unit_id}), patching relations")
                 cleaned = False
                 try:
-                    self.context.cleanup_on_unit_change(self._api_service)
+                    self.context.cleanup_on_unit_change(self._api_service, new_unit_id=current_unit_id)
                     cleaned = True
                 except Exception as e:
                     logger.warning(f"API cleanup failed, doing local cleanup: {e}")

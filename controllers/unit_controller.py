@@ -341,8 +341,38 @@ class UnitController(BaseController):
             return OperationResult.ok(data=units)
 
         except Exception as e:
+            logger.warning(f"API units fetch failed: {e}, trying local DB")
+            try:
+                from repositories.unit_repository import UnitRepository
+                from repositories.database import Database
+                units = UnitRepository(Database()).get_by_building(building_uuid)
+                if units:
+                    self._units_cache = units
+                    self._emit_completed("get_units_for_building", True)
+                    self.units_loaded.emit(units)
+                    return OperationResult.ok(data=units)
+            except Exception as e2:
+                logger.warning(f"Local DB fallback failed: {e2}")
             error_msg = f"Error getting units for building: {str(e)}"
             self._emit_error("get_units_for_building", error_msg)
+            return OperationResult.fail(message=error_msg)
+
+    def get_units_for_survey(self, survey_id: str) -> OperationResult[List[PropertyUnit]]:
+        """Get units for a building via survey-scoped endpoint."""
+        try:
+            self._emit_started("get_units_for_survey")
+            units_data = self._api_service.get_survey_property_units(survey_id)
+            if isinstance(units_data, list):
+                units = [self._api_dto_to_unit(dto) for dto in units_data]
+            else:
+                units = [self._api_dto_to_unit(dto) for dto in units_data.get("items", units_data.get("propertyUnits", []))]
+            self._units_cache = units
+            self._emit_completed("get_units_for_survey", True)
+            self.units_loaded.emit(units)
+            return OperationResult.ok(data=units)
+        except Exception as e:
+            error_msg = f"Error getting units for survey: {str(e)}"
+            self._emit_error("get_units_for_survey", error_msg)
             return OperationResult.fail(message=error_msg)
 
     def search_units(self, search_text: str) -> OperationResult[List[PropertyUnit]]:

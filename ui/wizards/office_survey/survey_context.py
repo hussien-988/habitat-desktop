@@ -199,24 +199,39 @@ class SurveyContext(WizardContext):
                     "claims_count", "created_claims"):
             self.update_data(key, None)
 
-    def cleanup_on_unit_change(self, api_client) -> None:
-        """Partial cleanup when unit changes. Deletes relations only.
-        Persons and household stay (they belong to the survey/household)."""
+    def cleanup_on_unit_change(self, api_client, new_unit_id: str = None) -> None:
+        """Update relations when unit changes. Uses PATCH to preserve evidence."""
         survey_id = self.get_data("survey_id")
         if not survey_id:
             return
 
-        self._delete_relations_from_api(api_client, survey_id)
+        if new_unit_id:
+            self._patch_relations_unit(api_client, survey_id, new_unit_id)
+        else:
+            self._delete_relations_from_api(api_client, survey_id)
+            for person in self.persons:
+                person['_relation_id'] = None
+            self.relations = []
 
-        for person in self.persons:
-            person['_relation_id'] = None
-
-        self.relations = []
         self.claims = []
         self.finalize_response = None
         for key in ("unit_linked", "linked_unit_uuid",
                     "claims_count", "created_claims"):
             self.update_data(key, None)
+
+    def _patch_relations_unit(self, api_client, survey_id: str, new_unit_id: str) -> None:
+        """PATCH each relation to point to the new unit."""
+        for person in self.persons:
+            relation_id = person.get('_relation_id')
+            if not relation_id:
+                continue
+            try:
+                api_client.update_relation(survey_id, relation_id, {
+                    'propertyUnitId': new_unit_id
+                })
+                logger.info(f"Relation {relation_id} patched to unit {new_unit_id}")
+            except Exception as e:
+                logger.warning(f"Failed to patch relation {relation_id}: {e}")
 
     def _delete_relations_from_api(self, api_client, survey_id: str) -> None:
         """Delete all person-unit relations from API."""

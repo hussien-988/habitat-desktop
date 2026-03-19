@@ -46,7 +46,7 @@ class ReviewStep(BaseStep):
     edit_requested = pyqtSignal(int)  # Emits step index to edit
 
     def __init__(self, context: SurveyContext, parent=None, read_only=False):
-        self._read_only = False
+        self._read_only = read_only
         super().__init__(context, parent)
 
         # Initialize API service for finalizing survey
@@ -825,7 +825,7 @@ class ReviewStep(BaseStep):
             if unit:
                 unit_num = str(unit.unit_number or unit.apartment_number or "-")
                 floor = str(unit.floor_number) if unit.floor_number is not None else "-"
-                rooms = str(unit.apartment_number) if unit.apartment_number else "-"
+                rooms = str(unit.apartment_number) if unit.apartment_number and str(unit.apartment_number) != "0" else "-"
                 if unit.area_sqm:
                     try:
                         area = tr("wizard.unit.area_format", value=f"{float(unit.area_sqm):.2f}")
@@ -1095,6 +1095,8 @@ class ReviewStep(BaseStep):
         elif self.context.new_unit_data:
             unit_id = self.context.new_unit_data.get('unit_uuid')
 
+        is_finalized = self._read_only or self.context.status == "finalized"
+
         dialog = PersonDialog(
             person_data=person,
             existing_persons=self.context.persons,
@@ -1102,32 +1104,35 @@ class ReviewStep(BaseStep):
             auth_token=auth_token,
             survey_id=survey_id,
             household_id=household_id,
-            unit_id=unit_id
+            unit_id=unit_id,
+            read_only=is_finalized
         )
 
-        if dialog.exec_() == QDialog.Accepted:
+        if dialog.exec_() == QDialog.Accepted and not is_finalized:
             updated_data = dialog.get_person_data()
             person_id = person.get('person_id')
             updated_data['person_id'] = person_id
 
             # Detect applicant (contact person - not a household member)
-            is_applicant = person.get('_is_applicant', False)
+            is_applicant = person.get('_is_applicant', False) or person.get('_is_contact_person', False)
             if not is_applicant:
                 contact_person_id = self.context.get_data('contact_person_id')
                 if contact_person_id and person_id == contact_person_id:
                     is_applicant = True
+            if not is_applicant and not person.get('_household_id'):
+                is_applicant = True
 
-            # Update person via API
             if person_id:
                 try:
                     self._set_auth_token()
-                    if is_applicant:
-                        logger.info(f"Applicant {person_id} updated locally (not a household member)")
+                    if is_applicant and survey_id:
+                        self._api_service.update_contact_person(
+                            survey_id, person_id, updated_data)
                     elif survey_id and household_id:
                         self._api_service.update_person_in_survey(
                             survey_id, household_id, person_id, updated_data)
                     else:
-                        self._api_service.update_person(person_id, updated_data)
+                        logger.warning(f"Missing survey_id or household_id for person {person_id}")
                     logger.info(f"Person {person_id} updated via API from review step")
 
                     relation_id = updated_data.get('_relation_id') or person.get('_relation_id')
@@ -1263,6 +1268,14 @@ class ReviewStep(BaseStep):
         if not evidence_count:
             evidence_ids = claim_data.get('evidence_ids', [])
             evidence_count = len(evidence_ids) if evidence_ids else 0
+        if not evidence_count:
+            survey_id = self.context.get_data("survey_id")
+            if survey_id:
+                try:
+                    from services.api_client import get_api_client
+                    evidence_count = len(get_api_client().get_survey_evidences(survey_id))
+                except Exception:
+                    pass
         has_evidence = evidence_count > 0
 
         eval_label = QLabel()
