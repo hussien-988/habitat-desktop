@@ -908,6 +908,29 @@ class OfficeSurveyWizard(BaseWizard):
                 confirm_style="danger"
             )
             if confirmed:
+                survey_id = self.context.get_data("survey_id")
+                if survey_id:
+                    try:
+                        from services.api_client import get_api_client
+                        api = get_api_client()
+                        api.cancel_survey(survey_id, "User returned to building selection")
+                        logger.info(f"Survey {survey_id} cancelled (user returned to building selection)")
+                    except Exception as e:
+                        logger.warning(f"Failed to cancel survey {survey_id}: {e}")
+                    for key in ("survey_id", "survey_data", "survey_building_uuid",
+                                "contact_person_id", "household_id",
+                                "applicant_household_person_id"):
+                        self.context.update_data(key, None)
+                    self.context.applicant = None
+                    self.context.unit = None
+                    self.context.is_new_unit = False
+                    self.context.new_unit_data = None
+                    self.context.households = []
+                    self.context.persons = []
+                    self.context.relations = []
+                    self.context.claims = []
+                    self.context.claim_data = None
+                    self.context.finalize_response = None
                 self.navigator.previous_step()
             return
 

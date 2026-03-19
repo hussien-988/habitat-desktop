@@ -185,9 +185,17 @@ class FieldWorkPreparationPage(QWidget):
 
         self.current_step = 0
 
+    def load_data(self):
+        """Load filter data for step 1 (call after login)."""
+        if self.step1:
+            self.step1.load_data()
+
     def _on_back(self):
         """Handle back button."""
-        if self.current_step > 0 and self.current_step < 3:
+        if self.current_step == 3:
+            self.refresh()
+            return
+        if self.current_step > 0:
             self.current_step -= 1
             self.step_container.setCurrentIndex(self.current_step)
             self._update_navigation()
@@ -198,6 +206,8 @@ class FieldWorkPreparationPage(QWidget):
             # Moving from Step 1 to Step 2
             selected_buildings = self.step1.get_selected_buildings()
             if not selected_buildings:
+                from PyQt5.QtWidgets import QMessageBox
+                QMessageBox.warning(self, "تنبيه", "يرجى تحديد مبنى واحد على الأقل")
                 return
 
             # Create Step 2 if not exists
@@ -219,6 +229,8 @@ class FieldWorkPreparationPage(QWidget):
             researcher = self.step2.get_selected_researcher()
             buildings = self.step1.get_selected_buildings()
             if not researcher:
+                from PyQt5.QtWidgets import QMessageBox
+                QMessageBox.warning(self, "تنبيه", "يرجى اختيار جامع بيانات ميداني")
                 return
 
             # Rebuild step3 each time (fresh data)
@@ -331,11 +343,17 @@ class FieldWorkPreparationPage(QWidget):
         self.step_container.setCurrentIndex(0)
         self._update_navigation()
 
-        # Reload step 1 data
-        if hasattr(self.step1, '_load_buildings'):
-            self.step1._selected_building_ids.clear()
-            self.step1._confirmed_building_ids.clear()
-            self.step1._load_buildings()
+        # Clear step 1 selections
+        self.step1._selected_building_ids.clear()
+        self.step1._confirmed_building_ids.clear()
+        while self.step1.selected_table_layout.count():
+            item = self.step1.selected_table_layout.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+        self.step1.buildings_list.clear()
+        self.step1._set_suggestions_visible(False)
+        self.step1._update_selection_count()
+        self.step1._update_selected_card_visibility()
 
         # Reload filter data (communities/neighborhoods) if not yet loaded
         if hasattr(self.step1, '_load_filter_data') and not self.step1._all_communities:

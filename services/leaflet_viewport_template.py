@@ -187,20 +187,24 @@ VIEWPORT_LOADING_JS_TEMPLATE = '''
                 }
 
                 // Create marker cluster group for points
-                // محدّث: نفس إعدادات المرحلة 1 (محسّنة)
-                currentMarkersCluster = L.markerClusterGroup({
-                    maxClusterRadius: 60,
-                    spiderfyOnMaxZoom: true,
-                    showCoverageOnHover: false,
-                    zoomToBoundsOnClick: true,
-                    disableClusteringAtZoom: 15,
-                    chunkedLoading: true,
-                    chunkInterval: 100,
-                    chunkDelay: 25,
-                    removeOutsideVisibleBounds: true,
-                    animate: true,
-                    animateAddingMarkers: false
-                });
+                if (typeof L.markerClusterGroup === 'function') {
+                    currentMarkersCluster = L.markerClusterGroup({
+                        maxClusterRadius: 60,
+                        spiderfyOnMaxZoom: true,
+                        showCoverageOnHover: false,
+                        zoomToBoundsOnClick: true,
+                        disableClusteringAtZoom: 15,
+                        chunkedLoading: true,
+                        chunkInterval: 100,
+                        chunkDelay: 25,
+                        removeOutsideVisibleBounds: true,
+                        animate: true,
+                        animateAddingMarkers: false
+                    });
+                } else {
+                    console.warn('MarkerCluster not available, using featureGroup fallback');
+                    currentMarkersCluster = L.featureGroup();
+                }
 
                 // Separate polygons layer
                 var polygonsGroup = L.featureGroup();

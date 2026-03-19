@@ -801,15 +801,10 @@ class HouseholdStep(BaseStep):
                 result.add_error("فشل حفظ بيانات الأسرة. يرجى المحاولة مجدداً.")
                 return result
 
-        # Update or add household data
         if self.context.households:
             self.context.households[0] = household
         else:
             self.context.households.append(household)
-
-        # Validate that household data exists
-        if len(self.context.households) == 0:
-            result.add_error(tr("wizard.household.required_error"))
 
         return result
 

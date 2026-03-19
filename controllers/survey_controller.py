@@ -35,6 +35,7 @@ class SurveyController:
         reference_code=None,
         contact_person_name=None,
         building_id=None,
+        clerk_id=None,
     ) -> OperationResult:
         """
         Fetch paginated list of office surveys from API.
@@ -53,6 +54,7 @@ class SurveyController:
                 reference_code=reference_code,
                 contact_person_name=contact_person_name,
                 building_id=building_id,
+                clerk_id=clerk_id,
             )
             surveys = response.get("surveys", [])
             logger.info(f"Loaded {len(surveys)} office surveys from API (status={status})")
@@ -80,7 +82,6 @@ class SurveyController:
             api = get_api_client()
             detail = api.get_office_survey_detail(survey_id)
 
-            # 1) Building enrichment — use BuildingController (resolves admin names from JSON)
             building_data = {}
             building_id = detail.get("buildingId")
             if building_id:
@@ -92,7 +93,6 @@ class SurveyController:
                 except Exception as e:
                     logger.warning(f"Failed to fetch building {building_id}: {e}")
 
-            # 2) Unit enrichment
             unit_data = {}
             unit_id = detail.get("propertyUnitId")
             if unit_id:
@@ -111,6 +111,17 @@ class SurveyController:
             # 4) Persons + relations from survey detail
             persons = []
             relations = []
+
+            # Fetch household persons
+            hh_id = households[0].get("household_id", "") if households else ""
+            person_map = {}
+            if hh_id:
+                try:
+                    all_persons_list = api.get_persons_for_household(survey_id, hh_id)
+                    person_map = {p.get("id"): p for p in all_persons_list}
+                except Exception as e:
+                    logger.warning(f"Failed to fetch household persons: {e}")
+
             seen_person_ids = set()
             for rel in (detail.get("relations") or []):
                 person_id = rel.get("personId")
@@ -123,11 +134,11 @@ class SurveyController:
                 if not person_id or person_id in seen_person_ids:
                     continue
                 seen_person_ids.add(person_id)
-                try:
-                    person_dto = api._request("GET", f"/v1/Persons/{person_id}")
+                person_dto = person_map.get(person_id)
+                if person_dto:
                     persons.append(ClaimController._map_person_dto(person_dto, rel))
-                except Exception as e:
-                    logger.warning(f"Failed to fetch person {person_id}: {e}")
+                else:
+                    logger.warning(f"Person {person_id} not found in household persons")
 
             # 5) Claim enrichment (if linked)
             claim_dto = None
@@ -141,42 +152,63 @@ class SurveyController:
             # 6) Claim data mapped from survey detail + linked claim
             claim_data = self._map_survey_to_claim_data(detail, persons, claim_dto)
 
-            # 7) Build applicant from survey detail
+            # 7) Build applicant
             applicant = None
-            interviewee_name = detail.get("contactPersonFullName") or detail.get("intervieweeName", "")
-            if interviewee_name:
-                name_parts = interviewee_name.split()
+            contact_person_id = detail.get("contactPersonId")
+            contact_person_dto = person_map.get(contact_person_id) if contact_person_id else None
+
+            if contact_person_dto:
                 applicant = {
-                    "first_name_ar": name_parts[0] if len(name_parts) > 0 else "",
-                    "father_name_ar": name_parts[1] if len(name_parts) > 1 else "",
-                    "last_name_ar": " ".join(name_parts[2:]) if len(name_parts) > 2 else "",
-                    "full_name": interviewee_name,
-                    "national_id": "",
-                    "phone": "",
-                    "email": "",
+                    "first_name_ar": contact_person_dto.get("firstNameArabic", ""),
+                    "father_name_ar": contact_person_dto.get("fatherNameArabic", ""),
+                    "last_name_ar": contact_person_dto.get("familyNameArabic", ""),
+                    "mother_name_ar": contact_person_dto.get("motherNameArabic", ""),
+                    "full_name": contact_person_dto.get("fullNameArabic", ""),
+                    "national_id": contact_person_dto.get("nationalId", ""),
+                    "phone": contact_person_dto.get("mobileNumber", ""),
+                    "email": contact_person_dto.get("email", ""),
+                    "landline": contact_person_dto.get("phoneNumber", ""),
+                    "gender": contact_person_dto.get("gender"),
+                    "nationality": contact_person_dto.get("nationality"),
                 }
-            elif persons:
-                p = persons[0]
-                applicant = {
-                    "first_name_ar": p.get("first_name", ""),
-                    "father_name_ar": p.get("father_name", ""),
-                    "last_name_ar": p.get("last_name", ""),
-                    "full_name": p.get("full_name", ""),
-                    "national_id": p.get("national_id", ""),
-                    "phone": "",
-                    "email": "",
-                }
+            else:
+                full_name = detail.get("contactPersonFullName") or ""
+                if full_name:
+                    name_parts = full_name.split()
+                    applicant = {
+                        "first_name_ar": name_parts[0] if len(name_parts) > 0 else "",
+                        "father_name_ar": name_parts[1] if len(name_parts) > 1 else "",
+                        "last_name_ar": " ".join(name_parts[2:]) if len(name_parts) > 2 else "",
+                        "mother_name_ar": "",
+                        "full_name": full_name,
+                        "national_id": "", "phone": "", "email": "",
+                    }
+                elif persons:
+                    p = persons[0]
+                    applicant = {
+                        "first_name_ar": p.get("first_name", ""),
+                        "father_name_ar": p.get("father_name", ""),
+                        "last_name_ar": p.get("last_name", ""),
+                        "mother_name_ar": p.get("mother_name", ""),
+                        "full_name": p.get("full_name", ""),
+                        "national_id": p.get("national_id", ""),
+                        "phone": "", "email": "",
+                    }
 
             survey_status = detail.get("status", 1)
             status_str = "finalized" if survey_status == 3 else "draft"
 
+            resume_step = self._determine_resume_step(detail, households, persons)
+
             context = {
                 "survey_id": detail.get("id", ""),
                 "status": status_str,
+                "resume_step": resume_step,
                 "data": {
                     "survey_id": detail.get("id", ""),
                     "survey_building_uuid": building_id or "",
-                    "household_id": households[0].get("household_id", "") if households else "",
+                    "household_id": hh_id,
+                    "contact_person_id": contact_person_id or "",
                 },
                 "building": building_data,
                 "unit": unit_data,
@@ -197,7 +229,23 @@ class SurveyController:
         except Exception as e:
             logger.error(f"Failed to get survey context: {e}", exc_info=True)
             return OperationResult.fail(message=str(e))
-    # Mapping: survey detail → claim_data dict for ReviewStep
+
+    @staticmethod
+    def _determine_resume_step(detail: dict, households: list, persons: list) -> int:
+        """Determine which wizard step to resume from based on available data.
+
+        Step mapping: 0=Building, 1=Applicant, 2=Unit, 3=Household, 4=Persons, 5=Review
+        """
+        if not detail.get("contactPersonId"):
+            return 1
+        if not detail.get("propertyUnitId"):
+            return 2
+        if not households:
+            return 3
+        if not persons:
+            return 4
+        return 5
+
 
     @staticmethod
     def _map_survey_to_claim_data(detail: dict, persons: List[dict],

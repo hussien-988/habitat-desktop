@@ -52,7 +52,7 @@ class ClaimEditPage(QWidget):
         self._building_dto = {}
         self._survey_id = None
         self._evidences = []
-        self._evidence_access_denied = False
+        # (evidence_access_denied removed — evidenceIds loaded from claim DTO)
         self._user_role = None
 
         # Original values for change detection
@@ -339,7 +339,7 @@ class ClaimEditPage(QWidget):
             self._building_dto = detail.get("building") or {}
             self._survey_id = detail.get("survey_id")
             self._evidences = detail.get("evidences") or []
-            self._evidence_access_denied = detail.get("evidence_access_denied", False)
+            # evidence_access_denied no longer needed — evidences loaded via claim DTO
 
             logger.debug(f"claim keys: {list(self._claim_dto.keys())}")
             logger.debug(f"person keys: {list(self._person_dto.keys())}")
@@ -435,14 +435,9 @@ class ClaimEditPage(QWidget):
             if item.widget():
                 item.widget().deleteLater()
 
-        # Handle access denied
-        denied = getattr(self, '_evidence_access_denied', False)
-        self._evidence_denied_label.setVisible(denied)
-        self._add_evidence_btn.setEnabled(not denied)
-        self._add_evidence_btn.setVisible(not denied)
-
-        if denied:
-            return
+        self._evidence_denied_label.setVisible(False)
+        self._add_evidence_btn.setEnabled(True)
+        self._add_evidence_btn.setVisible(True)
 
         if not self._evidences:
             lbl = QLabel("لا توجد مستندات")
@@ -518,9 +513,6 @@ class ClaimEditPage(QWidget):
         return row
 
     def _on_add_evidence(self):
-        if self._evidence_access_denied:
-            Toast.show_toast(self, "ليس لديك صلاحية إضافة مستندات لهذا المسح", Toast.WARNING)
-            return
         if not self._survey_id:
             Toast.show_toast(self, "لا يوجد معرف المسح", Toast.WARNING)
             return
@@ -584,9 +576,6 @@ class ClaimEditPage(QWidget):
     def _on_delete_evidence(self, evidence_id: str):
         if self._user_role and self._user_role not in ("admin", "data_manager"):
             return
-        if self._evidence_access_denied:
-            Toast.show_toast(self, "ليس لديك صلاحية حذف مستندات هذا المسح", Toast.WARNING)
-            return
         if not self._survey_id or not evidence_id:
             return
         try:
@@ -602,12 +591,22 @@ class ClaimEditPage(QWidget):
             Toast.show_toast(self, f"خطأ: {e}", Toast.ERROR)
 
     def _reload_evidences(self):
-        """Refresh evidence list from API."""
-        if not self._survey_id:
+        """Refresh evidence list from claim DTO evidenceIds."""
+        if not self._claim_id:
             return
         try:
             from services.api_client import get_api_client
-            self._evidences = get_api_client().get_survey_evidences(self._survey_id) or []
+            api = get_api_client()
+            claim = api.get_claim_by_id(self._claim_id)
+            evidence_ids = claim.get("evidenceIds") or []
+            self._evidences = []
+            for eid in evidence_ids:
+                try:
+                    ev = api.get_evidence_by_id(eid)
+                    if ev:
+                        self._evidences.append(ev)
+                except Exception:
+                    pass
         except Exception as e:
             logger.warning(f"Failed to reload evidences: {e}")
         self._refresh_evidence_list()

@@ -193,6 +193,74 @@ def generate_building_id(
     return f"{governorate}-{district}-{subdistrict}-{community}-{neighborhood}-{building}"
 
 
+def download_evidence_file(evidence_id: str, file_name: str) -> Optional[str]:
+    """Download evidence file to temp dir using multiple strategies. Returns local path or None."""
+    if not evidence_id:
+        return None
+    import os, tempfile, logging
+    _logger = logging.getLogger(__name__)
+
+    cache_dir = os.path.join(tempfile.gettempdir(), "trrcms_evidence")
+    os.makedirs(cache_dir, exist_ok=True)
+    safe_name = sanitize_filename(file_name) if file_name else evidence_id
+    save_path = os.path.join(cache_dir, f"{evidence_id}_{safe_name}")
+
+    if os.path.exists(save_path) and os.path.getsize(save_path) > 0:
+        return save_path
+
+    from services.api_client import get_api_client
+    api = get_api_client()
+
+    try:
+        api.download_evidence(evidence_id, save_path)
+        if os.path.exists(save_path) and os.path.getsize(save_path) > 0:
+            return save_path
+    except Exception as e:
+        _logger.debug(f"Direct download failed for {evidence_id}: {e}")
+
+    try:
+        meta = api.get_evidence_by_id(evidence_id)
+        if meta:
+            file_url = (meta.get("fileUrl") or meta.get("blobUrl")
+                        or meta.get("url") or meta.get("downloadUrl"))
+            file_path_val = meta.get("filePath")
+
+            import requests as _requests
+            auth_headers = {
+                "Authorization": f"Bearer {api.access_token}",
+                "Accept": "*/*"
+            }
+
+            if file_url and file_url.startswith("http"):
+                try:
+                    resp = _requests.get(file_url, headers=auth_headers, timeout=30, verify=False)
+                    resp.raise_for_status()
+                    with open(save_path, 'wb') as f:
+                        f.write(resp.content)
+                    if os.path.getsize(save_path) > 0:
+                        return save_path
+                except Exception:
+                    pass
+
+            if file_path_val:
+                base = api.base_url.rstrip("/")
+                server_root = base.rsplit("/api", 1)[0] if base.endswith("/api") else base
+                for url in [f"{base}/{file_path_val}", f"{server_root}/{file_path_val}"]:
+                    try:
+                        resp = _requests.get(url, headers=auth_headers, timeout=30, verify=False)
+                        resp.raise_for_status()
+                        with open(save_path, 'wb') as f:
+                            f.write(resp.content)
+                        if os.path.getsize(save_path) > 0:
+                            return save_path
+                    except Exception:
+                        continue
+    except Exception as e:
+        _logger.warning(f"Metadata download failed for {evidence_id}: {e}")
+
+    return None
+
+
 def validate_coordinates(lat: float, lon: float) -> bool:
     """
     Validate latitude and longitude values.

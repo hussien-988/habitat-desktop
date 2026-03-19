@@ -909,6 +909,51 @@ class TRRCMSApiClient:
         # Filter None and empty strings - don't send invalid values to API
         return {k: v for k, v in api_data.items() if v is not None and v != ''}
 
+    def get_survey_property_units(self, survey_id: str) -> List[Dict[str, Any]]:
+        """Get property units for a building via survey-scoped endpoint."""
+        if not survey_id:
+            raise ValueError("survey_id is required")
+        return self._request("GET", f"/v1/Surveys/{survey_id}/property-units")
+
+    def update_contact_person(self, survey_id: str, person_id: str, person_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Update contact person via survey-scoped endpoint."""
+        if not survey_id or not person_id:
+            raise ValueError("survey_id and person_id are required")
+
+        api_data: Dict[str, Any] = {}
+
+        field_map = {
+            'first_name': 'firstNameArabic',
+            'father_name': 'fatherNameArabic',
+            'last_name': 'familyNameArabic',
+            'mother_name': 'motherNameArabic',
+            'national_id': 'nationalId',
+            'email': 'email',
+            'phone': 'mobileNumber',
+            'landline': 'phoneNumber',
+        }
+        for local_key, api_key in field_map.items():
+            val = person_data.get(local_key)
+            if val is not None:
+                api_data[api_key] = str(val).strip() if isinstance(val, str) else val
+
+        for int_field in ('gender', 'nationality'):
+            val = person_data.get(int_field)
+            if val is not None:
+                try:
+                    api_data[int_field] = int(val)
+                except (ValueError, TypeError):
+                    pass
+
+        birth_date = person_data.get('birth_date')
+        if birth_date:
+            api_data['dateOfBirth'] = f"{birth_date}T00:00:00Z" if "T" not in str(birth_date) else str(birth_date)
+
+        logger.info(f"Updating contact person {person_id} for survey {survey_id}")
+        result = self._request("PUT", f"/v1/Surveys/{survey_id}/contact-person/{person_id}", json_data=api_data)
+        logger.info(f"Contact person {person_id} updated successfully")
+        return result
+
     def link_unit_to_survey(self, survey_id: str, unit_id: str) -> Dict[str, Any]:
         """Link a property unit to a survey."""
         if not survey_id or not unit_id:
@@ -1115,15 +1160,18 @@ class TRRCMSApiClient:
         logger.info(f"Person created: {result.get('id', 'N/A')}")
         return result
 
-    def create_person_in_household(self, person_data: Dict[str, Any], survey_id: str, household_id: str) -> Dict[str, Any]:
+    def create_person_in_household(self, person_data: Dict[str, Any], survey_id: str, household_id: str,
+                                   is_contact_person: bool = False) -> Dict[str, Any]:
         """Create a new person in a household."""
         if not survey_id or not household_id:
             raise ValueError("survey_id and household_id are required")
 
         api_data = self._convert_person_to_api_format_with_household(person_data, survey_id, household_id)
+        if is_contact_person:
+            api_data["isContactPerson"] = True
         endpoint = f"/v1/Surveys/{survey_id}/households/{household_id}/persons"
 
-        logger.info(f"Creating person in household via {endpoint}")
+        logger.info(f"Creating person in household via {endpoint} (isContactPerson={is_contact_person})")
         result = self._request("POST", endpoint, json_data=api_data)
         logger.info(f"Person created in household: {result.get('id', 'N/A')}")
         return result
@@ -1274,6 +1322,8 @@ class TRRCMSApiClient:
             raise ValueError("survey_id and relation_id are required")
 
         api_data = {}
+        if 'propertyUnitId' in relation_data:
+            api_data["propertyUnitId"] = relation_data['propertyUnitId']
         if 'rel_type' in relation_data or 'relationship_type' in relation_data:
             api_data["relationType"] = int(relation_data.get('rel_type') or relation_data.get('relationship_type', 99))
         if 'contract_type' in relation_data or 'occupancy_type' in relation_data:
@@ -1830,6 +1880,7 @@ class TRRCMSApiClient:
             mother_name = "-"
 
         api_data: Dict[str, Any] = {
+            "command": "CreateContactPerson",
             "firstNameArabic":  person_data.get("first_name_ar", "").strip(),
             "fatherNameArabic": father_name,
             "familyNameArabic": person_data.get("last_name_ar", "").strip(),
@@ -1853,9 +1904,9 @@ class TRRCMSApiClient:
             except (ValueError, TypeError):
                 pass
 
-        birth_date = person_data.get("birth_date")
+        birth_date = (person_data.get("birth_date") or "").strip()
         if birth_date:
-            api_data["dateOfBirth"] = f"{birth_date}T00:00:00Z" if "T" not in str(birth_date) else str(birth_date)
+            api_data["dateOfBirth"] = f"{birth_date}T00:00:00Z" if "T" not in birth_date else birth_date
         elif person_data.get("birth_year"):
             api_data["dateOfBirth"] = f"{person_data['birth_year']}-01-01T00:00:00Z"
 

@@ -635,7 +635,7 @@ class ClaimDetailsPage(QWidget):
             self._ownership_share_input.setStyleSheet(StyleManager.form_input())
             if raw_share is not None:
                 self._ownership_share_input.setText(str(round(float(raw_share) * 100, 2)))
-            self._ownership_share_input.setEnabled(is_ownership or not is_claim_open)
+            self._ownership_share_input.setEnabled(True)
             share_row.addWidget(self._ownership_share_input)
         else:
             if raw_share is not None and is_ownership:
@@ -838,80 +838,8 @@ class ClaimDetailsPage(QWidget):
 
     def _download_evidence_file(self, evidence_id, file_name):
         """Download evidence file to temp dir using multiple strategies, return local path or None."""
-        if not evidence_id:
-            return None
-        import os, tempfile
-        cache_dir = os.path.join(tempfile.gettempdir(), "trrcms_evidence")
-        os.makedirs(cache_dir, exist_ok=True)
-        save_path = os.path.join(cache_dir, f"{evidence_id}_{file_name}")
-
-        if os.path.exists(save_path) and os.path.getsize(save_path) > 0:
-            return save_path
-
-        from services.api_client import get_api_client
-        api = get_api_client()
-
-        # Strategy 1: Try direct download endpoint
-        try:
-            api.download_evidence(evidence_id, save_path)
-            if os.path.exists(save_path) and os.path.getsize(save_path) > 0:
-                return save_path
-        except Exception as e:
-            logger.debug(f"Direct download failed for {evidence_id}: {e}")
-
-        # Strategy 2: Get evidence metadata — try filePath/fileUrl
-        try:
-            meta = api.get_evidence_by_id(evidence_id)
-            if meta:
-                logger.info(f"Evidence metadata keys: {list(meta.keys())}")
-                file_url = (meta.get("fileUrl") or meta.get("blobUrl")
-                            or meta.get("url") or meta.get("downloadUrl"))
-                file_path_val = meta.get("filePath")
-
-                import requests as _requests
-                auth_headers = {
-                    "Authorization": f"Bearer {api.access_token}",
-                    "Accept": "*/*"
-                }
-
-                # Try direct URL first
-                if file_url and file_url.startswith("http"):
-                    try:
-                        resp = _requests.get(file_url, headers=auth_headers, timeout=30, verify=False)
-                        resp.raise_for_status()
-                        with open(save_path, 'wb') as f:
-                            f.write(resp.content)
-                        if os.path.getsize(save_path) > 0:
-                            return save_path
-                    except Exception:
-                        pass
-
-                # Try filePath with base URL variations
-                if file_path_val:
-                    base = api.base_url.rstrip("/")
-                    # Remove /api suffix to get server root
-                    server_root = base.rsplit("/api", 1)[0] if base.endswith("/api") else base
-                    urls_to_try = [
-                        f"{base}/{file_path_val}",
-                        f"{server_root}/{file_path_val}",
-                    ]
-                    for url in urls_to_try:
-                        try:
-                            logger.info(f"Trying evidence URL: {url}")
-                            resp = _requests.get(url, headers=auth_headers, timeout=30, verify=False)
-                            resp.raise_for_status()
-                            with open(save_path, 'wb') as f:
-                                f.write(resp.content)
-                            if os.path.getsize(save_path) > 0:
-                                logger.info(f"Evidence downloaded from: {url}")
-                                return save_path
-                        except Exception as url_err:
-                            logger.info(f"URL failed ({url}): {url_err}")
-                            continue
-        except Exception as e:
-            logger.warning(f"Metadata download failed for {evidence_id}: {e}")
-
-        return None
+        from utils.helpers import download_evidence_file
+        return download_evidence_file(evidence_id, file_name)
 
     def _populate_status_card(self):
         self._clear_layout(self._status_content)
@@ -1006,13 +934,8 @@ class ClaimDetailsPage(QWidget):
     # Edit mode handlers
 
     def _on_claim_type_changed_in_edit(self):
-        """Enable/disable ownership share input based on selected claim type."""
-        if not self._ownership_share_input:
-            return
-        is_ownership = self._claim_type_combo and self._claim_type_combo.currentData() == 2
-        self._ownership_share_input.setEnabled(is_ownership)
-        if not is_ownership:
-            self._ownership_share_input.clear()
+        """Ownership share input is always enabled regardless of claim type."""
+        pass
 
     def _extract_relation_id(self):
         """Extract relation_id from claim data or evidence relations."""
