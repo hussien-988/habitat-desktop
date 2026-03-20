@@ -370,25 +370,26 @@ class TileServerManager:
         if not hasattr(self, '_initialized'):
             self._initialized = True
 
-            # Read port from settings.json (user-configurable via UI)
-            from app.config import get_tile_server_port
-            configured_port = get_tile_server_port()
+            from app.config import get_tile_server_url as _get_configured_url
+            from urllib.parse import urlparse
 
-            # Build production URL from configured port
-            production_url = f"http://localhost:{configured_port}"
+            configured_url = _get_configured_url()
+            parsed = urlparse(configured_url)
+            host = parsed.hostname or "localhost"
+            port = parsed.port or 80
             use_production = False
 
             try:
-                with socket.create_connection(("localhost", configured_port), timeout=Config.TILE_SERVER_HEALTH_TIMEOUT):
+                with socket.create_connection((host, port), timeout=Config.TILE_SERVER_HEALTH_TIMEOUT):
                     use_production = True
-                    logger.info(f"Tile server reachable (TCP localhost:{configured_port})")
+                    logger.info(f"Tile server reachable (TCP {host}:{port})")
             except (socket.timeout, socket.error, OSError) as e:
-                logger.warning(f"Tile server port unreachable (localhost:{configured_port}): {e}")
+                logger.warning(f"Tile server unreachable ({host}:{port}): {e}")
 
             if use_production:
-                logger.info(f"Using external tile server: {production_url}")
+                logger.info(f"Using external tile server: {configured_url}")
                 self._is_production = True
-                self._production_url = production_url
+                self._production_url = configured_url
             else:
                 logger.info("Using embedded local tile server")
                 self._is_production = False

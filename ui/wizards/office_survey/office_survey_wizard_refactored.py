@@ -252,6 +252,15 @@ class OfficeSurveyWizard(BaseWizard):
                 )
                 return None
 
+            contact_person_id = self.context.get_data("contact_person_id")
+            if not contact_person_id:
+                ErrorHandler.show_error(
+                    self,
+                    "يجب إكمال بيانات مقدم الطلب قبل حفظ المسودة",
+                    tr("common.error")
+                )
+                return None
+
             if self.context.status == "finalized":
                 logger.info(f"Survey {survey_id} is finalized, skipping draft save")
                 return survey_id
@@ -307,6 +316,15 @@ class OfficeSurveyWizard(BaseWizard):
         else:
             self._handle_save_draft()
 
+    def _handle_save_draft(self):
+        """Override base class to prevent duplicate notifications."""
+        draft_id = self.on_save_draft()
+        if draft_id:
+            self._finalization_complete = True
+            self.draft_saved.emit(draft_id)
+            from ui.components.toast import Toast
+            Toast.show_toast(self, tr("wizard.draft.saved_success"), Toast.SUCCESS)
+
     def _handle_close(self):
         """Handle close button click - offers save draft before closing."""
         # If finalization already completed, just close without prompting
@@ -335,6 +353,7 @@ class OfficeSurveyWizard(BaseWizard):
                 # Save as draft
                 draft_id = self.on_save_draft()
                 if draft_id:
+                    self._finalization_complete = True
                     from ui.components.toast import Toast
                     Toast.show_toast(self, tr("wizard.draft.saved_success"), Toast.SUCCESS)
                 else:
@@ -342,7 +361,24 @@ class OfficeSurveyWizard(BaseWizard):
                     return
 
             elif result == ConfirmationDialog.DISCARD:
-                # User chose to discard - continue closing
+                # Cancel survey on server with reason
+                survey_id = self.context.get_data("survey_id")
+                if survey_id:
+                    from PyQt5.QtWidgets import QInputDialog
+                    reason, ok = QInputDialog.getMultiLineText(
+                        self, "سبب الإلغاء",
+                        "يرجى إدخال سبب إلغاء المسح:", ""
+                    )
+                    if not ok or not reason.strip():
+                        return
+                    try:
+                        from services.api_client import get_api_client
+                        api = get_api_client()
+                        api.cancel_survey(survey_id, reason.strip())
+                        logger.info(f"Survey {survey_id} cancelled: {reason.strip()}")
+                    except Exception as e:
+                        logger.warning(f"Failed to cancel survey {survey_id}: {e}")
+                self._finalization_complete = True
                 logger.info("User discarded wizard changes on close")
 
             else:
@@ -542,39 +578,7 @@ class OfficeSurveyWizard(BaseWizard):
         title_row.addLayout(title_subtitle_container)
         title_row.addStretch()
 
-        # Close button FIRST
-
-        self.close_btn = QPushButton("✕")
-        self.close_btn.setCursor(Qt.PointingHandCursor)
-
-        # Fixed dimensions
-        self.close_btn.setFixedSize(ButtonDimensions.CLOSE_WIDTH, ButtonDimensions.CLOSE_HEIGHT)
-
-        # Apply font
-        close_btn_font = create_font(
-            size=ButtonDimensions.CLOSE_FONT_SIZE,  # 12pt
-            weight=QFont.Normal,  # 400 - lighter weight
-            letter_spacing=0
-        )
-        self.close_btn.setFont(close_btn_font)
-
-        # Styling
-        self.close_btn.setStyleSheet(f"""
-            QPushButton {{
-                background-color: {Colors.SURFACE};
-                color: {Colors.PRIMARY_BLUE};
-                border: 1px solid {Colors.BORDER_DEFAULT};
-                border-radius: {ButtonDimensions.CLOSE_BORDER_RADIUS}px;
-                padding: {ButtonDimensions.CLOSE_PADDING_V}px {ButtonDimensions.CLOSE_PADDING_H}px;
-            }}
-            QPushButton:hover {{
-                background-color: {Colors.BACKGROUND_LIGHT};
-            }}
-        """)
-        self.close_btn.clicked.connect(self._handle_close)
-        title_row.addWidget(self.close_btn)
-
-        # Save button SECOND with icon
+        # Save button with icon
 
         self.save_btn = QPushButton(f" {tr('wizard.button.save')}")  # Space for icon
         self.save_btn.setCursor(Qt.PointingHandCursor)

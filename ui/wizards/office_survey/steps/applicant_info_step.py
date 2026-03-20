@@ -529,7 +529,10 @@ class ApplicantInfoStep(BaseStep):
             result.add_error("رقم الهاتف الثابت يجب أن يكون 7 أرقام")
 
         nid_text = self.national_id.text().strip()
-        if nid_text and (len(nid_text) != 11 or not nid_text.isdigit()):
+        if not nid_text:
+            self._set_err(self.national_id, self._nid_error)
+            result.add_error("الرقم الوطني مطلوب")
+        elif len(nid_text) != 11 or not nid_text.isdigit():
             self._set_err(self.national_id, self._nid_error)
             result.add_error("الرقم الوطني يجب أن يكون 11 رقماً")
 
@@ -566,7 +569,16 @@ class ApplicantInfoStep(BaseStep):
                     logger.error(f"Contact person API failed: {e}")
                     result.add_error("فشل حفظ بيانات مقدم الطلب. يرجى المحاولة مجدداً.")
         else:
-            logger.info(f"Contact person already exists: {existing_cp_id}, skipping creation")
+            try:
+                self._api_client.update_contact_person(survey_id, existing_cp_id, self.context.applicant)
+                logger.info(f"Contact person {existing_cp_id} updated")
+            except Exception as e:
+                from services.error_mapper import is_duplicate_nid_error, build_duplicate_person_message
+                if is_duplicate_nid_error(e):
+                    result.add_error(build_duplicate_person_message(getattr(e, 'response_data', {})))
+                else:
+                    logger.error(f"Contact person update failed: {e}")
+                    result.add_error("فشل تحديث بيانات مقدم الطلب. يرجى المحاولة مجدداً.")
 
         # 6. Upload ID photos (if any and not already uploaded)
         person_id = self.context.get_data("contact_person_id")
@@ -586,7 +598,10 @@ class ApplicantInfoStep(BaseStep):
                     logger.error(f"Failed to upload ID photo {fp}: {e}")
             self.context.update_data("uploaded_id_photos", list(already_uploaded))
 
-        # 7. Save intervieweeName so it appears in the surveys list
+        # 7. Cache contact person locally for draft resume
+        self._save_contact_person_locally(survey_id)
+
+        # 8. Save intervieweeName so it appears in the surveys list
         try:
             a = self.context.applicant or {}
             parts = [a.get("first_name_ar", ""), a.get("father_name_ar", ""), a.get("last_name_ar", "")]
@@ -598,6 +613,18 @@ class ApplicantInfoStep(BaseStep):
             logger.warning(f"Could not save interviewee name: {e}")
 
         return result
+
+    def _save_contact_person_locally(self, survey_id: str):
+        """Cache contact person data locally for draft resume."""
+        try:
+            from repositories.survey_repository import SurveyRepository
+            repo = SurveyRepository(self.context.db)
+            cp_id = self.context.get_data("contact_person_id")
+            if cp_id and self.context.applicant:
+                repo.save_contact_person_cache(survey_id, cp_id, self.context.applicant)
+                logger.debug(f"Contact person cached locally for survey {survey_id}")
+        except Exception as e:
+            logger.warning(f"Failed to cache contact person locally: {e}")
 
     def collect_data(self) -> dict:
         fn  = self.first_name.text().strip()

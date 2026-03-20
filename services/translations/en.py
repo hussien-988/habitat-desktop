@@ -554,6 +554,7 @@ EN_TRANSLATIONS = {
     "wizard.person_dialog.is_contact": "Main contact person",
     "wizard.person_dialog.choose_files": "Choose files",
     "wizard.person_dialog.files_selected": "{count} file(s) selected",
+    "wizard.person_dialog.nid_required": "National ID is required",
     "wizard.person_dialog.nid_must_be_11": "Must be 11 digits",
     "wizard.person_dialog.nid_exists": "Number already exists",
     "wizard.person_dialog.nid_available": "Number is available",

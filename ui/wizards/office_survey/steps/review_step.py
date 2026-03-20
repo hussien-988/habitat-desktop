@@ -87,9 +87,11 @@ class ReviewStep(BaseStep):
         self.case_status_banner = self._create_case_status_banner()
         self.case_status_banner.hide()
 
-        # Applicant info card
+        # Applicant info card (hidden in case details / read-only mode)
         self.applicant_card = self._create_applicant_card()
         scroll_layout.addWidget(self.applicant_card)
+        if self._read_only:
+            self.applicant_card.hide()
 
         # Create summary cards — building split into 3 separate cards
         # Building Card 1: Header + code + address
@@ -573,22 +575,26 @@ class ReviewStep(BaseStep):
 
         fields = [
             (tr("wizard.applicant.full_name"), full_name_display),
-            (tr("wizard.applicant.national_id"), applicant.get("national_id", "-")),
-            (tr("wizard.applicant.phone"), applicant.get("phone", "-")),
-            (tr("wizard.applicant.email"), applicant.get("email", "-")),
+            (tr("wizard.applicant.national_id"), applicant.get("national_id", "")),
+            (tr("wizard.applicant.phone"), applicant.get("phone", "")),
+            (tr("wizard.applicant.email"), applicant.get("email", "")),
         ]
 
-        for row, (label_text, value_text) in enumerate(fields):
+        idx = 0
+        for label_text, value_text in fields:
+            if not value_text or value_text == "-":
+                continue
             lbl = QLabel(label_text + ":")
             lbl.setFont(create_font(size=FontManager.WIZARD_CARD_LABEL, weight=FontManager.WEIGHT_SEMIBOLD))
             lbl.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent; border: none;")
             lbl.setAlignment(Qt.AlignCenter)
-            val = QLabel(value_text or "-")
+            val = QLabel(value_text)
             val.setFont(create_font(size=FontManager.WIZARD_CARD_LABEL, weight=FontManager.WEIGHT_REGULAR))
             val.setStyleSheet(f"color: {Colors.TEXT_SECONDARY}; background: transparent; border: none;")
             val.setAlignment(Qt.AlignCenter)
-            self._applicant_grid.addWidget(lbl, row // 2, (row % 2) * 2)
-            self._applicant_grid.addWidget(val, row // 2, (row % 2) * 2 + 1)
+            self._applicant_grid.addWidget(lbl, idx // 2, (idx % 2) * 2)
+            self._applicant_grid.addWidget(val, idx // 2, (idx % 2) * 2 + 1)
+            idx += 1
 
     def _populate_building_card(self):
         """Populate 3 separate building cards matching BuildingSelectionStep."""
@@ -1119,8 +1125,6 @@ class ReviewStep(BaseStep):
                 contact_person_id = self.context.get_data('contact_person_id')
                 if contact_person_id and person_id == contact_person_id:
                     is_applicant = True
-            if not is_applicant and not person.get('_household_id'):
-                is_applicant = True
 
             if person_id:
                 try:
@@ -1143,9 +1147,13 @@ class ReviewStep(BaseStep):
                         except Exception as e:
                             logger.warning(f"Failed to update relation {relation_id}: {e}")
                 except Exception as e:
-                    logger.error(f"Failed to update person via API: {e}")
-                    from services.error_mapper import map_exception
-                    ErrorHandler.show_error(self, map_exception(e), tr("common.error"))
+                    from services.error_mapper import is_duplicate_nid_error, build_duplicate_person_message
+                    if is_duplicate_nid_error(e):
+                        ErrorHandler.show_warning(self, build_duplicate_person_message(getattr(e, 'response_data', {})), tr("common.warning"))
+                    else:
+                        logger.error(f"Failed to update person via API: {e}")
+                        from services.error_mapper import map_exception
+                        ErrorHandler.show_error(self, map_exception(e), tr("common.error"))
                     return
 
             # Update context

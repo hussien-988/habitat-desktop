@@ -524,25 +524,10 @@ class LoginPage(QWidget):
 
         lay.addWidget(logo_label)
 
-        # Settings button (gear icon)
-        btn_settings = QPushButton("\u2699")
-        btn_settings.setObjectName("win_btn")
-        btn_settings.setFixedSize(46, 32)
-        btn_settings.setCursor(QCursor(Qt.PointingHandCursor))
-        btn_settings.setFocusPolicy(Qt.NoFocus)
-        btn_settings.setToolTip("إعدادات الاتصال")
-        btn_settings.setStyleSheet("""
-            QPushButton {
-                font-size: 16px;
-            }
-        """)
-        btn_settings.clicked.connect(self._open_server_settings)
-        lay.addWidget(btn_settings)
-
         lay.addStretch(1)
 
         # Window control buttons
-        btn_min = QPushButton("–")
+        btn_min = QPushButton("\u2013")
         btn_max = QPushButton("□")
         btn_close = QPushButton("✕")
 
@@ -575,12 +560,38 @@ class LoginPage(QWidget):
         # Keep on top
         self.titlebar.raise_()
 
+        # Settings button — floating on the blue area (top-left)
+        self._btn_settings = QPushButton("\u2699", self)
+        self._btn_settings.setFixedSize(42, 42)
+        self._btn_settings.setCursor(QCursor(Qt.PointingHandCursor))
+        self._btn_settings.setFocusPolicy(Qt.NoFocus)
+        self._btn_settings.setToolTip("\u0625\u0639\u062f\u0627\u062f\u0627\u062a \u0627\u0644\u0627\u062a\u0635\u0627\u0644")
+        self._btn_settings.setStyleSheet("""
+            QPushButton {
+                font-size: 24px;
+                color: rgba(255, 255, 255, 0.55);
+                background-color: transparent;
+                border: none;
+            }
+            QPushButton:hover {
+                color: rgba(255, 255, 255, 0.85);
+            }
+            QPushButton:pressed {
+                color: white;
+            }
+        """)
+        self._btn_settings.clicked.connect(self._open_server_settings)
+        self._btn_settings.move(20, 45)
+        self._btn_settings.raise_()
+
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
         if hasattr(self, "titlebar") and self.titlebar:
             self.titlebar.setGeometry(0, 0, self.width(), 33)
             self.titlebar.raise_()
+        if hasattr(self, "_btn_settings"):
+            self._btn_settings.raise_()
         self._position_login_watermark()
 
     def _open_server_settings(self):

@@ -172,7 +172,7 @@ class SurveyController:
                     "nationality": contact_person_dto.get("nationality"),
                 }
             else:
-                full_name = detail.get("contactPersonFullName") or ""
+                full_name = detail.get("contactPersonFullName") or detail.get("intervieweeName") or ""
                 if full_name:
                     name_parts = full_name.split()
                     applicant = {
@@ -200,6 +200,21 @@ class SurveyController:
 
             resume_step = self._determine_resume_step(detail, households, persons)
 
+            # Fallback: if contact_person_id not in API, check local cache
+            resolved_cp_id = contact_person_id or ""
+            if not resolved_cp_id:
+                try:
+                    from repositories.survey_repository import SurveyRepository
+                    repo = SurveyRepository(self.db)
+                    cached_cp_id, cached_applicant = repo.get_contact_person_cache(survey_id)
+                    if cached_cp_id:
+                        resolved_cp_id = cached_cp_id
+                        logger.info(f"contact_person_id restored from local cache: {cached_cp_id}")
+                    if cached_applicant and not applicant:
+                        applicant = cached_applicant
+                except Exception as cache_err:
+                    logger.warning(f"Local cache fallback failed: {cache_err}")
+
             context = {
                 "survey_id": detail.get("id", ""),
                 "status": status_str,
@@ -208,7 +223,7 @@ class SurveyController:
                     "survey_id": detail.get("id", ""),
                     "survey_building_uuid": building_id or "",
                     "household_id": hh_id,
-                    "contact_person_id": contact_person_id or "",
+                    "contact_person_id": resolved_cp_id,
                 },
                 "building": building_data,
                 "unit": unit_data,

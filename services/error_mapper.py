@@ -170,6 +170,17 @@ def sanitize_user_message(msg: str) -> str:
     return fallback
 
 
+def is_duplicate_nid_error(exc: Exception) -> bool:
+    """Check if exception is a duplicate NationalId error (409 or DB constraint)."""
+    from services.exceptions import ApiException
+    if not isinstance(exc, ApiException):
+        return False
+    if exc.status_code == 409:
+        return True
+    error_str = str(exc.response_data) + exc.message
+    return "IX_Person_NationalId" in error_str
+
+
 def build_duplicate_person_message(response_data: dict) -> str:
     """Build Arabic warning message from 409 duplicate national ID response."""
     msg = "يوجد شخص مسجّل مسبقاً بنفس الرقم الوطني."

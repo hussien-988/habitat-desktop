@@ -395,3 +395,40 @@ class SurveyRepository:
                     data[field] = None
 
         return data
+
+    def save_contact_person_cache(self, survey_id: str, contact_person_id: str, applicant_data: dict):
+        """Cache contact person data locally for a survey."""
+        existing = self.get_by_id(survey_id)
+        if existing:
+            context = existing.get('context', {})
+            if 'data' not in context:
+                context['data'] = {}
+            context['data']['contact_person_id'] = contact_person_id
+            context['applicant'] = applicant_data
+            self.db.execute(
+                "UPDATE surveys SET context_data = ?, updated_at = ? WHERE survey_id = ?",
+                (json.dumps(context, ensure_ascii=False, default=str),
+                 datetime.now().isoformat(), survey_id)
+            )
+        else:
+            self.create({
+                'survey_id': survey_id,
+                'status': 'draft',
+                'source': 'office',
+                'data': {'contact_person_id': contact_person_id},
+                'applicant': applicant_data,
+            })
+        logger.debug(f"Contact person cache saved for survey {survey_id}")
+
+    def get_contact_person_cache(self, survey_id: str):
+        """Get cached contact_person_id and applicant data for a survey."""
+        record = self.get_by_id(survey_id)
+        if not record:
+            return None, None
+        context = record.get('context', {})
+        cp_id = None
+        data = context.get('data', {})
+        if isinstance(data, dict):
+            cp_id = data.get('contact_person_id')
+        applicant = context.get('applicant')
+        return cp_id, applicant
