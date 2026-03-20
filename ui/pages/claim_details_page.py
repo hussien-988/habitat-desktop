@@ -934,8 +934,9 @@ class ClaimDetailsPage(QWidget):
     # Edit mode handlers
 
     def _on_claim_type_changed_in_edit(self):
-        """Ownership share input is always enabled regardless of claim type."""
-        pass
+        """Sync combo selection back to claim data so rebuilds preserve it."""
+        if self._claim_type_combo:
+            self._claim_data["claimType"] = self._claim_type_combo.currentData()
 
     def _extract_relation_id(self):
         """Extract relation_id from claim data or evidence relations."""

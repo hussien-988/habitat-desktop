@@ -166,6 +166,7 @@ class CompletedClaimsPage(QWidget):
         self._source_filter.addItem(get_source_display(1), 1)
         self._source_filter.addItem(get_source_display(2), 2)
         self._source_filter.currentIndexChanged.connect(self._on_source_changed)
+        self._source_filter.setVisible(False)
         layout.addWidget(self._source_filter)
 
         layout.addStretch()
