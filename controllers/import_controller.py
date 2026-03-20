@@ -41,6 +41,8 @@ class ImportController(BaseController):
                 or e.response_data.get("message", "")
                 or ""
             )
+        if code == 403:
+            return "غير مخوّل: لا تملك صلاحية تنفيذ هذا الإجراء"
         if code == 409:
             if detail:
                 return f"تعارض في حالة الحزمة: {detail}"
@@ -96,8 +98,12 @@ class ImportController(BaseController):
             api = get_api_client()
             result = api.get_import_packages(page, page_size, status_filter)
             return OperationResult.ok(data=result)
-        except (NetworkException, ApiException):
-            raise
+        except ApiException as e:
+            logger.error(f"Get packages API error: {e}")
+            return OperationResult.fail(str(e), message_ar=self._api_error_msg(e, "فشل تحميل قائمة الحزم"))
+        except NetworkException as e:
+            logger.error(f"Get packages network error: {e}")
+            return OperationResult.fail(str(e), message_ar="خطأ في الاتصال بالخادم")
         except Exception as e:
             logger.error(f"Get packages failed: {e}")
             return OperationResult.fail(str(e), message_ar="فشل تحميل قائمة الحزم")
@@ -108,8 +114,12 @@ class ImportController(BaseController):
             api = get_api_client()
             result = api.get_import_package(package_id)
             return OperationResult.ok(data=result)
-        except (NetworkException, ApiException):
-            raise
+        except ApiException as e:
+            logger.error(f"Get package API error: {e}")
+            return OperationResult.fail(str(e), message_ar=self._api_error_msg(e, "فشل تحميل تفاصيل الحزمة"))
+        except NetworkException as e:
+            logger.error(f"Get package network error: {e}")
+            return OperationResult.fail(str(e), message_ar="خطأ في الاتصال بالخادم")
         except Exception as e:
             logger.error(f"Get package failed: {e}")
             return OperationResult.fail(str(e), message_ar="فشل تحميل تفاصيل الحزمة")
@@ -121,8 +131,12 @@ class ImportController(BaseController):
             result = self._with_retry(lambda: api.stage_import_package(package_id))
             self.package_staged.emit(package_id)
             return OperationResult.ok(data=result, message_ar="تم تدريج الحزمة بنجاح")
-        except (NetworkException, ApiException):
-            raise
+        except ApiException as e:
+            logger.error(f"Stage package API error: {e}")
+            return OperationResult.fail(str(e), message_ar=self._api_error_msg(e, "فشل تدريج الحزمة"))
+        except NetworkException as e:
+            logger.error(f"Stage package network error: {e}")
+            return OperationResult.fail(str(e), message_ar="خطأ في الاتصال بالخادم")
         except Exception as e:
             logger.error(f"Staging failed: {e}")
             return OperationResult.fail(str(e), message_ar="فشل تدريج الحزمة")
@@ -133,8 +147,12 @@ class ImportController(BaseController):
             api = get_api_client()
             result = api.get_validation_report(package_id)
             return OperationResult.ok(data=result)
-        except (NetworkException, ApiException):
-            raise
+        except ApiException as e:
+            logger.error(f"Get validation report API error: {e}")
+            return OperationResult.fail(str(e), message_ar=self._api_error_msg(e, "فشل تحميل تقرير التحقق"))
+        except NetworkException as e:
+            logger.error(f"Get validation report network error: {e}")
+            return OperationResult.fail(str(e), message_ar="خطأ في الاتصال بالخادم")
         except Exception as e:
             logger.error(f"Get validation report failed: {e}")
             return OperationResult.fail(str(e), message_ar="فشل تحميل تقرير التحقق")
@@ -152,8 +170,12 @@ class ImportController(BaseController):
             if not isinstance(result, dict):
                 result = {}
             return OperationResult.ok(data=result)
-        except (NetworkException, ApiException):
-            raise
+        except ApiException as e:
+            logger.error(f"Get staged entities API error: {e}")
+            return OperationResult.fail(str(e), message_ar=self._api_error_msg(e, "فشل تحميل الكيانات المرحلية"))
+        except NetworkException as e:
+            logger.error(f"Get staged entities network error: {e}")
+            return OperationResult.fail(str(e), message_ar="خطأ في الاتصال بالخادم")
         except Exception as e:
             logger.error(f"Get staged entities failed: {e}")
             return OperationResult.fail(str(e), message_ar="فشل تحميل الكيانات المرحلية")
@@ -164,8 +186,12 @@ class ImportController(BaseController):
             api = get_api_client()
             result = api.detect_duplicates(package_id)
             return OperationResult.ok(data=result, message_ar="تم كشف التكرارات")
-        except (NetworkException, ApiException):
-            raise
+        except ApiException as e:
+            logger.error(f"Detect duplicates API error: {e}")
+            return OperationResult.fail(str(e), message_ar=self._api_error_msg(e, "فشل كشف التكرارات"))
+        except NetworkException as e:
+            logger.error(f"Detect duplicates network error: {e}")
+            return OperationResult.fail(str(e), message_ar="خطأ في الاتصال بالخادم")
         except Exception as e:
             logger.error(f"Duplicate detection failed: {e}")
             return OperationResult.fail(str(e), message_ar="فشل كشف التكرارات")
@@ -176,8 +202,12 @@ class ImportController(BaseController):
             api = get_api_client()
             result = self._with_retry(lambda: api.approve_import_package(package_id))
             return OperationResult.ok(data=result, message_ar="تمت الموافقة على الحزمة")
-        except (NetworkException, ApiException):
-            raise
+        except ApiException as e:
+            logger.error(f"Approve package API error: {e}")
+            return OperationResult.fail(str(e), message_ar=self._api_error_msg(e, "فشل الموافقة على الحزمة"))
+        except NetworkException as e:
+            logger.error(f"Approve package network error: {e}")
+            return OperationResult.fail(str(e), message_ar="خطأ في الاتصال بالخادم")
         except Exception as e:
             logger.error(f"Approve failed: {e}")
             return OperationResult.fail(str(e), message_ar="فشل الموافقة على الحزمة")
@@ -189,8 +219,12 @@ class ImportController(BaseController):
             result = self._with_retry(lambda: api.commit_import_package(package_id))
             self.package_committed.emit(package_id)
             return OperationResult.ok(data=result, message_ar="تم إدخال البيانات في الإنتاج")
-        except (NetworkException, ApiException):
-            raise
+        except ApiException as e:
+            logger.error(f"Commit package API error: {e}")
+            return OperationResult.fail(str(e), message_ar=self._api_error_msg(e, "فشل إدخال البيانات"))
+        except NetworkException as e:
+            logger.error(f"Commit package network error: {e}")
+            return OperationResult.fail(str(e), message_ar="خطأ في الاتصال بالخادم")
         except Exception as e:
             logger.error(f"Commit failed: {e}")
             return OperationResult.fail(str(e), message_ar="فشل إدخال البيانات")
@@ -201,8 +235,12 @@ class ImportController(BaseController):
             api = get_api_client()
             result = api.get_commit_report(package_id)
             return OperationResult.ok(data=result)
-        except (NetworkException, ApiException):
-            raise
+        except ApiException as e:
+            logger.error(f"Get commit report API error: {e}")
+            return OperationResult.fail(str(e), message_ar=self._api_error_msg(e, "فشل تحميل تقرير الإدخال"))
+        except NetworkException as e:
+            logger.error(f"Get commit report network error: {e}")
+            return OperationResult.fail(str(e), message_ar="خطأ في الاتصال بالخادم")
         except Exception as e:
             logger.error(f"Get commit report failed: {e}")
             return OperationResult.fail(str(e), message_ar="فشل تحميل تقرير الإدخال")
@@ -213,8 +251,12 @@ class ImportController(BaseController):
             api = get_api_client()
             result = self._with_retry(lambda: api.reset_commit(package_id))
             return OperationResult.ok(data=result, message_ar="تم إعادة تعيين حالة الإدخال")
-        except (NetworkException, ApiException):
-            raise
+        except ApiException as e:
+            logger.error(f"Reset commit API error: {e}")
+            return OperationResult.fail(str(e), message_ar=self._api_error_msg(e, "فشل إعادة التعيين"))
+        except NetworkException as e:
+            logger.error(f"Reset commit network error: {e}")
+            return OperationResult.fail(str(e), message_ar="خطأ في الاتصال بالخادم")
         except Exception as e:
             logger.error(f"Reset commit failed: {e}")
             return OperationResult.fail(str(e), message_ar="فشل إعادة التعيين")
@@ -226,8 +268,12 @@ class ImportController(BaseController):
             result = api.cancel_import_package(package_id)
             self.package_cancelled.emit(package_id)
             return OperationResult.ok(data=result, message_ar="تم إلغاء الحزمة")
-        except (NetworkException, ApiException):
-            raise
+        except ApiException as e:
+            logger.error(f"Cancel package API error: {e}")
+            return OperationResult.fail(str(e), message_ar=self._api_error_msg(e, "فشل إلغاء الحزمة"))
+        except NetworkException as e:
+            logger.error(f"Cancel package network error: {e}")
+            return OperationResult.fail(str(e), message_ar="خطأ في الاتصال بالخادم")
         except Exception as e:
             logger.error(f"Cancel failed: {e}")
             return OperationResult.fail(str(e), message_ar="فشل إلغاء الحزمة")
@@ -238,8 +284,12 @@ class ImportController(BaseController):
             api = get_api_client()
             result = api.quarantine_import_package(package_id)
             return OperationResult.ok(data=result, message_ar="تم حجر الحزمة")
-        except (NetworkException, ApiException):
-            raise
+        except ApiException as e:
+            logger.error(f"Quarantine package API error: {e}")
+            return OperationResult.fail(str(e), message_ar=self._api_error_msg(e, "فشل حجر الحزمة"))
+        except NetworkException as e:
+            logger.error(f"Quarantine package network error: {e}")
+            return OperationResult.fail(str(e), message_ar="خطأ في الاتصال بالخادم")
         except Exception as e:
             logger.error(f"Quarantine failed: {e}")
             return OperationResult.fail(str(e), message_ar="فشل حجر الحزمة")

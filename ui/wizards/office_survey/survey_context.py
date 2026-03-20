@@ -203,7 +203,7 @@ class SurveyContext(WizardContext):
         self.claims = []
         self.finalize_response = None
         for key in ("household_id", "unit_linked", "linked_unit_uuid",
-                    "claims_count", "created_claims"):
+                    "claims_count", "created_claims", "contact_person_id"):
             self.update_data(key, None)
 
     def cleanup_on_unit_change(self, api_client, new_unit_id: str = None) -> None:

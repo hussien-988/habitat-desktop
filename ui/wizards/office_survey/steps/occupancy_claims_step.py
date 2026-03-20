@@ -308,8 +308,6 @@ class OccupancyClaimsStep(BaseStep):
             contact_person_id = self.context.get_data('contact_person_id')
             if contact_person_id and person_data.get('person_id') == contact_person_id:
                 is_applicant = True
-        if not is_applicant and not person_data.get('_household_id'):
-            is_applicant = True
         has_relation = bool(
             person_data.get('person_role')
             or person_data.get('relationship_type')
@@ -417,8 +415,12 @@ class OccupancyClaimsStep(BaseStep):
                                 except Exception as e:
                                     logger.error(f"Failed to create relation for person {person_id}: {e}")
                     except Exception as e:
-                        logger.error(f"Failed to update person via API: {e}")
-                        ErrorHandler.show_error(self, map_exception(e), tr("common.error"))
+                        from services.error_mapper import is_duplicate_nid_error, build_duplicate_person_message
+                        if is_duplicate_nid_error(e):
+                            ErrorHandler.show_warning(self, build_duplicate_person_message(getattr(e, 'response_data', {})), tr("common.warning"))
+                        else:
+                            logger.error(f"Failed to update person via API: {e}")
+                            ErrorHandler.show_error(self, map_exception(e), tr("common.error"))
                         return
 
             if person_data.get('_is_applicant'):
@@ -432,7 +434,7 @@ class OccupancyClaimsStep(BaseStep):
         """Create a person row card with name, role, and action menu."""
         from ui.components.icon import Icon
 
-        person_id = person['person_id']
+        person_id = person.get('person_id', '')
 
         card = QFrame()
         card.setLayoutDirection(Qt.RightToLeft)
@@ -483,7 +485,7 @@ class OccupancyClaimsStep(BaseStep):
         text_vbox = QVBoxLayout()
         text_vbox.setSpacing(2)
 
-        full_name = f"{person['first_name']} {person.get('father_name', '')} {person['last_name']}".strip()
+        full_name = f"{person.get('first_name', '')} {person.get('father_name', '')} {person.get('last_name', '')}".strip()
         name_lbl = QLabel(full_name)
         name_lbl.setFont(create_font(size=FontManager.WIZARD_CARD_LABEL, weight=FontManager.WEIGHT_SEMIBOLD))
         name_lbl.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent;")

@@ -404,8 +404,8 @@ class AleppoDivisions:
 
 # Local settings file (per-device, not synced via API)
 _SETTINGS_FILE = Config.DATA_DIR / "settings.json"
-_DEFAULT_TILE_PORT = 5000
-_DEFAULT_API_PORT = 8080
+_DEFAULT_TILE_URL = "http://localhost:5000"
+_DEFAULT_API_SERVER_URL = "http://localhost:8080"
 
 
 def load_local_settings() -> dict:
@@ -426,39 +426,50 @@ def save_local_settings(settings: dict):
         json.dump(settings, f, indent=2, ensure_ascii=False)
 
 
-def get_tile_server_port() -> int:
-    """Get tile server port: settings.json > .env > default 5000."""
+def get_tile_server_url() -> str:
+    """Get tile server URL: settings.json > .env > default."""
     settings = load_local_settings()
+    if "tile_server_url" in settings:
+        return settings["tile_server_url"].rstrip("/")
     if "tile_server_port" in settings:
-        return int(settings["tile_server_port"])
+        return f"http://localhost:{int(settings['tile_server_port'])}"
     env_url = os.getenv("TILE_SERVER_URL", "")
     if env_url:
-        try:
-            from urllib.parse import urlparse
-            return urlparse(env_url).port or _DEFAULT_TILE_PORT
-        except Exception:
-            pass
-    return _DEFAULT_TILE_PORT
+        return env_url.rstrip("/")
+    return _DEFAULT_TILE_URL
 
 
-def get_api_port() -> int:
-    """Get API backend port: settings.json > .env > default 8080."""
+def get_api_server_url() -> str:
+    """Get API server URL (without /api suffix): settings.json > .env > default."""
     settings = load_local_settings()
+    if "api_server_url" in settings:
+        return settings["api_server_url"].rstrip("/")
+    if "api_base_url" in settings:
+        return settings["api_base_url"].rstrip("/").removesuffix("/api")
     if "api_port" in settings:
-        return int(settings["api_port"])
+        return f"http://localhost:{int(settings['api_port'])}"
     env_url = os.getenv("API_BASE_URL", "")
     if env_url:
-        try:
-            from urllib.parse import urlparse
-            return urlparse(env_url).port or _DEFAULT_API_PORT
-        except Exception:
-            pass
-    return _DEFAULT_API_PORT
+        return env_url.rstrip("/").removesuffix("/api")
+    return _DEFAULT_API_SERVER_URL
 
 
 def get_api_base_url() -> str:
-    """Get API base URL with the configured port."""
-    port = get_api_port()
-    return f"http://localhost:{port}/api"
+    """Get full API base URL (with /api suffix appended automatically)."""
+    return get_api_server_url() + "/api"
+
+
+def get_tile_server_port() -> int:
+    """Extract port from tile server URL (backwards compat)."""
+    from urllib.parse import urlparse
+    url = get_tile_server_url()
+    return urlparse(url).port or 5000
+
+
+def get_api_port() -> int:
+    """Extract port from API base URL (backwards compat)."""
+    from urllib.parse import urlparse
+    url = get_api_base_url()
+    return urlparse(url).port or 8080
 
 

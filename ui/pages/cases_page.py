@@ -69,6 +69,20 @@ class CasesPage(QWidget):
         """Set user context for filtering surveys by ownership."""
         self._user_role = role
         self._user_id = user_id
+        self._all_data = []
+        self._buildings_cache = {}
+        self._clear_content()
+
+        if role in ("data_manager", "admin"):
+            self._tab_bar.setVisible(False)
+            self._active_tab = "finalized"
+            self._type_filter.setVisible(True)
+            self._add_btn.setVisible(False)
+        else:
+            self._add_btn.setVisible(True)
+
+        if role == "office_clerk":
+            self._type_filter.setVisible(False)
 
     # UI Setup
 
@@ -147,9 +161,9 @@ class CasesPage(QWidget):
 
         layout.addSpacerItem(QSpacerItem(40, 20, QSizePolicy.Expanding, QSizePolicy.Minimum))
 
-        add_btn = PrimaryButton(tr("wizard.button.add_case"), icon_name="icon")
-        add_btn.clicked.connect(self.add_claim_clicked.emit)
-        layout.addWidget(add_btn)
+        self._add_btn = PrimaryButton(tr("wizard.button.add_case"), icon_name="icon")
+        self._add_btn.clicked.connect(self.add_claim_clicked.emit)
+        layout.addWidget(self._add_btn)
 
         return header
 
@@ -194,6 +208,7 @@ class CasesPage(QWidget):
     def _on_type_changed(self):
         """Survey type dropdown changed — re-filter locally."""
         self._apply_type_filter()
+
     # Tab handling
 
     def _on_tab_changed(self, index: int):

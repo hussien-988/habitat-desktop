@@ -913,6 +913,10 @@ class TRRCMSApiClient:
         api_data: Dict[str, Any] = {}
 
         field_map = {
+            'first_name_ar': 'firstNameArabic',
+            'father_name_ar': 'fatherNameArabic',
+            'last_name_ar': 'familyNameArabic',
+            'mother_name_ar': 'motherNameArabic',
             'first_name': 'firstNameArabic',
             'father_name': 'fatherNameArabic',
             'last_name': 'familyNameArabic',

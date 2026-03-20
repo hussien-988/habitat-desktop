@@ -562,6 +562,12 @@ class MainWindow(QMainWindow):
         # Update navbar with user info
         self.navbar.set_user_id(str(user.user_id))
 
+        # Set user context on CasesPage BEFORE configure_for_role,
+        # because configure_for_role emits tab_changed which triggers refresh()
+        cases_page = self.pages.get(Pages.CASES)
+        if cases_page and hasattr(cases_page, 'configure_for_user'):
+            cases_page.configure_for_user(user.role, str(user.user_id))
+
         # Configure tabs based on user role (RBAC)
         self.navbar.configure_for_role(user.role)
 
@@ -571,10 +577,6 @@ class MainWindow(QMainWindow):
             page = self.pages.get(page_id)
             if page and hasattr(page, 'configure_for_role'):
                 page.configure_for_role(user.role)
-
-        cases_page = self.pages.get(Pages.CASES)
-        if cases_page and hasattr(cases_page, 'configure_for_user'):
-            cases_page.configure_for_user(user.role, str(user.user_id))
 
         # Load field assignment filter data (requires valid API token)
         if Pages.FIELD_ASSIGNMENT in self.pages:
@@ -741,6 +743,13 @@ class MainWindow(QMainWindow):
                     logger.warning(f"API logout failed (proceeding with local logout): {e}")
                 self.current_user = None
                 self._stop_session_timer()
+                # Clear login fields for security
+                login_page = self.pages.get(Pages.LOGIN)
+                if login_page:
+                    if hasattr(login_page, 'username_input'):
+                        login_page.username_input.clear()
+                    if hasattr(login_page, 'password_input'):
+                        login_page.password_input.clear()
                 self._show_login()
 
     def _navigate_to_user(self, user_data: dict, mode: str):
@@ -1016,7 +1025,25 @@ class MainWindow(QMainWindow):
                         return
 
                 elif result == ConfirmationDialog.DISCARD:
-                    # User chose to discard - continue navigation
+                    # Cancel survey on server with reason
+                    survey_id = self.office_survey_wizard.context.get_data("survey_id")
+                    if survey_id:
+                        from PyQt5.QtWidgets import QInputDialog
+                        reason, ok = QInputDialog.getMultiLineText(
+                            self, "سبب الإلغاء",
+                            "يرجى إدخال سبب إلغاء المسح:", ""
+                        )
+                        if not ok or not reason.strip():
+                            return
+                        try:
+                            from services.api_client import get_api_client
+                            api = get_api_client()
+                            if self._api_token:
+                                api.set_access_token(self._api_token)
+                            api.cancel_survey(survey_id, reason.strip())
+                            logger.info(f"Survey {survey_id} cancelled: {reason.strip()}")
+                        except Exception as e:
+                            logger.warning(f"Failed to cancel survey {survey_id}: {e}")
                     logger.info("User discarded wizard changes")
 
                 else:

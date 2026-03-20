@@ -2342,17 +2342,12 @@ class PersonDialog(QDialog):
         return len(digits) == 7
 
     def _validate_national_id(self):
-        """Validate national ID format and uniqueness. Returns (valid, error_key)."""
+        """Validate national ID format. Uniqueness is checked server-side (409). Returns (valid, error_key)."""
         nid = self.national_id.text().strip()
         if not nid:
-            return True, None
+            return False, "wizard.person_dialog.nid_required"
         if len(nid) != 11 or not nid.isdigit():
             return False, "wizard.person_dialog.nid_invalid"
-        for person in self.existing_persons:
-            if person.get('national_id') == nid:
-                if self.editing_mode and self.person_data and person.get('person_id') == self.person_data.get('person_id'):
-                    continue
-                return False, "wizard.person_dialog.nid_duplicate"
         return True, None
 
     # Load / Save Data
@@ -2543,13 +2538,11 @@ class PersonDialog(QDialog):
         if not self.last_name.text().strip():
             self._set_field_error(self.last_name, self._last_name_error, tr("wizard.person_dialog.enter_last_name"))
             has_error = True
-        # Optional format checks
-        if self.national_id.text().strip():
-            nid_valid, nid_error = self._validate_national_id()
-            if not nid_valid:
-                self._set_field_error(self.national_id, self._nid_error, tr(nid_error))
-                self.tab_widget.setCurrentIndex(0)
-                has_error = True
+        nid_valid, nid_error = self._validate_national_id()
+        if not nid_valid:
+            self._set_field_error(self.national_id, self._nid_error, tr(nid_error))
+            self.tab_widget.setCurrentIndex(0)
+            has_error = True
         if not self._validate_mobile(self.phone.text().strip()):
             self._set_field_error(self.phone, self._mobile_error, tr("wizard.person_dialog.invalid_mobile"))
             self.tab_widget.setCurrentIndex(1)
@@ -2603,12 +2596,11 @@ class PersonDialog(QDialog):
             from ui.components.toast import Toast
             Toast.show_toast(self, "اسم الأم مطلوب", Toast.ERROR)
 
-        if self.national_id.text().strip():
-            nid_valid, nid_error = self._validate_national_id()
-            if not nid_valid:
-                self._set_field_error(self.national_id, self._nid_error, tr(nid_error))
-                self.tab_widget.setCurrentIndex(0)
-                has_error = True
+        nid_valid, nid_error = self._validate_national_id()
+        if not nid_valid:
+            self._set_field_error(self.national_id, self._nid_error, tr(nid_error))
+            self.tab_widget.setCurrentIndex(0)
+            has_error = True
 
         if has_error:
             return

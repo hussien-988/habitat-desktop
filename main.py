@@ -12,16 +12,16 @@ from pathlib import Path
 trrcms_path = Path(__file__).parent / "trrcms"
 sys.path.insert(0, str(trrcms_path))
 
-# Now we can import from trrcms
+
 from PyQt5.QtWidgets import QApplication
 from PyQt5.QtCore import Qt
 
-from app.config import Config  # type: ignore
-from app import MainWindow  # type: ignore
-from repositories.database import Database  # type: ignore
-from utils.i18n import I18n  # type: ignore
-from utils.logger import setup_logger  # type: ignore
-from ui.font_utils import set_application_default_font  # type: ignore
+from app.config import Config  
+from app import MainWindow  
+from repositories.database import Database  
+from utils.i18n import I18n  
+from utils.logger import setup_logger  
+from ui.font_utils import set_application_default_font  
 
 
 def main():
