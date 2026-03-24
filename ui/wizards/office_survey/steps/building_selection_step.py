@@ -26,6 +26,7 @@ from controllers.building_controller import BuildingController, BuildingFilter
 from controllers.unit_controller import UnitController
 from models.building import Building
 from services.api_client import get_api_client
+from services.api_worker import ApiWorker
 from services.error_mapper import map_exception
 from ui.error_handler import ErrorHandler
 from utils.logger import get_logger
@@ -742,22 +743,34 @@ class BuildingSelectionStep(BaseStep):
             self.emit_validation_changed(True)
 
     def _load_buildings(self):
-        """Load buildings into the list."""
-        # Ensure auth token is set before API call
+        """Load buildings into the list (non-blocking)."""
         self._set_building_controller_auth()
 
-        # Load first 100 buildings only for performance (use search for specific buildings)
         building_filter = BuildingFilter(limit=100)
-        result = self.building_controller.load_buildings(building_filter)
+
+        def _do_load():
+            return self.building_controller.load_buildings(building_filter)
+
+        self._load_buildings_worker = ApiWorker(_do_load)
+        self._load_buildings_worker.finished.connect(self._on_buildings_loaded)
+        self._load_buildings_worker.error.connect(
+            lambda msg: logger.error(f"Failed to load buildings: {msg}")
+        )
+        self._load_buildings_worker.start()
+
+    def _on_buildings_loaded(self, result):
+        """Handle buildings loaded from API."""
         self.buildings_list.clear()
 
         if not result.success:
             logger.error(f"Failed to load buildings: {result.message}")
             return
 
-        buildings = result.data
+        self._populate_buildings_list(result.data)
+
+    def _populate_buildings_list(self, buildings):
+        """Populate the buildings QListWidget with building items."""
         for building in buildings:
-            # Create item with building info
             item_text = (
                 f"{building.building_id} | "
                 f"{tr('wizard.building.type_prefix', value=building.building_type_display)} | "
@@ -765,13 +778,11 @@ class BuildingSelectionStep(BaseStep):
             )
             item = QListWidgetItem(item_text)
 
-            # Add blue.png icon (same icon as card header)
             from ui.components.icon import Icon
             icon_pixmap = Icon.load_pixmap("blue", size=24)
             if icon_pixmap and not icon_pixmap.isNull():
                 item.setIcon(QIcon(icon_pixmap))
 
-            # Apply font: same as subtitle
             font = create_font(size=FontManager.WIZARD_CARD_VALUE, weight=FontManager.WEIGHT_REGULAR)
             item.setFont(font)
             item.setForeground(QColor(Colors.WIZARD_SUBTITLE))
@@ -791,47 +802,31 @@ class BuildingSelectionStep(BaseStep):
             item.setHidden(search_text not in item.text().lower())
 
     def _search_buildings(self):
-        """Search buildings via API or local database."""
-        # Ensure auth token is set on building controller
+        """Search buildings via API or local database (non-blocking)."""
         self._set_building_controller_auth()
 
         search = self.building_search.text().strip()
 
-        if search:
-            result = self.building_controller.search_buildings(search)
-        else:
-            # Load first 100 buildings only
-            building_filter = BuildingFilter(limit=100)
-            result = self.building_controller.load_buildings(building_filter)
+        def _do_search():
+            if search:
+                return self.building_controller.search_buildings(search)
+            else:
+                building_filter = BuildingFilter(limit=100)
+                return self.building_controller.load_buildings(building_filter)
 
-        self.buildings_list.clear()
+        def _on_search_done(result):
+            self.buildings_list.clear()
+            if not result.success:
+                logger.error(f"Failed to search buildings: {result.message}")
+                return
+            self._populate_buildings_list(result.data)
 
-        if not result.success:
-            logger.error(f"Failed to search buildings: {result.message}")
-            return
-
-        buildings = result.data
-        for building in buildings:
-            # Create item with building info
-            item_text = (
-                f"{building.building_id} | "
-                f"{tr('wizard.building.type_prefix', value=building.building_type_display)}"
-            )
-            item = QListWidgetItem(item_text)
-
-            # Add blue.png icon (same icon as card header)
-            from ui.components.icon import Icon
-            icon_pixmap = Icon.load_pixmap("blue", size=24)
-            if icon_pixmap and not icon_pixmap.isNull():
-                item.setIcon(QIcon(icon_pixmap))
-
-            # Apply font: same as subtitle
-            font = create_font(size=FontManager.WIZARD_CARD_VALUE, weight=FontManager.WEIGHT_REGULAR)
-            item.setFont(font)
-            item.setForeground(QColor(Colors.WIZARD_SUBTITLE))
-
-            item.setData(Qt.UserRole, building)
-            self.buildings_list.addItem(item)
+        self._search_buildings_worker = ApiWorker(_do_search)
+        self._search_buildings_worker.finished.connect(_on_search_done)
+        self._search_buildings_worker.error.connect(
+            lambda msg: logger.error(f"Failed to search buildings: {msg}")
+        )
+        self._search_buildings_worker.start()
 
     def _on_building_selected(self, item):
         """Handle building selection."""
@@ -1169,15 +1164,19 @@ class BuildingSelectionStep(BaseStep):
         self.address_container.setVisible(True)
 
     def _update_unit_count_from_api(self, building):
-        """Fetch actual unit counts from PropertyUnits API and update display labels."""
+        """Fetch actual unit counts from PropertyUnits API (non-blocking)."""
         building_uuid = getattr(building, 'building_uuid', None)
         if not building_uuid:
             return
-        try:
-            main_window = self.window()
-            if main_window and hasattr(main_window, '_api_token') and main_window._api_token:
-                self._unit_controller.set_auth_token(main_window._api_token)
-            result = self._unit_controller.get_units_for_building(building_uuid)
+
+        main_window = self.window()
+        if main_window and hasattr(main_window, '_api_token') and main_window._api_token:
+            self._unit_controller.set_auth_token(main_window._api_token)
+
+        def _do_fetch():
+            return self._unit_controller.get_units_for_building(building_uuid)
+
+        def _on_units_fetched(result):
             if result.success and result.data is not None:
                 units = result.data
                 total = len(units)
@@ -1188,8 +1187,13 @@ class BuildingSelectionStep(BaseStep):
                 self.ui_units_count.setText(str(total))
                 self.ui_parcels_count.setText(str(residential))
                 self.ui_shops_count.setText(str(total - residential))
-        except Exception as e:
-            logger.warning(f"Could not fetch unit counts for building {building_uuid}: {e}")
+
+        self._unit_count_worker = ApiWorker(_do_fetch)
+        self._unit_count_worker.finished.connect(_on_units_fetched)
+        self._unit_count_worker.error.connect(
+            lambda msg: logger.warning(f"Could not fetch unit counts for building {building_uuid}: {msg}")
+        )
+        self._unit_count_worker.start()
 
     def _set_building_controller_auth(self):
         """Set auth token for building controller API service."""

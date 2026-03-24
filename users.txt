@@ -1,15 +1,9 @@
 TRRCMS - بيانات دخول تطبيق سطح المكتب
-========================================
 
-الدور: مدير البيانات
-اسم المستخدم: data_manager
-كلمة المرور: Trrcms@2026
-------------------------------
-الدور: موظف المكتب
-اسم المستخدم: office_clerk
-كلمة المرور: Trrcms@2026
-------------------------------
-الدور: مشرف ميداني
-اسم المستخدم: field_supervisor
-كلمة المرور: Trrcms@2026
-------------------------------
+Username	Password	Role	
+admin	         Admin@123	Administrator      
+datamanager	Data@123	DataManager
+clerk	           Clerk@123  OfficeClerk
+collector	Field@123	FieldCollector	
+supervisor	Super@123	FieldSupervisor
+analyst	Analyst@123	Analyst	

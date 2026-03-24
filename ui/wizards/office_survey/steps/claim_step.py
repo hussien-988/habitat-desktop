@@ -22,6 +22,7 @@ from services.display_mappings import (
     get_claim_type_display, get_claim_status_display,
     get_source_display
 )
+from services.api_worker import ApiWorker
 from ui.style_manager import StyleManager
 from utils.logger import get_logger
 from ui.wizards.office_survey.steps.occupancy_claims_step import _is_owner_relation
@@ -523,19 +524,45 @@ class ClaimStep(BaseStep):
                 }
             """)
 
-    def _fetch_evidence_count(self) -> int:
-        """Fetch evidence count from the API."""
+    def _fetch_evidence_count(self, callback=None) -> int:
+        """Fetch evidence count from the API (non-blocking).
+
+        Args:
+            callback: Optional callable(int) invoked with the evidence count.
+
+        Returns:
+            Cached evidence count (0 if not yet fetched).
+        """
+        cached = getattr(self, '_cached_evidence_count', 0)
         survey_id = self.context.get_data("survey_id")
         if not survey_id:
-            return 0
-        try:
-            from services.api_client import get_api_client
-            api = get_api_client()
-            evidences = api.get_survey_evidences(survey_id)
-            return len(evidences)
-        except Exception as e:
-            logger.warning(f"Failed to fetch evidence count: {e}")
-            return 0
+            if callback:
+                callback(0)
+            return cached
+
+        from services.api_client import get_api_client
+        api = get_api_client()
+
+        def _do_fetch():
+            return api.get_survey_evidences(survey_id)
+
+        def _on_fetched(evidences):
+            count = len(evidences) if evidences else 0
+            self._cached_evidence_count = count
+            if callback:
+                callback(count)
+
+        def _on_error(msg):
+            logger.warning(f"Failed to fetch evidence count: {msg}")
+            if callback:
+                callback(cached)
+
+        self._evidence_count_worker = ApiWorker(_do_fetch)
+        self._evidence_count_worker.finished.connect(_on_fetched)
+        self._evidence_count_worker.error.connect(_on_error)
+        self._evidence_count_worker.start()
+
+        return cached
 
     def _evaluate_for_claim(self):
         """Evaluate relations for claim creation and populate from API response if available."""
@@ -661,13 +688,21 @@ class ClaimStep(BaseStep):
 
         # Update status bar
         evidence_count = data_summary.get('evidenceCount', 0)
-        if not evidence_count:
-            evidence_count = self._fetch_evidence_count()
         reason = response.get('claimNotCreatedReason', '')
 
         if evidence_count > 0:
-            first_card.claim_eval_label.setText(f"✓  الأدلة متوفرة ({evidence_count})")
-            first_card.claim_eval_label.setStyleSheet("""
+            self._update_evidence_label(first_card.claim_eval_label, evidence_count, reason)
+        else:
+            # Fetch asynchronously, update label on callback
+            self._fetch_evidence_count(
+                callback=lambda c: self._update_evidence_label(first_card.claim_eval_label, c, reason)
+            )
+
+    def _update_evidence_label(self, label, evidence_count, reason=""):
+        """Update the evidence status label based on count."""
+        if evidence_count > 0:
+            label.setText(f"✓  الأدلة متوفرة ({evidence_count})")
+            label.setStyleSheet("""
                 QLabel {
                     background-color: #e1f7ef;
                     color: #10b981;
@@ -675,8 +710,8 @@ class ClaimStep(BaseStep):
                 }
             """)
         else:
-            first_card.claim_eval_label.setText(reason if reason else "في انتظار المستندات")
-            first_card.claim_eval_label.setStyleSheet("""
+            label.setText(reason if reason else "في انتظار المستندات")
+            label.setStyleSheet("""
                 QLabel {
                     background-color: #fef3c7;
                     color: #f59e0b;
@@ -696,8 +731,6 @@ class ClaimStep(BaseStep):
         owners_or_heirs = [r for r in self.context.relations if _is_owner_relation(r.get('relation_type'))]
         tenants = [r for r in self.context.relations if r.get('relation_type') in ('tenant', 3)]
         occupants = [r for r in self.context.relations if r.get('relation_type') in ('occupant', 2)]
-
-        total_evidences = self._fetch_evidence_count()
 
         if self.context.unit:
             unit = self.context.unit
@@ -773,24 +806,10 @@ class ClaimStep(BaseStep):
         # Store raw data for collect_data
         first_card._claim_raw_data = {'from_context': True}
 
-        if total_evidences > 0:
-            first_card.claim_eval_label.setText(f"✓  الأدلة متوفرة ({total_evidences})")
-            first_card.claim_eval_label.setStyleSheet("""
-                QLabel {
-                    background-color: #e1f7ef;
-                    color: #10b981;
-                    border-radius: 18px;
-                }
-            """)
-        else:
-            first_card.claim_eval_label.setText("في انتظار المستندات")
-            first_card.claim_eval_label.setStyleSheet("""
-                QLabel {
-                    background-color: #fef3c7;
-                    color: #f59e0b;
-                    border-radius: 18px;
-                }
-            """)
+        # Fetch evidence count asynchronously and update label
+        self._fetch_evidence_count(
+            callback=lambda c: self._update_evidence_label(first_card.claim_eval_label, c)
+        )
 
     def reset(self):
         """Reset claim cards to initial state for a new wizard session."""
@@ -858,7 +877,7 @@ class ClaimStep(BaseStep):
 
             evidence_count = len(all_evidences)
             if not evidence_count:
-                evidence_count = self._fetch_evidence_count()
+                evidence_count = getattr(self, '_cached_evidence_count', 0)
 
             # Use stored raw API data if available, otherwise use defaults
             raw = getattr(card, '_claim_raw_data', {}) or {}

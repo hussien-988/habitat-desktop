@@ -1,9 +1,10 @@
 # -*- coding: utf-8 -*-
 """Building Map Dialog V2 - dialog for building selection via interactive map."""
 
+import json
 from typing import Optional
 from ui.error_handler import ErrorHandler
-from PyQt5.QtCore import QTimer
+from PyQt5.QtCore import QTimer, QThread, pyqtSignal
 
 from repositories.database import Database
 from controllers.building_controller import BuildingController, BuildingFilter
@@ -14,6 +15,276 @@ from services.geojson_converter import GeoJSONConverter
 from utils.logger import get_logger
 
 logger = get_logger(__name__)
+
+
+class _MapDataWorker(QThread):
+    """Background worker for loading map data without blocking the UI."""
+    finished = pyqtSignal(dict)
+    error = pyqtSignal(str)
+
+    def __init__(self, auth_token, selected_building_id, is_view_only, fallback_building):
+        super().__init__()
+        self._auth_token = auth_token
+        self._selected_building_id = selected_building_id
+        self._is_view_only = is_view_only
+        self._fallback_building = fallback_building
+
+    def run(self):
+        try:
+            result = {}
+
+            from services.tile_server_manager import get_tile_server_url
+            result['tile_server_url'] = get_tile_server_url()
+
+            from services.map_service_api import MapServiceAPI
+            from ui.constants.map_constants import MapConstants
+
+            map_service = MapServiceAPI()
+            if self._auth_token:
+                map_service.set_auth_token(self._auth_token)
+
+            # Load buildings
+            buildings = []
+            if self._is_view_only and self._selected_building_id:
+                result['buildings_geojson'] = '{"type": "FeatureCollection", "features": []}'
+                building = map_service.get_building_with_polygon(self._selected_building_id)
+                result['view_buildings'] = [building] if building else []
+                if not result['view_buildings'] and self._fallback_building:
+                    result['view_buildings'] = [self._fallback_building]
+            else:
+                try:
+                    buildings = map_service.get_buildings_in_bbox(
+                        north_east_lat=MapConstants.MAX_LAT,
+                        north_east_lng=MapConstants.MAX_LON,
+                        south_west_lat=MapConstants.MIN_LAT,
+                        south_west_lng=MapConstants.MIN_LON,
+                        page_size=200
+                    )
+                except Exception as e:
+                    logger.warning(f"API map loading failed: {e}")
+                result['buildings_list'] = buildings
+                result['buildings_geojson'] = GeoJSONConverter.buildings_to_geojson(
+                    buildings, prefer_polygons=True
+                )
+
+            # Load neighborhoods
+            result['neighborhoods_geojson'] = None
+            try:
+                from services.api_client import get_api_client
+                api = get_api_client()
+                if api and self._auth_token:
+                    from app.config import Config
+                    neighborhoods = api.get_neighborhoods_by_bounds(
+                        sw_lat=Config.MAP_BOUNDS_MIN_LAT,
+                        sw_lng=Config.MAP_BOUNDS_MIN_LNG,
+                        ne_lat=Config.MAP_BOUNDS_MAX_LAT,
+                        ne_lng=Config.MAP_BOUNDS_MAX_LNG,
+                    )
+                    if neighborhoods:
+                        features = []
+                        for n in neighborhoods:
+                            import re
+                            wkt = n.get('boundaries') or n.get('boundary') or n.get('boundaryWkt') or ''
+                            coords = re.findall(r'([-\d.]+)\s+([-\d.]+)', wkt)
+                            if coords:
+                                lngs = [float(c[0]) for c in coords]
+                                lats = [float(c[1]) for c in coords]
+                                center = (sum(lats)/len(lats), sum(lngs)/len(lngs))
+                                features.append({
+                                    "type": "Feature",
+                                    "properties": {
+                                        "code": n.get('neighborhoodCode') or n.get('code', ''),
+                                        "center_lat": center[0], "center_lng": center[1],
+                                        "name_ar": n.get('nameArabic') or n.get('name_ar', '')
+                                    },
+                                    "geometry": None
+                                })
+                        result['neighborhoods_geojson'] = json.dumps(
+                            {"type": "FeatureCollection", "features": features}
+                        )
+            except Exception as e:
+                logger.warning(f"Could not load neighborhoods: {e}")
+
+            # Load boundaries from local GeoJSON
+            result['boundaries_geojson'] = None
+            try:
+                from services import boundary_service
+                if boundary_service.is_available('neighbourhoods'):
+                    raw = boundary_service.get('neighbourhoods')
+                    if raw:
+                        boundary_data = json.loads(raw)
+                        boundary_data['features'] = [
+                            f for f in boundary_data['features']
+                            if f.get('properties', {}).get('ADM1_PCODE') == 'SY02'
+                        ]
+                        result['boundaries_geojson'] = json.dumps(boundary_data, ensure_ascii=False)
+            except Exception as e:
+                logger.warning(f"Failed to load boundaries: {e}")
+
+            # Load landmarks and streets
+            result['landmarks_json'] = None
+            result['streets_json'] = None
+            try:
+                from services.api_client import get_api_client
+                from services.map_utils import normalize_landmark, normalize_street
+                api = get_api_client()
+                from ui.constants.map_constants import MapConstants
+                sw_lat, sw_lng = MapConstants.DEFAULT_CENTER_LAT - 0.5, MapConstants.DEFAULT_CENTER_LON - 0.5
+                ne_lat, ne_lng = MapConstants.DEFAULT_CENTER_LAT + 0.5, MapConstants.DEFAULT_CENTER_LON + 0.5
+
+                landmarks = api.get_landmarks_for_map(
+                    south_west_lat=sw_lat, south_west_lng=sw_lng,
+                    north_east_lat=ne_lat, north_east_lng=ne_lng
+                )
+                if landmarks and isinstance(landmarks, list):
+                    landmarks = [normalize_landmark(lm) for lm in landmarks]
+                    result['landmarks_json'] = json.dumps(landmarks, ensure_ascii=False)
+
+                streets = api.get_streets_for_map(
+                    south_west_lat=sw_lat, south_west_lng=sw_lng,
+                    north_east_lat=ne_lat, north_east_lng=ne_lng
+                )
+                if streets and isinstance(streets, list):
+                    streets = [normalize_street(s) for s in streets]
+                    result['streets_json'] = json.dumps(streets, ensure_ascii=False)
+            except Exception as e:
+                logger.warning(f"Failed to load landmarks/streets: {e}")
+
+            self.finished.emit(result)
+        except Exception as e:
+            logger.error(f"Map data worker error: {e}", exc_info=True)
+            self.error.emit(str(e))
+
+
+class _SearchWorker(QThread):
+    """Background worker for search operations without blocking UI."""
+    found = pyqtSignal(str, float, float, int)  # name, lat, lng, zoom
+    not_found = pyqtSignal(str)  # search_text
+    error = pyqtSignal(str)
+
+    def __init__(self, search_text, auth_token, neighborhoods_cache):
+        super().__init__()
+        self._search_text = search_text
+        self._auth_token = auth_token
+        self.neighborhoods_cache = neighborhoods_cache
+
+    def run(self):
+        try:
+            from services.api_client import get_api_client
+            search_text = self._search_text
+
+            # Step 1: load neighborhoods if not cached
+            if self.neighborhoods_cache is None:
+                try:
+                    api = get_api_client()
+                    if self._auth_token:
+                        api.set_access_token(self._auth_token)
+                    self.neighborhoods_cache = api.get_neighborhoods() or []
+                    logger.info(f"Loaded {len(self.neighborhoods_cache)} neighborhoods from API")
+                except Exception as e:
+                    logger.warning(f"Failed to load neighborhoods: {e}")
+                    self.neighborhoods_cache = []
+
+            # Step 2: match neighborhood
+            match = self._match_neighborhood(search_text)
+            if match and match["lat"] and match["lng"]:
+                try:
+                    self.found.emit(match["name"], float(match["lat"]), float(match["lng"]), 17)
+                    return
+                except (ValueError, TypeError):
+                    logger.warning(f"Invalid coords for {match['name']}")
+
+            if not match:
+                # Step 3: places fallback (local file, fast)
+                try:
+                    from services import boundary_service
+                    places = boundary_service.get_places_list()
+                    for p in places:
+                        if search_text in p.get('name_ar', '') or \
+                           search_text.lower() in p.get('name_en', '').lower():
+                            label = p.get('name_ar') or p.get('name_en') or search_text
+                            self.found.emit(label, float(p['lat']), float(p['lng']), 13)
+                            return
+                except Exception as e:
+                    logger.warning(f"Places search error: {e}")
+
+                # Step 4: landmarks API
+                try:
+                    from services.map_utils import normalize_landmark
+                    api = get_api_client()
+                    landmarks = api.search_landmarks(search_text, max_results=5)
+                    if landmarks and isinstance(landmarks, list):
+                        lm = normalize_landmark(landmarks[0])
+                        lat, lng = lm.get("latitude"), lm.get("longitude")
+                        if lat and lng:
+                            self.found.emit(
+                                lm.get("name", search_text),
+                                float(lat), float(lng), 17
+                            )
+                            return
+                except Exception as e:
+                    logger.warning(f"Landmark search error: {e}")
+
+                self.not_found.emit(search_text)
+                return
+
+            # Step 5: neighborhood matched but no coords - search buildings
+            if match and match.get("code"):
+                try:
+                    api = get_api_client()
+                    if self._auth_token:
+                        api.set_access_token(self._auth_token)
+                    response = api.search_buildings(
+                        neighborhood_code=match["code"], page_size=200
+                    )
+                    buildings_data = response.get('buildings', response.get('data', []))
+                    lats, lons = [], []
+                    for b_data in buildings_data:
+                        b = Building.from_dict(b_data)
+                        if b.latitude and b.longitude:
+                            lats.append(b.latitude)
+                            lons.append(b.longitude)
+                    if lats:
+                        zoom = 19 if len(lats) <= 5 else 18 if len(lats) <= 15 else 17
+                        self.found.emit(
+                            match["name"],
+                            sum(lats) / len(lats),
+                            sum(lons) / len(lons),
+                            zoom
+                        )
+                        return
+                except Exception as e:
+                    logger.warning(f"Building search error: {e}")
+
+            self.not_found.emit(search_text)
+
+        except Exception as e:
+            logger.error(f"Search worker error: {e}", exc_info=True)
+            self.error.emit(str(e))
+
+    def _match_neighborhood(self, search_text):
+        """Match search text against cached neighborhoods."""
+        search_lower = search_text.lower().strip()
+        best_match = None
+        for n in (self.neighborhoods_cache or []):
+            name_ar = n.get("nameArabic", "") or ""
+            name_en = n.get("nameEnglish", "") or n.get("name", "") or ""
+            if search_lower == name_ar.lower() or search_lower == name_en.lower():
+                best_match = n
+                break
+            if not best_match:
+                if search_lower in name_ar.lower() or search_lower in name_en.lower():
+                    best_match = n
+        if not best_match:
+            return None
+        code = (
+            best_match.get("neighborhoodCode") or best_match.get("code")
+            or best_match.get("fullCode") or ""
+        )
+        name = best_match.get("nameArabic") or best_match.get("nameEnglish") or ""
+        lat = best_match.get("centerLatitude") or best_match.get("latitude") or best_match.get("centroidLat")
+        lng = best_match.get("centerLongitude") or best_match.get("longitude") or best_match.get("centroidLng")
+        return {"code": code, "name": name, "lat": lat, "lng": lng}
 
 
 class BuildingMapDialog(BaseMapDialog):
@@ -95,265 +366,188 @@ class BuildingMapDialog(BaseMapDialog):
 
         # Cache for neighborhoods (loaded from API on first search)
         self._neighborhoods_cache = None
+        self._search_worker = None
 
-        # SIMPLE: Load map with buildings directly (like old working version!)
-        self._load_map()
+        # Load map data in background thread to avoid UI freeze
+        self._data_worker = None
+        QTimer.singleShot(50, self._start_map_load)
 
-    def _load_map(self):
-        """Load map with buildings."""
+    def _start_map_load(self):
+        """Show map immediately with tiles, then load buildings in background."""
         from services.tile_server_manager import get_tile_server_url
+        from ui.constants.map_constants import MapConstants
 
+        tile_url = get_tile_server_url()
+        center_lat = MapConstants.DEFAULT_CENTER_LAT
+        center_lon = MapConstants.DEFAULT_CENTER_LON
+        zoom = 15
+
+        # For view-only with fallback building, center on it
+        if self._is_view_only and self._fallback_building:
+            fb = self._fallback_building
+            if fb.latitude and fb.longitude:
+                center_lat, center_lon = fb.latitude, fb.longitude
+                zoom = 20
+
+        # Show map immediately with empty buildings
+        empty_geojson = '{"type":"FeatureCollection","features":[]}'
+        html = generate_leaflet_html(
+            tile_server_url=tile_url.rstrip('/'),
+            buildings_geojson=empty_geojson,
+            center_lat=center_lat,
+            center_lon=center_lon,
+            zoom=zoom,
+            max_zoom=20,
+            show_legend=True,
+            show_layer_control=False,
+            enable_selection=(not self._is_view_only),
+            enable_viewport_loading=(not self._is_view_only),
+            enable_drawing=False,
+            neighborhoods_geojson=None,
+            landmarks_json='[]',
+            streets_json='[]',
+            boundaries_geojson=None,
+            boundary_level='neighbourhoods',
+        )
+        self.load_map_html(html)
+
+        # Show loading overlay on map
+        if self.web_view:
+            js_overlay = """
+            (function() {
+                var overlay = document.createElement('div');
+                overlay.id = 'loadingOverlay';
+                overlay.style.cssText = 'position:fixed;top:12px;left:50%;transform:translateX(-50%);' +
+                    'background:rgba(27,43,77,0.85);color:white;padding:8px 20px;border-radius:20px;' +
+                    'font-size:13px;font-family:Arial;z-index:9999;direction:rtl;';
+                overlay.textContent = 'جاري تحميل المباني...';
+                document.body.appendChild(overlay);
+            })();
+            """
+            QTimer.singleShot(300, lambda: self.web_view.page().runJavaScript(js_overlay))
+
+        # Load data in background
+        self._data_worker = _MapDataWorker(
+            self._auth_token, self._selected_building_id,
+            self._is_view_only, self._fallback_building
+        )
+        self._data_worker.finished.connect(self._on_map_data_ready)
+        self._data_worker.error.connect(self._on_map_data_error)
+        self._data_worker.start()
+
+    def _on_map_data_error(self, error_msg):
+        """Handle map data loading error."""
+        logger.error(f"Map data loading failed: {error_msg}")
+        ErrorHandler.show_error(self, f"حدث خطأ أثناء تحميل الخريطة:\n{error_msg}", "خطأ")
+
+    def _on_map_data_ready(self, data):
+        """Inject buildings and layers into the already-visible map."""
         try:
-            # Get tile server URL
-            tile_server_url = get_tile_server_url()
+            buildings_geojson = data.get('buildings_geojson', '{"type":"FeatureCollection","features":[]}')
 
-            # Use self._auth_token (already set in __init__)
-            logger.debug(f"Using auth token for loading buildings: {bool(self._auth_token)}")
+            # Cache buildings for selection
+            if 'buildings_list' in data:
+                self._buildings_cache = data['buildings_list']
+                logger.info(f"Cached {len(self._buildings_cache)} buildings for selection")
 
-            # Load buildings using shared method
-            # VIEW-ONLY MODE: Load ONLY the selected building (no others!)
-            # SELECTION MODE: 200 buildings for initial load
-            if self._is_view_only and self._selected_building_id:
-                # View-only: Empty initial load (will add selected building below)
-                buildings_geojson = '{"type": "FeatureCollection", "features": []}'
-                logger.info("View-only mode: Loading ONLY selected building (no initial 200)")
-            else:
-                # Selection mode: Load 200 buildings for browsing
-                buildings = []
-                try:
-                    from services.map_service_api import MapServiceAPI
-                    from ui.constants.map_constants import MapConstants
-
-                    map_service = MapServiceAPI()
-                    if self._auth_token:
-                        map_service.set_auth_token(self._auth_token)
-
-                    buildings = map_service.get_buildings_in_bbox(
-                        north_east_lat=MapConstants.MAX_LAT,
-                        north_east_lng=MapConstants.MAX_LON,
-                        south_west_lat=MapConstants.MIN_LAT,
-                        south_west_lng=MapConstants.MIN_LON,
-                        page_size=200
-                    )
-                except Exception as e:
-                    logger.warning(f"API map loading failed: {e}")
-                    QTimer.singleShot(1000, lambda: self._show_load_warning())
-
-                # Cache buildings for selection lookup
-                self._buildings_cache = buildings
-                logger.info(f"Cached {len(buildings)} buildings for selection")
-
-                from services.geojson_converter import GeoJSONConverter
-                buildings_geojson = GeoJSONConverter.buildings_to_geojson(
-                    buildings,
-                    prefer_polygons=True
-                )
-
-            import json
             geojson_data = json.loads(buildings_geojson) if isinstance(buildings_geojson, str) else buildings_geojson
-            num_features = len(geojson_data.get('features', []))
-            logger.info(f"Loaded {num_features} buildings into GeoJSON")
 
-            if num_features == 0:
-                logger.error("NO BUILDINGS LOADED! GeoJSON is empty!")
-            else:
-                # Check if buildings have coordinates
-                features_with_coords = sum(
-                    1 for f in geojson_data['features']
-                    if f.get('geometry') and f['geometry'].get('coordinates')
-                )
-                logger.info(f"Buildings with coordinates: {features_with_coords}/{num_features}")
-
-            # Only load buildings if in view-only mode (for focusing on specific building)
-            buildings = []
-            if self._is_view_only and self._selected_building_id:
-                logger.info(f"Focus mode: Looking for building_id = {self._selected_building_id}")
-
-                from services.map_service_api import MapServiceAPI
-                map_service = MapServiceAPI()
-                if self._auth_token:
-                    map_service.set_auth_token(self._auth_token)
-
-                building = map_service.get_building_with_polygon(self._selected_building_id)
-                buildings = [building] if building else []
-                logger.info(f"Retrieved building with polygon: found {len(buildings)} buildings")
-
-                # Fallback: if API didn't find the building, use the passed-in building object
-                if not buildings and self._fallback_building:
-                    buildings = [self._fallback_building]
-                    logger.info(f"Using fallback building object for GeoJSON (lat={self._fallback_building.latitude}, lon={self._fallback_building.longitude})")
-
-                # Add selected building to GeoJSON if not already present
-                if buildings and len(buildings) > 0:
-                    from services.geojson_converter import GeoJSONConverter
-                    selected_building_geojson = GeoJSONConverter.buildings_to_geojson(
-                        buildings,
-                        prefer_polygons=True
-                    )
-
-                    # Merge selected building into buildings_geojson
-                    selected_data = json.loads(selected_building_geojson)
-                    if selected_data.get('features'):
-                        # Check if building already exists in geojson_data
-                        existing_ids = {
-                            f.get('properties', {}).get('building_id')
-                            for f in geojson_data.get('features', [])
-                        }
-
-                        # Add selected building if not present
-                        for feature in selected_data['features']:
-                            building_id = feature.get('properties', {}).get('building_id')
-                            if building_id not in existing_ids:
-                                geojson_data['features'].append(feature)
-                                logger.info(f"Added selected building {building_id} to GeoJSON")
-
-                        # Update buildings_geojson with merged data
-                        buildings_geojson = json.dumps(geojson_data)
-
-            # Determine center and zoom
-            from ui.constants.map_constants import MapConstants
-            center_lat = MapConstants.DEFAULT_CENTER_LAT
-            center_lon = MapConstants.DEFAULT_CENTER_LON
-            zoom = 15  #
+            # Handle view-only mode
             focus_building_id = None
+            center_lat = center_lon = None
 
-            # If view-only mode, focus on the selected building
             if self._is_view_only and self._selected_building_id:
-                logger.info(f"Focus mode: self._selected_building_id = {self._selected_building_id}")
-                logger.info(f"Focus mode: buildings list has {len(buildings)} buildings")
+                buildings = data.get('view_buildings', [])
                 if buildings:
-                    logger.info(f"Buildings IDs in list: {[b.building_id for b in buildings]}")
+                    selected_geojson = GeoJSONConverter.buildings_to_geojson(buildings, prefer_polygons=True)
+                    selected_data = json.loads(selected_geojson)
+                    if selected_data.get('features'):
+                        existing_ids = {f.get('properties', {}).get('building_id') for f in geojson_data.get('features', [])}
+                        for feature in selected_data['features']:
+                            bid = feature.get('properties', {}).get('building_id')
+                            if bid not in existing_ids:
+                                geojson_data['features'].append(feature)
+                        buildings_geojson = json.dumps(geojson_data)
 
                 focus_building = next(
                     (b for b in buildings
                      if b.building_id == self._selected_building_id
-                     or b.building_uuid == self._selected_building_id),
-                    None
+                     or b.building_uuid == self._selected_building_id), None
                 )
-
-                if focus_building:
-                    logger.info(f"Found focus_building: {focus_building.building_id}")
-                else:
-                    logger.warning(f"Could NOT find focus_building with ID {self._selected_building_id} in buildings list")
-
                 if not focus_building and self._fallback_building:
-                    # Use fallback building coordinates when API lookup fails
-                    logger.info(f"Using fallback building coordinates for {self._selected_building_id}")
                     focus_building = self._fallback_building
 
                 if focus_building:
-                    # Calculate center from polygon geometry if available
                     if focus_building.geo_location and 'POLYGON' in focus_building.geo_location.upper():
-                        from services.geojson_converter import GeoJSONConverter
                         geometry, _ = GeoJSONConverter._parse_geo_location(focus_building.geo_location)
                         if geometry and geometry.get('type') == 'Polygon':
                             coords = geometry['coordinates'][0]
                             center_lon = sum(c[0] for c in coords) / len(coords)
                             center_lat = sum(c[1] for c in coords) / len(coords)
                         elif focus_building.latitude and focus_building.longitude:
-                            center_lat = focus_building.latitude
-                            center_lon = focus_building.longitude
-                        else:
-                            center_lat = 36.2021
-                            center_lon = 37.1343
+                            center_lat, center_lon = focus_building.latitude, focus_building.longitude
                     elif focus_building.latitude and focus_building.longitude:
-                        center_lat = focus_building.latitude
-                        center_lon = focus_building.longitude
-                    else:
-                        center_lat = 36.2021
-                        center_lon = 37.1343
-
-                    zoom = 20
+                        center_lat, center_lon = focus_building.latitude, focus_building.longitude
                     focus_building_id = self._selected_building_id
-                    logger.info(f"Focusing on building {focus_building_id} at ({center_lat}, {center_lon}) with max zoom {zoom}")
 
-            # Load neighborhoods for map overlay (shared helper from BaseMapDialog)
-            neighborhoods_geojson = self.load_neighborhoods_geojson(auth_token=self._auth_token)
+            # Inject buildings into existing map via JavaScript
+            safe_geojson = json.dumps(buildings_geojson) if isinstance(buildings_geojson, str) else json.dumps(json.dumps(buildings_geojson))
+            js_inject = f"""
+            (function() {{
+                // Remove loading overlay
+                var overlay = document.getElementById('loadingOverlay');
+                if (overlay) overlay.remove();
 
-            # Load neighbourhood boundary polygons from local GeoJSON
-            boundaries_geojson = None
-            try:
-                from services import boundary_service
-                if boundary_service.is_available('neighbourhoods'):
-                    raw = boundary_service.get('neighbourhoods')
-                    if raw:
-                        boundary_data = json.loads(raw)
-                        boundary_data['features'] = [
-                            f for f in boundary_data['features']
-                            if f.get('properties', {}).get('ADM1_PCODE') == 'SY02'
-                        ]
-                        boundaries_geojson = json.dumps(boundary_data, ensure_ascii=False)
-                        logger.info(f"Loaded {len(boundary_data['features'])} neighbourhood boundaries for Aleppo")
-            except Exception as e:
-                logger.warning(f"Failed to load neighbourhood boundaries: {e}")
+                // Add buildings to map
+                var geojsonStr = {safe_geojson};
+                var geojsonData = (typeof geojsonStr === 'string') ? JSON.parse(geojsonStr) : geojsonStr;
+                if (typeof buildingsLayer !== 'undefined' && buildingsLayer) {{
+                    buildingsLayer.clearLayers();
+                    L.geoJSON(geojsonData, buildingsLayer.options).eachLayer(function(layer) {{
+                        buildingsLayer.addLayer(layer);
+                    }});
+                }} else if (typeof L !== 'undefined' && typeof map !== 'undefined') {{
+                    window.buildingsLayer = L.geoJSON(geojsonData, {{
+                        style: function(feature) {{
+                            return {{color: '#1a73e8', weight: 2, fillOpacity: 0.3}};
+                        }},
+                        onEachFeature: function(feature, layer) {{
+                            if (feature.properties && feature.properties.building_id) {{
+                                layer.on('click', function() {{
+                                    if (typeof bridge !== 'undefined') {{
+                                        bridge.onBuildingSelected(feature.properties.building_id);
+                                    }}
+                                }});
+                            }}
+                        }}
+                    }}).addTo(map);
+                }}
+                console.log('Buildings injected: ' + (geojsonData.features ? geojsonData.features.length : 0));
+            }})();
+            """
+            if self.web_view:
+                self.web_view.page().runJavaScript(js_inject)
 
-            # Load landmarks and streets for map overlay
-            landmarks_json = None
-            streets_json = None
-            sw_lat, sw_lng = center_lat - 0.5, center_lon - 0.5
-            ne_lat, ne_lng = center_lat + 0.5, center_lon + 0.5
-            logger.info(f"Loading landmarks/streets for map (bbox={sw_lat},{sw_lng}-{ne_lat},{ne_lng})")
-            try:
-                from services.api_client import get_api_client
-                from services.map_utils import normalize_landmark, normalize_street
-                api = get_api_client()
+            # Inject landmarks
+            landmarks_json = data.get('landmarks_json')
+            if landmarks_json and self.web_view:
+                js_lm = f"if(typeof updateLandmarksOnMap==='function')updateLandmarksOnMap({landmarks_json});"
+                self.web_view.page().runJavaScript(js_lm)
 
-                landmarks = api.get_landmarks_for_map(
-                    south_west_lat=sw_lat, south_west_lng=sw_lng,
-                    north_east_lat=ne_lat, north_east_lng=ne_lng
-                )
-                logger.info(f"Landmarks: {len(landmarks) if landmarks else 0} items")
-                if landmarks and isinstance(landmarks, list):
-                    landmarks = [normalize_landmark(lm) for lm in landmarks]
-                    landmarks_json = json.dumps(landmarks, ensure_ascii=False)
+            # Inject streets
+            streets_json = data.get('streets_json')
+            if streets_json and self.web_view:
+                js_st = f"if(typeof updateStreetsOnMap==='function')updateStreetsOnMap({streets_json});"
+                self.web_view.page().runJavaScript(js_st)
 
-                streets = api.get_streets_for_map(
-                    south_west_lat=sw_lat, south_west_lng=sw_lng,
-                    north_east_lat=ne_lat, north_east_lng=ne_lng
-                )
-                logger.info(f"Streets: {len(streets) if streets else 0} items")
-                if streets and isinstance(streets, list):
-                    streets = [normalize_street(s) for s in streets]
-                    streets_json = json.dumps(streets, ensure_ascii=False)
-            except Exception as e:
-                logger.error(f"Failed to load landmarks/streets: {e}", exc_info=True)
-
-            # Generate map HTML using LeafletHTMLGenerator
-            html = generate_leaflet_html(
-                tile_server_url=tile_server_url.rstrip('/'),
-                buildings_geojson=buildings_geojson,
-                center_lat=center_lat,
-                center_lon=center_lon,
-                zoom=zoom,
-                max_zoom=20,
-                show_legend=True,
-                show_layer_control=False,
-                enable_selection=(not self._is_view_only),
-                enable_viewport_loading=(not self._is_view_only),
-                enable_drawing=False,
-                neighborhoods_geojson=neighborhoods_geojson,
-                skip_fit_bounds=self._is_view_only,
-                landmarks_json=landmarks_json,
-                streets_json=streets_json,
-                boundaries_geojson=boundaries_geojson,
-                boundary_level='neighbourhoods',
-            )
-
-            # Load into web view
-            self.load_map_html(html)
-
-            # If view-only mode, open popup for focused building immediately (no delay)
-            if self._is_view_only and focus_building_id:
-                logger.info(f"Opening popup for building {focus_building_id}")
-                self._open_building_popup_immediate(focus_building_id, center_lat, center_lon)
+            # For view-only: fly to building
+            if self._is_view_only and focus_building_id and center_lat and center_lon:
+                self._fly_to(center_lat, center_lon, 20)
+                QTimer.singleShot(2500, lambda: self._open_building_popup_immediate(
+                    focus_building_id, center_lat, center_lon))
 
         except Exception as e:
-            logger.error(f"Error loading map: {e}", exc_info=True)
-            ErrorHandler.show_error(
-                self,
-                f"حدث خطأ أثناء تحميل الخريطة:\n{str(e)}",
-                "خطأ"
-            )
+            logger.error(f"Error injecting map data: {e}", exc_info=True)
 
     def _open_building_popup_immediate(self, building_id: str, lat: float, lon: float):
         """Open popup for focused building when map loads."""
@@ -643,7 +837,7 @@ class BuildingMapDialog(BaseMapDialog):
         return {"code": code, "name": name, "lat": lat, "lng": lng}
 
     def _on_search_submitted(self):
-        """Handle search submission - search neighborhoods via API then flyTo."""
+        """Handle search submission - runs in background thread to avoid UI freeze."""
         if not self.show_search or not hasattr(self, 'search_input'):
             return
 
@@ -653,115 +847,49 @@ class BuildingMapDialog(BaseMapDialog):
 
         self.search_input.setEnabled(False)
         self.search_input.setPlaceholderText("جاري البحث...")
+        logger.info(f"Searching for: '{search_text}'")
 
-        try:
-            from ui.components.toast import Toast
-            from services.api_client import get_api_client
+        self._search_worker = _SearchWorker(
+            search_text, self._auth_token, self._neighborhoods_cache
+        )
+        self._search_worker.found.connect(self._on_search_found)
+        self._search_worker.not_found.connect(self._on_search_not_found)
+        self._search_worker.error.connect(self._on_search_error)
+        self._search_worker.start()
 
-            logger.info(f"Searching for: '{search_text}'")
+    def _on_search_found(self, name, lat, lng, zoom):
+        """Handle successful search result from worker."""
+        # Update neighborhoods cache from worker
+        if self._search_worker and self._search_worker.neighborhoods_cache:
+            self._neighborhoods_cache = self._search_worker.neighborhoods_cache
+        self._fly_to(lat, lng, zoom)
+        from ui.components.toast import Toast
+        Toast.show_toast(self, name, "success")
+        self._reset_search_input()
 
-            # Step 1: Load neighborhoods from API (cached after first call)
-            self._load_neighborhoods_cache()
+    def _on_search_not_found(self, search_text):
+        """Handle search not found - try streets JS layer as last resort."""
+        # Update neighborhoods cache from worker
+        if self._search_worker and self._search_worker.neighborhoods_cache:
+            self._neighborhoods_cache = self._search_worker.neighborhoods_cache
+        from ui.components.toast import Toast
 
-            # Step 2: Match search text against neighborhoods
-            match = self._match_neighborhood(search_text)
+        def _on_street_not_found():
+            Toast.show_toast(self, f"لم يتم العثور على: {search_text}", "warning")
 
-            if not match:
-                # Fallback: search populated places (local, no API required)
-                from services import boundary_service
-                places = boundary_service.get_places_list()
-                place_matches = [
-                    p for p in places
-                    if search_text in p.get('name_ar', '')
-                    or search_text.lower() in p.get('name_en', '').lower()
-                ]
-                if place_matches:
-                    best = place_matches[0]
-                    label = best.get('name_ar') or best.get('name_en') or search_text
-                    logger.info(f"Place match '{search_text}' -> {label} ({best.get('lat')}, {best.get('lng')})")
-                    self._fly_to(float(best['lat']), float(best['lng']), zoom=13)
-                    Toast.show_toast(self, label, "success")
-                    return
+        self._search_streets_js(search_text, not_found_callback=_on_street_not_found)
+        self._reset_search_input()
 
-                # Fallback: search landmarks via API
-                found, name = self._search_landmark_or_street(search_text)
-                if found:
-                    Toast.show_toast(self, name or search_text, "success")
-                    return
+    def _on_search_error(self, error_msg):
+        """Handle search error from worker."""
+        logger.error(f"Search error: {error_msg}")
+        self._reset_search_input()
 
-                # Fallback: search streets in loaded JS layer
-                def _on_street_not_found():
-                    Toast.show_toast(self, f"لم يتم العثور على: {search_text}", "warning")
-
-                self._search_streets_js(search_text, not_found_callback=_on_street_not_found)
-                return
-
-            logger.info(f"Matched '{search_text}' -> {match['name']} (code: {match['code']})")
-
-            # Step 3: If neighborhood has coordinates, flyTo directly
-            if match["lat"] and match["lng"]:
-                try:
-                    center_lat = float(match["lat"])
-                    center_lng = float(match["lng"])
-                    logger.info(f"Direct flyTo neighborhood center: ({center_lat:.6f}, {center_lng:.6f})")
-                    self._fly_to(center_lat, center_lng, zoom=17)
-                    Toast.show_toast(self, match["name"], "success")
-                    return
-                except (ValueError, TypeError):
-                    logger.warning(f"Invalid coordinates for {match['name']}, falling back to building search")
-
-            # Step 4: Fallback - search buildings by neighborhood code
-            if not match["code"]:
-                Toast.show_toast(self, f"لا يوجد كود للحي: {match['name']}", "warning")
-                return
-
-            api_client = get_api_client()
-            if self._auth_token:
-                api_client.set_access_token(self._auth_token)
-
-            response = api_client.search_buildings(
-                neighborhood_code=match["code"],
-                page_size=200
-            )
-
-            buildings_data = response.get('buildings', response.get('data', []))
-            if not buildings_data:
-                Toast.show_toast(self, f"لا توجد مباني في: {match['name']}", "info")
-                return
-
-            # Calculate center from building coordinates
-            lats = []
-            lons = []
-            for b_data in buildings_data:
-                b = Building.from_dict(b_data)
-                if b.latitude and b.longitude:
-                    lats.append(b.latitude)
-                    lons.append(b.longitude)
-
-            if not lats:
-                Toast.show_toast(self, f"المباني في {match['name']} ليس لديها إحداثيات", "warning")
-                return
-
-            center_lat = sum(lats) / len(lats)
-            center_lon = sum(lons) / len(lons)
-
-            if len(lats) <= 5:
-                safe_zoom = 19
-            elif len(lats) <= 15:
-                safe_zoom = 18
-            else:
-                safe_zoom = 17
-
-            logger.info(f"Fallback flyTo: ({center_lat:.6f}, {center_lon:.6f}), zoom {safe_zoom}, {len(lats)} buildings")
-            self._fly_to(center_lat, center_lon, safe_zoom)
-
-        except Exception as e:
-            logger.error(f"Error searching: {e}", exc_info=True)
-
-        finally:
-            if hasattr(self, 'search_input'):
-                self.search_input.setEnabled(True)
-                self.search_input.setPlaceholderText("بحث: حي، معلم، أو شارع")
+    def _reset_search_input(self):
+        """Re-enable search input after search completes."""
+        if hasattr(self, 'search_input'):
+            self.search_input.setEnabled(True)
+            self.search_input.setPlaceholderText("بحث: حي، معلم، أو شارع")
 
     def get_selected_building(self) -> Optional[Building]:
         """Get selected building or None."""

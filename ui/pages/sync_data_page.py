@@ -14,6 +14,7 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt, QTimer, QPropertyAnimation, QEasingCurve, pyqtProperty, pyqtSignal
 from PyQt5.QtGui import QFont, QPainter, QColor, QLinearGradient
 
+from services.api_worker import ApiWorker
 from ui.components.icon import Icon
 from ui.design_system import Colors, PageDimensions
 from ui.style_manager import StyleManager
@@ -340,10 +341,18 @@ class SyncDataPage(QWidget):
     # Data loading
 
     def _load_collectors(self):
+        from services.api_client import get_api_client
+        api = get_api_client()
+        self._collectors_worker = ApiWorker(api.get_field_collectors)
+        self._collectors_worker.finished.connect(self._on_collectors_loaded)
+        self._collectors_worker.error.connect(
+            lambda msg: logger.warning(f"Failed to load field collectors: {msg}")
+        )
+        self._collectors_worker.start()
+
+    def _on_collectors_loaded(self, response):
+        """Populate collector combo from API response."""
         try:
-            from services.api_client import get_api_client
-            api = get_api_client()
-            response = api.get_field_collectors()
             collectors = (
                 response if isinstance(response, list)
                 else response.get("items", []) if isinstance(response, dict)
@@ -365,15 +374,13 @@ class SyncDataPage(QWidget):
                     self._collector_combo.addItem(name or cid, cid)
             self._collector_combo.blockSignals(False)
         except Exception as e:
-            logger.warning(f"Failed to load field collectors: {e}")
+            logger.warning(f"Failed to process collectors response: {e}")
 
     def _on_collector_changed(self):
         self._load_assignments()
 
-    def _get_filtered_items(self) -> list:
-        from services.api_client import get_api_client
-        api = get_api_client()
-        response = api.get_all_assignments(page=1, page_size=100)
+    def _filter_items_from_response(self, response) -> list:
+        """Extract and filter assignment items from API response."""
         items = (
             response if isinstance(response, list)
             else response.get("items", []) if isinstance(response, dict)
@@ -394,45 +401,70 @@ class SyncDataPage(QWidget):
         return items
 
     def _load_assignments(self):
-        """Full rebuild of all accordion items."""
+        """Full rebuild of all accordion items (non-blocking)."""
         self._spinner.show_loading("جاري تحميل البيانات...")
+        self._clear_rows()
+
+        from services.api_client import get_api_client
+        api = get_api_client()
+        self._assignments_worker = ApiWorker(api.get_all_assignments, page=1, page_size=100)
+        self._assignments_worker.finished.connect(self._on_assignments_loaded)
+        self._assignments_worker.error.connect(self._on_assignments_load_error)
+        self._assignments_worker.start()
+
+    def _on_assignments_loaded(self, response):
+        """Handle assignment list API response."""
         try:
-            self._clear_rows()
+            items = self._filter_items_from_response(response)
+            self._current_items = items
 
-            try:
-                items = self._get_filtered_items()
-                self._current_items = items
-
-                if not items:
-                    self._empty_label.setText("لا توجد تعيينات")
-                    self._empty_label.show()
-                    return
-
-                self._empty_label.hide()
-                for assignment in items:
-                    aid = self._get_assignment_id(assignment)
-                    status_str = self._normalize_status(assignment)
-
-                    accordion = self._create_accordion_item(assignment)
-                    self._rows_container.addWidget(accordion)
-
-                    self._previous_statuses[aid] = status_str
-
-                    if status_str in _SYNCING_STATUSES:
-                        self._add_sync_overlay(aid)
-
-            except Exception as e:
-                logger.warning(f"Failed to load assignments: {e}")
-                self._empty_label.setText("فشل تحميل التعيينات")
+            if not items:
+                self._empty_label.setText("لا توجد تعيينات")
                 self._empty_label.show()
+                return
+
+            self._empty_label.hide()
+            for assignment in items:
+                aid = self._get_assignment_id(assignment)
+                status_str = self._normalize_status(assignment)
+
+                accordion = self._create_accordion_item(assignment)
+                self._rows_container.addWidget(accordion)
+
+                self._previous_statuses[aid] = status_str
+
+                if status_str in _SYNCING_STATUSES:
+                    self._add_sync_overlay(aid)
+        except Exception as e:
+            logger.warning(f"Failed to load assignments: {e}")
+            self._empty_label.setText("فشل تحميل التعيينات")
+            self._empty_label.show()
         finally:
             self._spinner.hide_loading()
+
+    def _on_assignments_load_error(self, error_msg):
+        """Handle assignment list API error."""
+        logger.warning(f"Failed to load assignments: {error_msg}")
+        self._empty_label.setText("فشل تحميل التعيينات")
+        self._empty_label.show()
+        self._spinner.hide_loading()
     # Smart Refresh (polling every 10s)
 
     def _smart_refresh(self):
-        """Poll API and update status badges + overlays in-place."""
+        """Poll API and update status badges + overlays in-place (non-blocking)."""
+        from services.api_client import get_api_client
+        api = get_api_client()
+        self._refresh_worker = ApiWorker(api.get_all_assignments, page=1, page_size=100)
+        self._refresh_worker.finished.connect(self._on_smart_refresh_loaded)
+        self._refresh_worker.error.connect(
+            lambda msg: logger.debug(f"Smart refresh failed: {msg}")
+        )
+        self._refresh_worker.start()
+
+    def _on_smart_refresh_loaded(self, response):
+        """Process smart refresh API response."""
         try:
-            items = self._get_filtered_items()
+            items = self._filter_items_from_response(response)
         except Exception:
             return
 
@@ -734,18 +766,71 @@ class SyncDataPage(QWidget):
             arrow.setText("\u25BC" if not is_visible else "\u25B6")
 
     def _load_assignment_details(self, assignment_id: str, assignment: dict, body: QWidget):
+        """Start background fetch of assignment details and units."""
+        # Show loading indicator in body
+        body_layout = body.layout()
+        loading_label = QLabel("جاري تحميل التفاصيل...")
+        loading_label.setFont(create_font(size=9, weight=FontManager.WEIGHT_REGULAR))
+        loading_label.setStyleSheet("color: #637381; background: transparent; border: none;")
+        loading_label.setAlignment(Qt.AlignCenter)
+        loading_label.setObjectName("loadingIndicator")
+        body_layout.addWidget(loading_label)
+
+        self._detail_worker = ApiWorker(
+            self._fetch_assignment_details, assignment_id, assignment
+        )
+        self._detail_worker.finished.connect(
+            lambda result: self._on_details_loaded(result, assignment_id, assignment, body)
+        )
+        self._detail_worker.error.connect(
+            lambda msg: self._on_details_load_error(msg, body)
+        )
+        self._detail_worker.start()
+
+    @staticmethod
+    def _fetch_assignment_details(assignment_id, assignment):
+        """Fetch assignment details and units. Runs in background thread."""
+        from services.api_client import get_api_client
+        api = get_api_client()
+
+        details = {}
+        try:
+            details = api.get_assignment(assignment_id) or {}
+        except Exception as e:
+            logger.debug(f"Could not fetch assignment details: {e}")
+
+        building_id = (
+            details.get("buildingId")
+            or assignment.get("buildingId")
+            or assignment.get("building_id")
+            or ""
+        )
+        units = []
+        if building_id:
+            try:
+                units = api.get_assignment_property_units(building_id)
+                if not isinstance(units, list):
+                    units = []
+            except Exception as e:
+                logger.debug(f"Could not fetch units: {e}")
+
+        return {"details": details, "units": units}
+
+    def _on_details_loaded(self, result, assignment_id, assignment, body):
+        """Build detail UI from fetched data."""
         body_layout = body.layout()
 
+        # Remove loading indicator
+        for i in range(body_layout.count()):
+            w = body_layout.itemAt(i)
+            if w and w.widget() and w.widget().objectName() == "loadingIndicator":
+                w.widget().deleteLater()
+                break
+
+        details = result.get("details", {})
+        units = result.get("units", [])
+
         try:
-            from services.api_client import get_api_client
-            api = get_api_client()
-
-            details = {}
-            try:
-                details = api.get_assignment(assignment_id) or {}
-            except Exception as e:
-                logger.debug(f"Could not fetch assignment details: {e}")
-
             # Info section
             info_frame = QFrame()
             info_frame.setStyleSheet("""
@@ -798,22 +883,6 @@ class SyncDataPage(QWidget):
 
             body_layout.addWidget(info_frame)
 
-            # Property units
-            building_id = (
-                details.get("buildingId")
-                or assignment.get("buildingId")
-                or assignment.get("building_id")
-                or ""
-            )
-            units = []
-            if building_id:
-                try:
-                    units = api.get_assignment_property_units(building_id)
-                    if not isinstance(units, list):
-                        units = []
-                except Exception as e:
-                    logger.debug(f"Could not fetch units: {e}")
-
             if units:
                 units_label = QLabel("المقاسم:")
                 units_label.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
@@ -854,12 +923,30 @@ class SyncDataPage(QWidget):
                 body_layout.addLayout(btn_row)
 
         except Exception as e:
-            logger.warning(f"Failed to load assignment details: {e}")
+            logger.warning(f"Failed to build assignment details UI: {e}")
             err = QLabel("فشل تحميل التفاصيل")
             err.setFont(create_font(size=9, weight=FontManager.WEIGHT_REGULAR))
             err.setStyleSheet("color: #EF4444; background: transparent; border: none;")
             err.setAlignment(Qt.AlignCenter)
             body_layout.addWidget(err)
+
+    def _on_details_load_error(self, error_msg, body):
+        """Handle failed assignment detail fetch."""
+        logger.warning(f"Failed to load assignment details: {error_msg}")
+        body_layout = body.layout()
+
+        # Remove loading indicator
+        for i in range(body_layout.count()):
+            w = body_layout.itemAt(i)
+            if w and w.widget() and w.widget().objectName() == "loadingIndicator":
+                w.widget().deleteLater()
+                break
+
+        err = QLabel("فشل تحميل التفاصيل")
+        err.setFont(create_font(size=9, weight=FontManager.WEIGHT_REGULAR))
+        err.setStyleSheet("color: #EF4444; background: transparent; border: none;")
+        err.setAlignment(Qt.AlignCenter)
+        body_layout.addWidget(err)
     # Unit card (same pattern as Step 3)
 
     def _create_unit_card(self, unit_data: dict) -> QFrame:
@@ -971,7 +1058,6 @@ class SyncDataPage(QWidget):
 
     def _unassign_building(self, assignment_id: str):
         from ui.components.dialogs import ConfirmationDialog
-        from ui.components.toast import Toast
 
         result = ConfirmationDialog.confirm(
             self,
@@ -981,15 +1067,30 @@ class SyncDataPage(QWidget):
         if result != ConfirmationDialog.YES:
             return
 
-        try:
-            from services.api_client import get_api_client
-            api = get_api_client()
-            api.unassign_building(assignment_id, cancellation_reason="إلغاء من المشرف")
-            Toast.show_toast(self.window(), "تم إلغاء التعيين بنجاح", Toast.SUCCESS)
-            self._load_assignments()
-        except Exception as e:
-            logger.warning(f"Failed to unassign: {e}")
-            Toast.show_toast(self.window(), f"فشل إلغاء التعيين: {e}", Toast.ERROR)
+        from services.api_client import get_api_client
+        api = get_api_client()
+        self._unassign_worker = ApiWorker(
+            api.unassign_building, assignment_id, cancellation_reason="إلغاء من المشرف"
+        )
+        self._unassign_worker.finished.connect(
+            lambda _: self._on_unassign_success()
+        )
+        self._unassign_worker.error.connect(
+            lambda msg: self._on_unassign_error(msg)
+        )
+        self._unassign_worker.start()
+
+    def _on_unassign_success(self):
+        """Handle successful unassign."""
+        from ui.components.toast import Toast
+        Toast.show_toast(self.window(), "تم إلغاء التعيين بنجاح", Toast.SUCCESS)
+        self._load_assignments()
+
+    def _on_unassign_error(self, error_msg):
+        """Handle failed unassign."""
+        from ui.components.toast import Toast
+        logger.warning(f"Failed to unassign: {error_msg}")
+        Toast.show_toast(self.window(), f"فشل إلغاء التعيين: {error_msg}", Toast.ERROR)
     # Helpers
 
     @staticmethod

@@ -17,6 +17,7 @@ from app.config import Config, Roles, Vocabularies
 from repositories.database import Database
 from repositories.user_repository import UserRepository
 from services.api_client import get_api_client
+from services.api_worker import ApiWorker
 from services.vocab_service import get_all_vocabularies, refresh_vocabularies
 from services.security_service import SecurityService, SecuritySettings
 from models.user import User
@@ -693,17 +694,15 @@ class AdminPage(QWidget):
         if not self.current_vocabulary:
             return
 
+        api = get_api_client()
+        self._load_terms_worker = ApiWorker(api.get_vocabulary_terms, self.current_vocabulary)
+        self._load_terms_worker.finished.connect(self._on_load_terms_finished)
+        self._load_terms_worker.error.connect(self._on_load_terms_error)
+        self._load_terms_worker.start()
+
+    def _on_load_terms_finished(self, result):
+        terms = result.get("values", []) if isinstance(result, dict) else []
         show_deprecated = self.show_deprecated.isChecked() if hasattr(self, 'show_deprecated') else False
-
-        try:
-            api = get_api_client()
-            result = api.get_vocabulary_terms(self.current_vocabulary)
-            terms = result.get("values", []) if isinstance(result, dict) else []
-        except Exception as e:
-            logger.error(f"Failed to load vocab terms from API: {e}")
-            Toast.show_toast(self, f"فشل في تحميل المصطلحات: {str(e)}", Toast.ERROR)
-            return
-
         if not show_deprecated:
             terms = [t for t in terms if t.get("isActive", True)]
 
@@ -795,6 +794,10 @@ class AdminPage(QWidget):
             self.vocab_table.setCellWidget(i, 4, actions_widget)
             self.vocab_table.setRowHeight(i, 40)
 
+    def _on_load_terms_error(self, error_msg):
+        logger.error(f"Failed to load vocab terms from API: {error_msg}")
+        Toast.show_toast(self, f"فشل في تحميل المصطلحات: {error_msg}", Toast.ERROR)
+
     def _on_show_deprecated_changed(self, state):
         """Handle show deprecated checkbox change."""
         self._load_vocab_terms()
@@ -809,21 +812,30 @@ class AdminPage(QWidget):
             if not data["code"]:
                 Toast.show_toast(self, "الرمز مطلوب", Toast.ERROR)
                 return
-            try:
-                api = get_api_client()
-                api.create_vocabulary_term(self.current_vocabulary, data)
-                refresh_vocabularies()
-                self.security_service.log_action(
-                    action="vocabulary_term_created",
-                    entity_type="vocabulary",
-                    entity_id=f"{self.current_vocabulary}/{data['code']}",
-                    details=f"تم إضافة تصنيف: {data['labelArabic']}"
-                )
-                Toast.show_toast(self, "تم إضافة المصطلح بنجاح", Toast.SUCCESS)
-                self._load_vocab_terms()
-            except Exception as e:
-                logger.error(f"Failed to create term: {e}")
-                Toast.show_toast(self, f"فشل في إضافة المصطلح: {str(e)}", Toast.ERROR)
+            api = get_api_client()
+            self._add_term_data = data
+            self._create_term_worker = ApiWorker(
+                api.create_vocabulary_term, self.current_vocabulary, data
+            )
+            self._create_term_worker.finished.connect(self._on_create_term_finished)
+            self._create_term_worker.error.connect(self._on_create_term_error)
+            self._create_term_worker.start()
+
+    def _on_create_term_finished(self, result):
+        data = self._add_term_data
+        refresh_vocabularies()
+        self.security_service.log_action(
+            action="vocabulary_term_created",
+            entity_type="vocabulary",
+            entity_id=f"{self.current_vocabulary}/{data['code']}",
+            details=f"تم إضافة تصنيف: {data['labelArabic']}"
+        )
+        Toast.show_toast(self, "تم إضافة المصطلح بنجاح", Toast.SUCCESS)
+        self._load_vocab_terms()
+
+    def _on_create_term_error(self, error_msg):
+        logger.error(f"Failed to create term: {error_msg}")
+        Toast.show_toast(self, f"فشل في إضافة المصطلح: {error_msg}", Toast.ERROR)
 
     def _on_edit_term(self, term_data: dict):
         """Edit an existing vocabulary term via API."""
@@ -831,21 +843,32 @@ class AdminPage(QWidget):
         if dialog.exec_() == QDialog.Accepted:
             data = dialog.get_data()
             original_code = str(term_data.get("code", ""))
-            try:
-                api = get_api_client()
-                api.update_vocabulary_term(self.current_vocabulary, original_code, data)
-                refresh_vocabularies()
-                self.security_service.log_action(
-                    action="vocabulary_term_updated",
-                    entity_type="vocabulary",
-                    entity_id=f"{self.current_vocabulary}/{original_code}",
-                    details=f"تم تحديث تصنيف: {data['labelArabic']}"
-                )
-                Toast.show_toast(self, "تم تحديث المصطلح بنجاح", Toast.SUCCESS)
-                self._load_vocab_terms()
-            except Exception as e:
-                logger.error(f"Failed to update term: {e}")
-                Toast.show_toast(self, f"فشل في تحديث المصطلح: {str(e)}", Toast.ERROR)
+            api = get_api_client()
+            self._edit_term_data = data
+            self._edit_term_code = original_code
+            self._update_term_worker = ApiWorker(
+                api.update_vocabulary_term, self.current_vocabulary, original_code, data
+            )
+            self._update_term_worker.finished.connect(self._on_update_term_finished)
+            self._update_term_worker.error.connect(self._on_update_term_error)
+            self._update_term_worker.start()
+
+    def _on_update_term_finished(self, result):
+        data = self._edit_term_data
+        original_code = self._edit_term_code
+        refresh_vocabularies()
+        self.security_service.log_action(
+            action="vocabulary_term_updated",
+            entity_type="vocabulary",
+            entity_id=f"{self.current_vocabulary}/{original_code}",
+            details=f"تم تحديث تصنيف: {data['labelArabic']}"
+        )
+        Toast.show_toast(self, "تم تحديث المصطلح بنجاح", Toast.SUCCESS)
+        self._load_vocab_terms()
+
+    def _on_update_term_error(self, error_msg):
+        logger.error(f"Failed to update term: {error_msg}")
+        Toast.show_toast(self, f"فشل في تحديث المصطلح: {error_msg}", Toast.ERROR)
 
     def _on_deprecate_term(self, term_data: dict):
         """Deprecate a vocabulary term via API."""
@@ -856,41 +879,63 @@ class AdminPage(QWidget):
             f"هل تريد إيقاف المصطلح '{label}'؟\nسيظل المصطلح موجوداً ولكن لن يظهر في القوائم الجديدة.",
             "تأكيد الإيقاف"
         ):
-            try:
-                api = get_api_client()
-                api.deactivate_vocabulary_term(self.current_vocabulary, code)
-                refresh_vocabularies()
-                self.security_service.log_action(
-                    action="vocabulary_term_deprecated",
-                    entity_type="vocabulary",
-                    entity_id=f"{self.current_vocabulary}/{code}",
-                    details=f"تم إيقاف تصنيف: {label}"
-                )
-                Toast.show_toast(self, "تم إيقاف المصطلح", Toast.SUCCESS)
-                self._load_vocab_terms()
-            except Exception as e:
-                logger.error(f"Failed to deprecate term: {e}")
-                Toast.show_toast(self, f"فشل في إيقاف المصطلح: {str(e)}", Toast.ERROR)
+            api = get_api_client()
+            self._deprecate_term_label = label
+            self._deprecate_term_code = code
+            self._deactivate_term_worker = ApiWorker(
+                api.deactivate_vocabulary_term, self.current_vocabulary, code
+            )
+            self._deactivate_term_worker.finished.connect(self._on_deactivate_term_finished)
+            self._deactivate_term_worker.error.connect(self._on_deactivate_term_error)
+            self._deactivate_term_worker.start()
+
+    def _on_deactivate_term_finished(self, result):
+        label = self._deprecate_term_label
+        code = self._deprecate_term_code
+        refresh_vocabularies()
+        self.security_service.log_action(
+            action="vocabulary_term_deprecated",
+            entity_type="vocabulary",
+            entity_id=f"{self.current_vocabulary}/{code}",
+            details=f"تم إيقاف تصنيف: {label}"
+        )
+        Toast.show_toast(self, "تم إيقاف المصطلح", Toast.SUCCESS)
+        self._load_vocab_terms()
+
+    def _on_deactivate_term_error(self, error_msg):
+        logger.error(f"Failed to deprecate term: {error_msg}")
+        Toast.show_toast(self, f"فشل في إيقاف المصطلح: {error_msg}", Toast.ERROR)
 
     def _on_activate_term(self, term_data: dict):
         """Activate a deprecated vocabulary term via API."""
         code = str(term_data.get("code", ""))
         label = term_data.get("labelArabic", "")
-        try:
-            api = get_api_client()
-            api.activate_vocabulary_term(self.current_vocabulary, code)
-            refresh_vocabularies()
-            self.security_service.log_action(
-                action="vocabulary_term_activated",
-                entity_type="vocabulary",
-                entity_id=f"{self.current_vocabulary}/{code}",
-                details=f"تم تفعيل تصنيف: {label}"
-            )
-            Toast.show_toast(self, "تم تفعيل المصطلح", Toast.SUCCESS)
-            self._load_vocab_terms()
-        except Exception as e:
-            logger.error(f"Failed to activate term: {e}")
-            Toast.show_toast(self, f"فشل في تفعيل المصطلح: {str(e)}", Toast.ERROR)
+        api = get_api_client()
+        self._activate_term_label = label
+        self._activate_term_code = code
+        self._activate_term_worker = ApiWorker(
+            api.activate_vocabulary_term, self.current_vocabulary, code
+        )
+        self._activate_term_worker.finished.connect(self._on_activate_term_finished)
+        self._activate_term_worker.error.connect(self._on_activate_term_error)
+        self._activate_term_worker.start()
+
+    def _on_activate_term_finished(self, result):
+        label = self._activate_term_label
+        code = self._activate_term_code
+        refresh_vocabularies()
+        self.security_service.log_action(
+            action="vocabulary_term_activated",
+            entity_type="vocabulary",
+            entity_id=f"{self.current_vocabulary}/{code}",
+            details=f"تم تفعيل تصنيف: {label}"
+        )
+        Toast.show_toast(self, "تم تفعيل المصطلح", Toast.SUCCESS)
+        self._load_vocab_terms()
+
+    def _on_activate_term_error(self, error_msg):
+        logger.error(f"Failed to activate term: {error_msg}")
+        Toast.show_toast(self, f"فشل في تفعيل المصطلح: {error_msg}", Toast.ERROR)
 
     def _on_import_vocab(self):
         """Import vocabulary terms from file via API."""
@@ -936,22 +981,31 @@ class AdminPage(QWidget):
                     return
 
             api = get_api_client()
-            api.import_vocabularies(data)
-            refresh_vocabularies()
-            self._populate_vocab_combo()
-
-            self.security_service.log_action(
-                action="vocabulary_imported",
-                entity_type="vocabulary",
-                entity_id=self.current_vocabulary or "all",
-                details=f"تم استيراد من ملف: {file_path}"
-            )
-            Toast.show_toast(self, "تم الاستيراد بنجاح", Toast.SUCCESS)
-            self._load_vocab_terms()
+            self._import_file_path = file_path
+            self._import_vocab_worker = ApiWorker(api.import_vocabularies, data)
+            self._import_vocab_worker.finished.connect(self._on_import_vocab_finished)
+            self._import_vocab_worker.error.connect(self._on_import_vocab_error)
+            self._import_vocab_worker.start()
 
         except Exception as e:
             logger.error(f"Import failed: {e}")
             Toast.show_toast(self, f"فشل في الاستيراد: {str(e)}", Toast.ERROR)
+
+    def _on_import_vocab_finished(self, result):
+        refresh_vocabularies()
+        self._populate_vocab_combo()
+        self.security_service.log_action(
+            action="vocabulary_imported",
+            entity_type="vocabulary",
+            entity_id=self.current_vocabulary or "all",
+            details=f"تم استيراد من ملف: {self._import_file_path}"
+        )
+        Toast.show_toast(self, "تم الاستيراد بنجاح", Toast.SUCCESS)
+        self._load_vocab_terms()
+
+    def _on_import_vocab_error(self, error_msg):
+        logger.error(f"Import failed: {error_msg}")
+        Toast.show_toast(self, f"فشل في الاستيراد: {error_msg}", Toast.ERROR)
 
     def _on_export_vocab(self):
         """Export vocabulary terms to file via API."""
@@ -964,26 +1018,32 @@ class AdminPage(QWidget):
         if not file_path:
             return
 
+        api = get_api_client()
+        self._export_file_path = file_path
+        self._export_vocab_worker = ApiWorker(api.export_vocabularies)
+        self._export_vocab_worker.finished.connect(self._on_export_vocab_finished)
+        self._export_vocab_worker.error.connect(self._on_export_vocab_error)
+        self._export_vocab_worker.start()
+
+    def _on_export_vocab_finished(self, export_data):
         try:
             import json
-
-            api = get_api_client()
-            export_data = api.export_vocabularies()
-
-            with open(file_path, "w", encoding="utf-8") as f:
+            with open(self._export_file_path, "w", encoding="utf-8") as f:
                 json.dump(export_data, f, ensure_ascii=False, indent=2)
-
             self.security_service.log_action(
                 action="vocabulary_exported",
                 entity_type="vocabulary",
                 entity_id=self.current_vocabulary or "all",
-                details=f"تم تصدير إلى: {file_path}"
+                details=f"تم تصدير إلى: {self._export_file_path}"
             )
             Toast.show_toast(self, "تم التصدير بنجاح", Toast.SUCCESS)
-
         except Exception as e:
-            logger.error(f"Export failed: {e}")
-            Toast.show_toast(self, f"فشل في التصدير: {str(e)}", Toast.ERROR)
+            logger.error(f"Export write failed: {e}")
+            Toast.show_toast(self, f"فشل في كتابة الملف: {str(e)}", Toast.ERROR)
+
+    def _on_export_vocab_error(self, error_msg):
+        logger.error(f"Export failed: {error_msg}")
+        Toast.show_toast(self, f"فشل في التصدير: {error_msg}", Toast.ERROR)
 
     def _create_system_tab(self) -> QWidget:
         """Create system settings tab with security and audit."""

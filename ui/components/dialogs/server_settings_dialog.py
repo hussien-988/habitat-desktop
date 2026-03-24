@@ -293,6 +293,12 @@ class ServerSettingsDialog(QDialog):
         settings["tile_server_url"] = tile_url
         settings["api_server_url"] = api_url
         save_local_settings(settings)
+
+        from services.tile_server_manager import TileServerManager
+        from services.api_client import reset_api_client
+        TileServerManager.reset()
+        reset_api_client()
+
         self.accept()
 
     def _on_reset(self):

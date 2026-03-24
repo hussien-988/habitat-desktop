@@ -17,6 +17,7 @@ from ui.design_system import Colors, PageDimensions
 from ui.components.claim_list_card import ClaimListCard
 from ui.components.icon import Icon
 from ui.components.toast import Toast
+from services.api_worker import ApiWorker
 from utils.i18n import I18n
 from utils.logger import get_logger
 
@@ -497,6 +498,23 @@ class ClaimComparisonPage(QWidget):
             Toast.show_toast(self, "معرف التعارض غير متوفر", Toast.WARNING)
             return
 
+        self._doc_load_btn.setEnabled(False)
+
+        entity_ids = [
+            self._current_group.get("firstEntityId", ""),
+            self._current_group.get("secondEntityId", ""),
+        ]
+        is_person = self._current_conflict_type == "PersonDuplicate"
+
+        self._doc_comparison_worker = ApiWorker(
+            self._fetch_document_comparison, conflict_id, entity_ids, is_person
+        )
+        self._doc_comparison_worker.finished.connect(self._on_doc_comparison_loaded)
+        self._doc_comparison_worker.error.connect(self._on_doc_comparison_error)
+        self._doc_comparison_worker.start()
+
+    def _fetch_document_comparison(self, conflict_id, entity_ids, is_person):
+        """Fetch document comparison data (runs in worker thread)."""
         first_evidences = []
         second_evidences = []
 
@@ -506,7 +524,6 @@ class ClaimComparisonPage(QWidget):
             logger.info(f"Document comparison response: {str(doc_data)[:500]}")
 
             if isinstance(doc_data, dict):
-                # Try multiple possible response structures
                 first_entity = doc_data.get("firstEntity") or doc_data.get("firstRecord") or {}
                 second_entity = doc_data.get("secondEntity") or doc_data.get("secondRecord") or {}
 
@@ -521,14 +538,12 @@ class ClaimComparisonPage(QWidget):
                     or second_entity.get("attachments", [])
                 )
 
-                # Handle flat list: [{entityId, evidences}, ...]
                 if not first_evidences and not second_evidences:
                     entities_list = doc_data.get("entities", doc_data.get("records", []))
                     if isinstance(entities_list, list) and len(entities_list) >= 2:
                         first_evidences = entities_list[0].get("evidences", entities_list[0].get("documents", []))
                         second_evidences = entities_list[1].get("evidences", entities_list[1].get("documents", []))
 
-                # Handle direct evidences/documents keys at root
                 if not first_evidences and not second_evidences:
                     root_docs = doc_data.get("evidences", doc_data.get("documents", []))
                     if isinstance(root_docs, list) and len(root_docs) >= 2:
@@ -551,12 +566,7 @@ class ClaimComparisonPage(QWidget):
 
         # Fallback: fetch building documents directly from each entity
         if not first_evidences and not second_evidences:
-            is_person = self._current_conflict_type == "PersonDuplicate"
             if not is_person:
-                entity_ids = [
-                    self._current_group.get("firstEntityId", ""),
-                    self._current_group.get("secondEntityId", ""),
-                ]
                 try:
                     from services.api_client import get_api_client
                     api = get_api_client()
@@ -582,6 +592,14 @@ class ClaimComparisonPage(QWidget):
                 except Exception as e:
                     logger.warning(f"Building documents fallback failed: {e}")
 
+        return {"first": first_evidences, "second": second_evidences}
+
+    def _on_doc_comparison_loaded(self, result):
+        """Handle document comparison result on main thread."""
+        self._doc_load_btn.setEnabled(True)
+        first_evidences = result.get("first", [])
+        second_evidences = result.get("second", [])
+
         if not first_evidences and not second_evidences:
             Toast.show_toast(self, "لا توجد مستندات مرتبطة بالسجلات", Toast.WARNING)
             return
@@ -592,6 +610,12 @@ class ClaimComparisonPage(QWidget):
 
         self._populate_doc_column(self._doc_first_frame, first_evidences)
         self._populate_doc_column(self._doc_second_frame, second_evidences)
+
+    def _on_doc_comparison_error(self, error_msg):
+        """Handle document comparison error."""
+        self._doc_load_btn.setEnabled(True)
+        logger.warning(f"Document comparison failed: {error_msg}")
+        Toast.show_toast(self, "فشل في تحميل المستندات", Toast.ERROR)
 
     # ────────────────────────────────────────────
     # Resolution Section
@@ -1307,11 +1331,9 @@ class ClaimComparisonPage(QWidget):
         # --- Populate comparison section ---
         self._clear_layout(self._comparison_cards_layout)
 
-        comparison_dicts = []
-
         if is_person:
-            # Person duplicates: always fetch from API for reliable data
-            # dataComparison as fallback only if API fetch fails
+            # Person duplicates: use already-fetched data (no additional blocking)
+            comparison_dicts = []
             for idx, record in enumerate(records):
                 person_dto = _fetched_persons.get(record["id"])
                 if person_dto:
@@ -1336,62 +1358,83 @@ class ClaimComparisonPage(QWidget):
                     comparison_dicts.append(self._map_person_to_comparison_dict({}))
 
             diff_fields = self._compute_person_diff_fields(comparison_dicts)
+
+            for comp_dict in comparison_dicts:
+                outer_card = self._build_outer_comparison_card(comp_dict, diff_fields)
+                self._comparison_cards_layout.addWidget(outer_card, 1)
         else:
-            # Property duplicates
-            for idx, record in enumerate(records):
-                unit_dto = self._fetch_property_unit_data(record["id"])
-                if unit_dto:
-                    building_data = unit_dto.get("_building", {})
-                    comparison_dicts.append(self._map_to_comparison_dict(
-                        building_data or unit_dto, unit_dto
-                    ))
-                elif data_comparison and idx < len(data_comparison):
-                    dc = data_comparison[idx]
-                    comp_dict = dc if isinstance(dc, dict) else {}
-                    if isinstance(dc, list):
-                        comp_dict = {}
-                        for fi in dc:
-                            if isinstance(fi, dict):
-                                comp_dict[fi.get("fieldName", "")] = str(fi.get("value", "-"))
-                    comparison_dicts.append(self._map_to_comparison_dict(comp_dict, comp_dict))
-                else:
-                    logger.warning(f"Property unit {record['id']} not available")
-                    comparison_dicts.append(self._map_to_comparison_dict({}, {}))
+            # Property duplicates: fetch units asynchronously
+            record_ids = [r["id"] for r in records]
+            self._pending_data_comparison = data_comparison
+            self._property_units_worker = ApiWorker(
+                self._fetch_all_property_units, record_ids
+            )
+            self._property_units_worker.finished.connect(self._on_property_units_loaded)
+            self._property_units_worker.error.connect(self._on_property_units_error)
+            self._property_units_worker.start()
 
-            diff_fields = self._compute_comparison_diff_fields(comparison_dicts)
+    def _fetch_all_property_units(self, record_ids):
+        """Fetch all property unit data for comparison (runs in worker thread)."""
+        from services.api_client import get_api_client
+        api = get_api_client()
+        results = []
+        for entity_id in record_ids:
+            if not entity_id:
+                results.append({})
+                continue
+            try:
+                unit_dto = api.get_property_unit_by_id(entity_id)
+                if not unit_dto:
+                    results.append({})
+                    continue
+                building_id = unit_dto.get("buildingId", unit_dto.get("building_id", ""))
+                if building_id:
+                    try:
+                        building_dto = api.get_building_by_id(building_id)
+                        if building_dto:
+                            unit_dto["_building"] = building_dto
+                    except Exception as be:
+                        logger.warning(f"Failed to fetch building {building_id}: {be}")
+                results.append(unit_dto)
+            except Exception as e:
+                logger.error(f"Failed to fetch property unit {entity_id}: {e}")
+                results.append({})
+        return results
 
+    def _on_property_units_loaded(self, unit_dtos):
+        """Handle property unit data loaded from API."""
+        data_comparison = getattr(self, '_pending_data_comparison', [])
+        comparison_dicts = []
+
+        for idx, unit_dto in enumerate(unit_dtos):
+            if unit_dto:
+                building_data = unit_dto.get("_building", {})
+                comparison_dicts.append(self._map_to_comparison_dict(
+                    building_data or unit_dto, unit_dto
+                ))
+            elif data_comparison and idx < len(data_comparison):
+                dc = data_comparison[idx]
+                comp_dict = dc if isinstance(dc, dict) else {}
+                if isinstance(dc, list):
+                    comp_dict = {}
+                    for fi in dc:
+                        if isinstance(fi, dict):
+                            comp_dict[fi.get("fieldName", "")] = str(fi.get("value", "-"))
+                comparison_dicts.append(self._map_to_comparison_dict(comp_dict, comp_dict))
+            else:
+                logger.warning(f"Property unit at index {idx} not available")
+                comparison_dicts.append(self._map_to_comparison_dict({}, {}))
+
+        diff_fields = self._compute_comparison_diff_fields(comparison_dicts)
+
+        self._clear_layout(self._comparison_cards_layout)
         for comp_dict in comparison_dicts:
             outer_card = self._build_outer_comparison_card(comp_dict, diff_fields)
             self._comparison_cards_layout.addWidget(outer_card, 1)
 
-    def _fetch_property_unit_data(self, entity_id: str) -> dict:
-        """Fetch property unit data by ID for comparison display."""
-        if not entity_id:
-            return {}
-        try:
-            from services.api_client import get_api_client
-            api = get_api_client()
-            if not api:
-                return {}
-
-            unit_dto = api.get_property_unit_by_id(entity_id)
-            if not unit_dto:
-                return {}
-
-            # Try to fetch building data for address/building info
-            building_id = unit_dto.get("buildingId", unit_dto.get("building_id", ""))
-            if building_id:
-                try:
-                    building_dto = api.get_building_by_id(building_id)
-                    if building_dto:
-                        unit_dto["_building"] = building_dto
-                except Exception as be:
-                    logger.warning(f"Failed to fetch building {building_id}: {be}")
-
-            return unit_dto
-        except Exception as e:
-            logger.error(f"Failed to fetch property unit {entity_id}: {e}")
-            return {}
+    def _on_property_units_error(self, error_msg):
+        """Handle property unit fetch error."""
+        logger.error(f"Failed to fetch property units: {error_msg}")
 
     def update_language(self, is_arabic: bool):
         pass

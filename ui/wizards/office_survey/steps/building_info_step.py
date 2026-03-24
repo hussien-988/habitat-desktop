@@ -24,6 +24,7 @@ from ui.style_manager import StyleManager
 from services.display_mappings import get_building_type_display, get_building_status_display
 from services.translation_manager import tr
 from services.api_client import get_api_client
+from services.api_worker import ApiWorker
 from utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -450,7 +451,7 @@ class BuildingInfoStep(BaseStep):
         self.f_description.setPlainText(desc)
 
     def _on_show_documents(self):
-        """Fetch building documents from API and show in dialog."""
+        """Fetch building documents from API (non-blocking) and show in dialog."""
         b = self.context.building
         if not b:
             return
@@ -461,32 +462,38 @@ class BuildingInfoStep(BaseStep):
             Toast.show_toast(self, "لا يتوفر معرف المبنى", Toast.WARNING)
             return
 
+        api = get_api_client()
+        if not api:
+            from ui.components.toast import Toast
+            Toast.show_toast(self, "خدمة API غير متوفرة", Toast.WARNING)
+            return
+
         self._docs_btn.setEnabled(False)
         self._docs_btn.setText("جاري التحميل...")
 
-        try:
-            api = get_api_client()
-            if not api:
-                from ui.components.toast import Toast
-                Toast.show_toast(self, "خدمة API غير متوفرة", Toast.WARNING)
-                return
+        def _do_fetch():
+            return api.get_building_documents(uuid)
 
-            docs = api.get_building_documents(uuid)
-
+        def _on_docs_loaded(docs):
+            self._docs_btn.setEnabled(True)
+            self._docs_btn.setText("عرض وثائق المبنى")
             if not docs:
                 from ui.components.toast import Toast
                 Toast.show_toast(self, "لا يوجد مرفقات لهذا المبنى", Toast.INFO)
                 return
-
             self._show_documents_dialog(docs)
 
-        except Exception as e:
-            logger.warning(f"Failed to load building documents: {e}")
-            from ui.components.toast import Toast
-            Toast.show_toast(self, "تعذر تحميل وثائق المبنى", Toast.WARNING)
-        finally:
+        def _on_docs_error(msg):
             self._docs_btn.setEnabled(True)
             self._docs_btn.setText("عرض وثائق المبنى")
+            logger.warning(f"Failed to load building documents: {msg}")
+            from ui.components.toast import Toast
+            Toast.show_toast(self, "تعذر تحميل وثائق المبنى", Toast.WARNING)
+
+        self._docs_worker = ApiWorker(_do_fetch)
+        self._docs_worker.finished.connect(_on_docs_loaded)
+        self._docs_worker.error.connect(_on_docs_error)
+        self._docs_worker.start()
 
     def _show_documents_dialog(self, docs: list):
         """Show building documents in a simple dialog."""
