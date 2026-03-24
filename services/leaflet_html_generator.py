@@ -619,9 +619,16 @@ class LeafletHTMLGenerator:
             tile_layer_url_js = json.dumps(tile_template_from_meta)
             tile_status_label = "Docker (" + tile_template_from_meta.split('/')[2] + ")"
         else:
-            fallback_tile_url = effective_tile_url + "/tiles/{z}/{x}/{y}.png"
+            from urllib.parse import urlparse as _urlparse
+            _parsed = _urlparse(effective_tile_url)
+            _is_local = _parsed.hostname in ('localhost', '127.0.0.1')
+            if _is_local:
+                fallback_tile_url = effective_tile_url + "/tiles/{z}/{x}/{y}.png"
+                tile_status_label = "Local (" + tile_server_url.split(':')[-1] + ")"
+            else:
+                fallback_tile_url = effective_tile_url + "/{z}/{x}/{y}.png"
+                tile_status_label = _parsed.hostname or effective_tile_url
             tile_layer_url_js = json.dumps(fallback_tile_url)
-            tile_status_label = "Local (" + tile_server_url.split(':')[-1] + ")"
 
         # GeoServer WMS (optional, from .env)
         geoserver_wms_url = ""

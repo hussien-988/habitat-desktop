@@ -17,6 +17,7 @@ from ui.design_system import Colors
 from ui.font_utils import create_font, FontManager
 from services.leaflet_html_generator import generate_leaflet_html
 from services.geojson_converter import GeoJSONConverter
+from services.api_worker import ApiWorker
 from utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -170,29 +171,103 @@ class PolygonMapDialog(BaseMapDialog):
             )
             return
 
-        # Resolve Building objects: viewport cache → local cache → API fallback
+        # Resolve Building objects from caches first
         viewport_cache = getattr(self, '_viewport_buildings_cache', {})
-        selected_buildings = []
+        cached_buildings = []
+        uncached_ids = []
 
         for building_id in building_ids:
             building = (
                 self._building_id_to_building.get(building_id)
                 or viewport_cache.get(building_id)
-                or self._fetch_building_from_api(building_id)
             )
             if building:
                 self._building_id_to_building[building.building_id] = building
-                selected_buildings.append(building)
+                cached_buildings.append(building)
             else:
-                logger.warning(f"Building {building_id} not found in any cache or API")
+                uncached_ids.append(building_id)
 
-        if selected_buildings:
-            self._selected_buildings = selected_buildings
-            logger.info(f"Confirmed selection of {len(selected_buildings)} buildings")
+        if not uncached_ids:
+            # All buildings resolved from cache
+            self._finalize_selection(cached_buildings)
+            return
+
+        # Fetch uncached buildings in background
+        logger.info(f"Fetching {len(uncached_ids)} uncached buildings from API")
+        if hasattr(self, 'confirm_selection_btn'):
+            self.confirm_selection_btn.setEnabled(False)
+            self.confirm_selection_btn.setText("جاري التحميل...")
+
+        self._pending_cached_buildings = cached_buildings
+
+        self._confirm_fetch_worker = ApiWorker(
+            self._fetch_buildings_batch, uncached_ids
+        )
+        self._confirm_fetch_worker.finished.connect(self._on_confirm_fetch_finished)
+        self._confirm_fetch_worker.error.connect(self._on_confirm_fetch_error)
+        self._confirm_fetch_worker.start()
+
+    def _fetch_buildings_batch(self, building_ids):
+        """Fetch multiple buildings by ID (runs in background thread)."""
+        from controllers.building_controller import BuildingController
+        controller = BuildingController(self.db)
+        if hasattr(self, '_auth_token') and self._auth_token:
+            controller.set_auth_token(self._auth_token)
+
+        fetched = []
+        for building_id in building_ids:
+            try:
+                result = controller.get_building_by_id(building_id)
+                if result.success and result.data:
+                    fetched.append(result.data)
+                else:
+                    logger.warning(f"Building {building_id} not found: {result.message}")
+            except Exception as e:
+                logger.error(f"Error fetching building {building_id}: {e}")
+        return fetched
+
+    def _on_confirm_fetch_finished(self, fetched_buildings):
+        """Handle batch building fetch completion."""
+        if hasattr(self, 'confirm_selection_btn'):
+            self.confirm_selection_btn.setText("تأكيد الاختيار")
+            self.confirm_selection_btn.setEnabled(True)
+
+        cached = getattr(self, '_pending_cached_buildings', [])
+        all_buildings = cached + (fetched_buildings or [])
+
+        for b in (fetched_buildings or []):
+            if b.building_id:
+                self._building_id_to_building[b.building_id] = b
+
+        self._finalize_selection(all_buildings)
+
+    def _on_confirm_fetch_error(self, error_msg):
+        """Handle batch building fetch error."""
+        logger.error(f"Confirm fetch error: {error_msg}")
+        if hasattr(self, 'confirm_selection_btn'):
+            self.confirm_selection_btn.setText("تأكيد الاختيار")
+            self.confirm_selection_btn.setEnabled(True)
+
+        # Try to finalize with whatever we have cached
+        cached = getattr(self, '_pending_cached_buildings', [])
+        if cached:
+            self._finalize_selection(cached)
+        else:
+            ErrorHandler.show_warning(
+                self,
+                "لم يتم العثور على تفاصيل المباني المحددة\nالرجاء المحاولة مرة أخرى",
+                "خطأ في جلب البيانات"
+            )
+
+    def _finalize_selection(self, buildings):
+        """Finalize confirmed building selection."""
+        if buildings:
+            self._selected_buildings = buildings
+            logger.info(f"Confirmed selection of {len(buildings)} buildings")
             self._cleanup_overlay()
             self.accept()
         else:
-            logger.warning(f"Could not resolve any of {len(building_ids)} buildings")
+            logger.warning("Could not resolve any buildings")
             ErrorHandler.show_warning(
                 self,
                 "لم يتم العثور على تفاصيل المباني المحددة\nالرجاء المحاولة مرة أخرى",
@@ -239,7 +314,9 @@ class PolygonMapDialog(BaseMapDialog):
             else:
                 logger.error(f"_load_map: NO AUTH TOKEN! Viewport loading will fail!")
 
-            buildings_geojson = self._load_and_cache_initial_buildings()
+            # Start with empty buildings; load asynchronously to avoid blocking
+            buildings_geojson = '{"type":"FeatureCollection","features":[]}'
+            self._load_initial_buildings_async()
 
             # Load neighborhoods for map overlay (shared helper)
             neighborhoods_geojson = self.load_neighborhoods_geojson(auth_token=self._auth_token)
@@ -262,30 +339,9 @@ class PolygonMapDialog(BaseMapDialog):
                 logger.warning(f"Failed to load neighbourhood boundaries: {e}")
 
             center_lat, center_lon = 36.2021, 37.1343
-            landmarks_json = None
-            streets_json = None
-            try:
-                from services.api_client import get_api_client
-                from services.map_utils import normalize_landmark, normalize_street
-                api = get_api_client()
 
-                landmarks = api.get_landmarks_for_map(
-                    south_west_lat=center_lat - 0.5, south_west_lng=center_lon - 0.5,
-                    north_east_lat=center_lat + 0.5, north_east_lng=center_lon + 0.5
-                )
-                if landmarks and isinstance(landmarks, list):
-                    landmarks = [normalize_landmark(lm) for lm in landmarks]
-                    landmarks_json = json.dumps(landmarks, ensure_ascii=False)
-
-                streets = api.get_streets_for_map(
-                    south_west_lat=center_lat - 0.5, south_west_lng=center_lon - 0.5,
-                    north_east_lat=center_lat + 0.5, north_east_lng=center_lon + 0.5
-                )
-                if streets and isinstance(streets, list):
-                    streets = [normalize_street(s) for s in streets]
-                    streets_json = json.dumps(streets, ensure_ascii=False)
-            except Exception as e:
-                logger.warning(f"Failed to load landmarks/streets: {e}")
+            # Load landmarks and streets asynchronously (injected after map loads)
+            self._load_landmarks_streets_async(center_lat, center_lon)
 
             html = generate_leaflet_html(
                 tile_server_url=tile_server_url.rstrip('/'),
@@ -301,8 +357,8 @@ class PolygonMapDialog(BaseMapDialog):
                 enable_viewport_loading=True,
                 enable_drawing=False,
                 neighborhoods_geojson=neighborhoods_geojson,
-                landmarks_json=landmarks_json,
-                streets_json=streets_json,
+                landmarks_json='[]',
+                streets_json='[]',
                 boundaries_geojson=boundaries_geojson,
                 boundary_level='neighbourhoods',
             )
@@ -320,15 +376,105 @@ class PolygonMapDialog(BaseMapDialog):
                 "خطأ"
             )
 
-    def _load_and_cache_initial_buildings(self) -> str:
-        """
-        Load initial buildings, cache them for multi-select lookup, return GeoJSON.
-        Falls back to local DB when API is unavailable.
-        """
-        from services.geojson_converter import GeoJSONConverter
+    def _load_landmarks_streets_async(self, center_lat: float, center_lon: float):
+        """Load landmarks and streets in a background thread, inject via JS when ready."""
+        def _fetch():
+            from services.api_client import get_api_client
+            from services.map_utils import normalize_landmark, normalize_street
+            api = get_api_client()
+            result = {'landmarks': None, 'streets': None}
 
+            landmarks = api.get_landmarks_for_map(
+                south_west_lat=center_lat - 0.5, south_west_lng=center_lon - 0.5,
+                north_east_lat=center_lat + 0.5, north_east_lng=center_lon + 0.5
+            )
+            if landmarks and isinstance(landmarks, list):
+                result['landmarks'] = [normalize_landmark(lm) for lm in landmarks]
+
+            streets = api.get_streets_for_map(
+                south_west_lat=center_lat - 0.5, south_west_lng=center_lon - 0.5,
+                north_east_lat=center_lat + 0.5, north_east_lng=center_lon + 0.5
+            )
+            if streets and isinstance(streets, list):
+                result['streets'] = [normalize_street(s) for s in streets]
+
+            return result
+
+        self._landmarks_streets_worker = ApiWorker(_fetch)
+        self._landmarks_streets_worker.finished.connect(self._on_landmarks_streets_loaded)
+        self._landmarks_streets_worker.error.connect(
+            lambda err: logger.warning(f"Failed to load landmarks/streets: {err}")
+        )
+        self._landmarks_streets_worker.start()
+
+    def _on_landmarks_streets_loaded(self, result):
+        """Inject landmarks and streets into the already-loaded map via JavaScript."""
+        try:
+            if result.get('landmarks'):
+                landmarks_js = json.dumps(result['landmarks'], ensure_ascii=False)
+                self.web_view.page().runJavaScript(
+                    f"if(typeof updateLandmarksOnMap==='function'){{updateLandmarksOnMap({landmarks_js});}}"
+                )
+                logger.info(f"Injected {len(result['landmarks'])} landmarks into map")
+            if result.get('streets'):
+                streets_js = json.dumps(result['streets'], ensure_ascii=False)
+                self.web_view.page().runJavaScript(
+                    f"if(typeof updateStreetsOnMap==='function'){{updateStreetsOnMap({streets_js});}}"
+                )
+                logger.info(f"Injected {len(result['streets'])} streets into map")
+        except Exception as e:
+            logger.warning(f"Error injecting landmarks/streets into map: {e}")
+
+    def _load_initial_buildings_async(self):
+        """Load initial buildings in a background thread, inject into map when ready."""
         if not hasattr(self, '_viewport_buildings_cache'):
             self._viewport_buildings_cache = {}
+
+        self._buildings_load_worker = ApiWorker(self._load_and_cache_initial_buildings)
+        self._buildings_load_worker.finished.connect(self._on_initial_buildings_loaded)
+        self._buildings_load_worker.error.connect(
+            lambda err: logger.warning(f"Failed to load initial buildings: {err}")
+        )
+        self._buildings_load_worker.start()
+
+    def _on_initial_buildings_loaded(self, result):
+        """Handle initial buildings loaded from background thread."""
+        buildings = result.get('buildings', [])
+        geojson = result.get('geojson')
+
+        if not buildings:
+            logger.info("No initial buildings loaded")
+            return
+
+        # Cache buildings
+        self.buildings = buildings
+        for b in buildings:
+            if b.building_id:
+                self._viewport_buildings_cache[b.building_id] = b
+
+        # Inject into map via JavaScript
+        if geojson:
+            try:
+                self.web_view.page().runJavaScript(
+                    f"""
+                    if (typeof buildingsLayer !== 'undefined') {{
+                        var newData = {geojson};
+                        var newLayer = L.geoJSON(newData, buildingsLayer.options);
+                        newLayer.eachLayer(function(layer) {{ buildingsLayer.addLayer(layer); }});
+                        console.log('Injected ' + newData.features.length + ' initial buildings');
+                    }}
+                    """
+                )
+                logger.info(f"Injected {len(buildings)} initial buildings into map")
+            except Exception as e:
+                logger.warning(f"Error injecting buildings into map: {e}")
+
+    def _load_and_cache_initial_buildings(self):
+        """
+        Load initial buildings (runs in background thread).
+        Returns dict with 'buildings' list and 'geojson' string.
+        """
+        from services.geojson_converter import GeoJSONConverter
 
         # Try API first (only if auth token available)
         if self._auth_token:
@@ -347,31 +493,26 @@ class PolygonMapDialog(BaseMapDialog):
 
                 if buildings:
                     logger.info(f"Loaded {len(buildings)} initial buildings from API")
-                    for b in buildings:
-                        if b.building_id:
-                            self._viewport_buildings_cache[b.building_id] = b
-                    return GeoJSONConverter.buildings_to_geojson(buildings, prefer_polygons=True)
+                    geojson = GeoJSONConverter.buildings_to_geojson(buildings, prefer_polygons=True)
+                    return {'buildings': buildings, 'geojson': geojson}
 
             except Exception as e:
                 logger.error(f"API unavailable for map buildings: {e}", exc_info=True)
 
-        # Fallback: load via BuildingController (API-only)
+        # Fallback: load via BuildingController
         try:
             from controllers.building_controller import BuildingController
             controller = BuildingController(self.db)
             result = controller.load_buildings()
             if result.success and result.data:
                 buildings = result.data
-                self.buildings = buildings
-                for b in buildings:
-                    if b.building_id:
-                        self._viewport_buildings_cache[b.building_id] = b
                 logger.info(f"Loaded {len(buildings)} buildings via controller for map")
-                return GeoJSONConverter.buildings_to_geojson(buildings, prefer_polygons=True)
+                geojson = GeoJSONConverter.buildings_to_geojson(buildings, prefer_polygons=True)
+                return {'buildings': buildings, 'geojson': geojson}
         except Exception as e2:
             logger.error(f"BuildingController fallback also failed: {e2}", exc_info=True)
 
-        return '{"type":"FeatureCollection","features":[]}'
+        return {'buildings': [], 'geojson': None}
 
     def _on_geometry_selected(self, geom_type: str, wkt: str):
         """Handle polygon drawn - query buildings within polygon."""
@@ -553,29 +694,6 @@ class PolygonMapDialog(BaseMapDialog):
         except Exception as e:
             logger.error(f"Error in fallback query: {e}", exc_info=True)
             return []
-
-    def _fetch_building_from_api(self, building_id: str) -> Optional[Building]:
-        """Fetch single building using BuildingController."""
-        try:
-            from controllers.building_controller import BuildingController
-
-            controller = BuildingController(self.db)
-
-            if hasattr(self, '_auth_token') and self._auth_token:
-                controller.set_auth_token(self._auth_token)
-
-            result = controller.get_building_by_id(building_id)
-
-            if result.success and result.data:
-                logger.info(f"Found building via controller: {building_id}")
-                return result.data
-            else:
-                logger.warning(f"Building {building_id} not found: {result.message}")
-                return None
-
-        except Exception as e:
-            logger.error(f"Error fetching building: {e}", exc_info=True)
-            return None
 
     def _on_buildings_clicked(self, building_ids: List[str]):
         """Handle buildings selected by clicking on map."""

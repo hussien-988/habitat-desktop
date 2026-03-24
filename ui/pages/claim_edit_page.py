@@ -17,6 +17,7 @@ from ui.style_manager import StyleManager
 from ui.components.toast import Toast
 from ui.components.dialogs.modification_reason_dialog import ModificationReasonDialog
 from services.translation_manager import tr
+from services.api_worker import ApiWorker
 from utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -594,21 +595,39 @@ class ClaimEditPage(QWidget):
         """Refresh evidence list from claim DTO evidenceIds."""
         if not self._claim_id:
             return
-        try:
-            from services.api_client import get_api_client
-            api = get_api_client()
-            claim = api.get_claim_by_id(self._claim_id)
-            evidence_ids = claim.get("evidenceIds") or []
-            self._evidences = []
-            for eid in evidence_ids:
-                try:
-                    ev = api.get_evidence_by_id(eid)
-                    if ev:
-                        self._evidences.append(ev)
-                except Exception:
-                    pass
-        except Exception as e:
-            logger.warning(f"Failed to reload evidences: {e}")
+
+        self._reload_evidences_worker = ApiWorker(
+            self._fetch_claim_evidences, self._claim_id
+        )
+        self._reload_evidences_worker.finished.connect(self._on_evidences_reloaded)
+        self._reload_evidences_worker.error.connect(self._on_evidences_reload_error)
+        self._reload_evidences_worker.start()
+
+    @staticmethod
+    def _fetch_claim_evidences(claim_id):
+        """Fetch claim and all its evidences (runs in worker thread)."""
+        from services.api_client import get_api_client
+        api = get_api_client()
+        claim = api.get_claim_by_id(claim_id)
+        evidence_ids = claim.get("evidenceIds") or []
+        evidences = []
+        for eid in evidence_ids:
+            try:
+                ev = api.get_evidence_by_id(eid)
+                if ev:
+                    evidences.append(ev)
+            except Exception:
+                pass
+        return evidences
+
+    def _on_evidences_reloaded(self, evidences):
+        """Handle reloaded evidences on main thread."""
+        self._evidences = evidences
+        self._refresh_evidence_list()
+
+    def _on_evidences_reload_error(self, error_msg):
+        """Handle evidence reload error."""
+        logger.warning(f"Failed to reload evidences: {error_msg}")
         self._refresh_evidence_list()
     # Save (S08-S10)
 

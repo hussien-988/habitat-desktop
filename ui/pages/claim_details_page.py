@@ -22,6 +22,7 @@ from services.display_mappings import (
     get_unit_type_display, get_unit_status_display,
     get_claim_type_display, get_source_display, get_claim_status_display,
 )
+from services.api_worker import ApiWorker
 
 logger = get_logger(__name__)
 
@@ -995,16 +996,22 @@ class ClaimDetailsPage(QWidget):
             Toast.show_toast(self, "لا يمكن تحميل المستندات — survey_id غير متوفر", Toast.WARNING)
             return
 
-        from services.api_client import get_api_client
-        api = get_api_client()
+        def _fetch_survey_evidences(survey_id):
+            from services.api_client import get_api_client
+            api = get_api_client()
+            return api.get_survey_evidences(survey_id)
 
-        all_evidences = api.get_survey_evidences(self._survey_id)
+        self._pick_evidence_worker = ApiWorker(_fetch_survey_evidences, self._survey_id)
+        self._pick_evidence_worker.finished.connect(self._on_pick_evidences_loaded)
+        self._pick_evidence_worker.error.connect(self._on_pick_evidences_error)
+        self._pick_evidence_worker.start()
+
+    def _on_pick_evidences_loaded(self, all_evidences):
+        """Handle loaded evidences for picker dialog."""
         logger.info(f"[PICK] Got {len(all_evidences)} evidences from survey")
 
-        # Exclude already-linked evidences and pending deletes
         linked_ids = {str(ev.get("id") or ev.get("evidenceId") or "") for ev in self._evidences}
         linked_ids -= set(self._pending_deletes)
-        # Also exclude already-pending-link IDs
         for ev_data in self._pending_links:
             linked_ids.add(str(ev_data.get("id") or ev_data.get("evidenceId") or ""))
 
@@ -1014,6 +1021,11 @@ class ClaimDetailsPage(QWidget):
             selected_data = dialog.get_selected_data()
             self._pending_links.extend(selected_data)
             self._populate_relation_card()
+
+    def _on_pick_evidences_error(self, error_msg):
+        """Handle evidence loading error."""
+        logger.warning(f"Failed to load survey evidences: {error_msg}")
+        Toast.show_toast(self, "فشل في تحميل المستندات", Toast.ERROR)
 
     def _on_remove_pending_link(self, evidence_id):
         """Remove an evidence from the pending links list."""

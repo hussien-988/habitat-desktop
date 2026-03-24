@@ -24,6 +24,7 @@ from ui.wizards.office_survey.survey_context import SurveyContext
 from controllers.unit_controller import UnitController
 from models.unit import PropertyUnit as Unit
 from services.api_client import get_api_client
+from services.api_worker import ApiWorker
 from utils.logger import get_logger
 from utils.helpers import build_hierarchical_address
 from ui.design_system import Colors
@@ -412,56 +413,44 @@ class UnitSelectionStep(BaseStep):
         return container
 
     def _load_units(self):
-        """Load units for the selected building and display as cards."""
+        """Load units for the selected building and display as cards (non-blocking)."""
         if not self.context.building:
             self._loaded_building_uuid = None
-            # Clear all units when no building is selected (new wizard)
             self.unit_building_frame.setVisible(False)
-            # Clear existing unit cards
             while self.units_layout.count():
                 child = self.units_layout.takeAt(0)
                 if child.widget():
                     child.widget().deleteLater()
-            # Show empty state, hide scroll
             self._empty_state.setVisible(True)
             self._scroll_area.setVisible(False)
-            # Clear selected unit
             self.selected_unit = None
             self.emit_validation_changed(False)
             return
 
         building_uuid = self.context.building.building_uuid
 
-        # Guard: skip if same building's units already loaded
         if building_uuid and self._loaded_building_uuid == building_uuid:
             logger.info(f"Units already loaded for building {building_uuid}, skipping fetch")
             return
 
-        # Populate building info card
-        # Populate building info card
         building = self.context.building
 
-        # Update address using helper function
-        # Format: "حلب - المنطقة - الناحية - الحي - رقم البناء"
         address = build_hierarchical_address(
             building_obj=building,
-            unit_obj=None,  # Don't include unit number in building info card
+            unit_obj=None,
             separator=" - ",
             include_unit=False
         )
         self.unit_building_address.setText(address)
 
-        # Update stats
         self.ui_building_type.setText(building.building_type_display or "-")
         self.ui_building_status.setText(building.building_status_display or "-")
         self.ui_units_count.setText(str(getattr(building, 'number_of_apartments', 0) + (building.number_of_shops or 0)))
         self.ui_parcels_count.setText(str(getattr(building, 'number_of_apartments', 0)))
         self.ui_shops_count.setText(str(building.number_of_shops or 0))
 
-        # Show the card after populating data
         self.unit_building_frame.setVisible(True)
 
-        # Clear existing unit cards
         while self.units_layout.count():
             child = self.units_layout.takeAt(0)
             if child.widget():
@@ -469,18 +458,30 @@ class UnitSelectionStep(BaseStep):
 
         survey_id = self.context.get_data("survey_id")
         logger.info(f"Loading units for building: {building_uuid}, survey: {survey_id}")
-        if survey_id:
-            result = self.unit_controller.get_units_for_survey(survey_id)
-        else:
-            result = self.unit_controller.get_units_for_building(building_uuid)
 
+        def _do_load():
+            if survey_id:
+                return self.unit_controller.get_units_for_survey(survey_id)
+            else:
+                return self.unit_controller.get_units_for_building(building_uuid)
+
+        self._load_units_worker = ApiWorker(_do_load)
+        self._load_units_worker.finished.connect(
+            lambda result: self._on_units_loaded(result, building_uuid)
+        )
+        self._load_units_worker.error.connect(
+            lambda msg: self._on_units_load_error(msg)
+        )
+        self._load_units_worker.start()
+
+    def _on_units_loaded(self, result, building_uuid):
+        """Handle units loaded from API."""
         if not result.success:
             logger.error(f"Failed to load units: {result.message}")
             self._empty_state.setVisible(True)
             self._scroll_area.setVisible(False)
             return
 
-        # Safety filter: ensure only units for THIS building are shown
         all_units = result.data or []
         units = []
         for u in all_units:
@@ -502,9 +503,13 @@ class UnitSelectionStep(BaseStep):
                 self.units_layout.addWidget(unit_card)
 
         self.units_layout.addStretch()
-
-        # Mark building as loaded to prevent redundant fetches
         self._loaded_building_uuid = building_uuid
+
+    def _on_units_load_error(self, msg):
+        """Handle units loading error."""
+        logger.error(f"Failed to load units: {msg}")
+        self._empty_state.setVisible(True)
+        self._scroll_area.setVisible(False)
 
     def _to_arabic_numerals(self, text: str) -> str:
         """
@@ -852,39 +857,39 @@ class UnitSelectionStep(BaseStep):
             self._load_units()
 
     def validate(self) -> StepValidationResult:
-        """Validate the step and link unit to survey via API."""
+        """Validate the step. Linking is performed asynchronously via on_next."""
         result = self.create_validation_result()
 
         if not self.context.building:
             result.add_error(tr("wizard.unit.no_building_error"))
             return result
 
-        # Check if unit is selected OR new unit is being created
         if not self.selected_unit and not self.context.is_new_unit:
             result.add_error(tr("wizard.unit.select_or_create_error"))
             return result
 
-        # Link selected unit to survey
         survey_id = self.context.get_data("survey_id")
         if not survey_id:
             result.add_error("لم يتم إنشاء المسح. يرجى العودة للخطوة الأولى والمحاولة مجدداً.")
             return result
 
-        # Get unit_id from selected unit or newly created unit
         current_unit_id = None
         if self.selected_unit and self.selected_unit != "new_unit":
             current_unit_id = getattr(self.selected_unit, 'unit_uuid', None)
         elif self.context.new_unit_data:
             current_unit_id = self.context.new_unit_data.get('unit_uuid')
 
-        # Guard: skip if same unit already linked (prevents duplicate on back-navigation)
+        if not survey_id or not current_unit_id:
+            result.add_error("لم يتم إنشاء المسح أو الوحدة. يرجى العودة للخطوة الأولى والمحاولة مجدداً.")
+            return result
+
+        # Guard: skip if same unit already linked
         if self.context.get_data("unit_linked"):
             previous_unit_id = self.context.get_data("linked_unit_uuid")
             if previous_unit_id == current_unit_id:
                 logger.info(f"Unit already linked ({current_unit_id}), skipping")
                 return result
             else:
-                # Unit changed - cleanup relations
                 logger.info(f"Unit changed ({previous_unit_id} -> {current_unit_id}), patching relations")
                 cleaned = False
                 try:
@@ -903,27 +908,33 @@ class UnitSelectionStep(BaseStep):
                                 "claims_count", "created_claims"):
                         self.context.update_data(key, None)
 
+        # If not yet linked, start async linking
         if not self.context.get_data("unit_linked"):
-            linked = False
-            self._set_auth_token()
-            if survey_id and current_unit_id:
-                try:
-                    response = self._api_service.link_unit_to_survey(survey_id, current_unit_id)
-                    logger.info(f"Unit {current_unit_id} linked to survey {survey_id}")
-                    linked = True
-                except Exception as e:
-                    logger.error(f"API link failed: {e}")
-                    result.add_error("فشل ربط الوحدة بالمسح. يرجى المحاولة مجدداً.")
-                    return result
-            else:
-                result.add_error("لم يتم إنشاء المسح أو الوحدة. يرجى العودة للخطوة الأولى والمحاولة مجدداً.")
-                return result
-
-            if linked:
-                self.context.update_data("unit_linked", True)
-                self.context.update_data("linked_unit_uuid", current_unit_id)
+            self._link_unit_async(survey_id, current_unit_id)
 
         return result
+
+    def _link_unit_async(self, survey_id, unit_id):
+        """Link unit to survey in a background thread."""
+        self._set_auth_token()
+
+        def _do_link():
+            return self._api_service.link_unit_to_survey(survey_id, unit_id)
+
+        def _on_linked(_response):
+            logger.info(f"Unit {unit_id} linked to survey {survey_id}")
+            self.context.update_data("unit_linked", True)
+            self.context.update_data("linked_unit_uuid", unit_id)
+
+        def _on_link_error(msg):
+            logger.error(f"API link failed: {msg}")
+            from ui.components.toast import Toast
+            Toast.show_toast(self, "فشل ربط الوحدة بالمسح. يرجى المحاولة مجدداً.", Toast.ERROR)
+
+        self._link_unit_worker = ApiWorker(_do_link)
+        self._link_unit_worker.finished.connect(_on_linked)
+        self._link_unit_worker.error.connect(_on_link_error)
+        self._link_unit_worker.start()
 
     def collect_data(self) -> Dict[str, Any]:
         """Collect data from the step."""

@@ -4,11 +4,13 @@ Map Picker Dialog V2 - حوار اختيار الموقع/المضلع
 Dialog for location/polygon selection on map.
 """
 
+import json
 from typing import Optional, Dict
 from PyQt5.QtCore import pyqtSlot
 
 from ui.components.base_map_dialog import BaseMapDialog
 from services.leaflet_html_generator import generate_leaflet_html
+from services.api_worker import ApiWorker
 from utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -100,39 +102,10 @@ class MapPickerDialog(BaseMapDialog):
             else:
                 logger.info("No existing polygon (new building)")
 
-            # Load landmarks and streets for map overlay
-            landmarks_json = None
-            streets_json = None
-            import json
-            sw_lat, sw_lng = self.initial_lat - 0.5, self.initial_lon - 0.5
-            ne_lat, ne_lng = self.initial_lat + 0.5, self.initial_lon + 0.5
-            logger.info(f"Loading landmarks/streets for map picker (bbox={sw_lat},{sw_lng}-{ne_lat},{ne_lng})")
-            try:
-                from services.api_client import get_api_client
-                from services.map_utils import normalize_landmark, normalize_street
-                api = get_api_client()
+            # Load landmarks and streets asynchronously (injected after map loads)
+            self._load_landmarks_streets_async()
 
-                landmarks = api.get_landmarks_for_map(
-                    south_west_lat=sw_lat, south_west_lng=sw_lng,
-                    north_east_lat=ne_lat, north_east_lng=ne_lng
-                )
-                logger.info(f"Landmarks: {len(landmarks) if landmarks else 0} items")
-                if landmarks and isinstance(landmarks, list):
-                    landmarks = [normalize_landmark(lm) for lm in landmarks]
-                    landmarks_json = json.dumps(landmarks, ensure_ascii=False)
-
-                streets = api.get_streets_for_map(
-                    south_west_lat=sw_lat, south_west_lng=sw_lng,
-                    north_east_lat=ne_lat, north_east_lng=ne_lng
-                )
-                logger.info(f"Streets: {len(streets) if streets else 0} items")
-                if streets and isinstance(streets, list):
-                    streets = [normalize_street(s) for s in streets]
-                    streets_json = json.dumps(streets, ensure_ascii=False)
-            except Exception as e:
-                logger.error(f"Failed to load landmarks/streets for map picker: {e}", exc_info=True)
-
-            # Generate map HTML using LeafletHTMLGenerator
+            # Generate map HTML with empty landmarks/streets layers (populated async)
             html = generate_leaflet_html(
                 tile_server_url=tile_server_url.rstrip('/'),
                 buildings_geojson=buildings_geojson,
@@ -152,8 +125,8 @@ class MapPickerDialog(BaseMapDialog):
                 selected_neighborhood_code=self.selected_neighborhood_code,
                 skip_fit_bounds=self._skip_fit_bounds,
                 tile_layer_url=docker_url,
-                landmarks_json=landmarks_json,
-                streets_json=streets_json
+                landmarks_json='[]',
+                streets_json='[]'
             )
 
             # Load into web view
@@ -169,6 +142,59 @@ class MapPickerDialog(BaseMapDialog):
                 f"حدث خطأ أثناء تحميل الخريطة:\n{str(e)}",
                 "خطأ"
             )
+
+    def _load_landmarks_streets_async(self):
+        """Load landmarks and streets in a background thread, inject via JS when ready."""
+        sw_lat, sw_lng = self.initial_lat - 0.5, self.initial_lon - 0.5
+        ne_lat, ne_lng = self.initial_lat + 0.5, self.initial_lon + 0.5
+        logger.info(f"Loading landmarks/streets async (bbox={sw_lat},{sw_lng}-{ne_lat},{ne_lng})")
+
+        def _fetch():
+            from services.api_client import get_api_client
+            from services.map_utils import normalize_landmark, normalize_street
+            api = get_api_client()
+            result = {'landmarks': None, 'streets': None}
+
+            landmarks = api.get_landmarks_for_map(
+                south_west_lat=sw_lat, south_west_lng=sw_lng,
+                north_east_lat=ne_lat, north_east_lng=ne_lng
+            )
+            if landmarks and isinstance(landmarks, list):
+                result['landmarks'] = [normalize_landmark(lm) for lm in landmarks]
+
+            streets = api.get_streets_for_map(
+                south_west_lat=sw_lat, south_west_lng=sw_lng,
+                north_east_lat=ne_lat, north_east_lng=ne_lng
+            )
+            if streets and isinstance(streets, list):
+                result['streets'] = [normalize_street(s) for s in streets]
+
+            return result
+
+        self._landmarks_streets_worker = ApiWorker(_fetch)
+        self._landmarks_streets_worker.finished.connect(self._on_landmarks_streets_loaded)
+        self._landmarks_streets_worker.error.connect(
+            lambda err: logger.warning(f"Failed to load landmarks/streets: {err}")
+        )
+        self._landmarks_streets_worker.start()
+
+    def _on_landmarks_streets_loaded(self, result):
+        """Inject landmarks and streets into the already-loaded map via JavaScript."""
+        try:
+            if result.get('landmarks'):
+                landmarks_js = json.dumps(result['landmarks'], ensure_ascii=False)
+                self.web_view.page().runJavaScript(
+                    f"if(typeof updateLandmarksOnMap==='function'){{updateLandmarksOnMap({landmarks_js});}}"
+                )
+                logger.info(f"Injected {len(result['landmarks'])} landmarks into map")
+            if result.get('streets'):
+                streets_js = json.dumps(result['streets'], ensure_ascii=False)
+                self.web_view.page().runJavaScript(
+                    f"if(typeof updateStreetsOnMap==='function'){{updateStreetsOnMap({streets_js});}}"
+                )
+                logger.info(f"Injected {len(result['streets'])} streets into map")
+        except Exception as e:
+            logger.warning(f"Error injecting landmarks/streets into map: {e}")
 
     def _on_geometry_selected(self, geom_type: str, wkt: str):
         """Handle geometry drawn. Store result and wait for user confirmation."""

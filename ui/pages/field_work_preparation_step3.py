@@ -10,6 +10,7 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtCore import Qt
 
+from services.api_worker import ApiWorker
 from ui.components.icon import Icon
 from ui.design_system import Colors
 from ui.font_utils import create_font, FontManager
@@ -32,20 +33,44 @@ class FieldWorkPreparationStep3(QWidget):
         super().__init__(parent)
         self.buildings = buildings or []
         self.researcher = researcher or {}
-        self._building_units = {}  # building_id → list of unit dicts
-        self._visit_type_groups = {}  # building_id → QButtonGroup
-        self._revisit_reason_inputs = {}  # building_id → QLineEdit
-        self._accordion_bodies = {}  # building_id → QWidget (body)
-        self._accordion_arrows = {}  # building_id → QLabel (arrow)
-        self._fetch_units()
+        self._building_units = {}  # building_id -> list of unit dicts
+        self._visit_type_groups = {}  # building_id -> QButtonGroup
+        self._revisit_reason_inputs = {}  # building_id -> QLineEdit
+        self._accordion_bodies = {}  # building_id -> QWidget (body)
+        self._accordion_arrows = {}  # building_id -> QLabel (arrow)
+
+        # Show a temporary loading layout, fetch units in background
+        from ui.components.loading_spinner import LoadingSpinnerOverlay
+        self._outer_layout = QVBoxLayout(self)
+        self._outer_layout.setContentsMargins(0, 0, 0, 0)
+        self._spinner = LoadingSpinnerOverlay(self)
+        self._spinner.show_loading("جاري تحميل بيانات المقاسم...")
+
+        self._units_worker = ApiWorker(self._fetch_units_data, self.buildings)
+        self._units_worker.finished.connect(self._on_units_loaded)
+        self._units_worker.error.connect(self._on_units_load_error)
+        self._units_worker.start()
+
+    def _on_units_loaded(self, building_units):
+        """Handle successful unit fetch, then build UI."""
+        self._building_units = building_units or {}
+        self._spinner.hide_loading()
         self._setup_ui()
 
-    def _fetch_units(self):
-        """Fetch property units for each building."""
+    def _on_units_load_error(self, error_msg):
+        """Handle failed unit fetch, build UI with empty units."""
+        logger.warning(f"Could not fetch property units: {error_msg}")
+        self._spinner.hide_loading()
+        self._setup_ui()
+
+    @staticmethod
+    def _fetch_units_data(buildings):
+        """Fetch property units for each building. Runs in background thread."""
+        building_units = {}
         try:
             from services.api_client import get_api_client
             api = get_api_client()
-            for building in self.buildings:
+            for building in buildings:
                 building_uuid = (
                     getattr(building, 'building_uuid', None)
                     or getattr(building, 'id', None)
@@ -55,17 +80,17 @@ class FieldWorkPreparationStep3(QWidget):
                 try:
                     units = api.get_assignment_property_units(building_uuid)
                     bid = getattr(building, 'building_id', '') or str(building)
-                    self._building_units[bid] = units if isinstance(units, list) else []
+                    building_units[bid] = units if isinstance(units, list) else []
                 except Exception as e:
                     logger.debug(f"Could not fetch units for {building_uuid}: {e}")
         except Exception as e:
             logger.warning(f"Could not fetch property units: {e}")
+        return building_units
 
     def _setup_ui(self):
         self.setLayoutDirection(Qt.RightToLeft)
 
-        outer = QVBoxLayout(self)
-        outer.setContentsMargins(0, 0, 0, 0)
+        outer = self._outer_layout
         outer.setSpacing(0)
 
         # Page-level scroll — the whole step scrolls, not individual cards

@@ -25,6 +25,7 @@ from ..font_utils import create_font, FontManager
 from ..style_manager import StyleManager
 from services.translation_manager import tr
 from services.display_mappings import get_survey_type_display
+from services.api_worker import ApiWorker
 
 logger = logging.getLogger(__name__)
 
@@ -225,38 +226,78 @@ class CasesPage(QWidget):
     def _load_surveys(self):
         """Load surveys from API based on active tab and filters."""
         self._spinner.show_loading("جاري تحميل المسوحات...")
-        try:
-            self._all_data = []
-            status = "Draft" if self._active_tab == "draft" else "Finalized"
-            name = self._name_filter.text().strip() or None
 
-            try:
-                from controllers.survey_controller import SurveyController
-                ctrl = SurveyController(self.db)
-                clerk_id = self._user_id if self._user_role == "office_clerk" else None
-                result = ctrl.load_office_surveys(
-                    status=status,
-                    page=1,
-                    page_size=30,
-                    sort_by="SurveyDate",
-                    sort_direction="desc",
-                    contact_person_name=name,
-                    clerk_id=clerk_id,
-                )
-                if result.success and result.data:
-                    building_ids = {s.get("buildingId", "") for s in result.data if s.get("buildingId")}
-                    self._enrich_buildings_cache(building_ids)
+        status = "Draft" if self._active_tab == "draft" else "Finalized"
+        name = self._name_filter.text().strip() or None
+        clerk_id = self._user_id if self._user_role == "office_clerk" else None
 
-                    for s in result.data:
-                        self._all_data.append(self._map_survey(s))
+        self._load_surveys_worker = ApiWorker(
+            self._fetch_surveys_data, status, name, clerk_id
+        )
+        self._load_surveys_worker.finished.connect(self._on_surveys_loaded)
+        self._load_surveys_worker.error.connect(self._on_surveys_load_error)
+        self._load_surveys_worker.start()
 
-                logger.info(f"Loaded {len(self._all_data)} surveys (status={status})")
-            except Exception as e:
-                logger.warning(f"Error loading surveys (status={status}): {e}")
+    def _fetch_surveys_data(self, status, name, clerk_id):
+        """Fetch surveys and enrich buildings cache (runs in worker thread)."""
+        from controllers.survey_controller import SurveyController
+        from services.api_client import get_api_client
+        from controllers.building_controller import BuildingController
 
-            self._apply_type_filter()
-        finally:
-            self._spinner.hide_loading()
+        ctrl = SurveyController(self.db)
+        result = ctrl.load_office_surveys(
+            status=status,
+            page=1,
+            page_size=30,
+            sort_by="SurveyDate",
+            sort_direction="desc",
+            contact_person_name=name,
+            clerk_id=clerk_id,
+        )
+
+        new_buildings = {}
+        surveys = []
+        if result.success and result.data:
+            surveys = result.data
+            building_ids = {s.get("buildingId", "") for s in surveys if s.get("buildingId")}
+
+            if building_ids:
+                try:
+                    api = get_api_client()
+                    bc = BuildingController(self.db)
+                    for bid in building_ids:
+                        if not bid or bid in self._buildings_cache:
+                            continue
+                        try:
+                            dto = api.get_building_by_id(bid)
+                            new_buildings[bid] = bc._api_dto_to_building(dto)
+                        except Exception:
+                            pass
+                except Exception:
+                    pass
+
+        return {"surveys": surveys, "new_buildings": new_buildings, "status": status}
+
+    def _on_surveys_loaded(self, result):
+        """Handle surveys loaded from API."""
+        self._spinner.hide_loading()
+
+        self._buildings_cache.update(result.get("new_buildings", {}))
+        surveys = result.get("surveys", [])
+
+        self._all_data = []
+        for s in surveys:
+            self._all_data.append(self._map_survey(s))
+
+        logger.info(f"Loaded {len(self._all_data)} surveys (status={result.get('status')})")
+        self._apply_type_filter()
+
+    def _on_surveys_load_error(self, error_msg):
+        """Handle surveys loading error."""
+        self._spinner.hide_loading()
+        logger.warning(f"Error loading surveys: {error_msg}")
+        self._all_data = []
+        self._apply_type_filter()
 
     def _apply_type_filter(self):
         """Filter displayed cards by survey type (local filter)."""
@@ -270,26 +311,6 @@ class CasesPage(QWidget):
             self._show_cards(filtered)
         else:
             self._show_empty_state()
-
-    def _enrich_buildings_cache(self, building_ids):
-        """Fetch building details for IDs not yet cached."""
-        if not building_ids:
-            return
-        try:
-            from services.api_client import get_api_client
-            from controllers.building_controller import BuildingController
-            api = get_api_client()
-            bc = BuildingController(self.db)
-            for bid in building_ids:
-                if not bid or bid in self._buildings_cache:
-                    continue
-                try:
-                    dto = api.get_building_by_id(bid)
-                    self._buildings_cache[bid] = bc._api_dto_to_building(dto)
-                except Exception:
-                    pass
-        except Exception:
-            pass
 
     def _map_survey(self, s: Dict) -> Dict:
         """Map Surveys API summary to card data format."""

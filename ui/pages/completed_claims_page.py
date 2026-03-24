@@ -24,6 +24,7 @@ from ..font_utils import create_font, FontManager
 from ..style_manager import StyleManager
 from services.translation_manager import tr
 from services.display_mappings import get_source_display
+from services.api_worker import ApiWorker
 
 logger = logging.getLogger(__name__)
 
@@ -202,46 +203,41 @@ class CompletedClaimsPage(QWidget):
     def _load_claims(self):
         """Load claims from API based on active tab and all filters."""
         self._spinner.show_loading("جاري تحميل المطالبات...")
-        try:
-            self.claims_data = []
-            case_status = CASE_STATUS_OPEN if self._active_tab == "open" else CASE_STATUS_CLOSED
-            source = self._source_filter.currentData()
-            claim_number = self._search_input.text().strip()
 
-            try:
-                from services.api_client import get_api_client
-                api = get_api_client()
+        case_status = CASE_STATUS_OPEN if self._active_tab == "open" else CASE_STATUS_CLOSED
+        source = self._source_filter.currentData()
+        claim_number = self._search_input.text().strip()
 
-                if claim_number:
-                    try:
-                        result = api.get_claim_by_number(claim_number)
-                        summaries = [result] if result else []
-                    except Exception:
-                        summaries = []
-                else:
-                    summaries = api.get_claims_summaries(
-                        claim_status=case_status,
-                        claim_source=source,
-                    )
+        self._load_claims_worker = ApiWorker(
+            self._fetch_claims_data, case_status, source, claim_number
+        )
+        self._load_claims_worker.finished.connect(self._on_claims_loaded)
+        self._load_claims_worker.error.connect(self._on_claims_load_error)
+        self._load_claims_worker.start()
 
-                building_codes = {s.get("buildingCode", "") for s in summaries if s.get("buildingCode")}
-                self._enrich_buildings_cache(api, building_codes)
-
-                for s in summaries:
-                    self.claims_data.append(self._map_summary(s))
-                logger.info(f"Loaded {len(self.claims_data)} claims (status={case_status}, source={source})")
-            except Exception as e:
-                logger.warning(f"Error loading claims (status={case_status}): {e}")
-
-            self._apply_local_filter()
-        finally:
-            self._spinner.hide_loading()
-
-    def _enrich_buildings_cache(self, api, building_codes):
-        """Fetch building details for codes not yet cached."""
+    def _fetch_claims_data(self, case_status, source, claim_number):
+        """Fetch claims and enrich buildings cache (runs in worker thread)."""
+        from services.api_client import get_api_client
         from controllers.building_controller import BuildingController
-        bc = BuildingController(self.db)
 
+        api = get_api_client()
+
+        if claim_number:
+            try:
+                result = api.get_claim_by_number(claim_number)
+                summaries = [result] if result else []
+            except Exception:
+                summaries = []
+        else:
+            summaries = api.get_claims_summaries(
+                claim_status=case_status,
+                claim_source=source,
+            )
+
+        # Enrich buildings cache
+        bc = BuildingController(self.db)
+        building_codes = {s.get("buildingCode", "") for s in summaries if s.get("buildingCode")}
+        new_buildings = {}
         for code in building_codes:
             if not code or code in self._buildings_cache:
                 continue
@@ -249,9 +245,32 @@ class CompletedClaimsPage(QWidget):
                 result = api.search_buildings(building_id=code, page_size=1)
                 buildings = result.get("buildings", [])
                 if buildings:
-                    self._buildings_cache[code] = bc._api_dto_to_building(buildings[0])
+                    new_buildings[code] = bc._api_dto_to_building(buildings[0])
             except Exception as e:
                 logger.debug(f"Building lookup failed for {code}: {e}")
+
+        return {"summaries": summaries, "new_buildings": new_buildings, "case_status": case_status, "source": source}
+
+    def _on_claims_loaded(self, result):
+        """Handle loaded claims data on the main thread."""
+        self._spinner.hide_loading()
+
+        self._buildings_cache.update(result.get("new_buildings", {}))
+        summaries = result.get("summaries", [])
+
+        self.claims_data = []
+        for s in summaries:
+            self.claims_data.append(self._map_summary(s))
+
+        logger.info(f"Loaded {len(self.claims_data)} claims (status={result.get('case_status')}, source={result.get('source')})")
+        self._apply_local_filter()
+
+    def _on_claims_load_error(self, error_msg):
+        """Handle claims loading error."""
+        self._spinner.hide_loading()
+        logger.warning(f"Error loading claims: {error_msg}")
+        self.claims_data = []
+        self._apply_local_filter()
 
     def _map_summary(self, s: Dict) -> Dict:
         """Map Claims API summary DTO to card data format."""

@@ -11,6 +11,7 @@ from PyQt5.QtCore import pyqtSignal, Qt, QSize
 from PyQt5.QtGui import QFont, QColor
 from ui.error_handler import ErrorHandler
 from services.error_mapper import map_exception
+from services.api_worker import ApiWorker
 
 from ui.wizards.framework import BaseWizard, BaseStep
 from ui.wizards.office_survey.survey_context import SurveyContext
@@ -133,19 +134,15 @@ class OfficeSurveyWizard(BaseWizard):
                     or finalize_resp.get("claimId")
                     or ""
                 )
-                # Fallback: fetch claim number from claims API
                 if not claim_number:
-                    claim_number = self._fetch_claim_number_from_api()
+                    # Fetch asynchronously, show popup on callback
+                    self._fetch_claim_number_from_api(
+                        callback=self._show_finalized_success_popup
+                    )
+                    return True
                 if not claim_number:
                     claim_number = self.context.reference_number or ""
-                SuccessPopup.show_success(
-                    claim_number=claim_number,
-                    title=tr("wizard.success.title"),
-                    description=tr("wizard.success.description"),
-                    auto_close_ms=0,
-                    parent=self
-                )
-                self._finalization_complete = True
+                self._show_finalized_success_popup(claim_number)
                 return True
 
             # Determine status based on claim creation result
@@ -198,24 +195,55 @@ class OfficeSurveyWizard(BaseWizard):
             )
             return False
 
-    def _fetch_claim_number_from_api(self) -> str:
-        """Fetch claim number from claims summaries API as fallback."""
-        try:
-            survey_id = self.context.get_data("survey_id")
-            if not survey_id:
-                return ""
-            from services.api_client import get_api_client
-            api = get_api_client()
-            main_window = self.window()
-            if main_window and hasattr(main_window, '_api_token'):
-                api.set_token(main_window._api_token)
-            response = api.get_claims_summaries(survey_visit_id=survey_id)
+    def _fetch_claim_number_from_api(self, callback=None):
+        """Fetch claim number from claims summaries API in background.
+
+        Args:
+            callback: Optional callable(str) invoked with the claim number.
+        """
+        survey_id = self.context.get_data("survey_id")
+        if not survey_id:
+            if callback:
+                callback("")
+            return
+
+        from services.api_client import get_api_client
+        api = get_api_client()
+        main_window = self.window()
+        if main_window and hasattr(main_window, '_api_token'):
+            api.set_token(main_window._api_token)
+
+        def _do_fetch():
+            return api.get_claims_summaries(survey_visit_id=survey_id)
+
+        def _on_finished(response):
             items = response if isinstance(response, list) else response.get("items", [])
-            if items:
-                return items[0].get("claimNumber", "")
-        except Exception as e:
-            logger.warning(f"Could not fetch claim number from API: {e}")
-        return ""
+            claim_number = items[0].get("claimNumber", "") if items else ""
+            if callback:
+                callback(claim_number)
+
+        def _on_error(msg):
+            logger.warning(f"Could not fetch claim number from API: {msg}")
+            if callback:
+                callback("")
+
+        self._claim_number_worker = ApiWorker(_do_fetch)
+        self._claim_number_worker.finished.connect(_on_finished)
+        self._claim_number_worker.error.connect(_on_error)
+        self._claim_number_worker.start()
+
+    def _show_finalized_success_popup(self, claim_number: str):
+        """Show success popup after finalization with the resolved claim number."""
+        if not claim_number:
+            claim_number = self.context.reference_number or ""
+        SuccessPopup.show_success(
+            claim_number=claim_number,
+            title=tr("wizard.success.title"),
+            description=tr("wizard.success.description"),
+            auto_close_ms=0,
+            parent=self
+        )
+        self._finalization_complete = True
 
     def on_cancel(self) -> bool:
         """Handle wizard cancellation."""
@@ -235,79 +263,85 @@ class OfficeSurveyWizard(BaseWizard):
 
     def on_save_draft(self) -> str:
         """
-        Handle draft saving via backend API.
+        Handle draft saving via backend API (non-blocking).
 
         Saves draft notes to backend (PUT /api/v1/Surveys/{id}/draft).
 
         Returns:
-            Survey ID if successful, None otherwise
+            Survey ID if pre-checks pass and worker is started, None otherwise.
         """
-        try:
-            survey_id = self.context.get_data("survey_id")
-            if not survey_id:
-                ErrorHandler.show_error(
-                    self,
-                    tr("wizard.error.no_survey_id"),
-                    tr("common.error")
-                )
-                return None
-
-            contact_person_id = self.context.get_data("contact_person_id")
-            if not contact_person_id:
-                ErrorHandler.show_error(
-                    self,
-                    "يجب إكمال بيانات مقدم الطلب قبل حفظ المسودة",
-                    tr("common.error")
-                )
-                return None
-
-            if self.context.status == "finalized":
-                logger.info(f"Survey {survey_id} is finalized, skipping draft save")
-                return survey_id
-
-            if not self.context.status or self.context.status == "in_progress":
-                self.context.status = "draft"
-
-            from services.api_client import get_api_client
-            api_service = get_api_client()
-            main_window = self.window()
-            if main_window and hasattr(main_window, '_api_token') and main_window._api_token:
-                api_service.set_access_token(main_window._api_token)
-
-            interviewee_name = None
-            # Prefer applicant info (from ApplicantInfoStep)
-            if self.context.applicant:
-                a = self.context.applicant
-                parts_ap = [a.get("first_name_ar", ""), a.get("father_name_ar", ""), a.get("last_name_ar", "")]
-                interviewee_name = " ".join(p for p in parts_ap if p) or a.get("full_name")
-            if not interviewee_name and self.context.persons:
-                p = self.context.persons[0]
-                parts = [p.get("first_name", ""), p.get("father_name", ""), p.get("last_name", "")]
-                interviewee_name = " ".join(part for part in parts if part)
-                if not interviewee_name:
-                    interviewee_name = p.get("full_name")
-
-            backend_draft_data = {
-                "property_unit_id": self.context.unit.unit_uuid if self.context.unit else None,
-                "interviewee_name": interviewee_name,
-                "notes": self.context.get_data("notes"),
-            }
-            api_service.save_draft_to_backend(survey_id, backend_draft_data)
-            logger.info(f"Draft saved to backend: {survey_id}")
-            return survey_id
-
-        except Exception as e:
-            err_msg = str(e)
-            if "Finalized" in err_msg or "finalized" in err_msg:
-                logger.warning(f"Draft save skipped (survey already finalized): {e}")
-                return survey_id
-            logger.error(f"Error saving draft: {e}", exc_info=True)
+        survey_id = self.context.get_data("survey_id")
+        if not survey_id:
             ErrorHandler.show_error(
                 self,
-                f"{tr('wizard.error.draft_save_failed')}\n{map_exception(e)}",
+                tr("wizard.error.no_survey_id"),
                 tr("common.error")
             )
             return None
+
+        contact_person_id = self.context.get_data("contact_person_id")
+        if not contact_person_id:
+            ErrorHandler.show_error(
+                self,
+                "يجب إكمال بيانات مقدم الطلب قبل حفظ المسودة",
+                tr("common.error")
+            )
+            return None
+
+        if self.context.status == "finalized":
+            logger.info(f"Survey {survey_id} is finalized, skipping draft save")
+            return survey_id
+
+        if not self.context.status or self.context.status == "in_progress":
+            self.context.status = "draft"
+
+        from services.api_client import get_api_client
+        api_service = get_api_client()
+        main_window = self.window()
+        if main_window and hasattr(main_window, '_api_token') and main_window._api_token:
+            api_service.set_access_token(main_window._api_token)
+
+        interviewee_name = None
+        if self.context.applicant:
+            a = self.context.applicant
+            parts_ap = [a.get("first_name_ar", ""), a.get("father_name_ar", ""), a.get("last_name_ar", "")]
+            interviewee_name = " ".join(p for p in parts_ap if p) or a.get("full_name")
+        if not interviewee_name and self.context.persons:
+            p = self.context.persons[0]
+            parts = [p.get("first_name", ""), p.get("father_name", ""), p.get("last_name", "")]
+            interviewee_name = " ".join(part for part in parts if part)
+            if not interviewee_name:
+                interviewee_name = p.get("full_name")
+
+        backend_draft_data = {
+            "property_unit_id": self.context.unit.unit_uuid if self.context.unit else None,
+            "interviewee_name": interviewee_name,
+            "notes": self.context.get_data("notes"),
+        }
+
+        def _do_save():
+            return api_service.save_draft_to_backend(survey_id, backend_draft_data)
+
+        def _on_saved(_result):
+            logger.info(f"Draft saved to backend: {survey_id}")
+
+        def _on_save_error(msg):
+            if "Finalized" in msg or "finalized" in msg:
+                logger.warning(f"Draft save skipped (survey already finalized): {msg}")
+                return
+            logger.error(f"Error saving draft: {msg}")
+            ErrorHandler.show_error(
+                self,
+                f"{tr('wizard.error.draft_save_failed')}\n{msg}",
+                tr("common.error")
+            )
+
+        self._save_draft_worker = ApiWorker(_do_save)
+        self._save_draft_worker.finished.connect(_on_saved)
+        self._save_draft_worker.error.connect(_on_save_error)
+        self._save_draft_worker.start()
+
+        return survey_id
 
     def _handle_header_save(self):
         """Header save button: finalize on last step, save draft on others."""
@@ -371,13 +405,7 @@ class OfficeSurveyWizard(BaseWizard):
                     )
                     if not ok or not reason.strip():
                         return
-                    try:
-                        from services.api_client import get_api_client
-                        api = get_api_client()
-                        api.cancel_survey(survey_id, reason.strip())
-                        logger.info(f"Survey {survey_id} cancelled: {reason.strip()}")
-                    except Exception as e:
-                        logger.warning(f"Failed to cancel survey {survey_id}: {e}")
+                    self._cancel_survey_async(survey_id, reason.strip())
                 self._finalization_complete = True
                 logger.info("User discarded wizard changes on close")
 
@@ -387,6 +415,25 @@ class OfficeSurveyWizard(BaseWizard):
 
         self.wizard_cancelled.emit()
         self.close()
+
+    def _cancel_survey_async(self, survey_id: str, reason: str):
+        """Cancel survey on the server in a background thread."""
+        from services.api_client import get_api_client
+        api = get_api_client()
+
+        def _do_cancel():
+            return api.cancel_survey(survey_id, reason)
+
+        def _on_cancelled(_result):
+            logger.info(f"Survey {survey_id} cancelled: {reason}")
+
+        def _on_cancel_error(msg):
+            logger.warning(f"Failed to cancel survey {survey_id}: {msg}")
+
+        self._cancel_survey_worker = ApiWorker(_do_cancel)
+        self._cancel_survey_worker.finished.connect(_on_cancelled)
+        self._cancel_survey_worker.error.connect(_on_cancel_error)
+        self._cancel_survey_worker.start()
 
     @classmethod
     def load_from_draft(cls, draft_id: str, parent=None):
@@ -914,13 +961,7 @@ class OfficeSurveyWizard(BaseWizard):
             if confirmed:
                 survey_id = self.context.get_data("survey_id")
                 if survey_id:
-                    try:
-                        from services.api_client import get_api_client
-                        api = get_api_client()
-                        api.cancel_survey(survey_id, "User returned to building selection")
-                        logger.info(f"Survey {survey_id} cancelled (user returned to building selection)")
-                    except Exception as e:
-                        logger.warning(f"Failed to cancel survey {survey_id}: {e}")
+                    self._cancel_survey_async(survey_id, "User returned to building selection")
                     for key in ("survey_id", "survey_data", "survey_building_uuid",
                                 "contact_person_id", "household_id",
                                 "applicant_household_person_id"):

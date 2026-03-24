@@ -18,6 +18,7 @@ from ui.design_system import Colors
 from ui.font_utils import create_font, FontManager
 from ui.style_manager import StyleManager
 from utils.i18n import I18n
+from services.api_worker import ApiWorker
 from utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -50,19 +51,34 @@ class FieldWorkPreparationStep2(QWidget):
         from ui.components.loading_spinner import LoadingSpinnerOverlay
         self._spinner = LoadingSpinnerOverlay(self)
 
-        # Load researchers from API
+        # Load researchers from API (non-blocking)
         self._spinner.show_loading("جاري تحميل الباحثين...")
-        try:
-            self._all_researchers = self._fetch_researchers_from_db()
-            self._researchers = list(self._all_researchers)
-            self._update_table()
-        finally:
-            self._spinner.hide_loading()
+        self._researchers_worker = ApiWorker(self._fetch_researchers_from_db)
+        self._researchers_worker.finished.connect(self._on_researchers_loaded)
+        self._researchers_worker.error.connect(self._on_researchers_load_error)
+        self._researchers_worker.start()
 
-    def _fetch_researchers_from_db(self):
+    def _on_researchers_loaded(self, researchers):
+        """Handle successful researcher fetch."""
+        self._all_researchers = researchers or []
+        self._researchers = list(self._all_researchers)
+        self._update_table()
+        self._spinner.hide_loading()
+
+    def _on_researchers_load_error(self, error_msg):
+        """Handle failed researcher fetch."""
+        logger.warning(f"Failed to load researchers: {error_msg}")
+        self._all_researchers = []
+        self._researchers = []
+        self._update_table()
+        self._spinner.hide_loading()
+
+    @staticmethod
+    def _fetch_researchers_from_db():
         """Fetch field collectors from BuildingAssignments API.
 
         Returns list of dicts with full API data for each collector.
+        Runs in a background thread via ApiWorker.
         """
         try:
             from services.api_client import get_api_client

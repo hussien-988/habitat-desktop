@@ -16,6 +16,7 @@ from PyQt5.QtGui import QColor, QIcon, QFont, QPixmap
 from app.config import Roles
 from repositories.database import Database
 from controllers.user_controller import UserController
+from services.api_worker import ApiWorker
 from ui.components.page_header import PageHeader
 from ui.components.toggle_switch import ToggleSwitch
 from ui.components.icon import Icon
@@ -298,26 +299,37 @@ class UserManagementPage(QWidget):
         self._load_users()
 
     def _load_users(self):
-        self._spinner.show_loading("جاري تحميل المستخدمين...")
-        try:
-            if not self._user_controller:
-                self._all_users = []
-                self._users = []
-                self._update_table()
-                return
-            result = self._user_controller.get_all_users()
-            if not result.success:
-                logger.error(f"Failed to load users: {result.message}")
-                Toast.show_toast(self, f"فشل تحميل المستخدمين: {result.message}", Toast.ERROR)
-                self._all_users = []
-            else:
-                raw = result.data or []
-                self._all_users = [self._map_api_user(u) for u in raw]
-            self._users = self._apply_filters(self._all_users)
-            self._current_page = 1
+        if not self._user_controller:
+            self._all_users = []
+            self._users = []
             self._update_table()
-        finally:
-            self._spinner.hide_loading()
+            return
+        self._spinner.show_loading("جاري تحميل المستخدمين...")
+        self._load_users_worker = ApiWorker(self._user_controller.get_all_users)
+        self._load_users_worker.finished.connect(self._on_load_users_finished)
+        self._load_users_worker.error.connect(self._on_load_users_error)
+        self._load_users_worker.start()
+
+    def _on_load_users_finished(self, result):
+        self._spinner.hide_loading()
+        if not result.success:
+            logger.error(f"Failed to load users: {result.message}")
+            Toast.show_toast(self, f"فشل تحميل المستخدمين: {result.message}", Toast.ERROR)
+            self._all_users = []
+        else:
+            raw = result.data or []
+            self._all_users = [self._map_api_user(u) for u in raw]
+        self._users = self._apply_filters(self._all_users)
+        self._current_page = 1
+        self._update_table()
+
+    def _on_load_users_error(self, error_msg):
+        self._spinner.hide_loading()
+        logger.error(f"Failed to load users: {error_msg}")
+        Toast.show_toast(self, f"فشل تحميل المستخدمين: {error_msg}", Toast.ERROR)
+        self._all_users = []
+        self._users = []
+        self._update_table()
 
     def _map_api_user(self, u: dict) -> dict:
         user_id = str(u.get("id") or u.get("userId") or u.get("user_id") or "")
@@ -661,13 +673,31 @@ class UserManagementPage(QWidget):
         new_password = PasswordDialog.get_password(self)
         if not new_password or not self._user_controller:
             return
-        result = self._user_controller.admin_change_user_password(user.get("user_id", ""), new_password)
+        self._spinner.show_loading("جاري تغيير كلمة المرور...")
+        username = user.get('username', '')
+        self._change_pw_worker = ApiWorker(
+            self._user_controller.admin_change_user_password,
+            user.get("user_id", ""), new_password
+        )
+        self._change_pw_worker.finished.connect(
+            lambda result: self._on_change_password_finished(result, username)
+        )
+        self._change_pw_worker.error.connect(self._on_change_password_error)
+        self._change_pw_worker.start()
+
+    def _on_change_password_finished(self, result, username):
+        self._spinner.hide_loading()
         if result.success:
-            logger.info(f"Password changed for user: {user.get('username')}")
+            logger.info(f"Password changed for user: {username}")
             Toast.show_toast(self, "تم تغيير كلمة المرور بنجاح", Toast.SUCCESS)
         else:
             logger.error(f"Password change failed: {result.message}")
             Toast.show_toast(self, f"فشل تغيير كلمة المرور: {result.message}", Toast.ERROR)
+
+    def _on_change_password_error(self, error_msg):
+        self._spinner.hide_loading()
+        logger.error(f"Password change failed: {error_msg}")
+        Toast.show_toast(self, f"فشل تغيير كلمة المرور: {error_msg}", Toast.ERROR)
 
     def configure_for_role(self, role: str):
         self._user_role = role
@@ -685,7 +715,18 @@ class UserManagementPage(QWidget):
         )
         if confirm != DialogResult.YES or not self._user_controller:
             return
-        result = self._user_controller.delete_user(user.get("user_id", ""))
+        self._spinner.show_loading("جاري حذف المستخدم...")
+        self._delete_user_worker = ApiWorker(
+            self._user_controller.delete_user, user.get("user_id", "")
+        )
+        self._delete_user_worker.finished.connect(
+            lambda result: self._on_delete_user_finished(result, username)
+        )
+        self._delete_user_worker.error.connect(self._on_delete_user_error)
+        self._delete_user_worker.start()
+
+    def _on_delete_user_finished(self, result, username):
+        self._spinner.hide_loading()
         if result.success:
             logger.info(f"Deleted user: {username}")
             Toast.show_toast(self, "تم حذف المستخدم بنجاح", Toast.SUCCESS)
@@ -693,6 +734,11 @@ class UserManagementPage(QWidget):
         else:
             logger.error(f"Delete user failed: {result.message}")
             Toast.show_toast(self, f"فشل حذف المستخدم: {result.message}", Toast.ERROR)
+
+    def _on_delete_user_error(self, error_msg):
+        self._spinner.hide_loading()
+        logger.error(f"Delete user failed: {error_msg}")
+        Toast.show_toast(self, f"فشل حذف المستخدم: {error_msg}", Toast.ERROR)
 
     def update_language(self, is_arabic: bool):
         pass

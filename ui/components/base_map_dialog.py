@@ -7,7 +7,7 @@ from PyQt5.QtWidgets import (
     QPushButton, QLineEdit, QFrame, QToolButton, QListWidget,
     QListWidgetItem, QScrollArea
     )
-from PyQt5.QtCore import Qt, pyqtSignal, QObject, pyqtSlot, QUrl, QSize
+from PyQt5.QtCore import Qt, pyqtSignal, QObject, pyqtSlot, QUrl, QSize, QThread
 from PyQt5.QtGui import QPainter, QColor, QPainterPath, QIcon
 
 from ui.design_system import Colors
@@ -133,6 +133,39 @@ class MapBridge(QObject):
         self.bridge_ready.emit()
 
 
+class _ViewportWorker(QThread):
+    """Background worker for loading buildings in viewport without blocking UI."""
+    finished = pyqtSignal(str)  # GeoJSON string
+    buildings_loaded = pyqtSignal(list)  # Building objects for cache
+
+    def __init__(self, viewport_loader, bounds, zoom, auth_token):
+        super().__init__()
+        self._viewport_loader = viewport_loader
+        self._bounds = bounds  # (ne_lat, ne_lng, sw_lat, sw_lng)
+        self._zoom = zoom
+        self._auth_token = auth_token
+
+    def run(self):
+        try:
+            buildings = self._viewport_loader.load_buildings_for_viewport(
+                north_east_lat=self._bounds[0],
+                north_east_lng=self._bounds[1],
+                south_west_lat=self._bounds[2],
+                south_west_lng=self._bounds[3],
+                zoom_level=self._zoom,
+                auth_token=self._auth_token
+            )
+            from services.geojson_converter import GeoJSONConverter
+            geojson = GeoJSONConverter.buildings_to_geojson(
+                buildings, prefer_polygons=True
+            )
+            self.buildings_loaded.emit(buildings)
+            self.finished.emit(geojson)
+        except Exception as e:
+            logger.error(f"Viewport worker error: {e}")
+            self.finished.emit("")
+
+
 class BaseMapDialog(QDialog):
     """
     Unified base dialog for all map operations.
@@ -192,6 +225,7 @@ class BaseMapDialog(QDialog):
         self._current_coordinates = None  # Store current selected coordinates
         self._selected_building_ids = []  # Store selected building IDs
         self._viewport_loader = None  # ViewportMapLoader instance
+        self._viewport_worker = None  # Background thread for viewport loading
         self._auth_token = None # Store auth token for API calls (set by subclass)
 
         # Initialize viewport loader if enabled (with cache + spatial sampling)
@@ -731,71 +765,49 @@ class BaseMapDialog(QDialog):
                 self.clear_all_btn.setEnabled(True)
 
     def _on_viewport_changed(self, ne_lat: float, ne_lng: float, sw_lat: float, sw_lng: float, zoom: int):
-        """
-        Handle viewport changed event from JavaScript.
-
-        Loads buildings for the new viewport and updates the map.
-
-        Args:
-            ne_lat: North-East latitude
-            ne_lng: North-East longitude
-            sw_lat: South-West latitude
-            sw_lng: South-West longitude
-            zoom: Current zoom level
-        """
+        """Handle viewport changed event from JavaScript (non-blocking)."""
         if not self._viewport_loader:
             return
 
-        try:
-            # Use stored auth token first, fallback to parent
-            auth_token = self._auth_token
+        # Cancel previous worker if still running
+        if self._viewport_worker and self._viewport_worker.isRunning():
+            self._viewport_worker.quit()
+            self._viewport_worker.wait(500)
 
-            # Fallback: Get auth token from parent if not set
-            if not auth_token:
-                try:
-                    if self.parent():
-                        main_window = self.parent()
-                        while main_window and not hasattr(main_window, 'current_user'):
-                            main_window = main_window.parent()
-                        if main_window and hasattr(main_window, 'current_user') and main_window.current_user:
-                            auth_token = getattr(main_window.current_user, '_api_token', None)
-                except Exception as e:
-                    logger.debug(f"Could not get auth token from parent: {e}")
+        # Get auth token
+        auth_token = self._auth_token
+        if not auth_token:
+            try:
+                if self.parent():
+                    main_window = self.parent()
+                    while main_window and not hasattr(main_window, 'current_user'):
+                        main_window = main_window.parent()
+                    if main_window and hasattr(main_window, 'current_user') and main_window.current_user:
+                        auth_token = getattr(main_window.current_user, '_api_token', None)
+            except Exception as e:
+                logger.debug(f"Could not get auth token from parent: {e}")
 
-            if auth_token:
-                logger.debug("Using auth token for viewport loading")
-            else:
-                logger.warning("No auth token available for viewport loading")
+        self._viewport_worker = _ViewportWorker(
+            self._viewport_loader,
+            (ne_lat, ne_lng, sw_lat, sw_lng),
+            zoom, auth_token
+        )
+        self._viewport_worker.buildings_loaded.connect(self._on_viewport_buildings_cached)
+        self._viewport_worker.finished.connect(self._on_viewport_geojson_ready)
+        self._viewport_worker.start()
 
-            # Load buildings for viewport (with cache + spatial sampling)
-            buildings = self._viewport_loader.load_buildings_for_viewport(
-                north_east_lat=ne_lat,
-                north_east_lng=ne_lng,
-                south_west_lat=sw_lat,
-                south_west_lng=sw_lng,
-                zoom_level=zoom,
-                auth_token=auth_token
-            )
+    def _on_viewport_buildings_cached(self, buildings):
+        """Cache buildings loaded by viewport worker."""
+        if not hasattr(self, '_viewport_buildings_cache'):
+            self._viewport_buildings_cache = {}
+        for b in buildings:
+            if b.building_id:
+                self._viewport_buildings_cache[b.building_id] = b
 
-            # Cache buildings by building_id for multi-select lookup
-            if not hasattr(self, '_viewport_buildings_cache'):
-                self._viewport_buildings_cache = {}
-            for b in buildings:
-                if b.building_id:
-                    self._viewport_buildings_cache[b.building_id] = b
-
-            # Convert to GeoJSON
-            from services.geojson_converter import GeoJSONConverter
-            buildings_geojson = GeoJSONConverter.buildings_to_geojson(
-                buildings,
-                prefer_polygons=True
-            )
-
-            # Update map via JavaScript
-            self._update_map_buildings(buildings_geojson)
-
-        except Exception as e:
-            logger.error(f"Error loading viewport buildings: {e}", exc_info=True)
+    def _on_viewport_geojson_ready(self, geojson):
+        """Update map with GeoJSON from viewport worker."""
+        if geojson:
+            self._update_map_buildings(geojson)
 
     def _update_buildings_list(self, building_ids: List[str]):
         """Update the buildings list widget with selected building IDs."""

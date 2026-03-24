@@ -359,6 +359,12 @@ class TileServerManager:
     _production_url: Optional[str] = None
     _tile_metadata: Optional[Dict[str, Any]] = None
 
+    @classmethod
+    def reset(cls):
+        """Reset singleton to pick up new settings."""
+        cls._instance = None
+        cls._tile_metadata = None
+
     def __new__(cls):
         """Ensure only one instance exists (Singleton)."""
         if cls._instance is None:
@@ -376,15 +382,20 @@ class TileServerManager:
             configured_url = _get_configured_url()
             parsed = urlparse(configured_url)
             host = parsed.hostname or "localhost"
-            port = parsed.port or 80
+            is_external = host not in ('localhost', '127.0.0.1')
             use_production = False
 
-            try:
-                with socket.create_connection((host, port), timeout=Config.TILE_SERVER_HEALTH_TIMEOUT):
-                    use_production = True
-                    logger.info(f"Tile server reachable (TCP {host}:{port})")
-            except (socket.timeout, socket.error, OSError) as e:
-                logger.warning(f"Tile server unreachable ({host}:{port}): {e}")
+            if is_external:
+                use_production = True
+                logger.info(f"External tile server configured: {configured_url}")
+            else:
+                port = parsed.port or 80
+                try:
+                    with socket.create_connection((host, port), timeout=1):
+                        use_production = True
+                        logger.info(f"Tile server reachable (TCP {host}:{port})")
+                except (socket.timeout, socket.error, OSError) as e:
+                    logger.warning(f"Tile server unreachable ({host}:{port}): {e}")
 
             if use_production:
                 logger.info(f"Using external tile server: {configured_url}")
@@ -465,9 +476,13 @@ class TileServerManager:
 
         metadata = None
 
-        # Try API first if Docker mode
+        # Only try API metadata for local Docker servers (they have /data.json)
+        # External XYZ servers (e.g. OpenStreetMap) don't have this endpoint
         if self._is_production:
-            metadata = self._fetch_metadata_from_api()
+            from urllib.parse import urlparse
+            _parsed = urlparse(self._production_url or '')
+            if (_parsed.hostname or '') in ('localhost', '127.0.0.1'):
+                metadata = self._fetch_metadata_from_api()
 
         # Always try local MBTiles as fallback
         if not metadata:

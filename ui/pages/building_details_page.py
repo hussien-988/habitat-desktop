@@ -26,6 +26,7 @@ from ui.font_utils import create_font, FontManager
 from ui.style_manager import StyleManager
 from utils.helpers import format_date, build_hierarchical_address
 from utils.i18n import I18n
+from services.api_worker import ApiWorker
 from utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -470,45 +471,10 @@ class BuildingDetailsPage(QWidget):
             building = self.building_repo.get_by_id(str(data))
             if not building:
                 logger.error(f"Building not found: {data}")
+                self._spinner.hide_loading()
                 return
 
-        # Re-fetch full details from API for complete stats and status
-        building_id_for_api = building.building_uuid or building.building_id
-        if building_id_for_api:
-            try:
-                from services.map_service_api import MapServiceAPI
-                map_api = MapServiceAPI()
-                main_window = self.window()
-                if main_window and hasattr(main_window, '_api_token') and main_window._api_token:
-                    map_api.set_auth_token(main_window._api_token)
-                full_building = map_api.get_building_with_polygon(building_id_for_api)
-                if full_building:
-                    building = full_building
-            except Exception as e:
-                logger.warning(f"Could not re-fetch building details from API: {e}")
-
         self.current_building = building
-
-        # Recalculate unit counts from actual PropertyUnits API data
-        building_uuid = building.building_uuid
-        if building_uuid:
-            try:
-                main_window = self.window()
-                if main_window and hasattr(main_window, '_api_token') and main_window._api_token:
-                    self.unit_controller.set_auth_token(main_window._api_token)
-                units_result = self.unit_controller.get_units_for_building(building_uuid)
-                if units_result.success and units_result.data is not None:
-                    actual_units = units_result.data
-                    total = len(actual_units)
-                    residential = sum(
-                        1 for u in actual_units
-                        if str(getattr(u, 'unit_type', '')).strip() in ('1', 'apartment')
-                    )
-                    building.number_of_units = total
-                    building.number_of_apartments = residential
-                    building.number_of_shops = total - residential
-            except Exception as e:
-                logger.warning(f"Could not recalculate unit counts: {e}")
 
         # Reset to cards view
         if self._units_view_active:
@@ -522,7 +488,86 @@ class BuildingDetailsPage(QWidget):
         display_id = building.building_id_formatted or building.building_id or "-"
         self.title_label.setText(display_id)
 
+        # Show cards immediately with available data
         self._populate_cards(building)
+
+        # Fetch full details + unit counts in background
+        building_id_for_api = building.building_uuid or building.building_id
+        if building_id_for_api:
+            auth_token = None
+            try:
+                main_window = self.window()
+                if main_window and hasattr(main_window, '_api_token') and main_window._api_token:
+                    auth_token = main_window._api_token
+            except Exception:
+                pass
+
+            self._refresh_details_worker = ApiWorker(
+                self._fetch_building_details_bg,
+                building, building_id_for_api, auth_token
+            )
+            self._refresh_details_worker.finished.connect(self._on_refresh_details_finished)
+            self._refresh_details_worker.error.connect(self._on_refresh_details_error)
+            self._refresh_details_worker.start()
+        else:
+            self._spinner.hide_loading()
+
+    def _fetch_building_details_bg(self, building, building_id_for_api, auth_token):
+        """Background: re-fetch building from API and recalculate unit counts."""
+        from services.map_service_api import MapServiceAPI
+
+        result_building = building
+        units_data = None
+
+        # Re-fetch full details from API
+        try:
+            map_api = MapServiceAPI()
+            if auth_token:
+                map_api.set_auth_token(auth_token)
+            full_building = map_api.get_building_with_polygon(building_id_for_api)
+            if full_building:
+                result_building = full_building
+        except Exception as e:
+            logger.warning(f"Could not re-fetch building details from API: {e}")
+
+        # Recalculate unit counts from actual PropertyUnits API data
+        building_uuid = result_building.building_uuid
+        if building_uuid:
+            try:
+                if auth_token:
+                    self.unit_controller.set_auth_token(auth_token)
+                units_result = self.unit_controller.get_units_for_building(building_uuid)
+                if units_result.success and units_result.data is not None:
+                    units_data = units_result.data
+            except Exception as e:
+                logger.warning(f"Could not recalculate unit counts: {e}")
+
+        return {"building": result_building, "units_data": units_data}
+
+    def _on_refresh_details_finished(self, result):
+        """Callback: update UI with full building details from API."""
+        building = result["building"]
+        units_data = result["units_data"]
+
+        if units_data is not None:
+            total = len(units_data)
+            residential = sum(
+                1 for u in units_data
+                if str(getattr(u, 'unit_type', '')).strip() in ('1', 'apartment')
+            )
+            building.number_of_units = total
+            building.number_of_apartments = residential
+            building.number_of_shops = total - residential
+
+        self.current_building = building
+        display_id = building.building_id_formatted or building.building_id or "-"
+        self.title_label.setText(display_id)
+        self._populate_cards(building)
+        self._spinner.hide_loading()
+
+    def _on_refresh_details_error(self, error_msg):
+        """Callback: API fetch failed, keep existing data."""
+        logger.warning(f"Background building details fetch failed: {error_msg}")
         self._spinner.hide_loading()
 
     def _clear_layout(self, layout):
@@ -718,24 +763,38 @@ class BuildingDetailsPage(QWidget):
             self._load_units()
 
     def _load_units(self):
-        """Load units for the current building."""
+        """Load units for the current building (non-blocking)."""
         if not self.current_building:
             return
 
+        auth_token = None
         try:
             main_window = self.window()
             if main_window and hasattr(main_window, '_api_token') and main_window._api_token:
-                self.unit_controller.set_auth_token(main_window._api_token)
+                auth_token = main_window._api_token
         except Exception as e:
-            logger.warning(f"Could not set auth token: {e}")
+            logger.warning(f"Could not get auth token: {e}")
 
         building_uuid = self.current_building.building_uuid
         if not building_uuid:
             Toast.show_toast(self, "لم يتم العثور على معرّف المبنى", Toast.ERROR)
             return
 
-        result = self.unit_controller.get_units_for_building(building_uuid)
+        self._load_units_worker = ApiWorker(
+            self._fetch_units_bg, building_uuid, auth_token
+        )
+        self._load_units_worker.finished.connect(self._on_load_units_finished)
+        self._load_units_worker.error.connect(self._on_load_units_error)
+        self._load_units_worker.start()
 
+    def _fetch_units_bg(self, building_uuid, auth_token):
+        """Background: fetch units for building."""
+        if auth_token:
+            self.unit_controller.set_auth_token(auth_token)
+        return self.unit_controller.get_units_for_building(building_uuid)
+
+    def _on_load_units_finished(self, result):
+        """Callback: populate units table with fetched data."""
         if result.success:
             self._units_list = result.data or []
         else:
@@ -745,6 +804,14 @@ class BuildingDetailsPage(QWidget):
 
         self._units_page = 1
         self._update_units_table()
+
+    def _on_load_units_error(self, error_msg):
+        """Callback: units fetch failed."""
+        logger.error(f"Failed to load units: {error_msg}")
+        self._units_list = []
+        self._units_page = 1
+        self._update_units_table()
+        Toast.show_toast(self, f"فشل تحميل الوحدات: {error_msg}", Toast.ERROR)
 
     def _update_units_table(self):
         """Populate the units table with current page data."""

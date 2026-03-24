@@ -16,6 +16,7 @@ from repositories.building_repository import BuildingRepository
 from models.unit import PropertyUnit
 from controllers.unit_controller import UnitController
 from services.api_client import get_api_client
+from services.api_worker import ApiWorker
 from services.display_mappings import (
     get_unit_type_display, get_unit_status_display,
     get_unit_type_options, get_unit_status_options
@@ -343,31 +344,39 @@ class UnitsPage(QWidget):
 
     def _load_units(self):
         self._spinner.show_loading("جاري تحميل الوحدات...")
-        try:
-            self._set_auth_token()
-            try:
-                result = self.unit_controller.get_units_grouped(
-                    building_id=self._active_filters.get('building_id'),
-                    unit_type=self._active_filters.get('unit_type'),
-                    status=self._active_filters.get('unit_status'),
-                )
-                if result.success:
-                    self._groups = result.data or []
-                else:
-                    logger.warning(f"Failed to load grouped units: {result.message}")
-                    self._groups = []
-            except Exception as e:
-                logger.warning(f"API grouped load failed: {e}")
-                self._groups = []
+        self._set_auth_token()
+        self._load_units_worker = ApiWorker(
+            self.unit_controller.get_units_grouped,
+            building_id=self._active_filters.get('building_id'),
+            unit_type=self._active_filters.get('unit_type'),
+            status=self._active_filters.get('unit_status'),
+        )
+        self._load_units_worker.finished.connect(self._on_load_units_finished)
+        self._load_units_worker.error.connect(self._on_load_units_error)
+        self._load_units_worker.start()
 
-            self._total_units = sum(g.get('unitCount', 0) for g in self._groups)
-            self._total_buildings = len(self._groups)
+    def _on_load_units_finished(self, result):
+        self._spinner.hide_loading()
+        if result.success:
+            self._groups = result.data or []
+        else:
+            logger.warning(f"Failed to load grouped units: {result.message}")
+            self._groups = []
+        self._total_units = sum(g.get('unitCount', 0) for g in self._groups)
+        self._total_buildings = len(self._groups)
+        self._rebuild_rows()
+        self._current_page = 1
+        self._update_table()
 
-            self._rebuild_rows()
-            self._current_page = 1
-            self._update_table()
-        finally:
-            self._spinner.hide_loading()
+    def _on_load_units_error(self, error_msg):
+        self._spinner.hide_loading()
+        logger.warning(f"API grouped load failed: {error_msg}")
+        self._groups = []
+        self._total_units = 0
+        self._total_buildings = 0
+        self._rebuild_rows()
+        self._current_page = 1
+        self._update_table()
 
     def _rebuild_rows(self):
         self._rows = []

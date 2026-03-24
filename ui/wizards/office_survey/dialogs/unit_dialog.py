@@ -27,6 +27,7 @@ from controllers.unit_controller import UnitController
 from ui.error_handler import ErrorHandler
 from services.validation_service import ValidationService
 from services.api_client import get_api_client
+from services.api_worker import ApiWorker
 from services.translation_manager import tr
 from services.display_mappings import get_unit_type_options, get_unit_status_options
 from services.error_mapper import map_exception
@@ -547,24 +548,16 @@ class UnitDialog(QDialog):
             self.area_error_label.setVisible(True)
             self.area_input.setStyleSheet(self._input_error_style())
 
-    def _validate(self) -> bool:
-        """Validate form data on save."""
-        # Unit type is required
+    def _validate_basic(self) -> bool:
+        """Validate form data (without uniqueness check)."""
         if not self.unit_type_combo.currentData():
             self._show_styled_message(tr("common.warning"), tr("wizard.unit_dialog.select_type_warning"))
             return False
 
-        # Unit number is required
         if self.unit_number_spin.value() == 0:
             self._show_styled_message(tr("common.warning"), tr("wizard.unit_dialog.enter_number_warning"))
             return False
 
-        # Check uniqueness on save
-        if not self._is_unit_unique():
-            self._show_styled_message(tr("common.warning"), tr("wizard.unit_dialog.number_taken"))
-            return False
-
-        # Area should be numeric if provided
         area_text = self.area_input.text().strip()
         if area_text:
             try:
@@ -580,36 +573,53 @@ class UnitDialog(QDialog):
 
         return True
 
-    def _is_unit_unique(self) -> bool:
-        """Check if unit number + floor combination is unique within the building."""
+    def _is_unit_unique_local(self, units_data, unit_number, floor) -> bool:
+        """Check uniqueness locally against already-fetched unit list."""
+        for unit in units_data:
+            if self.unit_data and hasattr(unit, 'unit_id') and unit.unit_id == self.unit_data.get('unit_id'):
+                continue
+            u_num = getattr(unit, 'apartment_number', None) or getattr(unit, 'unit_number', None)
+            u_floor = getattr(unit, 'floor_number', None)
+            if u_num == unit_number and u_floor == floor:
+                return False
+        return True
+
+    def _on_save(self):
+        """Handle save button click - validates then saves."""
+        # Run basic validation (without uniqueness check)
+        if not self._validate_basic():
+            return
+
+        # Disable save button while checking uniqueness
+        self.save_btn.setEnabled(False)
+
         unit_number = str(self.unit_number_spin.value())
         floor = self.floor_spin.value()
 
-        try:
-            result = self.unit_controller.get_units_for_building(self.building.building_uuid)
-            if not result.success:
-                return True  # Allow save if check fails
+        def _do_fetch():
+            return self.unit_controller.get_units_for_building(self.building.building_uuid)
 
-            for unit in result.data:
-                # Skip if editing the same unit
-                if self.unit_data and hasattr(unit, 'unit_id') and unit.unit_id == self.unit_data.get('unit_id'):
-                    continue
-                # Check for duplicate
-                u_num = getattr(unit, 'apartment_number', None) or getattr(unit, 'unit_number', None)
-                u_floor = getattr(unit, 'floor_number', None)
-                if u_num == unit_number and u_floor == floor:
-                    return False
+        def _on_units_fetched(result):
+            self.save_btn.setEnabled(True)
+            if result.success and result.data:
+                if not self._is_unit_unique_local(result.data, unit_number, floor):
+                    self._show_styled_message(tr("common.warning"), tr("wizard.unit_dialog.number_taken"))
+                    return
+            self._do_save()
 
-            return True
-        except Exception as e:
-            logger.error(f"Error checking uniqueness: {e}", exc_info=True)
-            return True  # Allow save if check fails
+        def _on_fetch_error(msg):
+            self.save_btn.setEnabled(True)
+            logger.error(f"Error checking uniqueness: {msg}")
+            # Allow save if check fails
+            self._do_save()
 
-    def _on_save(self):
-        """Handle save button click."""
-        if not self._validate():
-            return
+        self._uniqueness_worker = ApiWorker(_do_fetch)
+        self._uniqueness_worker.finished.connect(_on_units_fetched)
+        self._uniqueness_worker.error.connect(_on_fetch_error)
+        self._uniqueness_worker.start()
 
+    def _do_save(self):
+        """Proceed with the actual save after validation passes."""
         if not self.unit_data:
             unit_data = self.get_unit_data()
             if self._survey_id:

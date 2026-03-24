@@ -25,6 +25,7 @@ from ui.font_utils import FontManager, create_font
 from ui.components.icon import Icon
 from utils.logger import get_logger
 from services.api_client import get_api_client
+from services.api_worker import ApiWorker
 from services.translation_manager import tr
 from services.error_mapper import map_exception
 from ui.wizards.office_survey.steps.occupancy_claims_step import _is_owner_relation
@@ -1276,32 +1277,16 @@ class ReviewStep(BaseStep):
         if not evidence_count:
             evidence_ids = claim_data.get('evidence_ids', [])
             evidence_count = len(evidence_ids) if evidence_ids else 0
-        if not evidence_count:
-            survey_id = self.context.get_data("survey_id")
-            if survey_id:
-                try:
-                    from services.api_client import get_api_client
-                    evidence_count = len(get_api_client().get_survey_evidences(survey_id))
-                except Exception:
-                    pass
-        has_evidence = evidence_count > 0
 
         eval_label = QLabel()
         eval_label.setAlignment(Qt.AlignCenter)
         eval_label.setFixedHeight(36)
         eval_label.setFont(create_font(size=FontManager.WIZARD_BADGE, weight=FontManager.WEIGHT_SEMIBOLD))
 
-        if has_evidence:
-            count_text = f" ({evidence_count})" if evidence_count else ""
-            eval_label.setText(f"\u2713  {tr('wizard.review.evidence_available')}{count_text}")
-            eval_label.setStyleSheet("""
-                QLabel {
-                    background-color: #e1f7ef;
-                    color: #10b981;
-                    border-radius: 18px;
-                }
-            """)
+        if evidence_count > 0:
+            self._set_evidence_label(eval_label, evidence_count)
         else:
+            # Set initial state then fetch asynchronously
             eval_label.setText(tr("wizard.review.waiting_documents"))
             eval_label.setStyleSheet("""
                 QLabel {
@@ -1310,10 +1295,44 @@ class ReviewStep(BaseStep):
                     border-radius: 18px;
                 }
             """)
+            survey_id = self.context.get_data("survey_id")
+            if survey_id:
+                self._fetch_evidence_count_async(survey_id, eval_label)
 
         card_layout.addWidget(eval_label)
 
         return card
+
+    def _set_evidence_label(self, label, count):
+        """Set evidence label with count."""
+        count_text = f" ({count})" if count else ""
+        label.setText(f"\u2713  {tr('wizard.review.evidence_available')}{count_text}")
+        label.setStyleSheet("""
+            QLabel {
+                background-color: #e1f7ef;
+                color: #10b981;
+                border-radius: 18px;
+            }
+        """)
+
+    def _fetch_evidence_count_async(self, survey_id, label):
+        """Fetch evidence count in background and update the label."""
+        api = get_api_client()
+
+        def _do_fetch():
+            return api.get_survey_evidences(survey_id)
+
+        def _on_fetched(evidences):
+            count = len(evidences) if evidences else 0
+            if count > 0:
+                self._set_evidence_label(label, count)
+
+        self._review_evidence_worker = ApiWorker(_do_fetch)
+        self._review_evidence_worker.finished.connect(_on_fetched)
+        self._review_evidence_worker.error.connect(
+            lambda msg: logger.warning(f"Failed to fetch evidence count: {msg}")
+        )
+        self._review_evidence_worker.start()
 
     def _populate_claim_card(self):
         """Populate claim information card."""

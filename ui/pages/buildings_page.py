@@ -48,6 +48,7 @@ from ui.components.primary_button import PrimaryButton
 from ui.design_system import PageDimensions, Colors, ButtonDimensions
 from ui.style_manager import StyleManager
 from ui.font_utils import create_font, FontManager
+from services.api_worker import ApiWorker
 from utils.i18n import I18n
 from utils.logger import get_logger
 
@@ -977,25 +978,28 @@ class AddBuildingPage(QWidget):
         self.polygon_radio.setEnabled(False)
 
     def _load_building_documents(self, building_uuid: str):
-        """Fetch and display document thumbnails for the building."""
+        """Fetch and display document thumbnails for the building (non-blocking)."""
         # Clear existing docs
         while self.docs_layout.count() > 0:
             item = self.docs_layout.takeAt(0)
             if item.widget():
                 item.widget().deleteLater()
 
-        try:
-            from services.api_client import get_api_client
-            api = get_api_client()
-            if not api:
-                self._show_no_docs()
-                return
-            docs = api.get_building_documents(building_uuid)
-        except Exception as e:
-            logger.warning(f"Failed to load building documents: {e}")
-            self._show_no_docs()
-            return
+        self._docs_worker = ApiWorker(self._fetch_building_documents_bg, building_uuid)
+        self._docs_worker.finished.connect(self._on_building_documents_loaded)
+        self._docs_worker.error.connect(self._on_building_documents_error)
+        self._docs_worker.start()
 
+    def _fetch_building_documents_bg(self, building_uuid):
+        """Background: fetch building documents from API."""
+        from services.api_client import get_api_client
+        api = get_api_client()
+        if not api:
+            return None
+        return api.get_building_documents(building_uuid)
+
+    def _on_building_documents_loaded(self, docs):
+        """Callback: display fetched document thumbnails."""
         if not docs:
             self._show_no_docs()
             return
@@ -1005,6 +1009,11 @@ class AddBuildingPage(QWidget):
             self.docs_layout.addWidget(card)
 
         self.docs_layout.addStretch()
+
+    def _on_building_documents_error(self, error_msg):
+        """Callback: document fetch failed."""
+        logger.warning(f"Failed to load building documents: {error_msg}")
+        self._show_no_docs()
 
     def _show_no_docs(self):
         """Display 'no documents' placeholder in the docs area."""
@@ -1420,102 +1429,131 @@ class AddBuildingPage(QWidget):
         Buildings are saved to Backend Database (PostgreSQL).
         """
         try:
-            from ui.components.map_picker_dialog_v2 import MapPickerDialog
-
-            initial_bounds = None
-            selected_neighborhood_code = self._get_neighborhood_code()
-
-            if self._has_map_coordinates:
-                initial_lat = self.latitude_spin.value()
-                initial_lon = self.longitude_spin.value()
-                initial_zoom = 20
-            elif selected_neighborhood_code:
-                center = self._get_neighborhood_center(selected_neighborhood_code)
-                if center:
-                    initial_lat, initial_lon = center
-                    initial_zoom = 18
-                    initial_bounds = self._get_neighborhood_bounds(selected_neighborhood_code)
-                else:
-                    initial_lat = 36.2021
-                    initial_lon = 37.1343
-                    initial_zoom = 15
-            else:
-                initial_lat = 36.2021
-                initial_lon = 37.1343
-                initial_zoom = 15
-
-            allow_polygon = self.polygon_radio.isChecked()
-
-            # Build neighborhoods GeoJSON for overlay layer
-            neighborhoods_geojson = self._build_neighborhoods_geojson()
-
-            dialog = MapPickerDialog(
-                initial_lat=initial_lat,
-                initial_lon=initial_lon,
-                initial_zoom=initial_zoom,
-                allow_polygon=allow_polygon,
-                initial_bounds=initial_bounds,
-                neighborhoods_geojson=neighborhoods_geojson,
-                selected_neighborhood_code=selected_neighborhood_code,
-                db=self.building_controller.db,
-                skip_fit_bounds=self._has_map_coordinates,
-                existing_polygon_wkt=self._polygon_wkt,
-                parent=self
-            )
-
-            if dialog.exec_():
-                result = dialog.get_result()
-
-                # Handle Polygon geometry FIRST (before checking point)
-                if result and 'polygon_wkt' in result and result['polygon_wkt']:
-                    polygon_wkt = result['polygon_wkt']
-                    self._polygon_wkt = polygon_wkt
-                    self._has_map_coordinates = True
-
-                    centroid_lat = result.get('latitude', 36.2)
-                    centroid_lon = result.get('longitude', 37.15)
-                    self.latitude_spin.setValue(centroid_lat)
-                    self.longitude_spin.setValue(centroid_lon)
-
-                    self._detect_and_update_neighborhood(polygon_wkt)
-
-                    # Show success message
-                    self.location_status_label.setText(
-                    f" تم رسم المضلع (مركزه: {centroid_lat:.6f}, {centroid_lon:.6f})"
-                    )
-                    self.location_status_label.setStyleSheet(
-                        f"color: {Config.SUCCESS_COLOR}; font-size: 10pt;"
-                    )
-                    self.geometry_type_label.setText("🔷 مضلع")
-                    logger.info(f"Polygon drawn and saved: {polygon_wkt[:100]}...")
-
-                # Handle Point geometry (only if NOT polygon)
-                elif result and 'latitude' in result and 'longitude' in result:
-                    lat = result['latitude']
-                    lon = result['longitude']
-
-                    self.latitude_spin.setValue(lat)
-                    self.longitude_spin.setValue(lon)
-                    self._polygon_wkt = None
-                    self._has_map_coordinates = True
-
-                    geometry_wkt = f"POINT({lon} {lat})"
-                    self._detect_and_update_neighborhood(geometry_wkt)
-
-                    self.location_status_label.setText(
-                        f"تم تحديد الموقع ({lat:.6f}, {lon:.6f})"
-                    )
-                    self.location_status_label.setStyleSheet(
-                        f"color: {Config.SUCCESS_COLOR}; font-size: 10pt;"
-                    )
-                    self.geometry_type_label.setText("📍 نقطة")
-
+            from ui.components.map_picker_dialog_v2 import MapPickerDialog  # noqa: F401
         except ImportError:
             ErrorHandler.show_success(
                 self,
                 "يرجى إدخال الإحداثيات يدوياً.",
                 "اختيار الموقع"
             )
+            return
+
+        # Compute synchronous map params
+        initial_bounds = None
+        selected_neighborhood_code = self._get_neighborhood_code()
+
+        if self._has_map_coordinates:
+            initial_lat = self.latitude_spin.value()
+            initial_lon = self.longitude_spin.value()
+            initial_zoom = 20
+        elif selected_neighborhood_code:
+            center = self._get_neighborhood_center(selected_neighborhood_code)
+            if center:
+                initial_lat, initial_lon = center
+                initial_zoom = 18
+                initial_bounds = self._get_neighborhood_bounds(selected_neighborhood_code)
+            else:
+                initial_lat = 36.2021
+                initial_lon = 37.1343
+                initial_zoom = 15
+        else:
+            initial_lat = 36.2021
+            initial_lon = 37.1343
+            initial_zoom = 15
+
+        allow_polygon = self.polygon_radio.isChecked()
+
+        # Store map params for use in callback
+        self._map_picker_params = {
+            "initial_lat": initial_lat,
+            "initial_lon": initial_lon,
+            "initial_zoom": initial_zoom,
+            "allow_polygon": allow_polygon,
+            "initial_bounds": initial_bounds,
+            "selected_neighborhood_code": selected_neighborhood_code,
+        }
+
+        # Fetch neighborhoods GeoJSON in background, then open dialog
+        self._neighborhoods_geojson_worker = ApiWorker(self._build_neighborhoods_geojson)
+        self._neighborhoods_geojson_worker.finished.connect(self._on_neighborhoods_geojson_loaded)
+        self._neighborhoods_geojson_worker.error.connect(self._on_neighborhoods_geojson_error)
+        self._neighborhoods_geojson_worker.start()
+
+    def _on_neighborhoods_geojson_loaded(self, neighborhoods_geojson):
+        """Callback: open map picker dialog with fetched neighborhoods GeoJSON."""
+        self._open_map_picker_dialog(neighborhoods_geojson)
+
+    def _on_neighborhoods_geojson_error(self, error_msg):
+        """Callback: neighborhoods fetch failed, open dialog with empty GeoJSON."""
+        logger.warning(f"Failed to load neighborhoods for map: {error_msg}")
+        self._open_map_picker_dialog('{"type":"FeatureCollection","features":[]}')
+
+    def _open_map_picker_dialog(self, neighborhoods_geojson):
+        """Open the map picker dialog with precomputed params and neighborhoods data."""
+        from ui.components.map_picker_dialog_v2 import MapPickerDialog
+
+        params = self._map_picker_params
+
+        dialog = MapPickerDialog(
+            initial_lat=params["initial_lat"],
+            initial_lon=params["initial_lon"],
+            initial_zoom=params["initial_zoom"],
+            allow_polygon=params["allow_polygon"],
+            initial_bounds=params["initial_bounds"],
+            neighborhoods_geojson=neighborhoods_geojson,
+            selected_neighborhood_code=params["selected_neighborhood_code"],
+            db=self.building_controller.db,
+            skip_fit_bounds=self._has_map_coordinates,
+            existing_polygon_wkt=self._polygon_wkt,
+            parent=self
+        )
+
+        if dialog.exec_():
+            result = dialog.get_result()
+
+            # Handle Polygon geometry FIRST (before checking point)
+            if result and 'polygon_wkt' in result and result['polygon_wkt']:
+                polygon_wkt = result['polygon_wkt']
+                self._polygon_wkt = polygon_wkt
+                self._has_map_coordinates = True
+
+                centroid_lat = result.get('latitude', 36.2)
+                centroid_lon = result.get('longitude', 37.15)
+                self.latitude_spin.setValue(centroid_lat)
+                self.longitude_spin.setValue(centroid_lon)
+
+                self._detect_and_update_neighborhood(polygon_wkt)
+
+                # Show success message
+                self.location_status_label.setText(
+                f" تم رسم المضلع (مركزه: {centroid_lat:.6f}, {centroid_lon:.6f})"
+                )
+                self.location_status_label.setStyleSheet(
+                    f"color: {Config.SUCCESS_COLOR}; font-size: 10pt;"
+                )
+                self.geometry_type_label.setText("🔷 مضلع")
+                logger.info(f"Polygon drawn and saved: {polygon_wkt[:100]}...")
+
+            # Handle Point geometry (only if NOT polygon)
+            elif result and 'latitude' in result and 'longitude' in result:
+                lat = result['latitude']
+                lon = result['longitude']
+
+                self.latitude_spin.setValue(lat)
+                self.longitude_spin.setValue(lon)
+                self._polygon_wkt = None
+                self._has_map_coordinates = True
+
+                geometry_wkt = f"POINT({lon} {lat})"
+                self._detect_and_update_neighborhood(geometry_wkt)
+
+                self.location_status_label.setText(
+                    f"تم تحديد الموقع ({lat:.6f}, {lon:.6f})"
+                )
+                self.location_status_label.setStyleSheet(
+                    f"color: {Config.SUCCESS_COLOR}; font-size: 10pt;"
+                )
+                self.geometry_type_label.setText("📍 نقطة")
 
     def _populate_data(self):
         """Populate form with existing building data."""
@@ -2882,7 +2920,20 @@ class BuildingsListPage(QWidget):
                     unique_values.add(area)
         elif column_index == 3:  # الحي (neighborhood - loaded from API)
             filter_key = 'neighborhood'
-            neighborhoods = self._load_neighborhoods_for_filter()
+            if not self._neighborhoods_api_cache:
+                # First call: fetch in background, then show menu
+                self._neighborhoods_filter_worker = ApiWorker(
+                    self._fetch_neighborhoods_for_filter_bg
+                )
+                self._neighborhoods_filter_worker.finished.connect(
+                    self._on_neighborhoods_for_filter_loaded
+                )
+                self._neighborhoods_filter_worker.error.connect(
+                    self._on_neighborhoods_for_filter_error
+                )
+                self._neighborhoods_filter_worker.start()
+                return
+            neighborhoods = self._neighborhoods_api_cache
             for n in neighborhoods:
                 code = n.get("neighborhoodCode", n.get("code", ""))
                 name_ar = n.get("nameArabic", n.get("name_ar", ""))
@@ -3036,25 +3087,39 @@ class BuildingsListPage(QWidget):
         """Get district name for building (used by area filter)."""
         return (building.district_name_ar or building.district_name or '').strip()
 
-    def _load_neighborhoods_for_filter(self) -> list:
-        """Load neighborhoods from API for filter menu (cached after first call)."""
-        if not self._neighborhoods_api_cache:
-            try:
-                from services.api_client import get_api_client
-                api = get_api_client()
-                if api:
-                    self._neighborhoods_api_cache = api.get_neighborhoods()
-            except Exception as e:
-                logger.warning(f"Could not load neighborhoods for filter: {e}")
-                # fallback: extract unique neighborhoods from already-loaded buildings
-                seen = {}
-                for b in self._all_buildings:
-                    if b.neighborhood_code and b.neighborhood_name_ar:
-                        seen[b.neighborhood_code] = b.neighborhood_name_ar
-                self._neighborhoods_api_cache = [
-                    {"neighborhoodCode": k, "nameArabic": v} for k, v in seen.items()
-                ]
-        return self._neighborhoods_api_cache
+    def _fetch_neighborhoods_for_filter_bg(self):
+        """Background: fetch neighborhoods from API for filter menu."""
+        from services.api_client import get_api_client
+        api = get_api_client()
+        if api:
+            return api.get_neighborhoods()
+        return None
+
+    def _on_neighborhoods_for_filter_loaded(self, result):
+        """Callback: neighborhoods fetched, cache and show filter menu."""
+        if result:
+            self._neighborhoods_api_cache = result
+        else:
+            self._neighborhoods_api_cache = self._fallback_neighborhoods_from_buildings()
+        # Re-trigger the filter menu now that cache is populated
+        self._show_filter_menu(3)
+
+    def _on_neighborhoods_for_filter_error(self, error_msg):
+        """Callback: neighborhoods fetch failed, use fallback."""
+        logger.warning(f"Could not load neighborhoods for filter: {error_msg}")
+        self._neighborhoods_api_cache = self._fallback_neighborhoods_from_buildings()
+        # Re-trigger the filter menu with fallback data
+        self._show_filter_menu(3)
+
+    def _fallback_neighborhoods_from_buildings(self) -> list:
+        """Extract unique neighborhoods from already-loaded buildings."""
+        seen = {}
+        for b in self._all_buildings:
+            if b.neighborhood_code and b.neighborhood_name_ar:
+                seen[b.neighborhood_code] = b.neighborhood_name_ar
+        return [
+            {"neighborhoodCode": k, "nameArabic": v} for k, v in seen.items()
+        ]
 
     def _on_cell_double_click(self, row, col):
         """Handle cell double click."""

@@ -12,6 +12,7 @@ from PyQt5.QtGui import QIcon, QColor
 
 from controllers.building_controller import BuildingController
 from services.api_client import get_api_client
+from services.api_worker import ApiWorker
 from ui.components.icon import Icon
 from ui.components.wizard_header import WizardHeader
 from ui.design_system import Colors, PageDimensions
@@ -991,56 +992,66 @@ class FieldWorkPreparationStep1(QWidget):
         self._update_selected_card_visibility()
 
     def _load_buildings_from_api(self):
-        """Load buildings from Backend API with current filters."""
+        """Load buildings from Backend API with current filters (non-blocking)."""
         self._spinner.show_loading("جاري البحث عن المباني...")
+
+        filters = self.get_filters()
+        has_active = None
+        assignment_val = filters.get('assignment_status')
+        if assignment_val == "false":
+            has_active = False
+        elif assignment_val == "true":
+            has_active = True
+
+        api = get_api_client()
+        self._buildings_worker = ApiWorker(
+            api.get_buildings_for_assignment,
+            community_code=filters['community'],
+            neighborhood_code=filters['neighborhood'],
+            has_active_assignment=has_active,
+            page=1,
+            page_size=500
+        )
+        self._buildings_worker.finished.connect(self._on_buildings_loaded)
+        self._buildings_worker.error.connect(self._on_buildings_load_error)
+        self._buildings_worker.start()
+
+    def _on_buildings_loaded(self, response):
+        """Handle API response for building search."""
         try:
-            filters = self.get_filters()
+            items = response.get("items", [])
+            buildings = [self._api_dto_to_building(item) for item in items]
 
-            has_active = None
-            assignment_val = filters.get('assignment_status')
-            if assignment_val == "false":
-                has_active = False
-            elif assignment_val == "true":
-                has_active = True
+            search_text = self.building_search.text().lower().strip()
+            if search_text:
+                buildings = [
+                    b for b in buildings
+                    if search_text in (b.building_id.lower() if b.building_id else "")
+                ]
 
-            try:
-                api = get_api_client()
-                response = api.get_buildings_for_assignment(
-                    community_code=filters['community'],
-                    neighborhood_code=filters['neighborhood'],
-                    has_active_assignment=has_active,
-                    page=1,
-                    page_size=500
-                )
+            logger.info(f"Loaded {len(buildings)} buildings from API")
+            self.buildings_list.clear()
 
-                items = response.get("items", [])
-                buildings = [self._api_dto_to_building(item) for item in items]
-
-                search_text = self.building_search.text().lower().strip()
-                if search_text:
-                    buildings = [
-                        b for b in buildings
-                        if search_text in (b.building_id.lower() if b.building_id else "")
-                    ]
-
-                logger.info(f"Loaded {len(buildings)} buildings from API")
-                self.buildings_list.clear()
-
-                if buildings:
-                    self.empty_label.setVisible(False)
-                    self.buildings_list.setVisible(True)
-                    self.buildings_list.setFixedHeight(179)
-                    self._populate_buildings_list(buildings)
-                else:
-                    self.buildings_list.setVisible(False)
-                    self.buildings_list.setFixedHeight(0)
-                    self.empty_label.setVisible(True)
-
-            except Exception as e:
-                logger.error(f"Failed to load buildings from API: {e}", exc_info=True)
-                self.buildings_list.clear()
+            if buildings:
+                self.empty_label.setVisible(False)
+                self.buildings_list.setVisible(True)
+                self.buildings_list.setFixedHeight(179)
+                self._populate_buildings_list(buildings)
+            else:
+                self.buildings_list.setVisible(False)
+                self.buildings_list.setFixedHeight(0)
+                self.empty_label.setVisible(True)
+        except Exception as e:
+            logger.error(f"Failed to process buildings response: {e}", exc_info=True)
+            self.buildings_list.clear()
         finally:
             self._spinner.hide_loading()
+
+    def _on_buildings_load_error(self, error_msg):
+        """Handle API error for building search."""
+        logger.error(f"Failed to load buildings from API: {error_msg}")
+        self.buildings_list.clear()
+        self._spinner.hide_loading()
 
     def _api_dto_to_building(self, dto):
         """Convert API BuildingDto to Building object for UI."""

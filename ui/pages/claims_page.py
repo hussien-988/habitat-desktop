@@ -28,6 +28,7 @@ from ui.components.toast import Toast
 from ui.style_manager import StyleManager
 from ui.components.base_table_model import BaseTableModel
 from utils.i18n import I18n
+from services.api_worker import ApiWorker
 from utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -606,11 +607,32 @@ class ClaimDetailsDialog(QDialog):
     def _create_history_tab(self):
         """Create history/audit trail tab."""
         history_widget = QWidget()
-        history_layout = QVBoxLayout(history_widget)
-        history_layout.setContentsMargins(20, 20, 20, 20)
+        self._history_layout = QVBoxLayout(history_widget)
+        self._history_layout.setContentsMargins(20, 20, 20, 20)
 
-        # Load history using controller
-        result = self.claim_controller.get_claim_history(self.claim.claim_uuid)
+        loading_label = QLabel("جاري تحميل السجل...")
+        loading_label.setAlignment(Qt.AlignCenter)
+        loading_label.setStyleSheet(f"color: {Config.TEXT_LIGHT};")
+        self._history_layout.addWidget(loading_label)
+
+        self.tabs.addTab(history_widget, "السجل")
+
+        # Load history asynchronously
+        self._history_worker = ApiWorker(
+            self.claim_controller.get_claim_history, self.claim.claim_uuid
+        )
+        self._history_worker.finished.connect(self._on_history_loaded)
+        self._history_worker.error.connect(self._on_history_error)
+        self._history_worker.start()
+
+    def _on_history_loaded(self, result):
+        """Handle history data loaded from API."""
+        # Clear loading label
+        while self._history_layout.count():
+            child = self._history_layout.takeAt(0)
+            if child.widget():
+                child.widget().deleteLater()
+
         history = result.data if result.success else []
 
         if history:
@@ -631,7 +653,6 @@ class ClaimDetailsDialog(QDialog):
                 """)
                 frame_layout = QVBoxLayout(frame)
 
-                # Header
                 header = QLabel(f"تعديل بتاريخ: {entry.get('changed_at', '-')}")
                 header.setStyleSheet("font-weight: 600;")
                 frame_layout.addWidget(header)
@@ -648,14 +669,25 @@ class ClaimDetailsDialog(QDialog):
 
             content_layout.addStretch()
             scroll.setWidget(content)
-            history_layout.addWidget(scroll)
+            self._history_layout.addWidget(scroll)
         else:
             no_history = QLabel("لا يوجد سجل تعديلات لهذه المطالبة")
             no_history.setAlignment(Qt.AlignCenter)
             no_history.setStyleSheet(f"color: {Config.TEXT_LIGHT};")
-            history_layout.addWidget(no_history)
+            self._history_layout.addWidget(no_history)
 
-        self.tabs.addTab(history_widget, "السجل")
+    def _on_history_error(self, error_msg):
+        """Handle history loading error."""
+        while self._history_layout.count():
+            child = self._history_layout.takeAt(0)
+            if child.widget():
+                child.widget().deleteLater()
+
+        error_label = QLabel("فشل في تحميل السجل")
+        error_label.setAlignment(Qt.AlignCenter)
+        error_label.setStyleSheet(f"color: {Config.TEXT_LIGHT};")
+        self._history_layout.addWidget(error_label)
+        logger.warning(f"Failed to load claim history: {error_msg}")
 
     def _toggle_edit_mode(self):
         """Toggle between view and edit mode."""
@@ -727,39 +759,46 @@ class ClaimDetailsDialog(QDialog):
         self.claim.notes = self.notes_edit.toPlainText().strip()
         self.claim.resolution_notes = self.resolution_edit.toPlainText().strip()
 
-        try:
-            # Update claim using controller
-            data = {
-                'claim_type': self.claim.claim_type,
-                'priority': self.claim.priority,
-                'notes': self.claim.notes,
-                'resolution_notes': self.claim.resolution_notes
-            }
+        data = {
+            'claim_type': self.claim.claim_type,
+            'priority': self.claim.priority,
+            'notes': self.claim.notes,
+            'resolution_notes': self.claim.resolution_notes
+        }
 
-            result = self.claim_controller.update_claim(
-                self.claim.claim_uuid,
-                data,
-                modification_reason=reason
-            )
+        self.save_btn.setEnabled(False)
+        self._update_worker = ApiWorker(
+            self.claim_controller.update_claim,
+            self.claim.claim_uuid,
+            data,
+            modification_reason=reason
+        )
+        self._update_worker.finished.connect(self._on_update_finished)
+        self._update_worker.error.connect(self._on_update_error)
+        self._update_worker.start()
 
-            if result.success:
-                # Save new documents
-                for doc in self.pending_docs:
-                    self.doc_repo.create(doc)
-                    self.doc_repo.link_to_claim(self.claim.claim_uuid, doc.document_id)
+    def _on_update_finished(self, result):
+        """Handle claim update result."""
+        self.save_btn.setEnabled(True)
+        if result.success:
+            for doc in self.pending_docs:
+                self.doc_repo.create(doc)
+                self.doc_repo.link_to_claim(self.claim.claim_uuid, doc.document_id)
 
-                self.pending_docs.clear()
-                self._load_documents()
-                self._refresh_documents_list()
+            self.pending_docs.clear()
+            self._load_documents()
+            self._refresh_documents_list()
 
-                Toast.show(self, "تم حفظ التعديلات بنجاح", Toast.SUCCESS)
-                self._toggle_edit_mode()
-            else:
-                MessageDialog.show_error(parent=self, title="خطأ", message=f"فشل في حفظ التعديلات: {result.message}")
+            Toast.show(self, "تم حفظ التعديلات بنجاح", Toast.SUCCESS)
+            self._toggle_edit_mode()
+        else:
+            MessageDialog.show_error(parent=self, title="خطأ", message=f"فشل في حفظ التعديلات: {result.message}")
 
-        except Exception as e:
-            logger.error(f"Failed to save claim changes: {e}")
-            MessageDialog.show_error(parent=self, title="خطأ", message=f"فشل في حفظ التعديلات: {str(e)}")
+    def _on_update_error(self, error_msg):
+        """Handle claim update error."""
+        self.save_btn.setEnabled(True)
+        logger.error(f"Failed to save claim changes: {error_msg}")
+        MessageDialog.show_error(parent=self, title="خطأ", message=f"فشل في حفظ التعديلات: {error_msg}")
 
     def _get_modification_reason(self):
         """Get modification reason from user."""
@@ -1084,15 +1123,20 @@ class ClaimsPage(QWidget):
         claim_type = self.type_combo.currentData()
         conflicts_only = self.conflicts_btn.isChecked()
 
-        # Use controller to search claims
-        result = self.claim_controller.search_claims(
+        self._search_worker = ApiWorker(
+            self.claim_controller.search_claims,
             claim_id=search or None,
             status=status or None,
             claim_type=claim_type or None,
             has_conflict=True if conflicts_only else None,
             limit=500
         )
+        self._search_worker.finished.connect(self._on_search_finished)
+        self._search_worker.error.connect(self._on_search_error)
+        self._search_worker.start()
 
+    def _on_search_finished(self, result):
+        """Handle search results from API."""
         if result.success:
             claims = result.data
             self.table_model.set_claims(claims)
@@ -1101,6 +1145,12 @@ class ClaimsPage(QWidget):
             logger.error(f"Failed to load claims: {result.message}")
             self.table_model.set_claims([])
             self.count_label.setText("تم العثور على 0 مطالبة")
+
+    def _on_search_error(self, error_msg):
+        """Handle search error."""
+        logger.error(f"Search claims failed: {error_msg}")
+        self.table_model.set_claims([])
+        self.count_label.setText("تم العثور على 0 مطالبة")
 
     def _on_filter_changed(self):
         self._load_claims()
@@ -1118,22 +1168,32 @@ class ClaimsPage(QWidget):
         if dialog.exec_() == QDialog.Accepted:
             data = dialog.get_data()
 
-            # Use controller to create claim
-            result = self.claim_controller.create_claim(data)
+            self._create_worker = ApiWorker(
+                self.claim_controller.create_claim, data
+            )
+            self._create_worker.finished.connect(self._on_create_finished)
+            self._create_worker.error.connect(self._on_create_error)
+            self._create_worker.start()
 
-            if result.success:
-                Toast.show(self, "تم إنشاء المطالبة بنجاح", Toast.SUCCESS)
+    def _on_create_finished(self, result):
+        """Handle claim creation result."""
+        if result.success:
+            Toast.show(self, "تم إنشاء المطالبة بنجاح", Toast.SUCCESS)
 
-                # Show conflict warning if exists
-                if hasattr(result, 'conflict_warning') and result.conflict_warning:
-                    Toast.show(self, "تحذير: تم الكشف عن مطالبات متعارضة", Toast.WARNING)
+            if hasattr(result, 'conflict_warning') and result.conflict_warning:
+                Toast.show(self, "تحذير: تم الكشف عن مطالبات متعارضة", Toast.WARNING)
 
-                self._load_claims()
-            else:
-                error_msg = result.message
-                if hasattr(result, 'validation_errors') and result.validation_errors:
-                    error_msg += "\n" + "\n".join(result.validation_errors)
-                Toast.show(self, f"فشل في إنشاء المطالبة: {error_msg}", Toast.ERROR)
+            self._load_claims()
+        else:
+            error_msg = result.message
+            if hasattr(result, 'validation_errors') and result.validation_errors:
+                error_msg += "\n" + "\n".join(result.validation_errors)
+            Toast.show(self, f"فشل في إنشاء المطالبة: {error_msg}", Toast.ERROR)
+
+    def _on_create_error(self, error_msg):
+        """Handle claim creation error."""
+        logger.error(f"Failed to create claim: {error_msg}")
+        Toast.show(self, f"فشل في إنشاء المطالبة: {error_msg}", Toast.ERROR)
 
     def update_language(self, is_arabic: bool):
         self.table_model.set_language(is_arabic)
