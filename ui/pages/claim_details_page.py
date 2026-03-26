@@ -639,7 +639,7 @@ class ClaimDetailsPage(QWidget):
             self._ownership_share_input.setEnabled(True)
             share_row.addWidget(self._ownership_share_input)
         else:
-            if raw_share is not None and is_ownership:
+            if raw_share is not None and raw_share > 0:
                 pct = round(float(raw_share) * 100, 2)
                 display = f"{pct}%"
             else:
@@ -915,8 +915,10 @@ class ClaimDetailsPage(QWidget):
         self._pending_links = []
         self._extract_relation_id()
         logger.info(f"[EDIT] Extracted relation_id: {self._relation_id}")
+        case_status = self._claim_data.get("caseStatus", 1)
+        border_color = Colors.PRIMARY_BLUE if case_status == 1 else Colors.WARNING
         self._relation_card.setStyleSheet(f"""
-            QFrame {{ background-color: {Colors.SURFACE}; border: 2px solid {Colors.PRIMARY_BLUE}; border-radius: 12px; }}
+            QFrame {{ background-color: {Colors.SURFACE}; border: 2px solid {border_color}; border-radius: 12px; }}
         """)
         self._populate_relation_card()
         self._edit_btn.setText("حفظ التعديلات")
@@ -928,8 +930,12 @@ class ClaimDetailsPage(QWidget):
         can_edit = False
         if hasattr(main_window, 'current_user') and main_window.current_user:
             role = getattr(main_window.current_user, 'role', '')
-            case_status = self._claim_data.get("caseStatus")
-            can_edit = role in ("admin", "data_manager") and case_status == 1
+            can_edit = role in ("admin", "data_manager")
+        case_status = self._claim_data.get("caseStatus")
+        if can_edit and case_status != 1:
+            self._edit_btn.setText("تعديل حصة الملكية والمستندات")
+        else:
+            self._edit_btn.setText("تعديل المطالبة")
         self._edit_btn.setVisible(can_edit)
         self._cancel_edit_btn.setVisible(False)
     # Edit mode handlers
@@ -1151,6 +1157,11 @@ class ClaimDetailsPage(QWidget):
         from controllers.claim_controller import ClaimController
 
         ctrl = ClaimController()
+
+        # Closed claims: prevent document deletions
+        case_status = self._claim_data.get("caseStatus", 1)
+        if case_status != 1:
+            self._pending_deletes = []
 
         # Check claim type change
         new_type = self._claim_type_combo.currentData() if self._claim_type_combo else None

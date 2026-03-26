@@ -23,6 +23,7 @@ from services.display_mappings import (
     get_source_display
 )
 from services.api_worker import ApiWorker
+from ui.components.toast import Toast
 from ui.style_manager import StyleManager
 from utils.logger import get_logger
 from ui.wizards.office_survey.steps.occupancy_claims_step import _is_owner_relation
@@ -554,6 +555,7 @@ class ClaimStep(BaseStep):
 
         def _on_error(msg):
             logger.warning(f"Failed to fetch evidence count: {msg}")
+            Toast.show_toast(self, "تعذر تحميل بيانات المطالبة", Toast.ERROR)
             if callback:
                 callback(cached)
 

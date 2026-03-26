@@ -12,6 +12,7 @@ from PyQt5.QtCore import Qt
 
 from services.api_worker import ApiWorker
 from ui.components.icon import Icon
+from ui.components.toast import Toast
 from ui.design_system import Colors
 from ui.font_utils import create_font, FontManager
 from ui.style_manager import StyleManager
@@ -61,6 +62,7 @@ class FieldWorkPreparationStep3(QWidget):
         """Handle failed unit fetch, build UI with empty units."""
         logger.warning(f"Could not fetch property units: {error_msg}")
         self._spinner.hide_loading()
+        Toast.show_toast(self, "تعذر تحميل بيانات الملخص", Toast.ERROR)
         self._setup_ui()
 
     @staticmethod

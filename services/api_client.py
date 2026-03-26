@@ -54,13 +54,14 @@ class TRRCMSApiClient:
         self.access_token: Optional[str] = None
         self.refresh_token: Optional[str] = None
         self.token_expires_at: Optional[datetime] = None
+        self._login_failures: int = 0
+        self._login_cooldown_until: Optional[datetime] = None
+        self._on_session_expired = None
+        logger.info(f"API client initialized for {self.base_url}")
 
-        # Login on initialization (non-fatal if API is unavailable)
-        try:
-            self.login(config.username, config.password)
-            logger.info(f"Connected to TRRCMS API at {self.base_url}")
-        except Exception as e:
-            logger.warning(f"API not available at {self.base_url}: {e}. Client created without token.")
+    def set_session_expired_callback(self, callback):
+        """Set callback to invoke when the session expires (token refresh failed or 401)."""
+        self._on_session_expired = callback
 
     def login(self, username: str, password: str) -> Dict[str, Any]:
         """Authenticate and obtain access token."""
@@ -81,6 +82,8 @@ class TRRCMSApiClient:
             expires_in = data.get("expiresIn", 3600)  # default 1 hour
             self.token_expires_at = datetime.now() + timedelta(seconds=expires_in)
 
+            self._login_failures = 0
+            self._login_cooldown_until = None
             logger.info(f"Logged in as {username}")
             return data
 
@@ -142,14 +145,16 @@ class TRRCMSApiClient:
         if not self.access_token:
             raise RuntimeError("Not authenticated")
 
-        # Refresh token if it will expire in next 5 minutes
         if self.token_expires_at:
             time_until_expiry = (self.token_expires_at - datetime.now()).total_seconds()
-            if time_until_expiry < 300:  # 5 minutes
+            if time_until_expiry < 300:
                 logger.info("Token expiring soon, refreshing...")
                 if not self.refresh_access_token():
-                    # Re-login if refresh fails
-                    self.login(self.config.username, self.config.password)
+                    logger.warning("Token refresh failed — session expired")
+                    self.access_token = None
+                    if self._on_session_expired:
+                        self._on_session_expired()
+                    raise RuntimeError("Session expired")
 
     def _headers(self) -> Dict[str, str]:
         """الحصول على Headers مع Authorization."""
@@ -160,6 +165,8 @@ class TRRCMSApiClient:
             "Accept": "application/json"
         }
 
+    _MAX_RETRIES = 2
+
     def _request(
         self,
         method: str,
@@ -167,10 +174,9 @@ class TRRCMSApiClient:
         json_data: Optional[Dict] = None,
         params: Optional[Dict] = None
     ) -> Any:
-        """Execute HTTP request with error handling."""
+        """Execute HTTP request with error handling and automatic retry."""
         url = f"{self.base_url}{endpoint}"
 
-        # Log request
         import json as _json
         logger.info(f"[API REQ] {method} {endpoint}")
         if params:
@@ -181,67 +187,83 @@ class TRRCMSApiClient:
             except Exception:
                 logger.info(f"[API REQ] Body: {json_data}")
 
-        try:
-            response = requests.request(
-                method=method,
-                url=url,
-                json=json_data,
-                params=params,
-                headers=self._headers(),
-                timeout=self.config.timeout,
-                verify=False
-            )
-            response.raise_for_status()
+        last_error = None
+        for attempt in range(self._MAX_RETRIES + 1):
+            try:
+                response = requests.request(
+                    method=method,
+                    url=url,
+                    json=json_data,
+                    params=params,
+                    headers=self._headers(),
+                    timeout=self.config.timeout,
+                    verify=False
+                )
+                response.raise_for_status()
 
-            result = None
-            if response.text:
-                result = response.json()
+                result = None
+                if response.text:
+                    result = response.json()
 
-            # Log successful response
-            logger.info(f"[API RES] {response.status_code} {endpoint}")
-            if result:
+                logger.info(f"[API RES] {response.status_code} {endpoint}")
+                if result:
+                    try:
+                        res_str = _json.dumps(result, indent=2, ensure_ascii=False, default=str)
+                        if len(res_str) > 5000:
+                            logger.info(f"[API RES] Body (truncated): {res_str[:5000]}...")
+                        else:
+                            logger.info(f"[API RES] Body: {res_str}")
+                    except Exception:
+                        logger.info(f"[API RES] Body: {result}")
+
+                return result
+
+            except requests.exceptions.HTTPError as e:
+                status_code = e.response.status_code if e.response is not None else 0
+                response_data = {}
                 try:
-                    res_str = _json.dumps(result, indent=2, ensure_ascii=False, default=str)
-                    if len(res_str) > 5000:
-                        logger.info(f"[API RES] Body (truncated): {res_str[:5000]}...")
-                    else:
-                        logger.info(f"[API RES] Body: {res_str}")
+                    response_data = e.response.json() if e.response is not None else {}
+                except (ValueError, AttributeError):
+                    pass
+                response_text = ''
+                try:
+                    response_text = e.response.text[:500] if e.response is not None else ''
                 except Exception:
-                    logger.info(f"[API RES] Body: {result}")
-
-            return result
-
-        except requests.exceptions.HTTPError as e:
-            status_code = e.response.status_code if e.response is not None else 0
-            response_data = {}
-            try:
-                response_data = e.response.json() if e.response is not None else {}
-            except (ValueError, AttributeError):
-                pass
-            response_text = ''
-            try:
-                response_text = e.response.text[:500] if e.response is not None else ''
-            except Exception:
-                pass
-            log_fn = logger.warning if status_code in (403, 404) else logger.error
-            log_fn(f"[API ERR] {status_code} {method} {endpoint} | Response: {response_data or response_text}")
-            raise ApiException(
-                message=str(e),
-                status_code=status_code,
-                response_data=response_data
-            )
-        except (requests.exceptions.ConnectionError, requests.exceptions.Timeout) as e:
-            logger.error(f"Network error: {endpoint} - {e}")
-            raise NetworkException(
-                message=str(e),
-                original_error=e
-            )
-        except requests.exceptions.RequestException as e:
-            logger.error(f"Request failed: {endpoint} - {e}")
-            raise NetworkException(
-                message=str(e),
-                original_error=e
-            )
+                    pass
+                if status_code == 401:
+                    logger.warning(f"[API ERR] 401 {method} {endpoint} — session expired")
+                    self.access_token = None
+                    if self._on_session_expired:
+                        self._on_session_expired()
+                log_fn = logger.warning if status_code in (401, 403, 404) else logger.error
+                log_fn(f"[API ERR] {status_code} {method} {endpoint} | Response: {response_data or response_text}")
+                raise ApiException(
+                    message=str(e),
+                    status_code=status_code,
+                    response_data=response_data
+                )
+            except (requests.exceptions.ConnectionError, requests.exceptions.Timeout) as e:
+                last_error = e
+                if attempt < self._MAX_RETRIES:
+                    import time
+                    wait = attempt + 1
+                    logger.warning(
+                        f"Network error (attempt {attempt + 1}/{self._MAX_RETRIES + 1}), "
+                        f"retrying in {wait}s: {endpoint}"
+                    )
+                    time.sleep(wait)
+                    continue
+                logger.error(f"Network error: {endpoint} - {e}")
+                raise NetworkException(
+                    message=str(e),
+                    original_error=e
+                )
+            except requests.exceptions.RequestException as e:
+                logger.error(f"Request failed: {endpoint} - {e}")
+                raise NetworkException(
+                    message=str(e),
+                    original_error=e
+                )
 
     def get_buildings_for_map(
         self,

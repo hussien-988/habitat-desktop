@@ -14,6 +14,7 @@ from PyQt5.QtCore import Qt, pyqtSignal, QSize, QPoint
 from PyQt5.QtGui import QIcon, QColor, QPixmap
 
 from ui.components.icon import Icon
+from ui.components.toast import Toast
 from ui.design_system import Colors
 from ui.font_utils import create_font, FontManager
 from ui.style_manager import StyleManager
@@ -72,6 +73,7 @@ class FieldWorkPreparationStep2(QWidget):
         self._researchers = []
         self._update_table()
         self._spinner.hide_loading()
+        Toast.show_toast(self, "تعذر تحميل بيانات الباحثين", Toast.ERROR)
 
     @staticmethod
     def _fetch_researchers_from_db():

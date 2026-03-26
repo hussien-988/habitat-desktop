@@ -54,8 +54,7 @@ class ViewportBounds:
 
     def get_cache_key(self) -> str:
         """Generate unique cache key for this viewport."""
-        # Round to 5 decimal places (~1 meter precision) for cache consistency
-        rounded = tuple(round(x, 5) for x in self.to_tuple())
+        rounded = tuple(round(x, 3) for x in self.to_tuple())
         key_str = f"{rounded[0]}_{rounded[1]}_{rounded[2]}_{rounded[3]}"
         return hashlib.md5(key_str.encode()).hexdigest()
 

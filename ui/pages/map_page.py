@@ -32,6 +32,7 @@ from services.translation_manager import tr
 from services.display_mappings import get_building_status_display
 from utils.i18n import I18n
 from services.api_worker import ApiWorker
+from ui.components.toast import Toast
 from utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -1112,6 +1113,7 @@ class MapPage(QWidget):
             logger.info("ViewportBridge setup complete (debounce=300ms)")
 
         except Exception as e:
+            Toast.show_toast(self, "تعذر تحميل بيانات الخريطة", Toast.ERROR)
             logger.error(f"Failed to setup ViewportBridge: {e}")
             self.viewport_bridge = None
             self.web_channel = None
@@ -1235,6 +1237,7 @@ class MapPage(QWidget):
             self._landmark_search_worker.start()
 
         except Exception as e:
+            Toast.show_toast(self, "تعذر تحميل بيانات الخريطة", Toast.ERROR)
             logger.warning(f"Landmark search failed: {e}")
             self.landmark_results.hide()
 
@@ -1260,6 +1263,7 @@ class MapPage(QWidget):
 
     def _on_landmark_search_error(self, error_msg):
         """Handle landmark search error."""
+        Toast.show_toast(self, "تعذر تحميل بيانات الخريطة", Toast.ERROR)
         logger.warning(f"Landmark search worker failed: {error_msg}")
         self.landmark_results.hide()
 
@@ -1283,6 +1287,7 @@ class MapPage(QWidget):
             self._street_search_worker.start()
 
         except Exception as e:
+            Toast.show_toast(self, "تعذر تحميل بيانات الخريطة", Toast.ERROR)
             logger.warning(f"Street search failed: {e}")
             self.landmark_results.hide()
 
@@ -1326,6 +1331,7 @@ class MapPage(QWidget):
 
     def _on_street_search_error(self, error_msg):
         """Handle street search error."""
+        Toast.show_toast(self, "تعذر تحميل بيانات الخريطة", Toast.ERROR)
         logger.warning(f"Street search worker failed: {error_msg}")
         self.landmark_results.hide()
 
@@ -1390,6 +1396,7 @@ class MapPage(QWidget):
             self.landmark_results.show()
 
         except Exception as e:
+            Toast.show_toast(self, "تعذر تحميل بيانات الخريطة", Toast.ERROR)
             logger.warning(f"Neighborhood search failed: {e}")
             self.landmark_results.hide()
 

@@ -129,20 +129,22 @@ class OfficeSurveyWizard(BaseWizard):
             # skip all draft-save logic and show success directly
             if self.context.status == "finalized":
                 finalize_resp = getattr(self.context, 'finalize_response', None) or {}
+                created_claims = finalize_resp.get("createdClaims", [])
+                if created_claims:
+                    self._show_finalized_success_popup(claims=created_claims)
+                    return True
+
                 claim_number = (
                     finalize_resp.get("claimNumber")
                     or finalize_resp.get("claimId")
                     or ""
                 )
                 if not claim_number:
-                    # Fetch asynchronously, show popup on callback
                     self._fetch_claim_number_from_api(
                         callback=self._show_finalized_success_popup
                     )
                     return True
-                if not claim_number:
-                    claim_number = self.context.reference_number or ""
-                self._show_finalized_success_popup(claim_number)
+                self._show_finalized_success_popup(claim_number=claim_number)
                 return True
 
             # Determine status based on claim creation result
@@ -218,26 +220,37 @@ class OfficeSurveyWizard(BaseWizard):
 
         def _on_finished(response):
             items = response if isinstance(response, list) else response.get("items", [])
-            claim_number = items[0].get("claimNumber", "") if items else ""
-            if callback:
-                callback(claim_number)
+            if items and len(items) > 0:
+                claims_list = [
+                    {
+                        "claimNumber": it.get("claimNumber", ""),
+                        "fullNameArabic": it.get("primaryClaimantName", "") or it.get("fullNameArabic", ""),
+                    }
+                    for it in items
+                ]
+                if callback:
+                    callback(claims=claims_list)
+            else:
+                if callback:
+                    callback(claim_number="")
 
         def _on_error(msg):
             logger.warning(f"Could not fetch claim number from API: {msg}")
             if callback:
-                callback("")
+                callback(claim_number="")
 
         self._claim_number_worker = ApiWorker(_do_fetch)
         self._claim_number_worker.finished.connect(_on_finished)
         self._claim_number_worker.error.connect(_on_error)
         self._claim_number_worker.start()
 
-    def _show_finalized_success_popup(self, claim_number: str):
-        """Show success popup after finalization with the resolved claim number."""
-        if not claim_number:
+    def _show_finalized_success_popup(self, claim_number: str = "", claims: list = None):
+        """Show success popup after finalization."""
+        if not claim_number and not claims:
             claim_number = self.context.reference_number or ""
         SuccessPopup.show_success(
             claim_number=claim_number,
+            claims=claims,
             title=tr("wizard.success.title"),
             description=tr("wizard.success.description"),
             auto_close_ms=0,

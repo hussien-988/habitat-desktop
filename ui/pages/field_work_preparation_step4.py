@@ -10,6 +10,7 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt, QTimer
 
 from services.api_worker import ApiWorker
+from ui.components.toast import Toast
 from ui.font_utils import create_font, FontManager
 from utils.logger import get_logger
 
@@ -226,9 +227,7 @@ class FieldWorkPreparationStep4(QWidget):
             self._fetch_all_statuses, self.assignment_ids, self.db
         )
         self._status_worker.finished.connect(self._on_statuses_loaded)
-        self._status_worker.error.connect(
-            lambda msg: logger.warning(f"Could not load transfer status: {msg}")
-        )
+        self._status_worker.error.connect(self._on_status_load_error)
         self._status_worker.start()
 
     @staticmethod
@@ -289,9 +288,7 @@ class FieldWorkPreparationStep4(QWidget):
             self._do_retry, assignment_id, self.db
         )
         self._retry_worker.finished.connect(lambda _: self._load_transfer_status())
-        self._retry_worker.error.connect(
-            lambda msg: logger.warning(f"Retry failed for {assignment_id}: {msg}")
-        )
+        self._retry_worker.error.connect(self._on_retry_error)
         self._retry_worker.start()
 
     @staticmethod
@@ -310,6 +307,16 @@ class FieldWorkPreparationStep4(QWidget):
                 svc = AssignmentService(db=db)
                 svc.retry_transfer(assignment_id)
             return True
+
+    def _on_status_load_error(self, error_msg):
+        """Handle failed transfer status fetch."""
+        logger.warning(f"Could not load transfer status: {error_msg}")
+        Toast.show_toast(self, "تعذر إرسال التكليف", Toast.ERROR)
+
+    def _on_retry_error(self, error_msg):
+        """Handle failed retry transfer."""
+        logger.warning(f"Retry failed: {error_msg}")
+        Toast.show_toast(self, "تعذر إرسال التكليف", Toast.ERROR)
 
     def stop_refresh(self):
         """Stop the auto-refresh timer."""

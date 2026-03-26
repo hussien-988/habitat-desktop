@@ -63,6 +63,7 @@ class MainWindow(QMainWindow):
         self._create_widgets()
         self._setup_layout()
         self._connect_signals()
+        self._setup_tile_interceptor()
 
         # تعيين اتجاه الواجهة للعربية
         self.setLayoutDirection(Qt.RightToLeft)
@@ -110,6 +111,17 @@ class MainWindow(QMainWindow):
             # If Windows API fails, continue without rounded corners
             logger.debug(f"Could not set rounded corners: {e}")
         '''
+    def _setup_tile_interceptor(self):
+        """Add User-Agent/Referer headers for external tile server requests."""
+        try:
+            from PyQt5.QtWebEngineWidgets import QWebEngineProfile
+            from services.tile_request_interceptor import TileRequestInterceptor
+
+            self._tile_interceptor = TileRequestInterceptor(self)
+            QWebEngineProfile.defaultProfile().setUrlRequestInterceptor(self._tile_interceptor)
+        except ImportError:
+            pass
+
     def _setup_shortcuts(self):
         """Setup keyboard shortcuts."""
         # Language toggle: Ctrl+L
@@ -706,6 +718,14 @@ class MainWindow(QMainWindow):
         # Store token for later use (e.g., when wizard is reset)
         self._api_token = token
 
+        # Set token directly on the API client singleton
+        from services.api_client import get_api_client
+        api = get_api_client()
+        if api:
+            api.set_access_token(token)
+            api.set_session_expired_callback(self._on_session_expired)
+            logger.info("API token set on singleton")
+
         # Pass token to BuildingsPage controller
         if Pages.BUILDINGS in self.pages:
             buildings_page = self.pages[Pages.BUILDINGS]
@@ -729,6 +749,29 @@ class MainWindow(QMainWindow):
         if hasattr(self, '_user_controller') and self._user_controller:
             self._user_controller.set_auth_token(token)
             logger.info("API token set for UserController")
+
+    def _on_session_expired(self):
+        """Handle session expiry (called from background thread)."""
+        if not self.current_user:
+            return
+        from PyQt5.QtCore import QTimer
+        QTimer.singleShot(0, self._do_session_expired)
+
+    def _do_session_expired(self):
+        """Show expiry toast and redirect to login (runs on main thread)."""
+        if not self.current_user:
+            return
+        logger.warning(f"Session expired for user: {self.current_user.username}")
+        from ui.components.toast import Toast
+        Toast.show_toast(
+            self,
+            "انتهت صلاحية الجلسة، يرجى تسجيل الدخول مجدداً",
+            Toast.WARNING,
+            5000
+        )
+        self.current_user = None
+        self._stop_session_timer()
+        self._show_login()
 
     def _handle_logout(self):
         """Handle logout request."""

@@ -276,29 +276,31 @@ class ServerSettingsDialog(QDialog):
         self._update_save_btn()
 
     def _update_save_btn(self):
-        self._save_btn.setEnabled(self._tile_ok and self._api_ok)
+        self._save_btn.setEnabled(self._tile_ok or self._api_ok)
 
     # ── Actions ─────────────────────────────────────────────────────
 
     def _on_save(self):
-        tile_url = self._tile_url_input.text().strip()
-        api_url = self._api_url_input.text().strip()
-        if not tile_url or not api_url:
-            return
-
         settings = load_local_settings()
         settings.pop("tile_server_port", None)
         settings.pop("api_port", None)
         settings.pop("api_base_url", None)
-        settings["tile_server_url"] = tile_url
-        settings["api_server_url"] = api_url
+
+        if self._tile_ok:
+            tile_url = self._tile_url_input.text().strip()
+            if tile_url:
+                settings["tile_server_url"] = tile_url
+                from services.tile_server_manager import TileServerManager
+                TileServerManager.reset()
+
+        if self._api_ok:
+            api_url = self._api_url_input.text().strip()
+            if api_url:
+                settings["api_server_url"] = api_url
+                from services.api_client import reset_api_client
+                reset_api_client()
+
         save_local_settings(settings)
-
-        from services.tile_server_manager import TileServerManager
-        from services.api_client import reset_api_client
-        TileServerManager.reset()
-        reset_api_client()
-
         self.accept()
 
     def _on_reset(self):

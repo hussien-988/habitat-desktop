@@ -11,6 +11,7 @@ from PyQt5.QtGui import QColor
 from ui.components.wizard_header import WizardHeader
 from ui.font_utils import create_font, FontManager
 from services.exceptions import NetworkException, ApiException
+from ui.components.toast import Toast
 from utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -698,11 +699,13 @@ class ImportWizardPage(QWidget):
         def on_dup_done(dup_result):
             duplicates_data = dup_result.data if dup_result.success else None
             if not dup_result.success:
+                Toast.show_toast(self, "تعذر تحميل البيانات", Toast.ERROR)
                 logger.warning(f"Duplicate detection failed: {dup_result.message}")
             self._navigate_to_step2(duplicates_data)
             self._update_navigation()
 
         def on_dup_error(error_type, msg_ar):
+            Toast.show_toast(self, "تعذر تحميل البيانات", Toast.ERROR)
             logger.warning(f"Duplicate detection error ({error_type}): {msg_ar}")
             self._navigate_to_step2(duplicates_data=None)
             self._update_navigation()
@@ -1343,6 +1346,7 @@ class ImportWizardPage(QWidget):
             self._start_status_poll()
 
         def on_approve_error(error_type, msg_ar):
+            Toast.show_toast(self, "تعذر تحميل البيانات", Toast.ERROR)
             logger.warning(f"Approve after conflicts failed ({error_type}): {msg_ar}")
             self._hide_loading()
             # Conflicts might not all be resolved — show step2 as before

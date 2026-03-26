@@ -14,6 +14,7 @@ from controllers.building_controller import BuildingController
 from services.api_client import get_api_client
 from services.api_worker import ApiWorker
 from ui.components.icon import Icon
+from ui.components.toast import Toast
 from ui.components.wizard_header import WizardHeader
 from ui.design_system import Colors, PageDimensions
 from ui.font_utils import create_font, FontManager
@@ -745,6 +746,7 @@ class FieldWorkPreparationStep1(QWidget):
 
         except Exception as e:
             logger.error(f"Error loading filter data from API: {e}", exc_info=True)
+            Toast.show_toast(self, "تعذر تحميل بيانات المباني", Toast.ERROR)
 
     def _on_community_changed(self, index):
         """Cascade: update neighborhoods based on selected community."""
@@ -1044,6 +1046,7 @@ class FieldWorkPreparationStep1(QWidget):
         except Exception as e:
             logger.error(f"Failed to process buildings response: {e}", exc_info=True)
             self.buildings_list.clear()
+            Toast.show_toast(self, "تعذر تحميل بيانات المباني", Toast.ERROR)
         finally:
             self._spinner.hide_loading()
 
@@ -1052,6 +1055,7 @@ class FieldWorkPreparationStep1(QWidget):
         logger.error(f"Failed to load buildings from API: {error_msg}")
         self.buildings_list.clear()
         self._spinner.hide_loading()
+        Toast.show_toast(self, "تعذر تحميل بيانات المباني", Toast.ERROR)
 
     def _api_dto_to_building(self, dto):
         """Convert API BuildingDto to Building object for UI."""

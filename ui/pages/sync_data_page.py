@@ -135,10 +135,6 @@ class SyncDataPage(QWidget):
         self._pending_notifications = 0
 
         self._setup_ui()
-
-        self._refresh_timer = QTimer(self)
-        self._refresh_timer.timeout.connect(self._smart_refresh)
-        self._refresh_timer.start(10000)
     # UI Setup
 
     def _setup_ui(self):
@@ -222,6 +218,25 @@ class SyncDataPage(QWidget):
         """)
         back_btn.clicked.connect(self.back_requested.emit)
         title_row.addWidget(back_btn)
+
+        refresh_btn = QPushButton("تحديث")
+        refresh_btn.setFixedSize(100, 40)
+        refresh_btn.setCursor(Qt.PointingHandCursor)
+        refresh_btn.setFont(create_font(size=FontManager.SIZE_BODY, weight=FontManager.WEIGHT_SEMIBOLD))
+        refresh_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #EBF5FF;
+                color: #3890DF;
+                border: 1px solid #BFDBFE;
+                border-radius: 8px;
+                font-weight: 600;
+            }
+            QPushButton:hover {
+                background-color: #DBEAFE;
+            }
+        """)
+        refresh_btn.clicked.connect(self.refresh)
+        title_row.addWidget(refresh_btn)
         self._collector_combo.setFixedHeight(42)
         self._collector_combo.setFixedWidth(220)
         self._collector_combo.setEditable(True)
@@ -1138,8 +1153,7 @@ class SyncDataPage(QWidget):
 
     def showEvent(self, event):
         super().showEvent(event)
-        self._refresh_timer.start(10000)
+        self.refresh()
 
     def hideEvent(self, event):
-        self._refresh_timer.stop()
         super().hideEvent(event)
