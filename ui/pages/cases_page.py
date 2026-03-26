@@ -26,6 +26,7 @@ from ..style_manager import StyleManager
 from services.translation_manager import tr
 from services.display_mappings import get_survey_type_display
 from services.api_worker import ApiWorker
+from ..components.toast import Toast
 
 logger = logging.getLogger(__name__)
 
@@ -295,6 +296,7 @@ class CasesPage(QWidget):
     def _on_surveys_load_error(self, error_msg):
         """Handle surveys loading error."""
         self._spinner.hide_loading()
+        Toast.show_toast(self, "تعذر تحميل المطالبات", Toast.ERROR)
         logger.warning(f"Error loading surveys: {error_msg}")
         self._all_data = []
         self._apply_type_filter()

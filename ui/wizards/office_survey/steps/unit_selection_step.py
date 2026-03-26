@@ -908,33 +908,20 @@ class UnitSelectionStep(BaseStep):
                                 "claims_count", "created_claims"):
                         self.context.update_data(key, None)
 
-        # If not yet linked, start async linking
+        # Link unit synchronously — block progression if it fails
         if not self.context.get_data("unit_linked"):
-            self._link_unit_async(survey_id, current_unit_id)
+            self._set_auth_token()
+            try:
+                self._api_service.link_unit_to_survey(survey_id, current_unit_id)
+                logger.info(f"Unit {current_unit_id} linked to survey {survey_id}")
+                self.context.update_data("unit_linked", True)
+                self.context.update_data("linked_unit_uuid", current_unit_id)
+            except Exception as e:
+                logger.error(f"API link failed: {e}")
+                result.add_error("فشل ربط الوحدة بالمسح. تحقق من الاتصال وحاول مجدداً.")
+                return result
 
         return result
-
-    def _link_unit_async(self, survey_id, unit_id):
-        """Link unit to survey in a background thread."""
-        self._set_auth_token()
-
-        def _do_link():
-            return self._api_service.link_unit_to_survey(survey_id, unit_id)
-
-        def _on_linked(_response):
-            logger.info(f"Unit {unit_id} linked to survey {survey_id}")
-            self.context.update_data("unit_linked", True)
-            self.context.update_data("linked_unit_uuid", unit_id)
-
-        def _on_link_error(msg):
-            logger.error(f"API link failed: {msg}")
-            from ui.components.toast import Toast
-            Toast.show_toast(self, "فشل ربط الوحدة بالمسح. يرجى المحاولة مجدداً.", Toast.ERROR)
-
-        self._link_unit_worker = ApiWorker(_do_link)
-        self._link_unit_worker.finished.connect(_on_linked)
-        self._link_unit_worker.error.connect(_on_link_error)
-        self._link_unit_worker.start()
 
     def collect_data(self) -> Dict[str, Any]:
         """Collect data from the step."""

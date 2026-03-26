@@ -17,33 +17,30 @@ from utils.logger import get_logger
 logger = get_logger(__name__)
 
 
-class _MapDataWorker(QThread):
-    """Background worker for loading map data without blocking the UI."""
+class _BuildingsWorker(QThread):
+    """Background worker for loading buildings data."""
     finished = pyqtSignal(dict)
     error = pyqtSignal(str)
 
-    def __init__(self, auth_token, selected_building_id, is_view_only, fallback_building):
+    def __init__(self, auth_token, selected_building_id, is_view_only,
+                 fallback_building, center_lat, center_lon):
         super().__init__()
         self._auth_token = auth_token
         self._selected_building_id = selected_building_id
         self._is_view_only = is_view_only
         self._fallback_building = fallback_building
+        self._center_lat = center_lat
+        self._center_lon = center_lon
 
     def run(self):
         try:
             result = {}
-
-            from services.tile_server_manager import get_tile_server_url
-            result['tile_server_url'] = get_tile_server_url()
-
             from services.map_service_api import MapServiceAPI
-            from ui.constants.map_constants import MapConstants
 
             map_service = MapServiceAPI()
             if self._auth_token:
                 map_service.set_auth_token(self._auth_token)
 
-            # Load buildings
             buildings = []
             if self._is_view_only and self._selected_building_id:
                 result['buildings_geojson'] = '{"type": "FeatureCollection", "features": []}'
@@ -53,11 +50,12 @@ class _MapDataWorker(QThread):
                     result['view_buildings'] = [self._fallback_building]
             else:
                 try:
+                    delta_lat, delta_lng = 0.015, 0.02
                     buildings = map_service.get_buildings_in_bbox(
-                        north_east_lat=MapConstants.MAX_LAT,
-                        north_east_lng=MapConstants.MAX_LON,
-                        south_west_lat=MapConstants.MIN_LAT,
-                        south_west_lng=MapConstants.MIN_LON,
+                        north_east_lat=self._center_lat + delta_lat,
+                        north_east_lng=self._center_lon + delta_lng,
+                        south_west_lat=self._center_lat - delta_lat,
+                        south_west_lng=self._center_lon - delta_lng,
                         page_size=200
                     )
                 except Exception as e:
@@ -67,7 +65,25 @@ class _MapDataWorker(QThread):
                     buildings, prefer_polygons=True
                 )
 
-            # Load neighborhoods
+            self.finished.emit(result)
+        except Exception as e:
+            logger.error(f"Buildings worker error: {e}", exc_info=True)
+            self.error.emit(str(e))
+
+
+class _LayersWorker(QThread):
+    """Background worker for loading neighborhoods, boundaries, landmarks and streets."""
+    finished = pyqtSignal(dict)
+    error = pyqtSignal(str)
+
+    def __init__(self, auth_token):
+        super().__init__()
+        self._auth_token = auth_token
+
+    def run(self):
+        try:
+            result = {}
+
             result['neighborhoods_geojson'] = None
             try:
                 from services.api_client import get_api_client
@@ -81,9 +97,9 @@ class _MapDataWorker(QThread):
                         ne_lng=Config.MAP_BOUNDS_MAX_LNG,
                     )
                     if neighborhoods:
+                        import re
                         features = []
                         for n in neighborhoods:
-                            import re
                             wkt = n.get('boundaries') or n.get('boundary') or n.get('boundaryWkt') or ''
                             coords = re.findall(r'([-\d.]+)\s+([-\d.]+)', wkt)
                             if coords:
@@ -105,7 +121,6 @@ class _MapDataWorker(QThread):
             except Exception as e:
                 logger.warning(f"Could not load neighborhoods: {e}")
 
-            # Load boundaries from local GeoJSON
             result['boundaries_geojson'] = None
             try:
                 from services import boundary_service
@@ -121,16 +136,17 @@ class _MapDataWorker(QThread):
             except Exception as e:
                 logger.warning(f"Failed to load boundaries: {e}")
 
-            # Load landmarks and streets
             result['landmarks_json'] = None
             result['streets_json'] = None
             try:
                 from services.api_client import get_api_client
                 from services.map_utils import normalize_landmark, normalize_street
-                api = get_api_client()
                 from ui.constants.map_constants import MapConstants
-                sw_lat, sw_lng = MapConstants.DEFAULT_CENTER_LAT - 0.5, MapConstants.DEFAULT_CENTER_LON - 0.5
-                ne_lat, ne_lng = MapConstants.DEFAULT_CENTER_LAT + 0.5, MapConstants.DEFAULT_CENTER_LON + 0.5
+                api = get_api_client()
+                sw_lat = MapConstants.DEFAULT_CENTER_LAT - 0.5
+                sw_lng = MapConstants.DEFAULT_CENTER_LON - 0.5
+                ne_lat = MapConstants.DEFAULT_CENTER_LAT + 0.5
+                ne_lng = MapConstants.DEFAULT_CENTER_LON + 0.5
 
                 landmarks = api.get_landmarks_for_map(
                     south_west_lat=sw_lat, south_west_lng=sw_lng,
@@ -152,7 +168,7 @@ class _MapDataWorker(QThread):
 
             self.finished.emit(result)
         except Exception as e:
-            logger.error(f"Map data worker error: {e}", exc_info=True)
+            logger.error(f"Layers worker error: {e}", exc_info=True)
             self.error.emit(str(e))
 
 
@@ -368,8 +384,8 @@ class BuildingMapDialog(BaseMapDialog):
         self._neighborhoods_cache = None
         self._search_worker = None
 
-        # Load map data in background thread to avoid UI freeze
-        self._data_worker = None
+        self._buildings_worker = None
+        self._layers_worker = None
         QTimer.singleShot(50, self._start_map_load)
 
     def _start_map_load(self):
@@ -426,33 +442,37 @@ class BuildingMapDialog(BaseMapDialog):
             """
             QTimer.singleShot(300, lambda: self.web_view.page().runJavaScript(js_overlay))
 
-        # Load data in background
-        self._data_worker = _MapDataWorker(
-            self._auth_token, self._selected_building_id,
-            self._is_view_only, self._fallback_building
-        )
-        self._data_worker.finished.connect(self._on_map_data_ready)
-        self._data_worker.error.connect(self._on_map_data_error)
-        self._data_worker.start()
+        if self._is_view_only and self._selected_building_id:
+            self._buildings_worker = _BuildingsWorker(
+                self._auth_token, self._selected_building_id,
+                self._is_view_only, self._fallback_building,
+                center_lat, center_lon
+            )
+            self._buildings_worker.finished.connect(self._on_buildings_ready)
+            self._buildings_worker.error.connect(self._on_map_data_error)
+            self._buildings_worker.start()
+
+        self._layers_worker = _LayersWorker(self._auth_token)
+        self._layers_worker.finished.connect(self._on_layers_ready)
+        self._layers_worker.error.connect(lambda e: logger.warning(f"Layers loading failed: {e}"))
+        self._layers_worker.start()
 
     def _on_map_data_error(self, error_msg):
         """Handle map data loading error."""
         logger.error(f"Map data loading failed: {error_msg}")
         ErrorHandler.show_error(self, f"حدث خطأ أثناء تحميل الخريطة:\n{error_msg}", "خطأ")
 
-    def _on_map_data_ready(self, data):
-        """Inject buildings and layers into the already-visible map."""
+    def _on_buildings_ready(self, data):
+        """Inject buildings into the already-visible map."""
         try:
             buildings_geojson = data.get('buildings_geojson', '{"type":"FeatureCollection","features":[]}')
 
-            # Cache buildings for selection
             if 'buildings_list' in data:
                 self._buildings_cache = data['buildings_list']
                 logger.info(f"Cached {len(self._buildings_cache)} buildings for selection")
 
             geojson_data = json.loads(buildings_geojson) if isinstance(buildings_geojson, str) else buildings_geojson
 
-            # Handle view-only mode
             focus_building_id = None
             center_lat = center_lon = None
 
@@ -490,15 +510,12 @@ class BuildingMapDialog(BaseMapDialog):
                         center_lat, center_lon = focus_building.latitude, focus_building.longitude
                     focus_building_id = self._selected_building_id
 
-            # Inject buildings into existing map via JavaScript
             safe_geojson = json.dumps(buildings_geojson) if isinstance(buildings_geojson, str) else json.dumps(json.dumps(buildings_geojson))
             js_inject = f"""
             (function() {{
-                // Remove loading overlay
                 var overlay = document.getElementById('loadingOverlay');
                 if (overlay) overlay.remove();
 
-                // Add buildings to map
                 var geojsonStr = {safe_geojson};
                 var geojsonData = (typeof geojsonStr === 'string') ? JSON.parse(geojsonStr) : geojsonStr;
                 if (typeof buildingsLayer !== 'undefined' && buildingsLayer) {{
@@ -528,26 +545,28 @@ class BuildingMapDialog(BaseMapDialog):
             if self.web_view:
                 self.web_view.page().runJavaScript(js_inject)
 
-            # Inject landmarks
-            landmarks_json = data.get('landmarks_json')
-            if landmarks_json and self.web_view:
-                js_lm = f"if(typeof updateLandmarksOnMap==='function')updateLandmarksOnMap({landmarks_json});"
-                self.web_view.page().runJavaScript(js_lm)
-
-            # Inject streets
-            streets_json = data.get('streets_json')
-            if streets_json and self.web_view:
-                js_st = f"if(typeof updateStreetsOnMap==='function')updateStreetsOnMap({streets_json});"
-                self.web_view.page().runJavaScript(js_st)
-
-            # For view-only: fly to building
             if self._is_view_only and focus_building_id and center_lat and center_lon:
                 self._fly_to(center_lat, center_lon, 20)
                 QTimer.singleShot(2500, lambda: self._open_building_popup_immediate(
                     focus_building_id, center_lat, center_lon))
 
         except Exception as e:
-            logger.error(f"Error injecting map data: {e}", exc_info=True)
+            logger.error(f"Error injecting buildings: {e}", exc_info=True)
+
+    def _on_layers_ready(self, data):
+        """Inject landmarks and streets into the already-visible map."""
+        try:
+            landmarks_json = data.get('landmarks_json')
+            if landmarks_json and self.web_view:
+                js_lm = f"if(typeof updateLandmarksOnMap==='function')updateLandmarksOnMap({landmarks_json});"
+                self.web_view.page().runJavaScript(js_lm)
+
+            streets_json = data.get('streets_json')
+            if streets_json and self.web_view:
+                js_st = f"if(typeof updateStreetsOnMap==='function')updateStreetsOnMap({streets_json});"
+                self.web_view.page().runJavaScript(js_st)
+        except Exception as e:
+            logger.error(f"Error injecting layers: {e}", exc_info=True)
 
     def _open_building_popup_immediate(self, building_id: str, lat: float, lon: float):
         """Open popup for focused building when map loads."""

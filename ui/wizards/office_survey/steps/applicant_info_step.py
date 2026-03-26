@@ -28,6 +28,7 @@ from ui.components.rtl_combo import RtlCombo
 from ui.style_manager import StyleManager
 from services.display_mappings import get_gender_options, get_nationality_options
 from services.translation_manager import tr
+from ui.components.toast import Toast
 from utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -596,6 +597,7 @@ class ApplicantInfoStep(BaseStep):
                     logger.info(f"ID photo uploaded: {os.path.basename(fp)}")
                 except Exception as e:
                     logger.error(f"Failed to upload ID photo {fp}: {e}")
+                    Toast.show_toast(self, "تعذر تحميل بيانات مقدم الطلب", Toast.ERROR)
             self.context.update_data("uploaded_id_photos", list(already_uploaded))
 
         # 7. Cache contact person locally for draft resume
@@ -611,6 +613,7 @@ class ApplicantInfoStep(BaseStep):
                 logger.info(f"intervieweeName saved: {interviewee_name}")
         except Exception as e:
             logger.warning(f"Could not save interviewee name: {e}")
+            Toast.show_toast(self, "تعذر تحميل بيانات مقدم الطلب", Toast.ERROR)
 
         return result
 
@@ -625,6 +628,7 @@ class ApplicantInfoStep(BaseStep):
                 logger.debug(f"Contact person cached locally for survey {survey_id}")
         except Exception as e:
             logger.warning(f"Failed to cache contact person locally: {e}")
+            Toast.show_toast(self, "تعذر تحميل بيانات مقدم الطلب", Toast.ERROR)
 
     def collect_data(self) -> dict:
         fn  = self.first_name.text().strip()

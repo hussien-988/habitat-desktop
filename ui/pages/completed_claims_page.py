@@ -25,6 +25,7 @@ from ..style_manager import StyleManager
 from services.translation_manager import tr
 from services.display_mappings import get_source_display
 from services.api_worker import ApiWorker
+from ..components.toast import Toast
 
 logger = logging.getLogger(__name__)
 
@@ -268,6 +269,7 @@ class CompletedClaimsPage(QWidget):
     def _on_claims_load_error(self, error_msg):
         """Handle claims loading error."""
         self._spinner.hide_loading()
+        Toast.show_toast(self, "تعذر تحميل المطالبات المكتملة", Toast.ERROR)
         logger.warning(f"Error loading claims: {error_msg}")
         self.claims_data = []
         self._apply_local_filter()

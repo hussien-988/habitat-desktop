@@ -1012,6 +1012,7 @@ class AddBuildingPage(QWidget):
 
     def _on_building_documents_error(self, error_msg):
         """Callback: document fetch failed."""
+        Toast.show_toast(self, "تعذر تحميل المباني", Toast.ERROR)
         logger.warning(f"Failed to load building documents: {error_msg}")
         self._show_no_docs()
 
@@ -1485,6 +1486,7 @@ class AddBuildingPage(QWidget):
 
     def _on_neighborhoods_geojson_error(self, error_msg):
         """Callback: neighborhoods fetch failed, open dialog with empty GeoJSON."""
+        Toast.show_toast(self, "تعذر تحميل المباني", Toast.ERROR)
         logger.warning(f"Failed to load neighborhoods for map: {error_msg}")
         self._open_map_picker_dialog('{"type":"FeatureCollection","features":[]}')
 
@@ -2758,6 +2760,7 @@ class BuildingsListPage(QWidget):
         if result.success:
             all_buildings = result.data
         else:
+            Toast.show_toast(self, "تعذر تحميل المباني", Toast.ERROR)
             logger.error(f"Failed to load buildings: {result.message}")
             all_buildings = []
 
@@ -3106,6 +3109,7 @@ class BuildingsListPage(QWidget):
 
     def _on_neighborhoods_for_filter_error(self, error_msg):
         """Callback: neighborhoods fetch failed, use fallback."""
+        Toast.show_toast(self, "تعذر تحميل المباني", Toast.ERROR)
         logger.warning(f"Could not load neighborhoods for filter: {error_msg}")
         self._neighborhoods_api_cache = self._fallback_neighborhoods_from_buildings()
         # Re-trigger the filter menu with fallback data

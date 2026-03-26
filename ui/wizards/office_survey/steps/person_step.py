@@ -25,6 +25,7 @@ from ui.wizards.framework import BaseStep, StepValidationResult
 from ui.wizards.office_survey.survey_context import SurveyContext
 from ui.wizards.office_survey.dialogs.person_dialog import PersonDialog
 from services.api_client import get_api_client
+from ui.components.toast import Toast
 from utils.logger import get_logger
 from ui.error_handler import ErrorHandler
 from ui.style_manager import StyleManager
@@ -493,7 +494,7 @@ class PersonStep(BaseStep):
 
         except Exception as e:
             logger.error(f"Failed to fetch persons from API: {e}")
-            # Don't block the UI, just log the error
+            Toast.show_toast(self, "تعذر تحميل بيانات الأشخاص", Toast.ERROR)
 
     def get_step_title(self) -> str:
         """Get step title."""

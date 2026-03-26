@@ -228,21 +228,22 @@ class BaseMapDialog(QDialog):
         self._viewport_worker = None  # Background thread for viewport loading
         self._auth_token = None # Store auth token for API calls (set by subclass)
 
-        # Initialize viewport loader if enabled (with cache + spatial sampling)
         if self.enable_viewport_loading:
-            # Get application-wide cache service (Singleton)
-            # NOTE: BuildingCacheService disabled for now - Database.get_instance() not available
-            # TODO: Pass db instance from parent to enable caching
             building_cache = None
+            try:
+                from services.building_cache_service import BuildingCacheService
+                building_cache = BuildingCacheService.get_instance()
+            except Exception:
+                building_cache = None
 
             self._viewport_loader = ViewportMapLoader(
                 cache_enabled=True,
                 cache_max_size=50,
                 cache_max_age_minutes=10,
-                building_cache_service=building_cache,  # Disabled - needs db instance
-                use_spatial_sampling=True  # Grid-based sampling
+                building_cache_service=building_cache,
+                use_spatial_sampling=True
             )
-        logger.info("Viewport loading enabled (cache disabled - needs db instance)")
+            logger.info(f"Viewport loading enabled (cache={'active' if building_cache else 'disabled'})")
 
         # Get auth token if not provided
         if not self._auth_token and parent:
@@ -803,6 +804,12 @@ class BaseMapDialog(QDialog):
         for b in buildings:
             if b.building_id:
                 self._viewport_buildings_cache[b.building_id] = b
+        if hasattr(self, '_buildings_cache') and isinstance(self._buildings_cache, list) and not self._buildings_cache:
+            self._buildings_cache = buildings
+        if self.web_view:
+            self.web_view.page().runJavaScript(
+                "var o=document.getElementById('loadingOverlay');if(o)o.remove();"
+            )
 
     def _on_viewport_geojson_ready(self, geojson):
         """Update map with GeoJSON from viewport worker."""

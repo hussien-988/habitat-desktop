@@ -23,6 +23,7 @@ from ui.design_system import Colors
 from ui.style_manager import StyleManager
 from ui.font_utils import FontManager, create_font
 from ui.components.icon import Icon
+from ui.components.toast import Toast
 from utils.logger import get_logger
 from services.api_client import get_api_client
 from services.api_worker import ApiWorker
@@ -482,6 +483,7 @@ class ReviewStep(BaseStep):
                 auth_token = getattr(main_window.current_user, '_api_token', None)
         except Exception as e:
             logger.warning(f"Could not get auth token: {e}")
+            Toast.show_toast(self, "تعذر تحميل بيانات المراجعة", Toast.ERROR)
 
         building = self.context.building
         if building:
@@ -1138,6 +1140,7 @@ class ReviewStep(BaseStep):
                             survey_id, household_id, person_id, updated_data)
                     else:
                         logger.warning(f"Missing survey_id or household_id for person {person_id}")
+                        Toast.show_toast(self, "تعذر تحميل بيانات المراجعة", Toast.ERROR)
                     logger.info(f"Person {person_id} updated via API from review step")
 
                     relation_id = updated_data.get('_relation_id') or person.get('_relation_id')
@@ -1147,6 +1150,7 @@ class ReviewStep(BaseStep):
                             logger.info(f"Relation {relation_id} updated via API")
                         except Exception as e:
                             logger.warning(f"Failed to update relation {relation_id}: {e}")
+                            Toast.show_toast(self, "تعذر تحميل بيانات المراجعة", Toast.ERROR)
                 except Exception as e:
                     from services.error_mapper import is_duplicate_nid_error, build_duplicate_person_message
                     if is_duplicate_nid_error(e):
@@ -1330,7 +1334,8 @@ class ReviewStep(BaseStep):
         self._review_evidence_worker = ApiWorker(_do_fetch)
         self._review_evidence_worker.finished.connect(_on_fetched)
         self._review_evidence_worker.error.connect(
-            lambda msg: logger.warning(f"Failed to fetch evidence count: {msg}")
+            lambda msg: (logger.warning(f"Failed to fetch evidence count: {msg}"),
+                         Toast.show_toast(self, "تعذر تحميل بيانات المراجعة", Toast.ERROR))
         )
         self._review_evidence_worker.start()
 
@@ -1395,8 +1400,9 @@ class ReviewStep(BaseStep):
             name = " ".join(p for p in parts if p) or a.get("full_name")
             if name:
                 self._api_service.save_draft_to_backend(survey_id, {"interviewee_name": name})
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning(f"Could not save interviewee name: {e}")
+            Toast.show_toast(self, "تعذر تحميل بيانات المراجعة", Toast.ERROR)
 
         # Step 1: process-claims if not already done in OccupancyClaimsStep
         if not (hasattr(self.context, 'finalize_response') and self.context.finalize_response):

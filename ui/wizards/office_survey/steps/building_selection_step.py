@@ -28,6 +28,7 @@ from models.building import Building
 from services.api_client import get_api_client
 from services.api_worker import ApiWorker
 from services.error_mapper import map_exception
+from ui.components.toast import Toast
 from ui.error_handler import ErrorHandler
 from utils.logger import get_logger
 from utils.helpers import build_hierarchical_address
@@ -626,6 +627,7 @@ class BuildingSelectionStep(BaseStep):
                 logger.debug(f"Got auth token from MainWindow.current_user: {bool(auth_token)}")
         except Exception as e:
             logger.warning(f"Could not get auth token from parent: {e}")
+            Toast.show_toast(self, "تعذر تحميل بيانات المبنى", Toast.ERROR)
 
         # Always open in selection mode (not view-only)
         # User can search and select building even if already selected
@@ -688,6 +690,7 @@ class BuildingSelectionStep(BaseStep):
                 auth_token = getattr(main_window.current_user, '_api_token', None)
         except Exception as e:
             logger.warning(f"Could not get auth token: {e}")
+            Toast.show_toast(self, "تعذر تحميل بيانات المبنى", Toast.ERROR)
 
         # If we already have a selected building, open in VIEW-ONLY mode
         if hasattr(self, 'selected_building') and self.selected_building:
@@ -754,7 +757,8 @@ class BuildingSelectionStep(BaseStep):
         self._load_buildings_worker = ApiWorker(_do_load)
         self._load_buildings_worker.finished.connect(self._on_buildings_loaded)
         self._load_buildings_worker.error.connect(
-            lambda msg: logger.error(f"Failed to load buildings: {msg}")
+            lambda msg: (logger.error(f"Failed to load buildings: {msg}"),
+                         Toast.show_toast(self, "تعذر تحميل بيانات المبنى", Toast.ERROR))
         )
         self._load_buildings_worker.start()
 
@@ -764,6 +768,7 @@ class BuildingSelectionStep(BaseStep):
 
         if not result.success:
             logger.error(f"Failed to load buildings: {result.message}")
+            Toast.show_toast(self, "تعذر تحميل بيانات المبنى", Toast.ERROR)
             return
 
         self._populate_buildings_list(result.data)
@@ -818,13 +823,15 @@ class BuildingSelectionStep(BaseStep):
             self.buildings_list.clear()
             if not result.success:
                 logger.error(f"Failed to search buildings: {result.message}")
+                Toast.show_toast(self, "تعذر تحميل بيانات المبنى", Toast.ERROR)
                 return
             self._populate_buildings_list(result.data)
 
         self._search_buildings_worker = ApiWorker(_do_search)
         self._search_buildings_worker.finished.connect(_on_search_done)
         self._search_buildings_worker.error.connect(
-            lambda msg: logger.error(f"Failed to search buildings: {msg}")
+            lambda msg: (logger.error(f"Failed to search buildings: {msg}"),
+                         Toast.show_toast(self, "تعذر تحميل بيانات المبنى", Toast.ERROR))
         )
         self._search_buildings_worker.start()
 
@@ -1128,6 +1135,7 @@ class BuildingSelectionStep(BaseStep):
                 self.context.cleanup_on_building_change(self._survey_api_service)
             except Exception as e:
                 logger.warning(f"Cleanup failed: {e}")
+                Toast.show_toast(self, "تعذر تحميل بيانات المبنى", Toast.ERROR)
             for key in ("survey_id", "survey_data", "survey_building_uuid"):
                 self.context.update_data(key, None)
 
@@ -1191,7 +1199,8 @@ class BuildingSelectionStep(BaseStep):
         self._unit_count_worker = ApiWorker(_do_fetch)
         self._unit_count_worker.finished.connect(_on_units_fetched)
         self._unit_count_worker.error.connect(
-            lambda msg: logger.warning(f"Could not fetch unit counts for building {building_uuid}: {msg}")
+            lambda msg: (logger.warning(f"Could not fetch unit counts for building {building_uuid}: {msg}"),
+                         Toast.show_toast(self, "تعذر تحميل بيانات المبنى", Toast.ERROR))
         )
         self._unit_count_worker.start()
 

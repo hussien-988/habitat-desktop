@@ -27,6 +27,7 @@ from ui.wizards.office_survey.survey_context import SurveyContext
 from app.config import Config
 from services.api_client import get_api_client
 from utils.logger import get_logger
+from ui.components.toast import Toast
 from ui.design_system import Colors
 from ui.components.icon import Icon
 from ui.font_utils import create_font, FontManager
@@ -781,6 +782,7 @@ class HouseholdStep(BaseStep):
                     saved = True
                 except Exception as e:
                     logger.error(f"Failed to update household via API: {e}")
+                    Toast.show_toast(self, "تعذر تحميل بيانات الأسرة", Toast.ERROR)
                     result.add_error("فشل تحديث بيانات الأسرة. يرجى المحاولة مجدداً.")
                     return result
             else:
@@ -798,6 +800,7 @@ class HouseholdStep(BaseStep):
                 saved = True
             except Exception as e:
                 logger.error(f"Failed to create household via API: {e}")
+                Toast.show_toast(self, "تعذر تحميل بيانات الأسرة", Toast.ERROR)
                 result.add_error("فشل حفظ بيانات الأسرة. يرجى المحاولة مجدداً.")
                 return result
 

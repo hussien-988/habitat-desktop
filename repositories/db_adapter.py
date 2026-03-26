@@ -31,7 +31,7 @@ class DatabaseType(Enum):
 @dataclass
 class DatabaseConfig:
     """Database configuration."""
-    db_type: DatabaseType = DatabaseType.POSTGRESQL  # Default to PostgreSQL
+    db_type: DatabaseType = DatabaseType.SQLITE
     # PostgreSQL settings
     pg_host: str = "localhost"
     pg_port: int = 5432
@@ -46,7 +46,7 @@ class DatabaseConfig:
     @classmethod
     def from_env(cls) -> 'DatabaseConfig':
         """Load configuration from environment variables."""
-        db_type_str = os.getenv("TRRCMS_DB_TYPE", "postgresql").lower()
+        db_type_str = os.getenv("TRRCMS_DB_TYPE", "sqlite").lower()
         db_type = DatabaseType.POSTGRESQL if db_type_str == "postgresql" else DatabaseType.SQLITE
 
         return cls(
