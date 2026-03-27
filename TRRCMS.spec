@@ -33,6 +33,7 @@ a = Analysis(
         'PyQt5.QtGui',
         'PyQt5.QtWebEngineWidgets',
         'PyQt5.QtWebChannel',
+        'PyQt5.QtWebEngineCore',
         'PyQt5.QtPrintSupport',
         'psycopg2',
         'reportlab',

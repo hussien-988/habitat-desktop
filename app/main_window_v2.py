@@ -1219,6 +1219,8 @@ class MainWindow(QMainWindow):
                 if result.success and result.data:
                     self.navigate_to(Pages.CASE_DETAILS, result.data)
                     return
+                from ui.components.toast import Toast
+                Toast.show_toast(self, result.message or "فشل تحميل بيانات المسح", Toast.ERROR)
             except Exception as e:
                 logger.warning(f"Survey context fetch failed: {e}")
 
@@ -1233,6 +1235,8 @@ class MainWindow(QMainWindow):
             result = SurveyController(self.db).get_survey_full_context(survey_uuid)
             if not result.success or not result.data:
                 logger.warning(f"Could not load draft context for: {survey_uuid}")
+                from ui.components.toast import Toast
+                Toast.show_toast(self, result.message or "فشل تحميل المسودة", Toast.ERROR)
                 return
 
             from ui.wizards.office_survey.survey_context import SurveyContext

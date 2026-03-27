@@ -213,7 +213,7 @@ class OfficeSurveyWizard(BaseWizard):
         api = get_api_client()
         main_window = self.window()
         if main_window and hasattr(main_window, '_api_token'):
-            api.set_token(main_window._api_token)
+            api.set_access_token(main_window._api_token)
 
         def _do_fetch():
             return api.get_claims_summaries(survey_visit_id=survey_id)

@@ -1941,6 +1941,13 @@ class TRRCMSApiClient:
         logger.info(f"Contact person set: {result.get('id', 'N/A')}")
         return result
 
+    def get_contact_person(self, survey_id: str) -> Optional[Dict[str, Any]]:
+        """Fetch the contact person for a survey."""
+        if not survey_id:
+            return None
+        endpoint = f"/v1/Surveys/{survey_id}/contact-person"
+        return self._request("GET", endpoint)
+
     def get_office_surveys(
         self,
         status: Optional[str] = None,

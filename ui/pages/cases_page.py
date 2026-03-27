@@ -75,16 +75,23 @@ class CasesPage(QWidget):
         self._buildings_cache = {}
         self._clear_content()
 
-        if role in ("data_manager", "admin"):
+        if role == "admin":
             self._tab_bar.setVisible(False)
             self._active_tab = "finalized"
             self._type_filter.setVisible(True)
             self._add_btn.setVisible(False)
+        elif role == "data_manager":
+            self._tab_bar.setVisible(True)
+            self._active_tab = "draft"
+            self._type_filter.setVisible(True)
+            self._add_btn.setVisible(True)
+        elif role == "office_clerk":
+            self._tab_bar.setVisible(True)
+            self._active_tab = "draft"
+            self._type_filter.setVisible(False)
+            self._add_btn.setVisible(True)
         else:
             self._add_btn.setVisible(True)
-
-        if role == "office_clerk":
-            self._type_filter.setVisible(False)
 
     # UI Setup
 
