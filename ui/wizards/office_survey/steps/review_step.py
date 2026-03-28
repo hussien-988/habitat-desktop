@@ -988,7 +988,8 @@ class ReviewStep(BaseStep):
             self.household_content.addWidget(no_data)
             return
 
-        total_size = sum(h.get('size', 0) for h in self.context.households)
+        hh = self.context.households[0] if self.context.households else {}
+        total_size = hh.get('size', 0)
 
         # Get main occupant name (first person in context)
         main_occupant_name = "-"
@@ -1033,12 +1034,9 @@ class ReviewStep(BaseStep):
 
         self.household_content.addWidget(summary_container)
 
-        # --- Aggregate demographics ---
-        demographics = {}
-        for h in self.context.households:
-            for key in ['adult_males', 'adult_females', 'male_children_under18', 'female_children_under18',
-                        'male_elderly_over65', 'female_elderly_over65', 'disabled_males', 'disabled_females']:
-                demographics[key] = demographics.get(key, 0) + h.get(key, 0)
+        demo_keys = ['adult_males', 'adult_females', 'male_children_under18', 'female_children_under18',
+                     'male_elderly_over65', 'female_elderly_over65', 'disabled_males', 'disabled_females']
+        demographics = {key: hh.get(key, 0) for key in demo_keys}
 
         # --- Two cards side by side: Males (right) + Females (left) ---
         male_items = [

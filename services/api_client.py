@@ -285,7 +285,8 @@ class TRRCMSApiClient:
             payload["status"] = status
 
         logger.debug(f"Fetching buildings for map: bbox={payload}")
-        buildings = self._request("POST", "/v1/Buildings/map", json_data=payload)
+        result = self._request("POST", "/v2/buildings/map", json_data=payload)
+        buildings = result.get("items", []) if isinstance(result, dict) else result
         logger.info(f"Fetched {len(buildings)} buildings from API")
 
         return buildings
@@ -309,8 +310,8 @@ class TRRCMSApiClient:
             params["type"] = landmark_type
 
         try:
-            result = self._request("GET", "/v1/Landmarks/map", params=params)
-            landmarks = result if isinstance(result, list) else []
+            result = self._request("GET", "/v2/landmarks/map", params=params)
+            landmarks = result.get("items", []) if isinstance(result, dict) else result
             logger.info(f"Fetched {len(landmarks)} landmarks for map")
             return landmarks
         except Exception as e:
@@ -339,8 +340,8 @@ class TRRCMSApiClient:
             params["type"] = landmark_type
 
         try:
-            result = self._request("GET", "/v1/Landmarks/search", params=params)
-            return result if isinstance(result, list) else []
+            result = self._request("GET", "/v2/landmarks/search", params=params)
+            return result.get("items", []) if isinstance(result, dict) else result
         except Exception as e:
             logger.warning(f"Failed to search landmarks: {e}")
             return []
@@ -372,8 +373,8 @@ class TRRCMSApiClient:
         }
 
         try:
-            result = self._request("GET", "/v1/Streets/map", params=params)
-            streets = result if isinstance(result, list) else []
+            result = self._request("GET", "/v2/streets/map", params=params)
+            streets = result.get("items", []) if isinstance(result, dict) else result
             logger.info(f"Fetched {len(streets)} streets for map")
             return streets
         except Exception as e:
@@ -925,7 +926,8 @@ class TRRCMSApiClient:
         """Get property units for a building via survey-scoped endpoint."""
         if not survey_id:
             raise ValueError("survey_id is required")
-        return self._request("GET", f"/v1/Surveys/{survey_id}/property-units")
+        result = self._request("GET", f"/v2/surveys/{survey_id}/property-units")
+        return result.get("items", []) if isinstance(result, dict) else result
 
     def update_contact_person(self, survey_id: str, person_id: str, person_data: Dict[str, Any]) -> Dict[str, Any]:
         """Update contact person via survey-scoped endpoint."""
@@ -1066,12 +1068,12 @@ class TRRCMSApiClient:
             return []
 
         logger.info(f"Fetching units for building: {building_id}")
-        result = self._request("GET", f"/v1/PropertyUnits/building/{building_id}")
+        result = self._request("GET", f"/v2/property-units/building/{building_id}")
 
-        if isinstance(result, list):
+        if isinstance(result, dict):
+            units = result.get("items", [])
+        elif isinstance(result, list):
             units = result
-        elif isinstance(result, dict):
-            units = result.get("data") or result.get("units") or result.get("items") or []
         else:
             logger.warning(f"Unexpected response format: {type(result)}")
             return []
@@ -1198,16 +1200,16 @@ class TRRCMSApiClient:
             logger.warning(f"Missing survey_id or household_id")
             return []
 
-        endpoint = f"/v1/Surveys/{survey_id}/households/{household_id}/persons"
+        endpoint = f"/v2/surveys/{survey_id}/households/{household_id}/persons"
         logger.info(f"Fetching persons for household: {household_id}")
 
         try:
             result = self._request("GET", endpoint)
 
-            if isinstance(result, list):
+            if isinstance(result, dict):
+                persons = result.get("items", [])
+            elif isinstance(result, list):
                 persons = result
-            elif isinstance(result, dict):
-                persons = result.get("data") or result.get("persons") or result.get("items") or []
             else:
                 logger.warning(f"Unexpected response format: {type(result)}")
                 return []
@@ -1355,6 +1357,15 @@ class TRRCMSApiClient:
         result = self._request("PATCH", f"/v1/Surveys/{survey_id}/relations/{relation_id}", json_data=api_data)
         logger.info(f"Relation {relation_id} updated successfully")
         return result
+
+    def get_unit_relations(self, survey_id: str, unit_id: str) -> List[Dict[str, Any]]:
+        """Get person-property relations for a unit within a survey."""
+        if not survey_id or not unit_id:
+            raise ValueError("survey_id and unit_id are required")
+        result = self._request(
+            "GET", f"/v2/surveys/{survey_id}/property-units/{unit_id}/relations"
+        )
+        return result.get("items", []) if isinstance(result, dict) else result
 
     def upload_relation_document(
         self,
@@ -1669,7 +1680,9 @@ class TRRCMSApiClient:
         params = {}
         if evidence_type:
             params["evidenceType"] = evidence_type
-        result = self._request("GET", f"/v1/Surveys/{survey_id}/evidence", params=params)
+        result = self._request("GET", f"/v2/surveys/{survey_id}/evidence", params=params)
+        if isinstance(result, dict):
+            return result.get("items", [])
         return result if isinstance(result, list) else []
 
     def get_relation_evidences(
@@ -1684,8 +1697,10 @@ class TRRCMSApiClient:
         if evidence_type:
             params["evidenceType"] = evidence_type
         result = self._request(
-            "GET", f"/v1/Surveys/{survey_id}/relations/{relation_id}/evidences", params=params
+            "GET", f"/v2/surveys/{survey_id}/relations/{relation_id}/evidences", params=params
         )
+        if isinstance(result, dict):
+            return result.get("items", [])
         return result if isinstance(result, list) else []
 
     def get_evidence_by_id(self, evidence_id: str) -> Dict[str, Any]:
@@ -1941,6 +1956,13 @@ class TRRCMSApiClient:
         logger.info(f"Contact person set: {result.get('id', 'N/A')}")
         return result
 
+    def get_contact_person(self, survey_id: str) -> Optional[Dict[str, Any]]:
+        """Fetch the contact person for a survey."""
+        if not survey_id:
+            return None
+        endpoint = f"/v1/Surveys/{survey_id}/contact-person"
+        return self._request("GET", endpoint)
+
     def get_office_surveys(
         self,
         status: Optional[str] = None,
@@ -2141,7 +2163,8 @@ class TRRCMSApiClient:
         """
         params = {"swLat": sw_lat, "swLng": sw_lng, "neLat": ne_lat, "neLng": ne_lng}
         logger.info(f"Fetching neighborhoods in viewport: [{sw_lat:.4f},{sw_lng:.4f} - {ne_lat:.4f},{ne_lng:.4f}]")
-        neighborhoods = self._request("GET", "/v1/Neighborhoods/by-bounds", params=params)
+        result = self._request("GET", "/v2/neighborhoods/by-bounds", params=params)
+        neighborhoods = result.get("items", []) if isinstance(result, dict) else result
         logger.info(f"Fetched {len(neighborhoods)} neighborhoods")
         return neighborhoods
 
@@ -2193,7 +2216,8 @@ class TRRCMSApiClient:
             params["communityCode"] = community_code
 
         logger.info(f"Fetching neighborhoods with filters: {params or 'none'}")
-        neighborhoods = self._request("GET", "/v1/Neighborhoods", params=params)
+        result = self._request("GET", "/v2/neighborhoods", params=params)
+        neighborhoods = result.get("items", []) if isinstance(result, dict) else result
         logger.info(f"Fetched {len(neighborhoods)} neighborhoods")
         return neighborhoods
 
@@ -2293,13 +2317,12 @@ class TRRCMSApiClient:
             params["buildingCode"] = building_code
 
         logger.info(f"Fetching claims summaries with filters: {params or 'none'}")
-        result = self._request("GET", "/v1/Claims/summaries", params=params)
+        result = self._request("GET", "/v2/claims/summaries", params=params)
 
-        # Handle both array and paginated response
-        if isinstance(result, list):
+        if isinstance(result, dict):
+            summaries = result.get("items", [])
+        elif isinstance(result, list):
             summaries = result
-        elif isinstance(result, dict):
-            summaries = result.get("items", result.get("data", []))
         else:
             summaries = []
 

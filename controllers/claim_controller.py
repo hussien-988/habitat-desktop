@@ -407,8 +407,19 @@ class ClaimController(BaseController):
                          or claim_dto.get("survey_id"))
             result["survey_id"] = survey_id
 
-            # Evidences — use evidenceIds from claim DTO + get_evidence_by_id()
+            # Relation enrichment — fetch ownershipShare from relation
             relation_id = hint_relation_id or claim_dto.get("sourceRelationId")
+            if relation_id and survey_id and unit_id:
+                try:
+                    relations = self._api.get_unit_relations(survey_id, unit_id)
+                    for rel in relations:
+                        if rel.get("id") == relation_id:
+                            result["claim"]["ownershipShare"] = rel.get("ownershipShare")
+                            break
+                except Exception as e:
+                    logger.warning(f"Failed to fetch relation for ownershipShare: {e}")
+
+            # Evidences — use evidenceIds from claim DTO + get_evidence_by_id()
             evidence_ids = claim_dto.get("evidenceIds") or []
             if evidence_ids:
                 evidences = []

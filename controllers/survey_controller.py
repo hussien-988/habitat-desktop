@@ -102,11 +102,19 @@ class SurveyController:
                 except Exception as e:
                     logger.warning(f"Failed to fetch unit {unit_id}: {e}")
 
-            # 3) Households (bundled in detail — no extra call)
-            households = [
+            # 3) Households (bundled in detail)
+            all_households = [
                 ClaimController._map_household_dto(h)
                 for h in (detail.get("households") or [])
             ]
+            # Keep only the survey's own household
+            survey_hh_id = detail.get("householdId")
+            if survey_hh_id and len(all_households) > 1:
+                households = [h for h in all_households if h.get("household_id") == survey_hh_id]
+                if not households:
+                    households = all_households[:1]
+            else:
+                households = all_households
 
             # 4) Persons + relations from survey detail
             persons = []
@@ -153,67 +161,53 @@ class SurveyController:
             claim_data = self._map_survey_to_claim_data(detail, persons, claim_dto)
 
             # 7) Build applicant
-            applicant = None
             contact_person_id = detail.get("contactPersonId")
-            contact_person_dto = person_map.get(contact_person_id) if contact_person_id else None
+            contact_person_dto = None
+            try:
+                contact_person_dto = api.get_contact_person(survey_id)
+            except Exception as e:
+                logger.warning(f"Contact person not available: {e}")
 
+            applicant = None
             if contact_person_dto:
                 applicant = {
-                    "first_name_ar": contact_person_dto.get("firstNameArabic", ""),
-                    "father_name_ar": contact_person_dto.get("fatherNameArabic", ""),
-                    "last_name_ar": contact_person_dto.get("familyNameArabic", ""),
-                    "mother_name_ar": contact_person_dto.get("motherNameArabic", ""),
-                    "full_name": contact_person_dto.get("fullNameArabic", ""),
-                    "national_id": contact_person_dto.get("nationalId", ""),
-                    "phone": contact_person_dto.get("mobileNumber", ""),
-                    "email": contact_person_dto.get("email", ""),
-                    "landline": contact_person_dto.get("phoneNumber", ""),
+                    "first_name_ar": contact_person_dto.get("firstNameArabic") or "",
+                    "father_name_ar": contact_person_dto.get("fatherNameArabic") or "",
+                    "last_name_ar": contact_person_dto.get("familyNameArabic") or "",
+                    "mother_name_ar": contact_person_dto.get("motherNameArabic") or "",
+                    "full_name": contact_person_dto.get("fullNameArabic") or "",
+                    "national_id": contact_person_dto.get("nationalId") or "",
+                    "phone": contact_person_dto.get("mobileNumber") or "",
+                    "email": contact_person_dto.get("email") or "",
+                    "landline": contact_person_dto.get("phoneNumber") or "",
                     "gender": contact_person_dto.get("gender"),
                     "nationality": contact_person_dto.get("nationality"),
+                    "birth_date": contact_person_dto.get("dateOfBirth") or "",
                 }
-            else:
-                full_name = detail.get("contactPersonFullName") or detail.get("intervieweeName") or ""
-                if full_name:
-                    name_parts = full_name.split()
-                    applicant = {
-                        "first_name_ar": name_parts[0] if len(name_parts) > 0 else "",
-                        "father_name_ar": name_parts[1] if len(name_parts) > 1 else "",
-                        "last_name_ar": " ".join(name_parts[2:]) if len(name_parts) > 2 else "",
-                        "mother_name_ar": "",
-                        "full_name": full_name,
-                        "national_id": "", "phone": "", "email": "",
-                    }
-                elif persons:
-                    p = persons[0]
-                    applicant = {
-                        "first_name_ar": p.get("first_name", ""),
-                        "father_name_ar": p.get("father_name", ""),
-                        "last_name_ar": p.get("last_name", ""),
-                        "mother_name_ar": p.get("mother_name", ""),
-                        "full_name": p.get("full_name", ""),
-                        "national_id": p.get("national_id", ""),
-                        "phone": "", "email": "",
-                    }
+                # Fetch identification photos
+                try:
+                    evidences = api.get_survey_evidences(survey_id, evidence_type="identification")
+                    if evidences:
+                        from utils.helpers import download_evidence_file
+                        photo_paths = []
+                        for ev in evidences:
+                            local_path = download_evidence_file(
+                                ev.get("id", ""), ev.get("fileName", "photo")
+                            )
+                            if local_path:
+                                photo_paths.append(local_path)
+                        applicant["id_photo_paths"] = photo_paths
+                except Exception as e:
+                    logger.warning(f"Could not fetch ID photos: {e}")
+
+            resolved_cp_id = contact_person_id or (
+                contact_person_dto.get("id", "") if contact_person_dto else ""
+            )
 
             survey_status = detail.get("status", 1)
             status_str = "finalized" if survey_status == 3 else "draft"
 
             resume_step = self._determine_resume_step(detail, households, persons)
-
-            # Fallback: if contact_person_id not in API, check local cache
-            resolved_cp_id = contact_person_id or ""
-            if not resolved_cp_id:
-                try:
-                    from repositories.survey_repository import SurveyRepository
-                    repo = SurveyRepository(self.db)
-                    cached_cp_id, cached_applicant = repo.get_contact_person_cache(survey_id)
-                    if cached_cp_id:
-                        resolved_cp_id = cached_cp_id
-                        logger.info(f"contact_person_id restored from local cache: {cached_cp_id}")
-                    if cached_applicant and not applicant:
-                        applicant = cached_applicant
-                except Exception as cache_err:
-                    logger.warning(f"Local cache fallback failed: {cache_err}")
 
             context = {
                 "survey_id": detail.get("id", ""),

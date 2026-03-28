@@ -565,7 +565,7 @@ class UnitSelectionStep(BaseStep):
         unit_display_num = unit.unit_number or unit.apartment_number or "?"
 
         # Check if this is the selected unit
-        is_selected = bool(self.context.unit and self.context.unit.unit_id == unit.unit_id)
+        is_selected = bool(self.context.unit and self.context.unit.unit_uuid == unit.unit_uuid)
         card = QFrame()
         card.setObjectName("unitCard")
         card.setFixedSize(1225, 138)
@@ -609,7 +609,7 @@ class UnitSelectionStep(BaseStep):
 
         card.setCursor(Qt.PointingHandCursor)
         card.mousePressEvent = lambda _: self._on_unit_card_clicked(unit)
-        card.setProperty("unit_id", unit.unit_id)
+        card.setProperty("unit_id", unit.unit_uuid)
         card.setLayoutDirection(Qt.RightToLeft)
         main_layout = QVBoxLayout(card)
         main_layout.setSpacing(8)  # Gap between top and bottom: 8px
@@ -724,7 +724,7 @@ class UnitSelectionStep(BaseStep):
 
     def _refresh_unit_card_styles(self):
         """Update selection highlight and checkmark on existing cards without API re-fetch."""
-        selected_id = self.context.unit.unit_id if self.context.unit else None
+        selected_id = self.context.unit.unit_uuid if self.context.unit else None
         for i in range(self.units_layout.count()):
             item = self.units_layout.itemAt(i)
             if not item:
@@ -768,7 +768,7 @@ class UnitSelectionStep(BaseStep):
     def _on_unit_card_clicked(self, unit):
         """Handle unit card click with toggle functionality."""
         # Toggle functionality: if clicking on already selected unit, deselect it
-        if self.context.unit and self.context.unit.unit_id == unit.unit_id:
+        if self.context.unit and self.context.unit.unit_uuid == unit.unit_uuid:
             # Deselect the unit
             self.context.unit = None
             self.context.is_new_unit = False

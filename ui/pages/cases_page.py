@@ -24,7 +24,7 @@ from ..components.underline_tab_bar import UnderlineTabBar
 from ..font_utils import create_font, FontManager
 from ..style_manager import StyleManager
 from services.translation_manager import tr
-from services.display_mappings import get_survey_type_display
+from services.display_mappings import get_survey_type_display, get_survey_type_options
 from services.api_worker import ApiWorker
 from ..components.toast import Toast
 
@@ -75,16 +75,23 @@ class CasesPage(QWidget):
         self._buildings_cache = {}
         self._clear_content()
 
-        if role in ("data_manager", "admin"):
+        if role == "admin":
             self._tab_bar.setVisible(False)
             self._active_tab = "finalized"
             self._type_filter.setVisible(True)
             self._add_btn.setVisible(False)
+        elif role == "data_manager":
+            self._tab_bar.setVisible(True)
+            self._active_tab = "draft"
+            self._type_filter.setVisible(True)
+            self._add_btn.setVisible(True)
+        elif role == "office_clerk":
+            self._tab_bar.setVisible(True)
+            self._active_tab = "draft"
+            self._type_filter.setVisible(False)
+            self._add_btn.setVisible(True)
         else:
             self._add_btn.setVisible(True)
-
-        if role == "office_clerk":
-            self._type_filter.setVisible(False)
 
     # UI Setup
 
@@ -194,8 +201,8 @@ class CasesPage(QWidget):
         self._type_filter.setFixedWidth(170)
         self._type_filter.setStyleSheet(form_style)
         self._type_filter.addItem("الكل", None)
-        self._type_filter.addItem(get_survey_type_display(1), 1)
-        self._type_filter.addItem(get_survey_type_display(2), 2)
+        for code, label in get_survey_type_options():
+            self._type_filter.addItem(label, code)
         self._type_filter.currentIndexChanged.connect(self._on_type_changed)
         layout.addWidget(self._type_filter)
 

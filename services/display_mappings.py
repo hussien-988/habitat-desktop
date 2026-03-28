@@ -235,14 +235,19 @@ def get_claim_status_display(status_key) -> str:
     return _vocab_label("ClaimStatus", status_key, _str_fallback)
 
 def get_survey_status_display(status_key) -> str:
-    _int_map = {1: "مسودة", 3: "نهائي"}
-    if isinstance(status_key, int) and status_key in _int_map:
-        return _int_map[status_key]
-    _str_map = {"draft": "مسودة", "finalized": "نهائي"}
-    return _str_map.get(str(status_key).lower(), str(status_key))
+    return _vocab_label("SurveyStatus", status_key, {})
 
 def get_survey_type_display(type_key) -> str:
-    _int_map = {1: "مسح ميداني", 2: "مسح مكتبي"}
-    if isinstance(type_key, int) and type_key in _int_map:
-        return _int_map[type_key]
-    return str(type_key)
+    return _vocab_label("SurveyType", type_key, {})
+
+def get_survey_type_options():
+    return _vocab_options("SurveyType")
+
+def get_survey_status_options():
+    return _vocab_options("SurveyStatus")
+
+def get_document_type_options():
+    return _vocab_options("DocumentType")
+
+def get_evidence_status_options():
+    return _vocab_options("EvidenceStatus")

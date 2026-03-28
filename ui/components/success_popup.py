@@ -153,29 +153,23 @@ class SuccessPopup(QDialog):
             number = claim.get("claimNumber", "")
 
             row = QFrame()
-            row.setStyleSheet("""
-                QFrame {
-                    background-color: #F8FAFC;
-                    border: 1px solid #E2E8F0;
-                    border-radius: 8px;
-                }
-            """)
+            row.setStyleSheet("QFrame { background: transparent; border: none; }")
             row_layout = QVBoxLayout(row)
-            row_layout.setContentsMargins(12, 6, 12, 6)
+            row_layout.setContentsMargins(0, 4, 0, 4)
             row_layout.setSpacing(2)
 
             if name:
                 name_lbl = QLabel(name)
-                name_lbl.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
-                name_lbl.setFont(create_font(size=FontManager.SIZE_BODY, weight=FontManager.WEIGHT_BOLD))
+                name_lbl.setAlignment(Qt.AlignCenter)
+                name_lbl.setFont(create_font(size=13, weight=FontManager.WEIGHT_BOLD))
                 name_lbl.setStyleSheet(f"color: {Colors.TEXT_PRIMARY}; background: transparent; border: none;")
                 row_layout.addWidget(name_lbl)
 
             if number:
                 num_lbl = QLabel(number)
-                num_lbl.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
-                num_lbl.setFont(create_font(size=FontManager.SIZE_SMALL))
-                num_lbl.setStyleSheet(f"color: {Colors.TEXT_SECONDARY}; background: transparent; border: none;")
+                num_lbl.setAlignment(Qt.AlignCenter)
+                num_lbl.setFont(create_font(size=11))
+                num_lbl.setStyleSheet(f"color: {Colors.PRIMARY_BLUE}; background: transparent; border: none;")
                 row_layout.addWidget(num_lbl)
 
             v_layout.addWidget(row)

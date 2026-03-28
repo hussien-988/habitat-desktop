@@ -730,7 +730,7 @@ class ApplicantInfoStep(BaseStep):
                 break
 
         self.national_id.setText(a.get("national_id", ""))
-        phone_val = a.get("phone", "")
+        phone_val = a.get("phone") or ""
         if phone_val.startswith("09"):
             phone_val = phone_val[2:]
         self.phone.setText(phone_val)

@@ -205,6 +205,27 @@ AR_TRANSLATIONS = {
     "mapping.import_status.failed": "فشل",
     "mapping.import_status.partial": "جزئي",
 
+    # Document Types
+    "mapping.document_type.tapu_green": "صك ملكية (طابو أخضر)",
+    "mapping.document_type.property_reg": "بيان قيد عقاري",
+    "mapping.document_type.temp_reg": "بيان قيد مؤقت",
+    "mapping.document_type.court_ruling": "حكم قضائي",
+    "mapping.document_type.power_attorney": "وكالة خاصة",
+    "mapping.document_type.sale_notarized": "عقد بيع موثق",
+    "mapping.document_type.sale_informal": "عقد بيع غير موثق",
+    "mapping.document_type.rent_registered": "عقد إيجار مسجل",
+    "mapping.document_type.rent_informal": "عقد إيجار غير مسجل",
+    "mapping.document_type.utility_bill": "فاتورة مرافق",
+    "mapping.document_type.mukhtar_cert": "شهادة المختار",
+    "mapping.document_type.inheritance": "حصر إرث",
+    "mapping.document_type.witness_statement": "إفادة شاهد",
+    "mapping.document_type.claimant_statement": "تصريح المطالب",
+
+    # Evidence Status
+    "mapping.evidence_status.pending": "معلق",
+    "mapping.evidence_status.verified": "تم التحقق",
+    "mapping.evidence_status.rejected": "مرفوض",
+
     # Source Types
     "mapping.source.field_survey": "مسح ميداني",
     "mapping.source.direct_request": "طلب مباشر",

@@ -82,89 +82,109 @@ class _LayersWorker(QThread):
 
     def run(self):
         try:
+            from concurrent.futures import ThreadPoolExecutor
+
             result = {}
 
-            result['neighborhoods_geojson'] = None
-            try:
-                from services.api_client import get_api_client
-                api = get_api_client()
-                if api and self._auth_token:
-                    from app.config import Config
-                    neighborhoods = api.get_neighborhoods_by_bounds(
-                        sw_lat=Config.MAP_BOUNDS_MIN_LAT,
-                        sw_lng=Config.MAP_BOUNDS_MIN_LNG,
-                        ne_lat=Config.MAP_BOUNDS_MAX_LAT,
-                        ne_lng=Config.MAP_BOUNDS_MAX_LNG,
-                    )
-                    if neighborhoods:
-                        import re
-                        features = []
-                        for n in neighborhoods:
-                            wkt = n.get('boundaries') or n.get('boundary') or n.get('boundaryWkt') or ''
-                            coords = re.findall(r'([-\d.]+)\s+([-\d.]+)', wkt)
-                            if coords:
-                                lngs = [float(c[0]) for c in coords]
-                                lats = [float(c[1]) for c in coords]
-                                center = (sum(lats)/len(lats), sum(lngs)/len(lngs))
-                                features.append({
-                                    "type": "Feature",
-                                    "properties": {
-                                        "code": n.get('neighborhoodCode') or n.get('code', ''),
-                                        "center_lat": center[0], "center_lng": center[1],
-                                        "name_ar": n.get('nameArabic') or n.get('name_ar', '')
-                                    },
-                                    "geometry": None
-                                })
-                        result['neighborhoods_geojson'] = json.dumps(
-                            {"type": "FeatureCollection", "features": features}
+            def _load_neighborhoods():
+                nh_geojson = None
+                bd_geojson = None
+                try:
+                    from services.api_client import get_api_client
+                    api = get_api_client()
+                    if api and self._auth_token:
+                        from app.config import Config
+                        neighborhoods = api.get_neighborhoods_by_bounds(
+                            sw_lat=Config.MAP_BOUNDS_MIN_LAT,
+                            sw_lng=Config.MAP_BOUNDS_MIN_LNG,
+                            ne_lat=Config.MAP_BOUNDS_MAX_LAT,
+                            ne_lng=Config.MAP_BOUNDS_MAX_LNG,
                         )
-            except Exception as e:
-                logger.warning(f"Could not load neighborhoods: {e}")
+                        if neighborhoods:
+                            import re
+                            features = []
+                            for n in neighborhoods:
+                                wkt = n.get('boundaries') or n.get('boundary') or n.get('boundaryWkt') or ''
+                                coords = re.findall(r'([-\d.]+)\s+([-\d.]+)', wkt)
+                                if coords:
+                                    lngs = [float(c[0]) for c in coords]
+                                    lats = [float(c[1]) for c in coords]
+                                    center = (sum(lats)/len(lats), sum(lngs)/len(lngs))
+                                    features.append({
+                                        "type": "Feature",
+                                        "properties": {
+                                            "code": n.get('neighborhoodCode') or n.get('code', ''),
+                                            "center_lat": center[0], "center_lng": center[1],
+                                            "name_ar": n.get('nameArabic') or n.get('name_ar', '')
+                                        },
+                                        "geometry": None
+                                    })
+                            nh_geojson = json.dumps(
+                                {"type": "FeatureCollection", "features": features}
+                            )
+                except Exception as e:
+                    logger.warning(f"Could not load neighborhoods: {e}")
 
-            result['boundaries_geojson'] = None
-            try:
-                from services import boundary_service
-                if boundary_service.is_available('neighbourhoods'):
-                    raw = boundary_service.get('neighbourhoods')
-                    if raw:
-                        boundary_data = json.loads(raw)
-                        boundary_data['features'] = [
-                            f for f in boundary_data['features']
-                            if f.get('properties', {}).get('ADM1_PCODE') == 'SY02'
-                        ]
-                        result['boundaries_geojson'] = json.dumps(boundary_data, ensure_ascii=False)
-            except Exception as e:
-                logger.warning(f"Failed to load boundaries: {e}")
+                try:
+                    from services import boundary_service
+                    if boundary_service.is_available('neighbourhoods'):
+                        raw = boundary_service.get('neighbourhoods')
+                        if raw:
+                            boundary_data = json.loads(raw)
+                            boundary_data['features'] = [
+                                f for f in boundary_data['features']
+                                if f.get('properties', {}).get('ADM1_PCODE') == 'SY02'
+                            ]
+                            bd_geojson = json.dumps(boundary_data, ensure_ascii=False)
+                except Exception as e:
+                    logger.warning(f"Failed to load boundaries: {e}")
 
-            result['landmarks_json'] = None
-            result['streets_json'] = None
-            try:
-                from services.api_client import get_api_client
-                from services.map_utils import normalize_landmark, normalize_street
-                from ui.constants.map_constants import MapConstants
-                api = get_api_client()
-                sw_lat = MapConstants.DEFAULT_CENTER_LAT - 0.5
-                sw_lng = MapConstants.DEFAULT_CENTER_LON - 0.5
-                ne_lat = MapConstants.DEFAULT_CENTER_LAT + 0.5
-                ne_lng = MapConstants.DEFAULT_CENTER_LON + 0.5
+                return nh_geojson, bd_geojson
 
-                landmarks = api.get_landmarks_for_map(
-                    south_west_lat=sw_lat, south_west_lng=sw_lng,
-                    north_east_lat=ne_lat, north_east_lng=ne_lng
-                )
-                if landmarks and isinstance(landmarks, list):
-                    landmarks = [normalize_landmark(lm) for lm in landmarks]
-                    result['landmarks_json'] = json.dumps(landmarks, ensure_ascii=False)
+            def _load_landmarks_streets():
+                lm_json = None
+                st_json = None
+                try:
+                    from services.api_client import get_api_client
+                    from services.map_utils import normalize_landmark, normalize_street
+                    from ui.constants.map_constants import MapConstants
+                    api = get_api_client()
+                    sw_lat = MapConstants.DEFAULT_CENTER_LAT - 0.5
+                    sw_lng = MapConstants.DEFAULT_CENTER_LON - 0.5
+                    ne_lat = MapConstants.DEFAULT_CENTER_LAT + 0.5
+                    ne_lng = MapConstants.DEFAULT_CENTER_LON + 0.5
 
-                streets = api.get_streets_for_map(
-                    south_west_lat=sw_lat, south_west_lng=sw_lng,
-                    north_east_lat=ne_lat, north_east_lng=ne_lng
-                )
-                if streets and isinstance(streets, list):
-                    streets = [normalize_street(s) for s in streets]
-                    result['streets_json'] = json.dumps(streets, ensure_ascii=False)
-            except Exception as e:
-                logger.warning(f"Failed to load landmarks/streets: {e}")
+                    landmarks = api.get_landmarks_for_map(
+                        south_west_lat=sw_lat, south_west_lng=sw_lng,
+                        north_east_lat=ne_lat, north_east_lng=ne_lng
+                    )
+                    if landmarks and isinstance(landmarks, list):
+                        landmarks = [normalize_landmark(lm) for lm in landmarks]
+                        lm_json = json.dumps(landmarks, ensure_ascii=False)
+
+                    streets = api.get_streets_for_map(
+                        south_west_lat=sw_lat, south_west_lng=sw_lng,
+                        north_east_lat=ne_lat, north_east_lng=ne_lng
+                    )
+                    if streets and isinstance(streets, list):
+                        streets = [normalize_street(s) for s in streets]
+                        st_json = json.dumps(streets, ensure_ascii=False)
+                except Exception as e:
+                    logger.warning(f"Failed to load landmarks/streets: {e}")
+
+                return lm_json, st_json
+
+            with ThreadPoolExecutor(max_workers=2) as executor:
+                f_nh = executor.submit(_load_neighborhoods)
+                f_ls = executor.submit(_load_landmarks_streets)
+
+                nh_geojson, bd_geojson = f_nh.result()
+                lm_json, st_json = f_ls.result()
+
+            result['neighborhoods_geojson'] = nh_geojson
+            result['boundaries_geojson'] = bd_geojson
+            result['landmarks_json'] = lm_json
+            result['streets_json'] = st_json
 
             self.finished.emit(result)
         except Exception as e:
@@ -442,15 +462,14 @@ class BuildingMapDialog(BaseMapDialog):
             """
             QTimer.singleShot(300, lambda: self.web_view.page().runJavaScript(js_overlay))
 
-        if self._is_view_only and self._selected_building_id:
-            self._buildings_worker = _BuildingsWorker(
-                self._auth_token, self._selected_building_id,
-                self._is_view_only, self._fallback_building,
-                center_lat, center_lon
-            )
-            self._buildings_worker.finished.connect(self._on_buildings_ready)
-            self._buildings_worker.error.connect(self._on_map_data_error)
-            self._buildings_worker.start()
+        self._buildings_worker = _BuildingsWorker(
+            self._auth_token, self._selected_building_id,
+            self._is_view_only, self._fallback_building,
+            center_lat, center_lon
+        )
+        self._buildings_worker.finished.connect(self._on_buildings_ready)
+        self._buildings_worker.error.connect(self._on_map_data_error)
+        self._buildings_worker.start()
 
         self._layers_worker = _LayersWorker(self._auth_token)
         self._layers_worker.finished.connect(self._on_layers_ready)
@@ -544,6 +563,18 @@ class BuildingMapDialog(BaseMapDialog):
             """
             if self.web_view:
                 self.web_view.page().runJavaScript(js_inject)
+
+                update_count_js = """
+                (function() {
+                    if (typeof buildingsLayer !== 'undefined' && buildingsLayer) {
+                        var count = buildingsLayer.getLayers().length;
+                        if (typeof window.updateBuildingCount === 'function') {
+                            window.updateBuildingCount(count);
+                        }
+                    }
+                })();
+                """
+                QTimer.singleShot(500, lambda: self.web_view.page().runJavaScript(update_count_js))
 
             if self._is_view_only and focus_building_id and center_lat and center_lon:
                 self._fly_to(center_lat, center_lon, 20)
