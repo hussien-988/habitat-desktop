@@ -230,9 +230,6 @@ class IDBadgeWidget(QWidget):
 
     language_change_requested = pyqtSignal()
     sync_requested = pyqtSignal()
-    password_change_requested = pyqtSignal()
-    security_settings_requested = pyqtSignal()
-    data_management_requested = pyqtSignal()
     import_requested = pyqtSignal()
     logout_requested = pyqtSignal()
 
@@ -366,17 +363,13 @@ class IDBadgeWidget(QWidget):
 
         # Menu items: (icon_name, translation_key, signal)
         self._menu_items_config = [
-            ("fluent", "navbar.menu.sync_data",         self.sync_requested),
-            ("safe",   "navbar.menu.security_policies", self.security_settings_requested),
-            ("data",   "navbar.menu.data_management",   self.data_management_requested),
-            ("data",   "navbar.menu.import_data",       self.import_requested),
+            ("fluent", "navbar.menu.sync_data",  self.sync_requested),
+            ("data",   "navbar.menu.import_data", self.import_requested),
         ]
 
         self._menu_item_widgets = []
         self._import_item = None
         self._sync_menu_item = None
-        self._security_item = None
-        self._data_mgmt_item = None
 
         for icon_name, tr_key, signal in self._menu_items_config:
             item = _MenuItem(icon_name, tr(tr_key))
@@ -387,10 +380,6 @@ class IDBadgeWidget(QWidget):
                 self._import_item = item
             if tr_key == "navbar.menu.sync_data":
                 self._sync_menu_item = item
-            if tr_key == "navbar.menu.security_policies":
-                self._security_item = item
-            if tr_key == "navbar.menu.data_management":
-                self._data_mgmt_item = item
 
         self._popup.add_separator()
 
@@ -434,10 +423,6 @@ class IDBadgeWidget(QWidget):
             self._sync_menu_item.setVisible(role in {"admin", "data_manager", "field_supervisor"})
         if self._import_item:
             self._import_item.setVisible(role in {"admin", "data_manager"})
-        if self._security_item:
-            self._security_item.setVisible(False)
-        if self._data_mgmt_item:
-            self._data_mgmt_item.setVisible(False)
 
     def set_user_id(self, user_id):
         self.user_id = user_id

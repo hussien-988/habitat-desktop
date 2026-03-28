@@ -28,12 +28,8 @@ class MainWindow(QMainWindow):
 
     # Pages restricted to specific roles
     _PAGE_ROLE_ACCESS = {
-        Pages.ADMIN: {"admin", "data_manager"},
-        Pages.USER_MANAGEMENT: {"admin"},
-        Pages.ADD_USER: {"admin"},
         Pages.FIELD_ASSIGNMENT: {"admin", "data_manager", "field_supervisor"},
         Pages.SYNC_DATA: {"admin", "data_manager", "field_supervisor"},
-        Pages.DATA_MANAGEMENT: {"admin", "data_manager"},
         Pages.REPORTS: {"admin", "data_manager", "field_supervisor"},
         Pages.CLAIM_EDIT: {"admin", "data_manager"},
         Pages.DUPLICATES: {"admin", "data_manager"},
@@ -151,7 +147,6 @@ class MainWindow(QMainWindow):
         from ui.pages.cases_page import CasesPage
         from ui.pages.search_page import SearchPage
         from ui.pages.reports_page import ReportsPage
-        from ui.pages.admin_page import AdminPage
         from ui.pages.map_page import MapPage
         from ui.pages.duplicates_page import DuplicatesPage
         from ui.pages.claim_comparison_page import ClaimComparisonPage
@@ -159,14 +154,9 @@ class MainWindow(QMainWindow):
         from controllers.building_controller import BuildingController
         from ui.pages.case_details_page import CaseDetailsPage
         from ui.pages.claim_details_page import ClaimDetailsPage
-        from ui.pages.user_management_page import UserManagementPage
-        from ui.pages.add_user_page import AddUserPage
-        from controllers.user_controller import UserController
         from ui.wizards.office_survey import OfficeSurveyWizard
         from ui.pages.import_wizard_page import ImportWizardPage
         from ui.pages.claim_edit_page import ClaimEditPage
-
-        self._user_controller = UserController(parent=self)
 
 
         # Central widget
@@ -263,10 +253,6 @@ class MainWindow(QMainWindow):
         self.pages[Pages.REPORTS] = ReportsPage(self.db, self.i18n, self)
         self.stack.addWidget(self.pages[Pages.REPORTS])
 
-        # Admin page
-        self.pages[Pages.ADMIN] = AdminPage(self.db, self.i18n, self)
-        self.stack.addWidget(self.pages[Pages.ADMIN])
-
         # Map view page
         self.pages[Pages.MAP_VIEW] = MapPage(self.db, self.i18n, self)
         self.stack.addWidget(self.pages[Pages.MAP_VIEW])
@@ -293,25 +279,10 @@ class MainWindow(QMainWindow):
         self.pages[Pages.CLAIM_DETAILS] = ClaimDetailsPage(self)
         self.stack.addWidget(self.pages[Pages.CLAIM_DETAILS])
 
-        # User Management page
-        self.pages[Pages.USER_MANAGEMENT] = UserManagementPage(
-            self.db, self.i18n, user_controller=self._user_controller, parent=self
-        )
-        self.stack.addWidget(self.pages[Pages.USER_MANAGEMENT])
-
-        # Add User page
-        self.pages[Pages.ADD_USER] = AddUserPage(self.db, self.i18n, self)
-        self.stack.addWidget(self.pages[Pages.ADD_USER])
-
         # Sync & Data page
         from ui.pages.sync_data_page import SyncDataPage
         self.pages[Pages.SYNC_DATA] = SyncDataPage(self.db, self.i18n, self)
         self.stack.addWidget(self.pages[Pages.SYNC_DATA])
-
-        # Data Management page
-        from ui.pages.data_management_page import DataManagementPage
-        self.pages[Pages.DATA_MANAGEMENT] = DataManagementPage(self.db, self.i18n, self)
-        self.stack.addWidget(self.pages[Pages.DATA_MANAGEMENT])
 
         # Import Wizard page
         from controllers.import_controller import ImportController
@@ -354,7 +325,6 @@ class MainWindow(QMainWindow):
             1: Pages.CASES,
             2: Pages.IMPORT_PACKAGES,
             3: Pages.DUPLICATES,
-            4: Pages.USER_MANAGEMENT,
             5: Pages.FIELD_ASSIGNMENT,
         }
 
@@ -389,9 +359,6 @@ class MainWindow(QMainWindow):
         self.navbar.language_change_requested.connect(self.toggle_language)
         self.navbar.sync_requested.connect(self._on_sync_requested)
         self.pages[Pages.SYNC_DATA].sync_notification.connect(self._on_sync_notification)
-        self.navbar.password_change_requested.connect(self._on_password_change_requested)
-        self.navbar.security_settings_requested.connect(self._on_security_settings_requested)
-        self.navbar.data_management_requested.connect(self._on_data_management_requested)
         self.navbar.import_requested.connect(self._on_import_requested)
 
         # Import pages signals
@@ -485,16 +452,6 @@ class MainWindow(QMainWindow):
             lambda: self.navigate_to(Pages.DUPLICATES)
         )
 
-        # User Management - add new user
-        self.pages[Pages.USER_MANAGEMENT].add_user_requested.connect(
-            lambda: self.navigate_to(Pages.ADD_USER)
-        )
-
-        # Add User - back to user management
-        self.pages[Pages.ADD_USER].back_requested.connect(
-            lambda: self.navigate_to(Pages.USER_MANAGEMENT)
-        )
-
         # Sync Data - back to field assignment
         self.pages[Pages.SYNC_DATA].back_requested.connect(
             lambda: self.navigate_to(Pages.FIELD_ASSIGNMENT)
@@ -505,19 +462,6 @@ class MainWindow(QMainWindow):
             self.pages[Pages.CLAIM_SEARCH].back_requested.connect(
                 lambda: self.navigate_to(Pages.CLAIMS)
             )
-
-        # User Management - view user details
-        self.pages[Pages.USER_MANAGEMENT].view_user.connect(
-            lambda user: self._navigate_to_user(user, 'view')
-        )
-
-        # User Management - edit user
-        self.pages[Pages.USER_MANAGEMENT].edit_user_signal.connect(
-            lambda user: self._navigate_to_user(user, 'edit')
-        )
-
-        # Add User - save new user to database
-        self.pages[Pages.ADD_USER].save_requested.connect(self._on_save_new_user)
 
         # Language change signal
         self.language_changed.connect(self._on_language_changed)
@@ -795,59 +739,6 @@ class MainWindow(QMainWindow):
                         login_page.password_input.clear()
                 self._show_login()
 
-    def _navigate_to_user(self, user_data: dict, mode: str):
-        """Navigate to AddUserPage in view or edit mode."""
-        user_data['_mode'] = mode
-        self.navigate_to(Pages.ADD_USER, user_data)
-
-    # Role string → API integer enum mapping
-    _ROLE_TO_INT = {
-        "admin": 6, "data_manager": 4, "office_clerk": 3,
-        "field_supervisor": 2, "field_researcher": 2,
-        "data_collector": 1, "analyst": 5,
-    }
-
-    def _on_save_new_user(self, data: dict):
-        """Handle saving a new or updated user from AddUserPage via backend API."""
-        from ui.components.toast import Toast
-
-        if not hasattr(self, '_user_controller') or not self._user_controller:
-            Toast.show_toast(self, "خطأ: UserController غير مهيأ", Toast.ERROR)
-            return
-
-        is_edit = data.get("_mode") == "edit"
-        role_int = self._ROLE_TO_INT.get(data.get("role", ""), 5)
-
-        if is_edit:
-            user_id = data.get("_editing_user_id", "")
-            api_data = {
-                "userId": user_id,
-                "role": role_int,
-            }
-            result = self._user_controller.update_user(user_id, api_data)
-            success_msg = "تم تحديث المستخدم بنجاح"
-            fail_prefix = "فشل تحديث المستخدم"
-        else:
-            api_data = {
-                "username": data.get("user_id", ""),
-                "password": data.get("password", ""),
-                "role": role_int,
-                "hasDesktopAccess": True,
-            }
-            result = self._user_controller.create_user(api_data)
-            success_msg = "تم حفظ المستخدم بنجاح"
-            fail_prefix = "فشل حفظ المستخدم"
-
-        if result.success:
-            logger.info(f"User {'updated' if is_edit else 'created'}: {data.get('user_id')}")
-            Toast.show_toast(self, success_msg, Toast.SUCCESS)
-            self.navigate_to(Pages.USER_MANAGEMENT)
-            if Pages.USER_MANAGEMENT in self.pages:
-                self.pages[Pages.USER_MANAGEMENT].refresh()
-        else:
-            logger.error(f"Save user failed: {result.message}")
-            Toast.show_toast(self, f"{fail_prefix}: {result.message}", Toast.ERROR)
-
     def _on_field_work_completed(self, workflow_data):
         """Handle field work wizard completion - create assignment via API."""
         try:
@@ -978,39 +869,6 @@ class MainWindow(QMainWindow):
         else:
             self.navbar.hide_sync_notification()
 
-    def _on_password_change_requested(self):
-        """Handle password change request from navbar menu (admin only)."""
-        from ui.components.dialogs.password_dialog import PasswordDialog
-        from ui.components.toast import Toast
-        from services.api_client import get_api_client
-        result = PasswordDialog.change_password(parent=self)
-        if not result:
-            return
-        current_pwd, new_pwd = result
-        try:
-            get_api_client().change_password(current_pwd, new_pwd)
-            Toast.show_toast(self, "تم تغيير كلمة المرور بنجاح", Toast.SUCCESS)
-            logger.info("Password changed successfully via API")
-        except Exception as e:
-            logger.error(f"Password change failed: {e}")
-            from ui.components.error_handler import ErrorHandler
-            ErrorHandler.show_error(self, str(e))
-
-    def _on_security_settings_requested(self):
-        """Handle security settings request from navbar menu."""
-        from ui.components.dialogs.security_dialog import SecurityDialog
-        result = SecurityDialog.show_settings(parent=self)
-        if result:
-            timeout_min, max_attempts = result
-            logger.info(f"Security settings updated: timeout={timeout_min}min, attempts={max_attempts}")
-            # Restart session timer with new timeout
-            if self.current_user:
-                self._start_session_timer()
-
-    def _on_data_management_requested(self):
-        """Handle data management request from navbar menu."""
-        self.navigate_to(Pages.DATA_MANAGEMENT)
-
     def _on_tab_changed(self, tab_index: int):
         """Handle navbar tab change."""
         if tab_index in self.tab_page_mapping:
@@ -1096,19 +954,6 @@ class MainWindow(QMainWindow):
 
             # Reset wizard for next time (after finalization or unsaved data handling)
             self._reset_wizard()
-
-        # Check if leaving Add User page with unsaved changes
-        if current_widget == self.pages.get(Pages.ADD_USER) and page_id != Pages.ADD_USER:
-            add_user_page = self.pages[Pages.ADD_USER]
-            if hasattr(add_user_page, 'has_unsaved_changes') and add_user_page.has_unsaved_changes():
-                from ui.components.dialogs.confirmation_dialog import ConfirmationDialog, DialogResult
-                result = ConfirmationDialog.confirm(
-                    parent=self,
-                    title="تغييرات غير محفوظة",
-                    message="لديك تغييرات غير محفوظة.\nهل تريد المغادرة بدون حفظ؟"
-                )
-                if result != DialogResult.YES:
-                    return
 
         # Block restricted pages for unauthorized roles
         if page_id in self._PAGE_ROLE_ACCESS and self.current_user:
