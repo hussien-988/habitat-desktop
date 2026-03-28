@@ -32,7 +32,7 @@ VIEWPORT_LOADING_JS_TEMPLATE = '''
         }
 
         // Configuration (from MapConstants)
-        var MIN_ZOOM_FOR_LOADING = 17;      // Don't load buildings below this zoom (buildings appear at 17+)
+        var MIN_ZOOM_FOR_LOADING = 15;
         var MAX_MARKERS_PER_VIEWPORT = 2000; // محسّن: زيادة من 1000 إلى 2000
 
         // Viewport loading state
@@ -313,9 +313,11 @@ VIEWPORT_LOADING_JS_TEMPLATE = '''
                 polygonsGroup.addTo(map);              // Polygons (no clustering)
 
                 isLoadingViewport = false;
-                console.log('Buildings updated successfully with clustering');
-                console.log('   - Markers in cluster:', currentMarkersCluster.getLayers().length);
-                console.log('   - Polygons on map:', polygonsGroup.getLayers().length);
+                var totalCount = currentMarkersCluster.getLayers().length + polygonsGroup.getLayers().length;
+                console.log('Buildings updated: ' + totalCount);
+                if (typeof window.updateBuildingCount === 'function') {
+                    window.updateBuildingCount(totalCount);
+                }
 
             } catch (error) {
                 console.error('Error updating buildings:', error);

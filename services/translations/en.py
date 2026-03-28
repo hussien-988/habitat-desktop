@@ -205,6 +205,27 @@ EN_TRANSLATIONS = {
     "mapping.import_status.failed": "Failed",
     "mapping.import_status.partial": "Partial",
 
+    # Document Types
+    "mapping.document_type.tapu_green": "Ownership Deed (Green Tapu)",
+    "mapping.document_type.property_reg": "Property Registration",
+    "mapping.document_type.temp_reg": "Temporary Registration",
+    "mapping.document_type.court_ruling": "Court Ruling",
+    "mapping.document_type.power_attorney": "Power of Attorney",
+    "mapping.document_type.sale_notarized": "Notarized Sale Contract",
+    "mapping.document_type.sale_informal": "Informal Sale Contract",
+    "mapping.document_type.rent_registered": "Registered Rental Contract",
+    "mapping.document_type.rent_informal": "Informal Rental Contract",
+    "mapping.document_type.utility_bill": "Utility Bill",
+    "mapping.document_type.mukhtar_cert": "Mukhtar Certificate",
+    "mapping.document_type.inheritance": "Inheritance Document",
+    "mapping.document_type.witness_statement": "Witness Statement",
+    "mapping.document_type.claimant_statement": "Claimant Statement",
+
+    # Evidence Status
+    "mapping.evidence_status.pending": "Pending",
+    "mapping.evidence_status.verified": "Verified",
+    "mapping.evidence_status.rejected": "Rejected",
+
     # Source Types
     "mapping.source.field_survey": "Field Survey",
     "mapping.source.direct_request": "Direct Request",

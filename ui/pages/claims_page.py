@@ -14,6 +14,7 @@ from PyQt5.QtGui import QColor
 
 from app.config import Config
 from services.vocab_service import get_options as vocab_get_options
+from services.display_mappings import get_document_type_options
 from repositories.database import Database
 from ui.components.dialogs.base_dialog import BaseDialog
 from ui.components.dialogs import MessageDialog
@@ -34,23 +35,6 @@ from utils.logger import get_logger
 logger = get_logger(__name__)
 
 
-# Document types
-DOCUMENT_TYPES = [
-    ("TAPU_GREEN", "صك ملكية (طابو أخضر)"),
-    ("PROPERTY_REG", "بيان قيد عقاري"),
-    ("TEMP_REG", "بيان قيد مؤقت"),
-    ("COURT_RULING", "حكم قضائي"),
-    ("POWER_ATTORNEY", "وكالة خاصة"),
-    ("SALE_NOTARIZED", "عقد بيع موثق"),
-    ("SALE_INFORMAL", "عقد بيع غير موثق"),
-    ("RENT_REGISTERED", "عقد إيجار مسجل"),
-    ("RENT_INFORMAL", "عقد إيجار غير مسجل"),
-    ("UTILITY_BILL", "فاتورة مرافق"),
-    ("MUKHTAR_CERT", "شهادة المختار"),
-    ("INHERITANCE", "حصر إرث"),
-    ("WITNESS_STATEMENT", "إفادة شاهد"),
-    ("CLAIMANT_STATEMENT", "تصريح المطالب"),
-]
 
 
 class ClaimsTableModel(BaseTableModel):
@@ -849,8 +833,8 @@ class AddDocumentDialog(BaseDialog):
 
         # Document type
         self.type_combo = QComboBox()
-        for code, ar in DOCUMENT_TYPES:
-            self.type_combo.addItem(ar, code)
+        for code, label in get_document_type_options():
+            self.type_combo.addItem(label, code)
         form.addRow("نوع الوثيقة:", self.type_combo)
 
         # Document number

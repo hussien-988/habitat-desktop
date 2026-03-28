@@ -24,7 +24,7 @@ from ..components.underline_tab_bar import UnderlineTabBar
 from ..font_utils import create_font, FontManager
 from ..style_manager import StyleManager
 from services.translation_manager import tr
-from services.display_mappings import get_survey_type_display
+from services.display_mappings import get_survey_type_display, get_survey_type_options
 from services.api_worker import ApiWorker
 from ..components.toast import Toast
 
@@ -201,8 +201,8 @@ class CasesPage(QWidget):
         self._type_filter.setFixedWidth(170)
         self._type_filter.setStyleSheet(form_style)
         self._type_filter.addItem("الكل", None)
-        self._type_filter.addItem(get_survey_type_display(1), 1)
-        self._type_filter.addItem(get_survey_type_display(2), 2)
+        for code, label in get_survey_type_options():
+            self._type_filter.addItem(label, code)
         self._type_filter.currentIndexChanged.connect(self._on_type_changed)
         layout.addWidget(self._type_filter)
 

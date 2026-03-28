@@ -25,12 +25,13 @@ def initialize_vocabularies():
     """
     global _initialized
     from app.config import Config, get_api_base_url
-    url = f"{get_api_base_url()}/{Config.API_VERSION}/vocabularies"
+    url = f"{get_api_base_url()}/v2/vocabularies"
     logger.info(f"Fetching vocabularies from: {url}")
     try:
         response = requests.get(url, timeout=10, verify=False)
         response.raise_for_status()
-        data = response.json()
+        raw = response.json()
+        data = raw.get("items", raw) if isinstance(raw, dict) else raw
         _build_cache(data)
         _build_from_translation_keys()
         _save_vocab_cache(data)
@@ -127,13 +128,14 @@ def get_label(vocab_name: str, code, lang: str = None) -> str:
     return str(code) if code is not None else ""
 
 
-def get_options(vocab_name: str, lang: str = None) -> List[Tuple[int, str]]:
+def get_options(vocab_name: str, lang: str = None, include_deprecated: bool = False) -> List[Tuple[int, str]]:
     """
     Get list of (code, label) tuples sorted by displayOrder.
 
     Args:
         vocab_name: Vocabulary name (case-insensitive, underscore-insensitive).
         lang: "ar" or "en". Defaults to current app language.
+        include_deprecated: If True, include deprecated values.
 
     Returns:
         List of (code, label) tuples for QComboBox population.
@@ -145,7 +147,13 @@ def get_options(vocab_name: str, lang: str = None) -> List[Tuple[int, str]]:
     options = _options_cache.get(key, [])
 
     result = []
-    for code, label_ar, label_en, order in options:
+    for item in options:
+        code = item[0]
+        label_ar = item[1]
+        label_en = item[2]
+        deprecated = item[4] if len(item) > 4 else False
+        if not include_deprecated and deprecated:
+            continue
         label = label_ar if lang == "ar" else label_en
         result.append((code, label))
     return result
@@ -161,6 +169,17 @@ def is_initialized() -> bool:
     return _initialized
 
 
+def is_deprecated(vocab_name: str, code) -> bool:
+    """Check if a vocabulary code is deprecated."""
+    key = _normalize_name(vocab_name)
+    try:
+        code_int = int(code)
+        entry = _lookup.get(key, {}).get(code_int)
+        return entry.get("deprecated", False) if entry else False
+    except (ValueError, TypeError):
+        return False
+
+
 def add_term(vocab_name: str, code: int, label_ar: str, label_en: str, order: int = 0):
     """Add a new term to the in-memory cache. Affects all dropdowns immediately."""
     key = _normalize_name(vocab_name)
@@ -169,8 +188,8 @@ def add_term(vocab_name: str, code: int, label_ar: str, label_en: str, order: in
     if key not in _options_cache:
         _options_cache[key] = []
 
-    _lookup[key][code] = {"ar": label_ar, "en": label_en, "order": order}
-    _options_cache[key].append((code, label_ar, label_en, order))
+    _lookup[key][code] = {"ar": label_ar, "en": label_en, "order": order, "deprecated": False}
+    _options_cache[key].append((code, label_ar, label_en, order, False))
     _options_cache[key].sort(key=lambda x: x[3])
 
 
@@ -182,9 +201,10 @@ def update_term(vocab_name: str, code: int, label_ar: str, label_en: str):
     _lookup[key][code]["ar"] = label_ar
     _lookup[key][code]["en"] = label_en
     opts = _options_cache.get(key, [])
-    for i, (c, ar, en, order) in enumerate(opts):
-        if c == code:
-            _options_cache[key][i] = (c, label_ar, label_en, order)
+    for i, item in enumerate(opts):
+        if item[0] == code:
+            deprecated = item[4] if len(item) > 4 else False
+            _options_cache[key][i] = (code, label_ar, label_en, item[3], deprecated)
             break
 
 
@@ -241,11 +261,11 @@ def _build_cache(api_data: List[Dict]):
                 "ar": val.get("labelArabic", ""),
                 "en": val.get("labelEnglish", ""),
                 "order": val.get("displayOrder", 0),
+                "deprecated": val.get("isDeprecated", False),
             }
             code_map[code] = entry
-            options_list.append((code, entry["ar"], entry["en"], entry["order"]))
+            options_list.append((code, entry["ar"], entry["en"], entry["order"], entry["deprecated"]))
 
-        # Sort by displayOrder
         options_list.sort(key=lambda x: x[3])
 
         _lookup[key] = code_map
@@ -382,6 +402,27 @@ def _build_from_translation_keys():
             (2, "mapping.import_status.imported"),
             (3, "mapping.import_status.failed"),
             (4, "mapping.import_status.partial"),
+        ],
+        "documenttype": [
+            ("TAPU_GREEN", "mapping.document_type.tapu_green"),
+            ("PROPERTY_REG", "mapping.document_type.property_reg"),
+            ("TEMP_REG", "mapping.document_type.temp_reg"),
+            ("COURT_RULING", "mapping.document_type.court_ruling"),
+            ("POWER_ATTORNEY", "mapping.document_type.power_attorney"),
+            ("SALE_NOTARIZED", "mapping.document_type.sale_notarized"),
+            ("SALE_INFORMAL", "mapping.document_type.sale_informal"),
+            ("RENT_REGISTERED", "mapping.document_type.rent_registered"),
+            ("RENT_INFORMAL", "mapping.document_type.rent_informal"),
+            ("UTILITY_BILL", "mapping.document_type.utility_bill"),
+            ("MUKHTAR_CERT", "mapping.document_type.mukhtar_cert"),
+            ("INHERITANCE", "mapping.document_type.inheritance"),
+            ("WITNESS_STATEMENT", "mapping.document_type.witness_statement"),
+            ("CLAIMANT_STATEMENT", "mapping.document_type.claimant_statement"),
+        ],
+        "evidencestatus": [
+            ("pending", "mapping.evidence_status.pending"),
+            ("verified", "mapping.evidence_status.verified"),
+            ("rejected", "mapping.evidence_status.rejected"),
         ],
     }
 

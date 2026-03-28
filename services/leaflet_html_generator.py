@@ -1029,6 +1029,15 @@ class LeafletHTMLGenerator:
             return div;
         }};
         statusControl.addTo(map);
+
+        window.updateBuildingCount = function(count) {{
+            var el = document.querySelector('.map-status-overlay');
+            if (el) {{
+                var parts = el.innerHTML.split('<br>');
+                parts[1] = '\u0627\u0644\u0645\u0628\u0627\u0646\u064a: ' + count;
+                el.innerHTML = parts.join('<br>');
+            }}
+        }};
     </script>
 '''
 

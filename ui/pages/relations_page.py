@@ -1043,9 +1043,9 @@ class RelationsPage(QWidget):
         status_filter_layout.addWidget(QLabel("الحالة:"))
         self.evidence_status_filter = QComboBox()
         self.evidence_status_filter.addItem(self.i18n.t("all"), "")
-        self.evidence_status_filter.addItem("معلق", "pending")
-        self.evidence_status_filter.addItem("تم التحقق", "verified")
-        self.evidence_status_filter.addItem("مرفوض", "rejected")
+        from services.display_mappings import get_evidence_status_options
+        for code, label in get_evidence_status_options():
+            self.evidence_status_filter.addItem(label, code)
         self.evidence_status_filter.currentIndexChanged.connect(self._on_evidence_filter_changed)
         self.evidence_status_filter.setEnabled(False)
         status_filter_layout.addWidget(self.evidence_status_filter)
