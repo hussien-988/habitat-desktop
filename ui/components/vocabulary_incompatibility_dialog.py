@@ -10,6 +10,7 @@ from PyQt5.QtGui import QFont
 
 from app.config import Config
 from ui.font_utils import create_font, FontManager
+from services.translation_manager import tr
 
 
 class VocabularyIncompatibilityDialog(QDialog):
@@ -20,7 +21,7 @@ class VocabularyIncompatibilityDialog(QDialog):
         self.incompatible_vocabs = incompatible_vocabs
         self.package_info = package_info
 
-        self.setWindowTitle("تقرير عدم توافق المفردات")
+        self.setWindowTitle(tr("component.vocab_incompatibility.window_title"))
         self.setMinimumWidth(700)
         self.setMinimumHeight(600)
         self._setup_ui()
@@ -51,12 +52,12 @@ class VocabularyIncompatibilityDialog(QDialog):
         # Title and subtitle
         title_layout = QVBoxLayout()
 
-        title = QLabel("المفردات غير متوافقة")
+        title = QLabel(tr("component.vocab_incompatibility.title"))
         title.setFont(create_font(size=16, weight=QFont.Bold, letter_spacing=0))
         title.setStyleSheet("color: #92400E;")
         title_layout.addWidget(title)
 
-        subtitle = QLabel(f"تحتوي الحزمة على {len(self.incompatible_vocabs)} مفردات قديمة تحتاج للتحديث")
+        subtitle = QLabel(tr("component.vocab_incompatibility.subtitle", count=len(self.incompatible_vocabs)))
         subtitle.setFont(create_font(size=11, weight=FontManager.WEIGHT_REGULAR, letter_spacing=0))
         subtitle.setStyleSheet("color: #B45309;")
         title_layout.addWidget(subtitle)
@@ -67,7 +68,7 @@ class VocabularyIncompatibilityDialog(QDialog):
         layout.addWidget(header_frame)
 
         # Package Information
-        pkg_label = QLabel("📦 معلومات الحزمة:")
+        pkg_label = QLabel(tr("component.vocab_incompatibility.section_package_info"))
         pkg_label.setFont(create_font(size=FontManager.SIZE_BODY, weight=QFont.Bold, letter_spacing=0))
         layout.addWidget(pkg_label)
 
@@ -83,10 +84,10 @@ class VocabularyIncompatibilityDialog(QDialog):
         pkg_layout = QVBoxLayout(pkg_frame)
 
         pkg_items = [
-            ("اسم الملف:", self.package_info.get('filename', 'غير محدد')),
-            ("معرف الحزمة:", self.package_info.get('package_id', 'غير محدد')),
-            ("إصدار التطبيق:", self.package_info.get('app_version', 'غير محدد')),
-            ("تاريخ الإنشاء:", self.package_info.get('created_utc', 'غير محدد')),
+            (tr("component.vocab_incompatibility.filename"), self.package_info.get('filename', tr("component.vocab_incompatibility.unspecified"))),
+            (tr("component.vocab_incompatibility.package_id"), self.package_info.get('package_id', tr("component.vocab_incompatibility.unspecified"))),
+            (tr("component.vocab_incompatibility.app_version"), self.package_info.get('app_version', tr("component.vocab_incompatibility.unspecified"))),
+            (tr("component.vocab_incompatibility.created_date"), self.package_info.get('created_utc', tr("component.vocab_incompatibility.unspecified"))),
         ]
 
         for label_text, value_text in pkg_items:
@@ -106,18 +107,18 @@ class VocabularyIncompatibilityDialog(QDialog):
         layout.addWidget(pkg_frame)
 
         # Incompatible Vocabularies Table
-        table_label = QLabel("📋 المفردات التي تحتاج للتحديث:")
+        table_label = QLabel(tr("component.vocab_incompatibility.section_vocabs_needing_update"))
         table_label.setFont(create_font(size=FontManager.SIZE_BODY, weight=QFont.Bold, letter_spacing=0))
         layout.addWidget(table_label)
 
         self.vocab_table = QTableWidget()
         self.vocab_table.setColumnCount(5)
         self.vocab_table.setHorizontalHeaderLabels([
-            "اسم المفردات",
-            "الإصدار الحالي",
-            "الإصدار المطلوب",
-            "الفرق",
-            "التأثير"
+            tr("component.vocab_incompatibility.col_vocab_name"),
+            tr("component.vocab_incompatibility.col_current_version"),
+            tr("component.vocab_incompatibility.col_required_version"),
+            tr("component.vocab_incompatibility.col_difference"),
+            tr("component.vocab_incompatibility.col_impact"),
         ])
         self.vocab_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         self.vocab_table.setAlternatingRowColors(True)
@@ -168,22 +169,27 @@ class VocabularyIncompatibilityDialog(QDialog):
             # Version difference
             try:
                 diff = int(required_ver) - int(current_ver)
-                diff_item = QTableWidgetItem(f"+{diff} إصدار" if diff > 0 else str(diff))
+                diff_text = tr("component.vocab_incompatibility.version_diff", diff=diff) if diff > 0 else str(diff)
+                diff_item = QTableWidgetItem(diff_text)
                 diff_item.setForeground(Config.WARNING_COLOR)
                 self.vocab_table.setItem(i, 3, diff_item)
             except:
-                self.vocab_table.setItem(i, 3, QTableWidgetItem("غير محدد"))
+                self.vocab_table.setItem(i, 3, QTableWidgetItem(tr("component.vocab_incompatibility.unspecified")))
 
             # Impact
             impact = vocab.get('impact', 'medium')
-            impact_text = {"high": "🔴 عالي", "medium": "🟡 متوسط", "low": "🟢 منخفض"}.get(impact, impact)
+            impact_text = {
+                "high": tr("component.vocab_incompatibility.impact_high"),
+                "medium": tr("component.vocab_incompatibility.impact_medium"),
+                "low": tr("component.vocab_incompatibility.impact_low"),
+            }.get(impact, impact)
             impact_item = QTableWidgetItem(impact_text)
             self.vocab_table.setItem(i, 4, impact_item)
 
         layout.addWidget(self.vocab_table)
 
         # Impact Assessment
-        impact_label = QLabel("📊 تقييم التأثير:")
+        impact_label = QLabel(tr("component.vocab_incompatibility.section_impact_assessment"))
         impact_label.setFont(create_font(size=FontManager.SIZE_BODY, weight=QFont.Bold, letter_spacing=0))
         layout.addWidget(impact_label)
 
@@ -200,16 +206,11 @@ class VocabularyIncompatibilityDialog(QDialog):
         layout.addWidget(impact_display)
 
         # Recommended Actions
-        actions_label = QLabel("💡 الإجراءات الموصى بها:")
+        actions_label = QLabel(tr("component.vocab_incompatibility.section_recommended_actions"))
         actions_label.setFont(create_font(size=FontManager.SIZE_BODY, weight=QFont.Bold, letter_spacing=0))
         layout.addWidget(actions_label)
 
-        actions_text = (
-            "1. قم بتحديث المفردات في قاعدة البيانات الرئيسية إلى الإصدارات المطلوبة\n"
-            "2. استخدم صفحة 'إدارة المفردات' لتحديث كل مفردات على حدة\n"
-            "3. بعد التحديث، أعد محاولة استيراد الحزمة\n"
-            "4. تأكد من تحديث جميع الأجهزة اللوحية لاستخدام نفس إصدار المفردات"
-        )
+        actions_text = tr("component.vocab_incompatibility.recommended_actions_text")
         actions_display = QLabel(actions_text)
         actions_display.setWordWrap(True)
         actions_display.setStyleSheet(f"""
@@ -227,7 +228,7 @@ class VocabularyIncompatibilityDialog(QDialog):
         button_layout.addStretch()
 
         # Go to Vocabulary Management
-        vocab_mgmt_btn = QPushButton("📝 إدارة المفردات")
+        vocab_mgmt_btn = QPushButton(tr("component.vocab_incompatibility.btn_vocab_management"))
         vocab_mgmt_btn.setStyleSheet(f"""
             QPushButton {{
                 background-color: {Config.PRIMARY_COLOR};
@@ -245,7 +246,7 @@ class VocabularyIncompatibilityDialog(QDialog):
         button_layout.addWidget(vocab_mgmt_btn)
 
         # Export Report
-        export_btn = QPushButton("📥 تصدير التقرير")
+        export_btn = QPushButton(tr("component.vocab_incompatibility.btn_export_report"))
         export_btn.setStyleSheet(f"""
             QPushButton {{
                 background-color: {Config.INFO_COLOR};
@@ -263,7 +264,7 @@ class VocabularyIncompatibilityDialog(QDialog):
         button_layout.addWidget(export_btn)
 
         # Close Button
-        close_btn = QPushButton("إغلاق")
+        close_btn = QPushButton(tr("component.vocab_incompatibility.btn_close"))
         close_btn.setStyleSheet(f"""
             QPushButton {{
                 background-color: {Config.TEXT_LIGHT};
@@ -288,23 +289,23 @@ class VocabularyIncompatibilityDialog(QDialog):
         medium_impact = sum(1 for v in self.incompatible_vocabs if v.get('impact') == 'medium')
         low_impact = sum(1 for v in self.incompatible_vocabs if v.get('impact') == 'low')
 
-        text = f"• التأثير العالي: {high_impact} مفردات\n"
-        text += f"• التأثير المتوسط: {medium_impact} مفردات\n"
-        text += f"• التأثير المنخفض: {low_impact} مفردات\n\n"
+        text = tr("component.vocab_incompatibility.impact_high_count", count=high_impact) + "\n"
+        text += tr("component.vocab_incompatibility.impact_medium_count", count=medium_impact) + "\n"
+        text += tr("component.vocab_incompatibility.impact_low_count", count=low_impact) + "\n\n"
 
         if high_impact > 0:
-            text += "⚠️ تحذير: يوجد مفردات ذات تأثير عالي - يجب التحديث قبل الاستيراد"
+            text += tr("component.vocab_incompatibility.warning_high_impact")
         elif medium_impact > 0:
-            text += "ℹ️ يُنصح بالتحديث قبل الاستيراد لتجنب مشاكل التوافق"
+            text += tr("component.vocab_incompatibility.warning_medium_impact")
         else:
-            text += "✓ التأثير منخفض - يمكن المتابعة بحذر"
+            text += tr("component.vocab_incompatibility.warning_low_impact")
 
         return text
 
     def _on_open_vocab_mgmt(self):
         """Open vocabulary management page."""
         from ui.components.toast import Toast
-        Toast.show_toast(self.parent(), "سيتم فتح صفحة إدارة المفردات...", Toast.INFO)
+        Toast.show_toast(self.parent(), tr("component.vocab_incompatibility.opening_vocab_management"), Toast.INFO)
         # TODO: Navigate to vocabulary management page
         self.accept()
 
@@ -315,7 +316,7 @@ class VocabularyIncompatibilityDialog(QDialog):
 
         filename, _ = QFileDialog.getSaveFileName(
             self,
-            "حفظ تقرير عدم التوافق",
+            tr("component.vocab_incompatibility.save_report_dialog_title"),
             f"vocab_incompatibility_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt",
             "Text Files (*.txt);;All Files (*)"
         )
@@ -324,25 +325,25 @@ class VocabularyIncompatibilityDialog(QDialog):
             try:
                 with open(filename, 'w', encoding='utf-8') as f:
                     f.write("=" * 70 + "\n")
-                    f.write("تقرير عدم توافق المفردات - TRRCMS\n")
+                    f.write(tr("component.vocab_incompatibility.report_header") + "\n")
                     f.write("=" * 70 + "\n\n")
 
-                    f.write(f"اسم الملف: {self.package_info.get('filename', 'N/A')}\n")
-                    f.write(f"معرف الحزمة: {self.package_info.get('package_id', 'N/A')}\n")
-                    f.write(f"التاريخ: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n")
+                    f.write(f"{tr('component.vocab_incompatibility.filename')} {self.package_info.get('filename', 'N/A')}\n")
+                    f.write(f"{tr('component.vocab_incompatibility.package_id')} {self.package_info.get('package_id', 'N/A')}\n")
+                    f.write(f"{tr('component.vocab_incompatibility.report_date')} {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n")
 
                     f.write("-" * 70 + "\n")
-                    f.write("المفردات غير المتوافقة:\n")
+                    f.write(tr("component.vocab_incompatibility.incompatible_vocabs_header") + "\n")
                     f.write("-" * 70 + "\n\n")
 
                     for vocab in self.incompatible_vocabs:
-                        f.write(f"المفردات: {vocab.get('name', 'N/A')}\n")
-                        f.write(f"  الإصدار الحالي: v{vocab.get('current_version', '0')}\n")
-                        f.write(f"  الإصدار المطلوب: v{vocab.get('required_version', '0')}\n")
-                        f.write(f"  التأثير: {vocab.get('impact', 'N/A')}\n\n")
+                        f.write(f"{tr('component.vocab_incompatibility.report_vocab_name')} {vocab.get('name', 'N/A')}\n")
+                        f.write(f"  {tr('component.vocab_incompatibility.report_current_version')} v{vocab.get('current_version', '0')}\n")
+                        f.write(f"  {tr('component.vocab_incompatibility.report_required_version')} v{vocab.get('required_version', '0')}\n")
+                        f.write(f"  {tr('component.vocab_incompatibility.report_impact')} {vocab.get('impact', 'N/A')}\n\n")
 
                 from ui.components.toast import Toast
-                Toast.show_toast(self.parent(), f"تم حفظ التقرير في: {filename}", Toast.SUCCESS)
+                Toast.show_toast(self.parent(), tr("component.vocab_incompatibility.report_saved", filename=filename), Toast.SUCCESS)
             except Exception as e:
                 from ui.components.toast import Toast
-                Toast.show_toast(self.parent(), f"خطأ في حفظ التقرير: {str(e)}", Toast.ERROR)
+                Toast.show_toast(self.parent(), tr("component.vocab_incompatibility.report_save_error", error=str(e)), Toast.ERROR)

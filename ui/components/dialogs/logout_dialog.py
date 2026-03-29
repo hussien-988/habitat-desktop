@@ -13,6 +13,7 @@ from PyQt5.QtGui import QColor, QFont
 from ui.components.icon import Icon
 from ui.design_system import Colors
 from ui.font_utils import create_font, FontManager
+from services.translation_manager import tr, get_layout_direction
 
 
 class LogoutDialog(QDialog):
@@ -31,7 +32,7 @@ class LogoutDialog(QDialog):
         self._setup_ui()
 
     def _setup_ui(self):
-        self.setLayoutDirection(Qt.RightToLeft)
+        self.setLayoutDirection(get_layout_direction())
 
         outer = QVBoxLayout(self)
         outer.setContentsMargins(12, 12, 12, 12)
@@ -76,7 +77,7 @@ class LogoutDialog(QDialog):
         layout.addLayout(icon_layout)
 
         # Title (centered)
-        title_text = "إغلاق التطبيق" if self._is_exit else "تسجيل خروج"
+        title_text = tr("dialog.logout.exit_app") if self._is_exit else tr("dialog.logout.logout")
         title = QLabel(title_text)
         title.setFont(create_font(size=16, weight=FontManager.WEIGHT_BOLD))
         title.setStyleSheet(f"color: {Colors.TEXT_PRIMARY};")
@@ -85,9 +86,9 @@ class LogoutDialog(QDialog):
 
         # Subtitle (centered)
         if self._is_exit:
-            subtitle_text = "هل انت متأكد انك تريد إغلاق التطبيق؟"
+            subtitle_text = tr("dialog.logout.confirm_exit")
         else:
-            subtitle_text = "هل انت متأكد انك تريد تسجيل الخروج"
+            subtitle_text = tr("dialog.logout.confirm_logout")
         subtitle = QLabel(subtitle_text)
         subtitle.setFont(create_font(size=10, weight=FontManager.WEIGHT_REGULAR))
         subtitle.setStyleSheet(f"color: {Colors.TEXT_SECONDARY};")
@@ -102,12 +103,12 @@ class LogoutDialog(QDialog):
         btn_layout.setSpacing(12)
         btn_layout.addStretch()
 
-        action_text = "إغلاق" if self._is_exit else "خروج"
+        action_text = tr("button.close") if self._is_exit else tr("dialog.logout.logout_btn")
         action_btn = self._create_button(action_text, primary=True)
         action_btn.clicked.connect(self.accept)
         btn_layout.addWidget(action_btn)
 
-        back_btn = self._create_button("رجوع", primary=False)
+        back_btn = self._create_button(tr("action.back"), primary=False)
         back_btn.clicked.connect(self.reject)
         btn_layout.addWidget(back_btn)
 

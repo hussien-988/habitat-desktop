@@ -14,6 +14,7 @@ from PyQt5.QtWebEngineWidgets import QWebEngineView
 from app.config import Config
 from ui.constants.map_constants import MapConstants
 from utils.logger import get_logger
+from services.translation_manager import tr
 
 logger = get_logger(__name__)
 
@@ -25,7 +26,7 @@ class MapViewerDialog(QDialog):
         self,
         latitude: float,
         longitude: float,
-        title: str = "عرض الموقع",
+        title: str = None,
         zoom: int = 20,
         parent=None
     ):
@@ -34,6 +35,8 @@ class MapViewerDialog(QDialog):
         self.longitude = longitude
         self.zoom = zoom
 
+        if title is None:
+            title = tr("dialog.map_viewer.title")
         self.setWindowTitle(title)
         self.setMinimumSize(700, 500)
         self.resize(800, 600)
@@ -46,7 +49,7 @@ class MapViewerDialog(QDialog):
         layout.setContentsMargins(12, 12, 12, 12)
 
         # Coordinates display
-        coords_label = QLabel(f"الإحداثيات: {self.latitude:.6f}, {self.longitude:.6f}")
+        coords_label = QLabel(f"{tr('dialog.map_viewer.coordinates')}: {self.latitude:.6f}, {self.longitude:.6f}")
         coords_label.setStyleSheet(f"""
             color: {Config.TEXT_LIGHT};
             font-size: 10pt;
@@ -69,7 +72,7 @@ class MapViewerDialog(QDialog):
         btn_layout.addStretch()
 
         # Close button
-        close_btn = QPushButton("إغلاق")
+        close_btn = QPushButton(tr("button.close"))
         close_btn.setStyleSheet(f"""
             QPushButton {{
                 background-color: {Config.PRIMARY_COLOR};
@@ -136,7 +139,7 @@ class MapViewerDialog(QDialog):
         var tileLayer = L.tileLayer('{tile_server_url}/tiles/{{z}}/{{x}}/{{y}}.png', {{
             maxZoom: 20,
             minZoom: 15,
-            attribution: 'UN-Habitat Syria - يعمل بدون اتصال بالإنترنت',
+            attribution: 'UN-Habitat Syria - {tr("dialog.map_viewer.offline_attribution")}',
             keepBuffer: {MapConstants.TILE_KEEP_BUFFER},
             updateWhenZooming: {'true' if MapConstants.TILE_UPDATE_WHEN_ZOOMING else 'false'},
             updateWhenIdle: {'true' if MapConstants.TILE_UPDATE_WHEN_IDLE else 'false'},

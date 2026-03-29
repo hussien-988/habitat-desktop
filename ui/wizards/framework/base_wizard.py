@@ -290,7 +290,7 @@ class BaseWizard(QWidget, metaclass=ABCQWidgetMeta):
         total = len(self.steps)
         percentage = self.navigator.get_progress_percentage()
 
-        self.progress_label.setText(f"الخطوة {current} من {total}")
+        self.progress_label.setText(f"{tr('component.base_wizard.step')} {current} {tr('component.base_wizard.of')} {total}")
         self.progress_bar.setValue(int(percentage))
 
     def _update_navigation_buttons(self):
@@ -302,7 +302,7 @@ class BaseWizard(QWidget, metaclass=ABCQWidgetMeta):
         if self.navigator.current_index == len(self.steps) - 1:
             self.btn_next.setText(self.get_submit_button_text())
         else:
-            self.btn_next.setText("التالي")
+            self.btn_next.setText(tr("component.base_wizard.next"))
 
     def _on_validation_failed(self, result: StepValidationResult):
         """Handle validation failure."""

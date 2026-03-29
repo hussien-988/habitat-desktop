@@ -9,6 +9,7 @@ from PyQt5.QtCore import QEventLoop
 
 from .base_dialog import BaseDialog, DialogType
 from utils.logger import get_logger
+from services.translation_manager import tr
 
 logger = get_logger(__name__)
 
@@ -21,9 +22,11 @@ class MessageDialog:
         parent: QWidget,
         title: str,
         message: str,
-        button_text: str = "حسناً"
+        button_text: str = None
     ) -> None:
         """Show success dialog with green checkmark icon."""
+        if button_text is None:
+            button_text = tr("button.ok")
         # Try to load success icon
         icon_path = MessageDialog._get_icon_path("success.png")
 
@@ -47,9 +50,11 @@ class MessageDialog:
         parent: QWidget,
         title: str,
         message: str,
-        button_text: str = "حسناً"
+        button_text: str = None
     ) -> None:
         """Show error dialog with red X icon."""
+        if button_text is None:
+            button_text = tr("button.ok")
         # Try to load error icon
         icon_path = MessageDialog._get_icon_path("error.png")
 
@@ -73,9 +78,11 @@ class MessageDialog:
         parent: QWidget,
         title: str,
         message: str,
-        button_text: str = "حسناً"
+        button_text: str = None
     ) -> None:
         """Show warning dialog with orange exclamation icon."""
+        if button_text is None:
+            button_text = tr("button.ok")
         # Try to load warning icon
         icon_path = MessageDialog._get_icon_path("warning.png")
 
@@ -99,9 +106,11 @@ class MessageDialog:
         parent: QWidget,
         title: str,
         message: str,
-        button_text: str = "حسناً"
+        button_text: str = None
     ) -> None:
         """Show info dialog with blue info icon."""
+        if button_text is None:
+            button_text = tr("button.ok")
         # Try to load info icon
         icon_path = MessageDialog._get_icon_path("info.png")
 
@@ -125,10 +134,14 @@ class MessageDialog:
         parent: QWidget,
         title: str,
         message: str,
-        yes_text: str = "نعم",
-        no_text: str = "لا"
+        yes_text: str = None,
+        no_text: str = None
     ) -> bool:
         """Show question dialog with Yes/No buttons. Returns True if confirmed."""
+        if yes_text is None:
+            yes_text = tr("button.yes")
+        if no_text is None:
+            no_text = tr("button.no")
         # Try to load question icon
         icon_path = MessageDialog._get_icon_path("info.png")  # Use info icon for questions
 

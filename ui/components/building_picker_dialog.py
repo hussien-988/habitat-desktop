@@ -9,6 +9,7 @@ from PyQt5.QtGui import QColor, QIcon
 
 from app.config import Config
 from utils.logger import get_logger
+from services.translation_manager import tr
 
 logger = get_logger(__name__)
 
@@ -166,7 +167,7 @@ class BuildingPickerDialog(QDialog):
         header_row = QHBoxLayout()
         header_row.setContentsMargins(0, 0, 0, 0)
 
-        title = QLabel("اختر المبنى")
+        title = QLabel(tr("component.building_picker.title"))
         title.setStyleSheet(
             "font-size: 15px; font-weight: 600; color: #1A1F1D;"
             " background: transparent; border: none;"
@@ -208,7 +209,7 @@ class BuildingPickerDialog(QDialog):
         sb.setContentsMargins(12, 6, 8, 6)
         sb.setSpacing(6)
 
-        map_btn = QPushButton("اختر من الخريطة")
+        map_btn = QPushButton(tr("component.building_picker.select_from_map"))
         map_btn.setFlat(True)
         map_btn.setCursor(Qt.PointingHandCursor)
         map_btn.setStyleSheet(f"""
@@ -231,7 +232,7 @@ class BuildingPickerDialog(QDialog):
         sb.addWidget(sep)
 
         self.search_input = QLineEdit()
-        self.search_input.setPlaceholderText("أو ابحث برمز المبنى ...")
+        self.search_input.setPlaceholderText(tr("component.building_picker.search_placeholder"))
         self.search_input.setLayoutDirection(Qt.RightToLeft)
         self.search_input.setStyleSheet("""
             QLineEdit {

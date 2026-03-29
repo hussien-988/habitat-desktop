@@ -24,7 +24,7 @@ from PyQt5.QtCore import QRegExp as QtRegExp
 from app.config import Config
 from services.validation_service import ValidationService
 from services.api_client import get_api_client
-from services.translation_manager import tr
+from services.translation_manager import tr, get_layout_direction
 from services.error_mapper import map_exception
 from services.display_mappings import (
     get_relation_type_options, get_relationship_to_head_options,
@@ -105,7 +105,7 @@ class PersonDialog(QDialog):
 
     def _setup_ui(self):
         """Setup dialog UI with 3 tabs."""
-        self.setLayoutDirection(Qt.RightToLeft)
+        self.setLayoutDirection(get_layout_direction())
 
         outer_layout = QVBoxLayout(self)
         outer_layout.setContentsMargins(12, 12, 12, 12)  # Margin for shadow visibility
@@ -367,7 +367,7 @@ class PersonDialog(QDialog):
     def _setup_tab1_personal(self):
         """Tab 1: Names, birth place, birth date, gender, nationality, national ID, ID photos."""
         tab = QWidget()
-        tab.setLayoutDirection(Qt.RightToLeft)
+        tab.setLayoutDirection(get_layout_direction())
         tab.setStyleSheet("background-color: transparent;")
         tab_layout = QVBoxLayout(tab)
         tab_layout.setContentsMargins(0, 0, 0, 0)
@@ -543,7 +543,7 @@ class PersonDialog(QDialog):
     def _setup_tab2_contact(self):
         """Tab 2: Person role, email, mobile, landline."""
         tab = QWidget()
-        tab.setLayoutDirection(Qt.RightToLeft)
+        tab.setLayoutDirection(get_layout_direction())
         tab.setStyleSheet("background-color: transparent;")
         tab_layout = QVBoxLayout(tab)
         tab_layout.setContentsMargins(0, 0, 0, 0)
@@ -656,7 +656,7 @@ class PersonDialog(QDialog):
     def _setup_tab3_relation(self):
         """Tab 3: Claim type, ownership share, dates, documents."""
         tab = QWidget()
-        tab.setLayoutDirection(Qt.RightToLeft)
+        tab.setLayoutDirection(get_layout_direction())
         tab.setStyleSheet("background-color: transparent;")
         tab_layout = QVBoxLayout(tab)
         tab_layout.setContentsMargins(0, 0, 0, 0)
@@ -710,17 +710,17 @@ class PersonDialog(QDialog):
         date_layout.setContentsMargins(0, 0, 0, 0)
         input_style = self._input_style()
         self.start_year = QLineEdit()
-        self.start_year.setPlaceholderText("السنة")
+        self.start_year.setPlaceholderText(tr("wizard.person_dialog.year"))
         self.start_year.setValidator(QIntValidator(1900, 2100, self))
         self.start_year.setMaxLength(4)
         self.start_year.setStyleSheet(input_style)
         self.start_month = QLineEdit()
-        self.start_month.setPlaceholderText("الشهر")
+        self.start_month.setPlaceholderText(tr("wizard.person_dialog.month"))
         self.start_month.setValidator(QIntValidator(1, 12, self))
         self.start_month.setMaxLength(2)
         self.start_month.setStyleSheet(input_style)
         self.start_day = QLineEdit()
-        self.start_day.setPlaceholderText("اليوم")
+        self.start_day.setPlaceholderText(tr("wizard.person_dialog.day"))
         self.start_day.setValidator(QIntValidator(1, 31, self))
         self.start_day.setMaxLength(2)
         self.start_day.setStyleSheet(input_style)
@@ -773,7 +773,7 @@ class PersonDialog(QDialog):
                 border: 1px solid #E0E6ED;
             }
         """)
-        self.notes.setLayoutDirection(Qt.RightToLeft)
+        self.notes.setLayoutDirection(get_layout_direction())
         grid.addWidget(self.notes, row, 0, 1, 2)
         row += 1
 
@@ -807,7 +807,7 @@ class PersonDialog(QDialog):
         # Upload frame for relation documents
         self._rel_upload_frame = self._create_upload_frame(self._browse_relation_files, "rel_upload", button_text=tr("wizard.person_dialog.attach_document"))
         # Add "Choose Existing Document" link to the upload frame
-        choose_btn = QPushButton("اختيار مستند موجود")
+        choose_btn = QPushButton(tr("wizard.person_dialog.choose_existing_doc"))
         choose_btn.setStyleSheet("""
             QPushButton {
                 color: #059669;
@@ -861,7 +861,7 @@ class PersonDialog(QDialog):
         layout.setContentsMargins(10, 8, 10, 8)
         layout.setSpacing(6)
 
-        header = QLabel("المستندات الموجودة المرتبطة بالاستمارة")
+        header = QLabel(tr("wizard.person_dialog.existing_docs_header"))
         header.setStyleSheet("font-size: 11px; font-weight: 700; color: #64748B;")
         header.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
         layout.addWidget(header)
@@ -917,11 +917,11 @@ class PersonDialog(QDialog):
             if issue_date:
                 date_part = str(issue_date)[:10]
                 display_parts.append(date_part)
-            label_text = " - ".join(display_parts) if display_parts else f"مستند ({ev_id[:8]})"
+            label_text = " - ".join(display_parts) if display_parts else tr("wizard.person_dialog.document_label", doc_id=ev_id[:8])
 
             cb = QCheckBox(label_text)
             cb.setStyleSheet("font-size: 12px; color: #334155;")
-            cb.setLayoutDirection(Qt.RightToLeft)
+            cb.setLayoutDirection(get_layout_direction())
             cb._evidence_data = {
                 'evidence_id': ev_id,
                 'issue_date': issue_date,
@@ -1509,9 +1509,9 @@ class PersonDialog(QDialog):
                             items[0].get("familyNameArabic", "")
                         ]
                         full_name = " ".join(p for p in name_parts if p)
-                        msg = "يوجد شخص مسجّل مسبقاً بنفس الرقم الوطني."
+                        msg = tr("wizard.person_dialog.nid_already_registered")
                         if full_name:
-                            msg += f"\nالاسم: {full_name}"
+                            msg += f"\n{tr('wizard.person_dialog.name_label')}: {full_name}"
                         ErrorHandler.show_warning(self, msg, tr("common.warning"))
                         return
                 except Exception:
@@ -1669,7 +1669,7 @@ class PersonDialog(QDialog):
     def _choose_existing_document(self):
         """Show dialog to select an existing survey document and link it."""
         if not self._survey_id:
-            Toast.show_toast(self, "غير متاح بدون اتصال", Toast.WARNING)
+            Toast.show_toast(self, tr("wizard.person_dialog.not_available_offline"), Toast.WARNING)
             return
 
         try:
@@ -1677,11 +1677,11 @@ class PersonDialog(QDialog):
             evidences = self._api_service.get_survey_evidences(self._survey_id)
         except Exception as e:
             logger.warning(f"Could not load existing docs: {e}")
-            Toast.show_toast(self, "تعذر تحميل المستندات", Toast.ERROR)
+            Toast.show_toast(self, tr("wizard.person_dialog.failed_load_docs"), Toast.ERROR)
             return
 
         if not evidences:
-            Toast.show_toast(self, "لا توجد مستندات محفوظة لهذا المسح", Toast.INFO)
+            Toast.show_toast(self, tr("wizard.person_dialog.no_existing_docs"), Toast.INFO)
             return
 
         # Filter out already-selected evidence IDs
@@ -1691,7 +1691,7 @@ class PersonDialog(QDialog):
         }
         available = [ev for ev in evidences if self._extract_evidence_id(ev) not in already_selected]
         if not available:
-            Toast.show_toast(self, "تم اختيار جميع المستندات المتاحة", Toast.INFO)
+            Toast.show_toast(self, tr("wizard.person_dialog.all_docs_selected"), Toast.INFO)
             return
 
         selected = self._show_document_selection_dialog(available)
@@ -1703,7 +1703,7 @@ class PersonDialog(QDialog):
             file_name = ev.get('originalFileName') or ev.get('OriginalFileName') or ''
             issue_date = ev.get('documentIssuedDate') or ev.get('DocumentIssuedDate') or ''
             ev_type = ev.get('evidenceType') or ev.get('EvidenceType') or ''
-            display = file_name or f"مستند ({ev_id[:8]})"
+            display = file_name or tr("wizard.person_dialog.document_label", doc_id=ev_id[:8])
             self.relation_uploaded_files.append({
                 'path': '',
                 'evidence_id': ev_id,
@@ -1725,9 +1725,9 @@ class PersonDialog(QDialog):
                                      QPushButton, QCheckBox, QScrollArea, QWidget)
 
         dlg = QDialog(self)
-        dlg.setWindowTitle("اختيار مستند موجود")
+        dlg.setWindowTitle(tr("wizard.person_dialog.choose_existing_doc"))
         dlg.setMinimumSize(450, 350)
-        dlg.setLayoutDirection(Qt.RightToLeft)
+        dlg.setLayoutDirection(get_layout_direction())
         dlg.setStyleSheet("""
             QDialog { background-color: #FAFBFC; }
             QLabel { background: transparent; }
@@ -1738,7 +1738,7 @@ class PersonDialog(QDialog):
         layout.setContentsMargins(16, 16, 16, 16)
         layout.setSpacing(10)
 
-        header = QLabel("اختر المستندات المراد ربطها بالعلاقة:")
+        header = QLabel(tr("wizard.person_dialog.select_docs_to_link"))
         header.setStyleSheet("font-size: 13px; font-weight: 700; color: #1E293B;")
         header.setAlignment(Qt.AlignRight)
         layout.addWidget(header)
@@ -1765,10 +1765,10 @@ class PersonDialog(QDialog):
                 parts.append(f"[{ev_type}]")
             if issue_date:
                 parts.append(str(issue_date)[:10])
-            label = " - ".join(parts) if parts else f"مستند ({ev_id[:8]})"
+            label = " - ".join(parts) if parts else tr("wizard.person_dialog.document_label", doc_id=ev_id[:8])
 
             cb = QCheckBox(label)
-            cb.setLayoutDirection(Qt.RightToLeft)
+            cb.setLayoutDirection(get_layout_direction())
             cb._evidence = ev
             checkboxes.append(cb)
             scroll_layout.addWidget(cb)
@@ -1779,7 +1779,7 @@ class PersonDialog(QDialog):
 
         btn_layout = QHBoxLayout()
         btn_layout.setSpacing(8)
-        cancel_btn = QPushButton("إلغاء")
+        cancel_btn = QPushButton(tr("common.cancel"))
         cancel_btn.setStyleSheet("""
             QPushButton { background: #F1F5F9; color: #475569; border: 1px solid #CBD5E1;
                 border-radius: 6px; padding: 8px 20px; font-size: 12px; font-weight: 600; }
@@ -1787,7 +1787,7 @@ class PersonDialog(QDialog):
         """)
         cancel_btn.clicked.connect(dlg.reject)
 
-        confirm_btn = QPushButton("تأكيد الاختيار")
+        confirm_btn = QPushButton(tr("wizard.person_dialog.confirm_selection"))
         confirm_btn.setStyleSheet("""
             QPushButton { background: #059669; color: white; border: none;
                 border-radius: 6px; padding: 8px 20px; font-size: 12px; font-weight: 600; }
@@ -1820,7 +1820,7 @@ class PersonDialog(QDialog):
         for entry in self.relation_uploaded_files:
             if entry.get('_selected_existing'):
                 # Existing doc: show as a styled label with remove button
-                display = entry.get('_display_name', 'مستند')
+                display = entry.get('_display_name', tr("wizard.person_dialog.document_default"))
                 widget = self._create_existing_doc_widget(display, entry)
             elif entry.get('path'):
                 widget = self._create_thumbnail_widget(entry['path'], self._remove_relation_file)
@@ -2089,13 +2089,13 @@ class PersonDialog(QDialog):
         labels_row = QHBoxLayout()
         labels_row.setSpacing(8)
         label_style = "color: #6B7280; font-size: 10px; font-weight: 600; background: transparent;"
-        lbl_year = QLabel("السنة")
+        lbl_year = QLabel(tr("wizard.person_dialog.year"))
         lbl_year.setStyleSheet(label_style)
         lbl_year.setAlignment(Qt.AlignCenter)
-        lbl_month = QLabel("الشهر")
+        lbl_month = QLabel(tr("wizard.person_dialog.month"))
         lbl_month.setStyleSheet(label_style)
         lbl_month.setAlignment(Qt.AlignCenter)
-        lbl_day = QLabel("اليوم")
+        lbl_day = QLabel(tr("wizard.person_dialog.day"))
         lbl_day.setStyleSheet(label_style)
         lbl_day.setAlignment(Qt.AlignCenter)
         labels_row.addWidget(lbl_year, 2)
@@ -2586,7 +2586,7 @@ class PersonDialog(QDialog):
             self.tab_widget.setCurrentIndex(0)
             has_error = True
         if not father:
-            self._set_field_error(self.father_name, self._father_name_error, "اسم الأب مطلوب")
+            self._set_field_error(self.father_name, self._father_name_error, tr("wizard.person_dialog.father_name_required"))
             self.tab_widget.setCurrentIndex(0)
             has_error = True
         if not mother:
@@ -2594,7 +2594,7 @@ class PersonDialog(QDialog):
                 self.tab_widget.setCurrentIndex(0)
             has_error = True
             from ui.components.toast import Toast
-            Toast.show_toast(self, "اسم الأم مطلوب", Toast.ERROR)
+            Toast.show_toast(self, tr("wizard.person_dialog.mother_name_required"), Toast.ERROR)
 
         nid_valid, nid_error = self._validate_national_id()
         if not nid_valid:
@@ -2657,7 +2657,7 @@ class PersonDialog(QDialog):
                 from ui.error_handler import ErrorHandler as _EH
                 _EH.show_error(
                     self,
-                    "يجب إرفاق وثائق الملكية عند اختيار نوع الادعاء كمالك",
+                    tr("wizard.person_dialog.ownership_docs_required"),
                     tr("common.error"))
                 if not has_error:
                     self.tab_widget.setCurrentIndex(2)
@@ -2671,7 +2671,7 @@ class PersonDialog(QDialog):
             person_id = (self.person_data or {}).get('person_id', '')
             if not person_id:
                 from ui.error_handler import ErrorHandler
-                ErrorHandler.show_error(self, "معرف الشخص غير متوفر", tr("common.error"))
+                ErrorHandler.show_error(self, tr("wizard.person_dialog.person_id_missing"), tr("common.error"))
                 return
             self._api_person_id = person_id
             person_data = self.get_person_data()

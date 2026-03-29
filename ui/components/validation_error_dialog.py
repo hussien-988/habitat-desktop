@@ -11,6 +11,7 @@ from PyQt5.QtGui import QFont
 from app.config import Config
 from ui.font_utils import create_font, FontManager
 from ui.style_manager import StyleManager
+from services.translation_manager import tr
 
 
 class ValidationErrorDialog(QDialog):
@@ -21,7 +22,7 @@ class ValidationErrorDialog(QDialog):
         self.error_type = error_type
         self.error_details = error_details
 
-        self.setWindowTitle("فشل التحقق من الحزمة")
+        self.setWindowTitle(tr("component.validation_error.window_title"))
         self.setMinimumWidth(600)
         self.setMinimumHeight(500)
         self._setup_ui()
@@ -52,7 +53,7 @@ class ValidationErrorDialog(QDialog):
         # Title and subtitle
         title_layout = QVBoxLayout()
 
-        title = QLabel("فشل التحقق من صحة الحزمة")
+        title = QLabel(tr("component.validation_error.title"))
         title.setFont(create_font(size=16, weight=QFont.Bold, letter_spacing=0))
         title.setStyleSheet(f"color: {Config.ERROR_COLOR};")
         title_layout.addWidget(title)
@@ -81,46 +82,46 @@ class ValidationErrorDialog(QDialog):
         details_layout.setSpacing(16)
 
         # Package Information Section
-        self._add_section(details_layout, "📦 معلومات الحزمة", [
-            ("اسم الملف:", self.error_details.get('filename', 'غير محدد')),
-            ("معرف الحزمة:", self.error_details.get('package_id', 'غير محدد')),
-            ("حجم الملف:", self._format_size(self.error_details.get('file_size', 0))),
-            ("التاريخ:", self.error_details.get('timestamp', 'غير محدد')),
+        self._add_section(details_layout, tr("component.validation_error.section_package_info"), [
+            (tr("component.validation_error.filename"), self.error_details.get('filename', tr("component.validation_error.unspecified"))),
+            (tr("component.validation_error.package_id"), self.error_details.get('package_id', tr("component.validation_error.unspecified"))),
+            (tr("component.validation_error.file_size"), self._format_size(self.error_details.get('file_size', 0))),
+            (tr("component.validation_error.date"), self.error_details.get('timestamp', tr("component.validation_error.unspecified"))),
         ])
 
         # Error Details Section
         error_info = []
         if self.error_type == "invalid_signature":
             error_info = [
-                ("التوقيع المتوقع:", self.error_details.get('expected_signature', 'N/A')[:32] + "..."),
-                ("التوقيع الفعلي:", self.error_details.get('actual_signature', 'N/A')[:32] + "..."),
-                ("السبب المحتمل:", "الحزمة قد تكون تالفة أو تم التلاعب بها"),
+                (tr("component.validation_error.expected_signature"), self.error_details.get('expected_signature', 'N/A')[:32] + "..."),
+                (tr("component.validation_error.actual_signature"), self.error_details.get('actual_signature', 'N/A')[:32] + "..."),
+                (tr("component.validation_error.probable_cause"), tr("component.validation_error.cause_signature")),
             ]
         elif self.error_type == "invalid_hash":
             error_info = [
-                ("SHA-256 المتوقع:", self.error_details.get('expected_hash', 'N/A')[:32] + "..."),
-                ("SHA-256 الفعلي:", self.error_details.get('actual_hash', 'N/A')[:32] + "..."),
-                ("السبب المحتمل:", "الملف تالف أو تم تعديله أثناء النقل"),
+                (tr("component.validation_error.expected_hash"), self.error_details.get('expected_hash', 'N/A')[:32] + "..."),
+                (tr("component.validation_error.actual_hash"), self.error_details.get('actual_hash', 'N/A')[:32] + "..."),
+                (tr("component.validation_error.probable_cause"), tr("component.validation_error.cause_hash")),
             ]
 
-        self._add_section(details_layout, "⚠️ تفاصيل الخطأ", error_info)
+        self._add_section(details_layout, tr("component.validation_error.section_error_details"), error_info)
 
         # Quarantine Information
-        self._add_section(details_layout, "🔒 معلومات العزل", [
-            ("حالة الحزمة:", "تم عزلها (Quarantined)"),
-            ("الموقع:", self.error_details.get('quarantine_path', '/data/quarantine/')),
-            ("معرف السجل:", self.error_details.get('audit_log_id', 'N/A')),
+        self._add_section(details_layout, tr("component.validation_error.section_quarantine"), [
+            (tr("component.validation_error.package_status"), tr("component.validation_error.quarantined")),
+            (tr("component.validation_error.location"), self.error_details.get('quarantine_path', '/data/quarantine/')),
+            (tr("component.validation_error.log_id"), self.error_details.get('audit_log_id', 'N/A')),
         ])
 
         # Detailed Error Message
-        details_label = QLabel("📋 رسالة الخطأ الكاملة:")
+        details_label = QLabel(tr("component.validation_error.full_error_message"))
         details_label.setFont(create_font(size=FontManager.SIZE_BODY, weight=QFont.Bold, letter_spacing=0))
         details_label.setStyleSheet(f"color: {Config.TEXT_COLOR}; margin-top: 8px;")
         details_layout.addWidget(details_label)
 
         error_text = QTextEdit()
         error_text.setReadOnly(True)
-        error_text.setPlainText(self.error_details.get('full_error', 'لا تتوفر تفاصيل إضافية'))
+        error_text.setPlainText(self.error_details.get('full_error', tr("component.validation_error.no_additional_details")))
         error_text.setMaximumHeight(150)
         error_text.setStyleSheet(f"""
             QTextEdit {{
@@ -135,7 +136,7 @@ class ValidationErrorDialog(QDialog):
         details_layout.addWidget(error_text)
 
         # Recommended Actions
-        actions_label = QLabel("💡 الإجراءات الموصى بها:")
+        actions_label = QLabel(tr("component.validation_error.recommended_actions"))
         actions_label.setFont(create_font(size=FontManager.SIZE_BODY, weight=QFont.Bold, letter_spacing=0))
         actions_label.setStyleSheet(f"color: {Config.TEXT_COLOR}; margin-top: 8px;")
         details_layout.addWidget(actions_label)
@@ -162,7 +163,7 @@ class ValidationErrorDialog(QDialog):
         button_layout.addStretch()
 
         # View Log Button
-        view_log_btn = QPushButton("📄 عرض سجل التدقيق")
+        view_log_btn = QPushButton(tr("component.validation_error.view_audit_log"))
         view_log_btn.setStyleSheet(f"""
             QPushButton {{
                 background-color: {Config.INFO_COLOR};
@@ -180,7 +181,7 @@ class ValidationErrorDialog(QDialog):
         button_layout.addWidget(view_log_btn)
 
         # Close Button
-        close_btn = QPushButton("إغلاق")
+        close_btn = QPushButton(tr("component.validation_error.close"))
         close_btn.setStyleSheet(f"""
             QPushButton {{
                 background-color: {Config.TEXT_LIGHT};
@@ -239,40 +240,30 @@ class ValidationErrorDialog(QDialog):
     def _get_error_type_text(self) -> str:
         """Get human-readable error type."""
         if self.error_type == "invalid_signature":
-            return "التوقيع الرقمي غير صالح"
+            return tr("component.validation_error.error_type_invalid_signature")
         elif self.error_type == "invalid_hash":
-            return "بصمة SHA-256 غير متطابقة"
-        return "خطأ في التحقق"
+            return tr("component.validation_error.error_type_invalid_hash")
+        return tr("component.validation_error.error_type_generic")
 
     def _get_recommendations(self) -> str:
         """Get recommended actions based on error type."""
         if self.error_type == "invalid_signature":
-            return (
-                "• تأكد من أن الحزمة مصدرها التطبيق الرسمي للتابلت\n"
-                "• تحقق من عدم تعديل الملف يدوياً بعد إنشائه\n"
-                "• اتصل بمشرف النظام إذا استمرت المشكلة\n"
-                "• لا تقم بتجاهل هذا الخطأ - قد يشير إلى محاولة تلاعب"
-            )
+            return tr("component.validation_error.recommendations_signature")
         elif self.error_type == "invalid_hash":
-            return (
-                "• أعد تصدير البيانات من التابلت\n"
-                "• تحقق من اتصال الشبكة أثناء نقل الملف\n"
-                "• استخدم USB بدلاً من الشبكة إذا أمكن\n"
-                "• افحص سلامة وسائط التخزين المستخدمة"
-            )
-        return "يرجى الاتصال بمشرف النظام للمساعدة."
+            return tr("component.validation_error.recommendations_hash")
+        return tr("component.validation_error.recommendations_generic")
 
     def _format_size(self, size_bytes: int) -> str:
         """Format file size in human-readable format."""
         if size_bytes < 1024:
-            return f"{size_bytes} بايت"
+            return tr("component.validation_error.size_bytes", size=size_bytes)
         elif size_bytes < 1024 * 1024:
-            return f"{size_bytes / 1024:.2f} كيلوبايت"
+            return tr("component.validation_error.size_kb", size=f"{size_bytes / 1024:.2f}")
         else:
-            return f"{size_bytes / (1024 * 1024):.2f} ميجابايت"
+            return tr("component.validation_error.size_mb", size=f"{size_bytes / (1024 * 1024):.2f}")
 
     def _on_view_log(self):
         """Open audit log viewer."""
         # TODO: Implement audit log viewer
         from ui.components.toast import Toast
-        Toast.show_toast(self.parent(), "سيتم فتح سجل التدقيق...", Toast.INFO)
+        Toast.show_toast(self.parent(), tr("component.validation_error.opening_audit_log"), Toast.INFO)

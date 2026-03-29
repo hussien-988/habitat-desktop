@@ -11,9 +11,9 @@ from PyQt5.QtCore import Qt, pyqtSignal, QPoint, QTimer, QEvent
 
 from PyQt5.QtGui import QKeySequence, QColor, QMouseEvent
 
-from .config import Config, Pages
+from .config import Config, Pages, save_language, get_saved_language
 from repositories.database import Database
-from services.translation_manager import set_language as tm_set_language
+from services.translation_manager import tr, set_language as tm_set_language
 from utils.i18n import I18n
 from utils.logger import get_logger
 from ui.error_handler import ErrorHandler
@@ -38,13 +38,13 @@ class MainWindow(QMainWindow):
         Pages.IMPORT_PACKAGES: {"admin", "data_manager"},
     }
 
-    def __init__(self, db: Database, i18n: I18n, parent=None):
+    def __init__(self, db: Database, lang: str = "ar", parent=None):
         super().__init__(parent)
         self.WINDOW_RADIUS = 12
         self.db = db
-        self.i18n = i18n
+        self.i18n = I18n(lang)
         self.current_user = None
-        self._is_arabic = True  # افتراضياً عربي
+        self._is_arabic = (lang == "ar")
 
         # For window dragging
         self._drag_position = QPoint()
@@ -61,9 +61,11 @@ class MainWindow(QMainWindow):
         self._connect_signals()
         self._setup_tile_interceptor()
 
-        # تعيين اتجاه الواجهة للعربية
-        self.setLayoutDirection(Qt.RightToLeft)
-        self.i18n.set_language("ar")
+        # Set layout direction based on saved language
+        if self._is_arabic:
+            self.setLayoutDirection(Qt.RightToLeft)
+        else:
+            self.setLayoutDirection(Qt.LeftToRight)
 
         # Start with login page
         self._show_login()
@@ -512,6 +514,18 @@ class MainWindow(QMainWindow):
         # Freeze repainting to prevent login-to-main transition flicker
         self.setUpdatesEnabled(False)
 
+        # Sync language if it was changed on the login page
+        saved_lang = get_saved_language()
+        saved_is_arabic = (saved_lang == "ar")
+        if saved_is_arabic != self._is_arabic:
+            self._is_arabic = saved_is_arabic
+            self.i18n.set_language(saved_lang)
+            if self._is_arabic:
+                self.setLayoutDirection(Qt.RightToLeft)
+            else:
+                self.setLayoutDirection(Qt.LeftToRight)
+            self.language_changed.emit(self._is_arabic)
+
         # Show navbar
         self.navbar.setVisible(True)
 
@@ -564,7 +578,7 @@ class MainWindow(QMainWindow):
         lay = QVBoxLayout(self._loading_overlay)
         lay.setAlignment(Qt.AlignCenter)
 
-        msg = QLabel("جاري تحميل البيانات...")
+        msg = QLabel(tr("page.login.loading_data"))
         msg.setFont(create_font(size=14, weight=FontManager.WEIGHT_MEDIUM))
         msg.setStyleSheet("color: #2C3E50; background: transparent;")
         msg.setAlignment(Qt.AlignCenter)
@@ -1246,17 +1260,12 @@ class MainWindow(QMainWindow):
         self.navigate_to(Pages.CASES)
 
     def toggle_language(self):
-        """Show language dialog and apply selection."""
-        from ui.components.dialogs.language_dialog import LanguageDialog
-
-        current = "ar" if self._is_arabic else "en"
-        selected = LanguageDialog.get_language(parent=self, current_lang=current)
-        if selected is None or selected == current:
-            return
-
-        self._is_arabic = (selected == "ar")
-        self.i18n.set_language(selected)
-        tm_set_language(selected)
+        """Toggle language directly between Arabic and English."""
+        new_lang = "en" if self._is_arabic else "ar"
+        self._is_arabic = (new_lang == "ar")
+        self.i18n.set_language(new_lang)
+        tm_set_language(new_lang)
+        save_language(new_lang)
 
         if self._is_arabic:
             self.setLayoutDirection(Qt.RightToLeft)

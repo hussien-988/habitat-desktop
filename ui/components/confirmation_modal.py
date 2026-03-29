@@ -9,23 +9,24 @@ from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QFont, QColor
 
 from ..font_utils import create_font, FontManager
+from services.translation_manager import tr
 
 
 class ConfirmationModal(QDialog):
     """Confirmation modal dialog."""
 
     def __init__(self,
-                 title: str = "هل تريد حفظ التغييرات؟",
-                 message: str = "لديك بيانات غير محفوظة، يمكنك حفظها كمسودة، والمتابعة لاحقاً، أو الخروج بدون حفظ.",
-                 confirm_text: str = "حفظ كمسودة",
-                 cancel_text: str = "عدم الحفظ",
+                 title: str = None,
+                 message: str = None,
+                 confirm_text: str = None,
+                 cancel_text: str = None,
                  confirm_style: str = "dark",
                  parent=None):
         super().__init__(parent)
-        self.title_text = title
-        self.message_text = message
-        self.confirm_text = confirm_text
-        self.cancel_text = cancel_text
+        self.title_text = title if title is not None else tr("component.confirmation_modal.default_title")
+        self.message_text = message if message is not None else tr("component.confirmation_modal.default_message")
+        self.confirm_text = confirm_text if confirm_text is not None else tr("component.confirmation_modal.save_draft")
+        self.cancel_text = cancel_text if cancel_text is not None else tr("component.confirmation_modal.discard")
         self.confirm_style = confirm_style
         self._setup_ui()
         self._apply_styling()
@@ -165,9 +166,13 @@ class ConfirmationModal(QDialog):
 
     @staticmethod
     def ask_confirmation(parent, title: str, message: str,
-                        confirm_text: str = "تأكيد",
-                        cancel_text: str = "إلغاء",
+                        confirm_text: str = None,
+                        cancel_text: str = None,
                         confirm_style: str = "dark") -> bool:
         """Show confirmation modal and return user choice."""
+        if confirm_text is None:
+            confirm_text = tr("component.confirmation_modal.confirm")
+        if cancel_text is None:
+            cancel_text = tr("component.confirmation_modal.cancel")
         modal = ConfirmationModal(title, message, confirm_text, cancel_text, confirm_style, parent)
         return modal.exec_() == QDialog.Accepted

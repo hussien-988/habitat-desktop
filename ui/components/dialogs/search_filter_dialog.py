@@ -16,7 +16,7 @@ from pathlib import Path
 
 from ui.design_system import Colors
 from ui.font_utils import create_font, FontManager
-from services.translation_manager import tr
+from services.translation_manager import tr, get_layout_direction
 
 
 # Input field stylesheet (shared with PasswordDialog)
@@ -107,7 +107,7 @@ class SearchFilterDialog(QDialog):
         self._setup_ui()
 
     def _setup_ui(self):
-        self.setLayoutDirection(Qt.RightToLeft)
+        self.setLayoutDirection(get_layout_direction())
 
         # Overlay: semi-transparent background that covers everything
         outer = QVBoxLayout(self)
@@ -131,7 +131,7 @@ class SearchFilterDialog(QDialog):
         container = QFrame()
         container.setObjectName("filterContainer")
         container.setFixedWidth(476)
-        container.setLayoutDirection(Qt.RightToLeft)
+        container.setLayoutDirection(get_layout_direction())
         container.setStyleSheet("""
             QFrame#filterContainer {
                 background-color: #FFFFFF;

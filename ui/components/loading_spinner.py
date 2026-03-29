@@ -10,6 +10,7 @@ from PyQt5.QtCore import Qt, QTimer, QRectF, QEvent
 from PyQt5.QtGui import QPainter, QColor, QPen
 
 from ui.font_utils import create_font, FontManager
+from services.translation_manager import tr
 
 # Safety timeout: auto-hide spinner after 30 seconds to prevent infinite hang
 _DEFAULT_TIMEOUT_MS = 30_000
@@ -86,7 +87,7 @@ class LoadingSpinnerOverlay(QWidget):
         self._spinner = _SpinnerWidget(size=48, pen_width=4, parent=self)
         layout.addWidget(self._spinner, 0, Qt.AlignCenter)
 
-        self._label = QLabel("جاري التحميل...")
+        self._label = QLabel(tr("component.loading.default"))
         self._label.setAlignment(Qt.AlignCenter)
         self._label.setFont(create_font(size=10, weight=FontManager.WEIGHT_REGULAR))
         self._label.setStyleSheet(
@@ -110,13 +111,13 @@ class LoadingSpinnerOverlay(QWidget):
     def is_loading(self) -> bool:
         return self._is_loading
 
-    def show_loading(self, message: str = "جاري التحميل...") -> None:
+    def show_loading(self, message: str = None) -> None:
         """Show overlay with spinner and message.
 
         Safe to call multiple times - will update message if already showing.
         """
         self._is_loading = True
-        self._label.setText(message)
+        self._label.setText(message or tr("component.loading.default"))
         parent = self.parent()
         if parent and isinstance(parent, QWidget):
             self.setGeometry(parent.rect())

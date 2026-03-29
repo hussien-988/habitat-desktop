@@ -20,6 +20,7 @@ from ui.font_utils import create_font, FontManager
 from ui.style_manager import StyleManager
 from utils.i18n import I18n
 from services.api_worker import ApiWorker
+from services.translation_manager import tr, get_layout_direction
 from utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -53,7 +54,7 @@ class FieldWorkPreparationStep2(QWidget):
         self._spinner = LoadingSpinnerOverlay(self)
 
         # Load researchers from API (non-blocking)
-        self._spinner.show_loading("جاري تحميل الباحثين...")
+        self._spinner.show_loading(tr("wizard.step2.loading_researchers"))
         self._researchers_worker = ApiWorker(self._fetch_researchers_from_db)
         self._researchers_worker.finished.connect(self._on_researchers_loaded)
         self._researchers_worker.error.connect(self._on_researchers_load_error)
@@ -73,7 +74,7 @@ class FieldWorkPreparationStep2(QWidget):
         self._researchers = []
         self._update_table()
         self._spinner.hide_loading()
-        Toast.show_toast(self, "تعذر تحميل بيانات الباحثين", Toast.ERROR)
+        Toast.show_toast(self, tr("wizard.step2.err_load_researchers"), Toast.ERROR)
 
     @staticmethod
     def _fetch_researchers_from_db():
@@ -151,7 +152,7 @@ class FieldWorkPreparationStep2(QWidget):
 
     def _setup_ui(self):
         """Setup UI - search card + table + selected card."""
-        self.setLayoutDirection(Qt.RightToLeft)
+        self.setLayoutDirection(get_layout_direction())
         self.setStyleSheet("background: transparent;")
 
         main_layout = QVBoxLayout(self)
@@ -178,10 +179,10 @@ class FieldWorkPreparationStep2(QWidget):
         search_card_layout.setContentsMargins(12, 12, 12, 12)
         search_card_layout.setSpacing(6)
 
-        label = QLabel("اختر الباحث الميداني")
-        label.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
-        label.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent;")
-        search_card_layout.addWidget(label)
+        self._select_label = QLabel(tr("wizard.step2.select_researcher"))
+        self._select_label.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
+        self._select_label.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent;")
+        search_card_layout.addWidget(self._select_label)
 
         # Search bar
         search_bar = QFrame()
@@ -223,8 +224,8 @@ class FieldWorkPreparationStep2(QWidget):
         search_icon_btn.clicked.connect(self._filter_and_update)
 
         self.researcher_search = QLineEdit()
-        self.researcher_search.setPlaceholderText("ابحث عن اسم جامع البيانات")
-        self.researcher_search.setLayoutDirection(Qt.RightToLeft)
+        self.researcher_search.setPlaceholderText(tr("wizard.step2.search_placeholder"))
+        self.researcher_search.setLayoutDirection(get_layout_direction())
         self.researcher_search.setStyleSheet("""
             QLineEdit {
                 border: none;
@@ -251,7 +252,7 @@ class FieldWorkPreparationStep2(QWidget):
 
         self.table = QTableWidget()
         self.table.setColumnCount(5)
-        self.table.setLayoutDirection(Qt.RightToLeft)
+        self.table.setLayoutDirection(get_layout_direction())
         self.table.setShowGrid(False)
         self.table.setFocusPolicy(Qt.NoFocus)
         self.table.setSelectionMode(QTableWidget.NoSelection)
@@ -266,7 +267,13 @@ class FieldWorkPreparationStep2(QWidget):
             base_path = Path(__file__).parent.parent.parent
         self._icon_path = base_path / "assets" / "images" / "down.png"
 
-        headers = ["", "اسم جامع البيانات", "حالة التوفر", "المهام النشطة", "الفريق"]
+        headers = [
+            "",
+            tr("wizard.step2.col_collector_name"),
+            tr("wizard.step2.col_availability"),
+            tr("wizard.step2.col_active_tasks"),
+            tr("wizard.step2.col_team"),
+        ]
         for i, text in enumerate(headers):
             item = QTableWidgetItem(text)
             if i in (2, 4) and self._icon_path.exists():
@@ -355,7 +362,7 @@ class FieldWorkPreparationStep2(QWidget):
         footer_layout = QHBoxLayout(footer_frame)
         footer_layout.setContentsMargins(16, 8, 16, 8)
 
-        self.count_label = QLabel("0 نتيجة")
+        self.count_label = QLabel(tr("wizard.step2.result_count", count=0))
         self.count_label.setStyleSheet("color: #637381; font-size: 10pt; background: transparent;")
         footer_layout.addWidget(self.count_label)
         footer_layout.addStretch()
@@ -382,11 +389,11 @@ class FieldWorkPreparationStep2(QWidget):
 
         if total == 0:
             self.table.setSpan(0, 0, 1, 5)
-            empty_item = QTableWidgetItem("لا يوجد جامعي بيانات مطابقين")
+            empty_item = QTableWidgetItem(tr("wizard.step2.no_matching_collectors"))
             empty_item.setTextAlignment(Qt.AlignCenter)
             empty_item.setForeground(QColor("#9CA3AF"))
             self.table.setItem(0, 0, empty_item)
-            self.count_label.setText("0 نتيجة")
+            self.count_label.setText(tr("wizard.step2.result_count", count=0))
             return
 
         for row, researcher in enumerate(researchers):
@@ -439,7 +446,7 @@ class FieldWorkPreparationStep2(QWidget):
 
             # Col 2: Availability (colored)
             is_available = researcher['is_available']
-            avail_text = "متوفر" if is_available else "غير متوفر"
+            avail_text = tr("wizard.step2.available") if is_available else tr("wizard.step2.unavailable")
             avail_item = QTableWidgetItem(avail_text)
             avail_item.setForeground(QColor("#10B981") if is_available else QColor("#EF4444"))
             self.table.setItem(row, 2, avail_item)
@@ -455,7 +462,7 @@ class FieldWorkPreparationStep2(QWidget):
             team_item = QTableWidgetItem(team)
             self.table.setItem(row, 4, team_item)
 
-        self.count_label.setText(f"{total} نتيجة")
+        self.count_label.setText(tr("wizard.step2.result_count", count=total))
 
         if self._selected_researcher:
             selected_id = self._selected_researcher['id']
@@ -521,9 +528,9 @@ class FieldWorkPreparationStep2(QWidget):
 
         # Availability filter
         avail_filter = self._active_filters.get('availability')
-        if avail_filter == "متوفر":
+        if avail_filter == "available":
             filtered = [r for r in filtered if r['is_available']]
-        elif avail_filter == "غير متوفر":
+        elif avail_filter == "unavailable":
             filtered = [r for r in filtered if not r['is_available']]
 
         # Team filter
@@ -555,7 +562,7 @@ class FieldWorkPreparationStep2(QWidget):
 
         if column_index == 2:
             filter_key = 'availability'
-            unique_values = {"متوفر", "غير متوفر"}
+            unique_values = {"available", "unavailable"}
         elif column_index == 4:
             filter_key = 'team'
             for r in self._all_researchers:
@@ -566,7 +573,7 @@ class FieldWorkPreparationStep2(QWidget):
             return
 
         menu = QMenu(self)
-        menu.setLayoutDirection(Qt.RightToLeft)
+        menu.setLayoutDirection(get_layout_direction())
         menu.setStyleSheet("""
             QMenu {
                 background-color: white;
@@ -586,13 +593,18 @@ class FieldWorkPreparationStep2(QWidget):
             }
         """)
 
-        clear_action = QAction("عرض الكل", self)
+        clear_action = QAction(tr("wizard.step2.show_all"), self)
         clear_action.triggered.connect(lambda: self._apply_filter(filter_key, None))
         menu.addAction(clear_action)
         menu.addSeparator()
 
+        _availability_labels = {
+            "available": tr("wizard.step2.available"),
+            "unavailable": tr("wizard.step2.unavailable"),
+        }
         for value in sorted(unique_values):
-            action = QAction(value, self)
+            display_text = _availability_labels.get(value, value)
+            action = QAction(display_text, self)
             action.triggered.connect(lambda checked, v=value: self._apply_filter(filter_key, v))
             if self._active_filters.get(filter_key) == value:
                 action.setCheckable(True)
@@ -613,3 +625,37 @@ class FieldWorkPreparationStep2(QWidget):
     def get_selected_researcher(self):
         """Get selected researcher info."""
         return self._selected_researcher
+
+    def update_language(self, is_arabic: bool = True):
+        """Update UI text after language change."""
+        self.setLayoutDirection(get_layout_direction())
+
+        # Card title
+        self._select_label.setText(tr("wizard.step2.select_researcher"))
+
+        # Search placeholder
+        self.researcher_search.setPlaceholderText(tr("wizard.step2.search_placeholder"))
+        self.researcher_search.setLayoutDirection(get_layout_direction())
+
+        # Table header items
+        headers = [
+            "",
+            tr("wizard.step2.col_collector_name"),
+            tr("wizard.step2.col_availability"),
+            tr("wizard.step2.col_active_tasks"),
+            tr("wizard.step2.col_team"),
+        ]
+        for i, text in enumerate(headers):
+            item = QTableWidgetItem(text)
+            if i in (2, 4) and self._icon_path.exists():
+                item.setIcon(QIcon(str(self._icon_path)))
+            self.table.setHorizontalHeaderItem(i, item)
+
+        self.table.setLayoutDirection(get_layout_direction())
+
+        # Footer count label
+        count = len(self._researchers)
+        self.count_label.setText(tr("wizard.step2.result_count", count=count))
+
+        # Re-populate table to update availability text
+        self._update_table()

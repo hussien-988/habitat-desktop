@@ -14,6 +14,7 @@ from PyQt5.QtGui import QColor
 from ui.design_system import Colors
 from ui.font_utils import create_font, FontManager
 from utils.logger import get_logger
+from services.translation_manager import tr, get_layout_direction
 
 logger = get_logger(__name__)
 
@@ -37,7 +38,7 @@ class EvidencePickerDialog(QDialog):
         self._setup_ui()
 
     def _setup_ui(self):
-        self.setLayoutDirection(Qt.RightToLeft)
+        self.setLayoutDirection(get_layout_direction())
 
         outer = QVBoxLayout(self)
         outer.setContentsMargins(12, 12, 12, 12)
@@ -71,7 +72,7 @@ class EvidencePickerDialog(QDialog):
         header = QHBoxLayout()
         header.setSpacing(0)
 
-        title = QLabel("اختيار مستند موجود")
+        title = QLabel(tr("dialog.evidence_picker.title"))
         title.setFont(create_font(size=16, weight=FontManager.WEIGHT_BOLD))
         title.setStyleSheet(f"color: {Colors.TEXT_PRIMARY};")
         header.addWidget(title)
@@ -99,7 +100,7 @@ class EvidencePickerDialog(QDialog):
                 filtered.append(ev)
 
         if not filtered:
-            empty_label = QLabel("لا توجد مستندات إضافية متاحة للاختيار")
+            empty_label = QLabel(tr("dialog.evidence_picker.no_documents"))
             empty_label.setFont(create_font(size=13))
             empty_label.setStyleSheet(f"color: {Colors.TEXT_SECONDARY};")
             empty_label.setAlignment(Qt.AlignCenter)
@@ -132,11 +133,11 @@ class EvidencePickerDialog(QDialog):
         btn_layout.setSpacing(12)
         btn_layout.addStretch()
 
-        confirm_btn = self._create_button("اختيار", primary=True)
+        confirm_btn = self._create_button(tr("dialog.evidence_picker.select"), primary=True)
         confirm_btn.clicked.connect(self._on_confirm)
         btn_layout.addWidget(confirm_btn)
 
-        cancel_btn = self._create_button("إلغاء", primary=False)
+        cancel_btn = self._create_button(tr("button.cancel"), primary=False)
         cancel_btn.clicked.connect(self.reject)
         btn_layout.addWidget(cancel_btn)
 
@@ -147,14 +148,17 @@ class EvidencePickerDialog(QDialog):
 
     def _create_evidence_row(self, ev: dict) -> QFrame:
         ev_id = str(ev.get("id") or ev.get("evidenceId") or "")
-        file_name = ev.get("originalFileName") or ev.get("fileName") or "مستند"
+        file_name = ev.get("originalFileName") or ev.get("fileName") or tr("dialog.evidence_picker.document")
         ev_type = ev.get("evidenceType") or ev.get("type") or ""
         date_str = str(ev.get("createdAtUtc") or ev.get("uploadedAt") or "")[:10]
 
         # Type label
         type_labels = {
-            1: "هوية", 2: "حيازة", "identification": "هوية",
-            "tenure": "حيازة", "other": "أخرى",
+            1: tr("dialog.evidence_picker.type_identity"),
+            2: tr("dialog.evidence_picker.type_tenure"),
+            "identification": tr("dialog.evidence_picker.type_identity"),
+            "tenure": tr("dialog.evidence_picker.type_tenure"),
+            "other": tr("dialog.evidence_picker.type_other"),
         }
         type_display = type_labels.get(ev_type, str(ev_type) if ev_type else "")
 

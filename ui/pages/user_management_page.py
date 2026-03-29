@@ -23,6 +23,7 @@ from ui.components.icon import Icon
 from ui.components.toast import Toast
 from ui.components.dialogs.password_dialog import PasswordDialog
 from ui.style_manager import StyleManager, PageDimensions
+from services.translation_manager import tr, get_layout_direction
 from utils.i18n import I18n
 from utils.logger import get_logger
 
@@ -82,12 +83,13 @@ class UserManagementPage(QWidget):
         layout.setSpacing(15)
 
         # Header (PageHeader component)
-        header = PageHeader(
-            title="إدارة المستخدمين",
+        self._page_header = PageHeader(
+            title=tr("page.user_mgmt.title"),
             show_add_button=True,
-            button_text="إضافة مستخدم جديد",
+            button_text=tr("page.user_mgmt.add_user"),
             button_icon="icon",
         )
+        header = self._page_header
         header.add_clicked.connect(self._on_add_user)
         layout.addWidget(header)
 
@@ -103,7 +105,7 @@ class UserManagementPage(QWidget):
         self.table = QTableWidget()
         self.table.setColumnCount(4)
         self.table.setRowCount(11)
-        self.table.setLayoutDirection(Qt.RightToLeft)
+        self.table.setLayoutDirection(get_layout_direction())
         self.table.setShowGrid(False)
         self.table.setFocusPolicy(Qt.NoFocus)
         self.table.setSelectionMode(QTableWidget.NoSelection)
@@ -118,7 +120,7 @@ class UserManagementPage(QWidget):
             base_path = Path(__file__).parent.parent.parent
         icon_path = base_path / "assets" / "images" / "down.png"
 
-        headers = ["المستخدم ", "الدور", "الصلاحية", ""]
+        headers = [tr("table.users.user"), tr("table.users.role"), tr("table.users.permission"), ""]
         for i, text in enumerate(headers):
             item = QTableWidgetItem(text)
             if i in (1, 2) and icon_path.exists():
@@ -304,7 +306,7 @@ class UserManagementPage(QWidget):
             self._users = []
             self._update_table()
             return
-        self._spinner.show_loading("جاري تحميل المستخدمين...")
+        self._spinner.show_loading(tr("page.user_mgmt.loading_users"))
         self._load_users_worker = ApiWorker(self._user_controller.get_all_users)
         self._load_users_worker.finished.connect(self._on_load_users_finished)
         self._load_users_worker.error.connect(self._on_load_users_error)
@@ -314,7 +316,7 @@ class UserManagementPage(QWidget):
         self._spinner.hide_loading()
         if not result.success:
             logger.error(f"Failed to load users: {result.message}")
-            Toast.show_toast(self, f"فشل تحميل المستخدمين: {result.message}", Toast.ERROR)
+            Toast.show_toast(self, f"{tr('page.user_mgmt.load_failed')}: {result.message}", Toast.ERROR)
             self._all_users = []
         else:
             raw = result.data or []
@@ -326,7 +328,7 @@ class UserManagementPage(QWidget):
     def _on_load_users_error(self, error_msg):
         self._spinner.hide_loading()
         logger.error(f"Failed to load users: {error_msg}")
-        Toast.show_toast(self, f"فشل تحميل المستخدمين: {error_msg}", Toast.ERROR)
+        Toast.show_toast(self, f"{tr('page.user_mgmt.load_failed')}: {error_msg}", Toast.ERROR)
         self._all_users = []
         self._users = []
         self._update_table()
@@ -380,7 +382,7 @@ class UserManagementPage(QWidget):
 
         if total == 0:
             self.table.setSpan(0, 0, self._rows_per_page, 4)
-            empty_item = QTableWidgetItem("لا توجد بيانات مطابقة للفلتر المحدد")
+            empty_item = QTableWidgetItem(tr("page.user_mgmt.no_matching_data"))
             empty_item.setTextAlignment(Qt.AlignCenter)
             empty_item.setForeground(QColor("#9CA3AF"))
             self.table.setItem(0, 0, empty_item)
@@ -397,7 +399,7 @@ class UserManagementPage(QWidget):
             self.table.setItem(row, 1, QTableWidgetItem(user.get("role", "")))
 
             # col 2: الحالة
-            status = "نشط" if user.get("is_active", True) else "معطل"
+            status = tr("filter.user_mgmt.active") if user.get("is_active", True) else tr("filter.user_mgmt.inactive")
             status_item = QTableWidgetItem(status)
             if user.get("is_active", True):
                 status_item.setForeground(QColor("#27AE60"))
@@ -503,7 +505,7 @@ class UserManagementPage(QWidget):
 
         # عرض
         view_icon = Icon.load_qicon("eye-open", size=18)
-        view_action = QAction("  عرض", self)
+        view_action = QAction(f"  {tr('action.view')}", self)
         if view_icon:
             view_action.setIcon(view_icon)
         view_action.triggered.connect(lambda: self._on_view_user(user))
@@ -511,7 +513,7 @@ class UserManagementPage(QWidget):
 
         # تعديل
         edit_icon = Icon.load_qicon("edit-01", size=18)
-        edit_action = QAction("  تعديل", self)
+        edit_action = QAction(f"  {tr('action.edit')}", self)
         if edit_icon:
             edit_action.setIcon(edit_icon)
         edit_action.triggered.connect(lambda: self._on_edit_user(user))
@@ -519,7 +521,7 @@ class UserManagementPage(QWidget):
 
         # تغيير كلمة المرور
         password_icon = Icon.load_qicon("lock", size=18)
-        password_action = QAction("  تغيير كلمة المرور", self)
+        password_action = QAction(f"  {tr('action.change_password')}", self)
         if password_icon:
             password_action.setIcon(password_icon)
         password_action.triggered.connect(lambda: self._on_change_password(user))
@@ -527,7 +529,7 @@ class UserManagementPage(QWidget):
 
         # حذف
         delete_icon = Icon.load_qicon("delete", size=18)
-        delete_action = QAction("  حذف", self)
+        delete_action = QAction(f"  {tr('action.delete')}", self)
         if delete_icon:
             delete_action.setIcon(delete_icon)
         delete_action.triggered.connect(lambda: self._on_delete_user(user))
@@ -579,13 +581,13 @@ class UserManagementPage(QWidget):
                     unique_values.add(role)
         elif column_index == 2:
             filter_key = 'status'
-            unique_values = {"نشط", "معطل"}
+            unique_values = {tr("filter.user_mgmt.active"), tr("filter.user_mgmt.inactive")}
 
         if not unique_values:
             return
 
         menu = QMenu(self)
-        menu.setLayoutDirection(Qt.RightToLeft)
+        menu.setLayoutDirection(get_layout_direction())
         menu.setStyleSheet("""
             QMenu {
                 background-color: white;
@@ -605,7 +607,7 @@ class UserManagementPage(QWidget):
             }
         """)
 
-        clear_action = QAction("عرض الكل", self)
+        clear_action = QAction(tr("filter.user_mgmt.show_all"), self)
         clear_action.triggered.connect(lambda: self._apply_filter(filter_key, None))
         menu.addAction(clear_action)
         menu.addSeparator()
@@ -639,9 +641,9 @@ class UserManagementPage(QWidget):
 
         if self._active_filters.get('status'):
             target = self._active_filters['status']
-            if target == "نشط":
+            if target == tr("filter.user_mgmt.active"):
                 filtered = [u for u in filtered if u.get("is_active", True)]
-            elif target == "معطل":
+            elif target == tr("filter.user_mgmt.inactive"):
                 filtered = [u for u in filtered if not u.get("is_active", True)]
 
         return filtered
@@ -665,15 +667,15 @@ class UserManagementPage(QWidget):
         display_name = user.get('full_name', user.get('username', ''))
         confirm = ConfirmationDialog.confirm(
             parent=self,
-            title="تغيير كلمة المرور",
-            message=f"هل تريد تغيير كلمة المرور للمستخدم: {display_name}؟"
+            title=tr("dialog.user_mgmt.change_password_title"),
+            message=tr("dialog.user_mgmt.change_password_confirm", name=display_name),
         )
         if confirm != DialogResult.YES:
             return
         new_password = PasswordDialog.get_password(self)
         if not new_password or not self._user_controller:
             return
-        self._spinner.show_loading("جاري تغيير كلمة المرور...")
+        self._spinner.show_loading(tr("page.user_mgmt.changing_password"))
         username = user.get('username', '')
         self._change_pw_worker = ApiWorker(
             self._user_controller.admin_change_user_password,
@@ -689,15 +691,15 @@ class UserManagementPage(QWidget):
         self._spinner.hide_loading()
         if result.success:
             logger.info(f"Password changed for user: {username}")
-            Toast.show_toast(self, "تم تغيير كلمة المرور بنجاح", Toast.SUCCESS)
+            Toast.show_toast(self, tr("page.user_mgmt.password_changed_success"), Toast.SUCCESS)
         else:
             logger.error(f"Password change failed: {result.message}")
-            Toast.show_toast(self, f"فشل تغيير كلمة المرور: {result.message}", Toast.ERROR)
+            Toast.show_toast(self, f"{tr('page.user_mgmt.password_change_failed')}: {result.message}", Toast.ERROR)
 
     def _on_change_password_error(self, error_msg):
         self._spinner.hide_loading()
         logger.error(f"Password change failed: {error_msg}")
-        Toast.show_toast(self, f"فشل تغيير كلمة المرور: {error_msg}", Toast.ERROR)
+        Toast.show_toast(self, f"{tr('page.user_mgmt.password_change_failed')}: {error_msg}", Toast.ERROR)
 
     def configure_for_role(self, role: str):
         self._user_role = role
@@ -715,7 +717,7 @@ class UserManagementPage(QWidget):
         )
         if confirm != DialogResult.YES or not self._user_controller:
             return
-        self._spinner.show_loading("جاري حذف المستخدم...")
+        self._spinner.show_loading(tr("page.user_mgmt.deleting_user"))
         self._delete_user_worker = ApiWorker(
             self._user_controller.delete_user, user.get("user_id", "")
         )
@@ -729,16 +731,16 @@ class UserManagementPage(QWidget):
         self._spinner.hide_loading()
         if result.success:
             logger.info(f"Deleted user: {username}")
-            Toast.show_toast(self, "تم حذف المستخدم بنجاح", Toast.SUCCESS)
+            Toast.show_toast(self, tr("page.user_mgmt.delete_success"), Toast.SUCCESS)
             self._load_users()
         else:
             logger.error(f"Delete user failed: {result.message}")
-            Toast.show_toast(self, f"فشل حذف المستخدم: {result.message}", Toast.ERROR)
+            Toast.show_toast(self, f"{tr('page.user_mgmt.delete_failed')}: {result.message}", Toast.ERROR)
 
     def _on_delete_user_error(self, error_msg):
         self._spinner.hide_loading()
         logger.error(f"Delete user failed: {error_msg}")
-        Toast.show_toast(self, f"فشل حذف المستخدم: {error_msg}", Toast.ERROR)
+        Toast.show_toast(self, f"{tr('page.user_mgmt.delete_failed')}: {error_msg}", Toast.ERROR)
 
     def update_language(self, is_arabic: bool):
         pass

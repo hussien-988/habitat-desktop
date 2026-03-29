@@ -507,35 +507,35 @@ class ApplicantInfoStep(BaseStep):
         # 1. Local validation — required fields
         if not self.first_name.text().strip():
             self._set_err(self.first_name, self._first_name_error)
-            result.add_error("الاسم الأول مطلوب")
+            result.add_error(tr("wizard.applicant.first_name_required"))
         if not self.last_name.text().strip():
             self._set_err(self.last_name, self._last_name_error)
-            result.add_error("الكنية مطلوبة")
+            result.add_error(tr("wizard.applicant.last_name_required"))
         if not self.father_name.text().strip():
             self._set_err(self.father_name, self._father_name_error)
-            result.add_error("اسم الأب مطلوب")
+            result.add_error(tr("wizard.applicant.father_name_required"))
         if not self.mother_name.text().strip():
             self._set_err(self.mother_name, self._mother_name_error)
-            result.add_error("اسم الأم مطلوب")
+            result.add_error(tr("wizard.applicant.mother_name_required"))
 
         # Optional field format validation
         phone_text = self.phone.text().strip()
         if phone_text and len(phone_text) != 8:
             self._set_err(self.phone, self._mobile_error)
-            result.add_error("رقم الجوال يجب أن يكون 8 أرقام")
+            result.add_error(tr("wizard.applicant.mobile_8_digits"))
 
         landline_text = self.landline.text().strip()
         if landline_text and len(landline_text) != 7:
             self._set_err(self.landline, self._landline_error)
-            result.add_error("رقم الهاتف الثابت يجب أن يكون 7 أرقام")
+            result.add_error(tr("wizard.applicant.landline_7_digits"))
 
         nid_text = self.national_id.text().strip()
         if not nid_text:
             self._set_err(self.national_id, self._nid_error)
-            result.add_error("الرقم الوطني مطلوب")
+            result.add_error(tr("wizard.applicant.national_id_required"))
         elif len(nid_text) != 11 or not nid_text.isdigit():
             self._set_err(self.national_id, self._nid_error)
-            result.add_error("الرقم الوطني يجب أن يكون 11 رقماً")
+            result.add_error(tr("wizard.applicant.national_id_11_digits"))
 
         if not result.is_valid:
             return result
@@ -543,7 +543,7 @@ class ApplicantInfoStep(BaseStep):
         # 2. Require survey_id from previous step
         survey_id = self.context.get_data("survey_id")
         if not survey_id:
-            result.add_error("لم يتم إنشاء المسح، يرجى العودة للخطوة السابقة")
+            result.add_error(tr("wizard.applicant.no_survey_error"))
             return result
 
         # 3. Collect data into context.applicant
@@ -568,7 +568,7 @@ class ApplicantInfoStep(BaseStep):
                     result.add_error(build_duplicate_person_message(e.response_data))
                 else:
                     logger.error(f"Contact person API failed: {e}")
-                    result.add_error("فشل حفظ بيانات مقدم الطلب. يرجى المحاولة مجدداً.")
+                    result.add_error(tr("wizard.applicant.save_failed"))
         else:
             try:
                 self._api_client.update_contact_person(survey_id, existing_cp_id, self.context.applicant)
@@ -579,7 +579,7 @@ class ApplicantInfoStep(BaseStep):
                     result.add_error(build_duplicate_person_message(getattr(e, 'response_data', {})))
                 else:
                     logger.error(f"Contact person update failed: {e}")
-                    result.add_error("فشل تحديث بيانات مقدم الطلب. يرجى المحاولة مجدداً.")
+                    result.add_error(tr("wizard.applicant.update_failed"))
 
         # 6. Upload ID photos (if any and not already uploaded)
         person_id = self.context.get_data("contact_person_id")
@@ -597,7 +597,7 @@ class ApplicantInfoStep(BaseStep):
                     logger.info(f"ID photo uploaded: {os.path.basename(fp)}")
                 except Exception as e:
                     logger.error(f"Failed to upload ID photo {fp}: {e}")
-                    Toast.show_toast(self, "تعذر تحميل بيانات مقدم الطلب", Toast.ERROR)
+                    Toast.show_toast(self, tr("wizard.applicant.load_failed"), Toast.ERROR)
             self.context.update_data("uploaded_id_photos", list(already_uploaded))
 
         # 7. Cache contact person locally for draft resume
@@ -613,7 +613,7 @@ class ApplicantInfoStep(BaseStep):
                 logger.info(f"intervieweeName saved: {interviewee_name}")
         except Exception as e:
             logger.warning(f"Could not save interviewee name: {e}")
-            Toast.show_toast(self, "تعذر تحميل بيانات مقدم الطلب", Toast.ERROR)
+            Toast.show_toast(self, tr("wizard.applicant.load_failed"), Toast.ERROR)
 
         return result
 
@@ -628,7 +628,7 @@ class ApplicantInfoStep(BaseStep):
                 logger.debug(f"Contact person cached locally for survey {survey_id}")
         except Exception as e:
             logger.warning(f"Failed to cache contact person locally: {e}")
-            Toast.show_toast(self, "تعذر تحميل بيانات مقدم الطلب", Toast.ERROR)
+            Toast.show_toast(self, tr("wizard.applicant.load_failed"), Toast.ERROR)
 
     def collect_data(self) -> dict:
         fn  = self.first_name.text().strip()

@@ -17,6 +17,7 @@ from ui.style_manager import StyleManager
 from ui.font_utils import create_font, FontManager
 from controllers.import_controller import ImportController
 from services.vocab_service import get_label as vocab_get_label, get_options as vocab_get_options
+from services.translation_manager import tr, get_layout_direction
 from utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -75,14 +76,14 @@ class ImportPackagesListPage(QWidget):
         top_row = QHBoxLayout()
         top_row.setSpacing(20)
 
-        title = QLabel("\u062d\u0632\u0645 \u0627\u0644\u0627\u0633\u062a\u064a\u0631\u0627\u062f")
-        title.setFont(create_font(size=FontManager.SIZE_TITLE, weight=FontManager.WEIGHT_SEMIBOLD))
-        title.setStyleSheet(f"color: {Colors.PAGE_TITLE}; background: transparent; border: none;")
-        top_row.addWidget(title)
+        self._title_label = QLabel(tr("page.import_packages.title"))
+        self._title_label.setFont(create_font(size=FontManager.SIZE_TITLE, weight=FontManager.WEIGHT_SEMIBOLD))
+        self._title_label.setStyleSheet(f"color: {Colors.PAGE_TITLE}; background: transparent; border: none;")
+        top_row.addWidget(self._title_label)
 
         top_row.addStretch()
 
-        self.upload_btn = PrimaryButton("معالجة حزمة جديدة", icon_name="icon")
+        self.upload_btn = PrimaryButton(tr("page.import_packages.process_new"), icon_name="icon")
         self.upload_btn.clicked.connect(self.open_wizard.emit)
         top_row.addWidget(self.upload_btn)
 
@@ -105,7 +106,7 @@ class ImportPackagesListPage(QWidget):
         self._status_combo.setMinimumWidth(220)
         self._status_combo.setStyleSheet(StyleManager.form_input())
 
-        self._status_combo.addItem("جميع الحالات", "")
+        self._status_combo.addItem(tr("page.import_packages.all_statuses"), "")
         for code, label in vocab_get_options("import_status"):
             self._status_combo.addItem(label, str(code))
         self._status_combo.currentIndexChanged.connect(self._on_status_filter_changed)
@@ -122,11 +123,11 @@ class ImportPackagesListPage(QWidget):
         self.table.setEditTriggers(QAbstractItemView.NoEditTriggers)
 
         headers = [
-            "اسم الملف",
-            "الحالة",
-            "التاريخ",
-            "المحتوى",
-            "الجهاز",
+            tr("page.import_packages.col_filename"),
+            tr("page.import_packages.col_status"),
+            tr("page.import_packages.col_date"),
+            tr("page.import_packages.col_content"),
+            tr("page.import_packages.col_device"),
             "",
         ]
         for i, text in enumerate(headers):
@@ -307,9 +308,9 @@ class ImportPackagesListPage(QWidget):
         rows_container.mousePressEvent = lambda e: self._show_page_selection_menu(rows_container)
         footer.addWidget(rows_container)
 
-        rows_label = QLabel("عدد الصفوف:")
-        rows_label.setStyleSheet("color: #637381; font-size: 10pt; font-weight: 400;")
-        footer.addWidget(rows_label)
+        self._rows_label = QLabel(tr("page.import_packages.rows_per_page"))
+        self._rows_label.setStyleSheet("color: #637381; font-size: 10pt; font-weight: 400;")
+        footer.addWidget(self._rows_label)
 
         footer.addStretch()
 
@@ -347,7 +348,7 @@ class ImportPackagesListPage(QWidget):
         card_layout.setAlignment(Qt.AlignCenter)
         card_layout.setSpacing(6)
 
-        self._loading_label = QLabel("جاري التحميل...")
+        self._loading_label = QLabel(tr("page.import_packages.loading"))
         self._loading_label.setFont(create_font(size=11, weight=FontManager.WEIGHT_SEMIBOLD))
         self._loading_label.setStyleSheet("color: #3890DF; background: transparent; border: none;")
         self._loading_label.setAlignment(Qt.AlignCenter)
@@ -366,8 +367,8 @@ class ImportPackagesListPage(QWidget):
 
         return overlay
 
-    def _show_loading(self, message: str = "جاري التحميل..."):
-        self._loading_label.setText(message)
+    def _show_loading(self, message: str = ""):
+        self._loading_label.setText(message or tr("page.import_packages.loading"))
         self._loading_overlay.setGeometry(self.rect())
         self._loading_overlay.raise_()
         self._loading_overlay.setVisible(True)
@@ -398,7 +399,7 @@ class ImportPackagesListPage(QWidget):
 
     def _load_packages(self):
         """Fetch packages from API and populate table."""
-        self._show_loading("جاري تحميل الحزم...")
+        self._show_loading(tr("page.import_packages.loading_packages"))
 
         result = self.import_controller.get_packages(
             page=self._current_page,
@@ -420,7 +421,7 @@ class ImportPackagesListPage(QWidget):
         else:
             logger.error(f"Failed to load packages: {result.message}")
             from ui.components.message_dialog import MessageDialog
-            MessageDialog.error(self, "خطأ", result.message_ar or "فشل تحميل الحزم")
+            MessageDialog.error(self, tr("page.import_packages.error"), result.message_ar or tr("page.import_packages.load_failed"))
 
         self._packages = items
         self._total_count = total_count
@@ -439,7 +440,7 @@ class ImportPackagesListPage(QWidget):
 
         if not items:
             self.table.setSpan(0, 0, 11, 6)
-            empty_item = QTableWidgetItem("\u0644\u0627 \u062a\u0648\u062c\u062f \u062d\u0632\u0645 \u0645\u0637\u0627\u0628\u0642\u0629")
+            empty_item = QTableWidgetItem(tr("page.import_packages.no_matching"))
             empty_item.setTextAlignment(Qt.AlignCenter)
             empty_item.setForeground(QColor("#9CA3AF"))
             self.table.setItem(0, 0, empty_item)
@@ -476,7 +477,7 @@ class ImportPackagesListPage(QWidget):
             buildings = pkg.get("buildingCount", 0) or 0
             units = pkg.get("propertyUnitCount", 0) or 0
             persons = pkg.get("personCount", 0) or 0
-            content = f"{buildings} \u0645\u0628\u0627\u0646\u064a \u2022 {units} \u0648\u062d\u062f\u0629 \u2022 {persons} \u0623\u0634\u062e\u0627\u0635"
+            content = tr("page.import_packages.content_summary", buildings=buildings, units=units, persons=persons)
             self.table.setItem(idx, 3, QTableWidgetItem(content))
 
             # Col 4: Device ID
@@ -553,17 +554,17 @@ class ImportPackagesListPage(QWidget):
         """)
 
         # View
-        view_action = QAction("\u0639\u0631\u0636", self)
+        view_action = QAction(tr("action.view"), self)
         view_action.triggered.connect(lambda: self.view_package.emit(pkg_id))
         menu.addAction(view_action)
 
         # Cancel
-        cancel_action = QAction("\u0625\u0644\u063a\u0627\u0621", self)
+        cancel_action = QAction(tr("action.cancel"), self)
         cancel_action.triggered.connect(lambda: self._cancel_package(pkg_id))
         menu.addAction(cancel_action)
 
         # Quarantine
-        quarantine_action = QAction("\u062d\u062c\u0631", self)
+        quarantine_action = QAction(tr("action.quarantine"), self)
         quarantine_action.triggered.connect(lambda: self._quarantine_package(pkg_id))
         menu.addAction(quarantine_action)
 
@@ -577,12 +578,12 @@ class ImportPackagesListPage(QWidget):
         try:
             result = self.import_controller.cancel_package(package_id)
             if result.success:
-                MessageDialog.success(self, "تم الإلغاء", result.message_ar or "تم إلغاء الحزمة")
+                MessageDialog.success(self, tr("page.import_packages.cancelled"), result.message_ar or tr("page.import_packages.package_cancelled"))
                 self._load_packages()
             else:
-                MessageDialog.error(self, "خطأ", result.message_ar or "فشل إلغاء الحزمة")
+                MessageDialog.error(self, tr("page.import_packages.error"), result.message_ar or tr("page.import_packages.cancel_failed"))
         except Exception as e:
-            MessageDialog.error(self, "خطأ", f"فشل إلغاء الحزمة: {e}")
+            MessageDialog.error(self, tr("page.import_packages.error"), tr("page.import_packages.cancel_failed_detail", error=str(e)))
 
     def _quarantine_package(self, package_id):
         """Quarantine a package."""
@@ -590,12 +591,12 @@ class ImportPackagesListPage(QWidget):
         try:
             result = self.import_controller.quarantine_package(package_id)
             if result.success:
-                MessageDialog.success(self, "تم الحجر", result.message_ar or "تم حجر الحزمة")
+                MessageDialog.success(self, tr("page.import_packages.quarantined"), result.message_ar or tr("page.import_packages.package_quarantined"))
                 self._load_packages()
             else:
-                MessageDialog.error(self, "خطأ", result.message_ar or "فشل حجر الحزمة")
+                MessageDialog.error(self, tr("page.import_packages.error"), result.message_ar or tr("page.import_packages.quarantine_failed"))
         except Exception as e:
-            MessageDialog.error(self, "خطأ", f"فشل حجر الحزمة: {e}")
+            MessageDialog.error(self, tr("page.import_packages.error"), tr("page.import_packages.quarantine_failed_detail", error=str(e)))
 
     def _reset_commit(self, package_id):
         """Reset a stuck commit (admin only)."""
@@ -603,12 +604,12 @@ class ImportPackagesListPage(QWidget):
         try:
             result = self.import_controller.reset_commit(package_id)
             if result.success:
-                MessageDialog.success(self, "تم إعادة التعيين", result.message_ar or "تم إعادة التعيين")
+                MessageDialog.success(self, tr("page.import_packages.reset_done"), result.message_ar or tr("page.import_packages.reset_done"))
                 self._load_packages()
             else:
-                MessageDialog.error(self, "خطأ", result.message_ar or "فشل إعادة التعيين")
+                MessageDialog.error(self, tr("page.import_packages.error"), result.message_ar or tr("page.import_packages.reset_failed"))
         except Exception as e:
-            MessageDialog.error(self, "خطأ", f"فشل إعادة التعيين: {e}")
+            MessageDialog.error(self, tr("page.import_packages.error"), tr("page.import_packages.reset_failed_detail", error=str(e)))
 
     # -- Pagination --
 
@@ -673,6 +674,39 @@ class ImportPackagesListPage(QWidget):
         self.upload_btn.setVisible(can_upload)
         self.upload_btn.setEnabled(can_upload)
 
+    def update_language(self, is_arabic: bool):
+        """Update all translatable texts when language changes."""
+        self.setLayoutDirection(get_layout_direction())
+
+        # Page title and upload button
+        self._title_label.setText(tr("page.import_packages.title"))
+        self.upload_btn.setText(tr("page.import_packages.process_new"))
+
+        # Status filter combo - first item
+        self._status_combo.setItemText(0, tr("page.import_packages.all_statuses"))
+
+        # Table headers
+        header_texts = [
+            tr("page.import_packages.col_filename"),
+            tr("page.import_packages.col_status"),
+            tr("page.import_packages.col_date"),
+            tr("page.import_packages.col_content"),
+            tr("page.import_packages.col_device"),
+            "",
+        ]
+        for i, text in enumerate(header_texts):
+            item = self.table.horizontalHeaderItem(i)
+            if item:
+                item.setText(text)
+
+        # Footer
+        self._rows_label.setText(tr("page.import_packages.rows_per_page"))
+        self._loading_label.setText(tr("page.import_packages.loading"))
+
+        # Re-populate table if data is loaded
+        if self._packages:
+            self._populate_table(self._packages, self._total_count)
+
 
 class ImportPackagesPage(QWidget):
     """Main container with QStackedWidget for import packages."""
@@ -719,3 +753,8 @@ class ImportPackagesPage(QWidget):
     def configure_for_role(self, role):
         """Delegate role configuration to inner list page."""
         self.list_page.configure_for_role(role)
+
+    def update_language(self, is_arabic: bool):
+        """Update all translatable texts when language changes."""
+        self.setLayoutDirection(get_layout_direction())
+        self.list_page.update_language(is_arabic)

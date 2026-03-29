@@ -31,6 +31,7 @@ from ui.components.base_table_model import BaseTableModel
 from utils.i18n import I18n
 from services.api_worker import ApiWorker
 from utils.logger import get_logger
+from services.translation_manager import tr, get_layout_direction
 
 logger = get_logger(__name__)
 
@@ -42,13 +43,13 @@ class ClaimsTableModel(BaseTableModel):
 
     def __init__(self, is_arabic: bool = True):
         columns = [
-            ('claim_id', "Claim ID", "رقم المطالبة"),
-            ('unit_id', "Unit ID", "رقم الوحدة"),
-            ('claim_type', "Type", "النوع"),
-            ('status', "Status", "الحالة"),
-            ('priority', "Priority", "الأولوية"),
-            ('submission_date', "Submission Date", "تاريخ التقديم"),
-            ('conflict', "Conflict", "تعارض"),
+            ('claim_id', "Claim ID", tr("table.claims.claim_id")),
+            ('unit_id', "Unit ID", tr("table.claims.unit_id")),
+            ('claim_type', "Type", tr("table.claims.type")),
+            ('status', "Status", tr("table.claims.status")),
+            ('priority', "Priority", tr("table.claims.priority")),
+            ('submission_date', "Submission Date", tr("table.claims.submission_date")),
+            ('conflict', "Conflict", tr("table.claims.conflict")),
         ]
         super().__init__(items=[], columns=columns)
         self._is_arabic = is_arabic
@@ -94,7 +95,7 @@ class ClaimsTableModel(BaseTableModel):
         elif field_name == 'submission_date':
             return str(item.submission_date) if item.submission_date else "-"
         elif field_name == 'conflict':
-            return "نعم" if item.has_conflict else "لا"
+            return tr("page.claims.yes") if item.has_conflict else tr("page.claims.no")
         return "-"
 
     def set_claims(self, claims: list):
@@ -124,7 +125,7 @@ class ClaimDialog(QDialog):
         layout.setContentsMargins(24, 24, 24, 24)
 
         # Title
-        title = QLabel("إنشاء مطالبة جديدة")
+        title = QLabel(tr("page.claims.create_new_claim"))
         title.setStyleSheet(f"font-size: {Config.FONT_SIZE_H2}pt; font-weight: 700;")
         layout.addWidget(title)
 
@@ -135,20 +136,20 @@ class ClaimDialog(QDialog):
         self.type_combo = QComboBox()
         for code, label in vocab_get_options("ClaimType"):
             self.type_combo.addItem(label, code)
-        form.addRow("نوع المطالبة:", self.type_combo)
+        form.addRow(tr("page.claims.claim_type_label"), self.type_combo)
 
         # Priority
         self.priority_combo = QComboBox()
         for code, label in vocab_get_options("CasePriority"):
             self.priority_combo.addItem(label, code)
         self.priority_combo.setCurrentIndex(1)  # Default to normal
-        form.addRow("الأولوية:", self.priority_combo)
+        form.addRow(tr("page.claims.priority_label"), self.priority_combo)
 
         # Source
         self.source_combo = QComboBox()
         for code, label in vocab_get_options("ClaimSource"):
             self.source_combo.addItem(label, code)
-        form.addRow("المصدر:", self.source_combo)
+        form.addRow(tr("page.claims.source_label"), self.source_combo)
 
         layout.addLayout(form)
 
@@ -160,12 +161,12 @@ class ClaimDialog(QDialog):
         unit_frame.setStyleSheet("background-color: #F8FAFC; border-radius: 8px;")
         unit_layout = QVBoxLayout(unit_frame)
 
-        unit_label = QLabel("اختر المقسم:")
+        unit_label = QLabel(tr("page.claims.select_unit"))
         unit_label.setStyleSheet("font-weight: 600;")
         unit_layout.addWidget(unit_label)
 
         self.unit_search = QLineEdit()
-        self.unit_search.setPlaceholderText("بحث...")
+        self.unit_search.setPlaceholderText(tr("page.claims.search_placeholder"))
         self.unit_search.textChanged.connect(self._filter_units)
         unit_layout.addWidget(self.unit_search)
 
@@ -180,12 +181,12 @@ class ClaimDialog(QDialog):
         person_frame.setStyleSheet("background-color: #F8FAFC; border-radius: 8px;")
         person_layout = QVBoxLayout(person_frame)
 
-        person_label = QLabel("اختر المطالبين (يمكن اختيار أكثر من شخص):")
+        person_label = QLabel(tr("page.claims.select_claimants"))
         person_label.setStyleSheet("font-weight: 600;")
         person_layout.addWidget(person_label)
 
         self.person_search = QLineEdit()
-        self.person_search.setPlaceholderText("بحث بالاسم...")
+        self.person_search.setPlaceholderText(tr("page.claims.search_by_name"))
         self.person_search.textChanged.connect(self._filter_persons)
         person_layout.addWidget(self.person_search)
 
@@ -197,7 +198,7 @@ class ClaimDialog(QDialog):
         layout.addWidget(splitter)
 
         # Notes
-        notes_label = QLabel("ملاحظات:")
+        notes_label = QLabel(tr("page.claims.notes_label"))
         layout.addWidget(notes_label)
 
         self.notes = QTextEdit()
@@ -265,13 +266,13 @@ class ClaimDialog(QDialog):
         # Validate unit selection
         selected_unit = self.unit_list.selectedItems()
         if not selected_unit:
-            MessageDialog.show_warning(parent=self, title="خطأ", message="يجب اختيار وحدة عقارية")
+            MessageDialog.show_warning(parent=self, title=tr("page.claims.error"), message=tr("page.claims.err_select_unit"))
             return
 
         # Validate person selection
         selected_persons = self.person_list.selectedItems()
         if not selected_persons:
-            MessageDialog.show_warning(parent=self, title="خطأ", message="يجب اختيار شخص واحد على الأقل")
+            MessageDialog.show_warning(parent=self, title=tr("page.claims.error"), message=tr("page.claims.err_select_person"))
             return
 
         self.accept()
@@ -309,7 +310,7 @@ class ClaimDetailsDialog(QDialog):
         self.documents = []
         self.pending_docs = []  # New documents to add
 
-        self.setWindowTitle(f"تفاصيل المطالبة - {claim.claim_id}")
+        self.setWindowTitle(f"{tr('page.claims.claim_details')} - {claim.claim_id}")
         self.setMinimumSize(900, 700)
         self._load_documents()
         self._setup_ui()
@@ -326,14 +327,14 @@ class ClaimDetailsDialog(QDialog):
         # Header with status and edit button
         header = QHBoxLayout()
 
-        title = QLabel(f"المطالبة: {self.claim.claim_id}")
+        title = QLabel(f"{tr('page.claims.claim_prefix')}: {self.claim.claim_id}")
         title.setStyleSheet(f"font-size: {Config.FONT_SIZE_H1}pt; font-weight: 700;")
         header.addWidget(title)
 
         header.addStretch()
 
         # Edit button
-        self.edit_btn = QPushButton("تعديل المطالبة")
+        self.edit_btn = QPushButton(tr("page.claims.edit_claim"))
         self.edit_btn.setStyleSheet(f"""
             QPushButton {{
                 background-color: {Config.PRIMARY_COLOR};
@@ -396,12 +397,12 @@ class ClaimDetailsDialog(QDialog):
         btn_layout = QHBoxLayout()
         btn_layout.addStretch()
 
-        self.cancel_btn = QPushButton("إلغاء")
+        self.cancel_btn = QPushButton(tr("page.claims.cancel"))
         self.cancel_btn.setVisible(False)
         self.cancel_btn.clicked.connect(self._cancel_edit)
         btn_layout.addWidget(self.cancel_btn)
 
-        self.save_btn = QPushButton("حفظ التعديلات")
+        self.save_btn = QPushButton(tr("page.claims.save_changes"))
         self.save_btn.setVisible(False)
         self.save_btn.setStyleSheet(f"""
             QPushButton {{
@@ -416,7 +417,7 @@ class ClaimDetailsDialog(QDialog):
         self.save_btn.clicked.connect(self._save_changes)
         btn_layout.addWidget(self.save_btn)
 
-        close_btn = QPushButton("إغلاق")
+        close_btn = QPushButton(tr("page.claims.close"))
         close_btn.clicked.connect(self.accept)
         btn_layout.addWidget(close_btn)
 
@@ -437,8 +438,8 @@ class ClaimDetailsDialog(QDialog):
         details_layout.setContentsMargins(20, 20, 20, 20)
 
         # Read-only fields
-        details_layout.addRow("رقم المطالبة:", QLabel(self.claim.claim_id))
-        details_layout.addRow("رقم الوحدة:", QLabel(self.claim.unit_id or "-"))
+        details_layout.addRow(tr("page.claims.claim_id_label"), QLabel(self.claim.claim_id))
+        details_layout.addRow(tr("page.claims.unit_id_label"), QLabel(self.claim.unit_id or "-"))
 
         # Editable fields
         self.type_combo = QComboBox()
@@ -448,7 +449,7 @@ class ClaimDetailsDialog(QDialog):
         if idx >= 0:
             self.type_combo.setCurrentIndex(idx)
         self.type_combo.setEnabled(False)
-        details_layout.addRow("النوع:", self.type_combo)
+        details_layout.addRow(tr("page.claims.type_label"), self.type_combo)
 
         self.priority_combo = QComboBox()
         for code, label in vocab_get_options("CasePriority"):
@@ -457,28 +458,28 @@ class ClaimDetailsDialog(QDialog):
         if idx >= 0:
             self.priority_combo.setCurrentIndex(idx)
         self.priority_combo.setEnabled(False)
-        details_layout.addRow("الأولوية:", self.priority_combo)
+        details_layout.addRow(tr("page.claims.priority_label"), self.priority_combo)
 
-        details_layout.addRow("المصدر:", QLabel(self.claim.source_display))
-        details_layout.addRow("تاريخ التقديم:", QLabel(str(self.claim.submission_date) if self.claim.submission_date else "-"))
-        details_layout.addRow("تعارض:", QLabel("نعم" if self.claim.has_conflict else "لا"))
+        details_layout.addRow(tr("page.claims.source_label"), QLabel(self.claim.source_display))
+        details_layout.addRow(tr("page.claims.submission_date_label"), QLabel(str(self.claim.submission_date) if self.claim.submission_date else "-"))
+        details_layout.addRow(tr("page.claims.conflict_label"), QLabel(tr("page.claims.yes") if self.claim.has_conflict else tr("page.claims.no")))
 
         # Editable notes
         self.notes_edit = QTextEdit()
         self.notes_edit.setPlainText(self.claim.notes or "")
         self.notes_edit.setMaximumHeight(100)
         self.notes_edit.setEnabled(False)
-        details_layout.addRow("ملاحظات:", self.notes_edit)
+        details_layout.addRow(tr("page.claims.notes_label"), self.notes_edit)
 
         # Resolution notes
         self.resolution_edit = QTextEdit()
         self.resolution_edit.setPlainText(self.claim.resolution_notes or "")
         self.resolution_edit.setMaximumHeight(80)
         self.resolution_edit.setEnabled(False)
-        details_layout.addRow("ملاحظات القرار:", self.resolution_edit)
+        details_layout.addRow(tr("page.claims.resolution_notes_label"), self.resolution_edit)
 
         scroll.setWidget(details_widget)
-        self.tabs.addTab(scroll, "التفاصيل")
+        self.tabs.addTab(scroll, tr("page.claims.tab_details"))
 
     def _create_documents_tab(self):
         """Create documents management tab."""
@@ -489,10 +490,10 @@ class ClaimDetailsDialog(QDialog):
 
         # Header
         header = QHBoxLayout()
-        header.addWidget(QLabel("الوثائق المرفقة:"))
+        header.addWidget(QLabel(tr("page.claims.attached_documents")))
         header.addStretch()
 
-        self.add_doc_btn = QPushButton("+ إضافة وثيقة")
+        self.add_doc_btn = QPushButton("+ " + tr("page.claims.add_document"))
         self.add_doc_btn.setEnabled(False)
         self.add_doc_btn.setStyleSheet(f"""
             QPushButton {{
@@ -519,11 +520,11 @@ class ClaimDetailsDialog(QDialog):
         docs_layout.addWidget(self.docs_list)
 
         # Info label
-        info = QLabel("ملاحظة: لا يمكن استبدال الوثائق، فقط إضافة وثائق جديدة أو إزالة الموجودة")
+        info = QLabel(tr("page.claims.docs_info_note"))
         info.setStyleSheet(f"color: {Config.TEXT_LIGHT}; font-size: {Config.FONT_SIZE_SMALL}pt;")
         docs_layout.addWidget(info)
 
-        self.tabs.addTab(docs_widget, f"الوثائق ({len(self.documents)})")
+        self.tabs.addTab(docs_widget, f"{tr('page.claims.tab_documents')} ({len(self.documents)})")
 
     def _refresh_documents_list(self):
         """Refresh the documents list widget."""
@@ -531,18 +532,18 @@ class ClaimDetailsDialog(QDialog):
         for doc in self.documents:
             item_text = f"{doc.document_type_display_ar}"
             if doc.document_number:
-                item_text += f" - رقم: {doc.document_number}"
+                item_text += f" - {tr('page.claims.number')}: {doc.document_number}"
             if doc.issue_date:
-                item_text += f" - تاريخ: {doc.issue_date}"
+                item_text += f" - {tr('page.claims.date')}: {doc.issue_date}"
             item = QListWidgetItem(item_text)
             item.setData(Qt.UserRole, doc.document_id)
             self.docs_list.addItem(item)
 
         # Add pending docs
         for doc in self.pending_docs:
-            item_text = f"[جديد] {doc.document_type_display_ar}"
+            item_text = f"[{tr('page.claims.new')}] {doc.document_type_display_ar}"
             if doc.document_number:
-                item_text += f" - رقم: {doc.document_number}"
+                item_text += f" - {tr('page.claims.number')}: {doc.document_number}"
             item = QListWidgetItem(item_text)
             item.setData(Qt.UserRole, doc.document_id)
             item.setBackground(QColor("#E8F5E9"))
@@ -554,7 +555,7 @@ class ClaimDetailsDialog(QDialog):
         workflow_layout = QVBoxLayout(workflow_widget)
         workflow_layout.setContentsMargins(20, 20, 20, 20)
 
-        workflow_label = QLabel("إجراءات سير العمل:")
+        workflow_label = QLabel(tr("page.claims.workflow_actions"))
         workflow_label.setStyleSheet("font-weight: 600; font-size: 11pt;")
         workflow_layout.addWidget(workflow_label)
 
@@ -581,12 +582,12 @@ class ClaimDetailsDialog(QDialog):
                 btn.clicked.connect(lambda checked, ns=next_status: self._do_transition(ns))
                 workflow_layout.addWidget(btn)
         else:
-            no_actions = QLabel("لا توجد إجراءات متاحة لهذه الحالة")
+            no_actions = QLabel(tr("page.claims.no_actions_available"))
             no_actions.setStyleSheet(f"color: {Config.TEXT_LIGHT};")
             workflow_layout.addWidget(no_actions)
 
         workflow_layout.addStretch()
-        self.tabs.addTab(workflow_widget, "سير العمل")
+        self.tabs.addTab(workflow_widget, tr("page.claims.tab_workflow"))
 
     def _create_history_tab(self):
         """Create history/audit trail tab."""
@@ -594,12 +595,12 @@ class ClaimDetailsDialog(QDialog):
         self._history_layout = QVBoxLayout(history_widget)
         self._history_layout.setContentsMargins(20, 20, 20, 20)
 
-        loading_label = QLabel("جاري تحميل السجل...")
+        loading_label = QLabel(tr("page.claims.loading_history"))
         loading_label.setAlignment(Qt.AlignCenter)
         loading_label.setStyleSheet(f"color: {Config.TEXT_LIGHT};")
         self._history_layout.addWidget(loading_label)
 
-        self.tabs.addTab(history_widget, "السجل")
+        self.tabs.addTab(history_widget, tr("page.claims.tab_history"))
 
         # Load history asynchronously
         self._history_worker = ApiWorker(
@@ -637,15 +638,15 @@ class ClaimDetailsDialog(QDialog):
                 """)
                 frame_layout = QVBoxLayout(frame)
 
-                header = QLabel(f"تعديل بتاريخ: {entry.get('changed_at', '-')}")
+                header = QLabel(f"{tr('page.claims.modified_on')}: {entry.get('changed_at', '-')}")
                 header.setStyleSheet("font-weight: 600;")
                 frame_layout.addWidget(header)
 
                 if entry.get('changed_by'):
-                    user = QLabel(f"بواسطة: {entry['changed_by']}")
+                    user = QLabel(f"{tr('page.claims.by')}: {entry['changed_by']}")
                     frame_layout.addWidget(user)
 
-                reason = QLabel(f"السبب: {entry.get('change_reason', '-')}")
+                reason = QLabel(f"{tr('page.claims.reason')}: {entry.get('change_reason', '-')}")
                 reason.setWordWrap(True)
                 frame_layout.addWidget(reason)
 
@@ -655,7 +656,7 @@ class ClaimDetailsDialog(QDialog):
             scroll.setWidget(content)
             self._history_layout.addWidget(scroll)
         else:
-            no_history = QLabel("لا يوجد سجل تعديلات لهذه المطالبة")
+            no_history = QLabel(tr("page.claims.no_history"))
             no_history.setAlignment(Qt.AlignCenter)
             no_history.setStyleSheet(f"color: {Config.TEXT_LIGHT};")
             self._history_layout.addWidget(no_history)
@@ -667,7 +668,7 @@ class ClaimDetailsDialog(QDialog):
             if child.widget():
                 child.widget().deleteLater()
 
-        error_label = QLabel("فشل في تحميل السجل")
+        error_label = QLabel(tr("page.claims.err_load_history"))
         error_label.setAlignment(Qt.AlignCenter)
         error_label.setStyleSheet(f"color: {Config.TEXT_LIGHT};")
         self._history_layout.addWidget(error_label)
@@ -689,7 +690,7 @@ class ClaimDetailsDialog(QDialog):
         self.cancel_btn.setVisible(self.edit_mode)
 
         # Update edit button text
-        self.edit_btn.setText("إلغاء التعديل" if self.edit_mode else "تعديل المطالبة")
+        self.edit_btn.setText(tr("page.claims.cancel_edit") if self.edit_mode else tr("page.claims.edit_claim"))
 
     def _cancel_edit(self):
         """Cancel editing and revert changes."""
@@ -722,19 +723,19 @@ class ClaimDetailsDialog(QDialog):
                     self.doc_repo.store_attachment(dialog.selected_file, doc)
                 except Exception as e:
                     logger.error(f"Failed to store attachment: {e}")
-                    MessageDialog.show_warning(parent=self, title="خطأ", message=f"فشل في حفظ الملف: {str(e)}")
+                    MessageDialog.show_warning(parent=self, title=tr("page.claims.error"), message=f"{tr('page.claims.err_save_file')}: {str(e)}")
                     return
 
             self.pending_docs.append(doc)
             self._refresh_documents_list()
-            Toast.show(self, "تمت إضافة الوثيقة (سيتم الحفظ عند تأكيد التعديلات)", Toast.INFO)
+            Toast.show(self, tr("page.claims.doc_added_pending"), Toast.INFO)
 
     def _save_changes(self):
         """Save changes with audit trail."""
         # Get reason for modification (mandatory)
         reason, ok = self._get_modification_reason()
         if not ok or not reason.strip():
-            MessageDialog.show_warning(parent=self, title="خطأ", message="يجب إدخال سبب التعديل")
+            MessageDialog.show_warning(parent=self, title=tr("page.claims.error"), message=tr("page.claims.err_reason_required"))
             return
 
         # Update claim fields
@@ -773,24 +774,24 @@ class ClaimDetailsDialog(QDialog):
             self._load_documents()
             self._refresh_documents_list()
 
-            Toast.show(self, "تم حفظ التعديلات بنجاح", Toast.SUCCESS)
+            Toast.show(self, tr("page.claims.changes_saved"), Toast.SUCCESS)
             self._toggle_edit_mode()
         else:
-            MessageDialog.show_error(parent=self, title="خطأ", message=f"فشل في حفظ التعديلات: {result.message}")
+            MessageDialog.show_error(parent=self, title=tr("page.claims.error"), message=f"{tr('page.claims.err_save_changes')}: {result.message}")
 
     def _on_update_error(self, error_msg):
         """Handle claim update error."""
         self.save_btn.setEnabled(True)
         logger.error(f"Failed to save claim changes: {error_msg}")
-        MessageDialog.show_error(parent=self, title="خطأ", message=f"فشل في حفظ التعديلات: {error_msg}")
+        MessageDialog.show_error(parent=self, title=tr("page.claims.error"), message=f"{tr('page.claims.err_save_changes')}: {error_msg}")
 
     def _get_modification_reason(self):
         """Get modification reason from user."""
         from PyQt5.QtWidgets import QInputDialog
         reason, ok = QInputDialog.getMultiLineText(
             self,
-            "سبب التعديل",
-            "يرجى إدخال سبب التعديل (مطلوب):",
+            tr("page.claims.modification_reason_title"),
+            tr("page.claims.modification_reason_prompt"),
             ""
         )
         return reason, ok
@@ -799,11 +800,11 @@ class ClaimDetailsDialog(QDialog):
         """Perform status transition."""
         try:
             self.workflow.transition_claim(self.claim, next_status)
-            Toast.show(self, f"تم تغيير الحالة إلى: {next_status}", Toast.SUCCESS)
+            Toast.show(self, f"{tr('page.claims.status_changed_to')}: {next_status}", Toast.SUCCESS)
             self.accept()
         except Exception as e:
             logger.error(f"Transition failed: {e}")
-            MessageDialog.show_warning(parent=self, title="خطأ", message=str(e))
+            MessageDialog.show_warning(parent=self, title=tr("page.claims.error"), message=str(e))
 
 
 class AddDocumentDialog(BaseDialog):
@@ -820,7 +821,7 @@ class AddDocumentDialog(BaseDialog):
             size=(500, 400)
         )
         # Override title with hardcoded Arabic (preserving existing behavior)
-        self.setWindowTitle("إضافة وثيقة جديدة")
+        self.setWindowTitle(tr("page.claims.add_new_document"))
         self._setup_ui()
 
     def _setup_ui(self):
@@ -835,36 +836,36 @@ class AddDocumentDialog(BaseDialog):
         self.type_combo = QComboBox()
         for code, label in get_document_type_options():
             self.type_combo.addItem(label, code)
-        form.addRow("نوع الوثيقة:", self.type_combo)
+        form.addRow(tr("page.claims.document_type"), self.type_combo)
 
         # Document number
         self.number_edit = QLineEdit()
-        self.number_edit.setPlaceholderText("رقم الوثيقة (اختياري)")
-        form.addRow("رقم الوثيقة:", self.number_edit)
+        self.number_edit.setPlaceholderText(tr("page.claims.document_number_placeholder"))
+        form.addRow(tr("page.claims.document_number"), self.number_edit)
 
         # Issue date
         self.issue_date = QDateEdit()
         self.issue_date.setCalendarPopup(True)
         self.issue_date.setDate(QDate.currentDate())
         self.issue_date.setDisplayFormat("yyyy-MM-dd")
-        form.addRow("تاريخ الإصدار:", self.issue_date)
+        form.addRow(tr("page.claims.issue_date"), self.issue_date)
 
         # Issuing authority
         self.authority_edit = QLineEdit()
-        self.authority_edit.setPlaceholderText("الجهة المصدرة (اختياري)")
-        form.addRow("الجهة المصدرة:", self.authority_edit)
+        self.authority_edit.setPlaceholderText(tr("page.claims.issuing_authority_placeholder"))
+        form.addRow(tr("page.claims.issuing_authority"), self.authority_edit)
 
         layout.addLayout(form)
 
         # File selection
-        file_frame = QGroupBox("ملف الوثيقة")
+        file_frame = QGroupBox(tr("page.claims.document_file"))
         file_layout = QHBoxLayout(file_frame)
 
-        self.file_label = QLabel("لم يتم اختيار ملف")
+        self.file_label = QLabel(tr("page.claims.no_file_selected"))
         self.file_label.setStyleSheet(f"color: {Config.TEXT_LIGHT};")
         file_layout.addWidget(self.file_label)
 
-        browse_btn = QPushButton("استعراض...")
+        browse_btn = QPushButton(tr("page.claims.browse"))
         browse_btn.clicked.connect(self._browse_file)
         file_layout.addWidget(browse_btn)
 
@@ -872,7 +873,7 @@ class AddDocumentDialog(BaseDialog):
 
         # Notes
         self.notes_edit = QTextEdit()
-        self.notes_edit.setPlaceholderText("ملاحظات (اختياري)")
+        self.notes_edit.setPlaceholderText(tr("page.claims.notes_optional"))
         self.notes_edit.setMaximumHeight(80)
         layout.addWidget(self.notes_edit)
 
@@ -880,11 +881,11 @@ class AddDocumentDialog(BaseDialog):
         btn_layout = QHBoxLayout()
         btn_layout.addStretch()
 
-        cancel_btn = QPushButton("إلغاء")
+        cancel_btn = QPushButton(tr("page.claims.cancel"))
         cancel_btn.clicked.connect(self.reject)
         btn_layout.addWidget(cancel_btn)
 
-        save_btn = QPushButton("إضافة")
+        save_btn = QPushButton(tr("page.claims.add"))
         save_btn.setStyleSheet(f"""
             QPushButton {{
                 background-color: {Config.PRIMARY_COLOR};
@@ -904,7 +905,7 @@ class AddDocumentDialog(BaseDialog):
         """Browse for a document file."""
         file_path, _ = QFileDialog.getOpenFileName(
             self,
-            "اختر ملف الوثيقة",
+            tr("page.claims.select_document_file"),
             "",
             "Documents (*.pdf *.jpg *.jpeg *.png *.doc *.docx);;All Files (*)"
         )
@@ -954,13 +955,13 @@ class ClaimsPage(QWidget):
         # Header
         header_layout = QHBoxLayout()
 
-        title = QLabel(self.i18n.t("claims"))
-        title.setStyleSheet(f"""
+        self._title = QLabel(self.i18n.t("claims"))
+        self._title.setStyleSheet(f"""
             font-size: {Config.FONT_SIZE_H1}pt;
             font-weight: 700;
             color: {Config.TEXT_COLOR};
         """)
-        header_layout.addWidget(title)
+        header_layout.addWidget(self._title)
         header_layout.addStretch()
 
         # Add claim button
@@ -987,7 +988,7 @@ class ClaimsPage(QWidget):
 
         # Search
         self.search_input = QLineEdit()
-        self.search_input.setPlaceholderText("بحث برقم المطالبة...")
+        self.search_input.setPlaceholderText(tr("page.claims.search_by_claim_id"))
         self.search_input.setMinimumWidth(200)
         self.search_input.setStyleSheet(f"""
             QLineEdit {{
@@ -1017,7 +1018,7 @@ class ClaimsPage(QWidget):
         filters_layout.addWidget(self.type_combo)
 
         # Conflicts only
-        self.conflicts_btn = QPushButton("التعارضات فقط")
+        self.conflicts_btn = QPushButton(tr("page.claims.conflicts_only"))
         self.conflicts_btn.setCheckable(True)
         self.conflicts_btn.setStyleSheet(f"""
             QPushButton {{
@@ -1124,17 +1125,17 @@ class ClaimsPage(QWidget):
         if result.success:
             claims = result.data
             self.table_model.set_claims(claims)
-            self.count_label.setText(f"تم العثور على {len(claims)} مطالبة")
+            self.count_label.setText(f"{tr('page.claims.found')} {len(claims)} {tr('page.claims.claim_unit')}")
         else:
             logger.error(f"Failed to load claims: {result.message}")
             self.table_model.set_claims([])
-            self.count_label.setText("تم العثور على 0 مطالبة")
+            self.count_label.setText(f"{tr('page.claims.found')} 0 {tr('page.claims.claim_unit')}")
 
     def _on_search_error(self, error_msg):
         """Handle search error."""
         logger.error(f"Search claims failed: {error_msg}")
         self.table_model.set_claims([])
-        self.count_label.setText("تم العثور على 0 مطالبة")
+        self.count_label.setText(f"{tr('page.claims.found')} 0 {tr('page.claims.claim_unit')}")
 
     def _on_filter_changed(self):
         self._load_claims()
@@ -1162,22 +1163,35 @@ class ClaimsPage(QWidget):
     def _on_create_finished(self, result):
         """Handle claim creation result."""
         if result.success:
-            Toast.show(self, "تم إنشاء المطالبة بنجاح", Toast.SUCCESS)
+            Toast.show(self, tr("page.claims.claim_created"), Toast.SUCCESS)
 
             if hasattr(result, 'conflict_warning') and result.conflict_warning:
-                Toast.show(self, "تحذير: تم الكشف عن مطالبات متعارضة", Toast.WARNING)
+                Toast.show(self, tr("page.claims.conflict_warning"), Toast.WARNING)
 
             self._load_claims()
         else:
             error_msg = result.message
             if hasattr(result, 'validation_errors') and result.validation_errors:
                 error_msg += "\n" + "\n".join(result.validation_errors)
-            Toast.show(self, f"فشل في إنشاء المطالبة: {error_msg}", Toast.ERROR)
+            Toast.show(self, f"{tr('page.claims.err_create_claim')}: {error_msg}", Toast.ERROR)
 
     def _on_create_error(self, error_msg):
         """Handle claim creation error."""
         logger.error(f"Failed to create claim: {error_msg}")
-        Toast.show(self, f"فشل في إنشاء المطالبة: {error_msg}", Toast.ERROR)
+        Toast.show(self, f"{tr('page.claims.err_create_claim')}: {error_msg}", Toast.ERROR)
 
     def update_language(self, is_arabic: bool):
+        self.setLayoutDirection(get_layout_direction())
+        self._title.setText(self.i18n.t("claims"))
+        self.search_input.setPlaceholderText(tr("page.claims.search_by_claim_id"))
+        self.conflicts_btn.setText(tr("page.claims.conflicts_only"))
+        self.table_model._columns = [
+            ('claim_id', "Claim ID", tr("table.claims.claim_id")),
+            ('unit_id', "Unit ID", tr("table.claims.unit_id")),
+            ('claim_type', "Type", tr("table.claims.type")),
+            ('status', "Status", tr("table.claims.status")),
+            ('priority', "Priority", tr("table.claims.priority")),
+            ('submission_date', "Submission Date", tr("table.claims.submission_date")),
+            ('conflict', "Conflict", tr("table.claims.conflict")),
+        ]
         self.table_model.set_language(is_arabic)

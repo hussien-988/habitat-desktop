@@ -19,6 +19,7 @@ from ui.components.icon import Icon
 from ui.design_system import Colors
 from ui.font_utils import create_font, FontManager
 from utils.logger import get_logger
+from services.translation_manager import tr, get_layout_direction
 
 logger = get_logger(__name__)
 
@@ -67,7 +68,7 @@ class PasswordDialog(QDialog):
         self._setup_ui()
 
     def _setup_ui(self):
-        self.setLayoutDirection(Qt.RightToLeft)
+        self.setLayoutDirection(get_layout_direction())
 
         outer = QVBoxLayout(self)
         outer.setContentsMargins(12, 12, 12, 12)
@@ -117,11 +118,11 @@ class PasswordDialog(QDialog):
         btn_layout.setSpacing(12)
         btn_layout.addStretch()
 
-        save_btn = self._create_button("حفظ", primary=True)
+        save_btn = self._create_button(tr("button.save"), primary=True)
         save_btn.clicked.connect(self._on_save)
         btn_layout.addWidget(save_btn)
 
-        cancel_btn = self._create_button("الغاء", primary=False)
+        cancel_btn = self._create_button(tr("button.cancel"), primary=False)
         cancel_btn.clicked.connect(self.reject)
         btn_layout.addWidget(cancel_btn)
 
@@ -132,42 +133,42 @@ class PasswordDialog(QDialog):
 
     def _build_set_mode(self, layout: QVBoxLayout):
         """Two password fields with confirmation — new user."""
-        title = self._create_title("حفظ المستخدم")
+        title = self._create_title(tr("dialog.password.save_user"))
         layout.addWidget(title)
 
-        subtitle = self._create_subtitle("ضع كلمة المرور للمستخدم")
+        subtitle = self._create_subtitle(tr("dialog.password.set_password"))
         layout.addWidget(subtitle)
 
-        self.password_input = self._create_password_field("أدخل كلمة المرور", "password")
+        self.password_input = self._create_password_field(tr("dialog.password.enter_password"), "password")
         layout.addWidget(self.password_input)
 
-        confirm_label = self._create_subtitle("اعد ادخال كلمة المرور")
+        confirm_label = self._create_subtitle(tr("dialog.password.reenter_password"))
         layout.addWidget(confirm_label)
 
-        self.confirm_input = self._create_password_field("أدخل كلمة المرور", "confirm")
+        self.confirm_input = self._create_password_field(tr("dialog.password.enter_password"), "confirm")
         layout.addWidget(self.confirm_input)
 
     def _build_change_mode(self, layout: QVBoxLayout):
         """Three password fields — current + new + confirm."""
-        title = self._create_title("تغيير كلمة المرور")
+        title = self._create_title(tr("dialog.password.change_password"))
         layout.addWidget(title)
 
-        current_label = self._create_subtitle("ضع كلمة المرور الحالية")
+        current_label = self._create_subtitle(tr("dialog.password.enter_current"))
         layout.addWidget(current_label)
 
-        self.current_input = self._create_password_field("أدخل كلمة المرور", "current")
+        self.current_input = self._create_password_field(tr("dialog.password.enter_password"), "current")
         layout.addWidget(self.current_input)
 
-        new_label = self._create_subtitle("ضع كلمة المرور الجديدة")
+        new_label = self._create_subtitle(tr("dialog.password.enter_new"))
         layout.addWidget(new_label)
 
-        self.password_input = self._create_password_field("أدخل كلمة المرور", "password")
+        self.password_input = self._create_password_field(tr("dialog.password.enter_password"), "password")
         layout.addWidget(self.password_input)
 
-        confirm_label = self._create_subtitle("اعد ادخال كلمة المرور الجديدة")
+        confirm_label = self._create_subtitle(tr("dialog.password.reenter_new"))
         layout.addWidget(confirm_label)
 
-        self.confirm_input = self._create_password_field("أدخل كلمة المرور", "confirm")
+        self.confirm_input = self._create_password_field(tr("dialog.password.enter_password"), "confirm")
         layout.addWidget(self.confirm_input)
 
     # --- Reusable widget builders ---
@@ -267,7 +268,7 @@ class PasswordDialog(QDialog):
         confirm = self.confirm_input.text().strip()
         if pwd != confirm:
             self._highlight_error(self.confirm_input)
-            self._policy_error_label.setText("كلمات المرور غير متطابقة")
+            self._policy_error_label.setText(tr("dialog.password.mismatch"))
             self._policy_error_label.show()
             return
 

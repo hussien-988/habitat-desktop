@@ -11,22 +11,27 @@ from PyQt5.QtGui import QColor
 
 from ui.font_utils import create_font, FontManager
 from ui.style_manager import StyleManager
+from services.translation_manager import tr, get_layout_direction
 from utils.logger import get_logger
 
 logger = get_logger(__name__)
 
 # Entity sections in commit-report (9 types)
-_ENTITY_SECTIONS = [
-    ('surveys', 'المسوحات'),
-    ('buildings', 'المباني'),
-    ('buildingDocuments', 'مستندات المباني'),
-    ('propertyUnits', 'الوحدات العقارية'),
-    ('persons', 'الأشخاص'),
-    ('households', 'الأسر'),
-    ('personPropertyRelations', 'علاقات الأشخاص بالعقارات'),
-    ('evidences', 'المستندات'),
-    ('claims', 'المطالبات'),
+_ENTITY_SECTION_KEYS = [
+    ('surveys', 'wizard.import.entity.surveys'),
+    ('buildings', 'wizard.import.entity.buildings'),
+    ('buildingDocuments', 'wizard.import.entity.building_documents'),
+    ('propertyUnits', 'wizard.import.entity.property_units'),
+    ('persons', 'wizard.import.entity.persons'),
+    ('households', 'wizard.import.entity.households'),
+    ('personPropertyRelations', 'wizard.import.entity.person_property_relations'),
+    ('evidences', 'wizard.import.entity.evidences'),
+    ('claims', 'wizard.import.entity.claims'),
 ]
+
+
+def _get_entity_sections():
+    return [(k, tr(tr_key)) for k, tr_key in _ENTITY_SECTION_KEYS]
 
 
 class ImportStep6Report(QWidget):
@@ -43,7 +48,7 @@ class ImportStep6Report(QWidget):
         self.load_report(package_id)
 
     def _setup_ui(self):
-        self.setLayoutDirection(Qt.RightToLeft)
+        self.setLayoutDirection(get_layout_direction())
         self.setStyleSheet("background: transparent;")
 
         outer_layout = QVBoxLayout(self)
@@ -70,7 +75,7 @@ class ImportStep6Report(QWidget):
         self._result_card_layout.setContentsMargins(32, 24, 32, 24)
         self._result_card_layout.setSpacing(8)
 
-        self._result_title = QLabel("تم الإدخال بنجاح")
+        self._result_title = QLabel(tr("wizard.import.step6.commit_success"))
         self._result_title.setFont(create_font(size=14, weight=FontManager.WEIGHT_SEMIBOLD))
         self._result_card_layout.addWidget(self._result_title)
 
@@ -106,10 +111,10 @@ class ImportStep6Report(QWidget):
         stats_layout.setContentsMargins(32, 24, 32, 24)
         stats_layout.setSpacing(16)
 
-        stats_title = QLabel("ملخص النتائج")
-        stats_title.setFont(create_font(size=12, weight=FontManager.WEIGHT_SEMIBOLD))
-        stats_title.setStyleSheet("color: #212B36; background: transparent;")
-        stats_layout.addWidget(stats_title)
+        self._stats_title = QLabel(tr("wizard.import.step6.results_summary"))
+        self._stats_title.setFont(create_font(size=12, weight=FontManager.WEIGHT_SEMIBOLD))
+        self._stats_title.setStyleSheet("color: #212B36; background: transparent;")
+        stats_layout.addWidget(self._stats_title)
 
         sep = QFrame()
         sep.setFrameShape(QFrame.HLine)
@@ -120,19 +125,19 @@ class ImportStep6Report(QWidget):
         stats_row = QHBoxLayout()
         stats_row.setSpacing(16)
 
-        self._approved_box = self._create_stat_box("معتمد", "0", "#3B82F6", "#EFF6FF")
+        self._approved_box, self._approved_label = self._create_stat_box(tr("wizard.import.step6.stat_approved"), "0", "#3B82F6", "#EFF6FF")
         stats_row.addWidget(self._approved_box)
 
-        self._committed_box = self._create_stat_box("تم الإدخال", "0", "#10B981", "#ECFDF5")
+        self._committed_box, self._committed_label = self._create_stat_box(tr("wizard.import.step6.stat_committed"), "0", "#10B981", "#ECFDF5")
         stats_row.addWidget(self._committed_box)
 
-        self._failed_box = self._create_stat_box("فشل", "0", "#EF4444", "#FEF2F2")
+        self._failed_box, self._failed_label = self._create_stat_box(tr("wizard.import.step6.stat_failed"), "0", "#EF4444", "#FEF2F2")
         stats_row.addWidget(self._failed_box)
 
-        self._skipped_box = self._create_stat_box("تم التخطي", "0", "#F59E0B", "#FFFBEB")
+        self._skipped_box, self._skipped_label = self._create_stat_box(tr("wizard.import.step6.stat_skipped"), "0", "#F59E0B", "#FFFBEB")
         stats_row.addWidget(self._skipped_box)
 
-        self._rate_box = self._create_stat_box("نسبة النجاح", "0%", "#8B5CF6", "#F5F3FF")
+        self._rate_box, self._rate_label = self._create_stat_box(tr("wizard.import.step6.stat_success_rate"), "0%", "#8B5CF6", "#F5F3FF")
         stats_row.addWidget(self._rate_box)
 
         stats_row.addStretch()
@@ -146,17 +151,21 @@ class ImportStep6Report(QWidget):
         breakdown_layout.setContentsMargins(32, 24, 32, 24)
         breakdown_layout.setSpacing(16)
 
-        breakdown_title = QLabel("تفصيل حسب نوع الكيان")
-        breakdown_title.setFont(create_font(size=12, weight=FontManager.WEIGHT_SEMIBOLD))
-        breakdown_title.setStyleSheet("color: #212B36; background: transparent;")
-        breakdown_layout.addWidget(breakdown_title)
+        self._breakdown_title = QLabel(tr("wizard.import.step6.breakdown_title"))
+        self._breakdown_title.setFont(create_font(size=12, weight=FontManager.WEIGHT_SEMIBOLD))
+        self._breakdown_title.setStyleSheet("color: #212B36; background: transparent;")
+        breakdown_layout.addWidget(self._breakdown_title)
 
         self._breakdown_table = QTableWidget()
         self._breakdown_table.setColumnCount(5)
         self._breakdown_table.setHorizontalHeaderLabels([
-            "نوع الكيان", "معتمد", "تم الإدخال", "فشل", "تم التخطي"
+            tr("wizard.import.step6.col_entity_type"),
+            tr("wizard.import.step6.col_approved"),
+            tr("wizard.import.step6.col_committed"),
+            tr("wizard.import.step6.col_failed"),
+            tr("wizard.import.step6.col_skipped"),
         ])
-        self._breakdown_table.setLayoutDirection(Qt.RightToLeft)
+        self._breakdown_table.setLayoutDirection(get_layout_direction())
         self._breakdown_table.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self._breakdown_table.setSelectionBehavior(QAbstractItemView.SelectRows)
         self._breakdown_table.verticalHeader().setVisible(False)
@@ -201,10 +210,10 @@ class ImportStep6Report(QWidget):
         extra_layout.setContentsMargins(32, 24, 32, 24)
         extra_layout.setSpacing(12)
 
-        extra_title = QLabel("معلومات إضافية")
-        extra_title.setFont(create_font(size=12, weight=FontManager.WEIGHT_SEMIBOLD))
-        extra_title.setStyleSheet("color: #212B36; background: transparent;")
-        extra_layout.addWidget(extra_title)
+        self._extra_title = QLabel(tr("wizard.import.step6.extra_info_title"))
+        self._extra_title.setFont(create_font(size=12, weight=FontManager.WEIGHT_SEMIBOLD))
+        self._extra_title.setStyleSheet("color: #212B36; background: transparent;")
+        extra_layout.addWidget(self._extra_title)
 
         sep2 = QFrame()
         sep2.setFrameShape(QFrame.HLine)
@@ -217,22 +226,24 @@ class ImportStep6Report(QWidget):
 
         # Pre-create extra info labels
         self._extra_labels = {}
-        extra_items = [
-            ('duplicateAttachmentsFound', 'مرفقات مكررة'),
-            ('deduplicationBytesSaved', 'حجم التوفير من إزالة التكرار'),
-            ('conflictResolutionsApplied', 'حلول تكرارات مطبّقة'),
-            ('mergesPerformed', 'عمليات دمج'),
-            ('isArchived', 'تم الأرشفة'),
-            ('archivePath', 'مسار الأرشيف'),
+        self._extra_name_labels = {}
+        self._extra_keys_tr = [
+            ('duplicateAttachmentsFound', "wizard.import.step6.extra_dup_attachments"),
+            ('deduplicationBytesSaved', "wizard.import.step6.extra_dedup_savings"),
+            ('conflictResolutionsApplied', "wizard.import.step6.extra_conflict_resolutions"),
+            ('mergesPerformed', "wizard.import.step6.extra_merges"),
+            ('isArchived', "wizard.import.step6.extra_archived"),
+            ('archivePath', "wizard.import.step6.extra_archive_path"),
         ]
-        for key, ar_label in extra_items:
+        for key, tr_key in self._extra_keys_tr:
             row = QHBoxLayout()
             row.setSpacing(12)
-            name = QLabel(f"{ar_label}:")
+            name = QLabel(f"{tr(tr_key)}:")
             name.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
             name.setStyleSheet("color: #637381; background: transparent;")
             name.setFixedWidth(200)
             row.addWidget(name)
+            self._extra_name_labels[key] = name
 
             value = QLabel("-")
             value.setFont(create_font(size=10, weight=FontManager.WEIGHT_REGULAR))
@@ -252,10 +263,10 @@ class ImportStep6Report(QWidget):
         errors_card_layout.setSpacing(12)
 
         errors_title_row = QHBoxLayout()
-        errors_title_label = QLabel("الأخطاء")
-        errors_title_label.setFont(create_font(size=12, weight=FontManager.WEIGHT_SEMIBOLD))
-        errors_title_label.setStyleSheet("color: #EF4444; background: transparent;")
-        errors_title_row.addWidget(errors_title_label)
+        self._errors_title_label = QLabel(tr("wizard.import.step6.errors_title"))
+        self._errors_title_label.setFont(create_font(size=12, weight=FontManager.WEIGHT_SEMIBOLD))
+        self._errors_title_label.setStyleSheet("color: #EF4444; background: transparent;")
+        errors_title_row.addWidget(self._errors_title_label)
 
         self._errors_count_label = QLabel("")
         self._errors_count_label.setFont(create_font(size=10, weight=FontManager.WEIGHT_REGULAR))
@@ -300,8 +311,8 @@ class ImportStep6Report(QWidget):
         return card
 
     def _create_stat_box(self, label_text: str, value_text: str,
-                         color: str, bg: str) -> QFrame:
-        """Create a stat box with value and label."""
+                         color: str, bg: str):
+        """Create a stat box with value and label. Returns (box, label)."""
         box = QFrame()
         box.setFixedHeight(70)
         box.setMinimumWidth(120)
@@ -335,7 +346,7 @@ class ImportStep6Report(QWidget):
         label.setAlignment(Qt.AlignCenter)
         box_layout.addWidget(label)
 
-        return box
+        return box, label
 
     def _set_result_style(self, status: str = "success"):
         """Apply styling to the result card. status: 'success', 'partial', 'error'."""
@@ -402,7 +413,7 @@ class ImportStep6Report(QWidget):
         cl.setAlignment(Qt.AlignCenter)
         cl.setSpacing(6)
 
-        self._ld_label = QLabel("جاري التحميل")
+        self._ld_label = QLabel(tr("wizard.import.step6.loading"))
         self._ld_label.setAlignment(Qt.AlignCenter)
         self._ld_label.setFont(create_font(size=11, weight=FontManager.WEIGHT_SEMIBOLD))
         self._ld_label.setStyleSheet("color: #3890DF; background: transparent;")
@@ -417,8 +428,8 @@ class ImportStep6Report(QWidget):
         ol.addWidget(card)
         return overlay
 
-    def _show_loading(self, msg="جاري التحميل"):
-        self._ld_label.setText(msg)
+    def _show_loading(self, msg=None):
+        self._ld_label.setText(msg or tr("wizard.import.step6.loading"))
         self._dots_count = 0
         self._loading_overlay.setVisible(True)
         self._loading_overlay.raise_()
@@ -446,19 +457,19 @@ class ImportStep6Report(QWidget):
         """Load the commit report from the controller."""
         logger.info(f"Loading commit report for package {package_id}")
 
-        self._show_loading("جاري تحميل التقرير")
+        self._show_loading(tr("wizard.import.step6.loading_report"))
 
         result = self.import_controller.get_commit_report(package_id)
         self._hide_loading()
 
         if not result.success:
             self._set_result_style("error")
-            self._result_title.setText("فشل تحميل التقرير")
+            self._result_title.setText(tr("wizard.import.step6.report_load_failed"))
             self._result_subtitle.setText(result.message_ar or result.message)
             from ui.components.message_dialog import MessageDialog
             MessageDialog.error(
-                self, "خطأ",
-                result.message_ar or "فشل تحميل تقرير الإدخال"
+                self, tr("wizard.import.step6.error"),
+                result.message_ar or tr("wizard.import.step6.commit_report_load_failed")
             )
             return
 
@@ -481,20 +492,20 @@ class ImportStep6Report(QWidget):
         # Result header
         if is_fully_ok and total_failed == 0:
             self._set_result_style("success")
-            self._result_title.setText("تم الإدخال بنجاح")
+            self._result_title.setText(tr("wizard.import.step6.commit_success"))
             self._result_subtitle.setText(
-                f"تم إدخال {total_committed} سجل بنجاح"
+                tr("wizard.import.step6.commit_success_detail", count=total_committed)
             )
         elif total_committed > 0 and total_failed > 0:
             self._set_result_style("partial")
-            self._result_title.setText("تم الإدخال مع بعض الأخطاء")
+            self._result_title.setText(tr("wizard.import.step6.commit_partial"))
             self._result_subtitle.setText(
-                f"تم إدخال {total_committed} سجل، فشل {total_failed} سجل"
+                tr("wizard.import.step6.commit_partial_detail", committed=total_committed, failed=total_failed)
             )
         else:
             self._set_result_style("error")
-            self._result_title.setText("فشل الإدخال")
-            self._result_subtitle.setText(f"فشل إدخال {total_failed} سجل")
+            self._result_title.setText(tr("wizard.import.step6.commit_failed"))
+            self._result_subtitle.setText(tr("wizard.import.step6.commit_failed_detail", count=total_failed))
 
         # Meta info
         duration = d.get("duration", "")
@@ -502,12 +513,12 @@ class ImportStep6Report(QWidget):
         pkg_number = d.get("packageNumber", "")
 
         if duration:
-            self._duration_label.setText(f"المدة: {duration}")
+            self._duration_label.setText(tr("wizard.import.step6.meta_duration", value=duration))
         if committed_at:
             date_part = committed_at[:10] if len(committed_at) >= 10 else committed_at
-            self._date_label.setText(f"التاريخ: {date_part}")
+            self._date_label.setText(tr("wizard.import.step6.meta_date", value=date_part))
         if pkg_number:
-            self._pkg_number_label.setText(f"رقم الحزمة: {pkg_number}")
+            self._pkg_number_label.setText(tr("wizard.import.step6.meta_package_number", value=pkg_number))
 
         # Summary stat boxes
         self._update_stat_value(self._approved_box, str(total_approved))
@@ -535,7 +546,7 @@ class ImportStep6Report(QWidget):
     def _populate_breakdown_table(self, d: dict):
         """Fill the per-entity breakdown table."""
         rows = []
-        for key, ar_name in _ENTITY_SECTIONS:
+        for key, ar_name in _get_entity_sections():
             section = d.get(key)
             if not isinstance(section, dict):
                 continue
@@ -583,7 +594,7 @@ class ImportStep6Report(QWidget):
         )
 
         is_archived = d.get("isArchived", False)
-        self._extra_labels["isArchived"].setText("نعم" if is_archived else "لا")
+        self._extra_labels["isArchived"].setText(tr("wizard.import.step6.yes") if is_archived else tr("wizard.import.step6.no"))
 
         archive_path = d.get("archivePath", "")
         self._extra_labels["archivePath"].setText(archive_path or "-")
@@ -601,9 +612,9 @@ class ImportStep6Report(QWidget):
             return
 
         self._errors_card.setVisible(True)
-        self._errors_count_label.setText(f"({len(errors)} خطأ)")
+        self._errors_count_label.setText(tr("wizard.import.step6.error_count", count=len(errors)))
 
-        entity_names = {k: v for k, v in _ENTITY_SECTIONS}
+        entity_names = {k: v for k, v in _get_entity_sections()}
 
         for err in errors:
             row = QFrame()
@@ -652,7 +663,7 @@ class ImportStep6Report(QWidget):
     def set_error(self, error_message: str):
         """Set the report to error state with a message."""
         self._set_result_style("error")
-        self._result_title.setText("فشل الإدخال")
+        self._result_title.setText(tr("wizard.import.step6.commit_failed"))
         self._result_subtitle.setText(error_message)
 
     def get_report_data(self) -> dict:
@@ -663,7 +674,7 @@ class ImportStep6Report(QWidget):
         """Reset the step to initial state."""
         self._report_data = None
         self._set_result_style("success")
-        self._result_title.setText("تم الإدخال بنجاح")
+        self._result_title.setText(tr("wizard.import.step6.commit_success"))
         self._result_subtitle.setText("")
         self._duration_label.setText("")
         self._date_label.setText("")
@@ -677,3 +688,42 @@ class ImportStep6Report(QWidget):
         for label in self._extra_labels.values():
             label.setText("-")
         self._errors_card.setVisible(False)
+
+    def update_language(self, is_arabic: bool):
+        """Update all translatable texts after language change."""
+        self.setLayoutDirection(get_layout_direction())
+
+        # Loading label
+        self._ld_label.setText(tr("wizard.import.step6.loading"))
+
+        # Section titles
+        self._stats_title.setText(tr("wizard.import.step6.results_summary"))
+        self._breakdown_title.setText(tr("wizard.import.step6.breakdown_title"))
+        self._extra_title.setText(tr("wizard.import.step6.extra_info_title"))
+        self._errors_title_label.setText(tr("wizard.import.step6.errors_title"))
+
+        # Stat box labels
+        self._approved_label.setText(tr("wizard.import.step6.stat_approved"))
+        self._committed_label.setText(tr("wizard.import.step6.stat_committed"))
+        self._failed_label.setText(tr("wizard.import.step6.stat_failed"))
+        self._skipped_label.setText(tr("wizard.import.step6.stat_skipped"))
+        self._rate_label.setText(tr("wizard.import.step6.stat_success_rate"))
+
+        # Extra info name labels
+        for key, tr_key in self._extra_keys_tr:
+            if key in self._extra_name_labels:
+                self._extra_name_labels[key].setText(f"{tr(tr_key)}:")
+
+        # Breakdown table header labels
+        self._breakdown_table.setHorizontalHeaderLabels([
+            tr("wizard.import.step6.col_entity_type"),
+            tr("wizard.import.step6.col_approved"),
+            tr("wizard.import.step6.col_committed"),
+            tr("wizard.import.step6.col_failed"),
+            tr("wizard.import.step6.col_skipped"),
+        ])
+        self._breakdown_table.setLayoutDirection(get_layout_direction())
+
+        # Re-populate all dynamic content with updated translations
+        if self._report_data:
+            self._update_ui()

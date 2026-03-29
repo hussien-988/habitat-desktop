@@ -15,6 +15,7 @@ from repositories.building_repository import BuildingRepository
 from repositories.person_repository import PersonRepository
 from repositories.claim_repository import ClaimRepository
 from ui.components.base_table_model import BaseTableModel
+from services.translation_manager import tr, get_layout_direction
 from utils.i18n import I18n
 from utils.logger import get_logger
 
@@ -103,7 +104,7 @@ class SearchPage(QWidget):
         search_layout.setSpacing(16)
 
         self.search_input = QLineEdit()
-        self.search_input.setPlaceholderText("ابحث في المباني، الأشخاص، المطالبات...")
+        self.search_input.setPlaceholderText(tr("page.search.placeholder"))
         self.search_input.setStyleSheet(f"""
             QLineEdit {{
                 background-color: #F8FAFC;
@@ -167,24 +168,33 @@ class SearchPage(QWidget):
 
         # Buildings tab
         self.buildings_table = self._create_table()
-        self.buildings_model = SearchResultsModel(["رقم المبنى", "الحي", "النوع", "الحالة"])
+        self.buildings_model = SearchResultsModel([
+            tr("table.search.building_id"), tr("table.search.neighborhood"),
+            tr("table.search.type"), tr("table.search.status")
+        ])
         self.buildings_table.setModel(self.buildings_model)
         self.buildings_table.doubleClicked.connect(lambda idx: self._on_building_click(idx))
-        self.tabs.addTab(self.buildings_table, "المباني (0)")
+        self.tabs.addTab(self.buildings_table, f"{tr('page.search.buildings_tab')} (0)")
 
         # Persons tab
         self.persons_table = self._create_table()
-        self.persons_model = SearchResultsModel(["الاسم", "الرقم الوطني", "الجنس", "الجوال"])
+        self.persons_model = SearchResultsModel([
+            tr("table.search.name"), tr("table.search.national_id"),
+            tr("table.search.gender"), tr("table.search.mobile")
+        ])
         self.persons_table.setModel(self.persons_model)
         self.persons_table.doubleClicked.connect(lambda idx: self._on_person_click(idx))
-        self.tabs.addTab(self.persons_table, "الأشخاص (0)")
+        self.tabs.addTab(self.persons_table, f"{tr('page.search.persons_tab')} (0)")
 
         # Claims tab
         self.claims_table = self._create_table()
-        self.claims_model = SearchResultsModel(["رقم المطالبة", "الوحدة", "النوع", "الحالة"])
+        self.claims_model = SearchResultsModel([
+            tr("table.search.claim_id"), tr("table.search.unit"),
+            tr("table.search.type"), tr("table.search.status")
+        ])
         self.claims_table.setModel(self.claims_model)
         self.claims_table.doubleClicked.connect(lambda idx: self._on_claim_click(idx))
-        self.tabs.addTab(self.claims_table, "المطالبات (0)")
+        self.tabs.addTab(self.claims_table, f"{tr('page.search.claims_tab')} (0)")
 
         layout.addWidget(self.tabs)
 
@@ -238,7 +248,7 @@ class SearchPage(QWidget):
             buildings,
             ["building_id", "neighborhood_name_ar", "building_type", "building_status"]
         )
-        self.tabs.setTabText(0, f"المباني ({len(buildings)})")
+        self.tabs.setTabText(0, f"{tr('page.search.buildings_tab')} ({len(buildings)})")
 
         # Search persons
         persons = self.person_repo.search(name=query, limit=100)
@@ -248,7 +258,7 @@ class SearchPage(QWidget):
             persons,
             ["full_name_ar", "national_id", "gender_display_ar", "mobile_number"]
         )
-        self.tabs.setTabText(1, f"الأشخاص ({len(persons)})")
+        self.tabs.setTabText(1, f"{tr('page.search.persons_tab')} ({len(persons)})")
 
         # Search claims
         claims = self.claim_repo.search(claim_id=query, limit=100)
@@ -256,7 +266,7 @@ class SearchPage(QWidget):
             claims,
             ["claim_id", "unit_id", "claim_type", "case_status_display_ar"]
         )
-        self.tabs.setTabText(2, f"المطالبات ({len(claims)})")
+        self.tabs.setTabText(2, f"{tr('page.search.claims_tab')} ({len(claims)})")
 
     def _on_building_click(self, index):
         building = self.buildings_model.get_item(index.row())
@@ -275,4 +285,8 @@ class SearchPage(QWidget):
             self.navigate_to.emit(Pages.CLAIMS, claim.claim_id)
 
     def update_language(self, is_arabic: bool):
-        pass
+        self.setLayoutDirection(get_layout_direction())
+        self.search_input.setPlaceholderText(tr("page.search.placeholder"))
+        self.tabs.setTabText(0, f"{tr('page.search.buildings_tab')} (0)")
+        self.tabs.setTabText(1, f"{tr('page.search.persons_tab')} (0)")
+        self.tabs.setTabText(2, f"{tr('page.search.claims_tab')} (0)")

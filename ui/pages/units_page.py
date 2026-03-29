@@ -29,6 +29,7 @@ from ui.error_handler import ErrorHandler
 from utils.i18n import I18n
 from utils.logger import get_logger
 from ui.style_manager import StyleManager, PageDimensions
+from services.translation_manager import tr, get_layout_direction
 
 logger = get_logger(__name__)
 
@@ -91,14 +92,14 @@ class UnitsPage(QWidget):
         top_row = QHBoxLayout()
         top_row.setSpacing(20)
 
-        title = QLabel("الوحدات السكنية")
-        title.setFont(create_font(size=FontManager.SIZE_TITLE, weight=FontManager.WEIGHT_SEMIBOLD))
-        title.setStyleSheet(f"color: {Colors.PAGE_TITLE}; background: transparent; border: none;")
-        top_row.addWidget(title)
+        self._title = QLabel(tr("page.units.title"))
+        self._title.setFont(create_font(size=FontManager.SIZE_TITLE, weight=FontManager.WEIGHT_SEMIBOLD))
+        self._title.setStyleSheet(f"color: {Colors.PAGE_TITLE}; background: transparent; border: none;")
+        top_row.addWidget(self._title)
 
         top_row.addStretch()
 
-        self.add_btn = PrimaryButton("إضافة وحدة جديدة", icon_name="icon")
+        self.add_btn = PrimaryButton(tr("page.units.add_new"), icon_name="icon")
         self.add_btn.clicked.connect(self._on_add_unit)
         top_row.addWidget(self.add_btn)
 
@@ -115,7 +116,7 @@ class UnitsPage(QWidget):
         self.table = QTableWidget()
         self.table.setColumnCount(6)
         self.table.setRowCount(11)
-        self.table.setLayoutDirection(Qt.RightToLeft)
+        self.table.setLayoutDirection(get_layout_direction())
         self.table.setShowGrid(False)
         self.table.setFocusPolicy(Qt.NoFocus)
         self.table.setSelectionMode(QTableWidget.NoSelection)
@@ -130,7 +131,7 @@ class UnitsPage(QWidget):
         icon_path = base_path / "assets" / "images" / "down.png"
 
         # Filterable cols are 2 (unit type) and 3 (unit status)
-        headers = ["رقم المقسم", "رمز المبنى", "نوع المقسم", "حالة المقسم", "وصف المقسم", ""]
+        headers = [tr("table.units.unit_number"), tr("table.units.building_code"), tr("table.units.unit_type"), tr("table.units.unit_status"), tr("table.units.unit_description"), ""]
         for i, text in enumerate(headers):
             item = QTableWidgetItem(text)
             if i in (2, 3) and icon_path.exists():
@@ -290,14 +291,14 @@ class UnitsPage(QWidget):
         rows_container.mousePressEvent = lambda e: self._show_page_selection_menu(rows_container)
         footer.addWidget(rows_container)
 
-        rows_label = QLabel("Rows per page:")
-        rows_label.setStyleSheet(
+        self._rows_label = QLabel(tr("page.units.rows_per_page"))
+        self._rows_label.setStyleSheet(
             "color: #637381; font-size: 10pt; font-weight: 400; background: transparent;"
         )
-        footer.addWidget(rows_label)
+        footer.addWidget(self._rows_label)
 
         from ui.components.toggle_switch import ToggleSwitch
-        self.dense_toggle = ToggleSwitch("Dense", checked=True)
+        self.dense_toggle = ToggleSwitch(tr("page.units.dense"), checked=True)
         self.dense_toggle.toggled.connect(self._on_dense_toggle)
 
         footer.addStretch()
@@ -343,7 +344,7 @@ class UnitsPage(QWidget):
         )
 
     def _load_units(self):
-        self._spinner.show_loading("جاري تحميل الوحدات...")
+        self._spinner.show_loading(tr("page.units.loading"))
         self._set_auth_token()
         self._load_units_worker = ApiWorker(
             self.unit_controller.get_units_grouped,
@@ -406,7 +407,7 @@ class UnitsPage(QWidget):
 
         if total_rows == 0:
             self.table.setSpan(0, 0, self.table.rowCount(), 6)
-            empty_item = QTableWidgetItem("لا توجد وحدات سكنية")
+            empty_item = QTableWidgetItem(tr("page.units.no_units"))
             empty_item.setTextAlignment(Qt.AlignCenter)
             empty_item.setForeground(QColor("#9CA3AF"))
             self.table.setItem(0, 0, empty_item)
@@ -543,7 +544,7 @@ class UnitsPage(QWidget):
         menu.setFixedSize(200, 149)
 
         view_icon = Icon.load_qicon("eye-open", size=18)
-        view_action = QAction("  عرض", self)
+        view_action = QAction("  " + tr("action.view"), self)
         if view_icon:
             view_action.setIcon(view_icon)
         view_action.triggered.connect(lambda: self.view_unit.emit(unit))
@@ -551,7 +552,7 @@ class UnitsPage(QWidget):
 
         _role = getattr(self, '_user_role', 'admin')
         edit_icon = Icon.load_qicon("edit-01", size=18)
-        edit_action = QAction("  تعديل", self)
+        edit_action = QAction("  " + tr("action.edit"), self)
         if edit_icon:
             edit_action.setIcon(edit_icon)
         edit_action.triggered.connect(lambda: self._edit_unit(unit, group))
@@ -559,7 +560,7 @@ class UnitsPage(QWidget):
         menu.addAction(edit_action)
 
         delete_icon = Icon.load_qicon("delete", size=18)
-        delete_action = QAction("  حذف", self)
+        delete_action = QAction("  " + tr("action.delete"), self)
         if delete_icon:
             delete_action.setIcon(delete_icon)
         delete_action.triggered.connect(lambda: self._delete_unit(unit))
@@ -620,7 +621,7 @@ class UnitsPage(QWidget):
 
         from PyQt5.QtWidgets import QMenu, QAction
         menu = QMenu(self)
-        menu.setLayoutDirection(Qt.RightToLeft)
+        menu.setLayoutDirection(get_layout_direction())
         menu.setStyleSheet("""
             QMenu {
                 background-color: white;
@@ -640,7 +641,7 @@ class UnitsPage(QWidget):
             }
         """)
 
-        clear_action = QAction("عرض الكل", self)
+        clear_action = QAction(tr("filter.show_all"), self)
         clear_action.triggered.connect(lambda: self._apply_filter(filter_key, None))
         menu.addAction(clear_action)
         menu.addSeparator()
@@ -738,26 +739,26 @@ class UnitsPage(QWidget):
 
         dialog = WizardUnitDialog(building, self.db, parent=self, auth_token=auth_token)
         if dialog.exec_() == QDialog.Accepted:
-            Toast.show_toast(self, "تم إضافة الوحدة بنجاح", Toast.SUCCESS)
+            Toast.show_toast(self, tr("success.unit.added"), Toast.SUCCESS)
             self._load_units()
 
     def _on_add_unit_for_building(self, group: dict):
         """Add a unit for a specific building (from header add button)."""
         building = self._get_building_for_group(group)
         if not building:
-            Toast.show_toast(self, "لم يتم العثور على المبنى", Toast.ERROR)
+            Toast.show_toast(self, tr("page.units.building_not_found"), Toast.ERROR)
             return
         main_window = self.window()
         auth_token = getattr(main_window, '_api_token', None) if main_window else None
         dialog = WizardUnitDialog(building, self.db, parent=self, auth_token=auth_token)
         if dialog.exec_() == QDialog.Accepted:
-            Toast.show_toast(self, "تم إضافة الوحدة بنجاح", Toast.SUCCESS)
+            Toast.show_toast(self, tr("success.unit.added"), Toast.SUCCESS)
             self._load_units()
 
     def _edit_unit(self, unit: PropertyUnit, group: dict):
         building = self._get_building_for_group(group)
         if not building:
-            Toast.show_toast(self, "لم يتم العثور على المبنى", Toast.ERROR)
+            Toast.show_toast(self, tr("page.units.building_not_found"), Toast.ERROR)
             return
 
         unit_data = unit.to_dict()
@@ -770,27 +771,37 @@ class UnitsPage(QWidget):
             try:
                 self._set_auth_token()
                 self._api_service.update_property_unit(unit.unit_uuid, updated_data)
-                Toast.show_toast(self, "تم تحديث الوحدة بنجاح", Toast.SUCCESS)
+                Toast.show_toast(self, tr("success.unit.updated"), Toast.SUCCESS)
                 self._load_units()
             except Exception as e:
                 logger.error(f"API unit update failed: {e}")
-                Toast.show_toast(self, f"فشل تحديث الوحدة: {e}", Toast.ERROR)
+                Toast.show_toast(self, tr("error.unit.update_failed_with_reason", error=str(e)), Toast.ERROR)
 
     def _delete_unit(self, unit: PropertyUnit):
         unit_label = unit.unit_number or unit.unit_uuid or ""
         if ErrorHandler.confirm(
             self,
-            f"هل أنت متأكد من حذف الوحدة {unit_label}؟",
-            "تأكيد الحذف"
+            tr("page.units.delete_confirm", unit_label=unit_label),
+            tr("confirm.delete.title")
         ):
             self._set_auth_token()
             success = self._api_service.delete_property_unit(unit.unit_uuid)
             if success:
-                Toast.show_toast(self, "تم حذف الوحدة بنجاح", Toast.SUCCESS)
+                Toast.show_toast(self, tr("success.unit.deleted"), Toast.SUCCESS)
                 self._load_units()
             else:
                 logger.error(f"Failed to delete unit {unit.unit_uuid}")
-                Toast.show_toast(self, "فشل في حذف الوحدة", Toast.ERROR)
+                Toast.show_toast(self, tr("error.unit.delete_failed"), Toast.ERROR)
 
     def update_language(self, is_arabic: bool):
+        self.setLayoutDirection(get_layout_direction())
+        self.table.setLayoutDirection(get_layout_direction())
+        self._title.setText(tr("page.units.title"))
+        self.add_btn.setText(tr("page.units.add_new"))
+        self._rows_label.setText(tr("page.units.rows_per_page"))
+        headers = [tr("table.units.unit_number"), tr("table.units.building_code"), tr("table.units.unit_type"), tr("table.units.unit_status"), tr("table.units.unit_description"), ""]
+        for i, text in enumerate(headers):
+            item = self.table.horizontalHeaderItem(i)
+            if item:
+                item.setText(text)
         self._update_table()

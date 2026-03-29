@@ -469,3 +469,16 @@ def get_api_port() -> int:
     return urlparse(url).port or 8080
 
 
+def get_saved_language() -> str:
+    """Get saved language preference, defaults to 'ar'."""
+    settings = load_local_settings()
+    return settings.get("language", "ar")
+
+
+def save_language(lang_code: str):
+    """Save language preference to local settings."""
+    settings = load_local_settings()
+    settings["language"] = lang_code
+    save_local_settings(settings)
+
+

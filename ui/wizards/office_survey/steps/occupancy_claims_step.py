@@ -781,7 +781,7 @@ class OccupancyClaimsStep(BaseStep):
 
         # At least one person must have a relation to the property (claim)
         if self.context.persons and not self.context.relations:
-            result.add_error("يجب أن يكون لدى شخص واحد على الأقل علاقة بالمقسم (ادعاء)")
+            result.add_error(tr("wizard.occupancy_claims.min_one_relation"))
 
         return result
 

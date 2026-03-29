@@ -494,7 +494,7 @@ class PersonStep(BaseStep):
 
         except Exception as e:
             logger.error(f"Failed to fetch persons from API: {e}")
-            Toast.show_toast(self, "تعذر تحميل بيانات الأشخاص", Toast.ERROR)
+            Toast.show_toast(self, tr("wizard.person.load_failed"), Toast.ERROR)
 
     def get_step_title(self) -> str:
         """Get step title."""

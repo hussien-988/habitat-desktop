@@ -19,6 +19,7 @@ from services.leaflet_html_generator import generate_leaflet_html
 from services.geojson_converter import GeoJSONConverter
 from services.api_worker import ApiWorker
 from utils.logger import get_logger
+from services.translation_manager import tr
 
 logger = get_logger(__name__)
 
@@ -47,7 +48,7 @@ class PolygonMapDialog(BaseMapDialog):
                 logger.warning(f"Could not get auth token from parent: {e}")
 
         super().__init__(
-            title="اختيار المباني على الخريطة",
+            title=tr("dialog.map.select_buildings_on_map"),
             show_search=False,
             show_multiselect_ui=False,  # No building list panel - clean map
             show_confirm_button=False,  # Custom confirm button below
@@ -92,7 +93,7 @@ class PolygonMapDialog(BaseMapDialog):
         button_layout.addStretch()
 
         # Cancel button
-        cancel_btn = QPushButton("إلغاء")
+        cancel_btn = QPushButton(tr("button.cancel"))
         cancel_btn.setFixedSize(100, 40)
         cancel_btn.setCursor(Qt.PointingHandCursor)
         cancel_btn.setFont(create_font(size=10, weight=FontManager.WEIGHT_MEDIUM))
@@ -113,7 +114,7 @@ class PolygonMapDialog(BaseMapDialog):
         button_layout.addWidget(cancel_btn)
 
         # Confirm button
-        self.confirm_selection_btn = QPushButton("تأكيد الاختيار")
+        self.confirm_selection_btn = QPushButton(tr("dialog.map.confirm_selection"))
         self.confirm_selection_btn.setFixedSize(140, 40)
         self.confirm_selection_btn.setCursor(Qt.PointingHandCursor)
         self.confirm_selection_btn.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
@@ -148,13 +149,13 @@ class PolygonMapDialog(BaseMapDialog):
             if count == 0:
                 self._selection_label.setText("")
             elif count == 1:
-                self._selection_label.setText("مبنى واحد محدد")
+                self._selection_label.setText(tr("dialog.map.one_building_selected"))
             elif count == 2:
-                self._selection_label.setText("مبنيان محددان")
+                self._selection_label.setText(tr("dialog.map.two_buildings_selected"))
             elif count <= 10:
-                self._selection_label.setText(f"{count} مباني محددة")
+                self._selection_label.setText(tr("dialog.map.plural_buildings_selected", count=count))
             else:
-                self._selection_label.setText(f"{count} مبنى محدد")
+                self._selection_label.setText(tr("dialog.map.many_buildings_selected", count=count))
 
         if hasattr(self, 'confirm_selection_btn'):
             self.confirm_selection_btn.setEnabled(count > 0)
@@ -166,8 +167,8 @@ class PolygonMapDialog(BaseMapDialog):
         if not building_ids:
             ErrorHandler.show_warning(
                 self,
-                "الرجاء تحديد مباني على الخريطة أولاً",
-                "لا توجد مباني محددة"
+                tr("dialog.map.please_select_buildings_first"),
+                tr("dialog.map.no_buildings_selected")
             )
             return
 
@@ -196,7 +197,7 @@ class PolygonMapDialog(BaseMapDialog):
         logger.info(f"Fetching {len(uncached_ids)} uncached buildings from API")
         if hasattr(self, 'confirm_selection_btn'):
             self.confirm_selection_btn.setEnabled(False)
-            self.confirm_selection_btn.setText("جاري التحميل...")
+            self.confirm_selection_btn.setText(tr("dialog.map.loading"))
 
         self._pending_cached_buildings = cached_buildings
 
@@ -229,7 +230,7 @@ class PolygonMapDialog(BaseMapDialog):
     def _on_confirm_fetch_finished(self, fetched_buildings):
         """Handle batch building fetch completion."""
         if hasattr(self, 'confirm_selection_btn'):
-            self.confirm_selection_btn.setText("تأكيد الاختيار")
+            self.confirm_selection_btn.setText(tr("dialog.map.confirm_selection"))
             self.confirm_selection_btn.setEnabled(True)
 
         cached = getattr(self, '_pending_cached_buildings', [])
@@ -245,7 +246,7 @@ class PolygonMapDialog(BaseMapDialog):
         """Handle batch building fetch error."""
         logger.error(f"Confirm fetch error: {error_msg}")
         if hasattr(self, 'confirm_selection_btn'):
-            self.confirm_selection_btn.setText("تأكيد الاختيار")
+            self.confirm_selection_btn.setText(tr("dialog.map.confirm_selection"))
             self.confirm_selection_btn.setEnabled(True)
 
         # Try to finalize with whatever we have cached
@@ -255,8 +256,8 @@ class PolygonMapDialog(BaseMapDialog):
         else:
             ErrorHandler.show_warning(
                 self,
-                "لم يتم العثور على تفاصيل المباني المحددة\nالرجاء المحاولة مرة أخرى",
-                "خطأ في جلب البيانات"
+                tr("dialog.map.building_details_not_found"),
+                tr("dialog.map.data_fetch_error")
             )
 
     def _finalize_selection(self, buildings):
@@ -270,8 +271,8 @@ class PolygonMapDialog(BaseMapDialog):
             logger.warning("Could not resolve any buildings")
             ErrorHandler.show_warning(
                 self,
-                "لم يتم العثور على تفاصيل المباني المحددة\nالرجاء المحاولة مرة أخرى",
-                "خطأ في جلب البيانات"
+                tr("dialog.map.building_details_not_found"),
+                tr("dialog.map.data_fetch_error")
             )
 
     def accept(self):
@@ -372,8 +373,8 @@ class PolygonMapDialog(BaseMapDialog):
             logger.error(f"Error loading map: {e}", exc_info=True)
             ErrorHandler.show_error(
                 self,
-                f"حدث خطأ أثناء تحميل الخريطة:\n{str(e)}",
-                "خطأ"
+                f"{tr('dialog.map.error_loading_map')}\n{str(e)}",
+                tr("dialog.map.error_title")
             )
 
     def _load_landmarks_streets_async(self, center_lat: float, center_lon: float):
@@ -559,10 +560,8 @@ class PolygonMapDialog(BaseMapDialog):
                 logger.warning("No buildings found in polygon")
                 ErrorHandler.show_warning(
                     self,
-                    "المضلع المرسوم لا يحتوي على أي مباني\n"
-                    "The drawn polygon contains no buildings\n\n"
-                    "الرجاء رسم مضلع يحتوي على مباني",
-                    "لا توجد مباني"
+                    tr("dialog.map.polygon_no_buildings"),
+                    tr("dialog.map.no_buildings_title")
                 )
                 # Don't close - let user redraw
 
@@ -570,8 +569,8 @@ class PolygonMapDialog(BaseMapDialog):
             logger.error(f"Error querying buildings: {e}", exc_info=True)
             ErrorHandler.show_error(
                 self,
-                f"حدث خطأ أثناء البحث عن المباني:\n{str(e)}",
-                "خطأ"
+                f"{tr('dialog.map.error_searching_buildings')}\n{str(e)}",
+                tr("dialog.map.error_title")
             )
 
     def _query_buildings_in_polygon(self, polygon_wkt: str) -> List[Building]:

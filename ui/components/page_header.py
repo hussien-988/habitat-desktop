@@ -13,6 +13,7 @@ from ..design_system import Colors, PageDimensions
 from ..font_utils import create_font, FontManager
 from ..style_manager import StyleManager
 from .primary_button import PrimaryButton
+from services.translation_manager import tr
 
 
 class PageHeader(QWidget):
@@ -24,7 +25,7 @@ class PageHeader(QWidget):
         self,
         title: str = "",
         show_add_button: bool = False,
-        button_text: str = "إضافة حالة جديدة",
+        button_text: str = None,
         button_icon: str = "icon",
         parent=None
     ):
@@ -32,7 +33,7 @@ class PageHeader(QWidget):
         super().__init__(parent)
         self.title_text = title
         self.show_add_button = show_add_button
-        self.button_text = button_text
+        self.button_text = button_text or tr("component.page_header.add_button")
         self.button_icon = button_icon
         self._setup_ui()
 

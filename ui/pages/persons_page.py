@@ -13,6 +13,7 @@ from PyQt5.QtGui import QColor
 import re
 
 from app.config import Config
+from services.translation_manager import tr, get_layout_direction
 from services.vocab_service import get_options as vocab_get_options
 from repositories.database import Database
 from controllers.person_controller import PersonController, PersonFilter
@@ -33,13 +34,13 @@ class PersonsTableModel(BaseTableModel):
 
     def __init__(self, is_arabic: bool = True):
         columns = [
-            ('full_name', "Name", "الاسم"),
-            ('father_name', "Father Name", "اسم الأب"),
-            ('national_id', "National ID", "الرقم الوطني"),
-            ('nationality', "Nationality", "الجنسية"),
-            ('gender', "Gender", "الجنس"),
-            ('phone', "Phone", "الهاتف"),
-            ('email', "Email", "البريد"),
+            ('full_name', "Name", tr("table.persons.name")),
+            ('father_name', "Father Name", tr("table.persons.father_name")),
+            ('national_id', "National ID", tr("table.persons.national_id")),
+            ('nationality', "Nationality", tr("table.persons.nationality")),
+            ('gender', "Gender", tr("table.persons.gender")),
+            ('phone', "Phone", tr("table.persons.phone")),
+            ('email', "Email", tr("table.persons.email")),
         ]
         super().__init__(items=[], columns=columns)
         self._is_arabic = is_arabic
@@ -66,26 +67,26 @@ class PersonsTableModel(BaseTableModel):
 class PersonDialog(QDialog):
     """Dialog for creating/editing a person."""
 
-    # ID Document types
-    ID_DOCUMENT_TYPES = [
-        ("", "-- اختر نوع الوثيقة --"),
-        ("national_id_card", "بطاقة الهوية الوطنية"),
-        ("passport", "جواز السفر"),
-        ("family_booklet", "دفتر العائلة"),
-        ("birth_certificate", "شهادة الميلاد"),
-        ("driver_license", "رخصة القيادة"),
-        ("other", "أخرى"),
+    # ID Document types (code, translation_key)
+    ID_DOCUMENT_TYPES_KEYS = [
+        ("", "page.persons.select_doc_type"),
+        ("national_id_card", "page.persons.doc_national_id_card"),
+        ("passport", "page.persons.doc_passport"),
+        ("family_booklet", "page.persons.doc_family_booklet"),
+        ("birth_certificate", "page.persons.doc_birth_certificate"),
+        ("driver_license", "page.persons.doc_driver_license"),
+        ("other", "page.persons.doc_other"),
     ]
 
-    # Nationality options
-    NATIONALITIES = [
-        ("Syrian", "سوري"),
-        ("Palestinian", "فلسطيني"),
-        ("Iraqi", "عراقي"),
-        ("Lebanese", "لبناني"),
-        ("Jordanian", "أردني"),
-        ("Egyptian", "مصري"),
-        ("Other", "أخرى"),
+    # Nationality options (code, translation_key)
+    NATIONALITY_KEYS = [
+        ("Syrian", "page.persons.nat_syrian"),
+        ("Palestinian", "page.persons.nat_palestinian"),
+        ("Iraqi", "page.persons.nat_iraqi"),
+        ("Lebanese", "page.persons.nat_lebanese"),
+        ("Jordanian", "page.persons.nat_jordanian"),
+        ("Egyptian", "page.persons.nat_egyptian"),
+        ("Other", "page.persons.nat_other"),
     ]
 
     def __init__(self, db: Database, i18n: I18n, person: Person = None, parent=None):
@@ -96,7 +97,7 @@ class PersonDialog(QDialog):
         self.validation = ValidationService()
         self._id_document_image_path = None
 
-        self.setWindowTitle(i18n.t("edit_person") if person else i18n.t("add_person"))
+        self.setWindowTitle(tr("dialog.persons.edit_title") if person else tr("dialog.persons.add_title"))
         self.setMinimumWidth(600)
         self.setMinimumHeight(650)
         self._setup_ui()
@@ -120,7 +121,7 @@ class PersonDialog(QDialog):
         scroll_widget = QWidget()
         layout = QVBoxLayout(scroll_widget)
         layout.setSpacing(16)
-        personal_group = QGroupBox("المعلومات الشخصية")
+        personal_group = QGroupBox(tr("page.persons.personal_info"))
         personal_group.setStyleSheet(f"""
             QGroupBox {{
                 font-weight: bold;
@@ -141,45 +142,45 @@ class PersonDialog(QDialog):
 
         # Arabic names
         self.first_name_ar = QLineEdit()
-        self.first_name_ar.setPlaceholderText("الاسم الأول بالعربية")
+        self.first_name_ar.setPlaceholderText(tr("page.persons.placeholder_first_name"))
         self._style_input(self.first_name_ar)
-        personal_form.addRow("الاسم الأول *:", self.first_name_ar)
+        personal_form.addRow(tr("page.persons.first_name_label"), self.first_name_ar)
 
         self.father_name_ar = QLineEdit()
-        self.father_name_ar.setPlaceholderText("اسم الأب بالعربية")
+        self.father_name_ar.setPlaceholderText(tr("page.persons.placeholder_father_name"))
         self._style_input(self.father_name_ar)
-        personal_form.addRow("اسم الأب *:", self.father_name_ar)
+        personal_form.addRow(tr("page.persons.father_name_label"), self.father_name_ar)
 
         self.mother_name_ar = QLineEdit()
-        self.mother_name_ar.setPlaceholderText("اسم الأم بالعربية")
+        self.mother_name_ar.setPlaceholderText(tr("page.persons.placeholder_mother_name"))
         self._style_input(self.mother_name_ar)
-        personal_form.addRow("اسم الأم:", self.mother_name_ar)
+        personal_form.addRow(tr("page.persons.mother_name_label"), self.mother_name_ar)
 
         self.last_name_ar = QLineEdit()
-        self.last_name_ar.setPlaceholderText("اسم العائلة بالعربية")
+        self.last_name_ar.setPlaceholderText(tr("page.persons.placeholder_last_name"))
         self._style_input(self.last_name_ar)
-        personal_form.addRow("اسم العائلة *:", self.last_name_ar)
+        personal_form.addRow(tr("page.persons.last_name_label"), self.last_name_ar)
 
         # Gender
         self.gender_combo = QComboBox()
         for code, label in vocab_get_options("Gender"):
             self.gender_combo.addItem(label, code)
-        personal_form.addRow("الجنس:", self.gender_combo)
+        personal_form.addRow(tr("page.persons.gender_label"), self.gender_combo)
 
         # Year of birth
         self.year_birth = QSpinBox()
         self.year_birth.setRange(1900, 2025)
         self.year_birth.setValue(1980)
-        personal_form.addRow("سنة الميلاد:", self.year_birth)
+        personal_form.addRow(tr("page.persons.year_of_birth_label"), self.year_birth)
 
         # Nationality
         self.nationality_combo = QComboBox()
-        for code, ar in self.NATIONALITIES:
-            self.nationality_combo.addItem(ar, code)
-        personal_form.addRow("الجنسية:", self.nationality_combo)
+        for code, key in self.NATIONALITY_KEYS:
+            self.nationality_combo.addItem(tr(key), code)
+        personal_form.addRow(tr("page.persons.nationality_label"), self.nationality_combo)
 
         layout.addWidget(personal_group)
-        contact_group = QGroupBox("معلومات الاتصال")
+        contact_group = QGroupBox(tr("page.persons.contact_info"))
         contact_group.setStyleSheet(personal_group.styleSheet())
         contact_form = QFormLayout(contact_group)
         contact_form.setSpacing(10)
@@ -201,13 +202,13 @@ class PersonDialog(QDialog):
         self.phone_error.setVisible(False)
         phone_layout.addWidget(self.phone_error)
 
-        contact_form.addRow("رقم الهاتف:", phone_container)
+        contact_form.addRow(tr("page.persons.phone_label"), phone_container)
 
         # Mobile number
         self.mobile = QLineEdit()
         self.mobile.setPlaceholderText("+963 9XXXXXXXX")
         self._style_input(self.mobile)
-        contact_form.addRow("رقم الجوال:", self.mobile)
+        contact_form.addRow(tr("page.persons.mobile_label"), self.mobile)
 
         # Email
         email_container = QWidget()
@@ -226,16 +227,16 @@ class PersonDialog(QDialog):
         self.email_error.setVisible(False)
         email_layout.addWidget(self.email_error)
 
-        contact_form.addRow("البريد الإلكتروني:", email_container)
+        contact_form.addRow(tr("page.persons.email_label"), email_container)
 
         # Address
         self.address = QLineEdit()
-        self.address.setPlaceholderText("العنوان الكامل")
+        self.address.setPlaceholderText(tr("page.persons.placeholder_address"))
         self._style_input(self.address)
-        contact_form.addRow("العنوان:", self.address)
+        contact_form.addRow(tr("page.persons.address_label"), self.address)
 
         layout.addWidget(contact_group)
-        id_group = QGroupBox("وثائق الهوية")
+        id_group = QGroupBox(tr("page.persons.id_documents"))
         id_group.setStyleSheet(personal_group.styleSheet())
         id_form = QFormLayout(id_group)
         id_form.setSpacing(10)
@@ -247,29 +248,29 @@ class PersonDialog(QDialog):
         nid_layout.setSpacing(2)
 
         self.national_id = QLineEdit()
-        self.national_id.setPlaceholderText("11 رقم")
+        self.national_id.setPlaceholderText(tr("page.persons.placeholder_national_id"))
         self.national_id.setMaxLength(11)
         self._style_input(self.national_id)
         nid_layout.addWidget(self.national_id)
 
-        nid_hint = QLabel("الرقم الوطني السوري: 11 رقم")
+        nid_hint = QLabel(tr("page.persons.national_id_hint"))
         nid_hint.setStyleSheet(f"color: {Config.TEXT_LIGHT}; font-size: 10px;")
         nid_layout.addWidget(nid_hint)
 
-        id_form.addRow("الرقم الوطني:", nid_container)
+        id_form.addRow(tr("page.persons.national_id_label"), nid_container)
 
         # Passport number
         self.passport_number = QLineEdit()
-        self.passport_number.setPlaceholderText("رقم جواز السفر")
+        self.passport_number.setPlaceholderText(tr("page.persons.placeholder_passport"))
         self._style_input(self.passport_number)
-        id_form.addRow("رقم جواز السفر:", self.passport_number)
+        id_form.addRow(tr("page.persons.passport_label"), self.passport_number)
 
         # ID Document Type
         self.id_doc_type = QComboBox()
-        for code, ar in self.ID_DOCUMENT_TYPES:
-            self.id_doc_type.addItem(ar, code)
+        for code, key in self.ID_DOCUMENT_TYPES_KEYS:
+            self.id_doc_type.addItem(tr(key), code)
         self.id_doc_type.currentIndexChanged.connect(self._on_id_doc_type_changed)
-        id_form.addRow("نوع وثيقة إضافية:", self.id_doc_type)
+        id_form.addRow(tr("page.persons.additional_doc_type_label"), self.id_doc_type)
 
         # ID Document Number
         doc_num_container = QWidget()
@@ -278,7 +279,7 @@ class PersonDialog(QDialog):
         doc_num_layout.setSpacing(2)
 
         self.id_doc_number = QLineEdit()
-        self.id_doc_number.setPlaceholderText("رقم الوثيقة")
+        self.id_doc_number.setPlaceholderText(tr("page.persons.placeholder_doc_number"))
         self._style_input(self.id_doc_number)
         self.id_doc_number.setEnabled(False)
         doc_num_layout.addWidget(self.id_doc_number)
@@ -288,7 +289,7 @@ class PersonDialog(QDialog):
         self.id_doc_error.setVisible(False)
         doc_num_layout.addWidget(self.id_doc_error)
 
-        id_form.addRow("رقم الوثيقة:", doc_num_container)
+        id_form.addRow(tr("page.persons.doc_number_label"), doc_num_container)
 
         # ID Document Image
         img_container = QWidget()
@@ -296,11 +297,11 @@ class PersonDialog(QDialog):
         img_layout.setContentsMargins(0, 0, 0, 0)
         img_layout.setSpacing(8)
 
-        self.id_doc_image_label = QLabel("لم يتم اختيار صورة")
+        self.id_doc_image_label = QLabel(tr("page.persons.no_image_selected"))
         self.id_doc_image_label.setStyleSheet(f"color: {Config.TEXT_LIGHT}; font-size: 11px;")
         img_layout.addWidget(self.id_doc_image_label)
 
-        self.id_doc_image_btn = QPushButton("اختر صورة...")
+        self.id_doc_image_btn = QPushButton(tr("page.persons.select_image"))
         self.id_doc_image_btn.setEnabled(False)
         self.id_doc_image_btn.clicked.connect(self._select_id_image)
         self.id_doc_image_btn.setStyleSheet("""
@@ -320,12 +321,12 @@ class PersonDialog(QDialog):
         img_layout.addWidget(self.id_doc_image_btn)
         img_layout.addStretch()
 
-        id_form.addRow("صورة الوثيقة:", img_container)
+        id_form.addRow(tr("page.persons.doc_image_label"), img_container)
 
         layout.addWidget(id_group)
         flags_layout = QHBoxLayout()
-        self.is_contact = QCheckBox("شخص الاتصال")
-        self.is_deceased = QCheckBox("متوفى")
+        self.is_contact = QCheckBox(tr("page.persons.is_contact_person"))
+        self.is_deceased = QCheckBox(tr("page.persons.is_deceased"))
         flags_layout.addWidget(self.is_contact)
         flags_layout.addWidget(self.is_deceased)
         flags_layout.addStretch()
@@ -352,11 +353,11 @@ class PersonDialog(QDialog):
         btn_layout = QHBoxLayout()
         btn_layout.addStretch()
 
-        cancel_btn = QPushButton(self.i18n.t("cancel"))
+        cancel_btn = QPushButton(tr("button.cancel"))
         cancel_btn.clicked.connect(self.reject)
         btn_layout.addWidget(cancel_btn)
 
-        save_btn = QPushButton(self.i18n.t("save"))
+        save_btn = QPushButton(tr("button.save"))
         save_btn.setStyleSheet(f"""
             QPushButton {{
                 background-color: {Config.PRIMARY_COLOR};
@@ -402,13 +403,13 @@ class PersonDialog(QDialog):
             self.id_doc_number.clear()
             self.id_doc_error.setVisible(False)
             self._id_document_image_path = None
-            self.id_doc_image_label.setText("لم يتم اختيار صورة")
+            self.id_doc_image_label.setText(tr("page.persons.no_image_selected"))
 
     def _select_id_image(self):
         """Open file dialog to select ID document image."""
         file_path, _ = QFileDialog.getOpenFileName(
             self,
-            "اختر صورة الوثيقة",
+            tr("page.persons.select_doc_image_title"),
             "",
             "Images (*.png *.jpg *.jpeg *.bmp *.pdf)"
         )
@@ -424,7 +425,7 @@ class PersonDialog(QDialog):
         """Live validation for phone number."""
         phone = self.phone_number.text().strip()
         if phone and not self._is_valid_phone(phone):
-            self.phone_error.setText("صيغة غير صحيحة (أرقام و + فقط)")
+            self.phone_error.setText(tr("page.persons.error_phone_format"))
             self.phone_error.setVisible(True)
             self._set_input_error(self.phone_number, True)
         else:
@@ -435,7 +436,7 @@ class PersonDialog(QDialog):
         """Live validation for email."""
         email = self.email.text().strip()
         if email and not self._is_valid_email(email):
-            self.email_error.setText("صيغة غير صحيحة (مثال: name@domain.com)")
+            self.email_error.setText(tr("page.persons.error_email_format"))
             self.email_error.setVisible(True)
             self._set_input_error(self.email, True)
         else:
@@ -510,33 +511,33 @@ class PersonDialog(QDialog):
 
         # Validate required Arabic names
         if not self.first_name_ar.text().strip():
-            errors.append("الاسم الأول مطلوب")
+            errors.append(tr("page.persons.error_first_name_required"))
         if not self.father_name_ar.text().strip():
-            errors.append("اسم الأب مطلوب")
+            errors.append(tr("page.persons.error_father_name_required"))
         if not self.last_name_ar.text().strip():
-            errors.append("اسم العائلة مطلوب")
+            errors.append(tr("page.persons.error_last_name_required"))
 
         # Validate national ID (11 digits)
         nid = self.national_id.text().strip()
         if nid and (not nid.isdigit() or len(nid) != 11):
-            errors.append("الرقم الوطني يجب أن يكون 11 رقم")
+            errors.append(tr("page.persons.error_national_id_format"))
 
         # Validate phone number
         phone = self.phone_number.text().strip()
         if phone and not self._is_valid_phone(phone):
-            errors.append("رقم الهاتف غير صحيح")
+            errors.append(tr("page.persons.error_phone_invalid"))
 
         # Validate email
         email = self.email.text().strip()
         if email and not self._is_valid_email(email):
-            errors.append("البريد الإلكتروني غير صحيح")
+            errors.append(tr("page.persons.error_email_invalid"))
 
         # Validate ID document - number required if type selected
         id_doc_type = self.id_doc_type.currentData()
         id_doc_number = self.id_doc_number.text().strip()
         if id_doc_type and not id_doc_number:
-            errors.append("رقم الوثيقة مطلوب عند اختيار نوع الوثيقة")
-            self.id_doc_error.setText("مطلوب")
+            errors.append(tr("page.persons.error_doc_number_required"))
+            self.id_doc_error.setText(tr("page.persons.required"))
             self.id_doc_error.setVisible(True)
         else:
             self.id_doc_error.setVisible(False)
@@ -597,17 +598,17 @@ class PersonsPage(QWidget):
         # Header
         header_layout = QHBoxLayout()
 
-        title = QLabel(self.i18n.t("persons"))
-        title.setStyleSheet(f"""
+        self._title = QLabel(tr("page.persons.title"))
+        self._title.setStyleSheet(f"""
             font-size: {Config.FONT_SIZE_H1}pt;
             font-weight: 700;
             color: {Config.TEXT_COLOR};
         """)
-        header_layout.addWidget(title)
+        header_layout.addWidget(self._title)
         header_layout.addStretch()
 
         # Add person button
-        self.add_btn = QPushButton("+ " + self.i18n.t("add_person"))
+        self.add_btn = QPushButton("+ " + tr("page.persons.add_new"))
         self.add_btn.setStyleSheet(f"""
             QPushButton {{
                 background-color: {Config.SUCCESS_COLOR};
@@ -644,7 +645,7 @@ class PersonsPage(QWidget):
 
         # Name search
         self.name_search = QLineEdit()
-        self.name_search.setPlaceholderText("بحث بالاسم...")
+        self.name_search.setPlaceholderText(tr("filter.persons.search_by_name"))
         self.name_search.setMinimumWidth(200)
         self.name_search.setStyleSheet(f"""
             QLineEdit {{
@@ -659,7 +660,7 @@ class PersonsPage(QWidget):
 
         # National ID search
         self.nid_search = QLineEdit()
-        self.nid_search.setPlaceholderText("الرقم الوطني...")
+        self.nid_search.setPlaceholderText(tr("filter.persons.national_id"))
         self.nid_search.setMaximumWidth(150)
         self.nid_search.setStyleSheet(f"""
             QLineEdit {{
@@ -674,7 +675,7 @@ class PersonsPage(QWidget):
 
         # Gender filter
         self.gender_combo = QComboBox()
-        self.gender_combo.addItem(self.i18n.t("all"), "")
+        self.gender_combo.addItem(tr("filter.all"), "")
         for code, label in vocab_get_options("Gender"):
             self.gender_combo.addItem(label, code)
         self.gender_combo.currentIndexChanged.connect(self._on_filter_changed)
@@ -757,7 +758,7 @@ class PersonsPage(QWidget):
 
     def _load_persons(self):
         """Load persons with filters."""
-        self._spinner.show_loading("جاري تحميل الأشخاص...")
+        self._spinner.show_loading(tr("page.persons.loading_persons"))
         name = self.name_search.text().strip()
         nid = self.nid_search.text().strip()
         gender = self.gender_combo.currentData()
@@ -779,19 +780,19 @@ class PersonsPage(QWidget):
         if result.success:
             persons = result.data
             self.table_model.set_persons(persons)
-            self.count_label.setText(f"تم العثور على {len(persons)} شخص")
+            self.count_label.setText(tr("page.persons.found_count", count=len(persons)))
         else:
             logger.error(f"Failed to load persons: {result.message}")
-            Toast.show_toast(self, f"فشل في تحميل الأشخاص: {result.message}", Toast.ERROR)
+            Toast.show_toast(self, tr("page.persons.load_failed", error=result.message), Toast.ERROR)
             self.table_model.set_persons([])
-            self.count_label.setText("تم العثور على 0 شخص")
+            self.count_label.setText(tr("page.persons.found_count", count=0))
 
     def _on_load_persons_error(self, error_msg):
         self._spinner.hide_loading()
         logger.error(f"Failed to load persons: {error_msg}")
-        Toast.show_toast(self, f"فشل في تحميل الأشخاص: {error_msg}", Toast.ERROR)
+        Toast.show_toast(self, tr("page.persons.load_failed", error=error_msg), Toast.ERROR)
         self.table_model.set_persons([])
-        self.count_label.setText("تم العثور على 0 شخص")
+        self.count_label.setText(tr("page.persons.found_count", count=0))
 
     def _on_filter_changed(self):
         self._load_persons()
@@ -807,7 +808,7 @@ class PersonsPage(QWidget):
         if dialog.exec_() == QDialog.Accepted:
             data = dialog.get_data()
             self.add_btn.setEnabled(False)
-            self._spinner.show_loading("جاري إضافة الشخص...")
+            self._spinner.show_loading(tr("page.persons.adding_person"))
             self._create_person_worker = ApiWorker(self.person_controller.create_person, data)
             self._create_person_worker.finished.connect(self._on_create_person_finished)
             self._create_person_worker.error.connect(self._on_create_person_error)
@@ -817,33 +818,32 @@ class PersonsPage(QWidget):
         self._spinner.hide_loading()
         self.add_btn.setEnabled(True)
         if result.success:
-            Toast.show_toast(self, "تم إضافة الشخص بنجاح", Toast.SUCCESS)
+            Toast.show_toast(self, tr("page.persons.person_added"), Toast.SUCCESS)
             self._load_persons()
             if hasattr(result, 'duplicate_warning') and result.duplicate_warning:
-                warning_msg = "تحذير: تم العثور على أشخاص مشابهين في قاعدة البيانات"
-                Toast.show_toast(self, warning_msg, Toast.WARNING)
+                Toast.show_toast(self, tr("page.persons.duplicate_warning"), Toast.WARNING)
         else:
             error_msg = result.error or ""
-            if "مسجّل مسبقاً" in error_msg:
+            if tr("page.persons.already_registered_marker") in error_msg:
                 from ui.error_handler import ErrorHandler
-                ErrorHandler.show_warning(self, error_msg, "تحذير")
+                ErrorHandler.show_warning(self, error_msg, tr("dialog.warning"))
             else:
                 if hasattr(result, 'validation_errors') and result.validation_errors:
                     error_msg += "\n" + "\n".join(result.validation_errors)
-                Toast.show_toast(self, f"فشل في إضافة الشخص: {error_msg}", Toast.ERROR)
+                Toast.show_toast(self, tr("page.persons.add_failed", error=error_msg), Toast.ERROR)
 
     def _on_create_person_error(self, error_msg):
         self._spinner.hide_loading()
         self.add_btn.setEnabled(True)
         logger.error(f"Failed to create person: {error_msg}")
-        Toast.show_toast(self, f"فشل في إضافة الشخص: {error_msg}", Toast.ERROR)
+        Toast.show_toast(self, tr("page.persons.add_failed", error=error_msg), Toast.ERROR)
 
     def _edit_person(self, person: Person):
         """Edit existing person."""
         dialog = PersonDialog(self.db, self.i18n, person=person, parent=self)
         if dialog.exec_() == QDialog.Accepted:
             data = dialog.get_data()
-            self._spinner.show_loading("جاري تحديث البيانات...")
+            self._spinner.show_loading(tr("page.persons.updating_person"))
             self._update_person_worker = ApiWorker(
                 self.person_controller.update_person, person.person_id, data
             )
@@ -854,18 +854,25 @@ class PersonsPage(QWidget):
     def _on_update_person_finished(self, result):
         self._spinner.hide_loading()
         if result.success:
-            Toast.show_toast(self, "تم تحديث بيانات الشخص بنجاح", Toast.SUCCESS)
+            Toast.show_toast(self, tr("page.persons.person_updated"), Toast.SUCCESS)
             self._load_persons()
         else:
             error_msg = result.error
             if hasattr(result, 'validation_errors') and result.validation_errors:
                 error_msg += "\n" + "\n".join(result.validation_errors)
-            Toast.show_toast(self, f"فشل في تحديث البيانات: {error_msg}", Toast.ERROR)
+            Toast.show_toast(self, tr("page.persons.update_failed", error=error_msg), Toast.ERROR)
 
     def _on_update_person_error(self, error_msg):
         self._spinner.hide_loading()
         logger.error(f"Failed to update person: {error_msg}")
-        Toast.show_toast(self, f"فشل في تحديث البيانات: {error_msg}", Toast.ERROR)
+        Toast.show_toast(self, tr("page.persons.update_failed", error=error_msg), Toast.ERROR)
 
     def update_language(self, is_arabic: bool):
+        self.setLayoutDirection(get_layout_direction())
+        self._title.setText(tr("page.persons.title"))
+        self.add_btn.setText("+ " + tr("page.persons.add_new"))
+        self.name_search.setPlaceholderText(tr("filter.persons.search_by_name"))
+        self.nid_search.setPlaceholderText(tr("filter.persons.national_id"))
+        # Update gender filter combo "All" item
+        self.gender_combo.setItemText(0, tr("filter.all"))
         self.table_model.set_language(is_arabic)

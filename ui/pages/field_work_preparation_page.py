@@ -9,6 +9,7 @@ from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtGui import QColor
 
 from controllers.building_controller import BuildingController
+from services.translation_manager import tr, get_layout_direction
 from ui.components.wizard_header import WizardHeader
 from ui.font_utils import create_font, FontManager
 from utils.i18n import I18n
@@ -35,7 +36,7 @@ class FieldWorkPreparationPage(QWidget):
 
     def _setup_ui(self):
         """Setup UI layout."""
-        self.setLayoutDirection(Qt.RightToLeft)
+        self.setLayoutDirection(get_layout_direction())
 
         # Background
         from ui.style_manager import StyleManager
@@ -56,8 +57,8 @@ class FieldWorkPreparationPage(QWidget):
         )
         content_layout.setSpacing(0)
         self.header = WizardHeader(
-            title="تجهيز العمل الميداني",
-            subtitle="المباني  •  تجهيز العمل الميداني"
+            title=tr("wizard.field_work.title"),
+            subtitle=tr("wizard.field_work.subtitle")
         )
         content_layout.addWidget(self.header)
 
@@ -86,7 +87,7 @@ class FieldWorkPreparationPage(QWidget):
         layout.setSpacing(0)
 
         # Back button
-        self.btn_back = QPushButton("<   السابق")
+        self.btn_back = QPushButton(tr("wizard.field_work.btn_back"))
         self.btn_back.setFixedSize(252, 50)
         self.btn_back.setCursor(Qt.PointingHandCursor)
         self.btn_back.setFont(create_font(size=12, weight=FontManager.WEIGHT_SEMIBOLD))
@@ -124,7 +125,7 @@ class FieldWorkPreparationPage(QWidget):
         layout.addStretch()
 
         # Next button
-        self.btn_next = QPushButton("التالي   >")
+        self.btn_next = QPushButton(tr("wizard.field_work.btn_next"))
         self.btn_next.setFixedSize(252, 50)
         self.btn_next.setCursor(Qt.PointingHandCursor)
         self.btn_next.setFont(create_font(size=12, weight=FontManager.WEIGHT_SEMIBOLD))
@@ -207,7 +208,7 @@ class FieldWorkPreparationPage(QWidget):
             selected_buildings = self.step1.get_selected_buildings()
             if not selected_buildings:
                 from PyQt5.QtWidgets import QMessageBox
-                QMessageBox.warning(self, "تنبيه", "يرجى تحديد مبنى واحد على الأقل")
+                QMessageBox.warning(self, tr("wizard.field_work.warning_title"), tr("wizard.field_work.select_building_warning"))
                 return
 
             # Create Step 2 if not exists
@@ -230,7 +231,7 @@ class FieldWorkPreparationPage(QWidget):
             buildings = self.step1.get_selected_buildings()
             if not researcher:
                 from PyQt5.QtWidgets import QMessageBox
-                QMessageBox.warning(self, "تنبيه", "يرجى اختيار جامع بيانات ميداني")
+                QMessageBox.warning(self, tr("wizard.field_work.warning_title"), tr("wizard.field_work.select_researcher_warning"))
                 return
 
             # Rebuild step3 each time (fresh data)
@@ -272,25 +273,25 @@ class FieldWorkPreparationPage(QWidget):
         """Update navigation buttons based on current step."""
         if self.current_step == 0:
             self.btn_back.setEnabled(False)
-            self.btn_next.setText("التالي   >")
+            self.btn_next.setText(tr("wizard.field_work.btn_next"))
             has_selection = len(self.step1.get_selected_buildings()) > 0 if hasattr(self, 'step1') else False
             self.btn_next.setEnabled(has_selection)
 
         elif self.current_step == 1:
             self.btn_back.setEnabled(True)
-            self.btn_next.setText("التالي   >")
+            self.btn_next.setText(tr("wizard.field_work.btn_next"))
             has_researcher = self.step2.get_selected_researcher() is not None if self.step2 else False
             self.btn_next.setEnabled(has_researcher)
 
         elif self.current_step == 2:
             self.btn_back.setEnabled(True)
-            self.btn_next.setText("تأكيد وإرسال   >")
+            self.btn_next.setText(tr("wizard.field_work.btn_confirm_send"))
             self.btn_next.setEnabled(True)
 
         elif self.current_step == 3:
             # Completion view — only "New Assignment" button
             self.btn_back.setEnabled(False)
-            self.btn_next.setText("تعيين جديد")
+            self.btn_next.setText(tr("wizard.field_work.btn_new_assignment"))
             self.btn_next.setEnabled(True)
 
     def enable_next_button(self, enabled: bool):
@@ -358,3 +359,17 @@ class FieldWorkPreparationPage(QWidget):
         # Reload filter data (communities/neighborhoods) if not yet loaded
         if hasattr(self.step1, '_load_filter_data') and not self.step1._all_communities:
             self.step1._load_filter_data()
+
+    def update_language(self, is_arabic=True):
+        """Update all translatable strings when language changes."""
+        self.setLayoutDirection(get_layout_direction())
+        self.header.set_title(tr("wizard.field_work.title"))
+        self.header.set_subtitle(tr("wizard.field_work.subtitle"))
+        self.btn_back.setText(tr("wizard.field_work.btn_back"))
+        self._update_navigation()
+        if self.step1 and hasattr(self.step1, 'update_language'):
+            self.step1.update_language(is_arabic)
+        if self.step2 and hasattr(self.step2, 'update_language'):
+            self.step2.update_language(is_arabic)
+        if self.step3 and hasattr(self.step3, 'update_language'):
+            self.step3.update_language(is_arabic)

@@ -22,6 +22,7 @@ from pathlib import Path
 
 from app.config import Config
 from services.vocab_service import get_options as vocab_get_options
+from services.translation_manager import tr, get_layout_direction
 from utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -57,7 +58,7 @@ class EvidenceDialog(QDialog):
         self.evidence_data = evidence_data
         self.selected_file = None
 
-        self.setWindowTitle("إضافة دليل / وثيقة")
+        self.setWindowTitle(tr("wizard.evidence_dialog.title"))
         self.setMinimumWidth(500)
         self.setStyleSheet("""
             QDialog {
@@ -77,7 +78,7 @@ class EvidenceDialog(QDialog):
         layout.setContentsMargins(24, 24, 24, 24)
 
         # Document type
-        type_label = QLabel("نوع الوثيقة:")
+        type_label = QLabel(tr("wizard.evidence_dialog.document_type"))
         type_label.setStyleSheet("font-weight: bold; color: #2c3e50;")
         layout.addWidget(type_label)
 
@@ -88,17 +89,17 @@ class EvidenceDialog(QDialog):
         layout.addWidget(self.type_combo)
 
         # Document number
-        number_label = QLabel("رقم الوثيقة:")
+        number_label = QLabel(tr("wizard.evidence_dialog.document_number"))
         number_label.setStyleSheet("font-weight: bold; color: #2c3e50;")
         layout.addWidget(number_label)
 
         self.number_edit = QLineEdit()
-        self.number_edit.setPlaceholderText("رقم الوثيقة (اختياري)")
+        self.number_edit.setPlaceholderText(tr("wizard.evidence_dialog.document_number_placeholder"))
         self.number_edit.setStyleSheet(self._input_style())
         layout.addWidget(self.number_edit)
 
         # Issue date
-        date_label = QLabel("تاريخ الإصدار:")
+        date_label = QLabel(tr("wizard.evidence_dialog.issue_date"))
         date_label.setStyleSheet("font-weight: bold; color: #2c3e50;")
         layout.addWidget(date_label)
 
@@ -110,24 +111,24 @@ class EvidenceDialog(QDialog):
         layout.addWidget(self.issue_date)
 
         # Issuing authority
-        authority_label = QLabel("الجهة المصدرة:")
+        authority_label = QLabel(tr("wizard.evidence_dialog.issuing_authority"))
         authority_label.setStyleSheet("font-weight: bold; color: #2c3e50;")
         layout.addWidget(authority_label)
 
         self.authority_edit = QLineEdit()
-        self.authority_edit.setPlaceholderText("الجهة المصدرة")
+        self.authority_edit.setPlaceholderText(tr("wizard.evidence_dialog.issuing_authority_placeholder"))
         self.authority_edit.setStyleSheet(self._input_style())
         layout.addWidget(self.authority_edit)
 
         # File selection
-        file_frame = QGroupBox("ملف الوثيقة")
+        file_frame = QGroupBox(tr("wizard.evidence_dialog.document_file"))
         file_layout = QHBoxLayout(file_frame)
 
-        self.file_label = QLabel("لم يتم اختيار ملف")
+        self.file_label = QLabel(tr("wizard.evidence_dialog.no_file_selected"))
         self.file_label.setStyleSheet("color: #7f8c8d;")
         file_layout.addWidget(self.file_label)
 
-        browse_btn = QPushButton("استعراض...")
+        browse_btn = QPushButton(tr("wizard.evidence_dialog.browse"))
         browse_btn.setStyleSheet("""
             QPushButton {
                 background-color: #3498db;
@@ -146,12 +147,12 @@ class EvidenceDialog(QDialog):
         layout.addWidget(file_frame)
 
         # Notes
-        notes_label = QLabel("ملاحظات:")
+        notes_label = QLabel(tr("wizard.evidence_dialog.notes"))
         notes_label.setStyleSheet("font-weight: bold; color: #2c3e50;")
         layout.addWidget(notes_label)
 
         self.notes_edit = QTextEdit()
-        self.notes_edit.setPlaceholderText("ملاحظات (اختياري)")
+        self.notes_edit.setPlaceholderText(tr("wizard.evidence_dialog.notes_placeholder"))
         self.notes_edit.setMaximumHeight(80)
         self.notes_edit.setStyleSheet("""
             QTextEdit {
@@ -167,7 +168,7 @@ class EvidenceDialog(QDialog):
         btn_layout = QHBoxLayout()
         btn_layout.addStretch()
 
-        cancel_btn = QPushButton("إلغاء")
+        cancel_btn = QPushButton(tr("common.cancel"))
         cancel_btn.setStyleSheet("""
             QPushButton {
                 background-color: #6c757d;
@@ -183,7 +184,7 @@ class EvidenceDialog(QDialog):
         cancel_btn.clicked.connect(self.reject)
         btn_layout.addWidget(cancel_btn)
 
-        save_btn = QPushButton("إضافة")
+        save_btn = QPushButton(tr("wizard.evidence_dialog.add"))
         save_btn.setStyleSheet(f"""
             QPushButton {{
                 background-color: {Config.PRIMARY_COLOR};
@@ -219,7 +220,7 @@ class EvidenceDialog(QDialog):
     def _browse_file(self):
         """Browse for file."""
         file_path, _ = QFileDialog.getOpenFileName(
-            self, "اختر ملف الوثيقة", "",
+            self, tr("wizard.evidence_dialog.choose_file"), "",
             "Documents (*.pdf *.jpg *.jpeg *.png *.doc *.docx);;All Files (*)"
         )
         if file_path:

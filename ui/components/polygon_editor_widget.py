@@ -13,6 +13,7 @@ from ui.error_handler import ErrorHandler
 from PyQt5.QtCore import Qt, pyqtSignal, QUrl, QObject, pyqtSlot
 from PyQt5.QtGui import QColor
 
+from services.translation_manager import tr
 from utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -404,13 +405,13 @@ class PolygonEditorWidget(QWidget):
         """Start drawing a new polygon."""
         if HAS_WEBENGINE:
             self.map_view.page().runJavaScript("window.startDrawing();")
-            self.status_label.setText("انقر على الخريطة لإضافة نقاط المضلع. انقر مرتين للإنهاء.")
+            self.status_label.setText(tr("component.polygon_editor.click_to_add_points"))
 
     def _start_editing(self):
         """Start editing existing polygon."""
         if HAS_WEBENGINE:
             self.map_view.page().runJavaScript("window.startEditing();")
-            self.status_label.setText("اسحب النقاط لتعديل شكل المضلع")
+            self.status_label.setText(tr("component.polygon_editor.drag_to_edit"))
 
     def _delete_polygon(self):
         """Delete current polygon."""
@@ -485,7 +486,7 @@ class PolygonEditorWidget(QWidget):
     def _on_area_updated(self, area: float):
         """Handle area update from bridge."""
         self._current_area = area
-        self.area_label.setText(f"المساحة: {area:.2f} م²")
+        self.area_label.setText(f"{tr('component.polygon_editor.area')}: {area:.2f} {tr('component.polygon_editor.sqm')}")
         self.area_changed.emit(area)
 
     def _on_error(self, error_msg: str):
@@ -502,9 +503,9 @@ class PolygonEditorWidget(QWidget):
         self.validate_btn.setEnabled(has_polygon)
 
         if has_polygon:
-            self.status_label.setText("✓ تم رسم المضلع. يمكنك التعديل أو الحذف.")
+            self.status_label.setText(tr("component.polygon_editor.polygon_drawn"))
         else:
-            self.status_label.setText("انقر على 'رسم مضلع جديد' للبدء")
+            self.status_label.setText(tr("component.polygon_editor.click_draw_new"))
 
     # Public API
 

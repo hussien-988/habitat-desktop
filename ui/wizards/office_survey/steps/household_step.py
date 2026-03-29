@@ -782,8 +782,8 @@ class HouseholdStep(BaseStep):
                     saved = True
                 except Exception as e:
                     logger.error(f"Failed to update household via API: {e}")
-                    Toast.show_toast(self, "تعذر تحميل بيانات الأسرة", Toast.ERROR)
-                    result.add_error("فشل تحديث بيانات الأسرة. يرجى المحاولة مجدداً.")
+                    Toast.show_toast(self, tr("wizard.household.load_failed"), Toast.ERROR)
+                    result.add_error(tr("wizard.household.update_failed"))
                     return result
             else:
                 logger.info(f"Household unchanged ({existing_household_id}), skipping")
@@ -800,8 +800,8 @@ class HouseholdStep(BaseStep):
                 saved = True
             except Exception as e:
                 logger.error(f"Failed to create household via API: {e}")
-                Toast.show_toast(self, "تعذر تحميل بيانات الأسرة", Toast.ERROR)
-                result.add_error("فشل حفظ بيانات الأسرة. يرجى المحاولة مجدداً.")
+                Toast.show_toast(self, tr("wizard.household.load_failed"), Toast.ERROR)
+                result.add_error(tr("wizard.household.save_failed"))
                 return result
 
         if self.context.households:

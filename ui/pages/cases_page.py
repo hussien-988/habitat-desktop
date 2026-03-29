@@ -115,7 +115,7 @@ class CasesPage(QWidget):
         main_layout.addWidget(filter_bar)
 
         # Underline Tab Bar
-        self._tab_bar = UnderlineTabBar(["مسودة", "منتهية"], self)
+        self._tab_bar = UnderlineTabBar([tr("page.cases.tab_draft"), tr("page.cases.tab_finalized")], self)
         self._tab_bar.tab_changed.connect(self._on_tab_changed)
         main_layout.addWidget(self._tab_bar)
 
@@ -189,7 +189,7 @@ class CasesPage(QWidget):
         # Search by contact person name (API: contactPersonName)
         self._name_filter = QLineEdit()
         self._name_filter.setLayoutDirection(Qt.RightToLeft)
-        self._name_filter.setPlaceholderText("بحث باسم الشخص...")
+        self._name_filter.setPlaceholderText(tr("page.cases.search_person"))
         self._name_filter.setFixedWidth(280)
         self._name_filter.setStyleSheet(form_style)
         self._name_filter.textChanged.connect(self._on_search_changed)
@@ -200,7 +200,7 @@ class CasesPage(QWidget):
         self._type_filter.setLayoutDirection(Qt.RightToLeft)
         self._type_filter.setFixedWidth(170)
         self._type_filter.setStyleSheet(form_style)
-        self._type_filter.addItem("الكل", None)
+        self._type_filter.addItem(tr("all"), None)
         for code, label in get_survey_type_options():
             self._type_filter.addItem(label, code)
         self._type_filter.currentIndexChanged.connect(self._on_type_changed)
@@ -233,7 +233,7 @@ class CasesPage(QWidget):
 
     def _load_surveys(self):
         """Load surveys from API based on active tab and filters."""
-        self._spinner.show_loading("جاري تحميل المسوحات...")
+        self._spinner.show_loading(tr("page.cases.loading"))
 
         status = "Draft" if self._active_tab == "draft" else "Finalized"
         name = self._name_filter.text().strip() or None
@@ -303,7 +303,7 @@ class CasesPage(QWidget):
     def _on_surveys_load_error(self, error_msg):
         """Handle surveys loading error."""
         self._spinner.hide_loading()
-        Toast.show_toast(self, "تعذر تحميل المطالبات", Toast.ERROR)
+        Toast.show_toast(self, tr("page.cases.load_error"), Toast.ERROR)
         logger.warning(f"Error loading surveys: {error_msg}")
         self._all_data = []
         self._apply_type_filter()
@@ -336,7 +336,7 @@ class CasesPage(QWidget):
         return {
             "claim_id": s.get("referenceCode") or s.get("id", "N/A"),
             "claim_uuid": s.get("id", ""),
-            "claimant_name": s.get("contactPersonFullName") or s.get("intervieweeName") or "غير محدد",
+            "claimant_name": s.get("contactPersonFullName") or s.get("intervieweeName") or tr("page.cases.unspecified"),
             "date": (s.get("surveyDate") or "")[:10],
             "status": self._active_tab,
             "building_id": s.get("buildingNumber") or (building_obj.building_id if building_obj else ""),
@@ -372,11 +372,11 @@ class CasesPage(QWidget):
     def _show_empty_state(self):
         self._clear_content()
 
-        msg = "لا توجد مسودات حالياً" if self._active_tab == "draft" else "لا توجد مسوحات منتهية بعد"
+        msg = tr("page.cases.no_drafts") if self._active_tab == "draft" else tr("page.cases.no_finalized")
         empty_state = EmptyState(
             icon_text="+",
             title=msg,
-            description="ابدأ بإضافة المسوحات للظهور هنا"
+            description=tr("page.cases.empty_description")
         )
 
         self.content_layout.addItem(

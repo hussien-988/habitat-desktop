@@ -16,22 +16,28 @@ from ui.font_utils import create_font, FontManager
 from ui.style_manager import StyleManager
 from ui.components.toast import Toast
 from ui.components.dialogs.modification_reason_dialog import ModificationReasonDialog
-from services.translation_manager import tr
+from services.translation_manager import tr, get_layout_direction
 from services.api_worker import ApiWorker
 from utils.logger import get_logger
 
 logger = get_logger(__name__)
 
-# Status options for claim
-_CLAIM_STATUS_OPTIONS = [
-    (1, "جديدة"), (2, "قيد المراجعة"), (3, "مكتملة"),
-    (4, "معلقة"), (5, "مسودة"),
-]
+def _get_claim_status_options():
+    return [
+        (1, tr("page.claim_edit.status_new")),
+        (2, tr("page.claim_edit.status_in_review")),
+        (3, tr("page.claim_edit.status_completed")),
+        (4, tr("page.claim_edit.status_suspended")),
+        (5, tr("page.claim_edit.status_draft")),
+    ]
 
-# Priority options
-_PRIORITY_OPTIONS = [
-    (1, "منخفضة"), (2, "عادية"), (3, "عالية"), (4, "عاجلة"),
-]
+def _get_priority_options():
+    return [
+        (1, tr("page.claim_edit.priority_low")),
+        (2, tr("page.claim_edit.priority_normal")),
+        (3, tr("page.claim_edit.priority_high")),
+        (4, tr("page.claim_edit.priority_urgent")),
+    ]
 
 
 class ClaimEditPage(QWidget):
@@ -128,7 +134,7 @@ class ClaimEditPage(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
 
-        self._title_label = QLabel("تعديل المطالبة")
+        self._title_label = QLabel(tr("page.claim_edit.title"))
         self._title_label.setFont(create_font(size=FontManager.SIZE_TITLE, weight=QFont.Bold))
         self._title_label.setStyleSheet(f"color: {Colors.PAGE_TITLE}; border: none;")
         layout.addWidget(self._title_label)
@@ -138,55 +144,60 @@ class ClaimEditPage(QWidget):
     # S04: Personal Information Section
 
     def _create_person_section(self) -> QFrame:
-        section = self._create_section_frame("البيانات الشخصية")
+        section = self._create_section_frame(tr("page.claim_edit.section_personal"))
 
         grid = QGridLayout()
         grid.setSpacing(12)
         grid.setColumnStretch(0, 1)
         grid.setColumnStretch(1, 1)
 
-        self._person_first_name = self._add_field(grid, 0, 0, "الاسم الأول")
-        self._person_father_name = self._add_field(grid, 0, 1, "اسم الأب")
-        self._person_family_name = self._add_field(grid, 1, 0, "اسم العائلة")
-        self._person_mother_name = self._add_field(grid, 1, 1, "اسم الأم")
-        self._person_national_id = self._add_field(grid, 2, 0, "الرقم الوطني")
-        self._person_gender = self._add_combo_field(grid, 2, 1, "الجنس",
-                                                     [(1, "ذكر"), (2, "أنثى")])
-        self._person_dob = self._add_field(grid, 3, 0, "تاريخ الميلاد")
+        self._person_first_name = self._add_field(grid, 0, 0, tr("page.claim_edit.first_name"))
+        self._person_father_name = self._add_field(grid, 0, 1, tr("page.claim_edit.father_name"))
+        self._person_family_name = self._add_field(grid, 1, 0, tr("page.claim_edit.family_name"))
+        self._person_mother_name = self._add_field(grid, 1, 1, tr("page.claim_edit.mother_name"))
+        self._person_national_id = self._add_field(grid, 2, 0, tr("page.claim_edit.national_id"))
+        self._person_gender = self._add_combo_field(grid, 2, 1, tr("page.claim_edit.gender"),
+                                                     [(1, tr("page.claim_edit.gender_male")), (2, tr("page.claim_edit.gender_female"))])
+        self._person_dob = self._add_field(grid, 3, 0, tr("page.claim_edit.date_of_birth"))
 
         section.layout().addLayout(grid)
         return section
     # S05: Property Unit Section
 
     def _create_unit_section(self) -> QFrame:
-        section = self._create_section_frame("بيانات العقار")
+        section = self._create_section_frame(tr("page.claim_edit.section_property"))
 
         grid = QGridLayout()
         grid.setSpacing(12)
         grid.setColumnStretch(0, 1)
         grid.setColumnStretch(1, 1)
 
-        self._unit_floor = self._add_field(grid, 0, 0, "الطابق")
-        self._unit_type = self._add_combo_field(grid, 0, 1, "نوع الوحدة",
-                                                 [(1, "شقة"), (2, "محل"), (3, "مكتب"),
-                                                  (4, "مستودع"), (5, "أخرى")])
-        self._unit_status = self._add_combo_field(grid, 1, 0, "حالة الوحدة",
-                                                   [(1, "مأهولة"), (2, "فارغة"),
-                                                    (3, "متضررة"), (4, "مدمرة")])
-        self._unit_area = self._add_field(grid, 1, 1, "المساحة (م²)")
-        self._unit_rooms = self._add_field(grid, 2, 0, "عدد الغرف")
-        self._unit_description = self._add_field(grid, 2, 1, "الوصف")
+        self._unit_floor = self._add_field(grid, 0, 0, tr("page.claim_edit.floor"))
+        self._unit_type = self._add_combo_field(grid, 0, 1, tr("page.claim_edit.unit_type"),
+                                                 [(1, tr("page.claim_edit.unit_apartment")),
+                                                  (2, tr("page.claim_edit.unit_shop")),
+                                                  (3, tr("page.claim_edit.unit_office")),
+                                                  (4, tr("page.claim_edit.unit_warehouse")),
+                                                  (5, tr("page.claim_edit.unit_other"))])
+        self._unit_status = self._add_combo_field(grid, 1, 0, tr("page.claim_edit.unit_status"),
+                                                   [(1, tr("page.claim_edit.unit_occupied")),
+                                                    (2, tr("page.claim_edit.unit_vacant")),
+                                                    (3, tr("page.claim_edit.unit_damaged")),
+                                                    (4, tr("page.claim_edit.unit_destroyed"))])
+        self._unit_area = self._add_field(grid, 1, 1, tr("page.claim_edit.area_sqm"))
+        self._unit_rooms = self._add_field(grid, 2, 0, tr("page.claim_edit.num_rooms"))
+        self._unit_description = self._add_field(grid, 2, 1, tr("page.claim_edit.description"))
 
         section.layout().addLayout(grid)
         return section
     # S06: Evidence Documents Section
 
     def _create_evidence_section(self) -> QFrame:
-        section = self._create_section_frame("المستندات")
+        section = self._create_section_frame(tr("page.claim_edit.section_documents"))
 
         # Access denied message (hidden by default)
         self._evidence_denied_label = QLabel(
-            "لا يمكن عرض المستندات — ليس لديك صلاحية الوصول لمستندات هذا المسح")
+            tr("page.claim_edit.evidence_access_denied"))
         self._evidence_denied_label.setWordWrap(True)
         self._evidence_denied_label.setStyleSheet(f"""
             QLabel {{
@@ -205,7 +216,7 @@ class ClaimEditPage(QWidget):
         section.layout().addLayout(self._evidence_list_layout)
 
         # Add button
-        self._add_evidence_btn = QPushButton("+ إضافة مستند")
+        self._add_evidence_btn = QPushButton(tr("page.claim_edit.add_document"))
         self._add_evidence_btn.setCursor(Qt.PointingHandCursor)
         self._add_evidence_btn.setFixedHeight(36)
         self._add_evidence_btn.setStyleSheet(f"""
@@ -228,7 +239,7 @@ class ClaimEditPage(QWidget):
     # S07: Status & Priority Section
 
     def _create_status_section(self) -> QFrame:
-        section = self._create_section_frame("الحالة والأولوية")
+        section = self._create_section_frame(tr("page.claim_edit.section_status"))
 
         grid = QGridLayout()
         grid.setSpacing(12)
@@ -236,23 +247,23 @@ class ClaimEditPage(QWidget):
         grid.setColumnStretch(1, 1)
 
         self._claim_status_combo = self._add_combo_field(
-            grid, 0, 0, "حالة المطالبة", _CLAIM_STATUS_OPTIONS)
+            grid, 0, 0, tr("page.claim_edit.claim_status"), _get_claim_status_options())
         self._claim_priority_combo = self._add_combo_field(
-            grid, 0, 1, "الأولوية", _PRIORITY_OPTIONS)
+            grid, 0, 1, tr("page.claim_edit.priority"), _get_priority_options())
 
         # Notes fields
-        notes_label = QLabel("ملاحظات المعالجة:")
-        notes_label.setStyleSheet(self._label_style())
-        grid.addWidget(notes_label, 1, 0, 1, 2)
+        self._notes_label = QLabel(tr("page.claim_edit.processing_notes"))
+        self._notes_label.setStyleSheet(self._label_style())
+        grid.addWidget(self._notes_label, 1, 0, 1, 2)
 
         self._processing_notes = QTextEdit()
         self._processing_notes.setMaximumHeight(80)
         self._processing_notes.setStyleSheet(self._textarea_style())
         grid.addWidget(self._processing_notes, 2, 0, 1, 2)
 
-        remarks_label = QLabel("ملاحظات عامة:")
-        remarks_label.setStyleSheet(self._label_style())
-        grid.addWidget(remarks_label, 3, 0, 1, 2)
+        self._remarks_label = QLabel(tr("page.claim_edit.public_remarks"))
+        self._remarks_label.setStyleSheet(self._label_style())
+        grid.addWidget(self._remarks_label, 3, 0, 1, 2)
 
         self._public_remarks = QTextEdit()
         self._public_remarks.setMaximumHeight(80)
@@ -271,7 +282,7 @@ class ClaimEditPage(QWidget):
         layout.setSpacing(12)
         layout.addStretch()
 
-        cancel_btn = QPushButton("إلغاء")
+        cancel_btn = QPushButton(tr("button.cancel"))
         cancel_btn.setFixedSize(120, 40)
         cancel_btn.setCursor(Qt.PointingHandCursor)
         cancel_btn.setStyleSheet(f"""
@@ -288,7 +299,7 @@ class ClaimEditPage(QWidget):
         cancel_btn.clicked.connect(self.back_requested.emit)
         layout.addWidget(cancel_btn)
 
-        save_btn = QPushButton("حفظ التعديلات")
+        save_btn = QPushButton(tr("page.claim_edit.save_changes"))
         save_btn.setFixedSize(160, 40)
         save_btn.setCursor(Qt.PointingHandCursor)
         save_btn.setStyleSheet(f"""
@@ -322,7 +333,7 @@ class ClaimEditPage(QWidget):
             return
 
         self._claim_id = claim_id
-        self._title_label.setText(f"تعديل المطالبة — {claim_id[:8]}...")
+        self._title_label.setText(f"{tr('page.claim_edit.title')} — {claim_id[:8]}...")
 
         try:
             from controllers.claim_controller import ClaimController
@@ -330,7 +341,7 @@ class ClaimEditPage(QWidget):
             result = ctrl.get_claim_full_detail(claim_id, hint_survey_id=hint_survey_id)
 
             if not result.success:
-                Toast.show_toast(self, f"خطأ: {result.message}", Toast.ERROR)
+                Toast.show_toast(self, f"{tr('page.claim_edit.error_prefix')}: {result.message}", Toast.ERROR)
                 return
 
             detail = result.data
@@ -352,7 +363,7 @@ class ClaimEditPage(QWidget):
 
         except Exception as e:
             logger.error(f"Failed to load claim {claim_id}: {e}", exc_info=True)
-            Toast.show_toast(self, f"خطأ في تحميل المطالبة: {e}", Toast.ERROR)
+            Toast.show_toast(self, f"{tr('page.claim_edit.error_loading_claim')}: {e}", Toast.ERROR)
 
     def _populate_fields(self):
         """Fill all form fields from loaded DTOs."""
@@ -441,7 +452,7 @@ class ClaimEditPage(QWidget):
         self._add_evidence_btn.setVisible(True)
 
         if not self._evidences:
-            lbl = QLabel("لا توجد مستندات")
+            lbl = QLabel(tr("page.claim_edit.no_documents"))
             lbl.setStyleSheet(f"color: {Colors.TEXT_SECONDARY}; font-size: 12px; border: none;")
             lbl.setAlignment(Qt.AlignCenter)
             self._evidence_list_layout.addWidget(lbl)
@@ -465,9 +476,9 @@ class ClaimEditPage(QWidget):
         layout.setContentsMargins(12, 4, 12, 4)
         layout.setSpacing(8)
 
-        desc = ev.get("description") or ev.get("fileName") or "مستند"
+        desc = ev.get("description") or ev.get("fileName") or tr("page.claim_edit.document")
         ev_type = ev.get("evidenceType") or ev.get("type") or ""
-        type_text = "هوية" if "identification" in str(ev_type).lower() else "حيازة"
+        type_text = tr("page.claim_edit.ev_identification") if "identification" in str(ev_type).lower() else tr("page.claim_edit.ev_tenure")
 
         type_badge = QLabel(type_text)
         type_badge.setFixedWidth(50)
@@ -491,7 +502,7 @@ class ClaimEditPage(QWidget):
 
         layout.addStretch()
 
-        del_btn = QPushButton("حذف")
+        del_btn = QPushButton(tr("action.delete"))
         del_btn.setFixedSize(60, 28)
         del_btn.setCursor(Qt.PointingHandCursor)
         del_btn.setStyleSheet("""
@@ -515,19 +526,19 @@ class ClaimEditPage(QWidget):
 
     def _on_add_evidence(self):
         if not self._survey_id:
-            Toast.show_toast(self, "لا يوجد معرف المسح", Toast.WARNING)
+            Toast.show_toast(self, tr("page.claim_edit.no_survey_id"), Toast.WARNING)
             return
 
         from PyQt5.QtWidgets import QInputDialog
         ev_type, ok = QInputDialog.getItem(
-            self, "نوع المستند", "اختر نوع المستند:",
-            ["هوية (Identification)", "حيازة (Tenure)"], 0, False
+            self, tr("page.claim_edit.document_type"), tr("page.claim_edit.choose_document_type"),
+            [tr("page.claim_edit.ev_identification_option"), tr("page.claim_edit.ev_tenure_option")], 0, False
         )
         if not ok:
             return
 
         file_path, _ = QFileDialog.getOpenFileName(
-            self, "اختر مستند", "",
+            self, tr("page.claim_edit.choose_document"), "",
             "Documents (*.pdf *.jpg *.jpeg *.png *.doc *.docx);;All Files (*)"
         )
         if not file_path:
@@ -540,7 +551,7 @@ class ClaimEditPage(QWidget):
             if "Tenure" in ev_type:
                 relation_id = self._get_tenure_relation_id()
                 if not relation_id:
-                    Toast.show_toast(self, "لا يوجد معرف الارتباط لمستند الحيازة", Toast.WARNING)
+                    Toast.show_toast(self, tr("page.claim_edit.no_tenure_relation_id"), Toast.WARNING)
                     return
                 result = ctrl.add_tenure_evidence(
                     self._survey_id, relation_id, file_path,
@@ -548,19 +559,19 @@ class ClaimEditPage(QWidget):
             else:
                 person_id = self._person_dto.get("id") or self._claim_dto.get("primaryClaimantId")
                 if not person_id:
-                    Toast.show_toast(self, "لا يوجد شخص مرتبط", Toast.WARNING)
+                    Toast.show_toast(self, tr("page.claim_edit.no_linked_person"), Toast.WARNING)
                     return
                 result = ctrl.add_identification_evidence(
                     self._survey_id, person_id, file_path,
                     description=os.path.basename(file_path))
 
             if result.success:
-                Toast.show_toast(self, "تم إضافة المستند بنجاح", Toast.SUCCESS)
+                Toast.show_toast(self, tr("page.claim_edit.document_added"), Toast.SUCCESS)
                 self._reload_evidences()
             else:
-                Toast.show_toast(self, f"خطأ: {result.message}", Toast.ERROR)
+                Toast.show_toast(self, f"{tr('page.claim_edit.error_prefix')}: {result.message}", Toast.ERROR)
         except Exception as e:
-            Toast.show_toast(self, f"خطأ: {e}", Toast.ERROR)
+            Toast.show_toast(self, f"{tr('page.claim_edit.error_prefix')}: {e}", Toast.ERROR)
 
     def _get_tenure_relation_id(self) -> str:
         """Extract relation_id from loaded tenure evidences."""
@@ -584,12 +595,12 @@ class ClaimEditPage(QWidget):
             ctrl = ClaimController()
             result = ctrl.delete_evidence(self._survey_id, evidence_id)
             if result.success:
-                Toast.show_toast(self, "تم حذف المستند", Toast.SUCCESS)
+                Toast.show_toast(self, tr("page.claim_edit.document_deleted"), Toast.SUCCESS)
                 self._reload_evidences()
             else:
-                Toast.show_toast(self, f"خطأ: {result.message}", Toast.ERROR)
+                Toast.show_toast(self, f"{tr('page.claim_edit.error_prefix')}: {result.message}", Toast.ERROR)
         except Exception as e:
-            Toast.show_toast(self, f"خطأ: {e}", Toast.ERROR)
+            Toast.show_toast(self, f"{tr('page.claim_edit.error_prefix')}: {e}", Toast.ERROR)
 
     def _reload_evidences(self):
         """Refresh evidence list from claim DTO evidenceIds."""
@@ -636,7 +647,7 @@ class ClaimEditPage(QWidget):
         changes = self._collect_changes()
 
         if not changes:
-            Toast.show_toast(self, "لا توجد تغييرات للحفظ", Toast.INFO)
+            Toast.show_toast(self, tr("page.claim_edit.no_changes"), Toast.INFO)
             return
 
         # S08: Modification reason dialog
@@ -658,7 +669,7 @@ class ClaimEditPage(QWidget):
                 if person_id:
                     result = ctrl.update_person(person_id, changes["person"])
                     if not result.success:
-                        errors.append(f"شخص: {result.message}")
+                        errors.append(f"{tr('page.claim_edit.person_label')}: {result.message}")
 
             # Save unit changes (S05) — include required buildingId for PUT
             if changes.get("unit"):
@@ -671,29 +682,29 @@ class ClaimEditPage(QWidget):
                         unit_payload["buildingId"] = bld_id
                     result = ctrl.update_property_unit(unit_id, unit_payload)
                     if not result.success:
-                        errors.append(f"وحدة: {result.message}")
+                        errors.append(f"{tr('page.claim_edit.unit_label')}: {result.message}")
 
             # Save claim changes (S07)
             if changes.get("claim"):
                 result = ctrl.update_claim(self._claim_id, changes["claim"], reason)
                 if not result.success:
-                    errors.append(f"مطالبة: {result.message}")
+                    errors.append(f"{tr('page.claim_edit.claim_label')}: {result.message}")
             elif reason:
                 # Even if no claim fields changed, record the reason
                 result = ctrl.update_claim(self._claim_id, {}, reason)
                 if not result.success:
-                    errors.append(f"سبب: {result.message}")
+                    errors.append(f"{tr('page.claim_edit.reason_label')}: {result.message}")
 
             if errors:
-                Toast.show_toast(self, f"أخطاء: {'; '.join(errors)}", Toast.WARNING)
+                Toast.show_toast(self, f"{tr('page.claim_edit.errors_prefix')}: {'; '.join(errors)}", Toast.WARNING)
             else:
-                Toast.show_toast(self, "تم تحديث المطالبة بنجاح", Toast.SUCCESS)
+                Toast.show_toast(self, tr("page.claim_edit.claim_updated"), Toast.SUCCESS)
                 self._snapshot_originals()
                 self.save_completed.emit()
 
         except Exception as e:
             logger.error(f"Save failed: {e}", exc_info=True)
-            Toast.show_toast(self, f"خطأ في الحفظ: {e}", Toast.ERROR)
+            Toast.show_toast(self, f"{tr('page.claim_edit.error_saving')}: {e}", Toast.ERROR)
 
     def _collect_changes(self) -> dict:
         """Compare current fields to originals, return only changed sections."""
@@ -752,27 +763,30 @@ class ClaimEditPage(QWidget):
     def _build_change_summary(self, changes: dict) -> list:
         """Build human-readable list of changes for the reason dialog."""
         _person_labels = {
-            "first_name": "الاسم الأول", "father_name": "اسم الأب",
-            "last_name": "اسم العائلة", "mother_name": "اسم الأم",
-            "national_id": "الرقم الوطني", "gender": "الجنس",
-            "birth_date": "تاريخ الميلاد",
+            "first_name": tr("page.claim_edit.first_name"),
+            "father_name": tr("page.claim_edit.father_name"),
+            "last_name": tr("page.claim_edit.family_name"),
+            "mother_name": tr("page.claim_edit.mother_name"),
+            "national_id": tr("page.claim_edit.national_id"),
+            "gender": tr("page.claim_edit.gender"),
+            "birth_date": tr("page.claim_edit.date_of_birth"),
         }
         summary = []
         if "person" in changes:
             fields = ", ".join(_person_labels.get(k, k) for k in changes["person"])
-            summary.append(f"تعديل البيانات الشخصية: {fields}")
+            summary.append(f"{tr('page.claim_edit.change_personal')}: {fields}")
         if "unit" in changes:
             fields = ", ".join(changes["unit"].keys())
-            summary.append(f"تعديل بيانات العقار: {fields}")
+            summary.append(f"{tr('page.claim_edit.change_property')}: {fields}")
         if "claim" in changes:
             fields = ", ".join(changes["claim"].keys())
-            summary.append(f"تعديل بيانات المطالبة: {fields}")
+            summary.append(f"{tr('page.claim_edit.change_claim')}: {fields}")
         return summary
     # Helpers
 
     def _create_section_frame(self, title: str) -> QFrame:
         frame = QFrame()
-        frame.setLayoutDirection(Qt.RightToLeft)
+        frame.setLayoutDirection(get_layout_direction())
         frame.setStyleSheet(f"""
             QFrame {{
                 background-color: {Colors.SURFACE};
@@ -893,4 +907,8 @@ class ClaimEditPage(QWidget):
             return 0.0
 
     def update_language(self, is_arabic=True):
-        self._title_label.setText("تعديل المطالبة" if is_arabic else "Edit Claim")
+        self._title_label.setText(tr("page.claim_edit.title"))
+        self._notes_label.setText(tr("page.claim_edit.processing_notes"))
+        self._remarks_label.setText(tr("page.claim_edit.public_remarks"))
+        self._add_evidence_btn.setText(tr("page.claim_edit.add_document"))
+        self._evidence_denied_label.setText(tr("page.claim_edit.evidence_access_denied"))

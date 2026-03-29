@@ -14,6 +14,7 @@ from PyQt5.QtGui import QColor, QFont
 
 from ui.design_system import Colors
 from ui.font_utils import create_font, FontManager
+from services.translation_manager import tr, get_layout_direction
 
 
 class _LanguageOption(QWidget):
@@ -26,7 +27,7 @@ class _LanguageOption(QWidget):
 
         self.setFixedHeight(40)
         self.setCursor(Qt.PointingHandCursor)
-        self.setLayoutDirection(Qt.RightToLeft)
+        self.setLayoutDirection(get_layout_direction())
 
         layout = QHBoxLayout(self)
         layout.setContentsMargins(12, 0, 12, 0)
@@ -114,7 +115,7 @@ class LanguageDialog(QDialog):
         self._setup_ui()
 
     def _setup_ui(self):
-        self.setLayoutDirection(Qt.RightToLeft)
+        self.setLayoutDirection(get_layout_direction())
 
         outer = QVBoxLayout(self)
         outer.setContentsMargins(12, 12, 12, 12)
@@ -123,7 +124,7 @@ class LanguageDialog(QDialog):
         # White container
         container = QFrame()
         container.setObjectName("langContainer")
-        container.setLayoutDirection(Qt.RightToLeft)
+        container.setLayoutDirection(get_layout_direction())
         container.setStyleSheet("""
             QFrame#langContainer {
                 background-color: #FFFFFF;
@@ -146,7 +147,7 @@ class LanguageDialog(QDialog):
         layout.setSpacing(12)
 
         # Title
-        title = QLabel("تغيير اللغة")
+        title = QLabel(tr("dialog.language.title"))
         title.setFont(create_font(size=14, weight=FontManager.WEIGHT_BOLD))
         title.setStyleSheet(f"color: {Colors.TEXT_PRIMARY};")
         title.setAlignment(Qt.AlignRight)
@@ -157,7 +158,7 @@ class LanguageDialog(QDialog):
             "English", "en", selected=(self._current_lang == "en")
         )
         self._ar_option = _LanguageOption(
-            "العربية", "ar", selected=(self._current_lang == "ar")
+            tr("dialog.language.arabic"), "ar", selected=(self._current_lang == "ar")
         )
 
         self._en_option.mousePressEvent = lambda e: self._select("en")
@@ -173,11 +174,11 @@ class LanguageDialog(QDialog):
         btn_layout.setSpacing(12)
         btn_layout.addStretch()
 
-        cancel_btn = self._create_button("الغاء", primary=False)
+        cancel_btn = self._create_button(tr("button.cancel"), primary=False)
         cancel_btn.clicked.connect(self.reject)
         btn_layout.addWidget(cancel_btn)
 
-        save_btn = self._create_button("حفظ", primary=True)
+        save_btn = self._create_button(tr("button.save"), primary=True)
         save_btn.clicked.connect(self._on_save)
         btn_layout.addWidget(save_btn)
 

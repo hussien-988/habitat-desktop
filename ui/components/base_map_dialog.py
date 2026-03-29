@@ -15,6 +15,7 @@ from ui.font_utils import create_font, FontManager
 from utils.logger import get_logger
 from services.viewport_map_loader import ViewportMapLoader
 from services.building_cache_service import get_building_cache
+from services.translation_manager import tr
 
 logger = get_logger(__name__)
 
@@ -194,7 +195,7 @@ class BaseMapDialog(QDialog):
 
     def __init__(
         self,
-        title: str = "بحث على الخريطة",
+        title: str = None,
         show_search: bool = True,
         show_confirm_button: bool = False,
         show_multiselect_ui: bool = False,
@@ -214,6 +215,8 @@ class BaseMapDialog(QDialog):
         """
         super().__init__(parent)
 
+        if title is None:
+            title = tr("dialog.map.search_on_map")
         self.dialog_title = title
         self.show_search = show_search
         self.show_confirm_button = show_confirm_button
@@ -319,7 +322,7 @@ class BaseMapDialog(QDialog):
             self.web_view.setStyleSheet("border-radius: 8px;")
 
             # Loading indicator
-            self._loading_label = QLabel("⏳ جاري تحميل الخريطة...")
+            self._loading_label = QLabel(tr("dialog.map.loading_map"))
             self._loading_label.setFixedSize(1407, 642)
             self._loading_label.setAlignment(Qt.AlignCenter)
             self._loading_label.setFont(create_font(size=10, weight=FontManager.WEIGHT_REGULAR))
@@ -341,7 +344,7 @@ class BaseMapDialog(QDialog):
             self.web_view.loadFinished.connect(self._on_map_loaded)
             content_layout.addWidget(map_container)
         else:
-            placeholder = QLabel("🗺️ الخريطة غير متاحة (QtWebEngine غير مثبت)")
+            placeholder = QLabel(tr("dialog.map.map_unavailable"))
             placeholder.setFixedSize(1407, 642)
             placeholder.setAlignment(Qt.AlignCenter)
             placeholder.setFont(create_font(size=10, weight=FontManager.WEIGHT_REGULAR))
@@ -426,7 +429,7 @@ class BaseMapDialog(QDialog):
 
         # Search input
         self.search_input = QLineEdit()
-        self.search_input.setPlaceholderText("بحث: حي، معلم، أو شارع")
+        self.search_input.setPlaceholderText(tr("dialog.map.search_placeholder"))
         self.search_input.setAlignment(Qt.AlignRight)
         self.search_input.setFont(create_font(size=10, weight=FontManager.WEIGHT_REGULAR))
         self.search_input.setStyleSheet(f"""
@@ -485,7 +488,7 @@ class BaseMapDialog(QDialog):
         multiselect_layout.setDirection(QHBoxLayout.RightToLeft)
 
         # Counter label
-        self.selection_counter_label = QLabel("0 مبنى محدد")
+        self.selection_counter_label = QLabel(tr("dialog.map.zero_buildings_selected"))
         self.selection_counter_label.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
         self.selection_counter_label.setStyleSheet(f"""
             QLabel {{
@@ -518,7 +521,7 @@ class BaseMapDialog(QDialog):
         multiselect_layout.addWidget(self.buildings_list_widget, 1)
 
         # Clear all button
-        self.clear_all_btn = QPushButton("🗑️ مسح الكل")
+        self.clear_all_btn = QPushButton(tr("dialog.map.clear_all"))
         self.clear_all_btn.setFixedSize(100, 32)
         self.clear_all_btn.setCursor(Qt.PointingHandCursor)
         self.clear_all_btn.setFont(create_font(size=9, weight=FontManager.WEIGHT_MEDIUM))
@@ -553,7 +556,7 @@ class BaseMapDialog(QDialog):
         confirm_layout.setSpacing(12)
 
         # Coordinates display
-        self.coordinates_display = QLabel("📍 الإحداثيات: لم يتم التحديد")
+        self.coordinates_display = QLabel(tr("dialog.map.coordinates_not_selected"))
         self.coordinates_display.setAlignment(Qt.AlignCenter)
         self.coordinates_display.setFont(create_font(size=10, weight=FontManager.WEIGHT_MEDIUM))
         self.coordinates_display.setStyleSheet(f"""
@@ -573,7 +576,7 @@ class BaseMapDialog(QDialog):
         buttons_row.addStretch()
 
         # Cancel button
-        cancel_btn = QPushButton("إلغاء")
+        cancel_btn = QPushButton(tr("button.cancel"))
         cancel_btn.setFixedSize(120, 40)
         cancel_btn.setCursor(Qt.PointingHandCursor)
         cancel_btn.setFont(create_font(size=10, weight=FontManager.WEIGHT_MEDIUM))
@@ -594,7 +597,7 @@ class BaseMapDialog(QDialog):
         buttons_row.addWidget(cancel_btn)
 
         # Confirm button
-        self.confirm_btn = QPushButton("✓ تأكيد الإحداثيات")
+        self.confirm_btn = QPushButton(tr("dialog.map.confirm_coordinates"))
         self.confirm_btn.setFixedSize(160, 40)
         self.confirm_btn.setCursor(Qt.PointingHandCursor)
         self.confirm_btn.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
@@ -705,7 +708,7 @@ class BaseMapDialog(QDialog):
         else:
             logger.error("Map failed to load")
             if hasattr(self, '_loading_label'):
-                self._loading_label.setText("❌ فشل تحميل الخريطة")
+                self._loading_label.setText(tr("dialog.map.map_load_failed"))
                 self._loading_label.setStyleSheet(f"""
                     background-color: {Colors.BACKGROUND};
                     color: {Colors.ERROR};
@@ -750,19 +753,19 @@ class BaseMapDialog(QDialog):
         """Handle selection count update from JavaScript."""
         if hasattr(self, 'selection_counter_label'):
             if count == 0:
-                self.selection_counter_label.setText("0 مبنى محدد")
+                self.selection_counter_label.setText(tr("dialog.map.zero_buildings_selected"))
                 self.clear_all_btn.setEnabled(False)
             elif count == 1:
-                self.selection_counter_label.setText("مبنى واحد محدد")
+                self.selection_counter_label.setText(tr("dialog.map.one_building_selected"))
                 self.clear_all_btn.setEnabled(True)
             elif count == 2:
-                self.selection_counter_label.setText("مبنيان محددان")
+                self.selection_counter_label.setText(tr("dialog.map.two_buildings_selected"))
                 self.clear_all_btn.setEnabled(True)
             elif count <= 10:
-                self.selection_counter_label.setText(f"{count} مباني محددة")
+                self.selection_counter_label.setText(tr("dialog.map.plural_buildings_selected", count=count))
                 self.clear_all_btn.setEnabled(True)
             else:
-                self.selection_counter_label.setText(f"{count} مبنى محدد")
+                self.selection_counter_label.setText(tr("dialog.map.many_buildings_selected", count=count))
                 self.clear_all_btn.setEnabled(True)
 
     def _on_viewport_changed(self, ne_lat: float, ne_lng: float, sw_lat: float, sw_lng: float, zoom: int):
@@ -958,7 +961,7 @@ class BaseMapDialog(QDialog):
                 self._current_coordinates = {'latitude': lat, 'longitude': lon, 'type': 'Point'}
 
                 self.coordinates_display.setText(
-                f" الإحداثيات: {lat:.6f}°, {lon:.6f}°"
+                tr("dialog.map.coordinates_point", lat=f"{lat:.6f}", lon=f"{lon:.6f}")
                 )
                 self.confirm_btn.setEnabled(True)
                 logger.info(f"Coordinates updated: Point ({lat}, {lon})")
@@ -987,7 +990,7 @@ class BaseMapDialog(QDialog):
                     }
 
                     self.coordinates_display.setText(
-                    f" المضلع: المركز ({center_lat:.6f}°, {center_lon:.6f}°) - {len(lats)} نقاط"
+                    tr("dialog.map.coordinates_polygon", lat=f"{center_lat:.6f}", lon=f"{center_lon:.6f}", points=len(lats))
                     )
                     self.confirm_btn.setEnabled(True)
                     logger.info(f"Coordinates updated: Polygon centroid ({center_lat}, {center_lon})")

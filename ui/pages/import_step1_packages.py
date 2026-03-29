@@ -13,6 +13,7 @@ from ui.design_system import Colors
 from ui.font_utils import create_font, FontManager
 from ui.style_manager import StyleManager
 from services.vocab_service import get_label as vocab_get_label
+from services.translation_manager import tr, get_layout_direction
 from utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -78,17 +79,17 @@ class _PackageCard(QFrame):
         date_raw = pkg.get("packageCreatedDate") or pkg.get("createdAtUtc") or ""
         if date_raw:
             date_str = str(date_raw)[:16].replace("T", "  ")
-            row2.addWidget(self._meta_label("التاريخ:", date_str))
+            row2.addWidget(self._meta_label(tr("wizard.import.step1.date_label"), date_str))
 
         buildings = pkg.get("buildingCount", 0) or 0
         units = pkg.get("propertyUnitCount", 0) or 0
         persons = pkg.get("personCount", 0) or 0
-        content = f"{buildings} مباني • {units} وحدة • {persons} أشخاص"
-        row2.addWidget(self._meta_label("المحتوى:", content))
+        content = tr("wizard.import.step1.content_summary", buildings=buildings, units=units, persons=persons)
+        row2.addWidget(self._meta_label(tr("wizard.import.step1.content_label"), content))
 
         device_id = pkg.get("deviceId") or ""
         if device_id:
-            row2.addWidget(self._meta_label("الجهاز:", str(device_id)[:20]))
+            row2.addWidget(self._meta_label(tr("wizard.import.step1.device_label"), str(device_id)[:20]))
 
         row2.addStretch()
         layout.addLayout(row2)
@@ -161,7 +162,7 @@ class ImportStep1Packages(QWidget):
         # self._start_polling()
 
     def _setup_ui(self):
-        self.setLayoutDirection(Qt.RightToLeft)
+        self.setLayoutDirection(get_layout_direction())
         self.setStyleSheet("background: transparent;")
 
         main_layout = QVBoxLayout(self)
@@ -184,7 +185,7 @@ class ImportStep1Packages(QWidget):
         header_row = QHBoxLayout()
         header_row.setSpacing(12)
 
-        title = QLabel("الحزم الواردة للمعالجة")
+        title = QLabel(tr("wizard.import.step1.title"))
         title.setFont(create_font(size=14, weight=FontManager.WEIGHT_SEMIBOLD))
         title.setStyleSheet("color: #212B36; background: transparent;")
         header_row.addWidget(title)
@@ -196,7 +197,7 @@ class ImportStep1Packages(QWidget):
         self._last_update_label.setStyleSheet("color: #9CA3AF; background: transparent;")
         header_row.addWidget(self._last_update_label)
 
-        back_btn = QPushButton("رجوع")
+        back_btn = QPushButton(tr("wizard.import.step1.back_btn"))
         back_btn.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
         back_btn.setFixedSize(80, 32)
         back_btn.setCursor(Qt.PointingHandCursor)
@@ -244,7 +245,7 @@ class ImportStep1Packages(QWidget):
         card_layout.addWidget(scroll, 1)
 
         # Empty state label
-        self._empty_label = QLabel("لا توجد حزم واردة حالياً\nسيتم التحديث تلقائياً كل 30 ثانية")
+        self._empty_label = QLabel(tr("wizard.import.step1.empty_state"))
         self._empty_label.setFont(create_font(size=11, weight=FontManager.WEIGHT_REGULAR))
         self._empty_label.setStyleSheet("color: #9CA3AF; background: transparent;")
         self._empty_label.setAlignment(Qt.AlignCenter)
@@ -252,7 +253,7 @@ class ImportStep1Packages(QWidget):
         card_layout.addWidget(self._empty_label)
 
         # Auto-refresh hint
-        hint = QLabel("تحديث تلقائي كل 30 ثانية")
+        hint = QLabel(tr("wizard.import.step1.auto_refresh_hint"))
         hint.setFont(create_font(size=8, weight=FontManager.WEIGHT_REGULAR))
         hint.setStyleSheet("color: #D1D5DB; background: transparent;")
         hint.setAlignment(Qt.AlignCenter)
@@ -290,7 +291,7 @@ class ImportStep1Packages(QWidget):
         card_layout.setAlignment(Qt.AlignCenter)
         card_layout.setSpacing(6)
 
-        self._loading_label = QLabel("جاري التحميل...")
+        self._loading_label = QLabel(tr("wizard.import.step1.loading"))
         self._loading_label.setFont(create_font(size=11, weight=FontManager.WEIGHT_SEMIBOLD))
         self._loading_label.setStyleSheet("color: #3890DF; background: transparent; border: none;")
         self._loading_label.setAlignment(Qt.AlignCenter)
@@ -334,7 +335,7 @@ class ImportStep1Packages(QWidget):
 
     def refresh(self, data=None):
         """Fetch pending packages from API and populate cards."""
-        self._show_loading("جاري تحميل الحزم...")
+        self._show_loading(tr("wizard.import.step1.loading_packages"))
         result = self.import_controller.get_packages(
             page=1, page_size=50
         )
@@ -360,7 +361,7 @@ class ImportStep1Packages(QWidget):
 
         from datetime import datetime
         now = datetime.now().strftime("%H:%M")
-        self._last_update_label.setText(f"آخر تحديث: {now}")
+        self._last_update_label.setText(tr("wizard.import.step1.last_update", time=now))
 
         logger.info(f"Step1: refreshed, {len(packages)} pending package(s)")
 
@@ -441,14 +442,14 @@ class ImportStep1Packages(QWidget):
     def _on_upload_file(self):
         """Upload .uhc file then auto-advance to processing."""
         file_path, _ = QFileDialog.getOpenFileName(
-            self, "اختيار ملف .uhc", "", "UHC Files (*.uhc);;All Files (*)"
+            self, tr("wizard.import.step1.select_file"), "", "UHC Files (*.uhc);;All Files (*)"
         )
         if not file_path:
             return
 
         from ui.components.message_dialog import MessageDialog
 
-        self._show_loading("جاري رفع الملف...")
+        self._show_loading(tr("wizard.import.step1.uploading_file"))
         result = self.import_controller.upload_package(file_path)
         self._hide_loading()
 
@@ -462,9 +463,9 @@ class ImportStep1Packages(QWidget):
                 self._auto_select(pkg_id)
                 self.upload_completed.emit(pkg_id)
             else:
-                MessageDialog.success(self, "تم الرفع", result.message_ar or "تم رفع الملف بنجاح")
+                MessageDialog.success(self, tr("wizard.import.step1.upload_success_title"), result.message_ar or tr("wizard.import.step1.upload_success_msg"))
         else:
-            MessageDialog.error(self, "خطأ في الرفع", result.message_ar or "فشل رفع الملف")
+            MessageDialog.error(self, tr("wizard.import.step1.upload_error_title"), result.message_ar or tr("wizard.import.step1.upload_error_msg"))
             self.refresh()
 
     def _auto_select(self, package_id: str):
@@ -476,6 +477,12 @@ class ImportStep1Packages(QWidget):
                 self._selected_status = card.get_status()
         self._selected_package_id = package_id
         self.package_selected.emit(package_id)
+
+    def update_language(self, is_arabic: bool):
+        """Update all translatable texts after language change."""
+        self.setLayoutDirection(get_layout_direction())
+        self._empty_label.setText(tr("wizard.import.step1.empty_state"))
+        self._loading_label.setText(tr("wizard.import.step1.loading"))
 
     def reset(self):
         """Reset to initial state."""

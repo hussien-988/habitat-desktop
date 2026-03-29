@@ -14,6 +14,7 @@ from PyQt5.QtGui import QFont, QColor
 
 from ui.font_utils import create_font
 from utils.logger import get_logger
+from services.translation_manager import tr, get_layout_direction
 
 logger = get_logger(__name__)
 
@@ -37,22 +38,22 @@ class _ResetWorker(QThread):
     def run(self):
         # Direct SQL mode: bypass API entirely
         if self.options.get("direct_sql"):
-            self.progress.emit(0, "حذف مباشر من PostgreSQL...")
+            self.progress.emit(0, tr("dialog.dev_reset.direct_sql_delete"))
             stats = self._reset_all_direct_sql()
             if stats:
                 # Also clear local SQLite
                 if self.db:
-                    self.progress.emit(90, "مسح السجلات المحلية (SQLite)...")
+                    self.progress.emit(90, tr("dialog.dev_reset.clearing_local"))
                     stats["local_claims"] = self._clear_local_claims()
                 self.finished.emit(stats)
             else:
-                self.error.emit("فشل الحذف المباشر من PostgreSQL")
+                self.error.emit(tr("dialog.dev_reset.direct_sql_failed"))
             return
 
         from services.api_client import get_api_client
         api = get_api_client()
         if not api:
-            self.error.emit("API client غير متاح")
+            self.error.emit(tr("dialog.dev_reset.api_unavailable"))
             return
 
         stats = {"local_claims": 0, "claims": 0, "assignments": 0, "surveys": 0, "buildings": 0}
@@ -72,29 +73,29 @@ class _ResetWorker(QThread):
                 end_pct = (step_idx + 1) * 100 // total
 
                 if step == "local_claims":
-                    self.progress.emit(base_pct, "جاري مسح السجلات المحلية (SQLite)...")
+                    self.progress.emit(base_pct, tr("dialog.dev_reset.clearing_local_sqlite"))
                     stats["local_claims"] = self._clear_local_claims()
-                    self.progress.emit(end_pct, f"تم مسح {stats['local_claims']} سجل محلي")
+                    self.progress.emit(end_pct, tr("dialog.dev_reset.cleared_local_count").format(count=stats['local_claims']))
 
                 elif step == "claims":
-                    self.progress.emit(base_pct, "جاري حذف المطالبات...")
+                    self.progress.emit(base_pct, tr("dialog.dev_reset.deleting_claims"))
                     stats["claims"] = self._delete_claims(api, base_pct, end_pct)
-                    self.progress.emit(end_pct, f"تم حذف {stats['claims']} مطالبة")
+                    self.progress.emit(end_pct, tr("dialog.dev_reset.deleted_claims_count").format(count=stats['claims']))
 
                 elif step == "assignments":
-                    self.progress.emit(base_pct, "جاري حذف التعيينات الميدانية...")
+                    self.progress.emit(base_pct, tr("dialog.dev_reset.deleting_assignments"))
                     stats["assignments"] = self._delete_assignments(api, base_pct, end_pct)
-                    self.progress.emit(end_pct, f"تم حذف {stats['assignments']} تعيين ميداني")
+                    self.progress.emit(end_pct, tr("dialog.dev_reset.deleted_assignments_count").format(count=stats['assignments']))
 
                 elif step == "surveys":
-                    self.progress.emit(base_pct, "جاري حذف الاستبيانات...")
+                    self.progress.emit(base_pct, tr("dialog.dev_reset.deleting_surveys"))
                     stats["surveys"] = self._delete_surveys(api, base_pct, end_pct)
-                    self.progress.emit(end_pct, f"تم حذف {stats['surveys']} استبيان")
+                    self.progress.emit(end_pct, tr("dialog.dev_reset.deleted_surveys_count").format(count=stats['surveys']))
 
                 elif step == "buildings":
-                    self.progress.emit(base_pct, "جاري حذف المباني...")
+                    self.progress.emit(base_pct, tr("dialog.dev_reset.deleting_buildings"))
                     stats["buildings"] = self._delete_buildings(api, base_pct, end_pct)
-                    self.progress.emit(end_pct, f"تم حذف {stats['buildings']} مبنى")
+                    self.progress.emit(end_pct, tr("dialog.dev_reset.deleted_buildings_count").format(count=stats['buildings']))
 
             self.finished.emit(stats)
 
@@ -144,7 +145,7 @@ class _ResetWorker(QThread):
                     break
                 self.progress.emit(
                     base_pct + (end_pct - base_pct) * min(count, 100) // 100,
-                    f"جاري حذف المطالبات... ({count})"
+                    tr("dialog.dev_reset.deleting_claims_progress").format(count=count)
                 )
             except Exception as e:
                 logger.warning(f"Claims listing error: {e}")
@@ -182,7 +183,7 @@ class _ResetWorker(QThread):
                 if deleted_in_batch == 0:
                     break
                 pct = base_pct + (end_pct - base_pct) * min(count, 100) // 100
-                self.progress.emit(pct, f"جاري حذف التعيينات... ({count})")
+                self.progress.emit(pct, tr("dialog.dev_reset.deleting_assignments_progress").format(count=count))
                 page += 1
         except Exception as e:
             logger.warning(f"Assignment listing error (skipping): {e}")
@@ -222,7 +223,7 @@ class _ResetWorker(QThread):
                         break
                     self.progress.emit(
                         status_base,
-                        f"جاري حذف الاستبيانات ({status})... ({count})"
+                        tr("dialog.dev_reset.deleting_surveys_progress").format(status=status, count=count)
                     )
                 except Exception as e:
                     logger.warning(f"Survey listing error for status={status}: {e}")
@@ -257,13 +258,13 @@ class _ResetWorker(QThread):
                 if api_failed or deleted_in_batch == 0:
                     break
                 pct = base_pct + (end_pct - base_pct) * min(count, 100) // 100
-                self.progress.emit(pct, f"جاري حذف المباني... ({count})")
+                self.progress.emit(pct, tr("dialog.dev_reset.deleting_buildings_progress").format(count=count))
             except Exception as e:
                 logger.warning(f"Building listing error: {e}")
                 break
 
         if api_failed:
-            self.progress.emit(base_pct, "API فشل — حذف المباني مباشرة من PostgreSQL...")
+            self.progress.emit(base_pct, tr("dialog.dev_reset.api_failed_direct_sql"))
             count += self._delete_buildings_direct_sql()
 
         return count
@@ -321,13 +322,13 @@ class _ResetWorker(QThread):
                 cur.execute(f'SELECT COUNT(*) FROM "{table}"')
                 counts[table] = cur.fetchone()[0]
 
-            self.progress.emit(10, "كسر المفاتيح الأجنبية الدائرية...")
+            self.progress.emit(10, tr("dialog.dev_reset.breaking_circular_fk"))
 
             # Break circular FKs
             cur.execute('UPDATE "Persons" SET "HouseholdId" = NULL')
             cur.execute('UPDATE "Buildings" SET "BuildingDocumentId" = NULL')
 
-            self.progress.emit(20, "حذف الجداول الفرعية...")
+            self.progress.emit(20, tr("dialog.dev_reset.deleting_child_tables"))
 
             # Delete in FK dependency order (leaf → parent)
             tables_to_delete = [
@@ -357,7 +358,7 @@ class _ResetWorker(QThread):
                 try:
                     cur.execute(f'DELETE FROM "{table}"')
                     pct = 20 + (i + 1) * 60 // len(tables_to_delete)
-                    self.progress.emit(pct, f'حذف {table}...')
+                    self.progress.emit(pct, tr("dialog.dev_reset.deleting_table").format(table=table))
                 except Exception as e:
                     logger.warning(f"Could not delete from {table}: {e}")
                     conn.rollback()
@@ -368,7 +369,7 @@ class _ResetWorker(QThread):
             conn.close()
 
             logger.info(f"Direct SQL reset complete: {counts}")
-            self.progress.emit(85, "تم الحذف من PostgreSQL بنجاح")
+            self.progress.emit(85, tr("dialog.dev_reset.postgresql_success"))
 
             return {
                 "local_claims": 0,
@@ -380,7 +381,7 @@ class _ResetWorker(QThread):
             }
         except ImportError:
             logger.error("psycopg2 not installed")
-            self.error.emit("psycopg2 غير مثبت — لا يمكن الحذف المباشر")
+            self.error.emit(tr("dialog.dev_reset.psycopg2_missing"))
             return None
         except Exception as e:
             logger.error(f"Direct SQL reset failed: {e}", exc_info=True)
@@ -394,19 +395,18 @@ class DevResetDialog(QDialog):
     Only create/show this dialog when Config.DEV_MODE is True.
     """
 
-    CONFIRM_WORD = "تأكيد"
-
     def __init__(self, parent=None, db=None):
         super().__init__(parent)
         self._worker = None
         self._db = db
+        self.CONFIRM_WORD = tr("dialog.dev_reset.confirm_word")
 
-        self.setWindowTitle("أداة مطورين — إعادة تعيين بيانات الاختبار")
+        self.setWindowTitle(tr("dialog.dev_reset.window_title"))
         self.setModal(True)
         self.setFixedWidth(480)
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.Dialog)
         self.setAttribute(Qt.WA_TranslucentBackground)
-        self.setLayoutDirection(Qt.RightToLeft)
+        self.setLayoutDirection(get_layout_direction())
 
         self._setup_ui()
         self._center_on_parent()
@@ -453,7 +453,7 @@ class DevResetDialog(QDialog):
                 font-weight: bold;
             }
         """)
-        title = QLabel("إعادة تعيين بيانات الاختبار")
+        title = QLabel(tr("dialog.dev_reset.title"))
         title.setFont(create_font(size=14, weight=QFont.Bold))
         title.setStyleSheet("color: #111827;")
         header_row.addWidget(title)
@@ -468,16 +468,16 @@ class DevResetDialog(QDialog):
         layout.addWidget(sep)
 
         # --- What will be deleted ---
-        delete_label = QLabel("سيتم حذف:")
+        delete_label = QLabel(tr("dialog.dev_reset.will_delete"))
         delete_label.setFont(create_font(size=10, weight=QFont.Medium))
         delete_label.setStyleSheet("color: #374151;")
         layout.addWidget(delete_label)
 
-        self.cb_local_claims = QCheckBox("سجلات SQLite المحلية — claims, claim_history")
-        self.cb_claims = QCheckBox("المطالبات (Claims) — من الباكيند API")
-        self.cb_assignments = QCheckBox("التعيينات الميدانية  (Building Assignments)")
-        self.cb_surveys = QCheckBox("الاستبيانات + الأسر + الأشخاص + الأدلة")
-        self.cb_buildings = QCheckBox("المباني + الوحدات العقارية")
+        self.cb_local_claims = QCheckBox(tr("dialog.dev_reset.cb_local_claims"))
+        self.cb_claims = QCheckBox(tr("dialog.dev_reset.cb_claims"))
+        self.cb_assignments = QCheckBox(tr("dialog.dev_reset.cb_assignments"))
+        self.cb_surveys = QCheckBox(tr("dialog.dev_reset.cb_surveys"))
+        self.cb_buildings = QCheckBox(tr("dialog.dev_reset.cb_buildings"))
         self._api_checkboxes = [self.cb_local_claims, self.cb_claims, self.cb_assignments, self.cb_surveys, self.cb_buildings]
         for cb in self._api_checkboxes:
             cb.setChecked(True)
@@ -495,7 +495,7 @@ class DevResetDialog(QDialog):
                 }
             """)
             layout.addWidget(cb)
-        self.cb_local_claims.setToolTip("سجلات المطالبات في قاعدة البيانات المحلية (data/trrcms.db) — السبب الرئيسي لظهور مطالبات 'غير محدد'")
+        self.cb_local_claims.setToolTip(tr("dialog.dev_reset.cb_local_claims_tooltip"))
 
         # --- Direct SQL option ---
         sep2 = QFrame()
@@ -503,7 +503,7 @@ class DevResetDialog(QDialog):
         sep2.setStyleSheet("color: #E5E7EB;")
         layout.addWidget(sep2)
 
-        self.cb_direct_sql = QCheckBox("حذف مباشر من PostgreSQL (تجاوز API)")
+        self.cb_direct_sql = QCheckBox(tr("dialog.dev_reset.cb_direct_sql"))
         self.cb_direct_sql.setChecked(False)
         self.cb_direct_sql.setFont(create_font(size=10, weight=QFont.Medium))
         self.cb_direct_sql.setStyleSheet("""
@@ -517,7 +517,7 @@ class DevResetDialog(QDialog):
                 background-color: #DC2626;
             }
         """)
-        self.cb_direct_sql.setToolTip("يحذف جميع البيانات مباشرة من PostgreSQL — يتجاوز API ويحل مشاكل 403/500")
+        self.cb_direct_sql.setToolTip(tr("dialog.dev_reset.cb_direct_sql_tooltip"))
         self.cb_direct_sql.toggled.connect(self._on_direct_sql_toggled)
         layout.addWidget(self.cb_direct_sql)
 
@@ -534,10 +534,10 @@ class DevResetDialog(QDialog):
         safe_layout = QVBoxLayout(safe_frame)
         safe_layout.setContentsMargins(12, 10, 12, 10)
         safe_layout.setSpacing(4)
-        safe_title = QLabel("لن يتم المساس بـ:")
+        safe_title = QLabel(tr("dialog.dev_reset.will_not_delete"))
         safe_title.setFont(create_font(size=9, weight=QFont.Medium))
         safe_title.setStyleSheet("color: #166534;")
-        safe_items = QLabel("المستخدمون  •  المفردات  •  التقسيمات الإدارية  •  الأحياء")
+        safe_items = QLabel(tr("dialog.dev_reset.safe_items"))
         safe_items.setFont(create_font(size=9))
         safe_items.setStyleSheet("color: #166534;")
         safe_layout.addWidget(safe_title)
@@ -545,7 +545,7 @@ class DevResetDialog(QDialog):
         layout.addWidget(safe_frame)
 
         # --- Confirmation input ---
-        confirm_label = QLabel(f'اكتب  "{self.CONFIRM_WORD}"  للمتابعة:')
+        confirm_label = QLabel(tr("dialog.dev_reset.type_to_confirm").format(word=self.CONFIRM_WORD))
         confirm_label.setFont(create_font(size=10))
         confirm_label.setStyleSheet("color: #374151;")
         layout.addWidget(confirm_label)
@@ -601,7 +601,7 @@ class DevResetDialog(QDialog):
         self.progress_bar.setRange(0, 100)
         self.progress_bar.setValue(0)
 
-        self.progress_label = QLabel("جاري التحضير...")
+        self.progress_label = QLabel(tr("dialog.dev_reset.preparing"))
         self.progress_label.setFont(create_font(size=9))
         self.progress_label.setStyleSheet("color: #6B7280;")
         self.progress_label.setAlignment(Qt.AlignCenter)
@@ -627,7 +627,7 @@ class DevResetDialog(QDialog):
         btn_row = QHBoxLayout()
         btn_row.setSpacing(12)
 
-        self.cancel_btn = QPushButton("إلغاء")
+        self.cancel_btn = QPushButton(tr("button.cancel"))
         self.cancel_btn.setFixedSize(120, 44)
         self.cancel_btn.setCursor(Qt.PointingHandCursor)
         self.cancel_btn.setFont(create_font(size=10))
@@ -642,7 +642,7 @@ class DevResetDialog(QDialog):
         """)
         self.cancel_btn.clicked.connect(self._on_cancel)
 
-        self.reset_btn = QPushButton("حذف البيانات")
+        self.reset_btn = QPushButton(tr("dialog.dev_reset.delete_data"))
         self.reset_btn.setFixedSize(160, 44)
         self.reset_btn.setCursor(Qt.PointingHandCursor)
         self.reset_btn.setFont(create_font(size=10, weight=QFont.Medium))
@@ -702,7 +702,7 @@ class DevResetDialog(QDialog):
 
         # Lock UI
         self.reset_btn.setEnabled(False)
-        self.cancel_btn.setText("إيقاف")
+        self.cancel_btn.setText(tr("dialog.dev_reset.stop"))
         self.confirm_input.setEnabled(False)
         self.cb_local_claims.setEnabled(False)
         self.cb_claims.setEnabled(False)
@@ -745,32 +745,32 @@ class DevResetDialog(QDialog):
         self.progress_bar.setValue(100)
 
         lines = []
-        method = "PostgreSQL مباشر" if stats.get("direct_sql") else "API"
+        method = tr("dialog.dev_reset.method_direct") if stats.get("direct_sql") else "API"
         if stats.get("local_claims"):
-            lines.append(f"تم مسح {stats['local_claims']} سجل من SQLite المحلية")
+            lines.append(tr("dialog.dev_reset.result_local").format(count=stats['local_claims']))
         if stats.get("claims"):
-            lines.append(f"تم حذف {stats['claims']} مطالبة ({method})")
+            lines.append(tr("dialog.dev_reset.result_claims").format(count=stats['claims'], method=method))
         if stats.get("assignments"):
-            lines.append(f"تم حذف {stats['assignments']} تعيين ميداني")
+            lines.append(tr("dialog.dev_reset.result_assignments").format(count=stats['assignments']))
         if stats.get("surveys"):
-            lines.append(f"تم حذف {stats['surveys']} استبيان (وما يتبعه)")
+            lines.append(tr("dialog.dev_reset.result_surveys").format(count=stats['surveys']))
         if stats.get("buildings"):
-            lines.append(f"تم حذف {stats['buildings']} مبنى")
+            lines.append(tr("dialog.dev_reset.result_buildings").format(count=stats['buildings']))
         if not lines:
-            lines.append("لم يتم العثور على بيانات للحذف")
+            lines.append(tr("dialog.dev_reset.no_data_found"))
 
         summary = "\n".join(lines)
-        self.progress_label.setText("اكتمل الحذف بنجاح")
-        self.log_view.append(f"\n--- النتيجة ---\n{summary}")
+        self.progress_label.setText(tr("dialog.dev_reset.completed"))
+        self.log_view.append(f"\n--- {tr('dialog.dev_reset.result_header')} ---\n{summary}")
 
-        self.cancel_btn.setText("إغلاق")
+        self.cancel_btn.setText(tr("button.close"))
         self.cancel_btn.setEnabled(True)
         logger.info(f"Dev reset completed: {stats}")
 
     def _on_error(self, message: str):
-        self.progress_label.setText(f"خطأ: {message}")
-        self.log_view.append(f"\n[خطأ] {message}")
-        self.cancel_btn.setText("إغلاق")
+        self.progress_label.setText(tr("dialog.dev_reset.error_prefix").format(message=message))
+        self.log_view.append(f"\n[{tr('dialog.dev_reset.error_label')}] {message}")
+        self.cancel_btn.setText(tr("button.close"))
         self.cancel_btn.setEnabled(True)
         logger.error(f"Dev reset error: {message}")
 

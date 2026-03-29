@@ -17,7 +17,7 @@ from PyQt5.QtGui import (
 from ui.components.icon import Icon
 from ui.design_system import NavbarDimensions, Colors, Typography
 from ui.font_utils import create_font, FontManager
-from services.translation_manager import tr
+from services.translation_manager import tr, get_layout_direction
 # Menu Item
 
 class _MenuItem(QWidget):
@@ -33,7 +33,7 @@ class _MenuItem(QWidget):
 
         self.setFixedHeight(38)
         self.setCursor(QCursor(Qt.PointingHandCursor))
-        self.setLayoutDirection(Qt.RightToLeft)
+        self.setLayoutDirection(get_layout_direction())
 
         layout = QHBoxLayout(self)
         layout.setContentsMargins(14, 0, 14, 0)
