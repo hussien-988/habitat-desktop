@@ -681,6 +681,9 @@ class MainWindow(QMainWindow):
         api = get_api_client()
         if api:
             api.set_access_token(token)
+            refresh = getattr(self.current_user, '_api_refresh_token', None)
+            if refresh:
+                api.refresh_token = refresh
             api.set_session_expired_callback(self._on_session_expired)
             logger.info("API token set on singleton")
 
@@ -712,11 +715,15 @@ class MainWindow(QMainWindow):
         """Handle session expiry (called from background thread)."""
         if not self.current_user:
             return
+        if getattr(self, '_session_expiry_pending', False):
+            return
+        self._session_expiry_pending = True
         from PyQt5.QtCore import QTimer
         QTimer.singleShot(0, self._do_session_expired)
 
     def _do_session_expired(self):
         """Show expiry toast and redirect to login (runs on main thread)."""
+        self._session_expiry_pending = False
         if not self.current_user:
             return
         logger.warning(f"Session expired for user: {self.current_user.username}")

@@ -150,4 +150,8 @@ class ApiAuthService:
             user._api_token = token
             logger.info(f"API token received for user: {user.username}")
 
+        refresh_token = data.get("refreshToken") or data.get("refresh_token")
+        if refresh_token:
+            user._api_refresh_token = refresh_token
+
         return user

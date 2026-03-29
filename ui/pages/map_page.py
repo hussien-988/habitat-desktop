@@ -67,11 +67,13 @@ class _MapPageWorker(QThread):
             buildings_result = map_ctrl.get_buildings_in_view(bbox=bbox, page_size=2000, zoom_level=15)
             result['buildings_result'] = buildings_result
 
+            from services.api_client import get_api_client
+            from services.map_utils import normalize_landmark, normalize_street
+            api = get_api_client()
+
             # Get neighborhoods
             result['neighborhoods'] = None
             try:
-                from services.api_client import get_api_client
-                api = get_api_client()
                 result['neighborhoods'] = api.get_neighborhoods_by_bounds(
                     sw_lat=Config.MAP_BOUNDS_MIN_LAT, sw_lng=Config.MAP_BOUNDS_MIN_LNG,
                     ne_lat=Config.MAP_BOUNDS_MAX_LAT, ne_lng=Config.MAP_BOUNDS_MAX_LNG
@@ -82,9 +84,6 @@ class _MapPageWorker(QThread):
             # Get landmarks
             result['landmarks'] = None
             try:
-                from services.api_client import get_api_client
-                from services.map_utils import normalize_landmark, normalize_street
-                api = get_api_client()
                 lm = api.get_landmarks_for_map(
                     north_east_lat=bbox[2], north_east_lng=bbox[3],
                     south_west_lat=bbox[0], south_west_lng=bbox[1]
@@ -1057,13 +1056,11 @@ class MapPage(QWidget):
             boundaries_geojson = boundary_service.get(boundary_level)
         places_json = boundary_service.get_places_json() if boundary_service.is_available('populated_places') else None
 
-        # Landmarks and streets from worker
-        landmarks_json = None
-        streets_json = None
-        if data.get('landmarks'):
-            landmarks_json = json.dumps(data['landmarks'], ensure_ascii=False)
-        if data.get('streets'):
-            streets_json = json.dumps(data['streets'], ensure_ascii=False)
+        # Landmarks and streets from worker (always pass JSON so JS infrastructure is created)
+        landmarks_list = data.get('landmarks') or []
+        streets_list = data.get('streets') or []
+        landmarks_json = json.dumps(landmarks_list, ensure_ascii=False)
+        streets_json = json.dumps(streets_list, ensure_ascii=False)
 
         # Generate and load HTML
         geojson = self._buildings_to_geojson(geo_buildings)
@@ -1159,8 +1156,6 @@ class MapPage(QWidget):
                 viewport_data['ne_lng']
             )
 
-            self._pending_viewport_data = viewport_data
-
             self._viewport_buildings_worker = ApiWorker(
                 self.map_controller.get_buildings_in_view,
                 bbox=bbox,
@@ -1170,6 +1165,9 @@ class MapPage(QWidget):
             self._viewport_buildings_worker.finished.connect(self._on_viewport_buildings_ready)
             self._viewport_buildings_worker.error.connect(self._on_viewport_buildings_error)
             self._viewport_buildings_worker.start()
+
+            # Load landmarks and streets concurrently with buildings
+            self._update_viewport_landmarks_streets(viewport_data)
 
         except Exception as e:
             logger.error(f"Error starting viewport buildings worker: {e}", exc_info=True)
@@ -1192,10 +1190,6 @@ class MapPage(QWidget):
             else:
                 logger.warning(f"No buildings found in viewport")
                 self.info_label.setText(tr("page.map.no_buildings_viewport"))
-
-            viewport_data = getattr(self, '_pending_viewport_data', None)
-            if viewport_data:
-                self._update_viewport_landmarks_streets(viewport_data)
 
         except Exception as e:
             logger.error(f"Error processing viewport buildings: {e}", exc_info=True)

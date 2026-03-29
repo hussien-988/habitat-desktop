@@ -148,12 +148,12 @@ class _LayersWorker(QThread):
                 try:
                     from services.api_client import get_api_client
                     from services.map_utils import normalize_landmark, normalize_street
-                    from ui.constants.map_constants import MapConstants
+                    from app.config import Config
                     api = get_api_client()
-                    sw_lat = MapConstants.DEFAULT_CENTER_LAT - 0.5
-                    sw_lng = MapConstants.DEFAULT_CENTER_LON - 0.5
-                    ne_lat = MapConstants.DEFAULT_CENTER_LAT + 0.5
-                    ne_lng = MapConstants.DEFAULT_CENTER_LON + 0.5
+                    sw_lat = Config.MAP_BOUNDS_MIN_LAT
+                    sw_lng = Config.MAP_BOUNDS_MIN_LNG
+                    ne_lat = Config.MAP_BOUNDS_MAX_LAT
+                    ne_lng = Config.MAP_BOUNDS_MAX_LNG
 
                     landmarks = api.get_landmarks_for_map(
                         south_west_lat=sw_lat, south_west_lng=sw_lng,
@@ -162,6 +162,7 @@ class _LayersWorker(QThread):
                     if landmarks and isinstance(landmarks, list):
                         landmarks = [normalize_landmark(lm) for lm in landmarks]
                         lm_json = json.dumps(landmarks, ensure_ascii=False)
+                        logger.info(f"Loaded {len(landmarks)} landmarks for map")
 
                     streets = api.get_streets_for_map(
                         south_west_lat=sw_lat, south_west_lng=sw_lng,
@@ -170,6 +171,7 @@ class _LayersWorker(QThread):
                     if streets and isinstance(streets, list):
                         streets = [normalize_street(s) for s in streets]
                         st_json = json.dumps(streets, ensure_ascii=False)
+                        logger.info(f"Loaded {len(streets)} streets for map")
                 except Exception as e:
                     logger.warning(f"Failed to load landmarks/streets: {e}")
 
@@ -407,12 +409,21 @@ class BuildingMapDialog(BaseMapDialog):
 
         self._buildings_worker = None
         self._layers_worker = None
+        self._page_loaded = False
+        self._pending_layers_data = None
         QTimer.singleShot(50, self._start_map_load)
 
     def _start_map_load(self):
         """Show map immediately with tiles, then load buildings in background."""
         from services.tile_server_manager import get_tile_server_url
         from ui.constants.map_constants import MapConstants
+        from services.landmark_icon_service import reload as reload_landmark_types
+
+        # Reload landmark types (may have failed at startup before login)
+        try:
+            reload_landmark_types()
+        except Exception as e:
+            logger.warning(f"Failed to reload landmark types: {e}")
 
         tile_url = get_tile_server_url()
         center_lat = MapConstants.DEFAULT_CENTER_LAT
@@ -447,6 +458,10 @@ class BuildingMapDialog(BaseMapDialog):
             boundary_level='neighbourhoods',
         )
         self.load_map_html(html)
+
+        # Track page load for deferred layers injection
+        if self.web_view:
+            self.web_view.loadFinished.connect(self._on_page_ready)
 
         # Show loading overlay on map
         if self.web_view:
@@ -585,8 +600,24 @@ class BuildingMapDialog(BaseMapDialog):
         except Exception as e:
             logger.error(f"Error injecting buildings: {e}", exc_info=True)
 
+    def _on_page_ready(self, success):
+        """Called when HTML page finishes loading - inject any buffered layers."""
+        if success:
+            self._page_loaded = True
+            if self._pending_layers_data:
+                self._inject_layers(self._pending_layers_data)
+                self._pending_layers_data = None
+
     def _on_layers_ready(self, data):
-        """Inject landmarks and streets into the already-visible map."""
+        """Inject landmarks and streets, or buffer if page not loaded yet."""
+        if self._page_loaded:
+            self._inject_layers(data)
+        else:
+            self._pending_layers_data = data
+            logger.info("Layers data buffered, waiting for page load")
+
+    def _inject_layers(self, data):
+        """Inject landmarks and streets into the loaded map page."""
         try:
             landmarks_json = data.get('landmarks_json')
             if landmarks_json and self.web_view:
