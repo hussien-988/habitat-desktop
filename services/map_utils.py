@@ -9,12 +9,14 @@ import re
 LANDMARK_TYPE_MAP = {
     1: "Police station",
     2: "Mosque",
-    3: "Public building",
+    3: "Square",
     4: "Shop",
     5: "School",
     6: "Clinic",
     7: "Water Tank",
     8: "Fuel Station",
+    9: "Hospital",
+    10: "Park",
 }
 
 

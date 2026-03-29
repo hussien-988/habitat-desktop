@@ -190,6 +190,7 @@ class TRRCMSApiClient:
         last_error = None
         for attempt in range(self._MAX_RETRIES + 1):
             try:
+                token_used = self.access_token
                 response = requests.request(
                     method=method,
                     url=url,
@@ -231,10 +232,16 @@ class TRRCMSApiClient:
                 except Exception:
                     pass
                 if status_code == 401:
-                    logger.warning(f"[API ERR] 401 {method} {endpoint} — session expired")
-                    self.access_token = None
-                    if self._on_session_expired:
-                        self._on_session_expired()
+                    # Only handle if the token hasn't changed (new login) since our request
+                    if self.access_token and self.access_token == token_used:
+                        if self.refresh_token and self.refresh_access_token():
+                            continue  # Retry with refreshed token
+                        logger.warning(f"[API ERR] 401 {method} {endpoint} — session expired")
+                        self.access_token = None
+                        if self._on_session_expired:
+                            self._on_session_expired()
+                    elif self.access_token != token_used:
+                        logger.info(f"401 on {endpoint} ignored — token changed by new session")
                 log_fn = logger.warning if status_code in (401, 403, 404) else logger.error
                 log_fn(f"[API ERR] {status_code} {method} {endpoint} | Response: {response_data or response_text}")
                 raise ApiException(
@@ -344,6 +351,17 @@ class TRRCMSApiClient:
             return result.get("items", []) if isinstance(result, dict) else result
         except Exception as e:
             logger.warning(f"Failed to search landmarks: {e}")
+            return []
+
+    def get_landmark_types(self) -> List[Dict[str, Any]]:
+        """Fetch all landmark types with their SVG icons."""
+        try:
+            result = self._request("GET", "/v1/landmarks/types")
+            items = result.get("items", []) if isinstance(result, dict) else result
+            logger.info(f"Fetched {len(items)} landmark types")
+            return items
+        except Exception as e:
+            logger.warning(f"Failed to fetch landmark types: {e}")
             return []
 
     def get_streets_for_map(

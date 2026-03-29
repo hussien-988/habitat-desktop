@@ -1377,8 +1377,9 @@ class LeafletHTMLGenerator:
         """
         Generate JavaScript for landmarks point layer.
 
-        Shows colored circle markers per landmark type with tooltips and popups.
-        Visible at zoom >= 14.
+        Shows SVG markers per landmark type (from server) with tooltips and popups.
+        Falls back to generic colored pin if no server SVG available.
+        Visible at zoom >= 13.
         """
         try:
             landmarks_list = json.loads(landmarks_json)
@@ -1386,34 +1387,58 @@ class LeafletHTMLGenerator:
         except Exception:
             return '// Invalid landmarks JSON'
 
+        # Get server SVG icons if available
+        try:
+            from services.landmark_icon_service import get_svg_icons_json
+            svg_icons_json = get_svg_icons_json()
+        except Exception:
+            svg_icons_json = '{}'
+
         return f'''
-        // Landmarks layer — visible at zoom >= 14
+        // Landmarks layer — visible at zoom >= 13
         var landmarksData = {landmarks_embedded};
         var landmarksLayer = L.featureGroup();
 
+        var landmarkTypeSvgs = {svg_icons_json};
+
         var landmarkTypeColors = {{
-            'Police station': '#1E40AF', 'PoliceStation': '#1E40AF',
-            'Mosque': '#059669',
-            'Public building': '#7C3AED', 'PublicBuilding': '#7C3AED',
-            'Shop': '#D97706',
-            'School': '#DC2626',
-            'Clinic': '#DB2777',
-            'Water Tank': '#0891B2', 'WaterTank': '#0891B2',
-            'Fuel Station': '#EA580C', 'FuelStation': '#EA580C'
+            'Police station': '#3B82F6', 'PoliceStation': '#3B82F6',
+            'Mosque': '#10B981',
+            'Square': '#8B5CF6', 'PublicBuilding': '#8B5CF6',
+            'Shop': '#F59E0B',
+            'School': '#EF4444',
+            'Clinic': '#EC4899',
+            'Water Tank': '#06B6D4', 'WaterTank': '#06B6D4',
+            'Fuel Station': '#F97316', 'FuelStation': '#F97316',
+            'Hospital': '#DC2626',
+            'Park': '#16A34A'
         }};
 
         var landmarkTypeLabelsAr = {{
             'Police station': 'مركز شرطة', 'PoliceStation': 'مركز شرطة',
             'Mosque': 'مسجد',
-            'Public building': 'مبنى عام', 'PublicBuilding': 'مبنى عام',
+            'Square': 'ساحة', 'PublicBuilding': 'ساحة',
             'Shop': 'محل تجاري',
             'School': 'مدرسة',
             'Clinic': 'عيادة',
             'Water Tank': 'خزان مياه', 'WaterTank': 'خزان مياه',
-            'Fuel Station': 'محطة وقود', 'FuelStation': 'محطة وقود'
+            'Fuel Station': 'محطة وقود', 'FuelStation': 'محطة وقود',
+            'Hospital': 'مستشفى',
+            'Park': 'حديقة'
         }};
 
-        function createLandmarkPin(color) {{
+        function createLandmarkIcon(typeName, color) {{
+            var svgHtml = landmarkTypeSvgs[typeName];
+            if (svgHtml) {{
+                return L.divIcon({{
+                    className: 'landmark-pin-icon',
+                    html: '<div style="position:relative;width:32px;height:42px;">' + svgHtml + '</div>',
+                    iconSize: [32, 42],
+                    iconAnchor: [16, 42],
+                    popupAnchor: [0, -42],
+                    tooltipAnchor: [0, -36]
+                }});
+            }}
             return L.divIcon({{
                 className: 'landmark-pin-icon',
                 html: '<div style="position:relative;width:28px;height:36px;">' +
@@ -1434,7 +1459,7 @@ class LeafletHTMLGenerator:
             var color = landmarkTypeColors[typeName] || '#6B7280';
             var typeAr = landmarkTypeLabelsAr[typeName] || typeName;
 
-            var icon = createLandmarkPin(color);
+            var icon = createLandmarkIcon(typeName, color);
             var marker = L.marker([lm.latitude, lm.longitude], {{ icon: icon }});
 
             var label = lm.name || '';
