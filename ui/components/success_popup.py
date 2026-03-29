@@ -17,6 +17,7 @@ import os
 from ui.design_system import Colors, ButtonDimensions
 from ui.font_utils import create_font, FontManager
 from ui.style_manager import StyleManager
+from services.translation_manager import tr, get_layout_direction
 
 
 class SuccessPopup(QDialog):
@@ -31,22 +32,22 @@ class SuccessPopup(QDialog):
     def __init__(self,
                  claim_number: str = "",
                  claims: Optional[List[Dict]] = None,
-                 title: str = "تمت الإضافة بنجاح",
-                 description: str = "تم حفظ جميع المعلومات،\nويمكنك الآن المتابعة أو إضافة عنصر جديد",
+                 title: str = None,
+                 description: str = None,
                  auto_close_ms: int = 0,
                  parent=None):
         super().__init__(parent)
         self.claim_number = claim_number
         self.claims = claims or []
-        self.title_text = title
-        self.description_text = description
+        self.title_text = title if title is not None else tr("component.success_popup.default_title")
+        self.description_text = description if description is not None else tr("component.success_popup.default_description")
         self.auto_close_ms = auto_close_ms
         self._init_ui()
 
     def _init_ui(self):
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint | Qt.Dialog)
         self.setAttribute(Qt.WA_TranslucentBackground)
-        self.setLayoutDirection(Qt.RightToLeft)
+        self.setLayoutDirection(get_layout_direction())
 
         # Dynamic height based on number of claims
         extra_claims = max(0, len(self.claims) - 1) if self.claims else 0
@@ -129,7 +130,7 @@ class SuccessPopup(QDialog):
         layout.addWidget(desc_label)
 
         # "تم" button
-        done_btn = QPushButton("تم")
+        done_btn = QPushButton(tr("component.success_popup.done_button"))
         done_btn.setFixedHeight(ButtonDimensions.PRIMARY_HEIGHT)
         done_btn.setFixedWidth(120)
         done_btn.setCursor(Qt.PointingHandCursor)
@@ -185,8 +186,8 @@ class SuccessPopup(QDialog):
     @staticmethod
     def show_success(claim_number: str = "",
                      claims: Optional[List[Dict]] = None,
-                     title: str = "تمت الإضافة بنجاح",
-                     description: str = "تم حفظ جميع المعلومات،\nويمكنك الآن المتابعة أو إضافة عنصر جديد",
+                     title: str = None,
+                     description: str = None,
                      auto_close_ms: int = 0,
                      parent=None) -> int:
         popup = SuccessPopup(

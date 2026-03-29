@@ -15,7 +15,7 @@ from app.config import Config
 from ui.design_system import Colors, PageDimensions
 from ui.style_manager import StyleManager
 from ui.font_utils import FontManager, create_font
-from services.translation_manager import tr
+from services.translation_manager import tr, get_layout_direction
 from utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -88,7 +88,7 @@ class CaseDetailsPage(QWidget):
         layout.addSpacerItem(QSpacerItem(40, 20, QSizePolicy.Expanding, QSizePolicy.Minimum))
 
         # Resume button (draft only)
-        self._resume_btn = QPushButton("استئناف التعديل")
+        self._resume_btn = QPushButton(tr("page.case_details.resume"))
         self._resume_btn.setFixedSize(160, 40)
         self._resume_btn.setCursor(Qt.PointingHandCursor)
         self._resume_btn.setVisible(False)
@@ -107,7 +107,7 @@ class CaseDetailsPage(QWidget):
         layout.addWidget(self._resume_btn)
 
         # Cancel survey button (draft only)
-        self._cancel_btn = QPushButton("إلغاء المسح")
+        self._cancel_btn = QPushButton(tr("page.case_details.cancel_survey"))
         self._cancel_btn.setFixedSize(140, 40)
         self._cancel_btn.setCursor(Qt.PointingHandCursor)
         self._cancel_btn.setVisible(False)
@@ -129,7 +129,7 @@ class CaseDetailsPage(QWidget):
         layout.addWidget(self._cancel_btn)
 
         # Back button
-        self._back_btn = QPushButton("رجوع")
+        self._back_btn = QPushButton(tr("action.back"))
         self._back_btn.setFixedSize(100, 40)
         self._back_btn.setCursor(Qt.PointingHandCursor)
         self._back_btn.setStyleSheet("""
@@ -177,7 +177,7 @@ class CaseDetailsPage(QWidget):
             return
 
         dialog = QDialog(self)
-        dialog.setWindowTitle("إلغاء المسح")
+        dialog.setWindowTitle(tr("page.case_details.cancel_survey"))
         dialog.setModal(True)
         dialog.setFixedWidth(400)
         dialog.setWindowFlags(Qt.FramelessWindowHint | Qt.Dialog)
@@ -243,7 +243,7 @@ class CaseDetailsPage(QWidget):
         card_layout.addSpacing(16)
 
         # Title
-        title_label = QLabel("إلغاء المسح")
+        title_label = QLabel(tr("page.case_details.cancel_survey"))
         title_label.setFont(create_font(size=16, weight=QFont.Bold))
         title_label.setStyleSheet("color: #1A1A1A;")
         title_label.setAlignment(Qt.AlignCenter)
@@ -252,7 +252,7 @@ class CaseDetailsPage(QWidget):
         card_layout.addSpacing(8)
 
         # Subtitle
-        subtitle = QLabel("هل أنت متأكد من إلغاء هذا المسح؟\nيرجى إدخال سبب الإلغاء أدناه.")
+        subtitle = QLabel(tr("page.case_details.cancel_confirm"))
         subtitle.setFont(create_font(size=10, weight=QFont.Normal))
         subtitle.setStyleSheet(f"color: {Colors.TEXT_SECONDARY};")
         subtitle.setAlignment(Qt.AlignCenter)
@@ -263,7 +263,7 @@ class CaseDetailsPage(QWidget):
 
         # Reason text edit
         reason_edit = QTextEdit()
-        reason_edit.setPlaceholderText("أدخل سبب الإلغاء هنا...")
+        reason_edit.setPlaceholderText(tr("page.case_details.cancel_reason_placeholder"))
         reason_edit.setFixedHeight(80)
         reason_edit.setFont(create_font(size=10, weight=QFont.Normal))
         reason_edit.setStyleSheet("""
@@ -286,7 +286,7 @@ class CaseDetailsPage(QWidget):
         btn_layout.addStretch()
 
         # Secondary: dismiss
-        dismiss_btn = QPushButton("تراجع")
+        dismiss_btn = QPushButton(tr("action.dismiss"))
         dismiss_btn.setFixedSize(150, 48)
         dismiss_btn.setCursor(Qt.PointingHandCursor)
         dismiss_btn.setFont(create_font(size=10, weight=QFont.Medium))
@@ -310,7 +310,7 @@ class CaseDetailsPage(QWidget):
         dismiss_btn.clicked.connect(dialog.reject)
 
         # Primary: confirm cancel (red)
-        confirm_btn = QPushButton("تأكيد الإلغاء")
+        confirm_btn = QPushButton(tr("page.case_details.confirm_cancel"))
         confirm_btn.setFixedSize(150, 48)
         confirm_btn.setCursor(Qt.PointingHandCursor)
         confirm_btn.setFont(create_font(size=10, weight=QFont.Medium))
@@ -336,7 +336,7 @@ class CaseDetailsPage(QWidget):
             reason = reason_edit.toPlainText().strip()
             if not reason:
                 from ui.components.toast import Toast
-                Toast.show_toast(self, "يجب إدخال سبب الإلغاء", Toast.WARNING)
+                Toast.show_toast(self, tr("page.case_details.reason_required"), Toast.WARNING)
                 return
             logger.info(f"Cancel requested for survey: {survey_id}")
             self.cancel_requested.emit(survey_id, reason)
@@ -372,6 +372,10 @@ class CaseDetailsPage(QWidget):
             logger.error(f"Error refreshing case details: {e}", exc_info=True)
 
     def update_language(self, is_arabic=True):
+        self.setLayoutDirection(get_layout_direction())
         self._title_label.setText(tr("page.case_details.title"))
         self._breadcrumb_label.setText(self._build_breadcrumb())
+        self._resume_btn.setText(tr("page.case_details.resume"))
+        self._cancel_btn.setText(tr("page.case_details.cancel_survey"))
+        self._back_btn.setText(tr("action.back"))
         self._review._populate_review()

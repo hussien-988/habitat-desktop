@@ -28,7 +28,7 @@ from ui.error_handler import ErrorHandler
 from services.validation_service import ValidationService
 from services.api_client import get_api_client
 from services.api_worker import ApiWorker
-from services.translation_manager import tr
+from services.translation_manager import tr, get_layout_direction
 from services.display_mappings import get_unit_type_options, get_unit_status_options
 from services.error_mapper import map_exception
 from ui.components.toast import Toast
@@ -69,7 +69,7 @@ class UnitDialog(QDialog):
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.Dialog)
 
         # ضبط RTL صراحة
-        self.setLayoutDirection(Qt.RightToLeft)
+        self.setLayoutDirection(get_layout_direction())
 
         # خلفية شفافة للزوايا المنحنية
         self.setAttribute(Qt.WA_TranslucentBackground)
@@ -119,7 +119,7 @@ class UnitDialog(QDialog):
         layout.setContentsMargins(24, 16, 24, 16)
 
         # العنوان (RTL يحاذيه يميناً تلقائياً)
-        header_label = QLabel("اضف معلومات المقسم" if not self.unit_data else "تعديل معلومات المقسم")
+        header_label = QLabel(tr("wizard.unit_dialog.title_add") if not self.unit_data else tr("wizard.unit_dialog.title_edit"))
         header_label.setStyleSheet("font-size: 18px; font-weight: 600; color: #1A1F1D; background: transparent;")
         layout.addWidget(header_label)
 
@@ -138,7 +138,7 @@ class UnitDialog(QDialog):
         self.floor_spin.setLocale(QLocale(QLocale.English, QLocale.UnitedStates))
         self.floor_spin.setButtonSymbols(QSpinBox.NoButtons)
         floor_widget = self._create_spinbox_with_arrows(self.floor_spin)
-        row1.addLayout(self._create_field_container("رقم الطابق", floor_widget), 1)
+        row1.addLayout(self._create_field_container(tr("wizard.unit_dialog.floor_number"), floor_widget), 1)
 
         # رقم المقسم (يسار في RTL = ثاني عنصر)
         self.unit_number_spin = QSpinBox()
@@ -148,7 +148,7 @@ class UnitDialog(QDialog):
         self.unit_number_spin.setLocale(QLocale(QLocale.English, QLocale.UnitedStates))
         self.unit_number_spin.setButtonSymbols(QSpinBox.NoButtons)
         unit_widget = self._create_spinbox_with_arrows(self.unit_number_spin)
-        row1.addLayout(self._create_field_container("رقم المقسم", unit_widget), 1)
+        row1.addLayout(self._create_field_container(tr("wizard.unit_dialog.unit_number"), unit_widget), 1)
 
         layout.addLayout(row1)
 
@@ -165,7 +165,7 @@ class UnitDialog(QDialog):
         self.unit_type_combo.addItem(tr("wizard.unit_dialog.select"), 0)
         for code, label in get_unit_type_options():
             self.unit_type_combo.addItem(label, code)
-        row2.addLayout(self._create_field_container("نوع المقسم", self.unit_type_combo), 1)
+        row2.addLayout(self._create_field_container(tr("wizard.unit_dialog.unit_type"), self.unit_type_combo), 1)
 
         # حالة المقسم (يسار في RTL = ثاني عنصر)
         self.unit_status_combo = RtlCombo()
@@ -174,7 +174,7 @@ class UnitDialog(QDialog):
         self.unit_status_combo.addItem(tr("wizard.unit_dialog.select"), 0)
         for code, label in get_unit_status_options():
             self.unit_status_combo.addItem(label, code)
-        row2.addLayout(self._create_field_container("حالة المقسم", self.unit_status_combo), 1)
+        row2.addLayout(self._create_field_container(tr("wizard.unit_dialog.unit_status"), self.unit_status_combo), 1)
 
         layout.addLayout(row2)
 
@@ -192,7 +192,7 @@ class UnitDialog(QDialog):
         self.rooms_spin.setLocale(QLocale(QLocale.English, QLocale.UnitedStates))
         self.rooms_spin.setButtonSymbols(QSpinBox.NoButtons)
         rooms_widget = self._create_spinbox_with_arrows(self.rooms_spin)
-        row3.addLayout(self._create_field_container("عدد الغرف", rooms_widget), 1)
+        row3.addLayout(self._create_field_container(tr("wizard.unit_dialog.rooms"), rooms_widget), 1)
 
         # مساحة المقسم (يسار في RTL = ثاني عنصر)
         self.area_input = QLineEdit()
@@ -210,7 +210,7 @@ class UnitDialog(QDialog):
         self.area_error_label.setVisible(False)
         self.area_input.textChanged.connect(self._validate_area_input)
 
-        row3.addLayout(self._create_field_container_with_validation("مساحة المقسم", self.area_input, self.area_error_label), 1)
+        row3.addLayout(self._create_field_container_with_validation(tr("wizard.unit_dialog.area"), self.area_input, self.area_error_label), 1)
 
         layout.addLayout(row3)
 
@@ -240,7 +240,7 @@ class UnitDialog(QDialog):
         # Center-align placeholder and text
         from PyQt5.QtGui import QTextCursor, QTextBlockFormat
         self.description_edit.setAlignment(Qt.AlignCenter)
-        layout.addLayout(self._create_field_container("وصف المقسم", self.description_edit))
+        layout.addLayout(self._create_field_container(tr("wizard.unit_dialog.description"), self.description_edit))
 
         layout.addSpacing(40)
 
@@ -635,7 +635,7 @@ class UnitDialog(QDialog):
                 if "409" in str(e):
                     self._show_styled_message(
                         tr("common.error"),
-                        "هذا المقسم مسجّل مسبقاً في النظام. يرجى اختياره من القائمة أو تغيير رقم المقسم.",
+                        tr("wizard.unit_dialog.duplicate_unit"),
                         is_error=True
                     )
                     return

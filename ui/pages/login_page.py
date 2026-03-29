@@ -12,6 +12,8 @@ import os
 import re
 from app.config import Config
 from services.api_auth_service import ApiAuthService
+from services.translation_manager import tr, get_layout_direction, set_language as tm_set_language, get_language as tm_get_language
+from app.config import save_language
 from utils.i18n import I18n
 from utils.logger import get_logger
 from ui.font_utils import create_font, FontManager
@@ -213,7 +215,8 @@ class LoginPage(QWidget):
         card_layout.addWidget(logo_label, 0, Qt.AlignCenter)
 
         # Title
-        title = QLabel("تسجيل الدخول إلى الحساب")
+        self._title_label = QLabel(tr("page.login.title"))
+        title = self._title_label
         title.setAlignment(Qt.AlignCenter)
         title.setMaximumWidth(315)
         title_font = create_font(size=FontManager.SIZE_HEADING, weight=QFont.Bold, letter_spacing=0)
@@ -224,7 +227,8 @@ class LoginPage(QWidget):
         card_layout.addSpacing(-20)
 
         # Subtitle
-        subtitle = QLabel("يرجى إدخال بيانات الدخول للمتابعة واستخدام النظام")
+        self._subtitle_label = QLabel(tr("page.login.subtitle"))
+        subtitle = self._subtitle_label
         subtitle.setAlignment(Qt.AlignCenter)
         subtitle.setWordWrap(False)  # Single line only
         subtitle.setMinimumWidth(315)  # Ensure minimum width for single line
@@ -237,7 +241,8 @@ class LoginPage(QWidget):
         card_layout.addSpacing(16)
 
         # Username label
-        username_label = QLabel("اسم المستخدم")
+        self._username_label = QLabel(tr("page.login.username"))
+        username_label = self._username_label
         username_label_font = create_font(size=10, weight=QFont.DemiBold, letter_spacing=0)
         username_label.setFont(username_label_font)
         username_label.setStyleSheet("color: #212B36; background: transparent;")
@@ -247,7 +252,7 @@ class LoginPage(QWidget):
 
         # Username input
         self.username_input = QLineEdit()
-        self.username_input.setPlaceholderText("أدخل اسم المستخدم")
+        self.username_input.setPlaceholderText(tr("page.login.username_placeholder"))
         self.username_input.setLayoutDirection(Qt.RightToLeft)
         self.username_input.setFixedHeight(40)
         username_input_font = create_font(size=10, weight=FontManager.WEIGHT_REGULAR, letter_spacing=0)
@@ -275,7 +280,8 @@ class LoginPage(QWidget):
         card_layout.addSpacing(-12)
 
         # Password label
-        password_label = QLabel("كلمة المرور")
+        self._password_label = QLabel(tr("page.login.password"))
+        password_label = self._password_label
         password_label_font = create_font(size=10, weight=QFont.DemiBold, letter_spacing=0)
         password_label.setFont(password_label_font)
         password_label.setStyleSheet("color: #212B36; background: transparent;")
@@ -284,7 +290,7 @@ class LoginPage(QWidget):
 
         # Password input
         self.password_input = QLineEdit()
-        self.password_input.setPlaceholderText("أدخل كلمة المرور")
+        self.password_input.setPlaceholderText(tr("page.login.password_placeholder"))
         self.password_input.setEchoMode(QLineEdit.Password)
         self.password_input.setFixedHeight(40)
         password_input_font = create_font(size=10, weight=FontManager.WEIGHT_REGULAR, letter_spacing=0)
@@ -328,7 +334,7 @@ class LoginPage(QWidget):
         card_layout.addWidget(self.error_label)
         card_layout.addSpacing(16)
         # Login button
-        self.login_btn = QPushButton("تسجيل دخول")
+        self.login_btn = QPushButton(tr("page.login.sign_in"))
         self.login_btn.setFixedHeight(48)
         self.login_btn.setFixedWidth(411)  # Card width (475) - Padding (32×2) = 411
         self.login_btn.setCursor(Qt.PointingHandCursor)
@@ -374,14 +380,14 @@ class LoginPage(QWidget):
         # Check lockout
         if self._lockout_until and datetime.now() < self._lockout_until:
             remaining = int((self._lockout_until - datetime.now()).total_seconds()) // 60 + 1
-            self._show_error(f"الحساب مقفل. حاول بعد {remaining} دقيقة")
+            self._show_error(tr("page.login.account_locked", minutes=remaining))
             return
 
         username = self.username_input.text().strip()
         password = self.password_input.text()
 
         if not username or not password:
-            self._show_error("يرجى إدخال اسم المستخدم وكلمة المرور")
+            self._show_error(tr("page.login.fields_required"))
             return
 
         user, error = self.auth_service.authenticate(username, password)
@@ -389,7 +395,7 @@ class LoginPage(QWidget):
         if user:
             from app.config import Roles
             if user.role in Roles.NON_LOGIN_ROLES:
-                self._show_error("هذا الحساب غير مخوّل لاستخدام تطبيق سطح المكتب")
+                self._show_error(tr("page.login.not_authorized"))
                 return
 
             self._failed_attempts = 0
@@ -405,14 +411,14 @@ class LoginPage(QWidget):
             max_attempts, lockout_minutes = self._get_lockout_settings()
             if max_attempts > 0 and self._failed_attempts >= max_attempts:
                 self._lockout_until = datetime.now() + timedelta(minutes=lockout_minutes)
-                self._show_error(f"تم قفل الحساب لمدة {lockout_minutes} دقيقة بسبب تجاوز عدد المحاولات المسموحة")
+                self._show_error(tr("page.login.lockout_exceeded", minutes=lockout_minutes))
                 logger.warning(f"Account locked for {lockout_minutes} min after {self._failed_attempts} failed attempts")
             else:
                 remaining = max_attempts - self._failed_attempts
                 if max_attempts > 0 and remaining <= 3:
-                    self._show_error(f"اسم المستخدم أو كلمة المرور غير صحيحة ({remaining} محاولات متبقية)")
+                    self._show_error(tr("page.login.invalid_credentials_remaining", remaining=remaining))
                 else:
-                    self._show_error("اسم المستخدم أو كلمة المرور غير صحيحة")
+                    self._show_error(tr("page.login.invalid_credentials"))
 
     def _get_lockout_settings(self) -> tuple:
         """Get lockout settings from SecurityService. Returns (max_attempts, lockout_minutes)."""
@@ -451,8 +457,17 @@ class LoginPage(QWidget):
         self.username_input.setFocus()
 
     def update_language(self, is_arabic: bool):
-        """Update language"""
-        pass
+        """Update language."""
+        self.setLayoutDirection(get_layout_direction())
+        self._title_label.setText(tr("page.login.title"))
+        self._subtitle_label.setText(tr("page.login.subtitle"))
+        self._username_label.setText(tr("page.login.username"))
+        self.username_input.setPlaceholderText(tr("page.login.username_placeholder"))
+        self._password_label.setText(tr("page.login.password"))
+        self.password_input.setPlaceholderText(tr("page.login.password_placeholder"))
+        self.login_btn.setText(tr("page.login.sign_in"))
+        if hasattr(self, "_lang_btn"):
+            self._update_lang_button()
 
     def _setup_login_navbar(self):
         """Setup navbar title bar for login page."""
@@ -565,7 +580,7 @@ class LoginPage(QWidget):
         self._btn_settings.setFixedSize(42, 42)
         self._btn_settings.setCursor(QCursor(Qt.PointingHandCursor))
         self._btn_settings.setFocusPolicy(Qt.NoFocus)
-        self._btn_settings.setToolTip("\u0625\u0639\u062f\u0627\u062f\u0627\u062a \u0627\u0644\u0627\u062a\u0635\u0627\u0644")
+        self._btn_settings.setToolTip(tr("page.login.settings_tooltip"))
         self._btn_settings.setStyleSheet("""
             QPushButton {
                 font-size: 24px;
@@ -584,6 +599,33 @@ class LoginPage(QWidget):
         self._btn_settings.move(20, 45)
         self._btn_settings.raise_()
 
+        # Language toggle button — floating on the blue area
+        self._lang_btn = QPushButton(self)
+        self._lang_btn.setFixedSize(80, 32)
+        self._lang_btn.setCursor(QCursor(Qt.PointingHandCursor))
+        self._lang_btn.setFocusPolicy(Qt.NoFocus)
+        self._lang_btn.setStyleSheet("""
+            QPushButton {
+                color: white;
+                background-color: rgba(255, 255, 255, 0.15);
+                border: 1px solid rgba(255, 255, 255, 0.3);
+                border-radius: 16px;
+                font-size: 13px;
+                font-weight: 600;
+                padding: 0 12px;
+            }
+            QPushButton:hover {
+                background-color: rgba(255, 255, 255, 0.25);
+            }
+            QPushButton:pressed {
+                background-color: rgba(255, 255, 255, 0.35);
+            }
+        """)
+        self._lang_btn.clicked.connect(self._toggle_language)
+        self._update_lang_button()
+        self._lang_btn.move(70, 50)
+        self._lang_btn.raise_()
+
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
@@ -592,12 +634,28 @@ class LoginPage(QWidget):
             self.titlebar.raise_()
         if hasattr(self, "_btn_settings"):
             self._btn_settings.raise_()
+        if hasattr(self, "_lang_btn"):
+            self._lang_btn.raise_()
         self._position_login_watermark()
 
     def _open_server_settings(self):
         """Open the server settings dialog."""
         from ui.components.dialogs.server_settings_dialog import ServerSettingsDialog
         ServerSettingsDialog.show_settings(parent=self)
+
+    def _toggle_language(self):
+        """Toggle between Arabic and English."""
+        current = tm_get_language()
+        new_lang = "en" if current == "ar" else "ar"
+        tm_set_language(new_lang)
+        save_language(new_lang)
+        is_arabic = (new_lang == "ar")
+        self.update_language(is_arabic)
+
+    def _update_lang_button(self):
+        """Update language button text based on current language."""
+        current = tm_get_language()
+        self._lang_btn.setText("English" if current == "ar" else "عربي")
 
     def _apply_password_style(self, icon_on_left: bool):
         self.password_input.setStyleSheet(f"""

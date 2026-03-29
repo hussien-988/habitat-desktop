@@ -13,21 +13,26 @@ from PyQt5.QtGui import QColor
 from ui.design_system import Colors, PageDimensions
 from ui.font_utils import create_font, FontManager
 from ui.style_manager import StyleManager
+from services.translation_manager import tr, get_layout_direction
 from utils.logger import get_logger
 
 logger = get_logger(__name__)
 
-# Entity type labels (key in API → Arabic)
-_ENTITY_SECTIONS = [
-    ('surveys', 'المسوحات'),
-    ('buildings', 'المباني'),
-    ('propertyUnits', 'الوحدات العقارية'),
-    ('persons', 'الأشخاص'),
-    ('households', 'الأسر'),
-    ('personPropertyRelations', 'علاقات الأشخاص بالعقارات'),
-    ('evidences', 'المستندات'),
-    ('claims', 'المطالبات'),
+# Entity type labels (key in API)
+_ENTITY_SECTION_KEYS = [
+    ('surveys', 'wizard.import.entity.surveys'),
+    ('buildings', 'wizard.import.entity.buildings'),
+    ('propertyUnits', 'wizard.import.entity.property_units'),
+    ('persons', 'wizard.import.entity.persons'),
+    ('households', 'wizard.import.entity.households'),
+    ('personPropertyRelations', 'wizard.import.entity.person_property_relations'),
+    ('evidences', 'wizard.import.entity.evidences'),
+    ('claims', 'wizard.import.entity.claims'),
 ]
+
+
+def _get_entity_sections():
+    return [(k, tr(tr_key)) for k, tr_key in _ENTITY_SECTION_KEYS]
 
 
 class ImportStep2Staging(QWidget):
@@ -47,7 +52,7 @@ class ImportStep2Staging(QWidget):
         self.load_report(package_id)
 
     def _setup_ui(self):
-        self.setLayoutDirection(Qt.RightToLeft)
+        self.setLayoutDirection(get_layout_direction())
         self.setStyleSheet("background: transparent;")
 
         main_layout = QVBoxLayout(self)
@@ -99,7 +104,7 @@ class ImportStep2Staging(QWidget):
         layout.setContentsMargins(32, 24, 32, 24)
         layout.setSpacing(16)
 
-        title = QLabel("تقرير التحقق")
+        title = QLabel(tr("wizard.import.step2.title"))
         title.setFont(create_font(size=14, weight=FontManager.WEIGHT_SEMIBOLD))
         title.setStyleSheet("color: #212B36; background: transparent;")
         layout.addWidget(title)
@@ -122,17 +127,17 @@ class ImportStep2Staging(QWidget):
         stats_row = QHBoxLayout()
         stats_row.setSpacing(16)
 
-        self._stat_total = self._create_stat_box("إجمالي السجلات", "0", "#3890DF", "#EBF5FF")
+        self._stat_total = self._create_stat_box(tr("wizard.import.step2.total_records"), "0", "#3890DF", "#EBF5FF")
         stats_row.addWidget(self._stat_total)
-        self._stat_valid = self._create_stat_box("صالح", "0", "#10B981", "#ECFDF5")
+        self._stat_valid = self._create_stat_box(tr("wizard.import.step2.valid"), "0", "#10B981", "#ECFDF5")
         stats_row.addWidget(self._stat_valid)
-        self._stat_invalid = self._create_stat_box("غير صالح", "0", "#EF4444", "#FEF2F2")
+        self._stat_invalid = self._create_stat_box(tr("wizard.import.step2.invalid"), "0", "#EF4444", "#FEF2F2")
         stats_row.addWidget(self._stat_invalid)
-        self._stat_warning = self._create_stat_box("تحذيرات", "0", "#F59E0B", "#FFFBEB")
+        self._stat_warning = self._create_stat_box(tr("wizard.import.step2.warnings"), "0", "#F59E0B", "#FFFBEB")
         stats_row.addWidget(self._stat_warning)
-        self._stat_skipped = self._create_stat_box("تخطي", "0", "#9CA3AF", "#F3F4F6")
+        self._stat_skipped = self._create_stat_box(tr("wizard.import.step2.skipped"), "0", "#9CA3AF", "#F3F4F6")
         stats_row.addWidget(self._stat_skipped)
-        self._stat_pending = self._create_stat_box("قيد الانتظار", "0", "#8B5CF6", "#F5F3FF")
+        self._stat_pending = self._create_stat_box(tr("wizard.import.step2.pending"), "0", "#8B5CF6", "#F5F3FF")
         stats_row.addWidget(self._stat_pending)
 
         stats_row.addStretch()
@@ -155,23 +160,31 @@ class ImportStep2Staging(QWidget):
         layout.setContentsMargins(32, 24, 32, 24)
         layout.setSpacing(12)
 
-        title = QLabel("تفصيل الكيانات")
+        title = QLabel(tr("wizard.import.step2.entity_breakdown"))
         title.setFont(create_font(size=12, weight=FontManager.WEIGHT_SEMIBOLD))
         title.setStyleSheet("color: #212B36; background: transparent;")
         layout.addWidget(title)
+
+        entity_sections = _get_entity_sections()
 
         # Table: entity type | total | valid | invalid | warning | skipped | pending
         self._entity_table = QTableWidget()
         self._entity_table.setColumnCount(7)
         self._entity_table.setHorizontalHeaderLabels([
-            "الكيان", "إجمالي", "صالح", "غير صالح", "تحذير", "تخطي", "قيد الانتظار"
+            tr("wizard.import.step2.col_entity"),
+            tr("wizard.import.step2.col_total"),
+            tr("wizard.import.step2.col_valid"),
+            tr("wizard.import.step2.col_invalid"),
+            tr("wizard.import.step2.col_warning"),
+            tr("wizard.import.step2.col_skipped"),
+            tr("wizard.import.step2.col_pending"),
         ])
-        self._entity_table.setRowCount(len(_ENTITY_SECTIONS))
-        self._entity_table.setLayoutDirection(Qt.RightToLeft)
+        self._entity_table.setRowCount(len(entity_sections))
+        self._entity_table.setLayoutDirection(get_layout_direction())
         self._entity_table.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self._entity_table.setSelectionMode(QAbstractItemView.NoSelection)
         self._entity_table.verticalHeader().setVisible(False)
-        self._entity_table.setFixedHeight(44 * len(_ENTITY_SECTIONS) + 36)
+        self._entity_table.setFixedHeight(44 * len(_ENTITY_SECTION_KEYS) + 36)
 
         header = self._entity_table.horizontalHeader()
         header.setSectionResizeMode(0, QHeaderView.Stretch)
@@ -203,7 +216,7 @@ class ImportStep2Staging(QWidget):
         header.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
 
         # Pre-populate with entity names
-        for row_idx, (key, ar_name) in enumerate(_ENTITY_SECTIONS):
+        for row_idx, (key, ar_name) in enumerate(entity_sections):
             name_item = QTableWidgetItem(ar_name)
             name_item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
             self._entity_table.setItem(row_idx, 0, name_item)
@@ -224,7 +237,7 @@ class ImportStep2Staging(QWidget):
         layout.setContentsMargins(32, 24, 32, 24)
         layout.setSpacing(16)
 
-        title = QLabel("التكرارات والتعارضات")
+        title = QLabel(tr("wizard.import.step2.duplicates_title"))
         title.setFont(create_font(size=12, weight=FontManager.WEIGHT_SEMIBOLD))
         title.setStyleSheet("color: #212B36; background: transparent;")
         layout.addWidget(title)
@@ -238,11 +251,11 @@ class ImportStep2Staging(QWidget):
         dup_stats = QHBoxLayout()
         dup_stats.setSpacing(16)
 
-        self._dup_persons = self._create_stat_box("تكرارات الأشخاص", "0", "#F59E0B", "#FFFBEB")
+        self._dup_persons = self._create_stat_box(tr("wizard.import.step2.dup_persons"), "0", "#F59E0B", "#FFFBEB")
         dup_stats.addWidget(self._dup_persons)
-        self._dup_properties = self._create_stat_box("تكرارات العقارات", "0", "#F59E0B", "#FFFBEB")
+        self._dup_properties = self._create_stat_box(tr("wizard.import.step2.dup_properties"), "0", "#F59E0B", "#FFFBEB")
         dup_stats.addWidget(self._dup_properties)
-        self._dup_total = self._create_stat_box("إجمالي التعارضات", "0", "#EF4444", "#FEF2F2")
+        self._dup_total = self._create_stat_box(tr("wizard.import.step2.dup_total"), "0", "#EF4444", "#FEF2F2")
         dup_stats.addWidget(self._dup_total)
 
         dup_stats.addStretch()
@@ -284,7 +297,7 @@ class ImportStep2Staging(QWidget):
         warning_layout.addWidget(warning_icon)
 
         warning_text = QLabel(
-            "يجب حل التكرارات في تبويب التكرارات قبل الموافقة على الإدخال"
+            tr("wizard.import.step2.dup_warning_text")
         )
         warning_text.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
         warning_text.setStyleSheet("color: #92400E;")
@@ -295,7 +308,7 @@ class ImportStep2Staging(QWidget):
         self._dup_warning.setVisible(False)
 
         # "Resolve duplicates" button
-        self._resolve_dups_btn = QPushButton("حل التكرارات")
+        self._resolve_dups_btn = QPushButton(tr("wizard.import.step2.resolve_duplicates"))
         self._resolve_dups_btn.setCursor(Qt.PointingHandCursor)
         self._resolve_dups_btn.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
         self._resolve_dups_btn.setFixedSize(180, 40)
@@ -323,7 +336,7 @@ class ImportStep2Staging(QWidget):
         layout.setContentsMargins(32, 24, 32, 24)
         layout.setSpacing(12)
 
-        title = QLabel("نتائج مستويات التحقق")
+        title = QLabel(tr("wizard.import.step2.level_results_title"))
         title.setFont(create_font(size=12, weight=FontManager.WEIGHT_SEMIBOLD))
         title.setStyleSheet("color: #212B36; background: transparent;")
         layout.addWidget(title)
@@ -332,7 +345,7 @@ class ImportStep2Staging(QWidget):
         self._levels_container = QVBoxLayout()
         self._levels_container.setSpacing(8)
 
-        empty = QLabel("لا توجد بيانات بعد")
+        empty = QLabel(tr("wizard.import.step2.no_data_yet"))
         empty.setFont(create_font(size=10, weight=FontManager.WEIGHT_REGULAR))
         empty.setStyleSheet("color: #9CA3AF; background: transparent;")
         empty.setAlignment(Qt.AlignCenter)
@@ -427,7 +440,7 @@ class ImportStep2Staging(QWidget):
         card_layout.setAlignment(Qt.AlignCenter)
         card_layout.setSpacing(6)
 
-        self._ld_label = QLabel("جاري التحميل...")
+        self._ld_label = QLabel(tr("wizard.import.step2.loading"))
         self._ld_label.setFont(create_font(size=11, weight=FontManager.WEIGHT_SEMIBOLD))
         self._ld_label.setStyleSheet("color: #3890DF; background: transparent; border: none;")
         self._ld_label.setAlignment(Qt.AlignCenter)
@@ -472,14 +485,14 @@ class ImportStep2Staging(QWidget):
         """Load validation report from the controller."""
         logger.info(f"Loading validation report for package {package_id}")
 
-        self._show_loading("جاري تحميل تقرير التحقق...")
+        self._show_loading(tr("wizard.import.step2.loading_report"))
         result = self.import_controller.get_validation_report(package_id)
         self._hide_loading()
 
         if not result.success:
-            self._show_error(result.message_ar or "فشل تحميل تقرير التحقق")
+            self._show_error(result.message_ar or tr("wizard.import.step2.report_load_failed"))
             from ui.components.message_dialog import MessageDialog
-            MessageDialog.error(self, "خطأ", result.message_ar or "فشل تحميل تقرير التحقق")
+            MessageDialog.error(self, tr("wizard.import.step2.error"), result.message_ar or tr("wizard.import.step2.report_load_failed"))
             return
 
         self._report_data = result.data or {}
@@ -502,7 +515,7 @@ class ImportStep2Staging(QWidget):
         # isClean badge
         is_clean = d.get("isClean", False)
         if is_clean:
-            self._clean_badge.setText("البيانات سليمة")
+            self._clean_badge.setText(tr("wizard.import.step2.data_clean"))
             self._clean_badge.setStyleSheet("""
                 color: #065F46;
                 background-color: #ECFDF5;
@@ -511,7 +524,7 @@ class ImportStep2Staging(QWidget):
                 padding: 4px 20px;
             """)
         else:
-            self._clean_badge.setText("توجد مشكلات تحتاج مراجعة")
+            self._clean_badge.setText(tr("wizard.import.step2.has_issues"))
             self._clean_badge.setStyleSheet("""
                 color: #991B1B;
                 background-color: #FEF2F2;
@@ -527,14 +540,14 @@ class ImportStep2Staging(QWidget):
         if files > 0:
             size_mb = bytes_val / (1024 * 1024)
             self._attachments_label.setText(
-                f"المرفقات: {files} ملف ({size_mb:.1f} MB)"
+                tr("wizard.import.step2.attachments_info", files=files, size=f"{size_mb:.1f}")
             )
             self._attachments_label.setVisible(True)
 
     def _update_entity_table(self):
         """Update per-entity breakdown table."""
         d = self._report_data
-        for row_idx, (key, _) in enumerate(_ENTITY_SECTIONS):
+        for row_idx, (key, _) in enumerate(_ENTITY_SECTION_KEYS):
             section = d.get(key, {})
             if not isinstance(section, dict):
                 continue
@@ -573,19 +586,19 @@ class ImportStep2Staging(QWidget):
         self._update_stat_value(self._dup_total, str(total_conflicts))
 
         if not dup_ran:
-            self._dup_status.setText("لم يتم تشغيل كشف التكرارات بعد")
+            self._dup_status.setText(tr("wizard.import.step2.dup_not_run"))
             self._dup_status.setStyleSheet("color: #9CA3AF; background: transparent;")
             self._dup_warning.setVisible(False)
             self._resolve_dups_btn.setVisible(False)
         elif total_conflicts == 0:
-            self._dup_status.setText("لا توجد تكرارات — يمكن المتابعة")
+            self._dup_status.setText(tr("wizard.import.step2.no_duplicates"))
             self._dup_status.setStyleSheet("color: #10B981; background: transparent;")
             self._dup_warning.setVisible(False)
             self._resolve_dups_btn.setVisible(False)
         else:
             self._dup_status.setText(
-                f"تم اكتشاف {total_conflicts} تعارض "
-                f"({person_dups} أشخاص، {property_dups} عقارات)"
+                tr("wizard.import.step2.conflicts_found",
+                   total=total_conflicts, persons=person_dups, properties=property_dups)
             )
             self._dup_status.setStyleSheet("color: #F59E0B; background: transparent;")
             self._dup_warning.setVisible(True)
@@ -602,7 +615,7 @@ class ImportStep2Staging(QWidget):
         levels = self._report_data.get("levelResults", [])
 
         if not levels:
-            empty = QLabel("لا توجد تفاصيل مستويات التحقق")
+            empty = QLabel(tr("wizard.import.step2.no_level_details"))
             empty.setFont(create_font(size=10, weight=FontManager.WEIGHT_REGULAR))
             empty.setStyleSheet("color: #9CA3AF; background: transparent;")
             empty.setAlignment(Qt.AlignCenter)
@@ -648,7 +661,7 @@ class ImportStep2Staging(QWidget):
 
         # Level number
         level_num = level_data.get("level", 0)
-        level_label = QLabel(f"المستوى {level_num}")
+        level_label = QLabel(tr("wizard.import.step2.level_num", num=level_num))
         level_label.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
         level_label.setStyleSheet("color: #212B36;")
         level_label.setFixedWidth(80)
@@ -663,21 +676,21 @@ class ImportStep2Staging(QWidget):
 
         # Records checked
         checked = level_data.get("recordsChecked", 0)
-        checked_label = QLabel(f"{checked} سجل")
+        checked_label = QLabel(tr("wizard.import.step2.records_checked", count=checked))
         checked_label.setFont(create_font(size=9, weight=FontManager.WEIGHT_REGULAR))
         checked_label.setStyleSheet("color: #9CA3AF;")
         row_layout.addWidget(checked_label)
 
         # Errors
         if errors > 0:
-            err_label = QLabel(f"{errors} خطأ")
+            err_label = QLabel(tr("wizard.import.step2.error_count", count=errors))
             err_label.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
             err_label.setStyleSheet("color: #EF4444;")
             row_layout.addWidget(err_label)
 
         # Warnings
         if warnings > 0:
-            warn_label = QLabel(f"{warnings} تحذير")
+            warn_label = QLabel(tr("wizard.import.step2.warning_count", count=warnings))
             warn_label.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
             warn_label.setStyleSheet("color: #F59E0B;")
             row_layout.addWidget(warn_label)
@@ -703,6 +716,39 @@ class ImportStep2Staging(QWidget):
             padding: 4px 20px;
         """)
         self._clean_badge.setVisible(True)
+
+    def update_language(self, is_arabic: bool):
+        """Update all translatable texts after language change."""
+        self.setLayoutDirection(get_layout_direction())
+
+        # Entity breakdown table headers
+        self._entity_table.setHorizontalHeaderLabels([
+            tr("wizard.import.step2.col_entity"),
+            tr("wizard.import.step2.col_total"),
+            tr("wizard.import.step2.col_valid"),
+            tr("wizard.import.step2.col_invalid"),
+            tr("wizard.import.step2.col_warning"),
+            tr("wizard.import.step2.col_skipped"),
+            tr("wizard.import.step2.col_pending"),
+        ])
+        self._entity_table.setLayoutDirection(get_layout_direction())
+
+        # Entity row names
+        entity_sections = _get_entity_sections()
+        for row_idx, (key, ar_name) in enumerate(entity_sections):
+            item = self._entity_table.item(row_idx, 0)
+            if item:
+                item.setText(ar_name)
+
+        # Resolve duplicates button
+        self._resolve_dups_btn.setText(tr("wizard.import.step2.resolve_duplicates"))
+
+        # Loading label
+        self._ld_label.setText(tr("wizard.import.step2.loading"))
+
+        # Re-apply duplicate status text if report data loaded
+        if self._report_data:
+            self._update_duplicates()
 
     def get_report_data(self) -> dict:
         """Return the loaded report data."""

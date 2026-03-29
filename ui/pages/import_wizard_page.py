@@ -12,18 +12,19 @@ from ui.components.wizard_header import WizardHeader
 from ui.font_utils import create_font, FontManager
 from services.exceptions import NetworkException, ApiException
 from ui.components.toast import Toast
+from services.translation_manager import tr, get_layout_direction
 from utils.logger import get_logger
 
 logger = get_logger(__name__)
 
 TOTAL_STEPS = 5
 
-_STEP_NAMES = [
-    "اختيار الحزمة",
-    "التدريج والتحقق",
-    "المراجعة",
-    "التأكيد",
-    "التقرير",
+_STEP_NAMES_KEYS = [
+    "wizard.import.step_select_package",
+    "wizard.import.step_staging_validation",
+    "wizard.import.step_review",
+    "wizard.import.step_confirm",
+    "wizard.import.step_report",
 ]
 
 
@@ -66,14 +67,14 @@ class _ApiWorker(QThread):
             result = self._fn()
             self.finished.emit(result)
         except NetworkException as e:
-            self.error.emit("network", "فشل الاتصال بالخادم — تحقق من الشبكة")
+            self.error.emit("network", tr("error.network_connection_failed"))
         except ApiException as e:
             from controllers.import_controller import ImportController
-            msg = ImportController._api_error_msg(e, "خطأ في الخادم")
+            msg = ImportController._api_error_msg(e, tr("error.server_error"))
             self.error.emit("api", msg)
         except Exception as e:
             logger.error(f"Unexpected worker error: {e}")
-            self.error.emit("unknown", "حدث خطأ غير متوقع. يرجى المحاولة مرة أخرى.")
+            self.error.emit("unknown", tr("error.unexpected_retry"))
 
 
 class ImportWizardPage(QWidget):
@@ -108,7 +109,7 @@ class ImportWizardPage(QWidget):
 
     def _setup_ui(self):
         """Setup UI (SAME structure as FieldWorkPreparationPage)."""
-        self.setLayoutDirection(Qt.RightToLeft)
+        self.setLayoutDirection(get_layout_direction())
 
         from ui.style_manager import StyleManager
         self.setStyleSheet(StyleManager.page_background())
@@ -134,8 +135,8 @@ class ImportWizardPage(QWidget):
 
         # Header (fixed)
         self.header = WizardHeader(
-            title="استيراد البيانات",
-            subtitle="إدارة البيانات  •  استيراد البيانات"
+            title=tr("wizard.import.title"),
+            subtitle=tr("wizard.import.subtitle")
         )
         content_layout.addWidget(self.header)
 
@@ -186,7 +187,7 @@ class ImportWizardPage(QWidget):
             self._step_circles.append(circle)
 
             # Label
-            name_label = QLabel(_STEP_NAMES[i])
+            name_label = QLabel(tr(_STEP_NAMES_KEYS[i]))
             name_label.setFont(create_font(size=8, weight=FontManager.WEIGHT_REGULAR))
             name_label.setAlignment(Qt.AlignCenter)
             name_label.setStyleSheet("background: transparent; border: none;")
@@ -297,7 +298,7 @@ class ImportWizardPage(QWidget):
         card_layout.setAlignment(Qt.AlignCenter)
         card_layout.setSpacing(8)
 
-        self._loading_label = QLabel("جاري المعالجة...")
+        self._loading_label = QLabel(tr("status.processing"))
         self._loading_label.setFont(create_font(size=11, weight=FontManager.WEIGHT_SEMIBOLD))
         self._loading_label.setStyleSheet("color: #3890DF; background: transparent; border: none;")
         self._loading_label.setAlignment(Qt.AlignCenter)
@@ -394,7 +395,7 @@ class ImportWizardPage(QWidget):
         """Default error handler for API worker errors."""
         self._set_buttons_enabled(True)
         if error_type == "network":
-            self._show_error(f"{msg_ar}\n\nيمكنك المحاولة مرة أخرى.")
+            self._show_error(f"{msg_ar}\n\n{tr('wizard.import.retry_hint')}")
         else:
             self._show_error(msg_ar)
         if self.current_step == 0:
@@ -424,7 +425,7 @@ class ImportWizardPage(QWidget):
         layout.setSpacing(0)
 
         # Back button
-        self.btn_back = QPushButton("<   السابق")
+        self.btn_back = QPushButton(tr("action.back_arrow"))
         self.btn_back.setFixedSize(252, 50)
         self.btn_back.setCursor(Qt.PointingHandCursor)
         self.btn_back.setFont(create_font(size=12, weight=FontManager.WEIGHT_SEMIBOLD))
@@ -462,7 +463,7 @@ class ImportWizardPage(QWidget):
         layout.addStretch()
 
         # Cancel package button (shown on steps 2-4)
-        self.btn_cancel = QPushButton("إلغاء الحزمة")
+        self.btn_cancel = QPushButton(tr("wizard.import.cancel_package"))
         self.btn_cancel.setFixedSize(252, 50)
         self.btn_cancel.setCursor(Qt.PointingHandCursor)
         self.btn_cancel.setFont(create_font(size=12, weight=FontManager.WEIGHT_SEMIBOLD))
@@ -501,7 +502,7 @@ class ImportWizardPage(QWidget):
         layout.addStretch()
 
         # Next button
-        self.btn_next = QPushButton("التالي   >")
+        self.btn_next = QPushButton(tr("action.next_arrow"))
         self.btn_next.setFixedSize(252, 50)
         self.btn_next.setCursor(Qt.PointingHandCursor)
         self.btn_next.setFont(create_font(size=12, weight=FontManager.WEIGHT_SEMIBOLD))
@@ -622,7 +623,7 @@ class ImportWizardPage(QWidget):
         def on_status_fetched(pkg_result):
             if not pkg_result.success:
                 self._set_buttons_enabled(True)
-                self._show_error(pkg_result.message_ar or "فشل تحميل بيانات الحزمة")
+                self._show_error(pkg_result.message_ar or tr("wizard.import.error_load_package"))
                 self.step1._start_polling()
                 return
             status = pkg_result.data.get("status", 1)
@@ -631,7 +632,7 @@ class ImportWizardPage(QWidget):
         def on_health_error(error_type, msg_ar):
             self._set_buttons_enabled(True)
             if error_type == "network":
-                self._show_error("لا يمكن الاتصال بالخادم.\nتحقق من اتصال الشبكة وحاول مرة أخرى.")
+                self._show_error(tr("error.cannot_connect_server"))
             else:
                 self._show_error(msg_ar)
             self.step1._start_polling()
@@ -640,7 +641,7 @@ class ImportWizardPage(QWidget):
             do_health_and_status,
             on_status_fetched,
             on_error=on_health_error,
-            loading_msg="جاري التحقق من الاتصال..."
+            loading_msg=tr("wizard.import.loading_checking_connection")
         )
 
     def _route_by_status(self, status: int):
@@ -670,7 +671,7 @@ class ImportWizardPage(QWidget):
             self._handle_cancelled()
         else:
             logger.warning(f"Unknown package status: {status}")
-            self._show_error(f"حالة الحزمة غير معروفة ({status})")
+            self._show_error(tr("wizard.import.error_unknown_status").format(status=status))
             self.btn_next.setEnabled(True)
             self.step1._start_polling()
 
@@ -685,10 +686,10 @@ class ImportWizardPage(QWidget):
             if not stage_result.success:
                 logger.error(f"Staging failed: {stage_result.message}")
                 self._set_buttons_enabled(True)
-                self._show_error(stage_result.message_ar or "فشل تدريج الحزمة")
+                self._show_error(stage_result.message_ar or tr("wizard.import.error_staging_failed"))
                 self.step1._start_polling()
                 return
-            self._show_loading("جاري كشف التكرارات...")
+            self._show_loading(tr("wizard.import.loading_detecting_duplicates"))
             self._run_api(
                 lambda: self.import_controller.detect_duplicates(pkg_id),
                 on_dup_done,
@@ -699,18 +700,18 @@ class ImportWizardPage(QWidget):
         def on_dup_done(dup_result):
             duplicates_data = dup_result.data if dup_result.success else None
             if not dup_result.success:
-                Toast.show_toast(self, "تعذر تحميل البيانات", Toast.ERROR)
+                Toast.show_toast(self, tr("error.failed_load_data"), Toast.ERROR)
                 logger.warning(f"Duplicate detection failed: {dup_result.message}")
             self._navigate_to_step2(duplicates_data)
             self._update_navigation()
 
         def on_dup_error(error_type, msg_ar):
-            Toast.show_toast(self, "تعذر تحميل البيانات", Toast.ERROR)
+            Toast.show_toast(self, tr("error.failed_load_data"), Toast.ERROR)
             logger.warning(f"Duplicate detection error ({error_type}): {msg_ar}")
             self._navigate_to_step2(duplicates_data=None)
             self._update_navigation()
 
-        self._run_api(do_stage, on_stage_done, loading_msg="جاري تدريج الحزمة...")
+        self._run_api(do_stage, on_stage_done, loading_msg=tr("wizard.import.loading_staging"))
 
     def _handle_in_progress(self, status: int):
         """Status 2/3: Backend is processing — trigger stage if needed, then poll."""
@@ -724,22 +725,22 @@ class ImportWizardPage(QWidget):
                     logger.info(f"Stage triggered for package {pkg_id}")
                 else:
                     logger.info(f"Stage returned: {result.message} — polling anyway")
-                self._show_loading("جاري التحقق في الخادم...")
+                self._show_loading(tr("wizard.import.loading_server_check"))
                 self._start_status_poll()
 
             def on_stage_error(error_type, msg_ar):
                 logger.info(f"Stage error ({error_type}): {msg_ar} — polling anyway")
-                self._show_loading("جاري التحقق في الخادم...")
+                self._show_loading(tr("wizard.import.loading_server_check"))
                 self._start_status_poll()
 
             self._run_api(
                 lambda: self.import_controller.stage_package(pkg_id),
                 on_stage_result,
                 on_error=on_stage_error,
-                loading_msg="جاري بدء المعالجة..."
+                loading_msg=tr("wizard.import.loading_start_processing")
             )
         else:
-            self._show_loading("جاري التدريج في الخادم...")
+            self._show_loading(tr("wizard.import.loading_staging_server"))
             self._start_status_poll()
 
     def _handle_validation_failed(self):
@@ -748,10 +749,7 @@ class ImportWizardPage(QWidget):
 
     def _handle_quarantined(self):
         """Status 5: Quarantined — show message, block completely."""
-        self._show_error(
-            "هذه الحزمة محجورة من قبل المسؤول.\n"
-            "لا يمكن متابعة المعالجة. يرجى التواصل مع مدير النظام."
-        )
+        self._show_error(tr("wizard.import.error_quarantined"))
         self.btn_next.setEnabled(True)
         self.step1._start_polling()
 
@@ -763,7 +761,7 @@ class ImportWizardPage(QWidget):
             return
 
         # Try to approve — backend will succeed only if all conflicts are resolved
-        self._show_loading("جاري التحقق من حالة التعارضات...")
+        self._show_loading(tr("wizard.import.loading_checking_conflicts"))
 
         def on_approve_ok(result):
             self._hide_loading()
@@ -801,7 +799,7 @@ class ImportWizardPage(QWidget):
         self._update_navigation()
         if self.step_commit and hasattr(self.step_commit, 'set_committing'):
             self.step_commit.set_committing(True)
-        self._show_loading("جاري إدخال البيانات في الخادم...")
+        self._show_loading(tr("wizard.import.loading_committing_server"))
         self._start_status_poll()
 
     def _handle_terminal_report(self):
@@ -814,7 +812,7 @@ class ImportWizardPage(QWidget):
 
     def _handle_cancelled(self):
         """Status 12: Cancelled — should not reach here (filtered)."""
-        self._show_error("هذه الحزمة ملغاة ولا يمكن معالجتها.")
+        self._show_error(tr("wizard.import.error_cancelled_package"))
         self.btn_next.setEnabled(True)
         self.step1._start_polling()
 
@@ -863,10 +861,7 @@ class ImportWizardPage(QWidget):
             if self.step_commit and hasattr(self.step_commit, 'set_committing'):
                 self.step_commit.set_committing(False)
             self._set_buttons_enabled(True)
-            self._show_error(
-                "انتهت مهلة الانتظار.\n"
-                "يرجى المحاولة لاحقاً أو التواصل مع الدعم الفني."
-            )
+            self._show_error(tr("wizard.import.error_timeout"))
             return
 
         # Pause timer during the API call, resume if still transient
@@ -876,7 +871,7 @@ class ImportWizardPage(QWidget):
         def on_poll_result(result):
             if not result.success:
                 logger.warning(f"Status poll failed: {result.message}")
-                self._show_loading("جاري المعالجة في الخادم...")
+                self._show_loading(tr("wizard.import.loading_processing_server"))
                 self._status_poll_timer.start(_STATUS_POLL_INTERVAL_MS)
                 return
 
@@ -885,10 +880,15 @@ class ImportWizardPage(QWidget):
 
             if new_status in _PkgStatus.TRANSIENT:
                 # Re-show loading (hidden by _on_worker_done)
-                status_label = "التحقق" if new_status == _PkgStatus.VALIDATING else (
-                    "التدريج" if new_status == _PkgStatus.STAGING else "الإدخال"
-                )
-                self._show_loading(f"جاري {status_label} في الخادم... (محاولة {self._poll_count})")
+                if new_status == _PkgStatus.VALIDATING:
+                    status_label = tr("wizard.import.status_validating")
+                elif new_status == _PkgStatus.STAGING:
+                    status_label = tr("wizard.import.status_staging")
+                else:
+                    status_label = tr("wizard.import.status_committing")
+                self._show_loading(tr("wizard.import.loading_server_attempt").format(
+                    status=status_label, attempt=self._poll_count
+                ))
                 self._status_poll_timer.start(_STATUS_POLL_INTERVAL_MS)
                 return
 
@@ -899,7 +899,7 @@ class ImportWizardPage(QWidget):
 
         def on_poll_error(error_type, msg_ar):
             logger.warning(f"Status poll error ({error_type}): {msg_ar}")
-            self._show_loading("جاري المعالجة في الخادم...")
+            self._show_loading(tr("wizard.import.loading_processing_server"))
             self._status_poll_timer.start(_STATUS_POLL_INTERVAL_MS)
 
         self._run_api(
@@ -940,24 +940,21 @@ class ImportWizardPage(QWidget):
 
                 if status == _PkgStatus.VALIDATION_FAILED:
                     self._set_buttons_enabled(True)
-                    self._show_error(
-                        "لا يمكن الموافقة — يوجد أخطاء في التحقق.\n"
-                        "يرجى مراجعة تقرير التحقق أولاً."
-                    )
+                    self._show_error(tr("wizard.import.error_validation_errors"))
                     return
 
             # Proceed to approve
             self._run_api(
                 lambda: self.import_controller.approve_package(pkg_id),
                 on_approve_done,
-                loading_msg="جاري الموافقة على الحزمة..."
+                loading_msg=tr("wizard.import.loading_approving")
             )
 
         def on_approve_done(approve_result):
             if not approve_result.success:
                 logger.error(f"Approve failed: {approve_result.message}")
                 self._set_buttons_enabled(True)
-                self._show_error(approve_result.message_ar or "فشل الموافقة على الحزمة")
+                self._show_error(approve_result.message_ar or tr("wizard.import.error_approve_failed"))
                 return
 
             self._current_package_status = _PkgStatus.READY_TO_COMMIT
@@ -969,7 +966,7 @@ class ImportWizardPage(QWidget):
         self._run_api(
             lambda: self.import_controller.get_package(pkg_id),
             on_status_fetched,
-            loading_msg="جاري التحقق من حالة الحزمة..."
+            loading_msg=tr("wizard.import.loading_checking_status")
         )
 
     def _transition_commit_to_report(self):
@@ -989,7 +986,7 @@ class ImportWizardPage(QWidget):
                 if status == _PkgStatus.COMMITTING:
                     if self.step_commit and hasattr(self.step_commit, 'set_committing'):
                         self.step_commit.set_committing(True)
-                    self._show_loading("جاري إدخال البيانات في الخادم...")
+                    self._show_loading(tr("wizard.import.loading_committing_server"))
                     self._start_status_poll()
                     return
 
@@ -998,7 +995,7 @@ class ImportWizardPage(QWidget):
                 lambda: self.import_controller.approve_package(pkg_id),
                 on_approve_done,
                 on_error=on_approve_error,
-                loading_msg="جاري الموافقة على الحزمة..."
+                loading_msg=tr("wizard.import.loading_approving")
             )
 
         def on_approve_done(approve_result):
@@ -1013,7 +1010,7 @@ class ImportWizardPage(QWidget):
                 lambda: self.import_controller.commit_package(pkg_id),
                 on_commit_done,
                 on_error=on_commit_error,
-                loading_msg="جاري إدخال البيانات..."
+                loading_msg=tr("wizard.import.loading_committing")
             )
 
         def on_approve_error(error_type, msg_ar):
@@ -1026,7 +1023,7 @@ class ImportWizardPage(QWidget):
                 lambda: self.import_controller.commit_package(pkg_id),
                 on_commit_done,
                 on_error=on_commit_error,
-                loading_msg="جاري إدخال البيانات..."
+                loading_msg=tr("wizard.import.loading_committing")
             )
 
         def on_commit_done(commit_result):
@@ -1036,7 +1033,7 @@ class ImportWizardPage(QWidget):
             if not commit_result.success:
                 logger.error(f"Commit failed: {commit_result.message}")
                 self._set_buttons_enabled(True)
-                self._show_error(commit_result.message_ar or "فشل إدخال البيانات")
+                self._show_error(commit_result.message_ar or tr("wizard.import.error_commit_failed"))
                 return
 
             self._current_package_status = _PkgStatus.COMPLETED
@@ -1055,7 +1052,7 @@ class ImportWizardPage(QWidget):
         self._run_api(
             lambda: self.import_controller.get_package(pkg_id),
             on_status_fetched,
-            loading_msg="جاري التحقق من حالة الحزمة..."
+            loading_msg=tr("wizard.import.loading_checking_status")
         )
 
     # -- Retry failed commit --------------------------------------------------
@@ -1067,7 +1064,7 @@ class ImportWizardPage(QWidget):
         def on_reset_done(result):
             if not result.success:
                 self._set_buttons_enabled(True)
-                self._show_error(result.message_ar or "فشل إعادة التعيين")
+                self._show_error(result.message_ar or tr("wizard.import.error_reset_failed"))
                 return
 
             self._current_package_status = _PkgStatus.READY_TO_COMMIT
@@ -1079,7 +1076,7 @@ class ImportWizardPage(QWidget):
         self._run_api(
             lambda: self.import_controller.reset_commit(pkg_id),
             on_reset_done,
-            loading_msg="جاري إعادة تعيين الحزمة..."
+            loading_msg=tr("wizard.import.loading_resetting")
         )
 
     # -- Lazy step creation ---------------------------------------------------
@@ -1153,7 +1150,7 @@ class ImportWizardPage(QWidget):
 
         if self.current_step == 0:
             self.btn_back.setEnabled(False)
-            self.btn_next.setText("بدء المعالجة   >")
+            self.btn_next.setText(tr("wizard.import.btn_start_processing"))
             has_selection = (
                 hasattr(self, 'step1')
                 and hasattr(self.step1, 'get_selected_package_id')
@@ -1164,32 +1161,32 @@ class ImportWizardPage(QWidget):
         elif self.current_step == 1:
             self.btn_back.setEnabled(True)
             if self._current_package_status == _PkgStatus.VALIDATION_FAILED:
-                self.btn_next.setText("فشل التحقق — إلغاء الحزمة")
+                self.btn_next.setText(tr("wizard.import.btn_validation_failed_cancel"))
                 self.btn_next.setEnabled(True)
             elif self._current_package_status == _PkgStatus.REVIEWING_CONFLICTS:
-                self.btn_next.setText("يجب حل التعارضات أولاً")
+                self.btn_next.setText(tr("wizard.import.btn_resolve_conflicts_first"))
                 self.btn_next.setEnabled(False)
             else:
-                self.btn_next.setText("التالي   >")
+                self.btn_next.setText(tr("action.next_arrow"))
                 self.btn_next.setEnabled(True)
 
         elif self.current_step == 2:
             self.btn_back.setEnabled(True)
-            self.btn_next.setText("موافقة وإدخال   >")
+            self.btn_next.setText(tr("wizard.import.btn_approve_and_import"))
             self.btn_next.setEnabled(True)
 
         elif self.current_step == 3:
             self.btn_back.setEnabled(False)
-            self.btn_next.setText("إدخال البيانات   >")
+            self.btn_next.setText(tr("wizard.import.btn_commit_data"))
             self.btn_next.setEnabled(True)
 
         elif self.current_step == 4:
             self.btn_back.setEnabled(False)
             self.btn_cancel.setVisible(False)
             if self._current_package_status == _PkgStatus.FAILED:
-                self.btn_next.setText("إعادة المحاولة")
+                self.btn_next.setText(tr("action.retry"))
             else:
-                self.btn_next.setText("استيراد جديد")
+                self.btn_next.setText(tr("wizard.import.btn_new_import"))
             self.btn_next.setEnabled(True)
 
     def enable_next_button(self, enabled: bool):
@@ -1226,9 +1223,9 @@ class ImportWizardPage(QWidget):
 
         from ui.components.message_dialog import MessageDialog
         if not MessageDialog.confirm(
-            self, "تأكيد الإلغاء",
-            "هل أنت متأكد من إلغاء هذه الحزمة؟\nلا يمكن التراجع عن هذا الإجراء.",
-            ok_text="نعم، إلغاء", cancel_text="لا، تراجع"
+            self, tr("dialog.import.confirm_cancel_title"),
+            tr("dialog.import.confirm_cancel_message"),
+            ok_text=tr("dialog.import.confirm_cancel_yes"), cancel_text=tr("dialog.import.confirm_cancel_no")
         ):
             return
 
@@ -1239,17 +1236,17 @@ class ImportWizardPage(QWidget):
             if not cancel_result.success:
                 logger.error(f"Cancel failed: {cancel_result.message}")
                 self._set_buttons_enabled(True)
-                self._show_error(cancel_result.message_ar or "فشل إلغاء الحزمة")
+                self._show_error(cancel_result.message_ar or tr("wizard.import.error_cancel_failed"))
                 return
 
-            self._show_success("تم إلغاء الحزمة بنجاح")
+            self._show_success(tr("wizard.import.success_package_cancelled"))
             self.cancelled.emit()
             self.refresh()
 
         self._run_api(
             lambda: self.import_controller.cancel_package(pkg_id),
             on_cancel_done,
-            loading_msg="جاري إلغاء الحزمة..."
+            loading_msg=tr("wizard.import.loading_cancelling")
         )
 
     # -- Error/Success display ------------------------------------------------
@@ -1257,7 +1254,7 @@ class ImportWizardPage(QWidget):
     def _show_error(self, message: str):
         """Show error message via dialog."""
         from ui.components.message_dialog import MessageDialog
-        MessageDialog.error(self, "خطأ", message)
+        MessageDialog.error(self, tr("dialog.error_title"), message)
 
     def _show_success(self, message: str):
         """Show success message via dialog."""
@@ -1312,7 +1309,7 @@ class ImportWizardPage(QWidget):
             return
         pkg_id = self._current_package_id
 
-        self._show_loading("جاري التحقق من حالة الحزمة...")
+        self._show_loading(tr("page.import_wizard.checking_package"))
 
         def on_status_result(result):
             if not result.success:
@@ -1331,7 +1328,7 @@ class ImportWizardPage(QWidget):
             # Still REVIEWING_CONFLICTS — try to approve directly
             # Backend will reject if conflicts remain for this package
             logger.info(f"Attempting to approve package {pkg_id} after conflict resolution")
-            self._show_loading("جاري الموافقة على الحزمة...")
+            self._show_loading(tr("page.import_wizard.approving_package"))
             self._run_api(
                 lambda: self.import_controller.approve_package(pkg_id),
                 on_approve_done,
@@ -1346,7 +1343,7 @@ class ImportWizardPage(QWidget):
             self._start_status_poll()
 
         def on_approve_error(error_type, msg_ar):
-            Toast.show_toast(self, "تعذر تحميل البيانات", Toast.ERROR)
+            Toast.show_toast(self, tr("wizard.import.data_load_failed"), Toast.ERROR)
             logger.warning(f"Approve after conflicts failed ({error_type}): {msg_ar}")
             self._hide_loading()
             # Conflicts might not all be resolved — show step2 as before
@@ -1366,3 +1363,31 @@ class ImportWizardPage(QWidget):
             step = getattr(self, step_attr, None)
             if step is not None and hasattr(step, 'configure_for_role'):
                 step.configure_for_role(role)
+
+    def update_language(self, is_arabic: bool):
+        """Update all translatable texts after language change."""
+        self.setLayoutDirection(get_layout_direction())
+
+        # Wizard header
+        self.header.set_title(tr("wizard.import.title"))
+        self.header.set_subtitle(tr("wizard.import.subtitle"))
+
+        # Step indicator labels
+        for i, key in enumerate(_STEP_NAMES_KEYS):
+            self._step_labels[i].setText(tr(key))
+
+        # Footer buttons
+        self.btn_back.setText(tr("action.back_arrow"))
+        self.btn_cancel.setText(tr("wizard.import.cancel_package"))
+
+        # Next button text depends on current step
+        self._update_navigation()
+
+        # Loading label
+        self._loading_label.setText(tr("status.processing"))
+
+        # Propagate to child steps
+        for step_attr in ('step1', 'step2', 'step_review', 'step_commit', 'step_report'):
+            step = getattr(self, step_attr, None)
+            if step is not None and hasattr(step, 'update_language'):
+                step.update_language(is_arabic)

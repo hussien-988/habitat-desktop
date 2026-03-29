@@ -12,6 +12,7 @@ from ui.components.base_map_dialog import BaseMapDialog
 from services.leaflet_html_generator import generate_leaflet_html
 from services.api_worker import ApiWorker
 from utils.logger import get_logger
+from services.translation_manager import tr
 
 logger = get_logger(__name__)
 
@@ -47,7 +48,7 @@ class MapPickerDialog(BaseMapDialog):
         self._result = None
 
         super().__init__(
-            title="تحديد الموقع على الخريطة",
+            title=tr("dialog.map.select_location_on_map"),
             show_search=True,
             show_confirm_button=True,  # Show confirm button and coordinates
             parent=parent
@@ -139,8 +140,8 @@ class MapPickerDialog(BaseMapDialog):
             from ui.error_handler import ErrorHandler
             ErrorHandler.show_error(
                 self,
-                f"حدث خطأ أثناء تحميل الخريطة:\n{str(e)}",
-                "خطأ"
+                f"{tr('dialog.map.error_loading_map')}\n{str(e)}",
+                tr("dialog.map.error_title")
             )
 
     def _load_landmarks_streets_async(self):
@@ -255,8 +256,8 @@ class MapPickerDialog(BaseMapDialog):
             from ui.error_handler import ErrorHandler
             ErrorHandler.show_error(
                 self,
-                f"حدث خطأ أثناء معالجة الإحداثيات:\n{str(e)}",
-                "خطأ"
+                f"{tr('dialog.map.error_processing_coordinates')}\n{str(e)}",
+                tr("dialog.map.error_title")
             )
 
     @staticmethod
@@ -311,7 +312,7 @@ class MapPickerDialog(BaseMapDialog):
                     "type": "Feature",
                     "properties": {
                         "building_id": "existing",
-                        "building_id_display": "المضلع الحالي",
+                        "building_id_display": tr("dialog.map.current_polygon"),
                         "status": "existing"
                     },
                     "geometry": geometry
@@ -336,7 +337,7 @@ class MapPickerDialog(BaseMapDialog):
             return
 
         self.search_input.setEnabled(False)
-        self.search_input.setPlaceholderText("جاري البحث...")
+        self.search_input.setPlaceholderText(tr("dialog.map.searching"))
 
         try:
             from ui.components.toast import Toast
@@ -364,7 +365,7 @@ class MapPickerDialog(BaseMapDialog):
 
             # Step 3: Search streets in loaded JS layer
             def _on_street_not_found():
-                Toast.show_toast(self, f"لم يتم العثور على: {search_text}", "warning")
+                Toast.show_toast(self, f"{tr('dialog.map.not_found')}: {search_text}", "warning")
 
             self._search_streets_js(search_text, not_found_callback=_on_street_not_found)
 
@@ -374,7 +375,7 @@ class MapPickerDialog(BaseMapDialog):
         finally:
             if hasattr(self, 'search_input'):
                 self.search_input.setEnabled(True)
-                self.search_input.setPlaceholderText("بحث: حي، معلم، أو شارع")
+                self.search_input.setPlaceholderText(tr("dialog.map.search_placeholder"))
 
     def get_result(self) -> Optional[Dict]:
         """Get selected location/polygon result."""

@@ -11,6 +11,7 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt
 
 from services.api_worker import ApiWorker
+from services.translation_manager import tr, get_layout_direction
 from ui.components.icon import Icon
 from ui.components.toast import Toast
 from ui.design_system import Colors
@@ -20,11 +21,15 @@ from utils.logger import get_logger
 
 logger = get_logger(__name__)
 
-_UNIT_TYPE_AR = {
-    1: "شقة سكنية", 2: "محل تجاري", 3: "مكتب", 4: "مستودع", 5: "أخرى",
-    "apartment": "شقة سكنية", "shop": "محل تجاري", "office": "مكتب",
-    "warehouse": "مستودع", "garage": "كراج", "other": "أخرى",
-}
+def _get_unit_type_labels():
+    return {
+        1: tr("wizard.step3.unit_apartment"), 2: tr("wizard.step3.unit_shop"),
+        3: tr("wizard.step3.unit_office"), 4: tr("wizard.step3.unit_warehouse"),
+        5: tr("wizard.step3.unit_other"),
+        "apartment": tr("wizard.step3.unit_apartment"), "shop": tr("wizard.step3.unit_shop"),
+        "office": tr("wizard.step3.unit_office"), "warehouse": tr("wizard.step3.unit_warehouse"),
+        "garage": tr("wizard.step3.unit_garage"), "other": tr("wizard.step3.unit_other"),
+    }
 
 
 class FieldWorkPreparationStep3(QWidget):
@@ -39,13 +44,17 @@ class FieldWorkPreparationStep3(QWidget):
         self._revisit_reason_inputs = {}  # building_id -> QLineEdit
         self._accordion_bodies = {}  # building_id -> QWidget (body)
         self._accordion_arrows = {}  # building_id -> QLabel (arrow)
+        self._visit_labels = {}  # building_id -> QLabel (visit type label)
+        self._first_visit_radios = {}  # building_id -> QRadioButton
+        self._revisit_radios = {}  # building_id -> QRadioButton
+        self._units_labels = {}  # building_id -> QLabel (units section label)
 
         # Show a temporary loading layout, fetch units in background
         from ui.components.loading_spinner import LoadingSpinnerOverlay
         self._outer_layout = QVBoxLayout(self)
         self._outer_layout.setContentsMargins(0, 0, 0, 0)
         self._spinner = LoadingSpinnerOverlay(self)
-        self._spinner.show_loading("جاري تحميل بيانات المقاسم...")
+        self._spinner.show_loading(tr("wizard.step3.loading_units"))
 
         self._units_worker = ApiWorker(self._fetch_units_data, self.buildings)
         self._units_worker.finished.connect(self._on_units_loaded)
@@ -62,7 +71,7 @@ class FieldWorkPreparationStep3(QWidget):
         """Handle failed unit fetch, build UI with empty units."""
         logger.warning(f"Could not fetch property units: {error_msg}")
         self._spinner.hide_loading()
-        Toast.show_toast(self, "تعذر تحميل بيانات الملخص", Toast.ERROR)
+        Toast.show_toast(self, tr("wizard.step3.err_load_summary"), Toast.ERROR)
         self._setup_ui()
 
     @staticmethod
@@ -90,7 +99,7 @@ class FieldWorkPreparationStep3(QWidget):
         return building_units
 
     def _setup_ui(self):
-        self.setLayoutDirection(Qt.RightToLeft)
+        self.setLayoutDirection(get_layout_direction())
 
         outer = self._outer_layout
         outer.setSpacing(0)
@@ -121,10 +130,10 @@ class FieldWorkPreparationStep3(QWidget):
         info_layout.setContentsMargins(24, 20, 24, 20)
         info_layout.setSpacing(12)
 
-        title = QLabel("معلومات التعيين")
-        title.setFont(create_font(size=12, weight=FontManager.WEIGHT_SEMIBOLD))
-        title.setStyleSheet("color: #212B36; background: transparent; border: none;")
-        info_layout.addWidget(title)
+        self._info_title_label = QLabel(tr("wizard.step3.assignment_info"))
+        self._info_title_label.setFont(create_font(size=12, weight=FontManager.WEIGHT_SEMIBOLD))
+        self._info_title_label.setStyleSheet("color: #212B36; background: transparent; border: none;")
+        info_layout.addWidget(self._info_title_label)
 
         researcher_name = (
             self.researcher.get('name')
@@ -132,14 +141,18 @@ class FieldWorkPreparationStep3(QWidget):
             or self.researcher.get('id', '')
         )
         available = self.researcher.get('available', True)
-        avail_text = "متوفر" if available else "غير متوفر"
+        avail_text = tr("wizard.step3.available") if available else tr("wizard.step3.unavailable")
         avail_color = "#10B981" if available else "#EF4444"
         assignment_date = date.today().strftime("%Y-%m-%d")
 
+        self._info_row_labels = []
+        self._info_row_values = []
+        self._avail_badge = None
+
         for label_text, value_text, value_color in [
-            ("الباحث الميداني:", f"{researcher_name}  —  {avail_text}", avail_color if not available else "#212B36"),
-            ("عدد المباني:", str(len(self.buildings)), "#3890DF"),
-            ("تاريخ التعيين:", assignment_date, "#212B36"),
+            (tr("wizard.step3.field_researcher"), f"{researcher_name}  \u2014  {avail_text}", avail_color if not available else "#212B36"),
+            (tr("wizard.step3.building_count"), str(len(self.buildings)), "#3890DF"),
+            (tr("wizard.step3.assignment_date"), assignment_date, "#212B36"),
         ]:
             row = QHBoxLayout()
             row.setSpacing(12)
@@ -149,13 +162,15 @@ class FieldWorkPreparationStep3(QWidget):
             lbl.setStyleSheet("color: #637381; background: transparent; border: none;")
             lbl.setFixedWidth(160)
             row.addWidget(lbl)
+            self._info_row_labels.append(lbl)
 
             val = QLabel(value_text)
             val.setFont(create_font(size=10, weight=FontManager.WEIGHT_REGULAR))
             val.setStyleSheet(f"color: {value_color}; background: transparent; border: none;")
             row.addWidget(val)
+            self._info_row_values.append(val)
 
-            if label_text == "الباحث الميداني:":
+            if label_text == tr("wizard.step3.field_researcher"):
                 badge = QLabel(avail_text)
                 badge.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
                 badge.setStyleSheet(f"""
@@ -166,6 +181,7 @@ class FieldWorkPreparationStep3(QWidget):
                     border: none;
                 """)
                 row.addWidget(badge)
+                self._avail_badge = badge
 
             row.addStretch()
             info_layout.addLayout(row)
@@ -183,10 +199,10 @@ class FieldWorkPreparationStep3(QWidget):
         buildings_card_layout.setContentsMargins(24, 16, 24, 16)
         buildings_card_layout.setSpacing(6)
 
-        list_title = QLabel("المباني والمقاسم")
-        list_title.setFont(create_font(size=12, weight=FontManager.WEIGHT_SEMIBOLD))
-        list_title.setStyleSheet("color: #212B36; background: transparent; border: none;")
-        buildings_card_layout.addWidget(list_title)
+        self._buildings_title_label = QLabel(tr("wizard.step3.buildings_and_units"))
+        self._buildings_title_label.setFont(create_font(size=12, weight=FontManager.WEIGHT_SEMIBOLD))
+        self._buildings_title_label.setStyleSheet("color: #212B36; background: transparent; border: none;")
+        buildings_card_layout.addWidget(self._buildings_title_label)
         buildings_card_layout.addSpacing(6)
 
         for i, building in enumerate(self.buildings):
@@ -270,7 +286,7 @@ class FieldWorkPreparationStep3(QWidget):
         units = self._building_units.get(building_id, [])
         units_count = len(units)
         if units_count > 0:
-            badge = QLabel(f"{units_count} مقاسم")
+            badge = QLabel(tr("wizard.step3.units_count", count=units_count))
             badge.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
             badge.setStyleSheet("""
                 color: #3890DF;
@@ -283,7 +299,7 @@ class FieldWorkPreparationStep3(QWidget):
         else:
             num_units = getattr(building, 'number_of_units', 0) or 0
             if num_units > 0:
-                badge = QLabel(f"{num_units} مقاسم")
+                badge = QLabel(tr("wizard.step3.units_count", count=num_units))
                 badge.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
                 badge.setStyleSheet("""
                     color: #3890DF;
@@ -317,10 +333,11 @@ class FieldWorkPreparationStep3(QWidget):
         visit_layout.setContentsMargins(12, 10, 12, 10)
         visit_layout.setSpacing(8)
 
-        visit_label = QLabel("نوع الزيارة:")
+        visit_label = QLabel(tr("wizard.step3.visit_type"))
         visit_label.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
         visit_label.setStyleSheet("color: #637381; background: transparent; border: none;")
         visit_layout.addWidget(visit_label)
+        self._visit_labels[building_id] = visit_label
 
         radio_row = QHBoxLayout()
         radio_row.setSpacing(24)
@@ -356,23 +373,25 @@ class FieldWorkPreparationStep3(QWidget):
         btn_group = QButtonGroup(self)
         self._visit_type_groups[building_id] = btn_group
 
-        first_visit_radio = QRadioButton("زيارة أولى")
+        first_visit_radio = QRadioButton(tr("wizard.step3.first_visit"))
         first_visit_radio.setStyleSheet(radio_style)
         first_visit_radio.setChecked(True)
         btn_group.addButton(first_visit_radio, 0)
         radio_row.addWidget(first_visit_radio)
+        self._first_visit_radios[building_id] = first_visit_radio
 
-        revisit_radio = QRadioButton("إعادة زيارة")
+        revisit_radio = QRadioButton(tr("wizard.step3.revisit"))
         revisit_radio.setStyleSheet(radio_style)
         btn_group.addButton(revisit_radio, 1)
         radio_row.addWidget(revisit_radio)
+        self._revisit_radios[building_id] = revisit_radio
 
         radio_row.addStretch()
         visit_layout.addLayout(radio_row)
 
         # Reason input (visible only when revisit is selected)
         reason_input = QLineEdit()
-        reason_input.setPlaceholderText("سبب إعادة الزيارة...")
+        reason_input.setPlaceholderText(tr("wizard.step3.revisit_reason_placeholder"))
         reason_input.setFixedHeight(32)
         reason_input.setFont(create_font(size=9, weight=FontManager.WEIGHT_REGULAR))
         reason_input.setStyleSheet("""
@@ -402,10 +421,11 @@ class FieldWorkPreparationStep3(QWidget):
 
         # Property units cards
         if units:
-            units_label = QLabel("المقاسم:")
+            units_label = QLabel(tr("wizard.step3.units_label"))
             units_label.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
             units_label.setStyleSheet("color: #637381; background: transparent; border: none;")
             body_layout.addWidget(units_label)
+            self._units_labels[building_id] = units_label
 
             for u in units:
                 unit_card = self._create_unit_card(u)
@@ -426,7 +446,7 @@ class FieldWorkPreparationStep3(QWidget):
         except (ValueError, TypeError):
             pass
         lookup_key = unit_type if isinstance(unit_type, int) else str(unit_type).lower()
-        ar_type = _UNIT_TYPE_AR.get(lookup_key, str(unit_type))
+        ar_type = _get_unit_type_labels().get(lookup_key, str(unit_type))
 
         unit_code = unit_data.get('unitCode') or unit_data.get('unit_code') or '-'
         floor = unit_data.get('floorNumber')
@@ -459,12 +479,12 @@ class FieldWorkPreparationStep3(QWidget):
         grid.setSpacing(0)
 
         data_points = [
-            ("رمز الوحدة", unit_code),
-            ("الطابق", floor_str),
-            ("النوع", ar_type),
-            ("الأفراد", str(person_count)),
-            ("الأسر", str(household_count)),
-            ("المطالبات", str(claim_count)),
+            (tr("wizard.step3.unit_code"), unit_code),
+            (tr("wizard.step3.floor"), floor_str),
+            (tr("wizard.step3.type"), ar_type),
+            (tr("wizard.step3.persons"), str(person_count)),
+            (tr("wizard.step3.households"), str(household_count)),
+            (tr("wizard.step3.claims"), str(claim_count)),
         ]
 
         for i, (label_text, value_text) in enumerate(data_points):
@@ -512,7 +532,7 @@ class FieldWorkPreparationStep3(QWidget):
             bottom.addStretch()
 
             if has_survey:
-                survey_badge = QLabel("تم المسح")
+                survey_badge = QLabel(tr("wizard.step3.surveyed"))
                 survey_badge.setFont(create_font(size=8, weight=FontManager.WEIGHT_SEMIBOLD))
                 survey_badge.setStyleSheet("""
                     color: #10B981;
@@ -522,7 +542,7 @@ class FieldWorkPreparationStep3(QWidget):
                 """)
                 bottom.addWidget(survey_badge)
             else:
-                survey_badge = QLabel("لم يتم المسح")
+                survey_badge = QLabel(tr("wizard.step3.not_surveyed"))
                 survey_badge.setFont(create_font(size=8, weight=FontManager.WEIGHT_SEMIBOLD))
                 survey_badge.setStyleSheet("""
                     color: #9CA3AF;
@@ -561,6 +581,55 @@ class FieldWorkPreparationStep3(QWidget):
             ]
             return "-".join(parts)
         return building_id
+
+    def update_language(self, is_arabic: bool = True):
+        """Update UI text after language change."""
+        self.setLayoutDirection(get_layout_direction())
+
+        # Update info card title
+        if hasattr(self, '_info_title_label'):
+            self._info_title_label.setText(tr("wizard.step3.assignment_info"))
+
+        # Update info row labels (researcher, building count, date)
+        if hasattr(self, '_info_row_labels') and len(self._info_row_labels) >= 3:
+            self._info_row_labels[0].setText(tr("wizard.step3.field_researcher"))
+            self._info_row_labels[1].setText(tr("wizard.step3.building_count"))
+            self._info_row_labels[2].setText(tr("wizard.step3.assignment_date"))
+
+        # Update researcher availability text in value and badge
+        if hasattr(self, '_info_row_values') and self._info_row_values:
+            available = self.researcher.get('available', True)
+            avail_text = tr("wizard.step3.available") if available else tr("wizard.step3.unavailable")
+            researcher_name = (
+                self.researcher.get('name')
+                or self.researcher.get('display_name')
+                or self.researcher.get('id', '')
+            )
+            self._info_row_values[0].setText(f"{researcher_name}  \u2014  {avail_text}")
+            if hasattr(self, '_avail_badge') and self._avail_badge:
+                self._avail_badge.setText(avail_text)
+
+        # Update buildings card title
+        if hasattr(self, '_buildings_title_label'):
+            self._buildings_title_label.setText(tr("wizard.step3.buildings_and_units"))
+
+        # Update per-building accordion labels
+        for building_id in self._visit_labels:
+            self._visit_labels[building_id].setText(tr("wizard.step3.visit_type"))
+
+        for building_id in self._first_visit_radios:
+            self._first_visit_radios[building_id].setText(tr("wizard.step3.first_visit"))
+
+        for building_id in self._revisit_radios:
+            self._revisit_radios[building_id].setText(tr("wizard.step3.revisit"))
+
+        for building_id in self._revisit_reason_inputs:
+            self._revisit_reason_inputs[building_id].setPlaceholderText(
+                tr("wizard.step3.revisit_reason_placeholder")
+            )
+
+        for building_id in self._units_labels:
+            self._units_labels[building_id].setText(tr("wizard.step3.units_label"))
 
     def get_summary(self) -> dict:
         """Return buildings, researcher, and revisit data for final submission."""

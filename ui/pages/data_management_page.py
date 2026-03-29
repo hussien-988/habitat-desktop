@@ -18,28 +18,33 @@ from ui.style_manager import StyleManager
 from ui.font_utils import create_font, FontManager
 from ui.components.dialogs.password_dialog import _INPUT_STYLE
 from services import vocab_service
+from services.translation_manager import tr, get_layout_direction
 from utils.logger import get_logger
 
 logger = get_logger(__name__)
 
 # All vocabulary sections (flat list — accordion pills)
-VOCAB_SECTIONS = [
-    ("building_type", "نوع المبنى"),
-    ("building_status", "حالة المبنى"),
-    ("unit_type", "نوع الوحدة"),
-    ("relation_type", "نوع العلاقة"),
-    ("case_status", "حالة القضية"),
-    ("contract_type", "نوع العقد"),
-    ("evidence_type", "نوع الوثيقة"),
-    ("occupancy_type", "نوع الإشغال"),
-    ("occupancy_nature", "طبيعة الإشغال"),
-    ("nationality", "الجنسية"),
-    ("claim_type", "نوع المطالبة"),
-    ("claim_status", "حالة المطالبة"),
-    ("case_priority", "أولوية القضية"),
-    ("claim_source", "مصدر المطالبة"),
-    ("business_nature", "طبيعة النشاط"),
+# Keys for translation: page.data_mgmt.vocab.<key>
+VOCAB_SECTION_KEYS = [
+    ("building_type", "page.data_mgmt.vocab.building_type"),
+    ("building_status", "page.data_mgmt.vocab.building_status"),
+    ("unit_type", "page.data_mgmt.vocab.unit_type"),
+    ("relation_type", "page.data_mgmt.vocab.relation_type"),
+    ("case_status", "page.data_mgmt.vocab.case_status"),
+    ("contract_type", "page.data_mgmt.vocab.contract_type"),
+    ("evidence_type", "page.data_mgmt.vocab.evidence_type"),
+    ("occupancy_type", "page.data_mgmt.vocab.occupancy_type"),
+    ("occupancy_nature", "page.data_mgmt.vocab.occupancy_nature"),
+    ("nationality", "page.data_mgmt.vocab.nationality"),
+    ("claim_type", "page.data_mgmt.vocab.claim_type"),
+    ("claim_status", "page.data_mgmt.vocab.claim_status"),
+    ("case_priority", "page.data_mgmt.vocab.case_priority"),
+    ("claim_source", "page.data_mgmt.vocab.claim_source"),
+    ("business_nature", "page.data_mgmt.vocab.business_nature"),
 ]
+
+def _get_vocab_sections():
+    return [(key, tr(tr_key)) for key, tr_key in VOCAB_SECTION_KEYS]
 
 
 class DataManagementPage(QWidget):
@@ -58,7 +63,7 @@ class DataManagementPage(QWidget):
 
     def _setup_ui(self):
         self.setStyleSheet(StyleManager.page_background())
-        self.setLayoutDirection(Qt.RightToLeft)
+        self.setLayoutDirection(get_layout_direction())
 
         main_layout = QVBoxLayout(self)
         main_layout.setContentsMargins(
@@ -74,7 +79,7 @@ class DataManagementPage(QWidget):
 
         # Scroll area
         scroll = QScrollArea()
-        scroll.setLayoutDirection(Qt.RightToLeft)
+        scroll.setLayoutDirection(get_layout_direction())
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QFrame.NoFrame)
         scroll.setStyleSheet(
@@ -83,7 +88,7 @@ class DataManagementPage(QWidget):
         )
 
         scroll_content = QWidget()
-        scroll_content.setLayoutDirection(Qt.RightToLeft)
+        scroll_content.setLayoutDirection(get_layout_direction())
         scroll_content.setStyleSheet("background: transparent;")
         scroll_layout = QVBoxLayout(scroll_content)
         scroll_layout.setContentsMargins(20, 0, 0, 0)  # left margin for scrollbar in RTL
@@ -122,27 +127,27 @@ class DataManagementPage(QWidget):
         title_row = QHBoxLayout()
         title_row.setSpacing(16)
 
-        title = QLabel("إدارة البيانات المرجعية")
-        title.setFont(create_font(
+        self._header_title = QLabel(tr("page.data_mgmt.title"))
+        self._header_title.setFont(create_font(
             size=FontManager.SIZE_TITLE,
             weight=QFont.Bold,
             letter_spacing=0
         ))
-        title.setStyleSheet(StyleManager.label_title())
-        title_row.addWidget(title)
+        self._header_title.setStyleSheet(StyleManager.label_title())
+        title_row.addWidget(self._header_title)
 
         title_row.addStretch()
 
         # "Ready for sync" button
-        sync_btn = QPushButton("  جاهزة للمزامنة")
-        sync_btn.setFixedHeight(36)
-        sync_btn.setCursor(Qt.PointingHandCursor)
-        sync_btn.setFont(create_font(size=FontManager.SIZE_SMALL, weight=QFont.Medium))
+        self._sync_btn = QPushButton("  " + tr("page.data_mgmt.ready_for_sync"))
+        self._sync_btn.setFixedHeight(36)
+        self._sync_btn.setCursor(Qt.PointingHandCursor)
+        self._sync_btn.setFont(create_font(size=FontManager.SIZE_SMALL, weight=QFont.Medium))
         pixmap = Icon.load_pixmap("save", size=14)
         if pixmap and not pixmap.isNull():
             from PyQt5.QtGui import QIcon
-            sync_btn.setIcon(QIcon(pixmap))
-        sync_btn.setStyleSheet(f"""
+            self._sync_btn.setIcon(QIcon(pixmap))
+        self._sync_btn.setStyleSheet(f"""
             QPushButton {{
                 background-color: {Colors.PRIMARY_BLUE};
                 color: white;
@@ -154,7 +159,7 @@ class DataManagementPage(QWidget):
             QPushButton:hover {{ background-color: #2D7BC9; }}
             QPushButton:pressed {{ background-color: #2468B0; }}
         """)
-        title_row.addWidget(sync_btn)
+        title_row.addWidget(self._sync_btn)
 
         layout.addLayout(title_row)
 
@@ -170,20 +175,20 @@ class DataManagementPage(QWidget):
         )
         style = f"color: {Colors.TEXT_SECONDARY}; border: none; background: transparent;"
 
-        part1 = QLabel("إدارة المستخدمين")
-        part1.setFont(subtitle_font)
-        part1.setStyleSheet(style)
-        breadcrumb_layout.addWidget(part1)
+        self._breadcrumb_part1 = QLabel(tr("page.data_mgmt.breadcrumb_users"))
+        self._breadcrumb_part1.setFont(subtitle_font)
+        self._breadcrumb_part1.setStyleSheet(style)
+        breadcrumb_layout.addWidget(self._breadcrumb_part1)
 
         dot = QLabel("•")
         dot.setFont(subtitle_font)
         dot.setStyleSheet(style)
         breadcrumb_layout.addWidget(dot)
 
-        part2 = QLabel("إدارة البيانات المرجعية")
-        part2.setFont(subtitle_font)
-        part2.setStyleSheet(style)
-        breadcrumb_layout.addWidget(part2)
+        self._breadcrumb_part2 = QLabel(tr("page.data_mgmt.title"))
+        self._breadcrumb_part2.setFont(subtitle_font)
+        self._breadcrumb_part2.setStyleSheet(style)
+        breadcrumb_layout.addWidget(self._breadcrumb_part2)
 
         breadcrumb_layout.addStretch()
         layout.addLayout(breadcrumb_layout)
@@ -195,7 +200,7 @@ class DataManagementPage(QWidget):
     def _create_vocabulary_card(self) -> QFrame:
         card = QFrame()
         card.setObjectName("vocabCard")
-        card.setLayoutDirection(Qt.RightToLeft)
+        card.setLayoutDirection(get_layout_direction())
         card.setStyleSheet("""
             QFrame#vocabCard {
                 background-color: white;
@@ -211,14 +216,15 @@ class DataManagementPage(QWidget):
         layout.setSpacing(12)
 
         # Section title
-        section_title = QLabel("إدارة المفردات")
+        self._vocab_section_title = QLabel(tr("page.data_mgmt.vocab_management"))
+        section_title = self._vocab_section_title
         section_title.setFont(create_font(size=FontManager.SIZE_BODY, weight=QFont.Bold))
         section_title.setStyleSheet(f"color: {Colors.TEXT_PRIMARY}; background: transparent;")
         section_title.setAlignment(Qt.AlignLeft)
         layout.addWidget(section_title)
 
         # Accordion sections for each vocabulary
-        for i, (key, title) in enumerate(VOCAB_SECTIONS):
+        for i, (key, title) in enumerate(_get_vocab_sections()):
             expanded = (i == 0)
             section = self._create_vocab_section(key, title, expanded)
             layout.addWidget(section)
@@ -285,11 +291,11 @@ class DataManagementPage(QWidget):
         content_layout.setContentsMargins(16, 8, 16, 12)
         content_layout.setSpacing(6)
 
-        add_btn = QPushButton("اضافة")
+        add_btn = QPushButton(tr("page.data_mgmt.add_term_btn"))
         add_btn.setFixedSize(106, 45)
         add_btn.setCursor(Qt.PointingHandCursor)
         add_btn.setFont(create_font(size=FontManager.SIZE_BODY, weight=QFont.Medium))
-        add_btn.setLayoutDirection(Qt.RightToLeft)
+        add_btn.setLayoutDirection(get_layout_direction())
         pixmap = Icon.load_pixmap("icon", size=16)
         if pixmap and not pixmap.isNull():
             from PyQt5.QtGui import QIcon
@@ -322,7 +328,7 @@ class DataManagementPage(QWidget):
 
     def _create_term_chip(self, term_label: str, code: int, vocab_name: str) -> QFrame:
         chip = QFrame()
-        chip.setLayoutDirection(Qt.RightToLeft)
+        chip.setLayoutDirection(get_layout_direction())
         chip.setFixedSize(150, 45)
         chip.setStyleSheet("""
             QFrame {
@@ -385,8 +391,8 @@ class DataManagementPage(QWidget):
         from ui.components.dialogs.confirmation_dialog import ConfirmationDialog, DialogResult
         result = ConfirmationDialog.confirm(
             parent=self,
-            title="تأكيد الحذف",
-            message="هل أنت متأكد من حذف هذا المصطلح؟"
+            title=tr("dialog.confirm_delete.title"),
+            message=tr("page.data_mgmt.confirm_delete_term")
         )
         if result != DialogResult.YES:
             return
@@ -397,7 +403,7 @@ class DataManagementPage(QWidget):
     def _on_edit_term(self, code: int, current_label: str, vocab_name: str):
         """Edit a vocabulary term label."""
         text, ok = QInputDialog.getText(
-            self, "تعديل مصطلح", "عدّل المصطلح:",
+            self, tr("page.data_mgmt.edit_term_title"), tr("page.data_mgmt.edit_term_prompt"),
             QLineEdit.Normal, current_label
         )
         if not ok or not text.strip() or text.strip() == current_label:
@@ -421,7 +427,7 @@ class DataManagementPage(QWidget):
     def _create_glossary_card(self) -> QFrame:
         card = QFrame()
         card.setObjectName("glossaryCard")
-        card.setLayoutDirection(Qt.RightToLeft)
+        card.setLayoutDirection(get_layout_direction())
         card.setStyleSheet("""
             QFrame#glossaryCard {
                 background-color: white;
@@ -437,7 +443,7 @@ class DataManagementPage(QWidget):
         layout.setSpacing(8)
 
         # Section title
-        section_title = QLabel("المفردات")
+        section_title = QLabel(tr("page.data_mgmt.glossary"))
         section_title.setFont(create_font(size=12, weight=QFont.Bold))
         section_title.setStyleSheet(f"color: {Colors.TEXT_PRIMARY}; background: transparent;")
         layout.addWidget(section_title)
@@ -448,7 +454,7 @@ class DataManagementPage(QWidget):
 
         # Text editor
         self._glossary_editor = QTextEdit()
-        self._glossary_editor.setLayoutDirection(Qt.RightToLeft)
+        self._glossary_editor.setLayoutDirection(get_layout_direction())
         self._glossary_editor.setAcceptRichText(True)
         self._glossary_editor.setFont(create_font(size=FontManager.SIZE_BODY, weight=QFont.Normal))
         self._glossary_editor.setStyleSheet("""
@@ -478,7 +484,7 @@ class DataManagementPage(QWidget):
     def _create_about_card(self) -> QFrame:
         card = QFrame()
         card.setObjectName("aboutCard")
-        card.setLayoutDirection(Qt.RightToLeft)
+        card.setLayoutDirection(get_layout_direction())
         card.setStyleSheet("""
             QFrame#aboutCard {
                 background-color: white;
@@ -494,7 +500,7 @@ class DataManagementPage(QWidget):
         layout.setSpacing(8)
 
         # Section title
-        section_title = QLabel("حول التطبيق")
+        section_title = QLabel(tr("page.data_mgmt.about"))
         section_title.setFont(create_font(size=12, weight=QFont.Bold))
         section_title.setStyleSheet(f"color: {Colors.TEXT_PRIMARY}; background: transparent;")
         layout.addWidget(section_title)
@@ -505,7 +511,7 @@ class DataManagementPage(QWidget):
 
         # Text editor
         self._about_editor = QTextEdit()
-        self._about_editor.setLayoutDirection(Qt.RightToLeft)
+        self._about_editor.setLayoutDirection(get_layout_direction())
         self._about_editor.setAcceptRichText(True)
         self._about_editor.setFont(create_font(size=FontManager.SIZE_BODY, weight=QFont.Normal))
         self._about_editor.setStyleSheet("""
@@ -625,7 +631,7 @@ class DataManagementPage(QWidget):
     def _create_support_card(self) -> QFrame:
         card = QFrame()
         card.setObjectName("supportCard")
-        card.setLayoutDirection(Qt.RightToLeft)
+        card.setLayoutDirection(get_layout_direction())
         card.setStyleSheet("""
             QFrame#supportCard {
                 background-color: white;
@@ -639,7 +645,7 @@ class DataManagementPage(QWidget):
         layout.setSpacing(12)
 
         # Title
-        section_title = QLabel("المساعدة و الدعم")
+        section_title = QLabel(tr("page.data_mgmt.help_support"))
         section_title.setFont(create_font(size=12, weight=QFont.Bold))
         section_title.setStyleSheet(f"color: {Colors.TEXT_PRIMARY}; background: transparent;")
         layout.addWidget(section_title)
@@ -649,9 +655,9 @@ class DataManagementPage(QWidget):
         fields_row.setSpacing(16)
 
         fields = [
-            ("الهاتف الثابت", "09-----------"),
-            ("الايميل", "-----@gmail.com"),
-            ("رقم هاتف اخر", "09-----------"),
+            (tr("page.data_mgmt.landline"), "09-----------"),
+            (tr("page.data_mgmt.email"), "-----@gmail.com"),
+            (tr("page.data_mgmt.alt_phone"), "09-----------"),
         ]
 
         for label_text, placeholder in fields:
@@ -739,7 +745,7 @@ class DataManagementPage(QWidget):
 
     def _on_add_term(self, vocab_name: str):
         text, ok = QInputDialog.getText(
-            self, "إضافة مصطلح", "أدخل المصطلح الجديد:",
+            self, tr("page.data_mgmt.add_term_title"), tr("page.data_mgmt.add_term_prompt"),
             QLineEdit.Normal, ""
         )
         if ok and text.strip():
@@ -787,6 +793,14 @@ class DataManagementPage(QWidget):
             )
         except Exception as e:
             logger.warning(f"Failed to delete term from DB: {e}")
+
+    def update_language(self, is_arabic: bool):
+        self.setLayoutDirection(get_layout_direction())
+        self._header_title.setText(tr("page.data_mgmt.title"))
+        self._sync_btn.setText("  " + tr("page.data_mgmt.ready_for_sync"))
+        self._breadcrumb_part1.setText(tr("page.data_mgmt.breadcrumb_users"))
+        self._breadcrumb_part2.setText(tr("page.data_mgmt.title"))
+        self._vocab_section_title.setText(tr("page.data_mgmt.vocab_management"))
 
     def refresh(self, data=None):
         for vocab_name in self._accordion_contents:

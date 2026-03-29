@@ -21,6 +21,7 @@ from app.config import (
     load_local_settings, save_local_settings,
     get_tile_server_url, get_api_server_url
 )
+from services.translation_manager import tr, get_layout_direction
 
 _DEFAULT_TILE_URL = "http://localhost:5000"
 _DEFAULT_API_SERVER_URL = "http://localhost:8080"
@@ -48,9 +49,9 @@ class _ConnectionWorker(QThread):
                     self._url.rstrip("/") + "/v1/Health",
                     timeout=5, verify=False
                 )
-            self.finished.emit(True, "\u0645\u062a\u0635\u0644")
+            self.finished.emit(True, tr("dialog.server_settings.connected"))
         except Exception:
-            self.finished.emit(False, "\u063a\u064a\u0631 \u0645\u062a\u0635\u0644")
+            self.finished.emit(False, tr("dialog.server_settings.disconnected"))
 
 
 class ServerSettingsDialog(QDialog):
@@ -73,7 +74,7 @@ class ServerSettingsDialog(QDialog):
     # ── UI ──────────────────────────────────────────────────────────
 
     def _setup_ui(self):
-        self.setLayoutDirection(Qt.RightToLeft)
+        self.setLayoutDirection(get_layout_direction())
 
         outer = QVBoxLayout(self)
         outer.setContentsMargins(12, 12, 12, 12)
@@ -81,7 +82,7 @@ class ServerSettingsDialog(QDialog):
 
         container = QFrame()
         container.setObjectName("settingsContainer")
-        container.setLayoutDirection(Qt.RightToLeft)
+        container.setLayoutDirection(get_layout_direction())
         container.setStyleSheet(f"""
             QFrame#settingsContainer {{
                 background-color: #FFFFFF;
@@ -109,7 +110,7 @@ class ServerSettingsDialog(QDialog):
         layout.setSpacing(Spacing.SM)
 
         # ── Title ──
-        title = QLabel("\u0625\u0639\u062f\u0627\u062f\u0627\u062a \u0627\u0644\u0627\u062a\u0635\u0627\u0644")
+        title = QLabel(tr("dialog.server_settings.title"))
         title.setFont(create_font(size=14, weight=FontManager.WEIGHT_BOLD))
         title.setStyleSheet(f"color: {Colors.TEXT_PRIMARY};")
         title.setAlignment(Qt.AlignRight)
@@ -120,8 +121,8 @@ class ServerSettingsDialog(QDialog):
         self._tile_url_input, self._tile_test_btn, self._tile_status = \
             self._build_section(
                 layout,
-                header="\u0633\u064a\u0631\u0641\u0631 \u0627\u0644\u062e\u0631\u064a\u0637\u0629",
-                description="\u0639\u0646\u0648\u0627\u0646 \u0633\u064a\u0631\u0641\u0631 \u0627\u0644\u0628\u0644\u0627\u0637\u0627\u062a (Tile Server)",
+                header=tr("dialog.server_settings.tile_header"),
+                description=tr("dialog.server_settings.tile_description"),
                 value=get_tile_server_url(),
                 placeholder=_DEFAULT_TILE_URL,
                 on_test=lambda: self._start_test(is_tile=True),
@@ -134,8 +135,8 @@ class ServerSettingsDialog(QDialog):
         self._api_url_input, self._api_test_btn, self._api_status = \
             self._build_section(
                 layout,
-                header="\u0633\u064a\u0631\u0641\u0631 \u0627\u0644\u0628\u064a\u0627\u0646\u0627\u062a (Backend)",
-                description="\u0639\u0646\u0648\u0627\u0646 \u0627\u0644\u0633\u064a\u0631\u0641\u0631 \u0628\u062f\u0648\u0646 /api",
+                header=tr("dialog.server_settings.api_header"),
+                description=tr("dialog.server_settings.api_description"),
                 value=get_api_server_url(),
                 placeholder=_DEFAULT_API_SERVER_URL,
                 on_test=lambda: self._start_test(is_tile=False),
@@ -148,17 +149,17 @@ class ServerSettingsDialog(QDialog):
         btn_layout = QHBoxLayout()
         btn_layout.setSpacing(Spacing.SM)
 
-        reset_btn = self._make_btn("\u0627\u0633\u062a\u0639\u0627\u062f\u0629 \u0627\u0644\u0627\u0641\u062a\u0631\u0627\u0636\u064a", "secondary", width=140)
+        reset_btn = self._make_btn(tr("dialog.server_settings.restore_defaults"), "secondary", width=140)
         reset_btn.clicked.connect(self._on_reset)
         btn_layout.addWidget(reset_btn)
 
         btn_layout.addStretch()
 
-        cancel_btn = self._make_btn("\u0625\u0644\u063a\u0627\u0621", "secondary")
+        cancel_btn = self._make_btn(tr("button.cancel"), "secondary")
         cancel_btn.clicked.connect(self.reject)
         btn_layout.addWidget(cancel_btn)
 
-        self._save_btn = self._make_btn("\u062d\u0641\u0638", "primary")
+        self._save_btn = self._make_btn(tr("button.save"), "primary")
         self._save_btn.setEnabled(False)
         self._save_btn.clicked.connect(self._on_save)
         btn_layout.addWidget(self._save_btn)
@@ -192,7 +193,7 @@ class ServerSettingsDialog(QDialog):
         url_input.setStyleSheet(self._input_style())
         row.addWidget(url_input, 1)
 
-        test_btn = self._make_btn("\u0627\u062e\u062a\u0628\u0627\u0631", "secondary", width=80, height=38)
+        test_btn = self._make_btn(tr("dialog.server_settings.test"), "secondary", width=80, height=38)
         test_btn.clicked.connect(on_test)
         row.addWidget(test_btn)
 
@@ -214,18 +215,18 @@ class ServerSettingsDialog(QDialog):
 
         url = url_input.text().strip()
         if not url:
-            status_lbl.setText("\u0623\u062f\u062e\u0644 \u0627\u0644\u0639\u0646\u0648\u0627\u0646")
+            status_lbl.setText(tr("dialog.server_settings.enter_url"))
             status_lbl.setStyleSheet(f"color: {Colors.ERROR};")
             return
 
         parsed = urlparse(url)
         if not parsed.hostname:
-            status_lbl.setText("URL \u063a\u064a\u0631 \u0635\u0627\u0644\u062d")
+            status_lbl.setText(tr("dialog.server_settings.invalid_url"))
             status_lbl.setStyleSheet(f"color: {Colors.ERROR};")
             return
 
         test_btn.setEnabled(False)
-        test_btn.setText("\u062c\u0627\u0631\u064a...")
+        test_btn.setText(tr("dialog.server_settings.testing"))
         status_lbl.setText("")
         url_input.setStyleSheet(self._input_style())
 
@@ -240,10 +241,10 @@ class ServerSettingsDialog(QDialog):
         url_input = self._tile_url_input if is_tile else self._api_url_input
 
         test_btn.setEnabled(True)
-        test_btn.setText("\u0627\u062e\u062a\u0628\u0627\u0631")
+        test_btn.setText(tr("dialog.server_settings.test"))
 
         if success:
-            status_lbl.setText("\u0645\u062a\u0635\u0644 \u2713")
+            status_lbl.setText(tr("dialog.server_settings.connected_ok"))
             status_lbl.setStyleSheet(f"color: {Colors.SUCCESS};")
             url_input.setStyleSheet(self._input_style(border_color=Colors.SUCCESS))
             if is_tile:
@@ -251,7 +252,7 @@ class ServerSettingsDialog(QDialog):
             else:
                 self._api_ok = True
         else:
-            status_lbl.setText("\u063a\u064a\u0631 \u0645\u062a\u0635\u0644 \u2717")
+            status_lbl.setText(tr("dialog.server_settings.disconnected_fail"))
             status_lbl.setStyleSheet(f"color: {Colors.ERROR};")
             url_input.setStyleSheet(self._input_style(border_color=Colors.ERROR))
             if is_tile:

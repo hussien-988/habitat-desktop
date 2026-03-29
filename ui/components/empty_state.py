@@ -8,6 +8,7 @@ from PyQt5.QtGui import QFont, QPainter, QColor
 from ..design_system import Colors
 from ..font_utils import create_font, FontManager
 from ..style_manager import StyleManager
+from services.translation_manager import tr
 
 
 class EmptyState(QWidget):
@@ -15,13 +16,13 @@ class EmptyState(QWidget):
 
     def __init__(self,
                  icon_text: str = "+",
-                 title: str = "لا توجد بيانات بعد",
-                 description: str = "ابدأ بإضافة الحالات لإظهارها هنا",
+                 title: str = None,
+                 description: str = None,
                  parent=None):
         super().__init__(parent)
         self.icon_text = icon_text
-        self.title_text = title
-        self.description_text = description
+        self.title_text = title or tr("component.empty_state.title")
+        self.description_text = description or tr("component.empty_state.description")
         self._setup_ui()
 
     def _setup_ui(self):

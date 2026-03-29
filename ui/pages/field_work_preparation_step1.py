@@ -13,6 +13,7 @@ from PyQt5.QtGui import QIcon, QColor
 from controllers.building_controller import BuildingController
 from services.api_client import get_api_client
 from services.api_worker import ApiWorker
+from services.translation_manager import tr, get_layout_direction
 from ui.components.icon import Icon
 from ui.components.toast import Toast
 from ui.components.wizard_header import WizardHeader
@@ -96,8 +97,8 @@ class BuildingCheckboxItem(QWidget):
         formatted_id = self._format_building_id_static(building.building_id)
         item_text = (
             f"{formatted_id} | "
-            f"النوع: {building.building_type_display} | "
-            f"الحالة: {building.building_status_display}"
+            f"{tr('wizard.step1.type_label')}: {building.building_type_display} | "
+            f"{tr('wizard.step1.status_label')}: {building.building_status_display}"
         )
         text_label = QLabel(item_text)
         text_label.setFont(create_font(size=10, weight=FontManager.WEIGHT_REGULAR))
@@ -174,7 +175,7 @@ class FieldWorkPreparationStep1(QWidget):
 
     def _setup_ui(self):
         """Setup UI - content only (no header/footer)."""
-        self.setLayoutDirection(Qt.RightToLeft)
+        self.setLayoutDirection(get_layout_direction())
 
         # Background
         self.setStyleSheet("background: transparent;")
@@ -205,41 +206,41 @@ class FieldWorkPreparationStep1(QWidget):
         filters_layout = QHBoxLayout()
         filters_layout.setSpacing(12)
 
-        # Filter 1: المدينة (City)
-        filter1_container = self._create_filter_field("المدينة")
+        # Filter 1: City
+        filter1_container, self._filter1_label = self._create_filter_field(tr("filter.step1.city"))
         self.community_combo = QComboBox()
-        self.community_combo.setPlaceholderText("اختر المدينة")
-        self._style_combo(self.community_combo, "اختر المدينة")
+        self.community_combo.setPlaceholderText(tr("filter.step1.select_city"))
+        self._style_combo(self.community_combo, tr("filter.step1.select_city"))
         self.community_combo.currentIndexChanged.connect(self._on_community_changed)
         filter1_container.layout().addWidget(self.community_combo)
         filters_layout.addWidget(filter1_container, 1)
 
-        # Filter 2: الحي (Neighborhood) — cascading from community
-        filter2_container = self._create_filter_field("الحي")
+        # Filter 2: Neighborhood — cascading from community
+        filter2_container, self._filter2_label = self._create_filter_field(tr("filter.step1.neighborhood"))
         self.neighborhood_combo = QComboBox()
-        self.neighborhood_combo.setPlaceholderText("اختر الحي")
-        self._style_combo(self.neighborhood_combo, "اختر الحي")
+        self.neighborhood_combo.setPlaceholderText(tr("filter.step1.select_neighborhood"))
+        self._style_combo(self.neighborhood_combo, tr("filter.step1.select_neighborhood"))
         self.neighborhood_combo.currentIndexChanged.connect(self._on_filter_changed)
         filter2_container.layout().addWidget(self.neighborhood_combo)
         filters_layout.addWidget(filter2_container, 1)
 
-        # Filter 3: حالة التعيين (Assignment Status)
-        filter3_container = self._create_filter_field("حالة التعيين")
+        # Filter 3: Assignment Status
+        filter3_container, self._filter3_label = self._create_filter_field(tr("filter.step1.assignment_status"))
         self.assignment_status_combo = QComboBox()
-        self.assignment_status_combo.setPlaceholderText("حالة التعيين")
-        self._style_combo(self.assignment_status_combo, "حالة التعيين")
-        self.assignment_status_combo.addItem("الكل", None)
-        self.assignment_status_combo.addItem("غير معيّن", "false")
-        self.assignment_status_combo.addItem("معيّن", "true")
+        self.assignment_status_combo.setPlaceholderText(tr("filter.step1.assignment_status"))
+        self._style_combo(self.assignment_status_combo, tr("filter.step1.assignment_status"))
+        self.assignment_status_combo.addItem(tr("filter.step1.all"), None)
+        self.assignment_status_combo.addItem(tr("filter.step1.unassigned"), "false")
+        self.assignment_status_combo.addItem(tr("filter.step1.assigned"), "true")
         self.assignment_status_combo.currentIndexChanged.connect(self._on_filter_changed)
         filter3_container.layout().addWidget(self.assignment_status_combo)
         filters_layout.addWidget(filter3_container, 1)
 
         card_layout.addLayout(filters_layout)
-        search_label = QLabel("رمز البناء")
-        search_label.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
-        search_label.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent;")
-        card_layout.addWidget(search_label)
+        self._search_label = QLabel(tr("wizard.step1.building_code_label"))
+        self._search_label.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
+        self._search_label.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent;")
+        card_layout.addWidget(self._search_label)
         search_bar = QFrame()
         search_bar.setObjectName("searchBar")
         search_bar.setFixedHeight(42)
@@ -281,7 +282,7 @@ class FieldWorkPreparationStep1(QWidget):
 
         # Input
         self.building_search = QLineEdit()
-        self.building_search.setPlaceholderText("ابحث عن رمز البناء ...")
+        self.building_search.setPlaceholderText(tr("wizard.step1.search_building_code"))
         self.building_search.setLayoutDirection(Qt.RightToLeft)
         # Hide suggestions when Enter is pressed
         self.building_search.returnPressed.connect(self._on_search_enter)
@@ -299,10 +300,10 @@ class FieldWorkPreparationStep1(QWidget):
         self.building_search.textChanged.connect(self._on_search_text_changed)
 
         # "بحث على الخريطة" link button
-        map_link_btn = QPushButton("بحث على الخريطة")
-        map_link_btn.setCursor(Qt.PointingHandCursor)
-        map_link_btn.setFlat(True)
-        map_link_btn.setStyleSheet("""
+        self._map_link_btn = QPushButton(tr("wizard.step1.search_on_map"))
+        self._map_link_btn.setCursor(Qt.PointingHandCursor)
+        self._map_link_btn.setFlat(True)
+        self._map_link_btn.setStyleSheet("""
             QPushButton {
                 border: none;
                 background: transparent;
@@ -315,10 +316,10 @@ class FieldWorkPreparationStep1(QWidget):
                 margin-top: 1px;
             }
         """)
-        map_link_btn.clicked.connect(self._on_open_map)
+        self._map_link_btn.clicked.connect(self._on_open_map)
 
         # Assemble search bar
-        sb.addWidget(map_link_btn)
+        sb.addWidget(self._map_link_btn)
         sb.addWidget(self.building_search)
         sb.addWidget(search_icon_btn, 1)
 
@@ -356,7 +357,7 @@ class FieldWorkPreparationStep1(QWidget):
         cards_layout.addSpacing(-27)
 
         # Empty state label (shown when no buildings found)
-        self.empty_label = QLabel("لا يوجد مباني")
+        self.empty_label = QLabel(tr("wizard.step1.no_buildings"))
         self.empty_label.setFixedWidth(1225)
         self.empty_label.setFixedHeight(179)
         self.empty_label.setAlignment(Qt.AlignCenter)
@@ -403,10 +404,10 @@ class FieldWorkPreparationStep1(QWidget):
         header_row = QHBoxLayout()
         header_row.setSpacing(4)
 
-        label_title = QLabel("العناصر المحددة")
-        label_title.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
-        label_title.setStyleSheet("color: #212B36; background: transparent;")
-        header_row.addWidget(label_title)
+        self._selected_items_label = QLabel(tr("wizard.step1.selected_items"))
+        self._selected_items_label.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
+        self._selected_items_label.setStyleSheet("color: #212B36; background: transparent;")
+        header_row.addWidget(self._selected_items_label)
 
         self.selected_count_label = QLabel("0 بناء")
         self.selected_count_label.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
@@ -526,8 +527,8 @@ class FieldWorkPreparationStep1(QWidget):
 
         return footer
 
-    def _create_filter_field(self, label_text: str) -> QFrame:
-        """Create filter field container with label."""
+    def _create_filter_field(self, label_text: str):
+        """Create filter field container with label. Returns (container, label)."""
         container = QFrame()
         container.setStyleSheet("background: transparent; border: none;")
 
@@ -540,7 +541,7 @@ class FieldWorkPreparationStep1(QWidget):
         label.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent;")
         layout.addWidget(label)
 
-        return container
+        return container, label
 
     def _get_down_icon_path(self) -> str:
         """Get absolute path to down.png icon."""
@@ -718,7 +719,7 @@ class FieldWorkPreparationStep1(QWidget):
 
             self.community_combo.blockSignals(True)
             self.community_combo.clear()
-            self.community_combo.addItem("الكل", None)
+            self.community_combo.addItem(tr("wizard.step1.all"), None)
             for code, name_ar in self._all_communities:
                 self.community_combo.addItem(name_ar, code)
             self.community_combo.blockSignals(False)
@@ -735,7 +736,7 @@ class FieldWorkPreparationStep1(QWidget):
             self._all_neighborhoods.sort(key=lambda x: x[1])
 
             self.neighborhood_combo.clear()
-            self.neighborhood_combo.addItem("الكل", None)
+            self.neighborhood_combo.addItem(tr("wizard.step1.all"), None)
             for code, name_ar, _ in self._all_neighborhoods:
                 self.neighborhood_combo.addItem(name_ar, code)
 
@@ -746,7 +747,7 @@ class FieldWorkPreparationStep1(QWidget):
 
         except Exception as e:
             logger.error(f"Error loading filter data from API: {e}", exc_info=True)
-            Toast.show_toast(self, "تعذر تحميل بيانات المباني", Toast.ERROR)
+            Toast.show_toast(self, tr("wizard.step1.buildings_load_failed"), Toast.ERROR)
 
     def _on_community_changed(self, index):
         """Cascade: update neighborhoods based on selected community."""
@@ -754,7 +755,7 @@ class FieldWorkPreparationStep1(QWidget):
 
         self.neighborhood_combo.blockSignals(True)
         self.neighborhood_combo.clear()
-        self.neighborhood_combo.addItem("الكل", None)
+        self.neighborhood_combo.addItem(tr("wizard.step1.all"), None)
 
         if community_code:
             # Filter neighborhoods by community
@@ -814,7 +815,7 @@ class FieldWorkPreparationStep1(QWidget):
 
         # Update header count (confirmed buildings only)
         count = len(self._confirmed_building_ids)
-        self.selected_count_label.setText(f"{count} بناء")
+        self.selected_count_label.setText(f"{count} {tr('wizard.step1.building_unit')}")
 
     def _add_building_to_table(self, building):
         """Add building row to selected buildings table."""
@@ -995,7 +996,7 @@ class FieldWorkPreparationStep1(QWidget):
 
     def _load_buildings_from_api(self):
         """Load buildings from Backend API with current filters (non-blocking)."""
-        self._spinner.show_loading("جاري البحث عن المباني...")
+        self._spinner.show_loading(tr("page.field_step1.searching_buildings"))
 
         filters = self.get_filters()
         has_active = None
@@ -1046,7 +1047,7 @@ class FieldWorkPreparationStep1(QWidget):
         except Exception as e:
             logger.error(f"Failed to process buildings response: {e}", exc_info=True)
             self.buildings_list.clear()
-            Toast.show_toast(self, "تعذر تحميل بيانات المباني", Toast.ERROR)
+            Toast.show_toast(self, tr("wizard.step1.buildings_load_failed"), Toast.ERROR)
         finally:
             self._spinner.hide_loading()
 
@@ -1055,7 +1056,7 @@ class FieldWorkPreparationStep1(QWidget):
         logger.error(f"Failed to load buildings from API: {error_msg}")
         self.buildings_list.clear()
         self._spinner.hide_loading()
-        Toast.show_toast(self, "تعذر تحميل بيانات المباني", Toast.ERROR)
+        Toast.show_toast(self, tr("wizard.step1.buildings_load_failed"), Toast.ERROR)
 
     def _api_dto_to_building(self, dto):
         """Convert API BuildingDto to Building object for UI."""
@@ -1264,4 +1265,33 @@ class FieldWorkPreparationStep1(QWidget):
         self.building_search.blockSignals(False)
 
         self._set_suggestions_visible(False)
+        self._update_selected_card_visibility()
+
+    def update_language(self, is_arabic: bool):
+        """Update all translatable texts when language changes."""
+        self.setLayoutDirection(get_layout_direction())
+
+        # Filter labels
+        self._filter1_label.setText(tr("filter.step1.city"))
+        self._filter2_label.setText(tr("filter.step1.neighborhood"))
+        self._filter3_label.setText(tr("filter.step1.assignment_status"))
+
+        # Combo placeholders
+        self.community_combo.lineEdit().setPlaceholderText(tr("filter.step1.select_city"))
+        self.neighborhood_combo.lineEdit().setPlaceholderText(tr("filter.step1.select_neighborhood"))
+        self.assignment_status_combo.lineEdit().setPlaceholderText(tr("filter.step1.assignment_status"))
+
+        # Assignment status combo items
+        self.assignment_status_combo.setItemText(0, tr("filter.step1.all"))
+        self.assignment_status_combo.setItemText(1, tr("filter.step1.unassigned"))
+        self.assignment_status_combo.setItemText(2, tr("filter.step1.assigned"))
+
+        # Search area
+        self._search_label.setText(tr("wizard.step1.building_code_label"))
+        self.building_search.setPlaceholderText(tr("wizard.step1.search_building_code"))
+        self._map_link_btn.setText(tr("wizard.step1.search_on_map"))
+
+        # Empty state and selected items
+        self.empty_label.setText(tr("wizard.step1.no_buildings"))
+        self._selected_items_label.setText(tr("wizard.step1.selected_items"))
         self._update_selected_card_visibility()

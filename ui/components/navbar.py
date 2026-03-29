@@ -17,7 +17,7 @@ from ..font_utils import create_font, FontManager
 from ..style_manager import StyleManager
 from .logo import LogoWidget
 from .id_badge import IDBadgeWidget
-from services.translation_manager import tr
+from services.translation_manager import tr, get_language
 
 
 class DraggableFrame(QFrame):
@@ -120,6 +120,33 @@ class Navbar(QFrame):
 
         # Spacer (search bar removed — each page has its own filters)
         layout.addSpacerItem(QSpacerItem(40, 20, QSizePolicy.Expanding, QSizePolicy.Minimum))
+
+        # Language toggle button
+        self._lang_btn = QPushButton()
+        self._lang_btn.setObjectName("lang_btn")
+        self._update_lang_display()
+        self._lang_btn.setFixedHeight(30)
+        self._lang_btn.setCursor(QCursor(Qt.PointingHandCursor))
+        self._lang_btn.setFocusPolicy(Qt.NoFocus)
+        self._lang_btn.setStyleSheet("""
+            QPushButton#lang_btn {
+                color: white;
+                background-color: rgba(255, 255, 255, 0.12);
+                border: 1px solid rgba(255, 255, 255, 0.25);
+                border-radius: 6px;
+                padding: 4px 14px;
+                font-size: 12px;
+                font-weight: 600;
+            }
+            QPushButton#lang_btn:hover {
+                background-color: rgba(255, 255, 255, 0.22);
+            }
+            QPushButton#lang_btn:pressed {
+                background-color: rgba(255, 255, 255, 0.30);
+            }
+        """)
+        self._lang_btn.clicked.connect(self._on_language_change_requested)
+        layout.addWidget(self._lang_btn)
 
         # ID Badge - Reusable dropdown component
         self.id_badge = IDBadgeWidget(user_id=self.user_id)
@@ -545,22 +572,31 @@ class Navbar(QFrame):
         if hasattr(self, 'id_badge'):
             self.id_badge.set_user_id(user_id)
 
+    def _update_lang_display(self):
+        """Update language button text to show the opposite language."""
+        current = get_language()
+        self._lang_btn.setText("English" if current == "ar" else "عربي")
+
     def update_language(self, is_arabic: bool):
         """Update all translatable texts when language changes."""
+        # Update language toggle button
+        self._update_lang_display()
+
         # Update tab titles
         for i, key in enumerate(self._tab_keys):
             if i < len(self.tab_buttons):
                 self.tab_buttons[i].setText(tr(key))
 
-        # Update search placeholder based on current search mode
-        mode = getattr(self, 'search_mode', 'default')
-        placeholder_map = {
-            'default': "navbar.search.default",
-            'name': "navbar.search.by_name",
-            'claim_id': "navbar.search.by_claim_id",
-            'building': "navbar.search.by_building",
-        }
-        self.search_input.setPlaceholderText(tr(placeholder_map.get(mode, "navbar.search.default")))
+        # Update search placeholder if search bar exists
+        if hasattr(self, 'search_input'):
+            mode = getattr(self, 'search_mode', 'default')
+            placeholder_map = {
+                'default': "navbar.search.default",
+                'name': "navbar.search.by_name",
+                'claim_id': "navbar.search.by_claim_id",
+                'building': "navbar.search.by_building",
+            }
+            self.search_input.setPlaceholderText(tr(placeholder_map.get(mode, "navbar.search.default")))
 
         # Update ID badge menu
         if hasattr(self, 'id_badge'):

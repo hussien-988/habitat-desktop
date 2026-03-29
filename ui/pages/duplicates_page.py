@@ -20,37 +20,61 @@ from ui.font_utils import create_font, FontManager
 from ui.style_manager import StyleManager
 from ui.design_system import Colors, PageDimensions
 from ui.components.toast import Toast
+from services.translation_manager import tr, get_layout_direction
 from utils.i18n import I18n
 from utils.logger import get_logger
 
 logger = get_logger(__name__)
 
-# Status display config
-_STATUS_CONFIG = {
-    "Pending": {"label": "معلق", "color": "#F59E0B", "bg": "#FEF3C7"},
-    "PendingReview": {"label": "بانتظار المراجعة", "color": "#F59E0B", "bg": "#FEF3C7"},
-    "InReview": {"label": "قيد المراجعة", "color": "#3B82F6", "bg": "#DBEAFE"},
-    "Resolved": {"label": "تم الحل", "color": "#10B981", "bg": "#D1FAE5"},
-    "Escalated": {"label": "مصعّد", "color": "#EF4444", "bg": "#FEE2E2"},
-    "AutoResolved": {"label": "حل تلقائي", "color": "#8B5CF6", "bg": "#EDE9FE"},
+# Status display config (colors/bg are static, labels use tr())
+_STATUS_COLORS = {
+    "Pending": {"color": "#F59E0B", "bg": "#FEF3C7"},
+    "PendingReview": {"color": "#F59E0B", "bg": "#FEF3C7"},
+    "InReview": {"color": "#3B82F6", "bg": "#DBEAFE"},
+    "Resolved": {"color": "#10B981", "bg": "#D1FAE5"},
+    "Escalated": {"color": "#EF4444", "bg": "#FEE2E2"},
+    "AutoResolved": {"color": "#8B5CF6", "bg": "#EDE9FE"},
+}
+_STATUS_LABEL_KEYS = {
+    "Pending": "page.duplicates.status_pending",
+    "PendingReview": "page.duplicates.status_pending_review",
+    "InReview": "page.duplicates.status_in_review",
+    "Resolved": "page.duplicates.status_resolved",
+    "Escalated": "page.duplicates.status_escalated",
+    "AutoResolved": "page.duplicates.status_auto_resolved",
 }
 
-_PRIORITY_CONFIG = {
-    "Critical": {"label": "حرج", "color": "#DC2626", "bg": "#FEE2E2"},
-    "High": {"label": "عالي", "color": "#EA580C", "bg": "#FFEDD5"},
-    "Medium": {"label": "متوسط", "color": "#CA8A04", "bg": "#FEF9C3"},
-    "Low": {"label": "منخفض", "color": "#16A34A", "bg": "#DCFCE7"},
+_PRIORITY_COLORS = {
+    "Critical": {"color": "#DC2626", "bg": "#FEE2E2"},
+    "High": {"color": "#EA580C", "bg": "#FFEDD5"},
+    "Medium": {"color": "#CA8A04", "bg": "#FEF9C3"},
+    "Low": {"color": "#16A34A", "bg": "#DCFCE7"},
+}
+_PRIORITY_LABEL_KEYS = {
+    "Critical": "page.duplicates.priority_critical",
+    "High": "page.duplicates.priority_high",
+    "Medium": "page.duplicates.priority_medium",
+    "Low": "page.duplicates.priority_low",
 }
 
-_TYPE_CONFIG = {
-    "PropertyDuplicate": {"label": "تكرار عقاري", "icon": "🏠"},
-    "PersonDuplicate": {"label": "تكرار أشخاص", "icon": "👤"},
+_TYPE_LABEL_KEYS = {
+    "PropertyDuplicate": "page.duplicates.type_property",
+    "PersonDuplicate": "page.duplicates.type_person",
 }
 
-# Case-insensitive lookup indexes
-_STATUS_LOOKUP = {k.lower(): v for k, v in _STATUS_CONFIG.items()}
-_PRIORITY_LOOKUP = {k.lower(): v for k, v in _PRIORITY_CONFIG.items()}
-_TYPE_LOOKUP = {k.lower(): v for k, v in _TYPE_CONFIG.items()}
+def _get_status_config(key):
+    colors = _STATUS_COLORS.get(key, {"color": "#6B7280", "bg": "#F3F4F6"})
+    label_key = _STATUS_LABEL_KEYS.get(key, "")
+    return {"label": tr(label_key) if label_key else key, "color": colors["color"], "bg": colors["bg"]}
+
+def _get_priority_config(key):
+    colors = _PRIORITY_COLORS.get(key, {"color": "#6B7280", "bg": "#F3F4F6"})
+    label_key = _PRIORITY_LABEL_KEYS.get(key, "")
+    return {"label": tr(label_key) if label_key else key, "color": colors["color"]}
+
+def _get_type_config(key):
+    label_key = _TYPE_LABEL_KEYS.get(key, "")
+    return {"label": tr(label_key) if label_key else key}
 
 RADIO_STYLE = f"""
     QRadioButton {{
@@ -351,11 +375,11 @@ class DuplicatesPage(QWidget):
         header = QHBoxLayout()
         header.setContentsMargins(0, 0, 0, 0)
 
-        title = QLabel("التكرارات والتعارضات")
+        title = QLabel(tr("page.duplicates.title"))
         title.setFont(create_font(size=FontManager.SIZE_TITLE, weight=FontManager.WEIGHT_SEMIBOLD))
         title.setStyleSheet(f"color: {Colors.PAGE_TITLE}; background: transparent; border: none;")
 
-        self._refresh_btn = QPushButton("تحديث")
+        self._refresh_btn = QPushButton(tr("page.duplicates.refresh"))
         self._refresh_btn.setCursor(Qt.PointingHandCursor)
         self._refresh_btn.setFont(create_font(size=FontManager.SIZE_BODY, weight=FontManager.WEIGHT_SEMIBOLD))
         self._refresh_btn.setFixedSize(90, 42)
@@ -402,12 +426,12 @@ class DuplicatesPage(QWidget):
         icon_lbl.setStyleSheet(f"color: {Colors.PRIMARY_BLUE}; background: transparent; border: none;")
         layout.addWidget(icon_lbl)
 
-        msg_lbl = QLabel("تم الانتقال من صفحة الاستيراد — قم بحل التكرارات ثم عُد لمتابعة الاستيراد")
+        msg_lbl = QLabel(tr("page.duplicates.import_banner_msg"))
         msg_lbl.setFont(create_font(size=FontManager.SIZE_BODY, weight=FontManager.WEIGHT_SEMIBOLD))
         msg_lbl.setStyleSheet(f"color: {Colors.PRIMARY_BLUE}; background: transparent; border: none;")
         layout.addWidget(msg_lbl, 1)
 
-        btn_return = QPushButton("العودة للاستيراد")
+        btn_return = QPushButton(tr("page.duplicates.return_to_import"))
         btn_return.setCursor(Qt.PointingHandCursor)
         btn_return.setFont(create_font(size=FontManager.SIZE_BODY, weight=FontManager.WEIGHT_SEMIBOLD))
         btn_return.setFixedSize(150, 36)
@@ -440,11 +464,11 @@ class DuplicatesPage(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(12)
 
-        self._card_total = _GlowCard("إجمالي التعارضات", 0, Colors.PRIMARY_BLUE)
-        self._card_property = _GlowCard("تعارضات المقاسم", 0, "#F59E0B")
-        self._card_person = _GlowCard("تكرار الأشخاص", 0, "#8B5CF6")
-        self._card_resolved = _GlowCard("تم الحل", 0, "#10B981")
-        self._card_overdue = _GlowCard("متأخر", 0, "#DC2626")
+        self._card_total = _GlowCard(tr("page.duplicates.card_total"), 0, Colors.PRIMARY_BLUE)
+        self._card_property = _GlowCard(tr("page.duplicates.card_property"), 0, "#F59E0B")
+        self._card_person = _GlowCard(tr("page.duplicates.card_person"), 0, "#8B5CF6")
+        self._card_resolved = _GlowCard(tr("page.duplicates.card_resolved"), 0, "#10B981")
+        self._card_overdue = _GlowCard(tr("page.duplicates.card_overdue"), 0, "#DC2626")
 
         self._summary_cards = [self._card_total, self._card_property, self._card_person,
                                self._card_resolved, self._card_overdue]
@@ -473,15 +497,15 @@ class DuplicatesPage(QWidget):
 
         form_style = StyleManager.form_input()
 
-        filter_label = QLabel("تصفية:")
+        filter_label = QLabel(tr("page.duplicates.filter_label"))
         filter_label.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
         filter_label.setStyleSheet(f"color: {Colors.WIZARD_SUBTITLE}; background: transparent; border: none;")
         layout.addWidget(filter_label)
 
         self._type_filter = QComboBox()
-        self._type_filter.addItem("جميع الأنواع", "")
-        self._type_filter.addItem("تعارضات المقاسم", "PropertyDuplicate")
-        self._type_filter.addItem("تكرار الأشخاص", "PersonDuplicate")
+        self._type_filter.addItem(tr("page.duplicates.all_types"), "")
+        self._type_filter.addItem(tr("page.duplicates.card_property"), "PropertyDuplicate")
+        self._type_filter.addItem(tr("page.duplicates.card_person"), "PersonDuplicate")
         self._type_filter.setStyleSheet(form_style)
         self._type_filter.setMinimumWidth(130)
         self._type_filter.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
@@ -489,12 +513,12 @@ class DuplicatesPage(QWidget):
         layout.addWidget(self._type_filter)
 
         self._status_filter = QComboBox()
-        self._status_filter.addItem("جميع الحالات", "")
-        self._status_filter.addItem("معلق", "Pending")
-        self._status_filter.addItem("بانتظار المراجعة", "PendingReview")
-        self._status_filter.addItem("قيد المراجعة", "InReview")
-        self._status_filter.addItem("تم الحل", "Resolved")
-        self._status_filter.addItem("حل تلقائي", "AutoResolved")
+        self._status_filter.addItem(tr("page.duplicates.all_statuses"), "")
+        self._status_filter.addItem(tr("page.duplicates.status_pending"), "Pending")
+        self._status_filter.addItem(tr("page.duplicates.status_pending_review"), "PendingReview")
+        self._status_filter.addItem(tr("page.duplicates.status_in_review"), "InReview")
+        self._status_filter.addItem(tr("page.duplicates.status_resolved"), "Resolved")
+        self._status_filter.addItem(tr("page.duplicates.status_auto_resolved"), "AutoResolved")
         self._status_filter.setStyleSheet(form_style)
         self._status_filter.setMinimumWidth(130)
         self._status_filter.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
@@ -502,11 +526,11 @@ class DuplicatesPage(QWidget):
         layout.addWidget(self._status_filter)
 
         self._priority_filter = QComboBox()
-        self._priority_filter.addItem("جميع الأولويات", "")
-        self._priority_filter.addItem("حرج", "Critical")
-        self._priority_filter.addItem("عالي", "High")
-        self._priority_filter.addItem("متوسط", "Medium")
-        self._priority_filter.addItem("منخفض", "Low")
+        self._priority_filter.addItem(tr("page.duplicates.all_priorities"), "")
+        self._priority_filter.addItem(tr("page.duplicates.priority_critical"), "Critical")
+        self._priority_filter.addItem(tr("page.duplicates.priority_high"), "High")
+        self._priority_filter.addItem(tr("page.duplicates.priority_medium"), "Medium")
+        self._priority_filter.addItem(tr("page.duplicates.priority_low"), "Low")
         self._priority_filter.setStyleSheet(form_style)
         self._priority_filter.setMinimumWidth(130)
         self._priority_filter.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
@@ -579,14 +603,14 @@ class DuplicatesPage(QWidget):
         self._table.setColumnCount(8)
         self._table.setRowCount(11)
         self._table.setHorizontalHeaderLabels([
-            "رقم التعارض",
-            "النوع",
-            "السجل الأول",
-            "السجل الثاني",
-            "نسبة التطابق",
-            "الأولوية",
-            "الحالة",
-            "التاريخ",
+            tr("page.duplicates.col_conflict_number"),
+            tr("page.duplicates.col_type"),
+            tr("page.duplicates.col_first_record"),
+            tr("page.duplicates.col_second_record"),
+            tr("page.duplicates.col_match_score"),
+            tr("page.duplicates.col_priority"),
+            tr("page.duplicates.col_status"),
+            tr("page.duplicates.col_date"),
         ])
         self._table.verticalHeader().setVisible(False)
         self._table.setSelectionMode(QAbstractItemView.SingleSelection)
@@ -651,7 +675,7 @@ class DuplicatesPage(QWidget):
         card_layout.addWidget(self._table)
 
         # Empty state
-        self._empty_label = QLabel("لا توجد تعارضات حالياً")
+        self._empty_label = QLabel(tr("page.duplicates.no_conflicts"))
         self._empty_label.setAlignment(Qt.AlignCenter)
         self._empty_label.setFont(create_font(size=12, weight=FontManager.WEIGHT_SEMIBOLD))
         self._empty_label.setStyleSheet("""
@@ -695,7 +719,7 @@ class DuplicatesPage(QWidget):
             }
         """
 
-        self._prev_btn = QPushButton("السابق")
+        self._prev_btn = QPushButton(tr("page.duplicates.previous"))
         self._prev_btn.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
         self._prev_btn.setCursor(Qt.PointingHandCursor)
         self._prev_btn.setFixedHeight(36)
@@ -707,7 +731,7 @@ class DuplicatesPage(QWidget):
         self._page_label.setAlignment(Qt.AlignCenter)
         self._page_label.setStyleSheet("color: #637381; font-size: 10pt; background: transparent; border: none;")
 
-        self._next_btn = QPushButton("التالي")
+        self._next_btn = QPushButton(tr("page.duplicates.next"))
         self._next_btn.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
         self._next_btn.setCursor(Qt.PointingHandCursor)
         self._next_btn.setFixedHeight(36)
@@ -719,7 +743,7 @@ class DuplicatesPage(QWidget):
         footer_layout.addWidget(self._next_btn)
         footer_layout.addStretch()
 
-        self._count_label = QLabel("عرض 0 من 0")
+        self._count_label = QLabel(tr("page.duplicates.showing_count", shown=0, total=0))
         self._count_label.setStyleSheet("color: #637381; font-size: 10pt; background: transparent; border: none;")
         footer_layout.addWidget(self._count_label)
 
@@ -752,7 +776,7 @@ class DuplicatesPage(QWidget):
 
         # Title row with conflict info
         title_row = QHBoxLayout()
-        self._resolution_title = QLabel("إجراء الحل")
+        self._resolution_title = QLabel(tr("page.duplicates.resolution_action"))
         self._resolution_title.setFont(create_font(size=14, weight=FontManager.WEIGHT_BOLD))
         self._resolution_title.setStyleSheet(f"color: {Colors.PAGE_TITLE}; background: transparent; border: none;")
 
@@ -760,7 +784,7 @@ class DuplicatesPage(QWidget):
         self._conflict_info_label.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
         self._conflict_info_label.setStyleSheet(f"color: {Colors.WIZARD_SUBTITLE}; background: transparent; border: none;")
 
-        self._view_details_btn = QPushButton("عرض التفاصيل")
+        self._view_details_btn = QPushButton(tr("page.duplicates.view_details"))
         self._view_details_btn.setCursor(Qt.PointingHandCursor)
         self._view_details_btn.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
         self._view_details_btn.setStyleSheet(f"""
@@ -800,7 +824,7 @@ class DuplicatesPage(QWidget):
         comp_layout.setSpacing(20)
 
         # Record A
-        self._record_a_frame = self._build_record_preview("السجل الأول")
+        self._record_a_frame = self._build_record_preview(tr("page.duplicates.col_first_record"))
         comp_layout.addWidget(self._record_a_frame, 1)
 
         # VS divider
@@ -818,7 +842,7 @@ class DuplicatesPage(QWidget):
         comp_layout.addWidget(vs_label)
 
         # Record B
-        self._record_b_frame = self._build_record_preview("السجل الثاني")
+        self._record_b_frame = self._build_record_preview(tr("page.duplicates.col_second_record"))
         comp_layout.addWidget(self._record_b_frame, 1)
 
         card_layout.addWidget(self._comparison_frame)
@@ -829,8 +853,8 @@ class DuplicatesPage(QWidget):
         options_layout.setSpacing(16)
 
         resolution_options = [
-            ("دمج السجلات", "merge", Colors.PRIMARY_BLUE),
-            ("إبقاء منفصل", "keep_separate", "#10B981"),
+            (tr("page.duplicates.merge_records"), "merge", Colors.PRIMARY_BLUE),
+            (tr("page.duplicates.keep_separate"), "keep_separate", "#10B981"),
         ]
 
         for idx, (label, value, color) in enumerate(resolution_options):
@@ -848,7 +872,7 @@ class DuplicatesPage(QWidget):
         options_layout.addStretch()
 
         # Master record selector (shown for merge)
-        self._master_label = QLabel("السجل الرئيسي:")
+        self._master_label = QLabel(tr("page.duplicates.master_record"))
         self._master_label.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
         self._master_label.setStyleSheet(f"color: {Colors.WIZARD_SUBTITLE}; background: transparent; border: none;")
 
@@ -874,13 +898,13 @@ class DuplicatesPage(QWidget):
         self._resolution_group.buttonClicked.connect(self._on_resolution_type_changed)
 
         # Justification
-        just_label = QLabel("مبرر القرار (مطلوب)")
+        just_label = QLabel(tr("page.duplicates.justification_label"))
         just_label.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
         just_label.setStyleSheet(f"color: {Colors.WIZARD_SUBTITLE}; background: transparent; border: none;")
         card_layout.addWidget(just_label)
 
         self._justification_edit = QTextEdit()
-        self._justification_edit.setPlaceholderText("أدخل سبب قرار الحل...")
+        self._justification_edit.setPlaceholderText(tr("page.duplicates.justification_placeholder"))
         self._justification_edit.setFixedHeight(72)
         self._justification_edit.setFont(create_font(size=9, weight=FontManager.WEIGHT_REGULAR))
         self._justification_edit.setStyleSheet(f"""
@@ -902,7 +926,7 @@ class DuplicatesPage(QWidget):
         btn_layout = QHBoxLayout()
         btn_layout.addStretch()
 
-        self._action_btn = QPushButton("تنفيذ القرار")
+        self._action_btn = QPushButton(tr("page.duplicates.execute_action"))
         self._action_btn.setCursor(Qt.PointingHandCursor)
         self._action_btn.setFont(create_font(size=11, weight=FontManager.WEIGHT_SEMIBOLD))
         self._action_btn.setFixedSize(160, 44)
@@ -992,7 +1016,7 @@ class DuplicatesPage(QWidget):
             page_size=self._page_size,
             filters=self._get_active_filters(),
         )
-        self._spinner.show_loading("جاري تحميل التعارضات...")
+        self._spinner.show_loading(tr("page.duplicates.loading_conflicts"))
         self._worker.finished.connect(self._on_load_finished)
         self._worker.error.connect(self._on_load_error)
         self._worker.start()
@@ -1032,7 +1056,7 @@ class DuplicatesPage(QWidget):
         else:
             self._conflicts = all_items
 
-        self._count_label.setText(f"عرض {len(self._conflicts)} من {total_count}")
+        self._count_label.setText(tr("page.duplicates.showing_count", shown=len(self._conflicts), total=total_count))
 
         self._populate_table()
         self._update_pagination()
@@ -1046,7 +1070,7 @@ class DuplicatesPage(QWidget):
 
         self._conflicts = []
         self._populate_table()
-        Toast.show_toast(self, f"فشل تحميل التعارضات: {error_msg}", Toast.ERROR)
+        Toast.show_toast(self, tr("page.duplicates.load_failed", error=error_msg), Toast.ERROR)
         logger.error(f"Conflict load error: {error_msg}")
 
     # Table Population
@@ -1077,8 +1101,8 @@ class DuplicatesPage(QWidget):
 
             # Type
             ctype = conflict.get("conflictType", "")
-            type_cfg = _TYPE_LOOKUP.get(ctype.lower(), {"label": ctype, "icon": ""}) if ctype else {"label": "-", "icon": ""}
-            type_item = QTableWidgetItem(f"{type_cfg['icon']} {type_cfg['label']}")
+            type_cfg = _get_type_config(ctype) if ctype else {"label": "-"}
+            type_item = QTableWidgetItem(type_cfg['label'])
             type_item.setTextAlignment(Qt.AlignCenter)
             type_item.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
             self._table.setItem(row_idx, 1, type_item)
@@ -1110,7 +1134,7 @@ class DuplicatesPage(QWidget):
 
             # Priority
             priority = conflict.get("priority", "Medium")
-            pri_cfg = _PRIORITY_LOOKUP.get(priority.lower(), {"label": priority, "color": "#6B7280"}) if priority else {"label": "-", "color": "#6B7280"}
+            pri_cfg = _get_priority_config(priority) if priority else {"label": "-", "color": "#6B7280"}
             pri_item = QTableWidgetItem(pri_cfg["label"])
             pri_item.setTextAlignment(Qt.AlignCenter)
             pri_item.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
@@ -1119,7 +1143,7 @@ class DuplicatesPage(QWidget):
 
             # Status
             status = conflict.get("status", "Pending")
-            st_cfg = _STATUS_LOOKUP.get(status.lower(), {"label": status, "color": "#6B7280"}) if status else {"label": "-", "color": "#6B7280"}
+            st_cfg = _get_status_config(status) if status else {"label": "-", "color": "#6B7280"}
             st_item = QTableWidgetItem(st_cfg["label"])
             st_item.setTextAlignment(Qt.AlignCenter)
             st_item.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
@@ -1175,16 +1199,16 @@ class DuplicatesPage(QWidget):
         if a_id:
             a_id.setText(str(first_id))
         if a_desc:
-            a_desc.setText(f"معرف: {conflict.get('firstEntityId', '-')}")
+            a_desc.setText(tr("page.duplicates.identifier", id=conflict.get('firstEntityId', '-')))
         if b_id:
             b_id.setText(str(second_id))
         if b_desc:
-            b_desc.setText(f"معرف: {conflict.get('secondEntityId', '-')}")
+            b_desc.setText(tr("page.duplicates.identifier", id=conflict.get('secondEntityId', '-')))
 
         # Update master record combo
         self._master_combo.clear()
-        self._master_combo.addItem(f"السجل الأول: {first_id}", conflict.get("firstEntityId", ""))
-        self._master_combo.addItem(f"السجل الثاني: {second_id}", conflict.get("secondEntityId", ""))
+        self._master_combo.addItem(tr("page.duplicates.first_record_id", id=first_id), conflict.get("firstEntityId", ""))
+        self._master_combo.addItem(tr("page.duplicates.second_record_id", id=second_id), conflict.get("secondEntityId", ""))
 
         # Reset justification
         self._justification_edit.clear()
@@ -1203,17 +1227,17 @@ class DuplicatesPage(QWidget):
 
     def _on_action_clicked(self):
         if self._selected_conflict_idx < 0 or self._selected_conflict_idx >= len(self._conflicts):
-            Toast.show_toast(self, "يرجى اختيار تعارض من القائمة", Toast.WARNING)
+            Toast.show_toast(self, tr("page.duplicates.select_conflict"), Toast.WARNING)
             return
 
         justification = self._justification_edit.toPlainText().strip()
         if not justification:
-            Toast.show_toast(self, "يرجى إدخال مبرر القرار", Toast.WARNING)
+            Toast.show_toast(self, tr("page.duplicates.enter_justification"), Toast.WARNING)
             return
 
         selected_radio = self._resolution_group.checkedButton()
         if not selected_radio:
-            Toast.show_toast(self, "يرجى اختيار نوع الإجراء", Toast.WARNING)
+            Toast.show_toast(self, tr("page.duplicates.select_action_type"), Toast.WARNING)
             return
 
         resolution_type = selected_radio.property("resolution_type")
@@ -1221,16 +1245,16 @@ class DuplicatesPage(QWidget):
         conflict_id = conflict.get("id", "")
 
         action_labels = {
-            "merge": "دمج السجلات",
-            "keep_separate": "إبقاء السجلات منفصلة",
+            "merge": tr("page.duplicates.merge_records"),
+            "keep_separate": tr("page.duplicates.keep_records_separate"),
         }
-        action_label = action_labels.get(resolution_type, "تنفيذ الإجراء")
+        action_label = action_labels.get(resolution_type, tr("page.duplicates.execute_action"))
 
         from ui.components.dialogs.confirmation_dialog import ConfirmationDialog, DialogResult
         result = ConfirmationDialog.confirm(
             parent=self,
-            title="تأكيد الإجراء",
-            message=f"هل أنت متأكد من {action_label}؟\nلا يمكن التراجع عن هذا الإجراء."
+            title=tr("page.duplicates.confirm_action_title"),
+            message=tr("page.duplicates.confirm_action_msg", action=action_label)
         )
         if result != DialogResult.YES:
             return
@@ -1239,7 +1263,7 @@ class DuplicatesPage(QWidget):
         if resolution_type == "merge":
             master_id = self._master_combo.currentData()
             if not master_id:
-                Toast.show_toast(self, "يرجى اختيار السجل الأساسي", Toast.WARNING)
+                Toast.show_toast(self, tr("page.duplicates.select_master_record"), Toast.WARNING)
                 return
 
         self._action_btn.setEnabled(False)
@@ -1255,14 +1279,14 @@ class DuplicatesPage(QWidget):
         self._action_btn.setEnabled(True)
         if success:
             self._justification_edit.clear()
-            Toast.show_toast(self, "تم تنفيذ الإجراء بنجاح", Toast.SUCCESS)
+            Toast.show_toast(self, tr("page.duplicates.action_success"), Toast.SUCCESS)
             self._load_conflicts()
         else:
-            Toast.show_toast(self, "فشل تنفيذ الإجراء", Toast.ERROR)
+            Toast.show_toast(self, tr("page.duplicates.action_failed"), Toast.ERROR)
 
     def _on_resolution_error(self, error_msg: str):
         self._action_btn.setEnabled(True)
-        Toast.show_toast(self, f"فشل تنفيذ الإجراء: {error_msg}", Toast.ERROR)
+        Toast.show_toast(self, tr("page.duplicates.action_failed_detail", error=error_msg), Toast.ERROR)
 
     def _on_view_details(self):
         if self._selected_conflict_idx < 0:

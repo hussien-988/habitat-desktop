@@ -17,6 +17,7 @@ from services.postgis_service import PostGISService, SQLiteSpatialService
 from models.building import Building
 from repositories.database import Database
 from utils.logger import get_logger
+from services.translation_manager import tr
 
 logger = get_logger(__name__)
 
@@ -54,17 +55,14 @@ class PolygonBuildingSelectorDialog(QDialog):
 
     def _setup_ui(self):
         """Setup the dialog UI."""
-        self.setWindowTitle("تحديد المباني بالمضلع - Polygon Building Selection")
+        self.setWindowTitle(tr("dialog.polygon_selector.title"))
         self.setMinimumSize(1000, 700)
         self.setLayoutDirection(Qt.RightToLeft)
 
         main_layout = QVBoxLayout(self)
         main_layout.setSpacing(12)
         main_layout.setContentsMargins(16, 16, 16, 16)
-        instructions = QLabel(
-            "ارسم مضلعاً على الخريطة لتحديد المباني داخل المنطقة\n"
-            "Draw a polygon on the map to select buildings within the area"
-        )
+        instructions = QLabel(tr("dialog.polygon_selector.instructions"))
         instructions.setStyleSheet("""
             QLabel {
                 font-family: 'IBM Plex Sans Arabic';
@@ -78,7 +76,7 @@ class PolygonBuildingSelectorDialog(QDialog):
         """)
         instructions.setAlignment(Qt.AlignCenter)
         main_layout.addWidget(instructions)
-        editor_group = QGroupBox("محرر المضلع - Polygon Editor")
+        editor_group = QGroupBox(tr("dialog.polygon_selector.polygon_editor"))
         editor_group.setStyleSheet("""
             QGroupBox {
                 font-family: 'IBM Plex Sans Arabic';
@@ -107,7 +105,7 @@ class PolygonBuildingSelectorDialog(QDialog):
         editor_layout.addWidget(self.polygon_editor)
 
         main_layout.addWidget(editor_group)
-        buildings_group = QGroupBox("المباني المحددة - Selected Buildings")
+        buildings_group = QGroupBox(tr("dialog.polygon_selector.selected_buildings"))
         buildings_group.setStyleSheet("""
             QGroupBox {
                 font-family: 'IBM Plex Sans Arabic';
@@ -131,7 +129,7 @@ class PolygonBuildingSelectorDialog(QDialog):
         buildings_layout.setContentsMargins(8, 8, 8, 8)
 
         # Status label
-        self.status_label = QLabel("لم يتم رسم مضلع بعد - No polygon drawn yet")
+        self.status_label = QLabel(tr("dialog.polygon_selector.no_polygon_yet"))
         self.status_label.setStyleSheet("""
             QLabel {
                 font-family: 'IBM Plex Sans Arabic';
@@ -168,7 +166,7 @@ class PolygonBuildingSelectorDialog(QDialog):
         buttons_layout = QHBoxLayout()
         buttons_layout.setSpacing(12)
 
-        self.select_btn = QPushButton("✓ تحديد المباني - Select Buildings")
+        self.select_btn = QPushButton(tr("dialog.polygon_selector.select_buildings_btn"))
         self.select_btn.setEnabled(False)
         self.select_btn.setMinimumHeight(40)
         self.select_btn.setStyleSheet("""
@@ -192,7 +190,7 @@ class PolygonBuildingSelectorDialog(QDialog):
         """)
         self.select_btn.clicked.connect(self.accept)
 
-        cancel_btn = QPushButton("✕ إلغاء - Cancel")
+        cancel_btn = QPushButton(tr("button.cancel"))
         cancel_btn.setMinimumHeight(40)
         cancel_btn.setStyleSheet("""
             QPushButton {
@@ -250,7 +248,7 @@ class PolygonBuildingSelectorDialog(QDialog):
 
             if not validation_result.is_valid:
                 error_msg = "\n".join(validation_result.errors)
-                self.status_label.setText(f"❌ مضلع غير صالح: {error_msg}")
+                self.status_label.setText(f"{tr('dialog.polygon_selector.invalid_polygon')}: {error_msg}")
                 self.status_label.setStyleSheet("QLabel { color: #DC2626; }")
                 self._clear_buildings()
                 return
@@ -263,7 +261,7 @@ class PolygonBuildingSelectorDialog(QDialog):
 
         except Exception as e:
             logger.error(f"Error processing polygon: {e}", exc_info=True)
-            self.status_label.setText(f"❌ خطأ: {str(e)}")
+            self.status_label.setText(f"{tr('dialog.map.error_title')}: {str(e)}")
             self._clear_buildings()
 
     @pyqtSlot(float)
@@ -406,14 +404,14 @@ class PolygonBuildingSelectorDialog(QDialog):
         self.selected_buildings = buildings
 
         if not buildings:
-            self.status_label.setText("⚠️ لا توجد مباني في المنطقة المحددة")
+            self.status_label.setText(tr("dialog.polygon_selector.no_buildings_in_area"))
             self.status_label.setStyleSheet("QLabel { color: #F59E0B; }")
             self.select_btn.setEnabled(False)
             return
 
         # Update status
         count = len(buildings)
-        self.status_label.setText(f"✓ تم العثور على {count} مبنى في المنطقة")
+        self.status_label.setText(tr("dialog.polygon_selector.found_buildings_in_area", count=count))
         self.status_label.setStyleSheet("QLabel { color: #10B981; }")
         self.select_btn.setEnabled(True)
 
@@ -421,8 +419,8 @@ class PolygonBuildingSelectorDialog(QDialog):
         for building in buildings:
             item_text = (
                 f"🏢 {building.building_id} | "
-                f"النوع: {building.building_type_display} | "
-                f"الحالة: {building.building_status_display}"
+                f"{tr('dialog.polygon_selector.type_label')}: {building.building_type_display} | "
+                f"{tr('dialog.polygon_selector.status_label')}: {building.building_status_display}"
             )
             item = QListWidgetItem(item_text)
             item.setData(Qt.UserRole, building)

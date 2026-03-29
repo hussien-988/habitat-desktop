@@ -14,6 +14,7 @@ from PyQt5.QtCore import Qt, pyqtSignal, QSize
 from PyQt5.QtGui import QColor
 
 from repositories.database import Database
+from services.translation_manager import tr, get_layout_direction
 from ui.components.input_field import InputField
 from ui.components.rtl_combo import RtlCombo
 from ui.components.toast import Toast
@@ -27,32 +28,50 @@ from utils.logger import get_logger
 
 logger = get_logger(__name__)
 
-# Permission sections and actions
-PERMISSION_SECTIONS = [
-    ("claims", "المطالبات"),
-    ("buildings", "المباني"),
-    ("units", "الوحدات السكنية"),
-    ("duplicates", "التكرارات"),
-    ("user_management", "إدارة المستخدمين"),
-]
+# Permission section keys (labels resolved via tr() at runtime)
+PERMISSION_SECTION_KEYS = ["claims", "buildings", "units", "duplicates", "user_management"]
 
-PERMISSION_ACTIONS = [
-    ("view", "عرض"),
-    ("add", "اضافة"),
-    ("edit", "تعديل"),
-    ("delete", "حذف"),
-]
+# Permission action keys
+PERMISSION_ACTION_KEYS = ["view", "add", "edit", "delete"]
 
-ROLES = [
-    ("-", "-"),
-    ("admin", "مدير النظام"),
-    ("data_manager", "مدير البيانات"),
-    ("office_clerk", "موظف المكتب"),
-    ("field_supervisor", "مشرف ميداني"),
-    ("field_researcher", "باحث ميداني"),
-    ("data_collector", "جامع بيانات"),
-    ("analyst", "محلل"),
-]
+# Role keys
+ROLE_KEYS = ["-", "admin", "data_manager", "office_clerk",
+             "field_supervisor", "field_researcher", "data_collector", "analyst"]
+
+
+def _get_permission_sections():
+    """Return permission sections with translated labels."""
+    return [
+        ("claims", tr("page.add_user.section_claims")),
+        ("buildings", tr("page.add_user.section_buildings")),
+        ("units", tr("page.add_user.section_units")),
+        ("duplicates", tr("page.add_user.section_duplicates")),
+        ("user_management", tr("page.add_user.section_user_management")),
+    ]
+
+
+def _get_permission_actions():
+    """Return permission actions with translated labels."""
+    return [
+        ("view", tr("action.view")),
+        ("add", tr("action.add")),
+        ("edit", tr("action.edit")),
+        ("delete", tr("action.delete")),
+    ]
+
+
+def _get_roles():
+    """Return roles with translated labels."""
+    return [
+        ("-", "-"),
+        ("admin", tr("page.add_user.role_admin")),
+        ("data_manager", tr("page.add_user.role_data_manager")),
+        ("office_clerk", tr("page.add_user.role_office_clerk")),
+        ("field_supervisor", tr("page.add_user.role_field_supervisor")),
+        ("field_researcher", tr("page.add_user.role_field_researcher")),
+        ("data_collector", tr("page.add_user.role_data_collector")),
+        ("analyst", tr("page.add_user.role_analyst")),
+    ]
 
 ROLE_PERMISSIONS = {
     "admin": {
@@ -121,6 +140,7 @@ class AddUserPage(QWidget):
         self._permission_checkboxes = {}
         self._section_contents = {}
         self._section_arrows = {}
+        self._section_title_labels = {}
 
         self._mode = 'add'  # 'add', 'edit', 'view'
         self._editing_user = None
@@ -130,7 +150,7 @@ class AddUserPage(QWidget):
         self._connect_dirty_tracking()
 
     def _setup_ui(self):
-        self.setLayoutDirection(Qt.RightToLeft)
+        self.setLayoutDirection(get_layout_direction())
         self.setStyleSheet(StyleManager.page_background())
 
         layout = QVBoxLayout(self)
@@ -150,7 +170,7 @@ class AddUserPage(QWidget):
         title_area = QVBoxLayout()
         title_area.setSpacing(4)
 
-        self.title_label = QLabel("إضافة مستخدم جديد")
+        self.title_label = QLabel(tr("page.add_user.title_add"))
         self.title_label.setFont(create_font(
             size=FontManager.SIZE_TITLE,
             weight=FontManager.WEIGHT_SEMIBOLD,
@@ -160,7 +180,7 @@ class AddUserPage(QWidget):
         )
         title_area.addWidget(self.title_label)
 
-        self.breadcrumb_label = QLabel("إدارة المستخدمين  •  إضافة مستخدم جديد")
+        self.breadcrumb_label = QLabel(tr("page.add_user.breadcrumb_add"))
         self.breadcrumb_label.setFont(create_font(
             size=FontManager.SIZE_BODY,
             weight=FontManager.WEIGHT_SEMIBOLD,
@@ -174,7 +194,7 @@ class AddUserPage(QWidget):
         header_layout.addStretch()
 
         # Save button (same as wizard save button, 114x48)
-        self.save_btn = QPushButton(" حفظ")
+        self.save_btn = QPushButton(f" {tr('button.save')}")
         self.save_btn.setCursor(Qt.PointingHandCursor)
         self.save_btn.setFixedSize(ButtonDimensions.SAVE_WIDTH, ButtonDimensions.SAVE_HEIGHT)
 
@@ -205,14 +225,14 @@ class AddUserPage(QWidget):
         self.save_btn.clicked.connect(self._on_save)
         header_layout.addWidget(self.save_btn)
 
-        back_btn = QPushButton("رجوع")
-        back_btn.setFixedSize(100, ButtonDimensions.SAVE_HEIGHT)
-        back_btn.setCursor(Qt.PointingHandCursor)
-        back_btn.setFont(create_font(
+        self.back_btn = QPushButton(tr("page.add_user.back"))
+        self.back_btn.setFixedSize(100, ButtonDimensions.SAVE_HEIGHT)
+        self.back_btn.setCursor(Qt.PointingHandCursor)
+        self.back_btn.setFont(create_font(
             size=ButtonDimensions.SAVE_FONT_SIZE,
             weight=FontManager.WEIGHT_SEMIBOLD,
         ))
-        back_btn.setStyleSheet("""
+        self.back_btn.setStyleSheet("""
             QPushButton {
                 background-color: #F1F5F9;
                 color: #475569;
@@ -224,8 +244,8 @@ class AddUserPage(QWidget):
                 background-color: #E2E8F0;
             }
         """)
-        back_btn.clicked.connect(self.back_requested.emit)
-        header_layout.addWidget(back_btn)
+        self.back_btn.clicked.connect(self.back_requested.emit)
+        header_layout.addWidget(self.back_btn)
 
         layout.addLayout(header_layout)
 
@@ -273,15 +293,15 @@ class AddUserPage(QWidget):
         # Right field: المستخدم ID
         id_group = QVBoxLayout()
         id_group.setSpacing(6)
-        id_label = QLabel("اسم المستخدم")
-        id_label.setFont(create_font(
+        self.id_label = QLabel(tr("page.add_user.username"))
+        self.id_label.setFont(create_font(
             size=FontManager.SIZE_BODY,
             weight=FontManager.WEIGHT_SEMIBOLD,
         ))
-        id_label.setStyleSheet(f"color: {Colors.PAGE_TITLE}; background: transparent;")
-        id_group.addWidget(id_label)
+        self.id_label.setStyleSheet(f"color: {Colors.PAGE_TITLE}; background: transparent;")
+        id_group.addWidget(self.id_label)
 
-        self.user_id_input = InputField(placeholder="اسم المستخدم")
+        self.user_id_input = InputField(placeholder=tr("page.add_user.username"))
         self.user_id_input.setAlignment(Qt.AlignRight)
         self.user_id_input.setStyleSheet("""
             QLineEdit {
@@ -306,17 +326,17 @@ class AddUserPage(QWidget):
         # Left field: اسم الدور
         role_group = QVBoxLayout()
         role_group.setSpacing(6)
-        role_label = QLabel("اسم الدور")
-        role_label.setFont(create_font(
+        self.role_label = QLabel(tr("page.add_user.role_name"))
+        self.role_label.setFont(create_font(
             size=FontManager.SIZE_BODY,
             weight=FontManager.WEIGHT_SEMIBOLD,
         ))
-        role_label.setStyleSheet(f"color: {Colors.PAGE_TITLE}; background: transparent;")
-        role_group.addWidget(role_label)
+        self.role_label.setStyleSheet(f"color: {Colors.PAGE_TITLE}; background: transparent;")
+        role_group.addWidget(self.role_label)
 
         self.role_combo = RtlCombo()
-        for role_id, role_label in ROLES:
-            self.role_combo.addItem(role_label, role_id)
+        for role_id, role_display in _get_roles():
+            self.role_combo.addItem(role_display, role_id)
         self.role_combo.setFixedHeight(42)
         self.role_combo.setStyleSheet("""
             QComboBox {
@@ -353,19 +373,19 @@ class AddUserPage(QWidget):
         card_layout.addLayout(fields_layout)
 
         # Permissions section title
-        perm_title = QLabel("الصلاحيات")
-        perm_title.setFont(create_font(
+        self.perm_title = QLabel(tr("page.add_user.permissions"))
+        self.perm_title.setFont(create_font(
             size=FontManager.SIZE_BODY,
             weight=FontManager.WEIGHT_SEMIBOLD,
         ))
-        perm_title.setStyleSheet(
+        self.perm_title.setStyleSheet(
             f"color: {Colors.PAGE_TITLE}; background: transparent;"
         )
-        perm_title.setAlignment(Qt.AlignLeft)
-        card_layout.addWidget(perm_title)
+        self.perm_title.setAlignment(Qt.AlignLeft)
+        card_layout.addWidget(self.perm_title)
 
         # Permission sections (accordion)
-        for i, (key, title) in enumerate(PERMISSION_SECTIONS):
+        for i, (key, title) in enumerate(_get_permission_sections()):
             expanded = (i == 0)
             section = self._create_permission_section(key, title, expanded)
             card_layout.addWidget(section)
@@ -419,6 +439,7 @@ class AddUserPage(QWidget):
         title_label.setStyleSheet(
             f"color: {Colors.PAGE_TITLE}; background: transparent; border: none;"
         )
+        self._section_title_labels[key] = title_label
         header_layout.addWidget(title_label)
 
         header_layout.addStretch()
@@ -454,9 +475,9 @@ class AddUserPage(QWidget):
 
         self._permission_checkboxes[key] = {}
 
-        for action_key, action_label in PERMISSION_ACTIONS:
+        for action_key, action_label in _get_permission_actions():
             cb = QCheckBox(action_label)
-            cb.setLayoutDirection(Qt.RightToLeft)
+            cb.setLayoutDirection(get_layout_direction())
             cb.setFont(create_font(
                 size=FontManager.SIZE_BODY,
                 weight=FontManager.WEIGHT_REGULAR,
@@ -518,9 +539,9 @@ class AddUserPage(QWidget):
     def _collect_data(self) -> dict:
         """Collect form data."""
         permissions = {}
-        for key, _ in PERMISSION_SECTIONS:
+        for key in PERMISSION_SECTION_KEYS:
             section_perms = {}
-            for action_key, _ in PERMISSION_ACTIONS:
+            for action_key in PERMISSION_ACTION_KEYS:
                 cb = self._permission_checkboxes.get(key, {}).get(action_key)
                 section_perms[action_key] = cb.isChecked() if cb else False
             permissions[key] = section_perms
@@ -536,11 +557,11 @@ class AddUserPage(QWidget):
         data = self._collect_data()
 
         if not data["user_id"]:
-            Toast.show_toast(self, "يرجى إدخال اسم المستخدم", Toast.WARNING)
+            Toast.show_toast(self, tr("page.add_user.error_username_required"), Toast.WARNING)
             return
 
         if data["role"] == "-":
-            Toast.show_toast(self, "يرجى اختيار اسم الدور", Toast.WARNING)
+            Toast.show_toast(self, tr("page.add_user.error_role_required"), Toast.WARNING)
             return
 
         if self._mode == 'edit':
@@ -565,12 +586,12 @@ class AddUserPage(QWidget):
         self._editing_user = user_data
 
         if mode == 'view':
-            self.title_label.setText("عرض بيانات المستخدم")
-            self.breadcrumb_label.setText("إدارة المستخدمين  •  عرض بيانات المستخدم")
+            self.title_label.setText(tr("page.add_user.title_view"))
+            self.breadcrumb_label.setText(tr("page.add_user.breadcrumb_view"))
             self.save_btn.setVisible(False)
         elif mode == 'edit':
-            self.title_label.setText("تعديل بيانات المستخدم")
-            self.breadcrumb_label.setText("إدارة المستخدمين  •  تعديل بيانات المستخدم")
+            self.title_label.setText(tr("page.add_user.title_edit"))
+            self.breadcrumb_label.setText(tr("page.add_user.breadcrumb_edit"))
             self.save_btn.setVisible(True)
 
         self.user_id_input.setText(user_data.get("username", ""))
@@ -608,16 +629,16 @@ class AddUserPage(QWidget):
         self._mode = 'add'
         self._editing_user = None
         self._is_dirty = False
-        self.title_label.setText("إضافة مستخدم جديد")
-        self.breadcrumb_label.setText("إدارة المستخدمين  •  إضافة مستخدم جديد")
+        self.title_label.setText(tr("page.add_user.title_add"))
+        self.breadcrumb_label.setText(tr("page.add_user.breadcrumb_add"))
         self.save_btn.setVisible(True)
         self.user_id_input.setEnabled(True)
         self.user_id_input.clear()
         self.role_combo.setEnabled(True)
         self.role_combo.setCurrentIndex(0)
 
-        for key, _ in PERMISSION_SECTIONS:
-            for action_key, _ in PERMISSION_ACTIONS:
+        for key in PERMISSION_SECTION_KEYS:
+            for action_key in PERMISSION_ACTION_KEYS:
                 cb = self._permission_checkboxes.get(key, {}).get(action_key)
                 if cb:
                     cb.setChecked(False)
@@ -630,7 +651,7 @@ class AddUserPage(QWidget):
             if arrow:
                 arrow.setText("‹")
 
-        first_key = PERMISSION_SECTIONS[0][0]
+        first_key = PERMISSION_SECTION_KEYS[0]
         first_content = self._section_contents.get(first_key)
         first_arrow = self._section_arrows.get(first_key)
         if first_content:
@@ -655,4 +676,44 @@ class AddUserPage(QWidget):
         return self._is_dirty
 
     def update_language(self, is_arabic: bool):
-        pass
+        """Update all translatable text when language changes."""
+        self.setLayoutDirection(get_layout_direction())
+
+        # Title and breadcrumb depend on current mode
+        if self._mode == 'view':
+            self.title_label.setText(tr("page.add_user.title_view"))
+            self.breadcrumb_label.setText(tr("page.add_user.breadcrumb_view"))
+        elif self._mode == 'edit':
+            self.title_label.setText(tr("page.add_user.title_edit"))
+            self.breadcrumb_label.setText(tr("page.add_user.breadcrumb_edit"))
+        else:
+            self.title_label.setText(tr("page.add_user.title_add"))
+            self.breadcrumb_label.setText(tr("page.add_user.breadcrumb_add"))
+
+        self.save_btn.setText(f" {tr('button.save')}")
+        self.back_btn.setText(tr("page.add_user.back"))
+        self.id_label.setText(tr("page.add_user.username"))
+        self.user_id_input.setPlaceholderText(tr("page.add_user.username"))
+        self.role_label.setText(tr("page.add_user.role_name"))
+        self.perm_title.setText(tr("page.add_user.permissions"))
+
+        # Update role combo items
+        roles = _get_roles()
+        for i, (role_id, role_display) in enumerate(roles):
+            if i < self.role_combo.count():
+                self.role_combo.setItemText(i, role_display)
+
+        # Update permission section titles
+        for key, label in _get_permission_sections():
+            title_lbl = self._section_title_labels.get(key)
+            if title_lbl:
+                title_lbl.setText(label)
+
+        # Update permission action checkbox labels
+        actions = _get_permission_actions()
+        for section_key in self._permission_checkboxes:
+            for action_key, action_label in actions:
+                cb = self._permission_checkboxes[section_key].get(action_key)
+                if cb:
+                    cb.setText(action_label)
+                    cb.setLayoutDirection(get_layout_direction())

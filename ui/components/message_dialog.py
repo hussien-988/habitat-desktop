@@ -9,6 +9,7 @@ from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QFont, QColor
 
 from ui.font_utils import create_font, FontManager
+from services.translation_manager import tr
 
 
 # Dialog type definitions: (icon_char, icon_bg_color, title_color, btn_color, btn_hover)
@@ -25,8 +26,13 @@ class MessageDialog(QDialog):
     """Reusable message dialog with error, warning, info, success, and confirm variants."""
 
     def __init__(self, parent, title, message, dialog_type="info",
-                 ok_text="حسناً", cancel_text="إلغاء", show_cancel=False):
+                 ok_text=None, cancel_text=None, show_cancel=False):
         super().__init__(parent)
+
+        if ok_text is None:
+            ok_text = tr("component.message_dialog.ok")
+        if cancel_text is None:
+            cancel_text = tr("component.message_dialog.cancel")
 
         if dialog_type in ("error", "warning"):
             from services.error_mapper import sanitize_user_message
@@ -145,27 +151,39 @@ class MessageDialog(QDialog):
         container.setGraphicsEffect(shadow)
 
     @staticmethod
-    def confirm(parent, title, message, ok_text="تأكيد", cancel_text="إلغاء"):
+    def confirm(parent, title, message, ok_text=None, cancel_text=None):
         """Show confirmation dialog and return True if OK clicked."""
+        if ok_text is None:
+            ok_text = tr("component.message_dialog.confirm")
+        if cancel_text is None:
+            cancel_text = tr("component.message_dialog.cancel")
         dlg = MessageDialog(parent, title, message, "confirm", ok_text, cancel_text, show_cancel=True)
         return dlg.exec_() == QDialog.Accepted
 
     @staticmethod
-    def warning(parent, title, message, ok_text="حسناً"):
+    def warning(parent, title, message, ok_text=None):
         """Show warning dialog."""
+        if ok_text is None:
+            ok_text = tr("component.message_dialog.ok")
         MessageDialog(parent, title, message, "warning", ok_text).exec_()
 
     @staticmethod
-    def error(parent, title, message, ok_text="حسناً"):
+    def error(parent, title, message, ok_text=None):
         """Show error dialog."""
+        if ok_text is None:
+            ok_text = tr("component.message_dialog.ok")
         MessageDialog(parent, title, message, "error", ok_text).exec_()
 
     @staticmethod
-    def info(parent, title, message, ok_text="حسناً"):
+    def info(parent, title, message, ok_text=None):
         """Show info dialog."""
+        if ok_text is None:
+            ok_text = tr("component.message_dialog.ok")
         MessageDialog(parent, title, message, "info", ok_text).exec_()
 
     @staticmethod
-    def success(parent, title, message, ok_text="حسناً"):
+    def success(parent, title, message, ok_text=None):
         """Show success dialog."""
+        if ok_text is None:
+            ok_text = tr("component.message_dialog.ok")
         MessageDialog(parent, title, message, "success", ok_text).exec_()

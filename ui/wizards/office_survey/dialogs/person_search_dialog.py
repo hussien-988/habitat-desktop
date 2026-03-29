@@ -16,7 +16,7 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtGui import QColor
 
-from services.translation_manager import tr
+from services.translation_manager import tr, get_layout_direction
 from utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -51,7 +51,7 @@ class PersonSearchDialog(QDialog):
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.Dialog)
         self.setAttribute(Qt.WA_TranslucentBackground)
         self.setStyleSheet("QDialog { background-color: transparent; }")
-        self.setLayoutDirection(Qt.RightToLeft)
+        self.setLayoutDirection(get_layout_direction())
 
         self._setup_ui()
 
@@ -140,7 +140,7 @@ class PersonSearchDialog(QDialog):
         btn_row = QHBoxLayout()
         btn_row.setSpacing(10)
 
-        cancel_btn = QPushButton(tr("common.cancel") if self._tr_exists("common.cancel") else "إلغاء")
+        cancel_btn = QPushButton(tr("common.cancel"))
         cancel_btn.setStyleSheet("""
             QPushButton {
                 border: 1px solid #E0E6ED;
@@ -280,7 +280,7 @@ class PersonSearchDialog(QDialog):
         name_lbl.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
 
         nid = person.get("nationalId") or person.get("national_id", "")
-        nid_lbl = QLabel(f"رقم وطني: {nid}" if nid else "بدون رقم وطني")
+        nid_lbl = QLabel(tr("person_search.national_id_label", nid=nid) if nid else tr("person_search.no_national_id"))
         nid_lbl.setStyleSheet(_ID_STYLE)
         nid_lbl.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
 
@@ -290,7 +290,7 @@ class PersonSearchDialog(QDialog):
         layout.addStretch()
 
         if is_applicant:
-            tag = QLabel("مقدم الطلب")
+            tag = QLabel(tr("person_search.applicant_tag"))
             tag.setStyleSheet("""
                 QLabel {
                     background-color: #3B82F6; color: white;

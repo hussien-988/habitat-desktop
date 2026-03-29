@@ -16,6 +16,7 @@ from ..icon import Icon
 from ...design_system import Colors, ButtonDimensions
 from ...font_utils import create_font, FontManager
 from typing import Optional
+from services.translation_manager import tr
 
 
 class DialogResult(IntEnum):
@@ -40,7 +41,7 @@ class ConfirmationDialog(QDialog):
     def __init__(
         self,
         parent: Optional[QWidget] = None,
-        title: str = "تأكيد",
+        title: str = None,
         message: str = "",
         icon_name: str = "wirning",  # warning icon (typo preserved from assets)
         buttons: list = None,
@@ -48,11 +49,13 @@ class ConfirmationDialog(QDialog):
     ):
         """Initialize confirmation dialog."""
         super().__init__(parent)
+        if title is None:
+            title = tr("dialog.confirm")
 
         self.result_code = DialogResult.CANCEL
         self.buttons_config = buttons or [
-            ("نعم", DialogResult.YES),
-            ("لا", DialogResult.NO)
+            (tr("button.yes"), DialogResult.YES),
+            (tr("button.no"), DialogResult.NO)
         ]
         self.default_button_index = default_button
 
@@ -236,19 +239,23 @@ class ConfirmationDialog(QDialog):
     @staticmethod
     def confirm(
         parent: Optional[QWidget] = None,
-        title: str = "تأكيد",
-        message: str = "هل أنت متأكد؟",
+        title: str = None,
+        message: str = None,
         icon_name: str = "wirning"
     ) -> int:
         """Show simple yes/no confirmation dialog."""
+        if title is None:
+            title = tr("dialog.confirm")
+        if message is None:
+            message = tr("dialog.confirmation.are_you_sure")
         dialog = ConfirmationDialog(
             parent=parent,
             title=title,
             message=message,
             icon_name=icon_name,
             buttons=[
-                ("لا", DialogResult.NO),
-                ("نعم", DialogResult.YES)
+                (tr("button.no"), DialogResult.NO),
+                (tr("button.yes"), DialogResult.YES)
             ],
             default_button=1  # Yes is default
         )
@@ -258,18 +265,22 @@ class ConfirmationDialog(QDialog):
     @staticmethod
     def save_draft_confirmation(
         parent: Optional[QWidget] = None,
-        title: str = "هل تريد الحفظ؟",
-        message: str = "لديك تغييرات غير محفوظة.\nهل تريد حفظها كمسودة؟"
+        title: str = None,
+        message: str = None
     ) -> int:
         """Show save draft confirmation dialog."""
+        if title is None:
+            title = tr("dialog.confirmation.save_prompt")
+        if message is None:
+            message = tr("dialog.confirmation.unsaved_changes")
         dialog = ConfirmationDialog(
             parent=parent,
             title=title,
             message=message,
             icon_name="wirning",  # typo preserved in asset name
             buttons=[
-                ("عدم الحفظ", DialogResult.DISCARD),  # White button (secondary)
-                ("حفظ كمسودة", DialogResult.SAVE)      # Yellow button (primary)
+                (tr("dialog.confirmation.discard"), DialogResult.DISCARD),  # White button (secondary)
+                (tr("dialog.confirmation.save_draft"), DialogResult.SAVE)      # Yellow button (primary)
             ],
             default_button=1  # Save is default (yellow button)
         )
@@ -279,18 +290,20 @@ class ConfirmationDialog(QDialog):
     @staticmethod
     def warning(
         parent: Optional[QWidget] = None,
-        title: str = "تحذير",
+        title: str = None,
         message: str = "",
         icon_name: str = "wirning"
     ) -> int:
         """Show warning dialog with OK button."""
+        if title is None:
+            title = tr("dialog.warning")
         dialog = ConfirmationDialog(
             parent=parent,
             title=title,
             message=message,
             icon_name=icon_name,
             buttons=[
-                ("حسناً", DialogResult.YES)
+                (tr("button.ok"), DialogResult.YES)
             ],
             default_button=0
         )

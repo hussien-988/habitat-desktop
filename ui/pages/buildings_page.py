@@ -51,6 +51,7 @@ from ui.font_utils import create_font, FontManager
 from services.api_worker import ApiWorker
 from utils.i18n import I18n
 from utils.logger import get_logger
+from services.translation_manager import tr, get_layout_direction
 
 logger = get_logger(__name__)
 
@@ -154,7 +155,7 @@ class AddBuildingPage(QWidget):
         title_subtitle_container.setSpacing(4)
 
         # Title
-        title_label = QLabel("معلومات البناء")
+        title_label = QLabel(tr("page.buildings.building_info"))
         title_font = create_font(
             size=FontManager.SIZE_TITLE,
             weight=QFont.Bold,
@@ -170,7 +171,7 @@ class AddBuildingPage(QWidget):
         subtitle_layout.setSpacing(8)
         subtitle_layout.setContentsMargins(0, 0, 0, 0)
 
-        subtitle_part1 = QLabel("المباني")
+        subtitle_part1 = QLabel(tr("page.buildings.title"))
         subtitle_font = create_font(
             size=FontManager.SIZE_BODY,
             weight=QFont.Normal,
@@ -187,7 +188,7 @@ class AddBuildingPage(QWidget):
         subtitle_layout.addWidget(dot_label)
 
         # Part 2
-        subtitle_part2 = QLabel("معلومات البناء")
+        subtitle_part2 = QLabel(tr("page.buildings.building_info"))
         subtitle_part2.setFont(subtitle_font)
         subtitle_part2.setStyleSheet(f"color: {Colors.TEXT_SECONDARY}; border: none; background: transparent;")
         subtitle_layout.addWidget(subtitle_part2)
@@ -226,7 +227,7 @@ class AddBuildingPage(QWidget):
         title_row.addWidget(close_btn)
 
         # Save button with icon
-        save_btn = QPushButton(" حفظ")
+        save_btn = QPushButton(" " + tr("button.save"))
         save_btn.setCursor(Qt.PointingHandCursor)
         save_btn.setFixedSize(ButtonDimensions.SAVE_WIDTH, ButtonDimensions.SAVE_HEIGHT)
 
@@ -315,14 +316,14 @@ class AddBuildingPage(QWidget):
         header_text_col.setSpacing(1)
 
         # Title: "بيانات البناء"
-        info_title = QLabel("بيانات البناء")
+        info_title = QLabel(tr("page.buildings.building_data"))
         # Title
         info_title.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
         info_title.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent;")
 
         # Subtitle: "ادخل معلومات البناء والموقع الجغرافي"
         # Changed from "ابحث عن" to "ادخل" as requested
-        info_sub = QLabel("ادخل معلومات البناء والموقع الجغرافي")
+        info_sub = QLabel(tr("page.buildings.enter_building_info"))
         # Subtitle
         info_sub.setFont(create_font(size=10, weight=FontManager.WEIGHT_REGULAR))
         info_sub.setStyleSheet(f"color: {Colors.WIZARD_SUBTITLE}; background: transparent;")
@@ -406,17 +407,17 @@ class AddBuildingPage(QWidget):
         # Field 1: رمز المحافظة (Governorate) - Dropdown
         gov_container = QVBoxLayout()
         gov_container.setSpacing(6)
-        gov_label = QLabel("رمز المحافظة")
+        gov_label = QLabel(tr("page.buildings.governorate_code"))
         gov_label.setFont(label_font)
         gov_label.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent;")
         self.governorate_combo = CodeDisplayCombo()
-        self.governorate_combo.addItem("اختر المحافظة", "")
+        self.governorate_combo.addItem(tr("page.buildings.select_governorate"), "")
         for code, en, ar in self._divisions.get_governorates():
             self.governorate_combo.addItem(f"{code} - {ar}", code)
         self.governorate_combo.setCurrentIndex(1)  # Default: Aleppo
         self.governorate_combo.setStyleSheet(code_combo_style)
         self.governorate_combo.setFixedHeight(45)
-        self.governorate_combo.setLayoutDirection(Qt.RightToLeft)
+        self.governorate_combo.setLayoutDirection(get_layout_direction())
         self.governorate_combo.currentIndexChanged.connect(self._on_governorate_changed)
         gov_container.addWidget(gov_label)
         gov_container.addWidget(self.governorate_combo)
@@ -425,13 +426,13 @@ class AddBuildingPage(QWidget):
         # Field 2: رمز المنطقة (District) - Dropdown from DivisionsService
         dist_container = QVBoxLayout()
         dist_container.setSpacing(6)
-        dist_label = QLabel("رمز المنطقة")
+        dist_label = QLabel(tr("page.buildings.district_code"))
         dist_label.setFont(label_font)
         dist_label.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent;")
         self.district_combo = CodeDisplayCombo()
         self.district_combo.setStyleSheet(code_combo_style)
         self.district_combo.setFixedHeight(45)
-        self.district_combo.setLayoutDirection(Qt.RightToLeft)
+        self.district_combo.setLayoutDirection(get_layout_direction())
         self.district_combo.currentIndexChanged.connect(self._on_district_changed)
         dist_container.addWidget(dist_label)
         dist_container.addWidget(self.district_combo)
@@ -440,13 +441,13 @@ class AddBuildingPage(QWidget):
         # Field 3: رمز البلدة (Subdistrict) - Dropdown from DivisionsService
         sub_container = QVBoxLayout()
         sub_container.setSpacing(6)
-        sub_label = QLabel("رمز الناحية")
+        sub_label = QLabel(tr("page.buildings.subdistrict_code"))
         sub_label.setFont(label_font)
         sub_label.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent;")
         self.subdistrict_combo = CodeDisplayCombo()
         self.subdistrict_combo.setStyleSheet(code_combo_style)
         self.subdistrict_combo.setFixedHeight(45)
-        self.subdistrict_combo.setLayoutDirection(Qt.RightToLeft)
+        self.subdistrict_combo.setLayoutDirection(get_layout_direction())
         self.subdistrict_combo.currentIndexChanged.connect(self._on_subdistrict_changed)
         sub_container.addWidget(sub_label)
         sub_container.addWidget(self.subdistrict_combo)
@@ -455,13 +456,13 @@ class AddBuildingPage(QWidget):
         # Field 4: رمز القرية (Community) - Dropdown from DivisionsService
         comm_container = QVBoxLayout()
         comm_container.setSpacing(6)
-        comm_label = QLabel("رمز المدينة")
+        comm_label = QLabel(tr("page.buildings.community_code"))
         comm_label.setFont(label_font)
         comm_label.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent;")
         self.community_combo = CodeDisplayCombo()
         self.community_combo.setStyleSheet(code_combo_style)
         self.community_combo.setFixedHeight(45)
-        self.community_combo.setLayoutDirection(Qt.RightToLeft)
+        self.community_combo.setLayoutDirection(get_layout_direction())
         self.community_combo.currentIndexChanged.connect(self._update_building_id)
         self.community_combo.currentIndexChanged.connect(self._validate_building_id_realtime)
         comm_container.addWidget(comm_label)
@@ -471,15 +472,15 @@ class AddBuildingPage(QWidget):
         # Field 5: رمز الحي (Neighborhood) - Loaded from API
         neigh_container = QVBoxLayout()
         neigh_container.setSpacing(6)
-        neigh_label = QLabel("رمز الحي")
+        neigh_label = QLabel(tr("page.buildings.neighborhood_code"))
         neigh_label.setFont(label_font)
         neigh_label.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent;")
 
         self.neighborhood_combo = CodeDisplayCombo()
-        self.neighborhood_combo.addItem("اختر الحي", "")
+        self.neighborhood_combo.addItem(tr("page.buildings.select_neighborhood"), "")
         self.neighborhood_combo.setStyleSheet(code_combo_style)
         self.neighborhood_combo.setFixedHeight(45)
-        self.neighborhood_combo.setLayoutDirection(Qt.RightToLeft)
+        self.neighborhood_combo.setLayoutDirection(get_layout_direction())
 
         self.neighborhood_combo.currentIndexChanged.connect(self._update_building_id)
         self.neighborhood_combo.currentIndexChanged.connect(self._validate_building_id_realtime)
@@ -492,7 +493,7 @@ class AddBuildingPage(QWidget):
         # Field 6: رمز البناء (Building Number) - QLineEdit (unique number)
         build_container = QVBoxLayout()
         build_container.setSpacing(6)
-        build_label = QLabel("رقم البناء")
+        build_label = QLabel(tr("page.buildings.building_number"))
         build_label.setFont(label_font)
         build_label.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent;")
         self.building_number = QLineEdit()
@@ -528,7 +529,7 @@ class AddBuildingPage(QWidget):
         card1_layout.addWidget(self.building_id_warning)
 
         # شريط الرمز النهائي
-        self.building_id_label = QLabel("رمز البناء: 01-001-002-003-0001-01-01")
+        self.building_id_label = QLabel(tr("page.buildings.building_code") + ": 01-001-002-003-0001-01-01")
         self.building_id_label.setAlignment(Qt.AlignCenter)
         self.building_id_label.setFixedHeight(32)
         self.building_id_label.setStyleSheet("""
@@ -595,34 +596,34 @@ class AddBuildingPage(QWidget):
         # حالة البناء
         vbox_status = QVBoxLayout()
         vbox_status.setSpacing(6)
-        lbl_status = QLabel("حالة البناء")
+        lbl_status = QLabel(tr("page.buildings.filter_status"))
         lbl_status.setFont(card2_label_font)
         lbl_status.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent;")
         vbox_status.addWidget(lbl_status)
         self.status_combo = RtlCombo()
-        self.status_combo.addItem("اختر")
+        self.status_combo.addItem(tr("page.buildings.select"))
         for code, label in vocab_get_options("BuildingStatus"):
             self.status_combo.addItem(label, code)
         self.status_combo.setStyleSheet(combo_style)
         self.status_combo.setFixedHeight(45)
-        self.status_combo.setLayoutDirection(Qt.RightToLeft)
+        self.status_combo.setLayoutDirection(get_layout_direction())
         vbox_status.addWidget(self.status_combo)
         card2_layout.addLayout(vbox_status, 1)  # توحيد العرض - stretch factor
 
         # نوع البناء
         vbox_type = QVBoxLayout()
         vbox_type.setSpacing(6)
-        lbl_type = QLabel("نوع البناء")
+        lbl_type = QLabel(tr("page.buildings.filter_type"))
         lbl_type.setFont(card2_label_font)
         lbl_type.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent;")
         vbox_type.addWidget(lbl_type)
         self.type_combo = RtlCombo()
-        self.type_combo.addItem("اختر")
+        self.type_combo.addItem(tr("page.buildings.select"))
         for code, label in vocab_get_options("BuildingType"):
             self.type_combo.addItem(label, code)
         self.type_combo.setStyleSheet(combo_style)
         self.type_combo.setFixedHeight(45)
-        self.type_combo.setLayoutDirection(Qt.RightToLeft)
+        self.type_combo.setLayoutDirection(get_layout_direction())
         self.type_combo.currentIndexChanged.connect(self._on_building_type_changed)
         vbox_type.addWidget(self.type_combo)
         card2_layout.addLayout(vbox_type, 1)  # توحيد العرض - stretch factor
@@ -630,7 +631,7 @@ class AddBuildingPage(QWidget):
         # عدد المقاسم السكنية
         vbox_residential = QVBoxLayout()
         vbox_residential.setSpacing(6)
-        lbl_residential = QLabel("المقاسم السكنية")
+        lbl_residential = QLabel(tr("page.buildings.residential_units"))
         lbl_residential.setFont(card2_label_font)
         lbl_residential.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent;")
         vbox_residential.addWidget(lbl_residential)
@@ -648,7 +649,7 @@ class AddBuildingPage(QWidget):
         # عدد المقاسم غير السكنية
         vbox_non_residential = QVBoxLayout()
         vbox_non_residential.setSpacing(6)
-        lbl_non_residential = QLabel("غير السكنية")
+        lbl_non_residential = QLabel(tr("page.buildings.non_residential_units"))
         lbl_non_residential.setFont(card2_label_font)
         lbl_non_residential.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent;")
         vbox_non_residential.addWidget(lbl_non_residential)
@@ -666,7 +667,7 @@ class AddBuildingPage(QWidget):
         # عدد الطوابق
         vbox_floors = QVBoxLayout()
         vbox_floors.setSpacing(6)
-        lbl_floors = QLabel("عدد الطوابق")
+        lbl_floors = QLabel(tr("page.buildings.floors_count"))
         lbl_floors.setFont(card2_label_font)
         lbl_floors.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent;")
         vbox_floors.addWidget(lbl_floors)
@@ -683,7 +684,7 @@ class AddBuildingPage(QWidget):
         # العدد الكلي للمقاسم (read-only, auto-calculated)
         vbox_total = QVBoxLayout()
         vbox_total.setSpacing(6)
-        lbl_total = QLabel("العدد الكلي")
+        lbl_total = QLabel(tr("page.add_building.total_units"))
         lbl_total.setFont(card2_label_font)
         lbl_total.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent;")
         vbox_total.addWidget(lbl_total)
@@ -714,7 +715,7 @@ class AddBuildingPage(QWidget):
         card3_layout.setSpacing(0)  # Manual spacing control
 
         # Row 1: Header only - "موقع البناء"
-        header = QLabel("موقع البناء")
+        header = QLabel(tr("page.add_building.building_location"))
         header.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
         header.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent;")
         card3_layout.addWidget(header)
@@ -777,7 +778,7 @@ class AddBuildingPage(QWidget):
             map_button.setIconSize(QSize(12, 12))
 
         # Text: "فتح الخريطة"
-        map_button.setText("فتح الخريطة")
+        map_button.setText(tr("page.add_building.open_map"))
         map_button.setFont(create_font(size=9, weight=FontManager.WEIGHT_REGULAR))
 
         map_button.setStyleSheet(f"""
@@ -831,7 +832,7 @@ class AddBuildingPage(QWidget):
         geometry_type_row.setSpacing(12)
         geometry_type_row.setContentsMargins(0, 8, 0, 0)
 
-        geometry_label = QLabel("نوع الموقع:")
+        geometry_label = QLabel(tr("page.add_building.location_type"))
         geometry_label.setFont(create_font(size=9, weight=FontManager.WEIGHT_REGULAR))
         geometry_label.setStyleSheet(f"color: {Colors.TEXT_SECONDARY}; background: transparent;")
         geometry_type_row.addWidget(geometry_label)
@@ -840,14 +841,14 @@ class AddBuildingPage(QWidget):
         self.geometry_button_group = QButtonGroup(self)
 
         # Point radio hidden
-        self.point_radio = QRadioButton("نقطة (GPS)")
+        self.point_radio = QRadioButton(tr("page.add_building.point_gps"))
         self.point_radio.setFont(create_font(size=9, weight=FontManager.WEIGHT_REGULAR))
         self.point_radio.setStyleSheet(f"color: {Colors.TEXT_PRIMARY}; background: transparent;")
         self.point_radio.setChecked(False)
         self.point_radio.setVisible(False)
         self.geometry_button_group.addButton(self.point_radio, 1)
 
-        self.polygon_radio = QRadioButton("مضلع (Polygon)")
+        self.polygon_radio = QRadioButton(tr("page.add_building.polygon"))
         self.polygon_radio.setFont(create_font(size=9, weight=FontManager.WEIGHT_REGULAR))
         self.polygon_radio.setStyleSheet(f"color: {Colors.TEXT_PRIMARY}; background: transparent;")
         self.polygon_radio.setChecked(True)
@@ -865,7 +866,7 @@ class AddBuildingPage(QWidget):
         docs_section = QVBoxLayout()
         docs_section.setSpacing(4)
 
-        lbl_docs = QLabel("وثائق المبنى")
+        lbl_docs = QLabel(tr("page.add_building.building_documents"))
         lbl_docs.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
         lbl_docs.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent;")
         docs_section.addWidget(lbl_docs)
@@ -891,7 +892,7 @@ class AddBuildingPage(QWidget):
         self.docs_layout.setSpacing(8)
         self.docs_layout.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
 
-        self.docs_empty_label = QLabel("لا توجد وثائق")
+        self.docs_empty_label = QLabel(tr("page.add_building.no_documents"))
         self.docs_empty_label.setStyleSheet(f"color: {Colors.TEXT_SECONDARY}; background: transparent;")
         self.docs_empty_label.setFont(create_font(size=9, weight=FontManager.WEIGHT_REGULAR))
         self.docs_empty_label.setAlignment(Qt.AlignCenter)
@@ -908,12 +909,12 @@ class AddBuildingPage(QWidget):
         section_general = QVBoxLayout()
         section_general.setSpacing(4)
 
-        lbl_general = QLabel("وصف البناء")
+        lbl_general = QLabel(tr("page.add_building.building_description"))
         lbl_general.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
         lbl_general.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent;")
 
         self.general_desc = QTextEdit()
-        self.general_desc.setPlaceholderText("لا يوجد وصف")
+        self.general_desc.setPlaceholderText(tr("page.add_building.no_description"))
         self.general_desc.setReadOnly(True)
         self.general_desc.setFixedHeight(130)  # نفس ارتفاع الخريطة
         self.general_desc.setStyleSheet("""
@@ -1012,13 +1013,13 @@ class AddBuildingPage(QWidget):
 
     def _on_building_documents_error(self, error_msg):
         """Callback: document fetch failed."""
-        Toast.show_toast(self, "تعذر تحميل المباني", Toast.ERROR)
+        Toast.show_toast(self, tr("page.buildings.load_error"), Toast.ERROR)
         logger.warning(f"Failed to load building documents: {error_msg}")
         self._show_no_docs()
 
     def _show_no_docs(self):
         """Display 'no documents' placeholder in the docs area."""
-        label = QLabel("لا توجد وثائق")
+        label = QLabel(tr("page.add_building.no_documents"))
         label.setStyleSheet(f"color: {Colors.TEXT_SECONDARY}; background: transparent;")
         label.setFont(create_font(size=9, weight=FontManager.WEIGHT_REGULAR))
         label.setAlignment(Qt.AlignCenter)
@@ -1232,7 +1233,7 @@ class AddBuildingPage(QWidget):
         bldg_num = self.building_number.text().strip().zfill(5)
 
         building_id = f"{gov}-{dist}-{subdist}-{comm}-{neigh}-{bldg_num}"
-        self.building_id_label.setText(f"رمز البناء: {building_id}")
+        self.building_id_label.setText(tr("page.add_building.building_code_value", code=building_id))
 
     def _validate_building_number_on_enter(self):
         """Validate building number when user presses Enter."""
@@ -1240,7 +1241,7 @@ class AddBuildingPage(QWidget):
 
         if len(building_num) < 5:
             from ui.components.message_dialog import MessageDialog
-            MessageDialog.warning(self, "خطأ في الإدخال", "رقم البناء يجب أن يتكون من 5 خانات")
+            MessageDialog.warning(self, tr("dialog.buildings.input_error"), tr("dialog.buildings.building_number_5_digits"))
             self.building_number.setFocus()
             return
 
@@ -1277,7 +1278,7 @@ class AddBuildingPage(QWidget):
         result = self.building_controller.get_building_by_id(building_id_plain)
 
         if result.success and result.data:
-            self.building_id_warning.setText("⚠️ هذا البناء موجود بالفعل")
+            self.building_id_warning.setText(tr("dialog.buildings.building_already_exists"))
             self.building_id_warning.show()
         else:
             self.building_id_warning.hide()
@@ -1434,8 +1435,8 @@ class AddBuildingPage(QWidget):
         except ImportError:
             ErrorHandler.show_success(
                 self,
-                "يرجى إدخال الإحداثيات يدوياً.",
-                "اختيار الموقع"
+                tr("dialog.buildings.enter_coordinates_manually"),
+                tr("dialog.buildings.select_location")
             )
             return
 
@@ -1486,7 +1487,7 @@ class AddBuildingPage(QWidget):
 
     def _on_neighborhoods_geojson_error(self, error_msg):
         """Callback: neighborhoods fetch failed, open dialog with empty GeoJSON."""
-        Toast.show_toast(self, "تعذر تحميل المباني", Toast.ERROR)
+        Toast.show_toast(self, tr("page.buildings.load_error"), Toast.ERROR)
         logger.warning(f"Failed to load neighborhoods for map: {error_msg}")
         self._open_map_picker_dialog('{"type":"FeatureCollection","features":[]}')
 
@@ -1528,12 +1529,12 @@ class AddBuildingPage(QWidget):
 
                 # Show success message
                 self.location_status_label.setText(
-                f" تم رسم المضلع (مركزه: {centroid_lat:.6f}, {centroid_lon:.6f})"
+                tr("page.add_building.polygon_drawn").format(lat=f"{centroid_lat:.6f}", lon=f"{centroid_lon:.6f}")
                 )
                 self.location_status_label.setStyleSheet(
                     f"color: {Config.SUCCESS_COLOR}; font-size: 10pt;"
                 )
-                self.geometry_type_label.setText("🔷 مضلع")
+                self.geometry_type_label.setText(tr("page.add_building.type_polygon"))
                 logger.info(f"Polygon drawn and saved: {polygon_wkt[:100]}...")
 
             # Handle Point geometry (only if NOT polygon)
@@ -1550,12 +1551,12 @@ class AddBuildingPage(QWidget):
                 self._detect_and_update_neighborhood(geometry_wkt)
 
                 self.location_status_label.setText(
-                    f"تم تحديد الموقع ({lat:.6f}, {lon:.6f})"
+                    tr("page.add_building.location_set_coords").format(lat=f"{lat:.6f}", lon=f"{lon:.6f}")
                 )
                 self.location_status_label.setStyleSheet(
                     f"color: {Config.SUCCESS_COLOR}; font-size: 10pt;"
                 )
-                self.geometry_type_label.setText("📍 نقطة")
+                self.geometry_type_label.setText(tr("page.add_building.type_point"))
 
     def _populate_data(self):
         """Populate form with existing building data."""
@@ -1622,7 +1623,7 @@ class AddBuildingPage(QWidget):
 
         if self.building.latitude:
             self.latitude_spin.setValue(self.building.latitude)
-            self.location_status_label.setText("تم تحديد الموقع")
+            self.location_status_label.setText(tr("page.add_building.location_set"))
             self.location_status_label.setStyleSheet(f"color: {Config.SUCCESS_COLOR}; font-size: 10pt;")
         if self.building.longitude:
             self.longitude_spin.setValue(self.building.longitude)
@@ -1631,7 +1632,7 @@ class AddBuildingPage(QWidget):
 
         if hasattr(self.building, 'geo_location') and self.building.geo_location:
             self._polygon_wkt = self.building.geo_location
-            self.geometry_type_label.setText("نوع الإحداثيات: مضلع")
+            self.geometry_type_label.setText(tr("page.add_building.coordinates_type_polygon"))
 
         # تحديث رمز البناء
         self._update_building_id()
@@ -1644,7 +1645,7 @@ class AddBuildingPage(QWidget):
     def _show_validation_error_dialog(self, errors):
         """عرض نافذة خطأ واضحة للتحقق من البيانات."""
         dialog = QDialog(self)
-        dialog.setWindowTitle("خطأ في البيانات")
+        dialog.setWindowTitle(tr("dialog.buildings.data_error"))
         dialog.setFixedSize(500, 280)
         dialog.setStyleSheet("""
             QDialog {
@@ -1663,7 +1664,7 @@ class AddBuildingPage(QWidget):
         layout.addWidget(icon_label)
 
         # العنوان
-        title = QLabel("بيانات غير صحيحة")
+        title = QLabel(tr("dialog.buildings.invalid_data"))
         title.setStyleSheet("font-size: 20px; font-weight: bold; color: #e74c3c;")
         title.setAlignment(Qt.AlignCenter)
         layout.addWidget(title)
@@ -1682,7 +1683,7 @@ class AddBuildingPage(QWidget):
         btn_layout = QHBoxLayout()
         btn_layout.addStretch()
 
-        ok_btn = QPushButton("موافق")
+        ok_btn = QPushButton(tr("button.ok"))
         ok_btn.setFixedSize(120, 42)
         ok_btn.setStyleSheet("""
             QPushButton {
@@ -1707,7 +1708,7 @@ class AddBuildingPage(QWidget):
     def _show_duplicate_error_dialog(self, building_id):
         """عرض نافذة خطأ واضحة لرقم البناء المكرر - حسب مواصفات FSD."""
         dialog = QDialog(self)
-        dialog.setWindowTitle("رقم مكرر")
+        dialog.setWindowTitle(tr("dialog.buildings.duplicate_number"))
         dialog.setFixedSize(520, 300)
         dialog.setStyleSheet("""
             QDialog {
@@ -1726,7 +1727,7 @@ class AddBuildingPage(QWidget):
         layout.addWidget(icon_label)
 
         # العنوان - حسب FSD: E003 Duplicate
-        title = QLabel("رقم مكرر")
+        title = QLabel(tr("dialog.buildings.duplicate_number"))
         title.setStyleSheet("font-size: 20px; font-weight: bold; color: #e67e22;")
         title.setAlignment(Qt.AlignCenter)
         layout.addWidget(title)
@@ -1735,13 +1736,13 @@ class AddBuildingPage(QWidget):
         message = QLabel(
             f"<div style='text-align: right; line-height: 1.8;'>"
             f"<p style='font-size: 15px; margin-bottom: 10px;'>"
-            f"المبنى برقم <b style='color: #e67e22; font-size: 16px;'>{building_id}</b> موجود مسبقاً في النظام."
+            f"{tr('dialog.buildings.duplicate_msg_exists', building_id=f'<b style=\"color: #e67e22; font-size: 16px;\">{building_id}</b>')}"
             f"</p>"
             f"<p style='font-size: 13px; color: #7f8c8d;'>"
-            f"<b>الحل:</b> راجع السجل الموجود أو قم بتعديل رمز البناء."
+            f"<b>{tr('dialog.buildings.duplicate_solution_label')}</b> {tr('dialog.buildings.duplicate_solution_text')}"
             f"</p>"
             f"<p style='font-size: 12px; color: #95a5a6; margin-top: 8px;'>"
-            f"رمز الخطأ: E003 - Duplicate Building ID"
+            f"{tr('dialog.buildings.duplicate_error_code')}"
             f"</p>"
             f"</div>"
         )
@@ -1755,7 +1756,7 @@ class AddBuildingPage(QWidget):
         btn_layout.addStretch()
 
         # زر مراجعة السجل
-        review_btn = QPushButton("مراجعة السجل الموجود")
+        review_btn = QPushButton(tr("dialog.buildings.review_existing"))
         review_btn.setFixedSize(170, 42)
         review_btn.setStyleSheet("""
             QPushButton {
@@ -1776,7 +1777,7 @@ class AddBuildingPage(QWidget):
         btn_layout.addSpacing(10)
 
         # زر موافق
-        ok_btn = QPushButton("موافق")
+        ok_btn = QPushButton(tr("button.ok"))
         ok_btn.setFixedSize(100, 42)
         ok_btn.setStyleSheet("""
             QPushButton {
@@ -1911,8 +1912,8 @@ class AddBuildingPage(QWidget):
         if result.warnings:
             if not ErrorHandler.confirm(
                 self,
-                "\n".join(result.warnings) + "\n\nهل تريد المتابعة؟",
-                "تحذيرات"
+                "\n".join(result.warnings) + "\n\n" + tr("dialog.buildings.continue_question"),
+                tr("dialog.buildings.warnings")
             ):
                 return
 
@@ -1926,7 +1927,7 @@ class AddBuildingPage(QWidget):
                 )
 
                 if result.success:
-                    Toast.show_toast(self.window(), f"تم تحديث المبنى {self.building.building_id} بنجاح", Toast.SUCCESS)
+                    Toast.show_toast(self.window(), tr("dialog.buildings.building_updated", building_id=self.building.building_id), Toast.SUCCESS)
                     self.saved.emit()
                 else:
                     error_msg = result.message
@@ -1939,7 +1940,7 @@ class AddBuildingPage(QWidget):
 
                 if result.success:
                     building = result.data
-                    Toast.show_toast(self.window(), f"تم إضافة المبنى {building.building_id} بنجاح", Toast.SUCCESS)
+                    Toast.show_toast(self.window(), tr("dialog.buildings.building_added", building_id=building.building_id), Toast.SUCCESS)
                     self.saved.emit()
                 else:
                     error_msg = result.message
@@ -1954,7 +1955,7 @@ class AddBuildingPage(QWidget):
 
         except Exception as e:
             logger.error(f"Failed to save building: {e}")
-            self._show_validation_error_dialog([f"فشل في حفظ المبنى: {str(e)}"])
+            self._show_validation_error_dialog([tr("dialog.buildings.save_failed", error=str(e))])
 
     def get_data(self):
         """Get form data."""
@@ -2051,9 +2052,9 @@ class AddBuildingPage(QWidget):
             if detected and detected.code != new_code:
                 ErrorHandler.show_warning(
                     self,
-                    f"الموقع المحدد من الخريطة يقع في حي {detected.name_ar} ({detected.code}).\n"
-                    f"يرجى تحديث الموقع من الخريطة ليتوافق مع الحي الجديد.",
-                    "تنبيه"
+                    tr("dialog.buildings.location_neighborhood_mismatch",
+                       neighborhood=detected.name_ar, code=detected.code),
+                    tr("dialog.buildings.alert")
                 )
         except Exception:
             pass
@@ -2063,7 +2064,7 @@ class AddBuildingPage(QWidget):
         gov_code = self._get_gov_code()
         self.district_combo.blockSignals(True)
         self.district_combo.clear()
-        self.district_combo.addItem("اختر المنطقة", "")
+        self.district_combo.addItem(tr("page.add_building.select_district"), "")
         if gov_code:
             for code, en, ar in self._divisions.get_districts(gov_code):
                 self.district_combo.addItem(f"{code} - {ar}", code)
@@ -2078,7 +2079,7 @@ class AddBuildingPage(QWidget):
         dist_code = self._get_district_code()
         self.subdistrict_combo.blockSignals(True)
         self.subdistrict_combo.clear()
-        self.subdistrict_combo.addItem("اختر البلدة", "")
+        self.subdistrict_combo.addItem(tr("page.add_building.select_subdistrict"), "")
         if gov_code and dist_code:
             for code, en, ar in self._divisions.get_subdistricts(gov_code, dist_code):
                 self.subdistrict_combo.addItem(f"{code} - {ar}", code)
@@ -2094,7 +2095,7 @@ class AddBuildingPage(QWidget):
         subdist_code = self._get_subdistrict_code()
         self.community_combo.blockSignals(True)
         self.community_combo.clear()
-        self.community_combo.addItem("اختر القرية", "")
+        self.community_combo.addItem(tr("page.add_building.select_community"), "")
         if gov_code and dist_code and subdist_code:
             for code, en, ar in self._divisions.get_communities(gov_code, dist_code, subdist_code):
                 self.community_combo.addItem(f"{code} - {ar}", code)
@@ -2114,7 +2115,7 @@ class AddBuildingPage(QWidget):
 
         self.neighborhood_combo.blockSignals(True)
         self.neighborhood_combo.clear()
-        self.neighborhood_combo.addItem("اختر الحي", "")
+        self.neighborhood_combo.addItem(tr("page.add_building.select_neighborhood"), "")
 
         if gov_code and dist_code and subdist_code and comm_code:
             neighborhoods = []
@@ -2182,7 +2183,8 @@ class AddBuildingPage(QWidget):
                 self._update_building_id()
                 Toast.show_toast(
                     self,
-                    f"تم تحديد الحي تلقائيا: {detected.name_ar} ({detected.code})",
+                    tr("dialog.buildings.neighborhood_auto_detected",
+                       neighborhood=detected.name_ar, code=detected.code),
                     Toast.INFO
                 )
             elif current_code != detected.code:
@@ -2191,11 +2193,10 @@ class AddBuildingPage(QWidget):
 
                 if ErrorHandler.confirm(
                     self,
-                    f"الموقع المحدد يقع في حي مختلف عن الحي المدخل.\n\n"
-                    f"الحي المدخل: {current_name} ({current_code})\n"
-                    f"الحي المكتشف: {detected.name_ar} ({detected.code})\n\n"
-                    f"هل تريد تحديث حقل الحي؟",
-                    "حي مختلف"
+                    tr("dialog.buildings.neighborhood_mismatch_confirm",
+                       current_name=current_name, current_code=current_code,
+                       detected_name=detected.name_ar, detected_code=detected.code),
+                    tr("dialog.buildings.different_neighborhood")
                 ):
                     self._set_neighborhood_by_code(detected.code)
                     self._update_building_id()
@@ -2439,7 +2440,7 @@ class BuildingsListPage(QWidget):
         top_row.setSpacing(20)
 
         # العنوان - unified page title styling (18pt, PAGE_TITLE color)
-        title = QLabel("المباني")
+        title = QLabel(tr("page.buildings.title"))
         title.setFont(create_font(size=FontManager.SIZE_TITLE, weight=FontManager.WEIGHT_SEMIBOLD))
         title.setStyleSheet(f"color: {Colors.PAGE_TITLE}; background: transparent; border: none;")
         top_row.addWidget(title)
@@ -2452,12 +2453,12 @@ class BuildingsListPage(QWidget):
 
         # زر تجهيز العمل الميداني (شفاف مع بوردر أزرق)
         # Apply unified button dimensions
-        btn_field = CustomButton.secondary("تجهيز العمل الميداني", self, width=199, height=48)
+        btn_field = CustomButton.secondary(tr("page.buildings.prepare_field_work"), self, width=199, height=48)
         btn_field.clicked.connect(self.prepare_field_work.emit)
 
         # زر إضافة بناء جديد (أزرق solid)
         # Same as "Add New Case" button from claims pages (PrimaryButton component)
-        self.add_btn = PrimaryButton("إضافة بناء جديد", icon_name="icon")
+        self.add_btn = PrimaryButton(tr("page.buildings.add_new_building"), icon_name="icon")
         self.add_btn.clicked.connect(self.add_building.emit)
         self.add_btn.hide()
 
@@ -2478,7 +2479,7 @@ class BuildingsListPage(QWidget):
         self.table = QTableWidget()
         self.table.setColumnCount(7)
         self.table.setRowCount(11)  # Fixed 11 rows
-        self.table.setLayoutDirection(Qt.RightToLeft)
+        self.table.setLayoutDirection(get_layout_direction())
         self.table.setEditTriggers(QAbstractItemView.NoEditTriggers)
 
         # Get down.png icon path
@@ -2494,7 +2495,7 @@ class BuildingsListPage(QWidget):
         icon_path = base_path / "assets" / "images" / "down.png"
 
         # Set headers with icons for filterable columns
-        headers = ["رمز البناء", "تاريخ الادخال", "المنطقة", "الحي", "نوع البناء", "حالة البناء", ""]
+        headers = [tr("table.buildings.building_code"), tr("table.buildings.entry_date"), tr("table.buildings.area"), tr("table.buildings.neighborhood"), tr("table.buildings.building_type"), tr("table.buildings.building_status"), ""]
         for i, text in enumerate(headers):
             item = QTableWidgetItem(text)
             # Add icon to filterable columns (2, 3, 4, 5)
@@ -2708,14 +2709,14 @@ class BuildingsListPage(QWidget):
         footer.addWidget(rows_container)
 
         # "Rows per page:" label (رابع شي)
-        rows_label = QLabel("Rows per page:")
+        rows_label = QLabel(tr("table.buildings.rows_per_page"))
         rows_label.setStyleSheet("color: #637381; font-size: 10pt; font-weight: 400;")
         footer.addWidget(rows_label)
 
         footer.addStretch()
 
         from ui.components.toggle_switch import ToggleSwitch
-        self.dense_toggle = ToggleSwitch("Dense", checked=True)
+        self.dense_toggle = ToggleSwitch(tr("table.buildings.dense"), checked=True)
         self.dense_toggle.toggled.connect(self._on_dense_toggle)
         footer.addWidget(self.dense_toggle)
 
@@ -2747,7 +2748,7 @@ class BuildingsListPage(QWidget):
 
     def _load_buildings(self):
         """Load buildings from repository and populate table."""
-        self._spinner.show_loading("جاري تحميل المباني...")
+        self._spinner.show_loading(tr("page.buildings.loading"))
         try:
             self.__do_load_buildings()
         finally:
@@ -2760,7 +2761,7 @@ class BuildingsListPage(QWidget):
         if result.success:
             all_buildings = result.data
         else:
-            Toast.show_toast(self, "تعذر تحميل المباني", Toast.ERROR)
+            Toast.show_toast(self, tr("page.buildings.load_error"), Toast.ERROR)
             logger.error(f"Failed to load buildings: {result.message}")
             all_buildings = []
 
@@ -2786,7 +2787,7 @@ class BuildingsListPage(QWidget):
 
         if total == 0:
             self.table.setSpan(0, 0, 11, 7)
-            empty_item = QTableWidgetItem("لا توجد بيانات مطابقة للفلتر المحدد")
+            empty_item = QTableWidgetItem(tr("page.buildings.no_matching_data"))
             empty_item.setTextAlignment(Qt.AlignCenter)
             from PyQt5.QtGui import QColor
             empty_item.setForeground(QColor("#9CA3AF"))
@@ -2959,7 +2960,7 @@ class BuildingsListPage(QWidget):
         # Create menu
         from PyQt5.QtWidgets import QMenu, QAction
         menu = QMenu(self)
-        menu.setLayoutDirection(Qt.RightToLeft)
+        menu.setLayoutDirection(get_layout_direction())
         menu.setStyleSheet("""
             QMenu {
                 background-color: white;
@@ -2980,7 +2981,7 @@ class BuildingsListPage(QWidget):
         """)
 
         # Add "عرض الكل" (Show All) option
-        clear_action = QAction("عرض الكل", self)
+        clear_action = QAction(tr("filter.show_all"), self)
         clear_action.triggered.connect(lambda: self._apply_filter(filter_key, None))
         menu.addAction(clear_action)
 
@@ -3109,7 +3110,7 @@ class BuildingsListPage(QWidget):
 
     def _on_neighborhoods_for_filter_error(self, error_msg):
         """Callback: neighborhoods fetch failed, use fallback."""
-        Toast.show_toast(self, "تعذر تحميل المباني", Toast.ERROR)
+        Toast.show_toast(self, tr("page.buildings.load_error"), Toast.ERROR)
         logger.warning(f"Could not load neighborhoods for filter: {error_msg}")
         self._neighborhoods_api_cache = self._fallback_neighborhoods_from_buildings()
         # Re-trigger the filter menu with fallback data
@@ -3177,7 +3178,7 @@ class BuildingsListPage(QWidget):
 
         # 1. عرض - لون #212B36
         view_icon = Icon.load_qicon("eye-open", size=18)
-        view_action = QAction("  عرض", self)
+        view_action = QAction("  " + tr("action.view"), self)
         if view_icon:
             view_action.setIcon(view_icon)
         view_action.triggered.connect(lambda: self.view_building.emit(building))
@@ -3186,7 +3187,7 @@ class BuildingsListPage(QWidget):
         # 2. تعديل - لون #212B36
         _role = getattr(self, '_user_role', 'admin')
         edit_icon = Icon.load_qicon("edit-01", size=18)
-        edit_action = QAction("  تعديل", self)
+        edit_action = QAction("  " + tr("action.edit"), self)
         if edit_icon:
             edit_action.setIcon(edit_icon)
         edit_action.triggered.connect(lambda: self.edit_building.emit(building))
@@ -3195,7 +3196,7 @@ class BuildingsListPage(QWidget):
 
         # 3. حذف - لون #FF4842
         delete_icon = Icon.load_qicon("delete", size=18)
-        delete_action = QAction("  حذف", self)
+        delete_action = QAction("  " + tr("action.delete"), self)
         if delete_icon:
             delete_action.setIcon(delete_icon)
         delete_action.triggered.connect(lambda: self._on_delete_building(building))
@@ -3251,7 +3252,7 @@ class BuildingsListPage(QWidget):
                 parent=self
             )
         else:
-            Toast.show_toast(self, "لا تتوفر إحداثيات لهذا المبنى", Toast.WARNING)
+            Toast.show_toast(self, tr("dialog.buildings.no_coordinates"), Toast.WARNING)
 
     def _on_delete_building(self, building: Building):
         """Delete building with confirmation dialog."""
@@ -3260,8 +3261,8 @@ class BuildingsListPage(QWidget):
         # تأكيد الحذف
         result = ConfirmationDialog.confirm(
             parent=self,
-            title="تأكيد الحذف",
-            message=f"سيتم حذف المبنى {building.building_id}\nهذا الإجراء لا يمكن التراجع عنه.",
+            title=tr("dialog.buildings.confirm_delete"),
+            message=tr("dialog.buildings.delete_message", building_id=building.building_id),
             icon_name="wirning"
         )
         if result != ConfirmationDialog.YES:
@@ -3272,7 +3273,7 @@ class BuildingsListPage(QWidget):
             result = self.building_controller.delete_building(building.building_uuid)
 
             if result.success:
-                Toast.show_toast(self, f"تم حذف المبنى {building.building_id} بنجاح", Toast.SUCCESS)
+                Toast.show_toast(self, tr("dialog.buildings.building_deleted", building_id=building.building_id), Toast.SUCCESS)
                 self._load_buildings()
             else:
                 raise Exception(result.message or result.message_ar)
@@ -3281,8 +3282,8 @@ class BuildingsListPage(QWidget):
             logger.error(f"Failed to delete building: {e}")
             FigmaMessageDialog.show_error(
                 self,
-                "خطأ في الحذف",
-                f"حدث خطأ أثناء حذف المبنى:\n{str(e)}"
+                tr("dialog.buildings.delete_error"),
+                tr("dialog.buildings.delete_error_message", error=str(e))
             )
 
     def _go_to_previous_page(self):

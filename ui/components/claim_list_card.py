@@ -12,6 +12,7 @@ from PyQt5.QtWidgets import QGraphicsDropShadowEffect
 from ..design_system import PageDimensions, Typography
 from ..style_manager import StyleManager
 from .icon import Icon, IconSize
+from services.translation_manager import tr
 
 
 class ClaimListCard(QFrame):
@@ -83,7 +84,7 @@ class ClaimListCard(QFrame):
         name_layout.setContentsMargins(0, 0, 0, 0)
         name_layout.setSpacing(2)
 
-        name = self.claim_data.get('claimant_name', 'غير محدد')
+        name = self.claim_data.get('claimant_name', tr("component.claim_list_card.unspecified"))
         name_label = QLabel(name)
         name_label.setStyleSheet(f"""
             QLabel {{

@@ -22,7 +22,7 @@ from ..components.primary_button import PrimaryButton
 from ..components.underline_tab_bar import UnderlineTabBar
 from ..font_utils import create_font, FontManager
 from ..style_manager import StyleManager
-from services.translation_manager import tr
+from services.translation_manager import tr, get_layout_direction
 from services.display_mappings import get_source_display
 from services.api_worker import ApiWorker
 from ..components.toast import Toast
@@ -80,7 +80,7 @@ class CompletedClaimsPage(QWidget):
         main_layout.addWidget(filter_bar)
 
         # Underline Tab Bar
-        self._tab_bar = UnderlineTabBar(["مفتوحة", "مغلقة"], self)
+        self._tab_bar = UnderlineTabBar([tr("page.claims.tab_open"), tr("page.claims.tab_closed")], self)
         self._tab_bar.tab_changed.connect(self._on_tab_changed)
         main_layout.addWidget(self._tab_bar)
 
@@ -152,8 +152,8 @@ class CompletedClaimsPage(QWidget):
 
         # Search by claim number
         self._search_input = QLineEdit()
-        self._search_input.setLayoutDirection(Qt.RightToLeft)
-        self._search_input.setPlaceholderText("بحث برقم المطالبة الكامل...")
+        self._search_input.setLayoutDirection(get_layout_direction())
+        self._search_input.setPlaceholderText(tr("page.claims.search_placeholder"))
         self._search_input.setFixedWidth(280)
         self._search_input.setStyleSheet(form_style)
         self._search_input.textChanged.connect(self._on_search_changed)
@@ -161,10 +161,10 @@ class CompletedClaimsPage(QWidget):
 
         # Source filter (FieldCollection=1, OfficeSubmission=2)
         self._source_filter = QComboBox()
-        self._source_filter.setLayoutDirection(Qt.RightToLeft)
+        self._source_filter.setLayoutDirection(get_layout_direction())
         self._source_filter.setFixedWidth(170)
         self._source_filter.setStyleSheet(form_style)
-        self._source_filter.addItem("الكل", None)
+        self._source_filter.addItem(tr("filter.claims.all"), None)
         self._source_filter.addItem(get_source_display(1), 1)
         self._source_filter.addItem(get_source_display(2), 2)
         self._source_filter.currentIndexChanged.connect(self._on_source_changed)
@@ -203,7 +203,7 @@ class CompletedClaimsPage(QWidget):
 
     def _load_claims(self):
         """Load claims from API based on active tab and all filters."""
-        self._spinner.show_loading("جاري تحميل المطالبات...")
+        self._spinner.show_loading(tr("page.claims.loading"))
 
         case_status = CASE_STATUS_OPEN if self._active_tab == "open" else CASE_STATUS_CLOSED
         source = self._source_filter.currentData()
@@ -269,7 +269,7 @@ class CompletedClaimsPage(QWidget):
     def _on_claims_load_error(self, error_msg):
         """Handle claims loading error."""
         self._spinner.hide_loading()
-        Toast.show_toast(self, "تعذر تحميل المطالبات المكتملة", Toast.ERROR)
+        Toast.show_toast(self, tr("page.claims.load_error"), Toast.ERROR)
         logger.warning(f"Error loading claims: {error_msg}")
         self.claims_data = []
         self._apply_local_filter()
@@ -282,7 +282,7 @@ class CompletedClaimsPage(QWidget):
         claimant = (
             s.get("primaryClaimantName")
             or s.get("fullNameArabic")
-            or "غير محدد"
+            or tr("page.claims.unknown_claimant")
         )
         date_str = s.get("createdAtUtc") or s.get("surveyDate") or ""
 
@@ -338,11 +338,11 @@ class CompletedClaimsPage(QWidget):
     def _show_empty_state(self):
         self._clear_content()
 
-        msg = "لا توجد مطالبات مفتوحة حالياً" if self._active_tab == "open" else "لا توجد مطالبات مغلقة بعد"
+        msg = tr("page.claims.empty_open") if self._active_tab == "open" else tr("page.claims.empty_closed")
         empty_state = EmptyState(
             icon_text="+",
             title=msg,
-            description="ابدأ بإضافة الحالات للظهور هنا"
+            description=tr("page.claims.empty_description")
         )
 
         self.content_layout.addItem(
@@ -372,6 +372,18 @@ class CompletedClaimsPage(QWidget):
 
     def search_claims(self, query: str, mode: str = "name"):
         pass
+
+    def update_language(self, is_arabic: bool):
+        self.setLayoutDirection(get_layout_direction())
+        self.title_label.setText(tr("navbar.tab.claims"))
+        if hasattr(self._tab_bar, '_tabs') and len(self._tab_bar._tabs) >= 2:
+            self._tab_bar._tabs[0].setText(tr("page.claims.tab_open"))
+            self._tab_bar._tabs[1].setText(tr("page.claims.tab_closed"))
+        self._search_input.setLayoutDirection(get_layout_direction())
+        self._search_input.setPlaceholderText(tr("page.claims.search_placeholder"))
+        self._source_filter.setLayoutDirection(get_layout_direction())
+        self._source_filter.setItemText(0, tr("filter.claims.all"))
+        self._show_empty_state()
 
     def set_tab_title(self, title: str):
         if hasattr(self, 'title_label'):

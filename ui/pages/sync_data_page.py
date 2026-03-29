@@ -15,6 +15,7 @@ from PyQt5.QtCore import Qt, QTimer, QPropertyAnimation, QEasingCurve, pyqtPrope
 from PyQt5.QtGui import QFont, QPainter, QColor, QLinearGradient
 
 from services.api_worker import ApiWorker
+from services.translation_manager import tr, get_layout_direction
 from ui.components.icon import Icon
 from ui.design_system import Colors, PageDimensions
 from ui.style_manager import StyleManager
@@ -23,34 +24,38 @@ from utils.logger import get_logger
 
 logger = get_logger(__name__)
 
-_STATUS_CONFIG = {
-    'not_transferred': ('في الانتظار', '#9CA3AF', '#F3F4F6'),
-    'pending': ('في الانتظار', '#9CA3AF', '#F3F4F6'),
-    '0': ('في الانتظار', '#9CA3AF', '#F3F4F6'),
-    'transferring': ('قيد المزامنة', '#3890DF', '#EBF5FF'),
-    'in_progress': ('قيد المزامنة', '#3890DF', '#EBF5FF'),
-    '1': ('قيد المزامنة', '#3890DF', '#EBF5FF'),
-    'transferred': ('تمت المزامنة', '#10B981', '#ECFDF5'),
-    'completed': ('تمت المزامنة', '#10B981', '#ECFDF5'),
-    '2': ('تمت المزامنة', '#10B981', '#ECFDF5'),
-    'failed': ('فشلت المزامنة', '#EF4444', '#FEF2F2'),
-    '3': ('فشلت المزامنة', '#EF4444', '#FEF2F2'),
-    '4': ('قيد الإعادة', '#F59E0B', '#FFFBEB'),
-    'retry': ('قيد الإعادة', '#F59E0B', '#FFFBEB'),
-    '5': ('ملغى', '#6B7280', '#F9FAFB'),
-    'cancelled': ('ملغى', '#6B7280', '#F9FAFB'),
-}
+def _get_status_config():
+    return {
+        'not_transferred': (tr("page.sync.status_pending"), '#9CA3AF', '#F3F4F6'),
+        'pending': (tr("page.sync.status_pending"), '#9CA3AF', '#F3F4F6'),
+        '0': (tr("page.sync.status_pending"), '#9CA3AF', '#F3F4F6'),
+        'transferring': (tr("page.sync.status_syncing"), '#3890DF', '#EBF5FF'),
+        'in_progress': (tr("page.sync.status_syncing"), '#3890DF', '#EBF5FF'),
+        '1': (tr("page.sync.status_syncing"), '#3890DF', '#EBF5FF'),
+        'transferred': (tr("page.sync.status_synced"), '#10B981', '#ECFDF5'),
+        'completed': (tr("page.sync.status_synced"), '#10B981', '#ECFDF5'),
+        '2': (tr("page.sync.status_synced"), '#10B981', '#ECFDF5'),
+        'failed': (tr("page.sync.status_failed"), '#EF4444', '#FEF2F2'),
+        '3': (tr("page.sync.status_failed"), '#EF4444', '#FEF2F2'),
+        '4': (tr("page.sync.status_retrying"), '#F59E0B', '#FFFBEB'),
+        'retry': (tr("page.sync.status_retrying"), '#F59E0B', '#FFFBEB'),
+        '5': (tr("page.sync.status_cancelled"), '#6B7280', '#F9FAFB'),
+        'cancelled': (tr("page.sync.status_cancelled"), '#6B7280', '#F9FAFB'),
+    }
 
 _SYNCING_STATUSES = {'transferring', 'in_progress', '1'}
 _PENDING_STATUSES = {'not_transferred', 'pending', '0'}
 _COMPLETED_STATUSES = {'transferred', 'completed', '2'}
 _CANCELLED_STATUSES = {'cancelled', '5'}
 
-_UNIT_TYPE_AR = {
-    1: "شقة سكنية", 2: "محل تجاري", 3: "مكتب", 4: "مستودع", 5: "أخرى",
-    "apartment": "شقة سكنية", "shop": "محل تجاري", "office": "مكتب",
-    "warehouse": "مستودع", "garage": "كراج", "other": "أخرى",
-}
+def _get_unit_type_ar():
+    return {
+        1: tr("page.sync.unit_apartment"), 2: tr("page.sync.unit_shop"),
+        3: tr("page.sync.unit_office"), 4: tr("page.sync.unit_warehouse"), 5: tr("page.sync.unit_other"),
+        "apartment": tr("page.sync.unit_apartment"), "shop": tr("page.sync.unit_shop"),
+        "office": tr("page.sync.unit_office"), "warehouse": tr("page.sync.unit_warehouse"),
+        "garage": tr("page.sync.unit_garage"), "other": tr("page.sync.unit_other"),
+    }
 
 
 class _SyncPulseOverlay(QWidget):
@@ -139,7 +144,7 @@ class SyncDataPage(QWidget):
 
     def _setup_ui(self):
         self.setStyleSheet(StyleManager.page_background())
-        self.setLayoutDirection(Qt.RightToLeft)
+        self.setLayoutDirection(get_layout_direction())
 
         main_layout = QVBoxLayout(self)
         main_layout.setContentsMargins(
@@ -187,24 +192,24 @@ class SyncDataPage(QWidget):
         title_row = QHBoxLayout()
         title_row.setSpacing(12)
 
-        title = QLabel("المزامنة والبيانات")
-        title.setFont(create_font(
+        self._title_label = QLabel(tr("page.sync.title"))
+        self._title_label.setFont(create_font(
             size=FontManager.SIZE_TITLE,
             weight=QFont.Bold,
             letter_spacing=0
         ))
-        title.setStyleSheet(StyleManager.label_title())
-        title_row.addWidget(title)
+        self._title_label.setStyleSheet(StyleManager.label_title())
+        title_row.addWidget(self._title_label)
 
         title_row.addStretch()
 
         self._collector_combo = QComboBox()
         # Back button
-        back_btn = QPushButton("رجوع")
-        back_btn.setFixedSize(100, 40)
-        back_btn.setCursor(Qt.PointingHandCursor)
-        back_btn.setFont(create_font(size=FontManager.SIZE_BODY, weight=FontManager.WEIGHT_SEMIBOLD))
-        back_btn.setStyleSheet("""
+        self._back_btn = QPushButton(tr("action.back"))
+        self._back_btn.setFixedSize(100, 40)
+        self._back_btn.setCursor(Qt.PointingHandCursor)
+        self._back_btn.setFont(create_font(size=FontManager.SIZE_BODY, weight=FontManager.WEIGHT_SEMIBOLD))
+        self._back_btn.setStyleSheet("""
             QPushButton {
                 background-color: #F1F5F9;
                 color: #475569;
@@ -216,14 +221,14 @@ class SyncDataPage(QWidget):
                 background-color: #E2E8F0;
             }
         """)
-        back_btn.clicked.connect(self.back_requested.emit)
-        title_row.addWidget(back_btn)
+        self._back_btn.clicked.connect(self.back_requested.emit)
+        title_row.addWidget(self._back_btn)
 
-        refresh_btn = QPushButton("تحديث")
-        refresh_btn.setFixedSize(100, 40)
-        refresh_btn.setCursor(Qt.PointingHandCursor)
-        refresh_btn.setFont(create_font(size=FontManager.SIZE_BODY, weight=FontManager.WEIGHT_SEMIBOLD))
-        refresh_btn.setStyleSheet("""
+        self._refresh_btn = QPushButton(tr("page.sync.refresh"))
+        self._refresh_btn.setFixedSize(100, 40)
+        self._refresh_btn.setCursor(Qt.PointingHandCursor)
+        self._refresh_btn.setFont(create_font(size=FontManager.SIZE_BODY, weight=FontManager.WEIGHT_SEMIBOLD))
+        self._refresh_btn.setStyleSheet("""
             QPushButton {
                 background-color: #EBF5FF;
                 color: #3890DF;
@@ -235,13 +240,13 @@ class SyncDataPage(QWidget):
                 background-color: #DBEAFE;
             }
         """)
-        refresh_btn.clicked.connect(self.refresh)
-        title_row.addWidget(refresh_btn)
+        self._refresh_btn.clicked.connect(self.refresh)
+        title_row.addWidget(self._refresh_btn)
         self._collector_combo.setFixedHeight(42)
         self._collector_combo.setFixedWidth(220)
         self._collector_combo.setEditable(True)
         self._collector_combo.lineEdit().setReadOnly(True)
-        self._collector_combo.lineEdit().setPlaceholderText("جميع جامعي البيانات")
+        self._collector_combo.lineEdit().setPlaceholderText(tr("page.sync.all_collectors"))
         self._collector_combo.lineEdit().setAlignment(Qt.AlignCenter)
         self._style_combo(self._collector_combo)
         self._collector_combo.currentIndexChanged.connect(self._on_collector_changed)
@@ -261,7 +266,8 @@ class SyncDataPage(QWidget):
         )
         style = f"color: {Colors.TEXT_SECONDARY}; border: none; background: transparent;"
 
-        for i, text in enumerate(["المطالبات المكتملة", "•", "المزامنة والبيانات"]):
+        self._breadcrumb_texts = [tr("page.sync.breadcrumb_claims"), "•", tr("page.sync.title")]
+        for i, text in enumerate(self._breadcrumb_texts):
             lbl = QLabel(text)
             lbl.setFont(subtitle_font)
             lbl.setStyleSheet(style)
@@ -341,7 +347,7 @@ class SyncDataPage(QWidget):
         self._rows_container.setSpacing(8)
         layout.addLayout(self._rows_container)
 
-        self._empty_label = QLabel("لا توجد تعيينات")
+        self._empty_label = QLabel(tr("page.sync.no_assignments"))
         self._empty_label.setFont(create_font(
             size=FontManager.SIZE_BODY, weight=QFont.Normal
         ))
@@ -376,7 +382,7 @@ class SyncDataPage(QWidget):
 
             self._collector_combo.blockSignals(True)
             self._collector_combo.clear()
-            self._collector_combo.addItem("جميع جامعي البيانات", None)
+            self._collector_combo.addItem(tr("page.sync.all_collectors"), None)
             for c in collectors:
                 name = (
                     c.get("fullNameArabic") or c.get("fullNameAr")
@@ -417,7 +423,7 @@ class SyncDataPage(QWidget):
 
     def _load_assignments(self):
         """Full rebuild of all accordion items (non-blocking)."""
-        self._spinner.show_loading("جاري تحميل البيانات...")
+        self._spinner.show_loading(tr("page.sync.loading_data"))
         self._clear_rows()
 
         from services.api_client import get_api_client
@@ -434,7 +440,7 @@ class SyncDataPage(QWidget):
             self._current_items = items
 
             if not items:
-                self._empty_label.setText("لا توجد تعيينات")
+                self._empty_label.setText(tr("page.sync.no_assignments"))
                 self._empty_label.show()
                 return
 
@@ -452,7 +458,7 @@ class SyncDataPage(QWidget):
                     self._add_sync_overlay(aid)
         except Exception as e:
             logger.warning(f"Failed to load assignments: {e}")
-            self._empty_label.setText("فشل تحميل التعيينات")
+            self._empty_label.setText(tr("page.sync.load_failed"))
             self._empty_label.show()
         finally:
             self._spinner.hide_loading()
@@ -460,7 +466,7 @@ class SyncDataPage(QWidget):
     def _on_assignments_load_error(self, error_msg):
         """Handle assignment list API error."""
         logger.warning(f"Failed to load assignments: {error_msg}")
-        self._empty_label.setText("فشل تحميل التعيينات")
+        self._empty_label.setText(tr("page.sync.load_failed"))
         self._empty_label.show()
         self._spinner.hide_loading()
     # Smart Refresh (polling every 10s)
@@ -553,8 +559,8 @@ class SyncDataPage(QWidget):
                 f"color: {Colors.TEXT_SECONDARY}; background: transparent; border: none;"
             )
         else:
-            label, color, bg = _STATUS_CONFIG.get(
-                new_status, _STATUS_CONFIG['not_transferred']
+            label, color, bg = _get_status_config().get(
+                new_status, _get_status_config()['not_transferred']
             )
             widget.setText(label)
             widget.setFont(create_font(
@@ -694,9 +700,9 @@ class SyncDataPage(QWidget):
         )
 
         if researcher_name:
-            display_text = f"تعيين مبنى {building_code} لـ {researcher_name}"
+            display_text = tr("page.sync.assign_building_to", building_code=building_code, researcher=researcher_name)
         else:
-            display_text = f"تعيين مبنى {building_code}"
+            display_text = tr("page.sync.assign_building", building_code=building_code)
 
         text_label = QLabel(display_text)
         text_label.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
@@ -708,7 +714,7 @@ class SyncDataPage(QWidget):
         # Units count badge
         units_count = assignment.get("propertyUnitsCount") or assignment.get("unitsCount") or 0
         if units_count:
-            badge = QLabel(f"{units_count} وحدات")
+            badge = QLabel(tr("page.sync.units_count", count=units_count))
             badge.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
             badge.setStyleSheet("""
                 color: #3890DF;
@@ -739,8 +745,8 @@ class SyncDataPage(QWidget):
                 f"color: {Colors.TEXT_SECONDARY}; background: transparent; border: none;"
             )
         else:
-            label, color, bg = _STATUS_CONFIG.get(
-                status_str, _STATUS_CONFIG['not_transferred']
+            label, color, bg = _get_status_config().get(
+                status_str, _get_status_config()['not_transferred']
             )
             status_widget.setText(label)
             status_widget.setFont(create_font(
@@ -784,7 +790,7 @@ class SyncDataPage(QWidget):
         """Start background fetch of assignment details and units."""
         # Show loading indicator in body
         body_layout = body.layout()
-        loading_label = QLabel("جاري تحميل التفاصيل...")
+        loading_label = QLabel(tr("page.sync.loading_details"))
         loading_label.setFont(create_font(size=9, weight=FontManager.WEIGHT_REGULAR))
         loading_label.setStyleSheet("color: #637381; background: transparent; border: none;")
         loading_label.setAlignment(Qt.AlignCenter)
@@ -875,9 +881,9 @@ class SyncDataPage(QWidget):
             date_str = str(assigned_date)[:10] if assigned_date else ""
 
             for label_text, value_text, value_color in [
-                ("الباحث الميداني:", researcher_name, "#212B36"),
-                ("عدد المباني:", str(building_count), "#3890DF"),
-                ("تاريخ التعيين:", date_str, "#212B36"),
+                (tr("page.sync.field_researcher"), researcher_name, "#212B36"),
+                (tr("page.sync.building_count"), str(building_count), "#3890DF"),
+                (tr("page.sync.assignment_date"), date_str, "#212B36"),
             ]:
                 row = QHBoxLayout()
                 row.setSpacing(12)
@@ -899,7 +905,7 @@ class SyncDataPage(QWidget):
             body_layout.addWidget(info_frame)
 
             if units:
-                units_label = QLabel("المقاسم:")
+                units_label = QLabel(tr("page.sync.property_units"))
                 units_label.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
                 units_label.setStyleSheet("color: #637381; background: transparent; border: none;")
                 body_layout.addWidget(units_label)
@@ -914,7 +920,7 @@ class SyncDataPage(QWidget):
                 btn_row = QHBoxLayout()
                 btn_row.addStretch()
 
-                unassign_btn = QPushButton("إلغاء التعيين")
+                unassign_btn = QPushButton(tr("page.sync.unassign"))
                 unassign_btn.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
                 unassign_btn.setCursor(Qt.PointingHandCursor)
                 unassign_btn.setFixedHeight(36)
@@ -939,7 +945,7 @@ class SyncDataPage(QWidget):
 
         except Exception as e:
             logger.warning(f"Failed to build assignment details UI: {e}")
-            err = QLabel("فشل تحميل التفاصيل")
+            err = QLabel(tr("page.sync.details_load_failed"))
             err.setFont(create_font(size=9, weight=FontManager.WEIGHT_REGULAR))
             err.setStyleSheet("color: #EF4444; background: transparent; border: none;")
             err.setAlignment(Qt.AlignCenter)
@@ -957,7 +963,7 @@ class SyncDataPage(QWidget):
                 w.widget().deleteLater()
                 break
 
-        err = QLabel("فشل تحميل التفاصيل")
+        err = QLabel(tr("page.sync.details_load_failed"))
         err.setFont(create_font(size=9, weight=FontManager.WEIGHT_REGULAR))
         err.setStyleSheet("color: #EF4444; background: transparent; border: none;")
         err.setAlignment(Qt.AlignCenter)
@@ -971,7 +977,7 @@ class SyncDataPage(QWidget):
         except (ValueError, TypeError):
             pass
         lookup_key = unit_type if isinstance(unit_type, int) else str(unit_type).lower()
-        ar_type = _UNIT_TYPE_AR.get(lookup_key, str(unit_type))
+        ar_type = _get_unit_type_ar().get(lookup_key, str(unit_type))
 
         unit_code = unit_data.get('unitCode') or unit_data.get('unit_code') or '-'
         floor = unit_data.get('floorNumber')
@@ -1003,12 +1009,12 @@ class SyncDataPage(QWidget):
         grid.setSpacing(0)
 
         data_points = [
-            ("رمز الوحدة", unit_code),
-            ("الطابق", floor_str),
-            ("النوع", ar_type),
-            ("الأفراد", str(person_count)),
-            ("الأسر", str(household_count)),
-            ("المطالبات", str(claim_count)),
+            (tr("page.sync.unit_code"), unit_code),
+            (tr("page.sync.floor"), floor_str),
+            (tr("page.sync.type"), ar_type),
+            (tr("page.sync.persons"), str(person_count)),
+            (tr("page.sync.households"), str(household_count)),
+            (tr("page.sync.claims"), str(claim_count)),
         ]
 
         for i, (label_text, value_text) in enumerate(data_points):
@@ -1053,7 +1059,7 @@ class SyncDataPage(QWidget):
 
             bottom.addStretch()
 
-            survey_text = "تم المسح" if has_survey else "لم يتم المسح"
+            survey_text = tr("page.sync.survey_done") if has_survey else tr("page.sync.survey_not_done")
             survey_color = "#10B981" if has_survey else "#9CA3AF"
             survey_bg = "#ECFDF5" if has_survey else "#F3F4F6"
             survey_badge = QLabel(survey_text)
@@ -1076,8 +1082,8 @@ class SyncDataPage(QWidget):
 
         result = ConfirmationDialog.confirm(
             self,
-            "تأكيد إلغاء التعيين",
-            "هل أنت متأكد من إلغاء هذا التعيين؟"
+            tr("page.sync.confirm_unassign_title"),
+            tr("page.sync.confirm_unassign_message")
         )
         if result != ConfirmationDialog.YES:
             return
@@ -1085,7 +1091,7 @@ class SyncDataPage(QWidget):
         from services.api_client import get_api_client
         api = get_api_client()
         self._unassign_worker = ApiWorker(
-            api.unassign_building, assignment_id, cancellation_reason="إلغاء من المشرف"
+            api.unassign_building, assignment_id, cancellation_reason=tr("page.sync.cancel_reason_supervisor")
         )
         self._unassign_worker.finished.connect(
             lambda _: self._on_unassign_success()
@@ -1098,14 +1104,14 @@ class SyncDataPage(QWidget):
     def _on_unassign_success(self):
         """Handle successful unassign."""
         from ui.components.toast import Toast
-        Toast.show_toast(self.window(), "تم إلغاء التعيين بنجاح", Toast.SUCCESS)
+        Toast.show_toast(self.window(), tr("page.sync.unassign_success"), Toast.SUCCESS)
         self._load_assignments()
 
     def _on_unassign_error(self, error_msg):
         """Handle failed unassign."""
         from ui.components.toast import Toast
         logger.warning(f"Failed to unassign: {error_msg}")
-        Toast.show_toast(self.window(), f"فشل إلغاء التعيين: {error_msg}", Toast.ERROR)
+        Toast.show_toast(self.window(), f"{tr('page.sync.unassign_failed')}: {error_msg}", Toast.ERROR)
     # Helpers
 
     @staticmethod
@@ -1150,6 +1156,15 @@ class SyncDataPage(QWidget):
     def refresh(self, data=None):
         self._load_collectors()
         self._load_assignments()
+
+    def update_language(self, is_arabic: bool):
+        self.setLayoutDirection(get_layout_direction())
+        self._title_label.setText(tr("page.sync.title"))
+        self._back_btn.setText(tr("action.back"))
+        self._refresh_btn.setText(tr("page.sync.refresh"))
+        self._empty_label.setText(tr("page.sync.no_assignments"))
+        if self._collector_combo and self._collector_combo.lineEdit():
+            self._collector_combo.lineEdit().setPlaceholderText(tr("page.sync.all_collectors"))
 
     def showEvent(self, event):
         super().showEvent(event)

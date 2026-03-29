@@ -17,6 +17,7 @@ from ui.components.icon import Icon
 from ui.design_system import Colors
 from ui.font_utils import create_font, FontManager
 from utils.logger import get_logger
+from services.translation_manager import tr, get_layout_direction
 
 logger = get_logger(__name__)
 
@@ -38,7 +39,7 @@ class SecurityDialog(QDialog):
         self._setup_ui()
 
     def _setup_ui(self):
-        self.setLayoutDirection(Qt.RightToLeft)
+        self.setLayoutDirection(get_layout_direction())
 
         outer = QVBoxLayout(self)
         outer.setContentsMargins(12, 12, 12, 12)
@@ -47,7 +48,7 @@ class SecurityDialog(QDialog):
         # White container
         container = QFrame()
         container.setObjectName("secContainer")
-        container.setLayoutDirection(Qt.RightToLeft)
+        container.setLayoutDirection(get_layout_direction())
         container.setStyleSheet("""
             QFrame#secContainer {
                 background-color: #FFFFFF;
@@ -70,19 +71,19 @@ class SecurityDialog(QDialog):
         layout.setSpacing(16)
 
         # Title
-        title = QLabel("سياسات الأمان")
+        title = QLabel(tr("dialog.security.title"))
         title.setFont(create_font(size=14, weight=FontManager.WEIGHT_BOLD))
         title.setStyleSheet(f"color: {Colors.TEXT_PRIMARY};")
         title.setAlignment(Qt.AlignRight)
         layout.addWidget(title)
 
         # Field 1: Session timeout in minutes
-        field1 = self._create_field("مهلة الجلسة (دقيقة)", self.session_timeout_minutes, 5, 480, " دقيقة")
+        field1 = self._create_field(tr("dialog.security.session_timeout"), self.session_timeout_minutes, 5, 480, " " + tr("dialog.security.minutes"))
         self._session_spin = field1["spin"]
         layout.addLayout(field1["layout"])
 
         # Field 2: Max login attempts
-        field2 = self._create_field("عدد محاولات الدخول", self.max_attempts, 1, 20, "")
+        field2 = self._create_field(tr("dialog.security.max_attempts"), self.max_attempts, 1, 20, "")
         self._attempts_spin = field2["spin"]
         layout.addLayout(field2["layout"])
 
@@ -93,11 +94,11 @@ class SecurityDialog(QDialog):
         btn_layout.setSpacing(12)
         btn_layout.addStretch()
 
-        cancel_btn = self._create_button("الغاء", primary=False)
+        cancel_btn = self._create_button(tr("button.cancel"), primary=False)
         cancel_btn.clicked.connect(self.reject)
         btn_layout.addWidget(cancel_btn)
 
-        save_btn = self._create_button("حفظ", primary=True)
+        save_btn = self._create_button(tr("button.save"), primary=True)
         save_btn.clicked.connect(self._on_save)
         btn_layout.addWidget(save_btn)
 

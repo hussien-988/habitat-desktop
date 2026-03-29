@@ -27,6 +27,7 @@ from ui.error_handler import ErrorHandler
 from utils.i18n import I18n
 from ui.style_manager import StyleManager
 from utils.logger import get_logger
+from services.translation_manager import tr, get_layout_direction
 
 logger = get_logger(__name__)
 
@@ -36,11 +37,11 @@ class UsersTableModel(BaseTableModel):
 
     def __init__(self):
         columns = [
-            ('username', "اسم المستخدم", "اسم المستخدم"),
-            ('full_name', "الاسم الكامل", "الاسم الكامل"),
-            ('role', "الدور", "الدور"),
-            ('email', "البريد", "البريد"),
-            ('status', "الحالة", "الحالة"),
+            ('username', tr("page.admin.col_username"), tr("page.admin.col_username")),
+            ('full_name', tr("page.admin.col_full_name"), tr("page.admin.col_full_name")),
+            ('role', tr("page.admin.col_role"), tr("page.admin.col_role")),
+            ('email', tr("page.admin.col_email"), tr("page.admin.col_email")),
+            ('status', tr("page.admin.col_status"), tr("page.admin.col_status")),
         ]
         super().__init__(items=[], columns=columns)
 
@@ -72,11 +73,11 @@ class UsersTableModel(BaseTableModel):
             return item.email or "-"
         elif field_name == 'status':
             if item.is_locked:
-                return "مقفل"
+                return tr("page.admin.status_locked")
             elif item.is_active:
-                return "نشط"
+                return tr("page.admin.status_active")
             else:
-                return "معطل"
+                return tr("page.admin.status_disabled")
         return "-"
 
     def set_users(self, users: list):
@@ -94,7 +95,7 @@ class UserDialog(QDialog):
         self.i18n = i18n
         self.user = user
 
-        self.setWindowTitle("تعديل المستخدم" if user else "إضافة مستخدم جديد")
+        self.setWindowTitle(tr("page.admin.edit_user") if user else tr("page.admin.add_new_user"))
         self.setMinimumWidth(450)
         self._setup_ui()
 
@@ -110,45 +111,45 @@ class UserDialog(QDialog):
         form.setSpacing(12)
 
         self.username = QLineEdit()
-        self.username.setPlaceholderText("اسم المستخدم")
+        self.username.setPlaceholderText(tr("page.admin.col_username"))
         if self.user:
             self.username.setEnabled(False)
-        form.addRow("اسم المستخدم:", self.username)
+        form.addRow(tr("page.admin.username_label"), self.username)
 
         self.full_name = QLineEdit()
-        self.full_name.setPlaceholderText("الاسم الكامل بالعربية")
-        form.addRow("الاسم الكامل:", self.full_name)
+        self.full_name.setPlaceholderText(tr("page.admin.full_name_placeholder"))
+        form.addRow(tr("page.admin.full_name_label"), self.full_name)
 
         self.email = QLineEdit()
         self.email.setPlaceholderText("example@unhabitat.org")
-        form.addRow("البريد الإلكتروني:", self.email)
+        form.addRow(tr("page.admin.email_label"), self.email)
 
         self.role_combo = QComboBox()
         roles = [
-            (Roles.ADMIN, "مدير النظام"),
-            (Roles.DATA_MANAGER, "مدير البيانات"),
-            (Roles.OFFICE_CLERK, "موظف المكتب"),
-            (Roles.FIELD_SUPERVISOR, "مشرف ميداني"),
-            (Roles.ANALYST, "محلل"),
+            (Roles.ADMIN, tr("page.admin.role_admin")),
+            (Roles.DATA_MANAGER, tr("page.admin.role_data_manager")),
+            (Roles.OFFICE_CLERK, tr("page.admin.role_office_clerk")),
+            (Roles.FIELD_SUPERVISOR, tr("page.admin.role_field_supervisor")),
+            (Roles.ANALYST, tr("page.admin.role_analyst")),
         ]
         for code, name in roles:
             self.role_combo.addItem(name, code)
-        form.addRow("الدور:", self.role_combo)
+        form.addRow(tr("page.admin.role_label"), self.role_combo)
 
-        self.is_active = QCheckBox("مستخدم نشط")
+        self.is_active = QCheckBox(tr("page.admin.active_user"))
         self.is_active.setChecked(True)
         form.addRow("", self.is_active)
 
         if not self.user:
             self.password = QLineEdit()
             self.password.setEchoMode(QLineEdit.Password)
-            self.password.setPlaceholderText("كلمة المرور")
-            form.addRow("كلمة المرور:", self.password)
+            self.password.setPlaceholderText(tr("page.admin.password_placeholder"))
+            form.addRow(tr("page.admin.password_label"), self.password)
 
             self.password_confirm = QLineEdit()
             self.password_confirm.setEchoMode(QLineEdit.Password)
-            self.password_confirm.setPlaceholderText("تأكيد كلمة المرور")
-            form.addRow("تأكيد كلمة المرور:", self.password_confirm)
+            self.password_confirm.setPlaceholderText(tr("page.admin.confirm_password_placeholder"))
+            form.addRow(tr("page.admin.confirm_password_label"), self.password_confirm)
 
         layout.addLayout(form)
 
@@ -161,11 +162,11 @@ class UserDialog(QDialog):
         btn_layout = QHBoxLayout()
         btn_layout.addStretch()
 
-        cancel_btn = QPushButton("إلغاء")
+        cancel_btn = QPushButton(tr("page.admin.cancel"))
         cancel_btn.clicked.connect(self.reject)
         btn_layout.addWidget(cancel_btn)
 
-        save_btn = QPushButton("حفظ")
+        save_btn = QPushButton(tr("page.admin.save"))
         save_btn.setStyleSheet(f"""
             QPushButton {{
                 background-color: {Config.PRIMARY_COLOR};
@@ -199,18 +200,18 @@ class UserDialog(QDialog):
         errors = []
 
         if not self.username.text().strip():
-            errors.append("اسم المستخدم مطلوب")
+            errors.append(tr("page.admin.err_username_required"))
 
         if not self.full_name.text().strip():
-            errors.append("الاسم الكامل مطلوب")
+            errors.append(tr("page.admin.err_full_name_required"))
 
         if not self.user:  # New user - validate password
             if not hasattr(self, 'password') or not self.password.text():
-                errors.append("كلمة المرور مطلوبة")
+                errors.append(tr("page.admin.err_password_required"))
             elif self.password.text() != self.password_confirm.text():
-                errors.append("كلمتا المرور غير متطابقتين")
+                errors.append(tr("page.admin.err_password_mismatch"))
             elif len(self.password.text()) < 6:
-                errors.append("كلمة المرور يجب أن تكون 6 أحرف على الأقل")
+                errors.append(tr("page.admin.err_password_min_length"))
 
         if errors:
             self.error_label.setText(" | ".join(errors))
@@ -242,7 +243,7 @@ class VocabularyTermDialog(QDialog):
         self.vocabulary_name = vocabulary_name
         self.term_data = term_data
 
-        self.setWindowTitle("تعديل المصطلح" if term_data else "إضافة مصطلح جديد")
+        self.setWindowTitle(tr("page.admin.edit_term") if term_data else tr("page.admin.add_new_term"))
         self.setMinimumWidth(450)
         self._setup_ui()
 
@@ -258,25 +259,25 @@ class VocabularyTermDialog(QDialog):
         form.setSpacing(12)
 
         self.code_edit = QLineEdit()
-        self.code_edit.setPlaceholderText("الرمز (مثال: residential)")
+        self.code_edit.setPlaceholderText(tr("page.admin.code_placeholder"))
         if self.term_data:
             self.code_edit.setEnabled(False)
-        form.addRow("الرمز:", self.code_edit)
+        form.addRow(tr("page.admin.code_label"), self.code_edit)
 
         self.label_en_edit = QLineEdit()
         self.label_en_edit.setPlaceholderText("English label")
-        form.addRow("التسمية (إنجليزي):", self.label_en_edit)
+        form.addRow(tr("page.admin.label_en"), self.label_en_edit)
 
         self.label_ar_edit = QLineEdit()
-        self.label_ar_edit.setPlaceholderText("التسمية بالعربية")
-        form.addRow("التسمية (عربي):", self.label_ar_edit)
+        self.label_ar_edit.setPlaceholderText(tr("page.admin.label_ar_placeholder"))
+        form.addRow(tr("page.admin.label_ar"), self.label_ar_edit)
 
-        self.is_active = QCheckBox("مصطلح نشط")
+        self.is_active = QCheckBox(tr("page.admin.active_term"))
         self.is_active.setChecked(True)
         form.addRow("", self.is_active)
 
         # Effective dates
-        dates_label = QLabel("تواريخ السريان:")
+        dates_label = QLabel(tr("page.admin.effective_dates"))
         dates_label.setStyleSheet("font-weight: 600; margin-top: 8px;")
         form.addRow(dates_label)
 
@@ -284,15 +285,15 @@ class VocabularyTermDialog(QDialog):
         self.effective_from.setCalendarPopup(True)
         self.effective_from.setDisplayFormat("yyyy-MM-dd")
         self.effective_from.setDate(QDate.currentDate())
-        self.effective_from.setSpecialValueText("غير محدد")
-        form.addRow("ساري من:", self.effective_from)
+        self.effective_from.setSpecialValueText(tr("page.admin.not_specified"))
+        form.addRow(tr("page.admin.effective_from"), self.effective_from)
 
         self.effective_to = QDateEdit()
         self.effective_to.setCalendarPopup(True)
         self.effective_to.setDisplayFormat("yyyy-MM-dd")
-        self.effective_to.setSpecialValueText("غير محدد")
+        self.effective_to.setSpecialValueText(tr("page.admin.not_specified"))
         self.effective_to.setDate(QDate())  # Empty/unset
-        form.addRow("ساري حتى:", self.effective_to)
+        form.addRow(tr("page.admin.effective_to"), self.effective_to)
 
         layout.addLayout(form)
 
@@ -303,11 +304,11 @@ class VocabularyTermDialog(QDialog):
         btn_layout = QHBoxLayout()
         btn_layout.addStretch()
 
-        cancel_btn = QPushButton("إلغاء")
+        cancel_btn = QPushButton(tr("page.admin.cancel"))
         cancel_btn.clicked.connect(self.reject)
         btn_layout.addWidget(cancel_btn)
 
-        save_btn = QPushButton("حفظ")
+        save_btn = QPushButton(tr("page.admin.save"))
         save_btn.setStyleSheet(f"""
             QPushButton {{
                 background-color: {Config.PRIMARY_COLOR};
@@ -336,10 +337,10 @@ class VocabularyTermDialog(QDialog):
 
     def _on_save(self):
         if not self.code_edit.text().strip():
-            self.error_label.setText("الرمز مطلوب")
+            self.error_label.setText(tr("page.admin.err_code_required"))
             return
         if not self.label_ar_edit.text().strip():
-            self.error_label.setText("التسمية العربية مطلوبة")
+            self.error_label.setText(tr("page.admin.err_label_ar_required"))
             return
         self.accept()
 
@@ -373,13 +374,13 @@ class AdminPage(QWidget):
         layout.setSpacing(20)
 
         # Header
-        title = QLabel(self.i18n.t("admin"))
-        title.setStyleSheet(f"""
+        self._page_title = QLabel(tr("page.admin.title"))
+        self._page_title.setStyleSheet(f"""
             font-size: {Config.FONT_SIZE_H1}pt;
             font-weight: 700;
             color: {Config.TEXT_COLOR};
         """)
-        layout.addWidget(title)
+        layout.addWidget(self._page_title)
 
         # Tabs
         tabs = QTabWidget()
@@ -407,15 +408,15 @@ class AdminPage(QWidget):
 
         # Users tab
         users_widget = self._create_users_tab()
-        tabs.addTab(users_widget, "المستخدمون")
+        tabs.addTab(users_widget, tr("page.admin.tab_users"))
 
         # Vocabularies tab (Controlled Vocabularies)
         vocab_widget = self._create_vocab_tab()
-        tabs.addTab(vocab_widget, "التصنيفات")
+        tabs.addTab(vocab_widget, tr("page.admin.tab_vocabularies"))
 
         # System tab
         system_widget = self._create_system_tab()
-        tabs.addTab(system_widget, "إعدادات النظام")
+        tabs.addTab(system_widget, tr("page.admin.tab_system"))
 
         # Connect tab change to refresh data
         tabs.currentChanged.connect(self._on_tab_changed)
@@ -434,7 +435,7 @@ class AdminPage(QWidget):
         header = QHBoxLayout()
 
         # Action buttons for selected user
-        self.lock_user_btn = QPushButton("قفل الحساب")
+        self.lock_user_btn = QPushButton(tr("page.admin.lock_account"))
         self.lock_user_btn.setStyleSheet(f"""
             QPushButton {{
                 background-color: {Config.WARNING_COLOR};
@@ -448,7 +449,7 @@ class AdminPage(QWidget):
         self.lock_user_btn.setEnabled(False)
         header.addWidget(self.lock_user_btn)
 
-        self.unlock_user_btn = QPushButton("إلغاء القفل")
+        self.unlock_user_btn = QPushButton(tr("page.admin.unlock_account"))
         self.unlock_user_btn.setStyleSheet(f"""
             QPushButton {{
                 background-color: {Config.INFO_COLOR};
@@ -462,7 +463,7 @@ class AdminPage(QWidget):
         self.unlock_user_btn.setEnabled(False)
         header.addWidget(self.unlock_user_btn)
 
-        self.deactivate_user_btn = QPushButton("تعطيل")
+        self.deactivate_user_btn = QPushButton(tr("page.admin.deactivate"))
         self.deactivate_user_btn.setStyleSheet(f"""
             QPushButton {{
                 background-color: {Config.ERROR_COLOR};
@@ -478,7 +479,7 @@ class AdminPage(QWidget):
 
         header.addStretch()
 
-        add_btn = QPushButton("+ إضافة مستخدم")
+        add_btn = QPushButton(tr("page.admin.add_user_btn"))
         add_btn.setStyleSheet(f"""
             QPushButton {{
                 background-color: {Config.SUCCESS_COLOR};
@@ -532,7 +533,7 @@ class AdminPage(QWidget):
         layout.addWidget(self.users_table)
 
         # Roles info section (read-only display)
-        roles_group = QGroupBox("الأدوار المتاحة")
+        roles_group = QGroupBox(tr("page.admin.available_roles"))
         roles_group.setStyleSheet("""
             QGroupBox { font-weight: 600; border: 1px solid #E5E7EB; border-radius: 8px; margin-top: 10px; padding-top: 10px; }
             QGroupBox::title { subcontrol-origin: margin; left: 10px; padding: 0 5px; }
@@ -541,15 +542,15 @@ class AdminPage(QWidget):
         roles_layout.setSpacing(8)
 
         roles_info = [
-            ("مدير النظام", "System Administrator", "صلاحيات كاملة لإدارة النظام والمستخدمين"),
-            ("مدير البيانات", "Data Manager", "إدارة المباني والوحدات والمطالبات"),
-            ("موظف المكتب", "Office Clerk", "تسجيل المطالبات وإدارة الملفات"),
-            ("مشرف ميداني", "Field Supervisor", "الإشراف على فرق الميدان"),
-            ("محلل", "Analyst", "عرض التقارير والإحصائيات فقط"),
+            (tr("page.admin.role_admin"), "System Administrator", tr("page.admin.role_admin_desc")),
+            (tr("page.admin.role_data_manager"), "Data Manager", tr("page.admin.role_data_manager_desc")),
+            (tr("page.admin.role_office_clerk"), "Office Clerk", tr("page.admin.role_office_clerk_desc")),
+            (tr("page.admin.role_field_supervisor"), "Field Supervisor", tr("page.admin.role_field_supervisor_desc")),
+            (tr("page.admin.role_analyst"), "Analyst", tr("page.admin.role_analyst_desc")),
         ]
 
-        for ar_name, en_name, desc in roles_info:
-            role_label = QLabel(f"<b>{ar_name}</b> ({en_name}): {desc}")
+        for display_name, en_name, desc in roles_info:
+            role_label = QLabel(f"<b>{display_name}</b> ({en_name}): {desc}")
             role_label.setWordWrap(True)
             role_label.setStyleSheet("padding: 4px;")
             roles_layout.addWidget(role_label)
@@ -565,7 +566,7 @@ class AdminPage(QWidget):
         layout.setContentsMargins(20, 20, 20, 20)
         layout.setSpacing(16)
 
-        info = QLabel("إدارة التصنيفات (أنواع المباني، حالات المطالبات، أنواع الوحدات، إلخ)")
+        info = QLabel(tr("page.admin.vocab_info"))
         info.setStyleSheet(f"color: {Config.TEXT_LIGHT};")
         layout.addWidget(info)
 
@@ -581,7 +582,7 @@ class AdminPage(QWidget):
         header_layout.addStretch()
 
         # Import button
-        import_btn = QPushButton("استيراد من ملف")
+        import_btn = QPushButton(tr("page.admin.import_from_file"))
         import_btn.setStyleSheet(f"""
             QPushButton {{
                 background-color: {Config.INFO_COLOR};
@@ -595,7 +596,7 @@ class AdminPage(QWidget):
         header_layout.addWidget(import_btn)
 
         # Export button
-        export_btn = QPushButton("تصدير")
+        export_btn = QPushButton(tr("page.admin.export"))
         export_btn.setStyleSheet(f"""
             QPushButton {{
                 background-color: {Config.WARNING_COLOR};
@@ -609,7 +610,7 @@ class AdminPage(QWidget):
         header_layout.addWidget(export_btn)
 
         # Add term button
-        add_btn = QPushButton("+ إضافة مصطلح")
+        add_btn = QPushButton(tr("page.admin.add_term_btn"))
         add_btn.setStyleSheet(f"""
             QPushButton {{
                 background-color: {Config.SUCCESS_COLOR};
@@ -628,7 +629,13 @@ class AdminPage(QWidget):
         # Vocabulary terms table - read-only display (per FSD: edit via dialog only)
         self.vocab_table = QTableWidget()
         self.vocab_table.setColumnCount(5)
-        self.vocab_table.setHorizontalHeaderLabels(["الرمز", "التسمية (إنجليزي)", "التسمية (عربي)", "الحالة", "إجراءات"])
+        self.vocab_table.setHorizontalHeaderLabels([
+            tr("page.admin.vocab_col_code"),
+            tr("page.admin.vocab_col_label_en"),
+            tr("page.admin.vocab_col_label_ar"),
+            tr("page.admin.col_status"),
+            tr("page.admin.vocab_col_actions"),
+        ])
         # IMPORTANT: Make table read-only - editing only through dialog
         self.vocab_table.setEditTriggers(QAbstractItemView.NoEditTriggers)
         # Column resize modes - stretch content columns, resize actions to content
@@ -662,7 +669,7 @@ class AdminPage(QWidget):
         layout.addWidget(self.vocab_table)
 
         # Show deprecated checkbox
-        show_deprecated = QCheckBox("إظهار المصطلحات المتقادمة")
+        show_deprecated = QCheckBox(tr("page.admin.show_deprecated"))
         show_deprecated.stateChanged.connect(self._on_show_deprecated_changed)
         self.show_deprecated = show_deprecated
         layout.addWidget(show_deprecated)
@@ -717,7 +724,7 @@ class AdminPage(QWidget):
             self.vocab_table.setItem(i, 1, QTableWidgetItem(label_en))
             self.vocab_table.setItem(i, 2, QTableWidgetItem(label_ar))
 
-            status_text = "نشط" if is_active else "متقادم"
+            status_text = tr("page.admin.status_active") if is_active else tr("page.admin.status_deprecated")
             status_item = QTableWidgetItem(status_text)
             if not is_active:
                 status_item.setBackground(QColor("#FEE2E2"))
@@ -730,7 +737,7 @@ class AdminPage(QWidget):
             actions_layout.setContentsMargins(8, 4, 8, 4)
             actions_layout.setSpacing(6)
 
-            edit_btn = QPushButton("تعديل")
+            edit_btn = QPushButton(tr("page.admin.edit"))
             edit_btn.setCursor(Qt.PointingHandCursor)
             edit_btn.setStyleSheet("""
                 QPushButton {
@@ -751,7 +758,7 @@ class AdminPage(QWidget):
             actions_layout.addWidget(edit_btn)
 
             if is_active:
-                stop_btn = QPushButton("إيقاف")
+                stop_btn = QPushButton(tr("page.admin.deprecate"))
                 stop_btn.setCursor(Qt.PointingHandCursor)
                 stop_btn.setStyleSheet("""
                     QPushButton {
@@ -771,7 +778,7 @@ class AdminPage(QWidget):
                 stop_btn.clicked.connect(lambda checked, t=term: self._on_deprecate_term(t))
                 actions_layout.addWidget(stop_btn)
             else:
-                act_btn = QPushButton("تفعيل")
+                act_btn = QPushButton(tr("page.admin.activate"))
                 act_btn.setCursor(Qt.PointingHandCursor)
                 act_btn.setStyleSheet("""
                     QPushButton {
@@ -796,7 +803,7 @@ class AdminPage(QWidget):
 
     def _on_load_terms_error(self, error_msg):
         logger.error(f"Failed to load vocab terms from API: {error_msg}")
-        Toast.show_toast(self, f"فشل في تحميل المصطلحات: {error_msg}", Toast.ERROR)
+        Toast.show_toast(self, tr("page.admin.err_load_terms_failed", error=error_msg), Toast.ERROR)
 
     def _on_show_deprecated_changed(self, state):
         """Handle show deprecated checkbox change."""
@@ -810,7 +817,7 @@ class AdminPage(QWidget):
         if dialog.exec_() == QDialog.Accepted:
             data = dialog.get_data()
             if not data["code"]:
-                Toast.show_toast(self, "الرمز مطلوب", Toast.ERROR)
+                Toast.show_toast(self, tr("page.admin.err_code_required"), Toast.ERROR)
                 return
             api = get_api_client()
             self._add_term_data = data
@@ -828,14 +835,14 @@ class AdminPage(QWidget):
             action="vocabulary_term_created",
             entity_type="vocabulary",
             entity_id=f"{self.current_vocabulary}/{data['code']}",
-            details=f"تم إضافة تصنيف: {data['labelArabic']}"
+            details=f"Added vocabulary term: {data['labelArabic']}"
         )
-        Toast.show_toast(self, "تم إضافة المصطلح بنجاح", Toast.SUCCESS)
+        Toast.show_toast(self, tr("page.admin.term_added_success"), Toast.SUCCESS)
         self._load_vocab_terms()
 
     def _on_create_term_error(self, error_msg):
         logger.error(f"Failed to create term: {error_msg}")
-        Toast.show_toast(self, f"فشل في إضافة المصطلح: {error_msg}", Toast.ERROR)
+        Toast.show_toast(self, tr("page.admin.err_add_term_failed", error=error_msg), Toast.ERROR)
 
     def _on_edit_term(self, term_data: dict):
         """Edit an existing vocabulary term via API."""
@@ -861,14 +868,14 @@ class AdminPage(QWidget):
             action="vocabulary_term_updated",
             entity_type="vocabulary",
             entity_id=f"{self.current_vocabulary}/{original_code}",
-            details=f"تم تحديث تصنيف: {data['labelArabic']}"
+            details=f"Updated vocabulary term: {data['labelArabic']}"
         )
-        Toast.show_toast(self, "تم تحديث المصطلح بنجاح", Toast.SUCCESS)
+        Toast.show_toast(self, tr("page.admin.term_updated_success"), Toast.SUCCESS)
         self._load_vocab_terms()
 
     def _on_update_term_error(self, error_msg):
         logger.error(f"Failed to update term: {error_msg}")
-        Toast.show_toast(self, f"فشل في تحديث المصطلح: {error_msg}", Toast.ERROR)
+        Toast.show_toast(self, tr("page.admin.err_update_term_failed", error=error_msg), Toast.ERROR)
 
     def _on_deprecate_term(self, term_data: dict):
         """Deprecate a vocabulary term via API."""
@@ -876,8 +883,8 @@ class AdminPage(QWidget):
         code = str(term_data.get("code", ""))
         if ErrorHandler.confirm(
             self,
-            f"هل تريد إيقاف المصطلح '{label}'؟\nسيظل المصطلح موجوداً ولكن لن يظهر في القوائم الجديدة.",
-            "تأكيد الإيقاف"
+            tr("page.admin.confirm_deprecate_msg", label=label),
+            tr("page.admin.confirm_deprecate_title")
         ):
             api = get_api_client()
             self._deprecate_term_label = label
@@ -897,14 +904,14 @@ class AdminPage(QWidget):
             action="vocabulary_term_deprecated",
             entity_type="vocabulary",
             entity_id=f"{self.current_vocabulary}/{code}",
-            details=f"تم إيقاف تصنيف: {label}"
+            details=f"Deprecated vocabulary term: {label}"
         )
-        Toast.show_toast(self, "تم إيقاف المصطلح", Toast.SUCCESS)
+        Toast.show_toast(self, tr("page.admin.term_deprecated_success"), Toast.SUCCESS)
         self._load_vocab_terms()
 
     def _on_deactivate_term_error(self, error_msg):
         logger.error(f"Failed to deprecate term: {error_msg}")
-        Toast.show_toast(self, f"فشل في إيقاف المصطلح: {error_msg}", Toast.ERROR)
+        Toast.show_toast(self, tr("page.admin.err_deprecate_term_failed", error=error_msg), Toast.ERROR)
 
     def _on_activate_term(self, term_data: dict):
         """Activate a deprecated vocabulary term via API."""
@@ -928,20 +935,20 @@ class AdminPage(QWidget):
             action="vocabulary_term_activated",
             entity_type="vocabulary",
             entity_id=f"{self.current_vocabulary}/{code}",
-            details=f"تم تفعيل تصنيف: {label}"
+            details=f"Activated vocabulary term: {label}"
         )
-        Toast.show_toast(self, "تم تفعيل المصطلح", Toast.SUCCESS)
+        Toast.show_toast(self, tr("page.admin.term_activated_success"), Toast.SUCCESS)
         self._load_vocab_terms()
 
     def _on_activate_term_error(self, error_msg):
         logger.error(f"Failed to activate term: {error_msg}")
-        Toast.show_toast(self, f"فشل في تفعيل المصطلح: {error_msg}", Toast.ERROR)
+        Toast.show_toast(self, tr("page.admin.err_activate_term_failed", error=error_msg), Toast.ERROR)
 
     def _on_import_vocab(self):
         """Import vocabulary terms from file via API."""
         file_path, _ = QFileDialog.getOpenFileName(
             self,
-            "استيراد التصنيف",
+            tr("page.admin.import_vocab_title"),
             "",
             "JSON Files (*.json);;CSV Files (*.csv);;All Files (*)"
         )
@@ -961,11 +968,11 @@ class AdminPage(QWidget):
                     reader = csv.DictReader(f)
                     data = list(reader)
             else:
-                Toast.show_toast(self, "نوع الملف غير مدعوم. استخدم JSON أو CSV", Toast.ERROR)
+                Toast.show_toast(self, tr("page.admin.err_unsupported_file_type"), Toast.ERROR)
                 return
 
             if not data:
-                Toast.show_toast(self, "الملف فارغ أو غير صالح", Toast.ERROR)
+                Toast.show_toast(self, tr("page.admin.err_empty_or_invalid_file"), Toast.ERROR)
                 return
 
             # Validate structure (S04a)
@@ -975,7 +982,7 @@ class AdminPage(QWidget):
                 if not required_keys.issubset(set(sample.keys())):
                     Toast.show_toast(
                         self,
-                        "الملف لا يحتوي على الأعمدة المطلوبة (code). تحقق من بنية الملف.",
+                        tr("page.admin.err_missing_required_columns"),
                         Toast.ERROR
                     )
                     return
@@ -989,7 +996,7 @@ class AdminPage(QWidget):
 
         except Exception as e:
             logger.error(f"Import failed: {e}")
-            Toast.show_toast(self, f"فشل في الاستيراد: {str(e)}", Toast.ERROR)
+            Toast.show_toast(self, tr("page.admin.err_import_failed", error=str(e)), Toast.ERROR)
 
     def _on_import_vocab_finished(self, result):
         refresh_vocabularies()
@@ -998,20 +1005,20 @@ class AdminPage(QWidget):
             action="vocabulary_imported",
             entity_type="vocabulary",
             entity_id=self.current_vocabulary or "all",
-            details=f"تم استيراد من ملف: {self._import_file_path}"
+            details=f"Imported from file: {self._import_file_path}"
         )
-        Toast.show_toast(self, "تم الاستيراد بنجاح", Toast.SUCCESS)
+        Toast.show_toast(self, tr("page.admin.import_success"), Toast.SUCCESS)
         self._load_vocab_terms()
 
     def _on_import_vocab_error(self, error_msg):
         logger.error(f"Import failed: {error_msg}")
-        Toast.show_toast(self, f"فشل في الاستيراد: {error_msg}", Toast.ERROR)
+        Toast.show_toast(self, tr("page.admin.err_import_failed", error=error_msg), Toast.ERROR)
 
     def _on_export_vocab(self):
         """Export vocabulary terms to file via API."""
         file_path, _ = QFileDialog.getSaveFileName(
             self,
-            "تصدير التصنيف",
+            tr("page.admin.export_vocab_title"),
             f"vocabularies_{self.current_vocabulary or 'all'}.json",
             "JSON Files (*.json)"
         )
@@ -1034,16 +1041,16 @@ class AdminPage(QWidget):
                 action="vocabulary_exported",
                 entity_type="vocabulary",
                 entity_id=self.current_vocabulary or "all",
-                details=f"تم تصدير إلى: {self._export_file_path}"
+                details=f"Exported to: {self._export_file_path}"
             )
-            Toast.show_toast(self, "تم التصدير بنجاح", Toast.SUCCESS)
+            Toast.show_toast(self, tr("page.admin.export_success"), Toast.SUCCESS)
         except Exception as e:
             logger.error(f"Export write failed: {e}")
-            Toast.show_toast(self, f"فشل في كتابة الملف: {str(e)}", Toast.ERROR)
+            Toast.show_toast(self, tr("page.admin.err_write_file_failed", error=str(e)), Toast.ERROR)
 
     def _on_export_vocab_error(self, error_msg):
         logger.error(f"Export failed: {error_msg}")
-        Toast.show_toast(self, f"فشل في التصدير: {error_msg}", Toast.ERROR)
+        Toast.show_toast(self, tr("page.admin.err_export_failed", error=error_msg), Toast.ERROR)
 
     def _create_system_tab(self) -> QWidget:
         """Create system settings tab with security and audit."""
@@ -1070,7 +1077,7 @@ class AdminPage(QWidget):
 
     def _create_security_settings_widget(self) -> QWidget:
         """Create security settings panel."""
-        widget = QGroupBox("إعدادات الأمان")
+        widget = QGroupBox(tr("page.admin.security_settings"))
         widget.setStyleSheet("""
             QGroupBox { font-weight: 600; border: 1px solid #E5E7EB; border-radius: 8px; margin-top: 10px; padding-top: 10px; }
             QGroupBox::title { subcontrol-origin: margin; left: 10px; padding: 0 5px; }
@@ -1089,65 +1096,65 @@ class AdminPage(QWidget):
         layout.setContentsMargins(16, 16, 16, 16)
 
         # Password settings
-        pwd_label = QLabel("سياسة كلمة المرور:")
+        pwd_label = QLabel(tr("page.admin.password_policy"))
         pwd_label.setStyleSheet("font-weight: 600; margin-top: 10px;")
         layout.addRow(pwd_label)
 
         self.password_min_length = QSpinBox()
         self.password_min_length.setRange(6, 32)
         self.password_min_length.setValue(8)
-        layout.addRow("الحد الأدنى للطول:", self.password_min_length)
+        layout.addRow(tr("page.admin.min_length"), self.password_min_length)
 
-        self.require_uppercase = QCheckBox("يتطلب حرف كبير")
+        self.require_uppercase = QCheckBox(tr("page.admin.require_uppercase"))
         self.require_uppercase.setChecked(True)
         layout.addRow("", self.require_uppercase)
 
-        self.require_lowercase = QCheckBox("يتطلب حرف صغير")
+        self.require_lowercase = QCheckBox(tr("page.admin.require_lowercase"))
         self.require_lowercase.setChecked(True)
         layout.addRow("", self.require_lowercase)
 
-        self.require_digit = QCheckBox("يتطلب رقم")
+        self.require_digit = QCheckBox(tr("page.admin.require_digit"))
         self.require_digit.setChecked(True)
         layout.addRow("", self.require_digit)
 
-        self.require_symbol = QCheckBox("يتطلب رمز خاص")
+        self.require_symbol = QCheckBox(tr("page.admin.require_symbol"))
         layout.addRow("", self.require_symbol)
 
         self.password_expiry = QSpinBox()
         self.password_expiry.setRange(0, 365)
         self.password_expiry.setValue(90)
-        self.password_expiry.setSuffix(" يوم")
-        layout.addRow("انتهاء كلمة المرور:", self.password_expiry)
+        self.password_expiry.setSuffix(tr("page.admin.suffix_days"))
+        layout.addRow(tr("page.admin.password_expiry"), self.password_expiry)
 
         self.password_history = QSpinBox()
         self.password_history.setRange(0, 24)
         self.password_history.setValue(5)
-        layout.addRow("سجل كلمات المرور السابقة:", self.password_history)
+        layout.addRow(tr("page.admin.password_history"), self.password_history)
 
         # Session settings
-        session_label = QLabel("إعدادات الجلسة:")
+        session_label = QLabel(tr("page.admin.session_settings"))
         session_label.setStyleSheet("font-weight: 600; margin-top: 10px;")
         layout.addRow(session_label)
 
         self.session_timeout = QSpinBox()
         self.session_timeout.setRange(5, 480)
         self.session_timeout.setValue(30)
-        self.session_timeout.setSuffix(" دقيقة")
-        layout.addRow("مهلة الجلسة:", self.session_timeout)
+        self.session_timeout.setSuffix(tr("page.admin.suffix_minutes"))
+        layout.addRow(tr("page.admin.session_timeout"), self.session_timeout)
 
         self.max_login_attempts = QSpinBox()
         self.max_login_attempts.setRange(1, 20)
         self.max_login_attempts.setValue(5)
-        layout.addRow("المحاولات الفاشلة المسموحة:", self.max_login_attempts)
+        layout.addRow(tr("page.admin.max_login_attempts"), self.max_login_attempts)
 
         self.lockout_duration = QSpinBox()
         self.lockout_duration.setRange(1, 1440)
         self.lockout_duration.setValue(15)
-        self.lockout_duration.setSuffix(" دقيقة")
-        layout.addRow("مدة قفل الحساب:", self.lockout_duration)
+        self.lockout_duration.setSuffix(tr("page.admin.suffix_minutes"))
+        layout.addRow(tr("page.admin.lockout_duration"), self.lockout_duration)
 
         # Save button
-        save_btn = QPushButton("حفظ الإعدادات")
+        save_btn = QPushButton(tr("page.admin.save_settings"))
         save_btn.setStyleSheet(f"""
             QPushButton {{
                 background-color: {Config.SUCCESS_COLOR};
@@ -1163,7 +1170,7 @@ class AdminPage(QWidget):
         layout.addRow("", save_btn)
 
         # Reset to defaults button
-        reset_btn = QPushButton("إعادة الإعدادات الافتراضية")
+        reset_btn = QPushButton(tr("page.admin.reset_defaults"))
         reset_btn.setStyleSheet(f"""
             QPushButton {{
                 background-color: {Config.WARNING_COLOR};
@@ -1191,7 +1198,7 @@ class AdminPage(QWidget):
 
     def _create_audit_log_widget(self) -> QWidget:
         """Create audit log viewer panel."""
-        widget = QGroupBox("سجل المراجعة")
+        widget = QGroupBox(tr("page.admin.audit_log"))
         widget.setStyleSheet("""
             QGroupBox { font-weight: 600; border: 1px solid #E5E7EB; border-radius: 8px; margin-top: 10px; padding-top: 10px; }
             QGroupBox::title { subcontrol-origin: margin; left: 10px; padding: 0 5px; }
@@ -1205,17 +1212,17 @@ class AdminPage(QWidget):
         filter_layout = QHBoxLayout()
 
         self.audit_action_filter = QComboBox()
-        self.audit_action_filter.addItem("كل الإجراءات", None)
+        self.audit_action_filter.addItem(tr("page.admin.all_actions"), None)
         self.audit_action_filter.setMinimumWidth(150)
         filter_layout.addWidget(self.audit_action_filter)
 
-        refresh_btn = QPushButton("تحديث")
+        refresh_btn = QPushButton(tr("page.admin.refresh"))
         refresh_btn.clicked.connect(self._load_audit_logs)
         filter_layout.addWidget(refresh_btn)
 
         filter_layout.addStretch()
 
-        export_btn = QPushButton("تصدير السجل")
+        export_btn = QPushButton(tr("page.admin.export_log"))
         export_btn.setStyleSheet(f"""
             QPushButton {{
                 background-color: {Config.WARNING_COLOR};
@@ -1233,7 +1240,13 @@ class AdminPage(QWidget):
         # Audit log table
         self.audit_table = QTableWidget()
         self.audit_table.setColumnCount(5)
-        self.audit_table.setHorizontalHeaderLabels(["التاريخ", "المستخدم", "الإجراء", "الكيان", "التفاصيل"])
+        self.audit_table.setHorizontalHeaderLabels([
+            tr("page.admin.audit_col_date"),
+            tr("page.admin.audit_col_user"),
+            tr("page.admin.audit_col_action"),
+            tr("page.admin.audit_col_entity"),
+            tr("page.admin.audit_col_details"),
+        ])
         self.audit_table.horizontalHeader().setStretchLastSection(True)
         self.audit_table.setSelectionBehavior(QTableWidget.SelectRows)
         self.audit_table.verticalHeader().setVisible(False)
@@ -1261,7 +1274,7 @@ class AdminPage(QWidget):
         layout.addWidget(self.audit_table)
 
         # Count label
-        self.audit_count_label = QLabel("إجمالي السجلات: 0")
+        self.audit_count_label = QLabel(tr("page.admin.total_records", count=0))
         self.audit_count_label.setStyleSheet(f"color: {Config.TEXT_LIGHT};")
         layout.addWidget(self.audit_count_label)
 
@@ -1286,7 +1299,7 @@ class AdminPage(QWidget):
         if settings.updated_at:
             updated_str = settings.updated_at.strftime("%Y-%m-%d %H:%M")
             by_str = settings.updated_by or "-"
-            self.settings_info_label.setText(f"آخر تحديث: {updated_str}  |  بواسطة: {by_str}")
+            self.settings_info_label.setText(tr("page.admin.last_updated_info", date=updated_str, user=by_str))
         else:
             self.settings_info_label.setText("")
 
@@ -1308,11 +1321,11 @@ class AdminPage(QWidget):
         success, errors = self.security_service.update_settings(settings)
 
         if success:
-            Toast.show_toast(self, "تم حفظ إعدادات الأمان بنجاح", Toast.SUCCESS)
+            Toast.show_toast(self, tr("page.admin.security_saved_success"), Toast.SUCCESS)
             self._load_security_settings()  # Refresh updated_at display
             self._load_audit_logs()
         else:
-            ErrorHandler.show_warning(self, "\n".join(errors), "خطأ في التحقق")
+            ErrorHandler.show_warning(self, "\n".join(errors), tr("page.admin.validation_error"))
 
     def _on_reset_security_defaults(self):
         """Reset security settings to defaults."""
@@ -1346,12 +1359,12 @@ class AdminPage(QWidget):
 
         # Update count
         total = self.security_service.get_audit_log_count()
-        self.audit_count_label.setText(f"إجمالي السجلات: {total}")
+        self.audit_count_label.setText(tr("page.admin.total_records", count=total))
 
         # Update action filter options
         current = self.audit_action_filter.currentText()
         self.audit_action_filter.clear()
-        self.audit_action_filter.addItem("كل الإجراءات", None)
+        self.audit_action_filter.addItem(tr("page.admin.all_actions"), None)
         for action in self.security_service.get_action_types():
             self.audit_action_filter.addItem(action, action)
 
@@ -1359,7 +1372,7 @@ class AdminPage(QWidget):
         """Export audit log to file."""
         file_path, _ = QFileDialog.getSaveFileName(
             self,
-            "تصدير سجل المراجعة",
+            tr("page.admin.export_audit_title"),
             "audit_log.csv",
             "CSV Files (*.csv)"
         )
@@ -1383,11 +1396,11 @@ class AdminPage(QWidget):
                         log.details or ""
                     ])
 
-            Toast.show_toast(self, f"تم تصدير {len(logs)} سجل", Toast.SUCCESS)
+            Toast.show_toast(self, tr("page.admin.exported_records", count=len(logs)), Toast.SUCCESS)
 
         except Exception as e:
             logger.error(f"Export failed: {e}")
-            Toast.show_toast(self, f"فشل في التصدير: {str(e)}", Toast.ERROR)
+            Toast.show_toast(self, tr("page.admin.err_export_failed", error=str(e)), Toast.ERROR)
 
     def _on_tab_changed(self, index):
         """Handle tab change - refresh data for the selected tab."""
@@ -1433,13 +1446,13 @@ class AdminPage(QWidget):
                     action="user_created",
                     entity_type="user",
                     entity_id=user.user_id,
-                    details=f"تم إنشاء المستخدم: {user.username}"
+                    details=f"Created user: {user.username}"
                 )
-                Toast.show_toast(self, "تم إضافة المستخدم بنجاح", Toast.SUCCESS)
+                Toast.show_toast(self, tr("page.admin.user_added_success"), Toast.SUCCESS)
                 self._load_users()
             except Exception as e:
                 logger.error(f"Failed to create user: {e}")
-                Toast.show_toast(self, f"فشل في إضافة المستخدم: {str(e)}", Toast.ERROR)
+                Toast.show_toast(self, tr("page.admin.err_add_user_failed", error=str(e)), Toast.ERROR)
 
     def _on_user_double_click(self, index):
         """Edit user on double click."""
@@ -1461,13 +1474,13 @@ class AdminPage(QWidget):
                         action="user_updated",
                         entity_type="user",
                         entity_id=user.user_id,
-                        details=f"تم تحديث المستخدم: {user.username}"
+                        details=f"Updated user: {user.username}"
                     )
-                    Toast.show_toast(self, "تم تحديث المستخدم بنجاح", Toast.SUCCESS)
+                    Toast.show_toast(self, tr("page.admin.user_updated_success"), Toast.SUCCESS)
                     self._load_users()
                 except Exception as e:
                     logger.error(f"Failed to update user: {e}")
-                    Toast.show_toast(self, f"فشل في تحديث المستخدم: {str(e)}", Toast.ERROR)
+                    Toast.show_toast(self, tr("page.admin.err_update_user_failed", error=str(e)), Toast.ERROR)
 
     def _on_user_selection_changed(self, selected, deselected):
         """Update action buttons based on selected user."""
@@ -1496,8 +1509,8 @@ class AdminPage(QWidget):
 
         if not ErrorHandler.confirm(
             self,
-            f"هل تريد قفل حساب المستخدم: {user.username}؟",
-            "تأكيد قفل الحساب"
+            tr("page.admin.confirm_lock_msg", username=user.username),
+            tr("page.admin.confirm_lock_title")
         ):
             return
 
@@ -1508,13 +1521,13 @@ class AdminPage(QWidget):
                 action="user_locked",
                 entity_type="user",
                 entity_id=user.user_id,
-                details=f"تم قفل حساب المستخدم: {user.username}"
+                details=f"Locked user account: {user.username}"
             )
-            Toast.show_toast(self, f"تم قفل حساب {user.username}", Toast.SUCCESS)
+            Toast.show_toast(self, tr("page.admin.user_locked_success", username=user.username), Toast.SUCCESS)
             self._load_users()
         except Exception as e:
             logger.error(f"Failed to lock user: {e}")
-            Toast.show_toast(self, f"فشل في قفل الحساب: {str(e)}", Toast.ERROR)
+            Toast.show_toast(self, tr("page.admin.err_lock_failed", error=str(e)), Toast.ERROR)
 
     def _on_unlock_user(self):
         """Unlock selected user account."""
@@ -1533,13 +1546,13 @@ class AdminPage(QWidget):
                 action="user_unlocked",
                 entity_type="user",
                 entity_id=user.user_id,
-                details=f"تم إلغاء قفل حساب المستخدم: {user.username}"
+                details=f"Unlocked user account: {user.username}"
             )
-            Toast.show_toast(self, f"تم إلغاء قفل حساب {user.username}", Toast.SUCCESS)
+            Toast.show_toast(self, tr("page.admin.user_unlocked_success", username=user.username), Toast.SUCCESS)
             self._load_users()
         except Exception as e:
             logger.error(f"Failed to unlock user: {e}")
-            Toast.show_toast(self, f"فشل في إلغاء القفل: {str(e)}", Toast.ERROR)
+            Toast.show_toast(self, tr("page.admin.err_unlock_failed", error=str(e)), Toast.ERROR)
 
     def _on_deactivate_user(self):
         """Deactivate selected user."""
@@ -1553,8 +1566,8 @@ class AdminPage(QWidget):
 
         if not ErrorHandler.confirm(
             self,
-            f"هل تريد تعطيل حساب المستخدم: {user.username}؟\nلن يتمكن من تسجيل الدخول.",
-            "تأكيد تعطيل الحساب"
+            tr("page.admin.confirm_deactivate_msg", username=user.username),
+            tr("page.admin.confirm_deactivate_title")
         ):
             return
 
@@ -1566,19 +1579,26 @@ class AdminPage(QWidget):
                 action="user_deactivated",
                 entity_type="user",
                 entity_id=user.user_id,
-                details=f"تم تعطيل حساب المستخدم: {user.username}"
+                details=f"Deactivated user account: {user.username}"
             )
-            Toast.show_toast(self, f"تم تعطيل حساب {user.username}", Toast.SUCCESS)
+            Toast.show_toast(self, tr("page.admin.user_deactivated_success", username=user.username), Toast.SUCCESS)
             self._load_users()
         except Exception as e:
             logger.error(f"Failed to deactivate user: {e}")
-            Toast.show_toast(self, f"فشل في تعطيل الحساب: {str(e)}", Toast.ERROR)
+            Toast.show_toast(self, tr("page.admin.err_deactivate_failed", error=str(e)), Toast.ERROR)
 
     def _on_backup(self):
         """Create database backup."""
-        Toast.show_toast(self, "جاري إنشاء نسخة احتياطية...", Toast.INFO)
+        Toast.show_toast(self, tr("page.admin.backup_in_progress"), Toast.INFO)
         # In production, this would copy the database file
-        Toast.show_toast(self, "تم إنشاء النسخة الاحتياطية بنجاح", Toast.SUCCESS)
+        Toast.show_toast(self, tr("page.admin.backup_success"), Toast.SUCCESS)
 
     def update_language(self, is_arabic: bool):
-        pass
+        self.setLayoutDirection(get_layout_direction())
+        self._page_title.setText(tr("page.admin.title"))
+        self._tabs.setTabText(0, tr("page.admin.tab_users"))
+        self._tabs.setTabText(1, tr("page.admin.tab_vocabularies"))
+        self._tabs.setTabText(2, tr("page.admin.tab_system"))
+        self.lock_user_btn.setText(tr("page.admin.lock_account"))
+        self.unlock_user_btn.setText(tr("page.admin.unlock_account"))
+        self.deactivate_user_btn.setText(tr("page.admin.deactivate"))

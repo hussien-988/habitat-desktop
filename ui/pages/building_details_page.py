@@ -27,6 +27,7 @@ from ui.style_manager import StyleManager
 from utils.helpers import format_date, build_hierarchical_address
 from utils.i18n import I18n
 from services.api_worker import ApiWorker
+from services.translation_manager import tr, get_layout_direction
 from utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -54,7 +55,7 @@ class BuildingDetailsPage(QWidget):
     # UI Setup
 
     def _setup_ui(self):
-        self.setLayoutDirection(Qt.RightToLeft)
+        self.setLayoutDirection(get_layout_direction())
         self.setStyleSheet(StyleManager.page_background())
 
         layout = QVBoxLayout(self)
@@ -83,7 +84,7 @@ class BuildingDetailsPage(QWidget):
         )
         title_area.addWidget(self.title_label)
 
-        self.breadcrumb_label = QLabel("المباني  •  عرض")
+        self.breadcrumb_label = QLabel(tr("page.building_details.breadcrumb"))
         self.breadcrumb_label.setFont(create_font(
             size=FontManager.SIZE_BODY,
             weight=FontManager.WEIGHT_SEMIBOLD,
@@ -97,7 +98,7 @@ class BuildingDetailsPage(QWidget):
         header_row.addStretch()
 
         # "عرض" button (same style as save button)
-        self.view_units_btn = QPushButton(" عرض")
+        self.view_units_btn = QPushButton(tr("page.building_details.view_units"))
         self.view_units_btn.setFixedSize(ButtonDimensions.SAVE_WIDTH, ButtonDimensions.SAVE_HEIGHT)
         self.view_units_btn.setCursor(Qt.PointingHandCursor)
         self.view_units_btn.setFont(create_font(
@@ -120,7 +121,7 @@ class BuildingDetailsPage(QWidget):
         self.view_units_btn.clicked.connect(self._toggle_units_view)
         header_row.addWidget(self.view_units_btn)
 
-        back_btn = QPushButton("رجوع")
+        back_btn = QPushButton(tr("action.back"))
         back_btn.setFixedSize(100, ButtonDimensions.SAVE_HEIGHT)
         back_btn.setCursor(Qt.PointingHandCursor)
         back_btn.setFont(create_font(
@@ -163,7 +164,7 @@ class BuildingDetailsPage(QWidget):
 
         # Card 1: Building info (header + code + address)
         self.info_card, self.info_content = self._create_card_base(
-            "blue", "بيانات البناء", "معلومات البناء والموقع الجغرافي"
+            "blue", tr("page.building_details.card_title"), tr("page.building_details.card_subtitle")
         )
         self._scroll_layout.addWidget(self.info_card)
 
@@ -332,7 +333,7 @@ class BuildingDetailsPage(QWidget):
         self.units_table.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
 
         # Headers
-        headers = ["رقم المقسم", "المساحة", "نوع المقسم", "حالة المقسم", "وصف المقسم"]
+        headers = [tr("table.units.unit_number"), tr("table.units.area"), tr("table.units.unit_type"), tr("table.units.unit_status"), tr("table.units.unit_description")]
         for i, text in enumerate(headers):
             item = QTableWidgetItem(text)
             self.units_table.setHorizontalHeaderItem(i, item)
@@ -463,7 +464,7 @@ class BuildingDetailsPage(QWidget):
         """
         if not data:
             return
-        self._spinner.show_loading("جاري تحميل تفاصيل المبنى...")
+        self._spinner.show_loading(tr("page.building_details.loading"))
 
         if isinstance(data, Building):
             building = data
@@ -482,7 +483,7 @@ class BuildingDetailsPage(QWidget):
             self.stats_card.setVisible(True)
             self.location_card.setVisible(True)
             self.units_table_card.setVisible(False)
-            self.view_units_btn.setText(" عرض")
+            self.view_units_btn.setText(tr("page.building_details.view_units"))
             self._units_view_active = False
 
         display_id = building.building_id_formatted or building.building_id or "-"
@@ -628,12 +629,12 @@ class BuildingDetailsPage(QWidget):
         stats_row.setSpacing(0)
 
         stat_items = [
-            ("حالة البناء", status),
-            ("نوع البناء", building_type),
-            ("العدد الكلي للمقاسم", units_count),
-            ("عدد المقاسم السكنية", apartments_count),
-            ("عدد المقاسم غير السكنية", shops_count),
-            ("تاريخ الادخال", entry_date),
+            (tr("page.building_details.building_status"), status),
+            (tr("page.building_details.building_type"), building_type),
+            (tr("page.building_details.total_units"), units_count),
+            (tr("page.building_details.residential_units"), apartments_count),
+            (tr("page.building_details.non_residential_units"), shops_count),
+            (tr("page.building_details.entry_date"), entry_date),
         ]
 
         for label_text, value_text in stat_items:
@@ -659,7 +660,7 @@ class BuildingDetailsPage(QWidget):
             stats_row.addWidget(section, stretch=1)
 
         self.stats_content.addLayout(stats_row)
-        loc_header = QLabel("موقع البناء")
+        loc_header = QLabel(tr("page.building_details.location"))
         loc_header.setFont(create_font(size=FontManager.WIZARD_CARD_LABEL, weight=FontManager.WEIGHT_SEMIBOLD))
         loc_header.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent; border: none;")
         self.location_content.addWidget(loc_header)
@@ -692,7 +693,7 @@ class BuildingDetailsPage(QWidget):
         if pill_pixmap and not pill_pixmap.isNull():
             map_button.setIcon(QIcon(pill_pixmap))
             map_button.setIconSize(QSize(12, 12))
-        map_button.setText("فتح الخريطة")
+        map_button.setText(tr("page.building_details.open_map"))
         map_button.setFont(create_font(size=FontManager.WIZARD_FIELD_LABEL, weight=FontManager.WEIGHT_REGULAR))
         map_button.setStyleSheet(f"""
             QPushButton {{
@@ -729,7 +730,7 @@ class BuildingDetailsPage(QWidget):
         # General description
         gen_desc_section = QVBoxLayout()
         gen_desc_section.setSpacing(4)
-        gen_desc_lbl = QLabel("وصف البناء")
+        gen_desc_lbl = QLabel(tr("page.building_details.description"))
         gen_desc_lbl.setFont(create_font(size=FontManager.WIZARD_CARD_LABEL, weight=FontManager.WEIGHT_SEMIBOLD))
         gen_desc_lbl.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent; border: none;")
         gen_desc_val = QLabel(general_desc)
@@ -751,14 +752,14 @@ class BuildingDetailsPage(QWidget):
             self.stats_card.setVisible(True)
             self.location_card.setVisible(True)
             self.units_table_card.setVisible(False)
-            self.view_units_btn.setText(" عرض")
+            self.view_units_btn.setText(tr("page.building_details.view_units"))
             self._units_view_active = False
         else:
             self.info_card.setVisible(False)
             self.stats_card.setVisible(False)
             self.location_card.setVisible(False)
             self.units_table_card.setVisible(True)
-            self.view_units_btn.setText(" رجوع")
+            self.view_units_btn.setText(tr("action.back"))
             self._units_view_active = True
             self._load_units()
 
@@ -777,7 +778,7 @@ class BuildingDetailsPage(QWidget):
 
         building_uuid = self.current_building.building_uuid
         if not building_uuid:
-            Toast.show_toast(self, "لم يتم العثور على معرّف المبنى", Toast.ERROR)
+            Toast.show_toast(self, tr("page.building_details.no_uuid"), Toast.ERROR)
             return
 
         self._load_units_worker = ApiWorker(
@@ -800,7 +801,7 @@ class BuildingDetailsPage(QWidget):
         else:
             logger.error(f"Failed to load units: {result.message}")
             self._units_list = []
-            Toast.show_toast(self, f"فشل تحميل الوحدات: {result.message}", Toast.ERROR)
+            Toast.show_toast(self, tr("page.building_details.units_load_failed").format(error=result.message), Toast.ERROR)
 
         self._units_page = 1
         self._update_units_table()
@@ -811,7 +812,7 @@ class BuildingDetailsPage(QWidget):
         self._units_list = []
         self._units_page = 1
         self._update_units_table()
-        Toast.show_toast(self, f"فشل تحميل الوحدات: {error_msg}", Toast.ERROR)
+        Toast.show_toast(self, tr("page.building_details.units_load_failed").format(error=error_msg), Toast.ERROR)
 
     def _update_units_table(self):
         """Populate the units table with current page data."""
@@ -833,7 +834,7 @@ class BuildingDetailsPage(QWidget):
 
         if total == 0:
             self.units_table.setSpan(0, 0, self._units_per_page, 5)
-            empty_item = QTableWidgetItem("لا توجد مقاسم لهذا المبنى")
+            empty_item = QTableWidgetItem(tr("page.building_details.no_units"))
             empty_item.setTextAlignment(Qt.AlignCenter)
             empty_item.setForeground(QColor("#9CA3AF"))
             self.units_table.setItem(0, 0, empty_item)
@@ -911,4 +912,9 @@ class BuildingDetailsPage(QWidget):
         )
 
     def update_language(self, is_arabic: bool):
-        pass
+        self.setLayoutDirection(get_layout_direction())
+        self.breadcrumb_label.setText(tr("page.building_details.breadcrumb"))
+        if self._units_view_active:
+            self.view_units_btn.setText(tr("action.back"))
+        else:
+            self.view_units_btn.setText(tr("page.building_details.view_units"))

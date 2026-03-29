@@ -9,21 +9,26 @@ from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtGui import QColor
 
 from ui.font_utils import create_font, FontManager
+from services.translation_manager import tr, get_layout_direction
 from utils.logger import get_logger
 
 logger = get_logger(__name__)
 
 # Entity sections matching API response keys
-_ENTITY_SECTIONS = [
-    ('surveys', 'المسوحات'),
-    ('buildings', 'المباني'),
-    ('propertyUnits', 'الوحدات العقارية'),
-    ('persons', 'الأشخاص'),
-    ('households', 'الأسر'),
-    ('personPropertyRelations', 'علاقات الأشخاص بالعقارات'),
-    ('evidences', 'المستندات'),
-    ('claims', 'المطالبات'),
+_ENTITY_SECTION_KEYS = [
+    ('surveys', 'wizard.import.entity.surveys'),
+    ('buildings', 'wizard.import.entity.buildings'),
+    ('propertyUnits', 'wizard.import.entity.property_units'),
+    ('persons', 'wizard.import.entity.persons'),
+    ('households', 'wizard.import.entity.households'),
+    ('personPropertyRelations', 'wizard.import.entity.person_property_relations'),
+    ('evidences', 'wizard.import.entity.evidences'),
+    ('claims', 'wizard.import.entity.claims'),
 ]
+
+
+def _get_entity_sections():
+    return [(k, tr(tr_key)) for k, tr_key in _ENTITY_SECTION_KEYS]
 
 
 class ImportStep5Commit(QWidget):
@@ -40,7 +45,7 @@ class ImportStep5Commit(QWidget):
         self.load_summary(package_id)
 
     def _setup_ui(self):
-        self.setLayoutDirection(Qt.RightToLeft)
+        self.setLayoutDirection(get_layout_direction())
         self.setStyleSheet("background: transparent;")
 
         main_layout = QVBoxLayout(self)
@@ -60,7 +65,7 @@ class ImportStep5Commit(QWidget):
         card_layout.setSpacing(16)
 
         # Title
-        title = QLabel("تأكيد الإدخال")
+        title = QLabel(tr("wizard.import.step5.title"))
         title.setFont(create_font(size=14, weight=FontManager.WEIGHT_SEMIBOLD))
         title.setStyleSheet("color: #212B36; background: transparent;")
         card_layout.addWidget(title)
@@ -71,7 +76,7 @@ class ImportStep5Commit(QWidget):
         card_layout.addWidget(sep)
 
         # Total count
-        self._total_label = QLabel("إجمالي الكيانات: 0")
+        self._total_label = QLabel(tr("wizard.import.step5.total_entities", count=0))
         self._total_label.setFont(create_font(size=12, weight=FontManager.WEIGHT_SEMIBOLD))
         self._total_label.setStyleSheet("color: #212B36; background: transparent;")
         card_layout.addWidget(self._total_label)
@@ -81,7 +86,7 @@ class ImportStep5Commit(QWidget):
         self._counts_layout.setSpacing(8)
 
         self._count_labels = {}
-        for key, ar_name in _ENTITY_SECTIONS:
+        for key, ar_name in _get_entity_sections():
             row = QHBoxLayout()
             row.setSpacing(12)
 
@@ -130,7 +135,7 @@ class ImportStep5Commit(QWidget):
         """)
         warning_layout.addWidget(warning_icon)
 
-        warning_text = QLabel("هذا الإجراء نهائي ولا يمكن التراجع عنه")
+        warning_text = QLabel(tr("wizard.import.step5.irreversible_warning"))
         warning_text.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
         warning_text.setStyleSheet("color: #92400E;")
         warning_layout.addWidget(warning_text)
@@ -189,7 +194,7 @@ class ImportStep5Commit(QWidget):
         cl.setAlignment(Qt.AlignCenter)
         cl.setSpacing(6)
 
-        self._ld_label = QLabel("جاري التحميل")
+        self._ld_label = QLabel(tr("wizard.import.step5.loading"))
         self._ld_label.setAlignment(Qt.AlignCenter)
         self._ld_label.setFont(create_font(size=11, weight=FontManager.WEIGHT_SEMIBOLD))
         self._ld_label.setStyleSheet("color: #3890DF; background: transparent;")
@@ -204,8 +209,8 @@ class ImportStep5Commit(QWidget):
         ol.addWidget(card)
         return overlay
 
-    def _show_loading(self, msg="جاري التحميل"):
-        self._ld_label.setText(msg)
+    def _show_loading(self, msg=None):
+        self._ld_label.setText(msg or tr("wizard.import.step5.loading"))
         self._dots_count = 0
         self._loading_overlay.setVisible(True)
         self._loading_overlay.raise_()
@@ -238,7 +243,7 @@ class ImportStep5Commit(QWidget):
             self._update_counts()
             return
 
-        self._show_loading("جاري تحميل الملخص")
+        self._show_loading(tr("wizard.import.step5.loading_summary"))
 
         result = self.import_controller.get_staged_entities(package_id)
         self._hide_loading()
@@ -250,8 +255,8 @@ class ImportStep5Commit(QWidget):
             logger.error(f"Failed to load entities for summary: {result.message}")
             from ui.components.message_dialog import MessageDialog
             MessageDialog.error(
-                self, "خطأ",
-                result.message_ar or "فشل تحميل ملخص الكيانات"
+                self, tr("wizard.import.step5.error"),
+                result.message_ar or tr("wizard.import.step5.summary_load_failed")
             )
 
         self._update_counts()
@@ -260,9 +265,9 @@ class ImportStep5Commit(QWidget):
         """Update entity count labels from grouped data."""
         d = self._data
         total = d.get("totalCount", 0)
-        self._total_label.setText(f"إجمالي الكيانات: {total}")
+        self._total_label.setText(tr("wizard.import.step5.total_entities", count=total))
 
-        for key, _ in _ENTITY_SECTIONS:
+        for key, _ in _ENTITY_SECTION_KEYS:
             section_items = d.get(key, [])
             count = len(section_items) if isinstance(section_items, list) else 0
             if key in self._count_labels:
@@ -273,7 +278,7 @@ class ImportStep5Commit(QWidget):
         self._progress_bar.setVisible(committing)
 
         if committing:
-            self._status_label.setText("جاري إدخال البيانات...")
+            self._status_label.setText(tr("wizard.import.step5.committing"))
             self._status_label.setStyleSheet("color: #3890DF; background: transparent;")
             self._status_label.setVisible(True)
         else:
@@ -283,9 +288,24 @@ class ImportStep5Commit(QWidget):
         """Reset the step to initial state."""
         self._data = {}
         self._package_id = None
-        self._total_label.setText("إجمالي الكيانات: 0")
+        self._total_label.setText(tr("wizard.import.step5.total_entities", count=0))
         self._progress_bar.setVisible(False)
         self._status_label.setText("")
         self._status_label.setVisible(False)
         for label in self._count_labels.values():
             label.setText("0")
+
+    def update_language(self, is_arabic: bool):
+        """Update all translatable texts after language change."""
+        self.setLayoutDirection(get_layout_direction())
+
+        # Total label
+        total = self._data.get("totalCount", 0) if self._data else 0
+        self._total_label.setText(tr("wizard.import.step5.total_entities", count=total))
+
+        # Loading label
+        self._ld_label.setText(tr("wizard.import.step5.loading"))
+
+        # Re-populate entity name labels in counts section
+        # (name labels are not stored as instance vars, so re-update counts)
+        self._update_counts()

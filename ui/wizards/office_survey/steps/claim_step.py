@@ -17,7 +17,7 @@ from PyQt5.QtCore import Qt
 from ui.components.centered_text_edit import CenteredTextEdit
 from ui.wizards.framework import BaseStep, StepValidationResult
 from ui.wizards.office_survey.survey_context import SurveyContext
-from services.translation_manager import tr
+from services.translation_manager import tr, get_layout_direction
 from services.display_mappings import (
     get_claim_type_display, get_claim_status_display,
     get_source_display
@@ -63,7 +63,7 @@ class ClaimStep(BaseStep):
         self._Icon = Icon
 
         widget = self
-        widget.setLayoutDirection(Qt.RightToLeft)
+        widget.setLayoutDirection(get_layout_direction())
         widget.setStyleSheet(f"background-color: {Colors.BACKGROUND};")
 
         layout = self.main_layout
@@ -72,7 +72,7 @@ class ClaimStep(BaseStep):
 
         # Create scroll area for claim cards
         self.scroll_area = QScrollArea()
-        self.scroll_area.setLayoutDirection(Qt.RightToLeft)
+        self.scroll_area.setLayoutDirection(get_layout_direction())
         self.scroll_area.setWidgetResizable(True)
         self.scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
@@ -84,7 +84,7 @@ class ClaimStep(BaseStep):
 
         # Container widget for scroll area
         scroll_content = QWidget()
-        scroll_content.setLayoutDirection(Qt.RightToLeft)
+        scroll_content.setLayoutDirection(get_layout_direction())
         scroll_content.setStyleSheet(f"background-color: {Colors.BACKGROUND};")
 
         self.cards_layout = QVBoxLayout(scroll_content)
@@ -153,7 +153,7 @@ class ClaimStep(BaseStep):
                 icon_container.setStyleSheet(icon_container.styleSheet() + "font-size: 28px; color: #1a1a1a;")
 
         # 2. Main Title (Arabic Text)
-        title_label = QLabel("لا توجد مطالبة ملكية على هذا المقسم")
+        title_label = QLabel(tr("wizard.claim.empty_title"))
         title_label.setAlignment(Qt.AlignCenter)
         title_label.setFont(create_font(size=FontManager.WIZARD_EMPTY_TITLE, weight=FontManager.WEIGHT_BOLD))
         title_label.setStyleSheet(f"""
@@ -162,10 +162,7 @@ class ClaimStep(BaseStep):
         """)
 
         # 3. Description (Arabic Text)
-        desc_label = QLabel(
-            "لم يتم العثور على أي علاقة ملكية، لذلك لن يتم إنشاء\n"
-            "مطالبة، وسيُعتبر العقار بدون أي مطالبات معلّقة"
-        )
+        desc_label = QLabel(tr("wizard.claim.empty_desc"))
         desc_label.setAlignment(Qt.AlignCenter)
         desc_label.setFont(create_font(size=FontManager.WIZARD_EMPTY_DESC, weight=FontManager.WEIGHT_REGULAR))
         desc_label.setStyleSheet(f"""
@@ -193,7 +190,7 @@ class ClaimStep(BaseStep):
 
         card = QFrame()
         card.setObjectName("ClaimCard")
-        card.setLayoutDirection(Qt.RightToLeft)
+        card.setLayoutDirection(get_layout_direction())
         card.setStyleSheet(f"""
             QFrame#ClaimCard {{
                 background-color: {Colors.SURFACE};
@@ -211,11 +208,11 @@ class ClaimStep(BaseStep):
 
         title_vbox = QVBoxLayout()
         title_vbox.setSpacing(1)
-        title_label = QLabel("تسجيل الحالة")
+        title_label = QLabel(tr("wizard.claim.card_title"))
         title_label.setFont(create_font(size=FontManager.WIZARD_STEP_TITLE, weight=FontManager.WEIGHT_SEMIBOLD))
         title_label.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent;")
 
-        subtitle_label = QLabel("ربط المطالبين بالوحدات العقارية وتتبع مطالبات تسجيل حقوق الحيازة")
+        subtitle_label = QLabel(tr("wizard.claim.card_subtitle"))
         subtitle_label.setFont(create_font(size=FontManager.WIZARD_STEP_SUBTITLE, weight=FontManager.WEIGHT_REGULAR))
         subtitle_label.setStyleSheet(f"color: {Colors.WIZARD_SUBTITLE}; background: transparent;")
         subtitle_label.setAlignment(Qt.AlignRight)
@@ -282,55 +279,55 @@ class ClaimStep(BaseStep):
 
         # Row 1: معرف المطالب | معرف المقسم | نوع الحالة | حالة القضية
         claim_person_search = QLineEdit()
-        claim_person_search.setPlaceholderText("اسم الشخص")
+        claim_person_search.setPlaceholderText(tr("wizard.claim.person_name_placeholder"))
         claim_person_search.setStyleSheet(ro_input_style)
         claim_person_search.setReadOnly(True)
-        add_field("معرف المطالب", claim_person_search, 0, 0)
+        add_field(tr("wizard.claim.claimant_id"), claim_person_search, 0, 0)
 
         claim_unit_search = QLineEdit()
-        claim_unit_search.setPlaceholderText("رقم المقسم")
+        claim_unit_search.setPlaceholderText(tr("wizard.claim.unit_number_placeholder"))
         claim_unit_search.setStyleSheet(ro_input_style)
         claim_unit_search.setReadOnly(True)
         claim_unit_search.setAlignment(Qt.AlignRight)
-        add_field("معرف المقسم المطالب به", claim_unit_search, 0, 1)
+        add_field(tr("wizard.claim.claimed_unit_id"), claim_unit_search, 0, 1)
 
         claim_type_field = QLineEdit()
         claim_type_field.setReadOnly(True)
         claim_type_field.setStyleSheet(ro_input_style)
-        add_field("نوع الحالة", claim_type_field, 0, 2)
+        add_field(tr("wizard.claim.case_type"), claim_type_field, 0, 2)
 
         case_category_field = QLineEdit()
         case_category_field.setReadOnly(True)
         case_category_field.setStyleSheet(ro_input_style)
-        add_field("حالة القضية", case_category_field, 0, 3)
+        add_field(tr("wizard.claim.case_category"), case_category_field, 0, 3)
 
         # Row 2: حالة الحالة | المصدر | تاريخ المسح
         claim_status_field = QLineEdit()
         claim_status_field.setReadOnly(True)
         claim_status_field.setStyleSheet(ro_input_style)
-        add_field("حالة الحالة", claim_status_field, 1, 0)
+        add_field(tr("wizard.claim.case_status"), claim_status_field, 1, 0)
 
         claim_source_field = QLineEdit()
         claim_source_field.setReadOnly(True)
         claim_source_field.setStyleSheet(ro_input_style)
-        add_field("المصدر", claim_source_field, 1, 1)
+        add_field(tr("wizard.claim.source"), claim_source_field, 1, 1)
 
         claim_survey_date = QLineEdit()
         claim_survey_date.setReadOnly(True)
         claim_survey_date.setStyleSheet(ro_input_style)
-        add_field("تاريخ المسح", claim_survey_date, 1, 2)
+        add_field(tr("wizard.claim.survey_date"), claim_survey_date, 1, 2)
 
         card_layout.addLayout(grid)
         card_layout.addSpacing(8)
 
         # Notes Section
-        notes_label = QLabel("ملاحظات المراجعة")
+        notes_label = QLabel(tr("wizard.claim.review_notes"))
         notes_label.setFont(create_font(size=FontManager.WIZARD_CARD_LABEL, weight=FontManager.WEIGHT_SEMIBOLD))
         notes_label.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent;")
         card_layout.addWidget(notes_label)
 
         claim_notes = CenteredTextEdit()
-        claim_notes.setPlaceholderText("ملاحظات إضافية")
+        claim_notes.setPlaceholderText(tr("wizard.claim.additional_notes_placeholder"))
         claim_notes.setPlaceholderStyleSheet(
             "color: #9CA3AF; background: transparent; font-size: 16px; font-weight: 400;"
         )
@@ -353,7 +350,7 @@ class ClaimStep(BaseStep):
         card_layout.addSpacing(8)
 
         # Status Bar - Evidence available indicator (pill shape)
-        claim_eval_label = QLabel("✓  الأدلة متوفرة")
+        claim_eval_label = QLabel(tr("wizard.claim.evidence_available"))
         claim_eval_label.setAlignment(Qt.AlignCenter)
         claim_eval_label.setFixedHeight(36)
         claim_eval_label.setFont(create_font(size=FontManager.WIZARD_BADGE, weight=FontManager.WEIGHT_SEMIBOLD))
@@ -420,9 +417,9 @@ class ClaimStep(BaseStep):
 
         # Hardcoded Arabic fallbacks in case vocab service isn't loaded
         _TYPE_FALLBACK = {
-            "Ownership": "ملكية",
-            "Tenancy": "إيجار",
-            "Occupancy": "إشغال",
+            "Ownership": tr("wizard.claim.type_ownership"),
+            "Tenancy": tr("wizard.claim.type_tenancy"),
+            "Occupancy": tr("wizard.claim.type_occupancy"),
         }
 
         if is_ownership:
@@ -447,7 +444,7 @@ class ClaimStep(BaseStep):
 
         # Case category: closed for ownership, open otherwise
         if is_ownership:
-            card.case_category_field.setText("مغلقة")
+            card.case_category_field.setText(tr("wizard.claim.case_closed"))
             card.case_category_field.setStyleSheet("""
                 QLineEdit {
                     border: 1px solid #E0E6ED;
@@ -462,7 +459,7 @@ class ClaimStep(BaseStep):
                 }
             """)
         else:
-            card.case_category_field.setText("مفتوحة")
+            card.case_category_field.setText(tr("wizard.claim.case_open"))
             card.case_category_field.setStyleSheet("""
                 QLineEdit {
                     border: 1px solid #E0E6ED;
@@ -507,7 +504,7 @@ class ClaimStep(BaseStep):
         # Evidence status
         has_evidence = claim_data.get('hasEvidence', False)
         if has_evidence:
-            card.claim_eval_label.setText("✓  الأدلة متوفرة")
+            card.claim_eval_label.setText(tr("wizard.claim.evidence_available"))
             card.claim_eval_label.setStyleSheet("""
                 QLabel {
                     background-color: #e1f7ef;
@@ -516,7 +513,7 @@ class ClaimStep(BaseStep):
                 }
             """)
         else:
-            card.claim_eval_label.setText("في انتظار المستندات")
+            card.claim_eval_label.setText(tr("wizard.claim.awaiting_documents"))
             card.claim_eval_label.setStyleSheet("""
                 QLabel {
                     background-color: #fef3c7;
@@ -555,7 +552,7 @@ class ClaimStep(BaseStep):
 
         def _on_error(msg):
             logger.warning(f"Failed to fetch evidence count: {msg}")
-            Toast.show_toast(self, "تعذر تحميل بيانات المطالبة", Toast.ERROR)
+            Toast.show_toast(self, tr("wizard.claim.load_failed"), Toast.ERROR)
             if callback:
                 callback(cached)
 
@@ -663,7 +660,7 @@ class ClaimStep(BaseStep):
                 first_card.claim_survey_date.setText(str(survey_date_str))
 
         # Auto-select claim type based on relations
-        _TYPE_FB = {"Ownership": "ملكية", "Tenancy": "إيجار", "Occupancy": "إشغال"}
+        _TYPE_FB = {"Ownership": tr("wizard.claim.type_ownership"), "Tenancy": tr("wizard.claim.type_tenancy"), "Occupancy": tr("wizard.claim.type_occupancy")}
         owners_or_heirs = [r for r in self.context.relations if _is_owner_relation(r.get('relation_type'))]
         tenants = [r for r in self.context.relations if r.get('relation_type') in ('tenant', 3)]
         occupants = [r for r in self.context.relations if r.get('relation_type') in ('occupant', 2)]
@@ -703,7 +700,7 @@ class ClaimStep(BaseStep):
     def _update_evidence_label(self, label, evidence_count, reason=""):
         """Update the evidence status label based on count."""
         if evidence_count > 0:
-            label.setText(f"✓  الأدلة متوفرة ({evidence_count})")
+            label.setText(f"{tr('wizard.claim.evidence_available')} ({evidence_count})")
             label.setStyleSheet("""
                 QLabel {
                     background-color: #e1f7ef;
@@ -712,7 +709,7 @@ class ClaimStep(BaseStep):
                 }
             """)
         else:
-            label.setText(reason if reason else "في انتظار المستندات")
+            label.setText(reason if reason else tr("wizard.claim.awaiting_documents"))
             label.setStyleSheet("""
                 QLabel {
                     background-color: #fef3c7;
@@ -745,7 +742,7 @@ class ClaimStep(BaseStep):
             first_card.claim_person_search.setText(full_name.strip())
 
         # Set claim type display text based on relations
-        _TYPE_FB = {"Ownership": "ملكية", "Tenancy": "إيجار", "Occupancy": "إشغال"}
+        _TYPE_FB = {"Ownership": tr("wizard.claim.type_ownership"), "Tenancy": tr("wizard.claim.type_tenancy"), "Occupancy": tr("wizard.claim.type_occupancy")}
         claim_type_english = None
         if owners_or_heirs:
             claim_type_english = "Ownership"
@@ -763,7 +760,7 @@ class ClaimStep(BaseStep):
 
         # Case category: closed for ownership, open otherwise
         if owners_or_heirs:
-            first_card.case_category_field.setText("مغلقة")
+            first_card.case_category_field.setText(tr("wizard.claim.case_closed"))
             first_card.case_category_field.setStyleSheet("""
                 QLineEdit {
                     border: 1px solid #E0E6ED;
@@ -778,7 +775,7 @@ class ClaimStep(BaseStep):
                 }
             """)
         else:
-            first_card.case_category_field.setText("مفتوحة")
+            first_card.case_category_field.setText(tr("wizard.claim.case_open"))
             first_card.case_category_field.setStyleSheet("""
                 QLineEdit {
                     border: 1px solid #E0E6ED;
@@ -910,7 +907,7 @@ class ClaimStep(BaseStep):
         return {"claims": claims_data, "claim_data": claims_data[0] if claims_data else None}
 
     def get_step_title(self) -> str:
-        return "تسجيل الحالة"
+        return tr("wizard.claim.step_title")
 
     def get_step_description(self) -> str:
-        return "ربط المطالبين بالوحدات العقارية وتتبع مطالبات تسجيل حقوق الحيازة"
+        return tr("wizard.claim.step_description")

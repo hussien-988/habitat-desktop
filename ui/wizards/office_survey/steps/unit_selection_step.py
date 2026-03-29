@@ -186,11 +186,11 @@ class UnitSelectionStep(BaseStep):
             return section, value
 
         # Create 5 stat sections - hardcoded Arabic matching Step 1
-        section_status, self.ui_building_status = _create_stat_section("حالة البناء")
-        section_type, self.ui_building_type = _create_stat_section("نوع البناء")
-        section_units, self.ui_units_count = _create_stat_section("العدد الكلي للمقاسم")
-        section_parcels, self.ui_parcels_count = _create_stat_section("عدد المقاسم السكنية")
-        section_shops, self.ui_shops_count = _create_stat_section("عدد المقاسم غير السكنية")
+        section_status, self.ui_building_status = _create_stat_section(tr("wizard.building.status"))
+        section_type, self.ui_building_type = _create_stat_section(tr("wizard.building.type"))
+        section_units, self.ui_units_count = _create_stat_section(tr("wizard.building.units_count"))
+        section_parcels, self.ui_parcels_count = _create_stat_section(tr("wizard.building.parcels_count"))
+        section_shops, self.ui_shops_count = _create_stat_section(tr("wizard.building.shops_count"))
 
         # Add sections with equal spacing - status first, then type (matching Step 1 order)
         sections = [section_status, section_type, section_units, section_parcels, section_shops]
@@ -277,7 +277,7 @@ class UnitSelectionStep(BaseStep):
         # 10pt font
         # Increased weight to emphasize title (SemiBold instead of Regular)
         # RTL: Text ends at the same point as subtitle, but starts further right
-        self._title_label = QLabel("اختر مقسما")
+        self._title_label = QLabel(tr("wizard.unit.select_title"))
         self._title_label.setFont(create_font(size=FontManager.WIZARD_STEP_TITLE, weight=FontManager.WEIGHT_SEMIBOLD))
         self._title_label.setStyleSheet("""
             QLabel {
@@ -291,7 +291,7 @@ class UnitSelectionStep(BaseStep):
         title_subtitle_layout.addWidget(self._title_label)
 
         # Subtitle with same font size, different color
-        self._subtitle_label = QLabel("اختر مقسما او سجل معلومات مقسم جديد")
+        self._subtitle_label = QLabel(tr("wizard.unit.select_subtitle"))
         self._subtitle_label.setFont(create_font(size=FontManager.WIZARD_STEP_SUBTITLE, weight=FontManager.WEIGHT_REGULAR))
         self._subtitle_label.setStyleSheet("""
             QLabel {
@@ -311,7 +311,7 @@ class UnitSelectionStep(BaseStep):
         # Use ActionButton component
         # Outline button styling
         self.add_unit_btn = ActionButton(
-            text="اضف مقسما",
+            text=tr("wizard.unit.add_button"),
             variant="outline",
             icon_name="icon",
             width=125,
@@ -390,16 +390,13 @@ class UnitSelectionStep(BaseStep):
                 icon_container.setStyleSheet(icon_container.styleSheet() + "font-size: 28px; color: #1a1a1a;")
 
         # Title
-        title_label = QLabel("لا توجد مقاسم مسجلة بعد")
+        title_label = QLabel(tr("wizard.unit.empty_title"))
         title_label.setAlignment(Qt.AlignCenter)
         title_label.setFont(create_font(size=FontManager.WIZARD_EMPTY_TITLE, weight=FontManager.WEIGHT_BOLD))
         title_label.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent;")
 
         # Description
-        desc_label = QLabel(
-            "يرجى إضافة مقسم جديد بالضغط على زر\n"
-            "\"اضف مقسما\" أعلاه"
-        )
+        desc_label = QLabel(tr("wizard.unit.empty_desc"))
         desc_label.setAlignment(Qt.AlignCenter)
         desc_label.setFont(create_font(size=FontManager.WIZARD_EMPTY_DESC, weight=FontManager.WEIGHT_REGULAR))
         desc_label.setStyleSheet(f"color: {Colors.WIZARD_SUBTITLE}; background: transparent;")
@@ -633,7 +630,7 @@ class UnitSelectionStep(BaseStep):
         # Format area with 2 decimal places in English numerals
         if unit.area_sqm:
             try:
-                area_val = f"{float(unit.area_sqm):.2f} م²"
+                area_val = f"{float(unit.area_sqm):.2f} {tr('wizard.unit.area_unit')}"
             except (ValueError, TypeError):
                 area_val = "-"
         else:
@@ -647,12 +644,12 @@ class UnitSelectionStep(BaseStep):
         # Column Data - REVERSED ORDER (was right-to-left, now left-to-right in code)
         # All values converted to Arabic
         data_points = [
-            ("رقم المقسم", unit_display_num),
-            ("رقم الطابق", floor_val),
-            ("عدد الغرف", rooms_val),
-            ("مساحة المقسم", area_val),
-            ("نوع المقسم", unit_type_val),
-            ("حالة المقسم", status_val),
+            (tr("wizard.unit.unit_number"), unit_display_num),
+            (tr("wizard.unit.floor_number"), floor_val),
+            (tr("wizard.unit.rooms_count"), rooms_val),
+            (tr("wizard.unit.unit_area"), area_val),
+            (tr("wizard.unit.unit_type"), unit_type_val),
+            (tr("wizard.unit.unit_status"), status_val),
         ]
 
         # Use helper method for consistent label styling
@@ -692,7 +689,7 @@ class UnitSelectionStep(BaseStep):
         desc_layout.setDirection(QVBoxLayout.TopToBottom)  # Ensure top-to-bottom flow
 
         # Title: وصف المقسم
-        desc_title = QLabel("وصف المقسم")
+        desc_title = QLabel(tr("wizard.unit.unit_description"))
         desc_title.setFont(create_font(size=FontManager.WIZARD_FIELD_LABEL, weight=FontManager.WEIGHT_SEMIBOLD))
         desc_title.setStyleSheet("color: #1A1F1D;")
         desc_title.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)  # Left in RTL = Right visually
@@ -870,7 +867,7 @@ class UnitSelectionStep(BaseStep):
 
         survey_id = self.context.get_data("survey_id")
         if not survey_id:
-            result.add_error("لم يتم إنشاء المسح. يرجى العودة للخطوة الأولى والمحاولة مجدداً.")
+            result.add_error(tr("wizard.unit.no_survey_error"))
             return result
 
         current_unit_id = None
@@ -880,7 +877,7 @@ class UnitSelectionStep(BaseStep):
             current_unit_id = self.context.new_unit_data.get('unit_uuid')
 
         if not survey_id or not current_unit_id:
-            result.add_error("لم يتم إنشاء المسح أو الوحدة. يرجى العودة للخطوة الأولى والمحاولة مجدداً.")
+            result.add_error(tr("wizard.unit.no_survey_or_unit_error"))
             return result
 
         # Guard: skip if same unit already linked
@@ -918,7 +915,7 @@ class UnitSelectionStep(BaseStep):
                 self.context.update_data("linked_unit_uuid", current_unit_id)
             except Exception as e:
                 logger.error(f"API link failed: {e}")
-                result.add_error("فشل ربط الوحدة بالمسح. تحقق من الاتصال وحاول مجدداً.")
+                result.add_error(tr("wizard.unit.link_failed"))
                 return result
 
         return result

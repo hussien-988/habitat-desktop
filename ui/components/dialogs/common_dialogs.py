@@ -10,6 +10,8 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtCore import Qt
 
+from services.translation_manager import tr
+
 
 class BaseDialog(QDialog):
     """Base dialog with consistent styling."""
@@ -56,10 +58,10 @@ class ConfirmDialog(BaseDialog):
         layout.addWidget(msg_label)
 
         # Buttons
-        self.yes_btn = QPushButton("Yes")
+        self.yes_btn = QPushButton(tr("button.yes"))
         self.yes_btn.clicked.connect(self.accept)
 
-        self.no_btn = QPushButton("No")
+        self.no_btn = QPushButton(tr("button.no"))
         self.no_btn.setProperty("class", "secondary")
         self.no_btn.clicked.connect(self.reject)
         self.no_btn.setDefault(True)
@@ -105,7 +107,7 @@ class ErrorDialog(BaseDialog):
             layout.addWidget(details_label)
 
         # OK button
-        ok_btn = QPushButton("OK")
+        ok_btn = QPushButton(tr("button.ok"))
         ok_btn.clicked.connect(self.accept)
         ok_btn.setDefault(True)
 
@@ -136,7 +138,7 @@ class InfoDialog(BaseDialog):
         layout.addWidget(msg_label)
 
         # OK button
-        ok_btn = QPushButton("OK")
+        ok_btn = QPushButton(tr("button.ok"))
         ok_btn.clicked.connect(self.accept)
         ok_btn.setDefault(True)
 
@@ -153,7 +155,7 @@ class ExportDialog(BaseDialog):
     """Export options dialog."""
 
     def __init__(self, parent=None, i18n=None):
-        super().__init__("Export", parent)
+        super().__init__(tr("dialog.export.title"), parent)
         self.i18n = i18n
         self.export_format = "csv"
         self._setup_ui()
@@ -164,21 +166,21 @@ class ExportDialog(BaseDialog):
         layout.setSpacing(16)
 
         # Format selection
-        format_label = QLabel("Select export format:")
+        format_label = QLabel(tr("dialog.export.select_format"))
         layout.addWidget(format_label)
 
         # CSV button
-        csv_btn = QPushButton("📄 Export as CSV")
+        csv_btn = QPushButton(tr("dialog.export.csv"))
         csv_btn.clicked.connect(lambda: self._select_format("csv"))
         layout.addWidget(csv_btn)
 
         # Excel button
-        excel_btn = QPushButton("📊 Export as Excel")
+        excel_btn = QPushButton(tr("dialog.export.excel"))
         excel_btn.clicked.connect(lambda: self._select_format("xlsx"))
         layout.addWidget(excel_btn)
 
         # Cancel button
-        cancel_btn = QPushButton("Cancel")
+        cancel_btn = QPushButton(tr("button.cancel"))
         cancel_btn.setProperty("class", "secondary")
         cancel_btn.clicked.connect(self.reject)
         layout.addWidget(cancel_btn)

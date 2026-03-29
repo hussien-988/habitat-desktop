@@ -401,11 +401,11 @@ class BuildingSelectionStep(BaseStep):
             return section, value
 
         # Create 5 stat sections
-        section_status, self.ui_building_status = _create_stat_section("حالة البناء")
-        section_type, self.ui_building_type = _create_stat_section("نوع البناء")
-        section_units, self.ui_units_count = _create_stat_section("العدد الكلي للمقاسم")
-        section_parcels, self.ui_parcels_count = _create_stat_section("عدد المقاسم السكنية")
-        section_shops, self.ui_shops_count = _create_stat_section("عدد المقاسم غير السكنية")
+        section_status, self.ui_building_status = _create_stat_section(tr("wizard.building.status"))
+        section_type, self.ui_building_type = _create_stat_section(tr("wizard.building.type"))
+        section_units, self.ui_units_count = _create_stat_section(tr("wizard.building.units_count"))
+        section_parcels, self.ui_parcels_count = _create_stat_section(tr("wizard.building.parcels_count"))
+        section_shops, self.ui_shops_count = _create_stat_section(tr("wizard.building.shops_count"))
 
         # Add sections with equal spacing (no dividers)
         sections = [section_status, section_type, section_units, section_parcels, section_shops]
@@ -627,7 +627,7 @@ class BuildingSelectionStep(BaseStep):
                 logger.debug(f"Got auth token from MainWindow.current_user: {bool(auth_token)}")
         except Exception as e:
             logger.warning(f"Could not get auth token from parent: {e}")
-            Toast.show_toast(self, "تعذر تحميل بيانات المبنى", Toast.ERROR)
+            Toast.show_toast(self, tr("wizard.building_selection.load_failed"), Toast.ERROR)
 
         # Always open in selection mode (not view-only)
         # User can search and select building even if already selected
@@ -690,7 +690,7 @@ class BuildingSelectionStep(BaseStep):
                 auth_token = getattr(main_window.current_user, '_api_token', None)
         except Exception as e:
             logger.warning(f"Could not get auth token: {e}")
-            Toast.show_toast(self, "تعذر تحميل بيانات المبنى", Toast.ERROR)
+            Toast.show_toast(self, tr("wizard.building_selection.load_failed"), Toast.ERROR)
 
         # If we already have a selected building, open in VIEW-ONLY mode
         if hasattr(self, 'selected_building') and self.selected_building:
@@ -758,7 +758,7 @@ class BuildingSelectionStep(BaseStep):
         self._load_buildings_worker.finished.connect(self._on_buildings_loaded)
         self._load_buildings_worker.error.connect(
             lambda msg: (logger.error(f"Failed to load buildings: {msg}"),
-                         Toast.show_toast(self, "تعذر تحميل بيانات المبنى", Toast.ERROR))
+                         Toast.show_toast(self, tr("wizard.building_selection.load_failed"), Toast.ERROR))
         )
         self._load_buildings_worker.start()
 
@@ -768,7 +768,7 @@ class BuildingSelectionStep(BaseStep):
 
         if not result.success:
             logger.error(f"Failed to load buildings: {result.message}")
-            Toast.show_toast(self, "تعذر تحميل بيانات المبنى", Toast.ERROR)
+            Toast.show_toast(self, tr("wizard.building_selection.load_failed"), Toast.ERROR)
             return
 
         self._populate_buildings_list(result.data)
@@ -823,7 +823,7 @@ class BuildingSelectionStep(BaseStep):
             self.buildings_list.clear()
             if not result.success:
                 logger.error(f"Failed to search buildings: {result.message}")
-                Toast.show_toast(self, "تعذر تحميل بيانات المبنى", Toast.ERROR)
+                Toast.show_toast(self, tr("wizard.building_selection.load_failed"), Toast.ERROR)
                 return
             self._populate_buildings_list(result.data)
 
@@ -831,7 +831,7 @@ class BuildingSelectionStep(BaseStep):
         self._search_buildings_worker.finished.connect(_on_search_done)
         self._search_buildings_worker.error.connect(
             lambda msg: (logger.error(f"Failed to search buildings: {msg}"),
-                         Toast.show_toast(self, "تعذر تحميل بيانات المبنى", Toast.ERROR))
+                         Toast.show_toast(self, tr("wizard.building_selection.load_failed"), Toast.ERROR))
         )
         self._search_buildings_worker.start()
 
@@ -1135,7 +1135,7 @@ class BuildingSelectionStep(BaseStep):
                 self.context.cleanup_on_building_change(self._survey_api_service)
             except Exception as e:
                 logger.warning(f"Cleanup failed: {e}")
-                Toast.show_toast(self, "تعذر تحميل بيانات المبنى", Toast.ERROR)
+                Toast.show_toast(self, tr("wizard.building_selection.load_failed"), Toast.ERROR)
             for key in ("survey_id", "survey_data", "survey_building_uuid"):
                 self.context.update_data(key, None)
 
@@ -1156,7 +1156,7 @@ class BuildingSelectionStep(BaseStep):
             logger.info(f"Survey created successfully, survey_id: {survey_id}")
         except Exception as e:
             logger.error(f"Survey creation failed: {e}")
-            result.add_error("فشل إنشاء المسح على السيرفر. يرجى المحاولة مجدداً.")
+            result.add_error(tr("wizard.building_info.survey_creation_failed"))
 
         return result
 
@@ -1200,7 +1200,7 @@ class BuildingSelectionStep(BaseStep):
         self._unit_count_worker.finished.connect(_on_units_fetched)
         self._unit_count_worker.error.connect(
             lambda msg: (logger.warning(f"Could not fetch unit counts for building {building_uuid}: {msg}"),
-                         Toast.show_toast(self, "تعذر تحميل بيانات المبنى", Toast.ERROR))
+                         Toast.show_toast(self, tr("wizard.building_selection.load_failed"), Toast.ERROR))
         )
         self._unit_count_worker.start()
 

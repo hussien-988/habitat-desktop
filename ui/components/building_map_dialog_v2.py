@@ -13,6 +13,7 @@ from ui.components.base_map_dialog import BaseMapDialog
 from services.leaflet_html_generator import generate_leaflet_html
 from services.geojson_converter import GeoJSONConverter
 from utils.logger import get_logger
+from services.translation_manager import tr
 
 logger = get_logger(__name__)
 
@@ -367,11 +368,11 @@ class BuildingMapDialog(BaseMapDialog):
         # Determine mode based on whether we're viewing or selecting
         if self._is_view_only:
             # View-only mode: just show the map, no selection controls
-            title = "عرض المبنى على الخريطة"
+            title = tr("dialog.map.view_building_on_map")
             show_search = False
         else:
             # Selection mode: allow building selection
-            title = "بحث على الخريطة"
+            title = tr("dialog.map.search_on_map")
             show_search = True
 
         # Store auth token temporarily (BaseMapDialog.__init__ will overwrite it)
@@ -456,7 +457,7 @@ class BuildingMapDialog(BaseMapDialog):
                 overlay.style.cssText = 'position:fixed;top:12px;left:50%;transform:translateX(-50%);' +
                     'background:rgba(27,43,77,0.85);color:white;padding:8px 20px;border-radius:20px;' +
                     'font-size:13px;font-family:Arial;z-index:9999;direction:rtl;';
-                overlay.textContent = 'جاري تحميل المباني...';
+                overlay.textContent = '{tr("dialog.map.loading_buildings")}';
                 document.body.appendChild(overlay);
             })();
             """
@@ -479,7 +480,7 @@ class BuildingMapDialog(BaseMapDialog):
     def _on_map_data_error(self, error_msg):
         """Handle map data loading error."""
         logger.error(f"Map data loading failed: {error_msg}")
-        ErrorHandler.show_error(self, f"حدث خطأ أثناء تحميل الخريطة:\n{error_msg}", "خطأ")
+        ErrorHandler.show_error(self, f"{tr('dialog.map.error_loading_map')}\n{error_msg}", tr("dialog.map.error_title"))
 
     def _on_buildings_ready(self, data):
         """Inject buildings into the already-visible map."""
@@ -821,17 +822,17 @@ class BuildingMapDialog(BaseMapDialog):
         """Show error message when building is not found."""
         ErrorHandler.show_warning(
             self,
-            f"رمز المبنى: {building_id}\n"
-            f"لم يتم العثور على هذا المبنى في قاعدة البيانات.\n"
-            f"قد يكون المبنى محذوفاً أو غير مسجّل.",
-            "لم يتم العثور على المبنى"
+            f"{tr('dialog.map.building_code')}: {building_id}\n"
+            f"{tr('dialog.map.building_not_found_in_db')}\n"
+            f"{tr('dialog.map.building_may_be_deleted')}",
+            tr("dialog.map.building_not_found_title")
         )
 
     def _show_load_warning(self):
         """Show warning toast when initial building load fails."""
         try:
             from ui.components.toast import Toast
-            Toast.show_toast(self, "تعذر تحميل المباني — حاول التحريك للتحميل", Toast.WARNING)
+            Toast.show_toast(self, tr("dialog.map.buildings_load_failed_try_pan"), Toast.WARNING)
         except Exception:
             pass
 
@@ -896,7 +897,7 @@ class BuildingMapDialog(BaseMapDialog):
             return
 
         self.search_input.setEnabled(False)
-        self.search_input.setPlaceholderText("جاري البحث...")
+        self.search_input.setPlaceholderText(tr("dialog.map.searching"))
         logger.info(f"Searching for: '{search_text}'")
 
         self._search_worker = _SearchWorker(
@@ -925,7 +926,7 @@ class BuildingMapDialog(BaseMapDialog):
         from ui.components.toast import Toast
 
         def _on_street_not_found():
-            Toast.show_toast(self, f"لم يتم العثور على: {search_text}", "warning")
+            Toast.show_toast(self, f"{tr('dialog.map.not_found')}: {search_text}", "warning")
 
         self._search_streets_js(search_text, not_found_callback=_on_street_not_found)
         self._reset_search_input()
@@ -939,7 +940,7 @@ class BuildingMapDialog(BaseMapDialog):
         """Re-enable search input after search completes."""
         if hasattr(self, 'search_input'):
             self.search_input.setEnabled(True)
-            self.search_input.setPlaceholderText("بحث: حي، معلم، أو شارع")
+            self.search_input.setPlaceholderText(tr("dialog.map.search_placeholder"))
 
     def get_selected_building(self) -> Optional[Building]:
         """Get selected building or None."""

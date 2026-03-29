@@ -14,6 +14,7 @@ from PyQt5.QtGui import QColor, QFont
 from ui.design_system import Colors
 from ui.font_utils import create_font, FontManager
 from utils.logger import get_logger
+from services.translation_manager import tr, get_layout_direction
 
 logger = get_logger(__name__)
 
@@ -37,7 +38,7 @@ class ModificationReasonDialog(QDialog):
         self._setup_ui()
 
     def _setup_ui(self):
-        self.setLayoutDirection(Qt.RightToLeft)
+        self.setLayoutDirection(get_layout_direction())
 
         outer = QVBoxLayout(self)
         outer.setContentsMargins(12, 12, 12, 12)
@@ -68,7 +69,7 @@ class ModificationReasonDialog(QDialog):
         layout.setSpacing(16)
 
         # Title (centered)
-        title = QLabel("سبب التعديل")
+        title = QLabel(tr("dialog.modification_reason.title"))
         title.setFont(create_font(size=16, weight=FontManager.WEIGHT_BOLD))
         title.setStyleSheet(f"color: {Colors.TEXT_PRIMARY};")
         title.setAlignment(Qt.AlignCenter)
@@ -93,7 +94,7 @@ class ModificationReasonDialog(QDialog):
             summary_layout.setContentsMargins(14, 10, 14, 10)
             summary_layout.setSpacing(4)
 
-            summary_title = QLabel("التغييرات التي تمت:")
+            summary_title = QLabel(tr("dialog.modification_reason.changes_made"))
             summary_title.setFont(create_font(
                 size=FontManager.SIZE_SMALL, weight=FontManager.WEIGHT_SEMIBOLD))
             summary_title.setStyleSheet(f"color: {Colors.TEXT_SECONDARY};")
@@ -109,15 +110,15 @@ class ModificationReasonDialog(QDialog):
             layout.addWidget(summary_frame)
 
         # Reason label
-        reason_label = QLabel(f"سبب التعديل (إلزامي — {_MIN_REASON_LENGTH} أحرف على الأقل):")
+        reason_label = QLabel(tr("dialog.modification_reason.reason_label").format(min_length=_MIN_REASON_LENGTH))
         reason_label.setFont(create_font(size=10, weight=FontManager.WEIGHT_MEDIUM))
         reason_label.setStyleSheet(f"color: {Colors.TEXT_PRIMARY};")
         layout.addWidget(reason_label)
 
         # Reason input
         self._reason_input = QTextEdit()
-        self._reason_input.setLayoutDirection(Qt.RightToLeft)
-        self._reason_input.setPlaceholderText("أدخل سبب التعديل هنا...")
+        self._reason_input.setLayoutDirection(get_layout_direction())
+        self._reason_input.setPlaceholderText(tr("dialog.modification_reason.placeholder"))
         self._reason_input.setMinimumHeight(90)
         self._reason_input.setMaximumHeight(120)
         self._reason_input.setStyleSheet(f"""
@@ -149,11 +150,11 @@ class ModificationReasonDialog(QDialog):
         btn_layout.setSpacing(12)
         btn_layout.addStretch()
 
-        confirm_btn = self._create_button("تأكيد وحفظ", primary=True)
+        confirm_btn = self._create_button(tr("dialog.modification_reason.confirm_save"), primary=True)
         confirm_btn.clicked.connect(self._on_confirm)
         btn_layout.addWidget(confirm_btn)
 
-        cancel_btn = self._create_button("إلغاء", primary=False)
+        cancel_btn = self._create_button(tr("button.cancel"), primary=False)
         cancel_btn.clicked.connect(self.reject)
         btn_layout.addWidget(cancel_btn)
 
@@ -210,12 +211,13 @@ class ModificationReasonDialog(QDialog):
     def _on_confirm(self):
         reason = self._reason_input.toPlainText().strip()
         if not reason:
-            self._show_error("سبب التعديل مطلوب")
+            self._show_error(tr("dialog.modification_reason.required"))
             return
         if len(reason) < _MIN_REASON_LENGTH:
             self._show_error(
-                f"سبب التعديل يجب أن يكون {_MIN_REASON_LENGTH} أحرف على الأقل"
-                f" (الحالي: {len(reason)})"
+                tr("dialog.modification_reason.min_length").format(
+                    min_length=_MIN_REASON_LENGTH, current=len(reason)
+                )
             )
             return
         self._reason = reason

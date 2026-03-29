@@ -16,6 +16,7 @@ from services.dashboard_service import DashboardService
 from utils.i18n import I18n
 from utils.helpers import format_number
 from ui.style_manager import StyleManager
+from services.translation_manager import tr
 from utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -329,7 +330,7 @@ class DashboardPage(QWidget):
     def refresh(self, data=None):
         """Refresh dashboard data."""
         logger.debug("Refreshing dashboard")
-        self._spinner.show_loading("جاري تحديث لوحة المعلومات...")
+        self._spinner.show_loading(tr("page.dashboard.refreshing"))
         try:
             # Get overview stats
             stats = self.dashboard_service.get_overview_stats()

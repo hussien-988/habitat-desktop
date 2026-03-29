@@ -15,6 +15,7 @@ from PyQt5.QtGui import QColor
 from app.config import Config
 from repositories.database import Database
 from services.export_service import ExportService
+from services.translation_manager import tr, get_layout_direction
 from ui.components.toast import Toast
 from ui.error_handler import ErrorHandler
 from utils.i18n import I18n
@@ -55,21 +56,21 @@ class ReportCard(QFrame):
         layout.addWidget(icon_label)
 
         # Title
-        title_label = QLabel(title)
-        title_label.setStyleSheet(f"""
+        self.title_label = QLabel(title)
+        self.title_label.setStyleSheet(f"""
             font-size: {Config.FONT_SIZE_H2}pt;
             font-weight: 600;
             color: {Config.TEXT_COLOR};
         """)
-        title_label.setAlignment(Qt.AlignCenter)
-        layout.addWidget(title_label)
+        self.title_label.setAlignment(Qt.AlignCenter)
+        layout.addWidget(self.title_label)
 
         # Description
-        desc_label = QLabel(description)
-        desc_label.setStyleSheet(f"color: {Config.TEXT_LIGHT}; font-size: {Config.FONT_SIZE_SMALL}pt;")
-        desc_label.setWordWrap(True)
-        desc_label.setAlignment(Qt.AlignCenter)
-        layout.addWidget(desc_label)
+        self.desc_label = QLabel(description)
+        self.desc_label.setStyleSheet(f"color: {Config.TEXT_LIGHT}; font-size: {Config.FONT_SIZE_SMALL}pt;")
+        self.desc_label.setWordWrap(True)
+        self.desc_label.setAlignment(Qt.AlignCenter)
+        layout.addWidget(self.desc_label)
 
 
 class ReportsPage(QWidget):
@@ -91,36 +92,38 @@ class ReportsPage(QWidget):
         layout.setSpacing(24)
 
         # Header
-        title = QLabel(self.i18n.t("reports"))
-        title.setStyleSheet(f"""
+        self._title = QLabel(tr("page.reports.title"))
+        self._title.setStyleSheet(f"""
             font-size: {Config.FONT_SIZE_H1}pt;
             font-weight: 700;
             color: {Config.TEXT_COLOR};
         """)
-        layout.addWidget(title)
+        layout.addWidget(self._title)
 
         # Report templates section
-        templates_label = QLabel("قوالب التقارير")
-        templates_label.setStyleSheet(f"font-size: {Config.FONT_SIZE_H2}pt; font-weight: 600;")
-        layout.addWidget(templates_label)
+        self._templates_label = QLabel(tr("page.reports.templates_title"))
+        self._templates_label.setStyleSheet(f"font-size: {Config.FONT_SIZE_H2}pt; font-weight: 600;")
+        layout.addWidget(self._templates_label)
 
         # Report cards grid
         grid = QGridLayout()
         grid.setSpacing(20)
 
-        reports = [
-            ("تقرير المباني", "إحصائيات المباني حسب الحالة والنوع", "", "buildings_summary"),
-            ("تقرير المطالبات", "ملخص المطالبات حسب الحالة", "", "claims_summary"),
-            ("تقرير الوحدات", "تفاصيل الوحدات العقارية", "", "units_report"),
-            ("تقرير الأشخاص", "قائمة المستفيدين والمطالبين", "", "persons_report"),
-            ("تقرير التعارضات", "المطالبات المتعارضة", "", "conflicts_report"),
-            ("تقرير الإنجاز", "مؤشرات الأداء والإنجاز", "", "progress_report"),
+        self._report_cards_keys = [
+            ("page.reports.buildings_report", "page.reports.buildings_report_desc", "", "buildings_summary"),
+            ("page.reports.claims_report", "page.reports.claims_report_desc", "", "claims_summary"),
+            ("page.reports.units_report", "page.reports.units_report_desc", "", "units_report"),
+            ("page.reports.persons_report", "page.reports.persons_report_desc", "", "persons_report"),
+            ("page.reports.conflicts_report", "page.reports.conflicts_report_desc", "", "conflicts_report"),
+            ("page.reports.progress_report", "page.reports.progress_report_desc", "", "progress_report"),
         ]
+        self._report_cards = []
 
-        for idx, (title, desc, icon, rtype) in enumerate(reports):
-            card = ReportCard(title, desc, icon, rtype)
+        for idx, (title_key, desc_key, icon, rtype) in enumerate(self._report_cards_keys):
+            card = ReportCard(tr(title_key), tr(desc_key), icon, rtype)
             card.mousePressEvent = lambda e, rt=rtype: self._on_report_click(rt)
             grid.addWidget(card, idx // 3, idx % 3)
+            self._report_cards.append(card)
 
         layout.addLayout(grid)
 
@@ -138,9 +141,9 @@ class ReportsPage(QWidget):
         export_layout.setContentsMargins(24, 24, 24, 24)
         export_layout.setSpacing(16)
 
-        export_title = QLabel("تصدير البيانات")
-        export_title.setStyleSheet(f"font-size: {Config.FONT_SIZE_H2}pt; font-weight: 600;")
-        export_layout.addWidget(export_title)
+        self._export_title = QLabel(tr("page.reports.export_data"))
+        self._export_title.setStyleSheet(f"font-size: {Config.FONT_SIZE_H2}pt; font-weight: 600;")
+        export_layout.addWidget(self._export_title)
 
         # Export options
         options_layout = QHBoxLayout()
@@ -148,16 +151,16 @@ class ReportsPage(QWidget):
 
         # Entity selection
         entity_layout = QVBoxLayout()
-        entity_label = QLabel("الكيان:")
-        entity_label.setStyleSheet("font-weight: 500;")
-        entity_layout.addWidget(entity_label)
+        self._entity_label = QLabel(tr("page.reports.entity"))
+        self._entity_label.setStyleSheet("font-weight: 500;")
+        entity_layout.addWidget(self._entity_label)
 
         self.entity_combo = QComboBox()
         entities = [
-            ("buildings", "المباني"),
-            ("units", "الوحدات"),
-            ("persons", "الأشخاص"),
-            ("claims", "المطالبات"),
+            ("buildings", tr("page.reports.entity_buildings")),
+            ("units", tr("page.reports.entity_units")),
+            ("persons", tr("page.reports.entity_persons")),
+            ("claims", tr("page.reports.entity_claims")),
         ]
         for code, name in entities:
             self.entity_combo.addItem(name, code)
@@ -166,9 +169,9 @@ class ReportsPage(QWidget):
 
         # Format selection
         format_layout = QVBoxLayout()
-        format_label = QLabel("الصيغة:")
-        format_label.setStyleSheet("font-weight: 500;")
-        format_layout.addWidget(format_label)
+        self._format_label = QLabel(tr("page.reports.format"))
+        self._format_label.setStyleSheet("font-weight: 500;")
+        format_layout.addWidget(self._format_label)
 
         self.format_combo = QComboBox()
         formats = [
@@ -183,9 +186,9 @@ class ReportsPage(QWidget):
 
         # Date range
         date_layout = QVBoxLayout()
-        date_label = QLabel("من تاريخ:")
-        date_label.setStyleSheet("font-weight: 500;")
-        date_layout.addWidget(date_label)
+        self._from_date_label = QLabel(tr("page.reports.from_date"))
+        self._from_date_label.setStyleSheet("font-weight: 500;")
+        date_layout.addWidget(self._from_date_label)
 
         self.from_date = QDateEdit()
         self.from_date.setCalendarPopup(True)
@@ -194,9 +197,9 @@ class ReportsPage(QWidget):
         options_layout.addLayout(date_layout)
 
         date_layout2 = QVBoxLayout()
-        date_label2 = QLabel("إلى تاريخ:")
-        date_label2.setStyleSheet("font-weight: 500;")
-        date_layout2.addWidget(date_label2)
+        self._to_date_label = QLabel(tr("page.reports.to_date"))
+        self._to_date_label.setStyleSheet("font-weight: 500;")
+        date_layout2.addWidget(self._to_date_label)
 
         self.to_date = QDateEdit()
         self.to_date.setCalendarPopup(True)
@@ -207,8 +210,8 @@ class ReportsPage(QWidget):
         options_layout.addStretch()
 
         # Export button
-        export_btn = QPushButton("تصدير")
-        export_btn.setStyleSheet(f"""
+        self._export_btn = QPushButton(tr("page.reports.export_btn"))
+        self._export_btn.setStyleSheet(f"""
             QPushButton {{
                 background-color: {Config.PRIMARY_COLOR};
                 color: white;
@@ -222,8 +225,8 @@ class ReportsPage(QWidget):
                 background-color: {Config.PRIMARY_DARK};
             }}
         """)
-        export_btn.clicked.connect(self._on_export)
-        options_layout.addWidget(export_btn, alignment=Qt.AlignBottom)
+        self._export_btn.clicked.connect(self._on_export)
+        options_layout.addWidget(self._export_btn, alignment=Qt.AlignBottom)
 
         export_layout.addLayout(options_layout)
 
@@ -245,7 +248,7 @@ class ReportsPage(QWidget):
         # Ask for save location
         filename, _ = QFileDialog.getSaveFileName(
             self,
-            "حفظ التقرير",
+            tr("page.reports.save_report"),
             f"{report_type}_{datetime.now().strftime('%Y%m%d')}.pdf",
             "PDF Files (*.pdf)"
         )
@@ -255,7 +258,7 @@ class ReportsPage(QWidget):
 
         try:
             # Generate report (placeholder - would use reportlab for PDF)
-            Toast.show_toast(self, f"جاري إنشاء التقرير: {report_type}", Toast.INFO)
+            Toast.show_toast(self, tr("page.reports.generating_report", report_type=report_type), Toast.INFO)
 
             # In production, this would call a PDF generation service
             # For now, we'll export as CSV
@@ -264,13 +267,13 @@ class ReportsPage(QWidget):
 
             Toast.show_toast(
                 self,
-                f"تم إنشاء التقرير بنجاح: {result['record_count']} سجل",
+                tr("page.reports.report_success", count=result['record_count']),
                 Toast.SUCCESS
             )
 
         except Exception as e:
             logger.error(f"Report generation failed: {e}")
-            ErrorHandler.show_warning(self, f"فشل في إنشاء التقرير: {str(e)}", "خطأ")
+            ErrorHandler.show_warning(self, tr("page.reports.report_failed", error=str(e)), tr("dialog.error"))
 
     def _on_export(self):
         """Handle data export."""
@@ -282,7 +285,7 @@ class ReportsPage(QWidget):
 
         filename, _ = QFileDialog.getSaveFileName(
             self,
-            "تصدير البيانات",
+            tr("page.reports.export_data"),
             f"{entity}_export_{datetime.now().strftime('%Y%m%d')}.{ext}",
             f"{fmt.upper()} Files (*.{ext})"
         )
@@ -317,18 +320,40 @@ class ReportsPage(QWidget):
             if result:
                 Toast.show_toast(
                     self,
-                    f"تم التصدير بنجاح: {result.get('record_count', 0)} سجل",
+                    tr("page.reports.export_success_count", count=result.get('record_count', 0)),
                     Toast.SUCCESS
                 )
             else:
-                Toast.show_toast(self, "تم التصدير بنجاح", Toast.SUCCESS)
+                Toast.show_toast(self, tr("page.reports.export_success"), Toast.SUCCESS)
 
         except Exception as e:
             logger.error(f"Export failed: {e}")
-            ErrorHandler.show_warning(self, f"فشل في التصدير: {str(e)}", "خطأ")
+            ErrorHandler.show_warning(self, tr("page.reports.export_failed", error=str(e)), tr("dialog.error"))
 
         finally:
             self.progress.setVisible(False)
 
     def update_language(self, is_arabic: bool):
-        pass
+        self.setLayoutDirection(get_layout_direction())
+        self._title.setText(tr("page.reports.title"))
+        self._templates_label.setText(tr("page.reports.templates_title"))
+        self._export_title.setText(tr("page.reports.export_data"))
+        self._entity_label.setText(tr("page.reports.entity"))
+        self._format_label.setText(tr("page.reports.format"))
+        self._from_date_label.setText(tr("page.reports.from_date"))
+        self._to_date_label.setText(tr("page.reports.to_date"))
+        self._export_btn.setText(tr("page.reports.export_btn"))
+
+        entity_keys = [
+            ("buildings", "page.reports.entity_buildings"),
+            ("units", "page.reports.entity_units"),
+            ("persons", "page.reports.entity_persons"),
+            ("claims", "page.reports.entity_claims"),
+        ]
+        for i, (code, key) in enumerate(entity_keys):
+            self.entity_combo.setItemText(i, tr(key))
+
+        for i, (title_key, desc_key, _, _) in enumerate(self._report_cards_keys):
+            card = self._report_cards[i]
+            card.title_label.setText(tr(title_key))
+            card.desc_label.setText(tr(desc_key))

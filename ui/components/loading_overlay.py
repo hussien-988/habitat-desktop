@@ -8,6 +8,8 @@ from PyQt5.QtWidgets import QWidget, QVBoxLayout, QLabel, QProgressBar
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QPainter, QColor, QPaintEvent
 
+from services.translation_manager import tr
+
 
 class LoadingOverlay(QWidget):
     """Semi-transparent loading overlay with progress indicator."""
@@ -38,7 +40,7 @@ class LoadingOverlay(QWidget):
         container_layout.setSpacing(16)
 
         # Message label
-        self.message_label = QLabel("Loading...")
+        self.message_label = QLabel(tr("component.loading.default"))
         self.message_label.setAlignment(Qt.AlignCenter)
         self.message_label.setStyleSheet("font-size: 12pt; color: #333;")
         container_layout.addWidget(self.message_label)
@@ -58,7 +60,7 @@ class LoadingOverlay(QWidget):
         painter.fillRect(self.rect(), QColor(0, 0, 0, 100))
         super().paintEvent(event)
 
-    def show_loading(self, message: str = "Loading...", progress: int = -1) -> None:
+    def show_loading(self, message: str = None, progress: int = -1) -> None:
         """
         Show the loading overlay.
 
@@ -66,7 +68,7 @@ class LoadingOverlay(QWidget):
             message: Message to display
             progress: Progress value (0-100), or -1 for indeterminate
         """
-        self.message_label.setText(message)
+        self.message_label.setText(message or tr("component.loading.default"))
 
         if progress < 0:
             self.progress_bar.setMaximum(0)  # Indeterminate

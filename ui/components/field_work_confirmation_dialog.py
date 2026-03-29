@@ -13,6 +13,7 @@ from PyQt5.QtGui import QPixmap, QColor
 
 from ui.components.icon import Icon
 from ui.font_utils import create_font, FontManager
+from services.translation_manager import tr
 
 
 class FieldWorkConfirmationDialog(QDialog):
@@ -92,7 +93,7 @@ class FieldWorkConfirmationDialog(QDialog):
         container_layout.addWidget(icon_label)
 
         # Row 2: Title
-        title_text = f"هل انت متاكد من اسناد {self.building_count} مهمة"
+        title_text = tr("component.field_work_confirmation.title", count=self.building_count)
         title_label = QLabel(title_text)
         title_label.setAlignment(Qt.AlignCenter)
         title_label.setFont(create_font(size=12, weight=FontManager.WEIGHT_SEMIBOLD))
@@ -101,7 +102,7 @@ class FieldWorkConfirmationDialog(QDialog):
         container_layout.addWidget(title_label)
 
         # Row 3: Subtitle
-        subtitle_text = f"{self.building_count} مهمة سيتم اسنادها ل {self.researcher_id}"
+        subtitle_text = tr("component.field_work_confirmation.subtitle", count=self.building_count, researcher=self.researcher_id)
         subtitle_label = QLabel(subtitle_text)
         subtitle_label.setAlignment(Qt.AlignCenter)
         subtitle_label.setFont(create_font(size=10, weight=FontManager.WEIGHT_REGULAR))
@@ -116,7 +117,7 @@ class FieldWorkConfirmationDialog(QDialog):
         buttons_layout.setSpacing(12)
 
         # Cancel button (white)
-        btn_cancel = QPushButton("الغاء")
+        btn_cancel = QPushButton(tr("component.field_work_confirmation.cancel"))
         btn_cancel.setFixedSize(170, 50)
         btn_cancel.setCursor(Qt.PointingHandCursor)
         btn_cancel.setFont(create_font(size=11, weight=FontManager.WEIGHT_SEMIBOLD))
@@ -135,7 +136,7 @@ class FieldWorkConfirmationDialog(QDialog):
         buttons_layout.addWidget(btn_cancel)
 
         # Assign button (yellow from warning icon)
-        btn_assign = QPushButton("اسناد")
+        btn_assign = QPushButton(tr("component.field_work_confirmation.assign"))
         btn_assign.setFixedSize(170, 50)
         btn_assign.setCursor(Qt.PointingHandCursor)
         btn_assign.setFont(create_font(size=11, weight=FontManager.WEIGHT_SEMIBOLD))

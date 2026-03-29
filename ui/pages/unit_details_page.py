@@ -12,7 +12,7 @@ from repositories.database import Database
 from repositories.unit_repository import UnitRepository
 from models.unit import PropertyUnit
 from services.display_mappings import get_unit_status_display
-from services.translation_manager import tr
+from services.translation_manager import tr, get_layout_direction
 from ui.font_utils import create_font, FontManager
 from ui.style_manager import StyleManager
 from ui.design_system import Colors, PageDimensions
@@ -60,7 +60,7 @@ class UnitDetailsPage(QWidget):
         self.title_label.setStyleSheet(f"color: {Colors.PAGE_TITLE}; background: transparent; border: none;")
         title_area.addWidget(self.title_label)
 
-        self.breadcrumb = QLabel("المقاسم  •  عرض")
+        self.breadcrumb = QLabel(tr("page.unit_details.breadcrumb"))
         self.breadcrumb.setFont(create_font(size=FontManager.SIZE_BODY, weight=FontManager.WEIGHT_SEMIBOLD))
         self.breadcrumb.setStyleSheet(f"color: {Colors.PAGE_SUBTITLE}; background: transparent; border: none;")
         title_area.addWidget(self.breadcrumb)
@@ -68,11 +68,11 @@ class UnitDetailsPage(QWidget):
         header_row.addLayout(title_area)
         header_row.addStretch()
 
-        back_btn = QPushButton("رجوع")
-        back_btn.setFixedSize(100, 40)
-        back_btn.setCursor(Qt.PointingHandCursor)
-        back_btn.setFont(create_font(size=FontManager.SIZE_BODY, weight=FontManager.WEIGHT_SEMIBOLD))
-        back_btn.setStyleSheet("""
+        self._back_btn = QPushButton(tr("action.back"))
+        self._back_btn.setFixedSize(100, 40)
+        self._back_btn.setCursor(Qt.PointingHandCursor)
+        self._back_btn.setFont(create_font(size=FontManager.SIZE_BODY, weight=FontManager.WEIGHT_SEMIBOLD))
+        self._back_btn.setStyleSheet("""
             QPushButton {
                 background-color: #F1F5F9;
                 color: #475569;
@@ -84,8 +84,8 @@ class UnitDetailsPage(QWidget):
                 background-color: #E2E8F0;
             }
         """)
-        back_btn.clicked.connect(self.back_requested.emit)
-        header_row.addWidget(back_btn)
+        self._back_btn.clicked.connect(self.back_requested.emit)
+        header_row.addWidget(self._back_btn)
 
         layout.addLayout(header_row)
 
@@ -192,13 +192,13 @@ class UnitDetailsPage(QWidget):
         title_subtitle_layout.setSpacing(2)
         title_subtitle_layout.setContentsMargins(0, 0, 0, 0)
 
-        title = QLabel("المقاسم")
+        title = QLabel(tr("page.unit_details.units_title"))
         title.setFont(create_font(size=FontManager.WIZARD_STEP_TITLE, weight=FontManager.WEIGHT_SEMIBOLD))
         title.setStyleSheet("color: #1A1F1D; border: none; background: transparent;")
         title.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
         title_subtitle_layout.addWidget(title)
 
-        subtitle = QLabel("معلومات المقاسم")
+        subtitle = QLabel(tr("page.unit_details.units_info"))
         subtitle.setFont(create_font(size=FontManager.WIZARD_STEP_SUBTITLE, weight=FontManager.WEIGHT_REGULAR))
         subtitle.setStyleSheet("color: #86909B; border: none; background: transparent;")
         subtitle.setAlignment(Qt.AlignRight)
@@ -263,7 +263,7 @@ class UnitDetailsPage(QWidget):
 
         if unit.area_sqm:
             try:
-                area_val = f"{float(unit.area_sqm):.2f} م²"
+                area_val = f"{float(unit.area_sqm):.2f} {tr('unit.sqm')}"
             except (ValueError, TypeError):
                 area_val = "-"
         else:
@@ -271,12 +271,12 @@ class UnitDetailsPage(QWidget):
 
         # --- Top Row: 6-column grid ---
         data_points = [
-            ("رقم المقسم", unit_display_num),
-            ("رقم الطابق", floor_val),
-            ("عدد الغرف", rooms_val),
-            ("مساحة المقسم", area_val),
-            ("نوع المقسم", unit_type_val),
-            ("حالة المقسم", status_val),
+            (tr("page.unit_details.unit_number"), unit_display_num),
+            (tr("page.unit_details.floor_number"), floor_val),
+            (tr("page.unit_details.rooms_count"), rooms_val),
+            (tr("page.unit_details.unit_area"), area_val),
+            (tr("page.unit_details.unit_type"), unit_type_val),
+            (tr("page.unit_details.unit_status"), status_val),
         ]
 
         grid_layout = QHBoxLayout()
@@ -323,7 +323,7 @@ class UnitDetailsPage(QWidget):
         desc_layout.setSpacing(2)
         desc_layout.setDirection(QVBoxLayout.TopToBottom)
 
-        desc_title = QLabel("وصف المقسم")
+        desc_title = QLabel(tr("page.unit_details.unit_description"))
         desc_title.setFont(create_font(size=FontManager.WIZARD_FIELD_LABEL, weight=FontManager.WEIGHT_SEMIBOLD))
         desc_title.setStyleSheet("color: #1A1F1D;")
         desc_title.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
@@ -341,3 +341,11 @@ class UnitDetailsPage(QWidget):
         main_layout.addLayout(desc_layout)
 
         return card
+
+    def update_language(self, is_arabic: bool):
+        """Update all translatable texts when language changes."""
+        self.setLayoutDirection(get_layout_direction())
+        self.breadcrumb.setText(tr("page.unit_details.breadcrumb"))
+        self._back_btn.setText(tr("action.back"))
+        if self.current_unit:
+            self._rebuild_card(self.current_unit)

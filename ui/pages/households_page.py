@@ -26,6 +26,7 @@ from ui.components.base_table_model import BaseTableModel
 from ui.error_handler import ErrorHandler
 from utils.i18n import I18n
 from utils.logger import get_logger
+from services.translation_manager import tr, get_layout_direction
 
 logger = get_logger(__name__)
 
@@ -35,13 +36,13 @@ class HouseholdsTableModel(BaseTableModel):
 
     def __init__(self, is_arabic: bool = True):
         columns = [
-            ('unit', "Unit", "الوحدة"),
-            ('main_occupant', "Main Occupant", "الشاغل الرئيسي"),
-            ('size', "Size", "الحجم"),
-            ('gender_dist', "M/F", "ذ/أ"),
-            ('age_groups', "Age Groups", "الفئات العمرية"),
-            ('type', "Type", "النوع"),
-            ('nature', "Nature", "الطبيعة"),
+            ('unit', "Unit", tr("table.households.unit")),
+            ('main_occupant', "Main Occupant", tr("table.households.main_occupant")),
+            ('size', "Size", tr("table.households.size")),
+            ('gender_dist', "M/F", tr("table.households.gender_dist")),
+            ('age_groups', "Age Groups", tr("table.households.age_groups")),
+            ('type', "Type", tr("table.households.type")),
+            ('nature', "Nature", tr("table.households.nature")),
         ]
         super().__init__(items=[], columns=columns)
         self._is_arabic = is_arabic
@@ -59,9 +60,9 @@ class HouseholdsTableModel(BaseTableModel):
             household = self._items[index.row()]
             col = index.column()
             if col == 3:
-                return f"ذكور: {household.male_count}, إناث: {household.female_count}"
+                return f"{tr('page.households.males')}: {household.male_count}, {tr('page.households.females')}: {household.female_count}"
             elif col == 4:
-                return f"قاصرين: {household.minors_count}, بالغين: {household.adults_count}, كبار السن: {household.elderly_count}"
+                return f"{tr('page.households.minors')}: {household.minors_count}, {tr('page.households.adults')}: {household.adults_count}, {tr('page.households.elderly')}: {household.elderly_count}"
         return super().data(index, role)
 
     def get_item_value(self, item, field_name: str):
@@ -94,18 +95,18 @@ class HouseholdDialog(QDialog):
     """Dialog for creating/editing a household."""
 
     OCCUPANCY_TYPES = [
-        ("owner", "مالك", "Owner"),
-        ("tenant", "مستأجر", "Tenant"),
-        ("guest", "ضيف", "Guest"),
-        ("caretaker", "حارس", "Caretaker"),
-        ("relative", "قريب", "Relative"),
-        ("other", "آخر", "Other"),
+        ("owner", "page.households.type_owner", "Owner"),
+        ("tenant", "page.households.type_tenant", "Tenant"),
+        ("guest", "page.households.type_guest", "Guest"),
+        ("caretaker", "page.households.type_caretaker", "Caretaker"),
+        ("relative", "page.households.type_relative", "Relative"),
+        ("other", "page.households.type_other", "Other"),
     ]
 
     OCCUPANCY_NATURES = [
-        ("permanent", "دائم", "Permanent"),
-        ("temporary", "مؤقت", "Temporary"),
-        ("seasonal", "موسمي", "Seasonal"),
+        ("permanent", "page.households.nature_permanent", "Permanent"),
+        ("temporary", "page.households.nature_temporary", "Temporary"),
+        ("seasonal", "page.households.nature_seasonal", "Seasonal"),
     ]
 
     def __init__(self, db: Database, i18n: I18n, household: Household = None,
@@ -119,7 +120,7 @@ class HouseholdDialog(QDialog):
         self.person_repo = PersonRepository(db)
         self._is_edit_mode = household is not None
 
-        self.setWindowTitle(i18n.t("edit_household") if household else i18n.t("add_household"))
+        self.setWindowTitle(tr("edit_household") if household else tr("add_household"))
         self.setMinimumWidth(600)
         self.setMinimumHeight(650)
         self._setup_ui()
@@ -133,7 +134,7 @@ class HouseholdDialog(QDialog):
         layout = QVBoxLayout(self)
         layout.setSpacing(16)
         layout.setContentsMargins(24, 24, 24, 24)
-        unit_group = QGroupBox("الوحدة")
+        unit_group = QGroupBox(tr("page.households.unit_group"))
         unit_group.setStyleSheet(f"""
             QGroupBox {{
                 font-weight: bold;
@@ -155,14 +156,14 @@ class HouseholdDialog(QDialog):
         self.unit_combo = QComboBox()
         self.unit_combo.setMinimumWidth(350)
         units = self.unit_repo.get_all(limit=500)
-        self.unit_combo.addItem("-- اختر الوحدة --", "")
+        self.unit_combo.addItem(tr("page.households.select_unit"), "")
         for u in units:
             display = f"{u.unit_id} ({u.unit_type_display_ar})"
             self.unit_combo.addItem(display, u.unit_id)
-        unit_form.addRow("الوحدة *:", self.unit_combo)
+        unit_form.addRow(tr("page.households.unit_required"), self.unit_combo)
 
         layout.addWidget(unit_group)
-        occupant_group = QGroupBox("الشاغل الرئيسي")
+        occupant_group = QGroupBox(tr("page.households.main_occupant_group"))
         occupant_group.setStyleSheet(unit_group.styleSheet())
         occupant_form = QFormLayout(occupant_group)
         occupant_form.setSpacing(10)
@@ -171,20 +172,20 @@ class HouseholdDialog(QDialog):
         self.person_combo = QComboBox()
         self.person_combo.setMinimumWidth(350)
         persons = self.person_repo.get_all(limit=500)
-        self.person_combo.addItem("-- اختر شخص (اختياري) --", "")
+        self.person_combo.addItem(tr("page.households.select_person_optional"), "")
         for p in persons:
-            display = f"{p.full_name_ar} ({p.national_id or 'بدون رقم وطني'})"
+            display = f"{p.full_name_ar} ({p.national_id or tr('page.households.no_national_id')})"
             self.person_combo.addItem(display, p.person_id)
         self.person_combo.currentIndexChanged.connect(self._on_person_changed)
-        occupant_form.addRow("الشخص:", self.person_combo)
+        occupant_form.addRow(tr("page.households.person_label"), self.person_combo)
 
         # Manual name entry (fallback)
         self.occupant_name = QLineEdit()
-        self.occupant_name.setPlaceholderText("أو أدخل الاسم يدوياً...")
-        occupant_form.addRow("الاسم:", self.occupant_name)
+        self.occupant_name.setPlaceholderText(tr("page.households.enter_name_manually"))
+        occupant_form.addRow(tr("page.households.name_label"), self.occupant_name)
 
         layout.addWidget(occupant_group)
-        counts_group = QGroupBox("بيانات الإشغال")
+        counts_group = QGroupBox(tr("page.households.occupancy_data_group"))
         counts_group.setStyleSheet(unit_group.styleSheet())
         counts_form = QFormLayout(counts_group)
         counts_form.setSpacing(10)
@@ -200,10 +201,10 @@ class HouseholdDialog(QDialog):
         self.size_spin.setValue(1)
         self.size_spin.valueChanged.connect(self._validate_counts)
         size_layout.addWidget(self.size_spin)
-        counts_form.addRow("حجم الأسرة *:", size_container)
+        counts_form.addRow(tr("page.households.family_size_required"), size_container)
 
         # Gender distribution header
-        gender_label = QLabel("التوزيع حسب الجنس:")
+        gender_label = QLabel(tr("page.households.gender_distribution"))
         gender_label.setStyleSheet(f"font-weight: 600; color: {Config.TEXT_COLOR}; margin-top: 8px;")
         counts_form.addRow(gender_label)
 
@@ -211,16 +212,16 @@ class HouseholdDialog(QDialog):
         self.male_spin = QSpinBox()
         self.male_spin.setRange(0, 50)
         self.male_spin.valueChanged.connect(self._validate_counts)
-        counts_form.addRow("الذكور:", self.male_spin)
+        counts_form.addRow(tr("page.households.males_label"), self.male_spin)
 
         # Female count
         self.female_spin = QSpinBox()
         self.female_spin.setRange(0, 50)
         self.female_spin.valueChanged.connect(self._validate_counts)
-        counts_form.addRow("الإناث:", self.female_spin)
+        counts_form.addRow(tr("page.households.females_label"), self.female_spin)
 
         # Age distribution header
-        age_label = QLabel("التوزيع حسب العمر:")
+        age_label = QLabel(tr("page.households.age_distribution"))
         age_label.setStyleSheet(f"font-weight: 600; color: {Config.TEXT_COLOR}; margin-top: 8px;")
         counts_form.addRow(age_label)
 
@@ -228,25 +229,25 @@ class HouseholdDialog(QDialog):
         self.minors_spin = QSpinBox()
         self.minors_spin.setRange(0, 50)
         self.minors_spin.valueChanged.connect(self._validate_counts)
-        counts_form.addRow("القاصرين (< 18):", self.minors_spin)
+        counts_form.addRow(tr("page.households.minors_under_18"), self.minors_spin)
 
         # Adults count
         self.adults_spin = QSpinBox()
         self.adults_spin.setRange(0, 50)
         self.adults_spin.valueChanged.connect(self._validate_counts)
-        counts_form.addRow("البالغين (18-59):", self.adults_spin)
+        counts_form.addRow(tr("page.households.adults_18_59"), self.adults_spin)
 
         # Elderly count
         self.elderly_spin = QSpinBox()
         self.elderly_spin.setRange(0, 50)
         self.elderly_spin.valueChanged.connect(self._validate_counts)
-        counts_form.addRow("كبار السن (60+):", self.elderly_spin)
+        counts_form.addRow(tr("page.households.elderly_60_plus"), self.elderly_spin)
 
         # With disability count
         self.disability_spin = QSpinBox()
         self.disability_spin.setRange(0, 50)
         self.disability_spin.valueChanged.connect(self._validate_counts)
-        counts_form.addRow("ذوي الإعاقة:", self.disability_spin)
+        counts_form.addRow(tr("page.households.with_disability"), self.disability_spin)
 
         # Validation hint
         self.count_hint = QLabel("")
@@ -254,46 +255,46 @@ class HouseholdDialog(QDialog):
         counts_form.addRow("", self.count_hint)
 
         layout.addWidget(counts_group)
-        details_group = QGroupBox("تفاصيل الإشغال")
+        details_group = QGroupBox(tr("page.households.occupancy_details_group"))
         details_group.setStyleSheet(unit_group.styleSheet())
         details_form = QFormLayout(details_group)
         details_form.setSpacing(10)
 
         # Occupancy type
         self.type_combo = QComboBox()
-        self.type_combo.addItem("-- اختر --", "")
-        for code, ar, en in self.OCCUPANCY_TYPES:
-            self.type_combo.addItem(ar, code)
-        details_form.addRow("نوع الإشغال:", self.type_combo)
+        self.type_combo.addItem(tr("page.households.select_placeholder"), "")
+        for code, tr_key, en in self.OCCUPANCY_TYPES:
+            self.type_combo.addItem(tr(tr_key), code)
+        details_form.addRow(tr("page.households.occupancy_type"), self.type_combo)
 
         # Occupancy nature
         self.nature_combo = QComboBox()
-        self.nature_combo.addItem("-- اختر --", "")
-        for code, ar, en in self.OCCUPANCY_NATURES:
-            self.nature_combo.addItem(ar, code)
-        details_form.addRow("طبيعة الإشغال:", self.nature_combo)
+        self.nature_combo.addItem(tr("page.households.select_placeholder"), "")
+        for code, tr_key, en in self.OCCUPANCY_NATURES:
+            self.nature_combo.addItem(tr(tr_key), code)
+        details_form.addRow(tr("page.households.occupancy_nature"), self.nature_combo)
 
         # Start date
         self.start_date = QDateEdit()
         self.start_date.setCalendarPopup(True)
         self.start_date.setDisplayFormat("yyyy-MM-dd")
-        self.start_date.setSpecialValueText("غير محدد")
+        self.start_date.setSpecialValueText(tr("page.households.not_specified"))
         self.start_date.setDate(QDate.currentDate())
-        details_form.addRow("تاريخ بدء الإشغال:", self.start_date)
+        details_form.addRow(tr("page.households.occupancy_start_date"), self.start_date)
 
         # Monthly rent
         self.rent_spin = QDoubleSpinBox()
         self.rent_spin.setRange(0, 10000000)
         self.rent_spin.setDecimals(2)
-        self.rent_spin.setSuffix(" ل.س")
-        self.rent_spin.setSpecialValueText("غير محدد")
-        details_form.addRow("الإيجار الشهري:", self.rent_spin)
+        self.rent_spin.setSuffix(tr("page.households.currency_suffix"))
+        self.rent_spin.setSpecialValueText(tr("page.households.not_specified"))
+        details_form.addRow(tr("page.households.monthly_rent"), self.rent_spin)
 
         layout.addWidget(details_group)
         self.notes = QTextEdit()
         self.notes.setMaximumHeight(60)
-        self.notes.setPlaceholderText("ملاحظات إضافية...")
-        layout.addWidget(QLabel("ملاحظات:"))
+        self.notes.setPlaceholderText(tr("page.households.additional_notes_placeholder"))
+        layout.addWidget(QLabel(tr("page.households.notes_label")))
         layout.addWidget(self.notes)
 
         # Error label
@@ -314,11 +315,11 @@ class HouseholdDialog(QDialog):
         btn_layout = QHBoxLayout()
         btn_layout.addStretch()
 
-        cancel_btn = QPushButton(self.i18n.t("cancel"))
+        cancel_btn = QPushButton(tr("cancel"))
         cancel_btn.clicked.connect(self.reject)
         btn_layout.addWidget(cancel_btn)
 
-        save_btn = QPushButton(self.i18n.t("save"))
+        save_btn = QPushButton(tr("save"))
         save_btn.setStyleSheet(f"""
             QPushButton {{
                 background-color: {Config.PRIMARY_COLOR};
@@ -362,11 +363,11 @@ class HouseholdDialog(QDialog):
         age_sum = minors + adults + elderly
 
         if gender_sum > size:
-            errors.append(f"مجموع الذكور والإناث ({gender_sum}) > حجم الأسرة ({size})")
+            errors.append(f"{tr('page.households.err_gender_sum')} ({gender_sum}) > {tr('page.households.family_size')} ({size})")
         if age_sum > size:
-            errors.append(f"مجموع الفئات العمرية ({age_sum}) > حجم الأسرة ({size})")
+            errors.append(f"{tr('page.households.err_age_sum')} ({age_sum}) > {tr('page.households.family_size')} ({size})")
         if disability > size:
-            errors.append(f"عدد ذوي الإعاقة ({disability}) > حجم الأسرة ({size})")
+            errors.append(f"{tr('page.households.err_disability_count')} ({disability}) > {tr('page.households.family_size')} ({size})")
 
         if errors:
             self.count_hint.setText(" | ".join(errors))
@@ -376,10 +377,10 @@ class HouseholdDialog(QDialog):
             remaining_age = size - age_sum
             hints = []
             if remaining_gender > 0:
-                hints.append(f"متبقي للجنس: {remaining_gender}")
+                hints.append(f"{tr('page.households.remaining_gender')}: {remaining_gender}")
             if remaining_age > 0:
-                hints.append(f"متبقي للعمر: {remaining_age}")
-            self.count_hint.setText(" | ".join(hints) if hints else "✓ البيانات متسقة")
+                hints.append(f"{tr('page.households.remaining_age')}: {remaining_age}")
+            self.count_hint.setText(" | ".join(hints) if hints else tr("page.households.data_consistent"))
             self.count_hint.setStyleSheet(f"color: {Config.SUCCESS_COLOR}; font-size: 10px;")
 
         return len(errors) == 0
@@ -454,11 +455,11 @@ class HouseholdDialog(QDialog):
         # Required fields
         unit_id = self.unit_combo.currentData()
         if not unit_id:
-            errors.append("يجب اختيار الوحدة")
+            errors.append(tr("page.households.err_select_unit"))
 
         # Validate counts
         if not self._validate_counts():
-            errors.append("البيانات غير متسقة - راجع الأرقام")
+            errors.append(tr("page.households.err_data_inconsistent"))
 
         if errors:
             self.error_label.setText(" • ".join(errors))
@@ -518,18 +519,18 @@ class HouseholdsPage(QWidget):
         # Header
         header_layout = QHBoxLayout()
 
-        title = QLabel(self.i18n.t("households"))
-        title.setStyleSheet(f"""
+        self._title = QLabel(tr("households"))
+        self._title.setStyleSheet(f"""
             font-size: {Config.FONT_SIZE_H1}pt;
             font-weight: 700;
             color: {Config.TEXT_COLOR};
         """)
-        header_layout.addWidget(title)
+        header_layout.addWidget(self._title)
         header_layout.addStretch()
 
         # Add household button
-        add_btn = QPushButton("+ " + self.i18n.t("add_household"))
-        add_btn.setStyleSheet(f"""
+        self.add_btn = QPushButton("+ " + tr("add_household"))
+        self.add_btn.setStyleSheet(f"""
             QPushButton {{
                 background-color: {Config.SUCCESS_COLOR};
                 color: white;
@@ -543,9 +544,9 @@ class HouseholdsPage(QWidget):
                 background-color: #219A52;
             }}
         """)
-        add_btn.setCursor(Qt.PointingHandCursor)
-        add_btn.clicked.connect(self._on_add_household)
-        header_layout.addWidget(add_btn)
+        self.add_btn.setCursor(Qt.PointingHandCursor)
+        self.add_btn.clicked.connect(self._on_add_household)
+        header_layout.addWidget(self.add_btn)
 
         layout.addLayout(header_layout)
 
@@ -564,28 +565,31 @@ class HouseholdsPage(QWidget):
         filters_layout.setSpacing(20)
 
         # Unit filter
-        filters_layout.addWidget(QLabel("الوحدة:"))
+        self._unit_filter_label = QLabel(tr("page.households.unit_filter"))
+        filters_layout.addWidget(self._unit_filter_label)
         self.unit_filter = QComboBox()
         self.unit_filter.setMinimumWidth(200)
-        self.unit_filter.addItem(self.i18n.t("all"), "")
+        self.unit_filter.addItem(tr("all"), "")
         self.unit_filter.currentIndexChanged.connect(self._on_filter_changed)
         filters_layout.addWidget(self.unit_filter)
 
         # Occupancy type filter
-        filters_layout.addWidget(QLabel("نوع الإشغال:"))
+        self._type_filter_label = QLabel(tr("page.households.occupancy_type_filter"))
+        filters_layout.addWidget(self._type_filter_label)
         self.type_filter = QComboBox()
-        self.type_filter.addItem(self.i18n.t("all"), "")
-        for code, ar, en in HouseholdDialog.OCCUPANCY_TYPES:
-            self.type_filter.addItem(ar, code)
+        self.type_filter.addItem(tr("all"), "")
+        for code, tr_key, en in HouseholdDialog.OCCUPANCY_TYPES:
+            self.type_filter.addItem(tr(tr_key), code)
         self.type_filter.currentIndexChanged.connect(self._on_filter_changed)
         filters_layout.addWidget(self.type_filter)
 
         # Occupancy nature filter
-        filters_layout.addWidget(QLabel("طبيعة الإشغال:"))
+        self._nature_filter_label = QLabel(tr("page.households.occupancy_nature_filter"))
+        filters_layout.addWidget(self._nature_filter_label)
         self.nature_filter = QComboBox()
-        self.nature_filter.addItem(self.i18n.t("all"), "")
-        for code, ar, en in HouseholdDialog.OCCUPANCY_NATURES:
-            self.nature_filter.addItem(ar, code)
+        self.nature_filter.addItem(tr("all"), "")
+        for code, tr_key, en in HouseholdDialog.OCCUPANCY_NATURES:
+            self.nature_filter.addItem(tr(tr_key), code)
         self.nature_filter.currentIndexChanged.connect(self._on_filter_changed)
         filters_layout.addWidget(self.nature_filter)
 
@@ -672,11 +676,11 @@ class HouseholdsPage(QWidget):
 
         menu = QMenu(self)
 
-        edit_action = QAction("تعديل", self)
+        edit_action = QAction(tr("page.households.edit"), self)
         edit_action.triggered.connect(lambda: self._on_row_double_click(index))
         menu.addAction(edit_action)
 
-        delete_action = QAction("حذف", self)
+        delete_action = QAction(tr("page.households.delete"), self)
         delete_action.triggered.connect(lambda: self._delete_household(index))
         menu.addAction(delete_action)
 
@@ -695,16 +699,16 @@ class HouseholdsPage(QWidget):
 
         if ErrorHandler.confirm(
             self,
-            "هل أنت متأكد من حذف هذه الأسرة؟",
-            "تأكيد الحذف"
+            tr("page.households.confirm_delete_msg"),
+            tr("page.households.confirm_delete_title")
         ):
             try:
                 self.household_repo.delete(household.household_id)
-                Toast.show_toast(self, self.i18n.t("household_deleted"), Toast.SUCCESS)
+                Toast.show_toast(self, tr("household_deleted"), Toast.SUCCESS)
                 self._load_households()
             except Exception as e:
                 logger.error(f"Failed to delete household: {e}")
-                Toast.show_toast(self, f"فشل في حذف الأسرة: {str(e)}", Toast.ERROR)
+                Toast.show_toast(self, f"{tr('page.households.err_delete_failed')}: {str(e)}", Toast.ERROR)
 
     def refresh(self, data=None):
         """Refresh the households list."""
@@ -724,7 +728,7 @@ class HouseholdsPage(QWidget):
         # Unit filter
         current_unit = self.unit_filter.currentData()
         self.unit_filter.clear()
-        self.unit_filter.addItem(self.i18n.t("all"), "")
+        self.unit_filter.addItem(tr("all"), "")
         for u in units:
             self.unit_filter.addItem(u.unit_id, u.unit_id)
         if current_unit:
@@ -746,13 +750,13 @@ class HouseholdsPage(QWidget):
         )
 
         self.table_model.set_households(households)
-        self.count_label.setText(f"تم العثور على {len(households)} أسرة")
+        self.count_label.setText(f"{tr('page.households.found')} {len(households)} {tr('page.households.household_unit')}")
 
         # Calculate stats
         total_occupants = sum(h.occupancy_size for h in households)
         total_males = sum(h.male_count for h in households)
         total_females = sum(h.female_count for h in households)
-        self.stats_label.setText(f"إجمالي الشاغلين: {total_occupants} (ذ: {total_males}, أ: {total_females})")
+        self.stats_label.setText(f"{tr('page.households.total_occupants')}: {total_occupants} ({tr('page.households.m_abbr')}: {total_males}, {tr('page.households.f_abbr')}: {total_females})")
 
     def _on_filter_changed(self):
         self._load_households()
@@ -778,11 +782,11 @@ class HouseholdsPage(QWidget):
 
             try:
                 self.household_repo.create(household)
-                Toast.show_toast(self, self.i18n.t("household_added"), Toast.SUCCESS)
+                Toast.show_toast(self, tr("household_added"), Toast.SUCCESS)
                 self._load_households()
             except Exception as e:
                 logger.error(f"Failed to create household: {e}")
-                Toast.show_toast(self, f"فشل في إضافة الأسرة: {str(e)}", Toast.ERROR)
+                Toast.show_toast(self, f"{tr('page.households.err_add_failed')}: {str(e)}", Toast.ERROR)
 
     def _edit_household(self, household: Household):
         """Edit existing household."""
@@ -800,12 +804,44 @@ class HouseholdsPage(QWidget):
 
             try:
                 self.household_repo.update(household)
-                Toast.show_toast(self, self.i18n.t("household_updated"), Toast.SUCCESS)
+                Toast.show_toast(self, tr("household_updated"), Toast.SUCCESS)
                 self._load_households()
             except Exception as e:
                 logger.error(f"Failed to update household: {e}")
-                Toast.show_toast(self, f"فشل في تحديث الأسرة: {str(e)}", Toast.ERROR)
+                Toast.show_toast(self, f"{tr('page.households.err_update_failed')}: {str(e)}", Toast.ERROR)
 
     def update_language(self, is_arabic: bool):
         """Update language."""
+        self.setLayoutDirection(get_layout_direction())
+        self._title.setText(tr("households"))
+        self.add_btn.setText("+ " + tr("add_household"))
+        self._unit_filter_label.setText(tr("page.households.unit_filter"))
+        self._type_filter_label.setText(tr("page.households.occupancy_type_filter"))
+        self._nature_filter_label.setText(tr("page.households.occupancy_nature_filter"))
+        self._rebuild_filter_combos()
         self.table_model.set_language(is_arabic)
+        self._load_households()
+
+    def _rebuild_filter_combos(self):
+        """Rebuild filter combo box items with current language."""
+        # Preserve current selections
+        current_type = self.type_filter.currentData()
+        current_nature = self.nature_filter.currentData()
+
+        self.type_filter.clear()
+        self.type_filter.addItem(tr("all"), "")
+        for code, tr_key, en in HouseholdDialog.OCCUPANCY_TYPES:
+            self.type_filter.addItem(tr(tr_key), code)
+        if current_type:
+            idx = self.type_filter.findData(current_type)
+            if idx >= 0:
+                self.type_filter.setCurrentIndex(idx)
+
+        self.nature_filter.clear()
+        self.nature_filter.addItem(tr("all"), "")
+        for code, tr_key, en in HouseholdDialog.OCCUPANCY_NATURES:
+            self.nature_filter.addItem(tr(tr_key), code)
+        if current_nature:
+            idx = self.nature_filter.findData(current_nature)
+            if idx >= 0:
+                self.nature_filter.setCurrentIndex(idx)

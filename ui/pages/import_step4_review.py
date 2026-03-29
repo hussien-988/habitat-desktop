@@ -12,6 +12,7 @@ from PyQt5.QtGui import QColor
 from ui.design_system import Colors, PageDimensions
 from ui.font_utils import create_font, FontManager
 from ui.style_manager import StyleManager
+from services.translation_manager import tr, get_layout_direction
 from utils.logger import get_logger
 import re
 
@@ -26,7 +27,7 @@ def _translate_display(entity_type: str, field: str, value: str) -> str:
     # Households: "Size: N" → "N أفراد"
     size_match = re.match(r"^Size:\s*(\d+)$", value, re.IGNORECASE)
     if size_match:
-        return f"{size_match.group(1)} أفراد"
+        return tr("wizard.import.step4.household_members", count=size_match.group(1))
 
     # Use vocab service for known types
     if entity_type == "personPropertyRelations" and field == "displayInfo":
@@ -36,48 +37,59 @@ def _translate_display(entity_type: str, field: str, value: str) -> str:
             return label
 
     if entity_type == "claims" and field == "identifier":
-        _claim_type_map = {
-            "Ownership": "ملكية",
-            "Tenancy": "إيجار",
-            "Occupancy": "إشغال",
-            "Inheritance": "إرث",
-            "Other": "أخرى",
+        _claim_type_keys = {
+            "Ownership": "wizard.import.step4.claim_ownership",
+            "Tenancy": "wizard.import.step4.claim_tenancy",
+            "Occupancy": "wizard.import.step4.claim_occupancy",
+            "Inheritance": "wizard.import.step4.claim_inheritance",
+            "Other": "wizard.import.step4.claim_other",
         }
-        return _claim_type_map.get(value, value)
+        key = _claim_type_keys.get(value)
+        return tr(key) if key else value
 
     if entity_type == "claims" and field == "displayInfo":
-        _collection_map = {
-            "FieldCollection": "جمع ميداني",
-            "OfficeEntry": "إدخال مكتبي",
-            "Import": "استيراد",
-            "Migration": "ترحيل",
+        _collection_keys = {
+            "FieldCollection": "wizard.import.step4.collection_field",
+            "OfficeEntry": "wizard.import.step4.collection_office",
+            "Import": "wizard.import.step4.collection_import",
+            "Migration": "wizard.import.step4.collection_migration",
         }
-        return _collection_map.get(value, value)
+        key = _collection_keys.get(value)
+        return tr(key) if key else value
 
     return value
 
 # Entity sections matching API response keys
-_ENTITY_SECTIONS = [
-    ('surveys', 'المسوحات', '#6366F1', '#EEF2FF'),
-    ('buildings', 'المباني', '#3890DF', '#EBF5FF'),
-    ('propertyUnits', 'الوحدات العقارية', '#10B981', '#ECFDF5'),
-    ('persons', 'الأشخاص', '#8B5CF6', '#F5F3FF'),
-    ('households', 'الأسر', '#EC4899', '#FDF2F8'),
-    ('personPropertyRelations', 'علاقات الأشخاص بالعقارات', '#14B8A6', '#F0FDFA'),
-    ('evidences', 'المستندات', '#F97316', '#FFF7ED'),
-    ('claims', 'المطالبات', '#F59E0B', '#FFFBEB'),
+_ENTITY_SECTION_KEYS = [
+    ('surveys', 'wizard.import.entity.surveys', '#6366F1', '#EEF2FF'),
+    ('buildings', 'wizard.import.entity.buildings', '#3890DF', '#EBF5FF'),
+    ('propertyUnits', 'wizard.import.entity.property_units', '#10B981', '#ECFDF5'),
+    ('persons', 'wizard.import.entity.persons', '#8B5CF6', '#F5F3FF'),
+    ('households', 'wizard.import.entity.households', '#EC4899', '#FDF2F8'),
+    ('personPropertyRelations', 'wizard.import.entity.person_property_relations', '#14B8A6', '#F0FDFA'),
+    ('evidences', 'wizard.import.entity.evidences', '#F97316', '#FFF7ED'),
+    ('claims', 'wizard.import.entity.claims', '#F59E0B', '#FFFBEB'),
 ]
 
+
+def _get_entity_sections():
+    return [(k, tr(tr_key), c, bg) for k, tr_key, c, bg in _ENTITY_SECTION_KEYS]
+
 # Validation status display
-_STATUS_CONFIG = {
-    'Valid': {'label': 'صالح', 'color': '#10B981', 'bg': '#ECFDF5'},
-    'Invalid': {'label': 'غير صالح', 'color': '#EF4444', 'bg': '#FEF2F2'},
-    'Warning': {'label': 'تحذير', 'color': '#F59E0B', 'bg': '#FFFBEB'},
-    'Pending': {'label': 'قيد الانتظار', 'color': '#9CA3AF', 'bg': '#F3F4F6'},
-    'Skipped': {'label': 'تم تخطيه', 'color': '#6B7280', 'bg': '#F9FAFB'},
+_STATUS_CONFIG_KEYS = {
+    'Valid': {'tr_key': 'wizard.import.step4.status_valid', 'color': '#10B981', 'bg': '#ECFDF5'},
+    'Invalid': {'tr_key': 'wizard.import.step4.status_invalid', 'color': '#EF4444', 'bg': '#FEF2F2'},
+    'Warning': {'tr_key': 'wizard.import.step4.status_warning', 'color': '#F59E0B', 'bg': '#FFFBEB'},
+    'Pending': {'tr_key': 'wizard.import.step4.status_pending', 'color': '#9CA3AF', 'bg': '#F3F4F6'},
+    'Skipped': {'tr_key': 'wizard.import.step4.status_skipped', 'color': '#6B7280', 'bg': '#F9FAFB'},
 }
 
-_DEFAULT_STATUS = {'label': 'غير معروف', 'color': '#9CA3AF', 'bg': '#F3F4F6'}
+_DEFAULT_STATUS_KEY = {'tr_key': 'wizard.import.step4.status_unknown', 'color': '#9CA3AF', 'bg': '#F3F4F6'}
+
+
+def _get_status_config(status_key):
+    cfg = _STATUS_CONFIG_KEYS.get(status_key, _DEFAULT_STATUS_KEY)
+    return {'label': tr(cfg['tr_key']), 'color': cfg['color'], 'bg': cfg['bg']}
 
 
 class ImportStep4Review(QWidget):
@@ -94,7 +106,7 @@ class ImportStep4Review(QWidget):
         self.load_entities(package_id)
 
     def _setup_ui(self):
-        self.setLayoutDirection(Qt.RightToLeft)
+        self.setLayoutDirection(get_layout_direction())
         self.setStyleSheet("background: transparent;")
 
         outer_layout = QVBoxLayout(self)
@@ -121,7 +133,7 @@ class ImportStep4Review(QWidget):
         summary_layout.setContentsMargins(32, 24, 32, 24)
         summary_layout.setSpacing(16)
 
-        title = QLabel("مراجعة الكيانات المرحلية")
+        title = QLabel(tr("wizard.import.step4.title"))
         title.setFont(create_font(size=14, weight=FontManager.WEIGHT_SEMIBOLD))
         title.setStyleSheet("color: #212B36; background: transparent;")
         summary_layout.addWidget(title)
@@ -132,7 +144,7 @@ class ImportStep4Review(QWidget):
         summary_layout.addWidget(sep)
 
         # Total count
-        self._total_label = QLabel("إجمالي الكيانات: 0")
+        self._total_label = QLabel(tr("wizard.import.step4.total_entities", count=0))
         self._total_label.setFont(create_font(size=12, weight=FontManager.WEIGHT_SEMIBOLD))
         self._total_label.setStyleSheet("color: #212B36; background: transparent;")
         summary_layout.addWidget(self._total_label)
@@ -140,9 +152,11 @@ class ImportStep4Review(QWidget):
         # Count badges (2 rows of 4)
         self._count_labels = {}
 
+        entity_sections = _get_entity_sections()
+
         row1_layout = QHBoxLayout()
         row1_layout.setSpacing(16)
-        for key, ar_name, color, bg in _ENTITY_SECTIONS[:4]:
+        for key, ar_name, color, bg in entity_sections[:4]:
             badge, count_label = self._create_count_badge(ar_name, "0", color, bg)
             self._count_labels[key] = count_label
             row1_layout.addWidget(badge)
@@ -151,7 +165,7 @@ class ImportStep4Review(QWidget):
 
         row2_layout = QHBoxLayout()
         row2_layout.setSpacing(16)
-        for key, ar_name, color, bg in _ENTITY_SECTIONS[4:]:
+        for key, ar_name, color, bg in entity_sections[4:]:
             badge, count_label = self._create_count_badge(ar_name, "0", color, bg)
             self._count_labels[key] = count_label
             row2_layout.addWidget(badge)
@@ -166,13 +180,13 @@ class ImportStep4Review(QWidget):
         table_layout.setContentsMargins(32, 24, 32, 24)
         table_layout.setSpacing(16)
 
-        table_title = QLabel("تفاصيل الكيانات")
+        table_title = QLabel(tr("wizard.import.step4.entity_details"))
         table_title.setFont(create_font(size=12, weight=FontManager.WEIGHT_SEMIBOLD))
         table_title.setStyleSheet("color: #212B36; background: transparent;")
         table_layout.addWidget(table_title)
 
         # Empty state label
-        self._empty_label = QLabel("لا توجد كيانات مرحلية")
+        self._empty_label = QLabel(tr("wizard.import.step4.no_staged_entities"))
         self._empty_label.setFont(create_font(size=11, weight=FontManager.WEIGHT_REGULAR))
         self._empty_label.setStyleSheet("color: #9CA3AF; background: transparent;")
         self._empty_label.setAlignment(Qt.AlignCenter)
@@ -183,9 +197,13 @@ class ImportStep4Review(QWidget):
         self._table = QTableWidget()
         self._table.setColumnCount(5)
         self._table.setHorizontalHeaderLabels([
-            "النوع", "المعرّف", "الوصف", "حالة التحقق", "معتمد للإدخال"
+            tr("wizard.import.step4.col_type"),
+            tr("wizard.import.step4.col_identifier"),
+            tr("wizard.import.step4.col_description"),
+            tr("wizard.import.step4.col_validation_status"),
+            tr("wizard.import.step4.col_approved"),
         ])
-        self._table.setLayoutDirection(Qt.RightToLeft)
+        self._table.setLayoutDirection(get_layout_direction())
         self._table.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self._table.setSelectionBehavior(QAbstractItemView.SelectRows)
         self._table.setAlternatingRowColors(True)
@@ -311,7 +329,7 @@ class ImportStep4Review(QWidget):
         card_layout.setAlignment(Qt.AlignCenter)
         card_layout.setSpacing(6)
 
-        self._loading_label = QLabel("جاري التحميل...")
+        self._loading_label = QLabel(tr("wizard.import.step4.loading"))
         self._loading_label.setFont(create_font(size=11, weight=FontManager.WEIGHT_SEMIBOLD))
         self._loading_label.setStyleSheet("color: #3890DF; background: transparent; border: none;")
         self._loading_label.setAlignment(Qt.AlignCenter)
@@ -358,14 +376,14 @@ class ImportStep4Review(QWidget):
         logger.info(f"Loading staged entities for package {package_id}")
         self._package_id = package_id
 
-        self._show_loading("جاري تحميل الكيانات...")
+        self._show_loading(tr("wizard.import.step4.loading_entities"))
         result = self.import_controller.get_staged_entities(package_id)
         self._hide_loading()
 
         if not result.success:
             logger.error(f"Failed to load entities: {result.message}")
             from ui.components.message_dialog import MessageDialog
-            MessageDialog.error(self, "خطأ", result.message_ar or "فشل تحميل الكيانات المرحلية")
+            MessageDialog.error(self, tr("wizard.import.step4.error"), result.message_ar or tr("wizard.import.step4.entities_load_failed"))
             return
 
         self._data = result.data or {}
@@ -375,10 +393,10 @@ class ImportStep4Review(QWidget):
         """Update UI with grouped entity data."""
         d = self._data
         total = d.get("totalCount", 0)
-        self._total_label.setText(f"إجمالي الكيانات: {total}")
+        self._total_label.setText(tr("wizard.import.step4.total_entities", count=total))
 
         # Update count badges
-        for key, _, _, _ in _ENTITY_SECTIONS:
+        for key, _, _, _ in _ENTITY_SECTION_KEYS:
             section_items = d.get(key, [])
             count = len(section_items) if isinstance(section_items, list) else 0
             if key in self._count_labels:
@@ -387,7 +405,7 @@ class ImportStep4Review(QWidget):
         # Flatten all entities for the table
         all_rows = []
 
-        for key, ar_name, _, _ in _ENTITY_SECTIONS:
+        for key, ar_name, _, _ in _get_entity_sections():
             section_items = d.get(key, [])
             if not isinstance(section_items, list):
                 continue
@@ -430,7 +448,7 @@ class ImportStep4Review(QWidget):
             self._table.setItem(row_idx, 2, info_item)
 
             # Validation status column
-            status_config = _STATUS_CONFIG.get(validation_status, _DEFAULT_STATUS)
+            status_config = _get_status_config(validation_status)
             status_widget = self._create_status_badge(status_config)
             self._table.setCellWidget(row_idx, 3, status_widget)
 
@@ -471,11 +489,11 @@ class ImportStep4Review(QWidget):
         layout.setAlignment(Qt.AlignCenter)
 
         if is_approved:
-            label = "معتمد"
+            label = tr("wizard.import.step4.approved")
             color = "#10B981"
             bg = "#ECFDF5"
         else:
-            label = "غير معتمد"
+            label = tr("wizard.import.step4.not_approved")
             color = "#9CA3AF"
             bg = "#F3F4F6"
 
@@ -500,9 +518,37 @@ class ImportStep4Review(QWidget):
     def reset(self):
         """Reset the step to initial state."""
         self._data = {}
-        self._total_label.setText("إجمالي الكيانات: 0")
+        self._total_label.setText(tr("wizard.import.step4.total_entities", count=0))
         for label in self._count_labels.values():
             label.setText("0")
         self._table.setRowCount(0)
         self._table.setVisible(True)
         self._empty_label.setVisible(False)
+
+    def update_language(self, is_arabic: bool):
+        """Update all translatable texts after language change."""
+        self.setLayoutDirection(get_layout_direction())
+
+        # Total label
+        total = self._data.get("totalCount", 0) if self._data else 0
+        self._total_label.setText(tr("wizard.import.step4.total_entities", count=total))
+
+        # Empty state label
+        self._empty_label.setText(tr("wizard.import.step4.no_staged_entities"))
+
+        # Loading label
+        self._loading_label.setText(tr("wizard.import.step4.loading"))
+
+        # Table header labels
+        self._table.setHorizontalHeaderLabels([
+            tr("wizard.import.step4.col_type"),
+            tr("wizard.import.step4.col_identifier"),
+            tr("wizard.import.step4.col_description"),
+            tr("wizard.import.step4.col_validation_status"),
+            tr("wizard.import.step4.col_approved"),
+        ])
+        self._table.setLayoutDirection(get_layout_direction())
+
+        # Re-populate table and count badges with updated translations
+        if self._data:
+            self._update_ui()

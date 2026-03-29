@@ -22,7 +22,7 @@ from ui.design_system import Colors
 from ui.font_utils import create_font, FontManager
 from ui.style_manager import StyleManager
 from services.display_mappings import get_building_type_display, get_building_status_display
-from services.translation_manager import tr
+from services.translation_manager import tr, get_layout_direction
 from services.api_client import get_api_client
 from services.api_worker import ApiWorker
 from utils.logger import get_logger
@@ -107,35 +107,35 @@ class BuildingInfoStep(BaseStep):
 
     def _build_card1(self) -> QFrame:
         card, grid = self._make_card_shell(
-            title="بيانات البناء",
-            subtitle="معلومات الموقع الإداري للبناء",
+            title=tr("wizard.building_info.card1_title"),
+            subtitle=tr("wizard.building_info.card1_subtitle"),
             icon_name="blue",
             columns=3,
         )
-        self.f_governorate  = self._add_grid_field(grid, "رمز المحافظة", 0, 0)
-        self.f_district     = self._add_grid_field(grid, "رمز المنطقة",  0, 1)
-        self.f_subdistrict  = self._add_grid_field(grid, "رمز الناحية",  0, 2)
-        self.f_community    = self._add_grid_field(grid, "رمز المدينة",  1, 0)
-        self.f_neighborhood = self._add_grid_field(grid, "رمز الحي",     1, 1)
-        self.f_bldg_number  = self._add_grid_field(grid, "رقم البناء",   1, 2)
-        self.f_bldg_code    = self._add_grid_field(grid, "رمز البناء",   2, 0, col_span=3)
+        self.f_governorate  = self._add_grid_field(grid, tr("wizard.building_info.governorate_code"), 0, 0)
+        self.f_district     = self._add_grid_field(grid, tr("wizard.building_info.district_code"),  0, 1)
+        self.f_subdistrict  = self._add_grid_field(grid, tr("wizard.building_info.subdistrict_code"),  0, 2)
+        self.f_community    = self._add_grid_field(grid, tr("wizard.building_info.community_code"),  1, 0)
+        self.f_neighborhood = self._add_grid_field(grid, tr("wizard.building_info.neighborhood_code"),     1, 1)
+        self.f_bldg_number  = self._add_grid_field(grid, tr("wizard.building_info.building_number"),   1, 2)
+        self.f_bldg_code    = self._add_grid_field(grid, tr("wizard.building_info.building_code"),   2, 0, col_span=3)
         return card
 
     # --- Card 2: حالة البناء ------------------------------------------
 
     def _build_card2(self) -> QFrame:
         card, grid = self._make_card_shell(
-            title="حالة البناء",
-            subtitle="معلومات حالة البناء والمقاسم",
+            title=tr("wizard.building_info.card2_title"),
+            subtitle=tr("wizard.building_info.card2_subtitle"),
             icon_name="blue",
             columns=3,
         )
-        self.f_status     = self._add_grid_field(grid, "حالة البناء",         0, 0)
-        self.f_type       = self._add_grid_field(grid, "نوع البناء",          0, 1)
-        self.f_apartments = self._add_grid_field(grid, "عدد الشقق",           0, 2)
-        self.f_shops      = self._add_grid_field(grid, "عدد المحلات",         1, 0)
-        self.f_floors     = self._add_grid_field(grid, "عدد الطوابق",         1, 1)
-        self.f_total      = self._add_grid_field(grid, "العدد الكلي للمقاسم", 1, 2)
+        self.f_status     = self._add_grid_field(grid, tr("wizard.building_info.building_status"),         0, 0)
+        self.f_type       = self._add_grid_field(grid, tr("wizard.building_info.building_type"),          0, 1)
+        self.f_apartments = self._add_grid_field(grid, tr("wizard.building_info.apartments_count"),           0, 2)
+        self.f_shops      = self._add_grid_field(grid, tr("wizard.building_info.shops_count"),         1, 0)
+        self.f_floors     = self._add_grid_field(grid, tr("wizard.building_info.floors_count"),         1, 1)
+        self.f_total      = self._add_grid_field(grid, tr("wizard.building_info.total_units"), 1, 2)
         return card
 
     # --- Card 3: موقع البناء (mirrors AddBuildingPage Card 3) ----------
@@ -148,7 +148,7 @@ class BuildingInfoStep(BaseStep):
         card_layout.setSpacing(0)
 
         # Simple text header — matches AddBuildingPage Card 3 exactly
-        header = QLabel("موقع البناء")
+        header = QLabel(tr("wizard.building_info.card3_title"))
         header.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
         header.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent;")
         card_layout.addWidget(header)
@@ -204,7 +204,7 @@ class BuildingInfoStep(BaseStep):
         if pill_px and not pill_px.isNull():
             map_button.setIcon(QIcon(pill_px))
             map_button.setIconSize(QSize(12, 12))
-        map_button.setText("فتح الخريطة")
+        map_button.setText(tr("wizard.building_info.open_map"))
         map_button.setFont(create_font(size=9, weight=FontManager.WEIGHT_REGULAR))
         map_button.setStyleSheet(f"""
             QPushButton {{
@@ -247,12 +247,12 @@ class BuildingInfoStep(BaseStep):
         docs_section = QVBoxLayout()
         docs_section.setSpacing(8)
 
-        docs_lbl = QLabel("وثائق المبنى")
+        docs_lbl = QLabel(tr("wizard.building_info.documents_title"))
         docs_lbl.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
         docs_lbl.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent;")
         docs_section.addWidget(docs_lbl)
 
-        self._docs_btn = QPushButton("عرض وثائق المبنى")
+        self._docs_btn = QPushButton(tr("wizard.building_info.show_documents"))
         self._docs_btn.setFixedHeight(40)
         self._docs_btn.setCursor(QCursor(Qt.PointingHandCursor))
         self._docs_btn.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
@@ -277,7 +277,7 @@ class BuildingInfoStep(BaseStep):
         desc_section = QVBoxLayout()
         desc_section.setSpacing(4)
 
-        desc_lbl = QLabel("وصف البناء")
+        desc_lbl = QLabel(tr("wizard.building_info.description_label"))
         desc_lbl.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
         desc_lbl.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent;")
         desc_section.addWidget(desc_lbl)
@@ -286,7 +286,7 @@ class BuildingInfoStep(BaseStep):
         self.f_description.setReadOnly(True)
         self.f_description.setFixedHeight(130)
         self.f_description.setStyleSheet(_TEXTAREA_STYLE)
-        self.f_description.setPlaceholderText("لا يوجد وصف")
+        self.f_description.setPlaceholderText(tr("wizard.building_info.no_description"))
         desc_section.addWidget(self.f_description)
         desc_section.addStretch(1)
 
@@ -438,7 +438,7 @@ class BuildingInfoStep(BaseStep):
         lat = getattr(b, "latitude", None)
         lon = getattr(b, "longitude", None)
         if lat and lon:
-            self.f_location_status.setText(f"الإحداثيات: {lat:.6f}, {lon:.6f}")
+            self.f_location_status.setText(f"{tr('wizard.building_info.coordinates')}: {lat:.6f}, {lon:.6f}")
         else:
             self.f_location_status.setText("")
 
@@ -459,36 +459,36 @@ class BuildingInfoStep(BaseStep):
         uuid = getattr(b, "building_uuid", None)
         if not uuid:
             from ui.components.toast import Toast
-            Toast.show_toast(self, "لا يتوفر معرف المبنى", Toast.WARNING)
+            Toast.show_toast(self, tr("wizard.building_info.no_building_uuid"), Toast.WARNING)
             return
 
         api = get_api_client()
         if not api:
             from ui.components.toast import Toast
-            Toast.show_toast(self, "خدمة API غير متوفرة", Toast.WARNING)
+            Toast.show_toast(self, tr("wizard.building_info.api_unavailable"), Toast.WARNING)
             return
 
         self._docs_btn.setEnabled(False)
-        self._docs_btn.setText("جاري التحميل...")
+        self._docs_btn.setText(tr("wizard.building_info.loading"))
 
         def _do_fetch():
             return api.get_building_documents(uuid)
 
         def _on_docs_loaded(docs):
             self._docs_btn.setEnabled(True)
-            self._docs_btn.setText("عرض وثائق المبنى")
+            self._docs_btn.setText(tr("wizard.building_info.show_documents"))
             if not docs:
                 from ui.components.toast import Toast
-                Toast.show_toast(self, "لا يوجد مرفقات لهذا المبنى", Toast.INFO)
+                Toast.show_toast(self, tr("wizard.building_info.no_attachments"), Toast.INFO)
                 return
             self._show_documents_dialog(docs)
 
         def _on_docs_error(msg):
             self._docs_btn.setEnabled(True)
-            self._docs_btn.setText("عرض وثائق المبنى")
+            self._docs_btn.setText(tr("wizard.building_info.show_documents"))
             logger.warning(f"Failed to load building documents: {msg}")
             from ui.components.toast import Toast
-            Toast.show_toast(self, "تعذر تحميل وثائق المبنى", Toast.WARNING)
+            Toast.show_toast(self, tr("wizard.building_info.load_docs_failed"), Toast.WARNING)
 
         self._docs_worker = ApiWorker(_do_fetch)
         self._docs_worker.finished.connect(_on_docs_loaded)
@@ -517,7 +517,7 @@ class BuildingInfoStep(BaseStep):
 
         # Header
         header = QHBoxLayout()
-        title = QLabel(f"وثائق المبنى ({len(docs)})")
+        title = QLabel(f"{tr('wizard.building_info.documents_dialog_title')} ({len(docs)})")
         title.setFont(create_font(size=12, weight=FontManager.WEIGHT_SEMIBOLD))
         title.setStyleSheet(f"color: {Colors.WIZARD_TITLE};")
         header.addWidget(title)
@@ -578,7 +578,7 @@ class BuildingInfoStep(BaseStep):
         lay.setSpacing(10)
 
         mime_type = doc.get("mimeType", "")
-        file_name = doc.get("originalFileName", "") or "مستند"
+        file_name = doc.get("originalFileName", "") or tr("wizard.building_info.document_fallback")
         file_path = doc.get("filePath", "")
 
         icon_text = "IMG" if mime_type.startswith("image/") else "PDF" if "pdf" in mime_type else "DOC"
@@ -636,7 +636,7 @@ class BuildingInfoStep(BaseStep):
     def validate(self) -> StepValidationResult:
         result = StepValidationResult(is_valid=True, errors=[])
         if not self.context.building:
-            result.add_error("لم يتم اختيار البناء")
+            result.add_error(tr("wizard.building_info.no_building_selected"))
             return result
 
         building_uuid = getattr(self.context.building, 'building_uuid', '') or ''
@@ -674,7 +674,7 @@ class BuildingInfoStep(BaseStep):
             logger.info(f"Survey created successfully, survey_id: {survey_id}")
         except Exception as e:
             logger.error(f"Survey creation failed: {e}")
-            result.add_error("فشل إنشاء المسح على السيرفر. يرجى المحاولة مجدداً.")
+            result.add_error(tr("wizard.building_info.survey_creation_failed"))
 
         return result
 

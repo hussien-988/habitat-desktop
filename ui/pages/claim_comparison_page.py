@@ -18,6 +18,7 @@ from ui.components.claim_list_card import ClaimListCard
 from ui.components.icon import Icon
 from ui.components.toast import Toast
 from services.api_worker import ApiWorker
+from services.translation_manager import tr, get_layout_direction
 from utils.i18n import I18n
 from utils.logger import get_logger
 
@@ -133,11 +134,11 @@ class ClaimComparisonPage(QWidget):
         top_row = QHBoxLayout()
         top_row.setContentsMargins(0, 0, 0, 0)
 
-        title = QLabel("تفاصيل المطالبات")
-        title.setFont(create_font(size=FontManager.SIZE_TITLE, weight=FontManager.WEIGHT_SEMIBOLD))
-        title.setStyleSheet(f"color: {Colors.PAGE_TITLE}; background: transparent; border: none;")
+        self._header_title = QLabel(tr("page.comparison.title"))
+        self._header_title.setFont(create_font(size=FontManager.SIZE_TITLE, weight=FontManager.WEIGHT_SEMIBOLD))
+        self._header_title.setStyleSheet(f"color: {Colors.PAGE_TITLE}; background: transparent; border: none;")
 
-        self.action_btn = QPushButton("تنفيذ")
+        self.action_btn = QPushButton(tr("page.comparison.execute"))
         self.action_btn.setCursor(Qt.PointingHandCursor)
         self.action_btn.setFont(create_font(size=FontManager.SIZE_BODY, weight=FontManager.WEIGHT_SEMIBOLD))
         self.action_btn.setFixedSize(90, 48)
@@ -159,16 +160,16 @@ class ClaimComparisonPage(QWidget):
         """)
         self.action_btn.clicked.connect(self._on_action_clicked)
 
-        top_row.addWidget(title)
+        top_row.addWidget(self._header_title)
         top_row.addStretch()
         top_row.addWidget(self.action_btn)
         header.addLayout(top_row)
 
         # Breadcrumb
-        breadcrumb = QLabel("التكرارات  •  اختيار السجل الأساسي")
-        breadcrumb.setFont(create_font(size=FontManager.SIZE_BODY, weight=FontManager.WEIGHT_SEMIBOLD))
-        breadcrumb.setStyleSheet(f"color: {Colors.PAGE_SUBTITLE}; background: transparent; border: none;")
-        header.addWidget(breadcrumb)
+        self._breadcrumb = QLabel(tr("page.comparison.breadcrumb"))
+        self._breadcrumb.setFont(create_font(size=FontManager.SIZE_BODY, weight=FontManager.WEIGHT_SEMIBOLD))
+        self._breadcrumb.setStyleSheet(f"color: {Colors.PAGE_SUBTITLE}; background: transparent; border: none;")
+        header.addWidget(self._breadcrumb)
 
         return header
 
@@ -193,7 +194,7 @@ class ClaimComparisonPage(QWidget):
         title_row = QHBoxLayout()
         title_row.setContentsMargins(0, 0, 0, 0)
 
-        title_label = QLabel("الأشخاص")
+        title_label = QLabel(tr("page.comparison.persons"))
         title_label.setFont(create_font(size=14, weight=FontManager.WEIGHT_BOLD))
         title_label.setStyleSheet("color: #E74C3C; background: transparent; border: none;")
 
@@ -201,7 +202,7 @@ class ClaimComparisonPage(QWidget):
         title_row.addStretch()
         card_layout.addLayout(title_row)
 
-        subtitle = QLabel("اختيار السجل الأساسي")
+        subtitle = QLabel(tr("page.comparison.select_primary_record"))
         subtitle.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
         subtitle.setStyleSheet(f"color: {Colors.WIZARD_SUBTITLE}; background: transparent; border: none;")
         card_layout.addWidget(subtitle)
@@ -224,7 +225,7 @@ class ClaimComparisonPage(QWidget):
         wrapper_layout.setSpacing(16)
         wrapper_layout.setContentsMargins(0, 0, 0, 0)
 
-        comp_title = QLabel("المقارنة")
+        comp_title = QLabel(tr("page.comparison.comparison"))
         comp_title.setFont(create_font(size=14, weight=FontManager.WEIGHT_BOLD))
         comp_title.setStyleSheet("color: #E74C3C; background: transparent; border: none;")
         wrapper_layout.addWidget(comp_title)
@@ -254,11 +255,11 @@ class ClaimComparisonPage(QWidget):
         card_layout.setContentsMargins(16, 16, 16, 16)
 
         title_row = QHBoxLayout()
-        title_label = QLabel("مقارنة المستندات")
+        title_label = QLabel(tr("page.comparison.document_comparison"))
         title_label.setFont(create_font(size=14, weight=FontManager.WEIGHT_BOLD))
         title_label.setStyleSheet(f"color: {Colors.PAGE_TITLE}; background: transparent; border: none;")
 
-        self._doc_load_btn = QPushButton("تحميل المقارنة")
+        self._doc_load_btn = QPushButton(tr("page.comparison.load_comparison"))
         self._doc_load_btn.setCursor(Qt.PointingHandCursor)
         self._doc_load_btn.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
         self._doc_load_btn.setStyleSheet(f"""
@@ -281,7 +282,7 @@ class ClaimComparisonPage(QWidget):
         title_row.addWidget(self._doc_load_btn)
         card_layout.addLayout(title_row)
 
-        subtitle = QLabel("المستندات والأدلة المرتبطة بكل سجل")
+        subtitle = QLabel(tr("page.comparison.documents_linked_to_records"))
         subtitle.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
         subtitle.setStyleSheet(f"color: {Colors.WIZARD_SUBTITLE}; background: transparent; border: none;")
         card_layout.addWidget(subtitle)
@@ -291,7 +292,7 @@ class ClaimComparisonPage(QWidget):
         self._doc_columns_layout.setSpacing(20)
 
         # First entity docs
-        self._doc_first_frame = self._build_doc_entity_column("مستندات السجل الأول")
+        self._doc_first_frame = self._build_doc_entity_column(tr("page.comparison.first_record_docs"))
         self._doc_columns_layout.addWidget(self._doc_first_frame, 1)
 
         # VS divider
@@ -303,13 +304,13 @@ class ClaimComparisonPage(QWidget):
         self._doc_columns_layout.addWidget(vs)
 
         # Second entity docs
-        self._doc_second_frame = self._build_doc_entity_column("مستندات السجل الثاني")
+        self._doc_second_frame = self._build_doc_entity_column(tr("page.comparison.second_record_docs"))
         self._doc_columns_layout.addWidget(self._doc_second_frame, 1)
 
         card_layout.addLayout(self._doc_columns_layout)
 
         # Empty state
-        self._doc_empty_label = QLabel("اضغط 'تحميل المقارنة' لعرض مستندات السجلين")
+        self._doc_empty_label = QLabel(tr("page.comparison.click_load_comparison"))
         self._doc_empty_label.setAlignment(Qt.AlignCenter)
         self._doc_empty_label.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
         self._doc_empty_label.setStyleSheet("color: #9CA3AF; background: transparent; padding: 30px;")
@@ -334,7 +335,7 @@ class ClaimComparisonPage(QWidget):
         title_lbl.setStyleSheet(f"color: {Colors.PAGE_TITLE}; background: transparent; border: none;")
         layout.addWidget(title_lbl)
 
-        count_lbl = QLabel("0 مستندات")
+        count_lbl = QLabel(f"0 {tr('page.comparison.documents')}")
         count_lbl.setObjectName("doc_count")
         count_lbl.setFont(create_font(size=8, weight=FontManager.WEIGHT_SEMIBOLD))
         count_lbl.setStyleSheet(f"color: {Colors.WIZARD_SUBTITLE}; background: transparent; border: none;")
@@ -435,7 +436,7 @@ class ClaimComparisonPage(QWidget):
 
         is_expired = evidence.get("isExpired", False)
         if is_expired:
-            meta_parts.append("منتهي الصلاحية")
+            meta_parts.append(tr("page.comparison.expired"))
 
         if meta_parts:
             meta_lbl = QLabel(" | ".join(meta_parts))
@@ -482,7 +483,7 @@ class ClaimComparisonPage(QWidget):
         # Update count
         count_lbl = frame.findChild(QLabel, "doc_count")
         if count_lbl:
-            count_lbl.setText(f"{len(evidences)} مستند" if len(evidences) != 0 else "لا توجد مستندات")
+            count_lbl.setText(f"{len(evidences)} {tr('page.comparison.document_singular')}" if len(evidences) != 0 else tr("page.comparison.no_documents"))
 
         # Add evidence cards
         for ev in evidences:
@@ -495,7 +496,7 @@ class ClaimComparisonPage(QWidget):
 
         conflict_id = self._current_group.get("id", "")
         if not conflict_id:
-            Toast.show_toast(self, "معرف التعارض غير متوفر", Toast.WARNING)
+            Toast.show_toast(self, tr("page.comparison.conflict_id_unavailable"), Toast.WARNING)
             return
 
         self._doc_load_btn.setEnabled(False)
@@ -601,7 +602,7 @@ class ClaimComparisonPage(QWidget):
         second_evidences = result.get("second", [])
 
         if not first_evidences and not second_evidences:
-            Toast.show_toast(self, "لا توجد مستندات مرتبطة بالسجلات", Toast.WARNING)
+            Toast.show_toast(self, tr("page.comparison.no_linked_documents"), Toast.WARNING)
             return
 
         self._doc_empty_label.setVisible(False)
@@ -615,7 +616,7 @@ class ClaimComparisonPage(QWidget):
         """Handle document comparison error."""
         self._doc_load_btn.setEnabled(True)
         logger.warning(f"Document comparison failed: {error_msg}")
-        Toast.show_toast(self, "فشل في تحميل المستندات", Toast.ERROR)
+        Toast.show_toast(self, tr("page.comparison.failed_loading_documents"), Toast.ERROR)
 
     # ────────────────────────────────────────────
     # Resolution Section
@@ -635,15 +636,15 @@ class ClaimComparisonPage(QWidget):
         card_layout.setSpacing(12)
         card_layout.setContentsMargins(16, 16, 16, 16)
 
-        title_label = QLabel("إجراء الحل")
+        title_label = QLabel(tr("page.comparison.resolution_action"))
         title_label.setFont(create_font(size=14, weight=FontManager.WEIGHT_BOLD))
         title_label.setStyleSheet("color: #E74C3C; background: transparent; border: none;")
         card_layout.addWidget(title_label)
 
         self._resolution_group = QButtonGroup(self)
         resolution_options = [
-            ("دمج السجلات", "merge"),
-            ("إبقاء منفصل", "keep_separate"),
+            (tr("page.comparison.merge_records"), "merge"),
+            (tr("page.comparison.keep_separate"), "keep_separate"),
         ]
 
         options_layout = QHBoxLayout()
@@ -660,13 +661,13 @@ class ClaimComparisonPage(QWidget):
         options_layout.addStretch()
         card_layout.addLayout(options_layout)
 
-        just_label = QLabel("مبرر القرار (مطلوب)")
+        just_label = QLabel(tr("page.comparison.justification_required"))
         just_label.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
         just_label.setStyleSheet(f"color: {Colors.WIZARD_SUBTITLE}; background: transparent;")
         card_layout.addWidget(just_label)
 
         self._justification_edit = QTextEdit()
-        self._justification_edit.setPlaceholderText("أدخل سبب قرار الحل...")
+        self._justification_edit.setPlaceholderText(tr("page.comparison.enter_justification"))
         self._justification_edit.setFixedHeight(80)
         self._justification_edit.setFont(create_font(size=9, weight=FontManager.WEIGHT_REGULAR))
         self._justification_edit.setStyleSheet(f"""
@@ -785,7 +786,7 @@ class ClaimComparisonPage(QWidget):
         card_layout.setContentsMargins(20, 20, 20, 20)
         card_layout.setSpacing(16)
 
-        header = self._create_card_header("blue", "بيانات البناء", "البناء والموقع الجغرافي")
+        header = self._create_card_header("blue", tr("page.comparison.building_data"), tr("page.comparison.building_location"))
         card_layout.addWidget(header)
 
         code_label = QLabel(data.get("building_code", "-"))
@@ -829,12 +830,12 @@ class ClaimComparisonPage(QWidget):
         card_layout.setSpacing(12)
 
         stat_items = [
-            ("commercial_units", "عدد المقاسم غير السكنية", data.get("commercial_units", "-")),
-            ("residential_units", "عدد المقاسم السكنية", data.get("residential_units", "-")),
-            ("total_units", "العدد الكلي للمقاسم", data.get("total_units", "-")),
-            ("building_type", "نوع البناء", data.get("building_type", "-")),
-            ("building_status", "حالة البناء", data.get("building_status", "-")),
-            ("general_description", "وصف البناء", data.get("general_description", "-")),
+            ("commercial_units", tr("page.comparison.commercial_units"), data.get("commercial_units", "-")),
+            ("residential_units", tr("page.comparison.residential_units"), data.get("residential_units", "-")),
+            ("total_units", tr("page.comparison.total_units"), data.get("total_units", "-")),
+            ("building_type", tr("page.comparison.building_type"), data.get("building_type", "-")),
+            ("building_status", tr("page.comparison.building_status"), data.get("building_status", "-")),
+            ("general_description", tr("page.comparison.building_description"), data.get("general_description", "-")),
         ]
 
         for field_key, label_text, value_text in stat_items:
@@ -845,7 +846,7 @@ class ClaimComparisonPage(QWidget):
             card_layout.addWidget(field)
 
         # Map placeholder
-        map_label = QLabel("موقع البناء")
+        map_label = QLabel(tr("page.comparison.building_location_map"))
         map_label.setFont(create_font(size=FontManager.WIZARD_CARD_LABEL, weight=FontManager.WEIGHT_SEMIBOLD))
         map_label.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent; border: none;")
         map_label.setAlignment(Qt.AlignRight | Qt.AlignAbsolute)
@@ -871,16 +872,16 @@ class ClaimComparisonPage(QWidget):
         card_layout.setContentsMargins(20, 20, 20, 20)
         card_layout.setSpacing(16)
 
-        header = self._create_card_header("move", "المقاسم", "معلومات المقسم")
+        header = self._create_card_header("move", tr("page.comparison.units"), tr("page.comparison.unit_info"))
         card_layout.addWidget(header)
 
         unit_items = [
-            ("unit_status", "حالة المقسم", data.get("unit_status", "-")),
-            ("unit_type", "نوع المقسم", data.get("unit_type", "-")),
-            ("area_sqm", "مساحة المقسم", data.get("area_sqm", "-")),
-            ("rooms", "عدد الغرف", data.get("rooms", "-")),
-            ("floor", "رقم الطابق", data.get("floor", "-")),
-            ("unit_number", "رقم المقسم", data.get("unit_number", "-")),
+            ("unit_status", tr("page.comparison.unit_status"), data.get("unit_status", "-")),
+            ("unit_type", tr("page.comparison.unit_type"), data.get("unit_type", "-")),
+            ("area_sqm", tr("page.comparison.unit_area"), data.get("area_sqm", "-")),
+            ("rooms", tr("page.comparison.num_rooms"), data.get("rooms", "-")),
+            ("floor", tr("page.comparison.floor_number"), data.get("floor", "-")),
+            ("unit_number", tr("page.comparison.unit_number"), data.get("unit_number", "-")),
         ]
 
         for field_key, label_text, value_text in unit_items:
@@ -899,17 +900,17 @@ class ClaimComparisonPage(QWidget):
         card_layout.setContentsMargins(20, 20, 20, 20)
         card_layout.setSpacing(16)
 
-        header = self._create_card_header("yelow", "بيانات الشخص", "معلومات الشخص المكرر")
+        header = self._create_card_header("yelow", tr("page.comparison.person_data"), tr("page.comparison.duplicate_person_info"))
         card_layout.addWidget(header)
 
         person_items = [
-            ("full_name_ar", "الاسم الكامل", data.get("full_name_ar", "-")),
-            ("mother_name", "اسم الأم", data.get("mother_name", "-")),
-            ("national_id", "الرقم الوطني", data.get("national_id", "-")),
-            ("date_of_birth", "تاريخ الميلاد", data.get("date_of_birth", "-")),
-            ("gender", "الجنس", data.get("gender", "-")),
-            ("nationality", "الجنسية", data.get("nationality", "-")),
-            ("phone_number", "رقم الهاتف", data.get("phone_number", "-")),
+            ("full_name_ar", tr("page.comparison.full_name"), data.get("full_name_ar", "-")),
+            ("mother_name", tr("page.comparison.mother_name"), data.get("mother_name", "-")),
+            ("national_id", tr("page.comparison.national_id"), data.get("national_id", "-")),
+            ("date_of_birth", tr("page.comparison.date_of_birth"), data.get("date_of_birth", "-")),
+            ("gender", tr("page.comparison.gender"), data.get("gender", "-")),
+            ("nationality", tr("page.comparison.nationality"), data.get("nationality", "-")),
+            ("phone_number", tr("page.comparison.phone_number"), data.get("phone_number", "-")),
         ]
 
         for field_key, label_text, value_text in person_items:
@@ -1114,7 +1115,7 @@ class ClaimComparisonPage(QWidget):
         """Handle resolution action using Conflicts API."""
         justification = self._justification_edit.toPlainText().strip()
         if not justification:
-            Toast.show_toast(self, "يرجى إدخال مبرر القرار", Toast.WARNING)
+            Toast.show_toast(self, tr("page.comparison.enter_justification_required"), Toast.WARNING)
             return
 
         selected_radio = self._resolution_group.checkedButton()
@@ -1124,25 +1125,25 @@ class ClaimComparisonPage(QWidget):
         resolution_type = selected_radio.property("resolution_type")
 
         if not self._current_group or not self.duplicate_service:
-            Toast.show_toast(self, "لا توجد بيانات للمعالجة", Toast.WARNING)
+            Toast.show_toast(self, tr("page.comparison.no_data_to_process"), Toast.WARNING)
             return
 
         conflict_id = self._current_group.get("id", "")
         if not conflict_id:
-            Toast.show_toast(self, "معرف التعارض غير متوفر", Toast.WARNING)
+            Toast.show_toast(self, tr("page.comparison.conflict_id_unavailable"), Toast.WARNING)
             return
 
         action_labels = {
-            "merge": "دمج السجلات",
-            "keep_separate": "إبقاء السجلات منفصلة",
+            "merge": tr("page.comparison.merge_records"),
+            "keep_separate": tr("page.comparison.keep_records_separate"),
         }
-        action_label = action_labels.get(resolution_type, "تنفيذ الإجراء")
+        action_label = action_labels.get(resolution_type, tr("page.comparison.execute_action"))
 
         from ui.components.dialogs.confirmation_dialog import ConfirmationDialog, DialogResult
         result = ConfirmationDialog.confirm(
             parent=self,
-            title="تأكيد الإجراء",
-            message=f"هل أنت متأكد من {action_label}؟\nلا يمكن التراجع عن هذا الإجراء."
+            title=tr("page.comparison.confirm_action"),
+            message=f"{tr('page.comparison.confirm_action_message')} {action_label}?\n{tr('page.comparison.cannot_undo')}"
         )
         if result != DialogResult.YES:
             return
@@ -1155,11 +1156,11 @@ class ClaimComparisonPage(QWidget):
                 self._current_group.get("secondEntityId", ""),
             ]
             if selected_idx < 0 or selected_idx >= len(entity_ids):
-                Toast.show_toast(self, "يرجى اختيار السجل الأساسي", Toast.WARNING)
+                Toast.show_toast(self, tr("page.comparison.select_primary_record"), Toast.WARNING)
                 return
             master_id = entity_ids[selected_idx]
             if not master_id:
-                Toast.show_toast(self, "لم يتم العثور على معرف السجل", Toast.WARNING)
+                Toast.show_toast(self, tr("page.comparison.record_id_not_found"), Toast.WARNING)
                 return
 
         self.action_btn.setEnabled(False)
@@ -1176,14 +1177,14 @@ class ClaimComparisonPage(QWidget):
         self.action_btn.setEnabled(True)
         if success:
             self._justification_edit.clear()
-            Toast.show_toast(self, "تم تنفيذ الإجراء بنجاح", Toast.SUCCESS)
+            Toast.show_toast(self, tr("page.comparison.action_success"), Toast.SUCCESS)
             self.back_requested.emit()
         else:
-            Toast.show_toast(self, "فشلت عملية المعالجة", Toast.WARNING)
+            Toast.show_toast(self, tr("page.comparison.action_failed"), Toast.WARNING)
 
     def _on_resolution_err(self, error_msg: str):
         self.action_btn.setEnabled(True)
-        Toast.show_toast(self, f"فشلت عملية المعالجة: {error_msg}", Toast.ERROR)
+        Toast.show_toast(self, f"{tr('page.comparison.action_failed')}: {error_msg}", Toast.ERROR)
 
     # ────────────────────────────────────────────
     # Refresh — populate with real data from API
@@ -1250,12 +1251,12 @@ class ClaimComparisonPage(QWidget):
         records.append({
             "id": entity_ids[0],
             "identifier": first_id,
-            "label": "السجل الأول",
+            "label": tr("page.comparison.first_record"),
         })
         records.append({
             "id": entity_ids[1],
             "identifier": second_id,
-            "label": "السجل الثاني",
+            "label": tr("page.comparison.second_record"),
         })
 
         # Always fetch person records from Persons API for reliable data
@@ -1437,4 +1438,8 @@ class ClaimComparisonPage(QWidget):
         logger.error(f"Failed to fetch property units: {error_msg}")
 
     def update_language(self, is_arabic: bool):
-        pass
+        self._header_title.setText(tr("page.comparison.title"))
+        self._breadcrumb.setText(tr("page.comparison.breadcrumb"))
+        self.action_btn.setText(tr("page.comparison.execute"))
+        self._doc_load_btn.setText(tr("page.comparison.load_comparison"))
+        self._doc_empty_label.setText(tr("page.comparison.click_load_comparison"))

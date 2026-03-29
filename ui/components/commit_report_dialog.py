@@ -11,6 +11,7 @@ from datetime import datetime
 
 from app.config import Config
 from ui.font_utils import create_font, FontManager
+from services.translation_manager import tr
 
 
 class CommitReportDialog(QDialog):
@@ -21,7 +22,7 @@ class CommitReportDialog(QDialog):
         self.commit_result = commit_result
         self.import_metadata = import_metadata
 
-        self.setWindowTitle("تقرير الاستيراد المفصل")
+        self.setWindowTitle(tr("component.commit_report.window_title"))
         self.setMinimumWidth(900)
         self.setMinimumHeight(750)
         self.resize(1000, 800)  # Set initial size
@@ -57,20 +58,20 @@ class CommitReportDialog(QDialog):
         # Title and summary
         title_layout = QVBoxLayout()
 
-        title_text = "اكتمل الاستيراد بنجاح!" if success else "اكتمل الاستيراد مع ملاحظات"
+        title_text = tr("component.commit_report.import_success") if success else tr("component.commit_report.import_with_notes")
         title = QLabel(title_text)
         title.setFont(create_font(size=18, weight=QFont.Bold, letter_spacing=0))
         title.setStyleSheet(f"color: {header_color};")
         title_layout.addWidget(title)
 
         summary = QLabel(
-            f"تم استيراد {self.commit_result.get('imported', 0)} سجل بنجاح"
+            tr("component.commit_report.import_summary", count=self.commit_result.get('imported', 0))
         )
         summary.setFont(create_font(size=12, weight=FontManager.WEIGHT_REGULAR, letter_spacing=0))
         title_layout.addWidget(summary)
 
         timestamp = QLabel(
-            f"التاريخ والوقت: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+            tr("component.commit_report.timestamp", datetime=datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
         )
         timestamp.setStyleSheet("color: #6B7280;")
         title_layout.addWidget(timestamp)
@@ -84,26 +85,26 @@ class CommitReportDialog(QDialog):
         stats_layout = QGridLayout()
         stats_layout.setSpacing(12)
 
-        self._add_stat_card(stats_layout, 0, 0, "✅ تم الاستيراد",
+        self._add_stat_card(stats_layout, 0, 0, tr("component.commit_report.stat_imported"),
                            str(self.commit_result.get('imported', 0)),
                            Config.SUCCESS_COLOR)
 
-        self._add_stat_card(stats_layout, 0, 1, "⏭️ تم التخطي",
+        self._add_stat_card(stats_layout, 0, 1, tr("component.commit_report.stat_skipped"),
                            str(self.commit_result.get('skipped', 0)),
                            Config.TEXT_LIGHT)
 
-        self._add_stat_card(stats_layout, 0, 2, "⚠️ تحذيرات",
+        self._add_stat_card(stats_layout, 0, 2, tr("component.commit_report.stat_warnings"),
                            str(self.commit_result.get('warnings', 0)),
                            Config.WARNING_COLOR)
 
-        self._add_stat_card(stats_layout, 0, 3, "❌ فشل",
+        self._add_stat_card(stats_layout, 0, 3, tr("component.commit_report.stat_failed"),
                            str(self.commit_result.get('failed', 0)),
                            Config.ERROR_COLOR)
 
         layout.addLayout(stats_layout)
 
         # Imported Records Breakdown
-        breakdown_group = QGroupBox("📊 تفصيل السجلات المستوردة حسب النوع")
+        breakdown_group = QGroupBox(tr("component.commit_report.section_records_breakdown"))
         breakdown_group.setFont(create_font(size=FontManager.SIZE_BODY, weight=QFont.Bold, letter_spacing=0))
         breakdown_group.setStyleSheet(f"""
             QGroupBox {{
@@ -134,19 +135,19 @@ class CommitReportDialog(QDialog):
             }
             icon = type_icons.get(record_type, '📦')
             type_ar = {
-                'buildings': 'المباني',
-                'units': 'الوحدات',
-                'persons': 'الأشخاص',
-                'households': 'الأسر',
-                'claims': 'المطالبات',
-                'documents': 'الوثائق'
+                'buildings': tr("component.commit_report.type_buildings"),
+                'units': tr("component.commit_report.type_units"),
+                'persons': tr("component.commit_report.type_persons"),
+                'households': tr("component.commit_report.type_households"),
+                'claims': tr("component.commit_report.type_claims"),
+                'documents': tr("component.commit_report.type_documents"),
             }.get(record_type, record_type)
 
             label = QLabel(f"{icon} {type_ar}:")
             label.setFont(create_font(size=FontManager.SIZE_BODY, weight=FontManager.WEIGHT_REGULAR, letter_spacing=0))
             breakdown_layout.addWidget(label, row, 0)
 
-            value = QLabel(f"{count} سجل")
+            value = QLabel(tr("component.commit_report.record_count", count=count))
             value.setFont(create_font(size=FontManager.SIZE_BODY, weight=QFont.Bold, letter_spacing=0))
             value.setStyleSheet(f"color: {Config.PRIMARY_COLOR};")
             breakdown_layout.addWidget(value, row, 1)
@@ -156,7 +157,7 @@ class CommitReportDialog(QDialog):
         layout.addWidget(breakdown_group)
 
         # Archive and Audit Information
-        archive_group = QGroupBox("🗄️ معلومات الأرشفة وسجل التدقيق")
+        archive_group = QGroupBox(tr("component.commit_report.section_archive_info"))
         archive_group.setFont(create_font(size=FontManager.SIZE_BODY, weight=QFont.Bold, letter_spacing=0))
         archive_group.setStyleSheet(f"""
             QGroupBox {{
@@ -175,11 +176,11 @@ class CommitReportDialog(QDialog):
         archive_layout = QVBoxLayout(archive_group)
 
         archive_items = [
-            ("📦 الحزمة الأصلية:", self.import_metadata.get('original_file', 'N/A')),
-            ("🗄️ موقع الأرشيف:", self.import_metadata.get('archive_path', '/data/archive/')),
-            ("🔑 معرف الحزمة:", self.import_metadata.get('package_id', 'N/A')),
-            ("📝 معرف سجل التدقيق:", self.import_metadata.get('audit_log_id', 'N/A')),
-            ("⏱️ مدة الاستيراد:", f"{self.commit_result.get('duration_seconds', 0):.2f} ثانية"),
+            (tr("component.commit_report.original_package"), self.import_metadata.get('original_file', 'N/A')),
+            (tr("component.commit_report.archive_location"), self.import_metadata.get('archive_path', '/data/archive/')),
+            (tr("component.commit_report.package_id"), self.import_metadata.get('package_id', 'N/A')),
+            (tr("component.commit_report.audit_log_id"), self.import_metadata.get('audit_log_id', 'N/A')),
+            (tr("component.commit_report.import_duration"), tr("component.commit_report.duration_seconds", seconds=f"{self.commit_result.get('duration_seconds', 0):.2f}")),
         ]
 
         for label_text, value_text in archive_items:
@@ -201,7 +202,7 @@ class CommitReportDialog(QDialog):
         layout.addWidget(archive_group)
 
         # Full Report Text (for export)
-        report_label = QLabel("📄 التقرير الكامل:")
+        report_label = QLabel(tr("component.commit_report.full_report"))
         report_label.setFont(create_font(size=FontManager.SIZE_BODY, weight=QFont.Bold, letter_spacing=0))
         layout.addWidget(report_label)
 
@@ -236,7 +237,7 @@ class CommitReportDialog(QDialog):
         """)
         buttons_frame_layout = QVBoxLayout(buttons_frame)
 
-        buttons_label = QLabel("📋 خيارات التقرير:")
+        buttons_label = QLabel(tr("component.commit_report.report_options"))
         buttons_label.setFont(create_font(size=11, weight=QFont.Bold, letter_spacing=0))
         buttons_frame_layout.addWidget(buttons_label)
 
@@ -245,7 +246,7 @@ class CommitReportDialog(QDialog):
         button_layout.addStretch()
 
         # Download Report
-        download_btn = QPushButton("💾 تحميل التقرير")
+        download_btn = QPushButton(tr("component.commit_report.btn_download"))
         download_btn.setMinimumHeight(45)
         download_btn.setStyleSheet(f"""
             QPushButton {{
@@ -268,7 +269,7 @@ class CommitReportDialog(QDialog):
         button_layout.addWidget(download_btn)
 
         # Print Report
-        print_btn = QPushButton("🖨️ طباعة التقرير")
+        print_btn = QPushButton(tr("component.commit_report.btn_print"))
         print_btn.setMinimumHeight(45)
         print_btn.setStyleSheet(f"""
             QPushButton {{
@@ -291,7 +292,7 @@ class CommitReportDialog(QDialog):
         button_layout.addWidget(print_btn)
 
         # Close
-        close_btn = QPushButton("إغلاق")
+        close_btn = QPushButton(tr("component.commit_report.btn_close"))
         close_btn.setMinimumHeight(45)
         close_btn.setStyleSheet(f"""
             QPushButton {{
@@ -347,36 +348,37 @@ class CommitReportDialog(QDialog):
     def _generate_full_report(self) -> str:
         """Generate full text report for export."""
         report = "=" * 80 + "\n"
-        report += "تقرير الاستيراد - TRRCMS\n"
+        report += tr("component.commit_report.report_header") + "\n"
         report += "=" * 80 + "\n\n"
 
-        report += f"التاريخ والوقت: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
-        report += f"الحالة: {'ناجح' if self.commit_result.get('success') else 'مع ملاحظات'}\n\n"
+        report += tr("component.commit_report.report_timestamp", datetime=datetime.now().strftime('%Y-%m-%d %H:%M:%S')) + "\n"
+        status_text = tr("component.commit_report.report_status_success") if self.commit_result.get('success') else tr("component.commit_report.report_status_notes")
+        report += tr("component.commit_report.report_status", status=status_text) + "\n\n"
 
         report += "-" * 80 + "\n"
-        report += "إحصائيات الاستيراد:\n"
+        report += tr("component.commit_report.report_import_stats") + "\n"
         report += "-" * 80 + "\n"
-        report += f"تم الاستيراد: {self.commit_result.get('imported', 0)} سجل\n"
-        report += f"تم التخطي: {self.commit_result.get('skipped', 0)} سجل\n"
-        report += f"تحذيرات: {self.commit_result.get('warnings', 0)}\n"
-        report += f"فشل: {self.commit_result.get('failed', 0)}\n\n"
+        report += tr("component.commit_report.report_imported", count=self.commit_result.get('imported', 0)) + "\n"
+        report += tr("component.commit_report.report_skipped", count=self.commit_result.get('skipped', 0)) + "\n"
+        report += tr("component.commit_report.report_warnings", count=self.commit_result.get('warnings', 0)) + "\n"
+        report += tr("component.commit_report.report_failed", count=self.commit_result.get('failed', 0)) + "\n\n"
 
         report += "-" * 80 + "\n"
-        report += "تفصيل السجلات حسب النوع:\n"
+        report += tr("component.commit_report.report_records_by_type") + "\n"
         report += "-" * 80 + "\n"
         for record_type, count in self.commit_result.get('records_by_type', {}).items():
-            report += f"{record_type}: {count} سجل\n"
+            report += tr("component.commit_report.report_record_line", type=record_type, count=count) + "\n"
 
         report += "\n" + "-" * 80 + "\n"
-        report += "معلومات الأرشفة:\n"
+        report += tr("component.commit_report.report_archive_info") + "\n"
         report += "-" * 80 + "\n"
-        report += f"الحزمة الأصلية: {self.import_metadata.get('original_file', 'N/A')}\n"
-        report += f"موقع الأرشيف: {self.import_metadata.get('archive_path', 'N/A')}\n"
-        report += f"معرف الحزمة: {self.import_metadata.get('package_id', 'N/A')}\n"
-        report += f"معرف سجل التدقيق: {self.import_metadata.get('audit_log_id', 'N/A')}\n\n"
+        report += tr("component.commit_report.report_original_package", value=self.import_metadata.get('original_file', 'N/A')) + "\n"
+        report += tr("component.commit_report.report_archive_location", value=self.import_metadata.get('archive_path', 'N/A')) + "\n"
+        report += tr("component.commit_report.report_package_id", value=self.import_metadata.get('package_id', 'N/A')) + "\n"
+        report += tr("component.commit_report.report_audit_log_id", value=self.import_metadata.get('audit_log_id', 'N/A')) + "\n\n"
 
         report += "=" * 80 + "\n"
-        report += "نهاية التقرير\n"
+        report += tr("component.commit_report.report_end") + "\n"
         report += "=" * 80 + "\n"
 
         return report
@@ -387,7 +389,7 @@ class CommitReportDialog(QDialog):
 
         filename, _ = QFileDialog.getSaveFileName(
             self,
-            "حفظ تقرير الاستيراد",
+            tr("component.commit_report.save_report_dialog_title"),
             f"import_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt",
             "Text Files (*.txt);;All Files (*)"
         )
@@ -400,16 +402,15 @@ class CommitReportDialog(QDialog):
                 # Show success dialog
                 from ui.components.dialogs import InfoDialog
                 InfoDialog(
-                    title="✅ تم الحفظ بنجاح",
-                    message=f"تم حفظ التقرير في:\n\n{filename}",
+                    title=tr("component.commit_report.save_success_title"),
+                    message=tr("component.commit_report.save_success_message", filename=filename),
                     parent=self
                 ).exec_()
             except Exception as e:
-                # Show error dialog
                 from ui.components.dialogs import ErrorDialog
                 ErrorDialog(
-                    title="❌ خطأ في الحفظ",
-                    message=f"حدث خطأ أثناء حفظ التقرير:\n\n{str(e)}",
+                    title=tr("component.commit_report.save_error_title"),
+                    message=tr("component.commit_report.save_error_message", error=str(e)),
                     parent=self
                 ).exec_()
 
@@ -429,7 +430,7 @@ class CommitReportDialog(QDialog):
             # Show success dialog
             from ui.components.dialogs import InfoDialog
             InfoDialog(
-                title="🖨️ تم إرسال التقرير للطباعة",
-                message="تم إرسال التقرير إلى الطابعة بنجاح",
+                title=tr("component.commit_report.print_success_title"),
+                message=tr("component.commit_report.print_success_message"),
                 parent=self
             ).exec_()

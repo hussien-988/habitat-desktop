@@ -12,6 +12,7 @@ from PyQt5.QtCore import Qt, QTimer
 from services.api_worker import ApiWorker
 from ui.components.toast import Toast
 from ui.font_utils import create_font, FontManager
+from services.translation_manager import tr, get_layout_direction
 from utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -81,16 +82,16 @@ class FieldWorkPreparationStep4(QWidget):
         success_layout.setContentsMargins(32, 24, 32, 24)
         success_layout.setSpacing(8)
 
-        success_title = QLabel("تم إنشاء التعيين بنجاح")
-        success_title.setFont(create_font(size=14, weight=FontManager.WEIGHT_SEMIBOLD))
-        success_title.setStyleSheet("color: #065F46; background: transparent;")
-        success_layout.addWidget(success_title)
+        self._success_title = QLabel(tr("wizard.step4.success_title"))
+        self._success_title.setFont(create_font(size=14, weight=FontManager.WEIGHT_SEMIBOLD))
+        self._success_title.setStyleSheet("color: #065F46; background: transparent;")
+        success_layout.addWidget(self._success_title)
 
-        summary_text = f"تم إسناد {len(self.buildings)} مبنى إلى {self.researcher_name}"
-        summary_label = QLabel(summary_text)
-        summary_label.setFont(create_font(size=11, weight=FontManager.WEIGHT_REGULAR))
-        summary_label.setStyleSheet("color: #047857; background: transparent;")
-        success_layout.addWidget(summary_label)
+        summary_text = tr("wizard.step4.summary", count=len(self.buildings), researcher=self.researcher_name)
+        self._summary_label = QLabel(summary_text)
+        self._summary_label.setFont(create_font(size=11, weight=FontManager.WEIGHT_REGULAR))
+        self._summary_label.setStyleSheet("color: #047857; background: transparent;")
+        success_layout.addWidget(self._summary_label)
 
         date_label = QLabel(date.today().strftime("%Y-%m-%d"))
         date_label.setFont(create_font(size=10, weight=FontManager.WEIGHT_REGULAR))
@@ -111,10 +112,10 @@ class FieldWorkPreparationStep4(QWidget):
         status_card_layout.setContentsMargins(24, 16, 24, 16)
         status_card_layout.setSpacing(8)
 
-        status_title = QLabel("حالة النقل")
-        status_title.setFont(create_font(size=12, weight=FontManager.WEIGHT_SEMIBOLD))
-        status_title.setStyleSheet("color: #212B36; background: transparent;")
-        status_card_layout.addWidget(status_title)
+        self._status_title = QLabel(tr("wizard.step4.transfer_status"))
+        self._status_title.setFont(create_font(size=12, weight=FontManager.WEIGHT_SEMIBOLD))
+        self._status_title.setStyleSheet("color: #212B36; background: transparent;")
+        status_card_layout.addWidget(self._status_title)
 
         # Scroll area for building status rows
         scroll = QScrollArea()
@@ -178,7 +179,7 @@ class FieldWorkPreparationStep4(QWidget):
         row_layout.addStretch()
 
         # Status badge
-        badge = QLabel("في الانتظار")
+        badge = QLabel(tr("wizard.step4.status_waiting"))
         badge.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
         badge.setAlignment(Qt.AlignCenter)
         badge.setFixedHeight(26)
@@ -192,7 +193,7 @@ class FieldWorkPreparationStep4(QWidget):
         row_layout.addWidget(badge)
 
         # Retry button (hidden by default)
-        retry_btn = QPushButton("إعادة المحاولة")
+        retry_btn = QPushButton(tr("wizard.step4.retry"))
         retry_btn.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
         retry_btn.setFixedSize(110, 28)
         retry_btn.setCursor(Qt.PointingHandCursor)
@@ -311,14 +312,27 @@ class FieldWorkPreparationStep4(QWidget):
     def _on_status_load_error(self, error_msg):
         """Handle failed transfer status fetch."""
         logger.warning(f"Could not load transfer status: {error_msg}")
-        Toast.show_toast(self, "تعذر إرسال التكليف", Toast.ERROR)
+        Toast.show_toast(self, tr("wizard.step4.assignment_send_failed"), Toast.ERROR)
 
     def _on_retry_error(self, error_msg):
         """Handle failed retry transfer."""
         logger.warning(f"Retry failed: {error_msg}")
-        Toast.show_toast(self, "تعذر إرسال التكليف", Toast.ERROR)
+        Toast.show_toast(self, tr("wizard.step4.assignment_send_failed"), Toast.ERROR)
 
     def stop_refresh(self):
         """Stop the auto-refresh timer."""
         if self._refresh_timer.isActive():
             self._refresh_timer.stop()
+
+    def update_language(self, is_arabic: bool):
+        """Update all translatable texts when language changes."""
+        self.setLayoutDirection(get_layout_direction())
+        self._success_title.setText(tr("wizard.step4.success_title"))
+        self._summary_label.setText(
+            tr("wizard.step4.summary", count=len(self.buildings), researcher=self.researcher_name)
+        )
+        self._status_title.setText(tr("wizard.step4.transfer_status"))
+
+        # Update status row badges and retry buttons
+        for assignment_id, (badge, retry_btn) in self._status_rows.items():
+            retry_btn.setText(tr("wizard.step4.retry"))

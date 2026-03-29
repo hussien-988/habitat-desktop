@@ -341,13 +341,28 @@ def get_leaflet_html(tile_server_url: str, buildings_geojson: str, **kwargs) -> 
     return generate_leaflet_html(tile_server_url, buildings_geojson, **kwargs)
 
     # Original implementation (deprecated, keeping as fallback):
+    _html_title = tr("page.map.html_title")
+    _offline_badge = tr("page.map.offline_mode")
+    _status_intact = tr("page.map.status_intact")
+    _status_minor = tr("page.map.status_minor_damage")
+    _status_major = tr("page.map.status_major_damage")
+    _status_destroyed = tr("page.map.status_destroyed")
+    _label_polygon = tr("page.map.geom_polygon")
+    _label_point = tr("page.map.geom_point")
+    _label_building = tr("page.map.popup_building")
+    _label_neighborhood = tr("page.map.popup_neighborhood_label")
+    _label_unspecified = tr("mapping.not_specified")
+    _label_status = tr("page.map.popup_status_label")
+    _label_units = tr("page.map.popup_units_label")
+    _label_type = tr("page.map.popup_type_label")
+    _legend_title = tr("page.map.legend_title")
     return f'''
     <!DOCTYPE html>
     <html dir="rtl">
     <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>خريطة حلب - UN-Habitat</title>
+    <title>{_html_title}</title>
     <link rel="stylesheet" href="{tile_server_url}/leaflet.css" />
     <script src="{tile_server_url}/leaflet.js"></script>
     <style>
@@ -424,7 +439,7 @@ def get_leaflet_html(tile_server_url: str, buildings_geojson: str, **kwargs) -> 
     </style>
     </head>
     <body>
-    <div class="offline-badge">وضع Offline</div>
+    <div class="offline-badge">{_offline_badge}</div>
     <div id="map"></div>
     <script>
         // Fix Leaflet icon paths for local serving
@@ -449,10 +464,10 @@ def get_leaflet_html(tile_server_url: str, buildings_geojson: str, **kwargs) -> 
         }};
 
         var statusLabels = {{
-            'intact': 'سليم',
-            'minor_damage': 'ضرر طفيف',
-            'major_damage': 'ضرر كبير',
-            'destroyed': 'مدمر'
+            'intact': '{_status_intact}',
+            'minor_damage': '{_status_minor}',
+            'major_damage': '{_status_major}',
+            'destroyed': '{_status_destroyed}'
         }};
 
         // Buildings GeoJSON
@@ -493,14 +508,14 @@ def get_leaflet_html(tile_server_url: str, buildings_geojson: str, **kwargs) -> 
                 var statusClass = 'status-' + status;
 
                 var geomType = feature.properties.geometry_type || feature.geometry.type;
-                var geomLabel = geomType === 'Polygon' || geomType === 'MultiPolygon' ? 'مضلع' : 'نقطة';
+                var geomLabel = geomType === 'Polygon' || geomType === 'MultiPolygon' ? '{_label_polygon}' : '{_label_point}';
 
                 var popup = '<div class="building-popup">' +
-                    '<h4>' + (props.building_id || 'مبنى') + '</h4>' +
-                    '<p><strong>الحي:</strong> ' + (props.neighborhood || 'غير محدد') + '</p>' +
-                    '<p><strong>الحالة:</strong> <span class="status-badge ' + statusClass + '">' + statusLabel + '</span></p>' +
-                    '<p><strong>الوحدات:</strong> ' + (props.units || 0) + '</p>' +
-                    '<p><strong>النوع:</strong> ' + geomLabel + '</p>' +
+                    '<h4>' + (props.building_id || '{_label_building}') + '</h4>' +
+                    '<p><strong>{_label_neighborhood}:</strong> ' + (props.neighborhood || '{_label_unspecified}') + '</p>' +
+                    '<p><strong>{_label_status}:</strong> <span class="status-badge ' + statusClass + '">' + statusLabel + '</span></p>' +
+                    '<p><strong>{_label_units}:</strong> ' + (props.units || 0) + '</p>' +
+                    '<p><strong>{_label_type}:</strong> ' + geomLabel + '</p>' +
                     '</div>';
 
                 layer.bindPopup(popup);
@@ -534,11 +549,11 @@ def get_leaflet_html(tile_server_url: str, buildings_geojson: str, **kwargs) -> 
         var legend = L.control({{ position: 'bottomright' }});
         legend.onAdd = function(map) {{
             var div = L.DomUtil.create('div', 'legend');
-            div.innerHTML = '<h4>دليل الحالات</h4>' +
-                '<div class="legend-item"><div class="legend-color" style="background:#28a745"></div>سليم</div>' +
-                '<div class="legend-item"><div class="legend-color" style="background:#ffc107"></div>ضرر طفيف</div>' +
-                '<div class="legend-item"><div class="legend-color" style="background:#fd7e14"></div>ضرر كبير</div>' +
-                '<div class="legend-item"><div class="legend-color" style="background:#dc3545"></div>مدمر</div>';
+            div.innerHTML = '<h4>{_legend_title}</h4>' +
+                '<div class="legend-item"><div class="legend-color" style="background:#28a745"></div>{_status_intact}</div>' +
+                '<div class="legend-item"><div class="legend-color" style="background:#ffc107"></div>{_status_minor}</div>' +
+                '<div class="legend-item"><div class="legend-color" style="background:#fd7e14"></div>{_status_major}</div>' +
+                '<div class="legend-item"><div class="legend-color" style="background:#dc3545"></div>{_status_destroyed}</div>';
             return div;
         }};
         legend.addTo(map);
@@ -629,9 +644,9 @@ class MapPage(QWidget):
 
         # Search type selector
         self.search_type_combo = QComboBox()
-        self.search_type_combo.addItem("معلم", "landmark")
-        self.search_type_combo.addItem("حي", "neighborhood")
-        self.search_type_combo.addItem("شارع", "street")
+        self.search_type_combo.addItem(tr("filter.map.landmark"), "landmark")
+        self.search_type_combo.addItem(tr("filter.map.neighborhood"), "neighborhood")
+        self.search_type_combo.addItem(tr("filter.map.street"), "street")
         self.search_type_combo.setFixedWidth(80)
         self.search_type_combo.setStyleSheet(f"""
             QComboBox {{
@@ -646,7 +661,7 @@ class MapPage(QWidget):
 
         # Search input
         self.landmark_search = QLineEdit()
-        self.landmark_search.setPlaceholderText("بحث المعالم...")
+        self.landmark_search.setPlaceholderText(tr("page.map.search_landmarks"))
         self.landmark_search.setFixedWidth(200)
         self.landmark_search.setStyleSheet(f"""
             QLineEdit {{
@@ -944,7 +959,7 @@ class MapPage(QWidget):
             return
 
         # Show loading state
-        self.status_label.setText("جاري تحميل البيانات...")
+        self.status_label.setText(tr("page.map.loading_data"))
         self.status_label.setStyleSheet(f"""
             color: white;
             font-size: {Config.FONT_SIZE_SMALL}pt;
@@ -953,12 +968,13 @@ class MapPage(QWidget):
             border-radius: 12px;
         """)
 
-        loading_html = """
+        loading_map_text = tr("page.map.loading_map")
+        loading_html = f"""
         <html><body style="display:flex;align-items:center;justify-content:center;
         height:100vh;margin:0;font-family:Arial;background:#f0f2f5;direction:rtl;">
         <div style="text-align:center;color:#555;">
         <div style="font-size:32px;margin-bottom:16px;">&#x23F3;</div>
-        <div style="font-size:16px;">جاري تحميل الخريطة...</div>
+        <div style="font-size:16px;">{loading_map_text}</div>
         </div></body></html>
         """
         if hasattr(self, 'web_view') and self.web_view:
@@ -1113,7 +1129,7 @@ class MapPage(QWidget):
             logger.info("ViewportBridge setup complete (debounce=300ms)")
 
         except Exception as e:
-            Toast.show_toast(self, "تعذر تحميل بيانات الخريطة", Toast.ERROR)
+            Toast.show_toast(self, tr("page.map.load_data_error"), Toast.ERROR)
             logger.error(f"Failed to setup ViewportBridge: {e}")
             self.viewport_bridge = None
             self.web_channel = None
@@ -1201,10 +1217,10 @@ class MapPage(QWidget):
         """Update placeholder when search type changes."""
         search_type = self.search_type_combo.currentData()
         placeholders = {
-            "neighborhood": "بحث الأحياء...",
-            "street": "بحث الشوارع...",
+            "neighborhood": tr("page.map.search_neighborhoods"),
+            "street": tr("page.map.search_streets"),
         }
-        self.landmark_search.setPlaceholderText(placeholders.get(search_type, "بحث المعالم..."))
+        self.landmark_search.setPlaceholderText(placeholders.get(search_type, tr("page.map.search_landmarks")))
         self.landmark_search.clear()
         self.landmark_results.hide()
 
@@ -1237,7 +1253,7 @@ class MapPage(QWidget):
             self._landmark_search_worker.start()
 
         except Exception as e:
-            Toast.show_toast(self, "تعذر تحميل بيانات الخريطة", Toast.ERROR)
+            Toast.show_toast(self, tr("page.map.load_data_error"), Toast.ERROR)
             logger.warning(f"Landmark search failed: {e}")
             self.landmark_results.hide()
 
@@ -1263,7 +1279,7 @@ class MapPage(QWidget):
 
     def _on_landmark_search_error(self, error_msg):
         """Handle landmark search error."""
-        Toast.show_toast(self, "تعذر تحميل بيانات الخريطة", Toast.ERROR)
+        Toast.show_toast(self, tr("page.map.load_data_error"), Toast.ERROR)
         logger.warning(f"Landmark search worker failed: {error_msg}")
         self.landmark_results.hide()
 
@@ -1287,7 +1303,7 @@ class MapPage(QWidget):
             self._street_search_worker.start()
 
         except Exception as e:
-            Toast.show_toast(self, "تعذر تحميل بيانات الخريطة", Toast.ERROR)
+            Toast.show_toast(self, tr("page.map.load_data_error"), Toast.ERROR)
             logger.warning(f"Street search failed: {e}")
             self.landmark_results.hide()
 
@@ -1331,7 +1347,7 @@ class MapPage(QWidget):
 
     def _on_street_search_error(self, error_msg):
         """Handle street search error."""
-        Toast.show_toast(self, "تعذر تحميل بيانات الخريطة", Toast.ERROR)
+        Toast.show_toast(self, tr("page.map.load_data_error"), Toast.ERROR)
         logger.warning(f"Street search worker failed: {error_msg}")
         self.landmark_results.hide()
 
@@ -1396,7 +1412,7 @@ class MapPage(QWidget):
             self.landmark_results.show()
 
         except Exception as e:
-            Toast.show_toast(self, "تعذر تحميل بيانات الخريطة", Toast.ERROR)
+            Toast.show_toast(self, tr("page.map.load_data_error"), Toast.ERROR)
             logger.warning(f"Neighborhood search failed: {e}")
             self.landmark_results.hide()
 

@@ -18,6 +18,7 @@ from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QColor
 
 from services.display_mappings import get_relation_type_display
+from services.translation_manager import tr, get_layout_direction
 from utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -51,7 +52,7 @@ class PersonSelectionDialog(QDialog):
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.Dialog)
         self.setAttribute(Qt.WA_TranslucentBackground)
         self.setStyleSheet("QDialog { background-color: transparent; }")
-        self.setLayoutDirection(Qt.RightToLeft)
+        self.setLayoutDirection(get_layout_direction())
 
         self._setup_ui()
 
@@ -83,7 +84,7 @@ class PersonSelectionDialog(QDialog):
         main.setSpacing(14)
 
         # Title
-        title = QLabel("اختيار شخص")
+        title = QLabel(tr("person_selection.title"))
         title.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
         title.setStyleSheet(
             "font-size: 18px; font-weight: bold; color: #2c3e50; background: transparent;"
@@ -120,7 +121,7 @@ class PersonSelectionDialog(QDialog):
         btn_row = QHBoxLayout()
         btn_row.setSpacing(10)
 
-        cancel_btn = QPushButton("إلغاء")
+        cancel_btn = QPushButton(tr("common.cancel"))
         cancel_btn.setStyleSheet("""
             QPushButton {
                 border: 1px solid #E0E6ED;
@@ -135,7 +136,7 @@ class PersonSelectionDialog(QDialog):
         """)
         cancel_btn.clicked.connect(self.reject)
 
-        self._confirm_btn = QPushButton("تأكيد")
+        self._confirm_btn = QPushButton(tr("common.confirm"))
         self._confirm_btn.setEnabled(False)
         self._confirm_btn.setStyleSheet("""
             QPushButton {
@@ -168,7 +169,7 @@ class PersonSelectionDialog(QDialog):
 
         # Applicant card
         if self._applicant:
-            self._add_section_label("مقدم الطلب")
+            self._add_section_label(tr("person_selection.applicant"))
             applicant_style = base_card_style + "background-color: #EFF6FF; border: 1px solid #BFDBFE;"
             name = " ".join(filter(None, [
                 self._applicant.get('first_name_ar', ''),
@@ -178,8 +179,8 @@ class PersonSelectionDialog(QDialog):
             nid = self._applicant.get('national_id', '')
             card = self._create_card(
                 name=name or "—",
-                subtitle=f"رقم وطني: {nid}" if nid else "",
-                badge_text="مقدم الطلب",
+                subtitle=tr("person_selection.national_id_label", nid=nid) if nid else "",
+                badge_text=tr("person_selection.applicant"),
                 badge_bg="#3B82F6",
                 style=applicant_style,
                 selected_style=selected_style,
@@ -193,7 +194,7 @@ class PersonSelectionDialog(QDialog):
             if p.get('person_id') not in self._already_added_ids
         ]
         if available:
-            self._add_section_label("الأشخاص المرتبطون بالوحدة")
+            self._add_section_label(tr("person_selection.linked_persons"))
             default_style = base_card_style + "background-color: #F8FAFC; border: 1px solid #E2E8F0;"
             for p in available:
                 name = " ".join(filter(None, [
@@ -206,7 +207,7 @@ class PersonSelectionDialog(QDialog):
                 badge_bg = "#10B981" if rel_type in (1, 5) else "#F59E0B" if rel_type == 3 else "#6B7280"
                 card = self._create_card(
                     name=name or "—",
-                    subtitle=f"رقم وطني: {p.get('national_id', '')}" if p.get('national_id') else "",
+                    subtitle=tr("person_selection.national_id_label", nid=p.get('national_id', '')) if p.get('national_id') else "",
                     badge_text=rel_display,
                     badge_bg=badge_bg,
                     style=default_style,
@@ -219,8 +220,8 @@ class PersonSelectionDialog(QDialog):
         self._add_section_label("")
         new_style = base_card_style + "background-color: #F0FDF4; border: 1px dashed #86EFAC;"
         new_card = self._create_card(
-            name="+ إضافة شخص جديد",
-            subtitle="إنشاء سجل شخص جديد وربطه بالوحدة",
+            name=tr("person_selection.add_new_person"),
+            subtitle=tr("person_selection.add_new_person_subtitle"),
             badge_text=None,
             badge_bg=None,
             style=new_style,

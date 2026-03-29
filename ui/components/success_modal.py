@@ -11,20 +11,21 @@ from PyQt5.QtGui import QFont, QColor
 from ..font_utils import create_font, FontManager
 from ..style_manager import StyleManager
 from ..design_system import Colors
+from services.translation_manager import tr
 
 
 class SuccessModal(QDialog):
     """Success modal dialog with claim ID display."""
 
     def __init__(self,
-                 title: str = "تمت الإضافة بنجاح",
+                 title: str = None,
                  claim_id: str = "CL-2025-000001",
-                 message: str = "تم حفظ جميع المعلومات، ويمكنك الآن المتابعة أو إضافة عنصر جديد.",
+                 message: str = None,
                  parent=None):
         super().__init__(parent)
-        self.title_text = title
+        self.title_text = title if title is not None else tr("component.success_modal.default_title")
         self.claim_id = claim_id
-        self.message_text = message
+        self.message_text = message if message is not None else tr("component.success_modal.default_message")
 
         self._setup_ui()
         self._apply_styling()
@@ -120,7 +121,7 @@ class SuccessModal(QDialog):
         layout.addSpacing(32)
 
         # Close button
-        close_btn = QPushButton("حسناً")
+        close_btn = QPushButton(tr("component.success_modal.ok_button"))
         close_btn.setFixedHeight(44)
         close_btn.setCursor(Qt.PointingHandCursor)
         close_btn_font = create_font(size=14, weight=QFont.DemiBold, letter_spacing=0)
@@ -149,7 +150,7 @@ class SuccessModal(QDialog):
     def show_success(parent, title: str, claim_id: str, message: str = None):
         """Show success modal."""
         if message is None:
-            message = "تم حفظ جميع المعلومات، ويمكنك الآن المتابعة أو إضافة عنصر جديد."
+            message = tr("component.success_modal.default_message")
 
         modal = SuccessModal(title, claim_id, message, parent)
         modal.exec_()

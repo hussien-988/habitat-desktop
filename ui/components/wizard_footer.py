@@ -9,6 +9,7 @@ from PyQt5.QtCore import Qt, pyqtSignal
 
 from ui.components.action_button import ActionButton
 from ui.font_utils import create_font, FontManager
+from services.translation_manager import tr
 
 
 class WizardFooter(QWidget):
@@ -25,8 +26,8 @@ class WizardFooter(QWidget):
         show_cancel: bool = True,
         show_save_draft: bool = False,
         show_info_label: bool = False,
-        next_text: str = "التالي",
-        previous_text: str = "السابق",
+        next_text: str = None,
+        previous_text: str = None,
         parent=None
     ):
         """Initialize wizard footer."""
@@ -34,8 +35,8 @@ class WizardFooter(QWidget):
         self.show_cancel = show_cancel
         self.show_save_draft = show_save_draft
         self.show_info_label = show_info_label
-        self.next_text = next_text
-        self.previous_text = previous_text
+        self.next_text = next_text if next_text is not None else tr("component.wizard_footer.next")
+        self.previous_text = previous_text if previous_text is not None else tr("component.wizard_footer.previous")
 
         self._setup_ui()
 
@@ -54,13 +55,13 @@ class WizardFooter(QWidget):
 
         # Left side buttons (Cancel, Save Draft)
         if self.show_cancel:
-            self.btn_cancel = ActionButton("إلغاء", variant="secondary", width=114, height=44)
+            self.btn_cancel = ActionButton(tr("component.wizard_footer.cancel"), variant="secondary", width=114, height=44)
             self.btn_cancel.clicked.connect(self.cancel_clicked.emit)
             layout.addWidget(self.btn_cancel)
 
         if self.show_save_draft:
             self.btn_save_draft = ActionButton(
-                text="حفظ كمسودة",
+                text=tr("component.wizard_footer.save_draft"),
                 variant="secondary",
                 icon_name="save",
                 width=140,

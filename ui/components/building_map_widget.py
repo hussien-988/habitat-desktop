@@ -17,6 +17,7 @@ from ui.design_system import Colors
 from ui.font_utils import FontManager, create_font
 from app.config import Config
 from services.map_service_api import MapServiceAPI
+from services.translation_manager import tr
 
 logger = get_logger(__name__)
 
@@ -184,7 +185,7 @@ class BuildingMapWidget(QObject):
         # Create custom dialog with rounded corners
         dialog = RoundedDialog(radius=32)
         dialog.setModal(True)
-        dialog.setWindowTitle("بحث على الخريطة")
+        dialog.setWindowTitle(tr("component.building_map.search_on_map"))
 
         # إزالة شريط العنوان القياسي (الجزء العلوي المشار إليه)
         dialog.setWindowFlags(Qt.Dialog | Qt.FramelessWindowHint)
@@ -240,7 +241,7 @@ class BuildingMapWidget(QObject):
             self._map_view.setStyleSheet("border-radius: 8px;")
 
             # Loading indicator
-            self._loading_label = QLabel("⏳ جاري تحميل الخريطة...")
+            self._loading_label = QLabel(tr("component.building_map.loading"))
             self._loading_label.setFixedSize(1052, 526)
             self._loading_label.setAlignment(Qt.AlignCenter)
             self._loading_label.setFont(create_font(size=10, weight=FontManager.WEIGHT_REGULAR))
@@ -295,7 +296,7 @@ class BuildingMapWidget(QObject):
         layout.setDirection(QHBoxLayout.RightToLeft)
 
         # Title
-        title = QLabel("بحث على الخريطة")
+        title = QLabel(tr("component.building_map.search_on_map"))
         title.setFont(create_font(size=12, weight=FontManager.WEIGHT_SEMIBOLD))
         title.setStyleSheet(f"color: {Colors.TEXT_PRIMARY}; background: transparent;")
         layout.addWidget(title)
@@ -353,7 +354,7 @@ class BuildingMapWidget(QObject):
 
         # Search input
         self.search_input = QLineEdit()
-        self.search_input.setPlaceholderText("بحث عن اسم المنطقة (مثال: Al-Jamiliyah)")
+        self.search_input.setPlaceholderText(tr("component.building_map.search_area_placeholder"))
         self.search_input.setAlignment(Qt.AlignRight)  # RTL alignment
         self.search_input.setFont(create_font(size=10, weight=FontManager.WEIGHT_REGULAR))
         self.search_input.setStyleSheet(f"""
@@ -405,7 +406,7 @@ class BuildingMapWidget(QObject):
         if self._is_view_only:
             # Disable search in view-only mode
             self.search_input.setEnabled(False)
-            self.search_input.setPlaceholderText("عرض المبنى المحدد على الخريطة")
+            self.search_input.setPlaceholderText(tr("component.building_map.view_selected_building"))
             self.search_input.setStyleSheet(f"""
                 QLineEdit {{
                     border: none;
@@ -434,7 +435,7 @@ class BuildingMapWidget(QObject):
         else:
             # Enable search in selection mode
             self.search_input.setEnabled(True)
-            self.search_input.setPlaceholderText("بحث عن اسم المنطقة (مثال: Al-Jamiliyah)")
+            self.search_input.setPlaceholderText(tr("component.building_map.search_area_placeholder"))
             self.search_input.setStyleSheet(f"""
                 QLineEdit {{
                     border: none;
@@ -480,7 +481,7 @@ class BuildingMapWidget(QObject):
         else:
             logger.error("Map failed to load")
             if hasattr(self, '_loading_label'):
-                self._loading_label.setText("❌ فشل تحميل الخريطة")
+                self._loading_label.setText(tr("component.building_map.map_load_failed"))
                 self._loading_label.setStyleSheet(f"""
                     background-color: {Colors.BACKGROUND};
                     color: {Colors.ERROR};
