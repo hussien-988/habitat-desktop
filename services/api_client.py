@@ -1752,7 +1752,7 @@ class TRRCMSApiClient:
             return save_path
         except requests.exceptions.HTTPError as e:
             status_code = e.response.status_code if e.response is not None else 0
-            logger.error(f"[API ERR] {status_code} download evidence {evidence_id}")
+            logger.debug(f"[API ERR] {status_code} download evidence {evidence_id}")
             raise ApiException(message=str(e), status_code=status_code)
         except (requests.exceptions.ConnectionError, requests.exceptions.Timeout) as e:
             logger.error(f"Network error during download: {e}")

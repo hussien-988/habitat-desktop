@@ -35,6 +35,7 @@ from utils.helpers import build_hierarchical_address
 from ui.font_utils import FontManager, create_font
 from ui.design_system import Colors
 from services.translation_manager import tr
+from ui.components.loading_spinner import LoadingSpinnerOverlay
 
 logger = get_logger(__name__)
 
@@ -66,6 +67,7 @@ class BuildingSelectionStep(BaseStep):
 
         # Initialize survey API service
         self._survey_api_service = get_api_client()
+        self._spinner = None  # Initialized in setup_ui
 
     def setup_ui(self):
         """
@@ -592,6 +594,9 @@ class BuildingSelectionStep(BaseStep):
         # Add stretch after location card to push remaining content down
         layout.addStretch(1)
 
+        # Loading spinner overlay
+        self._spinner = LoadingSpinnerOverlay(self)
+
         # Lazy loading: Don't load buildings until needed (when user searches or opens map)
         # This speeds up wizard initialization significantly
         # self._load_buildings()  # Removed - will load on first search
@@ -754,10 +759,14 @@ class BuildingSelectionStep(BaseStep):
         def _do_load():
             return self.building_controller.load_buildings(building_filter)
 
+        self._spinner.show_loading(tr("component.loading.default"))
         self._load_buildings_worker = ApiWorker(_do_load)
-        self._load_buildings_worker.finished.connect(self._on_buildings_loaded)
+        self._load_buildings_worker.finished.connect(
+            lambda result: (self._spinner.hide_loading(), self._on_buildings_loaded(result))
+        )
         self._load_buildings_worker.error.connect(
-            lambda msg: (logger.error(f"Failed to load buildings: {msg}"),
+            lambda msg: (self._spinner.hide_loading(),
+                         logger.error(f"Failed to load buildings: {msg}"),
                          Toast.show_toast(self, tr("wizard.building_selection.load_failed"), Toast.ERROR))
         )
         self._load_buildings_worker.start()
@@ -820,6 +829,7 @@ class BuildingSelectionStep(BaseStep):
                 return self.building_controller.load_buildings(building_filter)
 
         def _on_search_done(result):
+            self._spinner.hide_loading()
             self.buildings_list.clear()
             if not result.success:
                 logger.error(f"Failed to search buildings: {result.message}")
@@ -827,10 +837,12 @@ class BuildingSelectionStep(BaseStep):
                 return
             self._populate_buildings_list(result.data)
 
+        self._spinner.show_loading(tr("component.loading.default"))
         self._search_buildings_worker = ApiWorker(_do_search)
         self._search_buildings_worker.finished.connect(_on_search_done)
         self._search_buildings_worker.error.connect(
-            lambda msg: (logger.error(f"Failed to search buildings: {msg}"),
+            lambda msg: (self._spinner.hide_loading(),
+                         logger.error(f"Failed to search buildings: {msg}"),
                          Toast.show_toast(self, tr("wizard.building_selection.load_failed"), Toast.ERROR))
         )
         self._search_buildings_worker.start()
@@ -1147,6 +1159,7 @@ class BuildingSelectionStep(BaseStep):
             "inPersonVisit": True,
         }
         logger.info(f"Creating office survey for building: {building_uuid}")
+        self._spinner.show_loading(tr("component.loading.default"))
         try:
             survey_response = self._survey_api_service.create_office_survey(survey_data)
             survey_id = survey_response.get("id") or survey_response.get("surveyId", "")
@@ -1157,6 +1170,8 @@ class BuildingSelectionStep(BaseStep):
         except Exception as e:
             logger.error(f"Survey creation failed: {e}")
             result.add_error(tr("wizard.building_info.survey_creation_failed"))
+        finally:
+            self._spinner.hide_loading()
 
         return result
 

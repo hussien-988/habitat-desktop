@@ -38,6 +38,7 @@ from services.display_mappings import (
     get_claim_status_display,
 )
 from utils.helpers import build_hierarchical_address
+from ui.components.loading_spinner import LoadingSpinnerOverlay
 
 logger = get_logger(__name__)
 
@@ -120,6 +121,9 @@ class ReviewStep(BaseStep):
         scroll_layout.addStretch()
         scroll.setWidget(scroll_content)
         layout.addWidget(scroll)
+
+        # Loading spinner overlay
+        self._spinner = LoadingSpinnerOverlay(self)
     # Shared Styles & Helpers
 
     def _create_section_label(self, text: str) -> QLabel:
@@ -1325,14 +1329,17 @@ class ReviewStep(BaseStep):
             return api.get_survey_evidences(survey_id)
 
         def _on_fetched(evidences):
+            self._spinner.hide_loading()
             count = len(evidences) if evidences else 0
             if count > 0:
                 self._set_evidence_label(label, count)
 
+        self._spinner.show_loading(tr("component.loading.default"))
         self._review_evidence_worker = ApiWorker(_do_fetch)
         self._review_evidence_worker.finished.connect(_on_fetched)
         self._review_evidence_worker.error.connect(
-            lambda msg: (logger.warning(f"Failed to fetch evidence count: {msg}"),
+            lambda msg: (self._spinner.hide_loading(),
+                         logger.warning(f"Failed to fetch evidence count: {msg}"),
                          Toast.show_toast(self, tr("wizard.review.load_failed"), Toast.ERROR))
         )
         self._review_evidence_worker.start()
@@ -1391,25 +1398,29 @@ class ReviewStep(BaseStep):
             ErrorHandler.show_error(self, tr("wizard.review.no_survey_id"), tr("common.error"))
             return
 
-        # Save intervieweeName before finalizing (draft endpoint only works while Draft)
+        self._spinner.show_loading(tr("component.loading.default"))
         try:
-            a = self.context.applicant or {}
-            parts = [a.get("first_name_ar", ""), a.get("father_name_ar", ""), a.get("last_name_ar", "")]
-            name = " ".join(p for p in parts if p) or a.get("full_name")
-            if name:
-                self._api_service.save_draft_to_backend(survey_id, {"interviewee_name": name})
-        except Exception as e:
-            logger.warning(f"Could not save interviewee name: {e}")
-            Toast.show_toast(self, tr("wizard.review.load_failed"), Toast.ERROR)
+            # Save intervieweeName before finalizing (draft endpoint only works while Draft)
+            try:
+                a = self.context.applicant or {}
+                parts = [a.get("first_name_ar", ""), a.get("father_name_ar", ""), a.get("last_name_ar", "")]
+                name = " ".join(p for p in parts if p) or a.get("full_name")
+                if name:
+                    self._api_service.save_draft_to_backend(survey_id, {"interviewee_name": name})
+            except Exception as e:
+                logger.warning(f"Could not save interviewee name: {e}")
+                Toast.show_toast(self, tr("wizard.review.load_failed"), Toast.ERROR)
 
-        # Step 1: process-claims if not already done in OccupancyClaimsStep
-        if not (hasattr(self.context, 'finalize_response') and self.context.finalize_response):
-            self._finalize_survey_via_api(survey_id)
+            # Step 1: process-claims if not already done in OccupancyClaimsStep
             if not (hasattr(self.context, 'finalize_response') and self.context.finalize_response):
-                return  # process-claims failed, stop
+                self._finalize_survey_via_api(survey_id)
+                if not (hasattr(self.context, 'finalize_response') and self.context.finalize_response):
+                    return  # process-claims failed, stop
 
-        # Step 2: finalize the survey (S19-S21: transition to FINALIZED state)
-        self._call_finalize_endpoint(survey_id)
+            # Step 2: finalize the survey (S19-S21: transition to FINALIZED state)
+            self._call_finalize_endpoint(survey_id)
+        finally:
+            self._spinner.hide_loading()
 
     def _finalize_survey_via_api(self, survey_id: str):
         """Call process-claims endpoint (S17-S18)."""

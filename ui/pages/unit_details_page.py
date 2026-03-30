@@ -242,7 +242,7 @@ class UnitDetailsPage(QWidget):
         card_shadow.setColor(QColor(0, 0, 0, 30))
         card.setGraphicsEffect(card_shadow)
 
-        card.setLayoutDirection(Qt.RightToLeft)
+        card.setLayoutDirection(get_layout_direction())
 
         # Main layout
         main_layout = QVBoxLayout(card)

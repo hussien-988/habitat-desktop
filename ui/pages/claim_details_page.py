@@ -65,8 +65,11 @@ class ClaimDetailsPage(QWidget):
         self._original_ownership_share = None
         self._setup_ui()
 
+        from ui.components.loading_spinner import LoadingSpinnerOverlay
+        self._spinner = LoadingSpinnerOverlay(self)
+
     def _setup_ui(self):
-        self.setLayoutDirection(Qt.RightToLeft)
+        self.setLayoutDirection(get_layout_direction())
         self.setStyleSheet(StyleManager.page_background())
 
         main_layout = QVBoxLayout(self)
@@ -93,8 +96,9 @@ class ClaimDetailsPage(QWidget):
         )
 
         scroll_content = QWidget()
-        scroll_content.setLayoutDirection(Qt.RightToLeft)
+        scroll_content.setLayoutDirection(get_layout_direction())
         scroll_content.setStyleSheet("background: transparent;")
+        self._scroll_content = scroll_content
         self._scroll_layout = QVBoxLayout(scroll_content)
         self._scroll_layout.setContentsMargins(0, 0, 0, 40)
         self._scroll_layout.setSpacing(20)
@@ -221,7 +225,7 @@ class ClaimDetailsPage(QWidget):
 
     def _create_card_base(self, icon_name, title, subtitle):
         card = QFrame()
-        card.setLayoutDirection(Qt.RightToLeft)
+        card.setLayoutDirection(get_layout_direction())
         card.setStyleSheet(f"""
             QFrame {{ background-color: {Colors.SURFACE}; border: none; border-radius: 12px; }}
         """)
@@ -273,7 +277,7 @@ class ClaimDetailsPage(QWidget):
 
         # Content
         content_widget = QWidget()
-        content_widget.setLayoutDirection(Qt.RightToLeft)
+        content_widget.setLayoutDirection(get_layout_direction())
         content_widget.setStyleSheet("background: transparent; border: none;")
         content_layout = QVBoxLayout(content_widget)
         content_layout.setContentsMargins(0, 0, 0, 0)
@@ -284,7 +288,7 @@ class ClaimDetailsPage(QWidget):
 
     def _create_simple_card(self):
         card = QFrame()
-        card.setLayoutDirection(Qt.RightToLeft)
+        card.setLayoutDirection(get_layout_direction())
         card.setStyleSheet(f"""
             QFrame {{ background-color: {Colors.SURFACE}; border: none; border-radius: 12px; }}
         """)
@@ -295,7 +299,7 @@ class ClaimDetailsPage(QWidget):
         card_layout.setSpacing(12)
 
         content_widget = QWidget()
-        content_widget.setLayoutDirection(Qt.RightToLeft)
+        content_widget.setLayoutDirection(get_layout_direction())
         content_widget.setStyleSheet("background: transparent; border: none;")
         content_layout = QVBoxLayout(content_widget)
         content_layout.setContentsMargins(0, 0, 0, 0)
@@ -500,7 +504,7 @@ class ClaimDetailsPage(QWidget):
         address = " > ".join(address_parts) if address_parts else "-"
 
         addr_bar = QFrame()
-        addr_bar.setLayoutDirection(Qt.RightToLeft)
+        addr_bar.setLayoutDirection(get_layout_direction())
         addr_bar.setFixedHeight(28)
         addr_bar.setStyleSheet("QFrame { background-color: #F8FAFF; border: none; border-radius: 8px; }")
         addr_layout = QHBoxLayout(addr_bar)
@@ -1008,10 +1012,12 @@ class ClaimDetailsPage(QWidget):
         self._pick_evidence_worker = ApiWorker(_fetch_survey_evidences, self._survey_id)
         self._pick_evidence_worker.finished.connect(self._on_pick_evidences_loaded)
         self._pick_evidence_worker.error.connect(self._on_pick_evidences_error)
+        self._spinner.show_loading(tr("component.loading.default"))
         self._pick_evidence_worker.start()
 
     def _on_pick_evidences_loaded(self, all_evidences):
         """Handle loaded evidences for picker dialog."""
+        self._spinner.hide_loading()
         logger.info(f"[PICK] Got {len(all_evidences)} evidences from survey")
 
         linked_ids = {str(ev.get("id") or ev.get("evidenceId") or "") for ev in self._evidences}
@@ -1028,6 +1034,7 @@ class ClaimDetailsPage(QWidget):
 
     def _on_pick_evidences_error(self, error_msg):
         """Handle evidence loading error."""
+        self._spinner.hide_loading()
         logger.warning(f"Failed to load survey evidences: {error_msg}")
         Toast.show_toast(self, tr("page.claim_details.load_documents_failed"), Toast.ERROR)
 
@@ -1255,7 +1262,15 @@ class ClaimDetailsPage(QWidget):
             update_data["reasonForModification"] = reason
 
         logger.info(f"[SAVE] Update command: {update_data}")
-        result = ctrl.update_claim(self._claim_id, update_data)
+        self._spinner.show_loading(tr("component.loading.default"))
+        self._save_worker = ApiWorker(ctrl.update_claim, self._claim_id, update_data)
+        self._save_worker.finished.connect(self._on_save_finished)
+        self._save_worker.error.connect(self._on_save_error)
+        self._save_worker.start()
+
+    def _on_save_finished(self, result):
+        """Callback: claim save completed."""
+        self._spinner.hide_loading()
         logger.info(f"[SAVE] Result: success={result.success}, msg={result.message}")
 
         if not result.success:
@@ -1277,22 +1292,45 @@ class ClaimDetailsPage(QWidget):
         self._cancel_edit_btn.setVisible(False)
         self._reload_claim_data()
 
+    def _on_save_error(self, error_msg):
+        """Callback: claim save failed."""
+        self._spinner.hide_loading()
+        logger.error(f"[SAVE] Error: {error_msg}")
+        Toast.show_toast(self, tr("page.claim_details.save_failed", error=error_msg), Toast.ERROR)
+
     def _reload_claim_data(self):
         """Reload claim data from API and refresh the page."""
         from controllers.claim_controller import ClaimController
         ctrl = ClaimController()
-        result = ctrl.get_claim_full_detail(
+        self._spinner.show_loading(tr("component.loading.default"))
+        self._reload_worker = ApiWorker(
+            ctrl.get_claim_full_detail,
             self._claim_id,
             hint_survey_id=self._survey_id,
-            hint_relation_id=self._relation_id)
+            hint_relation_id=self._relation_id
+        )
+        self._reload_worker.finished.connect(self._on_reload_claim_finished)
+        self._reload_worker.error.connect(self._on_reload_claim_error)
+        self._reload_worker.start()
+
+    def _on_reload_claim_finished(self, result):
+        """Callback: claim data reloaded."""
+        self._spinner.hide_loading()
         if result.success:
             self.refresh(result.data)
         else:
             logger.warning(f"Failed to reload claim data: {result.message}")
 
+    def _on_reload_claim_error(self, error_msg):
+        """Callback: claim reload failed."""
+        self._spinner.hide_loading()
+        logger.warning(f"Failed to reload claim data: {error_msg}")
+
     def update_language(self, is_arabic: bool):
         """Update all translatable texts when language changes."""
-        self.setLayoutDirection(get_layout_direction())
+        direction = get_layout_direction()
+        self.setLayoutDirection(direction)
+        self._scroll_content.setLayoutDirection(direction)
         self._title_label.setText(tr("page.claim_details.title"))
         self._breadcrumb_label.setText(tr("page.claim_details.breadcrumb"))
         self._cancel_edit_btn.setText(tr("page.claim_details.cancel"))

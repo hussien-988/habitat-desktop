@@ -34,6 +34,7 @@ from ui.design_system import Colors
 from services.translation_manager import tr
 from services.display_mappings import get_relation_type_display
 from services.error_mapper import map_exception
+from ui.components.loading_spinner import LoadingSpinnerOverlay
 
 logger = get_logger(__name__)
 
@@ -176,6 +177,9 @@ class PersonStep(BaseStep):
         table_layout.addWidget(scroll_area)
 
         layout.addWidget(table_frame)
+
+        # Loading spinner overlay
+        self._spinner = LoadingSpinnerOverlay(self)
 
     def _add_person(self):
         """Show dialog to add a new person."""
@@ -483,6 +487,7 @@ class PersonStep(BaseStep):
 
         logger.info(f"Fetching persons for survey {survey_id}, household {household_id}")
 
+        self._spinner.show_loading(tr("component.loading.default"))
         try:
             persons = self._api_service.get_persons_for_household(survey_id, household_id)
 
@@ -495,6 +500,8 @@ class PersonStep(BaseStep):
         except Exception as e:
             logger.error(f"Failed to fetch persons from API: {e}")
             Toast.show_toast(self, tr("wizard.person.load_failed"), Toast.ERROR)
+        finally:
+            self._spinner.hide_loading()
 
     def get_step_title(self) -> str:
         """Get step title."""

@@ -283,7 +283,7 @@ class FieldWorkPreparationStep1(QWidget):
         # Input
         self.building_search = QLineEdit()
         self.building_search.setPlaceholderText(tr("wizard.step1.search_building_code"))
-        self.building_search.setLayoutDirection(Qt.RightToLeft)
+        self.building_search.setLayoutDirection(get_layout_direction())
         # Hide suggestions when Enter is pressed
         self.building_search.returnPressed.connect(self._on_search_enter)
         self.building_search.setStyleSheet("""

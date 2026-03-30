@@ -23,7 +23,7 @@ from ..components.primary_button import PrimaryButton
 from ..components.underline_tab_bar import UnderlineTabBar
 from ..font_utils import create_font, FontManager
 from ..style_manager import StyleManager
-from services.translation_manager import tr
+from services.translation_manager import tr, get_layout_direction
 from services.display_mappings import get_survey_type_display, get_survey_type_options
 from services.api_worker import ApiWorker
 from ..components.toast import Toast
@@ -188,7 +188,7 @@ class CasesPage(QWidget):
 
         # Search by contact person name (API: contactPersonName)
         self._name_filter = QLineEdit()
-        self._name_filter.setLayoutDirection(Qt.RightToLeft)
+        self._name_filter.setLayoutDirection(get_layout_direction())
         self._name_filter.setPlaceholderText(tr("page.cases.search_person"))
         self._name_filter.setFixedWidth(280)
         self._name_filter.setStyleSheet(form_style)
@@ -197,7 +197,7 @@ class CasesPage(QWidget):
 
         # Survey type filter (local: 1=Field, 2=Office)
         self._type_filter = QComboBox()
-        self._type_filter.setLayoutDirection(Qt.RightToLeft)
+        self._type_filter.setLayoutDirection(get_layout_direction())
         self._type_filter.setFixedWidth(170)
         self._type_filter.setStyleSheet(form_style)
         self._type_filter.addItem(tr("all"), None)

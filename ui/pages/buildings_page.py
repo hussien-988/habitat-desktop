@@ -110,6 +110,9 @@ class AddBuildingPage(QWidget):
 
         self._setup_ui()
 
+        from ui.components.loading_spinner import LoadingSpinnerOverlay
+        self._spinner = LoadingSpinnerOverlay(self)
+
         if building:
             self._populate_data()
 
@@ -989,6 +992,7 @@ class AddBuildingPage(QWidget):
         self._docs_worker = ApiWorker(self._fetch_building_documents_bg, building_uuid)
         self._docs_worker.finished.connect(self._on_building_documents_loaded)
         self._docs_worker.error.connect(self._on_building_documents_error)
+        self._spinner.show_loading(tr("component.loading.default"))
         self._docs_worker.start()
 
     def _fetch_building_documents_bg(self, building_uuid):
@@ -1001,6 +1005,7 @@ class AddBuildingPage(QWidget):
 
     def _on_building_documents_loaded(self, docs):
         """Callback: display fetched document thumbnails."""
+        self._spinner.hide_loading()
         if not docs:
             self._show_no_docs()
             return
@@ -1013,6 +1018,7 @@ class AddBuildingPage(QWidget):
 
     def _on_building_documents_error(self, error_msg):
         """Callback: document fetch failed."""
+        self._spinner.hide_loading()
         Toast.show_toast(self, tr("page.buildings.load_error"), Toast.ERROR)
         logger.warning(f"Failed to load building documents: {error_msg}")
         self._show_no_docs()
@@ -1479,14 +1485,17 @@ class AddBuildingPage(QWidget):
         self._neighborhoods_geojson_worker = ApiWorker(self._build_neighborhoods_geojson)
         self._neighborhoods_geojson_worker.finished.connect(self._on_neighborhoods_geojson_loaded)
         self._neighborhoods_geojson_worker.error.connect(self._on_neighborhoods_geojson_error)
+        self._spinner.show_loading(tr("component.loading.default"))
         self._neighborhoods_geojson_worker.start()
 
     def _on_neighborhoods_geojson_loaded(self, neighborhoods_geojson):
         """Callback: open map picker dialog with fetched neighborhoods GeoJSON."""
+        self._spinner.hide_loading()
         self._open_map_picker_dialog(neighborhoods_geojson)
 
     def _on_neighborhoods_geojson_error(self, error_msg):
         """Callback: neighborhoods fetch failed, open dialog with empty GeoJSON."""
+        self._spinner.hide_loading()
         Toast.show_toast(self, tr("page.buildings.load_error"), Toast.ERROR)
         logger.warning(f"Failed to load neighborhoods for map: {error_msg}")
         self._open_map_picker_dialog('{"type":"FeatureCollection","features":[]}')
@@ -2107,7 +2116,7 @@ class AddBuildingPage(QWidget):
         self._validate_building_id_realtime()
 
     def _load_neighborhoods_from_api(self):
-        """Load neighborhoods from backend API."""
+        """Load neighborhoods from backend API (non-blocking)."""
         gov_code = self._get_gov_code()
         dist_code = self._get_district_code()
         subdist_code = self._get_subdistrict_code()
@@ -2116,30 +2125,48 @@ class AddBuildingPage(QWidget):
         self.neighborhood_combo.blockSignals(True)
         self.neighborhood_combo.clear()
         self.neighborhood_combo.addItem(tr("page.add_building.select_neighborhood"), "")
+        self.neighborhood_combo.blockSignals(False)
 
         if gov_code and dist_code and subdist_code and comm_code:
+            self._spinner.show_loading(tr("component.loading.default"))
+            self._neighborhoods_api_worker = ApiWorker(
+                self._fetch_neighborhoods_bg, gov_code, dist_code, subdist_code, comm_code
+            )
+            self._neighborhoods_api_worker.finished.connect(self._on_neighborhoods_api_loaded)
+            self._neighborhoods_api_worker.error.connect(self._on_neighborhoods_api_error)
+            self._neighborhoods_api_worker.start()
+
+    def _fetch_neighborhoods_bg(self, gov_code, dist_code, subdist_code, comm_code):
+        """Background: fetch neighborhoods from API."""
+        api_client = get_api_client()
+        if api_client is not None:
+            return api_client.get_neighborhoods(
+                governorate_code=gov_code,
+                district_code=dist_code,
+                subdistrict_code=subdist_code,
+                community_code=comm_code
+            )
+        return []
+
+    def _on_neighborhoods_api_loaded(self, neighborhoods):
+        """Callback: populate neighborhood combo with API results."""
+        self._spinner.hide_loading()
+        if not neighborhoods:
             neighborhoods = []
-            try:
-                api_client = get_api_client()
-                if api_client is not None:
-                    neighborhoods = api_client.get_neighborhoods(
-                        governorate_code=gov_code,
-                        district_code=dist_code,
-                        subdistrict_code=subdist_code,
-                        community_code=comm_code
-                    )
-            except Exception as e:
-                logger.warning(f"Failed to load neighborhoods from API: {e}")
-
-            self._neighborhoods_cache = neighborhoods
-            for n in neighborhoods:
-                code = n.get("neighborhoodCode", n.get("code", ""))
-                name_ar = n.get("nameArabic", n.get("name_ar", ""))
-                self.neighborhood_combo.addItem(f"{code} - {name_ar}", code)
-            if self.neighborhood_combo.count() > 1:
-                self.neighborhood_combo.setCurrentIndex(1)
-
+        self._neighborhoods_cache = neighborhoods
+        self.neighborhood_combo.blockSignals(True)
+        for n in neighborhoods:
+            code = n.get("neighborhoodCode", n.get("code", ""))
+            name_ar = n.get("nameArabic", n.get("name_ar", ""))
+            self.neighborhood_combo.addItem(f"{code} - {name_ar}", code)
+        if self.neighborhood_combo.count() > 1:
+            self.neighborhood_combo.setCurrentIndex(1)
         self.neighborhood_combo.blockSignals(False)
+
+    def _on_neighborhoods_api_error(self, error_msg):
+        """Callback: neighborhoods fetch failed."""
+        self._spinner.hide_loading()
+        logger.warning(f"Failed to load neighborhoods from API: {error_msg}")
 
     def _get_neighborhood_name_ar(self) -> str:
         """Get Arabic name from cached API neighborhoods."""
@@ -2935,6 +2962,7 @@ class BuildingsListPage(QWidget):
                 self._neighborhoods_filter_worker.error.connect(
                     self._on_neighborhoods_for_filter_error
                 )
+                self._spinner.show_loading(tr("component.loading.default"))
                 self._neighborhoods_filter_worker.start()
                 return
             neighborhoods = self._neighborhoods_api_cache
@@ -3101,6 +3129,7 @@ class BuildingsListPage(QWidget):
 
     def _on_neighborhoods_for_filter_loaded(self, result):
         """Callback: neighborhoods fetched, cache and show filter menu."""
+        self._spinner.hide_loading()
         if result:
             self._neighborhoods_api_cache = result
         else:
@@ -3110,6 +3139,7 @@ class BuildingsListPage(QWidget):
 
     def _on_neighborhoods_for_filter_error(self, error_msg):
         """Callback: neighborhoods fetch failed, use fallback."""
+        self._spinner.hide_loading()
         Toast.show_toast(self, tr("page.buildings.load_error"), Toast.ERROR)
         logger.warning(f"Could not load neighborhoods for filter: {error_msg}")
         self._neighborhoods_api_cache = self._fallback_neighborhoods_from_buildings()

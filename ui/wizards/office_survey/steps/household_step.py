@@ -34,6 +34,7 @@ from ui.font_utils import create_font, FontManager
 from services.translation_manager import tr
 from services.display_mappings import get_unit_type_display, get_unit_status_display, get_occupancy_type_options, get_occupancy_nature_options
 from services.error_mapper import map_exception
+from ui.components.loading_spinner import LoadingSpinnerOverlay
 
 logger = get_logger(__name__)
 
@@ -500,6 +501,9 @@ class HouseholdStep(BaseStep):
         scroll_area.setWidget(scroll_content)
         layout.addWidget(scroll_area)
 
+        # Loading spinner overlay
+        self._spinner = LoadingSpinnerOverlay(self)
+
     def _create_stat_section(self, label_text: str, value_text: str = "-"):
         """
         Create a stat section with label on top and value below.
@@ -772,37 +776,41 @@ class HouseholdStep(BaseStep):
         saved = False
 
         self._set_auth_token()
+        self._spinner.show_loading(tr("component.loading.default"))
 
-        if existing_household_id:
-            stored = self.context.households[0] if self.context.households else {}
-            if self._household_data_changed(household, stored):
+        try:
+            if existing_household_id:
+                stored = self.context.households[0] if self.context.households else {}
+                if self._household_data_changed(household, stored):
+                    try:
+                        self._api_client.update_household(existing_household_id, household, survey_id=survey_id)
+                        logger.info(f"Household {existing_household_id} updated via API")
+                        saved = True
+                    except Exception as e:
+                        logger.error(f"Failed to update household via API: {e}")
+                        Toast.show_toast(self, tr("wizard.household.load_failed"), Toast.ERROR)
+                        result.add_error(tr("wizard.household.update_failed"))
+                        return result
+                else:
+                    logger.info(f"Household unchanged ({existing_household_id}), skipping")
+                    saved = True
+                household["api_id"] = existing_household_id
+            else:
+                logger.info(f"Creating household via API: property_unit_id={property_unit_id}, survey_id={survey_id}, size={household['size']}")
                 try:
-                    self._api_client.update_household(existing_household_id, household, survey_id=survey_id)
-                    logger.info(f"Household {existing_household_id} updated via API")
+                    api_response = self._api_client.create_household(household, survey_id=survey_id)
+                    logger.info("Household created successfully via API")
+                    household_id = api_response.get("id") or api_response.get("householdId", "")
+                    household["api_id"] = household_id
+                    self.context.update_data("household_id", household_id)
                     saved = True
                 except Exception as e:
-                    logger.error(f"Failed to update household via API: {e}")
+                    logger.error(f"Failed to create household via API: {e}")
                     Toast.show_toast(self, tr("wizard.household.load_failed"), Toast.ERROR)
-                    result.add_error(tr("wizard.household.update_failed"))
+                    result.add_error(tr("wizard.household.save_failed"))
                     return result
-            else:
-                logger.info(f"Household unchanged ({existing_household_id}), skipping")
-                saved = True
-            household["api_id"] = existing_household_id
-        else:
-            logger.info(f"Creating household via API: property_unit_id={property_unit_id}, survey_id={survey_id}, size={household['size']}")
-            try:
-                api_response = self._api_client.create_household(household, survey_id=survey_id)
-                logger.info("Household created successfully via API")
-                household_id = api_response.get("id") or api_response.get("householdId", "")
-                household["api_id"] = household_id
-                self.context.update_data("household_id", household_id)
-                saved = True
-            except Exception as e:
-                logger.error(f"Failed to create household via API: {e}")
-                Toast.show_toast(self, tr("wizard.household.load_failed"), Toast.ERROR)
-                result.add_error(tr("wizard.household.save_failed"))
-                return result
+        finally:
+            self._spinner.hide_loading()
 
         if self.context.households:
             self.context.households[0] = household

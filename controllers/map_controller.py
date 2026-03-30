@@ -384,8 +384,8 @@ class MapController(BaseController):
         if building.geo_location and 'POLYGON' in building.geo_location.upper():
             try:
                 polygon = GeoPolygon.from_wkt(building.geo_location)
-            except:
-                pass
+            except Exception as e:
+                logger.debug(f"WKT parse failed for building {building.building_id}: {e}")
 
         return BuildingGeoData(
             building_uuid=building.building_uuid,

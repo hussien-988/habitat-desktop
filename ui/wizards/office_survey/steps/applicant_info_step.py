@@ -29,6 +29,7 @@ from ui.style_manager import StyleManager
 from services.display_mappings import get_gender_options, get_nationality_options
 from services.translation_manager import tr
 from ui.components.toast import Toast
+from ui.components.loading_spinner import LoadingSpinnerOverlay
 from utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -112,6 +113,9 @@ class ApplicantInfoStep(BaseStep):
 
         scroll.setWidget(container)
         self.main_layout.addWidget(scroll)
+
+        # Loading spinner overlay
+        self._spinner = LoadingSpinnerOverlay(self)
 
     def _build_form(self) -> QGridLayout:
         grid = QGridLayout()
@@ -552,68 +556,72 @@ class ApplicantInfoStep(BaseStep):
         # 4. Set auth token
         self._set_auth_token()
 
-        # 5. Call API (skip if contact person already created for this survey)
-        existing_cp_id = self.context.get_data("contact_person_id")
-        if not existing_cp_id:
-            try:
-                response = self._api_client.create_contact_person(survey_id, self.context.applicant)
-                self.context.update_data(
-                    "contact_person_id",
-                    response.get("id") or response.get("contactPersonId", "")
-                )
-            except Exception as e:
-                from services.exceptions import ApiException
-                if isinstance(e, ApiException) and e.status_code == 409:
-                    from services.error_mapper import build_duplicate_person_message
-                    result.add_error(build_duplicate_person_message(e.response_data))
-                else:
-                    logger.error(f"Contact person API failed: {e}")
-                    result.add_error(tr("wizard.applicant.save_failed"))
-        else:
-            try:
-                self._api_client.update_contact_person(survey_id, existing_cp_id, self.context.applicant)
-                logger.info(f"Contact person {existing_cp_id} updated")
-            except Exception as e:
-                from services.error_mapper import is_duplicate_nid_error, build_duplicate_person_message
-                if is_duplicate_nid_error(e):
-                    result.add_error(build_duplicate_person_message(getattr(e, 'response_data', {})))
-                else:
-                    logger.error(f"Contact person update failed: {e}")
-                    result.add_error(tr("wizard.applicant.update_failed"))
-
-        # 6. Upload ID photos (if any and not already uploaded)
-        person_id = self.context.get_data("contact_person_id")
-        if person_id and self.uploaded_files:
-            already_uploaded = set(self.context.get_data("uploaded_id_photos") or [])
-            new_files = [f for f in self.uploaded_files if f not in already_uploaded]
-            for fp in new_files:
-                try:
-                    self._api_client.upload_identification_document(
-                        survey_id=survey_id,
-                        person_id=person_id,
-                        file_path=fp,
-                    )
-                    already_uploaded.add(fp)
-                    logger.info(f"ID photo uploaded: {os.path.basename(fp)}")
-                except Exception as e:
-                    logger.error(f"Failed to upload ID photo {fp}: {e}")
-                    Toast.show_toast(self, tr("wizard.applicant.load_failed"), Toast.ERROR)
-            self.context.update_data("uploaded_id_photos", list(already_uploaded))
-
-        # 7. Cache contact person locally for draft resume
-        self._save_contact_person_locally(survey_id)
-
-        # 8. Save intervieweeName so it appears in the surveys list
+        self._spinner.show_loading(tr("component.loading.default"))
         try:
-            a = self.context.applicant or {}
-            parts = [a.get("first_name_ar", ""), a.get("father_name_ar", ""), a.get("last_name_ar", "")]
-            interviewee_name = " ".join(p for p in parts if p) or a.get("full_name")
-            if interviewee_name:
-                self._api_client.save_draft_to_backend(survey_id, {"interviewee_name": interviewee_name})
-                logger.info(f"intervieweeName saved: {interviewee_name}")
-        except Exception as e:
-            logger.warning(f"Could not save interviewee name: {e}")
-            Toast.show_toast(self, tr("wizard.applicant.load_failed"), Toast.ERROR)
+            # 5. Call API (skip if contact person already created for this survey)
+            existing_cp_id = self.context.get_data("contact_person_id")
+            if not existing_cp_id:
+                try:
+                    response = self._api_client.create_contact_person(survey_id, self.context.applicant)
+                    self.context.update_data(
+                        "contact_person_id",
+                        response.get("id") or response.get("contactPersonId", "")
+                    )
+                except Exception as e:
+                    from services.exceptions import ApiException
+                    if isinstance(e, ApiException) and e.status_code == 409:
+                        from services.error_mapper import build_duplicate_person_message
+                        result.add_error(build_duplicate_person_message(e.response_data))
+                    else:
+                        logger.error(f"Contact person API failed: {e}")
+                        result.add_error(tr("wizard.applicant.save_failed"))
+            else:
+                try:
+                    self._api_client.update_contact_person(survey_id, existing_cp_id, self.context.applicant)
+                    logger.info(f"Contact person {existing_cp_id} updated")
+                except Exception as e:
+                    from services.error_mapper import is_duplicate_nid_error, build_duplicate_person_message
+                    if is_duplicate_nid_error(e):
+                        result.add_error(build_duplicate_person_message(getattr(e, 'response_data', {})))
+                    else:
+                        logger.error(f"Contact person update failed: {e}")
+                        result.add_error(tr("wizard.applicant.update_failed"))
+
+            # 6. Upload ID photos (if any and not already uploaded)
+            person_id = self.context.get_data("contact_person_id")
+            if person_id and self.uploaded_files:
+                already_uploaded = set(self.context.get_data("uploaded_id_photos") or [])
+                new_files = [f for f in self.uploaded_files if f not in already_uploaded]
+                for fp in new_files:
+                    try:
+                        self._api_client.upload_identification_document(
+                            survey_id=survey_id,
+                            person_id=person_id,
+                            file_path=fp,
+                        )
+                        already_uploaded.add(fp)
+                        logger.info(f"ID photo uploaded: {os.path.basename(fp)}")
+                    except Exception as e:
+                        logger.error(f"Failed to upload ID photo {fp}: {e}")
+                        Toast.show_toast(self, tr("wizard.applicant.load_failed"), Toast.ERROR)
+                self.context.update_data("uploaded_id_photos", list(already_uploaded))
+
+            # 7. Cache contact person locally for draft resume
+            self._save_contact_person_locally(survey_id)
+
+            # 8. Save intervieweeName so it appears in the surveys list
+            try:
+                a = self.context.applicant or {}
+                parts = [a.get("first_name_ar", ""), a.get("father_name_ar", ""), a.get("last_name_ar", "")]
+                interviewee_name = " ".join(p for p in parts if p) or a.get("full_name")
+                if interviewee_name:
+                    self._api_client.save_draft_to_backend(survey_id, {"interviewee_name": interviewee_name})
+                    logger.info(f"intervieweeName saved: {interviewee_name}")
+            except Exception as e:
+                logger.warning(f"Could not save interviewee name: {e}")
+                Toast.show_toast(self, tr("wizard.applicant.load_failed"), Toast.ERROR)
+        finally:
+            self._spinner.hide_loading()
 
         return result
 

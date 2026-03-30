@@ -146,7 +146,7 @@ class SurveyController:
                 if person_dto:
                     persons.append(ClaimController._map_person_dto(person_dto, rel))
                 else:
-                    logger.warning(f"Person {person_id} not found in household persons")
+                    logger.debug(f"Person {person_id} not found in household persons")
 
             # 5) Claim enrichment (if linked)
             claim_dto = None
@@ -166,7 +166,7 @@ class SurveyController:
             try:
                 contact_person_dto = api.get_contact_person(survey_id)
             except Exception as e:
-                logger.warning(f"Contact person not available: {e}")
+                logger.debug(f"Contact person not available: {e}")
 
             applicant = None
             if contact_person_dto:

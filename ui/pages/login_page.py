@@ -390,7 +390,24 @@ class LoginPage(QWidget):
             self._show_error(tr("page.login.fields_required"))
             return
 
-        user, error = self.auth_service.authenticate(username, password)
+        self._set_login_loading(True)
+
+        from services.api_worker import ApiWorker
+        worker = ApiWorker(self.auth_service.authenticate, username, password)
+        worker.finished.connect(lambda result: self._on_login_result(result, username))
+        worker.start()
+        self._login_worker = worker
+
+    def _on_login_result(self, result, username):
+        """Handle login result from async worker."""
+        from datetime import datetime, timedelta
+        self._set_login_loading(False)
+
+        if isinstance(result, Exception):
+            self._show_error(tr("page.login.connection_error"))
+            return
+
+        user, error = result
 
         if user:
             from app.config import Roles
@@ -407,7 +424,6 @@ class LoginPage(QWidget):
             self._failed_attempts += 1
             logger.warning(f"Login failed: {username} (attempt {self._failed_attempts})")
 
-            # Check if lockout threshold reached
             max_attempts, lockout_minutes = self._get_lockout_settings()
             if max_attempts > 0 and self._failed_attempts >= max_attempts:
                 self._lockout_until = datetime.now() + timedelta(minutes=lockout_minutes)
@@ -419,6 +435,17 @@ class LoginPage(QWidget):
                     self._show_error(tr("page.login.invalid_credentials_remaining", remaining=remaining))
                 else:
                     self._show_error(tr("page.login.invalid_credentials"))
+
+    def _set_login_loading(self, loading: bool):
+        """Toggle login button loading state."""
+        self.login_btn.setEnabled(not loading)
+        self.username_input.setEnabled(not loading)
+        self.password_input.setEnabled(not loading)
+        if loading:
+            self._original_btn_text = self.login_btn.text()
+            self.login_btn.setText(tr("page.login.signing_in"))
+        else:
+            self.login_btn.setText(getattr(self, '_original_btn_text', tr("page.login.sign_in")))
 
     def _get_lockout_settings(self) -> tuple:
         """Get lockout settings from SecurityService. Returns (max_attempts, lockout_minutes)."""

@@ -12,6 +12,7 @@ from PyQt5.QtGui import QFont, QColor
 from ui.error_handler import ErrorHandler
 from services.error_mapper import map_exception
 from services.api_worker import ApiWorker
+from ui.components.loading_spinner import LoadingSpinnerOverlay
 
 from ui.wizards.framework import BaseWizard, BaseStep
 from ui.wizards.office_survey.survey_context import SurveyContext
@@ -219,6 +220,7 @@ class OfficeSurveyWizard(BaseWizard):
             return api.get_claims_summaries(survey_visit_id=survey_id)
 
         def _on_finished(response):
+            self._spinner.hide_loading()
             items = response if isinstance(response, list) else response.get("items", [])
             if items and len(items) > 0:
                 claims_list = [
@@ -235,10 +237,12 @@ class OfficeSurveyWizard(BaseWizard):
                     callback(claim_number="")
 
         def _on_error(msg):
+            self._spinner.hide_loading()
             logger.warning(f"Could not fetch claim number from API: {msg}")
             if callback:
                 callback(claim_number="")
 
+        self._spinner.show_loading(tr("component.loading.default"))
         self._claim_number_worker = ApiWorker(_do_fetch)
         self._claim_number_worker.finished.connect(_on_finished)
         self._claim_number_worker.error.connect(_on_error)
@@ -336,9 +340,11 @@ class OfficeSurveyWizard(BaseWizard):
             return api_service.save_draft_to_backend(survey_id, backend_draft_data)
 
         def _on_saved(_result):
+            self._spinner.hide_loading()
             logger.info(f"Draft saved to backend: {survey_id}")
 
         def _on_save_error(msg):
+            self._spinner.hide_loading()
             if "Finalized" in msg or "finalized" in msg:
                 logger.warning(f"Draft save skipped (survey already finalized): {msg}")
                 return
@@ -349,6 +355,7 @@ class OfficeSurveyWizard(BaseWizard):
                 tr("common.error")
             )
 
+        self._spinner.show_loading(tr("component.loading.default"))
         self._save_draft_worker = ApiWorker(_do_save)
         self._save_draft_worker.finished.connect(_on_saved)
         self._save_draft_worker.error.connect(_on_save_error)
@@ -438,11 +445,14 @@ class OfficeSurveyWizard(BaseWizard):
             return api.cancel_survey(survey_id, reason)
 
         def _on_cancelled(_result):
+            self._spinner.hide_loading()
             logger.info(f"Survey {survey_id} cancelled: {reason}")
 
         def _on_cancel_error(msg):
+            self._spinner.hide_loading()
             logger.warning(f"Failed to cancel survey {survey_id}: {msg}")
 
+        self._spinner.show_loading(tr("component.loading.default"))
         self._cancel_survey_worker = ApiWorker(_do_cancel)
         self._cancel_survey_worker.finished.connect(_on_cancelled)
         self._cancel_survey_worker.error.connect(_on_cancel_error)
@@ -572,6 +582,9 @@ class OfficeSurveyWizard(BaseWizard):
         # Footer is added directly to outer_layout, so it extends to full window width
         footer = self._create_footer()
         outer_layout.addWidget(footer)
+
+        # Loading spinner overlay
+        self._spinner = LoadingSpinnerOverlay(self)
 
     def _create_header(self) -> QWidget:
         """Create wizard header with title, subtitle, and save button."""
