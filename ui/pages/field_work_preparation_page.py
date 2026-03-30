@@ -50,9 +50,9 @@ class FieldWorkPreparationPage(QWidget):
         content_layout = QVBoxLayout(content_container)
         from ui.design_system import PageDimensions
         content_layout.setContentsMargins(
-            PageDimensions.CONTENT_PADDING_H,        # Left: 131px
-            PageDimensions.CONTENT_PADDING_V_TOP,    # Top: 32px
-            PageDimensions.CONTENT_PADDING_H,        # Right: 131px
+            PageDimensions.content_padding_h(),        # Left: 131px
+            PageDimensions.content_padding_v_top(),    # Top: 32px
+            PageDimensions.content_padding_h(),        # Right: 131px
             0                                         # Bottom: 0
         )
         content_layout.setSpacing(0)

@@ -5,6 +5,7 @@ TRRCMS - Tenure Rights Registration & Claims Management System
 Main entry point for the application
 """
 
+import math
 import sys
 import time
 from pathlib import Path
@@ -108,7 +109,6 @@ class AnimatedSplash(QSplashScreen):
         """Update glow breathing phase."""
         if not self._start_time:
             return
-        import math
         t = time.time() - self._start_time
         # Slow sine wave: period ~3s, range 0.6-1.0
         self._glow_phase = 0.8 + 0.2 * math.sin(t * 2.1)
@@ -134,6 +134,8 @@ class AnimatedSplash(QSplashScreen):
         painter.setRenderHint(QPainter.Antialiasing)
         painter.setRenderHint(QPainter.SmoothPixmapTransform)
 
+        t = time.time() - self._start_time if self._start_time else 0
+
         # Breathing glow behind logo
         glow_alpha = int(35 * self._glow_phase)
         glow = QRadialGradient(w / 2, 95, 120)
@@ -143,6 +145,17 @@ class AnimatedSplash(QSplashScreen):
         painter.setPen(Qt.NoPen)
         painter.setBrush(glow)
         painter.drawEllipse(int(w / 2 - 120), -25, 240, 240)
+
+        # Traveling shimmer — drifts across the background
+        shimmer_x = w * 0.5 + w * 0.4 * math.sin(t * 0.8)
+        shimmer_y = h * 0.35 + h * 0.1 * math.cos(t * 1.2)
+        shimmer_alpha = int(25 * self._glow_phase)
+        shimmer = QRadialGradient(shimmer_x, shimmer_y, w * 0.35)
+        shimmer.setColorAt(0.0, QColor(100, 180, 255, shimmer_alpha))
+        shimmer.setColorAt(0.5, QColor(56, 144, 223, int(shimmer_alpha * 0.3)))
+        shimmer.setColorAt(1.0, QColor(56, 144, 223, 0))
+        painter.setBrush(shimmer)
+        painter.drawRect(0, 0, w, h)
 
         text_y = self._text_y
 
@@ -166,14 +179,19 @@ class AnimatedSplash(QSplashScreen):
         painter.drawText(0, text_y + 36, w, 24, Qt.AlignHCenter,
                          "Tenure Rights Registration & Claims")
 
-        # Separator line
+        # Animated separator — blue sweep sliding across
         sep_y = text_y + 68
-        sep_grad = QLinearGradient(0, 0, w, 0)
+        sweep = (t * 0.4) % 1.0
+        sep_grad = QLinearGradient(80, 0, w - 80, 0)
         sep_grad.setColorAt(0.0, QColor(255, 255, 255, 0))
-        sep_grad.setColorAt(0.3, QColor(255, 255, 255, 40))
-        sep_grad.setColorAt(0.7, QColor(255, 255, 255, 40))
+        pre = max(0.05, sweep - 0.15)
+        post = min(0.95, sweep + 0.15)
+        if pre < post:
+            sep_grad.setColorAt(pre, QColor(255, 255, 255, 30))
+            sep_grad.setColorAt(sweep, QColor(56, 144, 223, 200))
+            sep_grad.setColorAt(post, QColor(255, 255, 255, 30))
         sep_grad.setColorAt(1.0, QColor(255, 255, 255, 0))
-        painter.setPen(QPen(sep_grad, 1))
+        painter.setPen(QPen(sep_grad, 1.5))
         painter.drawLine(80, sep_y, w - 80, sep_y)
 
         # Status message with animated dots
@@ -220,14 +238,32 @@ def main():
         # Set application-wide default font
         set_application_default_font()
 
-        # Initialize database
+        # Initialize database in background thread so splash can animate
         splash.showMessage(tr("splash.initializing_db"),
                            Qt.AlignBottom | Qt.AlignHCenter,
                            QColor(255, 255, 255, 120))
         app.processEvents()
         print("[STARTUP] Initializing database...")
-        db = Database()
-        db.initialize()
+
+        from PyQt5.QtCore import QThread, pyqtSignal
+
+        class _DbWorker(QThread):
+            done = pyqtSignal(object)
+            def run(self):
+                db = Database()
+                db.initialize()
+                self.done.emit(db)
+
+        db_result = [None]
+        worker = _DbWorker()
+        worker.done.connect(lambda db: db_result.__setitem__(0, db))
+        worker.start()
+
+        while worker.isRunning():
+            app.processEvents()
+            QThread.msleep(16)
+
+        db = db_result[0]
 
         # Create main window
         splash.showMessage(tr("splash.loading_ui"),

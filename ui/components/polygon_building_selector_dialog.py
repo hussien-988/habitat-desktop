@@ -56,7 +56,9 @@ class PolygonBuildingSelectorDialog(QDialog):
     def _setup_ui(self):
         """Setup the dialog UI."""
         self.setWindowTitle(tr("dialog.polygon_selector.title"))
-        self.setMinimumSize(1000, 700)
+        screen = self.screen().availableGeometry()
+        self.setMinimumSize(min(1000, int(screen.width() * 0.8)),
+                            min(700, int(screen.height() * 0.8)))
         self.setLayoutDirection(get_layout_direction())
 
         main_layout = QVBoxLayout(self)

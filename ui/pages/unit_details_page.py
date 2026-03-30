@@ -41,9 +41,9 @@ class UnitDetailsPage(QWidget):
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(
-            PageDimensions.CONTENT_PADDING_H,
-            PageDimensions.CONTENT_PADDING_V_TOP,
-            PageDimensions.CONTENT_PADDING_H,
+            PageDimensions.content_padding_h(),
+            PageDimensions.content_padding_v_top(),
+            PageDimensions.content_padding_h(),
             PageDimensions.CONTENT_PADDING_V_BOTTOM,
         )
         layout.setSpacing(15)

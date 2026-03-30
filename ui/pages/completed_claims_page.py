@@ -10,10 +10,10 @@ from typing import List, Dict
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel,
     QScrollArea, QSpacerItem, QSizePolicy, QFrame, QGridLayout,
-    QLineEdit, QComboBox
+    QLineEdit, QComboBox, QAction
 )
 from PyQt5.QtCore import Qt, pyqtSignal, QTimer
-from PyQt5.QtGui import QFont
+from PyQt5.QtGui import QFont, QIcon
 
 from ..design_system import Colors, PageDimensions
 from ..components.empty_state import EmptyState
@@ -62,9 +62,9 @@ class CompletedClaimsPage(QWidget):
     def _setup_ui(self):
         main_layout = QVBoxLayout(self)
         main_layout.setContentsMargins(
-            PageDimensions.CONTENT_PADDING_H,
-            PageDimensions.CONTENT_PADDING_V_TOP,
-            PageDimensions.CONTENT_PADDING_H,
+            PageDimensions.content_padding_h(),
+            PageDimensions.content_padding_v_top(),
+            PageDimensions.content_padding_h(),
             PageDimensions.CONTENT_PADDING_V_BOTTOM
         )
         main_layout.setSpacing(16)
@@ -157,6 +157,13 @@ class CompletedClaimsPage(QWidget):
         self._search_input.setFixedWidth(280)
         self._search_input.setStyleSheet(form_style)
         self._search_input.textChanged.connect(self._on_search_changed)
+        try:
+            from ..components.icon import Icon
+            search_pixmap = Icon.load_pixmap("search", 16)
+            if search_pixmap and not search_pixmap.isNull():
+                self._search_input.addAction(QAction(QIcon(search_pixmap), "", self._search_input), QLineEdit.LeadingPosition)
+        except Exception:
+            pass
         layout.addWidget(self._search_input)
 
         # Source filter (FieldCollection=1, OfficeSubmission=2)
@@ -168,7 +175,6 @@ class CompletedClaimsPage(QWidget):
         self._source_filter.addItem(get_source_display(1), 1)
         self._source_filter.addItem(get_source_display(2), 2)
         self._source_filter.currentIndexChanged.connect(self._on_source_changed)
-        self._source_filter.setVisible(False)
         layout.addWidget(self._source_filter)
 
         layout.addStretch()

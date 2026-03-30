@@ -308,9 +308,9 @@ class DuplicatesPage(QWidget):
 
         main_layout = QVBoxLayout(self)
         main_layout.setContentsMargins(
-            PageDimensions.CONTENT_PADDING_H,
-            PageDimensions.CONTENT_PADDING_V_TOP,
-            PageDimensions.CONTENT_PADDING_H,
+            PageDimensions.content_padding_h(),
+            PageDimensions.content_padding_v_top(),
+            PageDimensions.content_padding_h(),
             PageDimensions.CONTENT_PADDING_V_BOTTOM,
         )
         main_layout.setSpacing(16)
@@ -578,7 +578,7 @@ class DuplicatesPage(QWidget):
     def _build_conflict_list(self) -> QFrame:
         card = QFrame()
         card.setObjectName("conflictListCard")
-        card.setFixedHeight(708)
+        card.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         card.setStyleSheet("""
             QFrame#conflictListCard {
                 background-color: white;

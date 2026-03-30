@@ -266,7 +266,10 @@ class BaseMapDialog(QDialog):
         self.setModal(True)
         self.setWindowTitle(self.dialog_title)
         self.setWindowFlags(Qt.Dialog | Qt.FramelessWindowHint)
-        self.setFixedSize(1455, 816)
+        screen = self.screen().availableGeometry()
+        w = min(1455, int(screen.width() * 0.92))
+        h = min(816, int(screen.height() * 0.88))
+        self.setFixedSize(w, h)
         self.setAttribute(Qt.WA_TranslucentBackground, True)
 
         # Main layout
@@ -303,9 +306,11 @@ class BaseMapDialog(QDialog):
             content_layout.addWidget(multiselect_ui)
 
         # Map view
+        map_w = self.width() - 48
+        map_h = self.height() - 174
         if HAS_WEBENGINE:
             self.web_view = QWebEngineView(self)
-            self.web_view.setFixedSize(1407, 642)
+            self.web_view.setFixedSize(map_w, map_h)
 
             settings = self.web_view.settings()
             settings.setAttribute(QWebEngineSettings.JavascriptEnabled, True)
@@ -323,7 +328,7 @@ class BaseMapDialog(QDialog):
 
             # Loading indicator
             self._loading_label = QLabel(tr("dialog.map.loading_map"))
-            self._loading_label.setFixedSize(1407, 642)
+            self._loading_label.setFixedSize(map_w, map_h)
             self._loading_label.setAlignment(Qt.AlignCenter)
             self._loading_label.setFont(create_font(size=10, weight=FontManager.WEIGHT_REGULAR))
             self._loading_label.setStyleSheet(f"""
@@ -345,7 +350,7 @@ class BaseMapDialog(QDialog):
             content_layout.addWidget(map_container)
         else:
             placeholder = QLabel(tr("dialog.map.map_unavailable"))
-            placeholder.setFixedSize(1407, 642)
+            placeholder.setFixedSize(map_w, map_h)
             placeholder.setAlignment(Qt.AlignCenter)
             placeholder.setFont(create_font(size=10, weight=FontManager.WEIGHT_REGULAR))
             placeholder.setStyleSheet(f"""

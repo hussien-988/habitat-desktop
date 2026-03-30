@@ -4,6 +4,41 @@ from PyQt5.QtGui import QColor, QFont, QPalette
 from PyQt5.QtCore import Qt
 
 
+class ScreenScale:
+    """Screen-aware scaling utility.
+
+    Call ScreenScale.initialize(screen_geometry) once from the main window
+    before any UI is built. On screens smaller than 1512x982, dimensions
+    scale down proportionally. On larger screens, no scaling (1.0).
+    """
+    _ref_width = 1512
+    _ref_height = 982
+    _scale_x = 1.0
+    _scale_y = 1.0
+
+    @classmethod
+    def initialize(cls, screen_geometry):
+        avail_w = screen_geometry.width()
+        avail_h = screen_geometry.height()
+        cls._scale_x = min(avail_w / cls._ref_width, 1.0)
+        cls._scale_y = min(avail_h / cls._ref_height, 1.0)
+
+    @classmethod
+    def w(cls, px):
+        """Scale a horizontal pixel value."""
+        return max(1, int(px * cls._scale_x))
+
+    @classmethod
+    def h(cls, px):
+        """Scale a vertical pixel value."""
+        return max(1, int(px * cls._scale_y))
+
+    @classmethod
+    def scale(cls):
+        """Overall scale factor (min of x, y)."""
+        return min(cls._scale_x, cls._scale_y)
+
+
 class Colors:
     """Color palette."""
     # Primary Colors
@@ -147,7 +182,7 @@ class Typography:
             font.setFamily(Typography.FONT_FAMILY_ARABIC)
             font.setStyleHint(QFont.SansSerif)
 
-        font.setPixelSize(size)
+        font.setPointSize(size)
 
         # Map weight to QFont weight
         if weight >= 700:
@@ -300,10 +335,20 @@ class PageDimensions:
     CONTENT_POSITION_X = 131
     CONTENT_POSITION_Y = 141
 
-    # Content padding
+    # Content padding (static fallbacks)
     CONTENT_PADDING_H = 131
     CONTENT_PADDING_V_TOP = 32
     CONTENT_PADDING_V_BOTTOM = 0
+
+    @classmethod
+    def content_padding_h(cls):
+        """Dynamic horizontal padding — scales on small screens."""
+        return ScreenScale.w(131)
+
+    @classmethod
+    def content_padding_v_top(cls):
+        """Dynamic vertical top padding."""
+        return ScreenScale.h(32)
 
     # Spacing and gaps
     CARD_GAP_VERTICAL = 16

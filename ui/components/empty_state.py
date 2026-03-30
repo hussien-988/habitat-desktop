@@ -18,9 +18,11 @@ class EmptyState(QWidget):
                  icon_text: str = "+",
                  title: str = None,
                  description: str = None,
+                 icon_name: str = None,
                  parent=None):
         super().__init__(parent)
         self.icon_text = icon_text
+        self._icon_name = icon_name
         self.title_text = title or tr("component.empty_state.title")
         self.description_text = description or tr("component.empty_state.description")
         self._setup_ui()
@@ -33,32 +35,45 @@ class EmptyState(QWidget):
         layout.setContentsMargins(40, 40, 40, 40)
         layout.setSpacing(0)
 
-        # Icon circle (120px × 120px, blue background)
+        # Icon circle (120px × 120px, soft light blue background)
         icon_container = QWidget()
         icon_container.setFixedSize(120, 120)
-        icon_container.setStyleSheet(f"""
-            QWidget {{
-                background-color: {Colors.PRIMARY_BLUE};
+        icon_container.setStyleSheet("""
+            QWidget {
+                background-color: #EBF4FF;
+                border: 2px solid #D6E4F0;
                 border-radius: 60px;
-            }}
+            }
         """)
 
         icon_layout = QVBoxLayout(icon_container)
         icon_layout.setAlignment(Qt.AlignCenter)
         icon_layout.setContentsMargins(0, 0, 0, 0)
 
-        # Icon label (+ symbol or custom icon)
-        icon_label = QLabel(self.icon_text)
-        icon_label.setAlignment(Qt.AlignCenter)
-        # Use centralized font utility
-        icon_font = create_font(size=36, weight=QFont.Bold)
-        icon_label.setFont(icon_font)
-        icon_label.setStyleSheet(f"""
-            QLabel {{
-                color: {Colors.PRIMARY_WHITE};
-                background: transparent;
-            }}
-        """)
+        # Icon: pixmap from icon_name or text fallback
+        if self._icon_name:
+            from .icon import Icon
+            pixmap = Icon.load_pixmap(self._icon_name, 48)
+            icon_label = QLabel()
+            icon_label.setAlignment(Qt.AlignCenter)
+            if pixmap and not pixmap.isNull():
+                icon_label.setPixmap(pixmap)
+            else:
+                icon_label.setText(self.icon_text)
+                icon_font = create_font(size=36, weight=QFont.Bold)
+                icon_label.setFont(icon_font)
+            icon_label.setStyleSheet("QLabel { background: transparent; }")
+        else:
+            icon_label = QLabel(self.icon_text)
+            icon_label.setAlignment(Qt.AlignCenter)
+            icon_font = create_font(size=36, weight=QFont.Bold)
+            icon_label.setFont(icon_font)
+            icon_label.setStyleSheet(f"""
+                QLabel {{
+                    color: {Colors.PRIMARY_BLUE};
+                    background: transparent;
+                }}
+            """)
         icon_layout.addWidget(icon_label)
 
         layout.addWidget(icon_container, 0, Qt.AlignCenter)
