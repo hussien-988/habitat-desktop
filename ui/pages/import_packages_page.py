@@ -5,7 +5,8 @@ from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel,
     QFrame, QTableWidget, QTableWidgetItem, QHeaderView,
     QComboBox, QMenu, QAction, QStackedWidget, QPushButton,
-    QGraphicsDropShadowEffect, QApplication, QAbstractItemView
+    QGraphicsDropShadowEffect, QApplication, QAbstractItemView,
+    QSizePolicy
 )
 from PyQt5.QtCore import Qt, pyqtSignal, QPoint, QTimer
 from PyQt5.QtGui import QColor, QFont
@@ -65,9 +66,9 @@ class ImportPackagesListPage(QWidget):
         """Setup list UI."""
         layout = QVBoxLayout(self)
         layout.setContentsMargins(
-            PageDimensions.CONTENT_PADDING_H,
-            PageDimensions.CONTENT_PADDING_V_TOP,
-            PageDimensions.CONTENT_PADDING_H,
+            PageDimensions.content_padding_h(),
+            PageDimensions.content_padding_v_top(),
+            PageDimensions.content_padding_h(),
             PageDimensions.CONTENT_PADDING_V_BOTTOM,
         )
         layout.setSpacing(15)
@@ -91,7 +92,7 @@ class ImportPackagesListPage(QWidget):
 
         # White table card
         table_card = QFrame()
-        table_card.setFixedHeight(708)
+        table_card.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         table_card.setStyleSheet("background-color: white; border-radius: 16px;")
         card_layout = QVBoxLayout(table_card)
         card_layout.setContentsMargins(10, 10, 10, 10)
@@ -183,20 +184,11 @@ class ImportPackagesListPage(QWidget):
         header.setStretchLastSection(False)
 
         # Column widths
-        header.setSectionResizeMode(0, QHeaderView.Fixed)
-        header.resizeSection(0, 200)
-
-        header.setSectionResizeMode(1, QHeaderView.Fixed)
-        header.resizeSection(1, 150)
-
-        header.setSectionResizeMode(2, QHeaderView.Fixed)
-        header.resizeSection(2, 150)
-
-        header.setSectionResizeMode(3, QHeaderView.Fixed)
-        header.resizeSection(3, 240)
-
+        header.setSectionResizeMode(0, QHeaderView.ResizeToContents)
+        header.setSectionResizeMode(1, QHeaderView.ResizeToContents)
+        header.setSectionResizeMode(2, QHeaderView.ResizeToContents)
+        header.setSectionResizeMode(3, QHeaderView.Stretch)
         header.setSectionResizeMode(4, QHeaderView.Stretch)
-
         header.setSectionResizeMode(5, QHeaderView.Fixed)
         header.resizeSection(5, 50)
 

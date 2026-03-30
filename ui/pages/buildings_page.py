@@ -12,7 +12,7 @@ from PyQt5.QtWidgets import (
     QFrame, QFileDialog, QAbstractItemView, QGraphicsDropShadowEffect,
     QDialog, QDoubleSpinBox, QSpinBox, QScrollArea,
     QMenu, QAction, QTabWidget, QStackedWidget, QStyleOptionHeader, QStyle,
-    QStylePainter, QStyleOptionComboBox
+    QStylePainter, QStyleOptionComboBox, QSizePolicy
     )
 from PyQt5.QtCore import Qt, pyqtSignal, QPoint, QRect, QSize, QLocale
 from PyQt5.QtGui import QColor, QCursor, QPainter, QFont, QIcon, QPixmap
@@ -139,9 +139,9 @@ class AddBuildingPage(QWidget):
         layout = QVBoxLayout(container)
         # Apply unified padding from PageDimensions
         layout.setContentsMargins(
-            PageDimensions.CONTENT_PADDING_H,        # Left: 131px
-            PageDimensions.CONTENT_PADDING_V_TOP,    # Top: 32px
-            PageDimensions.CONTENT_PADDING_H,        # Right: 131px
+            PageDimensions.content_padding_h(),        # Left: 131px
+            PageDimensions.content_padding_v_top(),    # Top: 32px
+            PageDimensions.content_padding_h(),        # Right: 131px
             PageDimensions.CONTENT_PADDING_V_BOTTOM  # Bottom: 0px
         )
         layout.setSpacing(12)
@@ -2455,9 +2455,9 @@ class BuildingsListPage(QWidget):
         # Apply unified padding from PageDimensions
         # Same as completed_claims_page.py and draft_claims_page.py
         layout.setContentsMargins(
-            PageDimensions.CONTENT_PADDING_H,        # Left: 131px
-            PageDimensions.CONTENT_PADDING_V_TOP,    # Top: 32px
-            PageDimensions.CONTENT_PADDING_H,        # Right: 131px
+            PageDimensions.content_padding_h(),        # Left: 131px
+            PageDimensions.content_padding_v_top(),    # Top: 32px
+            PageDimensions.content_padding_h(),        # Right: 131px
             PageDimensions.CONTENT_PADDING_V_BOTTOM  # Bottom: 0px
         )
         layout.setSpacing(15)  # 15px gap between header and table card
@@ -2498,7 +2498,7 @@ class BuildingsListPage(QWidget):
 
         # البطاقة البيضاء للجدول
         table_card = QFrame()
-        table_card.setFixedHeight(708)
+        table_card.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         table_card.setStyleSheet("background-color: white; border-radius: 16px;")
         card_layout = QVBoxLayout(table_card)
         card_layout.setContentsMargins(10, 10, 10, 10)
@@ -2587,25 +2587,14 @@ class BuildingsListPage(QWidget):
         header.sectionEntered.connect(self._on_header_hover)
 
         # تحديد عرض الأعمدة
-        header.setSectionResizeMode(0, QHeaderView.Fixed)  # رمز البناء
-        header.resizeSection(0, 298)
-
-        header.setSectionResizeMode(1, QHeaderView.Fixed)  # تاريخ الإدخال
-        header.resizeSection(1, 180)
-
-        header.setSectionResizeMode(2, QHeaderView.Fixed)  # المنطقة (district)
-        header.resizeSection(2, 160)
-
-        header.setSectionResizeMode(3, QHeaderView.Fixed)  # الحي (neighborhood)
-        header.resizeSection(3, 160)
-
-        header.setSectionResizeMode(4, QHeaderView.Fixed)  # نوع البناء
-        header.resizeSection(4, 165)
-
-        header.setSectionResizeMode(5, QHeaderView.Fixed)  # حالة البناء
-        header.resizeSection(5, 165)
-
-        header.setSectionResizeMode(6, QHeaderView.Stretch)  # أيقونة الثلاث نقاط (الباقي)
+        header.setSectionResizeMode(0, QHeaderView.Stretch)           # رمز البناء
+        header.setSectionResizeMode(1, QHeaderView.ResizeToContents)  # تاريخ الإدخال
+        header.setSectionResizeMode(2, QHeaderView.ResizeToContents)  # المنطقة (district)
+        header.setSectionResizeMode(3, QHeaderView.ResizeToContents)  # الحي (neighborhood)
+        header.setSectionResizeMode(4, QHeaderView.ResizeToContents)  # نوع البناء
+        header.setSectionResizeMode(5, QHeaderView.ResizeToContents)  # حالة البناء
+        header.setSectionResizeMode(6, QHeaderView.Fixed)             # أيقونة الثلاث نقاط
+        header.resizeSection(6, 80)
 
         # ضبط ارتفاع الصفوف بالتساوي
         # الارتفاع المتاح: 708 (card) - 10 (top) - 10 (bottom) - 56 (header) - 58 (footer) = 574px

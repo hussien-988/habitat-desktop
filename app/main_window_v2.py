@@ -71,15 +71,21 @@ class MainWindow(QMainWindow):
         self._show_login()
 
     def _setup_window(self):
-        """Configure window properties."""
+        """Configure window properties — adapts to screen size."""
         self.setWindowTitle("UN-HABITAT")
 
-        window_width = 1512
-        window_height = 982
-        self.setMinimumSize(window_width, window_height)
+        screen = self.screen().availableGeometry()
+
+        # Initialize screen scaling for all UI components
+        from ui.design_system import ScreenScale
+        ScreenScale.initialize(screen)
+
+        # Window = 95% of available screen, capped at reference size
+        window_width = min(1512, int(screen.width() * 0.95))
+        window_height = min(982, int(screen.height() * 0.95))
+        self.setMinimumSize(1024, 680)
 
         # Center on screen
-        screen = self.screen().geometry()
         x = (screen.width() - window_width) // 2
         y = (screen.height() - window_height) // 2
         self.setGeometry(x, y, window_width, window_height)

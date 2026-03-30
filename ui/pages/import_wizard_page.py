@@ -126,9 +126,9 @@ class ImportWizardPage(QWidget):
         content_layout = QVBoxLayout(content_container)
         from ui.design_system import PageDimensions
         content_layout.setContentsMargins(
-            PageDimensions.CONTENT_PADDING_H,
-            PageDimensions.CONTENT_PADDING_V_TOP,
-            PageDimensions.CONTENT_PADDING_H,
+            PageDimensions.content_padding_h(),
+            PageDimensions.content_padding_v_top(),
+            PageDimensions.content_padding_h(),
             0
         )
         content_layout.setSpacing(0)

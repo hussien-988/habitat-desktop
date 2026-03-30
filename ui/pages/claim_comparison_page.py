@@ -95,9 +95,9 @@ class ClaimComparisonPage(QWidget):
         content.setStyleSheet("background: transparent;")
         self._content_layout = QVBoxLayout(content)
         self._content_layout.setContentsMargins(
-            PageDimensions.CONTENT_PADDING_H,
-            PageDimensions.CONTENT_PADDING_V_TOP,
-            PageDimensions.CONTENT_PADDING_H,
+            PageDimensions.content_padding_h(),
+            PageDimensions.content_padding_v_top(),
+            PageDimensions.content_padding_h(),
             PageDimensions.CONTENT_PADDING_V_BOTTOM,
         )
         self._content_layout.setSpacing(20)

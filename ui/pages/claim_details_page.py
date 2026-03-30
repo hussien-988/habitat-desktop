@@ -74,9 +74,9 @@ class ClaimDetailsPage(QWidget):
 
         main_layout = QVBoxLayout(self)
         main_layout.setContentsMargins(
-            PageDimensions.CONTENT_PADDING_H,
-            PageDimensions.CONTENT_PADDING_V_TOP,
-            PageDimensions.CONTENT_PADDING_H,
+            PageDimensions.content_padding_h(),
+            PageDimensions.content_padding_v_top(),
+            PageDimensions.content_padding_h(),
             PageDimensions.CONTENT_PADDING_V_BOTTOM,
         )
         main_layout.setSpacing(16)

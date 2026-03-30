@@ -5,11 +5,13 @@ from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QLabel, QLineEdit,
     QPushButton, QFrame, QGraphicsDropShadowEffect, QHBoxLayout, QGraphicsOpacityEffect
 )
-from PyQt5.QtCore import Qt, pyqtSignal, QPoint, QSize
-from PyQt5.QtGui import QColor, QPainter, QPaintEvent, QFont, QFontDatabase, QPixmap
+from PyQt5.QtCore import Qt, pyqtSignal, QPoint, QSize, QPropertyAnimation, QEasingCurve, QTimer
+from PyQt5.QtGui import QColor, QPainter, QPaintEvent, QFont, QFontDatabase, QPixmap, QLinearGradient, QRadialGradient
 from PyQt5.QtGui import QCursor, QIcon
+import math
 import os
 import re
+import time
 from app.config import Config
 from services.api_auth_service import ApiAuthService
 from services.translation_manager import tr, get_layout_direction, set_language as tm_set_language, get_language as tm_get_language
@@ -46,6 +48,17 @@ class LoginPage(QWidget):
         self._position_login_watermark()
         self._setup_login_navbar()
 
+        # Shimmer animation timer (~12fps for performance)
+        self._shimmer_start = time.time()
+        self._shimmer_timer = QTimer(self)
+        self._shimmer_timer.timeout.connect(self._shimmer_tick)
+        self._shimmer_timer.start(80)
+
+    def _shimmer_tick(self):
+        """Repaint only the blue section for shimmer animation."""
+        h = self.height()
+        blue_height = int(h * 0.55)
+        self.update(0, 0, self.width(), 33 + blue_height)
 
     def _load_fonts(self):
         """Load Noto Kufi Arabic fonts"""
@@ -63,21 +76,35 @@ class LoginPage(QWidget):
                 QFontDatabase.addApplicationFont(font_path)
 
     def paintEvent(self, event: QPaintEvent):
-        """Paint background with blue section."""
+        """Paint background with gradient blue section and ambient glow."""
         painter = QPainter(self)
         painter.setRenderHint(QPainter.Antialiasing)
 
-        width = self.width()
-        height = self.height()
+        w = self.width()
+        h = self.height()
 
-        # Blue section height (~55% of window)
-        blue_height = int(height * 0.55)
+        blue_height = int(h * 0.55)
 
-        # Top section - Primary blue
-        painter.fillRect(0, 33, width, blue_height, QColor(Colors.PRIMARY_BLUE))
+        # Diagonal gradient across the blue section
+        gradient = QLinearGradient(0, 33, w, 33 + blue_height)
+        gradient.setColorAt(0.0, QColor("#2B6CB0"))
+        gradient.setColorAt(0.5, QColor(Colors.PRIMARY_BLUE))
+        gradient.setColorAt(1.0, QColor(Colors.PRIMARY_BLUE_LIGHT))
+        painter.fillRect(0, 33, w, blue_height, gradient)
 
-        # Bottom section - Background color #F0F7FF
-        painter.fillRect(0, 33 + blue_height, width, height - (33 + blue_height), QColor(Colors.BACKGROUND))
+        # Moving shimmer glows
+        t = time.time() - self._shimmer_start
+        glow_x = w * 0.5 + w * 0.35 * math.sin(t * 0.7)
+        glow_y = 33 + blue_height * (0.35 + 0.15 * math.cos(t * 1.1))
+        glow_alpha = 45 + int(25 * math.sin(t * 2.0))
+
+        glow = QRadialGradient(glow_x, glow_y, w * 0.4)
+        glow.setColorAt(0.0, QColor(255, 255, 255, glow_alpha))
+        glow.setColorAt(1.0, QColor(255, 255, 255, 0))
+        painter.fillRect(0, 33, w, blue_height, glow)
+
+        # Bottom section
+        painter.fillRect(0, 33 + blue_height, w, h - (33 + blue_height), QColor(Colors.BACKGROUND))
 
     def _setup_ui(self):
         """Setup the login UI."""
@@ -130,8 +157,17 @@ class LoginPage(QWidget):
 
         # شفافية خفيفة
         eff = QGraphicsOpacityEffect(self.bg_logo)
-        eff.setOpacity(0.8)
+        eff.setOpacity(0.25)
         self.bg_logo.setGraphicsEffect(eff)
+
+        self._pulse_anim = QPropertyAnimation(eff, b"opacity")
+        self._pulse_anim.setDuration(3000)
+        self._pulse_anim.setStartValue(0.25)
+        self._pulse_anim.setKeyValueAt(0.5, 0.7)
+        self._pulse_anim.setEndValue(0.25)
+        self._pulse_anim.setEasingCurve(QEasingCurve.InOutSine)
+        self._pulse_anim.setLoopCount(-1)
+        self._pulse_anim.start()
 
         # خليه ورا الكارد
         self.bg_logo.lower()
@@ -342,18 +378,26 @@ class LoginPage(QWidget):
         self.login_btn.setFont(button_font)
         self.login_btn.setStyleSheet("""
             QPushButton {
-                background-color: #3890DF;
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                    stop:0 #3890DF, stop:1 #00B2E3);
                 color: white;
                 border: none;
                 border-radius: 8px;
             }
             QPushButton:hover {
-                background-color: #2A7BC9;
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                    stop:0 #2A7BC9, stop:1 #009FCC);
             }
             QPushButton:pressed {
-                background-color: #1F68B3;
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                    stop:0 #1F68B3, stop:1 #008BB5);
             }
         """)
+        btn_shadow = QGraphicsDropShadowEffect()
+        btn_shadow.setBlurRadius(20)
+        btn_shadow.setColor(QColor(56, 144, 223, 100))
+        btn_shadow.setOffset(0, 4)
+        self.login_btn.setGraphicsEffect(btn_shadow)
         self.login_btn.clicked.connect(self._on_login)
         card_layout.addWidget(self.login_btn)
 
@@ -482,6 +526,18 @@ class LoginPage(QWidget):
         """Refresh the page"""
         self._clear_form()
         self.username_input.setFocus()
+        QTimer.singleShot(100, self._animate_card_entrance)
+
+    def _animate_card_entrance(self):
+        """Slide the login card up smoothly."""
+        start_pos = self.login_card.pos() + QPoint(0, 30)
+        end_pos = self.login_card.pos()
+        self._card_slide = QPropertyAnimation(self.login_card, b"pos")
+        self._card_slide.setDuration(600)
+        self._card_slide.setStartValue(start_pos)
+        self._card_slide.setEndValue(end_pos)
+        self._card_slide.setEasingCurve(QEasingCurve.OutCubic)
+        self._card_slide.start()
 
     def update_language(self, is_arabic: bool):
         """Update language."""
@@ -602,55 +658,68 @@ class LoginPage(QWidget):
         # Keep on top
         self.titlebar.raise_()
 
-        # Settings button — floating on the blue area (top-left)
+        # Settings button — frosted glass circle on the blue area
         self._btn_settings = QPushButton("\u2699", self)
-        self._btn_settings.setFixedSize(42, 42)
+        self._btn_settings.setFixedSize(38, 38)
         self._btn_settings.setCursor(QCursor(Qt.PointingHandCursor))
         self._btn_settings.setFocusPolicy(Qt.NoFocus)
         self._btn_settings.setToolTip(tr("page.login.settings_tooltip"))
         self._btn_settings.setStyleSheet("""
             QPushButton {
-                font-size: 24px;
-                color: rgba(255, 255, 255, 0.55);
-                background-color: transparent;
-                border: none;
-            }
-            QPushButton:hover {
+                background-color: rgba(255, 255, 255, 0.15);
+                border: 1px solid rgba(255, 255, 255, 0.25);
+                border-radius: 19px;
+                font-size: 18px;
                 color: rgba(255, 255, 255, 0.85);
             }
-            QPushButton:pressed {
+            QPushButton:hover {
+                background-color: rgba(255, 255, 255, 0.28);
                 color: white;
+            }
+            QPushButton:pressed {
+                background-color: rgba(255, 255, 255, 0.38);
             }
         """)
         self._btn_settings.clicked.connect(self._open_server_settings)
-        self._btn_settings.move(20, 45)
+        self._btn_settings.move(20, 50)
         self._btn_settings.raise_()
 
-        # Language toggle button — floating on the blue area
+        # Language toggle button — frosted glass pill with icon
         self._lang_btn = QPushButton(self)
-        self._lang_btn.setFixedSize(80, 32)
+        self._lang_btn.setFixedSize(110, 34)
         self._lang_btn.setCursor(QCursor(Qt.PointingHandCursor))
         self._lang_btn.setFocusPolicy(Qt.NoFocus)
+
+        try:
+            from ui.components.icon import Icon
+            lang_pixmap = Icon.load_pixmap("language", size=16)
+            if lang_pixmap and not lang_pixmap.isNull():
+                self._lang_btn.setIcon(QIcon(lang_pixmap))
+                self._lang_btn.setIconSize(QSize(16, 16))
+        except Exception:
+            pass
+
         self._lang_btn.setStyleSheet("""
             QPushButton {
                 color: white;
-                background-color: rgba(255, 255, 255, 0.15);
-                border: 1px solid rgba(255, 255, 255, 0.3);
-                border-radius: 16px;
-                font-size: 13px;
+                background-color: rgba(255, 255, 255, 0.12);
+                border: 1px solid rgba(255, 255, 255, 0.22);
+                border-radius: 17px;
+                font-size: 12px;
                 font-weight: 600;
-                padding: 0 12px;
+                padding: 0 14px;
             }
             QPushButton:hover {
-                background-color: rgba(255, 255, 255, 0.25);
+                background-color: rgba(255, 255, 255, 0.22);
+                border-color: rgba(255, 255, 255, 0.35);
             }
             QPushButton:pressed {
-                background-color: rgba(255, 255, 255, 0.35);
+                background-color: rgba(255, 255, 255, 0.32);
             }
         """)
         self._lang_btn.clicked.connect(self._toggle_language)
         self._update_lang_button()
-        self._lang_btn.move(70, 50)
+        self._lang_btn.move(66, 52)
         self._lang_btn.raise_()
 
 

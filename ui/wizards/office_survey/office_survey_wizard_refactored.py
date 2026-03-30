@@ -32,6 +32,7 @@ from ui.design_system import PageDimensions, Colors, ButtonDimensions
 from ui.style_manager import StyleManager
 from ui.font_utils import create_font, FontManager
 from ui.components.success_popup import SuccessPopup
+from ui.components.curved_tab import CurvedTab
 from utils.logger import get_logger
 from services.translation_manager import tr
 from ui.wizards.office_survey.steps.occupancy_claims_step import _is_owner_relation
@@ -512,7 +513,7 @@ class OfficeSurveyWizard(BaseWizard):
         step_names = self.get_step_names()
         for i, (num, name) in enumerate(step_names):
             if i < len(self.step_labels):
-                self.step_labels[i].setText(name)
+                self.step_labels[i].set_text(name)
 
         # Footer buttons
         self.btn_previous.setText(f"<   {tr('wizard.button.previous')}")
@@ -562,9 +563,9 @@ class OfficeSurveyWizard(BaseWizard):
         content_layout = QVBoxLayout(content_widget)
         # Apply padding (EXACTLY like completed_claims_page.py)
         content_layout.setContentsMargins(
-            PageDimensions.CONTENT_PADDING_H,        # Left: 131px
-            PageDimensions.CONTENT_PADDING_V_TOP,    # Top: 32px
-            PageDimensions.CONTENT_PADDING_H,        # Right: 131px
+            PageDimensions.content_padding_h(),        # Left: 131px
+            PageDimensions.content_padding_v_top(),    # Top: 32px
+            PageDimensions.content_padding_h(),        # Right: 131px
             PageDimensions.CONTENT_PADDING_V_BOTTOM  # Bottom: 0px
         )
         content_layout.setSpacing(PageDimensions.HEADER_GAP)  # 30px gap after header
@@ -715,47 +716,19 @@ class OfficeSurveyWizard(BaseWizard):
         # ButtonDimensions.STEP_TAB_GAP (20px)
         steps_layout.setSpacing(ButtonDimensions.STEP_TAB_GAP)  # 20px gap between tabs
 
-        # Create step indicator tabs
-        # No numbers shown, only step names with proper padding
+        # Create curved step indicator tabs
         self.step_labels = []
-        # Steps 3,4 (index 2,3) have longer names - use smaller font
         self._step_font_sizes = []
         for num, name in self.get_step_names():
-            # Display only the step name (no number)
-            step_widget = QLabel(name)
-            step_widget.setAlignment(Qt.AlignCenter)
+            step_tab = CurvedTab(name, theme="light")
+            step_tab.setFixedSize(ButtonDimensions.STEP_TAB_WIDTH, ButtonDimensions.STEP_TAB_HEIGHT)
 
-            # Fixed dimensions
-            step_widget.setFixedSize(ButtonDimensions.STEP_TAB_WIDTH, ButtonDimensions.STEP_TAB_HEIGHT)
-
-            # Smaller font for long step names (تفاصيل الإشغال، ادعاءات الإشغال)
             tab_font_size = 7 if num in ("3", "4") else ButtonDimensions.STEP_TAB_FONT_SIZE
             self._step_font_sizes.append(tab_font_size)
+            step_tab.set_font(create_font(size=tab_font_size, weight=FontManager.WEIGHT_REGULAR, letter_spacing=0))
 
-            # Default state: White background, gray text, no border
-            # Default state styling
-            step_widget.setStyleSheet(f"""
-                background-color: {Colors.SURFACE};
-                color: {Colors.TEXT_SECONDARY};
-                border: none;
-                border-radius: {ButtonDimensions.STEP_TAB_BORDER_RADIUS}px;
-                padding: {ButtonDimensions.STEP_TAB_PADDING_V}px {ButtonDimensions.STEP_TAB_PADDING_H}px;
-                font-size: {tab_font_size}pt;
-            """)
-
-            # Apply subtle shadow effect for visual depth
-            # Consistent shadow across step tabs
-            from PyQt5.QtWidgets import QGraphicsDropShadowEffect
-            from PyQt5.QtGui import QColor
-            tab_shadow = QGraphicsDropShadowEffect()
-            tab_shadow.setBlurRadius(6)  # Softer blur for tabs
-            tab_shadow.setXOffset(0)
-            tab_shadow.setYOffset(1)  # Very slight offset
-            tab_shadow.setColor(QColor(0, 0, 0, 40))  # More subtle alpha
-            step_widget.setGraphicsEffect(tab_shadow)
-
-            self.step_labels.append(step_widget)
-            steps_layout.addWidget(step_widget)
+            self.step_labels.append(step_tab)
+            steps_layout.addWidget(step_tab)
 
         steps_layout.addStretch()
         layout.addWidget(steps_frame)
@@ -866,12 +839,9 @@ class OfficeSurveyWizard(BaseWizard):
 
         layout.addWidget(self.btn_previous)
 
-        # Spacer between buttons (748px gap - calculated)
-        # Formula: 1512 - (130*2 padding) - (252*2 buttons) = 748px
         spacer = QSpacerItem(
-            ButtonDimensions.NAV_BUTTON_GAP,  # 748px
-            ButtonDimensions.NAV_BUTTON_HEIGHT,  # 50px
-            QSizePolicy.Fixed,
+            0, ButtonDimensions.NAV_BUTTON_HEIGHT,
+            QSizePolicy.Expanding,
             QSizePolicy.Fixed
         )
         layout.addItem(spacer)
@@ -1052,31 +1022,8 @@ class OfficeSurveyWizard(BaseWizard):
     def _update_step_display(self):
         """Update step indicators with proper state styling."""
         current_step = self.navigator.current_index
-
-        for i, label in enumerate(self.step_labels):
-            tab_font = self._step_font_sizes[i] if i < len(self._step_font_sizes) else ButtonDimensions.STEP_TAB_FONT_SIZE
-            if i == current_step:
-                # Active tab
-                label.setStyleSheet(f"""
-                    background-color: {Colors.SURFACE};
-                    color: {Colors.PRIMARY_BLUE};
-                    border: 1px solid {Colors.PRIMARY_BLUE};
-                    border-radius: {ButtonDimensions.STEP_TAB_BORDER_RADIUS}px;
-                    padding: {ButtonDimensions.STEP_TAB_PADDING_V}px {ButtonDimensions.STEP_TAB_PADDING_H}px;
-                    font-size: {tab_font}pt;
-                    font-weight: 600;
-                """)
-            else:
-                # Inactive tabs (Same color as title: WIZARD_TITLE)
-                # Completed and Pending use same style
-                label.setStyleSheet(f"""
-                    background-color: {Colors.SURFACE};
-                    color: {Colors.WIZARD_TITLE};
-                    border: none;
-                    border-radius: {ButtonDimensions.STEP_TAB_BORDER_RADIUS}px;
-                    padding: {ButtonDimensions.STEP_TAB_PADDING_V}px {ButtonDimensions.STEP_TAB_PADDING_H}px;
-                    font-size: {tab_font}pt;
-                """)
+        for i, tab in enumerate(self.step_labels):
+            tab.set_active(i == current_step)
 
         self.step_container.setCurrentIndex(current_step)
         self.btn_previous.setEnabled(current_step > 0)

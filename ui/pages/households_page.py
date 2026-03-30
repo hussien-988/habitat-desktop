@@ -738,6 +738,8 @@ class HouseholdsPage(QWidget):
 
     def _load_households(self):
         """Load households with filters."""
+        if not self.db:
+            return
         unit_id = self.unit_filter.currentData()
         occupancy_type = self.type_filter.currentData()
         occupancy_nature = self.nature_filter.currentData()

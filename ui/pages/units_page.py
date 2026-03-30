@@ -4,7 +4,7 @@
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel,
     QPushButton, QComboBox, QTableWidget, QTableWidgetItem, QHeaderView,
-    QFrame, QDialog, QAbstractItemView
+    QFrame, QDialog, QAbstractItemView, QSizePolicy
 )
 from PyQt5.QtCore import Qt, pyqtSignal, QPoint, QTimer
 from PyQt5.QtGui import QColor, QIcon, QCursor, QFont
@@ -81,9 +81,9 @@ class UnitsPage(QWidget):
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(
-            PageDimensions.CONTENT_PADDING_H,
-            PageDimensions.CONTENT_PADDING_V_TOP,
-            PageDimensions.CONTENT_PADDING_H,
+            PageDimensions.content_padding_h(),
+            PageDimensions.content_padding_v_top(),
+            PageDimensions.content_padding_h(),
             PageDimensions.CONTENT_PADDING_V_BOTTOM,
         )
         layout.setSpacing(15)
@@ -107,7 +107,7 @@ class UnitsPage(QWidget):
 
         # Table card
         table_card = QFrame()
-        table_card.setFixedHeight(708)
+        table_card.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         table_card.setStyleSheet("background-color: white; border-radius: 16px;")
         card_layout = QVBoxLayout(table_card)
         card_layout.setContentsMargins(10, 10, 10, 10)
@@ -183,16 +183,12 @@ class UnitsPage(QWidget):
         header.sectionEntered.connect(self._on_header_hover)
         header.sectionClicked.connect(self._on_header_clicked)
 
-        header.setSectionResizeMode(0, QHeaderView.Fixed)
-        header.resizeSection(0, 130)
-        header.setSectionResizeMode(1, QHeaderView.Fixed)
-        header.resizeSection(1, 240)
-        header.setSectionResizeMode(2, QHeaderView.Fixed)
-        header.resizeSection(2, 140)
-        header.setSectionResizeMode(3, QHeaderView.Fixed)
-        header.resizeSection(3, 140)
-        header.setSectionResizeMode(4, QHeaderView.Stretch)
-        header.setSectionResizeMode(5, QHeaderView.Fixed)
+        header.setSectionResizeMode(0, QHeaderView.ResizeToContents)  # Unit number
+        header.setSectionResizeMode(1, QHeaderView.ResizeToContents)  # Building code
+        header.setSectionResizeMode(2, QHeaderView.ResizeToContents)  # Unit type
+        header.setSectionResizeMode(3, QHeaderView.ResizeToContents)  # Unit status
+        header.setSectionResizeMode(4, QHeaderView.Stretch)           # Description
+        header.setSectionResizeMode(5, QHeaderView.Fixed)             # Actions
         header.resizeSection(5, 44)
 
         v_header = self.table.verticalHeader()

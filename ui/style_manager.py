@@ -1151,6 +1151,26 @@ class StyleManager:
         """
 
     @staticmethod
+    def stats_card(accent_color: str) -> str:
+        """
+        Get stats card stylesheet with colored left accent border.
+
+        Args:
+            accent_color: Left border accent color hex string
+
+        Returns:
+            Complete QSS stylesheet string
+        """
+        return f"""
+            QFrame#StatsCard {{
+                background-color: {Colors.SURFACE};
+                border: 1px solid {Colors.BORDER_DEFAULT};
+                border-left: 4px solid {accent_color};
+                border-radius: 8px;
+            }}
+        """
+
+    @staticmethod
     def dialog_button_secondary() -> str:
         """
         Get secondary button stylesheet for dialogs.

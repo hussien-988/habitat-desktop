@@ -17,6 +17,7 @@ from ..font_utils import create_font, FontManager
 from ..style_manager import StyleManager
 from .logo import LogoWidget
 from .id_badge import IDBadgeWidget
+from .curved_tab import CurvedTab
 from services.translation_manager import tr, get_language
 
 
@@ -227,7 +228,8 @@ class Navbar(QFrame):
     def _create_search_bar(self):
         """Create search bar with menu and icon."""
         search_container = QWidget()
-        search_container.setFixedWidth(NavbarDimensions.SEARCH_BAR_WIDTH)
+        search_container.setMinimumWidth(200)
+        search_container.setMaximumWidth(NavbarDimensions.SEARCH_BAR_WIDTH)
         search_container.setFixedHeight(NavbarDimensions.SEARCH_BAR_HEIGHT)
         search_container.setStyleSheet(f"""
             QWidget {{
@@ -392,65 +394,25 @@ class Navbar(QFrame):
 
         return tabs_container
 
-    def _create_tab_button(self, title: str, index: int) -> QPushButton:
-        """Create a single tab button."""
-        tab_btn = QPushButton(title)
-        tab_btn.setFixedHeight(NavbarDimensions.TAB_HEIGHT)  # 32px
-        tab_btn.setCursor(QCursor(Qt.PointingHandCursor))
-
-        tab_font = create_font(
-            size=NavbarDimensions.TAB_FONT_SIZE,  # 11pt (14px × 0.75)
-            weight=NavbarDimensions.TAB_FONT_WEIGHT,  # SemiBold (600)
+    def _create_tab_button(self, title: str, index: int) -> CurvedTab:
+        """Create a single curved tab button."""
+        tab = CurvedTab(title, theme="dark")
+        tab.setFixedHeight(NavbarDimensions.TAB_HEIGHT)
+        tab.setMinimumWidth(80)
+        tab.setCursor(QCursor(Qt.PointingHandCursor))
+        tab.set_font(create_font(
+            size=NavbarDimensions.TAB_FONT_SIZE,
+            weight=NavbarDimensions.TAB_FONT_WEIGHT,
             letter_spacing=0
-        )
-        tab_btn.setFont(tab_font)
-
-        tab_btn.setProperty("tab_index", index)
-        tab_btn.setProperty("active", False)
-        tab_btn.clicked.connect(lambda: self._on_tab_clicked(index))
-
-        return tab_btn
+        ))
+        tab.clicked.connect(lambda: self._on_tab_clicked(index))
+        return tab
 
     def _set_active_tab(self, index: int):
         """Set active tab styling."""
         self.current_tab_index = index
-
-        for i, btn in enumerate(self.tab_buttons):
-            if i == index:
-                # Active tab - #DEEBFF background, #3B86FF text
-                btn.setProperty("active", True)
-                btn.setStyleSheet(f"""
-                    QPushButton {{
-                        background-color: #DEEBFF;
-                        color: #3B86FF;
-                        border: none;
-                        border-radius: {NavbarDimensions.TAB_BORDER_RADIUS}px;
-                        padding: {NavbarDimensions.TAB_PADDING_V}px {NavbarDimensions.TAB_PADDING_H}px;
-                        text-align: center;
-                        line-height: {NavbarDimensions.TAB_LINE_HEIGHT}px;
-                    }}
-                    QPushButton:hover {{
-                        background-color: #CDE0FF;
-                    }}
-                """)
-            else:
-                # Inactive tab - Transparent background, white text with opacity
-                btn.setProperty("active", False)
-                btn.setStyleSheet(f"""
-                    QPushButton {{
-                        background: transparent;
-                        color: rgba(255, 255, 255, 0.7);
-                        border: none;
-                        padding: {NavbarDimensions.TAB_PADDING_V}px {NavbarDimensions.TAB_PADDING_H}px;
-                        text-align: center;
-                        line-height: {NavbarDimensions.TAB_LINE_HEIGHT}px;
-                    }}
-                    QPushButton:hover {{
-                        color: rgba(255, 255, 255, 0.9);
-                        background: rgba(255, 255, 255, 0.05);
-                        border-radius: {NavbarDimensions.TAB_BORDER_RADIUS}px;
-                    }}
-                """)
+        for i, tab in enumerate(self.tab_buttons):
+            tab.set_active(i == index)
 
     def _on_tab_clicked(self, index: int):
         """Handle tab click event"""
@@ -585,7 +547,7 @@ class Navbar(QFrame):
         # Update tab titles
         for i, key in enumerate(self._tab_keys):
             if i < len(self.tab_buttons):
-                self.tab_buttons[i].setText(tr(key))
+                self.tab_buttons[i].set_text(tr(key))
 
         # Update search placeholder if search bar exists
         if hasattr(self, 'search_input'):
@@ -693,7 +655,8 @@ class SimpleNavbar(QFrame):
         # Search bar
         if self.show_search:
             search_widget = QWidget()
-            search_widget.setFixedWidth(320)
+            search_widget.setMinimumWidth(200)
+            search_widget.setMaximumWidth(320)
             search_layout = QHBoxLayout(search_widget)
             search_layout.setContentsMargins(0, 0, 0, 0)
 

@@ -191,7 +191,10 @@ class BuildingMapWidget(QObject):
         dialog.setWindowFlags(Qt.Dialog | Qt.FramelessWindowHint)
 
         # Enhanced size: 1100×700px (much larger for better map interaction)
-        dialog.setFixedSize(1100, 700)
+        screen = dialog.screen().availableGeometry()
+        dlg_w = min(1100, int(screen.width() * 0.85))
+        dlg_h = min(700, int(screen.height() * 0.85))
+        dialog.setFixedSize(dlg_w, dlg_h)
 
         # Enable transparency for rounded corners
         dialog.setAttribute(Qt.WA_TranslucentBackground, True)
@@ -224,9 +227,11 @@ class BuildingMapWidget(QObject):
         # 652 - title_bar (60) - 12 (gap) - search_bar (42) - 12 (gap) = space for map
         # Approximately: 652 - 60 - 12 - 42 - 12 = 526px height
         # Width: 1100 - 48 (padding) = 1052px
+        map_w = dlg_w - 48
+        map_h = dlg_h - 174
         if HAS_WEBENGINE:
             self._map_view = QWebEngineView(dialog)
-            self._map_view.setFixedSize(1052, 526)
+            self._map_view.setFixedSize(map_w, map_h)
 
             # Enable settings
             settings = self._map_view.settings()
@@ -242,7 +247,7 @@ class BuildingMapWidget(QObject):
 
             # Loading indicator
             self._loading_label = QLabel(tr("component.building_map.loading"))
-            self._loading_label.setFixedSize(1052, 526)
+            self._loading_label.setFixedSize(map_w, map_h)
             self._loading_label.setAlignment(Qt.AlignCenter)
             self._loading_label.setFont(create_font(size=10, weight=FontManager.WEIGHT_REGULAR))
             self._loading_label.setStyleSheet(f"""
@@ -266,7 +271,7 @@ class BuildingMapWidget(QObject):
             content_layout.addWidget(map_container)
         else:
             placeholder = QLabel("🗺️ الخريطة غير متاحة (QtWebEngine غير مثبت)")
-            placeholder.setFixedSize(1052, 526)
+            placeholder.setFixedSize(map_w, map_h)
             placeholder.setAlignment(Qt.AlignCenter)
             placeholder.setFont(create_font(size=10, weight=FontManager.WEIGHT_REGULAR))
             placeholder.setStyleSheet(f"""
