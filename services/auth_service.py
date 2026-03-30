@@ -87,8 +87,11 @@ class AuthService:
         if not user.check_password(old_password):
             return False, "Current password is incorrect"
 
-        if len(new_password) < 6:
-            return False, "Password must be at least 6 characters"
+        from services.security_service import SecurityService
+        sec_svc = SecurityService(self.db)
+        is_valid, errors = sec_svc.validate_password(new_password)
+        if not is_valid:
+            return False, "; ".join(errors)
 
         password_hash = User.hash_password(new_password)
         self.user_repo.update_password(user_id, password_hash)

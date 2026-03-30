@@ -61,7 +61,7 @@ class SecurityService:
     """
 
     # Validation constraints
-    MIN_PASSWORD_LENGTH = 6
+    MIN_PASSWORD_LENGTH = 8
     MAX_PASSWORD_LENGTH = 128
     MIN_SESSION_TIMEOUT = 5
     MAX_SESSION_TIMEOUT = 480  # 8 hours
