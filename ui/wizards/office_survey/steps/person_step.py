@@ -31,7 +31,7 @@ from ui.error_handler import ErrorHandler
 from ui.style_manager import StyleManager
 from ui.font_utils import FontManager, create_font
 from ui.design_system import Colors
-from services.translation_manager import tr
+from services.translation_manager import tr, get_layout_direction
 from services.display_mappings import get_relation_type_display
 from services.error_mapper import map_exception
 from ui.components.loading_spinner import LoadingSpinnerOverlay
@@ -60,7 +60,7 @@ class PersonStep(BaseStep):
     def setup_ui(self):
         """Setup the step's UI - matching Step 1 styling."""
         widget = self
-        widget.setLayoutDirection(Qt.RightToLeft)
+        widget.setLayoutDirection(get_layout_direction())
         # Set main window background color
         widget.setStyleSheet(f"background-color: {Colors.BACKGROUND};")
 
@@ -73,7 +73,7 @@ class PersonStep(BaseStep):
         # Main Card Container - matching Step 1 card styling
         table_frame = QFrame()
         table_frame.setObjectName("personsCard")
-        table_frame.setLayoutDirection(Qt.RightToLeft)
+        table_frame.setLayoutDirection(get_layout_direction())
         table_frame.setStyleSheet(f"""
             QFrame#personsCard {{
                 background-color: {Colors.SURFACE};
@@ -132,7 +132,7 @@ class PersonStep(BaseStep):
 
         # Add button on the left (appears last in RTL) - matching Step 1 styling
         self._add_person_btn = QPushButton(tr("wizard.person.add_button"))
-        self._add_person_btn.setLayoutDirection(Qt.RightToLeft)
+        self._add_person_btn.setLayoutDirection(get_layout_direction())
         self._add_person_btn.setFont(create_font(size=FontManager.SIZE_BODY, weight=FontManager.WEIGHT_SEMIBOLD))
         self._add_person_btn.setStyleSheet(f"""
             QPushButton {{
@@ -158,7 +158,7 @@ class PersonStep(BaseStep):
 
         # Scroll area for person cards
         scroll_area = QScrollArea()
-        scroll_area.setLayoutDirection(Qt.RightToLeft)
+        scroll_area.setLayoutDirection(get_layout_direction())
         scroll_area.setWidgetResizable(True)
         scroll_area.setStyleSheet(
             "QScrollArea { border: none; background-color: transparent; }"
@@ -166,7 +166,7 @@ class PersonStep(BaseStep):
         )
 
         scroll_widget = QWidget()
-        scroll_widget.setLayoutDirection(Qt.RightToLeft)
+        scroll_widget.setLayoutDirection(get_layout_direction())
         scroll_widget.setStyleSheet("background-color: transparent;")
         self.persons_table_layout = QVBoxLayout(scroll_widget)
         self.persons_table_layout.setSpacing(10)
@@ -220,7 +220,7 @@ class PersonStep(BaseStep):
     def _create_person_row_card(self, person: dict, index: int = 0) -> QFrame:
         """Create a person row card matching the photo design."""
         card = QFrame()
-        card.setLayoutDirection(Qt.RightToLeft)
+        card.setLayoutDirection(get_layout_direction())
         card.setFixedHeight(60)
         # Use main window background color - same for all rows
         card.setStyleSheet(f"""
@@ -314,7 +314,7 @@ class PersonStep(BaseStep):
 
         # Create context menu
         menu = QMenu(menu_btn)
-        menu.setLayoutDirection(Qt.RightToLeft)
+        menu.setLayoutDirection(get_layout_direction())
         menu.setStyleSheet("""
             QMenu {
                 background-color: white;
@@ -429,6 +429,7 @@ class PersonStep(BaseStep):
 
     def update_language(self, is_arabic: bool):
         """Update all translatable texts when language changes."""
+        self.setLayoutDirection(get_layout_direction())
         self._title_label.setText(tr("wizard.person.card_title"))
         self._subtitle_label.setText(tr("wizard.person.subtitle"))
         self._add_person_btn.setText(tr("wizard.person.add_button"))

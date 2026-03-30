@@ -34,7 +34,7 @@ from utils.logger import get_logger
 from utils.helpers import build_hierarchical_address
 from ui.font_utils import FontManager, create_font
 from ui.design_system import Colors
-from services.translation_manager import tr
+from services.translation_manager import tr, get_layout_direction
 from ui.components.loading_spinner import LoadingSpinnerOverlay
 
 logger = get_logger(__name__)
@@ -77,7 +77,7 @@ class BuildingSelectionStep(BaseStep):
         Only vertical spacing for step content.
         """
         widget = self  # Use self as the widget since BaseStep already has main_layout
-        widget.setLayoutDirection(Qt.RightToLeft)
+        widget.setLayoutDirection(get_layout_direction())
 
         layout = self.main_layout
         # No horizontal padding - wizard applies 131px
@@ -207,7 +207,7 @@ class BuildingSelectionStep(BaseStep):
         # Input
         self.building_search = QLineEdit()
         self.building_search.setPlaceholderText(tr("wizard.building.search_placeholder"))
-        self.building_search.setLayoutDirection(Qt.RightToLeft)
+        self.building_search.setLayoutDirection(get_layout_direction())
 
         self.building_search.setStyleSheet("""
             QLineEdit {
@@ -974,7 +974,7 @@ class BuildingSelectionStep(BaseStep):
         dialog = QDialog(self)
         dialog.setWindowTitle(tr("wizard.building.select_dialog_title", count=len(buildings)))
         dialog.setMinimumWidth(500)
-        dialog.setLayoutDirection(Qt.RightToLeft)
+        dialog.setLayoutDirection(get_layout_direction())
 
         layout = QVBoxLayout(dialog)
         layout.setSpacing(12)
@@ -1118,6 +1118,7 @@ class BuildingSelectionStep(BaseStep):
 
     def update_language(self, is_arabic: bool):
         """Update all translatable texts when language changes."""
+        self.setLayoutDirection(get_layout_direction())
         self._title_label.setText(tr("wizard.building.card_title"))
         self._subtitle_label.setText(tr("wizard.building.card_subtitle"))
         self._code_label.setText(tr("wizard.building.code_label"))

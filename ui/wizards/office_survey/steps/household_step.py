@@ -31,7 +31,7 @@ from ui.components.toast import Toast
 from ui.design_system import Colors
 from ui.components.icon import Icon
 from ui.font_utils import create_font, FontManager
-from services.translation_manager import tr
+from services.translation_manager import tr, get_layout_direction
 from services.display_mappings import get_unit_type_display, get_unit_status_display, get_occupancy_type_options, get_occupancy_nature_options
 from services.error_mapper import map_exception
 from ui.components.loading_spinner import LoadingSpinnerOverlay
@@ -188,7 +188,7 @@ class HouseholdStep(BaseStep):
 
         # Create scroll area for ALL cards (modern thin scrollbar)
         scroll_area = QScrollArea()
-        scroll_area.setLayoutDirection(Qt.RightToLeft)
+        scroll_area.setLayoutDirection(get_layout_direction())
         scroll_area.setWidgetResizable(True)
         scroll_area.setFrameShape(QFrame.NoFrame)
         scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
@@ -425,7 +425,7 @@ class HouseholdStep(BaseStep):
             "color: #9CA3AF; background: transparent; font-size: 16px; font-weight: 400;"
         )
         self.hh_notes.setMaximumHeight(80)
-        self.hh_notes.setLayoutDirection(Qt.RightToLeft)
+        self.hh_notes.setLayoutDirection(get_layout_direction())
         self.hh_notes.setStyleSheet("""
             QTextEdit {
                 padding: 8px 12px;
@@ -716,6 +716,7 @@ class HouseholdStep(BaseStep):
 
     def update_language(self, is_arabic: bool):
         """Update all translatable texts when language changes."""
+        self.setLayoutDirection(get_layout_direction())
         self._title_label.setText(tr("wizard.household.occupants_title"))
         self._subtitle_label.setText(tr("wizard.household.subtitle"))
         self._occupancy_type_label.setText(tr("wizard.household.occupancy_type"))

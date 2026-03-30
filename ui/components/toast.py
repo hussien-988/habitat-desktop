@@ -10,6 +10,7 @@ from PyQt5.QtGui import QColor
 
 from ui.design_system import Colors, DialogColors, BorderRadius
 from ui.font_utils import create_font, FontManager
+from services.translation_manager import get_layout_direction
 
 
 class Toast(QFrame):
@@ -56,7 +57,7 @@ class Toast(QFrame):
         self._setup_ui()
 
     def _setup_ui(self):
-        self.setLayoutDirection(Qt.RightToLeft)
+        self.setLayoutDirection(get_layout_direction())
         self.setMinimumWidth(360)
         self.setMaximumWidth(520)
 
@@ -74,7 +75,7 @@ class Toast(QFrame):
 
         self._msg_lbl = QLabel()
         self._msg_lbl.setWordWrap(True)
-        self._msg_lbl.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        self._msg_lbl.setAlignment(Qt.AlignVCenter)
         self._msg_lbl.setFont(
             create_font(size=FontManager.SIZE_BODY, weight=FontManager.WEIGHT_MEDIUM)
         )
@@ -101,14 +102,18 @@ class Toast(QFrame):
             from services.error_mapper import sanitize_user_message
             message = sanitize_user_message(message)
 
+        direction = get_layout_direction()
+        self.setLayoutDirection(direction)
+
         self.setProperty("type", toast_type)
         config = self._TYPE_CONFIG.get(toast_type, self._TYPE_CONFIG[self.INFO])
         accent = config["accent"]
 
+        border_side = "right" if direction == Qt.RightToLeft else "left"
         self.setStyleSheet(f"""
             background-color: #FFFFFF;
             border: 1px solid {Colors.BORDER_DEFAULT};
-            border-right: 4px solid {accent};
+            border-{border_side}: 4px solid {accent};
             border-radius: {BorderRadius.LG}px;
         """)
 

@@ -27,7 +27,7 @@ from ui.components.toast import Toast
 from utils.logger import get_logger
 from services.api_client import get_api_client
 from services.api_worker import ApiWorker
-from services.translation_manager import tr
+from services.translation_manager import tr, get_layout_direction
 from services.error_mapper import map_exception
 from ui.wizards.office_survey.steps.occupancy_claims_step import _is_owner_relation
 from services.display_mappings import (
@@ -58,7 +58,7 @@ class ReviewStep(BaseStep):
     def setup_ui(self):
         """Setup the step's UI with scrollable summary cards."""
         widget = self
-        widget.setLayoutDirection(Qt.RightToLeft)
+        widget.setLayoutDirection(get_layout_direction())
         widget.setStyleSheet(f"""
             QWidget {{
                 background-color: {Colors.BACKGROUND};
@@ -71,7 +71,7 @@ class ReviewStep(BaseStep):
 
         # --- Main Scroll Area ---
         scroll = QScrollArea()
-        scroll.setLayoutDirection(Qt.RightToLeft)
+        scroll.setLayoutDirection(get_layout_direction())
         scroll.setWidgetResizable(True)
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         scroll.setStyleSheet(
@@ -81,7 +81,7 @@ class ReviewStep(BaseStep):
 
         # Scroll content container
         scroll_content = QWidget()
-        scroll_content.setLayoutDirection(Qt.RightToLeft)
+        scroll_content.setLayoutDirection(get_layout_direction())
         scroll_layout = QVBoxLayout(scroll_content)
         scroll_layout.setContentsMargins(0, 0, 0, 0)
         scroll_layout.setSpacing(20)  # Increased spacing for clear card separation
@@ -158,7 +158,7 @@ class ReviewStep(BaseStep):
     def _create_applicant_card(self) -> QFrame:
         """Create a summary card for applicant (visitor) information."""
         card = QFrame()
-        card.setLayoutDirection(Qt.RightToLeft)
+        card.setLayoutDirection(get_layout_direction())
         card.setStyleSheet(f"""
             QFrame {{
                 background-color: {Colors.SURFACE};
@@ -226,7 +226,7 @@ class ReviewStep(BaseStep):
         menu_btn.setCursor(Qt.PointingHandCursor)
 
         menu = QMenu(menu_btn)
-        menu.setLayoutDirection(Qt.RightToLeft)
+        menu.setLayoutDirection(get_layout_direction())
         menu.setStyleSheet("""
             QMenu {
                 background-color: white;
@@ -255,7 +255,7 @@ class ReviewStep(BaseStep):
     def _create_card_base(self, icon_name: str, title: str, subtitle: str, edit_callback=None) -> tuple:
         """Create base card with header (icon, title, subtitle) and return card and content layout."""
         card = QFrame()
-        card.setLayoutDirection(Qt.RightToLeft)
+        card.setLayoutDirection(get_layout_direction())
         card.setStyleSheet(f"""
             QFrame {{
                 background-color: {Colors.SURFACE};
@@ -324,7 +324,7 @@ class ReviewStep(BaseStep):
 
         # Content container
         content_widget = QWidget()
-        content_widget.setLayoutDirection(Qt.RightToLeft)
+        content_widget.setLayoutDirection(get_layout_direction())
         content_widget.setStyleSheet("background: transparent; border: none;")
         content_layout = QVBoxLayout(content_widget)
         content_layout.setContentsMargins(0, 0, 0, 0)
@@ -337,7 +337,7 @@ class ReviewStep(BaseStep):
     def _create_simple_card(self) -> tuple:
         """Create a simple card (no header) with shadow and return card and content layout."""
         card = QFrame()
-        card.setLayoutDirection(Qt.RightToLeft)
+        card.setLayoutDirection(get_layout_direction())
         card.setStyleSheet(f"""
             QFrame {{
                 background-color: {Colors.SURFACE};
@@ -353,7 +353,7 @@ class ReviewStep(BaseStep):
 
         # Content container
         content_widget = QWidget()
-        content_widget.setLayoutDirection(Qt.RightToLeft)
+        content_widget.setLayoutDirection(get_layout_direction())
         content_widget.setStyleSheet("background: transparent; border: none;")
         content_layout = QVBoxLayout(content_widget)
         content_layout.setContentsMargins(0, 0, 0, 0)
@@ -366,7 +366,7 @@ class ReviewStep(BaseStep):
     def _create_person_row(self, person: dict) -> QWidget:
         """Create a person row card with blue left border accent."""
         row = QFrame()
-        row.setLayoutDirection(Qt.RightToLeft)
+        row.setLayoutDirection(get_layout_direction())
         row.setFixedHeight(80)
         row.setStyleSheet(f"""
             QFrame {{
@@ -639,7 +639,7 @@ class ReviewStep(BaseStep):
 
         address = build_hierarchical_address(building_obj=building, unit_obj=None, include_unit=False)
         addr_bar = QFrame()
-        addr_bar.setLayoutDirection(Qt.RightToLeft)
+        addr_bar.setLayoutDirection(get_layout_direction())
         addr_bar.setFixedHeight(28)
         addr_bar.setStyleSheet("QFrame { background-color: #F8FAFF; border: none; border-radius: 8px; }")
         addr_row = QHBoxLayout(addr_bar)
@@ -863,7 +863,7 @@ class ReviewStep(BaseStep):
 
             # Build unit info container matching step 3 style
             unit_info_container = QFrame()
-            unit_info_container.setLayoutDirection(Qt.RightToLeft)
+            unit_info_container.setLayoutDirection(get_layout_direction())
             unit_info_container.setFixedHeight(73)
             unit_info_container.setStyleSheet(f"""
                 QFrame {{
@@ -925,7 +925,7 @@ class ReviewStep(BaseStep):
             desc_layout.addWidget(desc_text)
 
             desc_widget = QWidget()
-            desc_widget.setLayoutDirection(Qt.RightToLeft)
+            desc_widget.setLayoutDirection(get_layout_direction())
             desc_widget.setStyleSheet("background: transparent; border: none;")
             desc_widget.setLayout(desc_layout)
             self.unit_content.addWidget(desc_widget)
@@ -939,7 +939,7 @@ class ReviewStep(BaseStep):
     def _create_demographic_card(self, items: list) -> QFrame:
         """Create a demographic data card with label/value rows and separators."""
         frame = QFrame()
-        frame.setLayoutDirection(Qt.RightToLeft)
+        frame.setLayoutDirection(get_layout_direction())
         frame.setStyleSheet(f"""
             QFrame {{
                 background-color: {Colors.SURFACE};
@@ -1005,7 +1005,7 @@ class ReviewStep(BaseStep):
 
         # Summary row: main occupant info (right) + total count (left)
         summary_container = QWidget()
-        summary_container.setLayoutDirection(Qt.RightToLeft)
+        summary_container.setLayoutDirection(get_layout_direction())
         summary_container.setStyleSheet("background: transparent; border: none;")
         summary_layout = QHBoxLayout(summary_container)
         summary_layout.setContentsMargins(0, 0, 0, 0)
@@ -1058,7 +1058,7 @@ class ReviewStep(BaseStep):
         ]
 
         cards_container = QWidget()
-        cards_container.setLayoutDirection(Qt.RightToLeft)
+        cards_container.setLayoutDirection(get_layout_direction())
         cards_container.setStyleSheet("background: transparent; border: none;")
         cards_layout = QHBoxLayout(cards_container)
         cards_layout.setContentsMargins(0, 0, 0, 0)
@@ -1178,7 +1178,7 @@ class ReviewStep(BaseStep):
         ro_bg = "#f0f7ff"
 
         card = QFrame()
-        card.setLayoutDirection(Qt.RightToLeft)
+        card.setLayoutDirection(get_layout_direction())
         card.setStyleSheet(f"""
             QFrame {{
                 background-color: {Colors.BACKGROUND};
@@ -1371,6 +1371,7 @@ class ReviewStep(BaseStep):
 
     def update_language(self, is_arabic: bool):
         """Update all translatable texts by rebuilding review content."""
+        self.setLayoutDirection(get_layout_direction())
         self._populate_review()
 
     def validate(self) -> StepValidationResult:

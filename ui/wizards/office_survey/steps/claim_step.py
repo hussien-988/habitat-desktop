@@ -913,6 +913,10 @@ class ClaimStep(BaseStep):
 
         return {"claims": claims_data, "claim_data": claims_data[0] if claims_data else None}
 
+    def update_language(self, is_arabic: bool):
+        """Update layout direction when language changes."""
+        self.setLayoutDirection(get_layout_direction())
+
     def get_step_title(self) -> str:
         return tr("wizard.claim.step_title")
 

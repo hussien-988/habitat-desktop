@@ -11,6 +11,7 @@ and ClaimController's static methods for unit/person/household mapping.
 """
 
 from typing import Any, Dict, List, Optional
+from concurrent.futures import ThreadPoolExecutor
 
 from controllers.base_controller import OperationResult
 from utils.logger import get_logger
@@ -80,34 +81,21 @@ class SurveyController:
             from controllers.building_controller import BuildingController
 
             api = get_api_client()
+
+            # Step 1: Get survey detail (must be first — all IDs come from here)
             detail = api.get_office_survey_detail(survey_id)
 
-            building_data = {}
+            # Extract IDs for parallel enrichment
             building_id = detail.get("buildingId")
-            if building_id:
-                try:
-                    building_dto = api.get_building_by_id(building_id)
-                    bc = BuildingController(self.db)
-                    building_obj = bc._api_dto_to_building(building_dto)
-                    building_data = building_obj.to_dict()
-                except Exception as e:
-                    logger.warning(f"Failed to fetch building {building_id}: {e}")
-
-            unit_data = {}
             unit_id = detail.get("propertyUnitId")
-            if unit_id:
-                try:
-                    unit_dto = api._request("GET", f"/v1/PropertyUnits/{unit_id}")
-                    unit_data = ClaimController._map_unit_dto(unit_dto)
-                except Exception as e:
-                    logger.warning(f"Failed to fetch unit {unit_id}: {e}")
+            claim_id = detail.get("claimId")
+            contact_person_id = detail.get("contactPersonId")
 
-            # 3) Households (bundled in detail)
+            # Process households locally (no API call needed)
             all_households = [
                 ClaimController._map_household_dto(h)
                 for h in (detail.get("households") or [])
             ]
-            # Keep only the survey's own household
             survey_hh_id = detail.get("householdId")
             if survey_hh_id and len(all_households) > 1:
                 households = [h for h in all_households if h.get("household_id") == survey_hh_id]
@@ -115,21 +103,65 @@ class SurveyController:
                     households = all_households[:1]
             else:
                 households = all_households
-
-            # 4) Persons + relations from survey detail
-            persons = []
-            relations = []
-
-            # Fetch household persons
             hh_id = households[0].get("household_id", "") if households else ""
+
+            # Step 2: Parallel enrichment — building, unit, persons, claim, contact
+            building_data = {}
+            unit_data = {}
             person_map = {}
-            if hh_id:
+            claim_dto = None
+            contact_person_dto = None
+
+            futures = {}
+            with ThreadPoolExecutor(max_workers=5) as executor:
+                if building_id:
+                    futures['building'] = executor.submit(api.get_building_by_id, building_id)
+                if unit_id:
+                    futures['unit'] = executor.submit(api._request, "GET", f"/v1/PropertyUnits/{unit_id}")
+                if hh_id:
+                    futures['persons'] = executor.submit(api.get_persons_for_household, survey_id, hh_id)
+                if claim_id:
+                    futures['claim'] = executor.submit(api.get_claim_by_id, claim_id)
+                futures['contact'] = executor.submit(api.get_contact_person, survey_id)
+
+            # Collect results with individual error handling
+            if 'building' in futures:
                 try:
-                    all_persons_list = api.get_persons_for_household(survey_id, hh_id)
+                    building_dto = futures['building'].result()
+                    bc = BuildingController(self.db)
+                    building_obj = bc._api_dto_to_building(building_dto)
+                    building_data = building_obj.to_dict()
+                except Exception as e:
+                    logger.warning(f"Failed to fetch building {building_id}: {e}")
+
+            if 'unit' in futures:
+                try:
+                    unit_dto = futures['unit'].result()
+                    unit_data = ClaimController._map_unit_dto(unit_dto)
+                except Exception as e:
+                    logger.warning(f"Failed to fetch unit {unit_id}: {e}")
+
+            if 'persons' in futures:
+                try:
+                    all_persons_list = futures['persons'].result()
                     person_map = {p.get("id"): p for p in all_persons_list}
                 except Exception as e:
                     logger.warning(f"Failed to fetch household persons: {e}")
 
+            if 'claim' in futures:
+                try:
+                    claim_dto = futures['claim'].result()
+                except Exception as e:
+                    logger.warning(f"Failed to fetch claim {claim_id}: {e}")
+
+            try:
+                contact_person_dto = futures['contact'].result()
+            except Exception as e:
+                logger.debug(f"Contact person not available: {e}")
+
+            # Process persons + relations from survey detail
+            persons = []
+            relations = []
             seen_person_ids = set()
             for rel in (detail.get("relations") or []):
                 person_id = rel.get("personId")
@@ -148,25 +180,8 @@ class SurveyController:
                 else:
                     logger.debug(f"Person {person_id} not found in household persons")
 
-            # 5) Claim enrichment (if linked)
-            claim_dto = None
-            claim_id = detail.get("claimId")
-            if claim_id:
-                try:
-                    claim_dto = api.get_claim_by_id(claim_id)
-                except Exception as e:
-                    logger.warning(f"Failed to fetch claim {claim_id}: {e}")
-
-            # 6) Claim data mapped from survey detail + linked claim
+            # Claim data mapped from survey detail + linked claim
             claim_data = self._map_survey_to_claim_data(detail, persons, claim_dto)
-
-            # 7) Build applicant
-            contact_person_id = detail.get("contactPersonId")
-            contact_person_dto = None
-            try:
-                contact_person_dto = api.get_contact_person(survey_id)
-            except Exception as e:
-                logger.debug(f"Contact person not available: {e}")
 
             applicant = None
             if contact_person_dto:

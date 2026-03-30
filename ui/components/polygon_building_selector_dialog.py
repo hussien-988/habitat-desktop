@@ -17,7 +17,7 @@ from services.postgis_service import PostGISService, SQLiteSpatialService
 from models.building import Building
 from repositories.database import Database
 from utils.logger import get_logger
-from services.translation_manager import tr
+from services.translation_manager import tr, get_layout_direction
 
 logger = get_logger(__name__)
 
@@ -57,7 +57,7 @@ class PolygonBuildingSelectorDialog(QDialog):
         """Setup the dialog UI."""
         self.setWindowTitle(tr("dialog.polygon_selector.title"))
         self.setMinimumSize(1000, 700)
-        self.setLayoutDirection(Qt.RightToLeft)
+        self.setLayoutDirection(get_layout_direction())
 
         main_layout = QVBoxLayout(self)
         main_layout.setSpacing(12)

@@ -253,7 +253,7 @@ class LoginPage(QWidget):
         # Username input
         self.username_input = QLineEdit()
         self.username_input.setPlaceholderText(tr("page.login.username_placeholder"))
-        self.username_input.setLayoutDirection(Qt.RightToLeft)
+        self.username_input.setLayoutDirection(get_layout_direction())
         self.username_input.setFixedHeight(40)
         username_input_font = create_font(size=10, weight=FontManager.WEIGHT_REGULAR, letter_spacing=0)
         self.username_input.setFont(username_input_font)

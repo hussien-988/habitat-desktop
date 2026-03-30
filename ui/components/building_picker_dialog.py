@@ -9,7 +9,7 @@ from PyQt5.QtGui import QColor, QIcon
 
 from app.config import Config
 from utils.logger import get_logger
-from services.translation_manager import tr
+from services.translation_manager import tr, get_layout_direction
 
 logger = get_logger(__name__)
 
@@ -48,7 +48,7 @@ class _ResultsPopup(QWidget):
         inner.setSpacing(0)
 
         self.list_widget = QListWidget()
-        self.list_widget.setLayoutDirection(Qt.RightToLeft)
+        self.list_widget.setLayoutDirection(get_layout_direction())
         self.list_widget.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.list_widget.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.list_widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
@@ -119,7 +119,7 @@ class BuildingPickerDialog(QDialog):
 
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.Dialog)
         self.setAttribute(Qt.WA_TranslucentBackground)
-        self.setLayoutDirection(Qt.RightToLeft)
+        self.setLayoutDirection(get_layout_direction())
         self.setStyleSheet("QDialog { background-color: transparent; }")
 
         if parent:
@@ -233,7 +233,7 @@ class BuildingPickerDialog(QDialog):
 
         self.search_input = QLineEdit()
         self.search_input.setPlaceholderText(tr("component.building_picker.search_placeholder"))
-        self.search_input.setLayoutDirection(Qt.RightToLeft)
+        self.search_input.setLayoutDirection(get_layout_direction())
         self.search_input.setStyleSheet("""
             QLineEdit {
                 border: none;

@@ -27,7 +27,7 @@ from services.api_client import get_api_client
 from utils.logger import get_logger
 from ui.components.toast import Toast
 from ui.error_handler import ErrorHandler
-from services.translation_manager import tr
+from services.translation_manager import tr, get_layout_direction
 from services.error_mapper import map_exception
 from ui.components.success_popup import SuccessPopup
 from services.display_mappings import get_relation_type_options, get_contract_type_options, get_evidence_type_options
@@ -55,7 +55,7 @@ class RelationStep(BaseStep):
         from ui.components.icon import Icon
 
         widget = self
-        widget.setLayoutDirection(Qt.RightToLeft)
+        widget.setLayoutDirection(get_layout_direction())
         # Set main window background color
         widget.setStyleSheet(f"background-color: {Colors.BACKGROUND};")
 
@@ -68,7 +68,7 @@ class RelationStep(BaseStep):
         # --- The Main Card (QFrame) - matching person_step card styling ---
         main_card = QFrame()
         main_card.setObjectName("relationsCard")
-        main_card.setLayoutDirection(Qt.RightToLeft)
+        main_card.setLayoutDirection(get_layout_direction())
         main_card.setStyleSheet(f"""
             QFrame#relationsCard {{
                 background-color: {Colors.SURFACE};
@@ -129,7 +129,7 @@ class RelationStep(BaseStep):
 
         # Scroll Area for person cards
         scroll_area = QScrollArea()
-        scroll_area.setLayoutDirection(Qt.RightToLeft)
+        scroll_area.setLayoutDirection(get_layout_direction())
         scroll_area.setWidgetResizable(True)
         scroll_area.setFrameShape(QFrame.NoFrame)
         scroll_area.setStyleSheet(
@@ -139,7 +139,7 @@ class RelationStep(BaseStep):
 
         # Container widget for cards
         scroll_widget = QWidget()
-        scroll_widget.setLayoutDirection(Qt.RightToLeft)
+        scroll_widget.setLayoutDirection(get_layout_direction())
         scroll_widget.setStyleSheet("background-color: transparent;")
         self.cards_layout = QVBoxLayout(scroll_widget)
         self.cards_layout.setSpacing(10)
@@ -189,7 +189,7 @@ class RelationStep(BaseStep):
 
         # Main card container - matching person_step card background
         card = QFrame()
-        card.setLayoutDirection(Qt.RightToLeft)
+        card.setLayoutDirection(get_layout_direction())
         card.setStyleSheet(f"""
             QFrame {{
                 background-color: {Colors.BACKGROUND};
@@ -460,6 +460,7 @@ class RelationStep(BaseStep):
 
     def update_language(self, is_arabic: bool):
         """Update all translatable texts when language changes."""
+        self.setLayoutDirection(get_layout_direction())
         self._title_label.setText(tr("wizard.relation.title"))
         self._subtitle_label.setText(tr("wizard.relation.subtitle"))
         # Reload person panels with new language

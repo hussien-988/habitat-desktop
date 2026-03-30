@@ -27,7 +27,7 @@ from ui.wizards.office_survey.survey_context import SurveyContext
 from ui.components.rtl_combo import RtlCombo
 from ui.style_manager import StyleManager
 from services.display_mappings import get_gender_options, get_nationality_options
-from services.translation_manager import tr
+from services.translation_manager import tr, get_layout_direction
 from ui.components.toast import Toast
 from ui.components.loading_spinner import LoadingSpinnerOverlay
 from utils.logger import get_logger
@@ -749,6 +749,10 @@ class ApplicantInfoStep(BaseStep):
         self.uploaded_files = list(photos)
         if photos:
             self._update_upload_thumbnails("id_upload", photos)
+
+    def update_language(self, is_arabic: bool):
+        """Update layout direction when language changes."""
+        self.setLayoutDirection(get_layout_direction())
 
     def get_name(self) -> str:
         return tr("wizard.step.applicant_info")

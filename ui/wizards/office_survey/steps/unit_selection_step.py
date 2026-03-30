@@ -32,7 +32,7 @@ from ui.style_manager import StyleManager
 from ui.components.icon import Icon
 from ui.components.action_button import ActionButton
 from ui.font_utils import create_font, FontManager
-from services.translation_manager import tr
+from services.translation_manager import tr, get_layout_direction
 from services.display_mappings import get_unit_status_display
 from services.error_mapper import map_exception
 from ui.components.loading_spinner import LoadingSpinnerOverlay
@@ -335,7 +335,7 @@ class UnitSelectionStep(BaseStep):
 
         # Scroll area for units
         scroll = QScrollArea()
-        scroll.setLayoutDirection(Qt.RightToLeft)
+        scroll.setLayoutDirection(get_layout_direction())
         scroll.setWidgetResizable(True)
         scroll.setWidget(self.units_container)
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
@@ -612,7 +612,7 @@ class UnitSelectionStep(BaseStep):
         card.setCursor(Qt.PointingHandCursor)
         card.mousePressEvent = lambda _: self._on_unit_card_clicked(unit)
         card.setProperty("unit_id", unit.unit_uuid)
-        card.setLayoutDirection(Qt.RightToLeft)
+        card.setLayoutDirection(get_layout_direction())
         main_layout = QVBoxLayout(card)
         main_layout.setSpacing(8)  # Gap between top and bottom: 8px
         main_layout.setContentsMargins(12, 12, 12, 12)  # Padding: 12px
@@ -850,6 +850,7 @@ class UnitSelectionStep(BaseStep):
 
     def update_language(self, is_arabic: bool):
         """Update all translatable texts when language changes."""
+        self.setLayoutDirection(get_layout_direction())
         self._title_label.setText(tr("wizard.unit.select_title"))
         self._subtitle_label.setText(tr("wizard.unit.select_subtitle"))
         self.add_unit_btn.setText(tr("wizard.unit.add_button"))

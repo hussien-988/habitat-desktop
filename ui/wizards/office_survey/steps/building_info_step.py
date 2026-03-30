@@ -678,6 +678,10 @@ class BuildingInfoStep(BaseStep):
 
         return result
 
+    def update_language(self, is_arabic: bool):
+        """Update layout direction when language changes."""
+        self.setLayoutDirection(get_layout_direction())
+
     def collect_data(self) -> dict:
         return {}
 
