@@ -867,6 +867,8 @@ EN_TRANSLATIONS = {
     "page.login.password": "Password",
     "page.login.password_placeholder": "Enter password",
     "page.login.sign_in": "Sign In",
+    "page.login.signing_in": "Signing in...",
+    "page.login.connection_error": "Connection failed. Check your network settings",
     "page.login.account_locked": "Account locked. Try again in {minutes} minutes",
     "page.login.fields_required": "Please enter username and password",
     "page.login.not_authorized": "This account is not authorized to use the desktop application",
@@ -2887,6 +2889,7 @@ EN_TRANSLATIONS = {
     "page.claim_details.gender_unspecified": "Unspecified",
 
     # Loading / spinner
+    "app.changing_language": "Changing language...",
     "component.loading.default": "Loading...",
     "page.user_mgmt.deleting_user": "Deleting user...",
     "page.field_step1.searching_buildings": "Searching for buildings...",

@@ -24,6 +24,7 @@ from services.display_mappings import (
 )
 from services.api_worker import ApiWorker
 from ui.components.toast import Toast
+from ui.components.loading_spinner import LoadingSpinnerOverlay
 from ui.style_manager import StyleManager
 from utils.logger import get_logger
 from ui.wizards.office_survey.steps.occupancy_claims_step import _is_owner_relation
@@ -105,6 +106,9 @@ class ClaimStep(BaseStep):
         self.empty_state_widget = self._create_empty_state_widget()
         self.empty_state_widget.hide()
         layout.addWidget(self.empty_state_widget)
+
+        # Loading spinner overlay
+        self._spinner = LoadingSpinnerOverlay(self)
 
     def _create_empty_state_widget(self) -> QWidget:
         """Create empty state widget shown when no claims are created."""
@@ -545,17 +549,20 @@ class ClaimStep(BaseStep):
             return api.get_survey_evidences(survey_id)
 
         def _on_fetched(evidences):
+            self._spinner.hide_loading()
             count = len(evidences) if evidences else 0
             self._cached_evidence_count = count
             if callback:
                 callback(count)
 
         def _on_error(msg):
+            self._spinner.hide_loading()
             logger.warning(f"Failed to fetch evidence count: {msg}")
             Toast.show_toast(self, tr("wizard.claim.load_failed"), Toast.ERROR)
             if callback:
                 callback(cached)
 
+        self._spinner.show_loading(tr("component.loading.default"))
         self._evidence_count_worker = ApiWorker(_do_fetch)
         self._evidence_count_worker.finished.connect(_on_fetched)
         self._evidence_count_worker.error.connect(_on_error)
@@ -905,6 +912,10 @@ class ClaimStep(BaseStep):
             self.context.claim_data = claims_data[0]
 
         return {"claims": claims_data, "claim_data": claims_data[0] if claims_data else None}
+
+    def update_language(self, is_arabic: bool):
+        """Update layout direction when language changes."""
+        self.setLayoutDirection(get_layout_direction())
 
     def get_step_title(self) -> str:
         return tr("wizard.claim.step_title")

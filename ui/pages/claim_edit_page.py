@@ -68,6 +68,9 @@ class ClaimEditPage(QWidget):
         self._original_claim = {}
 
         self._setup_ui()
+
+        from ui.components.loading_spinner import LoadingSpinnerOverlay
+        self._spinner = LoadingSpinnerOverlay(self)
     # UI Setup
 
     def _setup_ui(self):
@@ -590,6 +593,7 @@ class ClaimEditPage(QWidget):
             return
         if not self._survey_id or not evidence_id:
             return
+        self._spinner.show_loading(tr("component.loading.default"))
         try:
             from controllers.claim_controller import ClaimController
             ctrl = ClaimController()
@@ -601,6 +605,8 @@ class ClaimEditPage(QWidget):
                 Toast.show_toast(self, f"{tr('page.claim_edit.error_prefix')}: {result.message}", Toast.ERROR)
         except Exception as e:
             Toast.show_toast(self, f"{tr('page.claim_edit.error_prefix')}: {e}", Toast.ERROR)
+        finally:
+            self._spinner.hide_loading()
 
     def _reload_evidences(self):
         """Refresh evidence list from claim DTO evidenceIds."""
@@ -612,6 +618,7 @@ class ClaimEditPage(QWidget):
         )
         self._reload_evidences_worker.finished.connect(self._on_evidences_reloaded)
         self._reload_evidences_worker.error.connect(self._on_evidences_reload_error)
+        self._spinner.show_loading(tr("component.loading.default"))
         self._reload_evidences_worker.start()
 
     @staticmethod
@@ -633,11 +640,13 @@ class ClaimEditPage(QWidget):
 
     def _on_evidences_reloaded(self, evidences):
         """Handle reloaded evidences on main thread."""
+        self._spinner.hide_loading()
         self._evidences = evidences
         self._refresh_evidence_list()
 
     def _on_evidences_reload_error(self, error_msg):
         """Handle evidence reload error."""
+        self._spinner.hide_loading()
         logger.warning(f"Failed to reload evidences: {error_msg}")
         self._refresh_evidence_list()
     # Save (S08-S10)
@@ -658,6 +667,7 @@ class ClaimEditPage(QWidget):
         reason = dialog.get_reason()
 
         # S09-S10: Save each section via API
+        self._spinner.show_loading(tr("component.loading.default"))
         try:
             from controllers.claim_controller import ClaimController
             ctrl = ClaimController()
@@ -705,6 +715,8 @@ class ClaimEditPage(QWidget):
         except Exception as e:
             logger.error(f"Save failed: {e}", exc_info=True)
             Toast.show_toast(self, f"{tr('page.claim_edit.error_saving')}: {e}", Toast.ERROR)
+        finally:
+            self._spinner.hide_loading()
 
     def _collect_changes(self) -> dict:
         """Compare current fields to originals, return only changed sections."""

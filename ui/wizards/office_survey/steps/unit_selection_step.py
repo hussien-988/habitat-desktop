@@ -32,9 +32,10 @@ from ui.style_manager import StyleManager
 from ui.components.icon import Icon
 from ui.components.action_button import ActionButton
 from ui.font_utils import create_font, FontManager
-from services.translation_manager import tr
+from services.translation_manager import tr, get_layout_direction
 from services.display_mappings import get_unit_status_display
 from services.error_mapper import map_exception
+from ui.components.loading_spinner import LoadingSpinnerOverlay
 
 logger = get_logger(__name__)
 
@@ -334,7 +335,7 @@ class UnitSelectionStep(BaseStep):
 
         # Scroll area for units
         scroll = QScrollArea()
-        scroll.setLayoutDirection(Qt.RightToLeft)
+        scroll.setLayoutDirection(get_layout_direction())
         scroll.setWidgetResizable(True)
         scroll.setWidget(self.units_container)
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
@@ -347,6 +348,9 @@ class UnitSelectionStep(BaseStep):
         units_main_layout.addWidget(scroll, 1)
 
         layout.addWidget(units_main_frame, 1)
+
+        # Loading spinner overlay
+        self._spinner = LoadingSpinnerOverlay(self)
 
     def _create_empty_state(self) -> QWidget:
         """Create empty state widget shown when no units exist."""
@@ -462,12 +466,13 @@ class UnitSelectionStep(BaseStep):
             else:
                 return self.unit_controller.get_units_for_building(building_uuid)
 
+        self._spinner.show_loading(tr("component.loading.default"))
         self._load_units_worker = ApiWorker(_do_load)
         self._load_units_worker.finished.connect(
-            lambda result: self._on_units_loaded(result, building_uuid)
+            lambda result: (self._spinner.hide_loading(), self._on_units_loaded(result, building_uuid))
         )
         self._load_units_worker.error.connect(
-            lambda msg: self._on_units_load_error(msg)
+            lambda msg: (self._spinner.hide_loading(), self._on_units_load_error(msg))
         )
         self._load_units_worker.start()
 
@@ -607,7 +612,7 @@ class UnitSelectionStep(BaseStep):
         card.setCursor(Qt.PointingHandCursor)
         card.mousePressEvent = lambda _: self._on_unit_card_clicked(unit)
         card.setProperty("unit_id", unit.unit_uuid)
-        card.setLayoutDirection(Qt.RightToLeft)
+        card.setLayoutDirection(get_layout_direction())
         main_layout = QVBoxLayout(card)
         main_layout.setSpacing(8)  # Gap between top and bottom: 8px
         main_layout.setContentsMargins(12, 12, 12, 12)  # Padding: 12px
@@ -845,6 +850,7 @@ class UnitSelectionStep(BaseStep):
 
     def update_language(self, is_arabic: bool):
         """Update all translatable texts when language changes."""
+        self.setLayoutDirection(get_layout_direction())
         self._title_label.setText(tr("wizard.unit.select_title"))
         self._subtitle_label.setText(tr("wizard.unit.select_subtitle"))
         self.add_unit_btn.setText(tr("wizard.unit.add_button"))
@@ -908,6 +914,7 @@ class UnitSelectionStep(BaseStep):
         # Link unit synchronously — block progression if it fails
         if not self.context.get_data("unit_linked"):
             self._set_auth_token()
+            self._spinner.show_loading(tr("component.loading.default"))
             try:
                 self._api_service.link_unit_to_survey(survey_id, current_unit_id)
                 logger.info(f"Unit {current_unit_id} linked to survey {survey_id}")
@@ -917,6 +924,8 @@ class UnitSelectionStep(BaseStep):
                 logger.error(f"API link failed: {e}")
                 result.add_error(tr("wizard.unit.link_failed"))
                 return result
+            finally:
+                self._spinner.hide_loading()
 
         return result
 

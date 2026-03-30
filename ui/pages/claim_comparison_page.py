@@ -67,6 +67,9 @@ class ClaimComparisonPage(QWidget):
         self._current_conflict_type = ""
         self._setup_ui()
 
+        from ui.components.loading_spinner import LoadingSpinnerOverlay
+        self._spinner = LoadingSpinnerOverlay(self)
+
     def set_user_id(self, user_id: str):
         """Set current user ID for audit trail."""
         self._user_id = user_id
@@ -512,6 +515,7 @@ class ClaimComparisonPage(QWidget):
         )
         self._doc_comparison_worker.finished.connect(self._on_doc_comparison_loaded)
         self._doc_comparison_worker.error.connect(self._on_doc_comparison_error)
+        self._spinner.show_loading(tr("component.loading.default"))
         self._doc_comparison_worker.start()
 
     def _fetch_document_comparison(self, conflict_id, entity_ids, is_person):
@@ -597,6 +601,7 @@ class ClaimComparisonPage(QWidget):
 
     def _on_doc_comparison_loaded(self, result):
         """Handle document comparison result on main thread."""
+        self._spinner.hide_loading()
         self._doc_load_btn.setEnabled(True)
         first_evidences = result.get("first", [])
         second_evidences = result.get("second", [])
@@ -614,6 +619,7 @@ class ClaimComparisonPage(QWidget):
 
     def _on_doc_comparison_error(self, error_msg):
         """Handle document comparison error."""
+        self._spinner.hide_loading()
         self._doc_load_btn.setEnabled(True)
         logger.warning(f"Document comparison failed: {error_msg}")
         Toast.show_toast(self, tr("page.comparison.failed_loading_documents"), Toast.ERROR)
@@ -1171,9 +1177,11 @@ class ClaimComparisonPage(QWidget):
         )
         self._resolution_worker.finished.connect(self._on_resolution_done)
         self._resolution_worker.error.connect(self._on_resolution_err)
+        self._spinner.show_loading(tr("component.loading.default"))
         self._resolution_worker.start()
 
     def _on_resolution_done(self, success: bool):
+        self._spinner.hide_loading()
         self.action_btn.setEnabled(True)
         if success:
             self._justification_edit.clear()
@@ -1183,6 +1191,7 @@ class ClaimComparisonPage(QWidget):
             Toast.show_toast(self, tr("page.comparison.action_failed"), Toast.WARNING)
 
     def _on_resolution_err(self, error_msg: str):
+        self._spinner.hide_loading()
         self.action_btn.setEnabled(True)
         Toast.show_toast(self, f"{tr('page.comparison.action_failed')}: {error_msg}", Toast.ERROR)
 
@@ -1372,6 +1381,7 @@ class ClaimComparisonPage(QWidget):
             )
             self._property_units_worker.finished.connect(self._on_property_units_loaded)
             self._property_units_worker.error.connect(self._on_property_units_error)
+            self._spinner.show_loading(tr("component.loading.default"))
             self._property_units_worker.start()
 
     def _fetch_all_property_units(self, record_ids):
@@ -1404,6 +1414,7 @@ class ClaimComparisonPage(QWidget):
 
     def _on_property_units_loaded(self, unit_dtos):
         """Handle property unit data loaded from API."""
+        self._spinner.hide_loading()
         data_comparison = getattr(self, '_pending_data_comparison', [])
         comparison_dicts = []
 
@@ -1435,6 +1446,7 @@ class ClaimComparisonPage(QWidget):
 
     def _on_property_units_error(self, error_msg):
         """Handle property unit fetch error."""
+        self._spinner.hide_loading()
         logger.error(f"Failed to fetch property units: {error_msg}")
 
     def update_language(self, is_arabic: bool):

@@ -793,6 +793,9 @@ class MapPage(QWidget):
 
         layout.addWidget(info_bar)
 
+        from ui.components.loading_spinner import LoadingSpinnerOverlay
+        self._spinner = LoadingSpinnerOverlay(self)
+
     def _start_tile_server(self):
         """Get tile server URLs from centralized manager."""
         from services.tile_server_manager import get_tile_server_url, get_local_server_url
@@ -981,10 +984,12 @@ class MapPage(QWidget):
 
         self._refresh_worker = _MapPageWorker()
         self._refresh_worker.finished.connect(self._on_refresh_data_ready)
+        self._spinner.show_loading(tr("component.loading.default"))
         self._refresh_worker.start()
 
     def _on_refresh_data_ready(self, data):
         """Handle map data from background worker."""
+        self._spinner.hide_loading()
         tile_meta = data.get('tile_meta', {})
         tile_bounds = tile_meta.get('bounds')
         bbox = data.get('bbox', (Config.MAP_BOUNDS_MIN_LAT, Config.MAP_BOUNDS_MIN_LNG,
@@ -1244,6 +1249,7 @@ class MapPage(QWidget):
             )
             self._landmark_search_worker.finished.connect(self._on_landmark_search_ready)
             self._landmark_search_worker.error.connect(self._on_landmark_search_error)
+            self._spinner.show_loading(tr("component.loading.default"))
             self._landmark_search_worker.start()
 
         except Exception as e:
@@ -1253,6 +1259,7 @@ class MapPage(QWidget):
 
     def _on_landmark_search_ready(self, results):
         """Handle landmark search results from background worker."""
+        self._spinner.hide_loading()
         self.landmark_results.clear()
         if not results:
             self.landmark_results.hide()
@@ -1273,6 +1280,7 @@ class MapPage(QWidget):
 
     def _on_landmark_search_error(self, error_msg):
         """Handle landmark search error."""
+        self._spinner.hide_loading()
         Toast.show_toast(self, tr("page.map.load_data_error"), Toast.ERROR)
         logger.warning(f"Landmark search worker failed: {error_msg}")
         self.landmark_results.hide()
@@ -1294,6 +1302,7 @@ class MapPage(QWidget):
             )
             self._street_search_worker.finished.connect(self._on_street_search_ready)
             self._street_search_worker.error.connect(self._on_street_search_error)
+            self._spinner.show_loading(tr("component.loading.default"))
             self._street_search_worker.start()
 
         except Exception as e:
@@ -1303,6 +1312,7 @@ class MapPage(QWidget):
 
     def _on_street_search_ready(self, streets):
         """Handle street search results from background worker."""
+        self._spinner.hide_loading()
         self.landmark_results.clear()
         if not streets:
             self.landmark_results.hide()
@@ -1341,6 +1351,7 @@ class MapPage(QWidget):
 
     def _on_street_search_error(self, error_msg):
         """Handle street search error."""
+        self._spinner.hide_loading()
         Toast.show_toast(self, tr("page.map.load_data_error"), Toast.ERROR)
         logger.warning(f"Street search worker failed: {error_msg}")
         self.landmark_results.hide()

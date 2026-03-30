@@ -867,6 +867,8 @@ AR_TRANSLATIONS = {
     "page.login.password": "كلمة المرور",
     "page.login.password_placeholder": "أدخل كلمة المرور",
     "page.login.sign_in": "تسجيل دخول",
+    "page.login.signing_in": "جاري تسجيل الدخول...",
+    "page.login.connection_error": "فشل الاتصال بالخادم. تحقق من إعدادات الشبكة",
     "page.login.account_locked": "الحساب مقفل. حاول بعد {minutes} دقيقة",
     "page.login.fields_required": "يرجى إدخال اسم المستخدم وكلمة المرور",
     "page.login.not_authorized": "هذا الحساب غير مخوّل لاستخدام تطبيق سطح المكتب",
@@ -2887,6 +2889,7 @@ AR_TRANSLATIONS = {
     "page.claim_details.gender_unspecified": "غير محدد",
 
     # Loading / spinner
+    "app.changing_language": "جاري تغيير اللغة...",
     "component.loading.default": "جاري التحميل...",
     "page.user_mgmt.deleting_user": "جاري حذف المستخدم...",
     "page.field_step1.searching_buildings": "جاري البحث عن المباني...",

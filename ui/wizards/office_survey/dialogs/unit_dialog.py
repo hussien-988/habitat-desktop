@@ -32,6 +32,7 @@ from services.translation_manager import tr, get_layout_direction
 from services.display_mappings import get_unit_type_options, get_unit_status_options
 from services.error_mapper import map_exception
 from ui.components.toast import Toast
+from ui.components.loading_spinner import LoadingSpinnerOverlay
 from utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -258,6 +259,9 @@ class UnitDialog(QDialog):
         layout.addLayout(buttons_layout)
 
         main_layout.addWidget(content_frame)
+
+        # Loading spinner overlay
+        self._spinner = LoadingSpinnerOverlay(self)
 
     def _create_spinbox_with_arrows(self, spinbox: QSpinBox) -> QFrame:
         """Create a spinbox widget with icon arrows (same as buildings_page)."""
@@ -600,6 +604,7 @@ class UnitDialog(QDialog):
             return self.unit_controller.get_units_for_building(self.building.building_uuid)
 
         def _on_units_fetched(result):
+            self._spinner.hide_loading()
             self.save_btn.setEnabled(True)
             if result.success and result.data:
                 if not self._is_unit_unique_local(result.data, unit_number, floor):
@@ -608,11 +613,13 @@ class UnitDialog(QDialog):
             self._do_save()
 
         def _on_fetch_error(msg):
+            self._spinner.hide_loading()
             self.save_btn.setEnabled(True)
             logger.error(f"Error checking uniqueness: {msg}")
             # Allow save if check fails
             self._do_save()
 
+        self._spinner.show_loading(tr("component.loading.default"))
         self._uniqueness_worker = ApiWorker(_do_fetch)
         self._uniqueness_worker.finished.connect(_on_units_fetched)
         self._uniqueness_worker.error.connect(_on_fetch_error)
@@ -626,6 +633,7 @@ class UnitDialog(QDialog):
                 unit_data['survey_id'] = self._survey_id
 
             logger.info(f"Creating property unit via API: {unit_data}")
+            self._spinner.show_loading(tr("component.loading.default"))
             try:
                 response = self._api_service.create_property_unit(unit_data)
                 logger.info("Property unit created successfully via API")
@@ -641,6 +649,8 @@ class UnitDialog(QDialog):
                     return
                 self._show_styled_message(tr("common.error"), str(e), is_error=True)
                 return
+            finally:
+                self._spinner.hide_loading()
 
         self.accept()
 

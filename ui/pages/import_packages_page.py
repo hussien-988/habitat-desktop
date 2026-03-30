@@ -102,7 +102,7 @@ class ImportPackagesListPage(QWidget):
         filter_row.setSpacing(10)
 
         self._status_combo = QComboBox()
-        self._status_combo.setLayoutDirection(Qt.RightToLeft)
+        self._status_combo.setLayoutDirection(get_layout_direction())
         self._status_combo.setMinimumWidth(220)
         self._status_combo.setStyleSheet(StyleManager.form_input())
 
@@ -119,7 +119,7 @@ class ImportPackagesListPage(QWidget):
         self.table = QTableWidget()
         self.table.setColumnCount(6)
         self.table.setRowCount(11)
-        self.table.setLayoutDirection(Qt.RightToLeft)
+        self.table.setLayoutDirection(get_layout_direction())
         self.table.setEditTriggers(QAbstractItemView.NoEditTriggers)
 
         headers = [
@@ -533,7 +533,7 @@ class ImportPackagesListPage(QWidget):
         pkg_id = str(pkg.get("id") or pkg.get("packageId") or "")
 
         menu = QMenu(self)
-        menu.setLayoutDirection(Qt.RightToLeft)
+        menu.setLayoutDirection(get_layout_direction())
         menu.setStyleSheet("""
             QMenu {
                 background-color: white;
@@ -725,7 +725,7 @@ class ImportPackagesPage(QWidget):
     def _setup_ui(self):
         """Setup UI."""
         self.setStyleSheet(StyleManager.page_background())
-        self.setLayoutDirection(Qt.RightToLeft)
+        self.setLayoutDirection(get_layout_direction())
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)

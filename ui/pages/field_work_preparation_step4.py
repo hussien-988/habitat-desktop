@@ -63,7 +63,7 @@ class FieldWorkPreparationStep4(QWidget):
         self._refresh_timer.start(10000)
 
     def _setup_ui(self):
-        self.setLayoutDirection(Qt.RightToLeft)
+        self.setLayoutDirection(get_layout_direction())
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 24, 0, 0)

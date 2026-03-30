@@ -34,6 +34,7 @@ from services.display_mappings import (
 from ui.components.rtl_combo import RtlCombo
 from ui.components.centered_text_edit import CenteredTextEdit
 from ui.components.toast import Toast
+from ui.components.loading_spinner import LoadingSpinnerOverlay
 from utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -194,6 +195,9 @@ class PersonDialog(QDialog):
 
         self.tab_widget.currentChanged.connect(self._update_progress)
         main_layout.addWidget(self.tab_widget)
+
+        # Loading spinner overlay
+        self._spinner = LoadingSpinnerOverlay(self)
 
     def _apply_read_only_mode(self):
         """Disable all input fields and change buttons for read-only viewing."""
@@ -2665,6 +2669,16 @@ class PersonDialog(QDialog):
 
         if has_error:
             return
+
+        self._spinner.show_loading(tr("component.loading.default"))
+        try:
+            self._on_final_save_api()
+        finally:
+            self._spinner.hide_loading()
+
+    def _on_final_save_api(self):
+        """Execute the API calls for final save (called after validation passes)."""
+        from ui.error_handler import ErrorHandler
 
         if self._existing_person_mode:
             self._refresh_token()

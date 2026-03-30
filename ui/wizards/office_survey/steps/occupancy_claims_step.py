@@ -41,7 +41,7 @@ def _is_owner_relation(relation_type) -> bool:
     if isinstance(relation_type, str):
         return relation_type.lower() in ('owner', 'co_owner', 'coowner', 'heir')
     return False
-from services.translation_manager import tr
+from services.translation_manager import tr, get_layout_direction
 from services.display_mappings import get_relation_type_display, get_relationship_to_head_display
 from services.error_mapper import map_exception
 from ui.components.toast import Toast
@@ -60,7 +60,7 @@ class OccupancyClaimsStep(BaseStep):
     def setup_ui(self):
         """Setup the step UI - same card pattern as PersonStep."""
         widget = self
-        widget.setLayoutDirection(Qt.RightToLeft)
+        widget.setLayoutDirection(get_layout_direction())
         widget.setStyleSheet(f"background-color: {Colors.BACKGROUND};")
 
         layout = self.main_layout
@@ -70,7 +70,7 @@ class OccupancyClaimsStep(BaseStep):
         # Main card
         table_frame = QFrame()
         table_frame.setObjectName("occupancyClaimsCard")
-        table_frame.setLayoutDirection(Qt.RightToLeft)
+        table_frame.setLayoutDirection(get_layout_direction())
         table_frame.setStyleSheet(f"""
             QFrame#occupancyClaimsCard {{
                 background-color: {Colors.SURFACE};
@@ -124,7 +124,7 @@ class OccupancyClaimsStep(BaseStep):
 
         # Add button
         self._add_person_btn = QPushButton(tr("wizard.occupancy_claims.add_person"))
-        self._add_person_btn.setLayoutDirection(Qt.RightToLeft)
+        self._add_person_btn.setLayoutDirection(get_layout_direction())
         self._add_person_btn.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
         self._add_person_btn.setStyleSheet(f"""
             QPushButton {{
@@ -149,7 +149,7 @@ class OccupancyClaimsStep(BaseStep):
 
         # Scroll area for person cards
         scroll_area = QScrollArea()
-        scroll_area.setLayoutDirection(Qt.RightToLeft)
+        scroll_area.setLayoutDirection(get_layout_direction())
         scroll_area.setWidgetResizable(True)
         scroll_area.setStyleSheet(
             "QScrollArea { border: none; background-color: transparent; }"
@@ -157,7 +157,7 @@ class OccupancyClaimsStep(BaseStep):
         )
 
         scroll_widget = QWidget()
-        scroll_widget.setLayoutDirection(Qt.RightToLeft)
+        scroll_widget.setLayoutDirection(get_layout_direction())
         scroll_widget.setStyleSheet("background-color: transparent;")
         self.persons_table_layout = QVBoxLayout(scroll_widget)
         self.persons_table_layout.setSpacing(10)
@@ -437,7 +437,7 @@ class OccupancyClaimsStep(BaseStep):
         person_id = person.get('person_id', '')
 
         card = QFrame()
-        card.setLayoutDirection(Qt.RightToLeft)
+        card.setLayoutDirection(get_layout_direction())
         card.setFixedHeight(60)
         card.setStyleSheet(f"""
             QFrame {{
@@ -526,7 +526,7 @@ class OccupancyClaimsStep(BaseStep):
         menu_btn.setCursor(Qt.PointingHandCursor)
 
         menu = QMenu(menu_btn)
-        menu.setLayoutDirection(Qt.RightToLeft)
+        menu.setLayoutDirection(get_layout_direction())
         menu.setFixedSize(99, 80)
         menu.setStyleSheet("""
             QMenu {
@@ -763,6 +763,7 @@ class OccupancyClaimsStep(BaseStep):
 
     def update_language(self, is_arabic: bool):
         """Update translatable texts when language changes."""
+        self.setLayoutDirection(get_layout_direction())
         self._title_label.setText(tr("wizard.occupancy_claims.title"))
         self._subtitle_label.setText(tr("wizard.occupancy_claims.subtitle"))
         self._add_person_btn.setText(tr("wizard.occupancy_claims.add_person"))

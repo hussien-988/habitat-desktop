@@ -1268,6 +1268,12 @@ class MainWindow(QMainWindow):
 
     def toggle_language(self):
         """Toggle language directly between Arabic and English."""
+        from ui.components.loading_spinner import LoadingSpinnerOverlay
+
+        if not hasattr(self, '_lang_spinner'):
+            self._lang_spinner = LoadingSpinnerOverlay(self, timeout_ms=10_000)
+        self._lang_spinner.show_loading(tr("app.changing_language"))
+
         new_lang = "en" if self._is_arabic else "ar"
         self._is_arabic = (new_lang == "ar")
         self.i18n.set_language(new_lang)
@@ -1281,6 +1287,8 @@ class MainWindow(QMainWindow):
 
         self.language_changed.emit(self._is_arabic)
         logger.info(f"Language changed to: {'Arabic' if self._is_arabic else 'English'}")
+
+        QTimer.singleShot(300, self._lang_spinner.hide_loading)
 
     def _on_language_changed(self, is_arabic: bool):
         """Handle language change across all components."""

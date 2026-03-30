@@ -173,7 +173,7 @@ class VocabularyIncompatibilityDialog(QDialog):
                 diff_item = QTableWidgetItem(diff_text)
                 diff_item.setForeground(Config.WARNING_COLOR)
                 self.vocab_table.setItem(i, 3, diff_item)
-            except:
+            except (ValueError, TypeError):
                 self.vocab_table.setItem(i, 3, QTableWidgetItem(tr("component.vocab_incompatibility.unspecified")))
 
             # Impact

@@ -156,8 +156,9 @@ class BuildingDetailsPage(QWidget):
         )
 
         scroll_content = QWidget()
-        scroll_content.setLayoutDirection(Qt.RightToLeft)
+        scroll_content.setLayoutDirection(get_layout_direction())
         scroll_content.setStyleSheet("background: transparent;")
+        self._scroll_content = scroll_content
         self._scroll_layout = QVBoxLayout(scroll_content)
         self._scroll_layout.setContentsMargins(0, 0, 0, 0)
         self._scroll_layout.setSpacing(20)
@@ -193,7 +194,7 @@ class BuildingDetailsPage(QWidget):
     def _create_card_base(self, icon_name: str, title: str, subtitle: str) -> tuple:
         """Create card with header (icon + title + subtitle). Returns (card, content_layout)."""
         card = QFrame()
-        card.setLayoutDirection(Qt.RightToLeft)
+        card.setLayoutDirection(get_layout_direction())
         card.setStyleSheet(f"""
             QFrame {{
                 background-color: {Colors.SURFACE};
@@ -255,7 +256,7 @@ class BuildingDetailsPage(QWidget):
 
         # Content container
         content_widget = QWidget()
-        content_widget.setLayoutDirection(Qt.RightToLeft)
+        content_widget.setLayoutDirection(get_layout_direction())
         content_widget.setStyleSheet("background: transparent; border: none;")
         content_layout = QVBoxLayout(content_widget)
         content_layout.setContentsMargins(0, 0, 0, 0)
@@ -268,7 +269,7 @@ class BuildingDetailsPage(QWidget):
     def _create_simple_card(self) -> tuple:
         """Create a simple card (no header). Returns (card, content_layout)."""
         card = QFrame()
-        card.setLayoutDirection(Qt.RightToLeft)
+        card.setLayoutDirection(get_layout_direction())
         card.setStyleSheet(f"""
             QFrame {{
                 background-color: {Colors.SURFACE};
@@ -283,7 +284,7 @@ class BuildingDetailsPage(QWidget):
         card_layout.setSpacing(12)
 
         content_widget = QWidget()
-        content_widget.setLayoutDirection(Qt.RightToLeft)
+        content_widget.setLayoutDirection(get_layout_direction())
         content_widget.setStyleSheet("background: transparent; border: none;")
         content_layout = QVBoxLayout(content_widget)
         content_layout.setContentsMargins(0, 0, 0, 0)
@@ -305,7 +306,7 @@ class BuildingDetailsPage(QWidget):
     def _create_units_table_card(self) -> QFrame:
         """Create card containing the units table for this building."""
         card = QFrame()
-        card.setLayoutDirection(Qt.RightToLeft)
+        card.setLayoutDirection(get_layout_direction())
         card.setObjectName("unitsTableCard")
         card.setStyleSheet(f"""
             QFrame#unitsTableCard {{
@@ -324,7 +325,7 @@ class BuildingDetailsPage(QWidget):
         self.units_table = QTableWidget()
         self.units_table.setColumnCount(5)
         self.units_table.setRowCount(self._units_per_page)
-        self.units_table.setLayoutDirection(Qt.RightToLeft)
+        self.units_table.setLayoutDirection(get_layout_direction())
         self.units_table.setShowGrid(False)
         self.units_table.setFocusPolicy(Qt.NoFocus)
         self.units_table.setSelectionMode(QTableWidget.NoSelection)
@@ -602,7 +603,7 @@ class BuildingDetailsPage(QWidget):
 
         address = build_hierarchical_address(building_obj=building, unit_obj=None, include_unit=False)
         addr_bar = QFrame()
-        addr_bar.setLayoutDirection(Qt.RightToLeft)
+        addr_bar.setLayoutDirection(get_layout_direction())
         addr_bar.setFixedHeight(28)
         addr_bar.setStyleSheet("QFrame { background-color: #F8FAFF; border: none; border-radius: 8px; }")
         addr_row = QHBoxLayout(addr_bar)
@@ -786,6 +787,7 @@ class BuildingDetailsPage(QWidget):
         )
         self._load_units_worker.finished.connect(self._on_load_units_finished)
         self._load_units_worker.error.connect(self._on_load_units_error)
+        self._spinner.show_loading(tr("component.loading.default"))
         self._load_units_worker.start()
 
     def _fetch_units_bg(self, building_uuid, auth_token):
@@ -796,6 +798,7 @@ class BuildingDetailsPage(QWidget):
 
     def _on_load_units_finished(self, result):
         """Callback: populate units table with fetched data."""
+        self._spinner.hide_loading()
         if result.success:
             self._units_list = result.data or []
         else:
@@ -808,6 +811,7 @@ class BuildingDetailsPage(QWidget):
 
     def _on_load_units_error(self, error_msg):
         """Callback: units fetch failed."""
+        self._spinner.hide_loading()
         logger.error(f"Failed to load units: {error_msg}")
         self._units_list = []
         self._units_page = 1
@@ -912,9 +916,14 @@ class BuildingDetailsPage(QWidget):
         )
 
     def update_language(self, is_arabic: bool):
-        self.setLayoutDirection(get_layout_direction())
+        direction = get_layout_direction()
+        self.setLayoutDirection(direction)
+        self._scroll_content.setLayoutDirection(direction)
+        self.units_table.setLayoutDirection(direction)
         self.breadcrumb_label.setText(tr("page.building_details.breadcrumb"))
         if self._units_view_active:
             self.view_units_btn.setText(tr("action.back"))
         else:
             self.view_units_btn.setText(tr("page.building_details.view_units"))
+        if self.current_building:
+            self._populate_cards()

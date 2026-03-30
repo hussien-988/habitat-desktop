@@ -10,7 +10,7 @@ from PyQt5.QtCore import Qt, QTimer, QRectF, QEvent
 from PyQt5.QtGui import QPainter, QColor, QPen
 
 from ui.font_utils import create_font, FontManager
-from services.translation_manager import tr
+from services.translation_manager import tr, get_layout_direction
 
 # Safety timeout: auto-hide spinner after 30 seconds to prevent infinite hang
 _DEFAULT_TIMEOUT_MS = 30_000
@@ -93,7 +93,7 @@ class LoadingSpinnerOverlay(QWidget):
         self._label.setStyleSheet(
             "color: rgba(255, 255, 255, 0.7); background: transparent;"
         )
-        self._label.setLayoutDirection(Qt.RightToLeft)
+        self._label.setLayoutDirection(get_layout_direction())
         layout.addWidget(self._label, 0, Qt.AlignCenter)
 
         # Safety timeout timer
