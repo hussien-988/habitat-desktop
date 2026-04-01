@@ -1110,39 +1110,7 @@ class MainWindow(QMainWindow):
     def _on_completed_claim_selected(self, claim_id: str):
         """Navigate to claim details page."""
         logger.info(f"Claim selected: {claim_id}")
-
-        claims_page = self.pages[Pages.CLAIMS]
-        claim_data = None
-        for c in claims_page.claims_data:
-            if c.get('claim_id') == claim_id:
-                claim_data = c
-                break
-
-        if not claim_data:
-            logger.warning(f"Claim data not found for: {claim_id}")
-            return
-
-        claim_uuid = claim_data.get('claim_uuid', '')
-        survey_id = claim_data.get('survey_id', '')
-
-        try:
-            from controllers.claim_controller import ClaimController
-            ctrl = ClaimController()
-            result = ctrl.get_claim_full_detail(claim_uuid, hint_survey_id=survey_id)
-            if result.success and result.data:
-                self.navigate_to(Pages.CLAIM_DETAILS, result.data)
-                return
-            logger.warning(f"ClaimController returned failure: {result.message}")
-        except Exception as e:
-            logger.warning(f"Could not load claim details: {e}")
-
-        # Error toast
-        from ui.components.toast import Toast
-        Toast.show_toast(
-            self,
-            f"تعذّر تحميل تفاصيل المطالبة {claim_id}",
-            toast_type=Toast.ERROR
-        )
+        self.navigate_to(Pages.CLAIM_DETAILS, {"claim_id": claim_id})
 
     def _start_new_office_survey(self):
         """Start a new office survey."""

@@ -387,6 +387,10 @@ class Navbar(QFrame):
         self.id_badge = IDBadgeWidget(user_id=self.user_id)
         layout.addWidget(self.id_badge)
 
+        # Settings pill (next to ID badge)
+        self._settings_pill = self._create_settings_pill()
+        layout.addWidget(self._settings_pill)
+
         return top_bar
 
     def _create_window_controls(self):
@@ -460,12 +464,7 @@ class Navbar(QFrame):
             self.tab_buttons.append(tab_btn)
             tabs_wrapper_layout.addWidget(tab_btn, stretch=1)
 
-        # Settings pill (collapsible)
-        self._settings_pill = self._create_settings_pill()
-
         layout.addWidget(tabs_wrapper, 1)
-        layout.addSpacing(12)
-        layout.addWidget(self._settings_pill, 0)
 
         self._set_active_tab(0)
         QTimer.singleShot(0, self._init_tab_indicator)
