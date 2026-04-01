@@ -801,6 +801,7 @@ EN_TRANSLATIONS = {
     "navbar.menu.data_management": "Reference Data Management",
     "navbar.menu.import_data": "Import Data",
     "navbar.menu.logout": "Logout",
+    "navbar.pill.settings": "Options",
     "building.docs.section_title": "Building Documents",
     "building.docs.none": "No documents available",
     "building.docs.view_details": "View Details",

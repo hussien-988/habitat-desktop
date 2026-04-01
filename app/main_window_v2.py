@@ -142,7 +142,6 @@ class MainWindow(QMainWindow):
         # Import here to avoid circular imports
         from ui.components.navbar import Navbar
         from ui.pages.login_page import LoginPage
-        from ui.pages.splash_page import SplashPage
         from ui.pages.dashboard_page import DashboardPage
         from ui.pages.buildings_page import BuildingsPage
         from ui.pages.building_details_page import BuildingDetailsPage
@@ -204,10 +203,6 @@ class MainWindow(QMainWindow):
 
         # Create pages
         self.pages = {}
-
-        # Splash page (mode chooser)
-        self.splash_page = SplashPage(self)
-        self.stack.addWidget(self.splash_page)
 
         # Login page
         self.pages[Pages.LOGIN] = LoginPage(self.i18n, db=self.db, parent=self)
@@ -354,9 +349,6 @@ class MainWindow(QMainWindow):
 
     def _connect_signals(self):
         """Connect widget signals to slots."""
-        # Splash page signal
-        self.splash_page.mode_selected.connect(self._on_data_mode_selected)
-
         # Login page signals
         self.pages[Pages.LOGIN].login_successful.connect(self._on_login_success)
 
@@ -475,23 +467,11 @@ class MainWindow(QMainWindow):
         self.language_changed.connect(self._on_language_changed)
 
     def _show_login(self):
-        """Show login or splash page depending on DATA_MODE."""
+        """Show the login page."""
         self.navbar.setVisible(False)
-        if Config.DATA_MODE:
-            self.pages[Pages.LOGIN].set_data_mode(Config.DATA_MODE, self.db)
-            self.stack.setCurrentWidget(self.pages[Pages.LOGIN])
-            logger.info("Showing login page (mode pre-set)")
-        else:
-            self.stack.setCurrentWidget(self.splash_page)
-            logger.info("Showing splash/mode chooser")
-
-    def _on_data_mode_selected(self, mode: str):
-        """Handle data mode selection from splash page."""
-        Config.DATA_MODE = "api"
-        logger.info("Data mode: API (Docker backend)")
-
-        self.pages[Pages.LOGIN].set_data_mode("api", self.db)
+        self.pages[Pages.LOGIN].set_data_mode(Config.DATA_MODE, self.db)
         self.stack.setCurrentWidget(self.pages[Pages.LOGIN])
+        logger.info("Showing login page")
 
     def _on_login_success(self, user):
         """Handle successful login."""
@@ -509,97 +489,78 @@ class MainWindow(QMainWindow):
         # Show loading overlay while preparing data
         self._show_login_loading()
 
-        # Refresh vocabularies now that we have a valid API token/port
         try:
-            from services.vocab_service import refresh_vocabularies
-            refresh_vocabularies()
-            logger.info("Vocabularies refreshed after login")
-        except Exception as e:
-            logger.warning(f"Failed to refresh vocabularies after login: {e}")
+            # Refresh vocabularies now that we have a valid API token/port
+            try:
+                from services.vocab_service import refresh_vocabularies
+                refresh_vocabularies()
+                logger.info("Vocabularies refreshed after login")
+            except Exception as e:
+                logger.warning(f"Failed to refresh vocabularies after login: {e}")
 
-        # Freeze repainting to prevent login-to-main transition flicker
-        self.setUpdatesEnabled(False)
+            # Freeze repainting to prevent login-to-main transition flicker
+            self.setUpdatesEnabled(False)
+            try:
+                # Sync language if it was changed on the login page
+                saved_lang = get_saved_language()
+                saved_is_arabic = (saved_lang == "ar")
+                if saved_is_arabic != self._is_arabic:
+                    self._is_arabic = saved_is_arabic
+                    self.i18n.set_language(saved_lang)
+                    if self._is_arabic:
+                        self.setLayoutDirection(Qt.RightToLeft)
+                    else:
+                        self.setLayoutDirection(Qt.LeftToRight)
+                    self.language_changed.emit(self._is_arabic)
 
-        # Sync language if it was changed on the login page
-        saved_lang = get_saved_language()
-        saved_is_arabic = (saved_lang == "ar")
-        if saved_is_arabic != self._is_arabic:
-            self._is_arabic = saved_is_arabic
-            self.i18n.set_language(saved_lang)
-            if self._is_arabic:
-                self.setLayoutDirection(Qt.RightToLeft)
-            else:
-                self.setLayoutDirection(Qt.LeftToRight)
-            self.language_changed.emit(self._is_arabic)
+                # Show navbar
+                self.navbar.setVisible(True)
 
-        # Show navbar
-        self.navbar.setVisible(True)
+                # Update navbar with user info
+                self.navbar.set_user_id(str(user.user_id))
 
-        # Update navbar with user info
-        self.navbar.set_user_id(str(user.user_id))
+                # Set user context on CasesPage BEFORE configure_for_role,
+                # because configure_for_role emits tab_changed which triggers refresh()
+                cases_page = self.pages.get(Pages.CASES)
+                if cases_page and hasattr(cases_page, 'configure_for_user'):
+                    cases_page.configure_for_user(user.role, str(user.user_id))
 
-        # Set user context on CasesPage BEFORE configure_for_role,
-        # because configure_for_role emits tab_changed which triggers refresh()
-        cases_page = self.pages.get(Pages.CASES)
-        if cases_page and hasattr(cases_page, 'configure_for_user'):
-            cases_page.configure_for_user(user.role, str(user.user_id))
+                # Configure tabs based on user role (RBAC)
+                self.navbar.configure_for_role(user.role)
 
-        # Configure tabs based on user role (RBAC)
-        self.navbar.configure_for_role(user.role)
+                # Apply role-based button visibility to content pages
+                for page_id in (Pages.BUILDINGS, Pages.UNITS, Pages.PERSONS,
+                                Pages.IMPORT_WIZARD, Pages.IMPORT_PACKAGES):
+                    page = self.pages.get(page_id)
+                    if page and hasattr(page, 'configure_for_role'):
+                        page.configure_for_role(user.role)
 
-        # Apply role-based button visibility to content pages
-        for page_id in (Pages.BUILDINGS, Pages.UNITS, Pages.PERSONS,
-                        Pages.IMPORT_WIZARD, Pages.IMPORT_PACKAGES):
-            page = self.pages.get(page_id)
-            if page and hasattr(page, 'configure_for_role'):
-                page.configure_for_role(user.role)
-
-        # Load field assignment filter data (requires valid API token)
-        if Pages.FIELD_ASSIGNMENT in self.pages:
-            field_page = self.pages[Pages.FIELD_ASSIGNMENT]
-            if hasattr(field_page, 'load_data'):
-                field_page.load_data()
-
-        # Resume repainting - user sees the final state directly
-        self.setUpdatesEnabled(True)
-
-        # Hide loading overlay
-        self._hide_login_loading()
+                # Load field assignment filter data (requires valid API token)
+                if Pages.FIELD_ASSIGNMENT in self.pages:
+                    field_page = self.pages[Pages.FIELD_ASSIGNMENT]
+                    if hasattr(field_page, 'load_data'):
+                        field_page.load_data()
+            finally:
+                # Always resume repainting
+                self.setUpdatesEnabled(True)
+        finally:
+            # Always hide loading overlay
+            self._hide_login_loading()
 
         # Start session timeout timer
         self._start_session_timer()
 
     def _show_login_loading(self):
-        """Show a loading overlay during post-login data preparation."""
-        from PyQt5.QtWidgets import QFrame, QLabel, QVBoxLayout, QApplication
-        from PyQt5.QtCore import Qt
-        from ui.font_utils import create_font, FontManager
-
-        self._loading_overlay = QFrame(self)
-        self._loading_overlay.setStyleSheet(
-            "background-color: rgba(255, 255, 255, 230); border: none;"
-        )
-        self._loading_overlay.setGeometry(self.rect())
-
-        lay = QVBoxLayout(self._loading_overlay)
-        lay.setAlignment(Qt.AlignCenter)
-
-        msg = QLabel(tr("page.login.loading_data"))
-        msg.setFont(create_font(size=14, weight=FontManager.WEIGHT_MEDIUM))
-        msg.setStyleSheet("color: #2C3E50; background: transparent;")
-        msg.setAlignment(Qt.AlignCenter)
-        lay.addWidget(msg)
-
-        self._loading_overlay.raise_()
-        self._loading_overlay.show()
-        QApplication.processEvents()
+        """Show a loading spinner overlay during post-login data preparation."""
+        from ui.components.loading_spinner import LoadingSpinnerOverlay
+        if not hasattr(self, '_login_spinner') or self._login_spinner is None:
+            self._login_spinner = LoadingSpinnerOverlay(self, timeout_ms=30_000)
+        self._login_spinner.show_loading(tr("page.login.loading_data"))
 
     def _hide_login_loading(self):
-        """Hide the loading overlay."""
-        if hasattr(self, '_loading_overlay') and self._loading_overlay:
-            self._loading_overlay.hide()
-            self._loading_overlay.deleteLater()
-            self._loading_overlay = None
+        """Hide the loading spinner overlay."""
+        if hasattr(self, '_login_spinner') and self._login_spinner:
+            self._login_spinner.hide_loading()
 
     def _start_session_timer(self):
         """Start session inactivity timer based on security settings."""

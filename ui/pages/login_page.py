@@ -1,15 +1,18 @@
 # -*- coding: utf-8 -*-
-"""Login page."""
+"""Login page — Cartographic Authority design."""
 
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QLabel, QLineEdit,
-    QPushButton, QFrame, QGraphicsDropShadowEffect, QHBoxLayout, QGraphicsOpacityEffect
+    QPushButton, QFrame, QGraphicsDropShadowEffect, QHBoxLayout
 )
 from PyQt5.QtCore import Qt, pyqtSignal, QPoint, QSize, QPropertyAnimation, QEasingCurve, QTimer
-from PyQt5.QtGui import QColor, QPainter, QPaintEvent, QFont, QFontDatabase, QPixmap, QLinearGradient, QRadialGradient
-from PyQt5.QtGui import QCursor, QIcon
+from PyQt5.QtGui import (
+    QColor, QPainter, QPaintEvent, QFont, QFontDatabase, QPixmap,
+    QLinearGradient, QRadialGradient, QPen, QCursor, QIcon
+)
 import math
 import os
+import random
 import re
 import time
 from app.config import Config
@@ -24,8 +27,41 @@ from ui.design_system import Colors
 logger = get_logger(__name__)
 
 
+class _RotatingLogo(QWidget):
+    """Logo that rotates calmly around a vertical (Y) axis."""
+
+    def __init__(self, pixmap: QPixmap, size: int = 100, parent=None):
+        super().__init__(parent)
+        self._pixmap = pixmap.scaled(size, size, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+        self._size = size
+        self.setFixedSize(size, size)
+        self.setAttribute(Qt.WA_TranslucentBackground)
+        self.setStyleSheet("background: transparent;")
+
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.SmoothPixmapTransform)
+        t = 0.0
+        p = self.parent()
+        while p:
+            if hasattr(p, "_anim_start"):
+                t = time.time() - p._anim_start
+                break
+            p = p.parent()
+        scale_x = abs(math.cos(t * 0.5))
+        scale_x = max(0.08, scale_x)
+        cx = self._size / 2
+        cy = self._size / 2
+        pw = self._pixmap.width()
+        ph = self._pixmap.height()
+        painter.translate(cx, cy)
+        painter.scale(scale_x, 1.0)
+        painter.drawPixmap(int(-pw / 2), int(-ph / 2), self._pixmap)
+        painter.end()
+
+
 class LoginPage(QWidget):
-    """Login page exactly matching the reference screenshot."""
+    """Login page with Cartographic Authority dark split-layout design."""
 
     login_successful = pyqtSignal(object)
 
@@ -41,24 +77,50 @@ class LoginPage(QWidget):
         self._failed_attempts = 0
         self._lockout_until = None
 
+        # Constellation particles
+        random.seed(99)
+        self._particles = []
+        for _ in range(18):
+            self._particles.append({
+                "x": random.uniform(0.05, 0.55),
+                "y": random.uniform(0.08, 0.92),
+                "dx": random.uniform(0.3, 0.8) * random.choice([-1, 1]),
+                "dy": random.uniform(0.2, 0.6) * random.choice([-1, 1]),
+                "phase": random.uniform(0, math.tau),
+            })
+
+        # Load watermark pixmap for paintEvent background
+        self._watermark_pixmap = None
+        wm_path = os.path.join(os.path.dirname(__file__), "..", "..", "assets", "images", "login-watermark.png")
+        wm_path = os.path.normpath(wm_path)
+        wm_pix = QPixmap(wm_path)
+        if not wm_pix.isNull():
+            self._watermark_pixmap = wm_pix.scaled(500, 400, Qt.IgnoreAspectRatio, Qt.SmoothTransformation)
+
         # Load custom fonts
         self._load_fonts()
         self._setup_ui()
-        self._setup_login_watermark()
-        self._position_login_watermark()
         self._setup_login_navbar()
 
-        # Shimmer animation timer (~12fps for performance)
-        self._shimmer_start = time.time()
-        self._shimmer_timer = QTimer(self)
-        self._shimmer_timer.timeout.connect(self._shimmer_tick)
-        self._shimmer_timer.start(80)
+        # Animation timer (~15fps)
+        self._anim_start = time.time()
+        self._anim_timer = QTimer(self)
+        self._anim_timer.timeout.connect(self._anim_tick)
+        self._anim_timer.start(66)
 
-    def _shimmer_tick(self):
-        """Repaint only the blue section for shimmer animation."""
-        h = self.height()
-        blue_height = int(h * 0.55)
-        self.update(0, 0, self.width(), 33 + blue_height)
+    def _anim_tick(self):
+        self.update()
+        if hasattr(self, "_rotating_logo"):
+            self._rotating_logo.update()
+        # Animate titlebar logo sliding left-right within titlebar bounds
+        if hasattr(self, "_tb_logo") and self._tb_logo:
+            t = time.time() - self._anim_start
+            progress = 0.5 + 0.5 * math.sin(t * 0.3)
+            deco_w = int(self.width() * 0.58)
+            min_x = 12
+            max_x = max(min_x + 10, deco_w - 143 - 12)
+            x = int(min_x + progress * (max_x - min_x))
+            self._tb_logo.move(x, self._tb_logo.y())
 
     def _load_fonts(self):
         """Load Noto Kufi Arabic fonts"""
@@ -76,333 +138,707 @@ class LoginPage(QWidget):
                 QFontDatabase.addApplicationFont(font_path)
 
     def paintEvent(self, event: QPaintEvent):
-        """Paint background with gradient blue section and ambient glow."""
+        """Dark navy background with geometric grid, constellation, and breathing glow."""
         painter = QPainter(self)
         painter.setRenderHint(QPainter.Antialiasing)
 
         w = self.width()
         h = self.height()
+        t = time.time() - self._anim_start
 
-        blue_height = int(h * 0.55)
+        # Deep navy gradient (diagonal, slightly brightened)
+        grad = QLinearGradient(0, 0, w, h)
+        grad.setColorAt(0.0, QColor("#0D1B30"))
+        grad.setColorAt(0.5, QColor("#122548"))
+        grad.setColorAt(1.0, QColor("#1A3358"))
+        painter.fillRect(0, 0, w, h, grad)
 
-        # Diagonal gradient across the blue section
-        gradient = QLinearGradient(0, 33, w, 33 + blue_height)
-        gradient.setColorAt(0.0, QColor("#2B6CB0"))
-        gradient.setColorAt(0.5, QColor(Colors.PRIMARY_BLUE))
-        gradient.setColorAt(1.0, QColor(Colors.PRIMARY_BLUE_LIGHT))
-        painter.fillRect(0, 33, w, blue_height, gradient)
+        # Geometric cadastral grid (decorative area only, left ~58%)
+        deco_w = int(w * 0.58)
+        grid_spacing = 60
+        painter.setPen(QPen(QColor(56, 144, 223, 16), 1))
+        x = grid_spacing
+        while x < deco_w:
+            painter.drawLine(x, 33, x, h)
+            x += grid_spacing
+        y = 33 + grid_spacing
+        while y < h:
+            painter.drawLine(0, y, deco_w, y)
+            y += grid_spacing
 
-        # Moving shimmer glows
-        t = time.time() - self._shimmer_start
-        glow_x = w * 0.5 + w * 0.35 * math.sin(t * 0.7)
-        glow_y = 33 + blue_height * (0.35 + 0.15 * math.cos(t * 1.1))
-        glow_alpha = 45 + int(25 * math.sin(t * 2.0))
+        # Diamond accents at intersections
+        painter.setPen(Qt.NoPen)
+        painter.setBrush(QColor(56, 144, 223, 12))
+        gx = grid_spacing
+        while gx < deco_w:
+            gy = 33 + grid_spacing
+            while gy < h:
+                painter.save()
+                painter.translate(gx, gy)
+                painter.rotate(45)
+                painter.drawRect(-2, -2, 4, 4)
+                painter.restore()
+                gy += grid_spacing
+            gx += grid_spacing
 
-        glow = QRadialGradient(glow_x, glow_y, w * 0.4)
-        glow.setColorAt(0.0, QColor(255, 255, 255, glow_alpha))
-        glow.setColorAt(1.0, QColor(255, 255, 255, 0))
-        painter.fillRect(0, 33, w, blue_height, glow)
+        # Subtle ambient light wash across center
+        light_wash = QLinearGradient(0, h * 0.3, 0, h * 0.7)
+        light_wash.setColorAt(0.0, QColor(56, 144, 223, 0))
+        light_wash.setColorAt(0.4, QColor(56, 144, 223, 8))
+        light_wash.setColorAt(0.5, QColor(100, 160, 220, 12))
+        light_wash.setColorAt(0.6, QColor(56, 144, 223, 8))
+        light_wash.setColorAt(1.0, QColor(56, 144, 223, 0))
+        painter.setPen(Qt.NoPen)
+        painter.setBrush(Qt.NoBrush)
+        painter.fillRect(0, 0, w, h, light_wash)
 
-        # Bottom section
-        painter.fillRect(0, 33 + blue_height, w, h - (33 + blue_height), QColor(Colors.BACKGROUND))
+        # Constellation particles
+        painter.setPen(Qt.NoPen)
+        positions = []
+        for p in self._particles:
+            px = int((p["x"] + 0.012 * math.sin(t * p["dx"] + p["phase"])) * w)
+            py = int((p["y"] + 0.010 * math.cos(t * p["dy"] + p["phase"])) * h)
+            px = max(4, min(deco_w - 4, px))
+            py = max(37, min(h - 4, py))
+            positions.append((px, py))
+            alpha = 38 + int(18 * math.sin(t * 1.5 + p["phase"]))
+            painter.setBrush(QColor(139, 172, 200, alpha))
+            painter.drawEllipse(QPoint(px, py), 2, 2)
+
+        # Connecting lines between nearby particles
+        painter.setPen(QPen(QColor(139, 172, 200, 12), 1))
+        for i in range(len(positions)):
+            for j in range(i + 1, len(positions)):
+                dx = positions[i][0] - positions[j][0]
+                dy = positions[i][1] - positions[j][1]
+                dist = math.sqrt(dx * dx + dy * dy)
+                if dist < 150:
+                    painter.drawLine(positions[i][0], positions[i][1],
+                                     positions[j][0], positions[j][1])
+
+        # Breathing glow behind logo area
+        if hasattr(self, "_deco_panel"):
+            deco_rect = self._deco_panel.geometry()
+            cx = deco_rect.x() + deco_rect.width() // 2
+            cy = deco_rect.y() + int(deco_rect.height() * 0.45)
+            glow_alpha = 18 + int(12 * math.sin(t * 1.25))
+            glow_r = 140
+            glow_grad = QRadialGradient(cx, cy, glow_r)
+            glow_grad.setColorAt(0.0, QColor(56, 144, 223, glow_alpha))
+            glow_grad.setColorAt(1.0, QColor(56, 144, 223, 0))
+            painter.setPen(Qt.NoPen)
+            painter.setBrush(glow_grad)
+            painter.drawEllipse(QPoint(cx, cy), glow_r, glow_r)
+
+        # Pulsing watermark logo in the decorative area
+        if self._watermark_pixmap and hasattr(self, "_deco_panel"):
+            deco_rect = self._deco_panel.geometry()
+            wm_w = self._watermark_pixmap.width()
+            wm_h = self._watermark_pixmap.height()
+            wm_x = deco_rect.x() + (deco_rect.width() - wm_w) // 2
+            wm_y = deco_rect.y() + (deco_rect.height() - wm_h) // 2
+            wm_opacity = 0.05 + 0.05 * math.sin(t * 0.8)
+            painter.setOpacity(wm_opacity)
+            painter.drawPixmap(wm_x, wm_y, self._watermark_pixmap)
+            painter.setOpacity(1.0)
+
+        # Subtle vertical divider between panels
+        div_x = deco_w
+        div_grad = QLinearGradient(div_x, 33, div_x, h)
+        div_grad.setColorAt(0.0, QColor(56, 144, 223, 0))
+        div_grad.setColorAt(0.3, QColor(56, 144, 223, 25))
+        div_grad.setColorAt(0.5, QColor(56, 144, 223, 40))
+        div_grad.setColorAt(0.7, QColor(56, 144, 223, 25))
+        div_grad.setColorAt(1.0, QColor(56, 144, 223, 0))
+        painter.setPen(QPen(div_grad, 1))
+        painter.drawLine(div_x, 33, div_x, h)
+
+        # 5a: Orbital ring around rotating logo
+        if hasattr(self, "_rotating_logo"):
+            logo_pos = self._rotating_logo.mapTo(self, QPoint(0, 0))
+            ring_cx = logo_pos.x() + 50
+            ring_cy = logo_pos.y() + 50
+            painter.setPen(QPen(QColor(56, 144, 223, 15), 1))
+            painter.setBrush(Qt.NoBrush)
+            painter.save()
+            painter.translate(ring_cx, ring_cy)
+            painter.rotate(t * 8)
+            painter.drawEllipse(-70, -35, 140, 70)
+            painter.restore()
+
+        # 5b: Corner brackets in the right panel
+        login_x = deco_w + 40
+        bracket_color = QColor(56, 144, 223, 20)
+        painter.setPen(QPen(bracket_color, 1))
+        # Top-right bracket
+        painter.drawLine(w - 40, 60, w - 40, 90)
+        painter.drawLine(w - 40, 60, w - 70, 60)
+        # Bottom-left bracket (in right panel)
+        painter.drawLine(login_x, h - 70, login_x, h - 40)
+        painter.drawLine(login_x, h - 70, login_x + 30, h - 70)
+
+        # 5c: Accent line near bottom
+        line_y = h - 3
+        line_grad = QLinearGradient(0, line_y, w, line_y)
+        line_grad.setColorAt(0.0, QColor(56, 144, 223, 0))
+        line_grad.setColorAt(0.3, QColor(56, 144, 223, 15))
+        line_grad.setColorAt(0.5, QColor(56, 144, 223, 25))
+        line_grad.setColorAt(0.7, QColor(56, 144, 223, 15))
+        line_grad.setColorAt(1.0, QColor(56, 144, 223, 0))
+        painter.setPen(QPen(line_grad, 1))
+        painter.drawLine(0, line_y, w, line_y)
+
+        # 5d: Coordinate labels on grid (map-style)
+        painter.setPen(QColor(56, 144, 223, 18))
+        coord_font = create_font(size=6, weight=FontManager.WEIGHT_REGULAR)
+        painter.setFont(coord_font)
+        for i, gx in enumerate(range(grid_spacing * 2, deco_w, grid_spacing * 3)):
+            for j, gy in enumerate(range(33 + grid_spacing * 2, h, grid_spacing * 4)):
+                painter.drawText(gx + 4, gy - 4, f"{35+i*0.5:.1f}N {36+j*0.3:.1f}E")
+
+        painter.end()
 
     def _setup_ui(self):
-        """Setup the login UI."""
-        # Set background color for the entire page
-        self.setStyleSheet(f"""
-            QWidget#LoginPage {{
-                background-color: {Colors.BACKGROUND};
-            }}
-        """)
+        """Setup split layout: decorative panel (left) + login panel (right)."""
         self.setObjectName("LoginPage")
+        self.setStyleSheet("QWidget#LoginPage { background: transparent; }")
 
-        # Main layout with NO margins (full screen)
         main_layout = QVBoxLayout(self)
         main_layout.setContentsMargins(0, 0, 0, 0)
         main_layout.setSpacing(0)
 
-        # Stack layers from bottom to top:
-        # 1. Background is set via stylesheet above
-        # 2. Blue section (will be created by paintEvent)
-        # 3. Login card (centered)
+        # Spacer for titlebar
+        titlebar_spacer = QWidget()
+        titlebar_spacer.setFixedHeight(33)
+        titlebar_spacer.setStyleSheet("background: transparent;")
+        main_layout.addWidget(titlebar_spacer)
 
-        # Create container for login card (centered)
-        card_container = QWidget()
-        card_container.setStyleSheet("background: transparent;")
-        card_container_layout = QVBoxLayout(card_container)
-        card_container_layout.setAlignment(Qt.AlignCenter)
-        card_container_layout.setContentsMargins(0, 0, 0, 0)
+        # Split container (always LTR so panels don't swap on language change)
+        split = QWidget()
+        split.setStyleSheet("background: transparent;")
+        split.setLayoutDirection(Qt.LeftToRight)
+        self._split_container = split
+        split_layout = QHBoxLayout(split)
+        split_layout.setContentsMargins(0, 0, 0, 0)
+        split_layout.setSpacing(0)
 
-        # Create login card
-        self.login_card = self._create_login_card()
-        card_container_layout.addWidget(self.login_card)
+        # Decorative panel (left)
+        self._deco_panel = self._create_decorative_panel()
+        split_layout.addWidget(self._deco_panel, 58)
 
-        # Add card container to main layout
-        main_layout.addWidget(card_container)
-    def _setup_login_watermark(self):
-        self.bg_logo = QLabel(self)
-        self.bg_logo.setObjectName("login_bg_logo")
-        self.bg_logo.setAttribute(Qt.WA_TransparentForMouseEvents, True)
-        self.bg_logo.setStyleSheet("background: transparent;")
+        # Login panel (right) — centered vertically via stretches
+        login_container = QWidget()
+        login_container.setStyleSheet("background: transparent;")
+        login_container_layout = QVBoxLayout(login_container)
+        login_container_layout.setContentsMargins(30, 0, 30, 0)
 
-        current_dir = os.path.dirname(os.path.abspath(__file__))
-        logo_path = os.path.join(current_dir, "..", "..", "assets", "images", "login-watermark.png")
-        logo_path = os.path.normpath(logo_path)
+        login_container_layout.addStretch(1)
+        self.login_card = self._create_login_panel()
+        login_container_layout.addWidget(self.login_card, 0, Qt.AlignHCenter)
+        login_container_layout.addStretch(1)
 
-        pix = QPixmap(logo_path)
-        if pix.isNull():
-            return
+        split_layout.addWidget(login_container, 42)
 
-        self._bg_logo_src = pix
+        main_layout.addWidget(split, 1)
 
-        # شفافية خفيفة
-        eff = QGraphicsOpacityEffect(self.bg_logo)
-        eff.setOpacity(0.25)
-        self.bg_logo.setGraphicsEffect(eff)
+        # Floating settings pill at bottom-left
+        self._create_settings_pill()
 
-        self._pulse_anim = QPropertyAnimation(eff, b"opacity")
-        self._pulse_anim.setDuration(3000)
-        self._pulse_anim.setStartValue(0.25)
-        self._pulse_anim.setKeyValueAt(0.5, 0.7)
-        self._pulse_anim.setEndValue(0.25)
-        self._pulse_anim.setEasingCurve(QEasingCurve.InOutSine)
-        self._pulse_anim.setLoopCount(-1)
-        self._pulse_anim.start()
+    def _create_settings_pill(self):
+        """Floating expandable pill at the bottom-left corner."""
+        self._pill_expanded = False
+        _PILL_H = 40
+        self._pill_collapsed_w = 150
+        self._pill_expanded_w = 380
 
-        # خليه ورا الكارد
-        self.bg_logo.lower()
-        if hasattr(self, "login_card"):
-            self.login_card.raise_()
-    def _position_login_watermark(self):
-        if not hasattr(self, "bg_logo") or not hasattr(self, "_bg_logo_src"):
-            return
-
-        target_w = 657
-        target_h = 515
-
-        pix = self._bg_logo_src.scaled(
-            target_w, target_h,
-            Qt.IgnoreAspectRatio,
-            Qt.SmoothTransformation
-        )
-
-        self.bg_logo.setPixmap(pix)
-        self.bg_logo.resize(pix.size())
-
-        # Position watermark
-        x = 427
-        y = 65
-        self.bg_logo.move(x, y)
-
-        # ترتيب الطبقات: الشعار تحت، الكارد فوق، وبعدين أزرار اللوجين إذا عندك titlebar
-        self.bg_logo.lower()
-        if hasattr(self, "login_card"):
-            self.login_card.raise_()
-        if hasattr(self, "titlebar"):
-            self.titlebar.raise_()
-
-
-    def _create_login_card(self) -> QFrame:
-        """Create the white login card."""
-        card = QFrame()
-        card.setObjectName("login_card")
-        # Card size
-        card.setFixedWidth(475)
-        card.setFixedHeight(538)
-        card.setStyleSheet("""
-            QFrame#login_card {
-                background-color: white;
-                border-radius: 24px;
-                
+        self._pill = QFrame(self)
+        self._pill.setObjectName("settings_pill")
+        self._pill.setFixedHeight(_PILL_H)
+        self._pill.setFixedWidth(self._pill_collapsed_w)
+        self._pill.setStyleSheet("""
+            QFrame#settings_pill {
+                background: rgba(10, 22, 40, 180);
+                border: 1px solid rgba(56, 144, 223, 40);
+                border-radius: 20px;
             }
         """)
+        self._pill.setCursor(QCursor(Qt.PointingHandCursor))
 
-        # Subtle shadow
-        shadow = QGraphicsDropShadowEffect()
-        shadow.setBlurRadius(25)
-        shadow.setColor(QColor(150, 150, 150, 40))
-        shadow.setOffset(0, 3)
-        card.setGraphicsEffect(shadow)
+        pill_layout = QHBoxLayout(self._pill)
+        pill_layout.setContentsMargins(14, 0, 14, 0)
+        pill_layout.setSpacing(0)
 
-        card_layout = QVBoxLayout(card)
-        card_layout.setSpacing(24)
-        card_layout.setContentsMargins(32, 32, 32, 32)
+        _BTN_STYLE = """
+            QPushButton {
+                color: rgba(139, 172, 200, 200);
+                background: transparent;
+                border: none;
+                border-radius: 4px;
+                padding: 4px 10px;
+            }
+            QPushButton:hover {
+                background: rgba(255,255,255,0.10);
+                color: white;
+            }
+            QPushButton:pressed {
+                background: rgba(255,255,255,0.16);
+            }
+        """
 
-        # Login Card Top Logo
-        logo_label = QLabel()
-        logo_label.setAlignment(Qt.AlignCenter)
-        logo_label.setFixedSize(92, 90)
-        logo_label.setStyleSheet("background: transparent;")
+        pill_text = "\u0627\u0644\u0625\u0639\u062f\u0627\u062f\u0627\u062a" if tm_get_language() == "ar" else "Settings"
+        self._pill_label = QPushButton("\u25C8  " + pill_text)
+        self._pill_label.setObjectName("pill_trigger")
+        self._pill_label.setStyleSheet("""
+            QPushButton#pill_trigger {
+                color: rgba(139, 172, 200, 200);
+                background: transparent;
+                border: none;
+                padding: 0;
+            }
+            QPushButton#pill_trigger:hover {
+                color: white;
+            }
+        """)
+        self._pill_label.setFont(create_font(size=10, weight=QFont.DemiBold))
+        self._pill_label.setCursor(QCursor(Qt.PointingHandCursor))
+        self._pill_label.setFocusPolicy(Qt.NoFocus)
+        self._pill_label.clicked.connect(self._toggle_pill)
+        pill_layout.addWidget(self._pill_label)
 
+        pill_layout.addStretch(1)
+
+        # Expandable content (hidden initially)
+        self._pill_content = QWidget()
+        self._pill_content.setStyleSheet("background: transparent;")
+        self._pill_content.setVisible(False)
+        content_lay = QHBoxLayout(self._pill_content)
+        content_lay.setContentsMargins(0, 0, 0, 0)
+        content_lay.setSpacing(0)
+
+        # Separator
+        sep = QFrame()
+        sep.setFixedSize(1, 18)
+        sep.setStyleSheet("background: rgba(139,172,200,40);")
+        content_lay.addWidget(sep)
+        content_lay.addSpacing(8)
+
+        # Language toggle button
+        self._lang_btn = QPushButton()
+        self._lang_btn.setStyleSheet(_BTN_STYLE)
+        self._lang_btn.setFixedHeight(30)
+        self._lang_btn.setCursor(QCursor(Qt.PointingHandCursor))
+        self._lang_btn.setFocusPolicy(Qt.NoFocus)
+        self._lang_btn.setFont(create_font(size=9, weight=QFont.DemiBold))
+        try:
+            from ui.components.icon import Icon
+            lang_pixmap = Icon.load_pixmap("language", size=14)
+            if lang_pixmap and not lang_pixmap.isNull():
+                self._lang_btn.setIcon(QIcon(lang_pixmap))
+                self._lang_btn.setIconSize(QSize(14, 14))
+        except Exception:
+            pass
+        self._lang_btn.clicked.connect(self._toggle_language)
+        self._update_lang_button()
+        content_lay.addWidget(self._lang_btn)
+
+        content_lay.addSpacing(4)
+
+        # Separator
+        sep2 = QFrame()
+        sep2.setFixedSize(1, 18)
+        sep2.setStyleSheet("background: rgba(139,172,200,40);")
+        content_lay.addWidget(sep2)
+        content_lay.addSpacing(4)
+
+        server_text = "\u0627\u0644\u062e\u0627\u062f\u0645" if tm_get_language() == "ar" else "Server"
+        self._btn_settings = QPushButton("\u25A3  " + server_text)
+        self._btn_settings.setStyleSheet(_BTN_STYLE)
+        self._btn_settings.setFixedHeight(30)
+        self._btn_settings.setCursor(QCursor(Qt.PointingHandCursor))
+        self._btn_settings.setFocusPolicy(Qt.NoFocus)
+        self._btn_settings.setFont(create_font(size=9, weight=QFont.DemiBold))
+        self._btn_settings.clicked.connect(self._open_server_settings)
+        content_lay.addWidget(self._btn_settings)
+
+        pill_layout.addWidget(self._pill_content)
+
+        self._pill.raise_()
+
+    def _toggle_pill(self):
+        """Toggle the settings pill between collapsed and expanded."""
+        self._pill_expanded = not self._pill_expanded
+
+        if self._pill_expanded:
+            self._pill_content.setVisible(True)
+            self._pill_anim = QPropertyAnimation(self._pill, b"minimumWidth")
+            self._pill_anim.setDuration(250)
+            self._pill_anim.setStartValue(self._pill_collapsed_w)
+            self._pill_anim.setEndValue(self._pill_expanded_w)
+            self._pill_anim.setEasingCurve(QEasingCurve.OutCubic)
+            self._pill_anim2 = QPropertyAnimation(self._pill, b"maximumWidth")
+            self._pill_anim2.setDuration(250)
+            self._pill_anim2.setStartValue(self._pill_collapsed_w)
+            self._pill_anim2.setEndValue(self._pill_expanded_w)
+            self._pill_anim2.setEasingCurve(QEasingCurve.OutCubic)
+            self._pill_anim.start()
+            self._pill_anim2.start()
+        else:
+            self._pill_anim = QPropertyAnimation(self._pill, b"minimumWidth")
+            self._pill_anim.setDuration(200)
+            self._pill_anim.setStartValue(self._pill_expanded_w)
+            self._pill_anim.setEndValue(self._pill_collapsed_w)
+            self._pill_anim.setEasingCurve(QEasingCurve.InCubic)
+            self._pill_anim2 = QPropertyAnimation(self._pill, b"maximumWidth")
+            self._pill_anim2.setDuration(200)
+            self._pill_anim2.setStartValue(self._pill_expanded_w)
+            self._pill_anim2.setEndValue(self._pill_collapsed_w)
+            self._pill_anim2.setEasingCurve(QEasingCurve.InCubic)
+            self._pill_anim.finished.connect(lambda: self._pill_content.setVisible(False))
+            self._pill_anim.start()
+            self._pill_anim2.start()
+
+    def _create_decorative_panel(self) -> QWidget:
+        """Left decorative panel with logo, titles, version."""
+        panel = QWidget()
+        panel.setStyleSheet("background: transparent;")
+        layout = QVBoxLayout(panel)
+        layout.setContentsMargins(40, 20, 40, 30)
+        layout.setSpacing(0)
+
+        # Top stretch for vertical centering
+        layout.addStretch(1)
+
+        # Rotating logo
         current_dir = os.path.dirname(os.path.abspath(__file__))
-
-        # Try to load Layer_1.png logo
         logo_path = os.path.join(current_dir, "..", "..", "assets", "images", "Layer_1.png")
         logo_path = os.path.normpath(logo_path)
 
         pixmap = QPixmap(logo_path)
         if not pixmap.isNull():
-            # Scale logo
-            logo_label.setPixmap(pixmap.scaled(95, 90, Qt.IgnoreAspectRatio, Qt.SmoothTransformation))
+            self._rotating_logo = _RotatingLogo(pixmap, size=100, parent=panel)
+            layout.addWidget(self._rotating_logo, 0, Qt.AlignCenter)
         else:
-            logo_label.setText("UN-HABITAT")
+            logo_label = QLabel("UN-HABITAT")
+            logo_label.setAlignment(Qt.AlignCenter)
             logo_label.setStyleSheet("color: #3890DF; font-size: 14px; font-weight: bold; background: transparent;")
+            layout.addWidget(logo_label, 0, Qt.AlignCenter)
 
-        card_layout.addWidget(logo_label, 0, Qt.AlignCenter)
+        layout.addSpacing(20)
 
-        # Title
-        self._title_label = QLabel(tr("page.login.title"))
-        title = self._title_label
+        # Title "TRRCMS"
+        title = QLabel("TRRCMS")
         title.setAlignment(Qt.AlignCenter)
-        title.setMaximumWidth(315)
-        title_font = create_font(size=FontManager.SIZE_HEADING, weight=QFont.Bold, letter_spacing=0)
+        title_font = create_font(size=20, weight=QFont.DemiBold, letter_spacing=4.0)
         title.setFont(title_font)
-        title.setStyleSheet("color: #172A47; background: transparent;")
-        card_layout.addWidget(title,0, Qt.AlignCenter)
+        title.setStyleSheet("color: white; background: transparent;")
+        layout.addWidget(title, 0, Qt.AlignCenter)
+        layout.addSpacing(10)
 
-        card_layout.addSpacing(-20)
+        # Arabic subtitle
+        self._deco_ar_label = QLabel(tr("page.login.title"))
+        self._deco_ar_label.setAlignment(Qt.AlignCenter)
+        self._deco_ar_label.setWordWrap(True)
+        ar_font = create_font(size=11, weight=QFont.DemiBold)
+        self._deco_ar_label.setFont(ar_font)
+        self._deco_ar_label.setStyleSheet("color: rgba(139,172,200, 217); background: transparent;")
+        layout.addWidget(self._deco_ar_label)
+        layout.addSpacing(14)
 
-        # Subtitle
-        self._subtitle_label = QLabel(tr("page.login.subtitle"))
-        subtitle = self._subtitle_label
-        subtitle.setAlignment(Qt.AlignCenter)
-        subtitle.setWordWrap(False)  # Single line only
-        subtitle.setMinimumWidth(315)  # Ensure minimum width for single line
-        subtitle_font = create_font(size=FontManager.SIZE_BODY, weight=QFont.DemiBold, letter_spacing=0)
-        subtitle.setFont(subtitle_font)
-        subtitle.setStyleSheet("color: #86909B; background: transparent;")
-        card_layout.addWidget(subtitle,0, Qt.AlignCenter)
+        # Separator line
+        sep = QFrame()
+        sep.setFixedHeight(1)
+        sep.setFixedWidth(260)
+        sep.setStyleSheet("background: qlineargradient(x1:0, y1:0, x2:1, y2:0, "
+                          "stop:0 transparent, stop:0.3 #3890DF, stop:0.7 #3890DF, stop:1 transparent);")
+        layout.addWidget(sep, 0, Qt.AlignCenter)
+        layout.addSpacing(14)
 
-        # Reduce gap before form fields
-        card_layout.addSpacing(16)
+        # English subtitle
+        self._deco_en_label = QLabel(tr("page.login.subtitle"))
+        self._deco_en_label.setAlignment(Qt.AlignCenter)
+        self._deco_en_label.setWordWrap(True)
+        en_font = create_font(size=9, weight=FontManager.WEIGHT_REGULAR)
+        self._deco_en_label.setFont(en_font)
+        self._deco_en_label.setStyleSheet("color: rgba(139,172,200, 166); background: transparent;")
+        layout.addWidget(self._deco_en_label)
+
+        layout.addStretch(1)
+
+        # Version at bottom
+        version_label = QLabel(f"v{Config.VERSION}")
+        version_label.setAlignment(Qt.AlignCenter)
+        ver_font = create_font(size=10, weight=FontManager.WEIGHT_MEDIUM)
+        version_label.setFont(ver_font)
+        version_label.setStyleSheet("color: rgba(139,172,200, 100); background: transparent;")
+        layout.addWidget(version_label, 0, Qt.AlignCenter)
+
+        return panel
+
+    def _create_login_panel(self) -> QFrame:
+        """Frosted glass login panel."""
+        card = QFrame()
+        card.setObjectName("login_panel")
+        card.setMinimumWidth(380)
+        card.setMaximumWidth(520)
+        card.setStyleSheet("""
+            QFrame#login_panel {
+                background-color: rgba(15, 31, 61, 160);
+                border: 1px solid rgba(56, 144, 223, 30);
+                border-radius: 16px;
+            }
+        """)
+
+        shadow = QGraphicsDropShadowEffect()
+        shadow.setBlurRadius(30)
+        shadow.setColor(QColor(0, 0, 0, 76))
+        shadow.setOffset(0, 4)
+        card.setGraphicsEffect(shadow)
+
+        card_layout = QVBoxLayout(card)
+        card_layout.setSpacing(18)
+        card_layout.setContentsMargins(36, 56, 36, 56)
+
+        # Panel heading
+        self._panel_title = QLabel(tr("page.login.sign_in"))
+        self._panel_title.setAlignment(Qt.AlignCenter)
+        heading_font = create_font(size=16, weight=QFont.Bold)
+        self._panel_title.setFont(heading_font)
+        self._panel_title.setStyleSheet("color: white; background: transparent;")
+        card_layout.addWidget(self._panel_title)
+
+        # Panel subtitle
+        self._panel_subtitle = QLabel(tr("page.login.subtitle"))
+        self._panel_subtitle.setAlignment(Qt.AlignCenter)
+        sub_font = create_font(size=9, weight=FontManager.WEIGHT_REGULAR)
+        self._panel_subtitle.setFont(sub_font)
+        self._panel_subtitle.setStyleSheet("color: #8BACC8; background: transparent;")
+        card_layout.addWidget(self._panel_subtitle)
+
+        card_layout.addSpacing(20)
 
         # Username label
         self._username_label = QLabel(tr("page.login.username"))
-        username_label = self._username_label
-        username_label_font = create_font(size=10, weight=QFont.DemiBold, letter_spacing=0)
-        username_label.setFont(username_label_font)
-        username_label.setStyleSheet("color: #212B36; background: transparent;")
-        card_layout.addWidget(username_label)
-        card_layout.addSpacing(-20)  # Reduce gap between label and input (tighter)
-
+        lbl_font = create_font(size=10, weight=QFont.DemiBold)
+        self._username_label.setFont(lbl_font)
+        self._username_label.setStyleSheet("color: #8BACC8; background: transparent;")
+        card_layout.addWidget(self._username_label)
 
         # Username input
         self.username_input = QLineEdit()
         self.username_input.setPlaceholderText(tr("page.login.username_placeholder"))
         self.username_input.setLayoutDirection(get_layout_direction())
-        self.username_input.setFixedHeight(40)
-        username_input_font = create_font(size=10, weight=FontManager.WEIGHT_REGULAR, letter_spacing=0)
-        self.username_input.setFont(username_input_font)
-        self.username_input.setStyleSheet("""
-            QLineEdit {
-                background-color: #F8FAFF;
-                border: 1px solid #E5EAF6;
-                border-radius: 8px;
-                padding: 0 4px;
-                color: #2C3E50;
-            }
-            QLineEdit:focus {
-                border: 1px solid #3890DF;
-                outline: none;
-            }
-            QLineEdit::placeholder {
-                color: #BDC3C7;
-            }
-        """)
+        self.username_input.setFixedHeight(48)
+        input_font = create_font(size=10, weight=FontManager.WEIGHT_REGULAR)
+        self.username_input.setFont(input_font)
+        self.username_input.setStyleSheet(self._dark_input_style())
         self.username_input.textChanged.connect(self._hide_error)
         card_layout.addWidget(self.username_input)
 
-        # Reduce gap between username input and password label
-        card_layout.addSpacing(-12)
+        card_layout.addSpacing(10)
 
         # Password label
         self._password_label = QLabel(tr("page.login.password"))
-        password_label = self._password_label
-        password_label_font = create_font(size=10, weight=QFont.DemiBold, letter_spacing=0)
-        password_label.setFont(password_label_font)
-        password_label.setStyleSheet("color: #212B36; background: transparent;")
-        card_layout.addWidget(password_label)
-        card_layout.addSpacing(-20)  # Reduce gap between label and input (tighter)
+        self._password_label.setFont(lbl_font)
+        self._password_label.setStyleSheet("color: #8BACC8; background: transparent;")
+        card_layout.addWidget(self._password_label)
 
         # Password input
         self.password_input = QLineEdit()
         self.password_input.setPlaceholderText(tr("page.login.password_placeholder"))
         self.password_input.setEchoMode(QLineEdit.Password)
-        self.password_input.setFixedHeight(40)
-        password_input_font = create_font(size=10, weight=FontManager.WEIGHT_REGULAR, letter_spacing=0)
-        self.password_input.setFont(password_input_font)
+        self.password_input.setFixedHeight(48)
+        self.password_input.setFont(input_font)
 
-
-        '''self.password_input.setLayoutDirection(Qt.RightToLeft)
-        self.password_input.setAlignment(Qt.AlignRight)'''
-
- 
         current_dir = os.path.dirname(os.path.abspath(__file__))
         eye_path = os.path.join(current_dir, "..", "..", "assets", "images", "Eye.png")
         eye_path = os.path.normpath(eye_path)
 
         eye_icon = QIcon(eye_path)
         self.eye_action = self.password_input.addAction(eye_icon, QLineEdit.TrailingPosition)
-        
         self.eye_action.triggered.connect(self._toggle_password_visibility)
-
 
         self._apply_password_style(icon_on_left=True)
         self.password_input.textChanged.connect(self._on_password_text_changed)
         self.password_input.returnPressed.connect(self._on_login)
-
         card_layout.addWidget(self.password_input)
-
 
         # Error message
         self.error_label = QLabel("")
         self.error_label.setStyleSheet("""
-            background-color: #FADBD8;
+            background-color: rgba(231, 76, 60, 38);
             color: #E74C3C;
             font-size: 10px;
             padding: 8px 10px;
-            border-radius: 4px;
-            border: 1px solid #E74C3C;
+            border-radius: 8px;
+            border: 1px solid rgba(231, 76, 60, 102);
         """)
         self.error_label.setAlignment(Qt.AlignCenter)
         self.error_label.setWordWrap(True)
         self.error_label.hide()
         card_layout.addWidget(self.error_label)
-        card_layout.addSpacing(16)
+
+        card_layout.addSpacing(14)
+
         # Login button
         self.login_btn = QPushButton(tr("page.login.sign_in"))
-        self.login_btn.setFixedHeight(48)
-        self.login_btn.setFixedWidth(411)  # Card width (475) - Padding (32×2) = 411
+        self.login_btn.setFixedHeight(52)
         self.login_btn.setCursor(Qt.PointingHandCursor)
-        button_font = create_font(size=12, weight=QFont.Bold, letter_spacing=0)
+        button_font = create_font(size=12, weight=QFont.Bold)
         self.login_btn.setFont(button_font)
         self.login_btn.setStyleSheet("""
             QPushButton {
                 background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
-                    stop:0 #3890DF, stop:1 #00B2E3);
+                    stop:0 #3890DF, stop:1 #5BA8F0);
                 color: white;
                 border: none;
-                border-radius: 8px;
+                border-radius: 10px;
             }
             QPushButton:hover {
                 background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
-                    stop:0 #2A7BC9, stop:1 #009FCC);
+                    stop:0 #4DA0EF, stop:1 #6DB8FF);
             }
             QPushButton:pressed {
                 background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
-                    stop:0 #1F68B3, stop:1 #008BB5);
+                    stop:0 #2A7BC9, stop:1 #4A98E0);
+            }
+            QPushButton:disabled {
+                background: rgba(56, 144, 223, 60);
+                color: rgba(255, 255, 255, 100);
             }
         """)
         btn_shadow = QGraphicsDropShadowEffect()
         btn_shadow.setBlurRadius(20)
-        btn_shadow.setColor(QColor(56, 144, 223, 100))
+        btn_shadow.setColor(QColor(56, 144, 223, 76))
         btn_shadow.setOffset(0, 4)
         self.login_btn.setGraphicsEffect(btn_shadow)
         self.login_btn.clicked.connect(self._on_login)
         card_layout.addWidget(self.login_btn)
 
-
         return card
+
+    @staticmethod
+    def _dark_input_style():
+        return """
+            QLineEdit {
+                background-color: rgba(10, 22, 40, 153);
+                border: 1px solid rgba(56, 144, 223, 51);
+                border-radius: 10px;
+                padding: 0 12px;
+                color: white;
+            }
+            QLineEdit:focus {
+                border: 1px solid rgba(56, 144, 223, 153);
+                outline: none;
+            }
+            QLineEdit::placeholder {
+                color: rgba(139, 172, 200, 102);
+            }
+        """
+
+    def _setup_login_navbar(self):
+        """Dark themed titlebar with animated sliding logo."""
+        from ui.components.navbar import DraggableFrame
+
+        self.titlebar = DraggableFrame(self)
+        self.titlebar.setLayoutDirection(Qt.LeftToRight)
+        self.titlebar.setFixedHeight(33)
+        self.titlebar.setObjectName("login_titlebar")
+        self.titlebar.setStyleSheet("""
+            QFrame#login_titlebar {
+                background: #0A1628;
+                border-bottom: 1px solid rgba(56, 144, 223, 38);
+            }
+            QPushButton#win_btn, QPushButton#win_close {
+                color: rgba(139, 172, 200, 180);
+                background: transparent;
+                border: none;
+                font-family: 'Segoe Fluent Icons', 'Segoe MDL2 Assets';
+                font-size: 14px;
+                font-weight: 400;
+                line-height: 16px;
+                border-radius: 6px;
+            }
+            QPushButton#win_btn:hover {
+                background: rgba(255,255,255,0.08);
+                color: white;
+            }
+            QPushButton#win_btn:pressed {
+                background: rgba(255,255,255,0.12);
+            }
+            QPushButton#win_close:hover {
+                background: rgba(255, 59, 48, 0.90);
+                color: white;
+            }
+            QPushButton#win_close:pressed {
+                background: rgba(255, 59, 48, 0.75);
+                color: white;
+            }
+        """)
+
+        lay = QHBoxLayout(self.titlebar)
+        lay.setContentsMargins(0, 0, 0, 0)
+        lay.setSpacing(0)
+
+        # Animated logo (absolute-positioned inside titlebar for sliding)
+        self._tb_logo = QLabel(self.titlebar)
+        self._tb_logo.setStyleSheet("background: transparent;")
+        self._tb_logo.setFixedSize(143, 22)
+
+        logo_path = os.path.join(
+            os.path.dirname(__file__), "..", "..",
+            "assets", "images", "header.png"
+        )
+        logo_path = os.path.normpath(logo_path)
+
+        logo_pixmap = QPixmap(logo_path)
+        if not logo_pixmap.isNull():
+            scaled_logo = logo_pixmap.scaled(
+                143, 22, Qt.IgnoreAspectRatio, Qt.SmoothTransformation
+            )
+            self._tb_logo.setPixmap(scaled_logo)
+        else:
+            self._tb_logo.setText("UN-HABITAT")
+            self._tb_logo.setFont(create_font(size=9, weight=QFont.Bold, letter_spacing=0))
+            self._tb_logo.setStyleSheet("color: #3890DF; background: transparent;")
+
+        self._tb_logo.move(12, 5)
+
+        # Spacer to push window controls to the right
+        spacer = QWidget()
+        spacer.setStyleSheet("background: transparent;")
+        lay.addWidget(spacer, 1)
+
+        # Window control buttons
+        btn_min = QPushButton("\u2013")
+        btn_max = QPushButton("\u25a1")
+        btn_close = QPushButton("\u2715")
+
+        btn_max.setStyleSheet("""
+            QPushButton {
+                font-size: 28px;
+                margin-bottom: 4px;
+            }
+        """)
+
+        btn_min.setObjectName("win_btn")
+        btn_max.setObjectName("win_btn")
+        btn_close.setObjectName("win_close")
+
+        for b in (btn_min, btn_max, btn_close):
+            b.setFixedSize(46, 32)
+            b.setCursor(QCursor(Qt.PointingHandCursor))
+            b.setFocusPolicy(Qt.NoFocus)
+
+        btn_min.clicked.connect(lambda: self.window().showMinimized())
+        btn_close.clicked.connect(lambda: self.window().close())
+
+        lay.addWidget(btn_min)
+        lay.addWidget(btn_max)
+        lay.addWidget(btn_close)
+
+        self.titlebar.raise_()
+
+    # ── Logic methods ──
 
     def set_data_mode(self, mode: str, db=None):
         """Set auth service (always API)."""
@@ -421,7 +857,6 @@ class LoginPage(QWidget):
         """Handle login attempt with lockout enforcement."""
         from datetime import datetime, timedelta
 
-        # Check lockout
         if self._lockout_until and datetime.now() < self._lockout_until:
             remaining = int((self._lockout_until - datetime.now()).total_seconds()) // 60 + 1
             self._show_error(tr("page.login.account_locked", minutes=remaining))
@@ -492,7 +927,7 @@ class LoginPage(QWidget):
             self.login_btn.setText(getattr(self, '_original_btn_text', tr("page.login.sign_in")))
 
     def _get_lockout_settings(self) -> tuple:
-        """Get lockout settings from SecurityService. Returns (max_attempts, lockout_minutes)."""
+        """Get lockout settings from SecurityService."""
         try:
             from services.security_service import SecurityService
             if self.db:
@@ -529,210 +964,61 @@ class LoginPage(QWidget):
         QTimer.singleShot(100, self._animate_card_entrance)
 
     def _animate_card_entrance(self):
-        """Slide the login card up smoothly."""
-        start_pos = self.login_card.pos() + QPoint(0, 30)
+        """Slide the login panel in from the right."""
+        start_pos = self.login_card.pos() + QPoint(40, 0)
         end_pos = self.login_card.pos()
         self._card_slide = QPropertyAnimation(self.login_card, b"pos")
-        self._card_slide.setDuration(600)
+        self._card_slide.setDuration(700)
         self._card_slide.setStartValue(start_pos)
         self._card_slide.setEndValue(end_pos)
         self._card_slide.setEasingCurve(QEasingCurve.OutCubic)
         self._card_slide.start()
 
     def update_language(self, is_arabic: bool):
-        """Update language."""
-        self.setLayoutDirection(get_layout_direction())
-        self._title_label.setText(tr("page.login.title"))
-        self._subtitle_label.setText(tr("page.login.subtitle"))
+        """Update language — text direction changes but panel positions stay fixed."""
+        direction = get_layout_direction()
+        self.setLayoutDirection(direction)
+        # Keep split container fixed (deco always left, card always right)
+        if hasattr(self, '_split_container'):
+            self._split_container.setLayoutDirection(Qt.LeftToRight)
+        # Inner panels follow text direction for proper alignment
+        if hasattr(self, '_deco_panel'):
+            self._deco_panel.setLayoutDirection(direction)
+        if hasattr(self, 'login_card'):
+            self.login_card.setLayoutDirection(direction)
+        self._panel_title.setText(tr("page.login.sign_in"))
+        self._panel_subtitle.setText(tr("page.login.subtitle"))
         self._username_label.setText(tr("page.login.username"))
         self.username_input.setPlaceholderText(tr("page.login.username_placeholder"))
         self._password_label.setText(tr("page.login.password"))
         self.password_input.setPlaceholderText(tr("page.login.password_placeholder"))
         self.login_btn.setText(tr("page.login.sign_in"))
+        if hasattr(self, "_deco_ar_label"):
+            self._deco_ar_label.setText(tr("page.login.title"))
+        if hasattr(self, "_deco_en_label"):
+            self._deco_en_label.setText(tr("page.login.subtitle"))
         if hasattr(self, "_lang_btn"):
             self._update_lang_button()
-
-    def _setup_login_navbar(self):
-        """Setup navbar title bar for login page."""
-        from ui.components.navbar import DraggableFrame
-
-        # Create title bar
-        self.titlebar = DraggableFrame(self)
-        self.titlebar.setLayoutDirection(Qt.LeftToRight)
-        self.titlebar.setFixedHeight(33)
-        self.titlebar.setObjectName("login_titlebar")
-        self.titlebar.setStyleSheet("""
-            QFrame#login_titlebar {
-                background: white;
-                border-bottom: 1px solid #E5E7EB;
-            }
-            QPushButton#win_btn, QPushButton#win_close {
-                color: #374151;
-                background: transparent;
-                border: none;
-                font-family: 'Segoe Fluent Icons', 'Segoe MDL2 Assets';
-                font-size: 14px;
-                font-weight: 400;
-                line-height: 16px;
-                border-radius: 6px;
-            }
-            QPushButton#win_btn:hover {
-                background: rgba(0,0,0,0.05);
-            }
-            QPushButton#win_btn:pressed {
-                background: rgba(0,0,0,0.1);
-            }
-            QPushButton#win_close:hover {
-                background: rgba(255, 59, 48, 0.90);
-                color: white;
-            }
-            QPushButton#win_close:pressed {
-                background: rgba(255, 59, 48, 0.75);
-                color: white;
-            }
-        """)
-
-        lay = QHBoxLayout(self.titlebar)
-        lay.setContentsMargins(12, 0, 0, 0)
-        lay.setSpacing(0)
-
-        # Logo image
-        logo_label = QLabel()
-        logo_label.setStyleSheet("background: transparent;")
-        logo_label.setFixedSize(143, 22)
-
-        logo_path = os.path.join(
-            os.path.dirname(__file__), "..", "..",
-            "assets", "images", "header.png"
-        )
-        logo_path = os.path.normpath(logo_path)
-
-        logo_pixmap = QPixmap(logo_path)
-        if not logo_pixmap.isNull():
-            # Scale logo
-            scaled_logo = logo_pixmap.scaled(
-                143, 22, Qt.IgnoreAspectRatio, Qt.SmoothTransformation
-            )
-            logo_label.setPixmap(scaled_logo)
-        else:
-            # Fallback to text if image not found
-            logo_label.setText("UN-HABITAT")
-            logo_label.setFont(create_font(size=9, weight=QFont.Bold, letter_spacing=0))
-            logo_label.setStyleSheet("color: #0072BC; background: transparent;")
-
-        lay.addWidget(logo_label)
-
-        lay.addStretch(1)
-
-        # Window control buttons
-        btn_min = QPushButton("\u2013")
-        btn_max = QPushButton("□")
-        btn_close = QPushButton("✕")
-
-        # Make maximize button icon 2x larger
-        btn_max.setStyleSheet("""
-            QPushButton {
-                font-size: 28px;
-                margin-bottom: 4px;
-            }
-        """)
-
-        btn_min.setObjectName("win_btn")
-        btn_max.setObjectName("win_btn")
-        btn_close.setObjectName("win_close")
-
-        for b in (btn_min, btn_max, btn_close):
-            b.setFixedSize(46, 32)
-            b.setCursor(QCursor(Qt.PointingHandCursor))
-            b.setFocusPolicy(Qt.NoFocus)
-
-        btn_min.clicked.connect(lambda: self.window().showMinimized())
-        # Maximize button DISABLED (not functional)
-        # btn_max.clicked.connect(...)  # Intentionally disabled
-        btn_close.clicked.connect(lambda: self.window().close())
-
-        lay.addWidget(btn_min)
-        lay.addWidget(btn_max)
-        lay.addWidget(btn_close)
-
-        # Keep on top
-        self.titlebar.raise_()
-
-        # Settings button — frosted glass circle on the blue area
-        self._btn_settings = QPushButton("\u2699", self)
-        self._btn_settings.setFixedSize(38, 38)
-        self._btn_settings.setCursor(QCursor(Qt.PointingHandCursor))
-        self._btn_settings.setFocusPolicy(Qt.NoFocus)
-        self._btn_settings.setToolTip(tr("page.login.settings_tooltip"))
-        self._btn_settings.setStyleSheet("""
-            QPushButton {
-                background-color: rgba(255, 255, 255, 0.15);
-                border: 1px solid rgba(255, 255, 255, 0.25);
-                border-radius: 19px;
-                font-size: 18px;
-                color: rgba(255, 255, 255, 0.85);
-            }
-            QPushButton:hover {
-                background-color: rgba(255, 255, 255, 0.28);
-                color: white;
-            }
-            QPushButton:pressed {
-                background-color: rgba(255, 255, 255, 0.38);
-            }
-        """)
-        self._btn_settings.clicked.connect(self._open_server_settings)
-        self._btn_settings.move(20, 50)
-        self._btn_settings.raise_()
-
-        # Language toggle button — frosted glass pill with icon
-        self._lang_btn = QPushButton(self)
-        self._lang_btn.setFixedSize(110, 34)
-        self._lang_btn.setCursor(QCursor(Qt.PointingHandCursor))
-        self._lang_btn.setFocusPolicy(Qt.NoFocus)
-
-        try:
-            from ui.components.icon import Icon
-            lang_pixmap = Icon.load_pixmap("language", size=16)
-            if lang_pixmap and not lang_pixmap.isNull():
-                self._lang_btn.setIcon(QIcon(lang_pixmap))
-                self._lang_btn.setIconSize(QSize(16, 16))
-        except Exception:
-            pass
-
-        self._lang_btn.setStyleSheet("""
-            QPushButton {
-                color: white;
-                background-color: rgba(255, 255, 255, 0.12);
-                border: 1px solid rgba(255, 255, 255, 0.22);
-                border-radius: 17px;
-                font-size: 12px;
-                font-weight: 600;
-                padding: 0 14px;
-            }
-            QPushButton:hover {
-                background-color: rgba(255, 255, 255, 0.22);
-                border-color: rgba(255, 255, 255, 0.35);
-            }
-            QPushButton:pressed {
-                background-color: rgba(255, 255, 255, 0.32);
-            }
-        """)
-        self._lang_btn.clicked.connect(self._toggle_language)
-        self._update_lang_button()
-        self._lang_btn.move(66, 52)
-        self._lang_btn.raise_()
-
+        if hasattr(self, "_pill_label"):
+            pill_text = "\u0627\u0644\u0625\u0639\u062f\u0627\u062f\u0627\u062a" if tm_get_language() == "ar" else "Settings"
+            self._pill_label.setText("\u25C8  " + pill_text)
+        if hasattr(self, "_btn_settings"):
+            server_text = "\u0627\u0644\u062e\u0627\u062f\u0645" if tm_get_language() == "ar" else "Server"
+            self._btn_settings.setText("\u25A3  " + server_text)
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
         if hasattr(self, "titlebar") and self.titlebar:
             self.titlebar.setGeometry(0, 0, self.width(), 33)
             self.titlebar.raise_()
-        if hasattr(self, "_btn_settings"):
-            self._btn_settings.raise_()
-        if hasattr(self, "_lang_btn"):
-            self._lang_btn.raise_()
-        self._position_login_watermark()
+        if hasattr(self, "_pill") and self._pill:
+            self._pill.move(16, 43)
+            self._pill.raise_()
+        # Responsive card width based on right panel size
+        if hasattr(self, "login_card") and self.login_card:
+            right_panel_w = int(self.width() * 0.42)
+            card_w = max(380, min(520, int(right_panel_w * 0.78)))
+            self.login_card.setFixedWidth(card_w)
 
     def _open_server_settings(self):
         """Open the server settings dialog."""
@@ -751,46 +1037,41 @@ class LoginPage(QWidget):
     def _update_lang_button(self):
         """Update language button text based on current language."""
         current = tm_get_language()
-        self._lang_btn.setText("English" if current == "ar" else "عربي")
+        self._lang_btn.setText("English" if current == "ar" else "\u0639\u0631\u0628\u064a")
 
     def _apply_password_style(self, icon_on_left: bool):
-        self.password_input.setStyleSheet(f"""
-            QLineEdit {{
-                background-color: #F8FAFF;
-                border: 1px solid #E5EAF6;
-                border-radius: 8px;
+        self.password_input.setStyleSheet("""
+            QLineEdit {
+                background-color: rgba(10, 22, 40, 153);
+                border: 1px solid rgba(56, 144, 223, 51);
+                border-radius: 10px;
                 padding: 0 4px;
-                color: #2C3E50;
-            }}
-            QLineEdit:focus {{
-                border: 1px solid #3890DF;
+                color: white;
+            }
+            QLineEdit:focus {
+                border: 1px solid rgba(56, 144, 223, 153);
                 outline: none;
-            }}
-            QLineEdit::placeholder {{
-                color: #BDC3C7;
-            }}
-            QLineEdit QToolButton {{
+            }
+            QLineEdit::placeholder {
+                color: rgba(139, 172, 200, 102);
+            }
+            QLineEdit QToolButton {
                 border: none;
                 background: transparent;
                 padding: 0px 6px;
-            }}
-            QLineEdit QToolButton:hover {{
+            }
+            QLineEdit QToolButton:hover {
                 background: rgba(56,144,223,0.12);
                 border-radius: 8px;
-            }}
+            }
         """)
 
     def _on_password_text_changed(self, text):
-    # فاضي أو فيه عربي => RTL (placeholder يمين) + مسافة لليسار بسبب العين
         if (not text.strip()) or self._arabic_re.search(text):
             self.password_input.setLayoutDirection(Qt.RightToLeft)
             self.password_input.setAlignment(Qt.AlignRight)
-            self.password_input.setTextMargins(44, 0, 12, 0)  # مساحة للأيقونة
-
-    # غير هيك (إنجليزي/أرقام) => LTR + مسافة لليمين بسبب العين
+            self.password_input.setTextMargins(44, 0, 12, 0)
         else:
             self.password_input.setLayoutDirection(Qt.LeftToRight)
             self.password_input.setAlignment(Qt.AlignLeft)
             self.password_input.setTextMargins(12, 0, 44, 0)
-
-
