@@ -24,6 +24,7 @@ from ui.style_manager import StyleManager
 from ui.components.centered_text_edit import CenteredTextEdit
 from ui.wizards.framework import BaseStep, StepValidationResult
 from ui.wizards.office_survey.survey_context import SurveyContext
+from ui.wizards.office_survey.wizard_styles import STEP_CARD_STYLE, FORM_FIELD_STYLE
 from app.config import Config
 from services.api_client import get_api_client
 from utils.logger import get_logger
@@ -74,22 +75,14 @@ class HouseholdStep(BaseStep):
         # Selected building info card - same design as unit_selection_step
         # Height: 198px (changed from 113px)
         self.household_building_frame = QFrame()
-        self.household_building_frame.setObjectName("householdBuildingInfoCard")
-        self.household_building_frame.setFixedHeight(198)  # Fixed height as requested
-        self.household_building_frame.setStyleSheet(f"""
-            QFrame#householdBuildingInfoCard {{
-                background-color: {Colors.SURFACE};
-                border: 1px solid {Colors.BORDER_DEFAULT};
-                border-radius: 12px;
-            }}
-        """)
+        self.household_building_frame.setObjectName("StepCard")
+        self.household_building_frame.setStyleSheet(STEP_CARD_STYLE)
 
-        # Apply subtle shadow effect for visual separation
         shadow = QGraphicsDropShadowEffect()
-        shadow.setBlurRadius(8)
+        shadow.setBlurRadius(20)
         shadow.setXOffset(0)
-        shadow.setYOffset(2)
-        shadow.setColor(QColor(0, 0, 0, 30))
+        shadow.setYOffset(4)
+        shadow.setColor(QColor(0, 0, 0, 20))
         self.household_building_frame.setGraphicsEffect(shadow)
 
         # Main card layout
@@ -209,139 +202,41 @@ class HouseholdStep(BaseStep):
 
         # معلومات الاسرة (Family Information) Section - same design as units card
         family_info_frame = QFrame()
-        family_info_frame.setObjectName("familyInfoCard")
-        family_info_frame.setFixedHeight(330)  # Header + head_name + total_members + notes
-        family_info_frame.setStyleSheet("""
-            QFrame#familyInfoCard {
-                background-color: white;
-                border: 1px solid #E1E8ED;
-                border-radius: 8px;
-            }
-        """)
+        family_info_frame.setObjectName("StepCard")
+        family_info_frame.setStyleSheet(STEP_CARD_STYLE)
 
-        # Apply subtle shadow effect
         family_shadow = QGraphicsDropShadowEffect()
-        family_shadow.setBlurRadius(8)
+        family_shadow.setBlurRadius(20)
         family_shadow.setXOffset(0)
-        family_shadow.setYOffset(2)
-        family_shadow.setColor(QColor(0, 0, 0, 30))
+        family_shadow.setYOffset(4)
+        family_shadow.setColor(QColor(0, 0, 0, 20))
         family_info_frame.setGraphicsEffect(family_shadow)
 
         family_info_layout = QVBoxLayout(family_info_frame)
         family_info_layout.setSpacing(12)
-        family_info_layout.setContentsMargins(12, 12, 12, 12)  # Padding 12px
-        header_layout = QHBoxLayout()
-        header_layout.setSpacing(0)
-        header_layout.setContentsMargins(0, 0, 0, 0)
+        family_info_layout.setContentsMargins(16, 16, 16, 16)
 
-        # Right side: Icon container + Title and subtitle
-        right_header = QHBoxLayout()
-        right_header.setSpacing(8)
+        # Icon header
+        family_info_layout.addLayout(self._make_icon_header(
+            title=tr("wizard.household.occupants_title"),
+            subtitle=tr("wizard.household.subtitle"),
+            icon_name="user-group",
+        ))
 
-        # Icon container (48×48, background #F0F7FF)
-        icon_container = QFrame()
-        icon_container.setFixedSize(48, 48)
-        icon_container.setStyleSheet(f"""
-            QFrame {{
-                background-color: {Colors.BACKGROUND};
-                border: none;
-                border-radius: 6px;
-            }}
-        """)
-
-        # Center icon inside container
-        icon_container_layout = QHBoxLayout(icon_container)
-        icon_container_layout.setContentsMargins(0, 0, 0, 0)
-        icon_container_layout.setAlignment(Qt.AlignCenter)
-
-        # Load user-group.png icon
-        icon_label = QLabel()
-        icon_pixmap = Icon.load_pixmap("user-group", size=24)
-        if icon_pixmap and not icon_pixmap.isNull():
-            icon_label.setPixmap(icon_pixmap)
-        else:
-            icon_label.setText("👥")  # Fallback emoji
-        icon_label.setStyleSheet("background: transparent; border: none;")
-        icon_container_layout.addWidget(icon_label)
-
-        right_header.addWidget(icon_container)
-
-        # Title and subtitle
-        title_subtitle_layout = QVBoxLayout()
-        title_subtitle_layout.setSpacing(2)
-        title_subtitle_layout.setContentsMargins(0, 0, 0, 0)
-
-        # Title
-        self._title_label = QLabel(tr("wizard.household.occupants_title"))
-        self._title_label.setFont(create_font(size=FontManager.WIZARD_STEP_TITLE, weight=FontManager.WEIGHT_SEMIBOLD))
-        self._title_label.setStyleSheet("""
-            QLabel {
-                color: #1A1F1D;
-                border: none;
-                background: transparent;
-            }
-        """)
-        self._title_label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
-        title_subtitle_layout.addWidget(self._title_label)
-
-        # Subtitle
-        self._subtitle_label = QLabel(tr("wizard.household.subtitle"))
-        self._subtitle_label.setFont(create_font(size=FontManager.WIZARD_STEP_SUBTITLE, weight=FontManager.WEIGHT_REGULAR))
-        self._subtitle_label.setStyleSheet("""
-            QLabel {
-                color: #86909B;
-                border: none;
-                background: transparent;
-            }
-        """)
-        self._subtitle_label.setAlignment(Qt.AlignRight)
-        title_subtitle_layout.addWidget(self._subtitle_label)
-
-        right_header.addLayout(title_subtitle_layout)
-        header_layout.addLayout(right_header)
-        header_layout.addStretch()
-
-        family_info_layout.addLayout(header_layout)
-        family_info_layout.addSpacing(8)
+        # Divider
+        family_div = QFrame()
+        family_div.setFrameShape(QFrame.HLine)
+        family_div.setFixedHeight(1)
+        family_div.setStyleSheet("border: none; background-color: #e1e8ee;")
+        family_info_layout.addWidget(family_div)
 
         occupancy_row = QHBoxLayout()
         occupancy_row.setSpacing(12)
 
-        arrow_img = str(Config.IMAGES_DIR / "v.png").replace("\\", "/")
-        combo_style = f"""
-            QComboBox {{
-                padding: 6px 12px;
-                border: 1px solid #E1E8ED;
-                border-radius: 8px;
-                background-color: #F8FAFF;
-                font-size: 14px;
-                color: #1A1A1A;
-                min-height: 43px;
-                max-height: 43px;
-            }}
-            QComboBox:focus {{
-                border: 1px solid #E1E8ED;
-            }}
-            QComboBox::drop-down {{
-                subcontrol-origin: border;
-                subcontrol-position: center right;
-                width: 35px;
-                border: none;
-                margin-right: 5px;
-            }}
-            QComboBox::down-arrow {{
-                image: url({arrow_img});
-                width: 12px;
-                height: 12px;
-            }}
-            QComboBox QAbstractItemView {{
-                font-size: 14px;
-                background-color: white;
-                selection-background-color: #3890DF;
-                selection-color: white;
-            }}
+        down_img = str(Config.IMAGES_DIR / "down.png").replace("\\", "/")
+        combo_style = FORM_FIELD_STYLE + f"""
+            QComboBox::down-arrow {{ image: url({down_img}); width: 12px; height: 12px; }}
         """
-        label_style = "color: #374151; background: transparent;"
 
         # -- Left field: Occupancy Nature (ownership/other) --
         nature_col = QVBoxLayout()
@@ -349,7 +244,7 @@ class HouseholdStep(BaseStep):
 
         self._occupancy_nature_label = QLabel(tr("wizard.household.occupancy_nature"))
         self._occupancy_nature_label.setFont(create_font(size=FontManager.WIZARD_FIELD_LABEL, weight=FontManager.WEIGHT_SEMIBOLD))
-        self._occupancy_nature_label.setStyleSheet(label_style)
+        self._occupancy_nature_label.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent;")
         nature_col.addWidget(self._occupancy_nature_label)
 
         self.hh_occupancy_nature = RtlCombo()
@@ -359,7 +254,7 @@ class HouseholdStep(BaseStep):
                 continue
             self.hh_occupancy_nature.addItem(display_name, code)
         self.hh_occupancy_nature.setStyleSheet(combo_style)
-        self.hh_occupancy_nature.setFixedHeight(45)
+        self.hh_occupancy_nature.setMinimumHeight(38)
         nature_col.addWidget(self.hh_occupancy_nature)
 
         occupancy_row.addLayout(nature_col, 1)
@@ -370,7 +265,7 @@ class HouseholdStep(BaseStep):
 
         self._occupancy_type_label = QLabel(tr("wizard.household.occupancy_type"))
         self._occupancy_type_label.setFont(create_font(size=FontManager.WIZARD_FIELD_LABEL, weight=FontManager.WEIGHT_SEMIBOLD))
-        self._occupancy_type_label.setStyleSheet(label_style)
+        self._occupancy_type_label.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent;")
         type_col.addWidget(self._occupancy_type_label)
 
         self.hh_occupancy_type = RtlCombo()
@@ -380,7 +275,7 @@ class HouseholdStep(BaseStep):
                 continue
             self.hh_occupancy_type.addItem(display_name, code)
         self.hh_occupancy_type.setStyleSheet(combo_style)
-        self.hh_occupancy_type.setFixedHeight(45)
+        self.hh_occupancy_type.setMinimumHeight(38)
         type_col.addWidget(self.hh_occupancy_type)
 
         occupancy_row.addLayout(type_col, 1)
@@ -393,7 +288,7 @@ class HouseholdStep(BaseStep):
 
         self._total_members_label = QLabel(tr("wizard.household.total_members"))
         self._total_members_label.setFont(create_font(size=FontManager.WIZARD_FIELD_LABEL, weight=FontManager.WEIGHT_SEMIBOLD))
-        self._total_members_label.setStyleSheet("color: #374151; background: transparent;")
+        self._total_members_label.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent;")
         total_members_layout.addWidget(self._total_members_label)
 
         self.hh_total_members = QSpinBox()
@@ -416,30 +311,28 @@ class HouseholdStep(BaseStep):
 
         self._notes_label = QLabel(tr("wizard.household.notes_label"))
         self._notes_label.setFont(create_font(size=FontManager.WIZARD_FIELD_LABEL, weight=FontManager.WEIGHT_SEMIBOLD))
-        self._notes_label.setStyleSheet("color: #374151; background: transparent;")
+        self._notes_label.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent;")
         notes_field_layout.addWidget(self._notes_label)
 
         self.hh_notes = CenteredTextEdit()
         self.hh_notes.setPlaceholderText(tr("wizard.household.notes_placeholder"))
         self.hh_notes.setPlaceholderStyleSheet(
-            "color: #9CA3AF; background: transparent; font-size: 16px; font-weight: 400;"
+            f"color: {Colors.WIZARD_SUBTITLE}; background: transparent; font-size: 10pt;"
         )
         self.hh_notes.setMaximumHeight(80)
         self.hh_notes.setLayoutDirection(get_layout_direction())
-        self.hh_notes.setStyleSheet("""
-            QTextEdit {
+        self.hh_notes.setStyleSheet(f"""
+            QTextEdit {{
                 padding: 8px 12px;
-                border: 1px solid #E1E8ED;
+                border: 1.5px solid #D0D7E2;
                 border-radius: 8px;
-                background-color: #F0F7FF;
-                font-size: 16px;
-                font-weight: 600;
-                color: #1A1A1A;
-            }
-            QTextEdit:focus {
-                border-color: #3890DF;
-                border-width: 2px;
-            }
+                background-color: #FFFFFF;
+                font-size: 10pt;
+                color: {Colors.WIZARD_TITLE};
+            }}
+            QTextEdit:focus {{
+                border: 1.5px solid {Colors.PRIMARY_BLUE};
+            }}
         """)
         notes_field_layout.addWidget(self.hh_notes)
 
@@ -447,32 +340,33 @@ class HouseholdStep(BaseStep):
 
         scroll_layout.addWidget(family_info_frame)
         composition_frame = QFrame()
-        composition_frame.setObjectName("compositionCard")
-        composition_frame.setFixedHeight(400)
-        composition_frame.setStyleSheet("""
-            QFrame#compositionCard {
-                background-color: white;
-                border: 1px solid #E1E8ED;
-                border-radius: 12px;
-            }
-        """)
+        composition_frame.setObjectName("StepCard")
+        composition_frame.setStyleSheet(STEP_CARD_STYLE)
 
-        # Apply subtle shadow effect
         composition_shadow = QGraphicsDropShadowEffect()
-        composition_shadow.setBlurRadius(8)
+        composition_shadow.setBlurRadius(20)
         composition_shadow.setXOffset(0)
-        composition_shadow.setYOffset(2)
-        composition_shadow.setColor(QColor(0, 0, 0, 30))
+        composition_shadow.setYOffset(4)
+        composition_shadow.setColor(QColor(0, 0, 0, 20))
         composition_frame.setGraphicsEffect(composition_shadow)
 
         composition_layout = QVBoxLayout(composition_frame)
-        composition_layout.setSpacing(12)  # Gap: 12px
-        composition_layout.setContentsMargins(12, 12, 12, 12)  # Padding: 12px
-        title_label = QLabel(tr("wizard.household.composition_title"))
-        title_label.setFont(create_font(size=FontManager.WIZARD_CARD_LABEL, weight=FontManager.WEIGHT_SEMIBOLD))
-        title_label.setStyleSheet("color: #1A1F1D; background: transparent;")
-        title_label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
-        composition_layout.addWidget(title_label)
+        composition_layout.setSpacing(12)
+        composition_layout.setContentsMargins(16, 16, 16, 16)
+
+        # Icon header
+        composition_layout.addLayout(self._make_icon_header(
+            title=tr("wizard.household.composition_title"),
+            subtitle=tr("wizard.household.composition_subtitle"),
+            icon_name="elements",
+        ))
+
+        # Divider
+        comp_div = QFrame()
+        comp_div.setFrameShape(QFrame.HLine)
+        comp_div.setFixedHeight(1)
+        comp_div.setStyleSheet("border: none; background-color: #e1e8ee;")
+        composition_layout.addWidget(comp_div)
         cards_row = QHBoxLayout()
         cards_row.setSpacing(12)  # Gap between cards: 12px
 
@@ -656,11 +550,11 @@ class HouseholdStep(BaseStep):
         """
         card = QFrame()
         card.setObjectName(f"{title}Card")
-        card.setFixedHeight(340)
+        card.setMinimumHeight(280)
         card.setStyleSheet(f"""
             QFrame#{title}Card {{
-                background-color: #F0F7FF;
-                border: 1px solid #E1E8ED;
+                background-color: #F8FAFF;
+                border: 1px solid #E2EAF2;
                 border-radius: 12px;
             }}
         """)
@@ -672,7 +566,7 @@ class HouseholdStep(BaseStep):
         # Card title
         card_title = QLabel(title)
         card_title.setFont(create_font(size=FontManager.WIZARD_FIELD_LABEL, weight=FontManager.WEIGHT_SEMIBOLD))
-        card_title.setStyleSheet("color: #374151; background: transparent;")
+        card_title.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent;")
         card_title.setAlignment(Qt.AlignCenter)
         card_layout.addWidget(card_title)
 
@@ -684,7 +578,7 @@ class HouseholdStep(BaseStep):
             # Label
             label = QLabel(label_text)
             label.setFont(create_font(size=FontManager.WIZARD_FIELD_LABEL, weight=FontManager.WEIGHT_SEMIBOLD))
-            label.setStyleSheet("color: #374151; background: transparent;")
+            label.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent;")
             field_layout.addWidget(label)
 
             # SpinBox with custom arrows (white background)
@@ -714,11 +608,49 @@ class HouseholdStep(BaseStep):
         """
         return self._create_spinbox_with_arrows(spinbox, bg_color="#FFFFFF")
 
+    @staticmethod
+    def _make_icon_header(title: str, subtitle: str, icon_name: str) -> QHBoxLayout:
+        """Build icon + (title / subtitle) header row."""
+        row = QHBoxLayout()
+        row.setSpacing(10)
+        row.setContentsMargins(0, 0, 0, 0)
+
+        icon_lbl = QLabel()
+        icon_lbl.setFixedSize(40, 40)
+        icon_lbl.setAlignment(Qt.AlignCenter)
+        icon_lbl.setStyleSheet("""
+            QLabel {
+                background-color: #EBF5FF;
+                border: 1px solid #DBEAFE;
+                border-radius: 10px;
+            }
+        """)
+        px = Icon.load_pixmap(icon_name, size=24)
+        if px and not px.isNull():
+            icon_lbl.setPixmap(px)
+
+        row.addWidget(icon_lbl)
+
+        col = QVBoxLayout()
+        col.setSpacing(1)
+
+        t = QLabel(title)
+        t.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
+        t.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent;")
+
+        s = QLabel(subtitle)
+        s.setFont(create_font(size=10, weight=FontManager.WEIGHT_REGULAR))
+        s.setStyleSheet(f"color: {Colors.WIZARD_SUBTITLE}; background: transparent;")
+
+        col.addWidget(t)
+        col.addWidget(s)
+        row.addLayout(col)
+        row.addStretch()
+        return row
+
     def update_language(self, is_arabic: bool):
-        """Update all translatable texts when language changes."""
+        """Update layout direction when language changes."""
         self.setLayoutDirection(get_layout_direction())
-        self._title_label.setText(tr("wizard.household.occupants_title"))
-        self._subtitle_label.setText(tr("wizard.household.subtitle"))
         self._occupancy_type_label.setText(tr("wizard.household.occupancy_type"))
         self._occupancy_nature_label.setText(tr("wizard.household.occupancy_nature"))
         self._total_members_label.setText(tr("wizard.household.total_members"))

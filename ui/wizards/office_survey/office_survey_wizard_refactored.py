@@ -32,7 +32,13 @@ from ui.design_system import PageDimensions, Colors, ButtonDimensions
 from ui.style_manager import StyleManager
 from ui.font_utils import create_font, FontManager
 from ui.components.success_popup import SuccessPopup
-from ui.components.curved_tab import CurvedTab
+from ui.components.dark_header_zone import DarkHeaderZone
+from ui.components.nav_style_tab import NavStyleTab
+from ui.components.accent_line import AccentLine
+from ui.wizards.office_survey.wizard_styles import (
+    FOOTER_PRIMARY_STYLE, FOOTER_SECONDARY_STYLE, FOOTER_HIDDEN_STYLE,
+    HEADER_SAVE_STYLE,
+)
 from utils.logger import get_logger
 from services.translation_manager import tr
 from ui.wizards.office_survey.steps.occupancy_claims_step import _is_owner_relation
@@ -516,8 +522,8 @@ class OfficeSurveyWizard(BaseWizard):
                 self.step_labels[i].set_text(name)
 
         # Footer buttons
-        self.btn_previous.setText(f"<   {tr('wizard.button.previous')}")
-        self.btn_next.setText(f"{tr('wizard.button.next')}   >")
+        self.btn_previous.setText(f"\u276E   {tr('wizard.button.previous')}")
+        self.btn_next.setText(f"{tr('wizard.button.next')}   \u276F")
         self.btn_final_save.setText(tr("wizard.button.save"))
 
         # Update current step subtitle
@@ -532,395 +538,200 @@ class OfficeSurveyWizard(BaseWizard):
     # UI Overrides - Exact copy from old wizard
 
     def _setup_ui(self):
-        """
-        Setup the wizard UI with proper layout structure.
-
-        Layout Structure (Senior PyQt5 Pattern):
-        - Outer layout (no padding): Contains content widget + footer
-        - Content widget (with padding 131px horizontal): Contains header + steps
-        - Footer (no padding): Full width, extends to window edges
-
-        This ensures the footer extends to the full window width without being
-        affected by the content padding.
-
-        Padding:
-        - Content horizontal: 131px each side
-        - Content top: 32px from navbar
-        - Footer: Full width (no horizontal padding)
-        """
+        """Setup wizard UI: DarkHeaderZone + AccentLine + content + footer."""
         from PyQt5.QtWidgets import QVBoxLayout, QStackedWidget
 
-        # Background color
-        self.setStyleSheet(StyleManager.page_background())
-        # This contains everything and ensures footer can extend full width
+        self.setStyleSheet(f"background-color: {Colors.BACKGROUND};")
+
         outer_layout = QVBoxLayout(self)
-        outer_layout.setContentsMargins(0, 0, 0, 0)  # No padding at all
-        outer_layout.setSpacing(0)  # No spacing between content and footer
-        # This contains header and steps with proper padding
+        outer_layout.setContentsMargins(0, 0, 0, 0)
+        outer_layout.setSpacing(0)
+
+        # Dark header zone with step tabs
+        self._header_zone = self._create_header()
+        outer_layout.addWidget(self._header_zone)
+
+        # Accent line separator
+        self._accent_line = AccentLine()
+        outer_layout.addWidget(self._accent_line)
+
+        # Content area with padding
         content_widget = QWidget()
-        content_widget.setStyleSheet("background-color: transparent;")  # Inherit parent background
-
+        content_widget.setStyleSheet("background-color: transparent;")
         content_layout = QVBoxLayout(content_widget)
-        # Apply padding (EXACTLY like completed_claims_page.py)
         content_layout.setContentsMargins(
-            PageDimensions.content_padding_h(),        # Left: 131px
-            PageDimensions.content_padding_v_top(),    # Top: 32px
-            PageDimensions.content_padding_h(),        # Right: 131px
-            PageDimensions.CONTENT_PADDING_V_BOTTOM  # Bottom: 0px
+            PageDimensions.content_padding_h(),
+            20,
+            PageDimensions.content_padding_h(),
+            0
         )
-        content_layout.setSpacing(PageDimensions.HEADER_GAP)  # 30px gap after header
-
-        # Header (Step indicators)
-        header = self._create_header()
-        content_layout.addWidget(header)
+        content_layout.setSpacing(0)
 
         # Step container
         self.step_container = QStackedWidget()
         for step in self.steps:
             self.step_container.addWidget(step)
         content_layout.addWidget(self.step_container, 1)
-        outer_layout.addWidget(content_widget)
-        # Footer is added directly to outer_layout, so it extends to full window width
+        outer_layout.addWidget(content_widget, 1)
+
+        # Footer
         footer = self._create_footer()
         outer_layout.addWidget(footer)
 
         # Loading spinner overlay
         self._spinner = LoadingSpinnerOverlay(self)
 
-    def _create_header(self) -> QWidget:
-        """Create wizard header with title, subtitle, and save button."""
-        header = QWidget()
-        header.setStyleSheet("background-color: transparent;")
+    def _create_header(self) -> DarkHeaderZone:
+        """Create dark header zone with title, subtitle, save button, and step tabs."""
+        header = DarkHeaderZone()
 
-        layout = QVBoxLayout(header)
-        layout.setContentsMargins(0, 0, 0, 0)
-        # PageDimensions.HEADER_GAP (30px) for gap between elements
-        layout.setSpacing(PageDimensions.HEADER_GAP)  # 30px: title → tabs, same as completed_claims_page
-        title_row = QHBoxLayout()
-        title_row.setSpacing(16)
+        # Title
+        self.title_label = header.get_title_label()
+        header.set_title(tr("wizard.header.title"))
 
-        # Title/Subtitle container (vertical)
-        title_subtitle_container = QVBoxLayout()
-        title_subtitle_container.setSpacing(4)  # Small gap between title and subtitle
-
-        # Title: "إضافة حالة جديدة"
-
-        self.title_label = QLabel(tr("wizard.header.title"))
-        title_font = create_font(
-            size=FontManager.SIZE_TITLE,  # 18pt
-            weight=QFont.Bold,
-            letter_spacing=0
-        )
-        self.title_label.setFont(title_font)
-        self.title_label.setStyleSheet(f"color: {Colors.TEXT_PRIMARY}; border: none; background: transparent;")
-        title_subtitle_container.addWidget(self.title_label)
-
-        # Subtitle: "المطالبات المكتملة • [Step Name]"
-        # Desktop/Body2 (smaller size), Text/Secondary
-        subtitle_layout = QHBoxLayout()
-        subtitle_layout.setSpacing(8)  # Gap between parts
+        # Subtitle row (breadcrumb + dot + step name) as a single widget in row1
+        subtitle_widget = QWidget()
+        subtitle_widget.setStyleSheet("background: transparent;")
+        subtitle_layout = QHBoxLayout(subtitle_widget)
         subtitle_layout.setContentsMargins(0, 0, 0, 0)
+        subtitle_layout.setSpacing(8)
 
-        # Part 1: "المطالبات المكتملة" (fixed)
+        subtitle_font = create_font(size=FontManager.SIZE_BODY, weight=QFont.Normal)
+
         self._subtitle_part1 = QLabel(tr("wizard.header.breadcrumb"))
-        subtitle_font = create_font(
-            size=FontManager.SIZE_BODY,  # 9pt
-            weight=QFont.Normal,
-            letter_spacing=0
-        )
         self._subtitle_part1.setFont(subtitle_font)
-        self._subtitle_part1.setStyleSheet(f"color: {Colors.TEXT_SECONDARY}; border: none; background: transparent;")
+        self._subtitle_part1.setStyleSheet("color: rgba(139, 172, 200, 0.8); background: transparent;")
         subtitle_layout.addWidget(self._subtitle_part1)
 
-        # Dot separator: "•"
-        dot_label = QLabel("•")
+        dot_label = QLabel("\u2022")
         dot_label.setFont(subtitle_font)
-        dot_label.setStyleSheet(f"color: {Colors.TEXT_SECONDARY}; border: none; background: transparent;")
+        dot_label.setStyleSheet("color: rgba(139, 172, 200, 0.6); background: transparent;")
         subtitle_layout.addWidget(dot_label)
 
-        # Part 2: Current step name (dynamic)
-        self.subtitle_part2 = QLabel(tr("wizard.step.building_registration"))  # Default: first step
+        self.subtitle_part2 = QLabel(tr("wizard.step.building_registration"))
         self.subtitle_part2.setFont(subtitle_font)
-        self.subtitle_part2.setStyleSheet(f"color: {Colors.TEXT_SECONDARY}; border: none; background: transparent;")
+        self.subtitle_part2.setStyleSheet("color: rgba(200, 220, 255, 0.9); background: transparent;")
         subtitle_layout.addWidget(self.subtitle_part2)
+        subtitle_layout.addStretch()
 
-        subtitle_layout.addStretch()  # Push to the right
+        # Insert subtitle below title in the header's row1 area
+        # We add it as a stat pill position (before stretch)
+        header.add_stat_pill(subtitle_widget)
 
-        # Add subtitle to container
-        title_subtitle_container.addLayout(subtitle_layout)
-
-        title_row.addLayout(title_subtitle_container)
-        title_row.addStretch()
-
-        # Save button with icon
-
-        self.save_btn = QPushButton(f" {tr('wizard.button.save')}")  # Space for icon
+        # Save button
+        self.save_btn = QPushButton(f" {tr('wizard.button.save')}")
         self.save_btn.setCursor(Qt.PointingHandCursor)
-
-        # Fixed dimensions
         self.save_btn.setFixedSize(ButtonDimensions.SAVE_WIDTH, ButtonDimensions.SAVE_HEIGHT)
 
-        # Load save icon from assets
         from PyQt5.QtGui import QIcon
         import os
         save_icon_path = os.path.join("assets", "images", "save.png")
         if os.path.exists(save_icon_path):
             self.save_btn.setIcon(QIcon(save_icon_path))
-            # ButtonDimensions.SAVE_ICON_SIZE
             self.save_btn.setIconSize(QSize(ButtonDimensions.SAVE_ICON_SIZE, ButtonDimensions.SAVE_ICON_SIZE))
 
-        # Apply font
-        save_btn_font = create_font(
-            size=ButtonDimensions.SAVE_FONT_SIZE,  # 12pt
-            weight=QFont.Normal,  # 400 - lighter weight
-            letter_spacing=0
-        )
-        self.save_btn.setFont(save_btn_font)
-
-        # Styling
-        self.save_btn.setStyleSheet(f"""
-            QPushButton {{
-                background-color: {Colors.PRIMARY_BLUE};
-                color: white;
-                border: none;
-                padding: {ButtonDimensions.SAVE_PADDING_V}px {ButtonDimensions.SAVE_PADDING_H}px;
-                border-radius: {ButtonDimensions.SAVE_BORDER_RADIUS}px;
-                font-family: 'IBM Plex Sans Arabic';
-                icon-size: {ButtonDimensions.SAVE_ICON_SIZE}px;
-            }}
-            QPushButton:hover {{
-                background-color: {ButtonDimensions.PRIMARY_HOVER_BG};
-            }}
-        """)
+        self.save_btn.setFont(create_font(size=ButtonDimensions.SAVE_FONT_SIZE, weight=QFont.DemiBold))
+        self.save_btn.setStyleSheet(HEADER_SAVE_STYLE)
         self.save_btn.clicked.connect(self._handle_header_save)
-        title_row.addWidget(self.save_btn)
+        header.add_action_widget(self.save_btn)
 
-        layout.addLayout(title_row)
-
-        # Step indicators (Tabs bar)
-        # IMPORTANT: No padding here - main_layout already has 131px horizontal padding
-        # This ensures tabs start at same position as title (131px from window edge)
-        steps_frame = QFrame()
-        steps_frame.setStyleSheet("""
-            QFrame {
-                background-color: transparent;
-                border: none;
-            }
-        """)
-
-        # Horizontal layout for step indicators (respecting main_layout padding)
-        steps_layout = QHBoxLayout(steps_frame)
-        # Add vertical margins to accommodate shadow effect (prevent clipping)
-        # Top: 2px, Bottom: 4px to prevent shadow from being cut off
-        steps_layout.setContentsMargins(0, 2, 0, 4)
-        # ButtonDimensions.STEP_TAB_GAP (20px)
-        steps_layout.setSpacing(ButtonDimensions.STEP_TAB_GAP)  # 20px gap between tabs
-
-        # Create curved step indicator tabs
+        # Step indicator tabs (NavStyleTab instead of CurvedTab)
         self.step_labels = []
         self._step_font_sizes = []
-        for num, name in self.get_step_names():
-            step_tab = CurvedTab(name, theme="light")
-            step_tab.setFixedSize(ButtonDimensions.STEP_TAB_WIDTH, ButtonDimensions.STEP_TAB_HEIGHT)
+        tab_font = create_font(size=9, weight=FontManager.WEIGHT_REGULAR)
 
-            tab_font_size = 7 if num in ("3", "4") else ButtonDimensions.STEP_TAB_FONT_SIZE
+        for num, name in self.get_step_names():
+            step_tab = NavStyleTab(name)
+            step_tab.setFixedSize(ButtonDimensions.STEP_TAB_WIDTH + 20, ButtonDimensions.STEP_TAB_HEIGHT + 3)
+
+            tab_font_size = 7 if num in ("3", "4") else 9
             self._step_font_sizes.append(tab_font_size)
-            step_tab.set_font(create_font(size=tab_font_size, weight=FontManager.WEIGHT_REGULAR, letter_spacing=0))
+            step_tab.set_font(create_font(size=tab_font_size, weight=FontManager.WEIGHT_REGULAR))
 
             self.step_labels.append(step_tab)
-            steps_layout.addWidget(step_tab)
-
-        steps_layout.addStretch()
-        layout.addWidget(steps_frame)
+            header.add_tab(step_tab)
 
         return header
 
     def _create_footer(self) -> QWidget:
         """Create wizard footer with navigation buttons."""
-        # Create footer as QFrame (white card)
         footer = QFrame()
         footer.setObjectName("WizardFooter")
-
-        # Fixed HEIGHT only - width is responsive (extends to full window width)
-        # Height: 74px
         footer.setFixedHeight(ButtonDimensions.FOOTER_HEIGHT)
-
-        # Apply white card styling with border
         footer.setStyleSheet(StyleManager.wizard_footer())
 
-        # Apply drop shadow effect
         shadow = QGraphicsDropShadowEffect()
-        shadow.setBlurRadius(PageDimensions.CARD_SHADOW_BLUR)  # 8px blur
-        shadow.setXOffset(PageDimensions.CARD_SHADOW_X)  # 0px X offset
-        shadow.setYOffset(PageDimensions.CARD_SHADOW_Y)  # 4px Y offset
-        # Shadow color: #919EAB with 16% opacity
-        shadow_color = QColor(PageDimensions.CARD_SHADOW_COLOR)
-        shadow_color.setAlpha(int(255 * PageDimensions.CARD_SHADOW_OPACITY / 100))  # Convert 16% to alpha
-        shadow.setColor(shadow_color)
+        shadow.setBlurRadius(12)
+        shadow.setXOffset(0)
+        shadow.setYOffset(-2)
+        shadow.setColor(QColor(0, 0, 0, 25))
         footer.setGraphicsEffect(shadow)
 
-        # Internal layout with padding
         layout = QHBoxLayout(footer)
         layout.setContentsMargins(
-            ButtonDimensions.FOOTER_PADDING_H,  # Left: 130px
-            ButtonDimensions.FOOTER_PADDING_V,  # Top: 12px
-            ButtonDimensions.FOOTER_PADDING_H,  # Right: 130px
-            ButtonDimensions.FOOTER_PADDING_V   # Bottom: 12px
+            ButtonDimensions.FOOTER_PADDING_H,
+            ButtonDimensions.FOOTER_PADDING_V,
+            ButtonDimensions.FOOTER_PADDING_H,
+            ButtonDimensions.FOOTER_PADDING_V
         )
-        layout.setSpacing(0)  # No spacing in main layout
+        layout.setSpacing(0)
 
-        # Apply font for navigation buttons
-        # Navigation button font
-        nav_btn_font = create_font(
-            size=ButtonDimensions.NAV_BUTTON_FONT_SIZE,  # 12pt
-            weight=QFont.Normal,  # 400 - lighter weight
-            letter_spacing=0
-        )
-        # Previous button
-        # Text format: "< السابق" with 10px spacing between arrow and text
-        # Note: Button uses transparent state instead of hide() to maintain layout position
-        self.btn_previous = QPushButton(f"<   {tr('wizard.button.previous')}")
+        nav_btn_font = create_font(size=ButtonDimensions.NAV_BUTTON_FONT_SIZE, weight=QFont.DemiBold)
+
+        # Previous button (transparent state to maintain layout)
+        self.btn_previous = QPushButton(f"\u276E   {tr('wizard.button.previous')}")
         self.btn_previous.setCursor(Qt.PointingHandCursor)
-
-        # Fixed dimensions
-        self.btn_previous.setFixedSize(
-            ButtonDimensions.NAV_BUTTON_WIDTH,   # 252px
-            ButtonDimensions.NAV_BUTTON_HEIGHT   # 50px
-        )
-
-        # Apply font
+        self.btn_previous.setFixedSize(ButtonDimensions.NAV_BUTTON_WIDTH, ButtonDimensions.NAV_BUTTON_HEIGHT)
         self.btn_previous.setFont(nav_btn_font)
 
-        # Store visible/hidden states as properties for easy management
-        self.btn_previous_visible_style = f"""
-            QPushButton {{
-                background-color: {Colors.SURFACE};
-                color: #414D5A;
-                border: 1px solid {Colors.BORDER_DEFAULT};
-                border-radius: {ButtonDimensions.NAV_BUTTON_BORDER_RADIUS}px;
-                font-family: 'IBM Plex Sans Arabic';
-                font-size: {ButtonDimensions.NAV_BUTTON_FONT_SIZE}pt;
-            }}
-            QPushButton:hover {{
-                background-color: {Colors.BACKGROUND_LIGHT};
-            }}
-            QPushButton:disabled {{
-                background-color: {Colors.SURFACE};
-                border: 1px solid {Colors.BORDER_DEFAULT};
-                color: {Colors.TEXT_DISABLED};
-            }}
-        """
+        self.btn_previous_visible_style = FOOTER_SECONDARY_STYLE
+        self.btn_previous_hidden_style = FOOTER_HIDDEN_STYLE
 
-        # Invisible state: completely transparent (maintains space in layout)
-        self.btn_previous_hidden_style = """
-            QPushButton {
-                background-color: transparent;
-                color: transparent;
-                border: none;
-            }
-        """
-
-        # Apply drop shadow to previous button
-        # Will be visible only when button is visible
         self.prev_shadow = QGraphicsDropShadowEffect()
-        self.prev_shadow.setBlurRadius(8)  # 8px blur
-        self.prev_shadow.setXOffset(0)  # 0px X offset
-        self.prev_shadow.setYOffset(2)  # 2px Y offset
+        self.prev_shadow.setBlurRadius(8)
+        self.prev_shadow.setXOffset(0)
+        self.prev_shadow.setYOffset(2)
         prev_shadow_color = QColor("#919EAB")
-        prev_shadow_color.setAlpha(int(255 * 0.16))  # 16% opacity
+        prev_shadow_color.setAlpha(40)
         self.prev_shadow.setColor(prev_shadow_color)
         self.btn_previous.setGraphicsEffect(self.prev_shadow)
-
         self.btn_previous.clicked.connect(self._handle_previous)
 
-        # Start invisible on Step 1 (transparent style + disabled)
         self.btn_previous.setStyleSheet(self.btn_previous_hidden_style)
         self.btn_previous.setEnabled(False)
-
         layout.addWidget(self.btn_previous)
 
-        spacer = QSpacerItem(
-            0, ButtonDimensions.NAV_BUTTON_HEIGHT,
-            QSizePolicy.Expanding,
-            QSizePolicy.Fixed
-        )
+        spacer = QSpacerItem(0, ButtonDimensions.NAV_BUTTON_HEIGHT, QSizePolicy.Expanding, QSizePolicy.Fixed)
         layout.addItem(spacer)
-        # Next button
-        # Text format: "التالي >" with 10px spacing between text and arrow
-        self.btn_next = QPushButton(f"{tr('wizard.button.next')}   >")
+
+        # Next button (gradient blue)
+        self.btn_next = QPushButton(f"{tr('wizard.button.next')}   \u276F")
         self.btn_next.setCursor(Qt.PointingHandCursor)
-
-        # Fixed dimensions
-        self.btn_next.setFixedSize(
-            ButtonDimensions.NAV_BUTTON_WIDTH,   # 252px
-            ButtonDimensions.NAV_BUTTON_HEIGHT   # 50px
-        )
-
-        # Apply font
+        self.btn_next.setFixedSize(ButtonDimensions.NAV_BUTTON_WIDTH, ButtonDimensions.NAV_BUTTON_HEIGHT)
         self.btn_next.setFont(nav_btn_font)
-
-        # Styling: Light blue background (#F0F7FF), blue text and border
-        self.btn_next.setStyleSheet(f"""
-            QPushButton {{
-                background-color: #F0F7FF;
-                color: {Colors.PRIMARY_BLUE};
-                border: 1px solid {Colors.PRIMARY_BLUE};
-                border-radius: {ButtonDimensions.NAV_BUTTON_BORDER_RADIUS}px;
-                font-family: 'IBM Plex Sans Arabic';
-                font-size: {ButtonDimensions.NAV_BUTTON_FONT_SIZE}pt;
-            }}
-            QPushButton:hover {{
-                background-color: rgba(56, 144, 223, 0.15);
-            }}
-            QPushButton:disabled {{
-                background-color: {Colors.BORDER_DEFAULT};
-                border: 1px solid {Colors.BORDER_DEFAULT};
-                color: {Colors.TEXT_DISABLED};
-            }}
-        """)
+        self.btn_next.setStyleSheet(FOOTER_PRIMARY_STYLE)
         self.btn_next.clicked.connect(self._handle_next)
         layout.addWidget(self.btn_next)
-        # Submit button
+
+        # Final save/submit button
         from PyQt5.QtGui import QIcon
         import os
 
         self.btn_final_save = QPushButton(tr("wizard.button.save"))
         self.btn_final_save.setCursor(Qt.PointingHandCursor)
-
-        # Fixed dimensions (same as next button)
-        self.btn_final_save.setFixedSize(
-            ButtonDimensions.NAV_BUTTON_WIDTH,   # 252px
-            ButtonDimensions.NAV_BUTTON_HEIGHT   # 50px
-        )
-
-        # Apply font
+        self.btn_final_save.setFixedSize(ButtonDimensions.NAV_BUTTON_WIDTH, ButtonDimensions.NAV_BUTTON_HEIGHT)
         self.btn_final_save.setFont(nav_btn_font)
 
-        # Load save icon
         save_icon_path = os.path.join("assets", "images", "save.png")
         if os.path.exists(save_icon_path):
             self.btn_final_save.setIcon(QIcon(save_icon_path))
             self.btn_final_save.setIconSize(QSize(16, 16))
 
-        # Styling: Primary blue background, white text
-        self.btn_final_save.setStyleSheet(f"""
-            QPushButton {{
-                background-color: {Colors.PRIMARY_BLUE};
-                color: white;
-                border: none;
-                border-radius: {ButtonDimensions.NAV_BUTTON_BORDER_RADIUS}px;
-                font-family: 'IBM Plex Sans Arabic';
-                font-size: {ButtonDimensions.NAV_BUTTON_FONT_SIZE}pt;
-            }}
-            QPushButton:hover {{
-                background-color: #2980b9;
-            }}
-        """)
+        self.btn_final_save.setStyleSheet(FOOTER_PRIMARY_STYLE)
         self.btn_final_save.clicked.connect(self._handle_submit)
-        self.btn_final_save.hide()  # Hidden by default, shown only on final step
+        self.btn_final_save.hide()
         layout.addWidget(self.btn_final_save)
 
-        # Push everything to the right (RTL)
         layout.addStretch()
 
         return footer
@@ -1016,6 +827,10 @@ class OfficeSurveyWizard(BaseWizard):
         # Update step indicators
         self._update_step_display()
 
+        # Pulse accent line on step change
+        if hasattr(self, '_accent_line'):
+            self._accent_line.pulse()
+
         # Update navigation buttons
         self._update_navigation_buttons()
 
@@ -1042,25 +857,21 @@ class OfficeSurveyWizard(BaseWizard):
         """Update navigation button states based on current step."""
         current_step = self.navigator.current_index
         if self._edit_mode:
-            # Previous → "إلغاء" (Cancel)
             self.btn_previous.setStyleSheet(self.btn_previous_visible_style)
             self.btn_previous.setEnabled(True)
             self.btn_previous.setCursor(Qt.PointingHandCursor)
             self.prev_shadow.setEnabled(True)
-            self.btn_previous.setText(f"<   {tr('wizard.button.cancel_edit')}")
+            self.btn_previous.setText(f"\u276E   {tr('wizard.button.cancel_edit')}")
 
-            # Next → "حفظ التعديلات" (Save Changes)
             self.btn_next.show()
             self.btn_next.setEnabled(True)
-            self.btn_next.setText(f"{tr('wizard.button.save_changes')}   >")
+            self.btn_next.setText(f"{tr('wizard.button.save_changes')}   \u276F")
 
-            # Hide final save
             if hasattr(self, 'btn_final_save'):
                 self.btn_final_save.hide()
             return
-        self.btn_previous.setText(f"<   {tr('wizard.button.previous')}")
-        self.btn_next.setText(f"{tr('wizard.button.next')}   >")
-        # Make transparent on first step and last step (ClaimStep), visible on other steps
+        self.btn_previous.setText(f"\u276E   {tr('wizard.button.previous')}")
+        self.btn_next.setText(f"{tr('wizard.button.next')}   \u276F")
         if current_step == 0 or current_step == len(self.steps) - 1:
             self.btn_previous.setStyleSheet(self.btn_previous_hidden_style)
             self.btn_previous.setEnabled(False)

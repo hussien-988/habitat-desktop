@@ -6,6 +6,7 @@ Main entry point for the application
 """
 
 import math
+import os
 import random
 import sys
 import time
@@ -373,6 +374,13 @@ class AnimatedSplash(QSplashScreen):
 
 def main():
     """Main application entry point."""
+
+    # Enable GPU acceleration for QWebEngineView (must be set before QApplication)
+    os.environ["QTWEBENGINE_CHROMIUM_FLAGS"] = (
+        "--ignore-gpu-blacklist "
+        "--enable-gpu-rasterization "
+        "--enable-zero-copy"
+    )
 
     # Set Qt attributes BEFORE creating QApplication
     QApplication.setAttribute(Qt.AA_EnableHighDpiScaling, True)  # type: ignore

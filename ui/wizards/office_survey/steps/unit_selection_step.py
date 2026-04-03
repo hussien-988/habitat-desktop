@@ -9,6 +9,7 @@ Allows user to:
 """
 
 from typing import Dict, Any, Optional, List
+import uuid
 
 from PyQt5.QtWidgets import (
     QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton,
@@ -16,13 +17,15 @@ from PyQt5.QtWidgets import (
     QComboBox, QSpinBox, QTextEdit, QDialog, QFormLayout,
     QGraphicsDropShadowEffect
 )
-from PyQt5.QtCore import Qt
-from PyQt5.QtGui import QCursor, QIcon, QColor
+from PyQt5.QtCore import Qt, QLocale
+from PyQt5.QtGui import QCursor, QIcon, QColor, QDoubleValidator
 
 from ui.wizards.framework import BaseStep, StepValidationResult
 from ui.wizards.office_survey.survey_context import SurveyContext
+from ui.wizards.office_survey.wizard_styles import STEP_CARD_STYLE, FORM_FIELD_STYLE, IN_CARD_ACTION_STYLE, OUTLINE_BUTTON_STYLE
 from controllers.unit_controller import UnitController
 from models.unit import PropertyUnit as Unit
+from app.config import Config
 from services.api_client import get_api_client
 from services.api_worker import ApiWorker
 from utils.logger import get_logger
@@ -31,9 +34,11 @@ from ui.design_system import Colors
 from ui.style_manager import StyleManager
 from ui.components.icon import Icon
 from ui.components.action_button import ActionButton
+from ui.components.rtl_combo import RtlCombo
+from ui.components.toast import Toast
 from ui.font_utils import create_font, FontManager
 from services.translation_manager import tr, get_layout_direction
-from services.display_mappings import get_unit_status_display
+from services.display_mappings import get_unit_status_display, get_unit_type_options, get_unit_status_options
 from services.error_mapper import map_exception
 from ui.components.loading_spinner import LoadingSpinnerOverlay
 
@@ -82,23 +87,14 @@ class UnitSelectionStep(BaseStep):
         # Selected building info card - same design as building_selection_step stats card
         # Height: 113px, includes address row + stats sections
         self.unit_building_frame = QFrame()
-        self.unit_building_frame.setObjectName("unitBuildingInfoCard")
-        self.unit_building_frame.setFixedHeight(113)  # Height: 113px total
-        self.unit_building_frame.setStyleSheet(f"""
-            QFrame#unitBuildingInfoCard {{
-                background-color: {Colors.SURFACE};
-                border: 1px solid {Colors.BORDER_DEFAULT};
-                border-radius: 12px;
-            }}
-        """)
+        self.unit_building_frame.setObjectName("StepCard")
+        self.unit_building_frame.setStyleSheet(STEP_CARD_STYLE)
 
-        # Apply subtle shadow effect for visual separation from tabs
-        # Consistent shadow across all wizard steps
         shadow = QGraphicsDropShadowEffect()
-        shadow.setBlurRadius(8)  # Soft blur
-        shadow.setXOffset(0)  # Centered shadow
-        shadow.setYOffset(2)  # Slight offset downward
-        shadow.setColor(QColor(0, 0, 0, 30))  # Lighter shadow (alpha: 30 - reduced from 60)
+        shadow.setBlurRadius(20)
+        shadow.setXOffset(0)
+        shadow.setYOffset(4)
+        shadow.setColor(QColor(0, 0, 0, 20))
         self.unit_building_frame.setGraphicsEffect(shadow)
 
         # Main card layout
@@ -206,24 +202,14 @@ class UnitSelectionStep(BaseStep):
         # Dimensions: 1249×372 (width×height), border-radius: 8px, padding: 12px
         # Gap from Card 1: 15px (handled by layout.setSpacing(15))
         units_main_frame = QFrame()
-        units_main_frame.setObjectName("unitsContainerCard")
-        # Fixed dimensions
-        units_main_frame.setFixedSize(1249, 372)
-        units_main_frame.setStyleSheet("""
-            QFrame#unitsContainerCard {
-                background-color: white;
-                border: 1px solid #E1E8ED;
-                border-radius: 8px;
-            }
-        """)
+        units_main_frame.setObjectName("StepCard")
+        units_main_frame.setStyleSheet(STEP_CARD_STYLE)
 
-        # Apply subtle shadow effect for visual depth
-        # Consistent shadow across all cards
         shadow2 = QGraphicsDropShadowEffect()
-        shadow2.setBlurRadius(8)
+        shadow2.setBlurRadius(20)
         shadow2.setXOffset(0)
-        shadow2.setYOffset(2)
-        shadow2.setColor(QColor(0, 0, 0, 30))  # Lighter shadow (alpha: 30 - reduced from 60)
+        shadow2.setYOffset(4)
+        shadow2.setColor(QColor(0, 0, 0, 20))
         units_main_frame.setGraphicsEffect(shadow2)
 
         # Use layout margins instead of CSS padding (more predictable)
@@ -232,85 +218,12 @@ class UnitSelectionStep(BaseStep):
         # Adjusted: Internal padding 11px all sides (reduced to prevent card clipping)
         units_main_layout.setContentsMargins(11, 11, 11, 11)
 
-        # Header with title/subtitle and button
-        header_layout = QHBoxLayout()
-        header_layout.setSpacing(0)  # No spacing, manual control
-        header_layout.setContentsMargins(0, 0, 0, 0)
-
-        # Right side: Icon container + Title and subtitle
-        right_header = QHBoxLayout()
-        right_header.setSpacing(8)  # Gap between icon container and text
-
-        # Icon container (48x48, background #F0F7FF, small border-radius)
-        icon_container = QFrame()
-        icon_container.setFixedSize(48, 48)
-        icon_container.setStyleSheet(f"""
-            QFrame {{
-                background-color: {Colors.BACKGROUND};
-                border: none;
-                border-radius: 6px;
-            }}
-        """)
-
-        # Center icon inside container
-        icon_container_layout = QHBoxLayout(icon_container)
-        icon_container_layout.setContentsMargins(0, 0, 0, 0)
-        icon_container_layout.setAlignment(Qt.AlignCenter)
-
-        # Load move.png icon
-        icon_label = QLabel()
-        icon_pixmap = Icon.load_pixmap("move", size=24)  # Reasonable size for 48×48 container
-        if icon_pixmap and not icon_pixmap.isNull():
-            icon_label.setPixmap(icon_pixmap)
-        else:
-            icon_label.setText("🏘️")  # Fallback emoji
-        icon_label.setStyleSheet("background: transparent; border: none;")
-        icon_container_layout.addWidget(icon_label)
-
-        right_header.addWidget(icon_container)
-
-        # Title and subtitle
-        title_subtitle_layout = QVBoxLayout()
-        title_subtitle_layout.setSpacing(2)
-        title_subtitle_layout.setContentsMargins(0, 0, 0, 0)
-
-        # Use FontManager for consistent font sizing
-        # 10pt font
-        # Increased weight to emphasize title (SemiBold instead of Regular)
-        # RTL: Text ends at the same point as subtitle, but starts further right
-        self._title_label = QLabel(tr("wizard.unit.select_title"))
-        self._title_label.setFont(create_font(size=FontManager.WIZARD_STEP_TITLE, weight=FontManager.WEIGHT_SEMIBOLD))
-        self._title_label.setStyleSheet("""
-            QLabel {
-                color: #1A1F1D;
-                border: none;
-                background: transparent;
-            }
-        """)
-        # Fix RTL alignment: AlignLeft makes RTL text end at the same point as subtitle
-        self._title_label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
-        title_subtitle_layout.addWidget(self._title_label)
-
-        # Subtitle with same font size, different color
-        self._subtitle_label = QLabel(tr("wizard.unit.select_subtitle"))
-        self._subtitle_label.setFont(create_font(size=FontManager.WIZARD_STEP_SUBTITLE, weight=FontManager.WEIGHT_REGULAR))
-        self._subtitle_label.setStyleSheet("""
-            QLabel {
-                color: #86909B;
-                border: none;
-                background: transparent;
-            }
-        """)
-        self._subtitle_label.setAlignment(Qt.AlignRight)
-        title_subtitle_layout.addWidget(self._subtitle_label)
-
-        right_header.addLayout(title_subtitle_layout)
-        header_layout.addLayout(right_header)
-        header_layout.addStretch()
-
-        # Add unit button
-        # Use ActionButton component
-        # Outline button styling
+        # Header: icon + title/subtitle + add-unit button
+        header_layout = self._make_icon_header(
+            tr("wizard.unit.select_title"),
+            tr("wizard.unit.select_subtitle"),
+            "move"
+        )
         self.add_unit_btn = ActionButton(
             text=tr("wizard.unit.add_button"),
             variant="outline",
@@ -318,10 +231,14 @@ class UnitSelectionStep(BaseStep):
             width=125,
             height=44
         )
-        self.add_unit_btn.clicked.connect(self._show_add_unit_dialog)
+        self.add_unit_btn.clicked.connect(self._show_add_unit_form)
         header_layout.addWidget(self.add_unit_btn)
 
         units_main_layout.addLayout(header_layout)
+
+        # Inline unit creation form (hidden by default)
+        self._build_inline_unit_form()
+        units_main_layout.addWidget(self._inline_form)
 
         # Empty state widget (shown when no units)
         self._empty_state = self._create_empty_state()
@@ -545,12 +462,12 @@ class UnitSelectionStep(BaseStep):
         if is_title:
             # Title style - center-aligned
             label.setFont(create_font(size=FontManager.WIZARD_FIELD_LABEL, weight=FontManager.WEIGHT_SEMIBOLD))
-            label.setStyleSheet("color: #1A1F1D;")
+            label.setStyleSheet(f"color: {Colors.WIZARD_TITLE};")
             label.setAlignment(Qt.AlignCenter)
         else:
             # Value style - center-aligned (directly under label)
             label.setFont(create_font(size=FontManager.WIZARD_FIELD_VALUE, weight=FontManager.WEIGHT_REGULAR))
-            label.setStyleSheet("color: #86909B;")
+            label.setStyleSheet(f"color: {Colors.WIZARD_SUBTITLE};")
             label.setAlignment(Qt.AlignCenter)
 
         return label
@@ -570,43 +487,35 @@ class UnitSelectionStep(BaseStep):
         is_selected = bool(self.context.unit and self.context.unit.unit_uuid == unit.unit_uuid)
         card = QFrame()
         card.setObjectName("unitCard")
-        card.setFixedSize(1225, 138)
 
-        # Different styles for selected and normal cards
         if is_selected:
             card.setStyleSheet("""
                 QFrame#unitCard {
-                    background-color: #f0f7ff;
-                    border: 2px solid #3498db;
-                    border-radius: 10px;
+                    background-color: #EBF5FF;
+                    border: 2px solid #3890DF;
+                    border-radius: 12px;
                 }
-                QFrame#unitCard QLabel {
-                    border: none;
-                }
+                QFrame#unitCard QLabel { border: none; }
             """)
         else:
             card.setStyleSheet("""
                 QFrame#unitCard {
-                    background-color: white;
-                    border: 1px solid #e0e0e0;
-                    border-radius: 10px;
+                    background-color: #FFFFFF;
+                    border: 1px solid #E2EAF2;
+                    border-radius: 12px;
                 }
                 QFrame#unitCard:hover {
-                    border-color: #3498db;
-                    background-color: #f9fbfd;
+                    border-color: #3890DF;
+                    background-color: #F8FAFF;
                 }
-                QFrame#unitCard QLabel {
-                    border: none;
-                }
+                QFrame#unitCard QLabel { border: none; }
             """)
 
-        # Apply subtle shadow effect for depth
-        # Consistent shadow like other cards
         card_shadow = QGraphicsDropShadowEffect()
-        card_shadow.setBlurRadius(8)
+        card_shadow.setBlurRadius(16)
         card_shadow.setXOffset(0)
-        card_shadow.setYOffset(2)
-        card_shadow.setColor(QColor(0, 0, 0, 30))  # Subtle shadow
+        card_shadow.setYOffset(3)
+        card_shadow.setColor(QColor(0, 0, 0, 18))
         card.setGraphicsEffect(card_shadow)
 
         card.setCursor(Qt.PointingHandCursor)
@@ -696,7 +605,7 @@ class UnitSelectionStep(BaseStep):
         # Title: وصف المقسم
         desc_title = QLabel(tr("wizard.unit.unit_description"))
         desc_title.setFont(create_font(size=FontManager.WIZARD_FIELD_LABEL, weight=FontManager.WEIGHT_SEMIBOLD))
-        desc_title.setStyleSheet("color: #1A1F1D;")
+        desc_title.setStyleSheet(f"color: {Colors.WIZARD_TITLE};")
         desc_title.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)  # Left in RTL = Right visually
 
 
@@ -704,7 +613,7 @@ class UnitSelectionStep(BaseStep):
         desc_text_content = unit.property_description if unit.property_description else tr("wizard.unit.property_description_placeholder")
         desc_text = QLabel(desc_text_content)
         desc_text.setFont(create_font(size=FontManager.WIZARD_FIELD_VALUE, weight=FontManager.WEIGHT_REGULAR))
-        desc_text.setStyleSheet("color: #86909B;")
+        desc_text.setStyleSheet(f"color: {Colors.WIZARD_SUBTITLE};")
         desc_text.setAlignment(Qt.AlignLeft | Qt.AlignTop)  # Left in RTL = Right visually
         
         desc_text.setWordWrap(True)
@@ -717,7 +626,7 @@ class UnitSelectionStep(BaseStep):
         # Checkmark for selected item (always created, visibility toggled)
         check_label = QLabel("✓")
         check_label.setObjectName("checkLabel")
-        check_label.setStyleSheet("color: #3498db; font-size: 18px; font-weight: bold; border: none;")
+        check_label.setStyleSheet(f"color: {Colors.PRIMARY_BLUE}; font-size: 18px; font-weight: bold; border: none;")
         check_label.setAlignment(Qt.AlignLeft)
         check_label.setVisible(is_selected)
         main_layout.addWidget(check_label)
@@ -739,28 +648,24 @@ class UnitSelectionStep(BaseStep):
             if is_selected:
                 card.setStyleSheet("""
                     QFrame#unitCard {
-                        background-color: #f0f7ff;
-                        border: 2px solid #3498db;
-                        border-radius: 10px;
+                        background-color: #EBF5FF;
+                        border: 2px solid #3890DF;
+                        border-radius: 12px;
                     }
-                    QFrame#unitCard QLabel {
-                        border: none;
-                    }
+                    QFrame#unitCard QLabel { border: none; }
                 """)
             else:
                 card.setStyleSheet("""
                     QFrame#unitCard {
-                        background-color: white;
-                        border: 1px solid #e0e0e0;
-                        border-radius: 10px;
+                        background-color: #FFFFFF;
+                        border: 1px solid #E2EAF2;
+                        border-radius: 12px;
                     }
                     QFrame#unitCard:hover {
-                        border-color: #3498db;
-                        background-color: #f9fbfd;
+                        border-color: #3890DF;
+                        background-color: #F8FAFF;
                     }
-                    QFrame#unitCard QLabel {
-                        border: none;
-                    }
+                    QFrame#unitCard QLabel { border: none; }
                 """)
             # Toggle checkmark visibility
             check_label = card.findChild(QLabel, "checkLabel")
@@ -791,49 +696,265 @@ class UnitSelectionStep(BaseStep):
             self.emit_validation_changed(True)
             logger.info(f"Unit selected: {unit.unit_id}")
 
-    def _show_add_unit_dialog(self):
-        """Show dialog to add a new unit - uses API to create unit."""
-        from ui.wizards.office_survey.dialogs.unit_dialog import UnitDialog
+    # ── Inline Unit Form ──
 
-        # Get auth token from main window if available
-        auth_token = None
-        main_window = self.window()
-        if main_window and hasattr(main_window, '_api_token'):
-            auth_token = main_window._api_token
+    def _show_add_unit_form(self):
+        """Show the inline unit creation form."""
+        self._reset_inline_form()
+        self._inline_form.setVisible(True)
 
-        # Get survey_id from context (created in step 1)
-        survey_id = self.context.get_data("survey_id")
+    def _cancel_inline_unit(self):
+        """Hide the inline unit creation form."""
+        self._inline_form.setVisible(False)
 
-        dialog = UnitDialog(
-            self.context.building,
-            self.context.db,
-            parent=self,
-            auth_token=auth_token,
-            survey_id=survey_id
+    def _reset_inline_form(self):
+        """Reset all inline form fields to defaults."""
+        self._if_floor.setValue(0)
+        self._if_unit_num.setValue(0)
+        self._if_type.setCurrentIndex(0)
+        self._if_status.setCurrentIndex(0)
+        self._if_rooms.setValue(0)
+        self._if_area.clear()
+        self._if_desc.clear()
+        self._if_save_btn.setEnabled(True)
+
+    def _build_inline_unit_form(self):
+        """Build the inline unit creation form card (replaces modal UnitDialog)."""
+        self._inline_form = QFrame()
+        self._inline_form.setStyleSheet("""
+            QFrame#InlineUnitForm {
+                background-color: #FFFFFF;
+                border: 1.5px solid #3890DF;
+                border-radius: 10px;
+            }
+            QFrame#InlineUnitForm QLabel { background: transparent; border: none; }
+        """)
+        self._inline_form.setObjectName("InlineUnitForm")
+        self._inline_form.setVisible(False)
+
+        form_layout = QVBoxLayout(self._inline_form)
+        form_layout.setContentsMargins(16, 12, 16, 16)
+        form_layout.setSpacing(12)
+
+        # Header
+        hdr = self._make_icon_header(
+            tr("wizard.unit_dialog.title_add"),
+            tr("wizard.unit.select_subtitle"),
+            "move"
         )
+        form_layout.addLayout(hdr)
 
-        if dialog.exec_() == QDialog.Accepted:
-            # Unit was created via API (if using API mode)
-            # Store the unit data in context
+        # Divider
+        div = QFrame()
+        div.setFixedHeight(1)
+        div.setStyleSheet("background-color: #E2EAF2;")
+        form_layout.addWidget(div)
+
+        # Combo style with down-arrow
+        down_img = str(Config.IMAGES_DIR / "down.png").replace("\\", "/")
+        combo_style = FORM_FIELD_STYLE + f"""
+            QComboBox::down-arrow {{ image: url({down_img}); width: 12px; height: 12px; }}
+        """
+
+        # Row 1: Floor number | Unit number
+        row1 = QHBoxLayout()
+        row1.setSpacing(12)
+        self._if_floor = QSpinBox()
+        self._if_floor.setRange(-3, 100)
+        self._if_floor.setLocale(QLocale(QLocale.English, QLocale.UnitedStates))
+        self._if_floor.setButtonSymbols(QSpinBox.NoButtons)
+        self._if_floor.setStyleSheet(FORM_FIELD_STYLE)
+        self._if_floor.setMinimumHeight(38)
+        row1.addLayout(self._make_form_field(tr("wizard.unit_dialog.floor_number"), self._if_floor), 1)
+
+        self._if_unit_num = QSpinBox()
+        self._if_unit_num.setRange(0, 9999)
+        self._if_unit_num.setLocale(QLocale(QLocale.English, QLocale.UnitedStates))
+        self._if_unit_num.setButtonSymbols(QSpinBox.NoButtons)
+        self._if_unit_num.setStyleSheet(FORM_FIELD_STYLE)
+        self._if_unit_num.setMinimumHeight(38)
+        row1.addLayout(self._make_form_field(tr("wizard.unit_dialog.unit_number"), self._if_unit_num), 1)
+        form_layout.addLayout(row1)
+
+        # Row 2: Unit type | Unit status
+        row2 = QHBoxLayout()
+        row2.setSpacing(12)
+        self._if_type = RtlCombo()
+        self._if_type.setStyleSheet(combo_style)
+        self._if_type.setMinimumHeight(38)
+        self._if_type.addItem(tr("wizard.unit_dialog.select"), 0)
+        for code, label in get_unit_type_options():
+            self._if_type.addItem(label, code)
+        row2.addLayout(self._make_form_field(tr("wizard.unit_dialog.unit_type"), self._if_type), 1)
+
+        self._if_status = RtlCombo()
+        self._if_status.setStyleSheet(combo_style)
+        self._if_status.setMinimumHeight(38)
+        self._if_status.addItem(tr("wizard.unit_dialog.select"), 0)
+        for code, label in get_unit_status_options():
+            self._if_status.addItem(label, code)
+        row2.addLayout(self._make_form_field(tr("wizard.unit_dialog.unit_status"), self._if_status), 1)
+        form_layout.addLayout(row2)
+
+        # Row 3: Rooms | Area
+        row3 = QHBoxLayout()
+        row3.setSpacing(12)
+        self._if_rooms = QSpinBox()
+        self._if_rooms.setRange(0, 20)
+        self._if_rooms.setLocale(QLocale(QLocale.English, QLocale.UnitedStates))
+        self._if_rooms.setButtonSymbols(QSpinBox.NoButtons)
+        self._if_rooms.setStyleSheet(FORM_FIELD_STYLE)
+        self._if_rooms.setMinimumHeight(38)
+        row3.addLayout(self._make_form_field(tr("wizard.unit_dialog.rooms"), self._if_rooms), 1)
+
+        self._if_area = QLineEdit()
+        self._if_area.setPlaceholderText(tr("wizard.unit_dialog.area_placeholder"))
+        self._if_area.setStyleSheet(FORM_FIELD_STYLE)
+        self._if_area.setMinimumHeight(38)
+        area_validator = QDoubleValidator(0.0, 999999.99, 2, self._if_area)
+        area_validator.setLocale(QLocale(QLocale.English, QLocale.UnitedStates))
+        area_validator.setNotation(QDoubleValidator.StandardNotation)
+        self._if_area.setValidator(area_validator)
+        row3.addLayout(self._make_form_field(tr("wizard.unit_dialog.area"), self._if_area), 1)
+        form_layout.addLayout(row3)
+
+        # Row 4: Description (full width)
+        self._if_desc = QTextEdit()
+        self._if_desc.setMinimumHeight(70)
+        self._if_desc.setMaximumHeight(90)
+        self._if_desc.setPlaceholderText(tr("wizard.unit_dialog.description_placeholder"))
+        self._if_desc.setStyleSheet(FORM_FIELD_STYLE)
+        form_layout.addLayout(self._make_form_field(tr("wizard.unit_dialog.description"), self._if_desc))
+
+        # Buttons
+        btn_row = QHBoxLayout()
+        btn_row.addStretch()
+
+        cancel_btn = QPushButton(tr("common.cancel"))
+        cancel_btn.setFixedSize(120, 38)
+        cancel_btn.setStyleSheet(OUTLINE_BUTTON_STYLE)
+        cancel_btn.setCursor(Qt.PointingHandCursor)
+        cancel_btn.clicked.connect(self._cancel_inline_unit)
+        btn_row.addWidget(cancel_btn)
+
+        self._if_save_btn = QPushButton(tr("common.save"))
+        self._if_save_btn.setFixedSize(120, 38)
+        self._if_save_btn.setStyleSheet(IN_CARD_ACTION_STYLE)
+        self._if_save_btn.setCursor(Qt.PointingHandCursor)
+        self._if_save_btn.clicked.connect(self._save_inline_unit)
+        btn_row.addWidget(self._if_save_btn)
+
+        form_layout.addLayout(btn_row)
+
+    def _make_form_field(self, label_text: str, widget) -> QVBoxLayout:
+        """Create a labeled form field for the inline form."""
+        col = QVBoxLayout()
+        col.setSpacing(4)
+        lbl = QLabel(label_text)
+        lbl.setFont(create_font(size=FontManager.WIZARD_FIELD_LABEL, weight=FontManager.WEIGHT_SEMIBOLD))
+        lbl.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent;")
+        col.addWidget(lbl)
+        col.addWidget(widget)
+        return col
+
+    def _save_inline_unit(self):
+        """Validate and save the inline unit form via API."""
+        # Basic validation (mirrors UnitDialog._validate_basic)
+        if not self._if_type.currentData():
+            Toast.show_message(self, tr("wizard.unit_dialog.select_type_warning"), Toast.WARNING)
+            return
+        if self._if_unit_num.value() == 0:
+            Toast.show_message(self, tr("wizard.unit_dialog.enter_number_warning"), Toast.WARNING)
+            return
+        area_text = self._if_area.text().strip()
+        if area_text:
+            try:
+                float(area_text)
+            except ValueError:
+                Toast.show_message(self, tr("wizard.unit_dialog.area_numbers_only"), Toast.WARNING)
+                return
+
+        self._if_save_btn.setEnabled(False)
+
+        # Set auth token
+        main_window = self.window()
+        if main_window and hasattr(main_window, '_api_token') and main_window._api_token:
+            self._api_service.set_access_token(main_window._api_token)
+            self.unit_controller.set_auth_token(main_window._api_token)
+
+        # Check uniqueness then create
+        def _do_fetch():
+            return self.unit_controller.get_units_for_building(self.context.building.building_uuid)
+
+        def _on_fetched(result):
+            self._spinner.hide_loading()
+            if result.success and result.data:
+                unit_number = str(self._if_unit_num.value())
+                floor = self._if_floor.value()
+                for u in result.data:
+                    u_num = getattr(u, 'apartment_number', None) or getattr(u, 'unit_number', None)
+                    u_floor = getattr(u, 'floor_number', None)
+                    if u_num == unit_number and u_floor == floor:
+                        Toast.show_message(self, tr("wizard.unit_dialog.number_taken"), Toast.WARNING)
+                        self._if_save_btn.setEnabled(True)
+                        return
+            self._do_create_unit()
+
+        def _on_fetch_error(msg):
+            self._spinner.hide_loading()
+            logger.error(f"Error checking uniqueness: {msg}")
+            self._do_create_unit()
+
+        self._spinner.show_loading(tr("component.loading.default"))
+        self._save_worker = ApiWorker(_do_fetch)
+        self._save_worker.finished.connect(_on_fetched)
+        self._save_worker.error.connect(_on_fetch_error)
+        self._save_worker.start()
+
+    def _do_create_unit(self):
+        """Create the unit via API after uniqueness check passes."""
+        area_text = self._if_area.text().strip()
+        area_value = float(area_text) if area_text else None
+        unit_data = {
+            'unit_uuid': str(uuid.uuid4()),
+            'building_id': self.context.building.building_id,
+            'building_uuid': self.context.building.building_uuid,
+            'unit_type': self._if_type.currentData() or 1,
+            'status': self._if_status.currentData() or 1,
+            'apartment_status': self._if_status.currentData() or 1,
+            'floor_number': self._if_floor.value(),
+            'unit_number': str(self._if_unit_num.value()),
+            'apartment_number': str(self._if_unit_num.value()),
+            'number_of_rooms': self._if_rooms.value(),
+            'area_sqm': area_value,
+            'property_description': self._if_desc.toPlainText().strip() or None,
+        }
+
+        survey_id = self.context.get_data("survey_id")
+        if survey_id:
+            unit_data['survey_id'] = survey_id
+
+        self._spinner.show_loading(tr("component.loading.default"))
+        try:
+            response = self._api_service.create_property_unit(unit_data)
+            logger.info("Property unit created successfully via inline form")
+
             self.context.is_new_unit = True
-            self.context.new_unit_data = dialog.get_unit_data()
+            self.context.new_unit_data = unit_data
 
-            # Use API-generated UUID (not the local one)
-            # dialog._created_unit_data contains the API response with the real UUID
-            if hasattr(dialog, '_created_unit_data') and dialog._created_unit_data:
-                api_uuid = dialog._created_unit_data.get('id') or dialog._created_unit_data.get('unitUuid')
-                if api_uuid:
-                    logger.info(f"Using API-generated unit UUID: {api_uuid}")
-                    self.context.new_unit_data['unit_uuid'] = api_uuid
+            api_uuid = None
+            if response:
+                api_uuid = response.get('id') or response.get('unitUuid')
+            if api_uuid:
+                logger.info(f"Using API-generated unit UUID: {api_uuid}")
+                self.context.new_unit_data['unit_uuid'] = api_uuid
 
-            # Reset guard to force re-fetch (new unit was created on server)
+            # Hide form and refresh units list
+            self._inline_form.setVisible(False)
             self._loaded_building_uuid = None
-            # Refresh units list to show the newly created unit
             self._load_units()
 
-            # Auto-select the newly created unit from the cached list
-            # _load_units() already fetched from API, use cached result
-            api_uuid = self.context.new_unit_data.get('unit_uuid')
+            # Auto-select the newly created unit
             if api_uuid and self.unit_controller._units_cache:
                 for unit in self.unit_controller._units_cache:
                     if getattr(unit, 'unit_uuid', None) == api_uuid:
@@ -844,15 +965,56 @@ class UnitSelectionStep(BaseStep):
                         self._refresh_unit_card_styles()
                         break
 
-            # Enable next button
             if self.selected_unit:
                 self.emit_validation_changed(True)
+
+        except Exception as e:
+            logger.error(f"API unit creation failed: {e}")
+            if "409" in str(e):
+                Toast.show_message(self, tr("wizard.unit_dialog.duplicate_unit"), Toast.ERROR)
+            else:
+                Toast.show_message(self, str(e), Toast.ERROR)
+        finally:
+            self._spinner.hide_loading()
+            self._if_save_btn.setEnabled(True)
+
+    @staticmethod
+    def _make_icon_header(title: str, subtitle: str, icon_name: str) -> QHBoxLayout:
+        """Create a standardised icon + title + subtitle header row."""
+        row = QHBoxLayout()
+        row.setSpacing(10)
+        row.setContentsMargins(0, 0, 0, 0)
+        icon_lbl = QLabel()
+        icon_lbl.setFixedSize(40, 40)
+        icon_lbl.setAlignment(Qt.AlignCenter)
+        icon_lbl.setStyleSheet("""
+            QLabel {
+                background-color: #EBF5FF;
+                border: 1px solid #DBEAFE;
+                border-radius: 10px;
+            }
+        """)
+        px = Icon.load_pixmap(icon_name, size=24)
+        if px and not px.isNull():
+            icon_lbl.setPixmap(px)
+        row.addWidget(icon_lbl)
+        col = QVBoxLayout()
+        col.setSpacing(1)
+        t = QLabel(title)
+        t.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
+        t.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent;")
+        s = QLabel(subtitle)
+        s.setFont(create_font(size=10, weight=FontManager.WEIGHT_REGULAR))
+        s.setStyleSheet(f"color: {Colors.WIZARD_SUBTITLE}; background: transparent;")
+        col.addWidget(t)
+        col.addWidget(s)
+        row.addLayout(col)
+        row.addStretch()
+        return row
 
     def update_language(self, is_arabic: bool):
         """Update all translatable texts when language changes."""
         self.setLayoutDirection(get_layout_direction())
-        self._title_label.setText(tr("wizard.unit.select_title"))
-        self._subtitle_label.setText(tr("wizard.unit.select_subtitle"))
         self.add_unit_btn.setText(tr("wizard.unit.add_button"))
         # Reload unit cards with new language
         if self.context.building:

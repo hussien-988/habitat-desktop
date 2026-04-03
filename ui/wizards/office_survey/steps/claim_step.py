@@ -10,9 +10,11 @@ from typing import Dict, Any
 
 from PyQt5.QtWidgets import (
     QVBoxLayout, QHBoxLayout, QLabel,
-    QLineEdit, QGridLayout, QFrame, QScrollArea, QWidget
+    QLineEdit, QGridLayout, QFrame, QScrollArea, QWidget,
+    QGraphicsDropShadowEffect
 )
 from PyQt5.QtCore import Qt
+from PyQt5.QtGui import QColor
 
 from ui.components.centered_text_edit import CenteredTextEdit
 from ui.wizards.framework import BaseStep, StepValidationResult
@@ -26,6 +28,10 @@ from services.api_worker import ApiWorker
 from ui.components.toast import Toast
 from ui.components.loading_spinner import LoadingSpinnerOverlay
 from ui.style_manager import StyleManager
+from ui.wizards.office_survey.wizard_styles import STEP_CARD_STYLE
+from ui.font_utils import FontManager, create_font
+from ui.design_system import Colors
+from ui.components.icon import Icon
 from utils.logger import get_logger
 from ui.wizards.office_survey.steps.occupancy_claims_step import _is_owner_relation
 
@@ -51,18 +57,6 @@ class ClaimStep(BaseStep):
 
     def setup_ui(self):
         """Setup the step's UI - scrollable claim cards."""
-        from ui.style_manager import StyleManager
-        from ui.font_utils import FontManager, create_font
-        from ui.design_system import Colors
-        from ui.components.icon import Icon
-
-        # Store references for later use
-        self._StyleManager = StyleManager
-        self._FontManager = FontManager
-        self._create_font = create_font
-        self._Colors = Colors
-        self._Icon = Icon
-
         widget = self
         widget.setLayoutDirection(get_layout_direction())
         widget.setStyleSheet(f"background-color: {Colors.BACKGROUND};")
@@ -112,9 +106,6 @@ class ClaimStep(BaseStep):
 
     def _create_empty_state_widget(self) -> QWidget:
         """Create empty state widget shown when no claims are created."""
-        from ui.font_utils import FontManager, create_font
-        from ui.design_system import Colors
-        from ui.components.icon import Icon
         from PyQt5.QtGui import QPixmap
 
         container = QWidget()
@@ -187,63 +178,25 @@ class ClaimStep(BaseStep):
 
     def _create_claim_card_widget(self, claim_data: Dict[str, Any] = None) -> QFrame:
         """Create a single claim card widget matching the main card design."""
-        from ui.style_manager import StyleManager
-        from ui.font_utils import FontManager, create_font
-        from ui.design_system import Colors
-        from ui.components.icon import Icon
-
         card = QFrame()
-        card.setObjectName("ClaimCard")
+        card.setObjectName("StepCard")
         card.setLayoutDirection(get_layout_direction())
-        card.setStyleSheet(f"""
-            QFrame#ClaimCard {{
-                background-color: {Colors.SURFACE};
-                border-radius: 12px;
-                border: 1px solid {Colors.BORDER_DEFAULT};
-            }}
-        """)
+        card.setStyleSheet(STEP_CARD_STYLE)
+        shadow = QGraphicsDropShadowEffect()
+        shadow.setBlurRadius(20)
+        shadow.setOffset(0, 4)
+        shadow.setColor(QColor(0, 0, 0, 20))
+        card.setGraphicsEffect(shadow)
         card_layout = QVBoxLayout(card)
         card_layout.setContentsMargins(12, 12, 12, 12)
         card_layout.setSpacing(12)
 
         # --- Header with Title and Icon ---
-        header_layout = QHBoxLayout()
-        header_layout.setSpacing(8)
-
-        title_vbox = QVBoxLayout()
-        title_vbox.setSpacing(1)
-        title_label = QLabel(tr("wizard.claim.card_title"))
-        title_label.setFont(create_font(size=FontManager.WIZARD_STEP_TITLE, weight=FontManager.WEIGHT_SEMIBOLD))
-        title_label.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent;")
-
-        subtitle_label = QLabel(tr("wizard.claim.card_subtitle"))
-        subtitle_label.setFont(create_font(size=FontManager.WIZARD_STEP_SUBTITLE, weight=FontManager.WEIGHT_REGULAR))
-        subtitle_label.setStyleSheet(f"color: {Colors.WIZARD_SUBTITLE}; background: transparent;")
-        subtitle_label.setAlignment(Qt.AlignRight)
-        title_vbox.addWidget(title_label)
-        title_vbox.addWidget(subtitle_label)
-
-        title_icon = QLabel()
-        title_icon.setFixedSize(40, 40)
-        title_icon.setAlignment(Qt.AlignCenter)
-        title_icon.setStyleSheet("""
-            QLabel {
-                background-color: #ffffff;
-                border: 1px solid #DBEAFE;
-                border-radius: 10px;
-            }
-        """)
-        claim_icon_pixmap = Icon.load_pixmap("elements", size=24)
-        if claim_icon_pixmap and not claim_icon_pixmap.isNull():
-            title_icon.setPixmap(claim_icon_pixmap)
-        else:
-            title_icon.setText("📋")
-            title_icon.setStyleSheet(title_icon.styleSheet() + "font-size: 16px;")
-
-        header_layout.addWidget(title_icon)
-        header_layout.addLayout(title_vbox)
-        header_layout.addStretch()
-
+        header_layout = self._make_icon_header(
+            "wizard.claim.card_title",
+            "wizard.claim.card_subtitle",
+            "elements"
+        )
         card_layout.addLayout(header_layout)
         card_layout.addSpacing(12)
 
@@ -266,15 +219,15 @@ class ClaimStep(BaseStep):
             grid.addLayout(v, row, col)
 
         # Field styles - ALL read-only with uniform background
-        ro_bg = "#f0f7ff"
+        ro_bg = "#F8FAFF"
 
         ro_input_style = f"""
             QLineEdit {{
-                border: 1px solid #E0E6ED;
+                border: 1px solid #D0D7E2;
                 border-radius: 8px;
                 padding: 10px;
                 background-color: {ro_bg};
-                color: #333;
+                color: #2C3E50;
                 font-size: 14px;
                 min-height: 23px;
                 max-height: 23px;
@@ -341,10 +294,10 @@ class ClaimStep(BaseStep):
         claim_notes.setStyleSheet(f"""
             QTextEdit {{
                 background-color: {ro_bg};
-                border: 1px solid #E0E6ED;
+                border: 1px solid #D0D7E2;
                 border-radius: 8px;
                 padding: 8px;
-                color: #333;
+                color: #2C3E50;
                 font-size: 16px;
             }}
         """)
@@ -383,6 +336,38 @@ class ClaimStep(BaseStep):
             self._populate_card_with_data(card, claim_data)
 
         return card
+
+    @staticmethod
+    def _make_icon_header(title_key: str, subtitle_key: str, icon_name: str) -> QHBoxLayout:
+        """Build a standard icon + title + subtitle header row."""
+        header = QHBoxLayout()
+        header.setSpacing(8)
+
+        icon_box = QLabel()
+        icon_box.setFixedSize(40, 40)
+        icon_box.setAlignment(Qt.AlignCenter)
+        icon_box.setStyleSheet(
+            "QLabel { background-color: #EBF5FF; border: 1px solid #DBEAFE; border-radius: 10px; }"
+        )
+        pix = Icon.load_pixmap(icon_name, size=24)
+        if pix and not pix.isNull():
+            icon_box.setPixmap(pix)
+
+        title_col = QVBoxLayout()
+        title_col.setSpacing(1)
+        t = QLabel(tr(title_key))
+        t.setFont(create_font(size=FontManager.WIZARD_STEP_TITLE, weight=FontManager.WEIGHT_SEMIBOLD))
+        t.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent;")
+        s = QLabel(tr(subtitle_key))
+        s.setFont(create_font(size=FontManager.WIZARD_STEP_SUBTITLE, weight=FontManager.WEIGHT_REGULAR))
+        s.setStyleSheet(f"color: {Colors.WIZARD_SUBTITLE}; background: transparent;")
+        title_col.addWidget(t)
+        title_col.addWidget(s)
+
+        header.addWidget(icon_box)
+        header.addLayout(title_col)
+        header.addStretch()
+        return header
 
     def _populate_card_with_data(self, card: QFrame, claim_data: Dict[str, Any]):
         """Populate a claim card with data from API response."""
@@ -451,7 +436,7 @@ class ClaimStep(BaseStep):
             card.case_category_field.setText(tr("wizard.claim.case_closed"))
             card.case_category_field.setStyleSheet("""
                 QLineEdit {
-                    border: 1px solid #E0E6ED;
+                    border: 1px solid #D0D7E2;
                     border-radius: 8px;
                     padding: 10px;
                     background-color: #e8f5e9;
@@ -466,7 +451,7 @@ class ClaimStep(BaseStep):
             card.case_category_field.setText(tr("wizard.claim.case_open"))
             card.case_category_field.setStyleSheet("""
                 QLineEdit {
-                    border: 1px solid #E0E6ED;
+                    border: 1px solid #D0D7E2;
                     border-radius: 8px;
                     padding: 10px;
                     background-color: #fff3e0;
@@ -770,7 +755,7 @@ class ClaimStep(BaseStep):
             first_card.case_category_field.setText(tr("wizard.claim.case_closed"))
             first_card.case_category_field.setStyleSheet("""
                 QLineEdit {
-                    border: 1px solid #E0E6ED;
+                    border: 1px solid #D0D7E2;
                     border-radius: 8px;
                     padding: 10px;
                     background-color: #e8f5e9;
@@ -785,7 +770,7 @@ class ClaimStep(BaseStep):
             first_card.case_category_field.setText(tr("wizard.claim.case_open"))
             first_card.case_category_field.setStyleSheet("""
                 QLineEdit {
-                    border: 1px solid #E0E6ED;
+                    border: 1px solid #D0D7E2;
                     border-radius: 8px;
                     padding: 10px;
                     background-color: #fff3e0;

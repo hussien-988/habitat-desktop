@@ -1,51 +1,602 @@
 # -*- coding: utf-8 -*-
 """
-Surveys Page — displays all surveys (Draft & Finalized) using Surveys/office API.
-Features Underline Tab Bar for switching between draft/finalized surveys,
-plus filter bar with reference code, person name, and building number search.
+Surveys Page v2 — Dark navy header with constellation, navbar-style tabs,
+animated shimmer cards, pagination, and cohesive blue palette.
+Displays Draft & Finalized office surveys.
 """
 
 import logging
-from typing import List, Dict
+import math
+import random
+import time
+from typing import List, Dict, Optional
 
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel,
-    QScrollArea, QSpacerItem, QSizePolicy, QFrame, QGridLayout,
-    QLineEdit, QComboBox,
+    QScrollArea, QFrame, QLineEdit, QPushButton,
+    QSizePolicy, QGraphicsDropShadowEffect,
+    QGraphicsOpacityEffect, QStackedWidget,
 )
-from PyQt5.QtCore import Qt, pyqtSignal, QTimer
-from PyQt5.QtGui import QFont
+from PyQt5.QtCore import (
+    Qt, pyqtSignal, pyqtProperty, QTimer, QRectF, QPoint, QSize,
+    QPropertyAnimation, QEasingCurve,
+)
+from PyQt5.QtGui import (
+    QFont, QColor, QPainter, QLinearGradient, QRadialGradient, QPen,
+    QPainterPath, QCursor,
+)
 
-from ..design_system import Colors, PageDimensions
-from ..components.empty_state import EmptyState
-from ..components.claim_list_card import ClaimListCard
-from ..components.primary_button import PrimaryButton
-from ..components.underline_tab_bar import UnderlineTabBar
-from ..font_utils import create_font, FontManager
-from ..style_manager import StyleManager
-from services.translation_manager import tr, get_layout_direction
-from services.display_mappings import get_survey_type_display, get_survey_type_options
+from ui.design_system import Colors, PageDimensions, Spacing
+from ui.font_utils import create_font, FontManager
+from ui.style_manager import StyleManager
+from ui.components.icon import Icon
+from ui.components.nav_style_tab import NavStyleTab
+from ui.components.accent_line import AccentLine
+from ui.components.dark_header_zone import DarkHeaderZone
+from services.translation_manager import tr, get_layout_direction, get_language
+from services.display_mappings import get_survey_type_display
 from services.api_worker import ApiWorker
-from ..components.toast import Toast
+from ui.components.toast import Toast
 
 logger = logging.getLogger(__name__)
 
-_STATUS_CONFIG = {
-    "draft":     {"icon": "yelow"},
-    "finalized": {"icon": "blue"},
+_STATUS_STYLES = {
+    "draft":     {"bg": "#FFF7ED", "fg": "#C2410C", "border": "#FDBA74"},
+    "finalized": {"bg": "#EBF5FF", "fg": "#0369A1", "border": "#7DD3FC"},
 }
 
+_DARK_INPUT_STYLE = """
+    QLineEdit {
+        background: rgba(10, 22, 40, 140);
+        color: white;
+        border: 1px solid rgba(56, 144, 223, 35);
+        border-radius: 8px;
+        padding: 0 12px 0 34px;
+    }
+    QLineEdit:focus {
+        border: 1.5px solid rgba(56, 144, 223, 140);
+        background: rgba(10, 22, 40, 180);
+    }
+    QLineEdit::placeholder {
+        color: rgba(139, 172, 200, 130);
+    }
+"""
+
+_ADD_BTN_STYLE = """
+    QPushButton {
+        background: qlineargradient(x1:0, y1:0, x2:0.5, y2:1,
+            stop:0 #4DA0EF, stop:0.45 #3890DF, stop:1 #2E7BD6);
+        color: white;
+        border: 1px solid rgba(120, 190, 255, 0.35);
+        border-radius: 10px;
+        padding: 0 24px;
+        font-weight: 700;
+        font-size: 13pt;
+    }
+    QPushButton:hover {
+        background: qlineargradient(x1:0, y1:0, x2:0.5, y2:1,
+            stop:0 #5AACFF, stop:0.45 #4DA0EF, stop:1 #3890DF);
+        border: 1px solid rgba(140, 210, 255, 0.55);
+    }
+    QPushButton:pressed {
+        background: qlineargradient(x1:0, y1:0, x2:0.5, y2:1,
+            stop:0 #3890DF, stop:0.5 #2E7BD6, stop:1 #266FC0);
+        border: 1px solid rgba(100, 170, 240, 0.25);
+    }
+"""
+
+_NAV_BTN_STYLE = """
+    QPushButton {
+        background: rgba(56, 144, 223, 0.08);
+        border: 1px solid rgba(56, 144, 223, 0.2);
+        border-radius: 6px; color: #3890DF;
+        padding: 0 10px; font-weight: 600;
+    }
+    QPushButton:hover { background: rgba(56, 144, 223, 0.18); }
+    QPushButton:disabled { color: #B0BEC5; background: transparent; border-color: #E0E0E0; }
+"""
+
+
+# ---------------------------------------------------------------------------
+#  _SurveyCard — Card with blue tint, animated shimmer, hover lift, chevron
+# ---------------------------------------------------------------------------
+
+class _SurveyCard(QFrame):
+    """Survey card with blue-tinted background, animated shimmer sweep,
+    prominent hover effects, and directional chevron."""
+
+    clicked = pyqtSignal(str)
+
+    _CARD_BG = "#F7FAFF"
+    _CARD_BG_HOVER = "#F0F5FF"
+
+    def _get_lift(self):
+        return self._lift_value
+
+    def _set_lift(self, v):
+        self._lift_value = v
+        lv = int(v)
+        self.setContentsMargins(0, max(0, -lv), 0, max(0, lv))
+        self.update()
+
+    lift = pyqtProperty(float, _get_lift, _set_lift)
+
+    def __init__(self, card_data: Dict, parent=None):
+        super().__init__(parent)
+        self._claim_id = card_data.get("claim_id", "")
+        self._claim_uuid = card_data.get("claim_uuid", "")
+        self._status = card_data.get("status", "draft")
+        self._hovered = False
+        self._pressed = False
+        self._badge = None
+        self._entrance_anim = None
+        self._entrance_effect = None
+        self._shimmer_offset = random.uniform(0, math.tau)
+        self._lift_value = 0.0
+        self._lift_anim = None
+        self.setCursor(QCursor(Qt.PointingHandCursor))
+        self.setFixedHeight(120)
+        self.setMouseTracking(True)
+        self._build_ui(card_data)
+
+    def _build_ui(self, d: Dict):
+        self.setLayoutDirection(get_layout_direction())
+        self.setStyleSheet(f"""
+            _SurveyCard {{
+                background: {self._CARD_BG};
+                border-radius: 12px;
+                border: 1px solid #E2EAF2;
+            }}
+        """)
+
+        shadow = QGraphicsDropShadowEffect(self)
+        shadow.setBlurRadius(20)
+        shadow.setOffset(0, 4)
+        shadow.setColor(QColor(0, 0, 0, 22))
+        self.setGraphicsEffect(shadow)
+
+        outer = QHBoxLayout(self)
+        outer.setContentsMargins(0, 0, 16, 0)
+        outer.setSpacing(0)
+
+        # Left status strip
+        style = _STATUS_STYLES.get(self._status, _STATUS_STYLES["draft"])
+        strip = QFrame()
+        strip.setFixedWidth(6)
+        strip.setStyleSheet(
+            f"background-color: {style['fg']}; "
+            "border-top-left-radius: 12px; border-bottom-left-radius: 12px;"
+        )
+        outer.addWidget(strip)
+
+        # Content
+        content = QVBoxLayout()
+        content.setContentsMargins(16, 12, 0, 12)
+        content.setSpacing(6)
+
+        # Row 1: reference code + status badge
+        row1 = QHBoxLayout()
+        row1.setSpacing(8)
+
+        ref_label = QLabel(d.get("claim_id", "N/A"))
+        id_font = create_font(size=10, weight=FontManager.WEIGHT_MEDIUM)
+        id_font.setLetterSpacing(QFont.AbsoluteSpacing, 0.5)
+        ref_label.setFont(id_font)
+        ref_label.setStyleSheet(
+            f"color: {Colors.TEXT_SECONDARY}; background: transparent; border: none;"
+        )
+        row1.addWidget(ref_label)
+        row1.addStretch()
+
+        status_text = self._get_status_text(self._status)
+        badge = QLabel(status_text)
+        badge.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
+        badge.setAlignment(Qt.AlignCenter)
+        badge.setFixedHeight(24)
+        badge.setStyleSheet(
+            f"QLabel {{ background-color: {style['bg']}; color: {style['fg']}; "
+            f"border: 1px solid {style['border']}; border-radius: 12px; "
+            f"padding: 0 12px; }}"
+        )
+        self._badge = badge
+        row1.addWidget(badge)
+        content.addLayout(row1)
+
+        # Row 2: contact person name
+        name_label = QLabel(d.get("claimant_name", "-"))
+        name_label.setFont(create_font(size=13, weight=QFont.Bold))
+        name_label.setStyleSheet(
+            f"color: {Colors.PAGE_TITLE}; background: transparent; border: none;"
+        )
+        name_label.setMaximumWidth(600)
+        content.addWidget(name_label)
+
+        # Row 3: details
+        details_parts = []
+        building_id = d.get("building_id", "")
+        if building_id:
+            details_parts.append(building_id)
+        source_label = d.get("source_label", "")
+        if source_label:
+            details_parts.append(source_label)
+        date_str = d.get("date", "")
+        if date_str and not date_str.startswith("0001"):
+            details_parts.append(date_str)
+
+        details_text = " \u2009\u00b7\u2009 ".join(details_parts)
+        details = QLabel(details_text)
+        details.setFont(create_font(size=10, weight=FontManager.WEIGHT_REGULAR))
+        details.setStyleSheet(
+            f"color: {Colors.TEXT_SECONDARY}; background: transparent; border: none;"
+        )
+        content.addWidget(details)
+
+        outer.addLayout(content, 1)
+
+    def _get_status_text(self, status: str) -> str:
+        key_map = {
+            "draft": "page.cases.tab_draft",
+            "finalized": "page.cases.tab_finalized",
+        }
+        return tr(key_map.get(status, "page.cases.tab_draft"))
+
+    def paintEvent(self, event):
+        super().paintEvent(event)
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing)
+        w, h = self.width(), self.height()
+        t = time.time()
+
+        # Animated blue shimmer sweep
+        sweep_pos = (math.sin(t * 0.7 + self._shimmer_offset) + 1) / 2
+        sweep_x = int(sweep_pos * w)
+        shimmer_grad = QLinearGradient(sweep_x - 120, 0, sweep_x + 120, 0)
+        shimmer_grad.setColorAt(0, QColor(56, 144, 223, 0))
+        shimmer_grad.setColorAt(0.5, QColor(120, 190, 255, 12))
+        shimmer_grad.setColorAt(1, QColor(56, 144, 223, 0))
+        painter.setPen(Qt.NoPen)
+
+        clip = QPainterPath()
+        clip.addRoundedRect(QRectF(1, 1, w - 2, h - 2), 11, 11)
+        painter.setClipPath(clip)
+        painter.fillRect(QRectF(0, 0, w, h), shimmer_grad)
+
+        # Top edge shimmer on hover
+        if self._hovered:
+            top_grad = QLinearGradient(0, 0, w, 0)
+            top_grad.setColorAt(0, QColor(56, 144, 223, 0))
+            top_grad.setColorAt(0.15, QColor(56, 144, 223, 35))
+            top_grad.setColorAt(0.5, QColor(120, 190, 255, 55))
+            top_grad.setColorAt(0.85, QColor(56, 144, 223, 35))
+            top_grad.setColorAt(1, QColor(56, 144, 223, 0))
+            painter.fillRect(QRectF(0, 0, w, 3.5), top_grad)
+
+        painter.setClipping(False)
+
+        # Chevron arrow (RTL-aware)
+        is_rtl = self.layoutDirection() == Qt.RightToLeft
+        chevron_x = 14 if is_rtl else w - 22
+        chevron_alpha = 130 if self._hovered else 45
+        painter.setPen(QPen(QColor(56, 144, 223, chevron_alpha), 2, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin))
+        cy = h / 2
+        if is_rtl:
+            painter.drawLine(int(chevron_x + 6), int(cy - 6), int(chevron_x), int(cy))
+            painter.drawLine(int(chevron_x), int(cy), int(chevron_x + 6), int(cy + 6))
+        else:
+            painter.drawLine(int(chevron_x), int(cy - 6), int(chevron_x + 6), int(cy))
+            painter.drawLine(int(chevron_x + 6), int(cy), int(chevron_x), int(cy + 6))
+
+        painter.end()
+
+    def _animate_lift(self, target):
+        if self._lift_anim and self._lift_anim.state() == QPropertyAnimation.Running:
+            self._lift_anim.stop()
+        self._lift_anim = QPropertyAnimation(self, b"lift")
+        self._lift_anim.setDuration(180)
+        self._lift_anim.setStartValue(self._lift_value)
+        self._lift_anim.setEndValue(target)
+        self._lift_anim.setEasingCurve(QEasingCurve.OutCubic)
+        self._lift_anim.start()
+
+    def enterEvent(self, event):
+        self._hovered = True
+        self.setStyleSheet(f"""
+            _SurveyCard {{
+                background: {self._CARD_BG_HOVER};
+                border-radius: 12px;
+                border: 1px solid rgba(56, 144, 223, 0.3);
+            }}
+        """)
+        eff = self.graphicsEffect()
+        if isinstance(eff, QGraphicsDropShadowEffect):
+            eff.setBlurRadius(32)
+            eff.setOffset(0, 8)
+            eff.setColor(QColor(56, 144, 223, 35))
+        if self._badge:
+            style = _STATUS_STYLES.get(self._status, _STATUS_STYLES["draft"])
+            glow = QGraphicsDropShadowEffect(self._badge)
+            glow.setBlurRadius(8)
+            glow.setOffset(0, 0)
+            glow.setColor(QColor(style['fg']))
+            self._badge.setGraphicsEffect(glow)
+        self._animate_lift(5.0)
+        self.update()
+        super().enterEvent(event)
+
+    def leaveEvent(self, event):
+        self._hovered = False
+        self._pressed = False
+        self.setStyleSheet(f"""
+            _SurveyCard {{
+                background: {self._CARD_BG};
+                border-radius: 12px;
+                border: 1px solid #E2EAF2;
+            }}
+        """)
+        eff = self.graphicsEffect()
+        if isinstance(eff, QGraphicsDropShadowEffect):
+            eff.setBlurRadius(20)
+            eff.setOffset(0, 4)
+            eff.setColor(QColor(0, 0, 0, 22))
+        if self._badge:
+            self._badge.setGraphicsEffect(None)
+        self._animate_lift(0.0)
+        self.update()
+        super().leaveEvent(event)
+
+    def mousePressEvent(self, event):
+        if event.button() == Qt.LeftButton:
+            self._pressed = True
+            eff = self.graphicsEffect()
+            if isinstance(eff, QGraphicsDropShadowEffect):
+                eff.setBlurRadius(8)
+                eff.setOffset(0, 1)
+                eff.setColor(QColor(0, 0, 0, 18))
+            if self._claim_id:
+                self.clicked.emit(self._claim_id)
+        super().mousePressEvent(event)
+
+    def mouseReleaseEvent(self, event):
+        if self._pressed:
+            self._pressed = False
+            if self._hovered:
+                eff = self.graphicsEffect()
+                if isinstance(eff, QGraphicsDropShadowEffect):
+                    eff.setBlurRadius(32)
+                    eff.setOffset(0, 8)
+                    eff.setColor(QColor(56, 144, 223, 35))
+            else:
+                eff = self.graphicsEffect()
+                if isinstance(eff, QGraphicsDropShadowEffect):
+                    eff.setBlurRadius(20)
+                    eff.setOffset(0, 4)
+                    eff.setColor(QColor(0, 0, 0, 22))
+        super().mouseReleaseEvent(event)
+
+
+# ---------------------------------------------------------------------------
+#  _EmptyStateAnimated — Dark navy cartographic empty state
+# ---------------------------------------------------------------------------
+
+class _EmptyStateAnimated(QWidget):
+    """Dark-themed empty state with constellation particles and
+    cartographic motifs."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._title_text = tr("page.cases.no_drafts")
+        self._desc_text = tr("page.cases.empty_description")
+
+        self._anim_start = time.time()
+
+        self._shimmer_pos = 0.0
+        self._shimmer_anim = QPropertyAnimation(self, b"shimmerPos")
+        self._shimmer_anim.setDuration(2500)
+        self._shimmer_anim.setStartValue(0.0)
+        self._shimmer_anim.setEndValue(1.0)
+        self._shimmer_anim.setEasingCurve(QEasingCurve.InOutQuad)
+        self._shimmer_anim.setLoopCount(-1)
+        self._shimmer_anim.start()
+
+        random.seed(77)
+        self._particles = []
+        for _ in range(12):
+            self._particles.append({
+                "x": random.uniform(0.05, 0.95),
+                "y": random.uniform(0.05, 0.95),
+                "phase": random.uniform(0, math.tau),
+                "speed": random.uniform(0.3, 0.8),
+            })
+
+        self._timer = QTimer(self)
+        self._timer.setInterval(50)
+        self._timer.timeout.connect(self.update)
+        self._timer.start()
+
+    @pyqtProperty(float)
+    def shimmerPos(self):
+        return self._shimmer_pos
+
+    @shimmerPos.setter
+    def shimmerPos(self, val):
+        self._shimmer_pos = val
+        self.update()
+
+    def set_title(self, text: str):
+        self._title_text = text
+        self.update()
+
+    def set_description(self, text: str):
+        self._desc_text = text
+        self.update()
+
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing)
+        w, h = self.width(), self.height()
+        t = time.time() - self._anim_start
+
+        # Dark navy gradient
+        bg_grad = QLinearGradient(0, 0, w, h)
+        bg_grad.setColorAt(0.0, QColor("#0E2035"))
+        bg_grad.setColorAt(0.5, QColor("#132D50"))
+        bg_grad.setColorAt(1.0, QColor("#1A3860"))
+        painter.fillRect(0, 0, w, h, bg_grad)
+
+        # Grid
+        painter.setPen(QPen(QColor(56, 144, 223, 12), 0.5))
+        for x in range(0, w, 60):
+            painter.drawLine(x, 0, x, h)
+        for y in range(0, h, 60):
+            painter.drawLine(0, y, w, y)
+
+        # Particles
+        positions = []
+        for p in self._particles:
+            px = int((p["x"] + 0.012 * math.sin(t * p["speed"] + p["phase"])) * w)
+            py = int((p["y"] + 0.010 * math.cos(t * p["speed"] * 0.7 + p["phase"])) * h)
+            px = max(4, min(w - 4, px))
+            py = max(4, min(h - 4, py))
+            positions.append((px, py))
+            alpha = 35 + int(18 * math.sin(t * 1.5 + p["phase"]))
+            painter.setPen(Qt.NoPen)
+            painter.setBrush(QColor(139, 172, 200, alpha))
+            painter.drawEllipse(QPoint(px, py), 2, 2)
+
+        for i in range(len(positions)):
+            for j in range(i + 1, len(positions)):
+                dx = positions[i][0] - positions[j][0]
+                dy = positions[i][1] - positions[j][1]
+                dist = math.sqrt(dx * dx + dy * dy)
+                if dist < 150:
+                    alpha = int(12 * (1 - dist / 150))
+                    painter.setPen(QPen(QColor(139, 172, 200, alpha), 1))
+                    painter.drawLine(
+                        positions[i][0], positions[i][1],
+                        positions[j][0], positions[j][1]
+                    )
+
+        cx, cy = w // 2, int(h * 0.40)
+        fw, fh = 110, 80
+
+        # Breathing glow
+        glow_alpha = 20 + int(12 * math.sin(t * 0.8))
+        glow = QRadialGradient(cx, cy, 100)
+        glow.setColorAt(0, QColor(56, 144, 223, glow_alpha))
+        glow.setColorAt(1, QColor(56, 144, 223, 0))
+        painter.setPen(Qt.NoPen)
+        painter.setBrush(glow)
+        painter.drawEllipse(cx - 100, cy - 100, 200, 200)
+
+        # Concentric circles
+        for i, radius in enumerate([40, 65, 90]):
+            alpha = int(15 + 8 * math.sin(t * 0.4 + i * 1.2))
+            painter.setPen(QPen(QColor(56, 144, 223, alpha), 0.8))
+            painter.setBrush(Qt.NoBrush)
+            painter.drawEllipse(cx - radius, cy - radius, radius * 2, radius * 2)
+
+        # Crosshairs
+        cross_alpha = int(12 + 6 * math.sin(t * 0.3))
+        painter.setPen(QPen(QColor(56, 144, 223, cross_alpha), 0.5))
+        painter.drawLine(cx - 100, cy, cx - 55, cy)
+        painter.drawLine(cx + 55, cy, cx + 100, cy)
+        painter.drawLine(cx, cy - 85, cx, cy - 50)
+        painter.drawLine(cx, cy + 50, cx, cy + 85)
+
+        # Folder body
+        folder = QPainterPath()
+        folder.moveTo(cx - fw // 2, cy - fh // 2 + 16)
+        folder.lineTo(cx - fw // 2, cy + fh // 2)
+        folder.lineTo(cx + fw // 2, cy + fh // 2)
+        folder.lineTo(cx + fw // 2, cy - fh // 2 + 16)
+        folder.closeSubpath()
+        painter.setPen(QPen(QColor(56, 144, 223, 40), 1.5))
+        painter.setBrush(QColor(15, 31, 61, 180))
+        painter.drawPath(folder)
+
+        # Folder tab
+        tab_path = QPainterPath()
+        tab_path.moveTo(cx - fw // 2, cy - fh // 2 + 16)
+        tab_path.lineTo(cx - fw // 2, cy - fh // 2 + 4)
+        tab_path.lineTo(cx - fw // 2 + 4, cy - fh // 2)
+        tab_path.lineTo(cx - 12, cy - fh // 2)
+        tab_path.lineTo(cx - 8, cy - fh // 2 + 8)
+        tab_path.lineTo(cx + 8, cy - fh // 2 + 8)
+        tab_path.lineTo(cx + 12, cy - fh // 2 + 16)
+        tab_path.closeSubpath()
+        painter.setPen(QPen(QColor(56, 144, 223, 40), 1.5))
+        painter.setBrush(QColor(20, 40, 70, 200))
+        painter.drawPath(tab_path)
+
+        # Documents
+        doc_x, doc_y = cx - 18, cy - fh // 2 + 24
+        for i in range(2):
+            dx = doc_x + i * 14
+            dy = doc_y + i * 5
+            painter.setPen(QPen(QColor(56, 144, 223, 30), 1))
+            painter.setBrush(QColor(25, 50, 85))
+            painter.drawRoundedRect(QRectF(dx, dy, 30, 38), 3, 3)
+            painter.setPen(Qt.NoPen)
+            painter.setBrush(QColor(56, 144, 223, 25))
+            for line_y in range(3):
+                lw = 20 if line_y < 2 else 13
+                painter.drawRect(QRectF(dx + 5, dy + 9 + line_y * 8, lw, 2))
+
+        # Ground shadow
+        painter.setPen(QPen(QColor(56, 144, 223, 20), 1))
+        painter.drawLine(cx - fw // 2 + 8, cy + fh // 2 + 3,
+                         cx + fw // 2 - 8, cy + fh // 2 + 3)
+
+        # Shimmer sweep
+        shimmer_x = int((self._shimmer_pos * 2 - 0.5) * fw + cx - fw // 2)
+        sg = QLinearGradient(shimmer_x - 30, 0, shimmer_x + 30, 0)
+        sg.setColorAt(0, QColor(56, 144, 223, 0))
+        sg.setColorAt(0.5, QColor(91, 168, 240, 50))
+        sg.setColorAt(1, QColor(56, 144, 223, 0))
+        cp = QPainterPath()
+        cp.addRect(QRectF(cx - fw // 2, cy - fh // 2, fw, fh))
+        painter.setClipPath(cp)
+        painter.setPen(Qt.NoPen)
+        painter.setBrush(sg)
+        painter.drawRect(shimmer_x - 30, cy - fh // 2, 60, fh)
+        painter.setClipping(False)
+
+        # Title
+        painter.setFont(create_font(size=FontManager.SIZE_TITLE, weight=QFont.DemiBold))
+        painter.setPen(QColor(255, 255, 255))
+        painter.drawText(QRectF(0, cy + fh // 2 + 28, w, 30), Qt.AlignCenter, self._title_text)
+
+        # Description
+        painter.setFont(create_font(size=FontManager.SIZE_BODY, weight=FontManager.WEIGHT_REGULAR))
+        painter.setPen(QColor(139, 172, 200, 200))
+        painter.drawText(QRectF(w * 0.2, cy + fh // 2 + 62, w * 0.6, 40),
+                         Qt.AlignCenter | Qt.TextWordWrap, self._desc_text)
+
+        painter.end()
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        if not self._timer.isActive():
+            self._timer.start()
+        if self._shimmer_anim.state() != QPropertyAnimation.Running:
+            self._shimmer_anim.start()
+
+    def hideEvent(self, event):
+        super().hideEvent(event)
+        self._timer.stop()
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        self.update()
+
+
+# ---------------------------------------------------------------------------
+#  CasesPage — Main page widget
+# ---------------------------------------------------------------------------
 
 class CasesPage(QWidget):
-    """
-    Surveys page with Underline Tab Bar (Draft / Finalized).
-
-    Signals:
-        claim_selected(str): emitted when a finalized survey card is clicked
-        add_claim_clicked():  emitted when the add-case button is clicked
-        survey_finalized(str): emitted after a draft survey is finalized
-        resume_survey(str):    emitted when a draft survey card is clicked
-    """
+    """Surveys listing page with dark header zone, shimmer cards,
+    pagination, and comprehensive loading states."""
 
     claim_selected = pyqtSignal(str)
     add_claim_clicked = pyqtSignal()
@@ -57,15 +608,171 @@ class CasesPage(QWidget):
         self.db = db
         self.i18n = i18n
         self._all_data: List[Dict] = []
-        self._active_tab = "draft"  # "draft" or "finalized"
+        self._active_tab = "draft"
         self._buildings_cache: Dict[str, object] = {}
         self._last_refresh_ms = 0
+        self._draft_count = 0
+        self._finalized_count = 0
+        self._card_widgets: List[_SurveyCard] = []
+        self._loading = False
+        self._navigating = False
+        self._worker = None
+        self._current_page = 1
+        self._total_count = 0
+        self._page_size = 20
         self._user_role = None
         self._user_id = None
+
         self._search_timer = QTimer(self)
         self._search_timer.setSingleShot(True)
         self._search_timer.timeout.connect(self._load_surveys)
+
+        self._shimmer_timer = QTimer(self)
+        self._shimmer_timer.setInterval(80)
+        self._shimmer_timer.timeout.connect(self._update_card_shimmer)
+
         self._setup_ui()
+
+    # -- UI Setup --
+
+    def _setup_ui(self):
+        self.setStyleSheet("background: transparent;")
+
+        main = QVBoxLayout(self)
+        main.setContentsMargins(0, 0, 0, 0)
+        main.setSpacing(0)
+
+        # Dark header zone
+        self._header = DarkHeaderZone(self)
+        self._header.set_title(tr("cases.page.title"))
+
+        # Add button in header actions
+        self._add_btn = QPushButton(tr("wizard.button.add_case"))
+        self._add_btn.setCursor(QCursor(Qt.PointingHandCursor))
+        self._add_btn.setFixedHeight(42)
+        self._add_btn.setMinimumWidth(150)
+        self._add_btn.setFont(create_font(size=13, weight=FontManager.WEIGHT_BOLD))
+        self._add_btn.setStyleSheet(_ADD_BTN_STYLE)
+        self._add_btn.clicked.connect(self.add_claim_clicked.emit)
+        self._header.add_action_widget(self._add_btn)
+
+        # Tabs (row 2)
+        tab_font = create_font(size=12, weight=QFont.DemiBold)
+
+        self._tab_draft = NavStyleTab(tr("page.cases.tab_draft"))
+        self._tab_draft.setFixedSize(130, 38)
+        self._tab_draft.set_font(tab_font)
+        self._tab_draft.set_active(True)
+        self._tab_draft.clicked.connect(lambda: self._on_tab("draft"))
+        self._header.add_tab(self._tab_draft)
+
+        self._tab_finalized = NavStyleTab(tr("page.cases.tab_finalized"))
+        self._tab_finalized.setFixedSize(130, 38)
+        self._tab_finalized.set_font(tab_font)
+        self._tab_finalized.set_active(False)
+        self._tab_finalized.clicked.connect(lambda: self._on_tab("finalized"))
+        self._header.add_tab(self._tab_finalized)
+
+        # Search field (row 2)
+        self._search = QLineEdit()
+        self._search.setPlaceholderText(tr("page.cases.search_person"))
+        self._search.setFixedSize(280, 34)
+        self._search.setFont(create_font(size=11, weight=FontManager.WEIGHT_REGULAR))
+        self._search.setStyleSheet(_DARK_INPUT_STYLE)
+        search_icon = Icon.load_pixmap("search", 16)
+        if search_icon and not search_icon.isNull():
+            icon_label = QLabel(self._search)
+            icon_label.setPixmap(search_icon)
+            icon_label.setFixedSize(16, 16)
+            icon_label.move(10, 9)
+            icon_label.setStyleSheet("background: transparent; border: none;")
+        self._search.textChanged.connect(self._on_search_changed)
+        self._header.set_search_field(self._search)
+
+        main.addWidget(self._header)
+
+        # Accent line
+        self._accent_line = AccentLine()
+        main.addWidget(self._accent_line)
+
+        # Light content area
+        self._content_wrapper = QWidget()
+        self._content_wrapper.setStyleSheet(f"background-color: {Colors.BACKGROUND};")
+        content_layout = QVBoxLayout(self._content_wrapper)
+        content_layout.setContentsMargins(
+            PageDimensions.content_padding_h(), 14,
+            PageDimensions.content_padding_h(),
+            PageDimensions.CONTENT_PADDING_V_BOTTOM
+        )
+        content_layout.setSpacing(0)
+
+        # Stacked widget: cards vs empty
+        self._stack = QStackedWidget()
+
+        self._scroll = QScrollArea()
+        self._scroll.setWidgetResizable(True)
+        self._scroll.setFrameShape(QFrame.NoFrame)
+        self._scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self._scroll.setStyleSheet(
+            "QScrollArea { border: none; background: transparent; }"
+            + StyleManager.scrollbar()
+        )
+
+        self._scroll_content = QWidget()
+        self._scroll_content.setStyleSheet("background: transparent;")
+        self._cards_layout = QVBoxLayout(self._scroll_content)
+        self._cards_layout.setContentsMargins(0, 0, 0, 0)
+        self._cards_layout.setSpacing(10)
+        self._cards_layout.addStretch()
+
+        self._scroll.setWidget(self._scroll_content)
+        self._stack.addWidget(self._scroll)
+
+        self._empty_state = _EmptyStateAnimated()
+        self._stack.addWidget(self._empty_state)
+
+        content_layout.addWidget(self._stack, 1)
+
+        self._pagination = self._create_pagination()
+        content_layout.addWidget(self._pagination)
+
+        main.addWidget(self._content_wrapper, 1)
+
+        from ui.components.loading_spinner import LoadingSpinnerOverlay
+        self._spinner = LoadingSpinnerOverlay(self)
+
+    def _create_pagination(self):
+        bar = QFrame()
+        bar.setFixedHeight(40)
+        bar.setStyleSheet("QFrame { background: transparent; border: none; }")
+        layout = QHBoxLayout(bar)
+        layout.setContentsMargins(4, 6, 4, 0)
+        layout.addStretch()
+
+        self._prev_btn = QPushButton("\u276E")
+        self._prev_btn.setFixedSize(32, 28)
+        self._prev_btn.setCursor(QCursor(Qt.PointingHandCursor))
+        self._prev_btn.setStyleSheet(_NAV_BTN_STYLE)
+        self._prev_btn.clicked.connect(self._on_prev_page)
+        layout.addWidget(self._prev_btn)
+
+        self._page_info = QLabel("")
+        self._page_info.setFont(create_font(size=10, weight=FontManager.WEIGHT_MEDIUM))
+        self._page_info.setStyleSheet(f"color: {Colors.TEXT_SECONDARY};")
+        self._page_info.setAlignment(Qt.AlignCenter)
+        self._page_info.setMinimumWidth(80)
+        layout.addWidget(self._page_info)
+
+        self._next_btn = QPushButton("\u276F")
+        self._next_btn.setFixedSize(32, 28)
+        self._next_btn.setCursor(QCursor(Qt.PointingHandCursor))
+        self._next_btn.setStyleSheet(_NAV_BTN_STYLE)
+        self._next_btn.clicked.connect(self._on_next_page)
+        layout.addWidget(self._next_btn)
+
+        return bar
+
+    # -- Role-based configuration --
 
     def configure_for_user(self, role: str, user_id: str):
         """Set user context for filtering surveys by ownership."""
@@ -73,256 +780,221 @@ class CasesPage(QWidget):
         self._user_id = user_id
         self._all_data = []
         self._buildings_cache = {}
-        self._clear_content()
+        self._clear_cards()
 
         if role == "admin":
-            self._tab_bar.setVisible(False)
+            self._tab_draft.setVisible(False)
+            self._tab_finalized.setVisible(False)
             self._active_tab = "finalized"
-            self._type_filter.setVisible(True)
+            self._tab_draft.set_active(False)
+            self._tab_finalized.set_active(True)
             self._add_btn.setVisible(False)
         elif role == "data_manager":
-            self._tab_bar.setVisible(True)
+            self._tab_draft.setVisible(True)
+            self._tab_finalized.setVisible(True)
             self._active_tab = "draft"
-            self._type_filter.setVisible(True)
+            self._tab_draft.set_active(True)
+            self._tab_finalized.set_active(False)
             self._add_btn.setVisible(True)
         elif role == "office_clerk":
-            self._tab_bar.setVisible(True)
+            self._tab_draft.setVisible(True)
+            self._tab_finalized.setVisible(True)
             self._active_tab = "draft"
-            self._type_filter.setVisible(False)
+            self._tab_draft.set_active(True)
+            self._tab_finalized.set_active(False)
             self._add_btn.setVisible(True)
         else:
+            self._tab_draft.setVisible(True)
+            self._tab_finalized.setVisible(True)
+            self._tab_draft.set_active(True)
+            self._tab_finalized.set_active(False)
             self._add_btn.setVisible(True)
 
-    # UI Setup
+    # -- Tab & filter handlers --
 
-    def _setup_ui(self):
-        main_layout = QVBoxLayout(self)
-        main_layout.setContentsMargins(
-            PageDimensions.content_padding_h(),
-            PageDimensions.content_padding_v_top(),
-            PageDimensions.content_padding_h(),
-            PageDimensions.CONTENT_PADDING_V_BOTTOM
-        )
-        main_layout.setSpacing(16)
-        self.setStyleSheet(StyleManager.page_background())
-
-        # Header
-        self.header = self._create_header()
-        main_layout.addWidget(self.header)
-
-        # Filter bar
-        filter_bar = self._create_filter_bar()
-        main_layout.addWidget(filter_bar)
-
-        # Underline Tab Bar
-        self._tab_bar = UnderlineTabBar([tr("page.cases.tab_draft"), tr("page.cases.tab_finalized")], self)
-        self._tab_bar.tab_changed.connect(self._on_tab_changed)
-        main_layout.addWidget(self._tab_bar)
-
-        # Separator line
-        separator = QFrame()
-        separator.setFrameShape(QFrame.HLine)
-        separator.setFixedHeight(1)
-        separator.setStyleSheet("background-color: #E8E8E8; border: none;")
-        main_layout.addWidget(separator)
-
-        # Content area (scrollable)
-        self.content_area = QScrollArea()
-        self.content_area.setWidgetResizable(True)
-        self.content_area.setFrameShape(QFrame.NoFrame)
-        self.content_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        self.content_area.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
-        self.content_area.setStyleSheet(f"""
-            QScrollArea {{
-                background-color: {Colors.BACKGROUND};
-                border: none;
-            }}
-        """ + StyleManager.scrollbar())
-
-        self.content_widget = QWidget()
-        self.content_layout = QGridLayout(self.content_widget)
-        self.content_layout.setContentsMargins(0, 8, 0, 0)
-        self.content_layout.setVerticalSpacing(PageDimensions.CARD_GAP_VERTICAL)
-        self.content_layout.setHorizontalSpacing(PageDimensions.CARD_GAP_HORIZONTAL)
-        self.content_area.setWidget(self.content_widget)
-        main_layout.addWidget(self.content_area)
-
-        self._show_empty_state()
-
-        from ui.components.loading_spinner import LoadingSpinnerOverlay
-        self._spinner = LoadingSpinnerOverlay(self)
-
-    def _create_header(self) -> QWidget:
-        header = QWidget()
-        header.setFixedHeight(PageDimensions.PAGE_HEADER_HEIGHT)
-        header.setStyleSheet(f"background-color: {Colors.BACKGROUND}; border: none;")
-
-        layout = QHBoxLayout(header)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(16)
-
-        self.title_label = QLabel(tr("cases.page.title"))
-        self.title_label.setFont(create_font(
-            size=FontManager.SIZE_TITLE, weight=QFont.Bold, letter_spacing=0
-        ))
-        self.title_label.setStyleSheet(f"color: {Colors.PAGE_TITLE}; border: none;")
-        layout.addWidget(self.title_label)
-
-        layout.addSpacerItem(QSpacerItem(40, 20, QSizePolicy.Expanding, QSizePolicy.Minimum))
-
-        self._add_btn = PrimaryButton(tr("wizard.button.add_case"), icon_name="icon")
-        self._add_btn.clicked.connect(self.add_claim_clicked.emit)
-        layout.addWidget(self._add_btn)
-
-        return header
-
-    def _create_filter_bar(self) -> QWidget:
-        form_style = StyleManager.form_input()
-
-        bar = QWidget()
-        bar.setStyleSheet(f"background-color: {Colors.BACKGROUND}; border: none;")
-
-        layout = QHBoxLayout(bar)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(10)
-
-        # Search by contact person name (API: contactPersonName)
-        self._name_filter = QLineEdit()
-        self._name_filter.setLayoutDirection(get_layout_direction())
-        self._name_filter.setPlaceholderText(tr("page.cases.search_person"))
-        self._name_filter.setFixedWidth(280)
-        self._name_filter.setStyleSheet(form_style)
-        self._name_filter.textChanged.connect(self._on_search_changed)
-        layout.addWidget(self._name_filter)
-
-        # Survey type filter (local: 1=Field, 2=Office)
-        self._type_filter = QComboBox()
-        self._type_filter.setLayoutDirection(get_layout_direction())
-        self._type_filter.setFixedWidth(170)
-        self._type_filter.setStyleSheet(form_style)
-        self._type_filter.addItem(tr("all"), None)
-        for code, label in get_survey_type_options():
-            self._type_filter.addItem(label, code)
-        self._type_filter.currentIndexChanged.connect(self._on_type_changed)
-        layout.addWidget(self._type_filter)
-
-        layout.addStretch()
-        return bar
-    # Filter handling
+    def _on_tab(self, which: str):
+        if self._loading or which == self._active_tab:
+            return
+        self._active_tab = which
+        self._current_page = 1
+        self._tab_draft.set_active(which == "draft")
+        self._tab_finalized.set_active(which == "finalized")
+        self._accent_line.pulse()
+        self._load_surveys()
 
     def _on_search_changed(self):
-        """Debounced search — sends to API after 500ms pause."""
+        self._current_page = 1
         self._search_timer.start(500)
 
-    def _on_type_changed(self):
-        """Survey type dropdown changed — re-filter locally."""
-        self._apply_type_filter()
+    # -- Pagination --
 
-    # Tab handling
+    def _on_prev_page(self):
+        if self._current_page > 1:
+            self._current_page -= 1
+            self._load_surveys()
 
-    def _on_tab_changed(self, index: int):
-        self._active_tab = "draft" if index == 0 else "finalized"
-        self._load_surveys()
-    # Data loading
+    def _on_next_page(self):
+        total_pages = max(1, -(-self._total_count // self._page_size))
+        if self._current_page < total_pages:
+            self._current_page += 1
+            self._load_surveys()
+
+    def _update_pagination(self):
+        total = self._total_count
+        ps = self._page_size
+        total_pages = max(1, -(-total // ps))
+        page = self._current_page
+        start = (page - 1) * ps + 1
+        end = min(page * ps, total)
+        if total > 0:
+            self._page_info.setText(f"{start}-{end}  /  {total}")
+        else:
+            self._page_info.setText("")
+        self._prev_btn.setEnabled(page > 1)
+        self._next_btn.setEnabled(page < total_pages)
+
+    # -- Tab labels with counts --
+
+    def _update_tab_labels(self):
+        draft_text = tr("page.cases.tab_draft")
+        finalized_text = tr("page.cases.tab_finalized")
+        if self._draft_count > 0:
+            draft_text = f"{draft_text} ({self._draft_count})"
+        if self._finalized_count > 0:
+            finalized_text = f"{finalized_text} ({self._finalized_count})"
+        self._tab_draft.set_text(draft_text)
+        self._tab_finalized.set_text(finalized_text)
+
+    # -- Data loading --
 
     def refresh(self, data=None):
-        """Refresh surveys from API."""
-        import time
+        self._navigating = False
         self._last_refresh_ms = int(time.time() * 1000)
         self._load_surveys()
 
     def _load_surveys(self):
-        """Load surveys from API based on active tab and filters."""
+        if self._loading:
+            return
+        self._loading = True
         self._spinner.show_loading(tr("page.cases.loading"))
 
         status = "Draft" if self._active_tab == "draft" else "Finalized"
-        name = self._name_filter.text().strip() or None
+        name = self._search.text().strip() or None
         clerk_id = self._user_id if self._user_role == "office_clerk" else None
 
-        self._load_surveys_worker = ApiWorker(
+        self._worker = ApiWorker(
             self._fetch_surveys_data, status, name, clerk_id
         )
-        self._load_surveys_worker.finished.connect(self._on_surveys_loaded)
-        self._load_surveys_worker.error.connect(self._on_surveys_load_error)
-        self._load_surveys_worker.start()
+        self._worker.finished.connect(self._on_surveys_loaded)
+        self._worker.error.connect(self._on_surveys_load_error)
+        self._worker.start()
 
     def _fetch_surveys_data(self, status, name, clerk_id):
-        """Fetch surveys and enrich buildings cache (runs in worker thread)."""
-        from controllers.survey_controller import SurveyController
         from services.api_client import get_api_client
         from controllers.building_controller import BuildingController
 
-        ctrl = SurveyController(self.db)
-        result = ctrl.load_office_surveys(
-            status=status,
-            page=1,
-            page_size=30,
-            sort_by="SurveyDate",
-            sort_direction="desc",
-            contact_person_name=name,
-            clerk_id=clerk_id,
-        )
+        api = get_api_client()
+        total_count = 0
 
+        # Fetch paginated surveys
+        try:
+            params = {
+                "page": self._current_page,
+                "pageSize": self._page_size,
+                "status": status,
+                "sortBy": "SurveyDate",
+                "sortDirection": "desc",
+            }
+            if name:
+                params["contactPersonName"] = name
+            if clerk_id:
+                params["clerkId"] = clerk_id
+
+            raw = api._request("GET", "/v1/Surveys/office", params=params)
+            if isinstance(raw, dict):
+                surveys = raw.get("surveys", [])
+                total_count = raw.get("totalCount", len(surveys))
+            else:
+                surveys = raw if isinstance(raw, list) else []
+                total_count = len(surveys)
+        except Exception as e:
+            logger.warning(f"Paginated surveys fetch failed: {e}")
+            surveys = []
+
+        # Fetch counts for stat pills
+        draft_count = 0
+        finalized_count = 0
+        for st, key in [("Draft", "draft"), ("Finalized", "finalized")]:
+            try:
+                count_params = {"status": st, "page": 1, "pageSize": 1}
+                if clerk_id:
+                    count_params["clerkId"] = clerk_id
+                raw_count = api._request("GET", "/v1/Surveys/office", params=count_params)
+                count_val = raw_count.get("totalCount", 0) if isinstance(raw_count, dict) else 0
+                if key == "draft":
+                    draft_count = count_val
+                else:
+                    finalized_count = count_val
+            except Exception:
+                pass
+
+        # Building enrichment
         new_buildings = {}
-        surveys = []
-        if result.success and result.data:
-            surveys = result.data
-            building_ids = {s.get("buildingId", "") for s in surveys if s.get("buildingId")}
+        building_ids = {s.get("buildingId", "") for s in surveys if s.get("buildingId")}
+        if building_ids:
+            try:
+                bc = BuildingController(self.db)
+                for bid in building_ids:
+                    if not bid or bid in self._buildings_cache:
+                        continue
+                    try:
+                        dto = api.get_building_by_id(bid)
+                        new_buildings[bid] = bc._api_dto_to_building(dto)
+                    except Exception:
+                        pass
+            except Exception:
+                pass
 
-            if building_ids:
-                try:
-                    api = get_api_client()
-                    bc = BuildingController(self.db)
-                    for bid in building_ids:
-                        if not bid or bid in self._buildings_cache:
-                            continue
-                        try:
-                            dto = api.get_building_by_id(bid)
-                            new_buildings[bid] = bc._api_dto_to_building(dto)
-                        except Exception:
-                            pass
-                except Exception:
-                    pass
-
-        return {"surveys": surveys, "new_buildings": new_buildings, "status": status}
+        return {
+            "surveys": surveys,
+            "new_buildings": new_buildings,
+            "status": status,
+            "draft_count": draft_count,
+            "finalized_count": finalized_count,
+            "total_count": total_count,
+        }
 
     def _on_surveys_loaded(self, result):
-        """Handle surveys loaded from API."""
-        self._spinner.hide_loading()
+        try:
+            self._buildings_cache.update(result.get("new_buildings", {}))
+            self._draft_count = result.get("draft_count", 0)
+            self._finalized_count = result.get("finalized_count", 0)
+            self._total_count = result.get("total_count", 0)
 
-        self._buildings_cache.update(result.get("new_buildings", {}))
-        surveys = result.get("surveys", [])
+            surveys = result.get("surveys", [])
+            self._all_data = [self._map_survey(s) for s in surveys]
 
-        self._all_data = []
-        for s in surveys:
-            self._all_data.append(self._map_survey(s))
-
-        logger.info(f"Loaded {len(self._all_data)} surveys (status={result.get('status')})")
-        self._apply_type_filter()
+            logger.info(f"Loaded {len(self._all_data)} surveys (status={result.get('status')})")
+            self._populate_cards(self._all_data)
+            self._update_tab_labels()
+            self._update_pagination()
+        except Exception as e:
+            logger.error(f"Error processing surveys: {e}")
+            self._all_data = []
+            self._populate_cards(self._all_data)
+        finally:
+            self._loading = False
+            self._spinner.hide_loading()
 
     def _on_surveys_load_error(self, error_msg):
-        """Handle surveys loading error."""
+        self._loading = False
         self._spinner.hide_loading()
         Toast.show_toast(self, tr("page.cases.load_error"), Toast.ERROR)
         logger.warning(f"Error loading surveys: {error_msg}")
         self._all_data = []
-        self._apply_type_filter()
-
-    def _apply_type_filter(self):
-        """Filter displayed cards by survey type (local filter)."""
-        type_val = self._type_filter.currentData()
-        if type_val is not None:
-            filtered = [c for c in self._all_data if c.get("survey_type") == type_val]
-        else:
-            filtered = self._all_data
-
-        if filtered:
-            self._show_cards(filtered)
-        else:
-            self._show_empty_state()
+        self._populate_cards(self._all_data)
 
     def _map_survey(self, s: Dict) -> Dict:
-        """Map Surveys API summary to card data format."""
         building_id = s.get("buildingId", "")
         building_obj = self._buildings_cache.get(building_id)
 
@@ -347,56 +1019,109 @@ class CasesPage(QWidget):
             "unit": unit_obj,
             "unit_id": s.get("propertyUnitId", ""),
         }
-    # Display
 
-    def _show_cards(self, data: List[Dict]):
-        self._clear_content()
+    # -- Card population --
 
-        cfg = _STATUS_CONFIG.get(self._active_tab, _STATUS_CONFIG["draft"])
-        icon = cfg["icon"]
+    def _populate_cards(self, data: List[Dict]):
+        try:
+            self._clear_cards()
 
-        for index, item in enumerate(data):
-            row = index // PageDimensions.CARD_COLUMNS
-            col = index % PageDimensions.CARD_COLUMNS
+            if not data:
+                self._stack.setCurrentIndex(1)
+                self._update_empty_text()
+                self._update_pagination()
+                return
 
-            card = ClaimListCard(item, icon_name=icon)
-            card.clicked.connect(self._on_card_clicked)
-            self.content_layout.addWidget(card, row, col)
+            self._stack.setCurrentIndex(0)
 
-        final_row = (len(data) + PageDimensions.CARD_COLUMNS - 1) // PageDimensions.CARD_COLUMNS
-        self.content_layout.addItem(
-            QSpacerItem(20, 40, QSizePolicy.Minimum, QSizePolicy.Expanding),
-            final_row, 0, 1, PageDimensions.CARD_COLUMNS
-        )
+            for item in data:
+                card = _SurveyCard(item)
+                card.clicked.connect(self._on_card_clicked)
+                self._cards_layout.insertWidget(
+                    self._cards_layout.count() - 1, card
+                )
+                self._card_widgets.append(card)
 
-    def _show_empty_state(self):
-        self._clear_content()
+            self._update_pagination()
+            self._animate_card_entrance()
 
+            if not self._shimmer_timer.isActive():
+                self._shimmer_timer.start()
+        except Exception as e:
+            logger.error(f"Error populating cards: {e}")
+            self._stack.setCurrentIndex(1)
+            self._update_empty_text()
+
+    def _animate_card_entrance(self):
+        count = len(self._card_widgets)
+        if count > 20 or count == 0:
+            return
+
+        for i, card in enumerate(self._card_widgets):
+            opacity_eff = QGraphicsOpacityEffect(card)
+            opacity_eff.setOpacity(0.0)
+            card.setGraphicsEffect(opacity_eff)
+
+            anim = QPropertyAnimation(opacity_eff, b"opacity")
+            anim.setDuration(300)
+            anim.setStartValue(0.0)
+            anim.setEndValue(1.0)
+            anim.setEasingCurve(QEasingCurve.OutCubic)
+
+            def _restore_shadow(c=card):
+                try:
+                    s = QGraphicsDropShadowEffect(c)
+                    s.setBlurRadius(20)
+                    s.setOffset(0, 4)
+                    s.setColor(QColor(0, 0, 0, 22))
+                    c.setGraphicsEffect(s)
+                except RuntimeError:
+                    pass
+
+            anim.finished.connect(_restore_shadow)
+            QTimer.singleShot(i * 40, anim.start)
+
+            card._entrance_anim = anim
+            card._entrance_effect = opacity_eff
+
+    def _clear_cards(self):
+        self._shimmer_timer.stop()
+        for card in self._card_widgets:
+            if hasattr(card, '_entrance_anim') and card._entrance_anim:
+                try:
+                    card._entrance_anim.stop()
+                except RuntimeError:
+                    pass
+            try:
+                card.clicked.disconnect()
+            except Exception:
+                pass
+            card.setParent(None)
+            card.deleteLater()
+        self._card_widgets.clear()
+
+    def _update_card_shimmer(self):
+        for card in self._card_widgets:
+            try:
+                card.update()
+            except RuntimeError:
+                pass
+
+    def _update_empty_text(self):
         msg = tr("page.cases.no_drafts") if self._active_tab == "draft" else tr("page.cases.no_finalized")
-        empty_state = EmptyState(
-            icon_text="+",
-            title=msg,
-            description=tr("page.cases.empty_description")
-        )
+        self._empty_state.set_title(msg)
+        self._empty_state.set_description(tr("page.cases.empty_description"))
 
-        self.content_layout.addItem(
-            QSpacerItem(20, 40, QSizePolicy.Minimum, QSizePolicy.Expanding), 0, 0, 1, 2
-        )
-        self.content_layout.addWidget(empty_state, 1, 0, 1, 2, Qt.AlignCenter)
-        self.content_layout.addItem(
-            QSpacerItem(20, 40, QSizePolicy.Minimum, QSizePolicy.Expanding), 2, 0, 1, 2
-        )
+    # -- Card click --
 
     def _on_card_clicked(self, claim_id: str):
-        """Navigate to CaseDetailsPage for both draft and finalized surveys."""
+        if self._navigating or not claim_id:
+            return
+        self._navigating = True
+        self._spinner.show_loading(tr("page.cases.loading"))
         self.claim_selected.emit(claim_id)
 
-    def _clear_content(self):
-        while self.content_layout.count():
-            item = self.content_layout.takeAt(0)
-            if item.widget():
-                item.widget().deleteLater()
-    # Public interface (backward compatibility)
+    # -- Public interface (backward compatibility) --
 
     def search_claims(self, query: str, mode: str = "name"):
         pass
@@ -405,6 +1130,19 @@ class CasesPage(QWidget):
         pass
 
     def update_language(self, is_arabic=True):
-        self.title_label.setText(tr("cases.page.title"))
+        direction = get_layout_direction()
+        self.setLayoutDirection(direction)
+
+        self._header.get_title_label().setText(tr("cases.page.title"))
+        self._search.setPlaceholderText(tr("page.cases.search_person"))
+        self._add_btn.setText(tr("wizard.button.add_case"))
+
+        self._update_tab_labels()
+
+        self._scroll.setLayoutDirection(direction)
+        self._scroll_content.setLayoutDirection(direction)
+
         if self._all_data:
-            self._show_cards(self._all_data)
+            self._populate_cards(self._all_data)
+        else:
+            self._update_empty_text()

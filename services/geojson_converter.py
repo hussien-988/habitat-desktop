@@ -43,7 +43,8 @@ class GeoJSONConverter:
     def buildings_to_geojson(
         buildings: List[Building],
         include_properties: Optional[List[str]] = None,
-        prefer_polygons: bool = True
+        prefer_polygons: bool = True,
+        force_points: bool = False
     ) -> str:
         """
         Convert list of buildings to GeoJSON FeatureCollection.
@@ -67,7 +68,8 @@ class GeoJSONConverter:
             feature = GeoJSONConverter._building_to_feature(
                 building,
                 include_properties=include_properties,
-                prefer_polygons=prefer_polygons
+                prefer_polygons=prefer_polygons,
+                force_points=force_points
             )
 
             if feature:
@@ -90,7 +92,8 @@ class GeoJSONConverter:
     def _building_to_feature(
         building: Building,
         include_properties: Optional[List[str]] = None,
-        prefer_polygons: bool = True
+        prefer_polygons: bool = True,
+        force_points: bool = False
     ) -> Optional[Dict[str, Any]]:
         """
         Convert single building to GeoJSON Feature.
@@ -132,6 +135,13 @@ class GeoJSONConverter:
                     geometry_type = GeometryType.POINT
             except (ValueError, TypeError):
                 pass
+
+        # Convert Polygon/MultiPolygon to centroid Point when force_points is enabled
+        if force_points and geometry and geometry_type in (GeometryType.POLYGON, GeometryType.MULTI_POLYGON):
+            centroid = GeoJSONConverter._calculate_centroid(geometry)
+            if centroid:
+                geometry = centroid
+                geometry_type = GeometryType.POINT
 
         # No geometry at all
         if not geometry:
@@ -200,8 +210,9 @@ class GeoJSONConverter:
                 return geometry, GeometryType.POLYGON
 
         elif geo_location.upper().startswith('POINT'):
-            logger.debug(f"Skipping POINT geometry (polygons only): {geo_location[:80]}...")
-            return None, None
+            geometry = GeoJSONConverter._wkt_point_to_geojson(geo_location)
+            if geometry:
+                return geometry, GeometryType.POINT
 
         logger.warning(f"Unable to parse geo_location: {geo_location[:50]}...")
         return None, None
@@ -336,6 +347,27 @@ class GeoJSONConverter:
         return None
 
     @staticmethod
+    def _calculate_centroid(geometry: Dict) -> Optional[Dict]:
+        """Calculate centroid point from polygon geometry."""
+        coords = geometry.get('coordinates', [])
+        try:
+            if geometry['type'] == 'Polygon' and coords:
+                ring = coords[0]
+                if ring:
+                    lng = sum(c[0] for c in ring) / len(ring)
+                    lat = sum(c[1] for c in ring) / len(ring)
+                    return {"type": "Point", "coordinates": [lng, lat]}
+            elif geometry['type'] == 'MultiPolygon' and coords:
+                all_points = [p for poly in coords for ring in poly for p in ring]
+                if all_points:
+                    lng = sum(c[0] for c in all_points) / len(all_points)
+                    lat = sum(c[1] for c in all_points) / len(all_points)
+                    return {"type": "Point", "coordinates": [lng, lat]}
+        except (TypeError, IndexError, ZeroDivisionError) as e:
+            logger.warning(f"Error calculating centroid: {e}")
+        return None
+
+    @staticmethod
     def _extract_properties(
         building: Building,
         include_properties: Optional[List[str]],
@@ -414,7 +446,8 @@ class GeoJSONConverter:
 # Export convenience function
 def buildings_to_geojson(
     buildings: List[Building],
-    prefer_polygons: bool = True
+    prefer_polygons: bool = True,
+    force_points: bool = False
 ) -> str:
     """
     Convenience function for converting buildings to GeoJSON.
@@ -422,11 +455,13 @@ def buildings_to_geojson(
     Args:
         buildings: List of Building objects
         prefer_polygons: Prefer polygon geometry over points when available
+        force_points: Convert all geometries to centroid points
 
     Returns:
         GeoJSON FeatureCollection string
     """
     return GeoJSONConverter.buildings_to_geojson(
         buildings,
-        prefer_polygons=prefer_polygons
+        prefer_polygons=prefer_polygons,
+        force_points=force_points
     )

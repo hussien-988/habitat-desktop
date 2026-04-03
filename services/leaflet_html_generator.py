@@ -716,7 +716,7 @@ class LeafletHTMLGenerator:
                 "                    });\n"
                 "\n"
                 "                    layer.on('mouseout', function(e) {\n"
-                "                        buildingsLayer.resetStyle(this);\n"
+                "                        if(buildingsLayer) buildingsLayer.resetStyle(this);\n"
                 "                    });\n"
                 "                }"
             )
@@ -826,10 +826,9 @@ class LeafletHTMLGenerator:
         // Buildings GeoJSON - Direct embedding (Simple & Works)
         var buildingsData = {buildings_json};
 
-        // Summary log only (no per-building spam)
+        // Summary counts (no per-building spam)
         var _polyCount = buildingsData.features.filter(f => f.geometry.type === 'Polygon' || f.geometry.type === 'MultiPolygon').length;
         var _ptCount = buildingsData.features.filter(f => f.geometry.type === 'Point').length;
-        console.log('GeoJSON: ' + buildingsData.features.length + ' features (' + _polyCount + ' polygons, ' + _ptCount + ' points)');
 
         // Marker Clustering Configuration
 
@@ -934,8 +933,6 @@ class LeafletHTMLGenerator:
         // Add polygons layer to map (bypasses clustering)
         polygonsLayer.addTo(map);
 
-        console.log('Map ready: ' + markers.getLayers().length + ' markers, ' + polygonsLayer.getLayers().length + ' polygons');
-
         // Add existing polygons layer (displayed in blue)
         {LeafletHTMLGenerator._get_existing_polygons_js(existing_polygons_geojson) if existing_polygons_geojson else '// No existing polygons'}
 
@@ -960,12 +957,9 @@ class LeafletHTMLGenerator:
             try {{
                 var bounds = buildingsLayer.getBounds();
                 map.fitBounds(bounds, {{ padding: [50, 50] }});
-                console.log('Map fitted to buildings bounds');
             }} catch(e) {{
                 console.log('Using default center (fitBounds failed)');
             }}
-        }} else if (skipFitBounds) {{
-            console.log('fitBounds skipped - using exact zoom:', {zoom});
         }}
 
         {LeafletHTMLGenerator._get_legend_js() if show_legend else ''}
@@ -1000,7 +994,7 @@ class LeafletHTMLGenerator:
                         }});
 
                         setTimeout(function() {{
-                            buildingsLayer.resetStyle(layer);
+                            if(buildingsLayer) buildingsLayer.resetStyle(layer);
                         }}, 2000);
                     }}
                 }}
@@ -1038,6 +1032,15 @@ class LeafletHTMLGenerator:
                 el.innerHTML = parts.join('<br>');
             }}
         }};
+
+        // Unified zoom handler for all visibility layers
+        map.on('zoomend', function() {{
+            if(typeof updateNeighborhoodVisibility !== 'undefined') updateNeighborhoodVisibility();
+            if(typeof updateBoundaryVisibility !== 'undefined') updateBoundaryVisibility();
+            if(typeof updatePlacesVisibility !== 'undefined') updatePlacesVisibility();
+            if(typeof updateLandmarksVisibility !== 'undefined') updateLandmarksVisibility();
+            if(typeof updateStreetsVisibility !== 'undefined') updateStreetsVisibility();
+        }});
     </script>
 '''
 
@@ -1086,7 +1089,7 @@ class LeafletHTMLGenerator:
         if enable_drawing:
             zoom_handler_js = "// Drawing mode: pins always visible at all zoom levels"
         else:
-            zoom_handler_js = "map.on('zoomend', updateNeighborhoodVisibility);\n            updateNeighborhoodVisibility();"
+            zoom_handler_js = "updateNeighborhoodVisibility();"
 
         return f'''
         // =========================================================
@@ -1155,7 +1158,6 @@ class LeafletHTMLGenerator:
 
             {zoom_handler_js}
 
-            console.log('Neighborhood pins loaded:', neighborhoodsData.features.length);
         }}
 '''
 
@@ -1218,7 +1220,6 @@ class LeafletHTMLGenerator:
                 }}
             }}).addTo(map);
 
-            console.log('Existing polygon displayed (will be replaced when user draws new one)');
         }}
 '''
 
@@ -1302,7 +1303,6 @@ class LeafletHTMLGenerator:
             }}
         }}
 
-        map.on('zoomend', updateBoundaryVisibility);
         updateBoundaryVisibility();
 
         // Register in overlayMaps for layer control (if it exists)
@@ -1310,7 +1310,6 @@ class LeafletHTMLGenerator:
             overlayMaps['{layer_label_ar}'] = boundaryLayer;
         }}
 
-        console.log('Boundary layer loaded: {level or "unknown"}, ' + (boundaryData.features ? boundaryData.features.length : 0) + ' features');
 '''
 
     @staticmethod
@@ -1366,10 +1365,8 @@ class LeafletHTMLGenerator:
             }}
         }}
 
-        map.on('zoomend', updatePlacesVisibility);
         updatePlacesVisibility();
 
-        console.log('Places layer loaded: ' + (placesData ? placesData.length : 0) + ' places');
 '''
 
     @staticmethod
@@ -1496,7 +1493,6 @@ class LeafletHTMLGenerator:
             }}
         }}
 
-        map.on('zoomend', updateLandmarksVisibility);
         updateLandmarksVisibility();
 
         if (typeof overlayMaps !== 'undefined') {{
@@ -1517,11 +1513,8 @@ class LeafletHTMLGenerator:
             landmarksLayer.clearLayers();
             if (!newData || !newData.length) return;
             newData.forEach(addLandmarkMarker);
-            console.log('Landmarks updated: ' + newData.length);
         }}
         window.updateLandmarksOnMap = updateLandmarksOnMap;
-
-        console.log('Landmarks layer loaded: ' + (landmarksData ? landmarksData.length : 0) + ' landmarks');
 '''
 
     @staticmethod
@@ -1598,7 +1591,6 @@ class LeafletHTMLGenerator:
             }}
         }}
 
-        map.on('zoomend', updateStreetsVisibility);
         updateStreetsVisibility();
 
         if (typeof overlayMaps !== 'undefined') {{
@@ -1621,11 +1613,8 @@ class LeafletHTMLGenerator:
                 polyline.on('mouseout', function() {{ this.setStyle({{ weight: 3, opacity: 0.7 }}); }});
                 streetsLayer.addLayer(polyline);
             }});
-            console.log('Streets updated: ' + newData.length);
         }}
         window.updateStreetsOnMap = updateStreetsOnMap;
-
-        console.log('Streets layer loaded: ' + (streetsData ? streetsData.length : 0) + ' streets');
 '''
 
     @staticmethod
@@ -1664,21 +1653,16 @@ class LeafletHTMLGenerator:
             }}
 
             if (typeof QWebChannel === 'undefined') {{
-                console.log('QWebChannel not loaded yet (attempt ' + initAttempts + '), waiting...');
                 setTimeout(initializeQWebChannel, 50);
                 return;
             }}
 
             if (typeof qt === 'undefined' || !qt.webChannelTransport) {{
-                if (initAttempts % 20 === 0) {{  // Log every second
-                    console.log('Waiting for qt.webChannelTransport (attempt ' + initAttempts + ')...');
-                }}
-                setTimeout(initializeQWebChannel, 50);  // Retry in 50ms
+                setTimeout(initializeQWebChannel, 50);
                 return;
             }}
 
             try {{
-                console.log('Initializing QWebChannel (attempt ' + initAttempts + ')...');
                 new QWebChannel(qt.webChannelTransport, function(channel) {{
                     bridge = channel.objects.buildingBridge || channel.objects.bridge;
                     if (!bridge) {{
@@ -1690,8 +1674,6 @@ class LeafletHTMLGenerator:
                     window.bridge = bridge;  // Make bridge globally accessible
                     bridgeReady = true;
                     window.bridgeReady = true;  // Make bridgeReady globally accessible
-                    console.log('QWebChannel bridge ready for selection (attempt ' + initAttempts + ')');
-                    console.log('   Bridge methods:', Object.keys(bridge));
 
                     // Notify Python that bridge is ready
                     if (bridge && bridge.onBridgeReady) {{
@@ -1715,8 +1697,6 @@ class LeafletHTMLGenerator:
         // Function to select building (called from popup button)
         // Wait for bridge or retry with timeout
         function selectBuilding(buildingId) {{
-            console.log('Selecting building:', buildingId);
-
             // Check if bridge is ready
             if (bridgeReady && bridge && (bridge.selectBuilding || bridge.buildingSelected)) {{
                 // Bridge ready - select immediately
@@ -1726,7 +1706,6 @@ class LeafletHTMLGenerator:
                     bridge.buildingSelected(buildingId);
                 }}
                 map.closePopup();
-                console.log('Building selected via bridge');
             }} else if (!bridgeReady) {{
                 // Bridge not ready yet - wait 500ms and retry
                 console.warn('Bridge not ready, waiting 500ms...');
@@ -1738,7 +1717,6 @@ class LeafletHTMLGenerator:
                             bridge.buildingSelected(buildingId);
                         }}
                         map.closePopup();
-                        console.log('Building selected after retry');
                     }} else {{
                         console.error('Bridge still not ready after 500ms');
                         // Don't show alert - just log error (user can try again)

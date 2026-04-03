@@ -7,8 +7,8 @@ from PyQt5.QtWidgets import (
     QPushButton, QLineEdit, QFrame, QToolButton, QListWidget,
     QListWidgetItem, QScrollArea
     )
-from PyQt5.QtCore import Qt, pyqtSignal, QObject, pyqtSlot, QUrl, QSize, QThread
-from PyQt5.QtGui import QPainter, QColor, QPainterPath, QIcon
+from PyQt5.QtCore import Qt, pyqtSignal, QObject, pyqtSlot, QUrl, QThread
+from PyQt5.QtGui import QPainter, QColor, QPainterPath, QPalette
 
 from ui.design_system import Colors
 from ui.font_utils import create_font, FontManager
@@ -156,15 +156,20 @@ class _ViewportWorker(QThread):
                 zoom_level=self._zoom,
                 auth_token=self._auth_token
             )
+            if self.isInterruptionRequested():
+                return
             from services.geojson_converter import GeoJSONConverter
             geojson = GeoJSONConverter.buildings_to_geojson(
-                buildings, prefer_polygons=True
+                buildings, force_points=True
             )
+            if self.isInterruptionRequested():
+                return
             self.buildings_loaded.emit(buildings)
             self.finished.emit(geojson)
         except Exception as e:
-            logger.error(f"Viewport worker error: {e}")
-            self.finished.emit("")
+            if not self.isInterruptionRequested():
+                logger.error(f"Viewport worker error: {e}")
+                self.finished.emit("")
 
 
 class BaseMapDialog(QDialog):
@@ -230,6 +235,7 @@ class BaseMapDialog(QDialog):
         self._viewport_loader = None  # ViewportMapLoader instance
         self._viewport_worker = None  # Background thread for viewport loading
         self._auth_token = None # Store auth token for API calls (set by subclass)
+        self._map_loaded = False  # Track whether map has finished loading
 
         if self.enable_viewport_loading:
             building_cache = None
@@ -260,6 +266,15 @@ class BaseMapDialog(QDialog):
         # Create UI
         self._setup_ui()
 
+        # Temporarily disable main window shadow effect (improves QWebEngineView performance)
+        self._orig_shadow_effect = None
+        main_win = self.parent()
+        if main_win and hasattr(main_win, 'window_frame'):
+            effect = main_win.window_frame.graphicsEffect()
+            if effect:
+                self._orig_shadow_effect = effect
+                main_win.window_frame.setGraphicsEffect(None)
+
     def _setup_ui(self):
         """Setup dialog UI - matches BuildingMapWidget exactly."""
         # Window settings
@@ -270,7 +285,10 @@ class BaseMapDialog(QDialog):
         w = min(1455, int(screen.width() * 0.92))
         h = min(816, int(screen.height() * 0.88))
         self.setFixedSize(w, h)
-        self.setAttribute(Qt.WA_TranslucentBackground, True)
+        palette = self.palette()
+        palette.setColor(QPalette.Window, QColor(30, 30, 30))
+        self.setPalette(palette)
+        self.setAutoFillBackground(True)
 
         # Main layout
         main_layout = QVBoxLayout(self)
@@ -279,9 +297,9 @@ class BaseMapDialog(QDialog):
 
         # Content container with 24px padding
         content = QWidget()
-        # White background for content with rounded corners (32px to match dialog)
+        content.setObjectName("mapDialogContent")
         content.setStyleSheet(f"""
-            QWidget {{
+            QWidget#mapDialogContent {{
                 background-color: {Colors.SURFACE};
                 border-radius: 32px;
             }}
@@ -319,25 +337,22 @@ class BaseMapDialog(QDialog):
             settings.setAttribute(QWebEngineSettings.LocalStorageEnabled, True)
             settings.setAttribute(QWebEngineSettings.JavascriptCanAccessClipboard, True)
             settings.setAttribute(QWebEngineSettings.JavascriptCanOpenWindows, True)
+            settings.setAttribute(QWebEngineSettings.Accelerated2dCanvasEnabled, True)
+            settings.setAttribute(QWebEngineSettings.WebGLEnabled, True)
 
             # Setup WebChannel
             if HAS_WEBCHANNEL:
                 self._setup_webchannel()
-
-            self.web_view.setStyleSheet("border-radius: 8px;")
 
             # Loading indicator
             self._loading_label = QLabel(tr("dialog.map.loading_map"))
             self._loading_label.setFixedSize(map_w, map_h)
             self._loading_label.setAlignment(Qt.AlignCenter)
             self._loading_label.setFont(create_font(size=10, weight=FontManager.WEIGHT_REGULAR))
-            self._loading_label.setStyleSheet(f"""
-                background-color: {Colors.BACKGROUND};
-                color: {Colors.TEXT_SECONDARY};
-                border-radius: 8px;
-            """)
+            self._loading_label.setStyleSheet(
+                f"background-color: {Colors.BACKGROUND}; color: {Colors.TEXT_SECONDARY}; border-radius: 8px;"
+            )
 
-            # Stack widgets
             map_container = QWidget()
             map_layout = QVBoxLayout(map_container)
             map_layout.setContentsMargins(0, 0, 0, 0)
@@ -346,7 +361,7 @@ class BaseMapDialog(QDialog):
             map_layout.addWidget(self.web_view)
             self.web_view.hide()
 
-            self.web_view.loadFinished.connect(self._on_map_loaded)
+            self.web_view.loadFinished.connect(self._on_load_finished)
             content_layout.addWidget(map_container)
         else:
             placeholder = QLabel(tr("dialog.map.map_unavailable"))
@@ -432,9 +447,10 @@ class BaseMapDialog(QDialog):
         search_layout.setSpacing(8)
         search_layout.setDirection(QHBoxLayout.RightToLeft)
 
-        # Search input
+        # Search input (disabled until map loads)
         self.search_input = QLineEdit()
-        self.search_input.setPlaceholderText(tr("dialog.map.search_placeholder"))
+        self.search_input.setPlaceholderText("...")
+        self.search_input.setEnabled(False)
         self.search_input.setAlignment(Qt.AlignRight)
         self.search_input.setFont(create_font(size=10, weight=FontManager.WEIGHT_REGULAR))
         self.search_input.setStyleSheet(f"""
@@ -640,6 +656,8 @@ class BaseMapDialog(QDialog):
         self._bridge.buildings_multiselected.connect(self._on_buildings_multiselected)
         self._bridge.selection_count_updated.connect(self._on_selection_count_updated)
 
+        self._bridge.bridge_ready.connect(self._on_bridge_ready)
+
         # Connect viewport changed signal if viewport loading enabled
         if self.enable_viewport_loading:
             self._bridge.viewport_changed.connect(self._on_viewport_changed)
@@ -667,9 +685,10 @@ class BaseMapDialog(QDialog):
 
         # Create overlay on top-level window to cover entire app
         overlay = QWidget(top_window)
+        overlay.setObjectName("mapDialogOverlay")
         overlay.setGeometry(0, 0, top_window.width(), top_window.height())
         overlay.setStyleSheet("""
-            QWidget {
+            QWidget#mapDialogOverlay {
                 background-color: rgba(45, 45, 45, 0.6);
             }
         """)
@@ -685,40 +704,32 @@ class BaseMapDialog(QDialog):
         y = (screen.height() - self.height()) // 2
         self.move(x, y)
 
-    def _on_map_loaded(self, success: bool):
-        """Called when map finishes loading - WAIT for QWebChannel bridge ready."""
+    def _on_load_finished(self, success):
+        """Called when web_view finishes loading HTML."""
         if success:
-            logger.info("Map HTML loaded - checking QWebChannel bridge status...")
-
-            # Check if QWebChannel is ready using proper async check
-            # Reference: https://doc.qt.io/qt-6/qtwebchannel-javascript.html
-            check_js = """
-            console.log(' Checking QWebChannel bridge after map load...');
-            console.log('  - qt:', typeof qt);
-            console.log('  - qt.webChannelTransport:', typeof qt !== 'undefined' ? typeof qt.webChannelTransport : 'N/A');
-            console.log('  - QWebChannel:', typeof QWebChannel);
-            console.log('  - bridge:', typeof bridge);
-            console.log('  - bridgeReady:', typeof bridgeReady !== 'undefined' ? bridgeReady : 'undefined');
-
-            // The bridge should be initializing now via QWebChannel callback
-            // We just log status - the callback in leaflet_html_generator will notify Python
-            """
-            self.web_view.page().runJavaScript(check_js)
-
-            # Show map immediately (hide loading indicator)
             if hasattr(self, '_loading_label'):
                 self._loading_label.hide()
             if self.web_view:
                 self.web_view.show()
         else:
-            logger.error("Map failed to load")
+            logger.error("Map HTML failed to load")
             if hasattr(self, '_loading_label'):
                 self._loading_label.setText(tr("dialog.map.map_load_failed"))
-                self._loading_label.setStyleSheet(f"""
-                    background-color: {Colors.BACKGROUND};
-                    color: {Colors.ERROR};
-                    border-radius: 8px;
-                """)
+                self._loading_label.setStyleSheet(
+                    f"background-color: {Colors.BACKGROUND}; color: {Colors.ERROR}; border-radius: 8px;"
+                )
+
+    def _on_bridge_ready(self):
+        """Called when QWebChannel bridge is ready — map is interactive."""
+        self._map_loaded = True
+        logger.info("Map bridge ready")
+        if self.search_input:
+            self.search_input.setEnabled(True)
+            self.search_input.setPlaceholderText(tr("dialog.map.search_placeholder"))
+
+    def _show_map_error(self, message: str):
+        """Log map error. No Qt overlay — web_view renders directly."""
+        logger.error(f"Map error: {message}")
 
     def _on_geometry_drawn(self, geom_type: str, wkt: str):
         """Handle geometry drawn - emit signal."""
@@ -778,10 +789,31 @@ class BaseMapDialog(QDialog):
         if not self._viewport_loader:
             return
 
-        # Cancel previous worker if still running
+        # Debounce: store pending bounds and use a single-shot timer
+        self._pending_viewport = (ne_lat, ne_lng, sw_lat, sw_lng, zoom)
+        if not hasattr(self, '_viewport_debounce_timer'):
+            from PyQt5.QtCore import QTimer
+            self._viewport_debounce_timer = QTimer(self)
+            self._viewport_debounce_timer.setSingleShot(True)
+            self._viewport_debounce_timer.setInterval(400)
+            self._viewport_debounce_timer.timeout.connect(self._fire_viewport_load)
+        if not self._viewport_debounce_timer.isActive():
+            self._viewport_debounce_timer.start()
+
+    def _fire_viewport_load(self):
+        """Actually fire viewport loading after debounce."""
+        if not hasattr(self, '_pending_viewport'):
+            return
+        ne_lat, ne_lng, sw_lat, sw_lng, zoom = self._pending_viewport
+
+        # Cancel previous worker (requestInterruption + disconnect signals)
         if self._viewport_worker and self._viewport_worker.isRunning():
-            self._viewport_worker.quit()
-            self._viewport_worker.wait(500)
+            self._viewport_worker.requestInterruption()
+            try:
+                self._viewport_worker.buildings_loaded.disconnect()
+                self._viewport_worker.finished.disconnect()
+            except (TypeError, RuntimeError):
+                pass
 
         # Get auth token
         auth_token = self._auth_token
@@ -1169,7 +1201,7 @@ class BaseMapDialog(QDialog):
         return None
 
     def _cleanup_overlay(self):
-        """Remove overlay from screen."""
+        """Remove overlay from screen and restore main window shadow."""
         if self._overlay:
             try:
                 self._overlay.hide()
@@ -1182,10 +1214,28 @@ class BaseMapDialog(QDialog):
                 logger.warning(f"Error cleaning up overlay: {e}")
                 self._overlay = None
 
+        # Restore main window shadow effect
+        if getattr(self, '_orig_shadow_effect', None):
+            try:
+                main_win = self.parent()
+                if main_win and hasattr(main_win, 'window_frame'):
+                    main_win.window_frame.setGraphicsEffect(self._orig_shadow_effect)
+                self._orig_shadow_effect = None
+            except (RuntimeError, Exception):
+                self._orig_shadow_effect = None
+
+    def _cleanup_workers(self):
+        """Stop viewport workers and timers."""
+        if hasattr(self, '_viewport_debounce_timer'):
+            self._viewport_debounce_timer.stop()
+        if self._viewport_worker and self._viewport_worker.isRunning():
+            self._viewport_worker.requestInterruption()
+
     def accept(self):
         """Override accept to clean up overlay."""
         try:
             self._cleanup_overlay()
+            self._cleanup_workers()
         finally:
             super().accept()
 
@@ -1193,6 +1243,7 @@ class BaseMapDialog(QDialog):
         """Override reject to clean up overlay."""
         try:
             self._cleanup_overlay()
+            self._cleanup_workers()
         finally:
             super().reject()
 
@@ -1200,5 +1251,6 @@ class BaseMapDialog(QDialog):
         """Clean up overlay when dialog closes."""
         try:
             self._cleanup_overlay()
+            self._cleanup_workers()
         finally:
             super().closeEvent(event)

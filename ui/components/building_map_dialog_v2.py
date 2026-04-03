@@ -63,7 +63,7 @@ class _BuildingsWorker(QThread):
                     logger.warning(f"API map loading failed: {e}")
                 result['buildings_list'] = buildings
                 result['buildings_geojson'] = GeoJSONConverter.buildings_to_geojson(
-                    buildings, prefer_polygons=True
+                    buildings, force_points=True
                 )
 
             self.finished.emit(result)
@@ -426,6 +426,8 @@ class BuildingMapDialog(BaseMapDialog):
             logger.warning(f"Failed to reload landmark types: {e}")
 
         tile_url = get_tile_server_url()
+        logger.info(f"Map tile server URL: {tile_url}")
+
         center_lat = MapConstants.DEFAULT_CENTER_LAT
         center_lon = MapConstants.DEFAULT_CENTER_LON
         zoom = 15
@@ -439,25 +441,34 @@ class BuildingMapDialog(BaseMapDialog):
 
         # Show map immediately with empty buildings
         empty_geojson = '{"type":"FeatureCollection","features":[]}'
-        html = generate_leaflet_html(
-            tile_server_url=tile_url.rstrip('/'),
-            buildings_geojson=empty_geojson,
-            center_lat=center_lat,
-            center_lon=center_lon,
-            zoom=zoom,
-            max_zoom=20,
-            show_legend=True,
-            show_layer_control=False,
-            enable_selection=(not self._is_view_only),
-            enable_viewport_loading=(not self._is_view_only),
-            enable_drawing=False,
-            neighborhoods_geojson=None,
-            landmarks_json='[]',
-            streets_json='[]',
-            boundaries_geojson=None,
-            boundary_level='neighbourhoods',
-        )
-        self.load_map_html(html)
+        try:
+            html = generate_leaflet_html(
+                tile_server_url=tile_url.rstrip('/'),
+                buildings_geojson=empty_geojson,
+                center_lat=center_lat,
+                center_lon=center_lon,
+                zoom=zoom,
+                max_zoom=20,
+                show_legend=True,
+                show_layer_control=False,
+                enable_selection=(not self._is_view_only),
+                enable_viewport_loading=(not self._is_view_only),
+                enable_drawing=False,
+                neighborhoods_geojson=None,
+                landmarks_json='[]',
+                streets_json='[]',
+                boundaries_geojson=None,
+                boundary_level='neighbourhoods',
+            )
+            if not html:
+                logger.error("generate_leaflet_html returned empty HTML")
+                self._show_map_error(tr("dialog.map.map_load_failed"))
+                return
+            self.load_map_html(html)
+        except Exception as e:
+            logger.error(f"Failed to generate map HTML: {e}", exc_info=True)
+            self._show_map_error(tr("dialog.map.map_load_failed"))
+            return
 
         # Track page load for deferred layers injection
         if self.web_view:
@@ -514,7 +525,7 @@ class BuildingMapDialog(BaseMapDialog):
             if self._is_view_only and self._selected_building_id:
                 buildings = data.get('view_buildings', [])
                 if buildings:
-                    selected_geojson = GeoJSONConverter.buildings_to_geojson(buildings, prefer_polygons=True)
+                    selected_geojson = GeoJSONConverter.buildings_to_geojson(buildings, force_points=True)
                     selected_data = json.loads(selected_geojson)
                     if selected_data.get('features'):
                         existing_ids = {f.get('properties', {}).get('building_id') for f in geojson_data.get('features', [])}
@@ -533,16 +544,14 @@ class BuildingMapDialog(BaseMapDialog):
                     focus_building = self._fallback_building
 
                 if focus_building:
-                    if focus_building.geo_location and 'POLYGON' in focus_building.geo_location.upper():
-                        geometry, _ = GeoJSONConverter._parse_geo_location(focus_building.geo_location)
-                        if geometry and geometry.get('type') == 'Polygon':
-                            coords = geometry['coordinates'][0]
-                            center_lon = sum(c[0] for c in coords) / len(coords)
-                            center_lat = sum(c[1] for c in coords) / len(coords)
-                        elif focus_building.latitude and focus_building.longitude:
-                            center_lat, center_lon = focus_building.latitude, focus_building.longitude
-                    elif focus_building.latitude and focus_building.longitude:
+                    if focus_building.latitude and focus_building.longitude:
                         center_lat, center_lon = focus_building.latitude, focus_building.longitude
+                    elif focus_building.geo_location:
+                        geometry, _ = GeoJSONConverter._parse_geo_location(focus_building.geo_location)
+                        if geometry:
+                            centroid = GeoJSONConverter._calculate_centroid(geometry)
+                            if centroid:
+                                center_lon, center_lat = centroid['coordinates']
                     focus_building_id = self._selected_building_id
 
             safe_geojson = json.dumps(buildings_geojson) if isinstance(buildings_geojson, str) else json.dumps(json.dumps(buildings_geojson))
