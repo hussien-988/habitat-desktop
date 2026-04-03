@@ -8,26 +8,23 @@ from typing import List, Dict, Optional
 
 from PyQt5.QtWidgets import (
     QDialog, QVBoxLayout, QLabel, QGraphicsDropShadowEffect,
-    QFrame, QHBoxLayout, QPushButton
+    QFrame, QHBoxLayout, QPushButton, QWidget
 )
-from PyQt5.QtCore import Qt, QTimer
+from PyQt5.QtCore import Qt, QTimer, QPropertyAnimation, QEasingCurve
 from PyQt5.QtGui import QColor, QPixmap
 import os
 
 from ui.design_system import Colors, ButtonDimensions
 from ui.font_utils import create_font, FontManager
-from ui.style_manager import StyleManager
 from services.translation_manager import tr, get_layout_direction
 
 
 class SuccessPopup(QDialog):
     """Success popup dialog shown after survey finalization."""
 
-    # Card base dimensions
-    _BASE_WIDTH = 350
-    _BASE_CARD_WIDTH = 300
-    _BASE_HEIGHT = 350
-    _CLAIM_ROW_HEIGHT = 60
+    _CARD_W = 320
+    _BASE_HEIGHT = 390
+    _CLAIM_ROW_HEIGHT = 64
 
     def __init__(self,
                  claim_number: str = "",
@@ -49,104 +46,182 @@ class SuccessPopup(QDialog):
         self.setAttribute(Qt.WA_TranslucentBackground)
         self.setLayoutDirection(get_layout_direction())
 
-        # Dynamic height based on number of claims
         extra_claims = max(0, len(self.claims) - 1) if self.claims else 0
-        total_height = self._BASE_HEIGHT + (extra_claims * self._CLAIM_ROW_HEIGHT)
-        card_height = total_height - 50  # 25px margin each side
+        card_h = self._BASE_HEIGHT + (extra_claims * self._CLAIM_ROW_HEIGHT)
+        total_w = self._CARD_W + 60   # 30px margin each side
+        total_h = card_h + 60         # 30px margin each side
 
-        self.setFixedSize(self._BASE_WIDTH, total_height)
+        self.setFixedSize(total_w, total_h)
 
-        # Main card container
-        card = QFrame(self)
-        card.setFixedSize(self._BASE_CARD_WIDTH, card_height)
-        card.move(25, 25)
-        card.setObjectName("MainCard")
-        card.setStyleSheet("""
-            #MainCard {
-                background-color: white;
-                border-radius: 30px;
-                border: 1px solid #e0e0e0;
+        # Card
+        self._card = QFrame(self)
+        self._card.setObjectName("SuccessCard")
+        self._card.setFixedSize(self._CARD_W, card_h)
+        self._card.move(30, 30)
+        self._card.setStyleSheet("""
+            QFrame#SuccessCard {
+                background-color: #FFFFFF;
+                border-radius: 20px;
+                border: 1px solid #E8F0FA;
             }
         """)
 
         shadow = QGraphicsDropShadowEffect()
-        shadow.setBlurRadius(20)
-        shadow.setColor(QColor(0, 0, 0, 40))
-        shadow.setOffset(0, 5)
-        card.setGraphicsEffect(shadow)
+        shadow.setBlurRadius(40)
+        shadow.setColor(QColor(30, 80, 160, 50))
+        shadow.setOffset(0, 8)
+        self._card.setGraphicsEffect(shadow)
 
-        layout = QVBoxLayout(card)
-        layout.setContentsMargins(20, 25, 20, 20)
-        layout.setSpacing(8)
-        layout.setAlignment(Qt.AlignCenter)
+        # Layout — no top padding (accent bar handles it)
+        layout = QVBoxLayout(self._card)
+        layout.setContentsMargins(0, 0, 0, 28)
+        layout.setSpacing(0)
+        layout.setAlignment(Qt.AlignTop)
 
-        # Icon
-        icon_label = QLabel()
-        icon_label.setAlignment(Qt.AlignCenter)
-        icon_label.setStyleSheet("background: transparent; border: none;")
+        # Green accent bar at top
+        accent = QFrame()
+        accent.setFixedHeight(6)
+        accent.setStyleSheet("""
+            QFrame {
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                    stop:0 #10b981, stop:1 #34d399);
+                border-top-left-radius: 20px;
+                border-top-right-radius: 20px;
+                border-bottom-left-radius: 0px;
+                border-bottom-right-radius: 0px;
+            }
+        """)
+        layout.addWidget(accent)
+        layout.addSpacing(24)
+
+        # Icon circle
+        icon_wrap = QLabel()
+        icon_wrap.setFixedSize(76, 76)
+        icon_wrap.setAlignment(Qt.AlignCenter)
+        icon_wrap.setStyleSheet("""
+            QLabel {
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
+                    stop:0 #34d399, stop:1 #10b981);
+                border-radius: 38px;
+                border: none;
+            }
+        """)
 
         icon_path = os.path.join(
             os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
             "assets", "images", "like.png"
         )
         if os.path.exists(icon_path):
-            pixmap = QPixmap(icon_path)
-            icon_label.setPixmap(pixmap.scaled(60, 60, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+            pixmap = QPixmap(icon_path).scaled(42, 42, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+            icon_wrap.setPixmap(pixmap)
         else:
-            icon_label.setText("\u2713")
-            icon_label.setFont(create_font(size=28, weight=FontManager.WEIGHT_BOLD))
-            icon_label.setStyleSheet("""
-                background: #10b981; color: white;
-                border-radius: 30px;
-                min-width: 60px; max-width: 60px;
-                min-height: 60px; max-height: 60px;
+            icon_wrap.setText("✓")
+            icon_wrap.setFont(create_font(size=30, weight=FontManager.WEIGHT_BOLD))
+            icon_wrap.setStyleSheet("""
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
+                    stop:0 #34d399, stop:1 #10b981);
+                border-radius: 38px;
+                color: white;
             """)
-        layout.addWidget(icon_label)
+
+        layout.addWidget(icon_wrap, 0, Qt.AlignCenter)
+        layout.addSpacing(18)
 
         # Title
-        title_label = QLabel(self.title_text)
-        title_label.setAlignment(Qt.AlignCenter)
-        title_label.setFont(create_font(size=18, weight=FontManager.WEIGHT_BOLD))
-        title_label.setStyleSheet(f"color: {Colors.TEXT_PRIMARY}; background: transparent; border: none;")
-        layout.addWidget(title_label)
+        title_lbl = QLabel(self.title_text)
+        title_lbl.setAlignment(Qt.AlignCenter)
+        title_lbl.setFont(create_font(size=20, weight=FontManager.WEIGHT_BOLD))
+        title_lbl.setStyleSheet("color: #1A2B3C; background: transparent; border: none;")
+        layout.addWidget(title_lbl)
+        layout.addSpacing(14)
 
-        # Claims list or single claim number
+        # Claims or single claim number
         if self.claims:
-            claims_container = self._build_claims_list()
-            layout.addWidget(claims_container)
+            layout.addWidget(self._build_claims_list())
         elif self.claim_number:
-            id_label = QLabel(self.claim_number)
-            id_label.setAlignment(Qt.AlignCenter)
-            id_label.setFont(create_font(size=16, weight=FontManager.WEIGHT_BOLD))
-            id_label.setStyleSheet(f"color: {Colors.TEXT_PRIMARY}; background: transparent; border: none;")
-            layout.addWidget(id_label)
+            pill = QFrame()
+            pill.setMinimumHeight(34)
+            pill.setStyleSheet("""
+                QFrame {
+                    background: rgba(56, 144, 223, 0.10);
+                    border-radius: 17px;
+                    border: 1px solid rgba(56, 144, 223, 0.20);
+                }
+            """)
+            pill_layout = QHBoxLayout(pill)
+            pill_layout.setContentsMargins(20, 0, 20, 0)
+            num_lbl = QLabel(self.claim_number)
+            num_lbl.setAlignment(Qt.AlignCenter)
+            num_lbl.setFont(create_font(size=13, weight=FontManager.WEIGHT_BOLD))
+            num_lbl.setStyleSheet("color: #3890DF; background: transparent; border: none;")
+            pill_layout.addWidget(num_lbl, 0, Qt.AlignCenter)
+
+            pill_wrap = QHBoxLayout()
+            pill_wrap.setContentsMargins(24, 0, 24, 0)
+            pill_wrap.addStretch()
+            pill_wrap.addWidget(pill)
+            pill_wrap.addStretch()
+            pill_widget = QWidget()
+            pill_widget.setStyleSheet("background: transparent; border: none;")
+            pill_widget.setLayout(pill_wrap)
+            layout.addWidget(pill_widget)
+
+        layout.addSpacing(10)
 
         # Description
-        desc_label = QLabel(self.description_text)
-        desc_label.setAlignment(Qt.AlignCenter)
-        desc_label.setWordWrap(True)
-        desc_label.setFont(create_font(size=FontManager.SIZE_BODY))
-        desc_label.setStyleSheet("color: #94a3b8; background: transparent; border: none;")
-        layout.addWidget(desc_label)
+        desc_lbl = QLabel(self.description_text)
+        desc_lbl.setAlignment(Qt.AlignCenter)
+        desc_lbl.setWordWrap(True)
+        desc_lbl.setFont(create_font(size=FontManager.SIZE_BODY))
+        desc_lbl.setStyleSheet("color: #94a3b8; background: transparent; border: none;")
+        desc_lbl.setContentsMargins(24, 0, 24, 0)
+        layout.addWidget(desc_lbl)
 
-        # "تم" button
+        layout.addSpacing(20)
+
+        # Done button — blue gradient
         done_btn = QPushButton(tr("component.success_popup.done_button"))
-        done_btn.setFixedHeight(ButtonDimensions.PRIMARY_HEIGHT)
-        done_btn.setFixedWidth(120)
+        done_btn.setFixedSize(140, 44)
         done_btn.setCursor(Qt.PointingHandCursor)
-        done_btn.setFont(create_font(size=FontManager.SIZE_BODY, weight=FontManager.WEIGHT_BOLD))
-        done_btn.setStyleSheet(StyleManager.button_primary())
+        done_btn.setFont(create_font(size=14, weight=FontManager.WEIGHT_BOLD))
+        done_btn.setStyleSheet("""
+            QPushButton {
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                    stop:0 #3890DF, stop:1 #5BA8F0);
+                color: white;
+                border: none;
+                border-radius: 12px;
+            }
+            QPushButton:hover {
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                    stop:0 #2A7BC9, stop:1 #4A98E0);
+            }
+            QPushButton:pressed {
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                    stop:0 #1E6AB0, stop:1 #3A88D0);
+            }
+        """)
         done_btn.clicked.connect(self.accept)
         layout.addWidget(done_btn, 0, Qt.AlignCenter)
 
         if self.auto_close_ms > 0:
             QTimer.singleShot(self.auto_close_ms, self.close)
 
+    def showEvent(self, event):
+        super().showEvent(event)
+        # Fade-in animation on the whole window
+        self._anim = QPropertyAnimation(self, b"windowOpacity")
+        self._anim.setDuration(220)
+        self._anim.setStartValue(0.0)
+        self._anim.setEndValue(1.0)
+        self._anim.setEasingCurve(QEasingCurve.OutCubic)
+        self._anim.start()
+
     def _build_claims_list(self) -> QFrame:
         container = QFrame()
         container.setStyleSheet("background: transparent; border: none;")
         v_layout = QVBoxLayout(container)
-        v_layout.setContentsMargins(0, 4, 0, 4)
+        v_layout.setContentsMargins(20, 0, 20, 0)
         v_layout.setSpacing(6)
 
         for claim in self.claims:
@@ -154,23 +229,29 @@ class SuccessPopup(QDialog):
             number = claim.get("claimNumber", "")
 
             row = QFrame()
-            row.setStyleSheet("QFrame { background: transparent; border: none; }")
+            row.setStyleSheet("""
+                QFrame {
+                    background: rgba(56, 144, 223, 0.06);
+                    border-radius: 10px;
+                    border: none;
+                }
+            """)
             row_layout = QVBoxLayout(row)
-            row_layout.setContentsMargins(0, 4, 0, 4)
+            row_layout.setContentsMargins(12, 8, 12, 8)
             row_layout.setSpacing(2)
 
             if name:
                 name_lbl = QLabel(name)
                 name_lbl.setAlignment(Qt.AlignCenter)
                 name_lbl.setFont(create_font(size=13, weight=FontManager.WEIGHT_BOLD))
-                name_lbl.setStyleSheet(f"color: {Colors.TEXT_PRIMARY}; background: transparent; border: none;")
+                name_lbl.setStyleSheet("color: #1A2B3C; background: transparent; border: none;")
                 row_layout.addWidget(name_lbl)
 
             if number:
                 num_lbl = QLabel(number)
                 num_lbl.setAlignment(Qt.AlignCenter)
                 num_lbl.setFont(create_font(size=11))
-                num_lbl.setStyleSheet(f"color: {Colors.PRIMARY_BLUE}; background: transparent; border: none;")
+                num_lbl.setStyleSheet("color: #3890DF; background: transparent; border: none;")
                 row_layout.addWidget(num_lbl)
 
             v_layout.addWidget(row)

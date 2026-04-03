@@ -135,10 +135,16 @@ class TRRCMSApiClient:
         self.token_expires_at = None
         return result or {}
 
-    def change_password(self, current_password: str, new_password: str) -> Dict[str, Any]:
-        """POST /v1/Auth/change-password."""
-        body = {"currentPassword": current_password, "newPassword": new_password}
-        return self._request("POST", "/v1/Auth/change-password", body) or {}
+    def change_password(self, current_password: str, new_password: str, user_id: str = None) -> Dict[str, Any]:
+        """POST /v1/auth/change-password."""
+        body = {
+            "currentPassword": current_password,
+            "newPassword": new_password,
+            "confirmPassword": new_password,
+        }
+        if user_id:
+            body["userId"] = user_id
+        return self._request("POST", "/v1/auth/change-password", body) or {}
 
     def lock_building(self, building_id: str, is_locked: bool) -> Dict[str, Any]:
         """PUT /v1/buildings/{id}/lock — toggle building lock state."""

@@ -534,7 +534,10 @@ class OfficeSurveyWizard(BaseWizard):
         # Propagate to all steps
         for step in self.steps:
             if hasattr(step, 'update_language'):
-                step.update_language(is_arabic)
+                try:
+                    step.update_language(is_arabic)
+                except Exception:
+                    pass
     # UI Overrides - Exact copy from old wizard
 
     def _setup_ui(self):

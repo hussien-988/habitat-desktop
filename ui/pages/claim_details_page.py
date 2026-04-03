@@ -183,6 +183,14 @@ class _DetailsHeader(QWidget):
         self._num_label.setStyleSheet(
             "color: #2A6CB5; background: transparent;"
         )
+        self._num_label.setMinimumWidth(200)
+        self._num_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+        self._num_label.setLayoutDirection(Qt.LeftToRight)
+        self._num_label.setAlignment(
+            Qt.AlignRight | Qt.AlignVCenter
+            if get_layout_direction() == Qt.RightToLeft
+            else Qt.AlignLeft | Qt.AlignVCenter
+        )
         num_glow = QGraphicsDropShadowEffect(self._num_label)
         num_glow.setBlurRadius(12)
         num_glow.setOffset(0, 0)
@@ -308,6 +316,11 @@ class _DetailsHeader(QWidget):
 
     def update_texts(self):
         self._cancel_btn.setText(tr("page.claim_details.cancel"))
+        self._num_label.setAlignment(
+            Qt.AlignRight | Qt.AlignVCenter
+            if get_layout_direction() == Qt.RightToLeft
+            else Qt.AlignLeft | Qt.AlignVCenter
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -673,6 +686,15 @@ class ClaimDetailsPage(QWidget):
 
     def refresh(self, data=None):
         """Load claim data. Accepts full data dict or {claim_id: ...}."""
+        if self._is_editing:
+            self._is_editing = False
+            self._pending_uploads = []
+            self._pending_deletes = []
+            self._pending_links = []
+            self._claim_type_combo = None
+            self._ownership_share_input = None
+            self._header.set_editing(False)
+
         if data is None:
             return
 
@@ -794,18 +816,6 @@ class ClaimDetailsPage(QWidget):
                 self._person_content.addWidget(no_lbl)
                 return
 
-            # Full name (prominent)
-            full_name_parts = [
-                person.get("firstNameArabic", ""),
-                person.get("fatherNameArabic", ""),
-                person.get("familyNameArabic", ""),
-            ]
-            full_name = " ".join(p for p in full_name_parts if p).strip() or "-"
-            name_lbl = QLabel(full_name)
-            name_lbl.setFont(create_font(size=16, weight=QFont.Bold))
-            name_lbl.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent; border: none;")
-            self._person_content.addWidget(name_lbl)
-
             # Grid of fields
             grid = QGridLayout()
             grid.setSpacing(16)
@@ -861,21 +871,22 @@ class ClaimDetailsPage(QWidget):
                 self._property_content.addWidget(no_lbl)
                 return
 
-            # Address bar
-            gov = building.get("governorateNameArabic", "")
-            dist = building.get("districtNameArabic", "")
-            sub = building.get("subDistrictNameArabic", "")
-            neigh = building.get("neighborhoodNameArabic", "")
+            # Address bar — try camelCase (raw API) then snake_case (mapped)
+            gov = building.get("governorateNameArabic") or building.get("governorate_name_ar") or ""
+            dist = building.get("districtNameArabic") or building.get("district_name_ar") or ""
+            sub = building.get("subDistrictNameArabic") or building.get("subdistrict_name_ar") or ""
+            neigh = building.get("neighborhoodNameArabic") or building.get("neighborhood_name_ar") or ""
             address_parts = [p for p in [gov, dist, sub, neigh] if p]
             address = " > ".join(address_parts) if address_parts else "-"
 
             addr_bar = QFrame()
             addr_bar.setLayoutDirection(get_layout_direction())
-            addr_bar.setFixedHeight(28)
+            addr_bar.setMinimumHeight(28)
             addr_bar.setStyleSheet("QFrame { background-color: #F8FAFF; border: none; border-radius: 8px; }")
             addr_layout = QHBoxLayout(addr_bar)
-            addr_layout.setContentsMargins(12, 0, 12, 0)
+            addr_layout.setContentsMargins(12, 6, 12, 6)
             addr_lbl = QLabel(address)
+            addr_lbl.setWordWrap(True)
             addr_lbl.setFont(create_font(size=11, weight=FontManager.WEIGHT_REGULAR))
             addr_lbl.setStyleSheet(f"color: {Colors.TEXT_SECONDARY}; background: transparent; border: none;")
             addr_layout.addWidget(addr_lbl)
@@ -936,8 +947,9 @@ class ClaimDetailsPage(QWidget):
 
             claim = self._claim_data
             current_type = claim.get("claimType", "")
-            case_status = claim.get("caseStatus") or claim.get("status", 1)
-            is_claim_open = (case_status == 1)
+            raw_case_status = claim.get("caseStatus")
+            # None means the API hasn't set it yet → still open (default state)
+            is_claim_open = (raw_case_status is None or raw_case_status == 1)
 
             # Claim type row
             type_row = QHBoxLayout()
@@ -953,7 +965,7 @@ class ClaimDetailsPage(QWidget):
                 self._claim_type_combo = QComboBox()
                 self._claim_type_combo.setFixedHeight(36)
                 self._claim_type_combo.setMinimumWidth(160)
-                self._claim_type_combo.setStyleSheet(StyleManager.form_input())
+                self._claim_type_combo.setStyleSheet(StyleManager.form_dropdown())
                 _CLAIM_TYPE_OPTIONS = [
                     (1, get_claim_type_display(1)),
                     (2, get_claim_type_display(2)),
@@ -987,46 +999,62 @@ class ClaimDetailsPage(QWidget):
             type_widget.setLayout(type_row)
             self._relation_content.addWidget(type_widget)
 
-            # Ownership share row
-            share_row = QHBoxLayout()
-            share_row.setContentsMargins(0, 0, 0, 0)
-            share_row.setSpacing(8)
+            # Ownership share row — only for ownership claim type
+            is_ownership_type = (current_type in (1, "1", "ownership"))
+            self._ownership_share_input = None
 
-            share_label = QLabel(tr("page.claim_details.ownership_share_label"))
-            share_label.setFont(create_font(size=FontManager.WIZARD_CARD_LABEL, weight=FontManager.WEIGHT_SEMIBOLD))
-            share_label.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent; border: none;")
-            share_row.addWidget(share_label)
+            if is_ownership_type:
+                share_row = QHBoxLayout()
+                share_row.setContentsMargins(0, 0, 0, 0)
+                share_row.setSpacing(8)
 
-            raw_share = claim.get("ownershipShare")
+                share_label = QLabel(tr("page.claim_details.ownership_share_label"))
+                share_label.setFont(create_font(size=FontManager.WIZARD_CARD_LABEL, weight=FontManager.WEIGHT_SEMIBOLD))
+                share_label.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent; border: none;")
+                share_row.addWidget(share_label)
 
-            if self._is_editing:
-                from PyQt5.QtGui import QIntValidator
-                self._ownership_share_input = QLineEdit()
-                self._ownership_share_input.setFixedHeight(36)
-                self._ownership_share_input.setFixedWidth(120)
-                self._ownership_share_input.setPlaceholderText("0 - 2400")
-                self._ownership_share_input.setValidator(QIntValidator(0, 2400, self))
-                self._ownership_share_input.setStyleSheet(StyleManager.form_input())
-                if raw_share is not None:
-                    self._ownership_share_input.setText(str(round(float(raw_share) * 2400)))
-                self._ownership_share_input.setEnabled(True)
-                share_row.addWidget(self._ownership_share_input)
-            else:
-                if raw_share is not None and raw_share > 0:
-                    shares = round(float(raw_share) * 2400)
-                    display = f"{shares} {tr('unit.shares')}"
+                raw_share = claim.get("ownershipShare")
+
+                if self._is_editing:
+                    from PyQt5.QtGui import QIntValidator
+                    self._ownership_share_input = QLineEdit()
+                    self._ownership_share_input.setFixedHeight(36)
+                    self._ownership_share_input.setMinimumWidth(160)
+                    self._ownership_share_input.setPlaceholderText("0 - 2400")
+                    self._ownership_share_input.setValidator(QIntValidator(0, 2400, self._ownership_share_input))
+                    self._ownership_share_input.setFocusPolicy(Qt.StrongFocus)
+                    self._ownership_share_input.setStyleSheet("""
+                        QLineEdit {
+                            border: 1.5px solid #D0D7E2;
+                            border-radius: 8px;
+                            padding: 6px 12px;
+                            background-color: #FFFFFF;
+                            color: #2C3E50;
+                            font-size: 13px;
+                        }
+                        QLineEdit:hover { border-color: #93C5FD; }
+                        QLineEdit:focus { border-color: #3890DF; }
+                    """)
+                    if raw_share is not None:
+                        self._ownership_share_input.setText(str(round(float(raw_share) * 2400)))
+                    self._ownership_share_input.setEnabled(True)
+                    share_row.addWidget(self._ownership_share_input)
                 else:
-                    display = "-"
-                share_value = QLabel(display)
-                share_value.setFont(create_font(size=FontManager.WIZARD_CARD_LABEL, weight=FontManager.WEIGHT_REGULAR))
-                share_value.setStyleSheet(f"color: {Colors.TEXT_SECONDARY}; background: transparent; border: none;")
-                share_row.addWidget(share_value)
+                    if raw_share is not None and raw_share > 0:
+                        shares = round(float(raw_share) * 2400)
+                        display = f"{shares} {tr('unit.shares')}"
+                    else:
+                        display = "-"
+                    share_value = QLabel(display)
+                    share_value.setFont(create_font(size=FontManager.WIZARD_CARD_LABEL, weight=FontManager.WEIGHT_REGULAR))
+                    share_value.setStyleSheet(f"color: {Colors.TEXT_SECONDARY}; background: transparent; border: none;")
+                    share_row.addWidget(share_value)
 
-            share_row.addStretch()
-            share_widget = QWidget()
-            share_widget.setStyleSheet("background: transparent; border: none;")
-            share_widget.setLayout(share_row)
-            self._relation_content.addWidget(share_widget)
+                share_row.addStretch()
+                share_widget = QWidget()
+                share_widget.setStyleSheet("background: transparent; border: none;")
+                share_widget.setLayout(share_row)
+                self._relation_content.addWidget(share_widget)
 
             # Divider
             divider = QFrame()
@@ -1475,8 +1503,8 @@ class ClaimDetailsPage(QWidget):
         self._extract_relation_id()
 
         self._header.set_editing(True)
-        self._populate_relation_card()
         self._animate_relation_card_edit(True)
+        self._populate_relation_card()
 
     def _update_edit_visibility(self):
         main_window = self.window()
@@ -1484,8 +1512,9 @@ class ClaimDetailsPage(QWidget):
         if hasattr(main_window, 'current_user') and main_window.current_user:
             role = getattr(main_window.current_user, 'role', '')
             can_edit = role in ("admin", "data_manager")
-        case_status = self._claim_data.get("caseStatus")
-        if can_edit and case_status != 1:
+        raw_case = self._claim_data.get("caseStatus")
+        is_open = (raw_case is None or raw_case == 1)
+        if can_edit and not is_open:
             self._header.set_edit_text(tr("page.claim_details.edit_share_docs"))
         else:
             self._header.set_edit_text(tr("page.claim_details.edit_claim"))
@@ -1495,6 +1524,7 @@ class ClaimDetailsPage(QWidget):
     def _on_claim_type_changed_in_edit(self):
         if self._claim_type_combo:
             self._claim_data["claimType"] = self._claim_type_combo.currentData()
+            self._populate_relation_card()
 
     def _extract_relation_id(self):
         rel_id = self._claim_data.get("sourceRelationId")
@@ -1602,6 +1632,14 @@ class ClaimDetailsPage(QWidget):
         new_share_text = self._ownership_share_input.text().strip() if self._ownership_share_input else ""
         new_share_val = int(new_share_text) if new_share_text else None
         share_changed = new_share_val != self._original_ownership_share
+
+        # Validate: ownership claim type requires ownership share
+        final_type = new_type if type_changed else self._original_claim_type
+        is_ownership = (final_type in (1, "1", "ownership"))
+        final_share = new_share_val if (share_changed and new_share_val is not None) else self._original_ownership_share
+        if is_ownership and final_share is None:
+            Toast.show_toast(self, tr("page.claim_details.ownership_share_required"), Toast.WARNING)
+            return
 
         has_changes = type_changed or share_changed or self._pending_uploads or self._pending_deletes or self._pending_links
         if not has_changes:

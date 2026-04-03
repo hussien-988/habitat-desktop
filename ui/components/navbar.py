@@ -92,6 +92,9 @@ class DraggableFrame(QFrame):
         super().mouseReleaseEvent(event)
 
     def mouseDoubleClickEvent(self, event):
+        navbar = self.parent()
+        if hasattr(navbar, '_toggle_maximize'):
+            navbar._toggle_maximize()
         event.accept()
 
 
@@ -304,6 +307,7 @@ class Navbar(QFrame):
     logout_requested = pyqtSignal()
     language_change_requested = pyqtSignal()
     sync_requested = pyqtSignal()
+    password_change_requested = pyqtSignal()
     import_requested = pyqtSignal()
 
     def __init__(self, user_id=None, parent=None):
@@ -418,6 +422,7 @@ class Navbar(QFrame):
             b.setCursor(QCursor(Qt.PointingHandCursor))
 
         btn_min.clicked.connect(lambda: self.window().showMinimized())
+        btn_max.clicked.connect(lambda: self._toggle_maximize())
         btn_close.clicked.connect(lambda: self.window().close())
 
         lay.addWidget(btn_min)
@@ -425,6 +430,13 @@ class Navbar(QFrame):
         lay.addWidget(btn_close)
 
         return box
+
+    def _toggle_maximize(self):
+        win = self.window()
+        if win.isMaximized():
+            win.showNormal()
+        else:
+            win.showMaximized()
 
     # -- Tabs Bar --
 
@@ -491,7 +503,7 @@ class Navbar(QFrame):
         """Collapsible frosted glass pill: trigger label + expandable content."""
         self._pill_expanded = False
         self._pill_collapsed_w = 120
-        self._pill_expanded_w = 340
+        self._pill_expanded_w = 430
 
         pill = QFrame()
         pill.setObjectName("navbar_pill")
@@ -569,6 +581,21 @@ class Navbar(QFrame):
         self._pill_sync_btn.clicked.connect(self._on_sync_requested)
         self._load_pill_icon(self._pill_sync_btn, "fluent", tr("navbar.menu.sync_data"))
         content_lay.addWidget(self._pill_sync_btn)
+
+        content_lay.addSpacing(4)
+        content_lay.addWidget(self._create_pill_separator())
+        content_lay.addSpacing(4)
+
+        # Password change button
+        self._pill_pwd_btn = QPushButton()
+        self._pill_pwd_btn.setStyleSheet(_BTN_STYLE)
+        self._pill_pwd_btn.setFixedHeight(28)
+        self._pill_pwd_btn.setFont(_btn_font)
+        self._pill_pwd_btn.setCursor(QCursor(Qt.PointingHandCursor))
+        self._pill_pwd_btn.setFocusPolicy(Qt.NoFocus)
+        self._pill_pwd_btn.clicked.connect(self._on_password_change_requested)
+        self._load_pill_icon(self._pill_pwd_btn, "safe", tr("navbar.menu.change_password"))
+        content_lay.addWidget(self._pill_pwd_btn)
 
         content_lay.addSpacing(4)
         content_lay.addWidget(self._create_pill_separator())
@@ -882,6 +909,9 @@ class Navbar(QFrame):
 
     def _on_sync_requested(self):
         self.sync_requested.emit()
+
+    def _on_password_change_requested(self):
+        self.password_change_requested.emit()
 
     def _on_import_requested(self):
         self.import_requested.emit()

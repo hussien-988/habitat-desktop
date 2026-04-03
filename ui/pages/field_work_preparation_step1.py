@@ -45,27 +45,27 @@ class BuildingCheckboxItem(QWidget):
         # Checkbox - border only (no content) - positioned at (0,0)
         self.checkbox = QCheckBox(checkbox_container)
         self.checkbox.setGeometry(0, 0, 20, 20)
-        self.checkbox.setStyleSheet("""
-            QCheckBox::indicator {
+        self.checkbox.setStyleSheet(f"""
+            QCheckBox::indicator {{
                 width: 20px;
                 height: 20px;
-                border: 2px solid #3890DF;
+                border: 2px solid {Colors.PRIMARY_BLUE};
                 border-radius: 4px;
                 background: white;
-            }
-            QCheckBox::indicator:checked {
+            }}
+            QCheckBox::indicator:checked {{
                 background: white;
-                border-color: #3890DF;
-            }
-            QCheckBox::indicator:hover {
-                border-color: #3890DF;
-            }
+                border-color: {Colors.PRIMARY_BLUE};
+            }}
+            QCheckBox::indicator:hover {{
+                border-color: {Colors.PRIMARY_BLUE};
+            }}
         """)
 
         # Checkmark overlay (only visible when checked) - overlaid on top at (0,0)
         self.check_label = QLabel("✓", checkbox_container)
         self.check_label.setGeometry(0, 0, 20, 20)
-        self.check_label.setStyleSheet("color: #3890DF; font-size: 14px; font-weight: bold; background: transparent; border: none;")
+        self.check_label.setStyleSheet(f"color: {Colors.PRIMARY_BLUE}; font-size: 14px; font-weight: bold; background: transparent; border: none;")
         self.check_label.setAlignment(Qt.AlignCenter)
         self.check_label.setVisible(False)  # Hidden by default
         # Make checkmark transparent to mouse clicks (so checkbox underneath can be clicked)
@@ -110,7 +110,7 @@ class BuildingCheckboxItem(QWidget):
             assigned_badge.setFont(create_font(size=8, weight=FontManager.WEIGHT_MEDIUM))
             assigned_badge.setFixedHeight(20)
             assigned_badge.setStyleSheet(
-                "background: #3890DF; color: #fff; border-radius: 10px; "
+                f"background: {Colors.PRIMARY_BLUE}; color: #fff; border-radius: 10px; "
                 "padding: 2px 8px;"
             )
             layout.addWidget(assigned_badge)
@@ -209,12 +209,12 @@ class FieldWorkPreparationStep1(QWidget):
         cards_layout.setSpacing(15)
         card = QFrame()
         card.setObjectName("filterCard")
-        card.setStyleSheet("""
-            QFrame#filterCard {
-                background-color: #FFFFFF;
-                border: 1px solid #E1E8ED;
+        card.setStyleSheet(f"""
+            QFrame#filterCard {{
+                background-color: {Colors.SURFACE};
+                border: 1px solid {Colors.BORDER_DEFAULT};
                 border-radius: 12px;
-            }
+            }}
         """)
 
         card.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
@@ -323,18 +323,18 @@ class FieldWorkPreparationStep1(QWidget):
         self._map_link_btn = QPushButton(tr("wizard.step1.search_on_map"))
         self._map_link_btn.setCursor(Qt.PointingHandCursor)
         self._map_link_btn.setFlat(True)
-        self._map_link_btn.setStyleSheet("""
-            QPushButton {
+        self._map_link_btn.setStyleSheet(f"""
+            QPushButton {{
                 border: none;
                 background: transparent;
-                color: #3890DF;
+                color: {Colors.PRIMARY_BLUE};
                 font-family: 'IBM Plex Sans Arabic';
                 font-weight: 600;
                 font-size: 7pt;
                 text-decoration: underline;
                 padding: 0;
                 margin-top: 1px;
-            }
+            }}
         """)
         self._map_link_btn.clicked.connect(self._on_open_map)
 
@@ -407,14 +407,14 @@ class FieldWorkPreparationStep1(QWidget):
         self.selected_buildings_card.setObjectName("selectedBuildingsCard")
         self.selected_buildings_card.setVisible(False)
         self.selected_buildings_card.setFixedWidth(1249)
-        self.selected_buildings_card.setStyleSheet("""
-            QFrame#selectedBuildingsCard {
-                background-color: #FFFFFF;
-                border: 1px solid #E1E8ED;
+        self.selected_buildings_card.setStyleSheet(f"""
+            QFrame#selectedBuildingsCard {{
+                background-color: {Colors.SURFACE};
+                border: 1px solid {Colors.BORDER_DEFAULT};
                 border-radius: 8px;
-            }
+            }}
         """)
-        self.selected_buildings_card.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+        self.selected_buildings_card.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Preferred)
 
         selected_card_layout = QVBoxLayout(self.selected_buildings_card)
         selected_card_layout.setContentsMargins(12, 12, 12, 12)
@@ -426,24 +426,33 @@ class FieldWorkPreparationStep1(QWidget):
 
         self._selected_items_label = QLabel(tr("wizard.step1.selected_items"))
         self._selected_items_label.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
-        self._selected_items_label.setStyleSheet("color: #212B36; background: transparent;")
+        self._selected_items_label.setStyleSheet(f"color: {Colors.PAGE_TITLE}; background: transparent;")
         header_row.addWidget(self._selected_items_label)
 
         self.selected_count_label = QLabel("0 بناء")
         self.selected_count_label.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
-        self.selected_count_label.setStyleSheet("color: #3890DF; background: transparent;")
+        self.selected_count_label.setStyleSheet(f"color: {Colors.PRIMARY_BLUE}; background: transparent;")
         header_row.addWidget(self.selected_count_label)
 
         header_row.addStretch()
 
         selected_card_layout.addLayout(header_row)
 
-        # Table layout
-        self.selected_table_layout = QVBoxLayout()
+        # Table layout with scroll area
+        self._selected_scroll = QScrollArea()
+        self._selected_scroll.setWidgetResizable(True)
+        self._selected_scroll.setFrameShape(QFrame.NoFrame)
+        self._selected_scroll.setMaximumHeight(400)
+        self._selected_scroll.setStyleSheet("background: transparent; border: none;")
+
+        scroll_content = QWidget()
+        scroll_content.setStyleSheet("background: transparent;")
+        self.selected_table_layout = QVBoxLayout(scroll_content)
         self.selected_table_layout.setContentsMargins(0, 0, 0, 0)
         self.selected_table_layout.setSpacing(0)
 
-        selected_card_layout.addLayout(self.selected_table_layout)
+        self._selected_scroll.setWidget(scroll_content)
+        selected_card_layout.addWidget(self._selected_scroll)
 
         cards_layout.addWidget(self.selected_buildings_card)
 
@@ -459,11 +468,11 @@ class FieldWorkPreparationStep1(QWidget):
     def _create_footer(self):
         """Create footer with navigation buttons."""
         footer = QFrame()
-        footer.setStyleSheet("""
-            QFrame {
-                background-color: #FFFFFF;
-                border-top: 1px solid #E1E8ED;
-            }
+        footer.setStyleSheet(f"""
+            QFrame {{
+                background-color: {Colors.SURFACE};
+                border-top: 1px solid {Colors.BORDER_DEFAULT};
+            }}
         """)
         footer.setFixedHeight(74)
 
@@ -484,24 +493,24 @@ class FieldWorkPreparationStep1(QWidget):
         shadow_back.setColor(QColor("#E5EAF6"))
         self.btn_back.setGraphicsEffect(shadow_back)
 
-        self.btn_back.setStyleSheet("""
-            QPushButton {
-                background-color: #FFFFFF;
+        self.btn_back.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {Colors.SURFACE};
                 color: #414D5A;
                 border: none;
                 border-radius: 8px;
                 font-size: 12pt;
                 font-weight: 600;
                 padding: 0;
-            }
-            QPushButton:hover {
+            }}
+            QPushButton:hover {{
                 background-color: #F8F9FA;
-            }
-            QPushButton:disabled {
+            }}
+            QPushButton:disabled {{
                 background-color: transparent;
                 color: transparent;
                 border: none;
-            }
+            }}
         """)
         self.btn_back.clicked.connect(self.cancelled.emit)
         self.btn_back.setEnabled(False)  # Disabled on Step 1
@@ -522,24 +531,24 @@ class FieldWorkPreparationStep1(QWidget):
         shadow_next.setColor(QColor("#E5EAF6"))
         self.btn_next.setGraphicsEffect(shadow_next)
 
-        self.btn_next.setStyleSheet("""
-            QPushButton {
-                background-color: #f0f7ff;
-                color: #3890DF;
-                border: 1px solid #3890DF;
+        self.btn_next.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {Colors.PRIMARY_BLUE};
+                color: white;
+                border: none;
                 border-radius: 8px;
                 font-size: 12pt;
                 font-weight: 600;
                 padding: 0;
-            }
-            QPushButton:hover {
-                background-color: #E3F2FD;
-            }
-            QPushButton:disabled {
+            }}
+            QPushButton:hover {{
+                background-color: #2A7BC8;
+            }}
+            QPushButton:disabled {{
                 background-color: #F8F9FA;
                 color: #9CA3AF;
-                border-color: #E1E8ED;
-            }
+                border: none;
+            }}
         """)
         self.btn_next.clicked.connect(self._on_next)
         self.btn_next.setEnabled(False)  # Initially disabled
@@ -851,27 +860,27 @@ class FieldWorkPreparationStep1(QWidget):
         checkbox = QCheckBox(checkbox_container)
         checkbox.setGeometry(0, 0, 20, 20)
         checkbox.setChecked(True)  # Already selected and confirmed
-        checkbox.setStyleSheet("""
-            QCheckBox::indicator {
+        checkbox.setStyleSheet(f"""
+            QCheckBox::indicator {{
                 width: 20px;
                 height: 20px;
-                border: 2px solid #3890DF;
+                border: 2px solid {Colors.PRIMARY_BLUE};
                 border-radius: 4px;
                 background: white;
-            }
-            QCheckBox::indicator:checked {
+            }}
+            QCheckBox::indicator:checked {{
                 background: white;
-                border-color: #3890DF;
-            }
-            QCheckBox::indicator:hover {
-                border-color: #3890DF;
-            }
+                border-color: {Colors.PRIMARY_BLUE};
+            }}
+            QCheckBox::indicator:hover {{
+                border-color: {Colors.PRIMARY_BLUE};
+            }}
         """)
 
         # Checkmark overlay (same as suggestions list) - overlaid on top at (0,0)
         check_label = QLabel("✓", checkbox_container)
         check_label.setGeometry(0, 0, 20, 20)
-        check_label.setStyleSheet("color: #3890DF; font-size: 14px; font-weight: bold; background: transparent; border: none;")
+        check_label.setStyleSheet(f"color: {Colors.PRIMARY_BLUE}; font-size: 14px; font-weight: bold; background: transparent; border: none;")
         check_label.setAlignment(Qt.AlignCenter)
         check_label.setVisible(True)  # Visible by default (checked)
         # Make checkmark transparent to mouse clicks (so checkbox underneath can be clicked)
@@ -1248,12 +1257,6 @@ class FieldWorkPreparationStep1(QWidget):
     def eventFilter(self, obj, event):
         """Event filter for combo dropdowns and dismissing suggestions."""
         from PyQt5.QtCore import QEvent, QRect
-
-        if event.type() == QEvent.MouseButtonPress:
-            parent = obj.parent()
-            if isinstance(parent, QComboBox):
-                parent.showPopup()
-                return True
 
         if event.type() == QEvent.MouseButtonPress and self.buildings_list.isVisible():
             # Check if click is inside suggestions list or search bar

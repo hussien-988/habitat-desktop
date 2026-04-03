@@ -723,7 +723,7 @@ class BaseMapDialog(QDialog):
         """Called when QWebChannel bridge is ready — map is interactive."""
         self._map_loaded = True
         logger.info("Map bridge ready")
-        if self.search_input:
+        if hasattr(self, 'search_input') and self.search_input:
             self.search_input.setEnabled(True)
             self.search_input.setPlaceholderText(tr("dialog.map.search_placeholder"))
 

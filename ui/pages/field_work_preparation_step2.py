@@ -166,12 +166,12 @@ class FieldWorkPreparationStep2(QWidget):
         cards_layout.setSpacing(15)
         search_card = QFrame()
         search_card.setObjectName("researcherCard")
-        search_card.setStyleSheet("""
-            QFrame#researcherCard {
-                background-color: #FFFFFF;
-                border: 1px solid #E1E8ED;
+        search_card.setStyleSheet(f"""
+            QFrame#researcherCard {{
+                background-color: {Colors.SURFACE};
+                border: 1px solid {Colors.BORDER_DEFAULT};
                 border-radius: 8px;
-            }
+            }}
         """)
         search_card.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Minimum)
 
@@ -280,29 +280,29 @@ class FieldWorkPreparationStep2(QWidget):
                 item.setIcon(QIcon(str(self._icon_path)))
             self.table.setHorizontalHeaderItem(i, item)
 
-        self.table.setStyleSheet("""
-            QTableWidget {
+        self.table.setStyleSheet(f"""
+            QTableWidget {{
                 border: none;
                 background-color: white;
                 font-size: 10.5pt;
                 font-weight: 400;
-                color: #212B36;
-            }
-            QTableWidget::item {
+                color: {Colors.PAGE_TITLE};
+            }}
+            QTableWidget::item {{
                 padding: 8px 15px;
                 border-bottom: 1px solid #F0F0F0;
-                color: #212B36;
+                color: {Colors.PAGE_TITLE};
                 font-size: 10.5pt;
                 font-weight: 400;
-            }
-            QTableWidget::item:hover {
+            }}
+            QTableWidget::item:hover {{
                 background-color: #FAFBFC;
-            }
-            QHeaderView {
+            }}
+            QHeaderView {{
                 border-top-left-radius: 16px;
                 border-top-right-radius: 16px;
-            }
-            QHeaderView::section {
+            }}
+            QHeaderView::section {{
                 background-color: #F8F9FA;
                 padding: 12px;
                 padding-left: 30px;
@@ -311,10 +311,10 @@ class FieldWorkPreparationStep2(QWidget):
                 font-weight: 600;
                 font-size: 11pt;
                 height: 56px;
-            }
-            QHeaderView::section:hover {
+            }}
+            QHeaderView::section:hover {{
                 background-color: #EBEEF2;
-            }
+            }}
         """ + StyleManager.scrollbar())
 
         # Header config
@@ -349,13 +349,13 @@ class FieldWorkPreparationStep2(QWidget):
 
         # Table footer with count
         footer_frame = QFrame()
-        footer_frame.setStyleSheet("""
-            QFrame {
+        footer_frame.setStyleSheet(f"""
+            QFrame {{
                 background-color: #F8F9FA;
-                border-top: 1px solid #E1E8ED;
+                border-top: 1px solid {Colors.BORDER_DEFAULT};
                 border-bottom-left-radius: 16px;
                 border-bottom-right-radius: 16px;
-            }
+            }}
         """)
         footer_frame.setFixedHeight(42)
 
@@ -406,25 +406,25 @@ class FieldWorkPreparationStep2(QWidget):
 
             radio = QRadioButton()
             radio.setFixedSize(20, 20)
-            radio.setStyleSheet("""
-                QRadioButton::indicator {
+            radio.setStyleSheet(f"""
+                QRadioButton::indicator {{
                     width: 18px;
                     height: 18px;
                     border: 2px solid #C4CDD5;
                     border-radius: 9px;
                     background: white;
-                }
-                QRadioButton::indicator:hover {
-                    border-color: #3890DF;
-                }
-                QRadioButton::indicator:checked {
-                    border: 2px solid #3890DF;
+                }}
+                QRadioButton::indicator:hover {{
+                    border-color: {Colors.PRIMARY_BLUE};
+                }}
+                QRadioButton::indicator:checked {{
+                    border: 2px solid {Colors.PRIMARY_BLUE};
                     background: qradialgradient(
                         cx:0.5, cy:0.5, radius:0.4,
                         fx:0.5, fy:0.5,
-                        stop:0 #3890DF, stop:0.6 #3890DF, stop:0.7 white
+                        stop:0 {Colors.PRIMARY_BLUE}, stop:0.6 {Colors.PRIMARY_BLUE}, stop:0.7 white
                     );
-                }
+                }}
             """)
 
             # Check if this was the previously selected researcher
@@ -574,23 +574,23 @@ class FieldWorkPreparationStep2(QWidget):
 
         menu = QMenu(self)
         menu.setLayoutDirection(get_layout_direction())
-        menu.setStyleSheet("""
-            QMenu {
+        menu.setStyleSheet(f"""
+            QMenu {{
                 background-color: white;
-                border: 1px solid #E1E8ED;
+                border: 1px solid {Colors.BORDER_DEFAULT};
                 border-radius: 8px;
                 padding: 8px;
-            }
-            QMenu::item {
+            }}
+            QMenu::item {{
                 padding: 10px 20px;
                 border-radius: 4px;
                 font-size: 10pt;
                 color: #637381;
-            }
-            QMenu::item:selected {
+            }}
+            QMenu::item:selected {{
                 background-color: #EFF6FF;
-                color: #3890DF;
-            }
+                color: {Colors.PRIMARY_BLUE};
+            }}
         """)
 
         clear_action = QAction(tr("wizard.step2.show_all"), self)

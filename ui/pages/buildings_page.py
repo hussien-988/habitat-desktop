@@ -2420,8 +2420,6 @@ class BuildingsListPage(QWidget):
 
     view_building = pyqtSignal(object)
     edit_building = pyqtSignal(object)
-    add_building = pyqtSignal()
-    prepare_field_work = pyqtSignal()
 
     def __init__(self, building_controller, export_service, i18n, parent=None):
         super().__init__(parent)
@@ -2474,26 +2472,6 @@ class BuildingsListPage(QWidget):
 
         top_row.addStretch()
 
-        # الأزرار
-        btn_layout = QHBoxLayout()
-        btn_layout.setSpacing(16)
-
-        # زر تجهيز العمل الميداني (شفاف مع بوردر أزرق)
-        # Apply unified button dimensions
-        btn_field = CustomButton.secondary(tr("page.buildings.prepare_field_work"), self, width=199, height=48)
-        btn_field.clicked.connect(self.prepare_field_work.emit)
-
-        # زر إضافة بناء جديد (أزرق solid)
-        # Same as "Add New Case" button from claims pages (PrimaryButton component)
-        self.add_btn = PrimaryButton(tr("page.buildings.add_new_building"), icon_name="icon")
-        self.add_btn.clicked.connect(self.add_building.emit)
-        self.add_btn.hide()
-
-        btn_layout.addWidget(btn_field)
-        btn_layout.addWidget(self.add_btn)
-
-        top_row.addLayout(btn_layout)
-
         layout.addLayout(top_row)
 
         # البطاقة البيضاء للجدول
@@ -2504,7 +2482,7 @@ class BuildingsListPage(QWidget):
         card_layout.setContentsMargins(10, 10, 10, 10)
 
         self.table = QTableWidget()
-        self.table.setColumnCount(9)
+        self.table.setColumnCount(8)
         self.table.setRowCount(11)  # Fixed 11 rows
         self.table.setLayoutDirection(get_layout_direction())
         self.table.setEditTriggers(QAbstractItemView.NoEditTriggers)
@@ -2522,7 +2500,7 @@ class BuildingsListPage(QWidget):
         icon_path = base_path / "assets" / "images" / "down.png"
 
         # Set headers with icons for filterable columns
-        headers = [tr("table.buildings.building_code"), tr("table.buildings.entry_date"), tr("table.buildings.area"), tr("table.buildings.neighborhood"), tr("table.buildings.building_type"), tr("table.buildings.building_status"), tr("table.buildings.assignment_status"), tr("table.buildings.lock_status"), ""]
+        headers = [tr("table.buildings.building_code"), tr("table.buildings.entry_date"), tr("table.buildings.area"), tr("table.buildings.neighborhood"), tr("table.buildings.building_type"), tr("table.buildings.building_status"), tr("table.buildings.assignment_status"), tr("table.buildings.lock_status")]
         for i, text in enumerate(headers):
             item = QTableWidgetItem(text)
             # Add icon to filterable columns (2, 3, 4, 5)
@@ -2595,8 +2573,6 @@ class BuildingsListPage(QWidget):
         header.setSectionResizeMode(5, QHeaderView.ResizeToContents)  # حالة البناء
         header.setSectionResizeMode(6, QHeaderView.ResizeToContents)  # حالة التعيين
         header.setSectionResizeMode(7, QHeaderView.ResizeToContents)  # حالة القفل
-        header.setSectionResizeMode(8, QHeaderView.Fixed)             # أيقونة الثلاث نقاط
-        header.resizeSection(8, 80)
 
         # ضبط ارتفاع الصفوف بالتساوي
         # الارتفاع المتاح: 708 (card) - 10 (top) - 10 (bottom) - 56 (header) - 58 (footer) = 574px
@@ -2605,9 +2581,8 @@ class BuildingsListPage(QWidget):
         vertical_header.setVisible(False)
         vertical_header.setDefaultSectionSize(52)  # ارتفاع موحد لكل الصفوف
 
-        # Enable cell click for actions button
+        # Single click on any row → view building details
         self.table.cellClicked.connect(self._on_cell_clicked)
-        self.table.cellDoubleClicked.connect(self._on_cell_double_click)
 
         # Connect header click for filtering (same pattern as field_work_preparation)
         header.sectionClicked.connect(self._on_header_clicked)
@@ -2757,12 +2732,8 @@ class BuildingsListPage(QWidget):
         self._load_buildings()
 
     def configure_for_role(self, role: str):
-        """Enable/disable CRUD buttons based on user role."""
+        """Store user role for lock permission checks."""
         self._user_role = role
-        can_create = role in {"admin", "data_manager", "field_researcher"}
-        if hasattr(self, 'add_btn'):
-            self.add_btn.setEnabled(can_create)
-            self.add_btn.setVisible(can_create)
 
     def _load_buildings(self):
         """Load buildings from repository and populate table."""
@@ -2861,16 +2832,6 @@ class BuildingsListPage(QWidget):
             else:
                 locked_item.setForeground(QColor("#28a745"))
             self.table.setItem(idx, 7, locked_item)
-
-            # زر الثلاث نقاط
-            actions_item = QTableWidgetItem("⋮")
-            actions_item.setTextAlignment(Qt.AlignCenter)
-            dots_font = QFont()
-            dots_font.setPointSize(18)
-            dots_font.setWeight(QFont.Bold)
-            actions_item.setFont(dots_font)
-            actions_item.setForeground(QColor("#637381"))
-            self.table.setItem(idx, 8, actions_item)
 
         # Update pagination info (counter only: "1-11 of 50")
         if total > 0:
@@ -3164,123 +3125,19 @@ class BuildingsListPage(QWidget):
             {"neighborhoodCode": k, "nameArabic": v} for k, v in seen.items()
         ]
 
-    def _on_cell_double_click(self, row, col):
-        """Handle cell double click."""
-        # Calculate actual building index
-        start_idx = (self._current_page - 1) * self._rows_per_page
-        building_idx = start_idx + row
-
-        if building_idx < len(self._buildings):
-            building = self._buildings[building_idx]
-            self.edit_building.emit(building)
-
     def _on_cell_clicked(self, row: int, col: int):
-        """فتح القائمة المنسدلة عند الضغط على زر الثلاث نقاط."""
-        if col != 8:
-            return
-
-        # التحقق من وجود محتوى في السطر
+        """Open building details on row click."""
         building_id_item = self.table.item(row, 0)
         if not building_id_item or not building_id_item.text().strip():
             return
 
-        # حساب index البناء الفعلي
         start_idx = (self._current_page - 1) * self._rows_per_page
         building_idx = start_idx + row
 
         if building_idx >= len(self._buildings):
             return
 
-        building = self._buildings[building_idx]
-
-        # إظهار القائمة المنسدلة
-        self._show_actions_menu(row, col, building)
-
-    def _show_actions_menu(self, row: int, col: int, building: Building):
-        """عرض القائمة المنسدلة تحت زر الثلاث نقاط."""
-        # الحصول على موقع الخلية
-        item = self.table.item(row, col)
-        if not item:
-            return
-
-        rect = self.table.visualItemRect(item)
-        position = QPoint(rect.right() - 10, rect.bottom())
-
-        # إنشاء القائمة - 3 صفوف فقط
-        menu = QMenu(self)
-        menu.setFixedSize(200, 149)
-
-        # Load icons
-        from ui.components.icon import Icon
-
-        # 1. عرض - لون #212B36
-        view_icon = Icon.load_qicon("eye-open", size=18)
-        view_action = QAction("  " + tr("action.view"), self)
-        if view_icon:
-            view_action.setIcon(view_icon)
-        view_action.triggered.connect(lambda: self.view_building.emit(building))
-        menu.addAction(view_action)
-
-        # 2. تعديل - لون #212B36
-        _role = getattr(self, '_user_role', 'admin')
-        edit_icon = Icon.load_qicon("edit-01", size=18)
-        edit_action = QAction("  " + tr("action.edit"), self)
-        if edit_icon:
-            edit_action.setIcon(edit_icon)
-        edit_action.triggered.connect(lambda: self.edit_building.emit(building))
-        edit_action.setVisible(False)
-        menu.addAction(edit_action)
-
-        # 3. قفل / فتح البناء
-        _role = getattr(self, '_user_role', '')
-        can_lock = _role in ('admin', 'data_manager')
-        if can_lock:
-            is_locked = getattr(building, 'is_locked', False)
-            lock_text = tr("building.action.unlock") if is_locked else tr("building.action.lock")
-            lock_icon = Icon.load_qicon("lock-open" if is_locked else "lock", size=18)
-            lock_action = QAction("  " + lock_text, self)
-            if lock_icon:
-                lock_action.setIcon(lock_icon)
-            lock_action.triggered.connect(lambda: self._on_toggle_lock(building))
-            menu.addAction(lock_action)
-
-        # 4. حذف
-        delete_icon = Icon.load_qicon("delete", size=18)
-        delete_action = QAction("  " + tr("action.delete"), self)
-        if delete_icon:
-            delete_action.setIcon(delete_icon)
-        delete_action.triggered.connect(lambda: self._on_delete_building(building))
-        delete_action.setVisible(False)
-        menu.addAction(delete_action)
-
-        # Apply styles
-        menu.setStyleSheet("""
-            QMenu {
-                background-color: white;
-                border: 1px solid #E1E8ED;
-                border-radius: 8px;
-                padding: 8px;
-            }
-            QMenu::item {
-                padding: 10px;
-                border-radius: 4px;
-                color: #212B36;
-                font-size: 11pt;
-                font-weight: 400;
-            }
-            QMenu::item:selected {
-                background-color: #F6F6F7;
-            }
-            QMenu::item:nth-child(3) {
-                color: #FF4842;
-            }
-            QMenu::item:nth-child(3):selected {
-                color: #FF4842;
-            }
-        """)
-
-        # عرض القائمة تحت زر الثلاث نقاط
-        menu.exec_(self.table.viewport().mapToGlobal(position))
+        self.view_building.emit(self._buildings[building_idx])
 
     def _show_on_map(self, building: Building):
         """
@@ -3460,16 +3317,10 @@ class BuildingsPage(QWidget):
             self
         )
         self.list_page.view_building.connect(self.view_building.emit)
-        self.list_page.edit_building.connect(self._on_edit_building)
-        self.list_page.add_building.connect(self._on_add_building)
-        self.list_page.prepare_field_work.connect(self._on_prepare_field_work)
         self.stacked.addWidget(self.list_page)
 
         # Page 1: Add/Edit (created on demand)
         self.form_page = None
-
-        # Page 2: Field Work Preparation (created on demand)
-        self.field_work_page = None
 
         layout.addWidget(self.stacked)
 
@@ -3482,23 +3333,6 @@ class BuildingsPage(QWidget):
     def configure_for_role(self, role: str):
         """Delegate role configuration to inner list page."""
         self.list_page.configure_for_role(role)
-
-    def _on_add_building(self):
-        """Add building."""
-        if self.form_page:
-            self.stacked.removeWidget(self.form_page)
-            self.form_page.deleteLater()
-
-        self.form_page = AddBuildingPage(
-            self.building_controller,
-            self.i18n,
-            building=None,
-            parent=self
-        )
-        self.form_page.saved.connect(self._on_form_saved)
-        self.form_page.cancelled.connect(self._on_form_cancelled)
-        self.stacked.addWidget(self.form_page)
-        self.stacked.setCurrentWidget(self.form_page)
 
     def _on_edit_building(self, building: Building):
         """Edit building."""
@@ -3516,39 +3350,6 @@ class BuildingsPage(QWidget):
         self.form_page.cancelled.connect(self._on_form_cancelled)
         self.stacked.addWidget(self.form_page)
         self.stacked.setCurrentWidget(self.form_page)
-
-    def _on_prepare_field_work(self):
-        """Open field work preparation wizard."""
-        if self.field_work_page:
-            self.stacked.removeWidget(self.field_work_page)
-            self.field_work_page.deleteLater()
-
-        from ui.pages.field_work_preparation_page import FieldWorkPreparationPage
-        self.field_work_page = FieldWorkPreparationPage(
-            self.building_controller,
-            self.i18n,
-            parent=self
-        )
-        self.field_work_page.completed.connect(self._on_field_work_completed)
-        self.field_work_page.cancelled.connect(self._on_field_work_cancelled)
-        self.stacked.addWidget(self.field_work_page)
-        self.stacked.setCurrentWidget(self.field_work_page)
-
-    def _on_field_work_completed(self, workflow_data):
-        """Handle field work workflow completion."""
-        buildings = workflow_data.get('buildings', [])
-        researcher = workflow_data.get('researcher', {})
-        logger.debug(
-            f"Field work assignment complete: {len(buildings)} buildings "
-            f"assigned to {researcher.get('name', 'N/A')}"
-        )
-        # Return to list page
-        self.list_page.refresh()
-        self.stacked.setCurrentWidget(self.list_page)
-
-    def _on_field_work_cancelled(self):
-        """Handle field work cancellation."""
-        self.stacked.setCurrentWidget(self.list_page)
 
     def _on_form_saved(self):
         """Form saved."""

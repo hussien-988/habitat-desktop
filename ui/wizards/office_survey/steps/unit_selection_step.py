@@ -38,7 +38,7 @@ from ui.components.rtl_combo import RtlCombo
 from ui.components.toast import Toast
 from ui.font_utils import create_font, FontManager
 from services.translation_manager import tr, get_layout_direction
-from services.display_mappings import get_unit_status_display, get_unit_type_options, get_unit_status_options
+from services.display_mappings import get_unit_status_display, get_unit_type_display, get_unit_type_options, get_unit_status_options
 from services.error_mapper import map_exception
 from ui.components.loading_spinner import LoadingSpinnerOverlay
 
@@ -526,9 +526,8 @@ class UnitSelectionStep(BaseStep):
         main_layout.setSpacing(8)  # Gap between top and bottom: 8px
         main_layout.setContentsMargins(12, 12, 12, 12)  # Padding: 12px
 
-        # Get unit data with Arabic text
-        # Use Arabic display properties from model
-        unit_type_val = unit.unit_type_display_ar if hasattr(unit, 'unit_type_display_ar') else (unit.unit_type or "-")
+        # Get unit type using centralized display mapping (language-aware)
+        unit_type_val = get_unit_type_display(unit.unit_type) if unit.unit_type else "-"
 
         # Get status display using centralized mapping
         if hasattr(unit, 'apartment_status') and unit.apartment_status is not None:
@@ -733,8 +732,8 @@ class UnitSelectionStep(BaseStep):
         self._inline_form.setVisible(False)
 
         form_layout = QVBoxLayout(self._inline_form)
-        form_layout.setContentsMargins(16, 12, 16, 16)
-        form_layout.setSpacing(12)
+        form_layout.setContentsMargins(24, 20, 24, 24)
+        form_layout.setSpacing(16)
 
         # Header
         hdr = self._make_icon_header(
@@ -758,13 +757,13 @@ class UnitSelectionStep(BaseStep):
 
         # Row 1: Floor number | Unit number
         row1 = QHBoxLayout()
-        row1.setSpacing(12)
+        row1.setSpacing(16)
         self._if_floor = QSpinBox()
         self._if_floor.setRange(-3, 100)
         self._if_floor.setLocale(QLocale(QLocale.English, QLocale.UnitedStates))
         self._if_floor.setButtonSymbols(QSpinBox.NoButtons)
         self._if_floor.setStyleSheet(FORM_FIELD_STYLE)
-        self._if_floor.setMinimumHeight(38)
+        self._if_floor.setMinimumHeight(44)
         row1.addLayout(self._make_form_field(tr("wizard.unit_dialog.floor_number"), self._if_floor), 1)
 
         self._if_unit_num = QSpinBox()
@@ -772,16 +771,16 @@ class UnitSelectionStep(BaseStep):
         self._if_unit_num.setLocale(QLocale(QLocale.English, QLocale.UnitedStates))
         self._if_unit_num.setButtonSymbols(QSpinBox.NoButtons)
         self._if_unit_num.setStyleSheet(FORM_FIELD_STYLE)
-        self._if_unit_num.setMinimumHeight(38)
+        self._if_unit_num.setMinimumHeight(44)
         row1.addLayout(self._make_form_field(tr("wizard.unit_dialog.unit_number"), self._if_unit_num), 1)
         form_layout.addLayout(row1)
 
         # Row 2: Unit type | Unit status
         row2 = QHBoxLayout()
-        row2.setSpacing(12)
+        row2.setSpacing(16)
         self._if_type = RtlCombo()
         self._if_type.setStyleSheet(combo_style)
-        self._if_type.setMinimumHeight(38)
+        self._if_type.setMinimumHeight(44)
         self._if_type.addItem(tr("wizard.unit_dialog.select"), 0)
         for code, label in get_unit_type_options():
             self._if_type.addItem(label, code)
@@ -789,7 +788,7 @@ class UnitSelectionStep(BaseStep):
 
         self._if_status = RtlCombo()
         self._if_status.setStyleSheet(combo_style)
-        self._if_status.setMinimumHeight(38)
+        self._if_status.setMinimumHeight(44)
         self._if_status.addItem(tr("wizard.unit_dialog.select"), 0)
         for code, label in get_unit_status_options():
             self._if_status.addItem(label, code)
@@ -798,19 +797,19 @@ class UnitSelectionStep(BaseStep):
 
         # Row 3: Rooms | Area
         row3 = QHBoxLayout()
-        row3.setSpacing(12)
+        row3.setSpacing(16)
         self._if_rooms = QSpinBox()
         self._if_rooms.setRange(0, 20)
         self._if_rooms.setLocale(QLocale(QLocale.English, QLocale.UnitedStates))
         self._if_rooms.setButtonSymbols(QSpinBox.NoButtons)
         self._if_rooms.setStyleSheet(FORM_FIELD_STYLE)
-        self._if_rooms.setMinimumHeight(38)
+        self._if_rooms.setMinimumHeight(44)
         row3.addLayout(self._make_form_field(tr("wizard.unit_dialog.rooms"), self._if_rooms), 1)
 
         self._if_area = QLineEdit()
         self._if_area.setPlaceholderText(tr("wizard.unit_dialog.area_placeholder"))
         self._if_area.setStyleSheet(FORM_FIELD_STYLE)
-        self._if_area.setMinimumHeight(38)
+        self._if_area.setMinimumHeight(44)
         area_validator = QDoubleValidator(0.0, 999999.99, 2, self._if_area)
         area_validator.setLocale(QLocale(QLocale.English, QLocale.UnitedStates))
         area_validator.setNotation(QDoubleValidator.StandardNotation)
@@ -820,25 +819,26 @@ class UnitSelectionStep(BaseStep):
 
         # Row 4: Description (full width)
         self._if_desc = QTextEdit()
-        self._if_desc.setMinimumHeight(70)
-        self._if_desc.setMaximumHeight(90)
+        self._if_desc.setMinimumHeight(90)
+        self._if_desc.setMaximumHeight(120)
         self._if_desc.setPlaceholderText(tr("wizard.unit_dialog.description_placeholder"))
         self._if_desc.setStyleSheet(FORM_FIELD_STYLE)
         form_layout.addLayout(self._make_form_field(tr("wizard.unit_dialog.description"), self._if_desc))
 
         # Buttons
         btn_row = QHBoxLayout()
+        btn_row.setSpacing(12)
         btn_row.addStretch()
 
         cancel_btn = QPushButton(tr("common.cancel"))
-        cancel_btn.setFixedSize(120, 38)
+        cancel_btn.setFixedSize(130, 44)
         cancel_btn.setStyleSheet(OUTLINE_BUTTON_STYLE)
         cancel_btn.setCursor(Qt.PointingHandCursor)
         cancel_btn.clicked.connect(self._cancel_inline_unit)
         btn_row.addWidget(cancel_btn)
 
         self._if_save_btn = QPushButton(tr("common.save"))
-        self._if_save_btn.setFixedSize(120, 38)
+        self._if_save_btn.setFixedSize(130, 44)
         self._if_save_btn.setStyleSheet(IN_CARD_ACTION_STYLE)
         self._if_save_btn.setCursor(Qt.PointingHandCursor)
         self._if_save_btn.clicked.connect(self._save_inline_unit)
@@ -849,7 +849,7 @@ class UnitSelectionStep(BaseStep):
     def _make_form_field(self, label_text: str, widget) -> QVBoxLayout:
         """Create a labeled form field for the inline form."""
         col = QVBoxLayout()
-        col.setSpacing(4)
+        col.setSpacing(6)
         lbl = QLabel(label_text)
         lbl.setFont(create_font(size=FontManager.WIZARD_FIELD_LABEL, weight=FontManager.WEIGHT_SEMIBOLD))
         lbl.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent;")
@@ -1015,7 +1015,8 @@ class UnitSelectionStep(BaseStep):
     def update_language(self, is_arabic: bool):
         """Update all translatable texts when language changes."""
         self.setLayoutDirection(get_layout_direction())
-        self.add_unit_btn.setText(tr("wizard.unit.add_button"))
+        if hasattr(self, 'add_unit_btn'):
+            self.add_unit_btn.setText(tr("wizard.unit.add_button"))
         # Reload unit cards with new language
         if self.context.building:
             self._loaded_building_uuid = None  # Force re-render with new language

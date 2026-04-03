@@ -17,6 +17,7 @@ from PyQt5.QtGui import QColor, QIcon
 from models.building import Building
 from repositories.database import Database
 from repositories.building_repository import BuildingRepository
+from controllers.building_controller import BuildingController
 from controllers.unit_controller import UnitController
 from services.display_mappings import get_unit_type_display, get_unit_status_display
 from ui.components.icon import Icon
@@ -44,6 +45,7 @@ class BuildingDetailsPage(QWidget):
         self.i18n = i18n
         self.building_repo = BuildingRepository(db)
         self.unit_controller = UnitController(db)
+        self.building_controller = BuildingController(db)
         self.current_building = None
 
         self._units_view_active = False
@@ -120,6 +122,26 @@ class BuildingDetailsPage(QWidget):
         """)
         self.view_units_btn.clicked.connect(self._toggle_units_view)
         header_row.addWidget(self.view_units_btn)
+
+        self._lock_btn = QPushButton("")
+        self._lock_btn.setFixedSize(ButtonDimensions.SAVE_WIDTH, ButtonDimensions.SAVE_HEIGHT)
+        self._lock_btn.setCursor(Qt.PointingHandCursor)
+        self._lock_btn.setFont(create_font(
+            size=ButtonDimensions.SAVE_FONT_SIZE,
+            weight=FontManager.WEIGHT_REGULAR,
+        ))
+        self._lock_btn.setStyleSheet(f"""
+            QPushButton {{
+                background-color: #F1F5F9;
+                color: #475569;
+                border: 1px solid #E2E8F0;
+                border-radius: {ButtonDimensions.SAVE_BORDER_RADIUS}px;
+            }}
+            QPushButton:hover {{ background-color: #E2E8F0; }}
+        """)
+        self._lock_btn.clicked.connect(self._on_toggle_lock)
+        self._lock_btn.setVisible(False)
+        header_row.addWidget(self._lock_btn)
 
         back_btn = QPushButton(tr("action.back"))
         back_btn.setFixedSize(100, ButtonDimensions.SAVE_HEIGHT)
@@ -478,6 +500,13 @@ class BuildingDetailsPage(QWidget):
 
         self.current_building = building
 
+        # Update lock button
+        is_locked = getattr(building, 'is_locked', False)
+        self._lock_btn.setText(
+            tr("building.action.unlock") if is_locked else tr("building.action.lock")
+        )
+        self._lock_btn.setVisible(True)
+
         # Reset to cards view
         if self._units_view_active:
             self.info_card.setVisible(True)
@@ -744,6 +773,36 @@ class BuildingDetailsPage(QWidget):
         content_row.addLayout(gen_desc_section, stretch=1)
 
         self.location_content.addLayout(content_row)
+    def _on_toggle_lock(self):
+        """Toggle building lock state with confirmation."""
+        if not self.current_building:
+            return
+        from ui.components.dialogs import ConfirmationDialog
+        is_locked = getattr(self.current_building, 'is_locked', False)
+        msg_key = "page.buildings.confirm_unlock" if is_locked else "page.buildings.confirm_lock"
+        title_key = "building.action.unlock" if is_locked else "building.action.lock"
+        result = ConfirmationDialog.confirm(
+            parent=self,
+            title=tr(title_key),
+            message=tr(msg_key),
+            icon_name="wirning"
+        )
+        if result != ConfirmationDialog.YES:
+            return
+        new_lock_state = not is_locked
+        op_result = self.building_controller.toggle_building_lock(
+            self.current_building.building_uuid or self.current_building.building_id,
+            new_lock_state
+        )
+        if op_result.success:
+            self.current_building.is_locked = new_lock_state
+            self._lock_btn.setText(
+                tr("building.action.unlock") if new_lock_state else tr("building.action.lock")
+            )
+            Toast.show_toast(self, tr("building.lock_success"), Toast.SUCCESS)
+        else:
+            Toast.show_toast(self, tr("building.lock_failed"), Toast.ERROR)
+
     # Units View Toggle
 
     def _toggle_units_view(self):

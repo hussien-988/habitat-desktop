@@ -1166,9 +1166,5 @@ class SyncDataPage(QWidget):
         if self._collector_combo and self._collector_combo.lineEdit():
             self._collector_combo.lineEdit().setPlaceholderText(tr("page.sync.all_collectors"))
 
-    def showEvent(self, event):
-        super().showEvent(event)
-        self.refresh()
-
     def hideEvent(self, event):
         super().hideEvent(event)

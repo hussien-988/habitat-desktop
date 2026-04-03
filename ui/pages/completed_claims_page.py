@@ -594,7 +594,7 @@ class CompletedClaimsPage(QWidget):
 
         self._search_timer = QTimer(self)
         self._search_timer.setSingleShot(True)
-        self._search_timer.timeout.connect(self._load_claims)
+        self._search_timer.timeout.connect(self._on_search_triggered)
 
         # Shared timer for card shimmer animation
         self._shimmer_timer = QTimer(self)
@@ -663,7 +663,7 @@ class CompletedClaimsPage(QWidget):
             icon_label.setFixedSize(16, 16)
             icon_label.move(10, 9)
             icon_label.setStyleSheet("background: transparent; border: none;")
-        self._search.textChanged.connect(self._on_search_changed)
+        self._search.returnPressed.connect(self._on_search_triggered)
         self._header.set_search_field(self._search)
 
         main.addWidget(self._header)
@@ -792,6 +792,10 @@ class CompletedClaimsPage(QWidget):
         self._stat_closed.set_count(self._closed_count)
 
     # -- Events --
+
+    def _on_search_triggered(self):
+        self._current_page = 1
+        self._load_claims()
 
     def _on_search_changed(self):
         self._current_page = 1
