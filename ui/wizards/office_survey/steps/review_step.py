@@ -20,6 +20,7 @@ from ui.wizards.framework import BaseStep, StepValidationResult
 from ui.wizards.office_survey.survey_context import SurveyContext
 from ui.error_handler import ErrorHandler
 from ui.design_system import Colors
+from ui.wizards.office_survey.wizard_styles import STEP_CARD_STYLE
 from ui.style_manager import StyleManager
 from ui.font_utils import FontManager, create_font
 from ui.components.icon import Icon
@@ -158,14 +159,9 @@ class ReviewStep(BaseStep):
     def _create_applicant_card(self) -> QFrame:
         """Create a summary card for applicant (visitor) information."""
         card = QFrame()
+        card.setObjectName("StepCard")
         card.setLayoutDirection(get_layout_direction())
-        card.setStyleSheet(f"""
-            QFrame {{
-                background-color: {Colors.SURFACE};
-                border: none;
-                border-radius: 12px;
-            }}
-        """)
+        card.setStyleSheet(STEP_CARD_STYLE)
         self._add_shadow(card)
 
         card_layout = QVBoxLayout(card)
@@ -198,7 +194,7 @@ class ReviewStep(BaseStep):
         shadow.setBlurRadius(20)
         shadow.setXOffset(0)
         shadow.setYOffset(4)
-        shadow.setColor(QColor(0, 0, 0, 25))
+        shadow.setColor(QColor(0, 0, 0, 20))
         widget.setGraphicsEffect(shadow)
 
     def _request_edit(self, step_index: int):
@@ -209,19 +205,19 @@ class ReviewStep(BaseStep):
         """Create a menu button with a single 'تعديل' action."""
         menu_btn = QPushButton("⋮")
         menu_btn.setFixedSize(36, 36)
-        menu_btn.setStyleSheet("""
-            QPushButton {
+        menu_btn.setStyleSheet(f"""
+            QPushButton {{
                 border: none;
                 color: #475569;
                 font-size: 24px;
                 font-weight: 700;
                 background: transparent;
                 border-radius: 18px;
-            }
-            QPushButton:hover {
-                color: #1e293b;
+            }}
+            QPushButton:hover {{
+                color: {Colors.WIZARD_TITLE};
                 background-color: #F1F5F9;
-            }
+            }}
         """)
         menu_btn.setCursor(Qt.PointingHandCursor)
 
@@ -255,14 +251,9 @@ class ReviewStep(BaseStep):
     def _create_card_base(self, icon_name: str, title: str, subtitle: str, edit_callback=None) -> tuple:
         """Create base card with header (icon, title, subtitle) and return card and content layout."""
         card = QFrame()
+        card.setObjectName("StepCard")
         card.setLayoutDirection(get_layout_direction())
-        card.setStyleSheet(f"""
-            QFrame {{
-                background-color: {Colors.SURFACE};
-                border: none;
-                border-radius: 12px;
-            }}
-        """)
+        card.setStyleSheet(STEP_CARD_STYLE)
         self._add_shadow(card)
 
         card_layout = QVBoxLayout(card)
@@ -282,7 +273,7 @@ class ReviewStep(BaseStep):
         icon_label.setAlignment(Qt.AlignCenter)
         icon_label.setStyleSheet("""
             QLabel {
-                background-color: #ffffff;
+                background-color: #EBF5FF;
                 border: 1px solid #DBEAFE;
                 border-radius: 7px;
             }
@@ -337,14 +328,9 @@ class ReviewStep(BaseStep):
     def _create_simple_card(self) -> tuple:
         """Create a simple card (no header) with shadow and return card and content layout."""
         card = QFrame()
+        card.setObjectName("StepCard")
         card.setLayoutDirection(get_layout_direction())
-        card.setStyleSheet(f"""
-            QFrame {{
-                background-color: {Colors.SURFACE};
-                border: none;
-                border-radius: 12px;
-            }}
-        """)
+        card.setStyleSheet(STEP_CARD_STYLE)
         self._add_shadow(card)
 
         card_layout = QVBoxLayout(card)
@@ -368,16 +354,17 @@ class ReviewStep(BaseStep):
         row = QFrame()
         row.setLayoutDirection(get_layout_direction())
         row.setFixedHeight(80)
-        row.setStyleSheet(f"""
-            QFrame {{
-                background-color: {Colors.BACKGROUND};
-                border: 1px solid #F0F0F0;
+        row.setStyleSheet("""
+            QFrame {
+                background-color: #F8FAFF;
+                border: 1px solid #E2EAF2;
                 border-radius: 8px;
-                border-right: 3px solid #3B82F6;
-            }}
-            QLabel {{
+                border-right: 3px solid #3890DF;
+            }
+            QLabel {
                 border: none;
-            }}
+                background: transparent;
+            }
         """)
 
         card_layout = QHBoxLayout(row)
@@ -393,8 +380,8 @@ class ReviewStep(BaseStep):
         icon_lbl.setAlignment(Qt.AlignCenter)
         icon_lbl.setStyleSheet("""
             QLabel {
-                background-color: #F4F8FF;
-                color: #3182CE;
+                background-color: #EBF5FF;
+                color: #3890DF;
                 border-radius: 18px;
                 border: none;
             }
@@ -433,7 +420,7 @@ class ReviewStep(BaseStep):
         if not self._read_only:
             view_lbl = QLabel(tr("wizard.review.view_personal_info"))
             view_lbl.setFont(create_font(size=FontManager.WIZARD_FIELD_LABEL, weight=FontManager.WEIGHT_MEDIUM))
-            view_lbl.setStyleSheet("color: #3B82F6; background: transparent; border: none;")
+            view_lbl.setStyleSheet("color: #3890DF; background: transparent; border: none;")
             view_lbl.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
             view_lbl.setCursor(Qt.PointingHandCursor)
             view_lbl.mousePressEvent = lambda e, p=person: self._view_person_editable(p)
@@ -865,12 +852,12 @@ class ReviewStep(BaseStep):
             unit_info_container = QFrame()
             unit_info_container.setLayoutDirection(get_layout_direction())
             unit_info_container.setFixedHeight(73)
-            unit_info_container.setStyleSheet(f"""
-                QFrame {{
+            unit_info_container.setStyleSheet("""
+                QFrame {
                     background-color: #F8FAFF;
-                    border: 1px solid {Colors.BORDER_DEFAULT};
+                    border: 1px solid #E2EAF2;
                     border-radius: 8px;
-                }}
+                }
             """)
 
             unit_info_row = QHBoxLayout(unit_info_container)
@@ -896,7 +883,7 @@ class ReviewStep(BaseStep):
             # Dotted separator line
             dotted_sep = QFrame()
             dotted_sep.setFixedHeight(1)
-            dotted_sep.setStyleSheet("background: transparent; border-top: 1px dashed #E0E6ED;")
+            dotted_sep.setStyleSheet("background: transparent; border-top: 1px dashed #D0D7E2;")
             self.unit_content.addWidget(dotted_sep)
 
             desc_layout = QVBoxLayout()
@@ -940,12 +927,12 @@ class ReviewStep(BaseStep):
         """Create a demographic data card with label/value rows and separators."""
         frame = QFrame()
         frame.setLayoutDirection(get_layout_direction())
-        frame.setStyleSheet(f"""
-            QFrame {{
-                background-color: {Colors.SURFACE};
-                border: 1px solid {Colors.BORDER_DEFAULT};
+        frame.setStyleSheet("""
+            QFrame {
+                background-color: #FFFFFF;
+                border: 1px solid #E2EAF2;
                 border-radius: 12px;
-            }}
+            }
         """)
         card_layout = QVBoxLayout(frame)
         card_layout.setContentsMargins(20, 20, 20, 20)
@@ -959,12 +946,12 @@ class ReviewStep(BaseStep):
 
             txt_lbl = QLabel(text)
             txt_lbl.setFont(create_font(size=FontManager.WIZARD_CARD_LABEL, weight=FontManager.WEIGHT_SEMIBOLD))
-            txt_lbl.setStyleSheet(f"color: #1e293b; background: transparent; border: none;")
+            txt_lbl.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent; border: none;")
             txt_lbl.setAlignment(ALIGN_ABS_RIGHT)
 
             val_lbl = QLabel(str(value))
             val_lbl.setFont(create_font(size=FontManager.WIZARD_CARD_VALUE, weight=FontManager.WEIGHT_REGULAR))
-            val_lbl.setStyleSheet(f"color: #94a3b8; background: transparent; border: none;")
+            val_lbl.setStyleSheet(f"color: {Colors.WIZARD_SUBTITLE}; background: transparent; border: none;")
             val_lbl.setAlignment(ALIGN_ABS_RIGHT)
 
             item_block.addWidget(txt_lbl)
@@ -1016,7 +1003,7 @@ class ReviewStep(BaseStep):
         occupant_title = self._create_section_label(tr("wizard.review.main_occupant_info"))
         occupant_val = QLabel(main_occupant_name)
         occupant_val.setFont(create_font(size=FontManager.WIZARD_CARD_VALUE, weight=FontManager.WEIGHT_REGULAR))
-        occupant_val.setStyleSheet(f"color: #94a3b8; background: transparent; border: none;")
+        occupant_val.setStyleSheet(f"color: {Colors.WIZARD_SUBTITLE}; background: transparent; border: none;")
         occupant_block.addWidget(occupant_title)
         occupant_block.addWidget(occupant_val)
 
@@ -1026,7 +1013,7 @@ class ReviewStep(BaseStep):
         count_title.setAlignment(Qt.AlignCenter)
         count_val = QLabel(str(total_size))
         count_val.setFont(create_font(size=FontManager.WIZARD_CARD_VALUE, weight=FontManager.WEIGHT_REGULAR))
-        count_val.setStyleSheet(f"color: #94a3b8; background: transparent; border: none;")
+        count_val.setStyleSheet(f"color: {Colors.WIZARD_SUBTITLE}; background: transparent; border: none;")
         count_val.setAlignment(Qt.AlignCenter)
         count_block.addWidget(count_title)
         count_block.addWidget(count_val)
@@ -1175,19 +1162,20 @@ class ReviewStep(BaseStep):
 
     def _create_claim_data_card(self, claim_data: dict) -> QFrame:
         """Create a single read-only claim card matching ClaimStep styling exactly."""
-        ro_bg = "#f0f7ff"
+        ro_bg = "#F8FAFF"
 
         card = QFrame()
         card.setLayoutDirection(get_layout_direction())
-        card.setStyleSheet(f"""
-            QFrame {{
-                background-color: {Colors.BACKGROUND};
-                border: 1px solid #F0F0F0;
+        card.setStyleSheet("""
+            QFrame {
+                background-color: #F8FAFF;
+                border: 1px solid #E2EAF2;
                 border-radius: 8px;
-            }}
-            QLabel {{
+            }
+            QLabel {
                 border: none;
-            }}
+                background: transparent;
+            }
         """)
         card_layout = QVBoxLayout(card)
         card_layout.setContentsMargins(20, 15, 20, 15)
@@ -1196,10 +1184,10 @@ class ReviewStep(BaseStep):
         ro_field_style = f"""
             QLabel {{
                 background-color: {ro_bg};
-                border: 1px solid #E0E6ED;
+                border: 1px solid #D0D7E2;
                 border-radius: 8px;
                 padding: 10px;
-                color: #333;
+                color: #2C3E50;
                 font-size: 14px;
                 min-height: 23px;
                 max-height: 23px;
@@ -1268,10 +1256,10 @@ class ReviewStep(BaseStep):
         notes_val.setStyleSheet(f"""
             QLabel {{
                 background-color: {ro_bg};
-                border: 1px solid #E0E6ED;
+                border: 1px solid #D0D7E2;
                 border-radius: 8px;
                 padding: 8px;
-                color: {Colors.TEXT_SECONDARY if not notes_text else '#333'};
+                color: {Colors.TEXT_SECONDARY if not notes_text else '#2C3E50'};
                 font-size: 13px;
             }}
         """)

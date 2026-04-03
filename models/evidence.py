@@ -36,6 +36,11 @@ class Evidence:
     verified_by: Optional[str] = None
     verification_date: Optional[date] = None
 
+    # Versioning
+    version_number: int = 1
+    is_current_version: bool = True
+    previous_version_id: Optional[str] = None
+
     # Metadata
     created_at: datetime = field(default_factory=datetime.now)
     updated_at: datetime = field(default_factory=datetime.now)
@@ -88,6 +93,9 @@ class Evidence:
             "verification_notes": self.verification_notes,
             "verified_by": self.verified_by,
             "verification_date": self.verification_date.isoformat() if self.verification_date else None,
+            "version_number": self.version_number,
+            "is_current_version": self.is_current_version,
+            "previous_version_id": self.previous_version_id,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
             "created_by": self.created_by,

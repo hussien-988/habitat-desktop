@@ -311,23 +311,24 @@ class StyleManager:
         """
         return f"""
             QFrame#navbar {{
-                background-color: {Colors.NAVBAR_BG};
+                background-color: {Colors.NAVBAR_GRADIENT_TOP};
                 border: none;
             }}
             QFrame#navbar_top {{
-                background-color: {Colors.NAVBAR_BG};
+                background: qlineargradient(
+                    x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #061222,
+                    stop:0.4 {Colors.NAVBAR_GRADIENT_MID},
+                    stop:1.0 {Colors.NAVBAR_GRADIENT_BOT}
+                );
                 border-radius: 16px;
-                border: none;
-            }}
-            QFrame#tabs_bar {{
-                background-color: {Colors.NAVBAR_BG};
                 border: none;
             }}
             QWidget#window_controls {{
                 background: transparent;
             }}
             QPushButton#win_btn, QPushButton#win_close {{
-                color: white;
+                color: rgba(180, 210, 245, 190);
                 background: transparent;
                 border: none;
                 font-size: 14px;
@@ -336,10 +337,12 @@ class StyleManager:
                 border-radius: 6px;
             }}
             QPushButton#win_btn:hover {{
-                background: rgba(255, 255, 255, 0.1);
+                background: rgba(56, 144, 223, 0.18);
+                color: white;
             }}
             QPushButton#win_btn:pressed {{
-                background: rgba(255, 255, 255, 0.15);
+                background: rgba(56, 144, 223, 0.30);
+                color: white;
             }}
             QPushButton#win_close:hover {{
                 background: rgba(255, 59, 48, 0.90);

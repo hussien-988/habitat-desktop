@@ -14,6 +14,7 @@ import threading
 import urllib.request
 from pathlib import Path
 from http.server import HTTPServer, BaseHTTPRequestHandler
+from socketserver import ThreadingMixIn
 from typing import Optional, Dict, Any
 
 from app.config import Config
@@ -28,6 +29,11 @@ def find_free_port() -> int:
         s.bind(('', 0))
         s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         return s.getsockname()[1]
+
+
+class _ThreadedHTTPServer(ThreadingMixIn, HTTPServer):
+    """HTTP server that handles each request in a separate thread."""
+    daemon_threads = True
 
 
 class TileServer(BaseHTTPRequestHandler):
@@ -455,7 +461,7 @@ class TileServerManager:
         # Create server - listen on all interfaces (0.0.0.0) to allow network access
         # NETWORK ACCESS: 0.0.0.0 allows other team members to connect
         # SECURITY: Only use on trusted networks (not public Wi-Fi!)
-        self._server = HTTPServer(('0.0.0.0', self._port), TileServer)
+        self._server = _ThreadedHTTPServer(('0.0.0.0', self._port), TileServer)
 
         # Start server in background thread
         self._server_thread = threading.Thread(

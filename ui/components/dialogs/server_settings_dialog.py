@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-Server Settings Dialog
+Server Settings Dialog — Layered Dark design
 Configure tile server and API backend URLs with non-blocking connection testing.
 """
 
@@ -13,7 +13,7 @@ from PyQt5.QtWidgets import (
     QPushButton, QFrame, QGraphicsDropShadowEffect, QLineEdit
 )
 from PyQt5.QtCore import Qt, QThread, pyqtSignal
-from PyQt5.QtGui import QColor, QFont
+from PyQt5.QtGui import QColor, QFont, QCursor
 
 from ui.design_system import Colors, Spacing, ButtonDimensions
 from ui.font_utils import create_font, FontManager
@@ -64,14 +64,14 @@ class ServerSettingsDialog(QDialog):
         self._workers = []
 
         self.setModal(True)
-        self.setFixedSize(520, 420)
+        self.setFixedSize(540, 480)
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.Dialog)
         self.setAttribute(Qt.WA_TranslucentBackground)
         self.setStyleSheet("QDialog { background-color: transparent; }")
 
         self._setup_ui()
 
-    # ── UI ──────────────────────────────────────────────────────────
+    # -- UI --
 
     def _setup_ui(self):
         self.setLayoutDirection(get_layout_direction())
@@ -83,44 +83,88 @@ class ServerSettingsDialog(QDialog):
         container = QFrame()
         container.setObjectName("settingsContainer")
         container.setLayoutDirection(get_layout_direction())
-        container.setStyleSheet(f"""
-            QFrame#settingsContainer {{
-                background-color: #FFFFFF;
-                border-radius: {ButtonDimensions.DIALOG_BORDER_RADIUS}px;
-            }}
-            QFrame#settingsContainer QLabel {{
+        container.setStyleSheet("""
+            QFrame#settingsContainer {
+                background-color: rgba(10, 20, 40, 245);
+                border: 1px solid rgba(56, 144, 223, 25);
+                border-radius: 16px;
+            }
+            QFrame#settingsContainer QLabel {
                 background-color: transparent;
-            }}
+            }
         """)
 
         shadow = QGraphicsDropShadowEffect()
-        shadow.setBlurRadius(30)
+        shadow.setBlurRadius(40)
         shadow.setXOffset(0)
-        shadow.setYOffset(4)
-        shadow.setColor(QColor(0, 0, 0, 40))
+        shadow.setYOffset(6)
+        shadow.setColor(QColor(0, 0, 0, 80))
         container.setGraphicsEffect(shadow)
 
-        layout = QVBoxLayout(container)
-        layout.setContentsMargins(
-            ButtonDimensions.DIALOG_PADDING,
-            ButtonDimensions.DIALOG_PADDING,
-            ButtonDimensions.DIALOG_PADDING,
-            ButtonDimensions.DIALOG_PADDING,
-        )
-        layout.setSpacing(Spacing.SM)
+        main_lay = QVBoxLayout(container)
+        main_lay.setContentsMargins(0, 0, 0, 0)
+        main_lay.setSpacing(0)
 
-        # ── Title ──
+        # -- Blue gradient header banner --
+        header = QFrame()
+        header.setObjectName("headerBanner")
+        header.setFixedHeight(54)
+        header.setStyleSheet("""
+            QFrame#headerBanner {
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                    stop:0 #1A3A6B, stop:0.5 #2A5A9B, stop:1 #1A3A6B);
+                border-top-left-radius: 15px;
+                border-top-right-radius: 15px;
+                border-bottom-left-radius: 0px;
+                border-bottom-right-radius: 0px;
+            }
+        """)
+        header_lay = QHBoxLayout(header)
+        header_lay.setContentsMargins(24, 0, 12, 0)
+        header_lay.setSpacing(0)
+
         title = QLabel(tr("dialog.server_settings.title"))
         title.setFont(create_font(size=14, weight=FontManager.WEIGHT_BOLD))
-        title.setStyleSheet(f"color: {Colors.TEXT_PRIMARY};")
-        title.setAlignment(Qt.AlignRight)
-        layout.addWidget(title)
-        layout.addSpacing(Spacing.XS)
+        title.setStyleSheet("color: white; background: transparent;")
+        header_lay.addWidget(title)
 
-        # ── Tile server section ──
+        header_lay.addStretch()
+
+        close_btn = QPushButton("\u2715")
+        close_btn.setFixedSize(32, 32)
+        close_btn.setCursor(QCursor(Qt.PointingHandCursor))
+        close_btn.setFocusPolicy(Qt.NoFocus)
+        close_btn.setStyleSheet("""
+            QPushButton {
+                color: rgba(200, 220, 255, 150);
+                background: transparent;
+                border: none;
+                font-size: 14px;
+                border-radius: 6px;
+            }
+            QPushButton:hover {
+                color: white;
+                background: rgba(255, 59, 48, 0.60);
+            }
+        """)
+        close_btn.clicked.connect(self.reject)
+        header_lay.addWidget(close_btn)
+
+        main_lay.addWidget(header)
+
+        # -- Content area --
+        content = QFrame()
+        content.setObjectName("contentArea")
+        content.setStyleSheet("QFrame#contentArea { background: transparent; }")
+        layout = QVBoxLayout(content)
+        layout.setContentsMargins(24, 20, 24, 20)
+        layout.setSpacing(14)
+
+        # -- Tile server section --
         self._tile_url_input, self._tile_test_btn, self._tile_status = \
             self._build_section(
                 layout,
+                icon="\u2295",
                 header=tr("dialog.server_settings.tile_header"),
                 description=tr("dialog.server_settings.tile_description"),
                 value=get_tile_server_url(),
@@ -129,12 +173,11 @@ class ServerSettingsDialog(QDialog):
             )
         self._tile_url_input.textChanged.connect(lambda: self._on_url_changed(True))
 
-        layout.addSpacing(Spacing.SM)
-
-        # ── API backend section ──
+        # -- API backend section --
         self._api_url_input, self._api_test_btn, self._api_status = \
             self._build_section(
                 layout,
+                icon="\u25C6",
                 header=tr("dialog.server_settings.api_header"),
                 description=tr("dialog.server_settings.api_description"),
                 value=get_api_server_url(),
@@ -145,11 +188,11 @@ class ServerSettingsDialog(QDialog):
 
         layout.addStretch()
 
-        # ── Buttons row ──
+        # -- Buttons row --
         btn_layout = QHBoxLayout()
-        btn_layout.setSpacing(Spacing.SM)
+        btn_layout.setSpacing(10)
 
-        reset_btn = self._make_btn(tr("dialog.server_settings.restore_defaults"), "secondary", width=140)
+        reset_btn = self._make_btn(tr("dialog.server_settings.restore_defaults"), "secondary", width=170)
         reset_btn.clicked.connect(self._on_reset)
         btn_layout.addWidget(reset_btn)
 
@@ -165,27 +208,46 @@ class ServerSettingsDialog(QDialog):
         btn_layout.addWidget(self._save_btn)
 
         layout.addLayout(btn_layout)
+        main_lay.addWidget(content, 1)
         outer.addWidget(container)
 
-    def _build_section(self, parent_layout, header, description, value, placeholder, on_test):
-        """Build one server section (header + description + URL input + test btn + status)."""
-        header_lbl = QLabel(header)
+    def _build_section(self, parent_layout, icon, header, description, value, placeholder, on_test):
+        """Build one server section inside a raised card with left accent border."""
+        section = QFrame()
+        section.setObjectName("sectionCard")
+        section.setStyleSheet("""
+            QFrame#sectionCard {
+                background-color: rgba(20, 40, 75, 180);
+                border: 1px solid rgba(56, 144, 223, 20);
+                border-left: 3px solid rgba(56, 144, 223, 100);
+                border-radius: 10px;
+            }
+            QFrame#sectionCard QLabel {
+                background: transparent;
+            }
+        """)
+
+        card_lay = QVBoxLayout(section)
+        card_lay.setContentsMargins(16, 14, 16, 14)
+        card_lay.setSpacing(6)
+
+        header_lbl = QLabel(f"{icon}  {header}")
         header_lbl.setFont(create_font(size=11, weight=FontManager.WEIGHT_MEDIUM))
-        header_lbl.setStyleSheet(f"color: {Colors.TEXT_PRIMARY};")
-        header_lbl.setAlignment(Qt.AlignRight)
-        parent_layout.addWidget(header_lbl)
+        header_lbl.setStyleSheet("color: white;")
+        card_lay.addWidget(header_lbl)
 
         desc_lbl = QLabel(description)
-        desc_lbl.setFont(create_font(size=9, weight=FontManager.WEIGHT_REGULAR))
-        desc_lbl.setStyleSheet(f"color: {Colors.TEXT_SECONDARY};")
-        desc_lbl.setAlignment(Qt.AlignRight)
-        parent_layout.addWidget(desc_lbl)
+        desc_lbl.setFont(create_font(size=8, weight=FontManager.WEIGHT_REGULAR))
+        desc_lbl.setStyleSheet("color: #8BACC8;")
+        card_lay.addWidget(desc_lbl)
+
+        card_lay.addSpacing(4)
 
         row = QHBoxLayout()
-        row.setSpacing(Spacing.SM)
+        row.setSpacing(8)
 
         url_input = QLineEdit(value)
-        url_input.setFixedHeight(38)
+        url_input.setFixedHeight(40)
         url_input.setAlignment(Qt.AlignLeft)
         url_input.setLayoutDirection(Qt.LeftToRight)
         url_input.setPlaceholderText(placeholder)
@@ -193,20 +255,21 @@ class ServerSettingsDialog(QDialog):
         url_input.setStyleSheet(self._input_style())
         row.addWidget(url_input, 1)
 
-        test_btn = self._make_btn(tr("dialog.server_settings.test"), "secondary", width=80, height=38)
+        test_btn = self._make_btn(tr("dialog.server_settings.test"), "secondary", width=80, height=40)
         test_btn.clicked.connect(on_test)
         row.addWidget(test_btn)
 
-        status_lbl = QLabel("")
-        status_lbl.setFont(create_font(size=10, weight=FontManager.WEIGHT_MEDIUM))
-        status_lbl.setFixedWidth(90)
-        status_lbl.setAlignment(Qt.AlignCenter)
-        row.addWidget(status_lbl)
+        card_lay.addLayout(row)
 
-        parent_layout.addLayout(row)
+        status_lbl = QLabel("")
+        status_lbl.setFont(create_font(size=9, weight=FontManager.WEIGHT_MEDIUM))
+        status_lbl.setStyleSheet("color: #8BACC8;")
+        card_lay.addWidget(status_lbl)
+
+        parent_layout.addWidget(section)
         return url_input, test_btn, status_lbl
 
-    # ── Connection testing ──────────────────────────────────────────
+    # -- Connection testing --
 
     def _start_test(self, is_tile: bool):
         url_input = self._tile_url_input if is_tile else self._api_url_input
@@ -216,13 +279,13 @@ class ServerSettingsDialog(QDialog):
         url = url_input.text().strip()
         if not url:
             status_lbl.setText(tr("dialog.server_settings.enter_url"))
-            status_lbl.setStyleSheet(f"color: {Colors.ERROR};")
+            status_lbl.setStyleSheet("color: #E53935;")
             return
 
         parsed = urlparse(url)
         if not parsed.hostname:
             status_lbl.setText(tr("dialog.server_settings.invalid_url"))
-            status_lbl.setStyleSheet(f"color: {Colors.ERROR};")
+            status_lbl.setStyleSheet("color: #E53935;")
             return
 
         test_btn.setEnabled(False)
@@ -244,17 +307,17 @@ class ServerSettingsDialog(QDialog):
         test_btn.setText(tr("dialog.server_settings.test"))
 
         if success:
-            status_lbl.setText(tr("dialog.server_settings.connected_ok"))
-            status_lbl.setStyleSheet(f"color: {Colors.SUCCESS};")
-            url_input.setStyleSheet(self._input_style(border_color=Colors.SUCCESS))
+            status_lbl.setText("\u25CF " + tr("dialog.server_settings.connected_ok"))
+            status_lbl.setStyleSheet("color: #66BB6A;")
+            url_input.setStyleSheet(self._input_style(border_color="rgba(102, 187, 106, 150)"))
             if is_tile:
                 self._tile_ok = True
             else:
                 self._api_ok = True
         else:
-            status_lbl.setText(tr("dialog.server_settings.disconnected_fail"))
-            status_lbl.setStyleSheet(f"color: {Colors.ERROR};")
-            url_input.setStyleSheet(self._input_style(border_color=Colors.ERROR))
+            status_lbl.setText("\u25CF " + tr("dialog.server_settings.disconnected_fail"))
+            status_lbl.setStyleSheet("color: #EF5350;")
+            url_input.setStyleSheet(self._input_style(border_color="rgba(239, 83, 80, 150)"))
             if is_tile:
                 self._tile_ok = False
             else:
@@ -279,7 +342,7 @@ class ServerSettingsDialog(QDialog):
     def _update_save_btn(self):
         self._save_btn.setEnabled(self._tile_ok or self._api_ok)
 
-    # ── Actions ─────────────────────────────────────────────────────
+    # -- Actions --
 
     def _on_save(self):
         settings = load_local_settings()
@@ -308,76 +371,85 @@ class ServerSettingsDialog(QDialog):
         self._tile_url_input.setText(_DEFAULT_TILE_URL)
         self._api_url_input.setText(_DEFAULT_API_SERVER_URL)
 
-    # ── Styles ──────────────────────────────────────────────────────
+    # -- Styles --
 
     @staticmethod
     def _input_style(border_color=None) -> str:
-        bc = border_color or Colors.INPUT_BORDER
+        bc = border_color or "rgba(56, 144, 223, 80)"
         return f"""
             QLineEdit {{
-                background-color: {Colors.INPUT_BG};
+                background-color: rgba(230, 240, 255, 15);
                 border: 1.5px solid {bc};
                 border-radius: 8px;
-                padding: 0 10px;
-                color: {Colors.TEXT_PRIMARY};
+                padding: 0 12px;
+                color: white;
+                selection-background-color: rgba(56, 144, 223, 100);
             }}
             QLineEdit:focus {{
-                border-color: {Colors.INPUT_BORDER_FOCUS};
+                border: 1.5px solid rgba(56, 144, 223, 180);
+                background-color: rgba(230, 240, 255, 25);
             }}
             QLineEdit::placeholder {{
-                color: {Colors.INPUT_PLACEHOLDER};
+                color: rgba(139, 172, 200, 130);
             }}
         """
 
     @staticmethod
     def _make_btn(text: str, style: str, width: int = 110, height: int = 44) -> QPushButton:
         btn = QPushButton(text)
-        btn.setFixedSize(width, height)
-        btn.setCursor(Qt.PointingHandCursor)
+        btn.setMinimumWidth(width)
+        btn.setFixedHeight(height)
+        btn.setCursor(QCursor(Qt.PointingHandCursor))
+        btn.setFocusPolicy(Qt.NoFocus)
         btn.setFont(create_font(size=10, weight=QFont.Medium))
 
         if style == "primary":
-            btn.setStyleSheet(f"""
-                QPushButton {{
-                    background-color: {Colors.PRIMARY_BLUE};
+            btn.setStyleSheet("""
+                QPushButton {
+                    background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                        stop:0 #3890DF, stop:1 #5BA8F0);
                     color: white;
                     border: none;
-                    border-radius: {ButtonDimensions.DIALOG_BUTTON_BORDER_RADIUS}px;
-                }}
-                QPushButton:hover {{
-                    background-color: #2D7BC9;
-                }}
-                QPushButton:pressed {{
-                    background-color: #2468B0;
-                }}
-                QPushButton:disabled {{
-                    background-color: #B0C4DE;
-                    color: #E8EDF2;
-                }}
+                    border-radius: 10px;
+                }
+                QPushButton:hover {
+                    background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                        stop:0 #4DA0EF, stop:1 #6DB8FF);
+                }
+                QPushButton:pressed {
+                    background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                        stop:0 #2A7BC9, stop:1 #4A98E0);
+                }
+                QPushButton:disabled {
+                    background: rgba(56, 144, 223, 40);
+                    color: rgba(255, 255, 255, 80);
+                }
             """)
         else:
-            btn.setStyleSheet(f"""
-                QPushButton {{
-                    background-color: white;
-                    color: {Colors.TEXT_SECONDARY};
-                    border: 1px solid {Colors.BORDER_DEFAULT};
-                    border-radius: {ButtonDimensions.DIALOG_BUTTON_BORDER_RADIUS}px;
-                }}
-                QPushButton:hover {{
-                    background-color: #F9FAFB;
-                }}
-                QPushButton:pressed {{
-                    background-color: #F3F4F6;
-                }}
-                QPushButton:disabled {{
-                    background-color: #F5F5F5;
-                    color: #C0C0C0;
-                    border-color: #E8E8E8;
-                }}
+            btn.setStyleSheet("""
+                QPushButton {
+                    background: rgba(30, 50, 85, 200);
+                    color: rgba(180, 200, 230, 220);
+                    border: 1px solid rgba(56, 144, 223, 60);
+                    border-radius: 10px;
+                }
+                QPushButton:hover {
+                    background: rgba(40, 65, 110, 220);
+                    color: white;
+                    border-color: rgba(56, 144, 223, 120);
+                }
+                QPushButton:pressed {
+                    background: rgba(25, 45, 75, 230);
+                }
+                QPushButton:disabled {
+                    background: rgba(20, 35, 60, 180);
+                    color: rgba(139, 172, 200, 60);
+                    border-color: rgba(56, 144, 223, 15);
+                }
             """)
         return btn
 
-    # ── Public API ──────────────────────────────────────────────────
+    # -- Public API --
 
     @staticmethod
     def show_settings(parent=None) -> Optional[bool]:

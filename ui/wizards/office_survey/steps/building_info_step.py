@@ -18,6 +18,9 @@ from PyQt5.QtCore import Qt
 
 from ui.wizards.framework import BaseStep, StepValidationResult
 from ui.wizards.office_survey.survey_context import SurveyContext
+from ui.wizards.office_survey.wizard_styles import (
+    STEP_CARD_STYLE, READONLY_FIELD_STYLE, SECTION_HEADER_STYLE,
+)
 from ui.design_system import Colors
 from ui.font_utils import create_font, FontManager
 from ui.style_manager import StyleManager
@@ -28,27 +31,6 @@ from services.api_worker import ApiWorker
 from utils.logger import get_logger
 
 logger = get_logger(__name__)
-# Shared styles (mirrors AddBuildingPage._get_card_style / field style)
-
-_CARD_STYLE = """
-    QFrame {
-        background-color: white;
-        border: 1px solid #e1e8ee;
-        border-radius: 8px;
-    }
-    QLabel { border: none; }
-"""
-
-_FIELD_STYLE = """
-    QLineEdit {
-        background-color: #F8FAFF;
-        border: 1px solid #dcdfe6;
-        border-radius: 8px;
-        padding: 8px 12px;
-        color: #606266;
-        font-size: 10pt;
-    }
-"""
 
 _TEXTAREA_STYLE = """
     QTextEdit {
@@ -141,8 +123,19 @@ class BuildingInfoStep(BaseStep):
     # --- Card 3: موقع البناء (mirrors AddBuildingPage Card 3) ----------
 
     def _build_card3(self) -> QFrame:
+        from PyQt5.QtWidgets import QGraphicsDropShadowEffect
+        from PyQt5.QtGui import QColor
+
         card = QFrame()
-        card.setStyleSheet(_CARD_STYLE)
+        card.setObjectName("StepCard")
+        card.setStyleSheet(STEP_CARD_STYLE)
+
+        shadow = QGraphicsDropShadowEffect()
+        shadow.setBlurRadius(20)
+        shadow.setOffset(0, 4)
+        shadow.setColor(QColor(0, 0, 0, 20))
+        card.setGraphicsEffect(shadow)
+
         card_layout = QVBoxLayout(card)
         card_layout.setContentsMargins(12, 12, 12, 12)
         card_layout.setSpacing(0)
@@ -301,8 +294,19 @@ class BuildingInfoStep(BaseStep):
         Create a card frame with icon+title+subtitle header, divider, and QGridLayout.
         Returns (card_frame, grid_layout).
         """
+        from PyQt5.QtWidgets import QGraphicsDropShadowEffect
+        from PyQt5.QtGui import QColor
+
         card = QFrame()
-        card.setStyleSheet(_CARD_STYLE)
+        card.setObjectName("StepCard")
+        card.setStyleSheet(STEP_CARD_STYLE)
+
+        shadow = QGraphicsDropShadowEffect()
+        shadow.setBlurRadius(20)
+        shadow.setOffset(0, 4)
+        shadow.setColor(QColor(0, 0, 0, 20))
+        card.setGraphicsEffect(shadow)
+
         layout = QVBoxLayout(card)
         layout.setContentsMargins(20, 16, 20, 16)
         layout.setSpacing(12)
@@ -338,7 +342,7 @@ class BuildingInfoStep(BaseStep):
         icon_lbl.setAlignment(Qt.AlignCenter)
         icon_lbl.setStyleSheet("""
             QLabel {
-                background-color: #ffffff;
+                background-color: #EBF5FF;
                 border: 1px solid #DBEAFE;
                 border-radius: 10px;
             }
@@ -393,7 +397,7 @@ class BuildingInfoStep(BaseStep):
         field.setReadOnly(True)
         field.setFixedHeight(40)
         field.setAlignment(Qt.AlignCenter)
-        field.setStyleSheet(_FIELD_STYLE)
+        field.setStyleSheet(READONLY_FIELD_STYLE)
         vbox.addWidget(field)
 
         grid.addWidget(container, row, col, 1, col_span)

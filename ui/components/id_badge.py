@@ -1,243 +1,26 @@
 # -*- coding: utf-8 -*-
 """
-ID Badge Widget — شارة المستخدم مع قائمة منسدلة
-Custom popup dropdown with cloud/bubble shape and PNG icons.
+ID Badge Widget — كبسولة المستخدم
+Frosted glass capsule showing user icon and ID.
 """
 
-from PyQt5.QtWidgets import (
-    QWidget, QLabel, QHBoxLayout, QVBoxLayout,
-    QFrame, QGraphicsDropShadowEffect
-)
-from PyQt5.QtCore import Qt, pyqtSignal, QSize, QPoint
-from PyQt5.QtGui import (
-    QFont, QCursor, QIcon, QColor, QPainter,
-    QPainterPath, QBrush, QPen
-)
+from PyQt5.QtWidgets import QWidget, QLabel, QHBoxLayout
+from PyQt5.QtCore import Qt, pyqtSignal
+from PyQt5.QtGui import QFont, QCursor
 
 from ui.components.icon import Icon
 from ui.design_system import NavbarDimensions, Colors, Typography
-from ui.font_utils import create_font, FontManager
-from services.translation_manager import tr, get_layout_direction
-# Menu Item
 
-class _MenuItem(QWidget):
-    """Single clickable menu item: icon + text."""
-
-    clicked = pyqtSignal()
-
-    def __init__(self, icon_name: str, text: str, parent=None):
-        super().__init__(parent)
-        self._icon_name = icon_name
-        self._text = text
-        self._hovered = False
-
-        self.setFixedHeight(38)
-        self.setCursor(QCursor(Qt.PointingHandCursor))
-        self.setLayoutDirection(get_layout_direction())
-
-        layout = QHBoxLayout(self)
-        layout.setContentsMargins(14, 0, 14, 0)
-        layout.setSpacing(10)
-
-        # Icon
-        self._icon_label = QLabel()
-        self._icon_label.setFixedSize(18, 18)
-        self._icon_label.setAlignment(Qt.AlignCenter)
-        self._icon_label.setStyleSheet("background: transparent;")
-        pixmap = Icon.load_pixmap(icon_name, size=18)
-        if pixmap and not pixmap.isNull():
-            self._icon_label.setPixmap(pixmap)
-        layout.addWidget(self._icon_label)
-
-        # Text
-        self._text_label = QLabel(text)
-        self._text_label.setFont(create_font(
-            size=FontManager.SIZE_SMALL,
-            weight=FontManager.WEIGHT_REGULAR,
-        ))
-        self._text_label.setStyleSheet(f"color: {Colors.TEXT_PRIMARY}; background: transparent;")
-        layout.addWidget(self._text_label, stretch=1)
-
-        # Optional notification badge
-        self._badge = QLabel()
-        self._badge.setAlignment(Qt.AlignCenter)
-        self._badge.setFixedSize(16, 16)
-        self._badge.setStyleSheet("""
-            QLabel {
-                background-color: #EF4444;
-                color: white;
-                border-radius: 8px;
-                font-size: 9px;
-                font-weight: bold;
-            }
-        """)
-        self._badge.hide()
-        layout.addWidget(self._badge)
-
-        self._apply_style()
-
-    def set_text(self, text: str):
-        self._text_label.setText(text)
-
-    def show_badge(self, count: int):
-        self._badge.setText(str(count) if count <= 9 else "9+")
-        self._badge.show()
-
-    def hide_badge(self):
-        self._badge.hide()
-
-    def _apply_style(self):
-        if self._hovered:
-            self.setStyleSheet(f"background-color: #f0f7ff; border-radius: 6px;")
-            self._text_label.setStyleSheet(f"color: {Colors.PRIMARY_BLUE}; background: transparent;")
-        else:
-            self.setStyleSheet("background: transparent;")
-            self._text_label.setStyleSheet(f"color: {Colors.TEXT_PRIMARY}; background: transparent;")
-
-    def enterEvent(self, event):
-        self._hovered = True
-        self._apply_style()
-        super().enterEvent(event)
-
-    def leaveEvent(self, event):
-        self._hovered = False
-        self._apply_style()
-        super().leaveEvent(event)
-
-    def mousePressEvent(self, event):
-        if event.button() == Qt.LeftButton:
-            self.clicked.emit()
-        super().mousePressEvent(event)
-# Dropdown Popup (Cloud/Bubble shape)
-
-ARROW_HEIGHT = 10
-ARROW_WIDTH = 16
-POPUP_WIDTH = 220
-POPUP_RADIUS = 12
-SHADOW_MARGIN = 4
-
-
-class _DropdownPopup(QWidget):
-    """Custom popup widget with bubble arrow pointing to the badge."""
-
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.setWindowFlags(Qt.Popup | Qt.FramelessWindowHint)
-        self.setAttribute(Qt.WA_TranslucentBackground)
-
-        self._arrow_x = 0
-        self._separators = []
-
-        # Container for menu items (inside the body area)
-        self._container = QWidget(self)
-        self._container.setStyleSheet("background: transparent;")
-
-        self._layout = QVBoxLayout(self._container)
-        self._layout.setContentsMargins(6, 8, 6, 8)
-        self._layout.setSpacing(4)
-
-        self._items = []
-        self._fixed_body_h = 0
-
-    def _calc_fixed_height(self):
-        """Calculate and cache popup height based on ALL items (called once)."""
-        margins = self._layout.contentsMargins()
-        spacing = self._layout.spacing()
-        body_h = margins.top() + margins.bottom()
-        count = self._layout.count()
-        for i in range(count):
-            w = self._layout.itemAt(i).widget()
-            if w:
-                body_h += w.sizeHint().height()
-                if i < count - 1:
-                    body_h += spacing
-        self._fixed_body_h = max(body_h, 50)
-
-    def _recalc_size(self):
-        """Apply the fixed popup size."""
-        if self._fixed_body_h == 0:
-            self._calc_fixed_height()
-        body_h = self._fixed_body_h
-        total_w = POPUP_WIDTH + SHADOW_MARGIN * 2
-        total_h = ARROW_HEIGHT + body_h + SHADOW_MARGIN * 2
-        self.setFixedSize(total_w, total_h)
-        self._container.setGeometry(
-            SHADOW_MARGIN, SHADOW_MARGIN + ARROW_HEIGHT,
-            POPUP_WIDTH, body_h
-        )
-        self._arrow_x = total_w // 2
-
-    def showEvent(self, event):
-        self._recalc_size()
-        super().showEvent(event)
-
-    def add_item(self, item: _MenuItem):
-        self._items.append(item)
-        self._layout.addWidget(item)
-        item.clicked.connect(self.close)
-
-    def add_separator(self):
-        sep = QFrame()
-        sep.setFixedHeight(1)
-        sep.setStyleSheet("background-color: #E5E7EB;")
-        self._separators.append(sep)
-        self._layout.addWidget(sep)
-
-    def set_arrow_x(self, x: int):
-        """Set X position of arrow tip relative to popup left edge."""
-        self._arrow_x = x
-
-    def paintEvent(self, event):
-        painter = QPainter(self)
-        painter.setRenderHint(QPainter.Antialiasing)
-
-        # Body rect (below arrow, inside shadow margin)
-        body_x = SHADOW_MARGIN
-        body_y = SHADOW_MARGIN + ARROW_HEIGHT
-        body_w = POPUP_WIDTH
-        body_h = self.height() - ARROW_HEIGHT - SHADOW_MARGIN * 2
-
-        # Main body path
-        path = QPainterPath()
-        path.addRoundedRect(
-            body_x, body_y, body_w, body_h,
-            POPUP_RADIUS, POPUP_RADIUS
-        )
-
-        # Arrow triangle (pointing up)
-        arrow_cx = self._arrow_x
-        arrow_top = SHADOW_MARGIN
-        arrow_base = body_y
-
-        arrow_path = QPainterPath()
-        arrow_path.moveTo(arrow_cx, arrow_top)
-        arrow_path.lineTo(arrow_cx + ARROW_WIDTH // 2, arrow_base)
-        arrow_path.lineTo(arrow_cx - ARROW_WIDTH // 2, arrow_base)
-        arrow_path.closeSubpath()
-
-        # Unite body + arrow
-        combined = path.united(arrow_path)
-
-        # Fill white
-        painter.setPen(QPen(QColor("#E5E7EB"), 1))
-        painter.setBrush(QBrush(QColor("white")))
-        painter.drawPath(combined)
-
-        painter.end()
-# ID Badge Widget
 
 class IDBadgeWidget(QWidget):
+    """Fixed frosted glass capsule: user icon + ID text."""
 
     language_change_requested = pyqtSignal()
-    sync_requested = pyqtSignal()
-    import_requested = pyqtSignal()
-    logout_requested = pyqtSignal()
 
     def __init__(self, user_id="12345", parent=None):
         super().__init__(parent)
         self.user_id = user_id
         self._setup_ui()
-        self._setup_menu()
         self._apply_styling()
 
     def _format_user_id(self, user_id):
@@ -250,19 +33,18 @@ class IDBadgeWidget(QWidget):
         return user_id_str
 
     def _create_user_icon(self):
-        from PyQt5.QtGui import QPixmap
         icon_label = QLabel()
-        icon_label.setFixedSize(20, 20)
+        icon_label.setFixedSize(22, 22)
         icon_label.setAlignment(Qt.AlignCenter)
 
-        vector_pixmap = Icon.load_pixmap("Vector", size=10)
+        vector_pixmap = Icon.load_pixmap("Vector", size=11)
         if vector_pixmap and not vector_pixmap.isNull():
             icon_label.setPixmap(vector_pixmap)
 
         icon_label.setStyleSheet(f"""
             QLabel {{
                 background-color: {Colors.PRIMARY_BLUE};
-                border-radius: 10px;
+                border-radius: 11px;
             }}
         """)
         return icon_label
@@ -270,159 +52,46 @@ class IDBadgeWidget(QWidget):
     def _create_id_text_label(self, display_id):
         id_label = QLabel(f"ID {display_id}")
         font = QFont(Typography.FONT_FAMILY_ARABIC)
-        font.setPixelSize(16)
-        font.setLetterSpacing(QFont.AbsoluteSpacing, 0)
+        font.setPixelSize(14)
+        font.setLetterSpacing(QFont.AbsoluteSpacing, 0.5)
         id_label.setFont(font)
-        id_label.setStyleSheet(f"color: {Colors.TEXT_ON_DARK}; background: transparent;")
+        id_label.setStyleSheet("color: rgba(200, 220, 255, 230); background: transparent;")
         id_label.setAlignment(Qt.AlignVCenter | Qt.AlignLeft)
         return id_label
-
-    def _create_dropdown_arrow(self):
-        arrow_label = QLabel()
-        arrow_label.setFixedSize(10, 10)
-        arrow_label.setAlignment(Qt.AlignCenter)
-
-        arrow_pixmap = Icon.load_pixmap("primary-shape", size=8)
-        if arrow_pixmap and not arrow_pixmap.isNull():
-            arrow_label.setPixmap(arrow_pixmap)
-        else:
-            arrow_label.setText("▼")
-            arrow_label.setStyleSheet(f"color: {Colors.TEXT_ON_DARK}; font-size: 8px; background: transparent;")
-
-        arrow_label.setStyleSheet("background: transparent;")
-        return arrow_label
 
     def _setup_ui(self):
         display_id = self._format_user_id(self.user_id)
 
+        self.setLayoutDirection(Qt.LeftToRight)
         layout = QHBoxLayout(self)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(4)
+        layout.setContentsMargins(8, 3, 10, 3)
+        layout.setSpacing(6)
 
+        # User icon (always visually first)
         self.icon_label = self._create_user_icon()
-        self.id_label = self._create_id_text_label(display_id)
-        self.arrow_label = self._create_dropdown_arrow()
-
-        layout.addWidget(self.arrow_label)
-        layout.addWidget(self.id_label)
         layout.addWidget(self.icon_label)
 
-        self.setCursor(QCursor(Qt.PointingHandCursor))
-        self.setFixedHeight(22)
+        # ID text
+        self.id_label = self._create_id_text_label(display_id)
+        layout.addWidget(self.id_label)
 
-        # Notification badge (red circle on arrow)
-        self._notif_badge = QLabel(self)
-        self._notif_badge.setAlignment(Qt.AlignCenter)
-        self._notif_badge.setFixedSize(16, 16)
-        self._notif_badge.setStyleSheet("""
-            QLabel {
-                background-color: #EF4444;
-                color: white;
-                border-radius: 8px;
-                font-size: 9px;
-                font-weight: bold;
-            }
-        """)
-        self._notif_badge.hide()
-
-    def show_notification(self, count: int):
-        self._notif_badge.setText(str(count) if count <= 9 else "9+")
-        self._notif_badge.show()
-        self._notif_badge.raise_()
-        self._position_badge()
-        if hasattr(self, '_sync_menu_item'):
-            self._sync_menu_item.show_badge(count)
-
-    def hide_notification(self):
-        self._notif_badge.hide()
-        if hasattr(self, '_sync_menu_item'):
-            self._sync_menu_item.hide_badge()
-
-    def _position_badge(self):
-        arrow_geo = self.arrow_label.geometry()
-        self._notif_badge.move(arrow_geo.x() - 5, max(0, arrow_geo.y() - 4))
-
-    def resizeEvent(self, event):
-        super().resizeEvent(event)
-        if hasattr(self, '_notif_badge') and self._notif_badge.isVisible():
-            self._position_badge()
+        self.setFixedHeight(30)
 
     def _apply_styling(self):
         self.setStyleSheet(f"""
             IDBadgeWidget {{
-                background: transparent;
+                background: {Colors.FROSTED_BG};
                 border-radius: {NavbarDimensions.ID_BADGE_BORDER_RADIUS}px;
+                border: 1px solid {Colors.FROSTED_BORDER};
             }}
             IDBadgeWidget:hover {{
-                background: rgba(255, 255, 255, 0.1);
+                border: 1px solid {Colors.FROSTED_BORDER_HOVER};
             }}
         """)
 
-    def _setup_menu(self):
-        self._popup = _DropdownPopup()
-
-        # Menu items: (icon_name, translation_key, signal)
-        self._menu_items_config = [
-            ("fluent", "navbar.menu.sync_data",  self.sync_requested),
-            ("data",   "navbar.menu.import_data", self.import_requested),
-        ]
-
-        self._menu_item_widgets = []
-        self._import_item = None
-        self._sync_menu_item = None
-
-        for icon_name, tr_key, signal in self._menu_items_config:
-            item = _MenuItem(icon_name, tr(tr_key))
-            item.clicked.connect(signal.emit)
-            self._popup.add_item(item)
-            self._menu_item_widgets.append((item, tr_key))
-            if tr_key == "navbar.menu.import_data":
-                self._import_item = item
-            if tr_key == "navbar.menu.sync_data":
-                self._sync_menu_item = item
-
-        self._popup.add_separator()
-
-        # Logout (after separator)
-        self._logout_item = _MenuItem("logout", tr("navbar.menu.logout"))
-        self._logout_item.clicked.connect(self.logout_requested.emit)
-        self._popup.add_item(self._logout_item)
-
-        # Lock the popup height so it never changes when items are hidden
-        self._popup._calc_fixed_height()
-
-    def mousePressEvent(self, event):
-        if event.button() == Qt.LeftButton:
-            self._show_menu()
-        super().mousePressEvent(event)
-
-    def _show_menu(self):
-        """Show dropdown popup below the badge with arrow pointing to center."""
-        self._popup._recalc_size()
-        badge_center = self.mapToGlobal(QPoint(self.width() // 2, self.height()))
-        popup_w = self._popup.width()
-
-        # Position popup so arrow points to badge center
-        popup_x = badge_center.x() - popup_w // 2
-        popup_y = badge_center.y() + 2
-
-        # Arrow should be at center of popup
-        self._popup.set_arrow_x(popup_w // 2)
-        self._popup.move(popup_x, popup_y)
-        self._popup.show()
-
     def update_language(self, is_arabic: bool):
-        """Update menu item texts when language changes."""
-        for item, tr_key in self._menu_item_widgets:
-            item.set_text(tr(tr_key))
-        self._logout_item.set_text(tr("navbar.menu.logout"))
-
-    def configure_for_role(self, role: str):
-        """Show/hide role-restricted menu items."""
-        if self._sync_menu_item:
-            self._sync_menu_item.setVisible(role in {"admin", "data_manager", "field_supervisor"})
-        if self._import_item:
-            self._import_item.setVisible(role in {"admin", "data_manager"})
+        """No-op (language toggle moved to settings pill)."""
+        pass
 
     def set_user_id(self, user_id):
         self.user_id = user_id

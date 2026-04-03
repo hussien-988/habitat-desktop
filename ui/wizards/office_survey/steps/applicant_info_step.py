@@ -24,6 +24,11 @@ from PyQt5.QtGui import QColor, QPixmap, QRegExpValidator, QDesktopServices
 from app.config import Config
 from ui.wizards.framework import BaseStep, StepValidationResult
 from ui.wizards.office_survey.survey_context import SurveyContext
+from ui.wizards.office_survey.wizard_styles import (
+    STEP_CARD_STYLE, FORM_FIELD_STYLE,
+)
+from ui.design_system import Colors
+from ui.font_utils import create_font, FontManager
 from ui.components.rtl_combo import RtlCombo
 from ui.style_manager import StyleManager
 from services.display_mappings import get_gender_options, get_nationality_options
@@ -33,8 +38,6 @@ from ui.components.loading_spinner import LoadingSpinnerOverlay
 from utils.logger import get_logger
 
 logger = get_logger(__name__)
-
-_LABEL_STYLE = "color: #555; font-weight: 600; font-size: 11pt; background: transparent;"
 
 
 class ApplicantInfoStep(BaseStep):
@@ -64,21 +67,12 @@ class ApplicantInfoStep(BaseStep):
 
         # White rounded card with drop shadow
         card = QFrame()
-        card.setObjectName("ApplicantCard")
-        card.setStyleSheet("""
-            QFrame#ApplicantCard {
-                background-color: #FFFFFF;
-                border-radius: 24px;
-            }
-            QFrame#ApplicantCard QLabel,
-            QFrame#ApplicantCard QCheckBox {
-                background-color: transparent;
-            }
-        """)
+        card.setObjectName("StepCard")
+        card.setStyleSheet(STEP_CARD_STYLE)
         shadow = QGraphicsDropShadowEffect(card)
-        shadow.setBlurRadius(30)
+        shadow.setBlurRadius(20)
         shadow.setOffset(0, 4)
-        shadow.setColor(QColor(0, 0, 0, 40))
+        shadow.setColor(QColor(0, 0, 0, 20))
         card.setGraphicsEffect(shadow)
 
         card_layout = QVBoxLayout(card)
@@ -86,17 +80,18 @@ class ApplicantInfoStep(BaseStep):
         card_layout.setSpacing(16)
         card_layout.setDirection(QVBoxLayout.TopToBottom)
 
-        # Title
-        title = QLabel(tr("wizard.step.applicant_info"))
-        title.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
-        title.setStyleSheet("font-size: 18px; font-weight: bold; color: #2c3e50; background: transparent;")
-        card_layout.addWidget(title)
+        # Icon header
+        card_layout.addLayout(self._make_icon_header(
+            title=tr("wizard.step.applicant_info"),
+            subtitle=tr("wizard.applicant.card_subtitle"),
+            icon_name="user",
+        ))
 
         # Divider
         div = QFrame()
         div.setFrameShape(QFrame.HLine)
         div.setFixedHeight(1)
-        div.setStyleSheet("border: none; background-color: #e8ecf0;")
+        div.setStyleSheet("border: none; background-color: #e1e8ee;")
         card_layout.addWidget(div)
 
         # Form grid
@@ -227,7 +222,14 @@ class ApplicantInfoStep(BaseStep):
         grid.addWidget(self._lbl(tr("wizard.person_dialog.mobile")), row, 0, 1, 2)
         row += 1
         mobile_container = QFrame()
-        mobile_container.setStyleSheet(StyleManager.mobile_input_container())
+        mobile_container.setStyleSheet(f"""
+            QFrame {{
+                border: 1.5px solid #D0D7E2;
+                border-radius: 8px;
+                background-color: #FFFFFF;
+            }}
+            QFrame:focus-within {{ border: 1.5px solid {Colors.PRIMARY_BLUE}; }}
+        """)
         mob_layout = QHBoxLayout(mobile_container)
         mob_layout.setContentsMargins(0, 0, 0, 0)
         mob_layout.setSpacing(0)
@@ -235,11 +237,24 @@ class ApplicantInfoStep(BaseStep):
         prefix_lbl = QLabel("+963 | 09")
         prefix_lbl.setFixedWidth(90)
         prefix_lbl.setAlignment(Qt.AlignCenter)
-        prefix_lbl.setStyleSheet(StyleManager.mobile_input_prefix())
+        prefix_lbl.setStyleSheet(f"""
+            QLabel {{
+                color: {Colors.WIZARD_SUBTITLE};
+                font-size: 10pt;
+                border-left: 1px solid #D0D7E2;
+                padding: 0 10px;
+                background: transparent;
+            }}
+        """)
         self.phone = QLineEdit()
         self.phone.setPlaceholderText("00000000")
         self.phone.setValidator(QRegExpValidator(QtRegExp(r"\d{0,8}")))
-        self.phone.setStyleSheet(StyleManager.mobile_input_field())
+        self.phone.setStyleSheet("""
+            QLineEdit {
+                border: none; background: transparent;
+                padding: 8px 12px; font-size: 10pt; color: #2C3E50;
+            }
+        """)
         mob_layout.addWidget(prefix_lbl)
         mob_layout.addWidget(self.phone)
         self._mobile_error = self._err_lbl()
@@ -272,7 +287,8 @@ class ApplicantInfoStep(BaseStep):
 
         # --- Row 8: زيارة حضورية (checkbox) ---
         self.in_person_check = QCheckBox(tr("wizard.applicant.in_person"))
-        self.in_person_check.setStyleSheet("font-size: 11pt; color: #374151; background: transparent;")
+        self.in_person_check.setFont(create_font(size=FontManager.WIZARD_CARD_LABEL, weight=FontManager.WEIGHT_REGULAR))
+        self.in_person_check.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent;")
         self.in_person_check.setChecked(True)
         grid.addWidget(self.in_person_check, row, 0, 1, 2)
 
@@ -360,9 +376,55 @@ class ApplicantInfoStep(BaseStep):
         return container
     # Widget factory helpers
 
+    @staticmethod
+    def _make_icon_header(title: str, subtitle: str, icon_name: str) -> QHBoxLayout:
+        """Build icon + (title / subtitle) header row."""
+        from ui.components.icon import Icon
+
+        row = QHBoxLayout()
+        row.setSpacing(10)
+        row.setContentsMargins(0, 0, 0, 0)
+
+        icon_lbl = QLabel()
+        icon_lbl.setFixedSize(40, 40)
+        icon_lbl.setAlignment(Qt.AlignCenter)
+        icon_lbl.setStyleSheet("""
+            QLabel {
+                background-color: #EBF5FF;
+                border: 1px solid #DBEAFE;
+                border-radius: 10px;
+            }
+        """)
+        px = Icon.load_pixmap(icon_name, size=24)
+        if px and not px.isNull():
+            icon_lbl.setPixmap(px)
+        else:
+            icon_lbl.setStyleSheet(icon_lbl.styleSheet() + "font-size: 16px;")
+            icon_lbl.setText("\U0001F464")
+
+        row.addWidget(icon_lbl)
+
+        col = QVBoxLayout()
+        col.setSpacing(1)
+
+        t = QLabel(title)
+        t.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
+        t.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent;")
+
+        s = QLabel(subtitle)
+        s.setFont(create_font(size=10, weight=FontManager.WEIGHT_REGULAR))
+        s.setStyleSheet(f"color: {Colors.WIZARD_SUBTITLE}; background: transparent;")
+
+        col.addWidget(t)
+        col.addWidget(s)
+        row.addLayout(col)
+        row.addStretch()
+        return row
+
     def _lbl(self, text: str) -> QLabel:
         lbl = QLabel(text)
-        lbl.setStyleSheet(_LABEL_STYLE)
+        lbl.setFont(create_font(size=FontManager.WIZARD_CARD_LABEL, weight=FontManager.WEIGHT_SEMIBOLD))
+        lbl.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent;")
         return lbl
 
     def _field(self, placeholder: str, validator=None) -> QLineEdit:
@@ -376,7 +438,7 @@ class ApplicantInfoStep(BaseStep):
     @staticmethod
     def _err_lbl() -> QLabel:
         lbl = QLabel("")
-        lbl.setStyleSheet("color: #e74c3c; font-size: 11px; font-weight: 700; background: transparent;")
+        lbl.setStyleSheet(f"color: {Colors.ERROR}; font-size: 9pt; font-weight: 600; background: transparent;")
         lbl.setVisible(False)
         return lbl
 
@@ -397,9 +459,9 @@ class ApplicantInfoStep(BaseStep):
         frame.setMinimumHeight(55)
         frame.setStyleSheet(f"""
             QFrame#{obj_name} {{
-                border: 2px dashed #B0C4DE;
+                border: 2px dashed rgba(56, 144, 223, 0.4);
                 border-radius: 8px;
-                background-color: transparent;
+                background-color: #F8FAFF;
             }}
         """)
         frame_layout = QVBoxLayout(frame)
@@ -455,41 +517,21 @@ class ApplicantInfoStep(BaseStep):
 
     def _input_style(self) -> str:
         down_img = str(Config.IMAGES_DIR / "down.png").replace("\\", "/")
-        return f"""
-            QLineEdit, QComboBox, QSpinBox {{
-                border: 1px solid #E0E6ED;
-                border-radius: 8px;
-                padding: 10px;
-                background-color: #f0f7ff;
-                color: #333;
-                font-size: 14px;
-                min-height: 20px;
-                max-height: 20px;
-            }}
-            QComboBox {{ padding-left: 4px; }}
-            QComboBox QLineEdit {{ border: none; background: transparent; padding: 0px 4px; min-height: 20px; max-height: 20px; }}
-            QLineEdit:focus, QComboBox:focus, QSpinBox:focus {{ border: 1px solid #4a90e2; }}
-            QComboBox::drop-down {{ border: none; width: 30px; subcontrol-position: right center; }}
+        return FORM_FIELD_STYLE + f"""
             QComboBox::down-arrow {{ image: url({down_img}); width: 12px; height: 12px; }}
-            QComboBox QAbstractItemView {{
-                background-color: #FFFFFF; border: 1px solid #E0E6ED;
-                border-bottom-left-radius: 10px; border-bottom-right-radius: 10px;
-                padding: 4px; selection-background-color: #e8f0fe;
-                selection-color: #333; outline: none;
-            }}
-            QComboBox QAbstractItemView::item {{
-                min-height: 32px; padding: 6px 10px; border-radius: 6px;
-            }}
-            QComboBox QAbstractItemView::item:hover {{ background-color: #f0f7ff; }}
         """
 
     def _input_error_style(self) -> str:
-        return """
-            QLineEdit, QComboBox, QSpinBox {
-                border: 2px solid #e74c3c; border-radius: 8px; padding: 10px;
-                background-color: #FFF5F5; color: #333;
-                font-size: 14px; min-height: 20px; max-height: 20px;
-            }
+        return f"""
+            QLineEdit, QComboBox, QSpinBox {{
+                border: 2px solid {Colors.ERROR};
+                border-radius: 8px;
+                padding: 8px 12px;
+                background-color: #FFF5F5;
+                color: #2C3E50;
+                font-size: 10pt;
+                min-height: 26px;
+            }}
         """
 
     def _set_err(self, field, error_lbl: QLabel):

@@ -62,6 +62,20 @@ class Colors:
     # Search bar background
     SEARCH_BG = "#1A3A5C"  # Search bar background in navbar (slightly lighter than navbar)
 
+    # Horizon Blue navbar gradient palette
+    NAVBAR_GRADIENT_TOP = "#0A1628"
+    NAVBAR_GRADIENT_MID = "#0F2440"
+    NAVBAR_GRADIENT_BOT = "#122C49"
+    NAVBAR_TABS_TOP = "#10243E"
+    NAVBAR_TABS_BOT = "#0D1E35"
+    NAVBAR_DIVIDER_BLUE = "rgba(100, 160, 220, 0.25)"
+
+    # Frosted glass palette (shared with login page)
+    FROSTED_BG = "rgba(15, 31, 61, 200)"
+    FROSTED_BORDER = "rgba(56, 144, 223, 30)"
+    FROSTED_BORDER_HOVER = "rgba(56, 144, 223, 80)"
+    CONSOLE_MUTED_TEXT = "rgba(139, 172, 200, 220)"
+
     # Old dark theme colors (DEPRECATED - keeping for backward compatibility)
     DARK_BG_PRIMARY = "#122C49"  # Now same as NAVBAR_BG
     DARK_BG_SECONDARY = "#1A3A5C"  # Now same as NAVBAR_BG_HOVER
@@ -244,9 +258,9 @@ class Spacing:
 
     # Navbar spacing
     NAVBAR_HORIZONTAL_PADDING = LG  # 24px horizontal padding in navbar
-    NAVBAR_TOP_HEIGHT = 52  # Top bar height (updated for 56px tabs)
-    NAVBAR_TABS_HEIGHT = 56  # Tabs bar height
-    NAVBAR_TOTAL_HEIGHT = 109  # Total navbar height (52 + 56 + 1)
+    NAVBAR_TOP_HEIGHT = 80  # Top bar height
+    NAVBAR_TABS_HEIGHT = 68  # Tabs bar height
+    NAVBAR_TOTAL_HEIGHT = 150  # Total navbar height (80 + 68 + 2)
 
     # ID Badge spacing
     ID_BADGE_PADDING_V = 8  # Vertical padding in ID badge
@@ -291,15 +305,15 @@ class NavbarDimensions:
     """Navbar dimension constants."""
     # Container dimensions
     CONTAINER_WIDTH = 1512
-    CONTAINER_HEIGHT = 109
+    CONTAINER_HEIGHT = 150
 
     # Top bar dimensions
-    TOP_BAR_HEIGHT = 60
+    TOP_BAR_HEIGHT = 80
 
     # Logo dimensions
     LOGO_WIDTH = 142.77
     LOGO_HEIGHT = 21.77
-    LOGO_SCALED_HEIGHT = 22
+    LOGO_SCALED_HEIGHT = 28
 
     # ID Badge dimensions
     ID_BADGE_WIDTH = 110.69
@@ -310,8 +324,8 @@ class NavbarDimensions:
     ID_BADGE_GAP = 8
 
     # Tabs bar dimensions
-    TABS_BAR_HEIGHT = 48
-    TAB_HEIGHT = 32
+    TABS_BAR_HEIGHT = 68
+    TAB_HEIGHT = 38
     TAB_PADDING_H = 12
     TAB_PADDING_V = 5
     TAB_GAP = 24
@@ -323,6 +337,20 @@ class NavbarDimensions:
     # Search bar dimensions
     SEARCH_BAR_WIDTH = 450
     SEARCH_BAR_HEIGHT = 32
+
+    # Dropdown panel dimensions
+    DROPDOWN_PANEL_WIDTH = 240
+    DROPDOWN_ITEM_HEIGHT = 42
+
+    # Active tab indicator
+    TAB_INDICATOR_HEIGHT = 3
+
+    # Action buttons (tabs bar)
+    ACTION_BTN_SIZE = 34
+
+    # Language slide toggle
+    LANG_TOGGLE_WIDTH = 56
+    LANG_TOGGLE_HEIGHT = 22
 
 
 class PageDimensions:
@@ -711,9 +739,8 @@ class ComponentStyles:
         """Get top navigation bar stylesheet."""
         return f"""
             QFrame#navbar {{
-                background-color: {Colors.NAVBAR_BG};
+                background-color: {Colors.NAVBAR_GRADIENT_TOP};
                 border: none;
-                border-bottom: 2px solid {Colors.NAVBAR_BORDER};
                 padding: {Spacing.MD}px {Spacing.LG}px;
                 min-height: 60px;
             }}
@@ -723,10 +750,10 @@ class ComponentStyles:
                 font-weight: {Typography.WEIGHT_BOLD};
             }}
             QLabel#user_id {{
-                color: {Colors.TEXT_ON_DARK};
+                color: rgba(200, 220, 255, 230);
                 font-size: {Typography.SIZE_BODY}px;
-                background-color: rgba(255, 255, 255, 0.15);
-                border: 1px solid rgba(255, 255, 255, 0.2);
+                background-color: rgba(56, 144, 223, 0.12);
+                border: 1px solid rgba(56, 144, 223, 0.35);
                 border-radius: {BorderRadius.FULL}px;
                 padding: {Spacing.XS}px {Spacing.MD}px;
             }}

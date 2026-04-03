@@ -140,6 +140,10 @@ class TRRCMSApiClient:
         body = {"currentPassword": current_password, "newPassword": new_password}
         return self._request("POST", "/v1/Auth/change-password", body) or {}
 
+    def lock_building(self, building_id: str, is_locked: bool) -> Dict[str, Any]:
+        """PUT /v1/buildings/{id}/lock — toggle building lock state."""
+        return self._request("PUT", f"/v1/buildings/{building_id}/lock", {"isLocked": is_locked}) or {}
+
     def _ensure_valid_token(self):
         """التأكد من صلاحية الـ Token قبل الطلب."""
         if not self.access_token:
@@ -242,6 +246,10 @@ class TRRCMSApiClient:
                             self._on_session_expired()
                     elif self.access_token != token_used:
                         logger.info(f"401 on {endpoint} ignored — token changed by new session")
+                if status_code == 403:
+                    error_code = str(response_data.get("code", "") or response_data.get("errorCode", ""))
+                    if "PasswordChangeRequired" in error_code or "PasswordChangeRequired" in str(response_data):
+                        logger.warning(f"[API ERR] 403 PasswordChangeRequired on {endpoint}")
                 log_fn = logger.warning if status_code in (401, 403, 404) else logger.error
                 log_fn(f"[API ERR] {status_code} {method} {endpoint} | Response: {response_data or response_text}")
                 raise ApiException(
@@ -1367,7 +1375,7 @@ class TRRCMSApiClient:
             if val:
                 api_data["occupancyType"] = int(val)
         if 'ownership_share' in relation_data:
-            api_data["ownershipShare"] = relation_data['ownership_share'] / 100.0
+            api_data["ownershipShare"] = relation_data['ownership_share'] / 2400.0
         if 'has_documents' in relation_data:
             api_data["hasEvidence"] = relation_data['has_documents']
 
@@ -1823,14 +1831,13 @@ class TRRCMSApiClient:
         else:
             occupancy_type_int = None
 
-        ownership_share_pct = relation_data.get('ownership_share', None)
-        if ownership_share_pct is not None and ownership_share_pct > 0:
-            ownership_share_decimal = ownership_share_pct / 100.0
-            # Safety: if result > 1.0, user may have entered a fraction directly
+        ownership_share_raw = relation_data.get('ownership_share', None)
+        if ownership_share_raw is not None and ownership_share_raw > 0:
+            ownership_share_decimal = ownership_share_raw / 2400.0
             if ownership_share_decimal > 1.0:
-                logger.warning(f"OwnershipShare: {ownership_share_pct}/100={ownership_share_decimal} > 1.0, using raw value as fraction")
-                ownership_share_decimal = min(ownership_share_pct, 1.0)
-            logger.info(f"OwnershipShare: input={ownership_share_pct}% -> API={ownership_share_decimal}")
+                logger.warning(f"OwnershipShare: {ownership_share_raw}/2400={ownership_share_decimal} > 1.0, capping")
+                ownership_share_decimal = 1.0
+            logger.info(f"OwnershipShare: input={ownership_share_raw} shares -> API={ownership_share_decimal}")
         else:
             ownership_share_decimal = None
 

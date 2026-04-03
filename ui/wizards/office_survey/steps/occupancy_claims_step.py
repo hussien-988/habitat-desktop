@@ -16,7 +16,7 @@ from PyQt5.QtWidgets import (
     QSizePolicy, QDialog
 )
 from PyQt5.QtCore import Qt
-from PyQt5.QtGui import QIcon
+from PyQt5.QtGui import QIcon, QColor
 
 from ui.wizards.framework import BaseStep, StepValidationResult
 from ui.wizards.office_survey.survey_context import SurveyContext
@@ -29,6 +29,7 @@ from utils.logger import get_logger
 from ui.error_handler import ErrorHandler
 from ui.font_utils import FontManager, create_font
 from ui.design_system import Colors
+from ui.wizards.office_survey.wizard_styles import STEP_CARD_STYLE, IN_CARD_ACTION_STYLE
 
 
 def _is_owner_relation(relation_type) -> bool:
@@ -69,79 +70,30 @@ class OccupancyClaimsStep(BaseStep):
 
         # Main card
         table_frame = QFrame()
-        table_frame.setObjectName("occupancyClaimsCard")
         table_frame.setLayoutDirection(get_layout_direction())
-        table_frame.setStyleSheet(f"""
-            QFrame#occupancyClaimsCard {{
-                background-color: {Colors.SURFACE};
-                border-radius: 12px;
-                border: 1px solid {Colors.BORDER_DEFAULT};
-            }}
-        """)
+        table_frame.setObjectName("StepCard")
+        table_frame.setStyleSheet(STEP_CARD_STYLE)
+        from PyQt5.QtWidgets import QGraphicsDropShadowEffect
+        shadow = QGraphicsDropShadowEffect()
+        shadow.setBlurRadius(20)
+        shadow.setOffset(0, 4)
+        shadow.setColor(QColor(0, 0, 0, 20))
+        table_frame.setGraphicsEffect(shadow)
         table_layout = QVBoxLayout(table_frame)
         table_layout.setContentsMargins(12, 12, 12, 12)
         table_layout.setSpacing(12)
 
-        # Header with title and add button
-        header = QHBoxLayout()
-
-        title_group = QHBoxLayout()
-        title_group.setSpacing(8)
-
-        title_vbox = QVBoxLayout()
-        title_vbox.setSpacing(1)
-        self._title_label = QLabel(tr("wizard.occupancy_claims.title"))
-        self._title_label.setFont(create_font(size=FontManager.WIZARD_STEP_TITLE, weight=FontManager.WEIGHT_SEMIBOLD))
-        self._title_label.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent;")
-        self._subtitle_label = QLabel(tr("wizard.occupancy_claims.subtitle"))
-        self._subtitle_label.setFont(create_font(size=FontManager.WIZARD_STEP_SUBTITLE, weight=FontManager.WEIGHT_REGULAR))
-        self._subtitle_label.setStyleSheet(f"color: {Colors.WIZARD_SUBTITLE}; background: transparent;")
-        self._subtitle_label.setAlignment(Qt.AlignRight)
-        title_vbox.addWidget(self._title_label)
-        title_vbox.addWidget(self._subtitle_label)
-
-        # Title icon
-        from ui.components.icon import Icon
-        title_icon = QLabel()
-        title_icon.setFixedSize(40, 40)
-        title_icon.setAlignment(Qt.AlignCenter)
-        title_icon.setStyleSheet("""
-            QLabel {
-                background-color: #ffffff;
-                border: 1px solid #DBEAFE;
-                border-radius: 10px;
-            }
-        """)
-        user_icon_pixmap = Icon.load_pixmap("user", size=24)
-        if user_icon_pixmap and not user_icon_pixmap.isNull():
-            title_icon.setPixmap(user_icon_pixmap)
-        else:
-            title_icon.setText("U")
-            title_icon.setStyleSheet(title_icon.styleSheet() + "font-size: 16px;")
-
-        title_group.addWidget(title_icon)
-        title_group.addLayout(title_vbox)
-
-        # Add button
+        # Header: icon + title + add button
+        header = self._make_icon_header(
+            tr("wizard.occupancy_claims.title"),
+            tr("wizard.occupancy_claims.subtitle"),
+            "user"
+        )
         self._add_person_btn = QPushButton(tr("wizard.occupancy_claims.add_person"))
         self._add_person_btn.setLayoutDirection(get_layout_direction())
         self._add_person_btn.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
-        self._add_person_btn.setStyleSheet(f"""
-            QPushButton {{
-                background-color: {Colors.SURFACE};
-                color: {Colors.PRIMARY_BLUE};
-                border: 1px solid {Colors.PRIMARY_BLUE};
-                border-radius: 6px;
-                padding: 8px 16px;
-            }}
-            QPushButton:hover {{
-                background-color: #EBF8FF;
-            }}
-        """)
+        self._add_person_btn.setStyleSheet(IN_CARD_ACTION_STYLE)
         self._add_person_btn.clicked.connect(self._add_person)
-
-        header.addLayout(title_group)
-        header.addStretch()
         header.addWidget(self._add_person_btn)
 
         table_layout.addLayout(header)
@@ -439,19 +391,20 @@ class OccupancyClaimsStep(BaseStep):
         card = QFrame()
         card.setLayoutDirection(get_layout_direction())
         card.setFixedHeight(60)
-        card.setStyleSheet(f"""
-            QFrame {{
-                background-color: {Colors.BACKGROUND};
-                border: 1px solid #E5EAF6;
-                border-radius: 12px;
-            }}
-            QFrame:hover {{
+        card.setStyleSheet("""
+            QFrame {
                 background-color: #F8FAFF;
-                border-color: #C7D7F0;
-            }}
-            QLabel {{
+                border: 1px solid #E2EAF2;
+                border-radius: 12px;
+            }
+            QFrame:hover {
+                background-color: #EBF5FF;
+                border-color: #3890DF;
+            }
+            QLabel {
                 border: none;
-            }}
+                background: transparent;
+            }
         """)
         card.setCursor(Qt.PointingHandCursor)
         card.mousePressEvent = lambda e, pid=person_id: self._view_person(pid) if e.button() == Qt.LeftButton else None
@@ -469,8 +422,8 @@ class OccupancyClaimsStep(BaseStep):
         icon_lbl.setAlignment(Qt.AlignCenter)
         icon_lbl.setStyleSheet("""
             QLabel {
-                background-color: #F4F8FF;
-                color: #3182CE;
+                background-color: #EBF5FF;
+                color: #3890DF;
                 border-radius: 18px;
                 border: none;
             }
@@ -761,11 +714,40 @@ class OccupancyClaimsStep(BaseStep):
 
     # BaseStep interface
 
+    @staticmethod
+    def _make_icon_header(title: str, subtitle: str, icon_name: str) -> QHBoxLayout:
+        """Create icon + title + subtitle header row."""
+        from ui.components.icon import Icon
+        row = QHBoxLayout()
+        row.setSpacing(10)
+        row.setContentsMargins(0, 0, 0, 0)
+        icon_lbl = QLabel()
+        icon_lbl.setFixedSize(40, 40)
+        icon_lbl.setAlignment(Qt.AlignCenter)
+        icon_lbl.setStyleSheet(
+            "QLabel { background-color: #EBF5FF; border: 1px solid #DBEAFE; border-radius: 10px; }"
+        )
+        px = Icon.load_pixmap(icon_name, size=24)
+        if px and not px.isNull():
+            icon_lbl.setPixmap(px)
+        row.addWidget(icon_lbl)
+        col = QVBoxLayout()
+        col.setSpacing(1)
+        t = QLabel(title)
+        t.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
+        t.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent;")
+        s = QLabel(subtitle)
+        s.setFont(create_font(size=10, weight=FontManager.WEIGHT_REGULAR))
+        s.setStyleSheet(f"color: {Colors.WIZARD_SUBTITLE}; background: transparent;")
+        col.addWidget(t)
+        col.addWidget(s)
+        row.addLayout(col)
+        row.addStretch()
+        return row
+
     def update_language(self, is_arabic: bool):
         """Update translatable texts when language changes."""
         self.setLayoutDirection(get_layout_direction())
-        self._title_label.setText(tr("wizard.occupancy_claims.title"))
-        self._subtitle_label.setText(tr("wizard.occupancy_claims.subtitle"))
         self._add_person_btn.setText(tr("wizard.occupancy_claims.add_person"))
         self._refresh_persons_list()
 

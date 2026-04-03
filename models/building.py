@@ -82,6 +82,10 @@ class Building:
     location_description: Optional[str] = None
     general_description: Optional[str] = None
 
+    # Assignment and lock state
+    is_assigned: bool = False
+    is_locked: bool = False
+
     def __post_init__(self):
         """
         Generate building_id if not provided and ensure no dashes.
@@ -210,6 +214,8 @@ class Building:
             "legacy_stdm_id": self.legacy_stdm_id,
             "location_description": self.location_description,
             "general_description": self.general_description,
+            "is_assigned": self.is_assigned,
+            "is_locked": self.is_locked,
         }
 
     @classmethod

@@ -722,7 +722,20 @@ class BuildingController(BaseController):
             geo_location=dto.get("buildingGeometryWkt") or dto.get("geoLocation"),
             location_description=dto.get("locationDescription") or dto.get("location_description"),
             general_description=dto.get("generalDescription") or dto.get("general_description"),
+            is_assigned=dto.get("isAssigned", False),
+            is_locked=dto.get("isLocked", False),
         )
+
+    def toggle_building_lock(self, building_id: str, lock: bool) -> "OperationResult":
+        """Toggle building lock state via API."""
+        try:
+            api_client = get_api_client()
+            result = api_client.lock_building(building_id, lock)
+            return OperationResult.ok(data=result)
+        except Exception as e:
+            error_msg = f"Failed to {'lock' if lock else 'unlock'} building: {e}"
+            logger.error(error_msg)
+            return OperationResult.fail(message=error_msg)
 
     def get_statistics(self) -> OperationResult[Dict[str, Any]]:
         """

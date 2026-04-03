@@ -6,6 +6,8 @@ Main entry point for the application
 """
 
 import math
+import os
+import random
 import sys
 import time
 from pathlib import Path
@@ -18,8 +20,8 @@ sys.path.insert(0, str(trrcms_path))
 from PyQt5.QtWidgets import QApplication, QSplashScreen
 from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtGui import (
-    QPixmap, QColor, QPainter, QFont,
-    QLinearGradient, QRadialGradient, QPen,
+    QPixmap, QColor, QPainter, QFont, QFontDatabase,
+    QLinearGradient, QRadialGradient, QPen, QPainterPath,
 )
 
 from app.config import Config, get_saved_language
@@ -30,183 +32,355 @@ from ui.font_utils import set_application_default_font
 
 
 class AnimatedSplash(QSplashScreen):
-    """Splash screen with glow breathing effect and animated loading dots."""
+    """Refined institutional splash with constellation, orbital ring,
+    and progress bar."""
 
-    WIDTH, HEIGHT = 460, 320
+    WIDTH, HEIGHT = 560, 400
+    _FONT = "Noto Kufi Arabic"
+    _RADIUS = 14
+
+    # Vertical layout positions (generous spacing to prevent overlap)
+    _LOGO_Y = 30
+    _LOGO_SIZE = 80
+    _LOGO_CENTER_Y = _LOGO_Y + _LOGO_SIZE // 2          # 70
+    _TITLE_Y = _LOGO_Y + _LOGO_SIZE + 20                 # 130
+    _TITLE_H = 40
+    _SUB_EN_Y = _TITLE_Y + _TITLE_H + 4                  # 174
+    _SUB_EN_H = 28
+    _SUB_AR_Y = _SUB_EN_Y + _SUB_EN_H + 4                # 206
+    _SUB_AR_H = 28
+    _SEP_Y = _SUB_AR_Y + _SUB_AR_H + 14                  # 248
+    _BAR_Y = _SEP_Y + 22                                  # 270
+    _STATUS_Y = HEIGHT - 35                                # 365
 
     def __init__(self):
         self._logo_pixmap = None
-        self._text_y = 50
+        self._load_fonts()
 
-        # Load logo
         logo_path = Path(__file__).parent / "assets" / "images" / "Layer_1.png"
         if logo_path.exists():
             px = QPixmap(str(logo_path))
             if not px.isNull():
                 self._logo_pixmap = px.scaled(
-                    88, 88, Qt.KeepAspectRatio, Qt.SmoothTransformation
+                    self._LOGO_SIZE, self._LOGO_SIZE,
+                    Qt.KeepAspectRatio, Qt.SmoothTransformation,
                 )
-                self._text_y = 130
 
-        # Create background-only pixmap
         bg = self._create_background()
         super().__init__(bg)
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint)
 
-        # Effect state
         self._start_time = None
         self._glow_phase = 0.0
-        self._dots_frame = 0
+        self._fade_in = 0.0
         self._status_msg = ""
+        self._progress = 0.0
 
-        # Glow breathing timer (~30fps is enough for subtle pulse)
+        # Constellation particles (deterministic seed for consistency)
+        random.seed(42)
+        self._particles = []
+        for _ in range(14):
+            self._particles.append((
+                random.uniform(30, self.WIDTH - 30),
+                random.uniform(30, self.HEIGHT - 30),
+                random.uniform(8, 22),
+                random.uniform(0.3, 0.7),
+                random.uniform(0, math.tau),
+            ))
+
         self._pulse_timer = QTimer(self)
         self._pulse_timer.timeout.connect(self._pulse_tick)
 
-        # Dots animation timer (every 400ms)
-        self._dots_timer = QTimer(self)
-        self._dots_timer.timeout.connect(self._advance_dots)
+    def _load_fonts(self):
+        fonts_dir = Path(__file__).parent / "assets" / "fonts" / "Noto_Kufi_Arabic"
+        for name in ("NotoKufiArabic-Regular.ttf", "NotoKufiArabic-Bold.ttf",
+                     "NotoKufiArabic-SemiBold.ttf", "NotoKufiArabic-Medium.ttf"):
+            fp = fonts_dir / name
+            if fp.exists():
+                QFontDatabase.addApplicationFont(str(fp))
 
     def show(self):
         super().show()
         self._start_time = time.time()
         self._pulse_timer.start(33)
-        self._dots_timer.start(400)
+
+    def set_progress(self, value: float):
+        self._progress = max(0.0, min(1.0, value))
+        self.repaint()
 
     def _create_background(self):
-        """Create the static background pixmap (gradient + border)."""
         w, h = self.WIDTH, self.HEIGHT
+        r = self._RADIUS
         pixmap = QPixmap(w, h)
         pixmap.fill(Qt.transparent)
 
-        painter = QPainter(pixmap)
-        painter.setRenderHint(QPainter.Antialiasing)
+        p = QPainter(pixmap)
+        p.setRenderHint(QPainter.Antialiasing)
 
-        # Background gradient
+        # Clip to rounded rect
+        clip = QPainterPath()
+        clip.addRoundedRect(0, 0, w, h, r, r)
+        p.setClipPath(clip)
+
+        # Deep navy gradient
         bg = QLinearGradient(0, 0, 0, h)
-        bg.setColorAt(0.0, QColor("#0F1B33"))
-        bg.setColorAt(0.5, QColor("#162544"))
-        bg.setColorAt(1.0, QColor("#1A3055"))
-        painter.setBrush(bg)
-        painter.setPen(Qt.NoPen)
-        painter.drawRoundedRect(0, 0, w, h, 12, 12)
+        bg.setColorAt(0.0, QColor("#0A1628"))
+        bg.setColorAt(0.45, QColor("#0F1F3D"))
+        bg.setColorAt(1.0, QColor("#162B4D"))
+        p.setBrush(bg)
+        p.setPen(Qt.NoPen)
+        p.drawRect(0, 0, w, h)
+
+        # Geometric grid overlay
+        grid_pen = QPen(QColor(26, 50, 88, 15), 0.5)
+        p.setPen(grid_pen)
+        spacing = 50
+        for x in range(0, w + 1, spacing):
+            p.drawLine(x, 0, x, h)
+        for y in range(0, h + 1, spacing):
+            p.drawLine(0, y, w, y)
+
+        # Diamond accents at intersections
+        p.setPen(QPen(QColor(56, 144, 223, 12), 0.5))
+        p.setBrush(Qt.NoBrush)
+        for x in range(0, w + 1, spacing):
+            for y in range(0, h + 1, spacing):
+                dp = QPainterPath()
+                dp.moveTo(x, y - 3)
+                dp.lineTo(x + 3, y)
+                dp.lineTo(x, y + 3)
+                dp.lineTo(x - 3, y)
+                dp.closeSubpath()
+                p.drawPath(dp)
+
+        # Inner vignette
+        vig = QRadialGradient(w / 2, h / 2, max(w, h) * 0.7)
+        vig.setColorAt(0.0, QColor(0, 0, 0, 0))
+        vig.setColorAt(0.7, QColor(0, 0, 0, 0))
+        vig.setColorAt(1.0, QColor(0, 0, 0, 45))
+        p.setPen(Qt.NoPen)
+        p.setBrush(vig)
+        p.drawRect(0, 0, w, h)
+
+        p.setClipping(False)
 
         # Accent border
-        border_grad = QLinearGradient(0, 0, w, h)
-        border_grad.setColorAt(0.0, QColor(100, 180, 255, 100))
-        border_grad.setColorAt(0.25, QColor(100, 180, 255, 40))
-        border_grad.setColorAt(0.5, QColor(100, 180, 255, 100))
-        border_grad.setColorAt(0.75, QColor(100, 180, 255, 40))
-        border_grad.setColorAt(1.0, QColor(100, 180, 255, 100))
-        painter.setPen(QPen(border_grad, 1.5))
-        painter.setBrush(Qt.NoBrush)
-        painter.drawRoundedRect(1, 1, w - 2, h - 2, 12, 12)
+        bg2 = QLinearGradient(0, 0, w, h)
+        bg2.setColorAt(0.0, QColor(56, 144, 223, 80))
+        bg2.setColorAt(0.25, QColor(56, 144, 223, 20))
+        bg2.setColorAt(0.5, QColor(56, 144, 223, 80))
+        bg2.setColorAt(0.75, QColor(56, 144, 223, 20))
+        bg2.setColorAt(1.0, QColor(56, 144, 223, 80))
+        p.setPen(QPen(bg2, 1.0))
+        p.setBrush(Qt.NoBrush)
+        p.drawRoundedRect(1, 1, w - 2, h - 2, r, r)
 
-        painter.end()
+        p.end()
         return pixmap
 
     def _pulse_tick(self):
-        """Update glow breathing phase."""
         if not self._start_time:
             return
         t = time.time() - self._start_time
-        # Slow sine wave: period ~3s, range 0.6-1.0
-        self._glow_phase = 0.8 + 0.2 * math.sin(t * 2.1)
+        self._fade_in = min(1.0, t / 0.6)
+        self._glow_phase = 0.8 + 0.2 * math.sin(t * 1.6)
         self.repaint()
 
-    def _advance_dots(self):
-        """Cycle through loading dots frames."""
-        self._dots_frame = (self._dots_frame + 1) % 4
-        if self._status_msg:
-            self.repaint()
-
     def showMessage(self, message, alignment=0, color=QColor()):
-        """Override to store status message for custom rendering."""
         self._status_msg = message.strip()
         self.repaint()
 
     def paintEvent(self, event):
-        """Draw all elements with breathing glow effect."""
         super().paintEvent(event)
 
         w, h = self.WIDTH, self.HEIGHT
-        painter = QPainter(self)
-        painter.setRenderHint(QPainter.Antialiasing)
-        painter.setRenderHint(QPainter.SmoothPixmapTransform)
+        p = QPainter(self)
+        p.setRenderHint(QPainter.Antialiasing)
+        p.setRenderHint(QPainter.SmoothPixmapTransform)
 
         t = time.time() - self._start_time if self._start_time else 0
+        p.setOpacity(self._fade_in)
 
-        # Breathing glow behind logo
-        glow_alpha = int(35 * self._glow_phase)
-        glow = QRadialGradient(w / 2, 95, 120)
-        glow.setColorAt(0.0, QColor(56, 144, 223, glow_alpha))
-        glow.setColorAt(0.6, QColor(56, 144, 223, int(glow_alpha * 0.3)))
+        logo_cy = self._LOGO_CENTER_Y
+
+        # --- Constellation particles ---
+        positions = []
+        for bx, by, radius, speed, phase in self._particles:
+            px = bx + radius * math.sin(t * speed + phase)
+            py = by + radius * math.cos(t * speed * 0.7 + phase)
+            positions.append((px, py))
+            alpha = int(22 + 16 * math.sin(t * speed * 0.5 + phase))
+            p.setPen(Qt.NoPen)
+            p.setBrush(QColor(56, 144, 223, alpha))
+            p.drawEllipse(int(px) - 1, int(py) - 1, 3, 3)
+
+        # Connecting lines between nearby particles
+        for i in range(len(positions)):
+            for j in range(i + 1, len(positions)):
+                dx = positions[i][0] - positions[j][0]
+                dy = positions[i][1] - positions[j][1]
+                dist = math.sqrt(dx * dx + dy * dy)
+                if dist < 90:
+                    la = int(8 * (1.0 - dist / 90))
+                    p.setPen(QPen(QColor(56, 144, 223, la), 0.5))
+                    p.drawLine(
+                        int(positions[i][0]), int(positions[i][1]),
+                        int(positions[j][0]), int(positions[j][1]),
+                    )
+
+        # --- Breathing glow behind logo ---
+        ga = int(30 * self._glow_phase)
+        glow = QRadialGradient(w / 2, logo_cy, 100)
+        glow.setColorAt(0.0, QColor(56, 144, 223, ga))
+        glow.setColorAt(0.5, QColor(56, 144, 223, int(ga * 0.25)))
         glow.setColorAt(1.0, QColor(56, 144, 223, 0))
-        painter.setPen(Qt.NoPen)
-        painter.setBrush(glow)
-        painter.drawEllipse(int(w / 2 - 120), -25, 240, 240)
+        p.setPen(Qt.NoPen)
+        p.setBrush(glow)
+        p.drawEllipse(int(w / 2 - 100), logo_cy - 100, 200, 200)
 
-        # Traveling shimmer — drifts across the background
-        shimmer_x = w * 0.5 + w * 0.4 * math.sin(t * 0.8)
-        shimmer_y = h * 0.35 + h * 0.1 * math.cos(t * 1.2)
-        shimmer_alpha = int(25 * self._glow_phase)
-        shimmer = QRadialGradient(shimmer_x, shimmer_y, w * 0.35)
-        shimmer.setColorAt(0.0, QColor(100, 180, 255, shimmer_alpha))
-        shimmer.setColorAt(0.5, QColor(56, 144, 223, int(shimmer_alpha * 0.3)))
+        # --- Traveling shimmer ---
+        sx = w * 0.5 + w * 0.4 * math.sin(t * 0.5)
+        sy = h * 0.35 + h * 0.1 * math.cos(t * 0.9)
+        sa = int(18 * self._glow_phase)
+        shimmer = QRadialGradient(sx, sy, w * 0.35)
+        shimmer.setColorAt(0.0, QColor(100, 180, 255, sa))
+        shimmer.setColorAt(0.5, QColor(56, 144, 223, int(sa * 0.25)))
         shimmer.setColorAt(1.0, QColor(56, 144, 223, 0))
-        painter.setBrush(shimmer)
-        painter.drawRect(0, 0, w, h)
+        p.setBrush(shimmer)
+        p.drawRect(0, 0, w, h)
 
-        text_y = self._text_y
+        # --- Orbital ring ---
+        ring_cx, ring_cy = w / 2, logo_cy
+        ring_rx, ring_ry = 52, 46
 
-        # Logo
+        p.setPen(QPen(QColor(56, 144, 223, 15), 0.5))
+        p.setBrush(Qt.NoBrush)
+        p.drawEllipse(
+            int(ring_cx - ring_rx), int(ring_cy - ring_ry),
+            ring_rx * 2, ring_ry * 2,
+        )
+
+        for orbit_phase, alpha_base in [(0.0, 55), (2.094, 40), (4.189, 48)]:
+            angle = t * 0.75 + orbit_phase
+            dx = ring_rx * math.cos(angle)
+            dy = ring_ry * math.sin(angle)
+            da = int(alpha_base + 20 * math.sin(t * 1.8 + orbit_phase))
+            p.setPen(Qt.NoPen)
+            p.setBrush(QColor(91, 168, 240, da))
+            p.drawEllipse(int(ring_cx + dx) - 2, int(ring_cy + dy) - 2, 5, 5)
+
+        # --- Logo ---
         if self._logo_pixmap:
             lx = (w - self._logo_pixmap.width()) // 2
-            ly = 30
-            painter.setOpacity(0.15)
-            painter.drawPixmap(lx + 2, ly + 2, self._logo_pixmap)
-            painter.setOpacity(1.0)
-            painter.drawPixmap(lx, ly, self._logo_pixmap)
+            ly = self._LOGO_Y
+            p.drawPixmap(lx, ly, self._logo_pixmap)
 
-        # Title
-        painter.setPen(QColor(255, 255, 255, 240))
-        painter.setFont(QFont("Arial", 17, QFont.Bold))
-        painter.drawText(0, text_y, w, 36, Qt.AlignHCenter, "TRRCMS")
+        # --- Title "TRRCMS" ---
+        title_font = QFont(self._FONT, 16, QFont.DemiBold)
+        title_font.setLetterSpacing(QFont.AbsoluteSpacing, 3.0)
+        p.setFont(title_font)
+        p.setPen(QColor(255, 255, 255, 240))
+        p.drawText(0, self._TITLE_Y, w, self._TITLE_H,
+                   Qt.AlignHCenter | Qt.AlignVCenter, "TRRCMS")
 
-        # Subtitle
-        painter.setFont(QFont("Arial", 10))
-        painter.setPen(QColor(255, 255, 255, 160))
-        painter.drawText(0, text_y + 36, w, 24, Qt.AlignHCenter,
-                         "Tenure Rights Registration & Claims")
+        # --- English subtitle ---
+        sub_font = QFont(self._FONT, 9)
+        sub_font.setLetterSpacing(QFont.AbsoluteSpacing, 0.3)
+        p.setFont(sub_font)
+        p.setPen(QColor(139, 172, 200, 180))
+        p.drawText(0, self._SUB_EN_Y, w, self._SUB_EN_H,
+                   Qt.AlignHCenter | Qt.AlignVCenter,
+                   "Tenure Rights Registration & Claims Management")
 
-        # Animated separator — blue sweep sliding across
-        sep_y = text_y + 68
-        sweep = (t * 0.4) % 1.0
-        sep_grad = QLinearGradient(80, 0, w - 80, 0)
-        sep_grad.setColorAt(0.0, QColor(255, 255, 255, 0))
+        # --- Arabic subtitle ---
+        ar_font = QFont(self._FONT, 9)
+        p.setFont(ar_font)
+        p.setPen(QColor(139, 172, 200, 130))
+        p.drawText(0, self._SUB_AR_Y, w, self._SUB_AR_H,
+                   Qt.AlignHCenter | Qt.AlignVCenter,
+                   "\u0646\u0638\u0627\u0645 \u062a\u0633\u062c\u064a\u0644 "
+                   "\u062d\u0642\u0648\u0642 \u0627\u0644\u062d\u064a\u0627\u0632\u0629 "
+                   "\u0648\u0625\u062f\u0627\u0631\u0629 \u0627\u0644\u0645\u0637\u0627\u0644\u0628\u0627\u062a")
+
+        # --- Animated separator ---
+        sep_y = self._SEP_Y
+
+        # Faint flanking rules
+        p.setPen(QPen(QColor(56, 144, 223, 12), 0.5))
+        p.drawLine(100, sep_y - 6, w - 100, sep_y - 6)
+        p.drawLine(100, sep_y + 6, w - 100, sep_y + 6)
+
+        # Main sweep
+        sweep = (t * 0.3) % 1.0
+        sg = QLinearGradient(100, 0, w - 100, 0)
+        sg.setColorAt(0.0, QColor(255, 255, 255, 0))
         pre = max(0.05, sweep - 0.15)
         post = min(0.95, sweep + 0.15)
         if pre < post:
-            sep_grad.setColorAt(pre, QColor(255, 255, 255, 30))
-            sep_grad.setColorAt(sweep, QColor(56, 144, 223, 200))
-            sep_grad.setColorAt(post, QColor(255, 255, 255, 30))
-        sep_grad.setColorAt(1.0, QColor(255, 255, 255, 0))
-        painter.setPen(QPen(sep_grad, 1.5))
-        painter.drawLine(80, sep_y, w - 80, sep_y)
+            sg.setColorAt(pre, QColor(255, 255, 255, 20))
+            sg.setColorAt(sweep, QColor(56, 144, 223, 180))
+            sg.setColorAt(post, QColor(255, 255, 255, 20))
+        sg.setColorAt(1.0, QColor(255, 255, 255, 0))
+        p.setPen(QPen(sg, 1.0))
+        p.drawLine(100, sep_y, w - 100, sep_y)
 
-        # Status message with animated dots
+        # --- Progress bar ---
+        bar_y = self._BAR_Y
+        bar_x = 110
+        bar_w = w - 220
+        bar_h = 3
+
+        p.setPen(Qt.NoPen)
+        p.setBrush(QColor("#1A2E4A"))
+        p.drawRoundedRect(bar_x, bar_y, bar_w, bar_h, 1.5, 1.5)
+
+        if self._progress > 0:
+            fill_w = max(4, int(bar_w * self._progress))
+            fg = QLinearGradient(bar_x, 0, bar_x + fill_w, 0)
+            fg.setColorAt(0.0, QColor(56, 144, 223, 200))
+            fg.setColorAt(1.0, QColor(91, 168, 240, 255))
+            p.setBrush(fg)
+            p.drawRoundedRect(bar_x, bar_y, fill_w, bar_h, 1.5, 1.5)
+
+            if fill_w > 8:
+                eg = QRadialGradient(bar_x + fill_w, bar_y + 1.5, 14)
+                eg.setColorAt(0.0, QColor(91, 168, 240, 65))
+                eg.setColorAt(1.0, QColor(56, 144, 223, 0))
+                p.setBrush(eg)
+                p.drawEllipse(int(bar_x + fill_w - 14), bar_y - 12, 28, 28)
+        else:
+            seg_w = bar_w * 0.25
+            seg_pos = (math.sin(t * 2.0) * 0.5 + 0.5) * (bar_w - seg_w)
+            ig = QLinearGradient(bar_x + seg_pos, 0, bar_x + seg_pos + seg_w, 0)
+            ig.setColorAt(0.0, QColor(56, 144, 223, 0))
+            ig.setColorAt(0.3, QColor(56, 144, 223, 140))
+            ig.setColorAt(0.7, QColor(91, 168, 240, 140))
+            ig.setColorAt(1.0, QColor(56, 144, 223, 0))
+            p.setBrush(ig)
+            p.drawRoundedRect(
+                int(bar_x + seg_pos), bar_y,
+                int(seg_w), bar_h, 1.5, 1.5,
+            )
+
+        # --- Status message ---
         if self._status_msg:
-            painter.setPen(QColor(255, 255, 255, 120))
-            painter.setFont(QFont("Arial", 9))
-            dots = "." * self._dots_frame
-            display_msg = self._status_msg.rstrip(".") + dots
-            painter.drawText(0, h - 40, w, 30, Qt.AlignHCenter, display_msg)
+            p.setPen(QColor(139, 172, 200, 120))
+            p.setFont(QFont(self._FONT, 8))
+            p.drawText(0, self._STATUS_Y, w, 24, Qt.AlignHCenter, self._status_msg)
 
-        painter.end()
+        p.setOpacity(1.0)
+        p.end()
 
 
 def main():
     """Main application entry point."""
+
+    # Enable GPU acceleration for QWebEngineView (must be set before QApplication)
+    os.environ["QTWEBENGINE_CHROMIUM_FLAGS"] = (
+        "--ignore-gpu-blacklist "
+        "--enable-gpu-rasterization "
+        "--enable-zero-copy"
+    )
 
     # Set Qt attributes BEFORE creating QApplication
     QApplication.setAttribute(Qt.AA_EnableHighDpiScaling, True)  # type: ignore
@@ -239,6 +413,7 @@ def main():
         set_application_default_font()
 
         # Initialize database in background thread so splash can animate
+        splash.set_progress(0.1)
         splash.showMessage(tr("splash.initializing_db"),
                            Qt.AlignBottom | Qt.AlignHCenter,
                            QColor(255, 255, 255, 120))
@@ -266,11 +441,14 @@ def main():
         db = db_result[0]
 
         # Create main window
+        splash.set_progress(0.7)
         splash.showMessage(tr("splash.loading_ui"),
                            Qt.AlignBottom | Qt.AlignHCenter,
                            QColor(255, 255, 255, 120))
         app.processEvents()
         window = MainWindow(db, saved_lang)
+        splash.set_progress(1.0)
+        app.processEvents()
         window.show()
         splash.finish(window)
         print("[STARTUP] Application started successfully!")

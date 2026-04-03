@@ -546,8 +546,8 @@ class RelationDialog(QDialog):
         share_layout.setSpacing(4)
 
         self.share_spin = QSpinBox()
-        self.share_spin.setRange(0, 100)
-        self.share_spin.setSuffix(" %")
+        self.share_spin.setRange(0, 2400)
+        self.share_spin.setSuffix(f" {tr('unit.shares')}")
         self.share_spin.setValue(0)
         self.share_spin.valueChanged.connect(self._validate_share)
         share_layout.addWidget(self.share_spin)
@@ -651,10 +651,8 @@ class RelationDialog(QDialog):
         if unit_id:
             exclude_id = self.relation.relation_id if self.relation else None
             current_total = self.relation_repo.get_total_ownership_share(unit_id, exclude_id)
-            # Convert from 2400 shares to percentage
-            current_pct = (current_total / 2400.0) * 100
-            remaining = 100 - current_pct
-            self.share_hint.setText(f"{tr('page.relations.remaining_shares')}: {remaining:.1f}%")
+            remaining = 2400 - current_total
+            self.share_hint.setText(f"{tr('page.relations.remaining_shares')}: {remaining}")
 
     def _validate_share(self):
         """Validate ownership share doesn't exceed 100% total."""
@@ -669,11 +667,9 @@ class RelationDialog(QDialog):
 
         exclude_id = self.relation.relation_id if self.relation else None
         current_total = self.relation_repo.get_total_ownership_share(unit_id, exclude_id)
-        current_pct = (current_total / 2400.0) * 100
-        new_share_in_2400 = int((new_share / 100.0) * 2400)
 
-        if current_pct + new_share > 100:
-            self.share_error.setText(f"{tr('page.relations.err_shares_exceed')} (:{current_pct:.1f}%)")
+        if current_total + new_share > 2400:
+            self.share_error.setText(f"{tr('page.relations.err_shares_exceed')} ({current_total}/2400)")
             self.share_error.setVisible(True)
             return False
 
@@ -704,10 +700,9 @@ class RelationDialog(QDialog):
         if self.relation.relation_type_other_description:
             self.other_desc.setText(self.relation.relation_type_other_description)
 
-        # Ownership share (convert from 2400 to percentage)
+        # Ownership share (direct value in shares 0-2400)
         if self.relation.ownership_share > 0:
-            pct = int((self.relation.ownership_share / 2400.0) * 100)
-            self.share_spin.setValue(pct)
+            self.share_spin.setValue(self.relation.ownership_share)
 
         # Dates
         if self.relation.relation_start_date:
@@ -782,9 +777,7 @@ class RelationDialog(QDialog):
 
     def get_data(self) -> dict:
         """Get form data as dictionary."""
-        # Convert percentage to 2400 shares
-        share_pct = self.share_spin.value()
-        share_2400 = int((share_pct / 100.0) * 2400)
+        share_2400 = self.share_spin.value()
 
         # Get dates
         start_date = self.start_date.date().toPyDate() if self.start_date.date().isValid() else None

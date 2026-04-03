@@ -35,6 +35,9 @@ from ui.components.rtl_combo import RtlCombo
 from ui.components.centered_text_edit import CenteredTextEdit
 from ui.components.toast import Toast
 from ui.components.loading_spinner import LoadingSpinnerOverlay
+from ui.design_system import Colors
+from ui.font_utils import create_font, FontManager
+from ui.wizards.office_survey.wizard_styles import FORM_FIELD_STYLE
 from utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -74,8 +77,9 @@ class PersonDialog(QDialog):
         self._pending_rel_replacements = []   # deferred evidence_ids for tenure file replacement
         self._field_styles = {}  # {widget: original_stylesheet} for error state restore
 
+        self._overlay = None
         self.setModal(True)
-        self.setFixedSize(589, 674)  # 565+24 width, 650+24 height (12px shadow margin each side)
+        self.setFixedWidth(520)
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.Dialog)
         self.setAttribute(Qt.WA_TranslucentBackground)
         self.setStyleSheet("QDialog { background-color: transparent; }")
@@ -102,6 +106,59 @@ class PersonDialog(QDialog):
             if main_window and hasattr(main_window, '_api_token') and main_window._api_token:
                 self._api_service.set_access_token(main_window._api_token)
 
+    # Drawer overlay and positioning
+
+    def showEvent(self, event):
+        """Position as a slide-in drawer on the right edge of the parent window."""
+        super().showEvent(event)
+        parent = self.parent()
+        if parent:
+            top_window = parent.window()
+            win_rect = top_window.geometry()
+            self.setFixedHeight(win_rect.height())
+            target_x = win_rect.x() + win_rect.width() - self.width()
+            target_y = win_rect.y()
+            self.move(target_x, target_y)
+            # Dark backdrop
+            self._overlay = QWidget(top_window)
+            self._overlay.setGeometry(0, 0, top_window.width(), top_window.height())
+            self._overlay.setStyleSheet("background-color: rgba(0, 0, 0, 0.3);")
+            self._overlay.setAttribute(Qt.WA_TransparentForMouseEvents, False)
+            self._overlay.show()
+            self._overlay.raise_()
+            self.raise_()
+            # Slide-in animation
+            from PyQt5.QtCore import QPropertyAnimation, QPoint, QEasingCurve
+            self._slide_anim = QPropertyAnimation(self, b"pos")
+            self._slide_anim.setDuration(250)
+            self._slide_anim.setStartValue(QPoint(win_rect.x() + win_rect.width(), target_y))
+            self._slide_anim.setEndValue(QPoint(target_x, target_y))
+            self._slide_anim.setEasingCurve(QEasingCurve.OutCubic)
+            self._slide_anim.start()
+
+    def _cleanup_overlay(self):
+        """Remove the backdrop overlay."""
+        if self._overlay:
+            try:
+                self._overlay.hide()
+                self._overlay.setParent(None)
+                self._overlay.deleteLater()
+            except RuntimeError:
+                pass
+            self._overlay = None
+
+    def closeEvent(self, event):
+        self._cleanup_overlay()
+        super().closeEvent(event)
+
+    def reject(self):
+        self._cleanup_overlay()
+        super().reject()
+
+    def accept(self):
+        self._cleanup_overlay()
+        super().accept()
+
     # UI Setup
 
     def _setup_ui(self):
@@ -109,7 +166,7 @@ class PersonDialog(QDialog):
         self.setLayoutDirection(get_layout_direction())
 
         outer_layout = QVBoxLayout(self)
-        outer_layout.setContentsMargins(12, 12, 12, 12)  # Margin for shadow visibility
+        outer_layout.setContentsMargins(12, 0, 0, 0)  # Drawer: flush with edge, left margin for shadow
         outer_layout.setSpacing(0)
 
         # White rounded content frame
@@ -118,7 +175,11 @@ class PersonDialog(QDialog):
         content_frame.setStyleSheet("""
             QFrame#ContentFrame {
                 background-color: #FFFFFF;
-                border-radius: 24px;
+                border-top-left-radius: 16px;
+                border-bottom-left-radius: 16px;
+                border-top-right-radius: 0px;
+                border-bottom-right-radius: 0px;
+                border-left: 1px solid #E2EAF2;
             }
             QFrame#ContentFrame QLabel,
             QFrame#ContentFrame QRadioButton {
@@ -151,7 +212,8 @@ class PersonDialog(QDialog):
             title_text = tr("wizard.person_dialog.title_add")
         self._dialog_title = QLabel(title_text)
         self._dialog_title.setAlignment(Qt.AlignAbsolute | Qt.AlignRight)
-        self._dialog_title.setStyleSheet("font-size: 18px; font-weight: bold; color: #2c3e50;")
+        self._dialog_title.setFont(create_font(size=14, weight=FontManager.WEIGHT_BOLD))
+        self._dialog_title.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent;")
         main_layout.addWidget(self._dialog_title)
 
         # Progress indicator (3 bars)
@@ -342,7 +404,7 @@ class PersonDialog(QDialog):
         if fill_pct <= 0:
             bar.setStyleSheet("QFrame { background-color: #e0e6ed; border-radius: 2px; }")
         elif fill_pct >= 1.0:
-            bar.setStyleSheet("QFrame { background-color: #4a90e2; border-radius: 2px; }")
+            bar.setStyleSheet("QFrame { background-color: #3890DF; border-radius: 2px; }")
         else:
             # Gradient: blue up to fill_pct, then gray
             stop = round(fill_pct, 3)
@@ -350,7 +412,7 @@ class PersonDialog(QDialog):
             bar.setStyleSheet(f"""
                 QFrame {{
                     background: qlineargradient(x1:1, y1:0, x2:0, y2:0,
-                        stop:0 #4a90e2, stop:{stop} #4a90e2,
+                        stop:0 #3890DF, stop:{stop} #3890DF,
                         stop:{stop2} #e0e6ed, stop:1 #e0e6ed);
                     border-radius: 2px;
                 }}
@@ -377,7 +439,7 @@ class PersonDialog(QDialog):
         tab_layout.setContentsMargins(0, 0, 0, 0)
         tab_layout.setSpacing(10)
 
-        label_style = "color: #555; font-weight: 600; font-size: 11pt; background: transparent;"
+        label_style = f"color: {Colors.WIZARD_TITLE}; font-weight: 600; font-size: 11pt; background: transparent;"
 
         grid = QGridLayout()
         grid.setHorizontalSpacing(12)
@@ -553,7 +615,7 @@ class PersonDialog(QDialog):
         tab_layout.setContentsMargins(0, 0, 0, 0)
         tab_layout.setSpacing(10)
 
-        label_style = "color: #555; font-weight: 600; font-size: 11pt; background: transparent;"
+        label_style = f"color: {Colors.WIZARD_TITLE}; font-weight: 600; font-size: 11pt; background: transparent;"
 
         grid = QGridLayout()
         grid.setHorizontalSpacing(12)
@@ -666,7 +728,7 @@ class PersonDialog(QDialog):
         tab_layout.setContentsMargins(0, 0, 0, 0)
         tab_layout.setSpacing(10)
 
-        label_style = "color: #555; font-weight: 600; font-size: 11pt; background: transparent;"
+        label_style = f"color: {Colors.WIZARD_TITLE}; font-weight: 600; font-size: 11pt; background: transparent;"
         from ui.style_manager import StyleManager
 
         grid = QGridLayout()
@@ -689,8 +751,8 @@ class PersonDialog(QDialog):
         grid.addWidget(self.rel_type_combo, row, 0)
 
         self.ownership_share = QLineEdit()
-        self.ownership_share.setPlaceholderText("%")
-        self.ownership_share.setValidator(QDoubleValidator(0, 100, 2, self))
+        self.ownership_share.setPlaceholderText(tr("wizard.person_dialog.ownership_share_placeholder"))
+        self.ownership_share.setValidator(QIntValidator(0, 2400, self))
         self.ownership_share.editingFinished.connect(self._clamp_ownership_share)
         self.ownership_share.setStyleSheet(self._input_style())
         self.ownership_share.setEnabled(False)
@@ -774,7 +836,7 @@ class PersonDialog(QDialog):
                 font-size: 16px;
             }
             QTextEdit:focus {
-                border: 1px solid #E0E6ED;
+                border: 1px solid #D0D7E2;
             }
         """)
         self.notes.setLayoutDirection(get_layout_direction())
@@ -962,23 +1024,23 @@ class PersonDialog(QDialog):
         if primary:
             btn.setStyleSheet("""
                 QPushButton {
-                    background-color: #4a90e2;
+                    background-color: #3890DF;
                     color: white;
-                    border: 1px solid #4a90e2;
+                    border: 1px solid #3890DF;
                     border-radius: 8px;
                     font-weight: bold;
                     font-size: 14px;
                 }
                 QPushButton:hover {
-                    background-color: #357ABD;
-                    border-color: #357ABD;
+                    background-color: #2E7BD6;
+                    border-color: #2E7BD6;
                 }
             """)
         else:
             btn.setStyleSheet("""
                 QPushButton {
                     background-color: white;
-                    color: #4a90e2;
+                    color: #3890DF;
                     border: 1.5px solid #b0b8c4;
                     border-radius: 8px;
                     font-weight: bold;
@@ -1053,7 +1115,7 @@ class PersonDialog(QDialog):
         text_btn = QPushButton(button_text or tr("wizard.person_dialog.attach_id_photos"))
         text_btn.setStyleSheet("""
             QPushButton {
-                color: #4a90e2;
+                color: #3890DF;
                 text-decoration: underline;
                 border: none;
                 background: transparent;
@@ -1061,7 +1123,7 @@ class PersonDialog(QDialog):
                 font-weight: 500;
                 padding: 0px;
             }
-            QPushButton:hover { color: #357ABD; }
+            QPushButton:hover { color: #2E7BD6; }
         """)
         text_btn.setCursor(Qt.PointingHandCursor)
         text_btn.clicked.connect(browse_callback)
@@ -1090,7 +1152,7 @@ class PersonDialog(QDialog):
         thumb.setAlignment(Qt.AlignCenter)
         thumb.setStyleSheet("""
             QLabel {
-                border: 1px solid #E0E6ED;
+                border: 1px solid #D0D7E2;
                 border-radius: 6px;
                 background-color: #FFFFFF;
             }
@@ -1209,7 +1271,7 @@ class PersonDialog(QDialog):
         down_img = str(Config.IMAGES_DIR / "down.png").replace("\\", "/")
         return f"""
             QLineEdit, QComboBox, QDateEdit, QDoubleSpinBox {{
-                border: 1px solid #E0E6ED;
+                border: 1px solid #D0D7E2;
                 border-radius: 8px;
                 padding: 10px;
                 background-color: #f0f7ff;
@@ -1229,7 +1291,7 @@ class PersonDialog(QDialog):
                 max-height: 20px;
             }}
             QLineEdit:focus, QComboBox:focus, QDateEdit:focus, QDoubleSpinBox:focus {{
-                border: 1px solid #E0E6ED;
+                border: 1px solid #D0D7E2;
             }}
             QComboBox::drop-down {{
                 border: none;
@@ -1243,12 +1305,12 @@ class PersonDialog(QDialog):
             }}
             QComboBox QAbstractItemView {{
                 background-color: #FFFFFF;
-                border: 1px solid #E0E6ED;
+                border: 1px solid #D0D7E2;
                 border-radius: 0px;
                 border-bottom-left-radius: 10px;
                 border-bottom-right-radius: 10px;
                 padding: 4px;
-                selection-background-color: #e8f0fe;
+                selection-background-color: #EBF5FF;
                 selection-color: #333;
                 outline: none;
             }}
@@ -1287,7 +1349,7 @@ class PersonDialog(QDialog):
 
     def _error_label_style(self) -> str:
         """Style for inline validation error labels."""
-        return "color: #e74c3c; font-size: 11px; font-weight: 700; background: transparent; padding: 0px;"
+        return f"color: {Colors.ERROR}; font-size: 11px; font-weight: 700; background: transparent; padding: 0px;"
 
     def _input_error_style(self) -> str:
         """Input style with red border for validation error state."""
@@ -1367,7 +1429,7 @@ class PersonDialog(QDialog):
         return """
             QDateEdit {
                 background-color: #f0f7ff;
-                border: 1px solid #E0E6ED;
+                border: 1px solid #D0D7E2;
                 border-radius: 8px;
                 padding: 10px;
                 color: #333;
@@ -1376,7 +1438,7 @@ class PersonDialog(QDialog):
                 max-height: 20px;
             }
             QDateEdit:focus {
-                border: 1px solid #E0E6ED;
+                border: 1px solid #D0D7E2;
             }
             QDateEdit::drop-down {
                 border: none;
@@ -1391,7 +1453,7 @@ class PersonDialog(QDialog):
             /* Calendar popup styling */
             QCalendarWidget {
                 background-color: #FFFFFF;
-                border: 1px solid #E0E6ED;
+                border: 1px solid #D0D7E2;
                 border-radius: 10px;
             }
             QCalendarWidget QToolButton {
@@ -1412,26 +1474,26 @@ class PersonDialog(QDialog):
             QCalendarWidget QToolButton#qt_calendar_prevmonth {
                 qproperty-icon: none;
                 qproperty-text: "<";
-                color: #4a90e2;
+                color: #3890DF;
                 font-weight: bold;
                 font-size: 16px;
             }
             QCalendarWidget QToolButton#qt_calendar_nextmonth {
                 qproperty-icon: none;
                 qproperty-text: ">";
-                color: #4a90e2;
+                color: #3890DF;
                 font-weight: bold;
                 font-size: 16px;
             }
             QCalendarWidget QWidget#qt_calendar_navigationbar {
                 background-color: #FFFFFF;
-                border-bottom: 1px solid #E0E6ED;
+                border-bottom: 1px solid #D0D7E2;
                 padding: 4px;
             }
             QCalendarWidget QAbstractItemView {
                 background-color: #FFFFFF;
                 color: #333;
-                selection-background-color: #4a90e2;
+                selection-background-color: #3890DF;
                 selection-color: white;
                 font-size: 12px;
                 outline: none;
@@ -1448,18 +1510,18 @@ class PersonDialog(QDialog):
             }
             QCalendarWidget QMenu {
                 background-color: #FFFFFF;
-                border: 1px solid #E0E6ED;
+                border: 1px solid #D0D7E2;
                 border-radius: 8px;
                 color: #333;
             }
             QCalendarWidget QMenu::item:selected {
-                background-color: #e8f0fe;
+                background-color: #EBF5FF;
                 color: #333;
             }
             QCalendarWidget QSpinBox {
                 background-color: #FFFFFF;
                 color: #333;
-                border: 1px solid #E0E6ED;
+                border: 1px solid #D0D7E2;
                 border-radius: 6px;
                 padding: 2px 8px;
                 font-size: 13px;
@@ -2299,11 +2361,11 @@ class PersonDialog(QDialog):
             self._clear_field_error(self.ownership_share, self._ownership_error)
 
     def _clamp_ownership_share(self):
-        """Clamp ownership share to 0-100 range on focus out."""
+        """Clamp ownership share to 0-2400 range on focus out."""
         try:
-            val = float(self.ownership_share.text() or 0)
-            if val > 100:
-                self.ownership_share.setText("100")
+            val = int(self.ownership_share.text() or 0)
+            if val > 2400:
+                self.ownership_share.setText("2400")
             elif val < 0:
                 self.ownership_share.setText("0")
         except ValueError:
@@ -2502,7 +2564,7 @@ class PersonDialog(QDialog):
             'relation_data': {
                 'rel_type': self.rel_type_combo.currentData(),
                 'start_date': self._build_start_date_iso(),
-                'ownership_share': float(self.ownership_share.text() or 0),
+                'ownership_share': int(self.ownership_share.text() or 0),
                 'evidence_type': self.evidence_type.currentData() if self.evidence_type.currentIndex() > 0 else None,
                 'evidence_desc': self.evidence_desc.text().strip() or None,
                 'notes': self.notes.toPlainText().strip() or None,
@@ -2642,8 +2704,8 @@ class PersonDialog(QDialog):
             has_error = True
         elif ownership_text:
             try:
-                ownership_val = float(ownership_text)
-                if ownership_val < 0 or ownership_val > 100:
+                ownership_val = int(ownership_text)
+                if ownership_val < 0 or ownership_val > 2400:
                     self._set_field_error(self.ownership_share, self._ownership_error, tr("wizard.person_dialog.invalid_ownership_share"))
                     if not has_error:
                         self.tab_widget.setCurrentIndex(2)
