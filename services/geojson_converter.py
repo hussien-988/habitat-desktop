@@ -397,7 +397,9 @@ class GeoJSONConverter:
             "neighborhood": building.neighborhood_name_ar or building.neighborhood_name or "",
             "units": building.number_of_units or 0,
             "type": building.building_type or "",
-            "geometry_type": geometry_type.value if geometry_type else "Point"
+            "geometry_type": geometry_type.value if geometry_type else "Point",
+            "is_assigned": getattr(building, 'is_assigned', False),
+            "is_locked": getattr(building, 'is_locked', False),
         }
 
         # Add custom properties

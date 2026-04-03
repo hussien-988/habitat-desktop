@@ -36,6 +36,7 @@ class MainWindow(QMainWindow):
         Pages.CLAIM_COMPARISON: {"admin", "data_manager"},
         Pages.IMPORT_WIZARD: {"admin", "data_manager"},
         Pages.IMPORT_PACKAGES: {"admin", "data_manager"},
+        Pages.BUILDINGS: {"admin", "data_manager"},
     }
 
     def __init__(self, db: Database, lang: str = "ar", parent=None):
@@ -329,6 +330,7 @@ class MainWindow(QMainWindow):
             2: Pages.IMPORT_PACKAGES,
             3: Pages.DUPLICATES,
             5: Pages.FIELD_ASSIGNMENT,
+            6: Pages.BUILDINGS,
         }
 
     def _setup_layout(self):
@@ -478,6 +480,13 @@ class MainWindow(QMainWindow):
         self.current_user = user
         logger.info(f"User logged in: {user.username} ({user.role})")
 
+        # Check if password change is required before proceeding
+        if getattr(user, 'must_change_password', False):
+            logger.info("Password change required for user: %s", user.username)
+            if not self._handle_forced_password_change(user):
+                self._show_login()
+                return
+
         # Pass API token to BuildingController if using API backend
         token = getattr(user, '_api_token', None)
         logger.info(f"User API token available: {bool(token)}")
@@ -549,6 +558,55 @@ class MainWindow(QMainWindow):
 
         # Start session timeout timer
         self._start_session_timer()
+
+    def _handle_forced_password_change(self, user) -> bool:
+        """Show password change dialog when backend requires it.
+
+        Returns True if password was changed successfully, False otherwise.
+        """
+        from ui.components.dialogs.password_dialog import PasswordDialog
+        from services.api_client import get_api_client
+        from services.api_auth_service import ApiAuthService
+        from ui.components.toast import Toast
+
+        result = PasswordDialog.change_password(parent=self)
+        if result is None:
+            Toast.show(self, tr("dialog.password.change_cancelled"), Toast.WARNING)
+            return False
+
+        current_password, new_password = result
+
+        try:
+            api_client = get_api_client()
+            token = getattr(user, '_api_token', None)
+            if token:
+                api_client.set_access_token(token)
+            api_client.change_password(current_password, new_password)
+            logger.info("Password changed successfully for user: %s", user.username)
+        except Exception as e:
+            logger.error("Password change failed: %s", e)
+            Toast.show(self, tr("page.user_mgmt.password_change_failed"), Toast.ERROR)
+            return False
+
+        # Re-authenticate with new password to get unrestricted token
+        try:
+            auth_service = ApiAuthService()
+            new_user, error = auth_service.authenticate(user.username, new_password)
+            if new_user:
+                self.current_user = new_user
+                token = getattr(new_user, '_api_token', None)
+                if token:
+                    self._set_api_token_for_controllers(token)
+                Toast.show(self, tr("page.user_mgmt.password_changed_success"), Toast.SUCCESS)
+                return True
+            else:
+                logger.error("Re-authentication after password change failed: %s", error)
+                Toast.show(self, tr("page.user_mgmt.password_change_failed"), Toast.ERROR)
+                return False
+        except Exception as e:
+            logger.error("Re-authentication failed: %s", e)
+            Toast.show(self, tr("page.user_mgmt.password_change_failed"), Toast.ERROR)
+            return False
 
     def _show_login_loading(self):
         """Show a loading spinner overlay during post-login data preparation."""

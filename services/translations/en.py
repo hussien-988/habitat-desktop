@@ -2,6 +2,9 @@
 """English translations."""
 
 EN_TRANSLATIONS = {
+    # Units
+    "unit.shares": "shares",
+
     # Dialogs
     "dialog.error": "Error",
     "dialog.warning": "Warning",
@@ -446,7 +449,9 @@ EN_TRANSLATIONS = {
     "wizard.household.unit_type_label": "Unit Type",
     "wizard.household.unit_status_label": "Unit Status",
     "wizard.household.members_required": "Number of household members must be greater than zero",
-    "wizard.household.members_mismatch": "Ensure member count matches the details",
+    "wizard.household.members_mismatch": "Ensure member count matches the details (excluding persons with disabilities)",
+    "wizard.household.disability_exceeds_total": "Disability count cannot exceed total household members",
+    "wizard.household.total_members_hint": "Excluding persons with disabilities",
     "wizard.person.card_title": "Persons Data",
     "wizard.person.subtitle": "Registered Persons List",
     "wizard.person.add_button": "+ Add New Person",
@@ -564,6 +569,7 @@ EN_TRANSLATIONS = {
     "wizard.person_dialog.relation_type": "Relation Type",
     "wizard.person_dialog.relation_start_date": "Relation Start Date",
     "wizard.person_dialog.ownership_share": "Ownership Share",
+    "wizard.person_dialog.ownership_share_placeholder": "0 - 2400 shares",
     "wizard.person_dialog.evidence_type": "Evidence Type",
     "wizard.person_dialog.evidence_description": "Evidence Description",
     "wizard.person_dialog.evidence_desc_placeholder": "Enter evidence description",
@@ -590,7 +596,7 @@ EN_TRANSLATIONS = {
     "wizard.person_dialog.invalid_first_name": "First name must contain only letters (Arabic or Latin)",
     "wizard.person_dialog.invalid_last_name": "Last name must contain only letters (Arabic or Latin)",
     "wizard.person_dialog.invalid_father_name": "Father's name must contain only letters (Arabic or Latin)",
-    "wizard.person_dialog.invalid_ownership_share": "Ownership share must be between 0 and 100",
+    "wizard.person_dialog.invalid_ownership_share": "Ownership share must be between 0 and 2400 shares",
     "wizard.person_dialog.ownership_share_required": "Ownership share is required for shared ownership",
     "wizard.person_dialog.invalid_mobile": "Invalid mobile number - must be exactly 8 digits",
     "wizard.person_dialog.invalid_landline": "Invalid landline number - must be exactly 7 digits",
@@ -1101,7 +1107,7 @@ EN_TRANSLATIONS = {
     "table.relations.person": "Person",
     "table.relations.unit": "Unit",
     "table.relations.relation_type": "Relation Type",
-    "table.relations.share": "Share %",
+    "table.relations.share": "Share (shares)",
     "table.relations.status": "Status",
     "table.relations.start_date": "Start Date",
     "table.relations.notes": "Notes",
@@ -1628,7 +1634,7 @@ EN_TRANSLATIONS = {
     "page.relations.notes_label": "Notes",
     "page.relations.other_description": "Other Description",
     "page.relations.ownership_details_group": "Ownership Details",
-    "page.relations.ownership_share_hint": "Percentage (0-100)",
+    "page.relations.ownership_share_hint": "Shares (0-2400)",
     "page.relations.person_filter": "Person",
     "page.relations.person_required": "Person is required",
     "page.relations.ref_date_label": "Reference Date",
@@ -1645,7 +1651,7 @@ EN_TRANSLATIONS = {
     "page.relations.select_file": "Select File",
     "page.relations.select_person": "Select Person",
     "page.relations.select_unit": "Select Unit",
-    "page.relations.share_percentage": "Share %",
+    "page.relations.share_percentage": "Ownership Share (shares)",
     "page.relations.start_date_label": "Start Date",
     "page.relations.status_filter": "Status",
     "page.relations.status_label": "Status",
@@ -2551,6 +2557,8 @@ EN_TRANSLATIONS = {
     # page.user_mgmt
     "page.user_mgmt.load_failed": "Failed to load users",
     "page.user_mgmt.password_change_failed": "Failed to change password",
+    "dialog.password.change_cancelled": "Password change cancelled",
+    "dialog.password.forced_change_title": "You must change your password before proceeding",
 
     # person_search.applicant_tag
     "person_search.applicant_tag": "Applicant",
@@ -2975,4 +2983,28 @@ EN_TRANSLATIONS = {
     # Loading text
     "page.login.loading_data": "Loading data...",
     "component.building_map.loading": "Loading map...",
+
+    # Building assignment and lock
+    "building.assigned": "Assigned",
+    "building.not_assigned": "Not Assigned",
+    "building.assigned_to_team": "Assigned to field team",
+    "building.locked": "Locked",
+    "building.unlocked": "Unlocked",
+    "building.action.lock": "Lock Building",
+    "building.action.unlock": "Unlock Building",
+    "building.lock_success": "Building lock state changed successfully",
+    "building.lock_failed": "Failed to change building lock state",
+    "table.buildings.assignment_status": "Assignment Status",
+    "table.buildings.lock_status": "Lock Status",
+
+    # Buildings management page
+    "page.buildings.title": "Buildings Management",
+    "page.buildings.subtitle": "View and manage building states",
+    "page.buildings.search_placeholder": "Search by building code or neighborhood...",
+    "page.buildings.no_buildings": "No buildings found",
+    "page.buildings.loading": "Loading buildings...",
+    "page.buildings.total_count": "{count} buildings",
+    "page.buildings.confirm_lock": "Lock this building? Field researchers will not be able to edit its data.",
+    "page.buildings.confirm_unlock": "Unlock this building? Field researchers will be able to edit its data.",
+    "navbar.tab.buildings": "Buildings Management",
 }

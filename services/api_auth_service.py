@@ -134,6 +134,7 @@ class ApiAuthService:
         user.email = data.get("email")
         user.is_active = data.get("is_active", data.get("isActive", True))
         user.is_locked = data.get("is_locked", data.get("isLocked", False))
+        user.must_change_password = data.get("mustChangePassword", False)
 
         # Store token if provided (handle various field names)
         # Common token field names: token, accessToken, access_token, jwtToken, jwt

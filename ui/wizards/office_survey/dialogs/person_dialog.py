@@ -751,8 +751,8 @@ class PersonDialog(QDialog):
         grid.addWidget(self.rel_type_combo, row, 0)
 
         self.ownership_share = QLineEdit()
-        self.ownership_share.setPlaceholderText("%")
-        self.ownership_share.setValidator(QDoubleValidator(0, 100, 2, self))
+        self.ownership_share.setPlaceholderText(tr("wizard.person_dialog.ownership_share_placeholder"))
+        self.ownership_share.setValidator(QIntValidator(0, 2400, self))
         self.ownership_share.editingFinished.connect(self._clamp_ownership_share)
         self.ownership_share.setStyleSheet(self._input_style())
         self.ownership_share.setEnabled(False)
@@ -2361,11 +2361,11 @@ class PersonDialog(QDialog):
             self._clear_field_error(self.ownership_share, self._ownership_error)
 
     def _clamp_ownership_share(self):
-        """Clamp ownership share to 0-100 range on focus out."""
+        """Clamp ownership share to 0-2400 range on focus out."""
         try:
-            val = float(self.ownership_share.text() or 0)
-            if val > 100:
-                self.ownership_share.setText("100")
+            val = int(self.ownership_share.text() or 0)
+            if val > 2400:
+                self.ownership_share.setText("2400")
             elif val < 0:
                 self.ownership_share.setText("0")
         except ValueError:
@@ -2564,7 +2564,7 @@ class PersonDialog(QDialog):
             'relation_data': {
                 'rel_type': self.rel_type_combo.currentData(),
                 'start_date': self._build_start_date_iso(),
-                'ownership_share': float(self.ownership_share.text() or 0),
+                'ownership_share': int(self.ownership_share.text() or 0),
                 'evidence_type': self.evidence_type.currentData() if self.evidence_type.currentIndex() > 0 else None,
                 'evidence_desc': self.evidence_desc.text().strip() or None,
                 'notes': self.notes.toPlainText().strip() or None,
@@ -2704,8 +2704,8 @@ class PersonDialog(QDialog):
             has_error = True
         elif ownership_text:
             try:
-                ownership_val = float(ownership_text)
-                if ownership_val < 0 or ownership_val > 100:
+                ownership_val = int(ownership_text)
+                if ownership_val < 0 or ownership_val > 2400:
                     self._set_field_error(self.ownership_share, self._ownership_error, tr("wizard.person_dialog.invalid_ownership_share"))
                     if not has_error:
                         self.tab_widget.setCurrentIndex(2)

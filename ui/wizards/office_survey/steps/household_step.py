@@ -302,8 +302,13 @@ class HouseholdStep(BaseStep):
         members_widget.setFixedHeight(45)
         total_members_layout.addWidget(members_widget)
 
+        members_hint = QLabel(tr("wizard.household.total_members_hint"))
+        members_hint.setFont(create_font(size=8, weight=FontManager.WEIGHT_REGULAR))
+        members_hint.setStyleSheet(f"color: {Colors.WIZARD_SUBTITLE}; background: transparent;")
+        members_hint.setAlignment(Qt.AlignCenter)
+        total_members_layout.addWidget(members_hint)
+
         family_info_layout.addLayout(total_members_layout)
-        # Gap before row 3: 8px
         family_info_layout.addSpacing(8)
 
         notes_field_layout = QVBoxLayout()
@@ -674,15 +679,20 @@ class HouseholdStep(BaseStep):
             result.add_error(tr("wizard.household.members_required"))
             return result
 
-        # Validate: total members == sum of all male + female fields
-        sum_details = (
+        # Validate: total members == sum of non-disabled members
+        sum_without_disability = (
             self.hh_adult_males.value() + self.hh_adult_females.value()
             + self.hh_male_children_under18.value() + self.hh_female_children_under18.value()
             + self.hh_male_elderly_over65.value() + self.hh_female_elderly_over65.value()
-            + self.hh_disabled_males.value() + self.hh_disabled_females.value()
         )
-        if total_entered != sum_details:
+        if total_entered != sum_without_disability:
             result.add_error(tr("wizard.household.members_mismatch"))
+            return result
+
+        # Validate: disabled count must not exceed total members
+        disabled_total = self.hh_disabled_males.value() + self.hh_disabled_females.value()
+        if disabled_total > total_entered:
+            result.add_error(tr("wizard.household.disability_exceeds_total"))
             return result
 
         household = {

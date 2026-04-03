@@ -400,7 +400,11 @@ class ClaimDetailDialog(QDialog):
         except Exception:
             claim_type_text = claim_type_raw or no_data
 
-        share_text = f"{self._ownership_share}%" if self._ownership_share is not None else no_data
+        if self._ownership_share is not None:
+            shares_val = round(float(self._ownership_share) * 2400) if self._ownership_share <= 1.0 else int(self._ownership_share)
+            share_text = f"{shares_val} {tr('unit.shares')}"
+        else:
+            share_text = no_data
 
         source_raw = claim.get("claimSource", 0)
         source_text = get_source_display(source_raw) if source_raw else no_data

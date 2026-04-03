@@ -2504,7 +2504,7 @@ class BuildingsListPage(QWidget):
         card_layout.setContentsMargins(10, 10, 10, 10)
 
         self.table = QTableWidget()
-        self.table.setColumnCount(7)
+        self.table.setColumnCount(9)
         self.table.setRowCount(11)  # Fixed 11 rows
         self.table.setLayoutDirection(get_layout_direction())
         self.table.setEditTriggers(QAbstractItemView.NoEditTriggers)
@@ -2522,7 +2522,7 @@ class BuildingsListPage(QWidget):
         icon_path = base_path / "assets" / "images" / "down.png"
 
         # Set headers with icons for filterable columns
-        headers = [tr("table.buildings.building_code"), tr("table.buildings.entry_date"), tr("table.buildings.area"), tr("table.buildings.neighborhood"), tr("table.buildings.building_type"), tr("table.buildings.building_status"), ""]
+        headers = [tr("table.buildings.building_code"), tr("table.buildings.entry_date"), tr("table.buildings.area"), tr("table.buildings.neighborhood"), tr("table.buildings.building_type"), tr("table.buildings.building_status"), tr("table.buildings.assignment_status"), tr("table.buildings.lock_status"), ""]
         for i, text in enumerate(headers):
             item = QTableWidgetItem(text)
             # Add icon to filterable columns (2, 3, 4, 5)
@@ -2593,8 +2593,10 @@ class BuildingsListPage(QWidget):
         header.setSectionResizeMode(3, QHeaderView.ResizeToContents)  # الحي (neighborhood)
         header.setSectionResizeMode(4, QHeaderView.ResizeToContents)  # نوع البناء
         header.setSectionResizeMode(5, QHeaderView.ResizeToContents)  # حالة البناء
-        header.setSectionResizeMode(6, QHeaderView.Fixed)             # أيقونة الثلاث نقاط
-        header.resizeSection(6, 80)
+        header.setSectionResizeMode(6, QHeaderView.ResizeToContents)  # حالة التعيين
+        header.setSectionResizeMode(7, QHeaderView.ResizeToContents)  # حالة القفل
+        header.setSectionResizeMode(8, QHeaderView.Fixed)             # أيقونة الثلاث نقاط
+        header.resizeSection(8, 80)
 
         # ضبط ارتفاع الصفوف بالتساوي
         # الارتفاع المتاح: 708 (card) - 10 (top) - 10 (bottom) - 56 (header) - 58 (footer) = 574px
@@ -2798,11 +2800,11 @@ class BuildingsListPage(QWidget):
         # Clear spans and cells
         self.table.clearSpans()
         for row in range(11):
-            for col in range(6):
+            for col in range(8):
                 self.table.setItem(row, col, QTableWidgetItem(""))
 
         if total == 0:
-            self.table.setSpan(0, 0, 11, 7)
+            self.table.setSpan(0, 0, 11, 9)
             empty_item = QTableWidgetItem(tr("page.buildings.no_matching_data"))
             empty_item.setTextAlignment(Qt.AlignCenter)
             from PyQt5.QtGui import QColor
@@ -2839,19 +2841,36 @@ class BuildingsListPage(QWidget):
             building_status = get_building_status_display(building.building_status)
             self.table.setItem(idx, 5, QTableWidgetItem(building_status))
 
-            # زر الثلاث نقاط - أكبر وأغمق
+            # حالة التعيين
+            from PyQt5.QtGui import QFont, QColor
+            assigned_text = tr("building.assigned") if getattr(building, 'is_assigned', False) else tr("building.not_assigned")
+            assigned_item = QTableWidgetItem(assigned_text)
+            assigned_item.setTextAlignment(Qt.AlignCenter)
+            if getattr(building, 'is_assigned', False):
+                assigned_item.setForeground(QColor("#3890DF"))
+            else:
+                assigned_item.setForeground(QColor("#9CA3AF"))
+            self.table.setItem(idx, 6, assigned_item)
+
+            # حالة القفل
+            locked_text = tr("building.locked") if getattr(building, 'is_locked', False) else tr("building.unlocked")
+            locked_item = QTableWidgetItem(locked_text)
+            locked_item.setTextAlignment(Qt.AlignCenter)
+            if getattr(building, 'is_locked', False):
+                locked_item.setForeground(QColor("#dc3545"))
+            else:
+                locked_item.setForeground(QColor("#28a745"))
+            self.table.setItem(idx, 7, locked_item)
+
+            # زر الثلاث نقاط
             actions_item = QTableWidgetItem("⋮")
             actions_item.setTextAlignment(Qt.AlignCenter)
-
-            # خط أكبر وأغمق للثلاث نقاط
-            from PyQt5.QtGui import QFont, QColor
             dots_font = QFont()
-            dots_font.setPointSize(18)  # أكبر من النص العادي (10.5pt)
+            dots_font.setPointSize(18)
             dots_font.setWeight(QFont.Bold)
             actions_item.setFont(dots_font)
-            actions_item.setForeground(QColor("#637381"))  # لون أغمق
-
-            self.table.setItem(idx, 6, actions_item)
+            actions_item.setForeground(QColor("#637381"))
+            self.table.setItem(idx, 8, actions_item)
 
         # Update pagination info (counter only: "1-11 of 50")
         if total > 0:
@@ -3157,8 +3176,7 @@ class BuildingsListPage(QWidget):
 
     def _on_cell_clicked(self, row: int, col: int):
         """فتح القائمة المنسدلة عند الضغط على زر الثلاث نقاط."""
-        # التحقق من أن المستخدم ضغط على عمود الإجراءات (آخر عمود)
-        if col != 6:
+        if col != 8:
             return
 
         # التحقق من وجود محتوى في السطر
@@ -3213,7 +3231,20 @@ class BuildingsListPage(QWidget):
         edit_action.setVisible(False)
         menu.addAction(edit_action)
 
-        # 3. حذف - لون #FF4842
+        # 3. قفل / فتح البناء
+        _role = getattr(self, '_user_role', '')
+        can_lock = _role in ('admin', 'data_manager')
+        if can_lock:
+            is_locked = getattr(building, 'is_locked', False)
+            lock_text = tr("building.action.unlock") if is_locked else tr("building.action.lock")
+            lock_icon = Icon.load_qicon("lock-open" if is_locked else "lock", size=18)
+            lock_action = QAction("  " + lock_text, self)
+            if lock_icon:
+                lock_action.setIcon(lock_icon)
+            lock_action.triggered.connect(lambda: self._on_toggle_lock(building))
+            menu.addAction(lock_action)
+
+        # 4. حذف
         delete_icon = Icon.load_qicon("delete", size=18)
         delete_action = QAction("  " + tr("action.delete"), self)
         if delete_icon:
@@ -3272,6 +3303,34 @@ class BuildingsListPage(QWidget):
             )
         else:
             Toast.show_toast(self, tr("dialog.buildings.no_coordinates"), Toast.WARNING)
+
+    def _on_toggle_lock(self, building: Building):
+        """Toggle building lock state with confirmation."""
+        from ui.components.dialogs import ConfirmationDialog
+
+        is_locked = getattr(building, 'is_locked', False)
+        msg_key = "page.buildings.confirm_unlock" if is_locked else "page.buildings.confirm_lock"
+        title_key = "building.action.unlock" if is_locked else "building.action.lock"
+
+        result = ConfirmationDialog.confirm(
+            parent=self,
+            title=tr(title_key),
+            message=tr(msg_key),
+            icon_name="wirning"
+        )
+        if result != ConfirmationDialog.YES:
+            return
+
+        new_lock_state = not is_locked
+        op_result = self.building_controller.toggle_building_lock(
+            building.building_uuid or building.building_id,
+            new_lock_state
+        )
+        if op_result.success:
+            Toast.show_toast(self, tr("building.lock_success"), Toast.SUCCESS)
+            self._load_buildings()
+        else:
+            Toast.show_toast(self, tr("building.lock_failed"), Toast.ERROR)
 
     def _on_delete_building(self, building: Building):
         """Delete building with confirmation dialog."""

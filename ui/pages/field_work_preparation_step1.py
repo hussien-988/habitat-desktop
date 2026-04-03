@@ -105,6 +105,26 @@ class BuildingCheckboxItem(QWidget):
         text_label.setStyleSheet(f"color: {Colors.PAGE_SUBTITLE}; background: transparent;")
         layout.addWidget(text_label, 1)
 
+        if getattr(building, 'is_assigned', False):
+            assigned_badge = QLabel(tr("building.assigned"))
+            assigned_badge.setFont(create_font(size=8, weight=FontManager.WEIGHT_MEDIUM))
+            assigned_badge.setFixedHeight(20)
+            assigned_badge.setStyleSheet(
+                "background: #3890DF; color: #fff; border-radius: 10px; "
+                "padding: 2px 8px;"
+            )
+            layout.addWidget(assigned_badge)
+
+        if getattr(building, 'is_locked', False):
+            locked_badge = QLabel(tr("building.locked"))
+            locked_badge.setFont(create_font(size=8, weight=FontManager.WEIGHT_MEDIUM))
+            locked_badge.setFixedHeight(20)
+            locked_badge.setStyleSheet(
+                "background: #6c757d; color: #fff; border-radius: 10px; "
+                "padding: 2px 8px;"
+            )
+            layout.addWidget(locked_badge)
+
     def mousePressEvent(self, event):
         """Handle click on entire row - toggle checkbox."""
         self.checkbox.setChecked(not self.checkbox.isChecked())

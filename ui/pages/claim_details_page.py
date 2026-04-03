@@ -1000,21 +1000,21 @@ class ClaimDetailsPage(QWidget):
             raw_share = claim.get("ownershipShare")
 
             if self._is_editing:
-                from PyQt5.QtGui import QDoubleValidator
+                from PyQt5.QtGui import QIntValidator
                 self._ownership_share_input = QLineEdit()
                 self._ownership_share_input.setFixedHeight(36)
                 self._ownership_share_input.setFixedWidth(120)
-                self._ownership_share_input.setPlaceholderText("0 - 100")
-                self._ownership_share_input.setValidator(QDoubleValidator(0, 100, 2, self))
+                self._ownership_share_input.setPlaceholderText("0 - 2400")
+                self._ownership_share_input.setValidator(QIntValidator(0, 2400, self))
                 self._ownership_share_input.setStyleSheet(StyleManager.form_input())
                 if raw_share is not None:
-                    self._ownership_share_input.setText(str(round(float(raw_share) * 100, 2)))
+                    self._ownership_share_input.setText(str(round(float(raw_share) * 2400)))
                 self._ownership_share_input.setEnabled(True)
                 share_row.addWidget(self._ownership_share_input)
             else:
                 if raw_share is not None and raw_share > 0:
-                    pct = round(float(raw_share) * 100, 2)
-                    display = f"{pct}%"
+                    shares = round(float(raw_share) * 2400)
+                    display = f"{shares} {tr('unit.shares')}"
                 else:
                     display = "-"
                 share_value = QLabel(display)
@@ -1468,7 +1468,7 @@ class ClaimDetailsPage(QWidget):
         self._is_editing = True
         self._original_claim_type = self._claim_data.get("claimType")
         raw_share = self._claim_data.get("ownershipShare")
-        self._original_ownership_share = round(float(raw_share) * 100, 2) if raw_share is not None else None
+        self._original_ownership_share = round(float(raw_share) * 2400) if raw_share is not None else None
         self._pending_uploads = []
         self._pending_deletes = []
         self._pending_links = []
@@ -1600,7 +1600,7 @@ class ClaimDetailsPage(QWidget):
         type_changed = new_type is not None and new_type != self._original_claim_type
 
         new_share_text = self._ownership_share_input.text().strip() if self._ownership_share_input else ""
-        new_share_val = float(new_share_text) if new_share_text else None
+        new_share_val = int(new_share_text) if new_share_text else None
         share_changed = new_share_val != self._original_ownership_share
 
         has_changes = type_changed or share_changed or self._pending_uploads or self._pending_deletes or self._pending_links
@@ -1616,9 +1616,9 @@ class ClaimDetailsPage(QWidget):
             new_label = get_claim_type_display(new_type)
             summary.append(tr("page.claim_details.change_claim_type", old=old_label, new=new_label))
         if share_changed:
-            old_pct = f"{self._original_ownership_share}%" if self._original_ownership_share is not None else "-"
-            new_pct = f"{new_share_val}%" if new_share_val is not None else "-"
-            summary.append(tr("page.claim_details.change_ownership_share", old=old_pct, new=new_pct))
+            old_display = f"{self._original_ownership_share} {tr('unit.shares')}" if self._original_ownership_share is not None else "-"
+            new_display = f"{new_share_val} {tr('unit.shares')}" if new_share_val is not None else "-"
+            summary.append(tr("page.claim_details.change_ownership_share", old=old_display, new=new_display))
         if self._pending_uploads:
             summary.append(tr("page.claim_details.upload_count", count=len(self._pending_uploads)))
         if self._pending_links:
@@ -1637,7 +1637,7 @@ class ClaimDetailsPage(QWidget):
             update_data["relationType"] = new_type
 
         if share_changed and new_share_val is not None:
-            update_data["ownershipShare"] = new_share_val / 100.0
+            update_data["ownershipShare"] = new_share_val / 2400.0
 
         if self._pending_uploads:
             new_evidence = []

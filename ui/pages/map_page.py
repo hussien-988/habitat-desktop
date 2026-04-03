@@ -354,6 +354,8 @@ def get_leaflet_html(tile_server_url: str, buildings_geojson: str, **kwargs) -> 
     _label_status = tr("page.map.popup_status_label")
     _label_units = tr("page.map.popup_units_label")
     _label_type = tr("page.map.popup_type_label")
+    _label_assigned = tr("building.assigned")
+    _label_locked = tr("building.locked")
     _legend_title = tr("page.map.legend_title")
     return f'''
     <!DOCTYPE html>
@@ -477,14 +479,33 @@ def get_leaflet_html(tile_server_url: str, buildings_geojson: str, **kwargs) -> 
             pointToLayer: function(feature, latlng) {{
                 var status = feature.properties.status || 'intact';
                 var color = statusColors[status] || '#0072BC';
+                var isAssigned = feature.properties.is_assigned || false;
+                var isLocked = feature.properties.is_locked || false;
+
+                var borderColor = '#fff';
+                var borderWeight = 2;
+                var radius = 8;
+                var dashArray = null;
+
+                if (isLocked) {{
+                    borderColor = '#6c757d';
+                    borderWeight = 3;
+                    radius = 10;
+                    dashArray = '4 3';
+                }} else if (isAssigned) {{
+                    borderColor = '#3890DF';
+                    borderWeight = 3;
+                    radius = 10;
+                }}
 
                 return L.circleMarker(latlng, {{
-                    radius: 8,
+                    radius: radius,
                     fillColor: color,
-                    color: '#fff',
-                    weight: 2,
+                    color: borderColor,
+                    weight: borderWeight,
                     opacity: 1,
-                    fillOpacity: 0.9
+                    fillOpacity: 0.9,
+                    dashArray: dashArray
                 }});
             }},
             style: function(feature) {{
@@ -509,8 +530,12 @@ def get_leaflet_html(tile_server_url: str, buildings_geojson: str, **kwargs) -> 
                 var geomType = feature.properties.geometry_type || feature.geometry.type;
                 var geomLabel = geomType === 'Polygon' || geomType === 'MultiPolygon' ? '{_label_polygon}' : '{_label_point}';
 
+                var assignedBadge = props.is_assigned ? '<span style="display:inline-block;background:#3890DF;color:#fff;padding:2px 8px;border-radius:10px;font-size:11px;margin-right:6px;">{_label_assigned}</span>' : '';
+                var lockedBadge = props.is_locked ? '<span style="display:inline-block;background:#6c757d;color:#fff;padding:2px 8px;border-radius:10px;font-size:11px;margin-right:6px;">{_label_locked}</span>' : '';
+
                 var popup = '<div class="building-popup">' +
                     '<h4>' + (props.building_id || '{_label_building}') + '</h4>' +
+                    (assignedBadge || lockedBadge ? '<p>' + assignedBadge + lockedBadge + '</p>' : '') +
                     '<p><strong>{_label_neighborhood}:</strong> ' + (props.neighborhood || '{_label_unspecified}') + '</p>' +
                     '<p><strong>{_label_status}:</strong> <span class="status-badge ' + statusClass + '">' + statusLabel + '</span></p>' +
                     '<p><strong>{_label_units}:</strong> ' + (props.units || 0) + '</p>' +
@@ -552,7 +577,10 @@ def get_leaflet_html(tile_server_url: str, buildings_geojson: str, **kwargs) -> 
                 '<div class="legend-item"><div class="legend-color" style="background:#28a745"></div>{_status_intact}</div>' +
                 '<div class="legend-item"><div class="legend-color" style="background:#ffc107"></div>{_status_minor}</div>' +
                 '<div class="legend-item"><div class="legend-color" style="background:#fd7e14"></div>{_status_major}</div>' +
-                '<div class="legend-item"><div class="legend-color" style="background:#dc3545"></div>{_status_destroyed}</div>';
+                '<div class="legend-item"><div class="legend-color" style="background:#dc3545"></div>{_status_destroyed}</div>' +
+                '<hr style="margin:4px 0;border-color:#ddd">' +
+                '<div class="legend-item"><div class="legend-color" style="background:transparent;border:3px solid #3890DF"></div>{_label_assigned}</div>' +
+                '<div class="legend-item"><div class="legend-color" style="background:transparent;border:3px dashed #6c757d"></div>{_label_locked}</div>';
             return div;
         }};
         legend.addTo(map);

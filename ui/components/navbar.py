@@ -455,6 +455,7 @@ class Navbar(QFrame):
             "navbar.tab.duplicates",
             "navbar.tab.user_management",
             "navbar.tab.field_assignment",
+            "navbar.tab.buildings",
         ]
         tab_titles = [tr(key) for key in self._tab_keys]
 
@@ -786,8 +787,8 @@ class Navbar(QFrame):
     # -- Role-based Visibility --
 
     TAB_PERMISSIONS = {
-        "admin":            [0, 1, 2, 3, 5],
-        "data_manager":     [0, 1, 2, 3, 5],
+        "admin":            [0, 1, 2, 3, 5, 6],
+        "data_manager":     [0, 1, 2, 3, 5, 6],
         "office_clerk":     [1],
         "field_supervisor": [5],
         "field_researcher": [],

@@ -2,6 +2,9 @@
 """Arabic translations."""
 
 AR_TRANSLATIONS = {
+    # Units
+    "unit.shares": "سهم",
+
     # Dialogs
     "dialog.error": "خطأ",
     "dialog.warning": "تحذير",
@@ -446,7 +449,9 @@ AR_TRANSLATIONS = {
     "wizard.household.unit_type_label": "نوع المقسم",
     "wizard.household.unit_status_label": "حالة المقسم",
     "wizard.household.members_required": "يجب أن يكون عدد أفراد الأسرة أكبر من صفر",
-    "wizard.household.members_mismatch": "تأكد من مطابقة عدد الأفراد",
+    "wizard.household.members_mismatch": "تأكد من مطابقة عدد الأفراد (بدون ذوي الاحتياجات الخاصة)",
+    "wizard.household.disability_exceeds_total": "عدد ذوي الاحتياجات الخاصة لا يمكن أن يتجاوز عدد أفراد الأسرة",
+    "wizard.household.total_members_hint": "بدون احتساب ذوي الاحتياجات الخاصة",
     "wizard.person.card_title": "بيانات الأشخاص",
     "wizard.person.subtitle": "قائمة الأشخاص المسجلين",
     "wizard.person.add_button": "+ اضافة شخص جديد",
@@ -564,6 +569,7 @@ AR_TRANSLATIONS = {
     "wizard.person_dialog.relation_type": "نوع العلاقة",
     "wizard.person_dialog.relation_start_date": "تاريخ بدء العلاقة",
     "wizard.person_dialog.ownership_share": "حصة الملكية",
+    "wizard.person_dialog.ownership_share_placeholder": "0 - 2400 سهم",
     "wizard.person_dialog.evidence_type": "نوع الدليل",
     "wizard.person_dialog.evidence_description": "وصف الدليل",
     "wizard.person_dialog.evidence_desc_placeholder": "ادخل وصف الدليل",
@@ -590,7 +596,7 @@ AR_TRANSLATIONS = {
     "wizard.person_dialog.invalid_first_name": "الاسم الأول يجب أن يحتوي على حروف فقط (عربي أو لاتيني)",
     "wizard.person_dialog.invalid_last_name": "اسم العائلة يجب أن يحتوي على حروف فقط (عربي أو لاتيني)",
     "wizard.person_dialog.invalid_father_name": "اسم الأب يجب أن يحتوي على حروف فقط (عربي أو لاتيني)",
-    "wizard.person_dialog.invalid_ownership_share": "نسبة الملكية يجب أن تكون بين 0 و 100",
+    "wizard.person_dialog.invalid_ownership_share": "حصة الملكية يجب أن تكون بين 0 و 2400 سهم",
     "wizard.person_dialog.ownership_share_required": "حصة الملكية مطلوبة عند اختيار ملكية مشتركة",
     "wizard.person_dialog.invalid_mobile": "رقم الجوال غير صحيح - يجب أن يكون 8 أرقام",
     "wizard.person_dialog.invalid_landline": "رقم الهاتف الثابت غير صحيح - يجب أن يكون 7 أرقام",
@@ -1101,7 +1107,7 @@ AR_TRANSLATIONS = {
     "table.relations.person": "الشخص",
     "table.relations.unit": "الوحدة",
     "table.relations.relation_type": "نوع العلاقة",
-    "table.relations.share": "الحصة %",
+    "table.relations.share": "الحصة (سهم)",
     "table.relations.status": "الحالة",
     "table.relations.start_date": "تاريخ البدء",
     "table.relations.notes": "ملاحظات",
@@ -1628,7 +1634,7 @@ AR_TRANSLATIONS = {
     "page.relations.notes_label": "ملاحظات",
     "page.relations.other_description": "وصف آخر",
     "page.relations.ownership_details_group": "تفاصيل الملكية",
-    "page.relations.ownership_share_hint": "نسبة الملكية (0-100%)",
+    "page.relations.ownership_share_hint": "الأسهم (0-2400)",
     "page.relations.person_filter": "الشخص",
     "page.relations.person_required": "الشخص",
     "page.relations.ref_date_label": "تاريخ المرجع",
@@ -1645,7 +1651,7 @@ AR_TRANSLATIONS = {
     "page.relations.select_file": "اختيار ملف",
     "page.relations.select_person": "اختر الشخص",
     "page.relations.select_unit": "اختر الوحدة",
-    "page.relations.share_percentage": "نسبة الحصة",
+    "page.relations.share_percentage": "حصة الملكية (سهم)",
     "page.relations.start_date_label": "تاريخ البدء",
     "page.relations.status_filter": "الحالة",
     "page.relations.status_label": "الحالة",
@@ -2551,6 +2557,8 @@ AR_TRANSLATIONS = {
     # page.user_mgmt
     "page.user_mgmt.load_failed": "فشل تحميل المستخدمين",
     "page.user_mgmt.password_change_failed": "فشل تغيير كلمة المرور",
+    "dialog.password.change_cancelled": "تم إلغاء تغيير كلمة المرور",
+    "dialog.password.forced_change_title": "يجب تغيير كلمة المرور قبل المتابعة",
 
     # person_search.applicant_tag
     "person_search.applicant_tag": "مقدم الطلب",
@@ -2975,4 +2983,28 @@ AR_TRANSLATIONS = {
     # Loading text
     "page.login.loading_data": "جاري تحميل البيانات...",
     "component.building_map.loading": "جاري تحميل الخريطة...",
+
+    # Building assignment and lock
+    "building.assigned": "معيّن",
+    "building.not_assigned": "غير معيّن",
+    "building.assigned_to_team": "معيّن لفريق ميداني",
+    "building.locked": "مقفل",
+    "building.unlocked": "غير مقفل",
+    "building.action.lock": "قفل البناء",
+    "building.action.unlock": "فتح البناء",
+    "building.lock_success": "تم تغيير حالة قفل البناء بنجاح",
+    "building.lock_failed": "فشل تغيير حالة قفل البناء",
+    "table.buildings.assignment_status": "حالة التعيين",
+    "table.buildings.lock_status": "حالة القفل",
+
+    # Buildings management page
+    "page.buildings.title": "إدارة المباني",
+    "page.buildings.subtitle": "عرض وإدارة حالة المباني",
+    "page.buildings.search_placeholder": "ابحث برقم المبنى أو الحي...",
+    "page.buildings.no_buildings": "لا توجد مباني",
+    "page.buildings.loading": "جاري تحميل المباني...",
+    "page.buildings.total_count": "{count} مبنى",
+    "page.buildings.confirm_lock": "هل تريد قفل هذا المبنى؟ لن يتمكن الباحث الميداني من تعديل بياناته.",
+    "page.buildings.confirm_unlock": "هل تريد فتح هذا المبنى؟ سيتمكن الباحث الميداني من تعديل بياناته.",
+    "navbar.tab.buildings": "إدارة المباني",
 }
