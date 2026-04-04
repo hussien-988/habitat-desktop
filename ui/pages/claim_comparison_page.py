@@ -1145,13 +1145,12 @@ class ClaimComparisonPage(QWidget):
         }
         action_label = action_labels.get(resolution_type, tr("page.comparison.execute_action"))
 
-        from ui.components.dialogs.confirmation_dialog import ConfirmationDialog, DialogResult
-        result = ConfirmationDialog.confirm(
-            parent=self,
-            title=tr("page.comparison.confirm_action"),
-            message=f"{tr('page.comparison.confirm_action_message')} {action_label}?\n{tr('page.comparison.cannot_undo')}"
-        )
-        if result != DialogResult.YES:
+        from ui.error_handler import ErrorHandler
+        if not ErrorHandler.confirm(
+            self,
+            f"{tr('page.comparison.confirm_action_message')} {action_label}?\n{tr('page.comparison.cannot_undo')}",
+            tr("page.comparison.confirm_action"),
+        ):
             return
 
         master_id = ""

@@ -46,7 +46,6 @@ from services.translation_manager import tr, get_layout_direction
 from services.display_mappings import get_relation_type_display, get_relationship_to_head_display
 from services.error_mapper import map_exception
 from ui.components.toast import Toast
-from ui.components.success_popup import SuccessPopup
 
 logger = get_logger(__name__)
 

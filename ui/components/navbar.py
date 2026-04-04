@@ -465,7 +465,6 @@ class Navbar(QFrame):
             "navbar.tab.cases",
             "navbar.tab.import",
             "navbar.tab.duplicates",
-            "navbar.tab.user_management",
             "navbar.tab.field_assignment",
             "navbar.tab.buildings",
         ]
@@ -814,16 +813,16 @@ class Navbar(QFrame):
     # -- Role-based Visibility --
 
     TAB_PERMISSIONS = {
-        "admin":            [0, 1, 2, 3, 5, 6],
-        "data_manager":     [0, 1, 2, 3, 5, 6],
+        "admin":            [0, 1, 2, 3, 4, 5],
+        "data_manager":     [0, 1, 2, 3, 4, 5],
         "office_clerk":     [1],
-        "field_supervisor": [5],
+        "field_supervisor": [4],
         "field_researcher": [],
         "analyst":          [],
     }
 
     def configure_for_role(self, role: str):
-        allowed = self.TAB_PERMISSIONS.get(role, [0, 1, 2, 3, 4])
+        allowed = self.TAB_PERMISSIONS.get(role, [0, 1, 2, 3])
         for i, btn in enumerate(self.tab_buttons):
             btn.setVisible(i in allowed)
 

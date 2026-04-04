@@ -208,8 +208,8 @@ class FieldWorkPreparationPage(QWidget):
             # Moving from Step 1 to Step 2
             selected_buildings = self.step1.get_selected_buildings()
             if not selected_buildings:
-                from PyQt5.QtWidgets import QMessageBox
-                QMessageBox.warning(self, tr("wizard.field_work.warning_title"), tr("wizard.field_work.select_building_warning"))
+                from ui.components.notification_bar import NotificationBar
+                NotificationBar.notify(self, tr("wizard.field_work.select_building_warning"), NotificationBar.WARNING)
                 return
 
             # Create Step 2 if not exists
@@ -231,8 +231,8 @@ class FieldWorkPreparationPage(QWidget):
             researcher = self.step2.get_selected_researcher()
             buildings = self.step1.get_selected_buildings()
             if not researcher:
-                from PyQt5.QtWidgets import QMessageBox
-                QMessageBox.warning(self, tr("wizard.field_work.warning_title"), tr("wizard.field_work.select_researcher_warning"))
+                from ui.components.notification_bar import NotificationBar
+                NotificationBar.notify(self, tr("wizard.field_work.select_researcher_warning"), NotificationBar.WARNING)
                 return
 
             # Rebuild step3 each time (fresh data)

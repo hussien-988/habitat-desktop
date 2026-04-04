@@ -816,6 +816,96 @@ class ComponentStyles:
         """
 
 
+class SkeletonColors:
+    """Skeleton loader shimmer color tokens."""
+    BASE = "#E8EDF2"
+    SHIMMER = "#F4F7FA"
+    HEADER = "#DCE3EB"
+    BORDER_RADIUS = 6
+
+
+class AnimationTimings:
+    """Shared animation timing constants (milliseconds)."""
+    FADE_IN = 200
+    FADE_OUT = 150
+    SLIDE_DOWN = 200
+    SLIDE_UP = 250
+    SHIMMER_CYCLE = 1500
+    BUTTON_PRESS = 100
+    ROW_STAGGER = 50
+    PAGE_TRANSITION = 150
+    HOVER = 150
+
+
+class NotificationDimensions:
+    """Notification bar layout tokens."""
+    HEIGHT = 52
+    ICON_SIZE = 20
+    BORDER_RADIUS = 10
+    PADDING_H = 20
+    PADDING_V = 12
+    AUTO_DISMISS_SUCCESS = 5000
+    AUTO_DISMISS_WARNING = 6000
+    AUTO_DISMISS_ERROR = 0
+    AUTO_DISMISS_INFO = 5000
+    PROGRESS_HEIGHT = 3
+    MAX_WIDTH = 600
+
+    BG_SUCCESS = "#F0FDF4"
+    BG_ERROR = "#FEF2F2"
+    BG_WARNING = "#FFFBEB"
+    BG_INFO = "#EFF6FF"
+    BORDER_SUCCESS = "#BBF7D0"
+    BORDER_ERROR = "#FECACA"
+    BORDER_WARNING = "#FDE68A"
+    BORDER_INFO = "#BFDBFE"
+    ACCENT_SUCCESS = Colors.SUCCESS
+    ACCENT_ERROR = Colors.ERROR
+    ACCENT_WARNING = Colors.WARNING
+    ACCENT_INFO = Colors.INFO
+
+
+class BottomSheetDimensions:
+    """Bottom sheet layout tokens."""
+    OVERLAY_COLOR = "rgba(15, 23, 42, 0.6)"
+    BORDER_RADIUS = 20
+    HANDLE_WIDTH = 40
+    HANDLE_HEIGHT = 4
+    HANDLE_COLOR = "#CBD5E1"
+    HANDLE_MARGIN_TOP = 12
+    PADDING_H = 28
+    PADDING_V = 24
+    MAX_WIDTH = 480
+    BG = Colors.SURFACE
+    SHADOW = "0 -8px 30px rgba(0, 0, 0, 0.12)"
+    BUTTON_HEIGHT = 48
+    BUTTON_RADIUS = 10
+    BUTTON_GAP = 12
+
+
+class ModernTableDimensions:
+    """Modern table layout tokens."""
+    ROW_HEIGHT = 56
+    HEADER_HEIGHT = 44
+    BORDER_RADIUS = 12
+    CELL_PADDING_H = 16
+    CELL_PADDING_V = 12
+    ROW_BORDER = "#F1F5F9"
+    ROW_HOVER_BG = "#F8FAFF"
+    ROW_SELECTED_BG = "#EBF5FF"
+    ROW_HOVER_ACCENT = Colors.PRIMARY_BLUE
+    ROW_HOVER_ACCENT_WIDTH = 3
+    HEADER_TEXT_COLOR = "#94A3B8"
+    HEADER_FONT_SIZE = 11
+    HEADER_FONT_WEIGHT = Typography.WEIGHT_SEMIBOLD
+    PAGINATION_HEIGHT = 48
+    PAGE_BUTTON_SIZE = 32
+    PAGE_BUTTON_RADIUS = 8
+    STATUS_BADGE_RADIUS = 12
+    STATUS_BADGE_PADDING_H = 10
+    STATUS_BADGE_PADDING_V = 4
+
+
 class DesignTokens:
     """
     Complete design tokens bundle
@@ -830,3 +920,8 @@ class DesignTokens:
     navbar = NavbarDimensions
     page = PageDimensions
     components = ComponentStyles
+    skeleton = SkeletonColors
+    animation = AnimationTimings
+    notification = NotificationDimensions
+    bottom_sheet = BottomSheetDimensions
+    table = ModernTableDimensions

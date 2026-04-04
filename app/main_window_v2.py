@@ -30,7 +30,6 @@ class MainWindow(QMainWindow):
     _PAGE_ROLE_ACCESS = {
         Pages.FIELD_ASSIGNMENT: {"admin", "data_manager", "field_supervisor"},
         Pages.SYNC_DATA: {"admin", "data_manager", "field_supervisor"},
-        Pages.REPORTS: {"admin", "data_manager", "field_supervisor"},
         Pages.CLAIM_EDIT: {"admin", "data_manager"},
         Pages.DUPLICATES: {"admin", "data_manager"},
         Pages.CLAIM_COMPARISON: {"admin", "data_manager"},
@@ -143,7 +142,6 @@ class MainWindow(QMainWindow):
         # Import here to avoid circular imports
         from ui.components.navbar import Navbar
         from ui.pages.login_page import LoginPage
-        from ui.pages.dashboard_page import DashboardPage
         from ui.pages.buildings_page import BuildingsPage
         from ui.pages.building_details_page import BuildingDetailsPage
         from ui.pages.units_page import UnitsPage
@@ -153,9 +151,6 @@ class MainWindow(QMainWindow):
         from ui.pages.households_page import HouseholdsPage
         from ui.pages.completed_claims_page import CompletedClaimsPage
         from ui.pages.cases_page import CasesPage
-        from ui.pages.search_page import SearchPage
-        from ui.pages.reports_page import ReportsPage
-        from ui.pages.map_page import MapPage
         from ui.pages.duplicates_page import DuplicatesPage
         from ui.pages.claim_comparison_page import ClaimComparisonPage
         from ui.pages.field_work_preparation_page import FieldWorkPreparationPage
@@ -209,10 +204,6 @@ class MainWindow(QMainWindow):
         self.pages[Pages.LOGIN] = LoginPage(self.i18n, db=self.db, parent=self)
         self.stack.addWidget(self.pages[Pages.LOGIN])
 
-        # Dashboard page
-        self.pages[Pages.DASHBOARD] = DashboardPage(self.db, self.i18n, self)
-        self.stack.addWidget(self.pages[Pages.DASHBOARD])
-
         # Buildings list page
         self.pages[Pages.BUILDINGS] = BuildingsPage(self.db, self.i18n, self)
         self.stack.addWidget(self.pages[Pages.BUILDINGS])
@@ -248,18 +239,6 @@ class MainWindow(QMainWindow):
         # Cases page (3 sub-tabs: Draft / Finalized / Completed)
         self.pages[Pages.CASES] = CasesPage(self.db, self.i18n, self)
         self.stack.addWidget(self.pages[Pages.CASES])
-
-        # Search page
-        self.pages[Pages.SEARCH] = SearchPage(self.db, self.i18n, self)
-        self.stack.addWidget(self.pages[Pages.SEARCH])
-
-        # Reports page
-        self.pages[Pages.REPORTS] = ReportsPage(self.db, self.i18n, self)
-        self.stack.addWidget(self.pages[Pages.REPORTS])
-
-        # Map view page
-        self.pages[Pages.MAP_VIEW] = MapPage(self.db, self.i18n, self)
-        self.stack.addWidget(self.pages[Pages.MAP_VIEW])
 
         # Duplicates page
         self.pages[Pages.DUPLICATES] = DuplicatesPage(self.db, self.i18n, self)
@@ -322,15 +301,15 @@ class MainWindow(QMainWindow):
         # Tab 1: الحالات (Cases)
         # Tab 2: الاستيراد (Import)
         # Tab 3: التكرارات (Duplicates)
-        # Tab 4: إدارة المستخدمين (User Management)
-        # Tab 5: تجهيز العمل الميداني (Field Work Preparation)
+        # Tab 4: تجهيز العمل الميداني (Field Work Preparation)
+        # Tab 5: المباني (Buildings)
         self.tab_page_mapping = {
             0: Pages.CLAIMS,
             1: Pages.CASES,
             2: Pages.IMPORT_PACKAGES,
             3: Pages.DUPLICATES,
-            5: Pages.FIELD_ASSIGNMENT,
-            6: Pages.BUILDINGS,
+            4: Pages.FIELD_ASSIGNMENT,
+            5: Pages.BUILDINGS,
         }
 
     def _setup_layout(self):
@@ -1072,8 +1051,6 @@ class MainWindow(QMainWindow):
             search_mode = getattr(self.navbar, 'search_mode', 'name')
             current_page.search_claims(search_text, search_mode)
             return
-        # Otherwise navigate to search page
-        self.navigate_to(Pages.SEARCH, search_text)
 
     def _on_filter_applied(self, filters: dict):
         """Handle filter applied from navbar filter popup."""
@@ -1087,37 +1064,49 @@ class MainWindow(QMainWindow):
         current_widget = self.stack.currentWidget()
         if current_widget == self.office_survey_wizard and page_id != "office_survey_wizard":
             if self._has_unsaved_wizard_data():
-                from ui.components.dialogs.confirmation_dialog import ConfirmationDialog
+                from ui.components.bottom_sheet import BottomSheet
+                from PyQt5.QtCore import QEventLoop
+                loop = QEventLoop()
+                choice_result = [None]
 
-                # Show save draft confirmation
-                result = ConfirmationDialog.save_draft_confirmation(
-                    parent=self,
-                    title="هل تريد الحفظ؟",
-                    message="لديك تغييرات غير محفوظة.\nهل تريد حفظها كمسودة؟"
+                def on_choice(c):
+                    choice_result[0] = c
+                    loop.quit()
+
+                def on_cancel():
+                    choice_result[0] = "cancel"
+                    loop.quit()
+
+                sheet = BottomSheet(self)
+                sheet.choice_made.connect(on_choice)
+                sheet.cancelled.connect(on_cancel)
+                sheet.show_choices(
+                    tr("wizard.confirm.save_title"),
+                    [
+                        ("save", tr("wizard.confirm.save_draft")),
+                        ("discard", tr("wizard.confirm.discard")),
+                    ]
                 )
+                loop.exec_()
 
-                if result == ConfirmationDialog.SAVE:
-                    # Save as draft
+                if choice_result[0] == "save":
                     draft_id = self.office_survey_wizard.on_save_draft()
                     if draft_id:
                         from ui.components.toast import Toast
-                        Toast.show_toast(self, "✅ تم حفظ المسودة بنجاح!", Toast.SUCCESS)
-                        # Refresh drafts page
+                        Toast.show_toast(self, tr("wizard.draft.saved_success"), Toast.SUCCESS)
                         if Pages.CASES in self.pages:
                             self.pages[Pages.CASES].refresh()
                     else:
-                        # Save failed - stay in wizard
                         logger.warning("Failed to save draft")
                         return
 
-                elif result == ConfirmationDialog.DISCARD:
-                    # Cancel survey on server with reason
+                elif choice_result[0] == "discard":
                     survey_id = self.office_survey_wizard.context.get_data("survey_id")
                     if survey_id:
                         from PyQt5.QtWidgets import QInputDialog
                         reason, ok = QInputDialog.getMultiLineText(
-                            self, "سبب الإلغاء",
-                            "يرجى إدخال سبب إلغاء المسح:", ""
+                            self, tr("wizard.cancel_reason_title"),
+                            tr("wizard.cancel_reason_prompt"), ""
                         )
                         if not ok or not reason.strip():
                             return
@@ -1133,7 +1122,6 @@ class MainWindow(QMainWindow):
                     logger.info("User discarded wizard changes")
 
                 else:
-                    # User cancelled - stay in wizard
                     logger.debug("User cancelled navigation")
                     return
 
@@ -1153,7 +1141,7 @@ class MainWindow(QMainWindow):
         if page_id not in self.pages:
             # Handle special case: office survey wizard
             if page_id == "office_survey_wizard":
-                self.stack.setCurrentWidget(self.office_survey_wizard)
+                self._fade_to_widget(self.office_survey_wizard)
                 return
             logger.error(f"Page not found: {page_id}")
             return
@@ -1174,9 +1162,26 @@ class MainWindow(QMainWindow):
         if hasattr(page, 'refresh'):
             page.refresh(data)
 
-        # Show page
-        self.stack.setCurrentWidget(page)
+        # Show page with cross-fade
+        self._fade_to_widget(page)
         logger.debug(f"Navigated to: {page_id}")
+
+    def _fade_to_widget(self, widget):
+        """Switch page with a quick cross-fade animation."""
+        from PyQt5.QtWidgets import QGraphicsOpacityEffect
+        from PyQt5.QtCore import QPropertyAnimation, QEasingCurve
+        effect = QGraphicsOpacityEffect(widget)
+        widget.setGraphicsEffect(effect)
+        effect.setOpacity(0)
+        self.stack.setCurrentWidget(widget)
+        anim = QPropertyAnimation(effect, b"opacity", self)
+        anim.setDuration(150)
+        anim.setStartValue(0)
+        anim.setEndValue(1)
+        anim.setEasingCurve(QEasingCurve.OutCubic)
+        anim.finished.connect(lambda: widget.setGraphicsEffect(None))
+        anim.start()
+        self._page_anim = anim
 
     def _has_unsaved_wizard_data(self) -> bool:
         """Check if wizard has unsaved data."""

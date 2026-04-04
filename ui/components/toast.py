@@ -3,7 +3,7 @@
 
 from PyQt5.QtWidgets import (
     QFrame, QLabel, QWidget, QHBoxLayout,
-    QGraphicsOpacityEffect
+    QGraphicsOpacityEffect, QPushButton
 )
 from PyQt5.QtCore import Qt, QTimer, QPropertyAnimation
 from PyQt5.QtGui import QColor
@@ -48,12 +48,20 @@ class Toast(QFrame):
         },
     }
 
+    _SEVERITY_DURATION = {
+        "success": 4000,
+        "error": 8000,
+        "warning": 6000,
+        "info": 4000,
+    }
+
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setObjectName("toast-notification")
         self._hide_timer = QTimer(self)
         self._hide_timer.setSingleShot(True)
         self._hide_timer.timeout.connect(self._fade_out)
+        self._action_callback = None
         self._setup_ui()
 
     def _setup_ui(self):
@@ -81,26 +89,48 @@ class Toast(QFrame):
         )
         layout.addWidget(self._msg_lbl, 1)
 
+        self._action_btn = QPushButton()
+        self._action_btn.setVisible(False)
+        self._action_btn.setCursor(Qt.PointingHandCursor)
+        self._action_btn.setFont(
+            create_font(size=FontManager.SIZE_BODY, weight=FontManager.WEIGHT_SEMIBOLD)
+        )
+        self._action_btn.clicked.connect(self._on_action)
+        layout.addWidget(self._action_btn)
+
+        self._close_btn = QPushButton("\u00D7")
+        self._close_btn.setFixedSize(24, 24)
+        self._close_btn.setCursor(Qt.PointingHandCursor)
+        self._close_btn.setFont(create_font(size=14, weight=FontManager.WEIGHT_BOLD))
+        self._close_btn.setStyleSheet(f"""
+            QPushButton {{
+                background: transparent;
+                color: {Colors.TEXT_SECONDARY};
+                border: none;
+                border-radius: 12px;
+            }}
+            QPushButton:hover {{ background: rgba(0,0,0,0.06); }}
+        """)
+        self._close_btn.clicked.connect(self._fade_out)
+        layout.addWidget(self._close_btn)
+
         self.opacity_effect = QGraphicsOpacityEffect(self)
         self.setGraphicsEffect(self.opacity_effect)
         self.opacity_effect.setOpacity(0)
 
         self.hide()
 
-    def show_message(self, message: str, toast_type: str = INFO, duration: int = 3000):
-        """
-        Show a toast message.
-
-        Args:
-            message: Message text
-            toast_type: Type (success, error, warning, info)
-            duration: Display duration in milliseconds
-        """
+    def show_message(self, message: str, toast_type: str = INFO,
+                     duration: int = None, action_text: str = "",
+                     action_callback=None):
         self._hide_timer.stop()
 
         if toast_type in (self.ERROR, self.WARNING):
             from services.error_mapper import sanitize_user_message
             message = sanitize_user_message(message)
+
+        if duration is None:
+            duration = self._SEVERITY_DURATION.get(toast_type, 4000)
 
         direction = get_layout_direction()
         self.setLayoutDirection(direction)
@@ -132,6 +162,23 @@ class Toast(QFrame):
             border: none;
         """)
 
+        if action_text and action_callback:
+            self._action_callback = action_callback
+            self._action_btn.setText(action_text)
+            self._action_btn.setStyleSheet(f"""
+                QPushButton {{
+                    background: transparent;
+                    color: {accent};
+                    border: none;
+                    padding: 2px 6px;
+                }}
+                QPushButton:hover {{ text-decoration: underline; }}
+            """)
+            self._action_btn.setVisible(True)
+        else:
+            self._action_btn.setVisible(False)
+            self._action_callback = None
+
         if self.parent():
             parent_rect = self.parent().rect()
             self.adjustSize()
@@ -149,6 +196,11 @@ class Toast(QFrame):
         self.fade_in.start()
 
         self._hide_timer.start(duration)
+
+    def _on_action(self):
+        if self._action_callback:
+            self._action_callback()
+        self._fade_out()
 
     def _fade_out(self):
         """Fade out and hide."""

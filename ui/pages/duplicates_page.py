@@ -1498,13 +1498,12 @@ class DuplicatesPage(QWidget):
         }
         action_label = action_labels.get(resolution_type, tr("page.duplicates.execute_action"))
 
-        from ui.components.dialogs.confirmation_dialog import ConfirmationDialog, DialogResult
-        result = ConfirmationDialog.confirm(
-            parent=self,
-            title=tr("page.duplicates.confirm_action_title"),
-            message=tr("page.duplicates.confirm_action_msg", action=action_label),
-        )
-        if result != DialogResult.YES:
+        from ui.error_handler import ErrorHandler
+        if not ErrorHandler.confirm(
+            self,
+            tr("page.duplicates.confirm_action_msg", action=action_label),
+            tr("page.duplicates.confirm_action_title"),
+        ):
             return
 
         master_id = ""

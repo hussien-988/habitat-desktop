@@ -8,9 +8,9 @@ from pathlib import Path
 from typing import Optional, Tuple
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QTextEdit,
-    QPushButton, QComboBox, QTableView, QTableWidget, QTableWidgetItem, QHeaderView,
+    QPushButton, QComboBox, QHeaderView,
     QFrame, QFileDialog, QAbstractItemView, QGraphicsDropShadowEffect,
-    QDialog, QDoubleSpinBox, QSpinBox, QScrollArea,
+    QDoubleSpinBox, QSpinBox, QScrollArea,
     QMenu, QAction, QTabWidget, QStackedWidget, QStyleOptionHeader, QStyle,
     QStylePainter, QStyleOptionComboBox, QSizePolicy
     )
@@ -41,7 +41,6 @@ from services.validation_service import ValidationService
 from ui.components.rtl_combo import RtlCombo
 from ui.components.toast import Toast
 from ui.components.dialogs import ExportDialog
-from ui.components.message_dialog import MessageDialog
 from ui.error_handler import ErrorHandler
 from ui.components.custom_button import CustomButton
 from ui.components.primary_button import PrimaryButton
@@ -230,7 +229,8 @@ class AddBuildingPage(QWidget):
         title_row.addWidget(close_btn)
 
         # Save button with icon
-        save_btn = QPushButton(" " + tr("button.save"))
+        self._save_btn = QPushButton(" " + tr("button.save"))
+        save_btn = self._save_btn
         save_btn.setCursor(Qt.PointingHandCursor)
         save_btn.setFixedSize(ButtonDimensions.SAVE_WIDTH, ButtonDimensions.SAVE_HEIGHT)
 
@@ -1246,8 +1246,7 @@ class AddBuildingPage(QWidget):
         building_num = self.building_number.text().strip()
 
         if len(building_num) < 5:
-            from ui.components.message_dialog import MessageDialog
-            MessageDialog.warning(self, tr("dialog.buildings.input_error"), tr("dialog.buildings.building_number_5_digits"))
+            ErrorHandler.show_warning(self, tr("dialog.buildings.building_number_5_digits"))
             self.building_number.setFocus()
             return
 
@@ -1652,167 +1651,29 @@ class AddBuildingPage(QWidget):
             self._load_building_documents(building_uuid)
 
     def _show_validation_error_dialog(self, errors):
-        """عرض نافذة خطأ واضحة للتحقق من البيانات."""
-        dialog = QDialog(self)
-        dialog.setWindowTitle(tr("dialog.buildings.data_error"))
-        dialog.setFixedSize(500, 280)
-        dialog.setStyleSheet("""
-            QDialog {
-                background-color: white;
-            }
-        """)
-
-        layout = QVBoxLayout(dialog)
-        layout.setContentsMargins(30, 25, 30, 25)
-        layout.setSpacing(15)
-
-        # أيقونة الخطأ
-        icon_label = QLabel("❌")
-        icon_label.setStyleSheet("font-size: 52px;")
-        icon_label.setAlignment(Qt.AlignCenter)
-        layout.addWidget(icon_label)
-
-        # العنوان
-        title = QLabel(tr("dialog.buildings.invalid_data"))
-        title.setStyleSheet("font-size: 20px; font-weight: bold; color: #e74c3c;")
-        title.setAlignment(Qt.AlignCenter)
-        layout.addWidget(title)
-
-        # قائمة الأخطاء
-        errors_text = "\n".join([f"• {error}" for error in errors])
-        message = QLabel(errors_text)
-        message.setStyleSheet("font-size: 14px; color: #555; line-height: 1.6;")
-        message.setAlignment(Qt.AlignRight)
-        message.setWordWrap(True)
-        layout.addWidget(message)
-
-        layout.addStretch()
-
-        # زر موافق
-        btn_layout = QHBoxLayout()
-        btn_layout.addStretch()
-
-        ok_btn = QPushButton(tr("button.ok"))
-        ok_btn.setFixedSize(120, 42)
-        ok_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #e74c3c;
-                color: white;
-                border: none;
-                border-radius: 6px;
-                font-size: 14px;
-                font-weight: bold;
-            }
-            QPushButton:hover {
-                background-color: #c0392b;
-            }
-        """)
-        ok_btn.clicked.connect(dialog.accept)
-        btn_layout.addWidget(ok_btn)
-
-        layout.addLayout(btn_layout)
-
-        dialog.exec_()
+        """Display validation errors via notification bar."""
+        message = " | ".join(errors) if len(errors) <= 3 else "\n".join(errors)
+        ErrorHandler.show_error(self, message)
 
     def _show_duplicate_error_dialog(self, building_id):
-        """عرض نافذة خطأ واضحة لرقم البناء المكرر - حسب مواصفات FSD."""
-        dialog = QDialog(self)
-        dialog.setWindowTitle(tr("dialog.buildings.duplicate_number"))
-        dialog.setFixedSize(520, 300)
-        dialog.setStyleSheet("""
-            QDialog {
-                background-color: white;
-            }
-        """)
-
-        layout = QVBoxLayout(dialog)
-        layout.setContentsMargins(30, 25, 30, 25)
-        layout.setSpacing(15)
-
-        # أيقونة الخطأ
-        icon_label = QLabel("⚠️")
-        icon_label.setStyleSheet("font-size: 52px;")
-        icon_label.setAlignment(Qt.AlignCenter)
-        layout.addWidget(icon_label)
-
-        # العنوان - حسب FSD: E003 Duplicate
-        title = QLabel(tr("dialog.buildings.duplicate_number"))
-        title.setStyleSheet("font-size: 20px; font-weight: bold; color: #e67e22;")
-        title.setAlignment(Qt.AlignCenter)
-        layout.addWidget(title)
-
-        # الرسالة - واضحة ومحددة
-        message = QLabel(
-            f"<div style='text-align: right; line-height: 1.8;'>"
-            f"<p style='font-size: 15px; margin-bottom: 10px;'>"
-            f"{tr('dialog.buildings.duplicate_msg_exists', building_id=f'<b style=\"color: #e67e22; font-size: 16px;\">{building_id}</b>')}"
-            f"</p>"
-            f"<p style='font-size: 13px; color: #7f8c8d;'>"
-            f"<b>{tr('dialog.buildings.duplicate_solution_label')}</b> {tr('dialog.buildings.duplicate_solution_text')}"
-            f"</p>"
-            f"<p style='font-size: 12px; color: #95a5a6; margin-top: 8px;'>"
-            f"{tr('dialog.buildings.duplicate_error_code')}"
-            f"</p>"
-            f"</div>"
+        """Display duplicate building error via BottomSheet with review option."""
+        from ui.components.bottom_sheet import BottomSheet
+        msg = tr('dialog.buildings.duplicate_msg_exists', building_id=building_id)
+        sheet = BottomSheet(self)
+        sheet.choice_made.connect(lambda choice: self._on_duplicate_choice(choice))
+        sheet.show_choices(
+            tr("dialog.buildings.duplicate_number"),
+            [
+                (tr("dialog.buildings.review_existing"), tr("dialog.buildings.review_existing")),
+                (tr("button.ok"), tr("button.ok")),
+            ]
         )
-        message.setWordWrap(True)
-        layout.addWidget(message)
+        ErrorHandler.show_warning(self, msg)
 
-        layout.addStretch()
-
-        # الأزرار
-        btn_layout = QHBoxLayout()
-        btn_layout.addStretch()
-
-        # زر مراجعة السجل
-        review_btn = QPushButton(tr("dialog.buildings.review_existing"))
-        review_btn.setFixedSize(170, 42)
-        review_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #3498db;
-                color: white;
-                border: none;
-                border-radius: 6px;
-                font-size: 13px;
-                font-weight: bold;
-            }
-            QPushButton:hover {
-                background-color: #2980b9;
-            }
-        """)
-        review_btn.clicked.connect(lambda: self._review_existing_building(building_id, dialog))
-        btn_layout.addWidget(review_btn)
-
-        btn_layout.addSpacing(10)
-
-        # زر موافق
-        ok_btn = QPushButton(tr("button.ok"))
-        ok_btn.setFixedSize(100, 42)
-        ok_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #95a5a6;
-                color: white;
-                border: none;
-                border-radius: 6px;
-                font-size: 13px;
-                font-weight: bold;
-            }
-            QPushButton:hover {
-                background-color: #7f8c8d;
-            }
-        """)
-        ok_btn.clicked.connect(dialog.accept)
-        btn_layout.addWidget(ok_btn)
-
-        layout.addLayout(btn_layout)
-
-        dialog.exec_()
-
-    def _review_existing_building(self, building_id, dialog):
-        """فتح السجل الموجود للمراجعة."""
-        dialog.accept()
-        # إغلاق نافذة الإضافة والعودة للقائمة
-        self.cancelled.emit()
+    def _on_duplicate_choice(self, choice):
+        """Handle duplicate building dialog choice."""
+        if choice == tr("dialog.buildings.review_existing"):
+            self.cancelled.emit()
         # يمكن إضافة منطق للبحث عن البناء وعرضه
 
     def _create_spinbox_with_arrows(self, spinbox: QSpinBox) -> QFrame:
@@ -1907,6 +1768,19 @@ class AddBuildingPage(QWidget):
 
         return container
 
+    def _set_save_loading(self, loading, text=""):
+        """Set save button loading state."""
+        btn = self._save_btn
+        if loading:
+            btn._original_text = btn.text()
+            btn.setText(text or tr("component.loading.default"))
+            btn.setEnabled(False)
+            btn.setCursor(Qt.WaitCursor)
+        else:
+            btn.setText(getattr(btn, '_original_text', " " + tr("button.save")))
+            btn.setEnabled(True)
+            btn.setCursor(Qt.PointingHandCursor)
+
     def _on_save(self):
         """Validate and save."""
         data = self.get_data()
@@ -1914,7 +1788,6 @@ class AddBuildingPage(QWidget):
         result = self.validation_service.validate_building(data)
 
         if not result.is_valid:
-            # عرض رسائل الخطأ في نافذة واضحة
             self._show_validation_error_dialog(result.errors)
             return
 
@@ -1926,9 +1799,9 @@ class AddBuildingPage(QWidget):
             ):
                 return
 
+        self._set_save_loading(True, tr("page.add_building.saving"))
         try:
             if self.building:
-                # Update - use controller
                 result = self.building_controller.update_building(
                     self.building.building_uuid,
                     data,
@@ -1944,7 +1817,6 @@ class AddBuildingPage(QWidget):
                         error_msg += "\n" + "\n".join(result.validation_errors)
                     self._show_validation_error_dialog([error_msg])
             else:
-                # Create - use controller
                 result = self.building_controller.create_building(data)
 
                 if result.success:
@@ -1956,7 +1828,6 @@ class AddBuildingPage(QWidget):
                     if hasattr(result, 'validation_errors') and result.validation_errors:
                         error_msg += "\n" + "\n".join(result.validation_errors)
 
-                    # Check if it's duplicate error
                     if "already exists" in error_msg or "موجود" in error_msg:
                         self._show_duplicate_error_dialog(data['building_id'])
                     else:
@@ -1965,6 +1836,8 @@ class AddBuildingPage(QWidget):
         except Exception as e:
             logger.error(f"Failed to save building: {e}")
             self._show_validation_error_dialog([tr("dialog.buildings.save_failed", error=str(e))])
+        finally:
+            self._set_save_loading(False)
 
     def get_data(self):
         """Get form data."""
@@ -2441,11 +2314,9 @@ class BuildingsListPage(QWidget):
             'building_status': None # حالة البناء (column 5)
         }
         self._neighborhoods_api_cache = []  # cached from API on first filter use
+        self._load_worker = None
 
         self._setup_ui()
-
-        from ui.components.loading_spinner import LoadingSpinnerOverlay
-        self._spinner = LoadingSpinnerOverlay(self)
 
     def _setup_ui(self):
         """Setup buildings list UI."""
@@ -2481,250 +2352,51 @@ class BuildingsListPage(QWidget):
         card_layout = QVBoxLayout(table_card)
         card_layout.setContentsMargins(10, 10, 10, 10)
 
-        self.table = QTableWidget()
-        self.table.setColumnCount(8)
-        self.table.setRowCount(11)  # Fixed 11 rows
-        self.table.setLayoutDirection(get_layout_direction())
-        self.table.setEditTriggers(QAbstractItemView.NoEditTriggers)
+        from ui.components.modern_table import ModernTable
 
-        # Get down.png icon path
-        from pathlib import Path
-        import sys
-        from PyQt5.QtGui import QIcon
+        self._modern_table = ModernTable()
+        self._modern_table.set_columns([
+            {"key": "building_code", "label": tr("table.buildings.building_code"),
+             "type": "id", "resize": "stretch"},
+            {"key": "entry_date", "label": tr("table.buildings.entry_date"),
+             "resize": "contents"},
+            {"key": "area", "label": tr("table.buildings.area"),
+             "resize": "contents"},
+            {"key": "neighborhood", "label": tr("table.buildings.neighborhood"),
+             "resize": "contents"},
+            {"key": "building_type", "label": tr("table.buildings.building_type"),
+             "resize": "contents"},
+            {"key": "building_status", "label": tr("table.buildings.building_status"),
+             "resize": "contents"},
+            {"key": "assignment_status", "label": tr("table.buildings.assignment_status"),
+             "type": "status", "resize": "contents",
+             "status_map": {"assigned": "info", "not_assigned": "default"},
+             "display_map": {
+                 "assigned": tr("building.assigned"),
+                 "not_assigned": tr("building.not_assigned"),
+             }},
+            {"key": "lock_status", "label": tr("table.buildings.lock_status"),
+             "type": "status", "resize": "contents",
+             "status_map": {"locked": "error", "unlocked": "success"},
+             "display_map": {
+                 "locked": tr("building.locked"),
+                 "unlocked": tr("building.unlocked"),
+             }},
+        ])
+        self._modern_table.set_page_size(self._rows_per_page)
+        self._modern_table.set_empty_state(tr("page.buildings.no_matching_data"))
+        self._modern_table.row_clicked.connect(self._on_modern_row_clicked)
+        self._modern_table.page_changed.connect(self._on_page_changed)
 
-        if hasattr(sys, '_MEIPASS'):
-            base_path = Path(sys._MEIPASS)
-        else:
-            base_path = Path(__file__).parent.parent.parent
+        # Connect header click for column filtering
+        self._modern_table._table.horizontalHeader().sectionClicked.disconnect()
+        self._modern_table._table.horizontalHeader().sectionClicked.connect(
+            self._on_header_clicked
+        )
 
-        icon_path = base_path / "assets" / "images" / "down.png"
-
-        # Set headers with icons for filterable columns
-        headers = [tr("table.buildings.building_code"), tr("table.buildings.entry_date"), tr("table.buildings.area"), tr("table.buildings.neighborhood"), tr("table.buildings.building_type"), tr("table.buildings.building_status"), tr("table.buildings.assignment_status"), tr("table.buildings.lock_status")]
-        for i, text in enumerate(headers):
-            item = QTableWidgetItem(text)
-            # Add icon to filterable columns (2, 3, 4, 5)
-            if i in [2, 3, 4, 5] and icon_path.exists():
-                icon = QIcon(str(icon_path))
-                item.setIcon(icon)
-            self.table.setHorizontalHeaderItem(i, item)
-
-        # Disable scroll bars
-        self.table.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        self.table.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-
-        # ستايل الجدول الاحترافي
-        self.table.setShowGrid(False)
-        self.table.setFocusPolicy(Qt.NoFocus)
-        self.table.setSelectionMode(QTableWidget.NoSelection)
-        self.table.setStyleSheet(f"""
-            QTableWidget {{
-                border: none;
-                background-color: white;
-                font-size: 10.5pt;
-                font-weight: 400;
-                color: #212B36;
-            }}
-            QTableWidget::item {{
-                padding: 8px 15px;
-                border-bottom: 1px solid #F0F0F0;
-                color: #212B36;
-                font-size: 10.5pt;
-                font-weight: 400;
-            }}
-            QTableWidget::item:hover {{
-                background-color: #FAFBFC;
-            }}
-            QHeaderView {{
-                border-top-left-radius: 16px;
-                border-top-right-radius: 16px;
-            }}
-            QHeaderView::section {{
-                background-color: #F8F9FA;
-                padding: 12px;
-                padding-left: 30px;
-                border: none;
-                color: #637381;
-                font-weight: 600;
-                font-size: 11pt;
-                height: 56px;
-            }}
-            QHeaderView::section:hover {{
-                background-color: #EBEEF2;
-            }}
-        """ + StyleManager.scrollbar())
-
-        # ضبط المحاذاة والعرض
-        header = self.table.horizontalHeader()
-        header.setDefaultAlignment(Qt.AlignRight | Qt.AlignVCenter)
-        header.setFixedHeight(56)
-        header.setStretchLastSection(True)  # آخر عمود يأخذ المساحة المتبقية
-        header.setMouseTracking(True)  # Enable mouse tracking for cursor change
-
-        # Connect hover event for cursor change on filterable columns
-        header.sectionEntered.connect(self._on_header_hover)
-
-        # تحديد عرض الأعمدة
-        header.setSectionResizeMode(0, QHeaderView.Stretch)           # رمز البناء
-        header.setSectionResizeMode(1, QHeaderView.ResizeToContents)  # تاريخ الإدخال
-        header.setSectionResizeMode(2, QHeaderView.ResizeToContents)  # المنطقة (district)
-        header.setSectionResizeMode(3, QHeaderView.ResizeToContents)  # الحي (neighborhood)
-        header.setSectionResizeMode(4, QHeaderView.ResizeToContents)  # نوع البناء
-        header.setSectionResizeMode(5, QHeaderView.ResizeToContents)  # حالة البناء
-        header.setSectionResizeMode(6, QHeaderView.ResizeToContents)  # حالة التعيين
-        header.setSectionResizeMode(7, QHeaderView.ResizeToContents)  # حالة القفل
-
-        # ضبط ارتفاع الصفوف بالتساوي
-        # الارتفاع المتاح: 708 (card) - 10 (top) - 10 (bottom) - 56 (header) - 58 (footer) = 574px
-        # لكل صف: 574 / 11 = 52px تقريباً
-        vertical_header = self.table.verticalHeader()
-        vertical_header.setVisible(False)
-        vertical_header.setDefaultSectionSize(52)  # ارتفاع موحد لكل الصفوف
-
-        # Single click on any row → view building details
-        self.table.cellClicked.connect(self._on_cell_clicked)
-
-        # Connect header click for filtering (same pattern as field_work_preparation)
-        header.sectionClicked.connect(self._on_header_clicked)
-
-        card_layout.addWidget(self.table)
-
-        # التذييل - Footer with gray background like header
-        footer_frame = QFrame()
-        footer_frame.setStyleSheet("""
-            QFrame {
-                background-color: #F8F9FA;
-                border-top: 1px solid #E1E8ED;
-                border-bottom-left-radius: 16px;
-                border-bottom-right-radius: 16px;
-            }
-        """)
-        footer_frame.setFixedHeight(58)  # Footer height: 58px
-
-        footer = QHBoxLayout(footer_frame)
-        footer.setContentsMargins(10, 10, 10, 10)  # Padding 10px from all sides
-
-        # Navigation arrows > < (أول شي من اليمين)
-        nav_container = QWidget()
-        nav_container.setStyleSheet("background: transparent;")
-        nav_layout = QHBoxLayout(nav_container)
-        nav_layout.setContentsMargins(0, 0, 0, 0)
-        nav_layout.setSpacing(8)
-
-        # Previous button (>) - للصفحة السابقة
-        self.prev_btn = QPushButton(">")
-        self.prev_btn.setFixedSize(32, 32)
-        self.prev_btn.setStyleSheet("""
-            QPushButton {
-                background: transparent;
-                border: 1px solid #E1E8ED;
-                border-radius: 4px;
-                color: #637381;
-                font-size: 14pt;
-                font-weight: bold;
-            }
-            QPushButton:hover {
-                background-color: #EBEEF2;
-            }
-            QPushButton:disabled {
-                color: #C1C7CD;
-            }
-        """)
-        self.prev_btn.clicked.connect(self._go_to_previous_page)
-        nav_layout.addWidget(self.prev_btn)
-
-        # Next button (<) - للصفحة التالية
-        self.next_btn = QPushButton("<")
-        self.next_btn.setFixedSize(32, 32)
-        self.next_btn.setStyleSheet("""
-            QPushButton {
-                background: transparent;
-                border: 1px solid #E1E8ED;
-                border-radius: 4px;
-                color: #637381;
-                font-size: 14pt;
-                font-weight: bold;
-            }
-            QPushButton:hover {
-                background-color: #EBEEF2;
-            }
-            QPushButton:disabled {
-                color: #C1C7CD;
-            }
-        """)
-        self.next_btn.clicked.connect(self._go_to_next_page)
-        nav_layout.addWidget(self.next_btn)
-
-        footer.addWidget(nav_container)
-
-        # Counter label "1-11 of 50" (ثاني شي)
-        self.page_label = QLabel("1-11 of 11")
-        self.page_label.setStyleSheet("color: #637381; font-size: 10pt; font-weight: 400;")
-        footer.addWidget(self.page_label)
-
-        # Rows number with down icon (ثالث شي) - Clickable page selector
-        from PyQt5.QtGui import QPixmap
-        rows_container = QFrame()
-        rows_container.setStyleSheet("""
-            QFrame {
-                background: transparent;
-                border: 1px solid #E1E8ED;
-                border-radius: 4px;
-                padding: 4px 8px;
-            }
-            QFrame:hover {
-                background-color: #EBEEF2;
-            }
-        """)
-        rows_container.setCursor(Qt.PointingHandCursor)
-        rows_layout = QHBoxLayout(rows_container)
-        rows_layout.setContentsMargins(4, 2, 4, 2)
-        rows_layout.setSpacing(4)
-
-        # Down icon - أولاً (نجرب نبدل المكان)
-        down_icon_label = QLabel()
-        if icon_path.exists():
-            down_pixmap = QPixmap(str(icon_path))
-            if not down_pixmap.isNull():
-                down_pixmap = down_pixmap.scaled(10, 10, Qt.KeepAspectRatio, Qt.SmoothTransformation)
-                down_icon_label.setPixmap(down_pixmap)
-        down_icon_label.setStyleSheet("background: transparent; border: none;")
-        rows_layout.addWidget(down_icon_label)
-
-        # Number (11) - ثانياً
-        self.rows_number = QLabel("11")
-        self.rows_number.setStyleSheet("color: #637381; font-size: 10pt; font-weight: 400; background: transparent; border: none;")
-        rows_layout.addWidget(self.rows_number)
-
-        # Make clickable to show page selection menu
-        rows_container.mousePressEvent = lambda e: self._show_page_selection_menu(rows_container)
-
-        footer.addWidget(rows_container)
-
-        # "Rows per page:" label (رابع شي)
-        rows_label = QLabel(tr("table.buildings.rows_per_page"))
-        rows_label.setStyleSheet("color: #637381; font-size: 10pt; font-weight: 400;")
-        footer.addWidget(rows_label)
-
-        footer.addStretch()
-
-        from ui.components.toggle_switch import ToggleSwitch
-        self.dense_toggle = ToggleSwitch(tr("table.buildings.dense"), checked=True)
-        self.dense_toggle.toggled.connect(self._on_dense_toggle)
-        footer.addWidget(self.dense_toggle)
-
-        card_layout.addWidget(footer_frame)
+        card_layout.addWidget(self._modern_table)
 
         layout.addWidget(table_card)
-
-    def _on_dense_toggle(self, checked):
-        row_height = 52 if checked else 68
-        v_header = self.table.verticalHeader()
-        v_header.setDefaultSectionSize(row_height)
-        if checked:
-            self.table.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        else:
-            self.table.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
 
     def refresh(self):
         """Refresh list."""
@@ -2736,154 +2408,63 @@ class BuildingsListPage(QWidget):
         self._user_role = role
 
     def _load_buildings(self):
-        """Load buildings from repository and populate table."""
-        self._spinner.show_loading(tr("page.buildings.loading"))
-        try:
-            self.__do_load_buildings()
-        finally:
-            self._spinner.hide_loading()
+        """Load buildings asynchronously so skeleton shimmer is visible."""
+        self._modern_table.show_loading(tr("page.buildings.loading"))
 
-    def __do_load_buildings(self):
-        # Load buildings using controller
-        result = self.building_controller.load_buildings()
+        self._load_worker = ApiWorker(self._fetch_buildings_bg)
+        self._load_worker.finished.connect(self._on_buildings_loaded)
+        self._load_worker.error.connect(self._on_buildings_load_error)
+        self._load_worker.start()
 
+    def _fetch_buildings_bg(self):
+        """Background thread: load from controller."""
+        return self.building_controller.load_buildings()
+
+    def _on_buildings_loaded(self, result):
+        """Main thread callback after buildings loaded."""
         if result.success:
-            all_buildings = result.data
+            self._all_buildings = result.data
         else:
             Toast.show_toast(self, tr("page.buildings.load_error"), Toast.ERROR)
             logger.error(f"Failed to load buildings: {result.message}")
-            all_buildings = []
+            self._all_buildings = []
 
-        self._all_buildings = all_buildings  # Store unfiltered buildings
+        self._populate_table_from_buildings()
 
-        # Apply filters before pagination
-        self._buildings = self._apply_filters(all_buildings)
+    def _on_buildings_load_error(self, error_msg):
+        """Handle background loading error."""
+        Toast.show_toast(self, tr("page.buildings.load_error"), Toast.ERROR)
+        logger.error(f"Background load failed: {error_msg}")
+        self._all_buildings = []
+        self._modern_table.set_data([], 0)
 
-        # Calculate pagination from FILTERED buildings (not all_buildings)
+    def _populate_table_from_buildings(self):
+        """Apply filters, paginate, and feed data to ModernTable."""
+        self._buildings = self._apply_filters(self._all_buildings)
+
         total = len(self._buildings)
-        self._total_pages = (total + self._rows_per_page - 1) // self._rows_per_page if total > 0 else 1
+        self._total_pages = max(1, (total + self._rows_per_page - 1) // self._rows_per_page)
 
-        # Get buildings for current page from FILTERED buildings
         start_idx = (self._current_page - 1) * self._rows_per_page
         end_idx = min(start_idx + self._rows_per_page, total)
         page_buildings = self._buildings[start_idx:end_idx]
 
-        # Clear spans and cells
-        self.table.clearSpans()
-        for row in range(11):
-            for col in range(8):
-                self.table.setItem(row, col, QTableWidgetItem(""))
+        rows = []
+        for b in page_buildings:
+            rows.append({
+                "building_code": b.building_id_formatted or b.building_id or "",
+                "entry_date": b.created_at.strftime("%d/%m/%Y") if b.created_at else "",
+                "area": (b.district_name_ar or b.district_name or "").strip(),
+                "neighborhood": (b.neighborhood_name_ar or b.neighborhood_name or "").strip(),
+                "building_type": get_building_type_display(b.building_type),
+                "building_status": get_building_status_display(b.building_status),
+                "assignment_status": "assigned" if getattr(b, 'is_assigned', False) else "not_assigned",
+                "lock_status": "locked" if getattr(b, 'is_locked', False) else "unlocked",
+                "_building": b,
+            })
 
-        if total == 0:
-            self.table.setSpan(0, 0, 11, 9)
-            empty_item = QTableWidgetItem(tr("page.buildings.no_matching_data"))
-            empty_item.setTextAlignment(Qt.AlignCenter)
-            from PyQt5.QtGui import QColor
-            empty_item.setForeground(QColor("#9CA3AF"))
-            self.table.setItem(0, 0, empty_item)
-            self.page_label.setText("0-0 of 0")
-            self.prev_btn.setEnabled(False)
-            self.next_btn.setEnabled(False)
-            return
-
-        # Populate table with current page data
-        for idx, building in enumerate(page_buildings):
-            # رمز البناء (use formatted ID if available, fallback to building_id)
-            display_id = building.building_id_formatted or building.building_id or ""
-            self.table.setItem(idx, 0, QTableWidgetItem(display_id))
-
-            # تاريخ الادخال
-            date_str = building.created_at.strftime("%d/%m/%Y") if building.created_at else ""
-            self.table.setItem(idx, 1, QTableWidgetItem(date_str))
-
-            # المنطقة - district name
-            area = (building.district_name_ar or building.district_name or '').strip()
-            self.table.setItem(idx, 2, QTableWidgetItem(area))
-
-            # الحي - neighborhood name
-            hood = (building.neighborhood_name_ar or building.neighborhood_name or '').strip()
-            self.table.setItem(idx, 3, QTableWidgetItem(hood))
-
-            # نوع البناء - display_mappings handles int codes + string fallback
-            building_type = get_building_type_display(building.building_type)
-            self.table.setItem(idx, 4, QTableWidgetItem(building_type))
-
-            # حالة البناء - display_mappings handles int codes + string fallback
-            building_status = get_building_status_display(building.building_status)
-            self.table.setItem(idx, 5, QTableWidgetItem(building_status))
-
-            # حالة التعيين
-            from PyQt5.QtGui import QFont, QColor
-            assigned_text = tr("building.assigned") if getattr(building, 'is_assigned', False) else tr("building.not_assigned")
-            assigned_item = QTableWidgetItem(assigned_text)
-            assigned_item.setTextAlignment(Qt.AlignCenter)
-            if getattr(building, 'is_assigned', False):
-                assigned_item.setForeground(QColor("#3890DF"))
-            else:
-                assigned_item.setForeground(QColor("#9CA3AF"))
-            self.table.setItem(idx, 6, assigned_item)
-
-            # حالة القفل
-            locked_text = tr("building.locked") if getattr(building, 'is_locked', False) else tr("building.unlocked")
-            locked_item = QTableWidgetItem(locked_text)
-            locked_item.setTextAlignment(Qt.AlignCenter)
-            if getattr(building, 'is_locked', False):
-                locked_item.setForeground(QColor("#dc3545"))
-            else:
-                locked_item.setForeground(QColor("#28a745"))
-            self.table.setItem(idx, 7, locked_item)
-
-        # Update pagination info (counter only: "1-11 of 50")
-        if total > 0:
-            self.page_label.setText(f"{start_idx + 1}-{end_idx} of {total}")
-        else:
-            self.page_label.setText("0-0 of 0")
-
-        # Update navigation buttons state
-        self.prev_btn.setEnabled(self._current_page > 1)
-        self.next_btn.setEnabled(self._current_page < self._total_pages)
-
-    def _get_down_icon_path(self) -> str:
-        """
-        Get absolute path to down.png icon.
-
-        Single source of truth for icon paths.
-        """
-        from pathlib import Path
-        import sys
-
-        if hasattr(sys, '_MEIPASS'):
-            base_path = Path(sys._MEIPASS)
-        else:
-            base_path = Path(__file__).parent.parent.parent
-
-        # Try multiple locations
-        search_paths = [
-            base_path / "assets" / "images" / "down.png",
-            base_path / "assets" / "icons" / "down.png",
-            base_path / "assets" / "down.png",
-        ]
-
-        for path in search_paths:
-            if path.exists():
-                return str(path).replace("\\", "/")
-
-        return ""
-
-    def _on_header_hover(self, logical_index: int):
-        """
-        Change cursor to pointer only on filterable columns.
-
-        Args:
-            logical_index: Column index being hovered
-        """
-        header = self.table.horizontalHeader()
-
-        # Pointer cursor only for filterable columns (2, 3, 4, 5)
-        if logical_index in [2, 3, 4, 5]:
-            header.setCursor(Qt.PointingHandCursor)
-        else:
-            header.setCursor(Qt.ArrowCursor)
+        self._modern_table.set_page(self._current_page)
+        self._modern_table.set_data(rows, total)
 
     def _on_header_clicked(self, logical_index: int):
         """
@@ -2931,7 +2512,6 @@ class BuildingsListPage(QWidget):
                 self._neighborhoods_filter_worker.error.connect(
                     self._on_neighborhoods_for_filter_error
                 )
-                self._spinner.show_loading(tr("component.loading.default"))
                 self._neighborhoods_filter_worker.start()
                 return
             neighborhoods = self._neighborhoods_api_cache
@@ -3012,7 +2592,8 @@ class BuildingsListPage(QWidget):
             menu.addAction(action)
 
         # Show menu below the specific column header (RTL-compatible positioning)
-        header = self.table.horizontalHeader()
+        inner_table = self._modern_table._table
+        header = inner_table.horizontalHeader()
 
         # Get the visual position of the column (works correctly in RTL)
         x_pos = header.sectionViewportPosition(column_index)
@@ -3021,7 +2602,7 @@ class BuildingsListPage(QWidget):
         y_pos = header.height()
 
         # Map to global coordinates (relative to table widget, not header)
-        pos = self.table.mapToGlobal(QPoint(x_pos, y_pos))
+        pos = inner_table.mapToGlobal(QPoint(x_pos, y_pos))
         menu.exec_(pos)
 
     def _apply_filter(self, filter_key: str, filter_value):
@@ -3098,7 +2679,6 @@ class BuildingsListPage(QWidget):
 
     def _on_neighborhoods_for_filter_loaded(self, result):
         """Callback: neighborhoods fetched, cache and show filter menu."""
-        self._spinner.hide_loading()
         if result:
             self._neighborhoods_api_cache = result
         else:
@@ -3108,7 +2688,6 @@ class BuildingsListPage(QWidget):
 
     def _on_neighborhoods_for_filter_error(self, error_msg):
         """Callback: neighborhoods fetch failed, use fallback."""
-        self._spinner.hide_loading()
         Toast.show_toast(self, tr("page.buildings.load_error"), Toast.ERROR)
         logger.warning(f"Could not load neighborhoods for filter: {error_msg}")
         self._neighborhoods_api_cache = self._fallback_neighborhoods_from_buildings()
@@ -3125,19 +2704,16 @@ class BuildingsListPage(QWidget):
             {"neighborhoodCode": k, "nameArabic": v} for k, v in seen.items()
         ]
 
-    def _on_cell_clicked(self, row: int, col: int):
+    def _on_modern_row_clicked(self, row_idx, row_data):
         """Open building details on row click."""
-        building_id_item = self.table.item(row, 0)
-        if not building_id_item or not building_id_item.text().strip():
-            return
+        building = row_data.get("_building")
+        if building:
+            self.view_building.emit(building)
 
-        start_idx = (self._current_page - 1) * self._rows_per_page
-        building_idx = start_idx + row
-
-        if building_idx >= len(self._buildings):
-            return
-
-        self.view_building.emit(self._buildings[building_idx])
+    def _on_page_changed(self, page):
+        """Handle page change from ModernTable pagination."""
+        self._current_page = page
+        self._populate_table_from_buildings()
 
     def _show_on_map(self, building: Building):
         """
@@ -3163,19 +2739,11 @@ class BuildingsListPage(QWidget):
 
     def _on_toggle_lock(self, building: Building):
         """Toggle building lock state with confirmation."""
-        from ui.components.dialogs import ConfirmationDialog
-
         is_locked = getattr(building, 'is_locked', False)
         msg_key = "page.buildings.confirm_unlock" if is_locked else "page.buildings.confirm_lock"
         title_key = "building.action.unlock" if is_locked else "building.action.lock"
 
-        result = ConfirmationDialog.confirm(
-            parent=self,
-            title=tr(title_key),
-            message=tr(msg_key),
-            icon_name="wirning"
-        )
-        if result != ConfirmationDialog.YES:
+        if not ErrorHandler.confirm(self, tr(msg_key), tr(title_key)):
             return
 
         new_lock_state = not is_locked
@@ -3191,20 +2759,14 @@ class BuildingsListPage(QWidget):
 
     def _on_delete_building(self, building: Building):
         """Delete building with confirmation dialog."""
-        from ui.components.dialogs import ConfirmationDialog, MessageDialog as FigmaMessageDialog
-
-        # تأكيد الحذف
-        result = ConfirmationDialog.confirm(
-            parent=self,
-            title=tr("dialog.buildings.confirm_delete"),
-            message=tr("dialog.buildings.delete_message", building_id=building.building_id),
-            icon_name="wirning"
-        )
-        if result != ConfirmationDialog.YES:
+        if not ErrorHandler.confirm(
+            self,
+            tr("dialog.buildings.delete_message", building_id=building.building_id),
+            tr("dialog.buildings.confirm_delete")
+        ):
             return
 
         try:
-            # حذف المبنى باستخدام controller
             result = self.building_controller.delete_building(building.building_uuid)
 
             if result.success:
@@ -3215,67 +2777,13 @@ class BuildingsListPage(QWidget):
 
         except Exception as e:
             logger.error(f"Failed to delete building: {e}")
-            FigmaMessageDialog.show_error(
+            ErrorHandler.show_error(
                 self,
-                tr("dialog.buildings.delete_error"),
                 tr("dialog.buildings.delete_error_message", error=str(e))
             )
 
-    def _go_to_previous_page(self):
-        """Go to previous page."""
-        if self._current_page > 1:
-            self._current_page -= 1
-            self._load_buildings()
-
-    def _go_to_next_page(self):
-        """Go to next page."""
-        if self._current_page < self._total_pages:
-            self._current_page += 1
-            self._load_buildings()
-
-    def _show_page_selection_menu(self, parent_widget):
-        """Show dropdown menu to select page number."""
-        from PyQt5.QtWidgets import QMenu
-
-        menu = QMenu(self)
-        menu.setStyleSheet("""
-            QMenu {
-                background-color: white;
-                border: 1px solid #E1E8ED;
-                border-radius: 4px;
-                padding: 4px;
-            }
-            QMenu::item {
-                padding: 6px 20px;
-                color: #637381;
-                font-size: 10pt;
-            }
-            QMenu::item:selected {
-                background-color: #E3F2FD;
-                color: #3498db;
-            }
-        """)
-
-        # Add page numbers to menu
-        for page_num in range(1, self._total_pages + 1):
-            action = menu.addAction(f"Page {page_num}")
-            if page_num == self._current_page:
-                action.setEnabled(False)  # Disable current page
-            else:
-                action.triggered.connect(lambda checked, p=page_num: self._go_to_page(p))
-
-        # Show menu below the widget
-        menu.exec_(parent_widget.mapToGlobal(parent_widget.rect().bottomLeft()))
-
-    def _go_to_page(self, page_num):
-        """Go to specific page."""
-        if 1 <= page_num <= self._total_pages:
-            self._current_page = page_num
-            self._load_buildings()
-
     def update_language(self, is_arabic: bool):
         """Update language."""
-        # Reload buildings to update language
         self._load_buildings()
 
 
