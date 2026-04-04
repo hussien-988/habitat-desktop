@@ -226,6 +226,12 @@ class BaseWizard(QWidget, metaclass=ABCQWidgetMeta):
 
     def _handle_next(self):
         """Handle next button click."""
+        import time
+        now = int(time.time() * 1000)
+        if now - getattr(self, '_last_next_ms', 0) < 600:
+            return
+        self._last_next_ms = now
+
         # Check if we're on the last step
         if self.navigator.current_index == len(self.steps) - 1:
             self._handle_submit()
@@ -318,7 +324,7 @@ class BaseWizard(QWidget, metaclass=ABCQWidgetMeta):
             message += warnings
 
         ErrorHandler.show_warning(
-            self,
+            self.window() or self,
             message or tr("validation.check_data"),
             tr("dialog.warning")
         )

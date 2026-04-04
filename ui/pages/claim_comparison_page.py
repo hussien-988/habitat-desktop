@@ -24,30 +24,7 @@ from utils.logger import get_logger
 
 logger = get_logger(__name__)
 
-RADIO_STYLE = f"""
-    QRadioButton {{
-        background: transparent;
-        border: none;
-        spacing: 0px;
-    }}
-    QRadioButton::indicator {{
-        width: 16px;
-        height: 16px;
-        border-radius: 8px;
-        border: 2px solid #C4CDD5;
-        background: {Colors.BACKGROUND};
-    }}
-    QRadioButton::indicator:hover {{
-        border-color: {Colors.PRIMARY_BLUE};
-    }}
-    QRadioButton::indicator:checked {{
-        width: 16px;
-        height: 16px;
-        border-radius: 8px;
-        border: 4px solid {Colors.PRIMARY_BLUE};
-        background: {Colors.PRIMARY_BLUE};
-    }}
-"""
+RADIO_STYLE = StyleManager.radio_button()
 
 
 class ClaimComparisonPage(QWidget):
@@ -145,22 +122,7 @@ class ClaimComparisonPage(QWidget):
         self.action_btn.setCursor(Qt.PointingHandCursor)
         self.action_btn.setFont(create_font(size=FontManager.SIZE_BODY, weight=FontManager.WEIGHT_SEMIBOLD))
         self.action_btn.setFixedSize(90, 48)
-        self.action_btn.setStyleSheet(f"""
-            QPushButton {{
-                background-color: {Colors.PRIMARY_BLUE};
-                color: white;
-                border: none;
-                border-radius: 8px;
-                padding: 12px 24px;
-                font-weight: 600;
-            }}
-            QPushButton:hover {{
-                background-color: #2E7BC8;
-            }}
-            QPushButton:pressed {{
-                background-color: #2568A8;
-            }}
-        """)
+        self.action_btn.setStyleSheet(StyleManager.nav_button_primary())
         self.action_btn.clicked.connect(self._on_action_clicked)
 
         top_row.addWidget(self._header_title)
@@ -182,13 +144,7 @@ class ClaimComparisonPage(QWidget):
     def _build_claims_container(self) -> QFrame:
         card = QFrame()
         card.setObjectName("claimsCompCard")
-        card.setStyleSheet("""
-            QFrame#claimsCompCard {
-                background-color: white;
-                border-radius: 16px;
-                border: none;
-            }
-        """)
+        card.setStyleSheet(StyleManager.form_card())
 
         card_layout = QVBoxLayout(card)
         card_layout.setSpacing(8)
@@ -245,13 +201,7 @@ class ClaimComparisonPage(QWidget):
     def _build_document_comparison(self) -> QFrame:
         card = QFrame()
         card.setObjectName("docCompCard")
-        card.setStyleSheet("""
-            QFrame#docCompCard {
-                background-color: white;
-                border-radius: 16px;
-                border: none;
-            }
-        """)
+        card.setStyleSheet(StyleManager.form_card())
 
         card_layout = QVBoxLayout(card)
         card_layout.setSpacing(16)
@@ -630,13 +580,7 @@ class ClaimComparisonPage(QWidget):
     def _build_resolution_section(self) -> QFrame:
         card = QFrame()
         card.setObjectName("resolutionCompCard")
-        card.setStyleSheet("""
-            QFrame#resolutionCompCard {
-                background-color: white;
-                border-radius: 16px;
-                border: none;
-            }
-        """)
+        card.setStyleSheet(StyleManager.form_card())
 
         card_layout = QVBoxLayout(card)
         card_layout.setSpacing(12)
@@ -697,13 +641,7 @@ class ClaimComparisonPage(QWidget):
     # ────────────────────────────────────────────
     def _create_inner_card_frame(self) -> QFrame:
         card = QFrame()
-        card.setStyleSheet(f"""
-            QFrame {{
-                background-color: {Colors.SURFACE};
-                border: none;
-                border-radius: 12px;
-            }}
-        """)
+        card.setStyleSheet(StyleManager.form_card())
         shadow = QGraphicsDropShadowEffect()
         shadow.setBlurRadius(20)
         shadow.setXOffset(0)
@@ -978,13 +916,7 @@ class ClaimComparisonPage(QWidget):
     def _build_outer_comparison_card(self, data: dict, diff_fields: set) -> QFrame:
         outer = QFrame()
         outer.setObjectName("outerCompCard")
-        outer.setStyleSheet(f"""
-            QFrame#outerCompCard {{
-                background-color: {Colors.SURFACE};
-                border: none;
-                border-radius: 12px;
-            }}
-        """)
+        outer.setStyleSheet(StyleManager.form_card())
         shadow = QGraphicsDropShadowEffect()
         shadow.setBlurRadius(20)
         shadow.setXOffset(0)
@@ -1214,20 +1146,60 @@ class ClaimComparisonPage(QWidget):
         self._current_conflict_type = data.get("conflictType", "")
         is_person = self._current_conflict_type == "PersonDuplicate"
 
-        # Fetch detailed comparison from API
+        # Show spinner during data fetch
+        self._spinner.show_loading(tr("component.loading.default"))
+
         conflict_id = data.get("id", "")
-        details = {}
-        if conflict_id:
-            try:
-                details = self.duplicate_service.get_conflict_details(conflict_id)
-                logger.info(f"Conflict details keys: {list(details.keys()) if details else 'empty'}")
-            except Exception as e:
-                logger.error(f"Failed to fetch conflict details: {e}")
-                details = {}
-            if details:
-                raw_dc = details.get("dataComparison", "")
+        entity_ids = [data.get("firstEntityId", ""), data.get("secondEntityId", "")]
+
+        def _fetch_comparison_data():
+            details = {}
+            fetched_persons = {}
+            if conflict_id:
+                try:
+                    details = self.duplicate_service.get_conflict_details(conflict_id)
+                except Exception as e:
+                    logger.error(f"Failed to fetch conflict details: {e}")
+            if is_person:
+                for eid in entity_ids:
+                    if eid:
+                        try:
+                            person = self.duplicate_service.get_person_data(eid)
+                            if person:
+                                fetched_persons[eid] = person
+                        except Exception as pe:
+                            logger.warning(f"Failed to fetch person {eid}: {pe}")
+            return {"details": details, "fetched_persons": fetched_persons}
+
+        self._comparison_fetch_worker = ApiWorker(_fetch_comparison_data)
+        self._comparison_fetch_worker.finished.connect(
+            lambda result: self._on_comparison_data_loaded(data, result)
+        )
+        self._comparison_fetch_worker.error.connect(self._on_comparison_data_error)
+        self._comparison_fetch_worker.start()
+
+    def _on_comparison_data_error(self, error_msg):
+        """Handle comparison data fetch failure."""
+        self._spinner.hide_loading()
+        logger.error(f"Failed to fetch comparison data: {error_msg}")
+        from ui.components.toast import Toast
+        Toast.show_toast(self, str(error_msg), Toast.ERROR)
+
+    def _on_comparison_data_loaded(self, data, result):
+        """Populate UI after background fetch completes."""
+        self._spinner.hide_loading()
+
+        details = result.get("details", {}) if result else {}
+        _fetched_persons = result.get("fetched_persons", {}) if result else {}
+
+        is_person = self._current_conflict_type == "PersonDuplicate"
+
+        if details:
+            raw_dc = details.get("dataComparison", "")
+            logger.info(f"Conflict details keys: {list(details.keys())}")
+            if raw_dc:
                 logger.info(f"dataComparison type={type(raw_dc).__name__}, "
-                            f"preview={str(raw_dc)[:300] if raw_dc else 'null/empty'}")
+                            f"preview={str(raw_dc)[:300]}")
 
         # --- Populate claims section ---
         self._clear_layout(self._claims_rows_layout)
@@ -1266,20 +1238,6 @@ class ClaimComparisonPage(QWidget):
             "identifier": second_id,
             "label": tr("page.comparison.second_record"),
         })
-
-        # Always fetch person records from Persons API for reliable data
-        _fetched_persons = {}
-        if is_person:
-            for eid in entity_ids:
-                if eid:
-                    try:
-                        person = self.duplicate_service.get_person_data(eid)
-                        if person:
-                            _fetched_persons[eid] = person
-                        else:
-                            logger.warning(f"Person {eid} not found (404)")
-                    except Exception as pe:
-                        logger.warning(f"Failed to fetch person {eid}: {pe}")
 
         # Extract national IDs for person duplicates
         person_national_ids = []

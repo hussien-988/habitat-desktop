@@ -5,7 +5,6 @@ Displays all building assignments with sync status, accordion details,
 sync pulse overlay, status change notifications, and unassign.
 """
 
-import os
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel,
     QFrame, QScrollArea, QSizePolicy, QComboBox,
@@ -17,6 +16,9 @@ from PyQt5.QtGui import QFont, QPainter, QColor, QLinearGradient
 from services.api_worker import ApiWorker
 from services.translation_manager import tr, get_layout_direction
 from ui.components.icon import Icon
+from ui.components.dark_header_zone import DarkHeaderZone
+from ui.components.stat_pill import StatPill
+from ui.components.accent_line import AccentLine
 from ui.design_system import Colors, PageDimensions
 from ui.style_manager import StyleManager
 from ui.font_utils import create_font, FontManager
@@ -143,20 +145,76 @@ class SyncDataPage(QWidget):
     # UI Setup
 
     def _setup_ui(self):
-        self.setStyleSheet(StyleManager.page_background())
+        self.setStyleSheet("background-color: #f0f7ff;")
         self.setLayoutDirection(get_layout_direction())
 
         main_layout = QVBoxLayout(self)
-        main_layout.setContentsMargins(
-            PageDimensions.content_padding_h(),
-            PageDimensions.content_padding_v_top(),
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        main_layout.setSpacing(0)
+
+        # Dark header zone
+        self._header = DarkHeaderZone(self)
+        self._header.set_title(tr("page.sync.title"))
+
+        # Stat pills for status counts
+        self._stat_pending = StatPill(tr("page.sync.status_pending"))
+        self._header.add_stat_pill(self._stat_pending)
+
+        self._stat_syncing = StatPill(tr("page.sync.status_syncing"))
+        self._header.add_stat_pill(self._stat_syncing)
+
+        self._stat_synced = StatPill(tr("page.sync.status_synced"))
+        self._header.add_stat_pill(self._stat_synced)
+
+        self._stat_failed = StatPill(tr("page.sync.status_failed"))
+        self._header.add_stat_pill(self._stat_failed)
+
+        # Collector filter combo in header (dark style)
+        self._collector_combo = QComboBox()
+        self._collector_combo.setFixedHeight(34)
+        self._collector_combo.setFixedWidth(220)
+        self._collector_combo.setEditable(True)
+        self._collector_combo.lineEdit().setReadOnly(True)
+        self._collector_combo.lineEdit().setPlaceholderText(tr("page.sync.all_collectors"))
+        self._collector_combo.lineEdit().setAlignment(Qt.AlignCenter)
+        self._collector_combo.setStyleSheet(StyleManager.dark_combo_box())
+        self._collector_combo.currentIndexChanged.connect(self._on_collector_changed)
+        self._header.add_row2_widget(self._collector_combo)
+
+        # Back button in header actions
+        self._back_btn = QPushButton(tr("action.back"))
+        self._back_btn.setFixedSize(100, 36)
+        self._back_btn.setCursor(Qt.PointingHandCursor)
+        self._back_btn.setFont(create_font(size=FontManager.SIZE_BODY, weight=FontManager.WEIGHT_SEMIBOLD))
+        self._back_btn.setStyleSheet(StyleManager.refresh_button_dark())
+        self._back_btn.clicked.connect(self.back_requested.emit)
+        self._header.add_action_widget(self._back_btn)
+
+        # Refresh button in header actions
+        self._refresh_btn = QPushButton(tr("page.sync.refresh"))
+        self._refresh_btn.setFixedSize(100, 36)
+        self._refresh_btn.setCursor(Qt.PointingHandCursor)
+        self._refresh_btn.setFont(create_font(size=FontManager.SIZE_BODY, weight=FontManager.WEIGHT_SEMIBOLD))
+        self._refresh_btn.setStyleSheet(StyleManager.refresh_button_dark())
+        self._refresh_btn.clicked.connect(self.refresh)
+        self._header.add_action_widget(self._refresh_btn)
+
+        main_layout.addWidget(self._header)
+
+        # Accent line between header and content
+        self._accent_line = AccentLine()
+        main_layout.addWidget(self._accent_line)
+
+        # Content area
+        content_wrapper = QWidget()
+        content_wrapper.setStyleSheet(f"background-color: {Colors.BACKGROUND};")
+        content_layout = QVBoxLayout(content_wrapper)
+        content_layout.setContentsMargins(
+            PageDimensions.content_padding_h(), 16,
             PageDimensions.content_padding_h(),
             PageDimensions.CONTENT_PADDING_V_BOTTOM
         )
-        main_layout.setSpacing(PageDimensions.HEADER_GAP)
-
-        header = self._create_header()
-        main_layout.addWidget(header)
+        content_layout.setSpacing(16)
 
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
@@ -177,166 +235,35 @@ class SyncDataPage(QWidget):
 
         scroll_layout.addStretch()
         scroll.setWidget(scroll_content)
-        main_layout.addWidget(scroll)
+        content_layout.addWidget(scroll)
+
+        main_layout.addWidget(content_wrapper, 1)
 
         from ui.components.loading_spinner import LoadingSpinnerOverlay
         self._spinner = LoadingSpinnerOverlay(self)
 
-    def _create_header(self) -> QWidget:
-        header = QWidget()
-        header.setStyleSheet("background: transparent;")
-        layout = QVBoxLayout(header)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(4)
-
-        title_row = QHBoxLayout()
-        title_row.setSpacing(12)
-
-        self._title_label = QLabel(tr("page.sync.title"))
-        self._title_label.setFont(create_font(
-            size=FontManager.SIZE_TITLE,
-            weight=QFont.Bold,
-            letter_spacing=0
-        ))
-        self._title_label.setStyleSheet(StyleManager.label_title())
-        title_row.addWidget(self._title_label)
-
-        title_row.addStretch()
-
-        self._collector_combo = QComboBox()
-        # Back button
-        self._back_btn = QPushButton(tr("action.back"))
-        self._back_btn.setFixedSize(100, 40)
-        self._back_btn.setCursor(Qt.PointingHandCursor)
-        self._back_btn.setFont(create_font(size=FontManager.SIZE_BODY, weight=FontManager.WEIGHT_SEMIBOLD))
-        self._back_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #F1F5F9;
-                color: #475569;
-                border: 1px solid #E2E8F0;
-                border-radius: 8px;
-                font-weight: 600;
-            }
-            QPushButton:hover {
-                background-color: #E2E8F0;
-            }
-        """)
-        self._back_btn.clicked.connect(self.back_requested.emit)
-        title_row.addWidget(self._back_btn)
-
-        self._refresh_btn = QPushButton(tr("page.sync.refresh"))
-        self._refresh_btn.setFixedSize(100, 40)
-        self._refresh_btn.setCursor(Qt.PointingHandCursor)
-        self._refresh_btn.setFont(create_font(size=FontManager.SIZE_BODY, weight=FontManager.WEIGHT_SEMIBOLD))
-        self._refresh_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #EBF5FF;
-                color: #3890DF;
-                border: 1px solid #BFDBFE;
-                border-radius: 8px;
-                font-weight: 600;
-            }
-            QPushButton:hover {
-                background-color: #DBEAFE;
-            }
-        """)
-        self._refresh_btn.clicked.connect(self.refresh)
-        title_row.addWidget(self._refresh_btn)
-        self._collector_combo.setFixedHeight(42)
-        self._collector_combo.setFixedWidth(220)
-        self._collector_combo.setEditable(True)
-        self._collector_combo.lineEdit().setReadOnly(True)
-        self._collector_combo.lineEdit().setPlaceholderText(tr("page.sync.all_collectors"))
-        self._collector_combo.lineEdit().setAlignment(Qt.AlignCenter)
-        self._style_combo(self._collector_combo)
-        self._collector_combo.currentIndexChanged.connect(self._on_collector_changed)
-        title_row.addWidget(self._collector_combo)
-
-        layout.addLayout(title_row)
-
-        # Breadcrumb
-        breadcrumb_layout = QHBoxLayout()
-        breadcrumb_layout.setSpacing(8)
-        breadcrumb_layout.setContentsMargins(0, 0, 0, 0)
-
-        subtitle_font = create_font(
-            size=FontManager.SIZE_BODY,
-            weight=QFont.Normal,
-            letter_spacing=0
-        )
-        style = f"color: {Colors.TEXT_SECONDARY}; border: none; background: transparent;"
-
-        self._breadcrumb_texts = [tr("page.sync.breadcrumb_claims"), "•", tr("page.sync.title")]
-        for i, text in enumerate(self._breadcrumb_texts):
-            lbl = QLabel(text)
-            lbl.setFont(subtitle_font)
-            lbl.setStyleSheet(style)
-            breadcrumb_layout.addWidget(lbl)
-
-        breadcrumb_layout.addStretch()
-        layout.addLayout(breadcrumb_layout)
-
-        return header
-
-    def _style_combo(self, combo: QComboBox):
-        down_icon_path = os.path.join(
-            os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
-            "assets", "images", "down.png"
-        ).replace("\\", "/")
-        combo.setStyleSheet(f"""
-            QComboBox {{
-                border: 1px solid #E5EAF6;
-                border-radius: 8px;
-                padding: 8px 14px;
-                padding-left: 35px;
-                background-color: #F8FAFF;
-                color: #6c757d;
-                font-family: 'IBM Plex Sans Arabic';
-                font-size: 9pt;
-            }}
-            QComboBox::drop-down {{
-                border: none;
-                width: 30px;
-                subcontrol-position: right center;
-            }}
-            QComboBox::down-arrow {{
-                image: url({down_icon_path});
-                width: 12px;
-                height: 12px;
-            }}
-            QComboBox QAbstractItemView {{
-                border: 1px solid {Colors.BORDER_DEFAULT};
-                background-color: white;
-                selection-background-color: #EFF6FF;
-                selection-color: #212B36;
-                color: #6c757d;
-                font-family: 'IBM Plex Sans Arabic';
-                font-size: 9pt;
-                outline: none;
-            }}
-            QComboBox QAbstractItemView::item {{
-                padding: 8px 12px;
-                color: #6c757d;
-            }}
-            QComboBox QAbstractItemView::item:hover {{
-                background-color: #EFF6FF;
-                color: #212B36;
-            }}
-            QComboBox QAbstractItemView::item:selected {{
-                background-color: #EFF6FF;
-                color: #212B36;
-            }}
-        """)
+    def _update_stat_pills(self):
+        """Update stat pill counts from current assignment items."""
+        pending = syncing = synced = failed = 0
+        for item in self._current_items:
+            status = self._normalize_status(item)
+            if status in _PENDING_STATUSES:
+                pending += 1
+            elif status in _SYNCING_STATUSES:
+                syncing += 1
+            elif status in _COMPLETED_STATUSES:
+                synced += 1
+            elif status in {'failed', '3'}:
+                failed += 1
+        self._stat_pending.set_count(pending)
+        self._stat_syncing.set_count(syncing)
+        self._stat_synced.set_count(synced)
+        self._stat_failed.set_count(failed)
 
     def _create_card(self) -> QFrame:
         card = QFrame()
         card.setObjectName("syncCard")
-        card.setStyleSheet("""
-            QFrame#syncCard {
-                background-color: white;
-                border-radius: 8px;
-            }
-        """)
+        card.setStyleSheet(StyleManager.table_card())
         card.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Minimum)
 
         layout = QVBoxLayout(card)
@@ -456,6 +383,8 @@ class SyncDataPage(QWidget):
 
                 if status_str in _SYNCING_STATUSES:
                     self._add_sync_overlay(aid)
+
+            self._update_stat_pills()
         except Exception as e:
             logger.warning(f"Failed to load assignments: {e}")
             self._empty_label.setText(tr("page.sync.load_failed"))
@@ -570,13 +499,7 @@ class SyncDataPage(QWidget):
             widget.setAlignment(Qt.AlignCenter)
             widget.setFixedHeight(24)
             widget.setMinimumWidth(90)
-            widget.setStyleSheet(f"""
-                padding: 2px 10px;
-                border-radius: 12px;
-                color: {color};
-                background-color: {bg};
-                border: none;
-            """)
+            widget.setStyleSheet(StyleManager.status_badge(color, bg))
     # Sync Pulse Overlay
 
     def _add_sync_overlay(self, assignment_id: str):
@@ -613,8 +536,8 @@ class SyncDataPage(QWidget):
         container.setStyleSheet("""
             QFrame {
                 background: transparent;
-                border: 1px solid #F0F0F0;
-                border-radius: 8px;
+                border: none;
+                border-radius: 12px;
             }
         """)
         container_layout = QVBoxLayout(container)
@@ -624,8 +547,8 @@ class SyncDataPage(QWidget):
         header = self._create_accordion_header(assignment, assignment_id)
         container_layout.addWidget(header)
 
-        body = QWidget()
-        body.setStyleSheet("background: transparent; border: none;")
+        body = QFrame()
+        body.setStyleSheet(StyleManager.accordion_body())
         body.setVisible(False)
         self._accordion_bodies[assignment_id] = body
 
@@ -644,16 +567,7 @@ class SyncDataPage(QWidget):
 
     def _create_accordion_header(self, assignment: dict, assignment_id: str) -> QFrame:
         header = QFrame()
-        header.setStyleSheet("""
-            QFrame {
-                background-color: #FAFBFC;
-                border: none;
-                border-radius: 8px;
-            }
-            QFrame:hover {
-                background-color: #F0F4F8;
-            }
-        """)
+        header.setStyleSheet(StyleManager.accordion_header())
         header.setCursor(Qt.PointingHandCursor)
         header.setFixedHeight(52)
         self._header_widgets[assignment_id] = header
@@ -716,13 +630,7 @@ class SyncDataPage(QWidget):
         if units_count:
             badge = QLabel(tr("page.sync.units_count", count=units_count))
             badge.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
-            badge.setStyleSheet("""
-                color: #3890DF;
-                background-color: #EBF5FF;
-                padding: 2px 10px;
-                border-radius: 10px;
-                border: none;
-            """)
+            badge.setStyleSheet(StyleManager.status_badge('#3890DF', '#EBF5FF'))
             layout.addWidget(badge)
 
         # Status badge or date
@@ -756,13 +664,7 @@ class SyncDataPage(QWidget):
             status_widget.setAlignment(Qt.AlignCenter)
             status_widget.setFixedHeight(24)
             status_widget.setMinimumWidth(90)
-            status_widget.setStyleSheet(f"""
-                padding: 2px 10px;
-                border-radius: 12px;
-                color: {color};
-                background-color: {bg};
-                border: none;
-            """)
+            status_widget.setStyleSheet(StyleManager.status_badge(color, bg))
 
         self._status_widgets[assignment_id] = status_widget
         layout.addWidget(status_widget)
@@ -1064,12 +966,7 @@ class SyncDataPage(QWidget):
             survey_bg = "#ECFDF5" if has_survey else "#F3F4F6"
             survey_badge = QLabel(survey_text)
             survey_badge.setFont(create_font(size=8, weight=FontManager.WEIGHT_SEMIBOLD))
-            survey_badge.setStyleSheet(f"""
-                color: {survey_color};
-                background-color: {survey_bg};
-                padding: 1px 8px;
-                border-radius: 8px;
-            """)
+            survey_badge.setStyleSheet(StyleManager.status_badge(survey_color, survey_bg))
             bottom.addWidget(survey_badge)
 
             card_layout.addLayout(bottom)
@@ -1158,10 +1055,14 @@ class SyncDataPage(QWidget):
 
     def update_language(self, is_arabic: bool):
         self.setLayoutDirection(get_layout_direction())
-        self._title_label.setText(tr("page.sync.title"))
+        self._header.set_title(tr("page.sync.title"))
         self._back_btn.setText(tr("action.back"))
         self._refresh_btn.setText(tr("page.sync.refresh"))
         self._empty_label.setText(tr("page.sync.no_assignments"))
+        self._stat_pending.set_label(tr("page.sync.status_pending"))
+        self._stat_syncing.set_label(tr("page.sync.status_syncing"))
+        self._stat_synced.set_label(tr("page.sync.status_synced"))
+        self._stat_failed.set_label(tr("page.sync.status_failed"))
         if self._collector_combo and self._collector_combo.lineEdit():
             self._collector_combo.lineEdit().setPlaceholderText(tr("page.sync.all_collectors"))
 

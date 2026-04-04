@@ -266,20 +266,30 @@ class EvidencePickerDialog(QDialog):
             """)
 
         def _open(checked=False, eid=ev_id, fn=file_name, b=btn):
-            b.setCursor(Qt.WaitCursor)
-            b.setEnabled(False)
-            local = download_evidence_file(eid, fn or eid)
-            b.setCursor(Qt.PointingHandCursor)
-            b.setEnabled(True)
-            if local:
-                QDesktopServices.openUrl(QUrl.fromLocalFile(local))
-            else:
+            try:
+                b.setCursor(Qt.WaitCursor)
+                b.setEnabled(False)
+                local = download_evidence_file(eid, fn or eid)
+                if local:
+                    QDesktopServices.openUrl(QUrl.fromLocalFile(local))
+                else:
+                    from PyQt5.QtWidgets import QMessageBox
+                    QMessageBox.warning(
+                        self,
+                        tr("dialog.evidence_picker.view_failed_title"),
+                        tr("dialog.evidence_picker.view_failed_message"),
+                    )
+            except Exception as e:
+                logger.error(f"View evidence error: {e}")
                 from PyQt5.QtWidgets import QMessageBox
                 QMessageBox.warning(
                     self,
                     tr("dialog.evidence_picker.view_failed_title"),
                     tr("dialog.evidence_picker.view_failed_message"),
                 )
+            finally:
+                b.setCursor(Qt.PointingHandCursor)
+                b.setEnabled(True)
         btn.clicked.connect(_open)
         return btn
 

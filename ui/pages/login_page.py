@@ -874,6 +874,7 @@ class LoginPage(QWidget):
         from services.api_worker import ApiWorker
         worker = ApiWorker(self.auth_service.authenticate, username, password)
         worker.finished.connect(lambda result: self._on_login_result(result, username))
+        worker.error.connect(lambda msg: self._on_login_error(msg))
         worker.start()
         self._login_worker = worker
 
@@ -914,6 +915,12 @@ class LoginPage(QWidget):
                     self._show_error(tr("page.login.invalid_credentials_remaining", remaining=remaining))
                 else:
                     self._show_error(tr("page.login.invalid_credentials"))
+
+    def _on_login_error(self, error_msg: str):
+        """Handle login worker exception — reset loading state and show error."""
+        self._set_login_loading(False)
+        logger.error(f"Login error: {error_msg}")
+        self._show_error(tr("page.login.connection_error"))
 
     def _set_login_loading(self, loading: bool):
         """Toggle login button loading state."""

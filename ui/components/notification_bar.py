@@ -139,6 +139,10 @@ class NotificationBar(QFrame):
 
     def show_message(self, message: str, level: str = INFO,
                      action_text: str = "", duration_override: int = None):
+        # Skip re-animation if already showing the same message
+        if self.isVisible() and self._msg_lbl.text() == message:
+            return
+
         self._auto_timer.stop()
         self._progress_timer.stop()
 

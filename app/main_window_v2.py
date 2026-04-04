@@ -3,7 +3,7 @@
 
 from PyQt5.QtWidgets import (
     QMainWindow, QWidget, QHBoxLayout, QVBoxLayout,
-    QStackedWidget, QShortcut,
+    QStackedWidget, QShortcut, QApplication,
     QFrame, QGraphicsDropShadowEffect, QSizeGrip
 )
 
@@ -469,10 +469,9 @@ class MainWindow(QMainWindow):
         self._complete_login(user)
 
     def _complete_login(self, user):
-        """Finalize login: set token, configure UI, load data."""
+        """Finalize login: set token, configure UI, load data (non-blocking)."""
         self.current_user = user
 
-        # Pass API token to BuildingController if using API backend
         token = getattr(user, '_api_token', None)
         logger.info(f"User API token available: {bool(token)}")
         if token:
@@ -480,69 +479,79 @@ class MainWindow(QMainWindow):
         else:
             logger.warning("No API token found in user object - API calls may fail with 401")
 
-        # Show loading overlay while preparing data
         self._show_login_loading()
 
-        try:
-            # Refresh vocabularies now that we have a valid API token/port
+        # Configure UI immediately (no blocking on vocab refresh)
+        # Use a short delay so the loading overlay has time to render
+        from PyQt5.QtCore import QTimer
+        QTimer.singleShot(100, lambda: self._finish_login_ui(user))
+
+        # Refresh vocabularies in background (fire-and-forget)
+        from services.api_worker import ApiWorker
+
+        def _background_vocab_refresh():
             try:
                 from services.vocab_service import refresh_vocabularies
                 refresh_vocabularies()
                 logger.info("Vocabularies refreshed after login")
             except Exception as e:
-                logger.warning(f"Failed to refresh vocabularies after login: {e}")
+                logger.warning(f"Vocab refresh failed (non-critical): {e}")
 
-            # Freeze repainting to prevent login-to-main transition flicker
-            self.setUpdatesEnabled(False)
-            try:
-                # Sync language if it was changed on the login page
-                saved_lang = get_saved_language()
-                saved_is_arabic = (saved_lang == "ar")
-                if saved_is_arabic != self._is_arabic:
-                    self._is_arabic = saved_is_arabic
-                    self.i18n.set_language(saved_lang)
-                    if self._is_arabic:
-                        self.setLayoutDirection(Qt.RightToLeft)
-                    else:
-                        self.setLayoutDirection(Qt.LeftToRight)
-                    self.language_changed.emit(self._is_arabic)
+        self._vocab_worker = ApiWorker(_background_vocab_refresh)
+        self._vocab_worker.start()
 
-                # Show navbar
-                self.navbar.setVisible(True)
+    def _finish_login_ui(self, user):
+        """Configure UI after background data loads (runs on main thread)."""
+        try:
+            # Sync language if it was changed on the login page
+            saved_lang = get_saved_language()
+            saved_is_arabic = (saved_lang == "ar")
+            if saved_is_arabic != self._is_arabic:
+                self._is_arabic = saved_is_arabic
+                self.i18n.set_language(saved_lang)
+                if self._is_arabic:
+                    self.setLayoutDirection(Qt.RightToLeft)
+                else:
+                    self.setLayoutDirection(Qt.LeftToRight)
+                self.language_changed.emit(self._is_arabic)
 
-                # Update navbar with user info
-                self.navbar.set_user_id(str(user.user_id))
+            # Show navbar
+            self.navbar.setVisible(True)
 
-                # Set user context on CasesPage BEFORE configure_for_role,
-                # because configure_for_role emits tab_changed which triggers refresh()
-                cases_page = self.pages.get(Pages.CASES)
-                if cases_page and hasattr(cases_page, 'configure_for_user'):
-                    cases_page.configure_for_user(user.role, str(user.user_id))
+            # Update navbar with user info
+            self.navbar.set_user_id(str(user.user_id))
 
-                # Configure tabs based on user role (RBAC)
-                self.navbar.configure_for_role(user.role)
+            # Set user context on CasesPage BEFORE configure_for_role,
+            # because configure_for_role emits tab_changed which triggers refresh()
+            cases_page = self.pages.get(Pages.CASES)
+            if cases_page and hasattr(cases_page, 'configure_for_user'):
+                cases_page.configure_for_user(user.role, str(user.user_id))
 
-                # Apply role-based button visibility to content pages
-                for page_id in (Pages.BUILDINGS, Pages.UNITS, Pages.PERSONS,
-                                Pages.IMPORT_WIZARD, Pages.IMPORT_PACKAGES):
-                    page = self.pages.get(page_id)
-                    if page and hasattr(page, 'configure_for_role'):
-                        page.configure_for_role(user.role)
+            # Configure tabs based on user role (RBAC)
+            self.navbar.configure_for_role(user.role)
 
-                # Load field assignment filter data (requires valid API token)
-                if Pages.FIELD_ASSIGNMENT in self.pages:
-                    field_page = self.pages[Pages.FIELD_ASSIGNMENT]
-                    if hasattr(field_page, 'load_data'):
-                        field_page.load_data()
-            finally:
-                # Always resume repainting
-                self.setUpdatesEnabled(True)
+            # Apply role-based button visibility to content pages
+            for page_id in (Pages.BUILDINGS, Pages.UNITS, Pages.PERSONS,
+                            Pages.IMPORT_WIZARD, Pages.IMPORT_PACKAGES):
+                page = self.pages.get(page_id)
+                if page and hasattr(page, 'configure_for_role'):
+                    page.configure_for_role(user.role)
+        except Exception as e:
+            logger.error(f"Error during login UI setup: {e}", exc_info=True)
         finally:
-            # Always hide loading overlay
             self._hide_login_loading()
+            QApplication.processEvents()
 
         # Start session timeout timer
         self._start_session_timer()
+
+        # Load field assignment filter data async (requires valid API token)
+        if Pages.FIELD_ASSIGNMENT in self.pages:
+            field_page = self.pages[Pages.FIELD_ASSIGNMENT]
+            if hasattr(field_page, '_load_filter_data_async'):
+                field_page._load_filter_data_async()
+            elif hasattr(field_page, 'load_data'):
+                field_page.load_data()
 
     # -- Forced Password Change (async UX flow) --
 
@@ -1103,20 +1112,38 @@ class MainWindow(QMainWindow):
                 elif choice_result[0] == "discard":
                     survey_id = self.office_survey_wizard.context.get_data("survey_id")
                     if survey_id:
-                        from PyQt5.QtWidgets import QInputDialog
-                        reason, ok = QInputDialog.getMultiLineText(
-                            self, tr("wizard.cancel_reason_title"),
-                            tr("wizard.cancel_reason_prompt"), ""
+                        reason_loop = QEventLoop()
+                        reason_result = [None]
+
+                        def on_reason_confirmed():
+                            reason_data = reason_sheet.get_form_data()
+                            reason_result[0] = (reason_data.get("reason") or "").strip()
+                            reason_loop.quit()
+
+                        def on_reason_cancelled():
+                            reason_result[0] = None
+                            reason_loop.quit()
+
+                        reason_sheet = BottomSheet(self)
+                        reason_sheet.confirmed.connect(on_reason_confirmed)
+                        reason_sheet.cancelled.connect(on_reason_cancelled)
+                        reason_sheet.show_form(
+                            tr("wizard.cancel_reason_title"),
+                            [("reason", tr("wizard.cancel_reason_prompt"), "multiline")],
+                            submit_text=tr("page.case_details.confirm_cancel"),
+                            cancel_text=tr("action.dismiss"),
                         )
-                        if not ok or not reason.strip():
+                        reason_loop.exec_()
+
+                        if not reason_result[0]:
                             return
                         try:
                             from services.api_client import get_api_client
                             api = get_api_client()
                             if self._api_token:
                                 api.set_access_token(self._api_token)
-                            api.cancel_survey(survey_id, reason.strip())
-                            logger.info(f"Survey {survey_id} cancelled: {reason.strip()}")
+                            api.cancel_survey(survey_id, reason_result[0])
+                            logger.info(f"Survey {survey_id} cancelled: {reason_result[0]}")
                         except Exception as e:
                             logger.warning(f"Failed to cancel survey {survey_id}: {e}")
                     logger.info("User discarded wizard changes")
@@ -1159,11 +1186,12 @@ class MainWindow(QMainWindow):
             self.navbar.set_current_tab(2)
 
         # Refresh page data if method exists
-        if hasattr(page, 'refresh'):
-            page.refresh(data)
-
-        # Show page with cross-fade
+        # Show page first, then refresh after fade-in completes
+        # to avoid QGraphicsOpacityEffect conflicts with child widgets
         self._fade_to_widget(page)
+
+        if hasattr(page, 'refresh'):
+            QTimer.singleShot(200, lambda p=page, d=data: p.refresh(d))
         logger.debug(f"Navigated to: {page_id}")
 
     def _fade_to_widget(self, widget):
@@ -1233,7 +1261,6 @@ class MainWindow(QMainWindow):
         """Navigate to case details — fetch full survey context from Surveys/office API."""
         logger.info(f"Draft survey selected: {claim_id}")
 
-        # Find survey data from CasesPage list
         claims_page = self.pages[Pages.CASES]
         claim_data = None
         for c in claims_page._all_data:
@@ -1246,34 +1273,74 @@ class MainWindow(QMainWindow):
             return
 
         survey_uuid = claim_data.get('claim_uuid')
-        if survey_uuid:
-            try:
-                from controllers.survey_controller import SurveyController
-                ctrl = SurveyController(self.db)
-                result = ctrl.get_survey_full_context(survey_uuid)
-                if result.success and result.data:
-                    self.navigate_to(Pages.CASE_DETAILS, result.data)
-                    return
-                from ui.components.toast import Toast
-                Toast.show_toast(self, result.message or "فشل تحميل بيانات المسح", Toast.ERROR)
-            except Exception as e:
-                logger.warning(f"Survey context fetch failed: {e}")
+        if not survey_uuid:
+            logger.warning(f"Could not load survey details for: {claim_id}")
+            return
 
-        logger.warning(f"Could not load survey details for: {claim_id}")
+        self._show_login_loading_msg(tr("component.loading.default"))
+
+        from services.api_worker import ApiWorker
+
+        def _fetch():
+            from controllers.survey_controller import SurveyController
+            ctrl = SurveyController(self.db)
+            return ctrl.get_survey_full_context(survey_uuid)
+
+        self._draft_claim_worker = ApiWorker(_fetch)
+        self._draft_claim_worker.finished.connect(
+            lambda result: self._on_draft_claim_fetched(result, claim_id)
+        )
+        self._draft_claim_worker.error.connect(
+            lambda msg: self._on_draft_claim_fetch_error(msg, claim_id)
+        )
+        self._draft_claim_worker.start()
+
+    def _on_draft_claim_fetched(self, result, claim_id):
+        self._hide_login_loading()
+        if result and result.success and result.data:
+            self.navigate_to(Pages.CASE_DETAILS, result.data)
+        else:
+            from ui.components.toast import Toast
+            msg = getattr(result, 'message', '') if result else ''
+            Toast.show_toast(self, msg or "فشل تحميل بيانات المسح", Toast.ERROR)
+
+    def _on_draft_claim_fetch_error(self, error_msg, claim_id):
+        self._hide_login_loading()
+        logger.warning(f"Survey context fetch failed for {claim_id}: {error_msg}")
 
     def _on_resume_draft_survey(self, survey_uuid: str):
         """Load draft survey into wizard for editing and resumption."""
         if not survey_uuid:
             return
-        try:
-            from controllers.survey_controller import SurveyController
-            result = SurveyController(self.db).get_survey_full_context(survey_uuid)
-            if not result.success or not result.data:
-                logger.warning(f"Could not load draft context for: {survey_uuid}")
-                from ui.components.toast import Toast
-                Toast.show_toast(self, result.message or "فشل تحميل المسودة", Toast.ERROR)
-                return
 
+        self._show_login_loading_msg(tr("component.loading.default"))
+
+        from services.api_worker import ApiWorker
+
+        def _fetch():
+            from controllers.survey_controller import SurveyController
+            return SurveyController(self.db).get_survey_full_context(survey_uuid)
+
+        self._resume_draft_worker = ApiWorker(_fetch)
+        self._resume_draft_worker.finished.connect(
+            lambda result: self._on_resume_draft_loaded(result, survey_uuid)
+        )
+        self._resume_draft_worker.error.connect(
+            lambda msg: self._on_resume_draft_error(msg, survey_uuid)
+        )
+        self._resume_draft_worker.start()
+
+    def _on_resume_draft_loaded(self, result, survey_uuid):
+        """Handle resume draft data loaded from API."""
+        self._hide_login_loading()
+        if not result or not result.success or not result.data:
+            logger.warning(f"Could not load draft context for: {survey_uuid}")
+            from ui.components.toast import Toast
+            msg = getattr(result, 'message', '') if result else ''
+            Toast.show_toast(self, msg or "فشل تحميل المسودة", Toast.ERROR)
+            return
+
+        try:
             from ui.wizards.office_survey.survey_context import SurveyContext
             new_context = SurveyContext.from_dict(result.data)
 
@@ -1287,13 +1354,17 @@ class MainWindow(QMainWindow):
                 self.office_survey_wizard.set_auth_token(self._api_token)
 
             resume_step = result.data.get("resume_step", 1)
-
             self.office_survey_wizard.navigator.goto_step(resume_step, skip_validation=True)
 
             self.navigate_to("office_survey_wizard")
             logger.info(f"Draft survey {survey_uuid} resumed at step {resume_step}")
         except Exception as e:
             logger.error(f"Failed to resume draft {survey_uuid}: {e}")
+
+    def _on_resume_draft_error(self, error_msg, survey_uuid):
+        """Handle resume draft fetch failure."""
+        self._hide_login_loading()
+        logger.error(f"Failed to resume draft {survey_uuid}: {error_msg}")
 
     def _on_case_details_back(self):
         """Navigate back to the Cases page from CaseDetailsPage."""
@@ -1344,34 +1415,13 @@ class MainWindow(QMainWindow):
         self.stack.setCurrentWidget(self.office_survey_wizard)
 
     def _on_survey_completed(self, data):
-        """Handle survey completion from wizard."""
-        from ui.components.toast import Toast
+        """Handle survey completion from wizard — navigate to surveys page."""
         logger.info(f"Survey completed: {data}")
 
-        Toast.show_toast(
-            self,
-            "✅ تم إنهاء المسح بنجاح!",
-            Toast.SUCCESS
-        )
-
-        # Navigate to the appropriate tab based on finalization and role access
-        is_finalized = (
-            isinstance(data, dict) and data.get('status') == 'finalized'
-        )
-
-        from ui.components.navbar import Navbar
-        user_role = getattr(self.current_user, 'role', '') if self.current_user else ''
-        allowed_tabs = Navbar.TAB_PERMISSIONS.get(user_role, [0, 1])
-
-        if is_finalized and 0 in allowed_tabs:
-            if hasattr(self.pages.get(Pages.CLAIMS), 'refresh'):
-                self.pages[Pages.CLAIMS].refresh()
-            self.navbar.set_current_tab(0)
-            self._on_tab_changed(0)
-        else:
-            self.pages[Pages.CASES].refresh()
-            self.navbar.set_current_tab(1)
-            self._on_tab_changed(1)
+        # Always navigate to surveys page (tab 1) so user can start a new survey
+        self.pages[Pages.CASES].refresh()
+        self.navbar.set_current_tab(1)
+        self._on_tab_changed(1)
 
     def _on_survey_cancelled(self):
         """Handle survey cancellation from wizard."""

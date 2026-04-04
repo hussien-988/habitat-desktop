@@ -66,63 +66,149 @@ class UnitDialog(QDialog):
             self._api_service.set_access_token(auth_token)
             self.unit_controller.set_auth_token(auth_token)
 
-        # إزالة الشريط العلوي (title bar)
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.Dialog)
-
-        # ضبط RTL صراحة
         self.setLayoutDirection(get_layout_direction())
-
-        # خلفية شفافة للزوايا المنحنية
         self.setAttribute(Qt.WA_TranslucentBackground)
 
-        # الأبعاد مع هامش الظل
-        self.setFixedSize(614, 629)
+        # Dynamic side-panel sizing
+        parent_rect = parent.window().geometry() if parent else None
+        if parent_rect:
+            panel_w = min(560, parent_rect.width() - 40)
+            panel_h = min(660, parent_rect.height() - 20)
+        else:
+            panel_w = 560
+            panel_h = 660
+        self.setFixedSize(panel_w, panel_h)
 
-        self.setStyleSheet("""
-            QDialog {
-                background-color: transparent;
-            }
-        """)
-
+        self.setStyleSheet("QDialog { background-color: transparent; }")
         self._overlay = None
+        self._slide_anim = None
 
         self._setup_ui()
         if unit_data:
             self._load_unit_data(unit_data)
 
+    def showEvent(self, event):
+        """Position as side panel with slide-in."""
+        super().showEvent(event)
+        parent = self.parent()
+        if not parent:
+            return
+        try:
+            from PyQt5.QtCore import QPropertyAnimation, QEasingCurve, QPoint
+            parent_rect = parent.window().geometry()
+            is_rtl = get_layout_direction() == Qt.RightToLeft
+            pw = self.width()
+            parent_global = parent.window().mapToGlobal(parent.window().rect().topLeft())
+            if is_rtl:
+                target_x = parent_global.x() + 10
+            else:
+                target_x = parent_global.x() + parent_rect.width() - pw - 10
+            target_y = parent_global.y() + (parent_rect.height() - self.height()) // 2
+            start_x = target_x + ((-pw) if is_rtl else pw)
+            self.move(start_x, target_y)
+            self._slide_anim = QPropertyAnimation(self, b"pos", self)
+            self._slide_anim.setDuration(250)
+            self._slide_anim.setStartValue(QPoint(start_x, target_y))
+            self._slide_anim.setEndValue(QPoint(target_x, target_y))
+            self._slide_anim.setEasingCurve(QEasingCurve.OutCubic)
+            self._slide_anim.start()
+        except Exception:
+            pass
+
     def _setup_ui(self):
-        """Setup the dialog UI."""
+        """Setup the dialog UI as side panel."""
         main_layout = QVBoxLayout(self)
-        main_layout.setContentsMargins(12, 12, 12, 12)  # Margin for shadow to render
+        main_layout.setContentsMargins(8, 8, 8, 8)
         main_layout.setSpacing(0)
 
-        # إنشاء frame أبيض مع زوايا منحنية (يرث RTL من التطبيق تلقائياً)
         content_frame = QFrame()
         content_frame.setObjectName("ContentFrame")
         content_frame.setStyleSheet("""
             QFrame#ContentFrame {
                 background-color: #FFFFFF;
-                border: none;
-                border-radius: 24px;
+                border: 1px solid rgba(56, 144, 223, 0.10);
+                border-radius: 16px;
             }
         """)
 
-        # Shadow effect — makes dialog float above the page
         shadow = QGraphicsDropShadowEffect()
         shadow.setBlurRadius(40)
-        shadow.setXOffset(0)
-        shadow.setYOffset(8)
-        shadow.setColor(QColor(0, 0, 0, 80))
+        shadow.setXOffset(-4)
+        shadow.setYOffset(4)
+        shadow.setColor(QColor(10, 22, 40, 50))
         content_frame.setGraphicsEffect(shadow)
 
-        layout = QVBoxLayout(content_frame)
+        frame_layout = QVBoxLayout(content_frame)
+        frame_layout.setSpacing(0)
+        frame_layout.setContentsMargins(0, 0, 0, 0)
+
+        # Dark header bar
+        header_bar = QFrame()
+        header_bar.setFixedHeight(48)
+        header_bar.setObjectName("UnitPanelHeader")
+        header_bar.setStyleSheet("""
+            QFrame#UnitPanelHeader {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #0E2035, stop:0.5 #122C49, stop:1 #152F4E);
+                border-top-left-radius: 16px;
+                border-top-right-radius: 16px;
+            }
+        """)
+        hdr_layout = QHBoxLayout(header_bar)
+        hdr_layout.setContentsMargins(20, 0, 20, 0)
+        hdr_layout.setSpacing(10)
+
+        close_btn = QPushButton("\u2715")
+        close_btn.setCursor(Qt.PointingHandCursor)
+        close_btn.setFixedSize(28, 28)
+        close_btn.setStyleSheet("""
+            QPushButton {
+                background: rgba(255, 255, 255, 0.08);
+                color: rgba(200, 220, 255, 0.85);
+                border: 1px solid rgba(56, 144, 223, 0.15);
+                border-radius: 7px;
+            }
+            QPushButton:hover {
+                background: rgba(255, 255, 255, 0.15);
+                color: white;
+            }
+        """)
+        close_btn.clicked.connect(self.reject)
+        hdr_layout.addWidget(close_btn)
+
+        header_title = tr("wizard.unit_dialog.title_add") if not self.unit_data else tr("wizard.unit_dialog.title_edit")
+        from ui.font_utils import create_font, FontManager
+        hdr_lbl = QLabel(header_title)
+        hdr_lbl.setFont(create_font(size=12, weight=FontManager.WEIGHT_SEMIBOLD))
+        hdr_lbl.setStyleSheet("color: white; background: transparent; border: none;")
+        hdr_layout.addWidget(hdr_lbl, 1)
+
+        frame_layout.addWidget(header_bar)
+
+        # Accent line
+        accent = QFrame()
+        accent.setFixedHeight(2)
+        accent.setStyleSheet("""
+            QFrame {
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                    stop:0 rgba(56, 144, 223, 0),
+                    stop:0.3 rgba(56, 144, 223, 100),
+                    stop:0.5 rgba(91, 168, 240, 160),
+                    stop:0.7 rgba(56, 144, 223, 100),
+                    stop:1 rgba(56, 144, 223, 0));
+            }
+        """)
+        frame_layout.addWidget(accent)
+
+        # Content area
+        content_area = QWidget()
+        content_area.setStyleSheet("background: #FAFBFD;")
+        layout = QVBoxLayout(content_area)
         layout.setSpacing(0)
         layout.setContentsMargins(24, 16, 24, 16)
 
-        # العنوان (RTL يحاذيه يميناً تلقائياً)
-        header_label = QLabel(tr("wizard.unit_dialog.title_add") if not self.unit_data else tr("wizard.unit_dialog.title_edit"))
-        header_label.setStyleSheet("font-size: 18px; font-weight: 600; color: #1A1F1D; background: transparent;")
-        layout.addWidget(header_label)
+        frame_layout.addWidget(content_area, 1)
 
         layout.addSpacing(32)
 

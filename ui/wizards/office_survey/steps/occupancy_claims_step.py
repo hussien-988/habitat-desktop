@@ -29,7 +29,11 @@ from utils.logger import get_logger
 from ui.error_handler import ErrorHandler
 from ui.font_utils import FontManager, create_font
 from ui.design_system import Colors
-from ui.wizards.office_survey.wizard_styles import STEP_CARD_STYLE, IN_CARD_ACTION_STYLE
+from ui.wizards.office_survey.wizard_styles import (
+    STEP_CARD_STYLE, IN_CARD_ACTION_STYLE,
+    make_step_card, make_icon_header, PERSON_CARD_STYLE,
+    CONTEXT_MENU_STYLE, MENU_DOTS_STYLE, EMPTY_STATE_ICON_STYLE,
+)
 
 
 def _is_owner_relation(relation_type) -> bool:
@@ -68,22 +72,14 @@ class OccupancyClaimsStep(BaseStep):
         layout.setSpacing(15)
 
         # Main card
-        table_frame = QFrame()
+        table_frame = make_step_card()
         table_frame.setLayoutDirection(get_layout_direction())
-        table_frame.setObjectName("StepCard")
-        table_frame.setStyleSheet(STEP_CARD_STYLE)
-        from PyQt5.QtWidgets import QGraphicsDropShadowEffect
-        shadow = QGraphicsDropShadowEffect()
-        shadow.setBlurRadius(20)
-        shadow.setOffset(0, 4)
-        shadow.setColor(QColor(0, 0, 0, 20))
-        table_frame.setGraphicsEffect(shadow)
         table_layout = QVBoxLayout(table_frame)
-        table_layout.setContentsMargins(12, 12, 12, 12)
-        table_layout.setSpacing(12)
+        table_layout.setContentsMargins(20, 20, 20, 20)
+        table_layout.setSpacing(14)
 
         # Header: icon + title + add button
-        header = self._make_icon_header(
+        header = make_icon_header(
             tr("wizard.occupancy_claims.title"),
             tr("wizard.occupancy_claims.subtitle"),
             "user"
@@ -148,10 +144,7 @@ class OccupancyClaimsStep(BaseStep):
         icon_container = QLabel()
         icon_container.setFixedSize(70, 70)
         icon_container.setAlignment(Qt.AlignCenter)
-        icon_container.setStyleSheet("""
-            background-color: #ffcc33;
-            border-radius: 35px;
-        """)
+        icon_container.setStyleSheet(EMPTY_STATE_ICON_STYLE)
 
         icon_path = os.path.join(
             os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))),
@@ -389,42 +382,28 @@ class OccupancyClaimsStep(BaseStep):
 
         card = QFrame()
         card.setLayoutDirection(get_layout_direction())
-        card.setFixedHeight(60)
-        card.setStyleSheet("""
-            QFrame {
-                background-color: #F8FAFF;
-                border: 1px solid #E2EAF2;
-                border-radius: 12px;
-            }
-            QFrame:hover {
-                background-color: #EBF5FF;
-                border-color: #3890DF;
-            }
-            QLabel {
-                border: none;
-                background: transparent;
-            }
-        """)
+        card.setFixedHeight(68)
+        card.setStyleSheet(PERSON_CARD_STYLE)
         card.setCursor(Qt.PointingHandCursor)
         card.mousePressEvent = lambda e, pid=person_id: self._view_person(pid) if e.button() == Qt.LeftButton else None
 
         card_layout = QHBoxLayout(card)
-        card_layout.setContentsMargins(8, 8, 8, 8)
-        card_layout.setSpacing(12)
+        card_layout.setContentsMargins(14, 10, 14, 10)
+        card_layout.setSpacing(14)
 
         # Right side: icon + text
         right_group = QHBoxLayout()
         right_group.setSpacing(12)
 
         icon_lbl = QLabel()
-        icon_lbl.setFixedSize(36, 36)
+        icon_lbl.setFixedSize(40, 40)
         icon_lbl.setAlignment(Qt.AlignCenter)
         icon_lbl.setStyleSheet("""
             QLabel {
                 background-color: #EBF5FF;
                 color: #3890DF;
-                border-radius: 18px;
-                border: none;
+                border-radius: 20px;
+                border: 1px solid #DBEAFE;
             }
         """)
         user_pixmap = Icon.load_pixmap("user", size=20)
@@ -461,40 +440,13 @@ class OccupancyClaimsStep(BaseStep):
         # Left side: menu button
         menu_btn = QPushButton("⋮")
         menu_btn.setFixedSize(36, 36)
-        menu_btn.setStyleSheet("""
-            QPushButton {
-                border: none;
-                color: #475569;
-                font-size: 32px;
-                font-weight: 900;
-                background: transparent;
-                border-radius: 18px;
-            }
-            QPushButton:hover {
-                color: #1e293b;
-                background-color: #F1F5F9;
-            }
-        """)
+        menu_btn.setStyleSheet(MENU_DOTS_STYLE)
         menu_btn.setCursor(Qt.PointingHandCursor)
 
         menu = QMenu(menu_btn)
         menu.setLayoutDirection(get_layout_direction())
         menu.setFixedSize(99, 80)
-        menu.setStyleSheet("""
-            QMenu {
-                background-color: white;
-                border: 1px solid #E5E7EB;
-                border-radius: 6px;
-                padding: 4px;
-            }
-            QMenu::item {
-                padding: 8px 16px;
-                border-radius: 4px;
-            }
-            QMenu::item:selected {
-                background-color: #F3F4F6;
-            }
-        """)
+        menu.setStyleSheet(CONTEXT_MENU_STYLE)
 
         eye_icon = QIcon(str(Config.IMAGES_DIR / "Eye.png"))
         view_action = menu.addAction(eye_icon, tr("wizard.occupancy_claims.view"))
@@ -713,36 +665,7 @@ class OccupancyClaimsStep(BaseStep):
 
     # BaseStep interface
 
-    @staticmethod
-    def _make_icon_header(title: str, subtitle: str, icon_name: str) -> QHBoxLayout:
-        """Create icon + title + subtitle header row."""
-        from ui.components.icon import Icon
-        row = QHBoxLayout()
-        row.setSpacing(10)
-        row.setContentsMargins(0, 0, 0, 0)
-        icon_lbl = QLabel()
-        icon_lbl.setFixedSize(40, 40)
-        icon_lbl.setAlignment(Qt.AlignCenter)
-        icon_lbl.setStyleSheet(
-            "QLabel { background-color: #EBF5FF; border: 1px solid #DBEAFE; border-radius: 10px; }"
-        )
-        px = Icon.load_pixmap(icon_name, size=24)
-        if px and not px.isNull():
-            icon_lbl.setPixmap(px)
-        row.addWidget(icon_lbl)
-        col = QVBoxLayout()
-        col.setSpacing(1)
-        t = QLabel(title)
-        t.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
-        t.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent;")
-        s = QLabel(subtitle)
-        s.setFont(create_font(size=10, weight=FontManager.WEIGHT_REGULAR))
-        s.setStyleSheet(f"color: {Colors.WIZARD_SUBTITLE}; background: transparent;")
-        col.addWidget(t)
-        col.addWidget(s)
-        row.addLayout(col)
-        row.addStretch()
-        return row
+    # _make_icon_header is now shared via wizard_styles.make_icon_header
 
     def update_language(self, is_arabic: bool):
         """Update translatable texts when language changes."""

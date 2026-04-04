@@ -965,7 +965,7 @@ class ClaimDetailsPage(QWidget):
                 self._claim_type_combo = QComboBox()
                 self._claim_type_combo.setFixedHeight(36)
                 self._claim_type_combo.setMinimumWidth(160)
-                self._claim_type_combo.setStyleSheet(StyleManager.form_dropdown())
+                self._claim_type_combo.setStyleSheet(StyleManager.combo_box())
                 _CLAIM_TYPE_OPTIONS = [
                     (1, get_claim_type_display(1)),
                     (2, get_claim_type_display(2)),
@@ -1036,7 +1036,10 @@ class ClaimDetailsPage(QWidget):
                         QLineEdit:focus { border-color: #3890DF; }
                     """)
                     if raw_share is not None:
-                        self._ownership_share_input.setText(str(round(float(raw_share) * 2400)))
+                        try:
+                            self._ownership_share_input.setText(str(round(float(raw_share) * 2400)))
+                        except (ValueError, TypeError):
+                            pass
                     self._ownership_share_input.setEnabled(True)
                     share_row.addWidget(self._ownership_share_input)
                 else:
@@ -1389,17 +1392,14 @@ class ClaimDetailsPage(QWidget):
                 sibling.setGraphicsEffect(dim)
                 self._dimmed_cards.append(sibling)
 
-            # Elevate relation card
+            # Elevate relation card — remove QGraphicsEffect so QComboBox popup works
             card.raise_()
+            card.set_glow_enabled(False)
+            card.setGraphicsEffect(None)
             card.setStyleSheet(
                 "_GlowingCard { background-color: %s; "
                 "border: 2px solid rgba(56, 144, 223, 0.35); border-radius: 12px; }" % Colors.SURFACE
             )
-            eff = card.graphicsEffect()
-            if isinstance(eff, QGraphicsDropShadowEffect):
-                eff.setBlurRadius(44)
-                eff.setOffset(0, 12)
-                eff.setColor(QColor(56, 144, 223, 55))
 
             # Add save/cancel buttons at bottom of card
             btn_container = QWidget()
@@ -1471,15 +1471,16 @@ class ClaimDetailsPage(QWidget):
                 sibling.setGraphicsEffect(shadow)
             self._dimmed_cards.clear()
 
-            # Restore relation card
+            # Restore relation card shadow and glow
             card.setStyleSheet(
                 "_GlowingCard { background-color: %s; border: none; border-radius: 12px; }" % Colors.SURFACE
             )
-            eff = card.graphicsEffect()
-            if isinstance(eff, QGraphicsDropShadowEffect):
-                eff.setBlurRadius(20)
-                eff.setOffset(0, 4)
-                eff.setColor(QColor(0, 0, 0, 25))
+            shadow = QGraphicsDropShadowEffect(card)
+            shadow.setBlurRadius(20)
+            shadow.setOffset(0, 4)
+            shadow.setColor(QColor(0, 0, 0, 25))
+            card.setGraphicsEffect(shadow)
+            card.set_glow_enabled(True)
 
             # Remove edit buttons
             if self._edit_btn_widget:
@@ -1496,7 +1497,10 @@ class ClaimDetailsPage(QWidget):
         self._is_editing = True
         self._original_claim_type = self._claim_data.get("claimType")
         raw_share = self._claim_data.get("ownershipShare")
-        self._original_ownership_share = round(float(raw_share) * 2400) if raw_share is not None else None
+        try:
+            self._original_ownership_share = round(float(raw_share) * 2400) if raw_share is not None else None
+        except (ValueError, TypeError):
+            self._original_ownership_share = None
         self._pending_uploads = []
         self._pending_deletes = []
         self._pending_links = []
@@ -1630,7 +1634,11 @@ class ClaimDetailsPage(QWidget):
         type_changed = new_type is not None and new_type != self._original_claim_type
 
         new_share_text = self._ownership_share_input.text().strip() if self._ownership_share_input else ""
-        new_share_val = int(new_share_text) if new_share_text else None
+        try:
+            new_share_val = int(new_share_text) if new_share_text else None
+        except (ValueError, TypeError):
+            Toast.show_toast(self, tr("page.claim_details.ownership_share_required"), Toast.WARNING)
+            return
         share_changed = new_share_val != self._original_ownership_share
 
         # Validate: ownership claim type requires ownership share

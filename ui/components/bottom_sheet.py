@@ -72,11 +72,15 @@ class BottomSheet(QWidget):
     def _setup_panel(self):
         self._panel.setStyleSheet(f"""
             QFrame#bottom_sheet_panel {{
-                background-color: {BSD.BG};
+                background: qlineargradient(
+                    x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #1B3555, stop:1 {BSD.BG}
+                );
                 border-top-left-radius: {BSD.BORDER_RADIUS}px;
                 border-top-right-radius: {BSD.BORDER_RADIUS}px;
                 border-bottom-left-radius: 0px;
                 border-bottom-right-radius: 0px;
+                border-top: 1px solid rgba(56, 144, 223, 0.25);
             }}
         """)
         self._panel_layout = QVBoxLayout(self._panel)
@@ -99,7 +103,7 @@ class BottomSheet(QWidget):
             create_font(size=FontManager.SIZE_HEADING,
                         weight=FontManager.WEIGHT_SEMIBOLD)
         )
-        self._title_lbl.setStyleSheet(f"color: {Colors.TEXT_PRIMARY};")
+        self._title_lbl.setStyleSheet("color: rgba(255, 255, 255, 0.95);")
         self._panel_layout.addWidget(self._title_lbl)
 
         self._message_lbl = QLabel()
@@ -109,7 +113,7 @@ class BottomSheet(QWidget):
             create_font(size=FontManager.SIZE_BODY,
                         weight=FontManager.WEIGHT_REGULAR)
         )
-        self._message_lbl.setStyleSheet(f"color: {Colors.TEXT_SECONDARY};")
+        self._message_lbl.setStyleSheet("color: rgba(180, 205, 230, 0.85);")
         self._panel_layout.addWidget(self._message_lbl)
 
         self._choices_container = QVBoxLayout()
@@ -191,16 +195,17 @@ class BottomSheet(QWidget):
             )
             btn.setStyleSheet(f"""
                 QPushButton {{
-                    background-color: {Colors.BACKGROUND};
-                    color: {Colors.TEXT_PRIMARY};
-                    border: 1px solid {Colors.BORDER_DEFAULT};
+                    background-color: rgba(255, 255, 255, 0.08);
+                    color: rgba(220, 235, 250, 0.9);
+                    border: 1px solid rgba(56, 144, 223, 0.2);
                     border-radius: {BSD.BUTTON_RADIUS}px;
                     padding: 0 {Spacing.MD}px;
                     text-align: center;
                 }}
                 QPushButton:hover {{
-                    background-color: {Colors.TABLE_ROW_HOVER};
-                    border-color: {Colors.PRIMARY_BLUE};
+                    background-color: rgba(56, 144, 223, 0.15);
+                    border-color: rgba(56, 144, 223, 0.5);
+                    color: white;
                 }}
             """)
             btn.clicked.connect(lambda checked, cid=choice_id: self._on_choice(cid))
@@ -229,7 +234,7 @@ class BottomSheet(QWidget):
                 create_font(size=FontManager.SIZE_BODY,
                             weight=FontManager.WEIGHT_MEDIUM)
             )
-            lbl.setStyleSheet(f"color: {Colors.TEXT_PRIMARY};")
+            lbl.setStyleSheet("color: rgba(180, 210, 240, 0.85);")
             row.addWidget(lbl)
 
             if field_type == "multiline":
@@ -240,12 +245,12 @@ class BottomSheet(QWidget):
                 widget.setFixedHeight(42)
 
             widget.setStyleSheet(f"""
-                background: {Colors.BACKGROUND};
-                border: 1px solid {Colors.BORDER_DEFAULT};
+                background: rgba(255, 255, 255, 0.07);
+                border: 1px solid rgba(56, 144, 223, 0.2);
                 border-radius: {BorderRadius.SM}px;
                 padding: {Spacing.SM}px {Spacing.MD}px;
                 font-size: {Typography.SIZE_BODY}px;
-                color: {Colors.TEXT_PRIMARY};
+                color: rgba(240, 248, 255, 0.95);
             """)
             row.addWidget(widget)
             self._form_container.addLayout(row)
@@ -307,13 +312,14 @@ class BottomSheet(QWidget):
         else:
             btn.setStyleSheet(f"""
                 QPushButton {{
-                    background-color: {Colors.BACKGROUND};
-                    color: {Colors.TEXT_PRIMARY};
-                    border: 1px solid {Colors.BORDER_DEFAULT};
+                    background-color: rgba(255, 255, 255, 0.08);
+                    color: rgba(200, 220, 240, 0.9);
+                    border: 1px solid rgba(56, 144, 223, 0.2);
                     border-radius: {BSD.BUTTON_RADIUS}px;
                 }}
                 QPushButton:hover {{
-                    background-color: {Colors.TABLE_ROW_HOVER};
+                    background-color: rgba(255, 255, 255, 0.12);
+                    border-color: rgba(56, 144, 223, 0.4);
                 }}
             """)
         return btn
@@ -410,9 +416,54 @@ class BottomSheet(QWidget):
         sheet.show_choices(title, choices)
         return sheet
 
+    def show_custom(self, title: str, content_widget: QWidget,
+                    submit_text: str = "", cancel_text: str = "",
+                    no_buttons: bool = False):
+        """Show bottom sheet with a custom widget as content.
+
+        If no_buttons=True, no cancel/submit buttons are added — the caller
+        is responsible for providing buttons inside content_widget and
+        calling close() or _animate_close() directly.
+        """
+        self._clear_dynamic()
+        self.setLayoutDirection(get_layout_direction())
+
+        self._title_lbl.setText(title)
+
+        self._form_container.addWidget(content_widget)
+
+        if not no_buttons:
+            if not submit_text:
+                submit_text = "\u0625\u0631\u0633\u0627\u0644"
+            if not cancel_text:
+                cancel_text = "\u0625\u0644\u063A\u0627\u0621"
+
+            cancel_btn = self._make_button(cancel_text, "secondary")
+            cancel_btn.clicked.connect(self._on_cancel)
+            self._buttons_layout.addWidget(cancel_btn)
+
+            submit_btn = self._make_button(submit_text, "primary")
+            submit_btn.clicked.connect(self._on_confirm)
+            self._buttons_layout.addWidget(submit_btn)
+
+        self._animate_open()
+
+    def close_sheet(self, callback=None):
+        """Public method to close the sheet with animation."""
+        self._animate_close(callback)
+
     @staticmethod
     def form(parent: QWidget, title: str, fields: list,
              submit_text: str = "", cancel_text: str = "") -> 'BottomSheet':
         sheet = BottomSheet(parent)
         sheet.show_form(title, fields, submit_text, cancel_text)
+        return sheet
+
+    @staticmethod
+    def custom(parent: QWidget, title: str, content_widget: QWidget,
+               submit_text: str = "", cancel_text: str = "",
+               no_buttons: bool = False) -> 'BottomSheet':
+        sheet = BottomSheet(parent)
+        sheet.show_custom(title, content_widget, submit_text, cancel_text,
+                          no_buttons)
         return sheet

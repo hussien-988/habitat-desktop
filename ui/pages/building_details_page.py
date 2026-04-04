@@ -107,19 +107,7 @@ class BuildingDetailsPage(QWidget):
             size=ButtonDimensions.SAVE_FONT_SIZE,
             weight=FontManager.WEIGHT_REGULAR,
         ))
-        self.view_units_btn.setStyleSheet(f"""
-            QPushButton {{
-                background-color: {Colors.PRIMARY_BLUE};
-                color: white;
-                border: none;
-                padding: {ButtonDimensions.SAVE_PADDING_V}px {ButtonDimensions.SAVE_PADDING_H}px;
-                border-radius: {ButtonDimensions.SAVE_BORDER_RADIUS}px;
-                font-family: 'IBM Plex Sans Arabic';
-            }}
-            QPushButton:hover {{
-                background-color: {ButtonDimensions.PRIMARY_HOVER_BG};
-            }}
-        """)
+        self.view_units_btn.setStyleSheet(StyleManager.nav_button_primary())
         self.view_units_btn.clicked.connect(self._toggle_units_view)
         header_row.addWidget(self.view_units_btn)
 
@@ -130,15 +118,7 @@ class BuildingDetailsPage(QWidget):
             size=ButtonDimensions.SAVE_FONT_SIZE,
             weight=FontManager.WEIGHT_REGULAR,
         ))
-        self._lock_btn.setStyleSheet(f"""
-            QPushButton {{
-                background-color: #F1F5F9;
-                color: #475569;
-                border: 1px solid #E2E8F0;
-                border-radius: {ButtonDimensions.SAVE_BORDER_RADIUS}px;
-            }}
-            QPushButton:hover {{ background-color: #E2E8F0; }}
-        """)
+        self._lock_btn.setStyleSheet(StyleManager.back_button_light())
         self._lock_btn.clicked.connect(self._on_toggle_lock)
         self._lock_btn.setVisible(False)
         header_row.addWidget(self._lock_btn)
@@ -150,18 +130,7 @@ class BuildingDetailsPage(QWidget):
             size=ButtonDimensions.SAVE_FONT_SIZE,
             weight=FontManager.WEIGHT_SEMIBOLD,
         ))
-        back_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #F1F5F9;
-                color: #475569;
-                border: 1px solid #E2E8F0;
-                border-radius: 8px;
-                font-weight: 600;
-            }
-            QPushButton:hover {
-                background-color: #E2E8F0;
-            }
-        """)
+        back_btn.setStyleSheet(StyleManager.back_button_light())
         back_btn.clicked.connect(self.back_requested.emit)
         header_row.addWidget(back_btn)
 
@@ -220,13 +189,7 @@ class BuildingDetailsPage(QWidget):
         """Create card with header (icon + title + subtitle). Returns (card, content_layout)."""
         card = QFrame()
         card.setLayoutDirection(get_layout_direction())
-        card.setStyleSheet(f"""
-            QFrame {{
-                background-color: {Colors.SURFACE};
-                border: none;
-                border-radius: 12px;
-            }}
-        """)
+        card.setStyleSheet(StyleManager.form_card())
         self._add_shadow(card)
 
         card_layout = QVBoxLayout(card)
@@ -295,13 +258,7 @@ class BuildingDetailsPage(QWidget):
         """Create a simple card (no header). Returns (card, content_layout)."""
         card = QFrame()
         card.setLayoutDirection(get_layout_direction())
-        card.setStyleSheet(f"""
-            QFrame {{
-                background-color: {Colors.SURFACE};
-                border: none;
-                border-radius: 12px;
-            }}
-        """)
+        card.setStyleSheet(StyleManager.form_card())
         self._add_shadow(card)
 
         card_layout = QVBoxLayout(card)
@@ -333,13 +290,7 @@ class BuildingDetailsPage(QWidget):
         card = QFrame()
         card.setLayoutDirection(get_layout_direction())
         card.setObjectName("unitsTableCard")
-        card.setStyleSheet(f"""
-            QFrame#unitsTableCard {{
-                background-color: {Colors.SURFACE};
-                border: none;
-                border-radius: 12px;
-            }}
-        """)
+        card.setStyleSheet(StyleManager.table_card())
         self._add_shadow(card)
 
         card_layout = QVBoxLayout(card)
@@ -364,43 +315,7 @@ class BuildingDetailsPage(QWidget):
             item = QTableWidgetItem(text)
             self.units_table.setHorizontalHeaderItem(i, item)
 
-        # Styling (same as units_page.py)
-        self.units_table.setStyleSheet("""
-            QTableWidget {
-                border: none;
-                background-color: white;
-                font-size: 10.5pt;
-                font-weight: 400;
-                color: #212B36;
-            }
-            QTableWidget::item {
-                padding: 8px 15px;
-                border-bottom: 1px solid #F0F0F0;
-                color: #212B36;
-                font-size: 10.5pt;
-                font-weight: 400;
-            }
-            QTableWidget::item:hover {
-                background-color: #FAFBFC;
-            }
-            QHeaderView {
-                border-top-left-radius: 16px;
-                border-top-right-radius: 16px;
-            }
-            QHeaderView::section {
-                background-color: #F8F9FA;
-                padding: 12px;
-                padding-left: 30px;
-                border: none;
-                color: #637381;
-                font-weight: 600;
-                font-size: 11pt;
-                height: 56px;
-            }
-            QHeaderView::section:hover {
-                background-color: #EBEEF2;
-            }
-        """ + StyleManager.scrollbar())
+        self.units_table.setStyleSheet(StyleManager.modern_table() + StyleManager.scrollbar())
 
         # Header config
         h = self.units_table.horizontalHeader()
@@ -429,44 +344,24 @@ class BuildingDetailsPage(QWidget):
         # Footer with pagination
         footer = QFrame()
         footer.setObjectName("unitsFooter")
-        footer.setStyleSheet("""
-            QFrame#unitsFooter {
-                background-color: #F8F9FA;
-                border-top: 1px solid #E1E8ED;
-                border-bottom-left-radius: 12px;
-                border-bottom-right-radius: 12px;
-            }
-        """)
+        footer.setStyleSheet(StyleManager.nav_footer())
         footer.setFixedHeight(58)
 
         footer_layout = QHBoxLayout(footer)
         footer_layout.setContentsMargins(16, 0, 16, 0)
 
         # Navigation buttons
-        nav_btn_style = """
-            QPushButton {
-                background: transparent;
-                border: 1px solid #E1E8ED;
-                border-radius: 4px;
-                color: #637381;
-                font-size: 14pt;
-                font-weight: bold;
-            }
-            QPushButton:hover { background-color: #EBEEF2; }
-            QPushButton:disabled { color: #C1C7CD; border-color: #E8EBED; }
-        """
-
         self.units_prev_btn = QPushButton(">")
         self.units_prev_btn.setFixedSize(32, 32)
         self.units_prev_btn.setCursor(Qt.PointingHandCursor)
-        self.units_prev_btn.setStyleSheet(nav_btn_style)
+        self.units_prev_btn.setStyleSheet(StyleManager.pagination_button())
         self.units_prev_btn.clicked.connect(self._on_units_prev_page)
         footer_layout.addWidget(self.units_prev_btn)
 
         self.units_next_btn = QPushButton("<")
         self.units_next_btn.setFixedSize(32, 32)
         self.units_next_btn.setCursor(Qt.PointingHandCursor)
-        self.units_next_btn.setStyleSheet(nav_btn_style)
+        self.units_next_btn.setStyleSheet(StyleManager.pagination_button())
         self.units_next_btn.clicked.connect(self._on_units_next_page)
         footer_layout.addWidget(self.units_next_btn)
 

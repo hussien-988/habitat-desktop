@@ -20,6 +20,7 @@ from ui.wizards.framework import BaseStep, StepValidationResult
 from ui.wizards.office_survey.survey_context import SurveyContext
 from ui.wizards.office_survey.wizard_styles import (
     STEP_CARD_STYLE, READONLY_FIELD_STYLE, SECTION_HEADER_STYLE,
+    make_step_card, make_icon_header, make_divider, DIVIDER_COLOR,
 )
 from ui.design_system import Colors
 from ui.font_utils import create_font, FontManager
@@ -123,18 +124,7 @@ class BuildingInfoStep(BaseStep):
     # --- Card 3: موقع البناء (mirrors AddBuildingPage Card 3) ----------
 
     def _build_card3(self) -> QFrame:
-        from PyQt5.QtWidgets import QGraphicsDropShadowEffect
-        from PyQt5.QtGui import QColor
-
-        card = QFrame()
-        card.setObjectName("StepCard")
-        card.setStyleSheet(STEP_CARD_STYLE)
-
-        shadow = QGraphicsDropShadowEffect()
-        shadow.setBlurRadius(20)
-        shadow.setOffset(0, 4)
-        shadow.setColor(QColor(0, 0, 0, 20))
-        card.setGraphicsEffect(shadow)
+        card = make_step_card()
 
         card_layout = QVBoxLayout(card)
         card_layout.setContentsMargins(12, 12, 12, 12)
@@ -294,30 +284,14 @@ class BuildingInfoStep(BaseStep):
         Create a card frame with icon+title+subtitle header, divider, and QGridLayout.
         Returns (card_frame, grid_layout).
         """
-        from PyQt5.QtWidgets import QGraphicsDropShadowEffect
-        from PyQt5.QtGui import QColor
-
-        card = QFrame()
-        card.setObjectName("StepCard")
-        card.setStyleSheet(STEP_CARD_STYLE)
-
-        shadow = QGraphicsDropShadowEffect()
-        shadow.setBlurRadius(20)
-        shadow.setOffset(0, 4)
-        shadow.setColor(QColor(0, 0, 0, 20))
-        card.setGraphicsEffect(shadow)
+        card = make_step_card()
 
         layout = QVBoxLayout(card)
         layout.setContentsMargins(20, 16, 20, 16)
         layout.setSpacing(12)
 
-        layout.addLayout(self._make_icon_header(title, subtitle, icon_name))
-
-        divider = QFrame()
-        divider.setFrameShape(QFrame.HLine)
-        divider.setFixedHeight(1)
-        divider.setStyleSheet("border: none; background-color: #e1e8ee;")
-        layout.addWidget(divider)
+        layout.addLayout(make_icon_header(title, subtitle, icon_name))
+        layout.addWidget(make_divider())
 
         grid = QGridLayout()
         grid.setSpacing(10)
@@ -328,50 +302,7 @@ class BuildingInfoStep(BaseStep):
 
         return card, grid
 
-    @staticmethod
-    def _make_icon_header(title: str, subtitle: str, icon_name: str) -> QHBoxLayout:
-        """Build icon + (title / subtitle) header row — matches AddBuildingPage Card 1/2."""
-        from ui.components.icon import Icon
-
-        row = QHBoxLayout()
-        row.setSpacing(10)
-        row.setContentsMargins(0, 0, 0, 0)
-
-        icon_lbl = QLabel()
-        icon_lbl.setFixedSize(40, 40)
-        icon_lbl.setAlignment(Qt.AlignCenter)
-        icon_lbl.setStyleSheet("""
-            QLabel {
-                background-color: #EBF5FF;
-                border: 1px solid #DBEAFE;
-                border-radius: 10px;
-            }
-        """)
-        px = Icon.load_pixmap(icon_name, size=24)
-        if px and not px.isNull():
-            icon_lbl.setPixmap(px)
-        else:
-            icon_lbl.setStyleSheet(icon_lbl.styleSheet() + "font-size: 16px;")
-            icon_lbl.setText("🏢")
-
-        row.addWidget(icon_lbl)
-
-        col = QVBoxLayout()
-        col.setSpacing(1)
-
-        t = QLabel(title)
-        t.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
-        t.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent;")
-
-        s = QLabel(subtitle)
-        s.setFont(create_font(size=10, weight=FontManager.WEIGHT_REGULAR))
-        s.setStyleSheet(f"color: {Colors.WIZARD_SUBTITLE}; background: transparent;")
-
-        col.addWidget(t)
-        col.addWidget(s)
-        row.addLayout(col)
-        row.addStretch()
-        return row
+    # _make_icon_header is now shared via wizard_styles.make_icon_header
 
     @staticmethod
     def _add_grid_field(

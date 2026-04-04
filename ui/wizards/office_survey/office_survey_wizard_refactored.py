@@ -148,9 +148,7 @@ class OfficeSurveyWizard(BaseWizard):
                     or ""
                 )
                 if not claim_number:
-                    self._fetch_claim_number_from_api(
-                        callback=self._show_finalized_success_popup
-                    )
+                    self._fetch_claim_number_sync()
                     return True
                 self._show_finalized_success_popup(claim_number=claim_number)
                 return True
@@ -251,9 +249,197 @@ class OfficeSurveyWizard(BaseWizard):
         self._claim_number_worker.error.connect(_on_error)
         self._claim_number_worker.start()
 
+    def _fetch_claim_number_sync(self):
+        """Fetch claims from API synchronously, then show success dialog."""
+        from PyQt5.QtCore import QEventLoop
+        survey_id = self.context.get_data("survey_id")
+        if not survey_id:
+            self._show_finalized_success_popup()
+            return
+
+        from services.api_client import get_api_client
+        api = get_api_client()
+        main_window = self.window()
+        if main_window and hasattr(main_window, '_api_token'):
+            api.set_access_token(main_window._api_token)
+
+        loop = QEventLoop()
+        result_holder = [None]
+
+        def _do_fetch():
+            return api.get_claims_summaries(survey_visit_id=survey_id)
+
+        def _on_finished(response):
+            self._spinner.hide_loading()
+            items = response if isinstance(response, list) else response.get("items", [])
+            if items:
+                result_holder[0] = [
+                    {
+                        "claimNumber": it.get("claimNumber", ""),
+                        "fullNameArabic": it.get("primaryClaimantName", "") or it.get("fullNameArabic", ""),
+                    }
+                    for it in items
+                ]
+            loop.quit()
+
+        def _on_error(msg):
+            self._spinner.hide_loading()
+            logger.warning(f"Could not fetch claim number from API: {msg}")
+            loop.quit()
+
+        self._spinner.show_loading(tr("component.loading.default"))
+        worker = ApiWorker(_do_fetch)
+        worker.finished.connect(_on_finished)
+        worker.error.connect(_on_error)
+        worker.start()
+        loop.exec_()
+
+        if result_holder[0]:
+            self._show_finalized_success_popup(claims=result_holder[0])
+        else:
+            self._show_finalized_success_popup()
+
     def _show_finalized_success_popup(self, claim_number: str = "", claims: list = None):
-        """Show success notification after finalization."""
-        Toast.show_toast(self, tr("wizard.success.description"), Toast.SUCCESS)
+        """Show success BottomSheet with person names and claim numbers."""
+        from PyQt5.QtWidgets import (
+            QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
+            QFrame, QGraphicsDropShadowEffect,
+        )
+        from PyQt5.QtGui import QColor
+
+        # Build claims display data
+        display_rows = []
+        if claims:
+            for c in claims:
+                name = (c.get("fullNameArabic") or c.get("primaryClaimantName")
+                        or c.get("fullName") or "")
+                num = c.get("claimNumber") or c.get("claimId") or ""
+                if name or num:
+                    display_rows.append((name, str(num)))
+        elif claim_number:
+            name = ""
+            if self.context.applicant:
+                a = self.context.applicant
+                parts = [a.get("first_name_ar", ""), a.get("father_name_ar", ""), a.get("last_name_ar", "")]
+                name = " ".join(p for p in parts if p) or a.get("full_name", "")
+            if not name and self.context.persons:
+                p = self.context.persons[0]
+                parts = [p.get("first_name", ""), p.get("father_name", ""), p.get("last_name", "")]
+                name = " ".join(part for part in parts if part) or p.get("full_name", "")
+            display_rows.append((name, str(claim_number)))
+
+        if not display_rows and self.context.persons:
+            for p in self.context.persons:
+                parts = [p.get("first_name", ""), p.get("father_name", ""), p.get("last_name", "")]
+                name = " ".join(part for part in parts if part) or p.get("full_name", "")
+                display_rows.append((name, ""))
+
+        dlg = QDialog(self)
+        dlg.setWindowFlags(Qt.FramelessWindowHint | Qt.Dialog)
+        dlg.setModal(True)
+        dlg.setAttribute(Qt.WA_TranslucentBackground)
+        dlg.resize(self.width(), self.height())
+        dlg.move(self.mapToGlobal(self.rect().topLeft()))
+
+        overlay = QFrame(dlg)
+        overlay.setStyleSheet("background-color: rgba(10, 20, 35, 0.65);")
+        overlay.setGeometry(0, 0, dlg.width(), dlg.height())
+
+        card_w = min(480, self.width() - 40)
+        card = QFrame(dlg)
+        card.setFixedWidth(card_w)
+        card.setStyleSheet("""
+            QFrame {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #1B3555, stop:1 #152A42);
+                border-radius: 20px;
+            }
+            QLabel { background: transparent; }
+        """)
+        shadow = QGraphicsDropShadowEffect()
+        shadow.setBlurRadius(40)
+        shadow.setYOffset(6)
+        shadow.setColor(QColor(0, 0, 0, 80))
+        card.setGraphicsEffect(shadow)
+
+        card_layout = QVBoxLayout(card)
+        card_layout.setContentsMargins(28, 28, 28, 24)
+        card_layout.setSpacing(16)
+
+        icon_lbl = QLabel("\u2714")
+        icon_lbl.setAlignment(Qt.AlignCenter)
+        icon_lbl.setStyleSheet(
+            "color: #4ADE80; font-size: 42px; font-weight: bold;"
+            "background: rgba(74, 222, 128, 0.12); border-radius: 30px;"
+            "min-width: 60px; max-width: 60px; min-height: 60px; max-height: 60px;"
+        )
+        icon_row = QHBoxLayout()
+        icon_row.addStretch()
+        icon_row.addWidget(icon_lbl)
+        icon_row.addStretch()
+        card_layout.addLayout(icon_row)
+
+        title = QLabel(tr("wizard.success.finalized_title"))
+        title.setAlignment(Qt.AlignCenter)
+        title.setStyleSheet("color: rgba(240, 248, 255, 0.95); font-size: 18px; font-weight: 700;")
+        title.setWordWrap(True)
+        card_layout.addWidget(title)
+
+        if display_rows:
+            hdr = QHBoxLayout()
+            hdr.setContentsMargins(4, 0, 4, 0)
+            name_hdr = QLabel(tr("wizard.success.col_name"))
+            name_hdr.setStyleSheet("color: rgba(140, 190, 240, 0.7); font-size: 11px; font-weight: 600;")
+            claim_hdr = QLabel(tr("wizard.success.col_claim"))
+            claim_hdr.setStyleSheet("color: rgba(140, 190, 240, 0.7); font-size: 11px; font-weight: 600;")
+            claim_hdr.setAlignment(Qt.AlignLeft)
+            hdr.addWidget(name_hdr, 1)
+            hdr.addWidget(claim_hdr, 1)
+            card_layout.addLayout(hdr)
+
+            div = QFrame()
+            div.setFixedHeight(1)
+            div.setStyleSheet("background-color: rgba(255, 255, 255, 0.1);")
+            card_layout.addWidget(div)
+
+            for name, num in display_rows:
+                row = QHBoxLayout()
+                row.setContentsMargins(4, 4, 4, 4)
+                name_lbl = QLabel(name or "-")
+                name_lbl.setStyleSheet("color: rgba(240, 248, 255, 0.9); font-size: 14px;")
+                name_lbl.setWordWrap(True)
+                num_lbl = QLabel(num or "-")
+                num_lbl.setStyleSheet("color: rgba(74, 222, 128, 0.9); font-size: 13px; font-weight: 600;")
+                num_lbl.setAlignment(Qt.AlignLeft)
+                row.addWidget(name_lbl, 1)
+                row.addWidget(num_lbl, 1)
+                card_layout.addLayout(row)
+
+        ok_btn = QPushButton(tr("button.ok"))
+        ok_btn.setCursor(Qt.PointingHandCursor)
+        ok_btn.setFixedHeight(44)
+        ok_btn.setStyleSheet(
+            "QPushButton {"
+            "    background-color: #3890DF; color: white; border: none;"
+            "    border-radius: 10px; font-size: 15px; font-weight: 600;"
+            "    padding: 0 32px;"
+            "}"
+            "QPushButton:hover { background-color: #2A7BC8; }"
+            "QPushButton:pressed { background-color: #1E6CB3; }"
+        )
+        ok_btn.clicked.connect(dlg.accept)
+        btn_row = QHBoxLayout()
+        btn_row.addStretch()
+        btn_row.addWidget(ok_btn)
+        btn_row.addStretch()
+        card_layout.addLayout(btn_row)
+
+        card.adjustSize()
+        card_x = (dlg.width() - card_w) // 2
+        card_y = (dlg.height() - card.sizeHint().height()) // 2
+        card.move(card_x, card_y)
+
+        dlg.exec_()
         self._finalization_complete = True
 
     def on_cancel(self) -> bool:
@@ -286,15 +472,6 @@ class OfficeSurveyWizard(BaseWizard):
             ErrorHandler.show_error(
                 self,
                 tr("wizard.error.no_survey_id"),
-                tr("common.error")
-            )
-            return None
-
-        contact_person_id = self.context.get_data("contact_person_id")
-        if not contact_person_id:
-            ErrorHandler.show_error(
-                self,
-                "يجب إكمال بيانات مقدم الطلب قبل حفظ المسودة",
                 tr("common.error")
             )
             return None
@@ -425,14 +602,32 @@ class OfficeSurveyWizard(BaseWizard):
                 # Cancel survey on server with reason
                 survey_id = self.context.get_data("survey_id")
                 if survey_id:
-                    from PyQt5.QtWidgets import QInputDialog
-                    reason, ok = QInputDialog.getMultiLineText(
-                        self, "سبب الإلغاء",
-                        "يرجى إدخال سبب إلغاء المسح:", ""
+                    reason_loop = QEventLoop()
+                    reason_result = [None]
+
+                    def on_reason_confirmed():
+                        reason_data = reason_sheet.get_form_data()
+                        reason_result[0] = (reason_data.get("reason") or "").strip()
+                        reason_loop.quit()
+
+                    def on_reason_cancelled():
+                        reason_result[0] = None
+                        reason_loop.quit()
+
+                    reason_sheet = BottomSheet(self)
+                    reason_sheet.confirmed.connect(on_reason_confirmed)
+                    reason_sheet.cancelled.connect(on_reason_cancelled)
+                    reason_sheet.show_form(
+                        tr("wizard.cancel_reason_title"),
+                        [("reason", tr("wizard.cancel_reason_prompt"), "multiline")],
+                        submit_text=tr("page.case_details.confirm_cancel"),
+                        cancel_text=tr("action.dismiss"),
                     )
-                    if not ok or not reason.strip():
+                    reason_loop.exec_()
+
+                    if not reason_result[0]:
                         return
-                    self._cancel_survey_async(survey_id, reason.strip())
+                    self._cancel_survey_async(survey_id, reason_result[0])
                 self._finalization_complete = True
                 logger.info("User discarded wizard changes on close")
 
@@ -657,17 +852,38 @@ class OfficeSurveyWizard(BaseWizard):
         return header
 
     def _create_footer(self) -> QWidget:
-        """Create wizard footer with navigation buttons."""
+        """Create wizard footer with navigation buttons and progress accent."""
+        footer_wrapper = QWidget()
+        footer_wrapper.setStyleSheet("background: transparent;")
+        wrapper_layout = QVBoxLayout(footer_wrapper)
+        wrapper_layout.setContentsMargins(0, 0, 0, 0)
+        wrapper_layout.setSpacing(0)
+
+        # Progress accent line at top of footer
+        self._footer_progress = QFrame()
+        self._footer_progress.setFixedHeight(2)
+        self._footer_progress.setStyleSheet("""
+            QFrame {
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                    stop:0 rgba(56, 144, 223, 0),
+                    stop:0.15 rgba(56, 144, 223, 120),
+                    stop:0.5 rgba(91, 168, 240, 180),
+                    stop:0.85 rgba(56, 144, 223, 120),
+                    stop:1 rgba(56, 144, 223, 0));
+            }
+        """)
+        wrapper_layout.addWidget(self._footer_progress)
+
         footer = QFrame()
         footer.setObjectName("WizardFooter")
         footer.setFixedHeight(ButtonDimensions.FOOTER_HEIGHT)
         footer.setStyleSheet(StyleManager.wizard_footer())
 
         shadow = QGraphicsDropShadowEffect()
-        shadow.setBlurRadius(12)
+        shadow.setBlurRadius(16)
         shadow.setXOffset(0)
-        shadow.setYOffset(-2)
-        shadow.setColor(QColor(0, 0, 0, 25))
+        shadow.setYOffset(-3)
+        shadow.setColor(QColor(0, 0, 0, 20))
         footer.setGraphicsEffect(shadow)
 
         layout = QHBoxLayout(footer)
@@ -737,7 +953,8 @@ class OfficeSurveyWizard(BaseWizard):
 
         layout.addStretch()
 
-        return footer
+        wrapper_layout.addWidget(footer)
+        return footer_wrapper
 
     def _enter_edit_mode(self, step_index: int):
         """Enter edit mode: navigate from review to a target step for editing."""
@@ -834,10 +1051,24 @@ class OfficeSurveyWizard(BaseWizard):
         self._update_navigation_buttons()
 
     def _update_step_display(self):
-        """Update step indicators with proper state styling."""
+        """Update step indicators with proper state styling and completion marks."""
         current_step = self.navigator.current_index
         for i, tab in enumerate(self.step_labels):
-            tab.set_active(i == current_step)
+            if i == current_step:
+                tab.set_active(True)
+            elif i < current_step:
+                # Completed steps: keep inactive but show completed state
+                tab.set_active(False)
+                # Prefix with checkmark for completed steps
+                step_names = self.get_step_names()
+                if i < len(step_names):
+                    tab.set_text(f"\u2713 {step_names[i][1]}")
+            else:
+                tab.set_active(False)
+                # Reset text for future steps
+                step_names = self.get_step_names()
+                if i < len(step_names):
+                    tab.set_text(step_names[i][1])
 
         self.step_container.setCurrentIndex(current_step)
         self.btn_previous.setEnabled(current_step > 0)

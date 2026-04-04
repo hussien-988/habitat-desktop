@@ -116,73 +116,22 @@ RADIO_STYLE = f"""
     }}
 """
 
-_DARK_COMBO_STYLE = """
-    QComboBox {
-        background: rgba(10, 22, 40, 140);
-        color: white;
-        border: 1px solid rgba(56, 144, 223, 35);
-        border-radius: 8px;
-        padding: 5px 10px;
-        font-size: 9pt;
-        min-width: 120px;
-    }
-    QComboBox:hover { border-color: rgba(56, 144, 223, 80); }
-    QComboBox::drop-down { border: none; width: 22px; }
-    QComboBox::down-arrow {
-        image: none;
-        border-left: 4px solid transparent;
-        border-right: 4px solid transparent;
-        border-top: 5px solid rgba(255, 255, 255, 0.5);
-        margin-right: 6px;
-    }
-    QComboBox QAbstractItemView {
-        background: #0F1E36;
-        color: white;
-        border: 1px solid rgba(56, 144, 223, 40);
-        border-radius: 6px;
-        selection-background-color: rgba(56, 144, 223, 50);
-        outline: none;
-        padding: 4px;
-    }
-"""
-
-_REFRESH_BTN_STYLE = """
+_PAGINATION_BTN_STYLE = """
     QPushButton {
-        background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
-            stop:0 #2E7BD6, stop:1 #3890DF);
-        color: white;
-        border: none;
-        border-radius: 8px;
-        padding: 7px 18px;
-        font-size: 10pt;
-        font-weight: 600;
-    }
-    QPushButton:hover {
-        background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
-            stop:0 #3688E3, stop:1 #4A9EED);
-    }
-    QPushButton:pressed {
-        background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
-            stop:0 #2568B8, stop:1 #2E7BD6);
-    }
-"""
-
-_NAV_BTN_STYLE = """
-    QPushButton {{
-        background: {bg};
-        border: 1px solid rgba(56, 144, 223, 30);
+        background: #F0F7FF;
+        border: 1px solid rgba(56, 144, 223, 0.20);
         border-radius: 6px;
-        color: {fg};
+        color: #3890DF;
         font-size: 10pt;
         font-weight: 600;
         padding: 6px 16px;
-    }}
-    QPushButton:hover {{ background: {hover}; }}
-    QPushButton:disabled {{
+    }
+    QPushButton:hover { background: #E0EFFF; }
+    QPushButton:disabled {
         background: #E8EDF2;
         color: #B0BEC5;
         border-color: #DDE3EA;
-    }}
+    }
 """
 
 
@@ -516,14 +465,14 @@ class DuplicatesPage(QWidget):
         # Refresh button
         self._refresh_btn = QPushButton(tr("page.duplicates.refresh"))
         self._refresh_btn.setCursor(Qt.PointingHandCursor)
-        self._refresh_btn.setStyleSheet(_REFRESH_BTN_STYLE)
+        self._refresh_btn.setStyleSheet(StyleManager.refresh_button_dark())
         self._refresh_btn.clicked.connect(lambda: self.refresh())
         self._header.add_action_widget(self._refresh_btn)
 
         # Filters in header row2
         self._type_filter = QComboBox()
         self._type_filter.setLayoutDirection(get_layout_direction())
-        self._type_filter.setStyleSheet(_DARK_COMBO_STYLE)
+        self._type_filter.setStyleSheet(StyleManager.dark_combo_box())
         self._type_filter.addItem(tr("page.duplicates.all_types"), "")
         self._type_filter.addItem(tr("page.duplicates.card_property"), "PropertyDuplicate")
         self._type_filter.addItem(tr("page.duplicates.card_person"), "PersonDuplicate")
@@ -532,7 +481,7 @@ class DuplicatesPage(QWidget):
 
         self._status_filter = QComboBox()
         self._status_filter.setLayoutDirection(get_layout_direction())
-        self._status_filter.setStyleSheet(_DARK_COMBO_STYLE)
+        self._status_filter.setStyleSheet(StyleManager.dark_combo_box())
         self._status_filter.addItem(tr("page.duplicates.all_statuses"), "")
         self._status_filter.addItem(tr("page.duplicates.status_pending"), "Pending")
         self._status_filter.addItem(tr("page.duplicates.status_pending_review"), "PendingReview")
@@ -544,7 +493,7 @@ class DuplicatesPage(QWidget):
 
         self._priority_filter = QComboBox()
         self._priority_filter.setLayoutDirection(get_layout_direction())
-        self._priority_filter.setStyleSheet(_DARK_COMBO_STYLE)
+        self._priority_filter.setStyleSheet(StyleManager.dark_combo_box())
         self._priority_filter.addItem(tr("page.duplicates.all_priorities"), "")
         self._priority_filter.addItem(tr("page.duplicates.priority_critical"), "Critical")
         self._priority_filter.addItem(tr("page.duplicates.priority_high"), "High")
@@ -743,13 +692,9 @@ class DuplicatesPage(QWidget):
         card = QFrame()
         card.setObjectName("conflictListCard")
         card.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-        card.setStyleSheet("""
-            QFrame#conflictListCard {
-                background-color: white;
-                border-radius: 16px;
-                border: 1px solid #E8EDF2;
-            }
-        """)
+        card.setStyleSheet(
+            StyleManager.table_card().replace("QFrame", "QFrame#conflictListCard")
+        )
 
         shadow = QGraphicsDropShadowEffect()
         shadow.setBlurRadius(24)
@@ -833,14 +778,10 @@ class DuplicatesPage(QWidget):
         # Footer with pagination
         footer = QFrame()
         footer.setFixedHeight(54)
-        footer.setStyleSheet("""
-            QFrame {
-                background-color: #F8FAFC;
-                border-top: 1px solid #E8EDF2;
-                border-bottom-left-radius: 16px;
-                border-bottom-right-radius: 16px;
-            }
-        """)
+        footer.setStyleSheet(
+            StyleManager.nav_footer()
+            + "QFrame { border-bottom-left-radius: 16px; border-bottom-right-radius: 16px; }"
+        )
 
         fl = QHBoxLayout(footer)
         fl.setContentsMargins(16, 0, 16, 0)
@@ -850,9 +791,7 @@ class DuplicatesPage(QWidget):
         self._prev_btn.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
         self._prev_btn.setCursor(Qt.PointingHandCursor)
         self._prev_btn.setFixedHeight(34)
-        self._prev_btn.setStyleSheet(
-            _NAV_BTN_STYLE.format(bg="#F0F7FF", fg="#3890DF", hover="#E0EFFF")
-        )
+        self._prev_btn.setStyleSheet(_PAGINATION_BTN_STYLE)
         self._prev_btn.clicked.connect(lambda: self._go_to_page(self._current_page - 1))
         fl.addWidget(self._prev_btn)
 
@@ -866,9 +805,7 @@ class DuplicatesPage(QWidget):
         self._next_btn.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
         self._next_btn.setCursor(Qt.PointingHandCursor)
         self._next_btn.setFixedHeight(34)
-        self._next_btn.setStyleSheet(
-            _NAV_BTN_STYLE.format(bg="#F0F7FF", fg="#3890DF", hover="#E0EFFF")
-        )
+        self._next_btn.setStyleSheet(_PAGINATION_BTN_STYLE)
         self._next_btn.clicked.connect(lambda: self._go_to_page(self._current_page + 1))
         fl.addWidget(self._next_btn)
 
@@ -901,13 +838,9 @@ class DuplicatesPage(QWidget):
     def _build_resolution_section(self) -> QFrame:
         card = QFrame()
         card.setObjectName("resolutionCard")
-        card.setStyleSheet("""
-            QFrame#resolutionCard {
-                background-color: white;
-                border-radius: 14px;
-                border: 1px solid #E8EDF2;
-            }
-        """)
+        card.setStyleSheet(
+            StyleManager.form_card().replace("QFrame", "QFrame#resolutionCard")
+        )
 
         shadow = QGraphicsDropShadowEffect()
         shadow.setBlurRadius(20)
@@ -962,9 +895,7 @@ class DuplicatesPage(QWidget):
 
         # Comparison preview
         self._comparison_frame = QFrame()
-        self._comparison_frame.setStyleSheet("""
-            QFrame { background: #F8FAFC; border-radius: 10px; border: 1px solid #E8EDF2; }
-        """)
+        self._comparison_frame.setStyleSheet(StyleManager.data_card())
         comp_layout = QHBoxLayout(self._comparison_frame)
         comp_layout.setContentsMargins(16, 12, 16, 12)
         comp_layout.setSpacing(20)
@@ -1074,23 +1005,7 @@ class DuplicatesPage(QWidget):
         self._action_btn.setCursor(Qt.PointingHandCursor)
         self._action_btn.setFont(create_font(size=11, weight=FontManager.WEIGHT_SEMIBOLD))
         self._action_btn.setFixedSize(160, 44)
-        self._action_btn.setStyleSheet(f"""
-            QPushButton {{
-                background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
-                    stop:0 {Colors.PRIMARY_BLUE}, stop:1 #2E7BC8);
-                color: white;
-                border: none;
-                border-radius: 10px;
-                font-weight: 600;
-            }}
-            QPushButton:hover {{
-                background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
-                    stop:0 #2E7BC8, stop:1 #2568A8);
-            }}
-            QPushButton:disabled {{
-                background-color: #B0BEC5;
-            }}
-        """)
+        self._action_btn.setStyleSheet(StyleManager.dark_action_button())
         self._action_btn.clicked.connect(self._on_action_clicked)
         btn_layout.addWidget(self._action_btn)
 
@@ -1099,10 +1014,10 @@ class DuplicatesPage(QWidget):
 
         # Resolved summary (shown instead of interactive zone for resolved conflicts)
         self._resolved_summary_frame = QFrame()
-        self._resolved_summary_frame.setStyleSheet("""
-            QFrame { background: #F8FAFC; border-radius: 10px; border: 1px solid #E8EDF2; }
-            QLabel { background: transparent; border: none; }
-        """)
+        self._resolved_summary_frame.setStyleSheet(
+            StyleManager.data_card()
+            + " QLabel { background: transparent; border: none; }"
+        )
         self._resolved_summary_frame.setVisible(False)
         rs_layout = QVBoxLayout(self._resolved_summary_frame)
         rs_layout.setContentsMargins(16, 14, 16, 14)

@@ -44,6 +44,9 @@ from ui.components.dialogs import ExportDialog
 from ui.error_handler import ErrorHandler
 from ui.components.custom_button import CustomButton
 from ui.components.primary_button import PrimaryButton
+from ui.components.dark_header_zone import DarkHeaderZone
+from ui.components.stat_pill import StatPill
+from ui.components.accent_line import AccentLine
 from ui.design_system import PageDimensions, Colors, ButtonDimensions
 from ui.style_manager import StyleManager
 from ui.font_utils import create_font, FontManager
@@ -122,6 +125,51 @@ class AddBuildingPage(QWidget):
         main_layout.setContentsMargins(0, 0, 0, 0)
         main_layout.setSpacing(0)
 
+        # Dark header zone
+        self._header = DarkHeaderZone(self)
+        self._header.set_title(tr("page.buildings.building_info"))
+
+        # Close button in header
+        close_btn = QPushButton("✕")
+        close_btn.setCursor(Qt.PointingHandCursor)
+        close_btn.setFixedSize(ButtonDimensions.CLOSE_WIDTH, ButtonDimensions.CLOSE_HEIGHT)
+        close_btn_font = create_font(
+            size=ButtonDimensions.CLOSE_FONT_SIZE,
+            weight=QFont.Normal,
+            letter_spacing=0
+        )
+        close_btn.setFont(close_btn_font)
+        close_btn.setStyleSheet(StyleManager.refresh_button_dark())
+        close_btn.clicked.connect(self.cancelled.emit)
+        self._header.add_action_widget(close_btn)
+
+        # Save button in header
+        self._save_btn = QPushButton(" " + tr("button.save"))
+        save_btn = self._save_btn
+        save_btn.setCursor(Qt.PointingHandCursor)
+        save_btn.setFixedSize(ButtonDimensions.SAVE_WIDTH, ButtonDimensions.SAVE_HEIGHT)
+        import os
+        save_icon_path = os.path.join("assets", "images", "save.png")
+        if os.path.exists(save_icon_path):
+            save_btn.setIcon(QIcon(save_icon_path))
+            save_btn.setIconSize(QSize(ButtonDimensions.SAVE_ICON_SIZE, ButtonDimensions.SAVE_ICON_SIZE))
+        save_btn_font = create_font(
+            size=ButtonDimensions.SAVE_FONT_SIZE,
+            weight=QFont.Normal,
+            letter_spacing=0
+        )
+        save_btn.setFont(save_btn_font)
+        save_btn.setStyleSheet(StyleManager.refresh_button_dark())
+        save_btn.clicked.connect(self._on_save)
+        save_btn.setVisible(False)  # Read-only mode: no save button
+        self._header.add_action_widget(save_btn)
+
+        main_layout.addWidget(self._header)
+
+        # Accent line
+        self._accent_line = AccentLine()
+        main_layout.addWidget(self._accent_line)
+
         # Create scroll area for the form content
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
@@ -136,150 +184,19 @@ class AddBuildingPage(QWidget):
         # Container widget for scroll area
         container = QWidget()
         layout = QVBoxLayout(container)
-        # Apply unified padding from PageDimensions
         layout.setContentsMargins(
-            PageDimensions.content_padding_h(),        # Left: 131px
-            PageDimensions.content_padding_v_top(),    # Top: 32px
-            PageDimensions.content_padding_h(),        # Right: 131px
-            PageDimensions.CONTENT_PADDING_V_BOTTOM  # Bottom: 0px
+            PageDimensions.content_padding_h(),
+            14,
+            PageDimensions.content_padding_h(),
+            PageDimensions.CONTENT_PADDING_V_BOTTOM
         )
         layout.setSpacing(12)
 
         container.setStyleSheet(StyleManager.page_background())
-
-        # Header - matching wizard style
-        title_row = QHBoxLayout()
-        title_row.setSpacing(16)
-        title_row.setContentsMargins(0, 0, 0, 0)
-
-        # Title/Subtitle container (vertical) - RIGHT SIDE
-        title_subtitle_container = QVBoxLayout()
-        title_subtitle_container.setSpacing(4)
-
-        # Title
-        title_label = QLabel(tr("page.buildings.building_info"))
-        title_font = create_font(
-            size=FontManager.SIZE_TITLE,
-            weight=QFont.Bold,
-            letter_spacing=0
-        )
-        title_label.setFont(title_font)
-        title_label.setStyleSheet(f"color: {Colors.TEXT_PRIMARY}; border: none; background: transparent;")
-        title_subtitle_container.addWidget(title_label)
-
-        # Subtitle: "المباني  •  إضافة بناء جديد"
-        # Desktop/Body2
-        subtitle_layout = QHBoxLayout()
-        subtitle_layout.setSpacing(8)
-        subtitle_layout.setContentsMargins(0, 0, 0, 0)
-
-        subtitle_part1 = QLabel(tr("page.buildings.title"))
-        subtitle_font = create_font(
-            size=FontManager.SIZE_BODY,
-            weight=QFont.Normal,
-            letter_spacing=0
-        )
-        subtitle_part1.setFont(subtitle_font)
-        subtitle_part1.setStyleSheet(f"color: {Colors.TEXT_SECONDARY}; border: none; background: transparent;")
-        subtitle_layout.addWidget(subtitle_part1)
-
-        # Dot separator
-        dot_label = QLabel("•")
-        dot_label.setFont(subtitle_font)
-        dot_label.setStyleSheet(f"color: {Colors.TEXT_SECONDARY}; border: none; background: transparent;")
-        subtitle_layout.addWidget(dot_label)
-
-        # Part 2
-        subtitle_part2 = QLabel(tr("page.buildings.building_info"))
-        subtitle_part2.setFont(subtitle_font)
-        subtitle_part2.setStyleSheet(f"color: {Colors.TEXT_SECONDARY}; border: none; background: transparent;")
-        subtitle_layout.addWidget(subtitle_part2)
-
-        subtitle_layout.addStretch()
-        title_subtitle_container.addLayout(subtitle_layout)
-
-        title_row.addLayout(title_subtitle_container)
-        title_row.addStretch()
-
-        # Close button (X)
-        close_btn = QPushButton("✕")
-        close_btn.setCursor(Qt.PointingHandCursor)
-        close_btn.setFixedSize(ButtonDimensions.CLOSE_WIDTH, ButtonDimensions.CLOSE_HEIGHT)
-
-        close_btn_font = create_font(
-            size=ButtonDimensions.CLOSE_FONT_SIZE,
-            weight=QFont.Normal,
-            letter_spacing=0
-        )
-        close_btn.setFont(close_btn_font)
-
-        close_btn.setStyleSheet(f"""
-            QPushButton {{
-                background-color: {Colors.SURFACE};
-                color: {Colors.PRIMARY_BLUE};
-                border: 1px solid {Colors.BORDER_DEFAULT};
-                border-radius: {ButtonDimensions.CLOSE_BORDER_RADIUS}px;
-                padding: {ButtonDimensions.CLOSE_PADDING_V}px {ButtonDimensions.CLOSE_PADDING_H}px;
-            }}
-            QPushButton:hover {{
-                background-color: {Colors.BACKGROUND_LIGHT};
-            }}
-        """)
-        close_btn.clicked.connect(self.cancelled.emit)
-        title_row.addWidget(close_btn)
-
-        # Save button with icon
-        self._save_btn = QPushButton(" " + tr("button.save"))
-        save_btn = self._save_btn
-        save_btn.setCursor(Qt.PointingHandCursor)
-        save_btn.setFixedSize(ButtonDimensions.SAVE_WIDTH, ButtonDimensions.SAVE_HEIGHT)
-
-        # Load save icon
-        import os
-        save_icon_path = os.path.join("assets", "images", "save.png")
-        if os.path.exists(save_icon_path):
-            save_btn.setIcon(QIcon(save_icon_path))
-            save_btn.setIconSize(QSize(ButtonDimensions.SAVE_ICON_SIZE, ButtonDimensions.SAVE_ICON_SIZE))
-
-        save_btn_font = create_font(
-            size=ButtonDimensions.SAVE_FONT_SIZE,
-            weight=QFont.Normal,
-            letter_spacing=0
-        )
-        save_btn.setFont(save_btn_font)
-
-        save_btn.setStyleSheet(f"""
-            QPushButton {{
-                background-color: {Colors.PRIMARY_BLUE};
-                color: white;
-                border: none;
-                padding: {ButtonDimensions.SAVE_PADDING_V}px {ButtonDimensions.SAVE_PADDING_H}px;
-                border-radius: {ButtonDimensions.SAVE_BORDER_RADIUS}px;
-                font-family: 'IBM Plex Sans Arabic';
-                icon-size: {ButtonDimensions.SAVE_ICON_SIZE}px;
-            }}
-            QPushButton:hover {{
-                background-color: {ButtonDimensions.PRIMARY_HOVER_BG};
-            }}
-        """)
-        save_btn.clicked.connect(self._on_save)
-        save_btn.setVisible(False)  # Read-only mode: no save button
-        title_row.addWidget(save_btn)
-
-        layout.addLayout(title_row)
-
-        # مسافة بعد الهيدر قبل الكاردات
-        layout.addSpacing(24)
         # Same card style as wizard (building_selection_step.py)
         card1 = QFrame()
         card1.setObjectName("buildingCard")
-        card1.setStyleSheet("""
-            QFrame#buildingCard {
-                background-color: #FFFFFF;
-                border: 1px solid #E1E8ED;
-                border-radius: 12px;
-            }
-        """)
+        card1.setStyleSheet(StyleManager.form_card())
 
         card1_layout = QVBoxLayout(card1)
         # Padding: 12px from all sides (matching wizard)
@@ -350,59 +267,10 @@ class AddBuildingPage(QWidget):
         label_font = create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD)
 
         # Shared input style for QLineEdit fields
-        input_style = """
-            QLineEdit {
-                background-color: #F8FAFF;
-                border: 1px solid #dcdfe6;
-                border-radius: 8px;
-                padding: 8px 12px;
-                color: #606266;
-                font-size: 10pt;
-            }
-            QLineEdit:focus {
-                border: 1px solid #3890DF;
-            }
-        """
+        input_style = StyleManager.form_input_light()
 
-        # Shared combo style for dropdown fields (consistent with card 2 combos)
-        arrow_img = str(Config.IMAGES_DIR / "v.png").replace("\\", "/")
-        code_combo_style = f"""
-            QComboBox {{
-                padding: 6px 12px 6px 40px;
-                border: 1px solid #dcdfe6;
-                border-radius: 8px;
-                background-color: #F8FAFF;
-                font-size: 10pt;
-                color: #606266;
-            }}
-            QComboBox:focus {{
-                border: 1px solid #3890DF;
-            }}
-            QComboBox::drop-down {{
-                subcontrol-origin: padding;
-                subcontrol-position: center right;
-                width: 35px;
-                border: none;
-                margin-right: 5px;
-            }}
-            QComboBox::down-arrow {{
-                image: url({arrow_img});
-                width: 12px;
-                height: 12px;
-            }}
-            QComboBox QLineEdit {{
-                background-color: transparent;
-                border: none;
-                color: #606266;
-                font-size: 10pt;
-            }}
-            QComboBox QAbstractItemView {{
-                font-size: 10pt;
-                background-color: white;
-                selection-background-color: #3890DF;
-                selection-color: white;
-            }}
-        """
+        # Shared combo style for dropdown fields
+        code_combo_style = StyleManager.form_combo_light()
 
         # DivisionsService for cascading dropdowns
         self._divisions = DivisionsService()
@@ -547,54 +415,16 @@ class AddBuildingPage(QWidget):
 
         layout.addWidget(card1)
         card2 = QFrame()
-        card2.setStyleSheet(self._get_card_style())
+        card2.setStyleSheet(StyleManager.form_card())
         card2_layout = QHBoxLayout(card2)
-        card2_layout.setContentsMargins(12, 12, 12, 12)  # توحيد padding مع الكاردات الأخرى
+        card2_layout.setContentsMargins(12, 12, 12, 12)
         card2_layout.setSpacing(15)
 
         # Shared label font for card 2 (same as card 1)
         card2_label_font = create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD)
 
-        # Shared combobox style (same as unit_dialog.py - height 45px)
-        arrow_img2 = str(Config.IMAGES_DIR / "v.png").replace("\\", "/")
-        combo_style = f"""
-            QComboBox {{
-                padding: 0px 12px 0px 40px;
-                border: 1px solid #E1E8ED;
-                border-radius: 8px;
-                background-color: #F8FAFF;
-                font-size: 14px;
-                font-weight: 600;
-                color: #9CA3AF;
-            }}
-            QComboBox:focus {{
-                border-color: #3890DF;
-                border-width: 2px;
-            }}
-            QComboBox::drop-down {{
-                subcontrol-origin: padding;
-                subcontrol-position: center right;
-                width: 35px;
-                border: none;
-                margin-right: 5px;
-            }}
-            QComboBox::down-arrow {{
-                image: url({arrow_img2});
-                width: 12px;
-                height: 12px;
-                border: none;
-            }}
-            QComboBox QLineEdit {{
-                background-color: transparent;
-                border: none;
-                color: #9CA3AF;
-                font-size: 14px;
-                font-weight: 600;
-            }}
-            QComboBox QAbstractItemView {{
-                font-size: 14px;
-            }}
-        """
+        # Shared combobox style
+        combo_style = StyleManager.form_combo_light()
 
         # حالة البناء
         vbox_status = QVBoxLayout()
@@ -710,9 +540,9 @@ class AddBuildingPage(QWidget):
 
         layout.addWidget(card2)
 
-        # === CARD 3: موقع البناء === (نفس تنسيق building_selection_step.py بالضبط)
+        # === CARD 3: موقع البناء ===
         card3 = QFrame()
-        card3.setStyleSheet(self._get_card_style())
+        card3.setStyleSheet(StyleManager.form_card())
         card3_layout = QVBoxLayout(card3)
         card3_layout.setContentsMargins(12, 12, 12, 12)
         card3_layout.setSpacing(0)  # Manual spacing control
@@ -880,13 +710,10 @@ class AddBuildingPage(QWidget):
         self.docs_scroll.setFrameShape(QFrame.NoFrame)
         self.docs_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
         self.docs_scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        self.docs_scroll.setStyleSheet("""
-            QScrollArea {
-                background-color: #F8FAFF;
-                border: 1px solid #dcdfe6;
-                border-radius: 8px;
-            }
-        """)
+        self.docs_scroll.setStyleSheet(
+            "QScrollArea { background-color: #F8FAFF; border: 1px solid #dcdfe6; border-radius: 8px; }"
+            + StyleManager.scrollbar()
+        )
 
         self.docs_container = QWidget()
         self.docs_container.setStyleSheet("background: transparent;")
@@ -919,17 +746,8 @@ class AddBuildingPage(QWidget):
         self.general_desc = QTextEdit()
         self.general_desc.setPlaceholderText(tr("page.add_building.no_description"))
         self.general_desc.setReadOnly(True)
-        self.general_desc.setFixedHeight(130)  # نفس ارتفاع الخريطة
-        self.general_desc.setStyleSheet("""
-            QTextEdit {
-                background-color: #F8FAFF;
-                border: 1px solid #dcdfe6;
-                border-radius: 8px;
-                padding: 8px 12px;
-                color: #606266;
-                font-size: 10pt;
-            }
-        """)
+        self.general_desc.setFixedHeight(130)
+        self.general_desc.setStyleSheet(StyleManager.form_input_light())
 
         section_general.addWidget(lbl_general)
         section_general.addWidget(self.general_desc)
@@ -2320,35 +2138,40 @@ class BuildingsListPage(QWidget):
 
     def _setup_ui(self):
         """Setup buildings list UI."""
+        self.setStyleSheet("background: transparent;")
+
         layout = QVBoxLayout(self)
-        # Apply unified padding from PageDimensions
-        # Same as completed_claims_page.py and draft_claims_page.py
-        layout.setContentsMargins(
-            PageDimensions.content_padding_h(),        # Left: 131px
-            PageDimensions.content_padding_v_top(),    # Top: 32px
-            PageDimensions.content_padding_h(),        # Right: 131px
-            PageDimensions.CONTENT_PADDING_V_BOTTOM  # Bottom: 0px
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
+
+        # Dark header zone
+        self._header = DarkHeaderZone(self)
+        self._header.set_title(tr("page.buildings.title"))
+
+        self._stat_total = StatPill(tr("page.buildings.total"))
+        self._header.add_stat_pill(self._stat_total)
+
+        layout.addWidget(self._header)
+
+        # Accent line between header and content
+        self._accent_line = AccentLine()
+        layout.addWidget(self._accent_line)
+
+        # Light content area
+        content_wrapper = QWidget()
+        content_wrapper.setStyleSheet(StyleManager.page_background())
+        content_layout = QVBoxLayout(content_wrapper)
+        content_layout.setContentsMargins(
+            PageDimensions.content_padding_h(), 14,
+            PageDimensions.content_padding_h(),
+            PageDimensions.CONTENT_PADDING_V_BOTTOM
         )
-        layout.setSpacing(15)  # 15px gap between header and table card
+        content_layout.setSpacing(12)
 
-        # سطر العنوان والأزرار - المباني على اليسار والأزرار على اليمين
-        top_row = QHBoxLayout()
-        top_row.setSpacing(20)
-
-        # العنوان - unified page title styling (18pt, PAGE_TITLE color)
-        title = QLabel(tr("page.buildings.title"))
-        title.setFont(create_font(size=FontManager.SIZE_TITLE, weight=FontManager.WEIGHT_SEMIBOLD))
-        title.setStyleSheet(f"color: {Colors.PAGE_TITLE}; background: transparent; border: none;")
-        top_row.addWidget(title)
-
-        top_row.addStretch()
-
-        layout.addLayout(top_row)
-
-        # البطاقة البيضاء للجدول
+        # Table card
         table_card = QFrame()
         table_card.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-        table_card.setStyleSheet("background-color: white; border-radius: 16px;")
+        table_card.setStyleSheet(StyleManager.table_card())
         card_layout = QVBoxLayout(table_card)
         card_layout.setContentsMargins(10, 10, 10, 10)
 
@@ -2396,7 +2219,8 @@ class BuildingsListPage(QWidget):
 
         card_layout.addWidget(self._modern_table)
 
-        layout.addWidget(table_card)
+        content_layout.addWidget(table_card)
+        layout.addWidget(content_wrapper)
 
     def refresh(self):
         """Refresh list."""
@@ -2436,11 +2260,15 @@ class BuildingsListPage(QWidget):
         Toast.show_toast(self, tr("page.buildings.load_error"), Toast.ERROR)
         logger.error(f"Background load failed: {error_msg}")
         self._all_buildings = []
+        self._stat_total.set_count(0)
         self._modern_table.set_data([], 0)
 
     def _populate_table_from_buildings(self):
         """Apply filters, paginate, and feed data to ModernTable."""
         self._buildings = self._apply_filters(self._all_buildings)
+
+        # Update stat pill count
+        self._stat_total.set_count(len(self._all_buildings))
 
         total = len(self._buildings)
         self._total_pages = max(1, (total + self._rows_per_page - 1) // self._rows_per_page)
