@@ -66,60 +66,6 @@ _STATUS_BG = {
     12: "rgba(156,163,175,0.12)",
 }
 
-_DARK_COMBO_STYLE = """
-    QComboBox {
-        background: rgba(10, 22, 40, 140);
-        color: white;
-        border: 1px solid rgba(56, 144, 223, 35);
-        border-radius: 8px;
-        padding: 6px 12px;
-        font-size: 10pt;
-        min-width: 200px;
-    }
-    QComboBox:hover { border-color: rgba(56, 144, 223, 80); }
-    QComboBox::drop-down {
-        border: none;
-        width: 24px;
-    }
-    QComboBox::down-arrow {
-        image: none;
-        border-left: 4px solid transparent;
-        border-right: 4px solid transparent;
-        border-top: 5px solid rgba(255, 255, 255, 0.5);
-        margin-right: 8px;
-    }
-    QComboBox QAbstractItemView {
-        background: #0F1E36;
-        color: white;
-        border: 1px solid rgba(56, 144, 223, 40);
-        border-radius: 6px;
-        selection-background-color: rgba(56, 144, 223, 50);
-        outline: none;
-        padding: 4px;
-    }
-"""
-
-_ADD_BTN_STYLE = """
-    QPushButton {
-        background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
-            stop:0 #2E7BD6, stop:1 #3890DF);
-        color: white;
-        border: none;
-        border-radius: 8px;
-        padding: 7px 18px;
-        font-size: 10pt;
-        font-weight: 600;
-    }
-    QPushButton:hover {
-        background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
-            stop:0 #3688E3, stop:1 #4A9EED);
-    }
-    QPushButton:pressed {
-        background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
-            stop:0 #2568B8, stop:1 #2E7BD6);
-    }
-"""
-
 _NAV_BTN_STYLE = """
     QPushButton {{
         background: {bg};
@@ -135,14 +81,6 @@ _NAV_BTN_STYLE = """
         color: #B0BEC5;
         border-color: #DDE3EA;
     }}
-"""
-
-_TABLE_CARD_STYLE = """
-    QFrame#tableCard {
-        background-color: white;
-        border-radius: 16px;
-        border: 1px solid #E8EDF2;
-    }
 """
 
 
@@ -307,14 +245,14 @@ class ImportPackagesPage(QWidget):
         # Upload button
         self._upload_btn = QPushButton(tr("page.import_packages.process_new"))
         self._upload_btn.setCursor(Qt.PointingHandCursor)
-        self._upload_btn.setStyleSheet(_ADD_BTN_STYLE)
+        self._upload_btn.setStyleSheet(StyleManager.refresh_button_dark())
         self._upload_btn.clicked.connect(self._on_upload_clicked)
         self._header.add_action_widget(self._upload_btn)
 
         # Status filter combo in row2
         self._status_combo = QComboBox()
         self._status_combo.setLayoutDirection(get_layout_direction())
-        self._status_combo.setStyleSheet(_DARK_COMBO_STYLE)
+        self._status_combo.setStyleSheet(StyleManager.dark_combo_box())
         self._status_combo.addItem(tr("page.import_packages.all_statuses"), "")
         for code, label in vocab_get_options("import_status"):
             self._status_combo.addItem(label, str(code))
@@ -357,7 +295,7 @@ class ImportPackagesPage(QWidget):
         card = QFrame()
         card.setObjectName("tableCard")
         card.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-        card.setStyleSheet(_TABLE_CARD_STYLE)
+        card.setStyleSheet(StyleManager.table_card())
 
         shadow = QGraphicsDropShadowEffect(card)
         shadow.setBlurRadius(24)

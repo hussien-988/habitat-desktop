@@ -46,22 +46,58 @@ class PersonSearchDialog(QDialog):
         self._all_persons: List[Dict[str, Any]] = []
         self._selected_person: Optional[Dict[str, Any]] = None
 
+        self._slide_anim = None
         self.setModal(True)
-        self.setFixedSize(544, 600)
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.Dialog)
         self.setAttribute(Qt.WA_TranslucentBackground)
         self.setStyleSheet("QDialog { background-color: transparent; }")
         self.setLayoutDirection(get_layout_direction())
 
+        # Side-panel sizing
+        parent_rect = parent.window().geometry() if parent else None
+        if parent_rect:
+            pw = min(520, parent_rect.width() - 40)
+            ph = parent_rect.height() - 20
+        else:
+            pw = 520
+            ph = 640
+        self.setFixedSize(pw, ph)
+
         self._setup_ui()
 
-        # Defer API load so dialog renders first
         QTimer.singleShot(100, self._load_persons)
-    # UI
+
+    def showEvent(self, event):
+        """Side-panel slide-in."""
+        super().showEvent(event)
+        parent = self.parent()
+        if not parent:
+            return
+        try:
+            from PyQt5.QtCore import QPropertyAnimation, QEasingCurve, QPoint
+            parent_rect = parent.window().geometry()
+            is_rtl = get_layout_direction() == Qt.RightToLeft
+            pw = self.width()
+            pg = parent.window().mapToGlobal(parent.window().rect().topLeft())
+            if is_rtl:
+                tx = pg.x() + 10
+            else:
+                tx = pg.x() + parent_rect.width() - pw - 10
+            ty = pg.y() + (parent_rect.height() - self.height()) // 2
+            sx = tx + ((-pw) if is_rtl else pw)
+            self.move(sx, ty)
+            self._slide_anim = QPropertyAnimation(self, b"pos", self)
+            self._slide_anim.setDuration(250)
+            self._slide_anim.setStartValue(QPoint(sx, ty))
+            self._slide_anim.setEndValue(QPoint(tx, ty))
+            self._slide_anim.setEasingCurve(QEasingCurve.OutCubic)
+            self._slide_anim.start()
+        except Exception:
+            pass
 
     def _setup_ui(self):
         outer = QVBoxLayout(self)
-        outer.setContentsMargins(12, 12, 12, 12)
+        outer.setContentsMargins(8, 8, 8, 8)
         outer.setSpacing(0)
 
         card = QFrame()
@@ -69,7 +105,8 @@ class PersonSearchDialog(QDialog):
         card.setStyleSheet("""
             QFrame#SearchCard {
                 background-color: #FFFFFF;
-                border-radius: 24px;
+                border-radius: 16px;
+                border: 1px solid rgba(56, 144, 223, 0.10);
             }
             QFrame#SearchCard QLabel,
             QFrame#SearchCard QCheckBox {
@@ -77,23 +114,70 @@ class PersonSearchDialog(QDialog):
             }
         """)
         shadow = QGraphicsDropShadowEffect(card)
-        shadow.setBlurRadius(30)
-        shadow.setOffset(0, 4)
-        shadow.setColor(QColor(0, 0, 0, 40))
+        shadow.setBlurRadius(40)
+        shadow.setOffset(-4, 4)
+        shadow.setColor(QColor(10, 22, 40, 50))
         card.setGraphicsEffect(shadow)
         outer.addWidget(card)
 
-        main = QVBoxLayout(card)
-        main.setContentsMargins(24, 24, 24, 24)
-        main.setSpacing(14)
+        card_layout = QVBoxLayout(card)
+        card_layout.setContentsMargins(0, 0, 0, 0)
+        card_layout.setSpacing(0)
 
-        # Title
+        # Dark header
+        hdr = QFrame()
+        hdr.setFixedHeight(48)
+        hdr.setObjectName("SearchPanelHdr")
+        hdr.setStyleSheet("""
+            QFrame#SearchPanelHdr {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #0E2035, stop:1 #152F4E);
+                border-top-left-radius: 16px;
+                border-top-right-radius: 16px;
+            }
+        """)
+        hl = QHBoxLayout(hdr)
+        hl.setContentsMargins(20, 0, 20, 0)
+        hl.setSpacing(10)
+        close_btn = QPushButton("\u2715")
+        close_btn.setCursor(Qt.PointingHandCursor)
+        close_btn.setFixedSize(28, 28)
+        close_btn.setStyleSheet("""
+            QPushButton {
+                background: rgba(255, 255, 255, 0.08);
+                color: rgba(200, 220, 255, 0.85);
+                border: 1px solid rgba(56, 144, 223, 0.15);
+                border-radius: 7px;
+            }
+            QPushButton:hover { background: rgba(255, 255, 255, 0.15); color: white; }
+        """)
+        close_btn.clicked.connect(self.reject)
+        hl.addWidget(close_btn)
+        from ui.font_utils import create_font, FontManager
         title = QLabel(tr("person_search.title"))
-        title.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
-        title.setStyleSheet(
-            "font-size: 18px; font-weight: bold; color: #2c3e50; background: transparent;"
-        )
-        main.addWidget(title)
+        title.setFont(create_font(size=12, weight=FontManager.WEIGHT_SEMIBOLD))
+        title.setStyleSheet("color: white; background: transparent; border: none;")
+        hl.addWidget(title, 1)
+        card_layout.addWidget(hdr)
+
+        # Accent
+        acc = QFrame()
+        acc.setFixedHeight(2)
+        acc.setStyleSheet("""
+            QFrame { background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                stop:0 rgba(56, 144, 223, 0), stop:0.3 rgba(56, 144, 223, 100),
+                stop:0.5 rgba(91, 168, 240, 160), stop:0.7 rgba(56, 144, 223, 100),
+                stop:1 rgba(56, 144, 223, 0)); }
+        """)
+        card_layout.addWidget(acc)
+
+        # Content area
+        content = QWidget()
+        content.setStyleSheet("background: #FAFBFD;")
+        main = QVBoxLayout(content)
+        main.setContentsMargins(24, 18, 24, 18)
+        main.setSpacing(14)
+        card_layout.addWidget(content, 1)
 
         # Divider
         div = QFrame()

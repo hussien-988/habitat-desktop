@@ -12,7 +12,9 @@ from controllers.building_controller import BuildingController
 from services.translation_manager import tr, get_layout_direction
 from ui.design_system import Colors
 from ui.components.wizard_header import WizardHeader
+from ui.components.accent_line import AccentLine
 from ui.font_utils import create_font, FontManager
+from ui.style_manager import StyleManager
 from utils.i18n import I18n
 from utils.logger import get_logger
 
@@ -35,12 +37,16 @@ class FieldWorkPreparationPage(QWidget):
         self._setup_ui()
         self._create_steps()
 
+    _STEP_KEYS = [
+        "wizard.field_work.step_select_buildings",
+        "wizard.field_work.step_select_researcher",
+        "wizard.field_work.step_summary",
+    ]
+
     def _setup_ui(self):
-        """Setup UI layout."""
+        """Setup UI with dark wizard header and step pills."""
         self.setLayoutDirection(get_layout_direction())
 
-        # Background
-        from ui.style_manager import StyleManager
         self.setStyleSheet(StyleManager.page_background())
         outer_layout = QVBoxLayout(self)
         outer_layout.setContentsMargins(0, 0, 0, 0)
@@ -51,23 +57,29 @@ class FieldWorkPreparationPage(QWidget):
         content_layout = QVBoxLayout(content_container)
         from ui.design_system import PageDimensions
         content_layout.setContentsMargins(
-            PageDimensions.content_padding_h(),        # Left: 131px
-            PageDimensions.content_padding_v_top(),    # Top: 32px
-            PageDimensions.content_padding_h(),        # Right: 131px
-            0                                         # Bottom: 0
+            PageDimensions.content_padding_h(),
+            PageDimensions.content_padding_v_top(),
+            PageDimensions.content_padding_h(),
+            0
         )
         content_layout.setSpacing(0)
+
+        # Dark header with integrated step indicator pills
+        step_names = [tr(key) for key in self._STEP_KEYS]
         self.header = WizardHeader(
             title=tr("wizard.field_work.title"),
-            subtitle=tr("wizard.field_work.subtitle")
+            subtitle=tr("wizard.field_work.subtitle"),
+            steps=step_names,
         )
         content_layout.addWidget(self.header)
 
-        # No spacing - step1 will handle its own top spacing (15px)
-        self.step_container = QStackedWidget()
-        content_layout.addWidget(self.step_container, 1)  # Stretch to fill available space
+        # Accent line
+        self._accent = AccentLine()
+        content_layout.addWidget(self._accent)
 
-        # Add content to outer layout
+        self.step_container = QStackedWidget()
+        content_layout.addWidget(self.step_container, 1)
+
         outer_layout.addWidget(content_container, 1)
         footer = self._create_footer()
         outer_layout.addWidget(footer)
@@ -75,12 +87,7 @@ class FieldWorkPreparationPage(QWidget):
     def _create_footer(self):
         """Create footer with navigation buttons."""
         footer = QFrame()
-        footer.setStyleSheet("""
-            QFrame {
-                background-color: #FFFFFF;
-                border-top: 1px solid #E1E8ED;
-            }
-        """)
+        footer.setStyleSheet(StyleManager.nav_footer())
         footer.setFixedHeight(74)
 
         layout = QHBoxLayout(footer)
@@ -92,35 +99,9 @@ class FieldWorkPreparationPage(QWidget):
         self.btn_back.setFixedSize(252, 50)
         self.btn_back.setCursor(Qt.PointingHandCursor)
         self.btn_back.setFont(create_font(size=12, weight=FontManager.WEIGHT_SEMIBOLD))
-
-        shadow_back = QGraphicsDropShadowEffect()
-        shadow_back.setBlurRadius(8)
-        shadow_back.setXOffset(0)
-        shadow_back.setYOffset(2)
-        shadow_back.setColor(QColor("#E5EAF6"))
-        self.btn_back.setGraphicsEffect(shadow_back)
-
-        self.btn_back.setStyleSheet("""
-            QPushButton {
-                background-color: #FFFFFF;
-                color: #414D5A;
-                border: none;
-                border-radius: 8px;
-                font-size: 12pt;
-                font-weight: 600;
-                padding: 0;
-            }
-            QPushButton:hover {
-                background-color: #F8F9FA;
-            }
-            QPushButton:disabled {
-                background-color: transparent;
-                color: transparent;
-                border: none;
-            }
-        """)
+        self.btn_back.setStyleSheet(StyleManager.nav_button_secondary())
         self.btn_back.clicked.connect(self._on_back)
-        self.btn_back.setEnabled(False)  # Disabled on Step 1
+        self.btn_back.setEnabled(False)
         layout.addWidget(self.btn_back)
 
         layout.addStretch()
@@ -130,35 +111,9 @@ class FieldWorkPreparationPage(QWidget):
         self.btn_next.setFixedSize(252, 50)
         self.btn_next.setCursor(Qt.PointingHandCursor)
         self.btn_next.setFont(create_font(size=12, weight=FontManager.WEIGHT_SEMIBOLD))
-
-        shadow_next = QGraphicsDropShadowEffect()
-        shadow_next.setBlurRadius(8)
-        shadow_next.setXOffset(0)
-        shadow_next.setYOffset(2)
-        shadow_next.setColor(QColor("#E5EAF6"))
-        self.btn_next.setGraphicsEffect(shadow_next)
-
-        self.btn_next.setStyleSheet(f"""
-            QPushButton {{
-                background-color: {Colors.PRIMARY_BLUE};
-                color: white;
-                border: none;
-                border-radius: 8px;
-                font-size: 12pt;
-                font-weight: 600;
-                padding: 0;
-            }}
-            QPushButton:hover {{
-                background-color: #2A7BC8;
-            }}
-            QPushButton:disabled {{
-                background-color: #F8F9FA;
-                color: #9CA3AF;
-                border: none;
-            }}
-        """)
+        self.btn_next.setStyleSheet(StyleManager.nav_button_primary())
         self.btn_next.clicked.connect(self._on_next)
-        self.btn_next.setEnabled(False)  # Initially disabled
+        self.btn_next.setEnabled(False)
         layout.addWidget(self.btn_next)
 
         return footer
@@ -191,6 +146,11 @@ class FieldWorkPreparationPage(QWidget):
         """Load filter data for step 1 (call after login)."""
         if self.step1:
             self.step1.load_data()
+
+    def _load_filter_data_async(self):
+        """Load filter data for step 1 in background (non-blocking)."""
+        if self.step1 and hasattr(self.step1, '_load_filter_data_async'):
+            self.step1._load_filter_data_async()
 
     def _on_back(self):
         """Handle back button."""
@@ -273,7 +233,9 @@ class FieldWorkPreparationPage(QWidget):
             self.refresh()
 
     def _update_navigation(self):
-        """Update navigation buttons based on current step."""
+        """Update navigation buttons and step indicator."""
+        self.header.set_current_step(min(self.current_step, len(self._STEP_KEYS) - 1))
+
         if self.current_step == 0:
             self.btn_back.setEnabled(False)
             self.btn_next.setText(tr("wizard.field_work.btn_next"))
@@ -368,6 +330,8 @@ class FieldWorkPreparationPage(QWidget):
         self.setLayoutDirection(get_layout_direction())
         self.header.set_title(tr("wizard.field_work.title"))
         self.header.set_subtitle(tr("wizard.field_work.subtitle"))
+        step_names = [tr(key) for key in self._STEP_KEYS]
+        self.header.set_steps(step_names)
         self.btn_back.setText(tr("wizard.field_work.btn_back"))
         self._update_navigation()
         if self.step1 and hasattr(self.step1, 'update_language'):

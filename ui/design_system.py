@@ -871,13 +871,13 @@ class BottomSheetDimensions:
     BORDER_RADIUS = 20
     HANDLE_WIDTH = 40
     HANDLE_HEIGHT = 4
-    HANDLE_COLOR = "#CBD5E1"
+    HANDLE_COLOR = "rgba(120, 170, 220, 0.45)"
     HANDLE_MARGIN_TOP = 12
     PADDING_H = 28
     PADDING_V = 24
     MAX_WIDTH = 480
-    BG = Colors.SURFACE
-    SHADOW = "0 -8px 30px rgba(0, 0, 0, 0.12)"
+    BG = "#162D4A"
+    SHADOW = "0 -8px 30px rgba(0, 0, 0, 0.25)"
     BUTTON_HEIGHT = 48
     BUTTON_RADIUS = 10
     BUTTON_GAP = 12

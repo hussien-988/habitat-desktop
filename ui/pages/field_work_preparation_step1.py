@@ -193,6 +193,65 @@ class FieldWorkPreparationStep1(QWidget):
         """Load filter data from API (call after login)."""
         self._load_filter_data()
 
+    def _load_filter_data_async(self):
+        """Load filter data from API in background thread (non-blocking)."""
+        api = get_api_client()
+
+        def _fetch():
+            communities = api.get_communities(
+                governorate_code="01", district_code="01", sub_district_code="01"
+            )
+            neighborhoods = api.get_neighborhoods(
+                governorate_code="01", district_code="01", subdistrict_code="01"
+            )
+            return communities, neighborhoods
+
+        def _on_done(result):
+            communities, neighborhoods = result
+            self._all_communities = []
+            self._all_neighborhoods = []
+
+            for c in communities:
+                if c.get("isActive", True):
+                    code = c.get("code", "")
+                    name_ar = c.get("nameArabic", "") or c.get("nameEnglish", "")
+                    if code and name_ar:
+                        self._all_communities.append((code, name_ar))
+            self._all_communities.sort(key=lambda x: x[1])
+
+            self.community_combo.blockSignals(True)
+            self.community_combo.clear()
+            self.community_combo.addItem(tr("wizard.step1.all"), None)
+            for code, name_ar in self._all_communities:
+                self.community_combo.addItem(name_ar, code)
+            self.community_combo.blockSignals(False)
+
+            for n in neighborhoods:
+                code = n.get("neighborhoodCode") or n.get("code", "")
+                name_ar = n.get("nameArabic", "") or n.get("nameEnglish", "")
+                comm_code = n.get("communityCode", "")
+                if code and name_ar:
+                    self._all_neighborhoods.append((code, name_ar, comm_code))
+            self._all_neighborhoods.sort(key=lambda x: x[1])
+
+            self.neighborhood_combo.clear()
+            self.neighborhood_combo.addItem(tr("wizard.step1.all"), None)
+            for code, name_ar, _ in self._all_neighborhoods:
+                self.neighborhood_combo.addItem(name_ar, code)
+
+            logger.info(
+                f"Loaded {len(self._all_communities)} communities, "
+                f"{len(self._all_neighborhoods)} neighborhoods from API (async)"
+            )
+
+        def _on_error(msg):
+            logger.error(f"Error loading filter data from API (async): {msg}")
+
+        self._filter_data_worker = ApiWorker(_fetch)
+        self._filter_data_worker.finished.connect(_on_done)
+        self._filter_data_worker.error.connect(_on_error)
+        self._filter_data_worker.start()
+
     def _setup_ui(self):
         """Setup UI - content only (no header/footer)."""
         self.setLayoutDirection(get_layout_direction())

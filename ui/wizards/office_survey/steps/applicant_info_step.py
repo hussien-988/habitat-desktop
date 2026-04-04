@@ -2,9 +2,8 @@
 """
 Applicant Info Step - Step 1 of Office Survey Wizard.
 
-Single-page form (no tabs). White rounded card with drop shadow.
-Fields: first/last/father/mother name, birth year, gender, nationality,
-        national ID, mobile (+963|09), landline, ID photo, in-person visit.
+Single-page form with grouped sections: Personal Info, Contact Details,
+Visit Type, ID Photos. White rounded card with left blue accent.
 
 collect_data() stores context.applicant with backward-compat "full_name" key.
 """
@@ -26,6 +25,7 @@ from ui.wizards.framework import BaseStep, StepValidationResult
 from ui.wizards.office_survey.survey_context import SurveyContext
 from ui.wizards.office_survey.wizard_styles import (
     STEP_CARD_STYLE, FORM_FIELD_STYLE,
+    make_step_card, make_icon_header, make_divider, make_sub_section_header,
 )
 from ui.design_system import Colors
 from ui.font_utils import create_font, FontManager
@@ -41,7 +41,7 @@ logger = get_logger(__name__)
 
 
 class ApplicantInfoStep(BaseStep):
-    """Step 1: Applicant (Visitor) Information — single-page form."""
+    """Step 1: Applicant (Visitor) Information — grouped-section form."""
 
     def __init__(self, context: SurveyContext, parent=None):
         super().__init__(context, parent)
@@ -49,7 +49,6 @@ class ApplicantInfoStep(BaseStep):
         self._field_styles: dict = {}
         from services.api_client import get_api_client
         self._api_client = get_api_client()
-    # UI construction
 
     def setup_ui(self):
         self.main_layout.setContentsMargins(0, 4, 0, 16)
@@ -65,39 +64,39 @@ class ApplicantInfoStep(BaseStep):
             + StyleManager.scrollbar()
         )
 
-        # White rounded card with drop shadow
-        card = QFrame()
-        card.setObjectName("StepCard")
-        card.setStyleSheet(STEP_CARD_STYLE)
-        shadow = QGraphicsDropShadowEffect(card)
-        shadow.setBlurRadius(20)
-        shadow.setOffset(0, 4)
-        shadow.setColor(QColor(0, 0, 0, 20))
-        card.setGraphicsEffect(shadow)
-
+        card = make_step_card()
         card_layout = QVBoxLayout(card)
-        card_layout.setContentsMargins(24, 24, 24, 24)
-        card_layout.setSpacing(16)
-        card_layout.setDirection(QVBoxLayout.TopToBottom)
+        card_layout.setContentsMargins(28, 28, 28, 28)
+        card_layout.setSpacing(20)
 
         # Icon header
-        card_layout.addLayout(self._make_icon_header(
+        card_layout.addLayout(make_icon_header(
             title=tr("wizard.step.applicant_info"),
             subtitle=tr("wizard.applicant.card_subtitle"),
             icon_name="user",
         ))
+        card_layout.addWidget(make_divider())
 
-        # Divider
-        div = QFrame()
-        div.setFrameShape(QFrame.HLine)
-        div.setFixedHeight(1)
-        div.setStyleSheet("border: none; background-color: #e1e8ee;")
-        card_layout.addWidget(div)
+        # Section 1: Personal Information
+        card_layout.addWidget(make_sub_section_header(tr("wizard.section.personal_info")))
+        card_layout.addLayout(self._build_personal_section())
 
-        # Form grid
-        card_layout.addLayout(self._build_form())
+        # Section 2: Contact Details
+        card_layout.addWidget(make_sub_section_header(tr("wizard.section.contact_details")))
+        card_layout.addLayout(self._build_contact_section())
 
-        # Wrap card in container to allow stretching below
+        # Section 3: Visit Type
+        card_layout.addWidget(make_sub_section_header(tr("wizard.section.visit_type")))
+        card_layout.addLayout(self._build_visit_section())
+
+        # Section 4: ID Photos
+        card_layout.addWidget(make_sub_section_header(tr("wizard.section.id_photos")))
+        self._id_upload_frame = self._create_upload_frame(
+            self._browse_files, "id_upload",
+            button_text=tr("wizard.person_dialog.attach_id_photos"),
+        )
+        card_layout.addWidget(self._id_upload_frame)
+
         container = QWidget()
         container.setStyleSheet("background: transparent;")
         wrap = QVBoxLayout(container)
@@ -109,52 +108,47 @@ class ApplicantInfoStep(BaseStep):
         scroll.setWidget(container)
         self.main_layout.addWidget(scroll)
 
-        # Loading spinner overlay
         self._spinner = LoadingSpinnerOverlay(self)
 
-    def _build_form(self) -> QGridLayout:
+    def _build_personal_section(self) -> QGridLayout:
         grid = QGridLayout()
-        grid.setHorizontalSpacing(14)
-        grid.setVerticalSpacing(10)
+        grid.setHorizontalSpacing(16)
+        grid.setVerticalSpacing(12)
         grid.setColumnStretch(0, 1)
         grid.setColumnStretch(1, 1)
 
         _name_v = QRegExpValidator(QtRegExp("[\u0600-\u06FFa-zA-Z\\s.\\-']+"))
         row = 0
 
-        # --- Row 1: الاسم الأول | الكنية ---
+        # Row 1: First Name | Father Name
         grid.addWidget(self._lbl(tr("wizard.person_dialog.first_name") + " *"), row, 0)
-        grid.addWidget(self._lbl(tr("wizard.person_dialog.last_name") + " *"), row, 1)
+        grid.addWidget(self._lbl(tr("wizard.person_dialog.father_name") + " *"), row, 1)
         row += 1
 
         self.first_name = self._field(tr("wizard.person_dialog.first_name_placeholder"), _name_v)
         self._first_name_error = self._err_lbl()
-        fn_box = self._field_box(self.first_name, self._first_name_error)
-        grid.addLayout(fn_box, row, 0)
-
-        self.last_name = self._field(tr("wizard.person_dialog.last_name_placeholder"), _name_v)
-        self._last_name_error = self._err_lbl()
-        ln_box = self._field_box(self.last_name, self._last_name_error)
-        grid.addLayout(ln_box, row, 1)
-        row += 1
-
-        # --- Row 2: اسم الأب | اسم الأم ---
-        grid.addWidget(self._lbl(tr("wizard.person_dialog.father_name") + " *"), row, 0)
-        grid.addWidget(self._lbl(tr("wizard.person_dialog.mother_name") + " *"), row, 1)
-        row += 1
+        grid.addLayout(self._field_box(self.first_name, self._first_name_error), row, 0)
 
         self.father_name = self._field(tr("wizard.person_dialog.father_name_placeholder"), _name_v)
         self._father_name_error = self._err_lbl()
-        fn_box = self._field_box(self.father_name, self._father_name_error)
-        grid.addLayout(fn_box, row, 0)
+        grid.addLayout(self._field_box(self.father_name, self._father_name_error), row, 1)
+        row += 1
+
+        # Row 2: Last Name | Mother Name
+        grid.addWidget(self._lbl(tr("wizard.person_dialog.last_name") + " *"), row, 0)
+        grid.addWidget(self._lbl(tr("wizard.person_dialog.mother_name") + " *"), row, 1)
+        row += 1
+
+        self.last_name = self._field(tr("wizard.person_dialog.last_name_placeholder"), _name_v)
+        self._last_name_error = self._err_lbl()
+        grid.addLayout(self._field_box(self.last_name, self._last_name_error), row, 0)
 
         self.mother_name = self._field(tr("wizard.person_dialog.mother_name_placeholder"), _name_v)
         self._mother_name_error = self._err_lbl()
-        mn_box = self._field_box(self.mother_name, self._mother_name_error)
-        grid.addLayout(mn_box, row, 1)
+        grid.addLayout(self._field_box(self.mother_name, self._mother_name_error), row, 1)
         row += 1
 
-        # --- Row 3: تاريخ الميلاد | الجنس ---
+        # Row 3: Birth Date | Gender
         grid.addWidget(self._lbl(tr("wizard.person_dialog.birth_date")), row, 0)
         grid.addWidget(self._lbl(tr("wizard.person_dialog.gender")), row, 1)
         row += 1
@@ -200,7 +194,7 @@ class ApplicantInfoStep(BaseStep):
         grid.addWidget(self.gender, row, 1)
         row += 1
 
-        # --- Row 4: الجنسية | الرقم الوطني ---
+        # Row 4: Nationality | National ID
         grid.addWidget(self._lbl(tr("wizard.person_dialog.nationality")), row, 0)
         grid.addWidget(self._lbl(tr("wizard.person_dialog.national_id")), row, 1)
         row += 1
@@ -214,18 +208,29 @@ class ApplicantInfoStep(BaseStep):
 
         self.national_id = self._field("0000000000", QRegExpValidator(QtRegExp(r"\d{0,11}")))
         self._nid_error = self._err_lbl()
-        nid_box = self._field_box(self.national_id, self._nid_error)
-        grid.addLayout(nid_box, row, 1)
-        row += 1
+        grid.addLayout(self._field_box(self.national_id, self._nid_error), row, 1)
 
-        # --- Row 5: رقم الجوال (full width) ---
-        grid.addWidget(self._lbl(tr("wizard.person_dialog.mobile")), row, 0, 1, 2)
-        row += 1
+        # Connect clear-error signals
+        self.first_name.textChanged.connect(lambda: self._clear_err(self.first_name, self._first_name_error))
+        self.last_name.textChanged.connect(lambda: self._clear_err(self.last_name, self._last_name_error))
+        self.father_name.textChanged.connect(lambda: self._clear_err(self.father_name, self._father_name_error))
+        self.mother_name.textChanged.connect(lambda: self._clear_err(self.mother_name, self._mother_name_error))
+        self.national_id.textChanged.connect(lambda: self._clear_err(self.national_id, self._nid_error))
+
+        return grid
+
+    def _build_contact_section(self) -> QVBoxLayout:
+        layout = QVBoxLayout()
+        layout.setSpacing(12)
+        layout.setContentsMargins(0, 0, 0, 0)
+
+        # Mobile number
+        layout.addWidget(self._lbl(tr("wizard.person_dialog.mobile")))
         mobile_container = QFrame()
         mobile_container.setStyleSheet(f"""
             QFrame {{
                 border: 1.5px solid #D0D7E2;
-                border-radius: 8px;
+                border-radius: 10px;
                 background-color: #FFFFFF;
             }}
             QFrame:focus-within {{ border: 1.5px solid {Colors.PRIMARY_BLUE}; }}
@@ -252,7 +257,8 @@ class ApplicantInfoStep(BaseStep):
         self.phone.setStyleSheet("""
             QLineEdit {
                 border: none; background: transparent;
-                padding: 8px 12px; font-size: 10pt; color: #2C3E50;
+                padding: 10px 14px; font-size: 10pt; color: #2C3E50;
+                min-height: 30px;
             }
         """)
         mob_layout.addWidget(prefix_lbl)
@@ -263,45 +269,34 @@ class ApplicantInfoStep(BaseStep):
         mob_outer.setContentsMargins(0, 0, 0, 0)
         mob_outer.addWidget(mobile_container)
         mob_outer.addWidget(self._mobile_error)
-        grid.addLayout(mob_outer, row, 0, 1, 2)
-        row += 1
+        layout.addLayout(mob_outer)
 
-        # --- Row 6: رقم الهاتف الثابت (full width) ---
-        grid.addWidget(self._lbl(tr("wizard.person_dialog.phone")), row, 0, 1, 2)
-        row += 1
+        # Landline
+        layout.addWidget(self._lbl(tr("wizard.person_dialog.phone")))
         self.landline = self._field("0000000", QRegExpValidator(QtRegExp(r"\d{0,7}")))
         self._landline_error = self._err_lbl()
         land_box = self._field_box(self.landline, self._landline_error)
-        grid.addLayout(land_box, row, 0, 1, 2)
-        row += 1
+        layout.addLayout(land_box)
 
-        # --- Row 7: ID photo upload (full width) ---
-        grid.addWidget(self._lbl(tr("wizard.person_dialog.attach_id_photos")), row, 0, 1, 2)
-        row += 1
-        self._id_upload_frame = self._create_upload_frame(
-            self._browse_files, "id_upload",
-            button_text=tr("wizard.person_dialog.attach_id_photos"),
-        )
-        grid.addWidget(self._id_upload_frame, row, 0, 1, 2)
-        row += 1
+        self.phone.textChanged.connect(lambda: self._clear_err(self.phone, self._mobile_error))
+        self.landline.textChanged.connect(lambda: self._clear_err(self.landline, self._landline_error))
 
-        # --- Row 8: زيارة حضورية (checkbox) ---
+        return layout
+
+    def _build_visit_section(self) -> QHBoxLayout:
+        layout = QHBoxLayout()
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(16)
+
         self.in_person_check = QCheckBox(tr("wizard.applicant.in_person"))
         self.in_person_check.setFont(create_font(size=FontManager.WIZARD_CARD_LABEL, weight=FontManager.WEIGHT_REGULAR))
         self.in_person_check.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent;")
         self.in_person_check.setChecked(True)
-        grid.addWidget(self.in_person_check, row, 0, 1, 2)
+        layout.addWidget(self.in_person_check)
+        layout.addStretch()
 
-        # Connect clear-error signals
-        self.first_name.textChanged.connect(lambda: self._clear_err(self.first_name, self._first_name_error))
-        self.last_name.textChanged.connect(lambda: self._clear_err(self.last_name, self._last_name_error))
-        self.father_name.textChanged.connect(lambda: self._clear_err(self.father_name, self._father_name_error))
-        self.mother_name.textChanged.connect(lambda: self._clear_err(self.mother_name, self._mother_name_error))
-        self.national_id.textChanged.connect(lambda: self._clear_err(self.national_id, self._nid_error))
-        self.phone.textChanged.connect(lambda: self._clear_err(self.phone, self._mobile_error))
-        self.landline.textChanged.connect(lambda: self._clear_err(self.landline, self._landline_error))
+        return layout
 
-        return grid
     # File upload helpers
 
     def _browse_files(self):
@@ -336,34 +331,35 @@ class ApplicantInfoStep(BaseStep):
 
     def _create_thumbnail_widget(self, file_path: str, remove_callback) -> QWidget:
         container = QWidget()
-        container.setFixedSize(48, 48)
+        container.setFixedSize(52, 52)
         container.setStyleSheet("border: none; background: transparent;")
 
         thumb = QLabel(container)
-        thumb.setFixedSize(44, 44)
+        thumb.setFixedSize(48, 48)
         thumb.move(4, 4)
         thumb.setAlignment(Qt.AlignCenter)
         thumb.setStyleSheet("""
             QLabel {
-                border: 1px solid #E0E6ED; border-radius: 6px;
-                background-color: #FFFFFF;
+                border: 1px solid #DBEAFE; border-radius: 8px;
+                background-color: #F8FAFF;
             }
         """)
         thumb.setCursor(Qt.PointingHandCursor)
         px = QPixmap(file_path)
         if not px.isNull():
-            thumb.setPixmap(px.scaled(40, 40, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+            thumb.setPixmap(px.scaled(44, 44, Qt.KeepAspectRatio, Qt.SmoothTransformation))
         else:
-            thumb.setText("📄")
+            thumb.setText("PDF")
+            thumb.setStyleSheet(thumb.styleSheet() + "font-size: 9pt; color: #64748B;")
+
         def _open_file(event, fp=file_path):
             QDesktopServices.openUrl(QUrl.fromLocalFile(fp))
-
         thumb.mousePressEvent = _open_file
 
         x_btn = QLabel(container)
         x_btn.setFixedSize(18, 18)
         x_btn.move(0, 0)
-        x_btn.setText("✕")
+        x_btn.setText("\u2715")
         x_btn.setAlignment(Qt.AlignCenter)
         x_btn.setStyleSheet("""
             QLabel {
@@ -374,57 +370,13 @@ class ApplicantInfoStep(BaseStep):
         x_btn.setCursor(Qt.PointingHandCursor)
         x_btn.mousePressEvent = lambda e, fp=file_path: remove_callback(fp)
         return container
+
     # Widget factory helpers
-
-    @staticmethod
-    def _make_icon_header(title: str, subtitle: str, icon_name: str) -> QHBoxLayout:
-        """Build icon + (title / subtitle) header row."""
-        from ui.components.icon import Icon
-
-        row = QHBoxLayout()
-        row.setSpacing(10)
-        row.setContentsMargins(0, 0, 0, 0)
-
-        icon_lbl = QLabel()
-        icon_lbl.setFixedSize(40, 40)
-        icon_lbl.setAlignment(Qt.AlignCenter)
-        icon_lbl.setStyleSheet("""
-            QLabel {
-                background-color: #EBF5FF;
-                border: 1px solid #DBEAFE;
-                border-radius: 10px;
-            }
-        """)
-        px = Icon.load_pixmap(icon_name, size=24)
-        if px and not px.isNull():
-            icon_lbl.setPixmap(px)
-        else:
-            icon_lbl.setStyleSheet(icon_lbl.styleSheet() + "font-size: 16px;")
-            icon_lbl.setText("\U0001F464")
-
-        row.addWidget(icon_lbl)
-
-        col = QVBoxLayout()
-        col.setSpacing(1)
-
-        t = QLabel(title)
-        t.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
-        t.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent;")
-
-        s = QLabel(subtitle)
-        s.setFont(create_font(size=10, weight=FontManager.WEIGHT_REGULAR))
-        s.setStyleSheet(f"color: {Colors.WIZARD_SUBTITLE}; background: transparent;")
-
-        col.addWidget(t)
-        col.addWidget(s)
-        row.addLayout(col)
-        row.addStretch()
-        return row
 
     def _lbl(self, text: str) -> QLabel:
         lbl = QLabel(text)
-        lbl.setFont(create_font(size=FontManager.WIZARD_CARD_LABEL, weight=FontManager.WEIGHT_SEMIBOLD))
-        lbl.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent;")
+        lbl.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
+        lbl.setStyleSheet("color: #64748B; background: transparent; border: none;")
         return lbl
 
     def _field(self, placeholder: str, validator=None) -> QLineEdit:
@@ -456,21 +408,25 @@ class ApplicantInfoStep(BaseStep):
 
         frame = QFrame()
         frame.setObjectName(obj_name)
-        frame.setMinimumHeight(55)
+        frame.setMinimumHeight(60)
         frame.setStyleSheet(f"""
             QFrame#{obj_name} {{
-                border: 2px dashed rgba(56, 144, 223, 0.4);
-                border-radius: 8px;
+                border: 2px dashed rgba(56, 144, 223, 0.35);
+                border-radius: 12px;
                 background-color: #F8FAFF;
+            }}
+            QFrame#{obj_name}:hover {{
+                border-color: rgba(56, 144, 223, 0.6);
+                background-color: #EBF5FF;
             }}
         """)
         frame_layout = QVBoxLayout(frame)
-        frame_layout.setContentsMargins(12, 8, 12, 8)
-        frame_layout.setSpacing(6)
+        frame_layout.setContentsMargins(16, 10, 16, 10)
+        frame_layout.setSpacing(8)
 
         row_layout = QHBoxLayout()
         row_layout.setContentsMargins(0, 0, 0, 0)
-        row_layout.setSpacing(6)
+        row_layout.setSpacing(8)
 
         thumbnails_container = QWidget()
         thumbnails_container.setStyleSheet("border: none; background: transparent;")
@@ -481,15 +437,15 @@ class ApplicantInfoStep(BaseStep):
         row_layout.addStretch()
 
         icon_lbl = QLabel()
-        icon_lbl.setFixedSize(22, 22)
+        icon_lbl.setFixedSize(24, 24)
         icon_lbl.setAlignment(Qt.AlignCenter)
         icon_lbl.setStyleSheet("border: none; background: transparent;")
-        up_px = Icon.load_pixmap("upload_file", size=20)
+        up_px = Icon.load_pixmap("upload_file", size=22)
         if up_px and not up_px.isNull():
             icon_lbl.setPixmap(up_px)
         else:
-            icon_lbl.setText("📎")
-            icon_lbl.setStyleSheet("border: none; font-size: 16px; background: transparent;")
+            icon_lbl.setText("+")
+            icon_lbl.setStyleSheet("border: none; font-size: 18px; color: #3890DF; background: transparent;")
         icon_lbl.setCursor(Qt.PointingHandCursor)
         icon_lbl.mousePressEvent = lambda e: browse_callback()
         row_layout.addWidget(icon_lbl)
@@ -497,11 +453,11 @@ class ApplicantInfoStep(BaseStep):
         text_btn = QPushButton(button_text or tr("wizard.person_dialog.attach_id_photos"))
         text_btn.setStyleSheet("""
             QPushButton {
-                color: #4a90e2; text-decoration: underline;
+                color: #3890DF; text-decoration: underline;
                 border: none; background: transparent;
-                font-size: 12px; font-weight: 500; padding: 0px;
+                font-size: 10pt; font-weight: 600; padding: 0px;
             }
-            QPushButton:hover { color: #357ABD; }
+            QPushButton:hover { color: #2E7BD6; }
         """)
         text_btn.setCursor(Qt.PointingHandCursor)
         text_btn.clicked.connect(browse_callback)
@@ -513,6 +469,7 @@ class ApplicantInfoStep(BaseStep):
         frame._thumbnails_layout = thumbnails_layout
         frame._text_btn = text_btn
         return frame
+
     # Style helpers
 
     def _input_style(self) -> str:
@@ -525,12 +482,12 @@ class ApplicantInfoStep(BaseStep):
         return f"""
             QLineEdit, QComboBox, QSpinBox {{
                 border: 2px solid {Colors.ERROR};
-                border-radius: 8px;
-                padding: 8px 12px;
+                border-radius: 10px;
+                padding: 8px 14px;
                 background-color: #FFF5F5;
                 color: #2C3E50;
                 font-size: 10pt;
-                min-height: 26px;
+                min-height: 30px;
             }}
         """
 
@@ -545,12 +502,13 @@ class ApplicantInfoStep(BaseStep):
         field.setStyleSheet(self._field_styles.get(field, self._input_style()))
         error_lbl.setText("")
         error_lbl.setVisible(False)
+
     # BaseStep interface
 
     def validate(self) -> StepValidationResult:
         result = StepValidationResult(is_valid=True, errors=[])
 
-        # 1. Local validation — required fields
+        # 1. Local validation
         if not self.first_name.text().strip():
             self._set_err(self.first_name, self._first_name_error)
             result.add_error(tr("wizard.applicant.first_name_required"))
@@ -564,7 +522,6 @@ class ApplicantInfoStep(BaseStep):
             self._set_err(self.mother_name, self._mother_name_error)
             result.add_error(tr("wizard.applicant.mother_name_required"))
 
-        # Optional field format validation
         phone_text = self.phone.text().strip()
         if phone_text and len(phone_text) != 8:
             self._set_err(self.phone, self._mobile_error)
@@ -600,7 +557,7 @@ class ApplicantInfoStep(BaseStep):
 
         self._spinner.show_loading(tr("component.loading.default"))
         try:
-            # 5. Call API (skip if contact person already created for this survey)
+            # 5. Call API
             existing_cp_id = self.context.get_data("contact_person_id")
             if not existing_cp_id:
                 try:
@@ -629,7 +586,7 @@ class ApplicantInfoStep(BaseStep):
                         logger.error(f"Contact person update failed: {e}")
                         result.add_error(tr("wizard.applicant.update_failed"))
 
-            # 6. Upload ID photos (if any and not already uploaded)
+            # 6. Upload ID photos
             person_id = self.context.get_data("contact_person_id")
             if person_id and self.uploaded_files:
                 already_uploaded = set(self.context.get_data("uploaded_id_photos") or [])
@@ -648,10 +605,10 @@ class ApplicantInfoStep(BaseStep):
                         Toast.show_toast(self, tr("wizard.applicant.load_failed"), Toast.ERROR)
                 self.context.update_data("uploaded_id_photos", list(already_uploaded))
 
-            # 7. Cache contact person locally for draft resume
+            # 7. Cache contact person locally
             self._save_contact_person_locally(survey_id)
 
-            # 8. Save intervieweeName so it appears in the surveys list
+            # 8. Save intervieweeName
             try:
                 a = self.context.applicant or {}
                 parts = [a.get("first_name_ar", ""), a.get("father_name_ar", ""), a.get("last_name_ar", "")]
@@ -685,7 +642,6 @@ class ApplicantInfoStep(BaseStep):
         fat = self.father_name.text().strip()
         ln  = self.last_name.text().strip()
 
-        # Build birth_date from 3 combos
         y = self.birth_year_combo.currentData()
         m = self.birth_month_combo.currentData()
         d = self.birth_day_combo.currentData()
@@ -694,6 +650,10 @@ class ApplicantInfoStep(BaseStep):
             month = m if m else 1
             day = d if d else 1
             birth_date = f"{y:04d}-{month:02d}-{day:02d}"
+
+        # Format phone with 09 prefix for API
+        phone_raw = self.phone.text().strip()
+        phone_formatted = f"09{phone_raw}" if phone_raw and len(phone_raw) == 8 else ""
 
         data = {
             "first_name_ar":  fn,
@@ -704,7 +664,7 @@ class ApplicantInfoStep(BaseStep):
             "gender":         self.gender.currentData(),
             "nationality":    self.nationality.currentData(),
             "national_id":    self.national_id.text().strip(),
-            "phone":          f"09{self.phone.text().strip()}" if self.phone.text().strip() else "",
+            "phone":          phone_formatted,
             "landline":       self.landline.text().strip(),
             "in_person":      self.in_person_check.isChecked(),
             "id_photo_paths": list(self.uploaded_files),
@@ -746,7 +706,6 @@ class ApplicantInfoStep(BaseStep):
         self.mother_name.setText(a.get("mother_name_ar", ""))
         self.last_name.setText(a.get("last_name_ar", ""))
 
-        # Populate birth date combos
         bd = a.get("birth_date") or ""
         if bd:
             parts = str(bd)[:10].split('-')
@@ -783,6 +742,8 @@ class ApplicantInfoStep(BaseStep):
         phone_val = a.get("phone") or ""
         if phone_val.startswith("09"):
             phone_val = phone_val[2:]
+        elif phone_val.startswith("+963"):
+            phone_val = phone_val[4:]
         self.phone.setText(phone_val)
         self.landline.setText(a.get("landline", ""))
         self.in_person_check.setChecked(a.get("in_person", True))

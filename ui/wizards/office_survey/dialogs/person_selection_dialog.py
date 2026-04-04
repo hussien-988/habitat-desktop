@@ -47,18 +47,53 @@ class PersonSelectionDialog(QDialog):
         self._already_added_ids = set(already_added_ids or [])
         self._selection: Optional[Dict[str, Any]] = None
 
+        self._slide_anim = None
         self.setModal(True)
-        self.setFixedSize(544, 520)
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.Dialog)
         self.setAttribute(Qt.WA_TranslucentBackground)
         self.setStyleSheet("QDialog { background-color: transparent; }")
         self.setLayoutDirection(get_layout_direction())
 
+        # Side-panel sizing
+        parent_rect = parent.window().geometry() if parent else None
+        if parent_rect:
+            pw = min(520, parent_rect.width() - 40)
+            ph = min(560, parent_rect.height() - 20)
+        else:
+            pw = 520
+            ph = 560
+        self.setFixedSize(pw, ph)
+
         self._setup_ui()
+
+    def showEvent(self, event):
+        """Side-panel slide-in."""
+        super().showEvent(event)
+        parent = self.parent()
+        if not parent:
+            return
+        try:
+            from PyQt5.QtCore import QPropertyAnimation, QEasingCurve, QPoint
+            pr = parent.window().geometry()
+            is_rtl = get_layout_direction() == Qt.RightToLeft
+            pw = self.width()
+            pg = parent.window().mapToGlobal(parent.window().rect().topLeft())
+            tx = pg.x() + 10 if is_rtl else pg.x() + pr.width() - pw - 10
+            ty = pg.y() + (pr.height() - self.height()) // 2
+            sx = tx + ((-pw) if is_rtl else pw)
+            self.move(sx, ty)
+            self._slide_anim = QPropertyAnimation(self, b"pos", self)
+            self._slide_anim.setDuration(250)
+            self._slide_anim.setStartValue(QPoint(sx, ty))
+            self._slide_anim.setEndValue(QPoint(tx, ty))
+            self._slide_anim.setEasingCurve(QEasingCurve.OutCubic)
+            self._slide_anim.start()
+        except Exception:
+            pass
 
     def _setup_ui(self):
         outer = QVBoxLayout(self)
-        outer.setContentsMargins(12, 12, 12, 12)
+        outer.setContentsMargins(8, 8, 8, 8)
         outer.setSpacing(0)
 
         card = QFrame()
@@ -66,16 +101,17 @@ class PersonSelectionDialog(QDialog):
         card.setStyleSheet("""
             QFrame#SelectionCard {
                 background-color: #FFFFFF;
-                border-radius: 24px;
+                border-radius: 16px;
+                border: 1px solid rgba(56, 144, 223, 0.10);
             }
             QFrame#SelectionCard QLabel {
                 background-color: transparent;
             }
         """)
         shadow = QGraphicsDropShadowEffect(card)
-        shadow.setBlurRadius(30)
-        shadow.setOffset(0, 4)
-        shadow.setColor(QColor(0, 0, 0, 40))
+        shadow.setBlurRadius(40)
+        shadow.setOffset(-4, 4)
+        shadow.setColor(QColor(10, 22, 40, 50))
         card.setGraphicsEffect(shadow)
         outer.addWidget(card)
 

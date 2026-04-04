@@ -72,18 +72,7 @@ class UnitDetailsPage(QWidget):
         self._back_btn.setFixedSize(100, 40)
         self._back_btn.setCursor(Qt.PointingHandCursor)
         self._back_btn.setFont(create_font(size=FontManager.SIZE_BODY, weight=FontManager.WEIGHT_SEMIBOLD))
-        self._back_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #F1F5F9;
-                color: #475569;
-                border: 1px solid #E2E8F0;
-                border-radius: 8px;
-                font-weight: 600;
-            }
-            QPushButton:hover {
-                background-color: #E2E8F0;
-            }
-        """)
+        self._back_btn.setStyleSheet(StyleManager.back_button_light())
         self._back_btn.clicked.connect(self.back_requested.emit)
         header_row.addWidget(self._back_btn)
 
@@ -131,13 +120,7 @@ class UnitDetailsPage(QWidget):
         # White outer frame (same as units_main_frame in wizard)
         frame = QFrame()
         frame.setObjectName("unitDetailFrame")
-        frame.setStyleSheet("""
-            QFrame#unitDetailFrame {
-                background-color: white;
-                border-radius: 10px;
-                border: none;
-            }
-        """)
+        frame.setStyleSheet(StyleManager.form_card())
         frame_layout = QVBoxLayout(frame)
         frame_layout.setSpacing(12)
         frame_layout.setContentsMargins(11, 11, 11, 11)
@@ -222,17 +205,7 @@ class UnitDetailsPage(QWidget):
         """
         card = QFrame()
         card.setObjectName("unitCard")
-        card.setStyleSheet("""
-            QFrame#unitCard {
-                background-color: white;
-                border: 1px solid #e0e0e0;
-                border-radius: 10px;
-            }
-            QFrame#unitCard QLabel {
-                border: none;
-                background: transparent;
-            }
-        """)
+        card.setStyleSheet(StyleManager.data_card())
 
         # Shadow — same as wizard
         card_shadow = QGraphicsDropShadowEffect()

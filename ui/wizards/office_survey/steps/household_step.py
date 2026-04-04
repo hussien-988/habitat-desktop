@@ -24,7 +24,10 @@ from ui.style_manager import StyleManager
 from ui.components.centered_text_edit import CenteredTextEdit
 from ui.wizards.framework import BaseStep, StepValidationResult
 from ui.wizards.office_survey.survey_context import SurveyContext
-from ui.wizards.office_survey.wizard_styles import STEP_CARD_STYLE, FORM_FIELD_STYLE
+from ui.wizards.office_survey.wizard_styles import (
+    STEP_CARD_STYLE, FORM_FIELD_STYLE,
+    make_step_card, make_icon_header, make_divider,
+)
 from app.config import Config
 from services.api_client import get_api_client
 from utils.logger import get_logger
@@ -74,28 +77,19 @@ class HouseholdStep(BaseStep):
 
         # Selected building info card - same design as unit_selection_step
         # Height: 198px (changed from 113px)
-        self.household_building_frame = QFrame()
-        self.household_building_frame.setObjectName("StepCard")
-        self.household_building_frame.setStyleSheet(STEP_CARD_STYLE)
-
-        shadow = QGraphicsDropShadowEffect()
-        shadow.setBlurRadius(20)
-        shadow.setXOffset(0)
-        shadow.setYOffset(4)
-        shadow.setColor(QColor(0, 0, 0, 20))
-        self.household_building_frame.setGraphicsEffect(shadow)
+        self.household_building_frame = make_step_card()
 
         # Main card layout
         card_layout = QVBoxLayout(self.household_building_frame)
-        card_layout.setContentsMargins(12, 12, 12, 12)
+        card_layout.setContentsMargins(16, 16, 16, 16)
         card_layout.setSpacing(12)
         address_container = QFrame()
-        address_container.setFixedHeight(28)
+        address_container.setFixedHeight(32)
         address_container.setStyleSheet("""
             QFrame {
-                background-color: #F8FAFF;
-                border: none;
-                border-radius: 8px;
+                background-color: #F0F4FA;
+                border: 1px solid #DBEAFE;
+                border-radius: 10px;
             }
         """)
 
@@ -201,34 +195,21 @@ class HouseholdStep(BaseStep):
         scroll_layout.addWidget(self.household_building_frame)
 
         # معلومات الاسرة (Family Information) Section - same design as units card
-        family_info_frame = QFrame()
-        family_info_frame.setObjectName("StepCard")
-        family_info_frame.setStyleSheet(STEP_CARD_STYLE)
-
-        family_shadow = QGraphicsDropShadowEffect()
-        family_shadow.setBlurRadius(20)
-        family_shadow.setXOffset(0)
-        family_shadow.setYOffset(4)
-        family_shadow.setColor(QColor(0, 0, 0, 20))
-        family_info_frame.setGraphicsEffect(family_shadow)
+        family_info_frame = make_step_card()
 
         family_info_layout = QVBoxLayout(family_info_frame)
         family_info_layout.setSpacing(12)
         family_info_layout.setContentsMargins(16, 16, 16, 16)
 
         # Icon header
-        family_info_layout.addLayout(self._make_icon_header(
+        family_info_layout.addLayout(make_icon_header(
             title=tr("wizard.household.occupants_title"),
             subtitle=tr("wizard.household.subtitle"),
             icon_name="user-group",
         ))
 
         # Divider
-        family_div = QFrame()
-        family_div.setFrameShape(QFrame.HLine)
-        family_div.setFixedHeight(1)
-        family_div.setStyleSheet("border: none; background-color: #e1e8ee;")
-        family_info_layout.addWidget(family_div)
+        family_info_layout.addWidget(make_divider())
 
         occupancy_row = QHBoxLayout()
         occupancy_row.setSpacing(12)
@@ -302,12 +283,6 @@ class HouseholdStep(BaseStep):
         members_widget.setFixedHeight(45)
         total_members_layout.addWidget(members_widget)
 
-        members_hint = QLabel(tr("wizard.household.total_members_hint"))
-        members_hint.setFont(create_font(size=8, weight=FontManager.WEIGHT_REGULAR))
-        members_hint.setStyleSheet(f"color: {Colors.WIZARD_SUBTITLE}; background: transparent;")
-        members_hint.setAlignment(Qt.AlignCenter)
-        total_members_layout.addWidget(members_hint)
-
         family_info_layout.addLayout(total_members_layout)
         family_info_layout.addSpacing(8)
 
@@ -344,34 +319,21 @@ class HouseholdStep(BaseStep):
         family_info_layout.addLayout(notes_field_layout)
 
         scroll_layout.addWidget(family_info_frame)
-        composition_frame = QFrame()
-        composition_frame.setObjectName("StepCard")
-        composition_frame.setStyleSheet(STEP_CARD_STYLE)
-
-        composition_shadow = QGraphicsDropShadowEffect()
-        composition_shadow.setBlurRadius(20)
-        composition_shadow.setXOffset(0)
-        composition_shadow.setYOffset(4)
-        composition_shadow.setColor(QColor(0, 0, 0, 20))
-        composition_frame.setGraphicsEffect(composition_shadow)
+        composition_frame = make_step_card()
 
         composition_layout = QVBoxLayout(composition_frame)
         composition_layout.setSpacing(12)
         composition_layout.setContentsMargins(16, 16, 16, 16)
 
         # Icon header
-        composition_layout.addLayout(self._make_icon_header(
+        composition_layout.addLayout(make_icon_header(
             title=tr("wizard.household.composition_title"),
             subtitle=tr("wizard.household.composition_subtitle"),
             icon_name="elements",
         ))
 
         # Divider
-        comp_div = QFrame()
-        comp_div.setFrameShape(QFrame.HLine)
-        comp_div.setFixedHeight(1)
-        comp_div.setStyleSheet("border: none; background-color: #e1e8ee;")
-        composition_layout.addWidget(comp_div)
+        composition_layout.addWidget(make_divider())
         cards_row = QHBoxLayout()
         cards_row.setSpacing(12)  # Gap between cards: 12px
 
@@ -613,45 +575,7 @@ class HouseholdStep(BaseStep):
         """
         return self._create_spinbox_with_arrows(spinbox, bg_color="#FFFFFF")
 
-    @staticmethod
-    def _make_icon_header(title: str, subtitle: str, icon_name: str) -> QHBoxLayout:
-        """Build icon + (title / subtitle) header row."""
-        row = QHBoxLayout()
-        row.setSpacing(10)
-        row.setContentsMargins(0, 0, 0, 0)
-
-        icon_lbl = QLabel()
-        icon_lbl.setFixedSize(40, 40)
-        icon_lbl.setAlignment(Qt.AlignCenter)
-        icon_lbl.setStyleSheet("""
-            QLabel {
-                background-color: #EBF5FF;
-                border: 1px solid #DBEAFE;
-                border-radius: 10px;
-            }
-        """)
-        px = Icon.load_pixmap(icon_name, size=24)
-        if px and not px.isNull():
-            icon_lbl.setPixmap(px)
-
-        row.addWidget(icon_lbl)
-
-        col = QVBoxLayout()
-        col.setSpacing(1)
-
-        t = QLabel(title)
-        t.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
-        t.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent;")
-
-        s = QLabel(subtitle)
-        s.setFont(create_font(size=10, weight=FontManager.WEIGHT_REGULAR))
-        s.setStyleSheet(f"color: {Colors.WIZARD_SUBTITLE}; background: transparent;")
-
-        col.addWidget(t)
-        col.addWidget(s)
-        row.addLayout(col)
-        row.addStretch()
-        return row
+    # _make_icon_header is now shared via wizard_styles.make_icon_header
 
     def update_language(self, is_arabic: bool):
         """Update layout direction when language changes."""

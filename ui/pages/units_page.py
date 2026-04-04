@@ -108,7 +108,7 @@ class UnitsPage(QWidget):
         # Table card
         table_card = QFrame()
         table_card.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-        table_card.setStyleSheet("background-color: white; border-radius: 16px;")
+        table_card.setStyleSheet(StyleManager.table_card())
         card_layout = QVBoxLayout(table_card)
         card_layout.setContentsMargins(10, 10, 10, 10)
         card_layout.setSpacing(0)
@@ -138,42 +138,7 @@ class UnitsPage(QWidget):
                 item.setIcon(QIcon(str(icon_path)))
             self.table.setHorizontalHeaderItem(i, item)
 
-        self.table.setStyleSheet("""
-            QTableWidget {
-                border: none;
-                background-color: white;
-                font-size: 10.5pt;
-                font-weight: 400;
-                color: #212B36;
-            }
-            QTableWidget::item {
-                padding: 8px 15px;
-                border-bottom: 1px solid #F0F0F0;
-                color: #212B36;
-                font-size: 10.5pt;
-                font-weight: 400;
-            }
-            QTableWidget::item:hover {
-                background-color: #FAFBFC;
-            }
-            QHeaderView {
-                border-top-left-radius: 16px;
-                border-top-right-radius: 16px;
-            }
-            QHeaderView::section {
-                background-color: #F8F9FA;
-                padding: 12px;
-                padding-left: 30px;
-                border: none;
-                color: #637381;
-                font-weight: 600;
-                font-size: 11pt;
-                height: 56px;
-            }
-            QHeaderView::section:hover {
-                background-color: #EBEEF2;
-            }
-        """ + StyleManager.scrollbar())
+        self.table.setStyleSheet(StyleManager.modern_table() + StyleManager.scrollbar())
 
         header = self.table.horizontalHeader()
         header.setDefaultAlignment(Qt.AlignRight | Qt.AlignVCenter)
@@ -209,14 +174,7 @@ class UnitsPage(QWidget):
         # Footer (pagination)
         self._footer_frame = QFrame()
         footer_frame = self._footer_frame
-        footer_frame.setStyleSheet("""
-            QFrame {
-                background-color: #F8F9FA;
-                border-top: 1px solid #E1E8ED;
-                border-bottom-left-radius: 16px;
-                border-bottom-right-radius: 16px;
-            }
-        """)
+        footer_frame.setStyleSheet(StyleManager.nav_footer())
         footer_frame.setFixedHeight(58)
 
         footer = QHBoxLayout(footer_frame)
@@ -228,27 +186,15 @@ class UnitsPage(QWidget):
         nav_layout.setContentsMargins(0, 0, 0, 0)
         nav_layout.setSpacing(8)
 
-        nav_btn_style = """
-            QPushButton {
-                background: transparent;
-                border: 1px solid #E1E8ED;
-                border-radius: 4px;
-                color: #637381;
-                font-size: 14pt;
-                font-weight: bold;
-            }
-            QPushButton:hover { background-color: #EBEEF2; }
-            QPushButton:disabled { color: #C1C7CD; }
-        """
         self.prev_btn = QPushButton(">")
         self.prev_btn.setFixedSize(32, 32)
-        self.prev_btn.setStyleSheet(nav_btn_style)
+        self.prev_btn.setStyleSheet(StyleManager.pagination_button())
         self.prev_btn.clicked.connect(self._on_prev_page)
         nav_layout.addWidget(self.prev_btn)
 
         self.next_btn = QPushButton("<")
         self.next_btn.setFixedSize(32, 32)
-        self.next_btn.setStyleSheet(nav_btn_style)
+        self.next_btn.setStyleSheet(StyleManager.pagination_button())
         self.next_btn.clicked.connect(self._on_next_page)
         nav_layout.addWidget(self.next_btn)
 

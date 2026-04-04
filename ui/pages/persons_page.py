@@ -23,6 +23,8 @@ from services.validation_service import ValidationService
 from ui.components.toast import Toast
 from ui.components.base_table_model import BaseTableModel
 from ui.style_manager import StyleManager
+from ui.design_system import Colors, PageDimensions
+from ui.font_utils import create_font, FontManager
 from utils.i18n import I18n
 from utils.logger import get_logger
 
@@ -589,41 +591,31 @@ class PersonsPage(QWidget):
         self._setup_ui()
 
     def _setup_ui(self):
-        self.setStyleSheet(f"background-color: {Config.BACKGROUND_COLOR};")
+        self.setStyleSheet(StyleManager.page_background())
 
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(32, 32, 32, 32)
+        layout.setContentsMargins(
+            PageDimensions.content_padding_h(),
+            PageDimensions.content_padding_v_top(),
+            PageDimensions.content_padding_h(),
+            PageDimensions.CONTENT_PADDING_V_BOTTOM,
+        )
         layout.setSpacing(20)
 
         # Header
         header_layout = QHBoxLayout()
 
         self._title = QLabel(tr("page.persons.title"))
-        self._title.setStyleSheet(f"""
-            font-size: {Config.FONT_SIZE_H1}pt;
-            font-weight: 700;
-            color: {Config.TEXT_COLOR};
-        """)
+        self._title.setFont(create_font(size=FontManager.SIZE_TITLE, weight=FontManager.WEIGHT_SEMIBOLD))
+        self._title.setStyleSheet(f"color: {Colors.PAGE_TITLE}; background: transparent; border: none;")
         header_layout.addWidget(self._title)
         header_layout.addStretch()
 
         # Add person button
         self.add_btn = QPushButton("+ " + tr("page.persons.add_new"))
-        self.add_btn.setStyleSheet(f"""
-            QPushButton {{
-                background-color: {Config.SUCCESS_COLOR};
-                color: white;
-                border: none;
-                border-radius: 8px;
-                padding: 10px 20px;
-                font-size: {Config.FONT_SIZE}pt;
-                font-weight: 600;
-            }}
-            QPushButton:hover {{
-                background-color: #219A52;
-            }}
-        """)
+        self.add_btn.setStyleSheet(StyleManager.nav_button_primary())
         self.add_btn.setCursor(Qt.PointingHandCursor)
+        self.add_btn.setFont(create_font(size=FontManager.SIZE_BODY, weight=FontManager.WEIGHT_SEMIBOLD))
         self.add_btn.clicked.connect(self._on_add_person)
         header_layout.addWidget(self.add_btn)
 
@@ -631,7 +623,7 @@ class PersonsPage(QWidget):
 
         # Filters
         filters_frame = QFrame()
-        filters_frame.setStyleSheet("background-color: white; border-radius: 12px;")
+        filters_frame.setStyleSheet(StyleManager.form_card())
 
         shadow = QGraphicsDropShadowEffect()
         shadow.setBlurRadius(20)
@@ -647,14 +639,7 @@ class PersonsPage(QWidget):
         self.name_search = QLineEdit()
         self.name_search.setPlaceholderText(tr("filter.persons.search_by_name"))
         self.name_search.setMinimumWidth(200)
-        self.name_search.setStyleSheet(f"""
-            QLineEdit {{
-                background-color: #F8FAFC;
-                border: 1px solid {Config.INPUT_BORDER};
-                border-radius: 8px;
-                padding: 8px 12px;
-            }}
-        """)
+        self.name_search.setStyleSheet(StyleManager.form_input_light())
         self.name_search.textChanged.connect(self._on_filter_changed)
         filters_layout.addWidget(self.name_search)
 
@@ -662,14 +647,7 @@ class PersonsPage(QWidget):
         self.nid_search = QLineEdit()
         self.nid_search.setPlaceholderText(tr("filter.persons.national_id"))
         self.nid_search.setMaximumWidth(150)
-        self.nid_search.setStyleSheet(f"""
-            QLineEdit {{
-                background-color: #F8FAFC;
-                border: 1px solid {Config.INPUT_BORDER};
-                border-radius: 8px;
-                padding: 8px 12px;
-            }}
-        """)
+        self.nid_search.setStyleSheet(StyleManager.form_input_light())
         self.nid_search.textChanged.connect(self._on_filter_changed)
         filters_layout.addWidget(self.nid_search)
 
@@ -678,6 +656,7 @@ class PersonsPage(QWidget):
         self.gender_combo.addItem(tr("filter.all"), "")
         for code, label in vocab_get_options("Gender"):
             self.gender_combo.addItem(label, code)
+        self.gender_combo.setStyleSheet(StyleManager.form_combo_light())
         self.gender_combo.currentIndexChanged.connect(self._on_filter_changed)
         filters_layout.addWidget(self.gender_combo)
 
@@ -686,12 +665,12 @@ class PersonsPage(QWidget):
 
         # Results count
         self.count_label = QLabel("")
-        self.count_label.setStyleSheet(f"color: {Config.TEXT_LIGHT};")
+        self.count_label.setStyleSheet(f"color: {Colors.PAGE_SUBTITLE}; background: transparent;")
         layout.addWidget(self.count_label)
 
         # Table
         table_frame = QFrame()
-        table_frame.setStyleSheet("background-color: white; border-radius: 12px;")
+        table_frame.setStyleSheet(StyleManager.table_card())
 
         table_shadow = QGraphicsDropShadowEffect()
         table_shadow.setBlurRadius(20)
@@ -710,29 +689,7 @@ class PersonsPage(QWidget):
         self.table.setShowGrid(False)
         self.table.verticalHeader().setVisible(False)
         self.table.horizontalHeader().setStretchLastSection(True)
-        self.table.setStyleSheet(f"""
-            QTableView {{
-                background-color: white;
-                border: none;
-                border-radius: 12px;
-            }}
-            QTableView::item {{
-                padding: 12px 8px;
-                border-bottom: 1px solid #F1F5F9;
-            }}
-            QTableView::item:selected {{
-                background-color: #EBF5FF;
-                color: {Config.TEXT_COLOR};
-            }}
-            QHeaderView::section {{
-                background-color: #F8FAFC;
-                color: {Config.TEXT_LIGHT};
-                font-weight: 600;
-                padding: 12px 8px;
-                border: none;
-                border-bottom: 1px solid {Config.BORDER_COLOR};
-            }}
-        """)
+        self.table.setStyleSheet(StyleManager.modern_table())
         self.table.doubleClicked.connect(self._on_row_double_click)
 
         self.table_model = PersonsTableModel(is_arabic=self.i18n.is_arabic())

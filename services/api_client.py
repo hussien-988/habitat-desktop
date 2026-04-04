@@ -985,7 +985,9 @@ class TRRCMSApiClient:
         for local_key, api_key in field_map.items():
             val = person_data.get(local_key)
             if val is not None:
-                api_data[api_key] = str(val).strip() if isinstance(val, str) else val
+                str_val = str(val).strip() if isinstance(val, str) else val
+                if str_val:  # skip empty strings to avoid API validation errors
+                    api_data[api_key] = str_val
 
         for int_field in ('gender', 'nationality'):
             val = person_data.get(int_field)

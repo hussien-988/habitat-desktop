@@ -57,25 +57,134 @@ class EvidenceDialog(QDialog):
         super().__init__(parent)
         self.evidence_data = evidence_data
         self.selected_file = None
+        self._slide_anim = None
 
-        self.setWindowTitle(tr("wizard.evidence_dialog.title"))
-        self.setMinimumWidth(500)
-        self.setStyleSheet("""
-            QDialog {
-                background-color: #f5f7fa;
-            }
-        """)
+        self.setWindowFlags(Qt.FramelessWindowHint | Qt.Dialog)
+        self.setAttribute(Qt.WA_TranslucentBackground)
+        self.setLayoutDirection(get_layout_direction())
+
+        parent_rect = parent.window().geometry() if parent else None
+        if parent_rect:
+            pw = min(500, parent_rect.width() - 40)
+            ph = min(580, parent_rect.height() - 20)
+        else:
+            pw = 500
+            ph = 580
+        self.setFixedSize(pw, ph)
+
+        self.setStyleSheet("QDialog { background-color: transparent; }")
 
         self._setup_ui()
 
         if evidence_data:
             self._load_evidence_data(evidence_data)
 
+    def showEvent(self, event):
+        """Side-panel slide-in."""
+        super().showEvent(event)
+        parent = self.parent()
+        if not parent:
+            return
+        try:
+            from PyQt5.QtCore import QPropertyAnimation, QEasingCurve, QPoint
+            pr = parent.window().geometry()
+            is_rtl = get_layout_direction() == Qt.RightToLeft
+            pw = self.width()
+            pg = parent.window().mapToGlobal(parent.window().rect().topLeft())
+            tx = pg.x() + 10 if is_rtl else pg.x() + pr.width() - pw - 10
+            ty = pg.y() + (pr.height() - self.height()) // 2
+            sx = tx + ((-pw) if is_rtl else pw)
+            self.move(sx, ty)
+            self._slide_anim = QPropertyAnimation(self, b"pos", self)
+            self._slide_anim.setDuration(250)
+            self._slide_anim.setStartValue(QPoint(sx, ty))
+            self._slide_anim.setEndValue(QPoint(tx, ty))
+            self._slide_anim.setEasingCurve(QEasingCurve.OutCubic)
+            self._slide_anim.start()
+        except Exception:
+            pass
+
     def _setup_ui(self):
-        """Setup dialog UI."""
-        layout = QVBoxLayout(self)
-        layout.setSpacing(16)
-        layout.setContentsMargins(24, 24, 24, 24)
+        """Setup dialog UI as side panel."""
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(8, 8, 8, 8)
+        outer.setSpacing(0)
+
+        card = QFrame()
+        card.setObjectName("EvidenceCard")
+        card.setStyleSheet("""
+            QFrame#EvidenceCard {
+                background-color: #FFFFFF;
+                border-radius: 16px;
+                border: 1px solid rgba(56, 144, 223, 0.10);
+            }
+        """)
+        from PyQt5.QtWidgets import QGraphicsDropShadowEffect
+        from PyQt5.QtGui import QColor
+        sh = QGraphicsDropShadowEffect(card)
+        sh.setBlurRadius(40)
+        sh.setOffset(-4, 4)
+        sh.setColor(QColor(10, 22, 40, 50))
+        card.setGraphicsEffect(sh)
+        outer.addWidget(card)
+
+        cl = QVBoxLayout(card)
+        cl.setContentsMargins(0, 0, 0, 0)
+        cl.setSpacing(0)
+
+        # Dark header
+        hdr = QFrame()
+        hdr.setFixedHeight(48)
+        hdr.setObjectName("EvHdr")
+        hdr.setStyleSheet("""
+            QFrame#EvHdr {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #0E2035, stop:1 #152F4E);
+                border-top-left-radius: 16px;
+                border-top-right-radius: 16px;
+            }
+        """)
+        from PyQt5.QtWidgets import QPushButton
+        hl = QHBoxLayout(hdr)
+        hl.setContentsMargins(20, 0, 20, 0)
+        hl.setSpacing(10)
+        cbtn = QPushButton("\u2715")
+        cbtn.setCursor(Qt.PointingHandCursor)
+        cbtn.setFixedSize(28, 28)
+        cbtn.setStyleSheet("""
+            QPushButton {
+                background: rgba(255, 255, 255, 0.08);
+                color: rgba(200, 220, 255, 0.85);
+                border: 1px solid rgba(56, 144, 223, 0.15);
+                border-radius: 7px;
+            }
+            QPushButton:hover { background: rgba(255, 255, 255, 0.15); color: white; }
+        """)
+        cbtn.clicked.connect(self.reject)
+        hl.addWidget(cbtn)
+        from ui.font_utils import create_font, FontManager
+        tlbl = QLabel(tr("wizard.evidence_dialog.title"))
+        tlbl.setFont(create_font(size=12, weight=FontManager.WEIGHT_SEMIBOLD))
+        tlbl.setStyleSheet("color: white; background: transparent; border: none;")
+        hl.addWidget(tlbl, 1)
+        cl.addWidget(hdr)
+
+        acc = QFrame()
+        acc.setFixedHeight(2)
+        acc.setStyleSheet("""
+            QFrame { background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                stop:0 rgba(56, 144, 223, 0), stop:0.3 rgba(56, 144, 223, 100),
+                stop:0.5 rgba(91, 168, 240, 160), stop:0.7 rgba(56, 144, 223, 100),
+                stop:1 rgba(56, 144, 223, 0)); }
+        """)
+        cl.addWidget(acc)
+
+        content = QWidget()
+        content.setStyleSheet("background: #FAFBFD; border-bottom-left-radius: 16px; border-bottom-right-radius: 16px;")
+        layout = QVBoxLayout(content)
+        layout.setSpacing(14)
+        layout.setContentsMargins(24, 18, 24, 18)
+        cl.addWidget(content, 1)
 
         # Document type
         type_label = QLabel(tr("wizard.evidence_dialog.document_type"))

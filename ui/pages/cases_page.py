@@ -41,8 +41,8 @@ from ui.components.toast import Toast
 logger = logging.getLogger(__name__)
 
 _STATUS_STYLES = {
-    "draft":     {"bg": "#FFF7ED", "fg": "#C2410C", "border": "#FDBA74"},
-    "finalized": {"bg": "#EBF5FF", "fg": "#0369A1", "border": "#7DD3FC"},
+    "draft":     {"bg": "#FFF7ED", "fg": "#C2410C", "border": "#FDBA74", "glow": "rgba(194, 65, 12, 0.12)"},
+    "finalized": {"bg": "#EBF5FF", "fg": "#0369A1", "border": "#7DD3FC", "glow": "rgba(3, 105, 161, 0.10)"},
 }
 
 _DARK_INPUT_STYLE = """
@@ -87,13 +87,25 @@ _ADD_BTN_STYLE = """
 
 _NAV_BTN_STYLE = """
     QPushButton {
-        background: rgba(56, 144, 223, 0.08);
-        border: 1px solid rgba(56, 144, 223, 0.2);
-        border-radius: 6px; color: #3890DF;
+        background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+            stop:0 #FAFBFF, stop:1 #F0F4FA);
+        border: 1px solid rgba(56, 144, 223, 0.20);
+        border-radius: 8px; color: #3890DF;
         padding: 0 10px; font-weight: 600;
     }
-    QPushButton:hover { background: rgba(56, 144, 223, 0.18); }
-    QPushButton:disabled { color: #B0BEC5; background: transparent; border-color: #E0E0E0; }
+    QPushButton:hover {
+        background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+            stop:0 #EBF5FF, stop:1 #E0EDFA);
+        border-color: rgba(56, 144, 223, 0.40);
+    }
+    QPushButton:pressed {
+        background: #E0EDFA;
+    }
+    QPushButton:disabled {
+        color: #C0C8D0;
+        background: #F5F7FA;
+        border-color: #E8ECF0;
+    }
 """
 
 
@@ -135,7 +147,7 @@ class _SurveyCard(QFrame):
         self._lift_value = 0.0
         self._lift_anim = None
         self.setCursor(QCursor(Qt.PointingHandCursor))
-        self.setFixedHeight(120)
+        self.setFixedHeight(110)
         self.setMouseTracking(True)
         self._build_ui(card_data)
 
@@ -143,8 +155,9 @@ class _SurveyCard(QFrame):
         self.setLayoutDirection(get_layout_direction())
         self.setStyleSheet(f"""
             _SurveyCard {{
-                background: {self._CARD_BG};
-                border-radius: 12px;
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
+                    stop:0 {self._CARD_BG}, stop:1 #F0F5FF);
+                border-radius: 14px;
                 border: 1px solid #E2EAF2;
             }}
         """)
@@ -156,80 +169,111 @@ class _SurveyCard(QFrame):
         self.setGraphicsEffect(shadow)
 
         outer = QHBoxLayout(self)
-        outer.setContentsMargins(0, 0, 16, 0)
+        outer.setContentsMargins(0, 0, 20, 0)
         outer.setSpacing(0)
 
-        # Left status strip
+        # Left status strip with gradient
         style = _STATUS_STYLES.get(self._status, _STATUS_STYLES["draft"])
         strip = QFrame()
-        strip.setFixedWidth(6)
-        strip.setStyleSheet(
-            f"background-color: {style['fg']}; "
-            "border-top-left-radius: 12px; border-bottom-left-radius: 12px;"
-        )
+        strip.setFixedWidth(5)
+        is_rtl = get_layout_direction() == Qt.RightToLeft
+        if is_rtl:
+            strip.setStyleSheet(
+                f"background: qlineargradient(x1:0, y1:0, x2:0, y2:1, "
+                f"stop:0 {style['fg']}, stop:0.5 {style['border']}, stop:1 {style['fg']}); "
+                "border-top-right-radius: 14px; border-bottom-right-radius: 14px;"
+            )
+        else:
+            strip.setStyleSheet(
+                f"background: qlineargradient(x1:0, y1:0, x2:0, y2:1, "
+                f"stop:0 {style['fg']}, stop:0.5 {style['border']}, stop:1 {style['fg']}); "
+                "border-top-left-radius: 14px; border-bottom-left-radius: 14px;"
+            )
         outer.addWidget(strip)
 
         # Content
         content = QVBoxLayout()
-        content.setContentsMargins(16, 12, 0, 12)
-        content.setSpacing(6)
+        content.setContentsMargins(18, 14, 0, 14)
+        content.setSpacing(4)
 
-        # Row 1: reference code + status badge
+        # Row 1: contact person name + status badge
         row1 = QHBoxLayout()
-        row1.setSpacing(8)
+        row1.setSpacing(10)
 
-        ref_label = QLabel(d.get("claim_id", "N/A"))
-        id_font = create_font(size=10, weight=FontManager.WEIGHT_MEDIUM)
-        id_font.setLetterSpacing(QFont.AbsoluteSpacing, 0.5)
-        ref_label.setFont(id_font)
-        ref_label.setStyleSheet(
-            f"color: {Colors.TEXT_SECONDARY}; background: transparent; border: none;"
-        )
-        row1.addWidget(ref_label)
-        row1.addStretch()
-
-        status_text = self._get_status_text(self._status)
-        badge = QLabel(status_text)
-        badge.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
-        badge.setAlignment(Qt.AlignCenter)
-        badge.setFixedHeight(24)
-        badge.setStyleSheet(
-            f"QLabel {{ background-color: {style['bg']}; color: {style['fg']}; "
-            f"border: 1px solid {style['border']}; border-radius: 12px; "
-            f"padding: 0 12px; }}"
-        )
-        self._badge = badge
-        row1.addWidget(badge)
-        content.addLayout(row1)
-
-        # Row 2: contact person name
         name_label = QLabel(d.get("claimant_name", "-"))
         name_label.setFont(create_font(size=13, weight=QFont.Bold))
         name_label.setStyleSheet(
             f"color: {Colors.PAGE_TITLE}; background: transparent; border: none;"
         )
         name_label.setMaximumWidth(600)
-        content.addWidget(name_label)
+        row1.addWidget(name_label)
+        row1.addStretch()
 
-        # Row 3: details
-        details_parts = []
-        building_id = d.get("building_id", "")
-        if building_id:
-            details_parts.append(building_id)
-        source_label = d.get("source_label", "")
-        if source_label:
-            details_parts.append(source_label)
-        date_str = d.get("date", "")
-        if date_str and not date_str.startswith("0001"):
-            details_parts.append(date_str)
+        status_text = self._get_status_text(self._status)
+        badge = QLabel(status_text)
+        badge.setFont(create_font(size=8, weight=FontManager.WEIGHT_SEMIBOLD))
+        badge.setAlignment(Qt.AlignCenter)
+        badge.setFixedHeight(22)
+        badge.setStyleSheet(
+            f"QLabel {{ background-color: {style['bg']}; color: {style['fg']}; "
+            f"border: 1px solid {style['border']}; border-radius: 11px; "
+            f"padding: 0 10px; }}"
+        )
+        self._badge = badge
+        row1.addWidget(badge)
+        content.addLayout(row1)
 
-        details_text = " \u2009\u00b7\u2009 ".join(details_parts)
-        details = QLabel(details_text)
-        details.setFont(create_font(size=10, weight=FontManager.WEIGHT_REGULAR))
-        details.setStyleSheet(
+        # Row 2: reference code
+        ref_label = QLabel(d.get("claim_id", "N/A"))
+        id_font = create_font(size=9, weight=FontManager.WEIGHT_MEDIUM)
+        id_font.setLetterSpacing(QFont.AbsoluteSpacing, 0.4)
+        ref_label.setFont(id_font)
+        ref_label.setStyleSheet(
             f"color: {Colors.TEXT_SECONDARY}; background: transparent; border: none;"
         )
-        content.addWidget(details)
+        content.addWidget(ref_label)
+
+        content.addSpacing(4)
+
+        # Row 3: info chips (building, source, date)
+        chips_row = QHBoxLayout()
+        chips_row.setSpacing(6)
+
+        chip_style = (
+            "QLabel {{ background-color: {bg}; color: {fg}; "
+            "border: 1px solid {border}; border-radius: 4px; "
+            "padding: 2px 8px; }}"
+        )
+
+        building_id = d.get("building_id", "")
+        if building_id:
+            chip = QLabel(building_id)
+            chip.setFont(create_font(size=8, weight=FontManager.WEIGHT_MEDIUM))
+            chip.setStyleSheet(chip_style.format(
+                bg="#F0F4FA", fg="#475569", border="#E2E8F0"
+            ))
+            chips_row.addWidget(chip)
+
+        source_label = d.get("source_label", "")
+        if source_label:
+            chip = QLabel(source_label)
+            chip.setFont(create_font(size=8, weight=FontManager.WEIGHT_MEDIUM))
+            chip.setStyleSheet(chip_style.format(
+                bg="#EEF2FF", fg="#4338CA", border="#E0E7FF"
+            ))
+            chips_row.addWidget(chip)
+
+        date_str = d.get("date", "")
+        if date_str and not date_str.startswith("0001"):
+            chip = QLabel(date_str)
+            chip.setFont(create_font(size=8, weight=FontManager.WEIGHT_MEDIUM))
+            chip.setStyleSheet(chip_style.format(
+                bg="#F0FDF4", fg="#15803D", border="#DCFCE7"
+            ))
+            chips_row.addWidget(chip)
+
+        chips_row.addStretch()
+        content.addLayout(chips_row)
 
         outer.addLayout(content, 1)
 
@@ -247,44 +291,52 @@ class _SurveyCard(QFrame):
         w, h = self.width(), self.height()
         t = time.time()
 
+        clip = QPainterPath()
+        clip.addRoundedRect(QRectF(1, 1, w - 2, h - 2), 13, 13)
+        painter.setClipPath(clip)
+
+        # Subtle cartographic grid pattern
+        painter.setPen(QPen(QColor(56, 144, 223, 5), 0.5))
+        for gx in range(0, w + 60, 60):
+            painter.drawLine(gx, 0, gx, h)
+        for gy in range(0, h + 60, 60):
+            painter.drawLine(0, gy, w, gy)
+
         # Animated blue shimmer sweep
-        sweep_pos = (math.sin(t * 0.7 + self._shimmer_offset) + 1) / 2
+        sweep_pos = (math.sin(t * 0.6 + self._shimmer_offset) + 1) / 2
         sweep_x = int(sweep_pos * w)
-        shimmer_grad = QLinearGradient(sweep_x - 120, 0, sweep_x + 120, 0)
+        shimmer_grad = QLinearGradient(sweep_x - 150, 0, sweep_x + 150, 0)
         shimmer_grad.setColorAt(0, QColor(56, 144, 223, 0))
-        shimmer_grad.setColorAt(0.5, QColor(120, 190, 255, 12))
+        shimmer_grad.setColorAt(0.5, QColor(120, 190, 255, 10))
         shimmer_grad.setColorAt(1, QColor(56, 144, 223, 0))
         painter.setPen(Qt.NoPen)
-
-        clip = QPainterPath()
-        clip.addRoundedRect(QRectF(1, 1, w - 2, h - 2), 11, 11)
-        painter.setClipPath(clip)
         painter.fillRect(QRectF(0, 0, w, h), shimmer_grad)
 
-        # Top edge shimmer on hover
+        # Top edge accent on hover
         if self._hovered:
             top_grad = QLinearGradient(0, 0, w, 0)
             top_grad.setColorAt(0, QColor(56, 144, 223, 0))
-            top_grad.setColorAt(0.15, QColor(56, 144, 223, 35))
-            top_grad.setColorAt(0.5, QColor(120, 190, 255, 55))
-            top_grad.setColorAt(0.85, QColor(56, 144, 223, 35))
+            top_grad.setColorAt(0.2, QColor(56, 144, 223, 40))
+            top_grad.setColorAt(0.5, QColor(91, 168, 240, 65))
+            top_grad.setColorAt(0.8, QColor(56, 144, 223, 40))
             top_grad.setColorAt(1, QColor(56, 144, 223, 0))
-            painter.fillRect(QRectF(0, 0, w, 3.5), top_grad)
+            painter.fillRect(QRectF(0, 0, w, 2.5), top_grad)
 
         painter.setClipping(False)
 
-        # Chevron arrow (RTL-aware)
+        # Chevron arrow (RTL-aware) with smooth opacity
         is_rtl = self.layoutDirection() == Qt.RightToLeft
-        chevron_x = 14 if is_rtl else w - 22
-        chevron_alpha = 130 if self._hovered else 45
-        painter.setPen(QPen(QColor(56, 144, 223, chevron_alpha), 2, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin))
+        chevron_x = 16 if is_rtl else w - 24
+        chevron_alpha = 160 if self._hovered else 40
+        painter.setPen(QPen(QColor(56, 144, 223, chevron_alpha), 1.8,
+                            Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin))
         cy = h / 2
         if is_rtl:
-            painter.drawLine(int(chevron_x + 6), int(cy - 6), int(chevron_x), int(cy))
-            painter.drawLine(int(chevron_x), int(cy), int(chevron_x + 6), int(cy + 6))
+            painter.drawLine(int(chevron_x + 6), int(cy - 5), int(chevron_x), int(cy))
+            painter.drawLine(int(chevron_x), int(cy), int(chevron_x + 6), int(cy + 5))
         else:
-            painter.drawLine(int(chevron_x), int(cy - 6), int(chevron_x + 6), int(cy))
-            painter.drawLine(int(chevron_x + 6), int(cy), int(chevron_x), int(cy + 6))
+            painter.drawLine(int(chevron_x), int(cy - 5), int(chevron_x + 6), int(cy))
+            painter.drawLine(int(chevron_x + 6), int(cy), int(chevron_x), int(cy + 5))
 
         painter.end()
 
@@ -302,24 +354,18 @@ class _SurveyCard(QFrame):
         self._hovered = True
         self.setStyleSheet(f"""
             _SurveyCard {{
-                background: {self._CARD_BG_HOVER};
-                border-radius: 12px;
-                border: 1px solid rgba(56, 144, 223, 0.3);
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
+                    stop:0 {self._CARD_BG_HOVER}, stop:1 #E8F0FE);
+                border-radius: 14px;
+                border: 1.5px solid rgba(56, 144, 223, 0.30);
             }}
         """)
         eff = self.graphicsEffect()
         if isinstance(eff, QGraphicsDropShadowEffect):
-            eff.setBlurRadius(32)
+            eff.setBlurRadius(36)
             eff.setOffset(0, 8)
-            eff.setColor(QColor(56, 144, 223, 35))
-        if self._badge:
-            style = _STATUS_STYLES.get(self._status, _STATUS_STYLES["draft"])
-            glow = QGraphicsDropShadowEffect(self._badge)
-            glow.setBlurRadius(8)
-            glow.setOffset(0, 0)
-            glow.setColor(QColor(style['fg']))
-            self._badge.setGraphicsEffect(glow)
-        self._animate_lift(5.0)
+            eff.setColor(QColor(56, 144, 223, 40))
+        self._animate_lift(4.0)
         self.update()
         super().enterEvent(event)
 
@@ -328,8 +374,9 @@ class _SurveyCard(QFrame):
         self._pressed = False
         self.setStyleSheet(f"""
             _SurveyCard {{
-                background: {self._CARD_BG};
-                border-radius: 12px;
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
+                    stop:0 {self._CARD_BG}, stop:1 #F0F5FF);
+                border-radius: 14px;
                 border: 1px solid #E2EAF2;
             }}
         """)
@@ -338,8 +385,6 @@ class _SurveyCard(QFrame):
             eff.setBlurRadius(20)
             eff.setOffset(0, 4)
             eff.setColor(QColor(0, 0, 0, 22))
-        if self._badge:
-            self._badge.setGraphicsEffect(None)
         self._animate_lift(0.0)
         self.update()
         super().leaveEvent(event)

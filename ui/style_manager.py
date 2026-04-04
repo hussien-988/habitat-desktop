@@ -1215,6 +1215,533 @@ class StyleManager:
         """
 
 
+    # -- New shared styles for cohesive redesign --
+
+    @staticmethod
+    def dark_search_input() -> str:
+        """Frosted glass search input for use inside DarkHeaderZone."""
+        return """
+            QLineEdit {
+                background: rgba(10, 22, 40, 140);
+                color: white;
+                border: 1px solid rgba(56, 144, 223, 35);
+                border-radius: 8px;
+                padding: 0 12px 0 34px;
+            }
+            QLineEdit:focus {
+                border: 1.5px solid rgba(56, 144, 223, 140);
+                background: rgba(10, 22, 40, 180);
+            }
+            QLineEdit::placeholder {
+                color: rgba(139, 172, 200, 130);
+            }
+        """
+
+    @staticmethod
+    def dark_combo_box() -> str:
+        """Dark-themed combo box for use inside DarkHeaderZone."""
+        return """
+            QComboBox {
+                background: rgba(10, 22, 40, 140);
+                color: white;
+                border: 1px solid rgba(56, 144, 223, 35);
+                border-radius: 8px;
+                padding: 6px 12px;
+                font-size: 10pt;
+                min-width: 140px;
+            }
+            QComboBox:hover { border-color: rgba(56, 144, 223, 80); }
+            QComboBox::drop-down {
+                border: none;
+                width: 24px;
+            }
+            QComboBox::down-arrow {
+                image: none;
+                border-left: 4px solid transparent;
+                border-right: 4px solid transparent;
+                border-top: 5px solid rgba(255, 255, 255, 0.5);
+                margin-right: 8px;
+            }
+            QComboBox QAbstractItemView {
+                background: #0F1E36;
+                color: white;
+                border: 1px solid rgba(56, 144, 223, 40);
+                border-radius: 6px;
+                selection-background-color: rgba(56, 144, 223, 50);
+                outline: none;
+                padding: 4px;
+            }
+        """
+
+    @staticmethod
+    def dark_action_button() -> str:
+        """Gradient blue action button for dark header zones."""
+        return """
+            QPushButton {
+                background: qlineargradient(x1:0, y1:0, x2:0.5, y2:1,
+                    stop:0 #4DA0EF, stop:0.45 #3890DF, stop:1 #2E7BD6);
+                color: white;
+                border: 1px solid rgba(120, 190, 255, 0.35);
+                border-radius: 10px;
+                padding: 0 24px;
+                font-weight: 700;
+                font-size: 11pt;
+            }
+            QPushButton:hover {
+                background: qlineargradient(x1:0, y1:0, x2:0.5, y2:1,
+                    stop:0 #5AACFF, stop:0.45 #4DA0EF, stop:1 #3890DF);
+                border: 1px solid rgba(140, 210, 255, 0.55);
+            }
+            QPushButton:pressed {
+                background: qlineargradient(x1:0, y1:0, x2:0.5, y2:1,
+                    stop:0 #3890DF, stop:0.5 #2E7BD6, stop:1 #266FC0);
+                border: 1px solid rgba(100, 170, 240, 0.25);
+            }
+            QPushButton:disabled {
+                background: rgba(56, 144, 223, 0.25);
+                color: rgba(255, 255, 255, 0.4);
+                border: 1px solid rgba(56, 144, 223, 0.15);
+            }
+        """
+
+    @staticmethod
+    def data_card() -> str:
+        """Blue-tinted card with subtle gradient for data list items."""
+        return """
+            QFrame {
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
+                    stop:0 #F7FAFF, stop:1 #F0F5FF);
+                border-radius: 14px;
+                border: 1px solid #E2EAF2;
+            }
+        """
+
+    @staticmethod
+    def data_card_hover() -> str:
+        """Hover state for data cards."""
+        return """
+            QFrame {
+                background: #F0F5FF;
+                border-radius: 14px;
+                border: 1px solid rgba(56, 144, 223, 0.3);
+            }
+        """
+
+    @staticmethod
+    def form_card() -> str:
+        """White form card with shadow and rounded corners."""
+        return f"""
+            QFrame {{
+                background-color: {Colors.SURFACE};
+                border: 1px solid #E2EAF2;
+                border-radius: 14px;
+            }}
+        """
+
+    @staticmethod
+    def form_input_light() -> str:
+        """Light-themed form input for use inside white cards."""
+        return """
+            QLineEdit, QTextEdit, QPlainTextEdit {
+                background-color: #F8FAFF;
+                border: 1px solid #dcdfe6;
+                border-radius: 8px;
+                padding: 8px 12px;
+                color: #606266;
+                font-size: 10pt;
+            }
+            QLineEdit:focus, QTextEdit:focus, QPlainTextEdit:focus {
+                border: 1px solid #3890DF;
+            }
+            QLineEdit:disabled, QTextEdit:disabled, QPlainTextEdit:disabled {
+                background-color: #F1F5F9;
+                color: #94A3B8;
+            }
+        """
+
+    @staticmethod
+    def form_combo_light() -> str:
+        """Light-themed combo box for use inside white form cards."""
+        return f"""
+            QComboBox {{
+                padding: 6px 12px 6px 12px;
+                border: 1px solid #dcdfe6;
+                border-radius: 8px;
+                background-color: #F8FAFF;
+                font-size: 10pt;
+                color: #606266;
+            }}
+            QComboBox:focus {{
+                border: 1px solid #3890DF;
+            }}
+            QComboBox::drop-down {{
+                subcontrol-origin: padding;
+                subcontrol-position: center right;
+                width: 35px;
+                border: none;
+                margin-right: 5px;
+            }}
+            QComboBox::down-arrow {{
+                image: url({_IMAGES_DIR}/v.png);
+                width: 12px;
+                height: 12px;
+            }}
+            QComboBox QAbstractItemView {{
+                font-size: 10pt;
+                background-color: white;
+                selection-background-color: #3890DF;
+                selection-color: white;
+            }}
+        """
+
+    @staticmethod
+    def wizard_step_pill(active: bool = False, completed: bool = False) -> str:
+        """Step indicator pill for wizard progress inside dark header."""
+        if completed:
+            return """
+                QLabel {
+                    background: rgba(16, 185, 129, 0.2);
+                    color: #6EE7B7;
+                    border: 1px solid rgba(16, 185, 129, 0.4);
+                    border-radius: 14px;
+                    padding: 4px 16px;
+                    font-weight: 600;
+                }
+            """
+        elif active:
+            return """
+                QLabel {
+                    background: rgba(56, 144, 223, 0.25);
+                    color: white;
+                    border: 1px solid rgba(120, 190, 255, 0.6);
+                    border-radius: 14px;
+                    padding: 4px 16px;
+                    font-weight: 700;
+                }
+            """
+        else:
+            return """
+                QLabel {
+                    background: rgba(15, 31, 61, 0.5);
+                    color: rgba(139, 172, 200, 160);
+                    border: 1px solid rgba(56, 144, 223, 20);
+                    border-radius: 14px;
+                    padding: 4px 16px;
+                    font-weight: 400;
+                }
+            """
+
+    @staticmethod
+    def step_connector(active: bool = False) -> str:
+        """Connector line between wizard steps."""
+        color = "rgba(56, 144, 223, 0.6)" if active else "rgba(56, 144, 223, 0.15)"
+        return f"""
+            QFrame {{
+                background-color: {color};
+                max-height: 2px;
+                min-height: 2px;
+            }}
+        """
+
+    @staticmethod
+    def nav_footer() -> str:
+        """Elevated wizard/page footer with shadow border."""
+        return f"""
+            QFrame {{
+                background-color: {Colors.SURFACE};
+                border-top: 1px solid #E2EAF2;
+            }}
+        """
+
+    @staticmethod
+    def nav_button_primary() -> str:
+        """Primary navigation button (Next, Confirm) for wizard footers."""
+        return f"""
+            QPushButton {{
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #4DA0EF, stop:0.5 #3890DF, stop:1 #2E7BD6);
+                color: white;
+                border: 1px solid rgba(120, 190, 255, 0.3);
+                border-radius: 10px;
+                padding: 12px 32px;
+                font-weight: 700;
+                font-size: 12pt;
+            }}
+            QPushButton:hover {{
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #5AACFF, stop:0.5 #4DA0EF, stop:1 #3890DF);
+            }}
+            QPushButton:pressed {{
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #3890DF, stop:0.5 #2E7BD6, stop:1 #266FC0);
+            }}
+            QPushButton:disabled {{
+                background: #E8EDF2;
+                color: #B0BEC5;
+                border-color: #DDE3EA;
+            }}
+        """
+
+    @staticmethod
+    def nav_button_secondary() -> str:
+        """Secondary navigation button (Back, Cancel) for wizard footers."""
+        return """
+            QPushButton {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #FAFBFF, stop:1 #F0F4FA);
+                border: 1px solid rgba(56, 144, 223, 0.20);
+                border-radius: 10px;
+                color: #3890DF;
+                padding: 12px 32px;
+                font-weight: 600;
+                font-size: 12pt;
+            }
+            QPushButton:hover {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #EBF5FF, stop:1 #E0EDFA);
+                border-color: rgba(56, 144, 223, 0.40);
+            }
+            QPushButton:pressed {
+                background: #E0EDFA;
+            }
+            QPushButton:disabled {
+                color: #C0C8D0;
+                background: #F5F7FA;
+                border-color: #E8ECF0;
+            }
+        """
+
+    @staticmethod
+    def accordion_header() -> str:
+        """Accordion header card style for expandable sections."""
+        return """
+            QFrame {
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
+                    stop:0 #F7FAFF, stop:1 #F0F5FF);
+                border: 1px solid #E2EAF2;
+                border-radius: 12px;
+            }
+            QFrame:hover {
+                border-color: rgba(56, 144, 223, 0.35);
+                background: #F0F5FF;
+            }
+        """
+
+    @staticmethod
+    def accordion_body() -> str:
+        """Accordion body content area."""
+        return f"""
+            QFrame {{
+                background-color: {Colors.SURFACE};
+                border: 1px solid #E8EDF2;
+                border-top: none;
+                border-bottom-left-radius: 12px;
+                border-bottom-right-radius: 12px;
+            }}
+        """
+
+    @staticmethod
+    def status_badge(color: str, bg: str, border: str = "") -> str:
+        """Colored status badge/pill."""
+        border_css = f"border: 1px solid {border};" if border else f"border: 1px solid {color}33;"
+        return f"""
+            QLabel {{
+                background-color: {bg};
+                color: {color};
+                {border_css}
+                border-radius: 11px;
+                padding: 2px 10px;
+                font-weight: 600;
+            }}
+        """
+
+    @staticmethod
+    def modern_table() -> str:
+        """Modern table styling with blue-tinted headers and hover effects."""
+        return """
+            QTableWidget {
+                border: none;
+                background-color: white;
+                font-size: 10.5pt;
+                font-weight: 400;
+                color: #212B36;
+            }
+            QTableWidget::item {
+                padding: 8px 15px;
+                border-bottom: 1px solid #F0F0F0;
+                color: #212B36;
+                font-size: 10.5pt;
+                font-weight: 400;
+            }
+            QTableWidget::item:hover {
+                background-color: #F5F9FF;
+            }
+            QHeaderView {
+                border-top-left-radius: 16px;
+                border-top-right-radius: 16px;
+            }
+            QHeaderView::section {
+                background-color: #F0F7FF;
+                padding: 12px;
+                padding-left: 30px;
+                border: none;
+                border-bottom: 2px solid #E0EFFF;
+                color: #3890DF;
+                font-weight: 600;
+                font-size: 11pt;
+                height: 56px;
+            }
+            QHeaderView::section:hover {
+                background-color: #E0EFFF;
+            }
+            QTableView {
+                border: none;
+                background-color: white;
+            }
+            QTableView::item {
+                padding: 12px 8px;
+                border-bottom: 1px solid #F0F4F8;
+            }
+            QTableView::item:selected {
+                background-color: #EBF5FF;
+                color: #212B36;
+            }
+            QTableView::item:hover {
+                background-color: #F5F9FF;
+            }
+        """
+
+    @staticmethod
+    def table_card() -> str:
+        """White card container for tables with rounded corners."""
+        return """
+            QFrame {
+                background-color: white;
+                border-radius: 16px;
+                border: 1px solid #E8EDF2;
+            }
+        """
+
+    @staticmethod
+    def pagination_button(active: bool = False) -> str:
+        """Pagination page number button."""
+        if active:
+            return f"""
+                QPushButton {{
+                    background-color: {Colors.PRIMARY_BLUE};
+                    color: white;
+                    border: none;
+                    border-radius: 8px;
+                    min-width: 32px;
+                    min-height: 32px;
+                    max-width: 32px;
+                    max-height: 32px;
+                    font-weight: 600;
+                }}
+            """
+        return f"""
+            QPushButton {{
+                background-color: transparent;
+                color: {Colors.TEXT_SECONDARY};
+                border: 1px solid #E8EDF2;
+                border-radius: 8px;
+                min-width: 32px;
+                min-height: 32px;
+                max-width: 32px;
+                max-height: 32px;
+            }}
+            QPushButton:hover {{
+                background-color: #F0F5FF;
+                border-color: rgba(56, 144, 223, 0.3);
+                color: {Colors.PRIMARY_BLUE};
+            }}
+        """
+
+    @staticmethod
+    def refresh_button_dark() -> str:
+        """Refresh/action button styled for dark header zone."""
+        return """
+            QPushButton {
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                    stop:0 #2E7BD6, stop:1 #3890DF);
+                color: white;
+                border: none;
+                border-radius: 8px;
+                padding: 7px 18px;
+                font-size: 10pt;
+                font-weight: 600;
+            }
+            QPushButton:hover {
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                    stop:0 #3688E3, stop:1 #4A9EED);
+            }
+            QPushButton:pressed {
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                    stop:0 #2568B8, stop:1 #2E7BD6);
+            }
+        """
+
+    @staticmethod
+    def back_button_light() -> str:
+        """Light-themed back button for content areas."""
+        return """
+            QPushButton {
+                background-color: #F1F5F9;
+                color: #475569;
+                border: 1px solid #E2E8F0;
+                border-radius: 8px;
+                font-weight: 600;
+                padding: 8px 16px;
+            }
+            QPushButton:hover {
+                background-color: #E2E8F0;
+            }
+            QPushButton:pressed {
+                background-color: #CBD5E1;
+            }
+        """
+
+    @staticmethod
+    def empty_state_dark() -> str:
+        """Dark constellation-themed empty state background."""
+        return """
+            QFrame {
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
+                    stop:0 #0E2035, stop:0.5 #132D50, stop:1 #1A3860);
+                border-radius: 16px;
+                border: 1px solid rgba(56, 144, 223, 0.15);
+            }
+        """
+
+    @staticmethod
+    def radio_button() -> str:
+        """Styled radio button."""
+        return f"""
+            QRadioButton {{
+                background: transparent;
+                border: none;
+                spacing: 8px;
+            }}
+            QRadioButton::indicator {{
+                width: 16px;
+                height: 16px;
+                border-radius: 8px;
+                border: 2px solid #C4CDD5;
+                background: {Colors.BACKGROUND};
+            }}
+            QRadioButton::indicator:hover {{
+                border-color: {Colors.PRIMARY_BLUE};
+            }}
+            QRadioButton::indicator:checked {{
+                width: 16px;
+                height: 16px;
+                border-radius: 8px;
+                border: 4px solid {Colors.PRIMARY_BLUE};
+                background: {Colors.PRIMARY_BLUE};
+            }}
+        """
+
+
 # Convenience functions for backward compatibility
 def get_button_style(variant: str = "primary") -> str:
     """

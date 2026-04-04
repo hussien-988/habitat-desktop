@@ -9,7 +9,9 @@ from PyQt5.QtCore import Qt, pyqtSignal, QTimer, QThread
 from PyQt5.QtGui import QColor
 
 from ui.components.wizard_header import WizardHeader
+from ui.components.accent_line import AccentLine
 from ui.font_utils import create_font, FontManager
+from ui.style_manager import StyleManager
 from services.exceptions import NetworkException, ApiException
 from ui.components.toast import Toast
 from services.translation_manager import tr, get_layout_direction
@@ -108,10 +110,9 @@ class ImportWizardPage(QWidget):
         self._create_steps()
 
     def _setup_ui(self):
-        """Setup UI (SAME structure as FieldWorkPreparationPage)."""
+        """Setup UI with dark wizard header and step pills."""
         self.setLayoutDirection(get_layout_direction())
 
-        from ui.style_manager import StyleManager
         self.setStyleSheet(StyleManager.page_background())
 
         # Outer layout (no padding) for full-width footer
@@ -133,16 +134,18 @@ class ImportWizardPage(QWidget):
         )
         content_layout.setSpacing(0)
 
-        # Header (fixed)
+        # Dark header with integrated step indicator pills
+        step_names = [tr(key) for key in _STEP_NAMES_KEYS]
         self.header = WizardHeader(
             title=tr("wizard.import.title"),
-            subtitle=tr("wizard.import.subtitle")
+            subtitle=tr("wizard.import.subtitle"),
+            steps=step_names,
         )
         content_layout.addWidget(self.header)
 
-        # Step indicator
-        self._step_indicator = self._create_step_indicator()
-        content_layout.addWidget(self._step_indicator)
+        # Accent line
+        self._accent = AccentLine()
+        content_layout.addWidget(self._accent)
 
         # Step container (QStackedWidget)
         self.step_container = QStackedWidget()
@@ -159,108 +162,9 @@ class ImportWizardPage(QWidget):
 
     # -- Step Indicator -------------------------------------------------------
 
-    def _create_step_indicator(self) -> QFrame:
-        """Create step progress indicator bar."""
-        container = QFrame()
-        container.setFixedHeight(80)
-        container.setStyleSheet("""
-            QFrame {
-                background-color: #FFFFFF;
-                border-bottom: 1px solid #E1E8ED;
-            }
-        """)
-
-        layout = QHBoxLayout(container)
-        layout.setContentsMargins(40, 8, 40, 8)
-        layout.setSpacing(0)
-
-        self._step_circles = []
-        self._step_labels = []
-        self._step_lines = []
-
-        for i in range(TOTAL_STEPS):
-            # Circle
-            circle = QLabel(str(i + 1))
-            circle.setFixedSize(32, 32)
-            circle.setAlignment(Qt.AlignCenter)
-            circle.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
-            self._step_circles.append(circle)
-
-            # Label
-            name_label = QLabel(tr(_STEP_NAMES_KEYS[i]))
-            name_label.setFont(create_font(size=8, weight=FontManager.WEIGHT_REGULAR))
-            name_label.setAlignment(Qt.AlignCenter)
-            name_label.setStyleSheet("background: transparent; border: none;")
-            self._step_labels.append(name_label)
-
-            # Circle + label vertical group
-            step_group = QVBoxLayout()
-            step_group.setSpacing(6)
-            step_group.setAlignment(Qt.AlignCenter)
-            step_group.addWidget(circle, 0, Qt.AlignCenter)
-            step_group.addWidget(name_label, 0, Qt.AlignCenter)
-
-            step_widget = QWidget()
-            step_widget.setStyleSheet("background: transparent; border: none;")
-            step_widget.setLayout(step_group)
-            step_widget.setFixedWidth(100)
-
-            layout.addWidget(step_widget)
-
-            # Connecting line (not after last step)
-            if i < TOTAL_STEPS - 1:
-                line = QFrame()
-                line.setFixedHeight(2)
-                line.setStyleSheet("background: transparent; border: none;")
-                self._step_lines.append(line)
-
-                line_container = QWidget()
-                line_container.setStyleSheet("background: transparent; border: none;")
-                line_layout = QVBoxLayout(line_container)
-                line_layout.setContentsMargins(0, 16, 0, 26)
-                line_layout.addWidget(line)
-
-                layout.addWidget(line_container, 1)
-
-        self._update_step_indicator(0)
-        return container
-
     def _update_step_indicator(self, current: int):
-        """Update step indicator styling for the current step."""
-        for i in range(TOTAL_STEPS):
-            circle = self._step_circles[i]
-            label = self._step_labels[i]
-
-            if i < current:
-                # Completed
-                circle.setStyleSheet("""
-                    background-color: #10B981; color: #FFFFFF;
-                    border-radius: 16px; border: none;
-                """)
-                circle.setText("\u2713")
-                label.setStyleSheet("color: #10B981; background: transparent; border: none;")
-            elif i == current:
-                # Active
-                circle.setStyleSheet("""
-                    background-color: #3890DF; color: #FFFFFF;
-                    border-radius: 16px; border: none;
-                """)
-                circle.setText(str(i + 1))
-                label.setStyleSheet("color: #3890DF; background: transparent; border: none; font-weight: 600;")
-            else:
-                # Upcoming
-                circle.setStyleSheet("""
-                    background-color: #F3F4F6; color: #9CA3AF;
-                    border-radius: 16px; border: none;
-                """)
-                circle.setText(str(i + 1))
-                label.setStyleSheet("color: #9CA3AF; background: transparent; border: none;")
-
-        for i, line in enumerate(self._step_lines):
-            if i < current:
-                line.setStyleSheet("background-color: #10B981; border: none;")
-            else:
-                line.setStyleSheet("background-color: #E5E7EB; border: none;")
+        """Update step indicator in the dark wizard header."""
+        self.header.set_current_step(current)
 
     # -- Loading Overlay ------------------------------------------------------
 
@@ -412,12 +316,7 @@ class ImportWizardPage(QWidget):
     def _create_footer(self):
         """Create footer with back, cancel, and next buttons."""
         footer = QFrame()
-        footer.setStyleSheet("""
-            QFrame {
-                background-color: #FFFFFF;
-                border-top: 1px solid #E1E8ED;
-            }
-        """)
+        footer.setStyleSheet(StyleManager.nav_footer())
         footer.setFixedHeight(74)
 
         layout = QHBoxLayout(footer)
@@ -429,33 +328,7 @@ class ImportWizardPage(QWidget):
         self.btn_back.setFixedSize(252, 50)
         self.btn_back.setCursor(Qt.PointingHandCursor)
         self.btn_back.setFont(create_font(size=12, weight=FontManager.WEIGHT_SEMIBOLD))
-
-        shadow_back = QGraphicsDropShadowEffect()
-        shadow_back.setBlurRadius(8)
-        shadow_back.setXOffset(0)
-        shadow_back.setYOffset(2)
-        shadow_back.setColor(QColor("#E5EAF6"))
-        self.btn_back.setGraphicsEffect(shadow_back)
-
-        self.btn_back.setStyleSheet("""
-            QPushButton {
-                background-color: #FFFFFF;
-                color: #414D5A;
-                border: none;
-                border-radius: 8px;
-                font-size: 12pt;
-                font-weight: 600;
-                padding: 0;
-            }
-            QPushButton:hover {
-                background-color: #F8F9FA;
-            }
-            QPushButton:disabled {
-                background-color: transparent;
-                color: transparent;
-                border: none;
-            }
-        """)
+        self.btn_back.setStyleSheet(StyleManager.nav_button_secondary())
         self.btn_back.clicked.connect(self._on_back)
         self.btn_back.setEnabled(False)
         layout.addWidget(self.btn_back)
@@ -467,31 +340,25 @@ class ImportWizardPage(QWidget):
         self.btn_cancel.setFixedSize(252, 50)
         self.btn_cancel.setCursor(Qt.PointingHandCursor)
         self.btn_cancel.setFont(create_font(size=12, weight=FontManager.WEIGHT_SEMIBOLD))
-
-        shadow_cancel = QGraphicsDropShadowEffect()
-        shadow_cancel.setBlurRadius(8)
-        shadow_cancel.setXOffset(0)
-        shadow_cancel.setYOffset(2)
-        shadow_cancel.setColor(QColor("#F6E5E5"))
-        self.btn_cancel.setGraphicsEffect(shadow_cancel)
-
         self.btn_cancel.setStyleSheet("""
             QPushButton {
-                background-color: #FFFFFF;
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #FAFBFF, stop:1 #FFF5F5);
                 color: #DC3545;
-                border: 1px solid #DC3545;
-                border-radius: 8px;
-                font-size: 12pt;
+                border: 1px solid rgba(220, 53, 69, 0.25);
+                border-radius: 10px;
+                padding: 12px 32px;
                 font-weight: 600;
-                padding: 0;
+                font-size: 12pt;
             }
             QPushButton:hover {
-                background-color: #FFF5F5;
+                background: #FFF0F0;
+                border-color: rgba(220, 53, 69, 0.45);
             }
             QPushButton:disabled {
-                background-color: transparent;
-                color: transparent;
-                border: none;
+                color: #C0C8D0;
+                background: #F5F7FA;
+                border-color: #E8ECF0;
             }
         """)
         self.btn_cancel.clicked.connect(self._on_cancel_package)
@@ -506,33 +373,7 @@ class ImportWizardPage(QWidget):
         self.btn_next.setFixedSize(252, 50)
         self.btn_next.setCursor(Qt.PointingHandCursor)
         self.btn_next.setFont(create_font(size=12, weight=FontManager.WEIGHT_SEMIBOLD))
-
-        shadow_next = QGraphicsDropShadowEffect()
-        shadow_next.setBlurRadius(8)
-        shadow_next.setXOffset(0)
-        shadow_next.setYOffset(2)
-        shadow_next.setColor(QColor("#E5EAF6"))
-        self.btn_next.setGraphicsEffect(shadow_next)
-
-        self.btn_next.setStyleSheet("""
-            QPushButton {
-                background-color: #f0f7ff;
-                color: #3890DF;
-                border: 1px solid #3890DF;
-                border-radius: 8px;
-                font-size: 12pt;
-                font-weight: 600;
-                padding: 0;
-            }
-            QPushButton:hover {
-                background-color: #E3F2FD;
-            }
-            QPushButton:disabled {
-                background-color: #F8F9FA;
-                color: #9CA3AF;
-                border-color: #E1E8ED;
-            }
-        """)
+        self.btn_next.setStyleSheet(StyleManager.nav_button_primary())
         self.btn_next.clicked.connect(self._on_next)
         self.btn_next.setEnabled(False)
         layout.addWidget(self.btn_next)
@@ -1372,9 +1213,9 @@ class ImportWizardPage(QWidget):
         self.header.set_title(tr("wizard.import.title"))
         self.header.set_subtitle(tr("wizard.import.subtitle"))
 
-        # Step indicator labels
-        for i, key in enumerate(_STEP_NAMES_KEYS):
-            self._step_labels[i].setText(tr(key))
+        # Update step names in header
+        step_names = [tr(key) for key in _STEP_NAMES_KEYS]
+        self.header.set_steps(step_names)
 
         # Footer buttons
         self.btn_back.setText(tr("action.back_arrow"))

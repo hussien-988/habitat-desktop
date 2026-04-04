@@ -78,11 +78,23 @@ class PersonDialog(QDialog):
         self._field_styles = {}  # {widget: original_stylesheet} for error state restore
 
         self._overlay = None
+        self._slide_anim = None
         self.setModal(True)
-        self.setFixedSize(589, 674)
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.Dialog)
         self.setAttribute(Qt.WA_TranslucentBackground)
         self.setStyleSheet("QDialog { background-color: transparent; }")
+
+        # Dynamic sizing: bottom-sheet style (centered, from bottom)
+        # Use rect() (client area) not geometry() (includes window frame)
+        parent_win = parent.window() if parent else None
+        if parent_win:
+            client_rect = parent_win.rect()
+            panel_w = min(700, client_rect.width() - 40)
+            panel_h = min(680, client_rect.height() - 30)
+        else:
+            panel_w = 700
+            panel_h = 680
+        self.setFixedSize(panel_w, panel_h)
 
         self._setup_ui()
 
@@ -106,6 +118,36 @@ class PersonDialog(QDialog):
             if main_window and hasattr(main_window, '_api_token') and main_window._api_token:
                 self._api_service.set_access_token(main_window._api_token)
 
+    def showEvent(self, event):
+        """Position as bottom sheet and animate slide-up."""
+        super().showEvent(event)
+        parent = self.parent()
+        if not parent:
+            return
+        try:
+            parent_win = parent.window()
+            client_rect = parent_win.rect()
+            panel_w = self.width()
+            panel_h = self.height()
+
+            # Position at bottom center using client area
+            parent_global = parent_win.mapToGlobal(client_rect.topLeft())
+            target_x = parent_global.x() + (client_rect.width() - panel_w) // 2
+            target_y = parent_global.y() + client_rect.height() - panel_h - 10
+
+            # Slide-up animation from bottom
+            from PyQt5.QtCore import QPropertyAnimation, QEasingCurve, QPoint
+            start_y = parent_global.y() + client_rect.height()
+            self.move(target_x, start_y)
+
+            self._slide_anim = QPropertyAnimation(self, b"pos", self)
+            self._slide_anim.setDuration(300)
+            self._slide_anim.setStartValue(QPoint(target_x, start_y))
+            self._slide_anim.setEndValue(QPoint(target_x, target_y))
+            self._slide_anim.setEasingCurve(QEasingCurve.OutQuart)
+            self._slide_anim.start()
+        except Exception:
+            pass
 
     # UI Setup
 
@@ -117,14 +159,18 @@ class PersonDialog(QDialog):
         outer_layout.setContentsMargins(12, 12, 12, 12)
         outer_layout.setSpacing(0)
 
-        # White rounded content frame
+        # Side panel content frame
         content_frame = QFrame()
         content_frame.setObjectName("ContentFrame")
         content_frame.setStyleSheet("""
             QFrame#ContentFrame {
-                background-color: #FFFFFF;
-                border-radius: 24px;
-                border: none;
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #1B3555, stop:1 #152A42);
+                border-top-left-radius: 20px;
+                border-top-right-radius: 20px;
+                border-bottom-left-radius: 0px;
+                border-bottom-right-radius: 0px;
+                border-top: 1px solid rgba(56, 144, 223, 0.25);
             }
             QFrame#ContentFrame QLabel,
             QFrame#ContentFrame QRadioButton {
@@ -132,21 +178,58 @@ class PersonDialog(QDialog):
             }
         """)
 
-        # Drop shadow for floating effect
         from PyQt5.QtWidgets import QGraphicsDropShadowEffect
         shadow = QGraphicsDropShadowEffect(content_frame)
-        shadow.setBlurRadius(30)
-        shadow.setOffset(0, 4)
-        shadow.setColor(QColor(0, 0, 0, 40))
+        shadow.setBlurRadius(60)
+        shadow.setOffset(0, -6)
+        shadow.setColor(QColor(0, 0, 0, 100))
         content_frame.setGraphicsEffect(shadow)
 
         outer_layout.addWidget(content_frame)
 
-        main_layout = QVBoxLayout(content_frame)
-        main_layout.setSpacing(16)
-        main_layout.setContentsMargins(24, 24, 24, 24)
+        frame_layout = QVBoxLayout(content_frame)
+        frame_layout.setSpacing(0)
+        frame_layout.setContentsMargins(0, 0, 0, 0)
 
-        # Dialog title (right-aligned for RTL)
+        # Dark header bar
+        header_bar = QFrame()
+        header_bar.setFixedHeight(50)
+        header_bar.setObjectName("PanelHeader")
+        header_bar.setStyleSheet("""
+            QFrame#PanelHeader {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #0E2035, stop:0.5 #122C49, stop:1 #152F4E);
+                border-top-left-radius: 20px;
+                border-top-right-radius: 20px;
+                border-bottom-left-radius: 0px;
+                border-bottom-right-radius: 0px;
+            }
+        """)
+        header_layout = QHBoxLayout(header_bar)
+        header_layout.setContentsMargins(20, 0, 20, 0)
+        header_layout.setSpacing(10)
+
+        # Close button in header
+        close_btn = QPushButton("\u2715")
+        close_btn.setCursor(Qt.PointingHandCursor)
+        close_btn.setFixedSize(30, 30)
+        close_btn.setFont(create_font(size=10, weight=FontManager.WEIGHT_MEDIUM))
+        close_btn.setStyleSheet("""
+            QPushButton {
+                background: rgba(255, 255, 255, 0.08);
+                color: rgba(200, 220, 255, 0.85);
+                border: 1px solid rgba(56, 144, 223, 0.15);
+                border-radius: 8px;
+            }
+            QPushButton:hover {
+                background: rgba(255, 255, 255, 0.15);
+                color: white;
+            }
+        """)
+        close_btn.clicked.connect(self.reject)
+        header_layout.addWidget(close_btn)
+
+        # Title in dark header
         if self.read_only:
             title_text = tr("wizard.person_dialog.title_view")
         elif getattr(self, '_existing_person_mode', False):
@@ -156,10 +239,57 @@ class PersonDialog(QDialog):
         else:
             title_text = tr("wizard.person_dialog.title_add")
         self._dialog_title = QLabel(title_text)
-        self._dialog_title.setAlignment(Qt.AlignAbsolute | Qt.AlignRight)
-        self._dialog_title.setFont(create_font(size=14, weight=FontManager.WEIGHT_BOLD))
-        self._dialog_title.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent;")
-        main_layout.addWidget(self._dialog_title)
+        self._dialog_title.setFont(create_font(size=13, weight=FontManager.WEIGHT_SEMIBOLD))
+        self._dialog_title.setStyleSheet("color: white; background: transparent; border: none;")
+        header_layout.addWidget(self._dialog_title, 1)
+
+        frame_layout.addWidget(header_bar)
+
+        # Accent line
+        accent_line = QFrame()
+        accent_line.setFixedHeight(2)
+        accent_line.setStyleSheet("""
+            QFrame {
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                    stop:0 rgba(56, 144, 223, 0),
+                    stop:0.2 rgba(56, 144, 223, 120),
+                    stop:0.5 rgba(91, 168, 240, 180),
+                    stop:0.8 rgba(56, 144, 223, 120),
+                    stop:1 rgba(56, 144, 223, 0));
+            }
+        """)
+        frame_layout.addWidget(accent_line)
+
+        # Content area with scroll
+        from PyQt5.QtWidgets import QScrollArea
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.NoFrame)
+        scroll.setStyleSheet("""
+            QScrollArea { border: none; background: transparent; }
+            QScrollBar:vertical {
+                background: transparent; width: 6px; margin: 0;
+            }
+            QScrollBar::handle:vertical {
+                background: rgba(56, 144, 223, 0.30);
+                border-radius: 3px; min-height: 30px;
+            }
+            QScrollBar::handle:vertical:hover {
+                background: rgba(56, 144, 223, 0.50);
+            }
+            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+                height: 0px;
+            }
+        """)
+
+        content_inner = QWidget()
+        content_inner.setStyleSheet("background: transparent;")
+        main_layout = QVBoxLayout(content_inner)
+        main_layout.setSpacing(14)
+        main_layout.setContentsMargins(24, 18, 24, 18)
+
+        scroll.setWidget(content_inner)
+        frame_layout.addWidget(scroll, 1)
 
         # Progress indicator (3 bars)
         self._setup_progress_indicator(main_layout)
@@ -203,6 +333,43 @@ class PersonDialog(QDialog):
         self.tab_widget.currentChanged.connect(self._update_progress)
         main_layout.addWidget(self.tab_widget)
 
+        # Fixed bottom button bar (outside scroll area, always visible)
+        self._btn_stack = QStackedWidget()
+        self._btn_stack.setStyleSheet("background: transparent;")
+
+        # Tab 1 buttons: Cancel | Next
+        bar1 = QWidget()
+        bar1.setStyleSheet("background: transparent;")
+        bar1_layout = QHBoxLayout(bar1)
+        bar1_layout.setContentsMargins(24, 10, 24, 14)
+        bar1_layout.setSpacing(8)
+        bar1_layout.addWidget(self._create_btn(tr("common.cancel"), primary=False, callback=self.reject))
+        bar1_layout.addWidget(self._create_btn(tr("wizard.person_dialog.next"), primary=True, callback=self._go_to_tab2))
+        self._btn_stack.addWidget(bar1)
+
+        # Tab 2 buttons: Previous | Next
+        bar2 = QWidget()
+        bar2.setStyleSheet("background: transparent;")
+        bar2_layout = QHBoxLayout(bar2)
+        bar2_layout.setContentsMargins(24, 10, 24, 14)
+        bar2_layout.setSpacing(8)
+        bar2_layout.addWidget(self._create_btn(tr("wizard.person_dialog.previous"), primary=False, callback=self._go_to_tab1))
+        bar2_layout.addWidget(self._create_btn(tr("wizard.person_dialog.next"), primary=True, callback=self._go_to_tab3))
+        self._btn_stack.addWidget(bar2)
+
+        # Tab 3 buttons: Previous | Save
+        bar3 = QWidget()
+        bar3.setStyleSheet("background: transparent;")
+        bar3_layout = QHBoxLayout(bar3)
+        bar3_layout.setContentsMargins(24, 10, 24, 14)
+        bar3_layout.setSpacing(8)
+        bar3_layout.addWidget(self._create_btn(tr("wizard.person_dialog.previous"), primary=False, callback=self._go_to_tab2_back))
+        bar3_layout.addWidget(self._create_btn(tr("common.save"), primary=True, callback=self._on_final_save))
+        self._btn_stack.addWidget(bar3)
+
+        self.tab_widget.currentChanged.connect(self._btn_stack.setCurrentIndex)
+        frame_layout.addWidget(self._btn_stack)
+
         # Loading spinner overlay
         self._spinner = LoadingSpinnerOverlay(self)
 
@@ -222,36 +389,30 @@ class PersonDialog(QDialog):
         for widget in self.findChildren(QRadioButton):
             widget.setEnabled(False)
 
-        # Replace all buttons with navigation-only buttons per tab
-        for i in range(self.tab_widget.count()):
-            tab = self.tab_widget.widget(i)
-            tab_layout = tab.layout()
-            if not tab_layout:
+        # Replace bottom bar buttons with navigation-only (no save)
+        for i in range(self._btn_stack.count()):
+            bar = self._btn_stack.widget(i)
+            bar_layout = bar.layout()
+            if not bar_layout:
                 continue
-            # Find and remove button layouts (last item in each tab)
-            last_item = tab_layout.itemAt(tab_layout.count() - 1)
-            if last_item and last_item.layout():
-                btn_layout = last_item.layout()
-                # Immediately remove old buttons (hide + reparent, not deleteLater)
-                widgets_to_remove = []
-                for j in range(btn_layout.count()):
-                    item = btn_layout.itemAt(j)
-                    if item and item.widget():
-                        widgets_to_remove.append(item.widget())
-                for w in widgets_to_remove:
-                    w.hide()
-                    btn_layout.removeWidget(w)
-                    w.setParent(None)
-                # Add navigation buttons for read-only
-                if i == 0:
-                    btn_layout.addWidget(self._create_btn(tr("common.cancel"), primary=False, callback=self.reject))
-                    btn_layout.addWidget(self._create_btn(tr("wizard.person_dialog.next"), primary=True, callback=self._go_to_tab2))
-                elif i == 1:
-                    btn_layout.addWidget(self._create_btn(tr("wizard.person_dialog.previous"), primary=False, callback=self._go_to_tab1))
-                    btn_layout.addWidget(self._create_btn(tr("wizard.person_dialog.next"), primary=True, callback=self._go_to_tab3))
-                else:
-                    btn_layout.addWidget(self._create_btn(tr("wizard.person_dialog.previous"), primary=False, callback=self._go_to_tab2_back))
-                    btn_layout.addWidget(self._create_btn(tr("common.cancel"), primary=True, callback=self.reject))
+            widgets_to_remove = []
+            for j in range(bar_layout.count()):
+                item = bar_layout.itemAt(j)
+                if item and item.widget():
+                    widgets_to_remove.append(item.widget())
+            for w in widgets_to_remove:
+                w.hide()
+                bar_layout.removeWidget(w)
+                w.setParent(None)
+            if i == 0:
+                bar_layout.addWidget(self._create_btn(tr("common.cancel"), primary=False, callback=self.reject))
+                bar_layout.addWidget(self._create_btn(tr("wizard.person_dialog.next"), primary=True, callback=self._go_to_tab2))
+            elif i == 1:
+                bar_layout.addWidget(self._create_btn(tr("wizard.person_dialog.previous"), primary=False, callback=self._go_to_tab1))
+                bar_layout.addWidget(self._create_btn(tr("wizard.person_dialog.next"), primary=True, callback=self._go_to_tab3))
+            else:
+                bar_layout.addWidget(self._create_btn(tr("wizard.person_dialog.previous"), primary=False, callback=self._go_to_tab2_back))
+                bar_layout.addWidget(self._create_btn(tr("common.cancel"), primary=True, callback=self.reject))
 
     def _apply_existing_person_mode(self):
         """Make Tab1 and Tab2 fields read-only when linking an existing person to a unit."""
@@ -274,7 +435,7 @@ class PersonDialog(QDialog):
             bar = QFrame()
             bar.setFixedHeight(5)
             bar.setLayoutDirection(Qt.LeftToRight)  # Prevent RTL from flipping gradient
-            bar.setStyleSheet("QFrame { background-color: #e0e6ed; border-radius: 2px; }")
+            bar.setStyleSheet("QFrame { background-color: rgba(255, 255, 255, 0.1); border-radius: 2px; }")
             self._progress_bars.append(bar)
             progress_layout.addWidget(bar)
         layout.addLayout(progress_layout)
@@ -347,7 +508,7 @@ class PersonDialog(QDialog):
     def _update_bar_style(self, bar: QFrame, fill_pct: float):
         """Update a single progress bar with gradient fill."""
         if fill_pct <= 0:
-            bar.setStyleSheet("QFrame { background-color: #e0e6ed; border-radius: 2px; }")
+            bar.setStyleSheet("QFrame { background-color: rgba(255, 255, 255, 0.1); border-radius: 2px; }")
         elif fill_pct >= 1.0:
             bar.setStyleSheet("QFrame { background-color: #3890DF; border-radius: 2px; }")
         else:
@@ -358,7 +519,7 @@ class PersonDialog(QDialog):
                 QFrame {{
                     background: qlineargradient(x1:1, y1:0, x2:0, y2:0,
                         stop:0 #3890DF, stop:{stop} #3890DF,
-                        stop:{stop2} #e0e6ed, stop:1 #e0e6ed);
+                        stop:{stop2} rgba(255,255,255,0.1), stop:1 rgba(255,255,255,0.1));
                     border-radius: 2px;
                 }}
             """)
@@ -384,11 +545,11 @@ class PersonDialog(QDialog):
         tab_layout.setContentsMargins(0, 0, 0, 0)
         tab_layout.setSpacing(10)
 
-        label_style = f"color: {Colors.WIZARD_TITLE}; font-weight: 600; font-size: 11pt; background: transparent;"
+        label_style = "color: rgba(180, 210, 240, 0.85); font-weight: 600; font-size: 11pt; background: transparent;"
 
         grid = QGridLayout()
         grid.setHorizontalSpacing(12)
-        grid.setVerticalSpacing(8)
+        grid.setVerticalSpacing(14)
         grid.setColumnStretch(0, 1)
         grid.setColumnStretch(1, 1)
 
@@ -538,14 +699,6 @@ class PersonDialog(QDialog):
         grid.addWidget(upload_frame, row, 0, 1, 2)
 
         tab_layout.addLayout(grid)
-        tab_layout.addStretch()
-
-        # Buttons: Next | Cancel
-        btn_layout = QHBoxLayout()
-        btn_layout.setSpacing(8)
-        btn_layout.addWidget(self._create_btn(tr("common.cancel"), primary=False, callback=self.reject))
-        btn_layout.addWidget(self._create_btn(tr("wizard.person_dialog.next"), primary=True, callback=self._go_to_tab2))
-        tab_layout.addLayout(btn_layout)
 
         self.tab_widget.addTab(tab, "")
 
@@ -560,11 +713,11 @@ class PersonDialog(QDialog):
         tab_layout.setContentsMargins(0, 0, 0, 0)
         tab_layout.setSpacing(10)
 
-        label_style = f"color: {Colors.WIZARD_TITLE}; font-weight: 600; font-size: 11pt; background: transparent;"
+        label_style = "color: rgba(180, 210, 240, 0.85); font-weight: 600; font-size: 11pt; background: transparent;"
 
         grid = QGridLayout()
         grid.setHorizontalSpacing(12)
-        grid.setVerticalSpacing(8)
+        grid.setVerticalSpacing(14)
         grid.setColumnStretch(0, 1)
         grid.setColumnStretch(1, 1)
 
@@ -602,9 +755,15 @@ class PersonDialog(QDialog):
         # Mobile (full width)
         grid.addWidget(self._label(tr("wizard.person_dialog.mobile"), label_style), row, 0, 1, 2)
         row += 1
-        from ui.style_manager import StyleManager
         mobile_container = QFrame()
-        mobile_container.setStyleSheet(StyleManager.mobile_input_container())
+        mobile_container.setStyleSheet("""
+            QFrame {
+                border: 1px solid rgba(56, 144, 223, 0.2);
+                border-radius: 8px;
+                background-color: rgba(255, 255, 255, 0.07);
+                min-height: 40px; max-height: 40px;
+            }
+        """)
         mobile_layout = QHBoxLayout(mobile_container)
         mobile_layout.setContentsMargins(0, 0, 0, 0)
         mobile_layout.setSpacing(0)
@@ -613,12 +772,23 @@ class PersonDialog(QDialog):
         prefix_label = QLabel("+963 | 09")
         prefix_label.setFixedWidth(90)
         prefix_label.setAlignment(Qt.AlignCenter)
-        prefix_label.setStyleSheet(StyleManager.mobile_input_prefix())
+        prefix_label.setStyleSheet("""
+            color: rgba(180, 210, 240, 0.7);
+            font-size: 14px; font-weight: 500;
+            border: none; border-left: 1px solid rgba(56,144,223,0.2);
+            background: transparent; padding: 0 8px;
+        """)
 
         self.phone = QLineEdit()
         self.phone.setPlaceholderText("00000000")
         self.phone.setValidator(QRegExpValidator(QtRegExp(r"\d{0,8}")))
-        self.phone.setStyleSheet(StyleManager.mobile_input_field())
+        self.phone.setStyleSheet("""
+            QLineEdit {
+                border: none; background: transparent;
+                color: rgba(240, 248, 255, 0.95);
+                font-size: 14px; padding: 0 10px;
+            }
+        """)
 
         mobile_layout.addWidget(prefix_label)
         mobile_layout.addWidget(self.phone)
@@ -651,14 +821,6 @@ class PersonDialog(QDialog):
         grid.addLayout(landline_container, row, 0, 1, 2)
 
         tab_layout.addLayout(grid)
-        tab_layout.addStretch()
-
-        # Buttons: Next | Previous
-        btn_layout = QHBoxLayout()
-        btn_layout.setSpacing(8)
-        btn_layout.addWidget(self._create_btn(tr("wizard.person_dialog.previous"), primary=False, callback=self._go_to_tab1))
-        btn_layout.addWidget(self._create_btn(tr("wizard.person_dialog.next"), primary=True, callback=self._go_to_tab3))
-        tab_layout.addLayout(btn_layout)
 
         self.tab_widget.addTab(tab, "")
 
@@ -673,12 +835,11 @@ class PersonDialog(QDialog):
         tab_layout.setContentsMargins(0, 0, 0, 0)
         tab_layout.setSpacing(10)
 
-        label_style = f"color: {Colors.WIZARD_TITLE}; font-weight: 600; font-size: 11pt; background: transparent;"
-        from ui.style_manager import StyleManager
+        label_style = "color: rgba(180, 210, 240, 0.85); font-weight: 600; font-size: 11pt; background: transparent;"
 
         grid = QGridLayout()
         grid.setHorizontalSpacing(12)
-        grid.setVerticalSpacing(8)
+        grid.setVerticalSpacing(14)
         grid.setColumnStretch(0, 1)
         grid.setColumnStretch(1, 1)
 
@@ -768,20 +929,20 @@ class PersonDialog(QDialog):
         self.notes = CenteredTextEdit()
         self.notes.setPlaceholderText(tr("wizard.person_dialog.notes_placeholder"))
         self.notes.setPlaceholderStyleSheet(
-            "color: #9CA3AF; background: transparent; font-size: 16px; font-weight: 400;"
+            "color: rgba(180, 210, 240, 0.4); background: transparent; font-size: 16px; font-weight: 400;"
         )
         self.notes.setMaximumHeight(80)
         self.notes.setStyleSheet("""
             QTextEdit {
-                border: 1px solid #e0e6ed;
+                border: 1px solid rgba(56, 144, 223, 0.2);
                 border-radius: 8px;
                 padding: 10px;
-                background-color: #f0f7ff;
-                color: #333;
+                background-color: rgba(255, 255, 255, 0.07);
+                color: rgba(240, 248, 255, 0.95);
                 font-size: 16px;
             }
             QTextEdit:focus {
-                border: 1px solid #D0D7E2;
+                border: 1px solid rgba(56, 144, 223, 0.5);
             }
         """)
         self.notes.setLayoutDirection(get_layout_direction())
@@ -821,7 +982,7 @@ class PersonDialog(QDialog):
         choose_btn = QPushButton(tr("wizard.person_dialog.choose_existing_doc"))
         choose_btn.setStyleSheet("""
             QPushButton {
-                color: #059669;
+                color: rgba(100, 220, 160, 0.9);
                 text-decoration: underline;
                 border: none;
                 background: transparent;
@@ -829,7 +990,7 @@ class PersonDialog(QDialog):
                 font-weight: 500;
                 padding: 0px;
             }
-            QPushButton:hover { color: #047857; }
+            QPushButton:hover { color: rgba(130, 240, 180, 1.0); }
         """)
         choose_btn.setCursor(Qt.PointingHandCursor)
         choose_btn.clicked.connect(self._choose_existing_document)
@@ -842,14 +1003,6 @@ class PersonDialog(QDialog):
         self.rb_no_docs.toggled.connect(lambda checked: self._rel_upload_frame.setVisible(not checked))
 
         tab_layout.addLayout(grid)
-        tab_layout.addStretch()
-
-        # Buttons: Save | Previous
-        btn_layout = QHBoxLayout()
-        btn_layout.setSpacing(8)
-        btn_layout.addWidget(self._create_btn(tr("wizard.person_dialog.previous"), primary=False, callback=self._go_to_tab2_back))
-        btn_layout.addWidget(self._create_btn(tr("common.save"), primary=True, callback=self._on_final_save))
-        tab_layout.addLayout(btn_layout)
 
         self.tab_widget.addTab(tab, "")
 
@@ -861,19 +1014,19 @@ class PersonDialog(QDialog):
         frame.setObjectName("ExistingDocsFrame")
         frame.setStyleSheet("""
             QFrame#ExistingDocsFrame {
-                background-color: #F8FAFC;
-                border: 1px solid #E2E8F0;
+                background-color: rgba(255, 255, 255, 0.05);
+                border: 1px solid rgba(56, 144, 223, 0.15);
                 border-radius: 8px;
             }
-            QFrame#ExistingDocsFrame QLabel { background: transparent; }
-            QFrame#ExistingDocsFrame QCheckBox { background: transparent; }
+            QFrame#ExistingDocsFrame QLabel { background: transparent; color: rgba(200, 220, 240, 0.85); }
+            QFrame#ExistingDocsFrame QCheckBox { background: transparent; color: rgba(200, 220, 240, 0.85); }
         """)
         layout = QVBoxLayout(frame)
         layout.setContentsMargins(10, 8, 10, 8)
         layout.setSpacing(6)
 
         header = QLabel(tr("wizard.person_dialog.existing_docs_header"))
-        header.setStyleSheet("font-size: 11px; font-weight: 700; color: #64748B;")
+        header.setStyleSheet("font-size: 11px; font-weight: 700; color: rgba(140, 190, 240, 0.8);")
         header.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
         layout.addWidget(header)
 
@@ -909,6 +1062,8 @@ class PersonDialog(QDialog):
             return
 
         from PyQt5.QtWidgets import QCheckBox
+        from PyQt5.QtGui import QDesktopServices
+        from utils.helpers import download_evidence_file
 
         for ev in evidences:
             ev_id = (ev.get('id') or ev.get('evidenceId')
@@ -921,7 +1076,6 @@ class PersonDialog(QDialog):
                           or ev.get('DocumentIssuedDate') or '')
             file_name = ev.get('originalFileName') or ev.get('OriginalFileName') or ''
 
-            # Build display text
             display_parts = []
             if file_name:
                 display_parts.append(file_name)
@@ -930,8 +1084,14 @@ class PersonDialog(QDialog):
                 display_parts.append(date_part)
             label_text = " - ".join(display_parts) if display_parts else tr("wizard.person_dialog.document_label", doc_id=ev_id[:8])
 
+            row_w = QWidget()
+            row_w.setStyleSheet("background: transparent;")
+            row_lay = QHBoxLayout(row_w)
+            row_lay.setContentsMargins(0, 0, 0, 0)
+            row_lay.setSpacing(6)
+
             cb = QCheckBox(label_text)
-            cb.setStyleSheet("font-size: 12px; color: #334155;")
+            cb.setStyleSheet("font-size: 12px; color: rgba(200, 220, 240, 0.85);")
             cb.setLayoutDirection(get_layout_direction())
             cb._evidence_data = {
                 'evidence_id': ev_id,
@@ -940,7 +1100,31 @@ class PersonDialog(QDialog):
                 '_selected_existing': True,
             }
             self._existing_docs_checkboxes.append(cb)
-            self._existing_docs_container.addWidget(cb)
+            row_lay.addWidget(cb, 1)
+
+            # View button
+            view_btn = QPushButton("\u29c9")
+            view_btn.setFixedSize(26, 26)
+            view_btn.setCursor(Qt.PointingHandCursor)
+            view_btn.setToolTip(tr("wizard.person_dialog.view_document"))
+            view_btn.setStyleSheet(
+                "QPushButton { background: rgba(255,255,255,0.08); color: #3890DF;"
+                "border: 1px solid rgba(56,144,223,0.3); border-radius: 6px; font-size: 13px; }"
+                "QPushButton:hover { background: rgba(255,255,255,0.14); }"
+            )
+            def _make_open(eid=ev_id, fn=file_name):
+                def _open():
+                    self._refresh_token()
+                    local = download_evidence_file(eid, fn or eid)
+                    if local:
+                        QDesktopServices.openUrl(QUrl.fromLocalFile(local))
+                    else:
+                        Toast.show_toast(self, tr("wizard.person_dialog.view_failed_message"), Toast.ERROR)
+                return _open
+            view_btn.clicked.connect(_make_open())
+            row_lay.addWidget(view_btn)
+
+            self._existing_docs_container.addWidget(row_w)
 
         if self._existing_docs_checkboxes:
             self._existing_docs_frame.setVisible(True)
@@ -984,25 +1168,18 @@ class PersonDialog(QDialog):
         else:
             btn.setStyleSheet("""
                 QPushButton {
-                    background-color: white;
-                    color: #3890DF;
-                    border: 1.5px solid #b0b8c4;
+                    background-color: rgba(255, 255, 255, 0.08);
+                    color: rgba(200, 220, 240, 0.9);
+                    border: 1px solid rgba(56, 144, 223, 0.2);
                     border-radius: 8px;
                     font-weight: bold;
                     font-size: 14px;
                 }
                 QPushButton:hover {
-                    background-color: #f5f7fa;
-                    border-color: #8e99a8;
+                    background-color: rgba(255, 255, 255, 0.12);
+                    border-color: rgba(56, 144, 223, 0.4);
                 }
             """)
-            # Light shadow so white button floats above the card
-            from PyQt5.QtWidgets import QGraphicsDropShadowEffect
-            btn_shadow = QGraphicsDropShadowEffect(btn)
-            btn_shadow.setBlurRadius(12)
-            btn_shadow.setOffset(0, 2)
-            btn_shadow.setColor(QColor(0, 0, 0, 30))
-            btn.setGraphicsEffect(btn_shadow)
         if callback:
             btn.clicked.connect(callback)
         return btn
@@ -1016,7 +1193,7 @@ class PersonDialog(QDialog):
         frame.setMinimumHeight(55)
         frame.setStyleSheet(f"""
             QFrame#{obj_name} {{
-                border: 2px dashed #B0C4DE;
+                border: 2px dashed rgba(56, 144, 223, 0.3);
                 border-radius: 8px;
                 background-color: transparent;
             }}
@@ -1060,7 +1237,7 @@ class PersonDialog(QDialog):
         text_btn = QPushButton(button_text or tr("wizard.person_dialog.attach_id_photos"))
         text_btn.setStyleSheet("""
             QPushButton {
-                color: #3890DF;
+                color: rgba(140, 190, 240, 0.9);
                 text-decoration: underline;
                 border: none;
                 background: transparent;
@@ -1068,7 +1245,7 @@ class PersonDialog(QDialog):
                 font-weight: 500;
                 padding: 0px;
             }
-            QPushButton:hover { color: #2E7BD6; }
+            QPushButton:hover { color: rgba(180, 210, 250, 1.0); }
         """)
         text_btn.setCursor(Qt.PointingHandCursor)
         text_btn.clicked.connect(browse_callback)
@@ -1097,9 +1274,9 @@ class PersonDialog(QDialog):
         thumb.setAlignment(Qt.AlignCenter)
         thumb.setStyleSheet("""
             QLabel {
-                border: 1px solid #D0D7E2;
+                border: 1px solid rgba(56, 144, 223, 0.3);
                 border-radius: 6px;
-                background-color: #FFFFFF;
+                background-color: rgba(255, 255, 255, 0.1);
             }
         """)
         thumb.setCursor(Qt.PointingHandCursor)
@@ -1213,83 +1390,86 @@ class PersonDialog(QDialog):
 
     def _input_style(self) -> str:
         """Custom input style with light blue background."""
-        down_img = str(Config.IMAGES_DIR / "down.png").replace("\\", "/")
-        return f"""
-            QLineEdit, QComboBox, QDateEdit, QDoubleSpinBox {{
-                border: 1px solid #D0D7E2;
+        return """
+            QLineEdit, QComboBox, QDateEdit, QDoubleSpinBox {
+                border: 1px solid rgba(56, 144, 223, 0.2);
                 border-radius: 8px;
                 padding: 10px;
-                background-color: #f0f7ff;
-                color: #333;
+                background-color: rgba(255, 255, 255, 0.07);
+                color: rgba(240, 248, 255, 0.95);
                 font-size: 14px;
                 min-height: 20px;
                 max-height: 20px;
-            }}
-            QComboBox {{
+            }
+            QComboBox {
                 padding-left: 4px;
-            }}
-            QComboBox QLineEdit {{
+            }
+            QComboBox QLineEdit {
                 border: none;
                 background: transparent;
+                color: rgba(240, 248, 255, 0.95);
                 padding: 0px 4px;
                 min-height: 20px;
                 max-height: 20px;
-            }}
-            QLineEdit:focus, QComboBox:focus, QDateEdit:focus, QDoubleSpinBox:focus {{
-                border: 1px solid #D0D7E2;
-            }}
-            QComboBox::drop-down {{
+            }
+            QLineEdit:focus, QComboBox:focus, QDateEdit:focus, QDoubleSpinBox:focus {
+                border: 1px solid rgba(56, 144, 223, 0.5);
+            }
+            QComboBox::drop-down {
                 border: none;
                 width: 30px;
                 subcontrol-position: right center;
-            }}
-            QComboBox::down-arrow {{
-                image: url({down_img});
-                width: 12px;
-                height: 12px;
-            }}
-            QComboBox QAbstractItemView {{
-                background-color: #FFFFFF;
-                border: 1px solid #D0D7E2;
+            }
+            QComboBox::down-arrow {
+                image: none;
+                width: 0; height: 0;
+                border-left: 5px solid transparent;
+                border-right: 5px solid transparent;
+                border-top: 5px solid rgba(200, 220, 240, 0.6);
+            }
+            QComboBox QAbstractItemView {
+                background-color: #1B3555;
+                border: 1px solid rgba(56, 144, 223, 0.3);
                 border-radius: 0px;
                 border-bottom-left-radius: 10px;
                 border-bottom-right-radius: 10px;
                 padding: 4px;
-                selection-background-color: #EBF5FF;
-                selection-color: #333;
+                selection-background-color: rgba(56, 144, 223, 0.3);
+                selection-color: white;
                 outline: none;
-            }}
-            QComboBox QAbstractItemView::item {{
+            }
+            QComboBox QAbstractItemView::item {
                 min-height: 32px;
                 padding: 6px 10px;
                 border-radius: 6px;
-            }}
-            QComboBox QAbstractItemView::item:hover {{
-                background-color: #f0f7ff;
-            }}
-            QComboBox QAbstractItemView QScrollBar:vertical {{
+                color: rgba(220, 235, 250, 0.9);
+            }
+            QComboBox QAbstractItemView::item:hover {
+                background-color: rgba(56, 144, 223, 0.2);
+            }
+            QComboBox QAbstractItemView QScrollBar:vertical {
                 background: transparent;
                 width: 5px;
                 margin: 4px 0px;
                 border-radius: 2px;
-            }}
-            QComboBox QAbstractItemView QScrollBar::handle:vertical {{
-                background: #C4CDD5;
+            }
+            QComboBox QAbstractItemView QScrollBar::handle:vertical {
+                background: rgba(56, 144, 223, 0.3);
                 min-height: 30px;
                 border-radius: 2px;
-            }}
-            QComboBox QAbstractItemView QScrollBar::handle:vertical:hover {{
-                background: #919EAB;
-            }}
+            }
+            QComboBox QAbstractItemView QScrollBar::handle:vertical:hover {
+                background: rgba(56, 144, 223, 0.5);
+            }
             QComboBox QAbstractItemView QScrollBar::add-line:vertical,
-            QComboBox QAbstractItemView QScrollBar::sub-line:vertical {{
+            QComboBox QAbstractItemView QScrollBar::sub-line:vertical {
                 height: 0px;
                 background: none;
-            }}
+            }
             QComboBox QAbstractItemView QScrollBar::add-page:vertical,
-            QComboBox QAbstractItemView QScrollBar::sub-page:vertical {{
+            QComboBox QAbstractItemView QScrollBar::sub-page:vertical {
                 background: none;
-            }}
+            }
         """
 
     def _error_label_style(self) -> str:
@@ -1298,41 +1478,43 @@ class PersonDialog(QDialog):
 
     def _input_error_style(self) -> str:
         """Input style with red border for validation error state."""
-        down_img = str(Config.IMAGES_DIR / "down.png").replace("\\", "/")
-        return f"""
-            QLineEdit, QComboBox, QDateEdit, QDoubleSpinBox {{
+        return """
+            QLineEdit, QComboBox, QDateEdit, QDoubleSpinBox {
                 border: 2px solid #e74c3c;
                 border-radius: 8px;
                 padding: 10px;
-                background-color: #FFF5F5;
-                color: #333;
+                background-color: rgba(231, 76, 60, 0.1);
+                color: rgba(240, 248, 255, 0.95);
                 font-size: 14px;
                 min-height: 20px;
                 max-height: 20px;
-            }}
-            QComboBox {{
+            }
+            QComboBox {
                 padding-left: 4px;
-            }}
-            QComboBox QLineEdit {{
+            }
+            QComboBox QLineEdit {
                 border: none;
                 background: transparent;
+                color: rgba(240, 248, 255, 0.95);
                 padding: 0px 4px;
                 min-height: 20px;
                 max-height: 20px;
-            }}
-            QLineEdit:focus, QComboBox:focus, QDateEdit:focus, QDoubleSpinBox:focus {{
+            }
+            QLineEdit:focus, QComboBox:focus, QDateEdit:focus, QDoubleSpinBox:focus {
                 border: 2px solid #e74c3c;
-            }}
-            QComboBox::drop-down {{
+            }
+            QComboBox::drop-down {
                 border: none;
                 width: 30px;
                 subcontrol-position: right center;
-            }}
-            QComboBox::down-arrow {{
-                image: url({down_img});
-                width: 12px;
-                height: 12px;
-            }}
+            }
+            QComboBox::down-arrow {
+                image: none;
+                width: 0; height: 0;
+                border-left: 5px solid transparent;
+                border-right: 5px solid transparent;
+                border-top: 5px solid rgba(200, 220, 240, 0.6);
+            }
         """
 
     def _set_field_error(self, field, error_label, message):
@@ -1510,14 +1692,17 @@ class PersonDialog(QDialog):
             original_nid = self.person_data.get('national_id') if self.person_data else None
             if nid != original_nid and self._api_service:
                 try:
-                    result = self._api_service.get_persons(national_id=nid, page_size=1)
+                    result = self._api_service.get_persons(national_id=nid, page_size=5)
                     items = result.get("items", [])
-                    if items:
+                    # Verify returned person's NID actually matches (API may not filter properly)
+                    matching = [p for p in items
+                                if (p.get('nationalId') or p.get('nationalNumber') or '') == nid]
+                    if matching:
                         from ui.error_handler import ErrorHandler
                         name_parts = [
-                            items[0].get("firstNameArabic", ""),
-                            items[0].get("fatherNameArabic", ""),
-                            items[0].get("familyNameArabic", "")
+                            matching[0].get("firstNameArabic", ""),
+                            matching[0].get("fatherNameArabic", ""),
+                            matching[0].get("familyNameArabic", "")
                         ]
                         full_name = " ".join(p for p in name_parts if p)
                         msg = tr("wizard.person_dialog.nid_already_registered")
@@ -1678,7 +1863,7 @@ class PersonDialog(QDialog):
         self._refresh_relation_thumbnails()
 
     def _choose_existing_document(self):
-        """Show dialog to select an existing survey document and link it."""
+        """Show EvidencePickerDialog to select existing survey documents."""
         if not self._survey_id:
             Toast.show_toast(self, tr("wizard.person_dialog.not_available_offline"), Toast.WARNING)
             return
@@ -1695,17 +1880,17 @@ class PersonDialog(QDialog):
             Toast.show_toast(self, tr("wizard.person_dialog.no_existing_docs"), Toast.INFO)
             return
 
-        # Filter out already-selected evidence IDs
-        already_selected = {
+        already_linked = {
             f.get("evidence_id") for f in self.relation_uploaded_files
             if f.get("_selected_existing")
         }
-        available = [ev for ev in evidences if self._extract_evidence_id(ev) not in already_selected]
-        if not available:
-            Toast.show_toast(self, tr("wizard.person_dialog.all_docs_selected"), Toast.INFO)
+
+        from ui.components.dialogs.evidence_picker_dialog import EvidencePickerDialog
+        picker = EvidencePickerDialog(evidences, already_linked, parent=self)
+        if picker.exec_() != QDialog.Accepted:
             return
 
-        selected = self._show_document_selection_dialog(available)
+        selected = picker.get_selected_data()
         if not selected:
             return
 
@@ -1713,7 +1898,6 @@ class PersonDialog(QDialog):
             ev_id = self._extract_evidence_id(ev)
             file_name = ev.get('originalFileName') or ev.get('OriginalFileName') or ''
             issue_date = ev.get('documentIssuedDate') or ev.get('DocumentIssuedDate') or ''
-            ev_type = ev.get('evidenceType') or ev.get('EvidenceType') or ''
             display = file_name or tr("wizard.person_dialog.document_label", doc_id=ev_id[:8])
             self.relation_uploaded_files.append({
                 'path': '',
@@ -1729,157 +1913,6 @@ class PersonDialog(QDialog):
         """Extract evidence ID from API response dict."""
         return (ev.get('id') or ev.get('evidenceId')
                 or ev.get('Id') or ev.get('EvidenceId') or '')
-
-    def _show_document_selection_dialog(self, evidences: list) -> list:
-        """Show a dialog to select existing documents. Returns list of selected evidence dicts."""
-        from PyQt5.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QLabel,
-                                     QPushButton, QCheckBox, QScrollArea, QWidget)
-
-        dlg = QDialog(self)
-        dlg.setWindowTitle(tr("wizard.person_dialog.choose_existing_doc"))
-        dlg.setMinimumSize(520, 400)
-        dlg.setLayoutDirection(get_layout_direction())
-        dlg.setStyleSheet("""
-            QDialog { background-color: #FAFBFC; }
-            QLabel { background: transparent; }
-            QCheckBox { background: transparent; font-size: 12px; color: #334155; }
-        """)
-
-        layout = QVBoxLayout(dlg)
-        layout.setContentsMargins(16, 16, 16, 16)
-        layout.setSpacing(10)
-
-        header = QLabel(tr("wizard.person_dialog.select_docs_to_link"))
-        header.setStyleSheet("font-size: 13px; font-weight: 700; color: #1E293B;")
-        header.setAlignment(Qt.AlignRight)
-        layout.addWidget(header)
-
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        scroll.setStyleSheet("QScrollArea { border: 1px solid #E2E8F0; border-radius: 6px; background: white; }")
-        scroll_widget = QWidget()
-        scroll_layout = QVBoxLayout(scroll_widget)
-        scroll_layout.setContentsMargins(8, 8, 8, 8)
-        scroll_layout.setSpacing(4)
-
-        def _make_view_btn(ev_id, file_name):
-            import os as _os
-            from PyQt5.QtCore import QUrl, QSize
-            from PyQt5.QtGui import QDesktopServices, QIcon, QPixmap
-            from utils.helpers import download_evidence_file
-
-            btn = QPushButton()
-            btn.setFixedSize(32, 32)
-            btn.setToolTip(tr("wizard.person_dialog.view_document"))
-            btn.setCursor(Qt.PointingHandCursor)
-            btn.setStyleSheet("""
-                QPushButton {
-                    background: #EFF6FF;
-                    border: 1px solid #BFDBFE;
-                    border-radius: 7px;
-                    padding: 0;
-                }
-                QPushButton:hover { background: #DBEAFE; border-color: #93C5FD; }
-                QPushButton:pressed { background: #BFDBFE; }
-            """)
-
-            _root = _os.path.normpath(_os.path.join(_os.path.dirname(__file__), "..", "..", "..", ".."))
-            icon_path = _os.path.join(_root, "assets", "images", "eye-open.png")
-            if _os.path.exists(icon_path):
-                px = QPixmap(icon_path).scaled(17, 17, Qt.KeepAspectRatio, Qt.SmoothTransformation)
-                btn.setIcon(QIcon(px))
-                btn.setIconSize(QSize(17, 17))
-            else:
-                btn.setText("\u29c9")
-                btn.setStyleSheet("""
-                    QPushButton {
-                        background: #EFF6FF; color: #3890DF;
-                        border: 1px solid #BFDBFE; border-radius: 7px;
-                        font-size: 14px; padding: 0;
-                    }
-                    QPushButton:hover { background: #DBEAFE; border-color: #93C5FD; }
-                """)
-
-            def _open(checked=False, eid=ev_id, fn=file_name, b=btn):
-                b.setCursor(Qt.WaitCursor)
-                b.setEnabled(False)
-                local = download_evidence_file(eid, fn or eid)
-                b.setCursor(Qt.PointingHandCursor)
-                b.setEnabled(True)
-                if local:
-                    QDesktopServices.openUrl(QUrl.fromLocalFile(local))
-                else:
-                    from PyQt5.QtWidgets import QMessageBox
-                    QMessageBox.warning(
-                        dlg,
-                        tr("wizard.person_dialog.view_failed_title"),
-                        tr("wizard.person_dialog.view_failed_message"),
-                    )
-            btn.clicked.connect(_open)
-            return btn
-
-        checkboxes = []
-        for ev in evidences:
-            ev_id = self._extract_evidence_id(ev)
-            file_name = ev.get('originalFileName') or ev.get('OriginalFileName') or ''
-            issue_date = ev.get('documentIssuedDate') or ev.get('DocumentIssuedDate') or ''
-            ev_type = ev.get('evidenceType') or ev.get('EvidenceType') or ''
-
-            parts = []
-            if file_name:
-                parts.append(file_name)
-            if ev_type:
-                parts.append(f"[{ev_type}]")
-            if issue_date:
-                parts.append(str(issue_date)[:10])
-            label = " - ".join(parts) if parts else tr("wizard.person_dialog.document_label", doc_id=ev_id[:8])
-
-            row_widget = QWidget()
-            row_widget.setStyleSheet("QWidget { background: #F8FAFF; border-radius: 6px; }")
-            row_layout = QHBoxLayout(row_widget)
-            row_layout.setContentsMargins(8, 6, 8, 6)
-            row_layout.setSpacing(8)
-
-            cb = QCheckBox(label)
-            cb.setLayoutDirection(get_layout_direction())
-            cb._evidence = ev
-            checkboxes.append(cb)
-            row_layout.addWidget(cb, 1)
-            row_layout.addWidget(_make_view_btn(ev_id, file_name))
-
-            scroll_layout.addWidget(row_widget)
-
-        scroll_layout.addStretch()
-        scroll.setWidget(scroll_widget)
-        layout.addWidget(scroll)
-
-        btn_layout = QHBoxLayout()
-        btn_layout.setSpacing(8)
-        cancel_btn = QPushButton(tr("common.cancel"))
-        cancel_btn.setStyleSheet("""
-            QPushButton { background: #F1F5F9; color: #475569; border: 1px solid #CBD5E1;
-                border-radius: 6px; padding: 8px 20px; font-size: 12px; font-weight: 600; }
-            QPushButton:hover { background: #E2E8F0; }
-        """)
-        cancel_btn.clicked.connect(dlg.reject)
-
-        confirm_btn = QPushButton(tr("wizard.person_dialog.confirm_selection"))
-        confirm_btn.setStyleSheet("""
-            QPushButton { background: #059669; color: white; border: none;
-                border-radius: 6px; padding: 8px 20px; font-size: 12px; font-weight: 600; }
-            QPushButton:hover { background: #047857; }
-        """)
-        confirm_btn.clicked.connect(dlg.accept)
-
-        btn_layout.addWidget(cancel_btn)
-        btn_layout.addStretch()
-        btn_layout.addWidget(confirm_btn)
-        layout.addLayout(btn_layout)
-
-        if dlg.exec_() != QDialog.Accepted:
-            return []
-
-        return [cb._evidence for cb in checkboxes if cb.isChecked()]
 
     def _refresh_relation_thumbnails(self):
         """Refresh relation document thumbnails including existing doc labels."""
@@ -1911,7 +1944,6 @@ class PersonDialog(QDialog):
         from utils.helpers import download_evidence_file
 
         evidence_id = entry.get('evidence_id', '')
-        local_path = download_evidence_file(evidence_id, display_name) if evidence_id else None
 
         container = QWidget()
         container.setFixedSize(48, 48)
@@ -1921,34 +1953,30 @@ class PersonDialog(QDialog):
         thumb.setFixedSize(44, 44)
         thumb.move(4, 4)
         thumb.setAlignment(Qt.AlignCenter)
-        thumb.setStyleSheet("""
-            QLabel {
-                border: 1px solid #A7F3D0;
-                border-radius: 6px;
-                background-color: #ECFDF5;
-            }
-        """)
+        thumb.setStyleSheet(
+            "QLabel { border: 1px solid rgba(56, 144, 223, 0.3);"
+            "border-radius: 6px; background-color: rgba(255,255,255,0.07); }"
+        )
         thumb.setCursor(Qt.PointingHandCursor)
+        thumb.setToolTip(display_name)
 
-        if local_path and os.path.exists(local_path):
-            pixmap = QPixmap(local_path)
-            if not pixmap.isNull():
-                thumb.setPixmap(pixmap.scaled(40, 40, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+        ext = display_name.rsplit(".", 1)[-1].upper() if "." in display_name else "DOC"
+        ext_colors = {"PDF": "#E53E3E", "JPG": "#3182CE", "JPEG": "#3182CE", "PNG": "#3182CE"}
+        thumb.setText(ext[:4])
+        thumb.setStyleSheet(
+            thumb.styleSheet()
+            + f"color: {ext_colors.get(ext, 'rgba(200,220,240,0.8)')};"
+            "font-size: 11px; font-weight: bold;"
+        )
+
+        def _open_doc(e, eid=evidence_id, fn=display_name):
+            self._refresh_token()
+            local = download_evidence_file(eid, fn or eid)
+            if local:
+                QDesktopServices.openUrl(QUrl.fromLocalFile(local))
             else:
-                ext = display_name.rsplit(".", 1)[-1].lower() if "." in display_name else ""
-                if ext == "pdf":
-                    thumb.setText("PDF")
-                    thumb.setStyleSheet(thumb.styleSheet() + "color: #E53E3E; font-size: 11px; font-weight: bold;")
-                else:
-                    thumb.setText("DOC")
-                    thumb.setStyleSheet(thumb.styleSheet() + "color: #065F46; font-size: 11px; font-weight: bold;")
-            def _open_file(e, fp=local_path):
-                QDesktopServices.openUrl(QUrl.fromLocalFile(fp))
-            thumb.mousePressEvent = _open_file
-        else:
-            thumb.setText("...")
-            thumb.setStyleSheet(thumb.styleSheet() + "color: #065F46; font-size: 11px; font-weight: bold;")
-            thumb.setToolTip(display_name)
+                Toast.show_toast(self, tr("wizard.person_dialog.view_failed_message"), Toast.ERROR)
+        thumb.mousePressEvent = _open_doc
 
         x_btn = QLabel(container)
         x_btn.setFixedSize(18, 18)

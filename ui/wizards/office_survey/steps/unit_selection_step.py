@@ -13,8 +13,8 @@ import uuid
 
 from PyQt5.QtWidgets import (
     QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton,
-    QFrame, QScrollArea, QWidget, QGroupBox,
-    QComboBox, QSpinBox, QTextEdit, QDialog, QFormLayout,
+    QFrame, QScrollArea, QWidget,
+    QComboBox, QSpinBox, QTextEdit,
     QGraphicsDropShadowEffect
 )
 from PyQt5.QtCore import Qt, QLocale
@@ -22,10 +22,12 @@ from PyQt5.QtGui import QCursor, QIcon, QColor, QDoubleValidator
 
 from ui.wizards.framework import BaseStep, StepValidationResult
 from ui.wizards.office_survey.survey_context import SurveyContext
-from ui.wizards.office_survey.wizard_styles import STEP_CARD_STYLE, FORM_FIELD_STYLE, IN_CARD_ACTION_STYLE, OUTLINE_BUTTON_STYLE
+from ui.wizards.office_survey.wizard_styles import (
+    MINI_CARD_STYLE, MINI_CARD_SELECTED_STYLE,
+    make_step_card, make_icon_header, make_divider, DIVIDER_COLOR,
+)
 from controllers.unit_controller import UnitController
 from models.unit import PropertyUnit as Unit
-from app.config import Config
 from services.api_client import get_api_client
 from services.api_worker import ApiWorker
 from utils.logger import get_logger
@@ -41,6 +43,7 @@ from services.translation_manager import tr, get_layout_direction
 from services.display_mappings import get_unit_status_display, get_unit_type_display, get_unit_type_options, get_unit_status_options
 from services.error_mapper import map_exception
 from ui.components.loading_spinner import LoadingSpinnerOverlay
+from ui.components.bottom_sheet import BottomSheet
 
 logger = get_logger(__name__)
 
@@ -86,30 +89,19 @@ class UnitSelectionStep(BaseStep):
 
         # Selected building info card - same design as building_selection_step stats card
         # Height: 113px, includes address row + stats sections
-        self.unit_building_frame = QFrame()
-        self.unit_building_frame.setObjectName("StepCard")
-        self.unit_building_frame.setStyleSheet(STEP_CARD_STYLE)
-
-        shadow = QGraphicsDropShadowEffect()
-        shadow.setBlurRadius(20)
-        shadow.setXOffset(0)
-        shadow.setYOffset(4)
-        shadow.setColor(QColor(0, 0, 0, 20))
-        self.unit_building_frame.setGraphicsEffect(shadow)
+        self.unit_building_frame = make_step_card()
 
         # Main card layout
         card_layout = QVBoxLayout(self.unit_building_frame)
-        card_layout.setContentsMargins(12, 12, 12, 12)  # Padding: 12px all sides
-        card_layout.setSpacing(12)  # Gap between rows
-        # Height: 28px, full width, border-radius 8px (suitable for 28px height), background #F8FAFF
-        # border-radius proportional to height (28/3.5 = 8px)
+        card_layout.setContentsMargins(16, 16, 16, 16)
+        card_layout.setSpacing(12)
         address_container = QFrame()
-        address_container.setFixedHeight(28)
+        address_container.setFixedHeight(32)
         address_container.setStyleSheet("""
             QFrame {
-                background-color: #F8FAFF;
-                border: none;
-                border-radius: 8px;
+                background-color: #F0F4FA;
+                border: 1px solid #DBEAFE;
+                border-radius: 10px;
             }
         """)
 
@@ -201,25 +193,14 @@ class UnitSelectionStep(BaseStep):
         # Units Container Card
         # Dimensions: 1249×372 (width×height), border-radius: 8px, padding: 12px
         # Gap from Card 1: 15px (handled by layout.setSpacing(15))
-        units_main_frame = QFrame()
-        units_main_frame.setObjectName("StepCard")
-        units_main_frame.setStyleSheet(STEP_CARD_STYLE)
+        units_main_frame = make_step_card()
 
-        shadow2 = QGraphicsDropShadowEffect()
-        shadow2.setBlurRadius(20)
-        shadow2.setXOffset(0)
-        shadow2.setYOffset(4)
-        shadow2.setColor(QColor(0, 0, 0, 20))
-        units_main_frame.setGraphicsEffect(shadow2)
-
-        # Use layout margins instead of CSS padding (more predictable)
         units_main_layout = QVBoxLayout(units_main_frame)
-        units_main_layout.setSpacing(12)
-        # Adjusted: Internal padding 11px all sides (reduced to prevent card clipping)
-        units_main_layout.setContentsMargins(11, 11, 11, 11)
+        units_main_layout.setSpacing(14)
+        units_main_layout.setContentsMargins(16, 16, 16, 16)
 
         # Header: icon + title/subtitle + add-unit button
-        header_layout = self._make_icon_header(
+        header_layout = make_icon_header(
             tr("wizard.unit.select_title"),
             tr("wizard.unit.select_subtitle"),
             "move"
@@ -236,9 +217,9 @@ class UnitSelectionStep(BaseStep):
 
         units_main_layout.addLayout(header_layout)
 
-        # Inline unit creation form (hidden by default)
-        self._build_inline_unit_form()
-        units_main_layout.addWidget(self._inline_form)
+        # BottomSheet reference for unit creation (created on demand)
+        self._unit_sheet = None
+        self._pending_auto_select_uuid = None  # UUID to auto-select after async load
 
         # Empty state widget (shown when no units)
         self._empty_state = self._create_empty_state()
@@ -291,7 +272,8 @@ class UnitSelectionStep(BaseStep):
         icon_container.setFixedSize(70, 70)
         icon_container.setAlignment(Qt.AlignCenter)
         icon_container.setStyleSheet("""
-            background-color: #ffcc33;
+            background-color: #EBF5FF;
+            border: 1px solid #DBEAFE;
             border-radius: 35px;
         """)
 
@@ -421,6 +403,19 @@ class UnitSelectionStep(BaseStep):
                 unit_card = self._create_unit_card(unit)
                 self.units_layout.addWidget(unit_card)
 
+        # Auto-select newly created unit if pending
+        if self._pending_auto_select_uuid and units:
+            for unit in units:
+                if getattr(unit, 'unit_uuid', None) == self._pending_auto_select_uuid:
+                    self.context.unit = unit
+                    self.context.is_new_unit = False
+                    self.selected_unit = unit
+                    logger.info(f"Auto-selected newly created unit: {unit.unit_uuid}")
+                    self._refresh_unit_card_styles()
+                    self.emit_validation_changed(True)
+                    break
+            self._pending_auto_select_uuid = None
+
         self.units_layout.addStretch()
         self._loaded_building_uuid = building_uuid
 
@@ -493,22 +488,23 @@ class UnitSelectionStep(BaseStep):
                 QFrame#unitCard {
                     background-color: #EBF5FF;
                     border: 2px solid #3890DF;
+                    border-left: 4px solid #3890DF;
                     border-radius: 12px;
                 }
-                QFrame#unitCard QLabel { border: none; }
+                QFrame#unitCard QLabel { border: none; background: transparent; }
             """)
         else:
             card.setStyleSheet("""
                 QFrame#unitCard {
-                    background-color: #FFFFFF;
-                    border: 1px solid #E2EAF2;
+                    background-color: #F8FAFF;
+                    border: 1px solid #E5EAF6;
                     border-radius: 12px;
                 }
                 QFrame#unitCard:hover {
-                    border-color: #3890DF;
-                    background-color: #F8FAFF;
+                    border-color: rgba(56, 144, 223, 0.5);
+                    background-color: #EBF5FF;
                 }
-                QFrame#unitCard QLabel { border: none; }
+                QFrame#unitCard QLabel { border: none; background: transparent; }
             """)
 
         card_shadow = QGraphicsDropShadowEffect()
@@ -698,62 +694,93 @@ class UnitSelectionStep(BaseStep):
     # ── Inline Unit Form ──
 
     def _show_add_unit_form(self):
-        """Show the inline unit creation form."""
-        self._reset_inline_form()
-        self._inline_form.setVisible(True)
+        """Show unit creation form in a BottomSheet overlay."""
+        form_widget = self._build_unit_form_widget()
+
+        parent = self.window()
+        self._unit_sheet = BottomSheet.custom(
+            parent,
+            tr("wizard.unit_dialog.title_add"),
+            form_widget,
+            no_buttons=True
+        )
 
     def _cancel_inline_unit(self):
-        """Hide the inline unit creation form."""
-        self._inline_form.setVisible(False)
+        """Close the BottomSheet."""
+        if self._unit_sheet:
+            self._unit_sheet.close_sheet()
 
-    def _reset_inline_form(self):
-        """Reset all inline form fields to defaults."""
-        self._if_floor.setValue(0)
-        self._if_unit_num.setValue(0)
-        self._if_type.setCurrentIndex(0)
-        self._if_status.setCurrentIndex(0)
-        self._if_rooms.setValue(0)
-        self._if_area.clear()
-        self._if_desc.clear()
-        self._if_save_btn.setEnabled(True)
-
-    def _build_inline_unit_form(self):
-        """Build the inline unit creation form card (replaces modal UnitDialog)."""
-        self._inline_form = QFrame()
-        self._inline_form.setStyleSheet("""
-            QFrame#InlineUnitForm {
-                background-color: #FFFFFF;
-                border: 1.5px solid #3890DF;
-                border-radius: 10px;
-            }
-            QFrame#InlineUnitForm QLabel { background: transparent; border: none; }
-        """)
-        self._inline_form.setObjectName("InlineUnitForm")
-        self._inline_form.setVisible(False)
-
-        form_layout = QVBoxLayout(self._inline_form)
-        form_layout.setContentsMargins(24, 20, 24, 24)
+    def _build_unit_form_widget(self) -> QWidget:
+        """Build the unit form fields widget for BottomSheet."""
+        form = QWidget()
+        form.setStyleSheet("QLabel { background: transparent; border: none; }")
+        form_layout = QVBoxLayout(form)
+        form_layout.setContentsMargins(0, 0, 0, 0)
         form_layout.setSpacing(16)
 
-        # Header
-        hdr = self._make_icon_header(
-            tr("wizard.unit_dialog.title_add"),
-            tr("wizard.unit.select_subtitle"),
-            "move"
-        )
-        form_layout.addLayout(hdr)
-
-        # Divider
-        div = QFrame()
-        div.setFixedHeight(1)
-        div.setStyleSheet("background-color: #E2EAF2;")
-        form_layout.addWidget(div)
-
-        # Combo style with down-arrow
-        down_img = str(Config.IMAGES_DIR / "down.png").replace("\\", "/")
-        combo_style = FORM_FIELD_STYLE + f"""
-            QComboBox::down-arrow {{ image: url({down_img}); width: 12px; height: 12px; }}
+        # Dark-theme field style for BottomSheet
+        bs_field_style = """
+            background: rgba(255, 255, 255, 0.07);
+            border: 1px solid rgba(56, 144, 223, 0.2);
+            border-radius: 8px;
+            padding: 6px 12px;
+            font-size: 13px;
+            color: rgba(240, 248, 255, 0.95);
         """
+        bs_spin_style = """
+            QSpinBox {
+                background: rgba(255, 255, 255, 0.07);
+                border: 1px solid rgba(56, 144, 223, 0.2);
+                border-radius: 8px;
+                padding: 6px 12px;
+                font-size: 13px;
+                color: rgba(240, 248, 255, 0.95);
+            }
+            QSpinBox::up-button {
+                subcontrol-origin: border;
+                subcontrol-position: top right;
+                width: 28px;
+                border: none;
+                border-left: 1px solid rgba(56, 144, 223, 0.15);
+                border-top-right-radius: 8px;
+                background: rgba(255, 255, 255, 0.05);
+            }
+            QSpinBox::down-button {
+                subcontrol-origin: border;
+                subcontrol-position: bottom right;
+                width: 28px;
+                border: none;
+                border-left: 1px solid rgba(56, 144, 223, 0.15);
+                border-bottom-right-radius: 8px;
+                background: rgba(255, 255, 255, 0.05);
+            }
+            QSpinBox::up-button:hover, QSpinBox::down-button:hover {
+                background: rgba(56, 144, 223, 0.15);
+            }
+            QSpinBox::up-arrow {
+                image: none;
+                width: 0; height: 0;
+                border-left: 5px solid transparent;
+                border-right: 5px solid transparent;
+                border-bottom: 5px solid rgba(200, 220, 240, 0.7);
+            }
+            QSpinBox::down-arrow {
+                image: none;
+                width: 0; height: 0;
+                border-left: 5px solid transparent;
+                border-right: 5px solid transparent;
+                border-top: 5px solid rgba(200, 220, 240, 0.7);
+            }
+        """
+        bs_combo_style = bs_field_style + """
+            QComboBox::drop-down {
+                subcontrol-origin: padding;
+                subcontrol-position: center left;
+                width: 24px;
+                border: none;
+            }
+        """
+        bs_label_style = "color: rgba(180, 210, 240, 0.85);"
 
         # Row 1: Floor number | Unit number
         row1 = QHBoxLayout()
@@ -761,38 +788,36 @@ class UnitSelectionStep(BaseStep):
         self._if_floor = QSpinBox()
         self._if_floor.setRange(-3, 100)
         self._if_floor.setLocale(QLocale(QLocale.English, QLocale.UnitedStates))
-        self._if_floor.setButtonSymbols(QSpinBox.NoButtons)
-        self._if_floor.setStyleSheet(FORM_FIELD_STYLE)
+        self._if_floor.setStyleSheet(bs_spin_style)
         self._if_floor.setMinimumHeight(44)
-        row1.addLayout(self._make_form_field(tr("wizard.unit_dialog.floor_number"), self._if_floor), 1)
+        row1.addLayout(self._make_bs_field(tr("wizard.unit_dialog.floor_number"), self._if_floor, bs_label_style), 1)
 
         self._if_unit_num = QSpinBox()
         self._if_unit_num.setRange(0, 9999)
         self._if_unit_num.setLocale(QLocale(QLocale.English, QLocale.UnitedStates))
-        self._if_unit_num.setButtonSymbols(QSpinBox.NoButtons)
-        self._if_unit_num.setStyleSheet(FORM_FIELD_STYLE)
+        self._if_unit_num.setStyleSheet(bs_spin_style)
         self._if_unit_num.setMinimumHeight(44)
-        row1.addLayout(self._make_form_field(tr("wizard.unit_dialog.unit_number"), self._if_unit_num), 1)
+        row1.addLayout(self._make_bs_field(tr("wizard.unit_dialog.unit_number"), self._if_unit_num, bs_label_style), 1)
         form_layout.addLayout(row1)
 
         # Row 2: Unit type | Unit status
         row2 = QHBoxLayout()
         row2.setSpacing(16)
         self._if_type = RtlCombo()
-        self._if_type.setStyleSheet(combo_style)
+        self._if_type.setStyleSheet(bs_combo_style)
         self._if_type.setMinimumHeight(44)
         self._if_type.addItem(tr("wizard.unit_dialog.select"), 0)
         for code, label in get_unit_type_options():
             self._if_type.addItem(label, code)
-        row2.addLayout(self._make_form_field(tr("wizard.unit_dialog.unit_type"), self._if_type), 1)
+        row2.addLayout(self._make_bs_field(tr("wizard.unit_dialog.unit_type"), self._if_type, bs_label_style), 1)
 
         self._if_status = RtlCombo()
-        self._if_status.setStyleSheet(combo_style)
+        self._if_status.setStyleSheet(bs_combo_style)
         self._if_status.setMinimumHeight(44)
         self._if_status.addItem(tr("wizard.unit_dialog.select"), 0)
         for code, label in get_unit_status_options():
             self._if_status.addItem(label, code)
-        row2.addLayout(self._make_form_field(tr("wizard.unit_dialog.unit_status"), self._if_status), 1)
+        row2.addLayout(self._make_bs_field(tr("wizard.unit_dialog.unit_status"), self._if_status, bs_label_style), 1)
         form_layout.addLayout(row2)
 
         # Row 3: Rooms | Area
@@ -801,80 +826,102 @@ class UnitSelectionStep(BaseStep):
         self._if_rooms = QSpinBox()
         self._if_rooms.setRange(0, 20)
         self._if_rooms.setLocale(QLocale(QLocale.English, QLocale.UnitedStates))
-        self._if_rooms.setButtonSymbols(QSpinBox.NoButtons)
-        self._if_rooms.setStyleSheet(FORM_FIELD_STYLE)
+        self._if_rooms.setStyleSheet(bs_spin_style)
         self._if_rooms.setMinimumHeight(44)
-        row3.addLayout(self._make_form_field(tr("wizard.unit_dialog.rooms"), self._if_rooms), 1)
+        row3.addLayout(self._make_bs_field(tr("wizard.unit_dialog.rooms"), self._if_rooms, bs_label_style), 1)
 
         self._if_area = QLineEdit()
         self._if_area.setPlaceholderText(tr("wizard.unit_dialog.area_placeholder"))
-        self._if_area.setStyleSheet(FORM_FIELD_STYLE)
+        self._if_area.setStyleSheet(bs_field_style)
         self._if_area.setMinimumHeight(44)
         area_validator = QDoubleValidator(0.0, 999999.99, 2, self._if_area)
         area_validator.setLocale(QLocale(QLocale.English, QLocale.UnitedStates))
         area_validator.setNotation(QDoubleValidator.StandardNotation)
         self._if_area.setValidator(area_validator)
-        row3.addLayout(self._make_form_field(tr("wizard.unit_dialog.area"), self._if_area), 1)
+        row3.addLayout(self._make_bs_field(tr("wizard.unit_dialog.area"), self._if_area, bs_label_style), 1)
         form_layout.addLayout(row3)
 
         # Row 4: Description (full width)
         self._if_desc = QTextEdit()
-        self._if_desc.setMinimumHeight(90)
-        self._if_desc.setMaximumHeight(120)
+        self._if_desc.setMinimumHeight(80)
+        self._if_desc.setMaximumHeight(100)
         self._if_desc.setPlaceholderText(tr("wizard.unit_dialog.description_placeholder"))
-        self._if_desc.setStyleSheet(FORM_FIELD_STYLE)
-        form_layout.addLayout(self._make_form_field(tr("wizard.unit_dialog.description"), self._if_desc))
+        self._if_desc.setStyleSheet(bs_field_style)
+        form_layout.addLayout(self._make_bs_field(tr("wizard.unit_dialog.description"), self._if_desc, bs_label_style))
 
-        # Buttons
+        # Buttons row
         btn_row = QHBoxLayout()
         btn_row.setSpacing(12)
-        btn_row.addStretch()
 
         cancel_btn = QPushButton(tr("common.cancel"))
-        cancel_btn.setFixedSize(130, 44)
-        cancel_btn.setStyleSheet(OUTLINE_BUTTON_STYLE)
         cancel_btn.setCursor(Qt.PointingHandCursor)
+        cancel_btn.setFixedHeight(48)
+        cancel_btn.setFont(create_font(size=FontManager.SIZE_BODY, weight=FontManager.WEIGHT_SEMIBOLD))
+        cancel_btn.setStyleSheet("""
+            QPushButton {
+                background-color: rgba(255, 255, 255, 0.08);
+                color: rgba(200, 220, 240, 0.9);
+                border: 1px solid rgba(56, 144, 223, 0.2);
+                border-radius: 12px;
+            }
+            QPushButton:hover {
+                background-color: rgba(255, 255, 255, 0.12);
+                border-color: rgba(56, 144, 223, 0.4);
+            }
+        """)
         cancel_btn.clicked.connect(self._cancel_inline_unit)
-        btn_row.addWidget(cancel_btn)
+        btn_row.addWidget(cancel_btn, 1)
 
-        self._if_save_btn = QPushButton(tr("common.save"))
-        self._if_save_btn.setFixedSize(130, 44)
-        self._if_save_btn.setStyleSheet(IN_CARD_ACTION_STYLE)
-        self._if_save_btn.setCursor(Qt.PointingHandCursor)
-        self._if_save_btn.clicked.connect(self._save_inline_unit)
-        btn_row.addWidget(self._if_save_btn)
+        save_btn = QPushButton(tr("common.save"))
+        save_btn.setCursor(Qt.PointingHandCursor)
+        save_btn.setFixedHeight(48)
+        save_btn.setFont(create_font(size=FontManager.SIZE_BODY, weight=FontManager.WEIGHT_SEMIBOLD))
+        save_btn.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {Colors.PRIMARY_BLUE};
+                color: white;
+                border: none;
+                border-radius: 12px;
+            }}
+            QPushButton:hover {{
+                background-color: #2A7BC9;
+            }}
+        """)
+        save_btn.clicked.connect(self._save_inline_unit)
+        btn_row.addWidget(save_btn, 1)
 
         form_layout.addLayout(btn_row)
 
-    def _make_form_field(self, label_text: str, widget) -> QVBoxLayout:
-        """Create a labeled form field for the inline form."""
+        return form
+
+    def _make_bs_field(self, label_text: str, widget, label_style: str = "") -> QVBoxLayout:
+        """Create a labeled form field for the BottomSheet form."""
         col = QVBoxLayout()
         col.setSpacing(6)
         lbl = QLabel(label_text)
-        lbl.setFont(create_font(size=FontManager.WIZARD_FIELD_LABEL, weight=FontManager.WEIGHT_SEMIBOLD))
-        lbl.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent;")
+        lbl.setFont(create_font(size=FontManager.SIZE_BODY, weight=FontManager.WEIGHT_MEDIUM))
+        lbl.setStyleSheet(label_style or "color: rgba(180, 210, 240, 0.85);")
         col.addWidget(lbl)
         col.addWidget(widget)
         return col
 
     def _save_inline_unit(self):
         """Validate and save the inline unit form via API."""
+        target = self._unit_sheet or self.window() or self
         # Basic validation (mirrors UnitDialog._validate_basic)
         if not self._if_type.currentData():
-            Toast.show_message(self, tr("wizard.unit_dialog.select_type_warning"), Toast.WARNING)
+            Toast.show_toast(target, tr("wizard.unit_dialog.select_type_warning"), Toast.WARNING)
             return
         if self._if_unit_num.value() == 0:
-            Toast.show_message(self, tr("wizard.unit_dialog.enter_number_warning"), Toast.WARNING)
+            Toast.show_toast(target, tr("wizard.unit_dialog.enter_number_warning"), Toast.WARNING)
             return
         area_text = self._if_area.text().strip()
         if area_text:
             try:
                 float(area_text)
             except ValueError:
-                Toast.show_message(self, tr("wizard.unit_dialog.area_numbers_only"), Toast.WARNING)
+                Toast.show_toast(target, tr("wizard.unit_dialog.area_numbers_only"), Toast.WARNING)
                 return
-
-        self._if_save_btn.setEnabled(False)
 
         # Set auth token
         main_window = self.window()
@@ -895,8 +942,7 @@ class UnitSelectionStep(BaseStep):
                     u_num = getattr(u, 'apartment_number', None) or getattr(u, 'unit_number', None)
                     u_floor = getattr(u, 'floor_number', None)
                     if u_num == unit_number and u_floor == floor:
-                        Toast.show_message(self, tr("wizard.unit_dialog.number_taken"), Toast.WARNING)
-                        self._if_save_btn.setEnabled(True)
+                        Toast.show_toast(self._unit_sheet or self, tr("wizard.unit_dialog.number_taken"), Toast.WARNING)
                         return
             self._do_create_unit()
 
@@ -934,7 +980,12 @@ class UnitSelectionStep(BaseStep):
         if survey_id:
             unit_data['survey_id'] = survey_id
 
-        self._spinner.show_loading(tr("component.loading.default"))
+        # Show spinner on BottomSheet so it's visible above the form
+        spinner_target = self._unit_sheet or self
+        if hasattr(spinner_target, '_spinner'):
+            spinner_target._spinner.show_loading(tr("component.loading.default"))
+        else:
+            self._spinner.show_loading(tr("component.loading.default"))
         try:
             response = self._api_service.create_property_unit(unit_data)
             logger.info("Property unit created successfully via inline form")
@@ -949,68 +1000,29 @@ class UnitSelectionStep(BaseStep):
                 logger.info(f"Using API-generated unit UUID: {api_uuid}")
                 self.context.new_unit_data['unit_uuid'] = api_uuid
 
-            # Hide form and refresh units list
-            self._inline_form.setVisible(False)
+            # Close BottomSheet and refresh units list
+            if self._unit_sheet:
+                self._unit_sheet.close_sheet()
+
+            # Store UUID for auto-selection after async load completes
+            self._pending_auto_select_uuid = api_uuid
             self._loaded_building_uuid = None
             self._load_units()
 
-            # Auto-select the newly created unit
-            if api_uuid and self.unit_controller._units_cache:
-                for unit in self.unit_controller._units_cache:
-                    if getattr(unit, 'unit_uuid', None) == api_uuid:
-                        self.context.unit = unit
-                        self.context.is_new_unit = False
-                        self.selected_unit = unit
-                        logger.info(f"Auto-selected newly created unit: {unit.unit_uuid}")
-                        self._refresh_unit_card_styles()
-                        break
-
-            if self.selected_unit:
-                self.emit_validation_changed(True)
-
         except Exception as e:
             logger.error(f"API unit creation failed: {e}")
+            target = self._unit_sheet or self.window() or self
             if "409" in str(e):
-                Toast.show_message(self, tr("wizard.unit_dialog.duplicate_unit"), Toast.ERROR)
+                Toast.show_toast(target, tr("wizard.unit_dialog.duplicate_unit"), Toast.ERROR)
             else:
-                Toast.show_message(self, str(e), Toast.ERROR)
+                Toast.show_toast(target, str(e), Toast.ERROR)
         finally:
-            self._spinner.hide_loading()
-            self._if_save_btn.setEnabled(True)
+            if hasattr(spinner_target, '_spinner'):
+                spinner_target._spinner.hide_loading()
+            else:
+                self._spinner.hide_loading()
 
-    @staticmethod
-    def _make_icon_header(title: str, subtitle: str, icon_name: str) -> QHBoxLayout:
-        """Create a standardised icon + title + subtitle header row."""
-        row = QHBoxLayout()
-        row.setSpacing(10)
-        row.setContentsMargins(0, 0, 0, 0)
-        icon_lbl = QLabel()
-        icon_lbl.setFixedSize(40, 40)
-        icon_lbl.setAlignment(Qt.AlignCenter)
-        icon_lbl.setStyleSheet("""
-            QLabel {
-                background-color: #EBF5FF;
-                border: 1px solid #DBEAFE;
-                border-radius: 10px;
-            }
-        """)
-        px = Icon.load_pixmap(icon_name, size=24)
-        if px and not px.isNull():
-            icon_lbl.setPixmap(px)
-        row.addWidget(icon_lbl)
-        col = QVBoxLayout()
-        col.setSpacing(1)
-        t = QLabel(title)
-        t.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
-        t.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent;")
-        s = QLabel(subtitle)
-        s.setFont(create_font(size=10, weight=FontManager.WEIGHT_REGULAR))
-        s.setStyleSheet(f"color: {Colors.WIZARD_SUBTITLE}; background: transparent;")
-        col.addWidget(t)
-        col.addWidget(s)
-        row.addLayout(col)
-        row.addStretch()
-        return row
+    # _make_icon_header is now shared via wizard_styles.make_icon_header
 
     def update_language(self, is_arabic: bool):
         """Update all translatable texts when language changes."""

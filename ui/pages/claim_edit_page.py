@@ -337,36 +337,47 @@ class ClaimEditPage(QWidget):
 
         self._claim_id = claim_id
         self._title_label.setText(f"{tr('page.claim_edit.title')} — {claim_id[:8]}...")
+        self._spinner.show_loading(tr("component.loading.default"))
 
-        try:
+        def _fetch():
             from controllers.claim_controller import ClaimController
             ctrl = ClaimController()
-            result = ctrl.get_claim_full_detail(claim_id, hint_survey_id=hint_survey_id)
+            return ctrl.get_claim_full_detail(claim_id, hint_survey_id=hint_survey_id)
 
-            if not result.success:
-                Toast.show_toast(self, f"{tr('page.claim_edit.error_prefix')}: {result.message}", Toast.ERROR)
-                return
+        self._load_worker = ApiWorker(_fetch)
+        self._load_worker.finished.connect(self._on_edit_data_loaded)
+        self._load_worker.error.connect(self._on_edit_data_error)
+        self._load_worker.start()
 
-            detail = result.data
-            self._claim_dto = detail.get("claim") or {}
-            self._person_dto = detail.get("person") or {}
-            self._unit_dto = detail.get("unit") or {}
-            self._building_dto = detail.get("building") or {}
-            self._survey_id = detail.get("survey_id")
-            self._evidences = detail.get("evidences") or []
-            # evidence_access_denied no longer needed — evidences loaded via claim DTO
+    def _on_edit_data_loaded(self, result):
+        """Handle async claim data load completion."""
+        self._spinner.hide_loading()
+        if not result or not result.success:
+            msg = getattr(result, 'message', '') if result else ''
+            Toast.show_toast(self, f"{tr('page.claim_edit.error_prefix')}: {msg}", Toast.ERROR)
+            return
 
-            logger.debug(f"claim keys: {list(self._claim_dto.keys())}")
-            logger.debug(f"person keys: {list(self._person_dto.keys())}")
-            logger.debug(f"unit keys: {list(self._unit_dto.keys())}")
-            logger.debug(f"survey_id={self._survey_id}, evidences={len(self._evidences)}")
+        detail = result.data
+        self._claim_dto = detail.get("claim") or {}
+        self._person_dto = detail.get("person") or {}
+        self._unit_dto = detail.get("unit") or {}
+        self._building_dto = detail.get("building") or {}
+        self._survey_id = detail.get("survey_id")
+        self._evidences = detail.get("evidences") or []
 
-            self._populate_fields()
-            self._snapshot_originals()
+        logger.debug(f"claim keys: {list(self._claim_dto.keys())}")
+        logger.debug(f"person keys: {list(self._person_dto.keys())}")
+        logger.debug(f"unit keys: {list(self._unit_dto.keys())}")
+        logger.debug(f"survey_id={self._survey_id}, evidences={len(self._evidences)}")
 
-        except Exception as e:
-            logger.error(f"Failed to load claim {claim_id}: {e}", exc_info=True)
-            Toast.show_toast(self, f"{tr('page.claim_edit.error_loading_claim')}: {e}", Toast.ERROR)
+        self._populate_fields()
+        self._snapshot_originals()
+
+    def _on_edit_data_error(self, error_msg):
+        """Handle async claim data load failure."""
+        self._spinner.hide_loading()
+        logger.error(f"Failed to load claim {self._claim_id}: {error_msg}")
+        Toast.show_toast(self, f"{tr('page.claim_edit.error_loading_claim')}: {error_msg}", Toast.ERROR)
 
     def _populate_fields(self):
         """Fill all form fields from loaded DTOs."""
