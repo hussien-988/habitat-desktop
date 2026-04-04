@@ -744,6 +744,11 @@ class PersonsPage(QWidget):
         from ui.components.loading_spinner import LoadingSpinnerOverlay
         self._spinner = LoadingSpinnerOverlay(self)
 
+        from ui.components.skeleton_loader import TableSkeleton
+        self._skeleton = TableSkeleton(columns=6, rows=8, message=tr("page.persons.loading_persons"))
+        table_layout.addWidget(self._skeleton)
+        self._skeleton.hide()
+
     def refresh(self, data=None):
         """Refresh the persons list."""
         logger.debug("Refreshing persons page")
@@ -758,7 +763,9 @@ class PersonsPage(QWidget):
 
     def _load_persons(self):
         """Load persons with filters."""
-        self._spinner.show_loading(tr("page.persons.loading_persons"))
+        self.table.hide()
+        self._skeleton.show()
+        self._skeleton.start()
         name = self.name_search.text().strip()
         nid = self.nid_search.text().strip()
         gender = self.gender_combo.currentData()
@@ -776,7 +783,9 @@ class PersonsPage(QWidget):
         self._load_persons_worker.start()
 
     def _on_load_persons_finished(self, result):
-        self._spinner.hide_loading()
+        self._skeleton.stop()
+        self._skeleton.hide()
+        self.table.show()
         if result.success:
             persons = result.data
             self.table_model.set_persons(persons)
@@ -788,7 +797,9 @@ class PersonsPage(QWidget):
             self.count_label.setText(tr("page.persons.found_count", count=0))
 
     def _on_load_persons_error(self, error_msg):
-        self._spinner.hide_loading()
+        self._skeleton.stop()
+        self._skeleton.hide()
+        self.table.show()
         logger.error(f"Failed to load persons: {error_msg}")
         Toast.show_toast(self, tr("page.persons.load_failed", error=error_msg), Toast.ERROR)
         self.table_model.set_persons([])

@@ -10,6 +10,7 @@ from PyQt5.QtGui import QColor
 
 from controllers.building_controller import BuildingController
 from services.translation_manager import tr, get_layout_direction
+from ui.design_system import Colors
 from ui.components.wizard_header import WizardHeader
 from ui.font_utils import create_font, FontManager
 from utils.i18n import I18n
@@ -137,24 +138,24 @@ class FieldWorkPreparationPage(QWidget):
         shadow_next.setColor(QColor("#E5EAF6"))
         self.btn_next.setGraphicsEffect(shadow_next)
 
-        self.btn_next.setStyleSheet("""
-            QPushButton {
-                background-color: #f0f7ff;
-                color: #3890DF;
-                border: 1px solid #3890DF;
+        self.btn_next.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {Colors.PRIMARY_BLUE};
+                color: white;
+                border: none;
                 border-radius: 8px;
                 font-size: 12pt;
                 font-weight: 600;
                 padding: 0;
-            }
-            QPushButton:hover {
-                background-color: #E3F2FD;
-            }
-            QPushButton:disabled {
+            }}
+            QPushButton:hover {{
+                background-color: #2A7BC8;
+            }}
+            QPushButton:disabled {{
                 background-color: #F8F9FA;
                 color: #9CA3AF;
-                border-color: #E1E8ED;
-            }
+                border: none;
+            }}
         """)
         self.btn_next.clicked.connect(self._on_next)
         self.btn_next.setEnabled(False)  # Initially disabled
@@ -207,8 +208,8 @@ class FieldWorkPreparationPage(QWidget):
             # Moving from Step 1 to Step 2
             selected_buildings = self.step1.get_selected_buildings()
             if not selected_buildings:
-                from PyQt5.QtWidgets import QMessageBox
-                QMessageBox.warning(self, tr("wizard.field_work.warning_title"), tr("wizard.field_work.select_building_warning"))
+                from ui.components.notification_bar import NotificationBar
+                NotificationBar.notify(self, tr("wizard.field_work.select_building_warning"), NotificationBar.WARNING)
                 return
 
             # Create Step 2 if not exists
@@ -230,8 +231,8 @@ class FieldWorkPreparationPage(QWidget):
             researcher = self.step2.get_selected_researcher()
             buildings = self.step1.get_selected_buildings()
             if not researcher:
-                from PyQt5.QtWidgets import QMessageBox
-                QMessageBox.warning(self, tr("wizard.field_work.warning_title"), tr("wizard.field_work.select_researcher_warning"))
+                from ui.components.notification_bar import NotificationBar
+                NotificationBar.notify(self, tr("wizard.field_work.select_researcher_warning"), NotificationBar.WARNING)
                 return
 
             # Rebuild step3 each time (fresh data)
@@ -249,6 +250,8 @@ class FieldWorkPreparationPage(QWidget):
 
         elif self.current_step == 2:
             # Step 3: Confirm and submit
+            if not self.step3.validate():
+                return
             try:
                 summary = self.step3.get_summary()
                 workflow_data = {

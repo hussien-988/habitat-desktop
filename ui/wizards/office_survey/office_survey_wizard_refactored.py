@@ -31,7 +31,7 @@ from repositories.database import Database
 from ui.design_system import PageDimensions, Colors, ButtonDimensions
 from ui.style_manager import StyleManager
 from ui.font_utils import create_font, FontManager
-from ui.components.success_popup import SuccessPopup
+from ui.components.toast import Toast
 from ui.components.dark_header_zone import DarkHeaderZone
 from ui.components.nav_style_tab import NavStyleTab
 from ui.components.accent_line import AccentLine
@@ -185,12 +185,8 @@ class OfficeSurveyWizard(BaseWizard):
             draft_id = self.on_save_draft()
             if draft_id:
                 claim_number = self.context.reference_number or draft_id
-                SuccessPopup.show_success(
-                    claim_number=claim_number,
-                    title=tr("wizard.success.title"),
-                    description=tr("wizard.success.description"),
-                    auto_close_ms=0,
-                    parent=self
+                Toast.show_toast(
+                    self, tr("wizard.success.description"), Toast.SUCCESS
                 )
                 self._finalization_complete = True
                 return True
@@ -256,17 +252,8 @@ class OfficeSurveyWizard(BaseWizard):
         self._claim_number_worker.start()
 
     def _show_finalized_success_popup(self, claim_number: str = "", claims: list = None):
-        """Show success popup after finalization."""
-        if not claim_number and not claims:
-            claim_number = self.context.reference_number or ""
-        SuccessPopup.show_success(
-            claim_number=claim_number,
-            claims=claims,
-            title=tr("wizard.success.title"),
-            description=tr("wizard.success.description"),
-            auto_close_ms=0,
-            parent=self
-        )
+        """Show success notification after finalization."""
+        Toast.show_toast(self, tr("wizard.success.description"), Toast.SUCCESS)
         self._finalization_complete = True
 
     def on_cancel(self) -> bool:
@@ -401,27 +388,40 @@ class OfficeSurveyWizard(BaseWizard):
         )
 
         if has_data:
-            # Show save-draft confirmation dialog
-            from ui.components.dialogs.confirmation_dialog import ConfirmationDialog
+            from ui.components.bottom_sheet import BottomSheet
+            from PyQt5.QtCore import QEventLoop
+            loop = QEventLoop()
+            choice_result = [None]
 
-            result = ConfirmationDialog.save_draft_confirmation(
-                parent=self,
-                title=tr("wizard.confirm.save_title"),
-                message=tr("wizard.confirm.save_message")
+            def on_choice(c):
+                choice_result[0] = c
+                loop.quit()
+
+            def on_cancel():
+                choice_result[0] = "cancel"
+                loop.quit()
+
+            sheet = BottomSheet(self)
+            sheet.choice_made.connect(on_choice)
+            sheet.cancelled.connect(on_cancel)
+            sheet.show_choices(
+                tr("wizard.confirm.save_title"),
+                [
+                    ("save", tr("wizard.confirm.save_draft")),
+                    ("discard", tr("wizard.confirm.discard")),
+                ]
             )
+            loop.exec_()
 
-            if result == ConfirmationDialog.SAVE:
-                # Save as draft
+            if choice_result[0] == "save":
                 draft_id = self.on_save_draft()
                 if draft_id:
                     self._finalization_complete = True
-                    from ui.components.toast import Toast
                     Toast.show_toast(self, tr("wizard.draft.saved_success"), Toast.SUCCESS)
                 else:
-                    # Save failed - stay in wizard
                     return
 
-            elif result == ConfirmationDialog.DISCARD:
+            elif choice_result[0] == "discard":
                 # Cancel survey on server with reason
                 survey_id = self.context.get_data("survey_id")
                 if survey_id:
@@ -534,7 +534,10 @@ class OfficeSurveyWizard(BaseWizard):
         # Propagate to all steps
         for step in self.steps:
             if hasattr(step, 'update_language'):
-                step.update_language(is_arabic)
+                try:
+                    step.update_language(is_arabic)
+                except Exception:
+                    pass
     # UI Overrides - Exact copy from old wizard
 
     def _setup_ui(self):
@@ -756,14 +759,10 @@ class OfficeSurveyWizard(BaseWizard):
 
         # Normal mode: warn when going back from step 1 to step 0
         if self.navigator.current_index == 1:
-            from ui.components.confirmation_modal import ConfirmationModal
-            confirmed = ConfirmationModal.ask_confirmation(
+            confirmed = ErrorHandler.confirm(
                 self,
-                title="تأكيد العودة",
-                message="في حالة العودة إلى اختيار المبنى ستفقد جميع المعلومات المدخلة وسيتم بدء حالة جديدة.",
-                confirm_text="موافق",
-                cancel_text="إلغاء",
-                confirm_style="danger"
+                tr("wizard.confirm.back_message"),
+                tr("wizard.confirm.back_title"),
             )
             if confirmed:
                 survey_id = self.context.get_data("survey_id")

@@ -17,6 +17,7 @@ from PyQt5.QtGui import QColor, QIcon
 from models.building import Building
 from repositories.database import Database
 from repositories.building_repository import BuildingRepository
+from controllers.building_controller import BuildingController
 from controllers.unit_controller import UnitController
 from services.display_mappings import get_unit_type_display, get_unit_status_display
 from ui.components.icon import Icon
@@ -44,6 +45,7 @@ class BuildingDetailsPage(QWidget):
         self.i18n = i18n
         self.building_repo = BuildingRepository(db)
         self.unit_controller = UnitController(db)
+        self.building_controller = BuildingController(db)
         self.current_building = None
 
         self._units_view_active = False
@@ -121,6 +123,26 @@ class BuildingDetailsPage(QWidget):
         self.view_units_btn.clicked.connect(self._toggle_units_view)
         header_row.addWidget(self.view_units_btn)
 
+        self._lock_btn = QPushButton("")
+        self._lock_btn.setFixedSize(ButtonDimensions.SAVE_WIDTH, ButtonDimensions.SAVE_HEIGHT)
+        self._lock_btn.setCursor(Qt.PointingHandCursor)
+        self._lock_btn.setFont(create_font(
+            size=ButtonDimensions.SAVE_FONT_SIZE,
+            weight=FontManager.WEIGHT_REGULAR,
+        ))
+        self._lock_btn.setStyleSheet(f"""
+            QPushButton {{
+                background-color: #F1F5F9;
+                color: #475569;
+                border: 1px solid #E2E8F0;
+                border-radius: {ButtonDimensions.SAVE_BORDER_RADIUS}px;
+            }}
+            QPushButton:hover {{ background-color: #E2E8F0; }}
+        """)
+        self._lock_btn.clicked.connect(self._on_toggle_lock)
+        self._lock_btn.setVisible(False)
+        header_row.addWidget(self._lock_btn)
+
         back_btn = QPushButton(tr("action.back"))
         back_btn.setFixedSize(100, ButtonDimensions.SAVE_HEIGHT)
         back_btn.setCursor(Qt.PointingHandCursor)
@@ -185,10 +207,13 @@ class BuildingDetailsPage(QWidget):
         self._scroll_layout.addStretch()
 
         scroll.setWidget(scroll_content)
+        self._scroll = scroll
         layout.addWidget(scroll)
 
-        from ui.components.loading_spinner import LoadingSpinnerOverlay
-        self._spinner = LoadingSpinnerOverlay(self)
+        from ui.components.skeleton_loader import DetailSkeleton
+        self._skeleton = DetailSkeleton(groups=3, fields_per_group=4, message=tr("page.building_details.loading"))
+        layout.addWidget(self._skeleton)
+        self._skeleton.hide()
     # Card Builders (same pattern as review_step.py)
 
     def _create_card_base(self, icon_name: str, title: str, subtitle: str) -> tuple:
@@ -465,7 +490,9 @@ class BuildingDetailsPage(QWidget):
         """
         if not data:
             return
-        self._spinner.show_loading(tr("page.building_details.loading"))
+        self._scroll.hide()
+        self._skeleton.show()
+        self._skeleton.start()
 
         if isinstance(data, Building):
             building = data
@@ -473,10 +500,19 @@ class BuildingDetailsPage(QWidget):
             building = self.building_repo.get_by_id(str(data))
             if not building:
                 logger.error(f"Building not found: {data}")
-                self._spinner.hide_loading()
+                self._skeleton.stop()
+                self._skeleton.hide()
+                self._scroll.show()
                 return
 
         self.current_building = building
+
+        # Update lock button
+        is_locked = getattr(building, 'is_locked', False)
+        self._lock_btn.setText(
+            tr("building.action.unlock") if is_locked else tr("building.action.lock")
+        )
+        self._lock_btn.setVisible(True)
 
         # Reset to cards view
         if self._units_view_active:
@@ -491,7 +527,14 @@ class BuildingDetailsPage(QWidget):
         self.title_label.setText(display_id)
 
         # Show cards immediately with available data
+        self._skeleton.stop()
+        self._skeleton.hide()
+        self._scroll.show()
         self._populate_cards(building)
+
+        # Progressive reveal animation for cards
+        from ui.animation_utils import stagger_fade_in
+        stagger_fade_in([self.info_card, self.stats_card, self.location_card])
 
         # Fetch full details + unit counts in background
         building_id_for_api = building.building_uuid or building.building_id
@@ -511,8 +554,6 @@ class BuildingDetailsPage(QWidget):
             self._refresh_details_worker.finished.connect(self._on_refresh_details_finished)
             self._refresh_details_worker.error.connect(self._on_refresh_details_error)
             self._refresh_details_worker.start()
-        else:
-            self._spinner.hide_loading()
 
     def _fetch_building_details_bg(self, building, building_id_for_api, auth_token):
         """Background: re-fetch building from API and recalculate unit counts."""
@@ -565,12 +606,10 @@ class BuildingDetailsPage(QWidget):
         display_id = building.building_id_formatted or building.building_id or "-"
         self.title_label.setText(display_id)
         self._populate_cards(building)
-        self._spinner.hide_loading()
 
     def _on_refresh_details_error(self, error_msg):
         """Callback: API fetch failed, keep existing data."""
         logger.warning(f"Background building details fetch failed: {error_msg}")
-        self._spinner.hide_loading()
 
     def _clear_layout(self, layout):
         while layout.count():
@@ -744,6 +783,30 @@ class BuildingDetailsPage(QWidget):
         content_row.addLayout(gen_desc_section, stretch=1)
 
         self.location_content.addLayout(content_row)
+    def _on_toggle_lock(self):
+        """Toggle building lock state with confirmation."""
+        if not self.current_building:
+            return
+        from ui.error_handler import ErrorHandler
+        is_locked = getattr(self.current_building, 'is_locked', False)
+        msg_key = "page.buildings.confirm_unlock" if is_locked else "page.buildings.confirm_lock"
+        title_key = "building.action.unlock" if is_locked else "building.action.lock"
+        if not ErrorHandler.confirm(self, tr(msg_key), tr(title_key)):
+            return
+        new_lock_state = not is_locked
+        op_result = self.building_controller.toggle_building_lock(
+            self.current_building.building_uuid or self.current_building.building_id,
+            new_lock_state
+        )
+        if op_result.success:
+            self.current_building.is_locked = new_lock_state
+            self._lock_btn.setText(
+                tr("building.action.unlock") if new_lock_state else tr("building.action.lock")
+            )
+            Toast.show_toast(self, tr("building.lock_success"), Toast.SUCCESS)
+        else:
+            Toast.show_toast(self, tr("building.lock_failed"), Toast.ERROR)
+
     # Units View Toggle
 
     def _toggle_units_view(self):
@@ -787,7 +850,6 @@ class BuildingDetailsPage(QWidget):
         )
         self._load_units_worker.finished.connect(self._on_load_units_finished)
         self._load_units_worker.error.connect(self._on_load_units_error)
-        self._spinner.show_loading(tr("component.loading.default"))
         self._load_units_worker.start()
 
     def _fetch_units_bg(self, building_uuid, auth_token):
@@ -798,7 +860,6 @@ class BuildingDetailsPage(QWidget):
 
     def _on_load_units_finished(self, result):
         """Callback: populate units table with fetched data."""
-        self._spinner.hide_loading()
         if result.success:
             self._units_list = result.data or []
         else:
@@ -811,7 +872,6 @@ class BuildingDetailsPage(QWidget):
 
     def _on_load_units_error(self, error_msg):
         """Callback: units fetch failed."""
-        self._spinner.hide_loading()
         logger.error(f"Failed to load units: {error_msg}")
         self._units_list = []
         self._units_page = 1

@@ -30,7 +30,6 @@ class MainWindow(QMainWindow):
     _PAGE_ROLE_ACCESS = {
         Pages.FIELD_ASSIGNMENT: {"admin", "data_manager", "field_supervisor"},
         Pages.SYNC_DATA: {"admin", "data_manager", "field_supervisor"},
-        Pages.REPORTS: {"admin", "data_manager", "field_supervisor"},
         Pages.CLAIM_EDIT: {"admin", "data_manager"},
         Pages.DUPLICATES: {"admin", "data_manager"},
         Pages.CLAIM_COMPARISON: {"admin", "data_manager"},
@@ -143,7 +142,6 @@ class MainWindow(QMainWindow):
         # Import here to avoid circular imports
         from ui.components.navbar import Navbar
         from ui.pages.login_page import LoginPage
-        from ui.pages.dashboard_page import DashboardPage
         from ui.pages.buildings_page import BuildingsPage
         from ui.pages.building_details_page import BuildingDetailsPage
         from ui.pages.units_page import UnitsPage
@@ -153,9 +151,6 @@ class MainWindow(QMainWindow):
         from ui.pages.households_page import HouseholdsPage
         from ui.pages.completed_claims_page import CompletedClaimsPage
         from ui.pages.cases_page import CasesPage
-        from ui.pages.search_page import SearchPage
-        from ui.pages.reports_page import ReportsPage
-        from ui.pages.map_page import MapPage
         from ui.pages.duplicates_page import DuplicatesPage
         from ui.pages.claim_comparison_page import ClaimComparisonPage
         from ui.pages.field_work_preparation_page import FieldWorkPreparationPage
@@ -209,10 +204,6 @@ class MainWindow(QMainWindow):
         self.pages[Pages.LOGIN] = LoginPage(self.i18n, db=self.db, parent=self)
         self.stack.addWidget(self.pages[Pages.LOGIN])
 
-        # Dashboard page
-        self.pages[Pages.DASHBOARD] = DashboardPage(self.db, self.i18n, self)
-        self.stack.addWidget(self.pages[Pages.DASHBOARD])
-
         # Buildings list page
         self.pages[Pages.BUILDINGS] = BuildingsPage(self.db, self.i18n, self)
         self.stack.addWidget(self.pages[Pages.BUILDINGS])
@@ -248,18 +239,6 @@ class MainWindow(QMainWindow):
         # Cases page (3 sub-tabs: Draft / Finalized / Completed)
         self.pages[Pages.CASES] = CasesPage(self.db, self.i18n, self)
         self.stack.addWidget(self.pages[Pages.CASES])
-
-        # Search page
-        self.pages[Pages.SEARCH] = SearchPage(self.db, self.i18n, self)
-        self.stack.addWidget(self.pages[Pages.SEARCH])
-
-        # Reports page
-        self.pages[Pages.REPORTS] = ReportsPage(self.db, self.i18n, self)
-        self.stack.addWidget(self.pages[Pages.REPORTS])
-
-        # Map view page
-        self.pages[Pages.MAP_VIEW] = MapPage(self.db, self.i18n, self)
-        self.stack.addWidget(self.pages[Pages.MAP_VIEW])
 
         # Duplicates page
         self.pages[Pages.DUPLICATES] = DuplicatesPage(self.db, self.i18n, self)
@@ -322,15 +301,15 @@ class MainWindow(QMainWindow):
         # Tab 1: الحالات (Cases)
         # Tab 2: الاستيراد (Import)
         # Tab 3: التكرارات (Duplicates)
-        # Tab 4: إدارة المستخدمين (User Management)
-        # Tab 5: تجهيز العمل الميداني (Field Work Preparation)
+        # Tab 4: تجهيز العمل الميداني (Field Work Preparation)
+        # Tab 5: المباني (Buildings)
         self.tab_page_mapping = {
             0: Pages.CLAIMS,
             1: Pages.CASES,
             2: Pages.IMPORT_PACKAGES,
             3: Pages.DUPLICATES,
-            5: Pages.FIELD_ASSIGNMENT,
-            6: Pages.BUILDINGS,
+            4: Pages.FIELD_ASSIGNMENT,
+            5: Pages.BUILDINGS,
         }
 
     def _setup_layout(self):
@@ -360,6 +339,7 @@ class MainWindow(QMainWindow):
         self.navbar.logout_requested.connect(self._handle_logout)
         self.navbar.language_change_requested.connect(self.toggle_language)
         self.navbar.sync_requested.connect(self._on_sync_requested)
+        self.navbar.password_change_requested.connect(self._on_voluntary_password_change)
         self.pages[Pages.SYNC_DATA].sync_notification.connect(self._on_sync_notification)
         self.navbar.import_requested.connect(self._on_import_requested)
 
@@ -483,9 +463,14 @@ class MainWindow(QMainWindow):
         # Check if password change is required before proceeding
         if getattr(user, 'must_change_password', False):
             logger.info("Password change required for user: %s", user.username)
-            if not self._handle_forced_password_change(user):
-                self._show_login()
-                return
+            self._start_forced_password_change(user)
+            return
+
+        self._complete_login(user)
+
+    def _complete_login(self, user):
+        """Finalize login: set token, configure UI, load data."""
+        self.current_user = user
 
         # Pass API token to BuildingController if using API backend
         token = getattr(user, '_api_token', None)
@@ -559,54 +544,187 @@ class MainWindow(QMainWindow):
         # Start session timeout timer
         self._start_session_timer()
 
-    def _handle_forced_password_change(self, user) -> bool:
-        """Show password change dialog when backend requires it.
+    # -- Forced Password Change (async UX flow) --
 
-        Returns True if password was changed successfully, False otherwise.
-        """
+    def _start_forced_password_change(self, user):
+        """Step 1: Show password change dialog."""
         from ui.components.dialogs.password_dialog import PasswordDialog
-        from services.api_client import get_api_client
-        from services.api_auth_service import ApiAuthService
         from ui.components.toast import Toast
+
+        from services.translation_manager import get_language as _get_lang
+        if _get_lang() == 'ar':
+            display_name = (getattr(user, 'full_name_ar', '') or
+                            getattr(user, 'full_name', '') or
+                            getattr(user, 'username', ''))
+        else:
+            display_name = (getattr(user, 'full_name', '') or
+                            getattr(user, 'full_name_ar', '') or
+                            getattr(user, 'username', ''))
+        result = PasswordDialog.forced_change_password(
+            parent=self, username=display_name
+        )
+        if result is None:
+            Toast.show_toast(self, tr("dialog.password.change_cancelled"), Toast.WARNING)
+            self._show_login()
+            return
+
+        current_password, new_password = result
+        self._pwd_change_user = user
+        self._pwd_change_new_password = new_password
+
+        # Step 2: Show loader and call API async
+        self._show_login_loading_msg(tr("dialog.password.changing"))
+
+        from services.api_client import get_api_client
+        api_client = get_api_client()
+        token = getattr(user, '_api_token', None)
+        if token:
+            api_client.set_access_token(token)
+
+        def _call_change_password(cur_pwd, new_pwd, uid):
+            try:
+                return api_client.change_password(cur_pwd, new_pwd, user_id=uid)
+            except Exception as e:
+                detail = ""
+                if hasattr(e, 'response_data') and e.response_data:
+                    detail = (e.response_data.get('message')
+                              or e.response_data.get('detail') or "")
+                raise Exception(detail) if detail else e
+
+        from services.api_worker import ApiWorker
+        self._pwd_worker = ApiWorker(
+            _call_change_password,
+            current_password, new_password,
+            getattr(user, 'user_id', None)
+        )
+        self._pwd_worker.finished.connect(self._on_password_changed)
+        self._pwd_worker.error.connect(self._on_password_change_failed)
+        self._pwd_worker.start()
+
+    def _on_password_changed(self, result):
+        """Step 3: Password changed — show success dialog, then re-auth."""
+        self._hide_login_loading()
+        logger.info("Password changed successfully for user: %s",
+                     self._pwd_change_user.username)
+
+        from ui.components.dialogs.message_dialog import MessageDialog
+        MessageDialog.show_success(
+            self,
+            tr("dialog.password.change_success_title"),
+            tr("dialog.password.change_success_message"),
+        )
+
+        # Step 4: Re-authenticate with new password
+        self._show_login_loading_msg(tr("dialog.password.logging_in"))
+
+        from services.api_worker import ApiWorker
+        from services.api_auth_service import ApiAuthService
+        auth_service = ApiAuthService()
+        self._reauth_worker = ApiWorker(
+            auth_service.authenticate,
+            self._pwd_change_user.username,
+            self._pwd_change_new_password
+        )
+        self._reauth_worker.finished.connect(self._on_reauth_finished)
+        self._reauth_worker.error.connect(self._on_reauth_failed)
+        self._reauth_worker.start()
+
+    def _on_password_change_failed(self, error_msg):
+        """Password change API failed — show specific error and retry."""
+        self._hide_login_loading()
+        logger.error("Password change failed: %s", error_msg)
+
+        from ui.components.dialogs.message_dialog import MessageDialog
+        MessageDialog.show_error(
+            self,
+            tr("page.user_mgmt.password_change_failed_title"),
+            tr("page.user_mgmt.password_change_failed"),
+        )
+        self._start_forced_password_change(self._pwd_change_user)
+
+    def _on_reauth_finished(self, result):
+        """Step 5: Re-auth done — continue to main app."""
+        self._hide_login_loading()
+
+        new_user, error = result if isinstance(result, tuple) else (result, None)
+        if new_user and not isinstance(new_user, str):
+            self._complete_login(new_user)
+        else:
+            logger.error("Re-authentication failed: %s", error)
+            from ui.components.toast import Toast
+            Toast.show_toast(self, tr("page.user_mgmt.password_change_failed"), Toast.ERROR)
+            self._show_login()
+
+    def _on_reauth_failed(self, error_msg):
+        """Re-authentication failed."""
+        self._hide_login_loading()
+        logger.error("Re-authentication failed: %s", error_msg)
+        from ui.components.toast import Toast
+        Toast.show_toast(self, tr("page.user_mgmt.password_change_failed"), Toast.ERROR)
+        self._show_login()
+
+    # -- Voluntary Password Change (from navbar settings) --
+
+    def _on_voluntary_password_change(self):
+        """User requested password change from settings pill."""
+        from ui.components.dialogs.password_dialog import PasswordDialog
 
         result = PasswordDialog.change_password(parent=self)
         if result is None:
-            Toast.show(self, tr("dialog.password.change_cancelled"), Toast.WARNING)
-            return False
+            return
 
         current_password, new_password = result
 
-        try:
-            api_client = get_api_client()
-            token = getattr(user, '_api_token', None)
-            if token:
-                api_client.set_access_token(token)
-            api_client.change_password(current_password, new_password)
-            logger.info("Password changed successfully for user: %s", user.username)
-        except Exception as e:
-            logger.error("Password change failed: %s", e)
-            Toast.show(self, tr("page.user_mgmt.password_change_failed"), Toast.ERROR)
-            return False
+        self._show_login_loading_msg(tr("dialog.password.changing"))
 
-        # Re-authenticate with new password to get unrestricted token
-        try:
-            auth_service = ApiAuthService()
-            new_user, error = auth_service.authenticate(user.username, new_password)
-            if new_user:
-                self.current_user = new_user
-                token = getattr(new_user, '_api_token', None)
-                if token:
-                    self._set_api_token_for_controllers(token)
-                Toast.show(self, tr("page.user_mgmt.password_changed_success"), Toast.SUCCESS)
-                return True
-            else:
-                logger.error("Re-authentication after password change failed: %s", error)
-                Toast.show(self, tr("page.user_mgmt.password_change_failed"), Toast.ERROR)
-                return False
-        except Exception as e:
-            logger.error("Re-authentication failed: %s", e)
-            Toast.show(self, tr("page.user_mgmt.password_change_failed"), Toast.ERROR)
-            return False
+        from services.api_client import get_api_client
+        api_client = get_api_client()
+
+        user_id = getattr(self.current_user, 'user_id', None)
+
+        def _call_change(cur_pwd, new_pwd, uid):
+            try:
+                return api_client.change_password(cur_pwd, new_pwd, user_id=uid)
+            except Exception as e:
+                detail = ""
+                if hasattr(e, 'response_data') and e.response_data:
+                    detail = (e.response_data.get('message')
+                              or e.response_data.get('detail') or "")
+                raise Exception(detail) if detail else e
+
+        from services.api_worker import ApiWorker
+        self._vol_pwd_worker = ApiWorker(
+            _call_change, current_password, new_password, user_id
+        )
+        self._vol_pwd_worker.finished.connect(self._on_voluntary_pwd_success)
+        self._vol_pwd_worker.error.connect(self._on_voluntary_pwd_error)
+        self._vol_pwd_worker.start()
+
+    def _on_voluntary_pwd_success(self, result):
+        self._hide_login_loading()
+        from ui.components.dialogs.message_dialog import MessageDialog
+        MessageDialog.show_success(
+            self,
+            tr("dialog.password.change_success_title"),
+            tr("dialog.password.change_success_message"),
+        )
+
+    def _on_voluntary_pwd_error(self, error_msg):
+        self._hide_login_loading()
+        logger.error("Voluntary password change failed: %s", error_msg)
+        from ui.components.dialogs.message_dialog import MessageDialog
+        MessageDialog.show_error(
+            self,
+            tr("page.user_mgmt.password_change_failed_title"),
+            tr("page.user_mgmt.password_change_failed"),
+        )
+
+    def _show_login_loading_msg(self, message):
+        """Show loading spinner with a custom message."""
+        from ui.components.loading_spinner import LoadingSpinnerOverlay
+        if not hasattr(self, '_login_spinner') or self._login_spinner is None:
+            self._login_spinner = LoadingSpinnerOverlay(self, timeout_ms=30_000)
+        self._login_spinner.show_loading(message)
 
     def _show_login_loading(self):
         """Show a loading spinner overlay during post-login data preparation."""
@@ -933,8 +1051,6 @@ class MainWindow(QMainWindow):
             search_mode = getattr(self.navbar, 'search_mode', 'name')
             current_page.search_claims(search_text, search_mode)
             return
-        # Otherwise navigate to search page
-        self.navigate_to(Pages.SEARCH, search_text)
 
     def _on_filter_applied(self, filters: dict):
         """Handle filter applied from navbar filter popup."""
@@ -948,37 +1064,49 @@ class MainWindow(QMainWindow):
         current_widget = self.stack.currentWidget()
         if current_widget == self.office_survey_wizard and page_id != "office_survey_wizard":
             if self._has_unsaved_wizard_data():
-                from ui.components.dialogs.confirmation_dialog import ConfirmationDialog
+                from ui.components.bottom_sheet import BottomSheet
+                from PyQt5.QtCore import QEventLoop
+                loop = QEventLoop()
+                choice_result = [None]
 
-                # Show save draft confirmation
-                result = ConfirmationDialog.save_draft_confirmation(
-                    parent=self,
-                    title="هل تريد الحفظ؟",
-                    message="لديك تغييرات غير محفوظة.\nهل تريد حفظها كمسودة؟"
+                def on_choice(c):
+                    choice_result[0] = c
+                    loop.quit()
+
+                def on_cancel():
+                    choice_result[0] = "cancel"
+                    loop.quit()
+
+                sheet = BottomSheet(self)
+                sheet.choice_made.connect(on_choice)
+                sheet.cancelled.connect(on_cancel)
+                sheet.show_choices(
+                    tr("wizard.confirm.save_title"),
+                    [
+                        ("save", tr("wizard.confirm.save_draft")),
+                        ("discard", tr("wizard.confirm.discard")),
+                    ]
                 )
+                loop.exec_()
 
-                if result == ConfirmationDialog.SAVE:
-                    # Save as draft
+                if choice_result[0] == "save":
                     draft_id = self.office_survey_wizard.on_save_draft()
                     if draft_id:
                         from ui.components.toast import Toast
-                        Toast.show_toast(self, "✅ تم حفظ المسودة بنجاح!", Toast.SUCCESS)
-                        # Refresh drafts page
+                        Toast.show_toast(self, tr("wizard.draft.saved_success"), Toast.SUCCESS)
                         if Pages.CASES in self.pages:
                             self.pages[Pages.CASES].refresh()
                     else:
-                        # Save failed - stay in wizard
                         logger.warning("Failed to save draft")
                         return
 
-                elif result == ConfirmationDialog.DISCARD:
-                    # Cancel survey on server with reason
+                elif choice_result[0] == "discard":
                     survey_id = self.office_survey_wizard.context.get_data("survey_id")
                     if survey_id:
                         from PyQt5.QtWidgets import QInputDialog
                         reason, ok = QInputDialog.getMultiLineText(
-                            self, "سبب الإلغاء",
-                            "يرجى إدخال سبب إلغاء المسح:", ""
+                            self, tr("wizard.cancel_reason_title"),
+                            tr("wizard.cancel_reason_prompt"), ""
                         )
                         if not ok or not reason.strip():
                             return
@@ -994,7 +1122,6 @@ class MainWindow(QMainWindow):
                     logger.info("User discarded wizard changes")
 
                 else:
-                    # User cancelled - stay in wizard
                     logger.debug("User cancelled navigation")
                     return
 
@@ -1014,7 +1141,7 @@ class MainWindow(QMainWindow):
         if page_id not in self.pages:
             # Handle special case: office survey wizard
             if page_id == "office_survey_wizard":
-                self.stack.setCurrentWidget(self.office_survey_wizard)
+                self._fade_to_widget(self.office_survey_wizard)
                 return
             logger.error(f"Page not found: {page_id}")
             return
@@ -1035,9 +1162,26 @@ class MainWindow(QMainWindow):
         if hasattr(page, 'refresh'):
             page.refresh(data)
 
-        # Show page
-        self.stack.setCurrentWidget(page)
+        # Show page with cross-fade
+        self._fade_to_widget(page)
         logger.debug(f"Navigated to: {page_id}")
+
+    def _fade_to_widget(self, widget):
+        """Switch page with a quick cross-fade animation."""
+        from PyQt5.QtWidgets import QGraphicsOpacityEffect
+        from PyQt5.QtCore import QPropertyAnimation, QEasingCurve
+        effect = QGraphicsOpacityEffect(widget)
+        widget.setGraphicsEffect(effect)
+        effect.setOpacity(0)
+        self.stack.setCurrentWidget(widget)
+        anim = QPropertyAnimation(effect, b"opacity", self)
+        anim.setDuration(150)
+        anim.setStartValue(0)
+        anim.setEndValue(1)
+        anim.setEasingCurve(QEasingCurve.OutCubic)
+        anim.finished.connect(lambda: widget.setGraphicsEffect(None))
+        anim.start()
+        self._page_anim = anim
 
     def _has_unsaved_wizard_data(self) -> bool:
         """Check if wizard has unsaved data."""
@@ -1294,6 +1438,11 @@ class MainWindow(QMainWindow):
         if hasattr(self.navbar, 'update_language'):
             self.navbar.update_language(is_arabic)
 
+        # Update office survey wizard (not in self.pages)
+        if hasattr(self, 'office_survey_wizard') and self.office_survey_wizard:
+            if hasattr(self.office_survey_wizard, 'update_language'):
+                self.office_survey_wizard.update_language(is_arabic)
+
         # Update window title
         title = Config.APP_TITLE_AR if is_arabic else Config.APP_TITLE
         self.setWindowTitle(f"{Config.APP_NAME} - {title}")
@@ -1325,15 +1474,37 @@ class MainWindow(QMainWindow):
         )
 
     # طبّق قصّ الزوايا بعد أي تغيير بالحجم
-        if hasattr(self, "window_frame") and self.window_frame:
+        if hasattr(self, "window_frame") and self.window_frame and not self.isMaximized():
             self._apply_round_mask()
+
+    def changeEvent(self, event):
+        from PyQt5.QtCore import QEvent
+        if event.type() == QEvent.WindowStateChange:
+            if hasattr(self, "window_frame") and self.window_frame:
+                if self.isMaximized():
+                    self.window_frame.setStyleSheet(f"""
+                        QFrame#window_frame {{
+                            background-color: {Config.BACKGROUND_COLOR};
+                            border-radius: 0px;
+                        }}
+                    """)
+                    self.window_frame.clearMask()
+                else:
+                    self.window_frame.setStyleSheet(f"""
+                        QFrame#window_frame {{
+                            background-color: {Config.BACKGROUND_COLOR};
+                            border-radius: 12px;
+                        }}
+                    """)
+                    self._apply_round_mask()
+        super().changeEvent(event)
 
     def _apply_round_mask(self):
         from PyQt5.QtGui import QPainterPath
         from PyQt5.QtCore import QRectF
         from PyQt5.QtGui import QRegion
 
-        r = getattr(self, "WINDOW_RADIUS", 18)  # نفس رقم الراديوس اللي مستخدمه
+        r = getattr(self, "WINDOW_RADIUS", 18)
         path = QPainterPath()
         rect = QRectF(self.window_frame.rect())
         path.addRoundedRect(rect, r, r)

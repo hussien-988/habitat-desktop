@@ -23,6 +23,7 @@ from ui.components.nav_style_tab import NavStyleTab
 from ui.components.stat_pill import StatPill
 from ui.components.accent_line import AccentLine
 from ui.components.loading_spinner import LoadingSpinnerOverlay
+from ui.error_handler import ErrorHandler
 from ui.design_system import PageDimensions, Colors
 from ui.style_manager import StyleManager
 from ui.font_utils import create_font, FontManager
@@ -561,10 +562,8 @@ class ImportPackagesPage(QWidget):
                     total_count = len(items)
             else:
                 logger.error("Failed to load packages: %s", result.message)
-                from ui.components.message_dialog import MessageDialog
-                MessageDialog.error(
+                ErrorHandler.show_error(
                     self,
-                    tr("page.import_packages.error"),
                     result.message_ar or tr("page.import_packages.load_failed"),
                 )
 
@@ -798,83 +797,44 @@ class ImportPackagesPage(QWidget):
     # -- Package actions ---------------------------------------------------
 
     def _cancel_package(self, package_id):
-        from ui.components.message_dialog import MessageDialog
         self._spinner.show_loading(tr("page.import_packages.cancelling"))
         try:
             result = self.import_controller.cancel_package(package_id)
             if result.success:
-                MessageDialog.success(
-                    self,
-                    tr("page.import_packages.cancelled"),
-                    result.message_ar or tr("page.import_packages.package_cancelled"),
-                )
+                ErrorHandler.show_success(self, result.message_ar or tr("page.import_packages.package_cancelled"))
                 self._load_packages()
             else:
-                MessageDialog.error(
-                    self,
-                    tr("page.import_packages.error"),
-                    result.message_ar or tr("page.import_packages.cancel_failed"),
-                )
+                ErrorHandler.show_error(self, result.message_ar or tr("page.import_packages.cancel_failed"))
         except Exception as e:
-            MessageDialog.error(
-                self,
-                tr("page.import_packages.error"),
-                tr("page.import_packages.cancel_failed_detail", error=str(e)),
-            )
+            ErrorHandler.show_error(self, tr("page.import_packages.cancel_failed_detail", error=str(e)))
         finally:
             self._spinner.hide_loading()
 
     def _quarantine_package(self, package_id):
-        from ui.components.message_dialog import MessageDialog
         self._spinner.show_loading(tr("page.import_packages.quarantining"))
         try:
             result = self.import_controller.quarantine_package(package_id)
             if result.success:
-                MessageDialog.success(
-                    self,
-                    tr("page.import_packages.quarantined"),
-                    result.message_ar or tr("page.import_packages.package_quarantined"),
-                )
+                ErrorHandler.show_success(self, result.message_ar or tr("page.import_packages.package_quarantined"))
                 self._load_packages()
             else:
-                MessageDialog.error(
-                    self,
-                    tr("page.import_packages.error"),
-                    result.message_ar or tr("page.import_packages.quarantine_failed"),
-                )
+                ErrorHandler.show_error(self, result.message_ar or tr("page.import_packages.quarantine_failed"))
         except Exception as e:
-            MessageDialog.error(
-                self,
-                tr("page.import_packages.error"),
-                tr("page.import_packages.quarantine_failed_detail", error=str(e)),
-            )
+            ErrorHandler.show_error(self, tr("page.import_packages.quarantine_failed_detail", error=str(e)))
         finally:
             self._spinner.hide_loading()
 
     def _reset_commit(self, package_id):
-        from ui.components.message_dialog import MessageDialog
         self._spinner.show_loading()
         try:
             result = self.import_controller.reset_commit(package_id)
             if result.success:
-                MessageDialog.success(
-                    self,
-                    tr("page.import_packages.reset_done"),
-                    result.message_ar or tr("page.import_packages.reset_done"),
-                )
+                ErrorHandler.show_success(self, result.message_ar or tr("page.import_packages.reset_done"))
                 self._load_packages()
             else:
-                MessageDialog.error(
-                    self,
-                    tr("page.import_packages.error"),
-                    result.message_ar or tr("page.import_packages.reset_failed"),
-                )
+                ErrorHandler.show_error(self, result.message_ar or tr("page.import_packages.reset_failed"))
         except Exception as e:
-            MessageDialog.error(
-                self,
-                tr("page.import_packages.error"),
-                tr("page.import_packages.reset_failed_detail", error=str(e)),
-            )
+            ErrorHandler.show_error(self, tr("page.import_packages.reset_failed_detail", error=str(e)))
         finally:
             self._spinner.hide_loading()
 

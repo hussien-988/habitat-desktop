@@ -8,8 +8,8 @@ from PyQt5.QtWidgets import (
     QPushButton, QFrame, QGraphicsDropShadowEffect,
     QScrollArea, QWidget, QCheckBox
 )
-from PyQt5.QtCore import Qt
-from PyQt5.QtGui import QColor
+from PyQt5.QtCore import Qt, QSize
+from PyQt5.QtGui import QColor, QIcon, QPixmap
 
 from ui.design_system import Colors
 from ui.font_utils import create_font, FontManager
@@ -223,7 +223,65 @@ class EvidencePickerDialog(QDialog):
                 f"color: white; background-color: {bg}; border-radius: 4px;")
             row_layout.addWidget(ext_badge)
 
+        row_layout.addWidget(self._make_view_btn(ev_id, file_name))
+
         return row
+
+    def _make_view_btn(self, ev_id: str, file_name: str) -> QPushButton:
+        import os
+        from PyQt5.QtCore import QUrl
+        from PyQt5.QtGui import QDesktopServices
+        from utils.helpers import download_evidence_file
+
+        btn = QPushButton()
+        btn.setFixedSize(32, 32)
+        btn.setToolTip(tr("dialog.evidence_picker.view_document"))
+        btn.setCursor(Qt.PointingHandCursor)
+        btn.setStyleSheet("""
+            QPushButton {
+                background: #EFF6FF;
+                border: 1px solid #BFDBFE;
+                border-radius: 7px;
+                padding: 0;
+            }
+            QPushButton:hover { background: #DBEAFE; border-color: #93C5FD; }
+            QPushButton:pressed { background: #BFDBFE; }
+        """)
+
+        _root = os.path.normpath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
+        icon_path = os.path.join(_root, "assets", "images", "eye-open.png")
+        if os.path.exists(icon_path):
+            px = QPixmap(icon_path).scaled(17, 17, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+            btn.setIcon(QIcon(px))
+            btn.setIconSize(QSize(17, 17))
+        else:
+            btn.setText("\u29c9")
+            btn.setStyleSheet("""
+                QPushButton {
+                    background: #EFF6FF; color: #3890DF;
+                    border: 1px solid #BFDBFE; border-radius: 7px;
+                    font-size: 14px; padding: 0;
+                }
+                QPushButton:hover { background: #DBEAFE; border-color: #93C5FD; }
+            """)
+
+        def _open(checked=False, eid=ev_id, fn=file_name, b=btn):
+            b.setCursor(Qt.WaitCursor)
+            b.setEnabled(False)
+            local = download_evidence_file(eid, fn or eid)
+            b.setCursor(Qt.PointingHandCursor)
+            b.setEnabled(True)
+            if local:
+                QDesktopServices.openUrl(QUrl.fromLocalFile(local))
+            else:
+                from PyQt5.QtWidgets import QMessageBox
+                QMessageBox.warning(
+                    self,
+                    tr("dialog.evidence_picker.view_failed_title"),
+                    tr("dialog.evidence_picker.view_failed_message"),
+                )
+        btn.clicked.connect(_open)
+        return btn
 
     def _create_button(self, text: str, primary: bool) -> QPushButton:
         btn = QPushButton(text)

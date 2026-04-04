@@ -8,8 +8,19 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QFont
 
-from app.config import Config
+from ui.design_system import Colors
 from ui.font_utils import create_font, FontManager
+
+
+class _ConfigCompat:
+    """Mapping from old Config color names to design_system Colors."""
+    ERROR_COLOR = Colors.ERROR
+    TEXT_COLOR = Colors.TEXT_PRIMARY
+    TEXT_LIGHT = Colors.TEXT_SECONDARY
+    BORDER_COLOR = Colors.BORDER_DEFAULT
+    INFO_COLOR = Colors.INFO
+
+Config = _ConfigCompat
 from ui.style_manager import StyleManager
 from services.translation_manager import tr
 

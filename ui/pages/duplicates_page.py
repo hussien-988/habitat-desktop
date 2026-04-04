@@ -990,6 +990,13 @@ class DuplicatesPage(QWidget):
 
         card_layout.addWidget(self._comparison_frame)
 
+        # Interactive zone (hidden for resolved conflicts)
+        self._interactive_zone = QWidget()
+        self._interactive_zone.setStyleSheet("background: transparent;")
+        iz_layout = QVBoxLayout(self._interactive_zone)
+        iz_layout.setContentsMargins(0, 0, 0, 0)
+        iz_layout.setSpacing(10)
+
         # Resolution options
         self._resolution_group = QButtonGroup(self)
         options_layout = QHBoxLayout()
@@ -1030,7 +1037,7 @@ class DuplicatesPage(QWidget):
 
         options_layout.addWidget(self._master_label)
         options_layout.addWidget(self._master_combo)
-        card_layout.addLayout(options_layout)
+        iz_layout.addLayout(options_layout)
 
         self._resolution_group.buttonClicked.connect(self._on_resolution_type_changed)
 
@@ -1038,7 +1045,7 @@ class DuplicatesPage(QWidget):
         just_label = QLabel(tr("page.duplicates.justification_label"))
         just_label.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
         just_label.setStyleSheet("color: #78909C; background: transparent; border: none;")
-        card_layout.addWidget(just_label)
+        iz_layout.addWidget(just_label)
 
         self._justification_edit = QTextEdit()
         self._justification_edit.setPlaceholderText(tr("page.duplicates.justification_placeholder"))
@@ -1057,7 +1064,7 @@ class DuplicatesPage(QWidget):
                 background: white;
             }}
         """)
-        card_layout.addWidget(self._justification_edit)
+        iz_layout.addWidget(self._justification_edit)
 
         # Action button
         btn_layout = QHBoxLayout()
@@ -1087,7 +1094,39 @@ class DuplicatesPage(QWidget):
         self._action_btn.clicked.connect(self._on_action_clicked)
         btn_layout.addWidget(self._action_btn)
 
-        card_layout.addLayout(btn_layout)
+        iz_layout.addLayout(btn_layout)
+        card_layout.addWidget(self._interactive_zone)
+
+        # Resolved summary (shown instead of interactive zone for resolved conflicts)
+        self._resolved_summary_frame = QFrame()
+        self._resolved_summary_frame.setStyleSheet("""
+            QFrame { background: #F8FAFC; border-radius: 10px; border: 1px solid #E8EDF2; }
+            QLabel { background: transparent; border: none; }
+        """)
+        self._resolved_summary_frame.setVisible(False)
+        rs_layout = QVBoxLayout(self._resolved_summary_frame)
+        rs_layout.setContentsMargins(16, 14, 16, 14)
+        rs_layout.setSpacing(10)
+
+        # Status banner
+        self._rs_status_label = QLabel("")
+        self._rs_status_label.setFont(create_font(size=10, weight=FontManager.WEIGHT_BOLD))
+        self._rs_status_label.setAlignment(Qt.AlignCenter)
+        self._rs_status_label.setFixedHeight(32)
+        self._rs_status_label.setStyleSheet(
+            "border-radius: 6px; padding: 4px 12px;"
+        )
+        rs_layout.addWidget(self._rs_status_label)
+
+        # Info rows
+        self._rs_type_row = self._make_summary_row()
+        self._rs_master_row = self._make_summary_row()
+        self._rs_just_row = self._make_summary_row()
+        self._rs_date_row = self._make_summary_row()
+        for row_w in (self._rs_type_row, self._rs_master_row, self._rs_just_row, self._rs_date_row):
+            rs_layout.addWidget(row_w)
+
+        card_layout.addWidget(self._resolved_summary_frame)
 
         return card
 
@@ -1117,6 +1156,67 @@ class DuplicatesPage(QWidget):
         layout.addWidget(desc_lbl)
 
         return frame
+
+    def _make_summary_row(self) -> QWidget:
+        """Create a key-value row widget for the resolved summary panel."""
+        w = QWidget()
+        w.setStyleSheet("background: transparent;")
+        row = QHBoxLayout(w)
+        row.setContentsMargins(0, 0, 0, 0)
+        row.setSpacing(8)
+        key_lbl = QLabel("")
+        key_lbl.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
+        key_lbl.setStyleSheet("color: #78909C; background: transparent; border: none;")
+        key_lbl.setFixedWidth(130)
+        val_lbl = QLabel("")
+        val_lbl.setFont(create_font(size=9, weight=FontManager.WEIGHT_REGULAR))
+        val_lbl.setStyleSheet(f"color: {Colors.PAGE_TITLE}; background: transparent; border: none;")
+        val_lbl.setWordWrap(True)
+        row.addWidget(key_lbl)
+        row.addWidget(val_lbl, 1)
+        w.key_lbl = key_lbl
+        w.val_lbl = val_lbl
+        return w
+
+    def _populate_resolved_summary(self, conflict: dict):
+        """Fill the resolved summary panel from conflict data."""
+        status = conflict.get("status", "")
+        is_auto = status.lower() == "autoresolved"
+        status_colors = {
+            "resolved": ("#22C55E", "#F0FDF4"),
+            "autoresolved": ("#A855F7", "#FAF5FF"),
+        }
+        fg, bg = status_colors.get(status.lower(), ("#22C55E", "#F0FDF4"))
+        status_text = tr("page.duplicates.status_autoresolved") if is_auto else tr("page.duplicates.status_resolved")
+        self._rs_status_label.setText(status_text)
+        self._rs_status_label.setStyleSheet(
+            f"border-radius: 6px; padding: 4px 12px; color: {fg}; background: {bg}; border: 1px solid {fg}33;"
+        )
+
+        res_type = conflict.get("resolutionType", "") or ""
+        if res_type in ("merge_records", "merge"):
+            type_display = tr("page.duplicates.merge_records")
+        elif res_type in ("keep_separate",):
+            type_display = tr("page.duplicates.keep_separate")
+        else:
+            type_display = res_type or "-"
+
+        master_id = conflict.get("masterRecordId") or conflict.get("masterEntityId") or "-"
+        justification = conflict.get("justification") or conflict.get("resolutionNotes") or "-"
+        resolved_at = str(conflict.get("resolvedAt") or conflict.get("resolvedDate") or "")[:10] or "-"
+        resolved_by = conflict.get("resolvedBy") or conflict.get("resolvedByUser") or "-"
+        meta = f"{resolved_at}  |  {resolved_by}" if resolved_by != "-" else resolved_at
+
+        for row_w, key_txt, val_txt, visible in [
+            (self._rs_type_row, tr("page.duplicates.resolution_type"), type_display, bool(res_type)),
+            (self._rs_master_row, tr("page.duplicates.master_record"), str(master_id),
+             res_type in ("merge_records", "merge")),
+            (self._rs_just_row, tr("page.duplicates.justification_label"), justification, True),
+            (self._rs_date_row, tr("page.duplicates.resolved_meta"), meta, resolved_at != "-"),
+        ]:
+            row_w.key_lbl.setText(key_txt)
+            row_w.val_lbl.setText(val_txt)
+            row_w.setVisible(visible)
 
     # -- Data Loading ------------------------------------------------------
 
@@ -1355,6 +1455,13 @@ class DuplicatesPage(QWidget):
             conflict.get("secondEntityId", ""),
         )
 
+        is_resolved = conflict.get("status", "").lower() in ("resolved", "autoresolved")
+        self._interactive_zone.setVisible(not is_resolved)
+        self._resolved_summary_frame.setVisible(is_resolved)
+        if is_resolved:
+            self._populate_resolved_summary(conflict)
+            return
+
         self._justification_edit.clear()
         self._on_resolution_type_changed()
 
@@ -1391,13 +1498,12 @@ class DuplicatesPage(QWidget):
         }
         action_label = action_labels.get(resolution_type, tr("page.duplicates.execute_action"))
 
-        from ui.components.dialogs.confirmation_dialog import ConfirmationDialog, DialogResult
-        result = ConfirmationDialog.confirm(
-            parent=self,
-            title=tr("page.duplicates.confirm_action_title"),
-            message=tr("page.duplicates.confirm_action_msg", action=action_label),
-        )
-        if result != DialogResult.YES:
+        from ui.error_handler import ErrorHandler
+        if not ErrorHandler.confirm(
+            self,
+            tr("page.duplicates.confirm_action_msg", action=action_label),
+            tr("page.duplicates.confirm_action_title"),
+        ):
             return
 
         master_id = ""

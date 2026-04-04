@@ -208,7 +208,6 @@ class Config:
 # Page identifiers
 class Pages:
     LOGIN = "login"
-    DASHBOARD = "dashboard"
     BUILDINGS = "buildings"
     BUILDING_DETAILS = "building_details"
     UNITS = "units"
@@ -227,9 +226,6 @@ class Pages:
     DUPLICATES = "duplicates"
     CLAIM_COMPARISON = "claim_comparison"
     FIELD_ASSIGNMENT = "field_assignment"
-    SEARCH = "search"
-    REPORTS = "reports"
-    MAP_VIEW = "map_view"
     AUDIT = "audit"
     SYNC_DATA = "sync_data"
     IMPORT_WIZARD = "import_wizard"

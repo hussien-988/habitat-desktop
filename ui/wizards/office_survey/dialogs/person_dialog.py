@@ -79,7 +79,7 @@ class PersonDialog(QDialog):
 
         self._overlay = None
         self.setModal(True)
-        self.setFixedWidth(520)
+        self.setFixedSize(589, 674)
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.Dialog)
         self.setAttribute(Qt.WA_TranslucentBackground)
         self.setStyleSheet("QDialog { background-color: transparent; }")
@@ -106,58 +106,6 @@ class PersonDialog(QDialog):
             if main_window and hasattr(main_window, '_api_token') and main_window._api_token:
                 self._api_service.set_access_token(main_window._api_token)
 
-    # Drawer overlay and positioning
-
-    def showEvent(self, event):
-        """Position as a slide-in drawer on the right edge of the parent window."""
-        super().showEvent(event)
-        parent = self.parent()
-        if parent:
-            top_window = parent.window()
-            win_rect = top_window.geometry()
-            self.setFixedHeight(win_rect.height())
-            target_x = win_rect.x() + win_rect.width() - self.width()
-            target_y = win_rect.y()
-            self.move(target_x, target_y)
-            # Dark backdrop
-            self._overlay = QWidget(top_window)
-            self._overlay.setGeometry(0, 0, top_window.width(), top_window.height())
-            self._overlay.setStyleSheet("background-color: rgba(0, 0, 0, 0.3);")
-            self._overlay.setAttribute(Qt.WA_TransparentForMouseEvents, False)
-            self._overlay.show()
-            self._overlay.raise_()
-            self.raise_()
-            # Slide-in animation
-            from PyQt5.QtCore import QPropertyAnimation, QPoint, QEasingCurve
-            self._slide_anim = QPropertyAnimation(self, b"pos")
-            self._slide_anim.setDuration(250)
-            self._slide_anim.setStartValue(QPoint(win_rect.x() + win_rect.width(), target_y))
-            self._slide_anim.setEndValue(QPoint(target_x, target_y))
-            self._slide_anim.setEasingCurve(QEasingCurve.OutCubic)
-            self._slide_anim.start()
-
-    def _cleanup_overlay(self):
-        """Remove the backdrop overlay."""
-        if self._overlay:
-            try:
-                self._overlay.hide()
-                self._overlay.setParent(None)
-                self._overlay.deleteLater()
-            except RuntimeError:
-                pass
-            self._overlay = None
-
-    def closeEvent(self, event):
-        self._cleanup_overlay()
-        super().closeEvent(event)
-
-    def reject(self):
-        self._cleanup_overlay()
-        super().reject()
-
-    def accept(self):
-        self._cleanup_overlay()
-        super().accept()
 
     # UI Setup
 
@@ -166,7 +114,7 @@ class PersonDialog(QDialog):
         self.setLayoutDirection(get_layout_direction())
 
         outer_layout = QVBoxLayout(self)
-        outer_layout.setContentsMargins(12, 0, 0, 0)  # Drawer: flush with edge, left margin for shadow
+        outer_layout.setContentsMargins(12, 12, 12, 12)
         outer_layout.setSpacing(0)
 
         # White rounded content frame
@@ -175,11 +123,8 @@ class PersonDialog(QDialog):
         content_frame.setStyleSheet("""
             QFrame#ContentFrame {
                 background-color: #FFFFFF;
-                border-top-left-radius: 16px;
-                border-bottom-left-radius: 16px;
-                border-top-right-radius: 0px;
-                border-bottom-right-radius: 0px;
-                border-left: 1px solid #E2EAF2;
+                border-radius: 24px;
+                border: none;
             }
             QFrame#ContentFrame QLabel,
             QFrame#ContentFrame QRadioButton {
@@ -1792,7 +1737,7 @@ class PersonDialog(QDialog):
 
         dlg = QDialog(self)
         dlg.setWindowTitle(tr("wizard.person_dialog.choose_existing_doc"))
-        dlg.setMinimumSize(450, 350)
+        dlg.setMinimumSize(520, 400)
         dlg.setLayoutDirection(get_layout_direction())
         dlg.setStyleSheet("""
             QDialog { background-color: #FAFBFC; }
@@ -1815,7 +1760,63 @@ class PersonDialog(QDialog):
         scroll_widget = QWidget()
         scroll_layout = QVBoxLayout(scroll_widget)
         scroll_layout.setContentsMargins(8, 8, 8, 8)
-        scroll_layout.setSpacing(6)
+        scroll_layout.setSpacing(4)
+
+        def _make_view_btn(ev_id, file_name):
+            import os as _os
+            from PyQt5.QtCore import QUrl, QSize
+            from PyQt5.QtGui import QDesktopServices, QIcon, QPixmap
+            from utils.helpers import download_evidence_file
+
+            btn = QPushButton()
+            btn.setFixedSize(32, 32)
+            btn.setToolTip(tr("wizard.person_dialog.view_document"))
+            btn.setCursor(Qt.PointingHandCursor)
+            btn.setStyleSheet("""
+                QPushButton {
+                    background: #EFF6FF;
+                    border: 1px solid #BFDBFE;
+                    border-radius: 7px;
+                    padding: 0;
+                }
+                QPushButton:hover { background: #DBEAFE; border-color: #93C5FD; }
+                QPushButton:pressed { background: #BFDBFE; }
+            """)
+
+            _root = _os.path.normpath(_os.path.join(_os.path.dirname(__file__), "..", "..", "..", ".."))
+            icon_path = _os.path.join(_root, "assets", "images", "eye-open.png")
+            if _os.path.exists(icon_path):
+                px = QPixmap(icon_path).scaled(17, 17, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+                btn.setIcon(QIcon(px))
+                btn.setIconSize(QSize(17, 17))
+            else:
+                btn.setText("\u29c9")
+                btn.setStyleSheet("""
+                    QPushButton {
+                        background: #EFF6FF; color: #3890DF;
+                        border: 1px solid #BFDBFE; border-radius: 7px;
+                        font-size: 14px; padding: 0;
+                    }
+                    QPushButton:hover { background: #DBEAFE; border-color: #93C5FD; }
+                """)
+
+            def _open(checked=False, eid=ev_id, fn=file_name, b=btn):
+                b.setCursor(Qt.WaitCursor)
+                b.setEnabled(False)
+                local = download_evidence_file(eid, fn or eid)
+                b.setCursor(Qt.PointingHandCursor)
+                b.setEnabled(True)
+                if local:
+                    QDesktopServices.openUrl(QUrl.fromLocalFile(local))
+                else:
+                    from PyQt5.QtWidgets import QMessageBox
+                    QMessageBox.warning(
+                        dlg,
+                        tr("wizard.person_dialog.view_failed_title"),
+                        tr("wizard.person_dialog.view_failed_message"),
+                    )
+            btn.clicked.connect(_open)
+            return btn
 
         checkboxes = []
         for ev in evidences:
@@ -1833,11 +1834,20 @@ class PersonDialog(QDialog):
                 parts.append(str(issue_date)[:10])
             label = " - ".join(parts) if parts else tr("wizard.person_dialog.document_label", doc_id=ev_id[:8])
 
+            row_widget = QWidget()
+            row_widget.setStyleSheet("QWidget { background: #F8FAFF; border-radius: 6px; }")
+            row_layout = QHBoxLayout(row_widget)
+            row_layout.setContentsMargins(8, 6, 8, 6)
+            row_layout.setSpacing(8)
+
             cb = QCheckBox(label)
             cb.setLayoutDirection(get_layout_direction())
             cb._evidence = ev
             checkboxes.append(cb)
-            scroll_layout.addWidget(cb)
+            row_layout.addWidget(cb, 1)
+            row_layout.addWidget(_make_view_btn(ev_id, file_name))
+
+            scroll_layout.addWidget(row_widget)
 
         scroll_layout.addStretch()
         scroll.setWidget(scroll_widget)

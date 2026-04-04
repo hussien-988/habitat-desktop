@@ -29,7 +29,7 @@ from ui.components.toast import Toast
 from ui.error_handler import ErrorHandler
 from services.translation_manager import tr, get_layout_direction
 from services.error_mapper import map_exception
-from ui.components.success_popup import SuccessPopup
+from ui.components.toast import Toast
 from services.display_mappings import get_relation_type_options, get_contract_type_options, get_evidence_type_options
 
 logger = get_logger(__name__)
@@ -552,13 +552,7 @@ class RelationStep(BaseStep):
                 logger.info(f"Claims created: {claims_count}")
 
                 claim_number = created_claims[0].get('claimNumber', '') if created_claims else ''
-                SuccessPopup.show_success(
-                    claim_number=claim_number,
-                    title=tr("wizard.success.title"),
-                    description=tr("wizard.success.description"),
-                    auto_close_ms=0,
-                    parent=self
-                )
+                Toast.show_toast(self, tr("wizard.success.description"), Toast.SUCCESS)
             else:
                 reason = api_data.get('claimNotCreatedReason', 'Unknown')
                 logger.warning(f"Claim not created. Reason: {reason}")

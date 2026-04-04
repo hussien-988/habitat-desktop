@@ -647,32 +647,12 @@ class ActivityEventFilter(QObject):
         return False  # Don't filter the event
 
 
-class SessionTimeoutDialog(QMessageBox):
-    """Dialog shown before session timeout."""
-
-    def __init__(self, seconds_remaining: int, parent=None):
-        super().__init__(parent)
-        self.setWindowTitle("تحذير انتهاء الجلسة")
-        self.setText(f"ستنتهي جلستك خلال {seconds_remaining} ثانية بسبب عدم النشاط.")
-        self.setInformativeText("هل تريد تمديد الجلسة؟")
-        self.setIcon(QMessageBox.Warning)
-        self.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
-        self.setDefaultButton(QMessageBox.Yes)
-
-        # Arabic button text
-        self.button(QMessageBox.Yes).setText("نعم، تمديد الجلسة")
-        self.button(QMessageBox.No).setText("لا، تسجيل الخروج")
-
-        # Auto-close timer
-        self.remaining = seconds_remaining
-        self.timer = QTimer(self)
-        self.timer.timeout.connect(self._update_countdown)
-        self.timer.start(1000)
-
-    def _update_countdown(self):
-        self.remaining -= 1
-        if self.remaining <= 0:
-            self.timer.stop()
-            self.reject()
-        else:
-            self.setText(f"ستنتهي جلستك خلال {self.remaining} ثانية بسبب عدم النشاط.")
+def show_session_timeout_warning(parent, seconds_remaining: int):
+    """Show session timeout warning using NotificationBar."""
+    from ui.components.notification_bar import NotificationBar
+    msg = f"\u0633\u062A\u0646\u062A\u0647\u064A \u062C\u0644\u0633\u062A\u0643 \u062E\u0644\u0627\u0644 {seconds_remaining} \u062B\u0627\u0646\u064A\u0629 \u0628\u0633\u0628\u0628 \u0639\u062F\u0645 \u0627\u0644\u0646\u0634\u0627\u0637."
+    NotificationBar.notify(
+        parent, msg, NotificationBar.WARNING,
+        action_text="\u062A\u0645\u062F\u064A\u062F \u0627\u0644\u062C\u0644\u0633\u0629",
+        duration=seconds_remaining * 1000
+    )

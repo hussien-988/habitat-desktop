@@ -93,7 +93,7 @@ class UnitDialog(QDialog):
     def _setup_ui(self):
         """Setup the dialog UI."""
         main_layout = QVBoxLayout(self)
-        main_layout.setContentsMargins(20, 12, 20, 28)  # Margin for shadow to render
+        main_layout.setContentsMargins(12, 12, 12, 12)  # Margin for shadow to render
         main_layout.setSpacing(0)
 
         # إنشاء frame أبيض مع زوايا منحنية (يرث RTL من التطبيق تلقائياً)

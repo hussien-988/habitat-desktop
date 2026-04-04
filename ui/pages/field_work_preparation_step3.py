@@ -119,12 +119,12 @@ class FieldWorkPreparationStep3(QWidget):
         layout.setContentsMargins(0, 24, 0, 0)
         layout.setSpacing(16)
         info_card = QFrame()
-        info_card.setStyleSheet("""
-            QFrame {
-                background-color: #FFFFFF;
+        info_card.setStyleSheet(f"""
+            QFrame {{
+                background-color: {Colors.SURFACE};
                 border-radius: 12px;
-                border: 1px solid #E1E8ED;
-            }
+                border: 1px solid {Colors.BORDER_DEFAULT};
+            }}
         """)
         info_layout = QVBoxLayout(info_card)
         info_layout.setContentsMargins(24, 20, 24, 20)
@@ -132,7 +132,7 @@ class FieldWorkPreparationStep3(QWidget):
 
         self._info_title_label = QLabel(tr("wizard.step3.assignment_info"))
         self._info_title_label.setFont(create_font(size=12, weight=FontManager.WEIGHT_SEMIBOLD))
-        self._info_title_label.setStyleSheet("color: #212B36; background: transparent; border: none;")
+        self._info_title_label.setStyleSheet(f"color: {Colors.PAGE_TITLE}; background: transparent; border: none;")
         info_layout.addWidget(self._info_title_label)
 
         researcher_name = (
@@ -150,9 +150,9 @@ class FieldWorkPreparationStep3(QWidget):
         self._avail_badge = None
 
         for label_text, value_text, value_color in [
-            (tr("wizard.step3.field_researcher"), f"{researcher_name}  \u2014  {avail_text}", avail_color if not available else "#212B36"),
-            (tr("wizard.step3.building_count"), str(len(self.buildings)), "#3890DF"),
-            (tr("wizard.step3.assignment_date"), assignment_date, "#212B36"),
+            (tr("wizard.step3.field_researcher"), f"{researcher_name}  \u2014  {avail_text}", avail_color if not available else Colors.PAGE_TITLE),
+            (tr("wizard.step3.building_count"), str(len(self.buildings)), Colors.PRIMARY_BLUE),
+            (tr("wizard.step3.assignment_date"), assignment_date, Colors.PAGE_TITLE),
         ]:
             row = QHBoxLayout()
             row.setSpacing(12)
@@ -188,12 +188,12 @@ class FieldWorkPreparationStep3(QWidget):
 
         layout.addWidget(info_card)
         buildings_card = QFrame()
-        buildings_card.setStyleSheet("""
-            QFrame {
-                background-color: #FFFFFF;
+        buildings_card.setStyleSheet(f"""
+            QFrame {{
+                background-color: {Colors.SURFACE};
                 border-radius: 12px;
-                border: 1px solid #E1E8ED;
-            }
+                border: 1px solid {Colors.BORDER_DEFAULT};
+            }}
         """)
         buildings_card_layout = QVBoxLayout(buildings_card)
         buildings_card_layout.setContentsMargins(24, 16, 24, 16)
@@ -201,7 +201,7 @@ class FieldWorkPreparationStep3(QWidget):
 
         self._buildings_title_label = QLabel(tr("wizard.step3.buildings_and_units"))
         self._buildings_title_label.setFont(create_font(size=12, weight=FontManager.WEIGHT_SEMIBOLD))
-        self._buildings_title_label.setStyleSheet("color: #212B36; background: transparent; border: none;")
+        self._buildings_title_label.setStyleSheet(f"color: {Colors.PAGE_TITLE}; background: transparent; border: none;")
         buildings_card_layout.addWidget(self._buildings_title_label)
         buildings_card_layout.addSpacing(6)
 
@@ -277,7 +277,7 @@ class FieldWorkPreparationStep3(QWidget):
         display_id = self._format_building_id(building_id)
         id_label = QLabel(f"{index}. {display_id}")
         id_label.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
-        id_label.setStyleSheet("color: #212B36; background: transparent; border: none;")
+        id_label.setStyleSheet(f"color: {Colors.PAGE_TITLE}; background: transparent; border: none;")
         header_layout.addWidget(id_label)
 
         header_layout.addStretch()
@@ -288,8 +288,8 @@ class FieldWorkPreparationStep3(QWidget):
         if units_count > 0:
             badge = QLabel(tr("wizard.step3.units_count", count=units_count))
             badge.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
-            badge.setStyleSheet("""
-                color: #3890DF;
+            badge.setStyleSheet(f"""
+                color: {Colors.PRIMARY_BLUE};
                 background-color: #EBF5FF;
                 padding: 2px 10px;
                 border-radius: 10px;
@@ -301,8 +301,8 @@ class FieldWorkPreparationStep3(QWidget):
             if num_units > 0:
                 badge = QLabel(tr("wizard.step3.units_count", count=num_units))
                 badge.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
-                badge.setStyleSheet("""
-                    color: #3890DF;
+                badge.setStyleSheet(f"""
+                    color: {Colors.PRIMARY_BLUE};
                     background-color: #EBF5FF;
                     padding: 2px 10px;
                     border-radius: 10px;
@@ -342,32 +342,32 @@ class FieldWorkPreparationStep3(QWidget):
         radio_row = QHBoxLayout()
         radio_row.setSpacing(24)
 
-        radio_style = """
-            QRadioButton {
-                color: #212B36;
+        radio_style = f"""
+            QRadioButton {{
+                color: {Colors.PAGE_TITLE};
                 font-size: 10pt;
                 spacing: 6px;
                 background: transparent;
                 border: none;
-            }
-            QRadioButton::indicator {
+            }}
+            QRadioButton::indicator {{
                 width: 16px;
                 height: 16px;
                 border: 2px solid #C4CDD5;
                 border-radius: 8px;
                 background: white;
-            }
-            QRadioButton::indicator:hover {
-                border-color: #3890DF;
-            }
-            QRadioButton::indicator:checked {
-                border: 2px solid #3890DF;
+            }}
+            QRadioButton::indicator:hover {{
+                border-color: {Colors.PRIMARY_BLUE};
+            }}
+            QRadioButton::indicator:checked {{
+                border: 2px solid {Colors.PRIMARY_BLUE};
                 background: qradialgradient(
                     cx:0.5, cy:0.5, radius:0.35,
                     fx:0.5, fy:0.5,
-                    stop:0 #3890DF, stop:0.6 #3890DF, stop:0.7 white
+                    stop:0 {Colors.PRIMARY_BLUE}, stop:0.6 {Colors.PRIMARY_BLUE}, stop:0.7 white
                 );
-            }
+            }}
         """
 
         btn_group = QButtonGroup(self)
@@ -394,20 +394,20 @@ class FieldWorkPreparationStep3(QWidget):
         reason_input.setPlaceholderText(tr("wizard.step3.revisit_reason_placeholder"))
         reason_input.setFixedHeight(32)
         reason_input.setFont(create_font(size=9, weight=FontManager.WEIGHT_REGULAR))
-        reason_input.setStyleSheet("""
-            QLineEdit {
+        reason_input.setStyleSheet(f"""
+            QLineEdit {{
                 background-color: white;
-                border: 1px solid #E1E8ED;
+                border: 1px solid {Colors.BORDER_DEFAULT};
                 border-radius: 6px;
                 padding: 0 10px;
                 color: #2C3E50;
-            }
-            QLineEdit:focus {
-                border: 1px solid #3890DF;
-            }
-            QLineEdit::placeholder {
+            }}
+            QLineEdit:focus {{
+                border: 1px solid {Colors.PRIMARY_BLUE};
+            }}
+            QLineEdit::placeholder {{
                 color: #9CA3AF;
-            }
+            }}
         """)
         reason_input.setVisible(False)
         self._revisit_reason_inputs[building_id] = reason_input
@@ -501,7 +501,7 @@ class FieldWorkPreparationStep3(QWidget):
 
             val = QLabel(value_text)
             val.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
-            val.setStyleSheet("color: #212B36;")
+            val.setStyleSheet(f"color: {Colors.PAGE_TITLE};")
             val.setAlignment(Qt.AlignCenter)
             col.addWidget(val)
 
@@ -630,6 +630,19 @@ class FieldWorkPreparationStep3(QWidget):
 
         for building_id in self._units_labels:
             self._units_labels[building_id].setText(tr("wizard.step3.units_label"))
+
+    def validate(self) -> bool:
+        """Validate revisit reasons are filled in."""
+        for building_id, btn_group in self._visit_type_groups.items():
+            if btn_group.checkedId() == 1:  # revisit
+                reason_input = self._revisit_reason_inputs.get(building_id)
+                if not reason_input or not reason_input.text().strip():
+                    from ui.components.toast import Toast
+                    Toast.show_toast(self, tr("wizard.step3.revisit_reason_required"), Toast.WARNING)
+                    if reason_input:
+                        reason_input.setFocus()
+                    return False
+        return True
 
     def get_summary(self) -> dict:
         """Return buildings, researcher, and revisit data for final submission."""

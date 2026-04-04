@@ -198,10 +198,17 @@ class UnitsPage(QWidget):
         self.table.cellClicked.connect(self._on_cell_clicked)
         self.table.cellDoubleClicked.connect(self._on_row_double_click)
 
+        # Skeleton loading placeholder
+        from ui.components.skeleton_loader import TableSkeleton
+        self._skeleton = TableSkeleton(columns=6, rows=11, message=tr("page.units.loading"))
+        card_layout.addWidget(self._skeleton)
+        self._skeleton.hide()
+
         card_layout.addWidget(self.table)
 
         # Footer (pagination)
-        footer_frame = QFrame()
+        self._footer_frame = QFrame()
+        footer_frame = self._footer_frame
         footer_frame.setStyleSheet("""
             QFrame {
                 background-color: #F8F9FA;
@@ -303,8 +310,7 @@ class UnitsPage(QWidget):
         card_layout.addWidget(footer_frame)
         layout.addWidget(table_card)
 
-        from ui.components.loading_spinner import LoadingSpinnerOverlay
-        self._spinner = LoadingSpinnerOverlay(self)
+        pass
 
     # ── Data loading ──
 
@@ -340,7 +346,10 @@ class UnitsPage(QWidget):
         )
 
     def _load_units(self):
-        self._spinner.show_loading(tr("page.units.loading"))
+        self.table.hide()
+        self._footer_frame.hide()
+        self._skeleton.show()
+        self._skeleton.start()
         self._set_auth_token()
         self._load_units_worker = ApiWorker(
             self.unit_controller.get_units_grouped,
@@ -353,7 +362,10 @@ class UnitsPage(QWidget):
         self._load_units_worker.start()
 
     def _on_load_units_finished(self, result):
-        self._spinner.hide_loading()
+        self._skeleton.stop()
+        self._skeleton.hide()
+        self.table.show()
+        self._footer_frame.show()
         if result.success:
             self._groups = result.data or []
         else:
@@ -366,7 +378,10 @@ class UnitsPage(QWidget):
         self._update_table()
 
     def _on_load_units_error(self, error_msg):
-        self._spinner.hide_loading()
+        self._skeleton.stop()
+        self._skeleton.hide()
+        self.table.show()
+        self._footer_frame.show()
         logger.warning(f"API grouped load failed: {error_msg}")
         self._groups = []
         self._total_units = 0

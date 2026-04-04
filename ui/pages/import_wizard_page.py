@@ -1221,11 +1221,11 @@ class ImportWizardPage(QWidget):
         if not self._current_package_id:
             return
 
-        from ui.components.message_dialog import MessageDialog
-        if not MessageDialog.confirm(
-            self, tr("dialog.import.confirm_cancel_title"),
+        from ui.error_handler import ErrorHandler
+        if not ErrorHandler.confirm(
+            self,
             tr("dialog.import.confirm_cancel_message"),
-            ok_text=tr("dialog.import.confirm_cancel_yes"), cancel_text=tr("dialog.import.confirm_cancel_no")
+            tr("dialog.import.confirm_cancel_title")
         ):
             return
 
@@ -1252,14 +1252,14 @@ class ImportWizardPage(QWidget):
     # -- Error/Success display ------------------------------------------------
 
     def _show_error(self, message: str):
-        """Show error message via dialog."""
-        from ui.components.message_dialog import MessageDialog
-        MessageDialog.error(self, tr("dialog.error_title"), message)
+        """Show error message via notification."""
+        from ui.error_handler import ErrorHandler
+        ErrorHandler.show_error(self, message)
 
     def _show_success(self, message: str):
-        """Show success message via dialog."""
-        from ui.components.message_dialog import MessageDialog
-        MessageDialog.success(self, "نجاح", message)
+        """Show success message via notification."""
+        from ui.error_handler import ErrorHandler
+        ErrorHandler.show_success(self, message)
 
     # -- Public interface -----------------------------------------------------
 

@@ -1078,14 +1078,13 @@ class SyncDataPage(QWidget):
     # Unassign
 
     def _unassign_building(self, assignment_id: str):
-        from ui.components.dialogs import ConfirmationDialog
+        from ui.error_handler import ErrorHandler
 
-        result = ConfirmationDialog.confirm(
+        if not ErrorHandler.confirm(
             self,
+            tr("page.sync.confirm_unassign_message"),
             tr("page.sync.confirm_unassign_title"),
-            tr("page.sync.confirm_unassign_message")
-        )
-        if result != ConfirmationDialog.YES:
+        ):
             return
 
         from services.api_client import get_api_client
@@ -1165,10 +1164,6 @@ class SyncDataPage(QWidget):
         self._empty_label.setText(tr("page.sync.no_assignments"))
         if self._collector_combo and self._collector_combo.lineEdit():
             self._collector_combo.lineEdit().setPlaceholderText(tr("page.sync.all_collectors"))
-
-    def showEvent(self, event):
-        super().showEvent(event)
-        self.refresh()
 
     def hideEvent(self, event):
         super().hideEvent(event)
