@@ -2643,6 +2643,7 @@ EN_TRANSLATIONS = {
     "dialog.password.change_success_message": "Your password has been changed successfully. You will now be logged in.",
     "dialog.password.forced_welcome": "Welcome, {name}",
     "dialog.password.forced_reason": "To protect your data, please change your password.\nThis is a one-time requirement.",
+    "dialog.password.change_required_message": "You must change your password before continuing to use the application",
 
     # person_search.applicant_tag
     "person_search.applicant_tag": "Applicant",
@@ -2685,6 +2686,8 @@ EN_TRANSLATIONS = {
     "wizard.evidence_dialog.notes": "Notes",
     "wizard.evidence_dialog.notes_placeholder": "Enter additional notes...",
     "wizard.evidence_dialog.title": "Add Document",
+    "wizard.evidence_dialog.replace": "Replace File",
+    "wizard.evidence_dialog.file_required_for_replace": "You must select a new file to replace the document",
 
     # wizard.import
     "wizard.import.retry_hint": "You can retry",

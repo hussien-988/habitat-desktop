@@ -275,20 +275,12 @@ class EvidencePickerDialog(QDialog):
                 if local:
                     QDesktopServices.openUrl(QUrl.fromLocalFile(local))
                 else:
-                    from PyQt5.QtWidgets import QMessageBox
-                    QMessageBox.warning(
-                        self,
-                        tr("dialog.evidence_picker.view_failed_title"),
-                        tr("dialog.evidence_picker.view_failed_message"),
-                    )
+                    from ui.components.toast import Toast
+                    Toast.show_toast(self, tr("dialog.evidence_picker.view_failed_message"), Toast.WARNING)
             except Exception as e:
                 logger.error(f"View evidence error: {e}")
-                from PyQt5.QtWidgets import QMessageBox
-                QMessageBox.warning(
-                    self,
-                    tr("dialog.evidence_picker.view_failed_title"),
-                    tr("dialog.evidence_picker.view_failed_message"),
-                )
+                from ui.components.toast import Toast
+                Toast.show_toast(self, tr("dialog.evidence_picker.view_failed_message"), Toast.ERROR)
             finally:
                 b.setCursor(Qt.PointingHandCursor)
                 b.setEnabled(True)

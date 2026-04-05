@@ -12,7 +12,7 @@ logger = get_logger(__name__)
 
 
 class ErrorHandler:
-    """Centralized error handler using NotificationBar and BottomSheet."""
+    """Centralized error handler using Toast and BottomSheet."""
 
     @staticmethod
     def handle(error: Exception, parent: QWidget = None,
@@ -25,23 +25,23 @@ class ErrorHandler:
 
     @staticmethod
     def show_error(parent: QWidget, message: str, title: str = None):
-        from ui.components.notification_bar import NotificationBar
-        NotificationBar.notify(parent, message, NotificationBar.ERROR)
+        from ui.components.toast import Toast
+        Toast.show_toast(parent, message, Toast.ERROR)
 
     @staticmethod
     def show_warning(parent: QWidget, message: str, title: str = None):
-        from ui.components.notification_bar import NotificationBar
-        NotificationBar.notify(parent, message, NotificationBar.WARNING)
+        from ui.components.toast import Toast
+        Toast.show_toast(parent, message, Toast.WARNING)
 
     @staticmethod
     def show_success(parent: QWidget, message: str, title: str = None):
-        from ui.components.notification_bar import NotificationBar
-        NotificationBar.notify(parent, message, NotificationBar.SUCCESS)
+        from ui.components.toast import Toast
+        Toast.show_toast(parent, message, Toast.SUCCESS)
 
     @staticmethod
     def show_info(parent: QWidget, message: str, title: str = None):
-        from ui.components.notification_bar import NotificationBar
-        NotificationBar.notify(parent, message, NotificationBar.INFO)
+        from ui.components.toast import Toast
+        Toast.show_toast(parent, message, Toast.INFO)
 
     @staticmethod
     def confirm(parent: QWidget, message: str, title: str = None) -> bool:

@@ -192,6 +192,7 @@ class FieldWorkPreparationStep1(QWidget):
         # Cache for filter data (from API)
         self._all_communities = []  # [(code, name_ar), ...]
         self._all_neighborhoods = []  # [(code, name_ar, community_code), ...]
+        self._all_neighborhoods_raw = []  # Raw API response (includes centerLatitude/centerLongitude)
 
         self._setup_ui()
 
@@ -236,6 +237,7 @@ class FieldWorkPreparationStep1(QWidget):
                 self.community_combo.addItem(name_ar, code)
             self.community_combo.blockSignals(False)
 
+            self._all_neighborhoods_raw = neighborhoods
             for n in neighborhoods:
                 code = n.get("neighborhoodCode") or n.get("code", "")
                 name_ar = n.get("nameArabic", "") or n.get("nameEnglish", "")
@@ -591,6 +593,7 @@ class FieldWorkPreparationStep1(QWidget):
             neighborhoods = api.get_neighborhoods(
                 governorate_code="01", district_code="01", subdistrict_code="01"
             )
+            self._all_neighborhoods_raw = neighborhoods
             for n in neighborhoods:
                 code = n.get("neighborhoodCode") or n.get("code", "")
                 name_ar = n.get("nameArabic", "") or n.get("nameEnglish", "")
@@ -922,10 +925,21 @@ class FieldWorkPreparationStep1(QWidget):
             except Exception as e:
                 logger.warning(f"Could not get auth token: {e}")
 
+            # Get center coordinates from selected neighborhood filter
+            filters = self.get_filters()
+            center_lat, center_lon = None, None
+            neighborhood_code = filters.get('neighborhood')
+            if neighborhood_code:
+                center_lat, center_lon = self._get_neighborhood_center(neighborhood_code)
+
             selected_buildings = show_multiselect_map_dialog(
                 db=self.building_controller.db,
                 auth_token=auth_token,
-                parent=self
+                parent=self,
+                center_lat=center_lat,
+                center_lon=center_lon,
+                initial_zoom=17 if neighborhood_code else None,
+                already_selected_ids=list(self._selected_building_ids),
             )
 
             # User cancelled or no buildings selected
@@ -993,6 +1007,20 @@ class FieldWorkPreparationStep1(QWidget):
             'assignment_status': self.assignment_status_combo.currentData() if self.assignment_status_combo.currentIndex() >= 0 else None,
             'search_text': self.building_search.text().strip()
         }
+
+    def _get_neighborhood_center(self, neighborhood_code):
+        """Get center coordinates for a neighborhood from cached API data."""
+        try:
+            for n in self._all_neighborhoods_raw:
+                code = n.get("neighborhoodCode") or n.get("code", "")
+                if code == neighborhood_code:
+                    lat = n.get("centerLatitude")
+                    lng = n.get("centerLongitude")
+                    if lat and lng:
+                        return float(lat), float(lng)
+        except Exception as e:
+            logger.debug(f"Could not get neighborhood center: {e}")
+        return None, None
 
     def get_selected_building_ids(self):
         """Get list of selected building IDs."""

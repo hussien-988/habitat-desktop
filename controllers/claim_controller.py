@@ -479,6 +479,23 @@ class ClaimController(BaseController):
             logger.error(f"Failed to add identification evidence: {e}", exc_info=True)
             return OperationResult.fail(message=str(e))
 
+    def update_tenure_evidence(self, survey_id: str, evidence_id: str,
+                               relation_id: str, file_path: str = None,
+                               **kwargs) -> OperationResult:
+        """Update/replace an existing tenure evidence document.
+
+        When a file is provided, the backend creates a new version with a new ID.
+        The caller must use the returned new ID to update local references.
+        """
+        try:
+            result = self._api.update_tenure_evidence(
+                survey_id, evidence_id, relation_id,
+                file_path=file_path, **kwargs)
+            return OperationResult.ok(data=result)
+        except Exception as e:
+            logger.error(f"Failed to update tenure evidence: {e}", exc_info=True)
+            return OperationResult.fail(message=str(e))
+
     def delete_evidence(self, survey_id: str,
                         evidence_id: str) -> OperationResult:
         """Delete evidence document."""

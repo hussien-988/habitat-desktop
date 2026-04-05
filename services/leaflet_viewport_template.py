@@ -152,8 +152,8 @@ VIEWPORT_LOADING_JS_TEMPLATE = '''
          * Update buildings on map with new GeoJSON data.
          * Called from Python when new viewport data is loaded.
          *
-         * - Uses marker clustering for points
-         * - Separates points and polygons
+         * - Converts all geometries to Point (pin markers)
+         * - Uses marker clustering
          * - Limits to MAX_MARKERS_PER_VIEWPORT
          *
          * @param {string} buildingsGeoJSON - GeoJSON FeatureCollection string
@@ -167,7 +167,18 @@ VIEWPORT_LOADING_JS_TEMPLATE = '''
                     ? JSON.parse(buildingsGeoJSON)
                     : buildingsGeoJSON;
 
-                console.log('  - New buildings count:', newBuildingsData.features.length);
+                // Convert all Polygon/MultiPolygon to Point (centroid) for pin-only display
+                if (newBuildingsData.features) {
+                    newBuildingsData.features.forEach(function(f) {
+                        if (f.geometry.type === 'Polygon' || f.geometry.type === 'MultiPolygon') {
+                            var bounds = L.geoJSON(f).getBounds();
+                            var center = bounds.getCenter();
+                            f.geometry = { type: 'Point', coordinates: [center.lng, center.lat] };
+                        }
+                    });
+                }
+
+                console.log('  - Buildings count:', newBuildingsData.features.length);
                 console.log('  - Max markers limit:', MAX_MARKERS_PER_VIEWPORT);
 
                 // Limit to MAX_MARKERS_PER_VIEWPORT
@@ -196,7 +207,7 @@ VIEWPORT_LOADING_JS_TEMPLATE = '''
                         disableClusteringAtZoom: 15,
                         chunkedLoading: true,
                         chunkInterval: 100,
-                        chunkDelay: 25,
+                        chunkDelay: 10,
                         removeOutsideVisibleBounds: true,
                         animate: true,
                         animateAddingMarkers: false
@@ -206,38 +217,33 @@ VIEWPORT_LOADING_JS_TEMPLATE = '''
                     currentMarkersCluster = L.featureGroup();
                 }
 
-                // Separate polygons layer
-                var polygonsGroup = L.featureGroup();
-
-                // Create new buildings layer (reuse same style/pointToLayer logic)
+                // Create new buildings layer (all features are Points after conversion)
                 currentBuildingsLayer = L.geoJSON(newBuildingsData, {
-                    // Style function for Polygon/MultiPolygon features
-                    style: function(feature) {
-                        var status = getStatusKey(feature.properties.status || 1);
-                        var color = statusColors[status] || '#0072BC';
-
-                        return {
-                            color: '#fff',
-                            weight: 2,
-                            fillColor: color,
-                            fillOpacity: 0.6,
-                            opacity: 1,
-                            className: 'building-polygon'
-                        };
-                    },
-
                     // pointToLayer for Point features
                     pointToLayer: function(feature, latlng) {
                         var status = getStatusKey(feature.properties.status || 1);
                         var color = statusColors[status] || '#0072BC';
+                        var isLocked = feature.properties.is_locked === true;
+                        var isAssigned = feature.properties.is_assigned === true;
+
+                        var innerSvg;
+                        if (isLocked) {
+                            color = '#9CA3AF';
+                            innerSvg = '<path d="M9.5 8V7a2.5 2.5 0 015 0v1M9 8h6a1 1 0 011 1v4a1 1 0 01-1 1H9a1 1 0 01-1-1V9a1 1 0 011-1z" fill="none" stroke="#fff" stroke-width="1.5"/>';
+                        } else if (isAssigned) {
+                            color = '#F59E0B';
+                            innerSvg = '<text x="12" y="16" text-anchor="middle" fill="#fff" font-size="10" font-weight="bold">&#10003;</text>';
+                        } else {
+                            innerSvg = '<circle cx="12" cy="12" r="4" fill="#fff"/>';
+                        }
 
                         var pinIcon = L.divIcon({
                             className: 'building-pin-icon',
-                            html: '<div style="position: relative; width: 24px; height: 36px;">' +
+                            html: '<div style="position:relative;width:24px;height:36px;">' +
                                   '<svg width="24" height="36" viewBox="0 0 24 36" xmlns="http://www.w3.org/2000/svg">' +
                                   '<path d="M12 0C5.4 0 0 5.4 0 12c0 8 12 24 12 24s12-16 12-24c0-6.6-5.4-12-12-12z" ' +
                                   'fill="' + color + '" stroke="#fff" stroke-width="2"/>' +
-                                  '<circle cx="12" cy="12" r="4" fill="#fff"/>' +
+                                  innerSvg +
                                   '</svg></div>',
                             iconSize: [24, 36],
                             iconAnchor: [12, 36],
@@ -255,12 +261,8 @@ VIEWPORT_LOADING_JS_TEMPLATE = '''
                         var statusClass = 'status-' + status;
                         var geomType = props.geometry_type || 'Point';
 
-                        // Add to appropriate layer (points to cluster, polygons to group)
-                        if (feature.geometry.type === 'Point') {
-                            currentMarkersCluster.addLayer(layer);
-                        } else {
-                            polygonsGroup.addLayer(layer);
-                        }
+                        // All buildings are Points — add to marker cluster
+                        currentMarkersCluster.addLayer(layer);
 
                         // Multi-select mode: attach click handler instead of popup
                         if (window.multiselectMode && typeof window.attachMultiselectHandler === 'function') {
@@ -292,28 +294,14 @@ VIEWPORT_LOADING_JS_TEMPLATE = '''
 
                         layer.bindPopup(popup);
 
-                        // Highlight on hover (polygons only)
-                        if (geomType !== 'Point') {
-                            layer.on('mouseover', function(e) {
-                                this.setStyle({
-                                    fillOpacity: 0.8,
-                                    weight: 3
-                                });
-                            });
-
-                            layer.on('mouseout', function(e) {
-                                currentBuildingsLayer.resetStyle(this);
-                            });
-                        }
                     }
                 });
 
-                // Add layers to map
-                map.addLayer(currentMarkersCluster);  // Clustered points
-                polygonsGroup.addTo(map);              // Polygons (no clustering)
+                // Add marker cluster to map
+                map.addLayer(currentMarkersCluster);
 
                 isLoadingViewport = false;
-                var totalCount = currentMarkersCluster.getLayers().length + polygonsGroup.getLayers().length;
+                var totalCount = currentMarkersCluster.getLayers().length;
                 console.log('Buildings updated: ' + totalCount);
                 if (typeof window.updateBuildingCount === 'function') {
                     window.updateBuildingCount(totalCount);

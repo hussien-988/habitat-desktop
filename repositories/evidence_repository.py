@@ -27,8 +27,9 @@ class EvidenceRepository:
                 reference_number, reference_date, evidence_description,
                 evidence_type, verification_status, verification_notes,
                 verified_by, verification_date,
+                version_number, is_current_version, previous_version_id,
                 created_at, updated_at, created_by, updated_by
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """
         params = (
             evidence.evidence_id, evidence.relation_id, evidence.document_id,
@@ -38,6 +39,9 @@ class EvidenceRepository:
             evidence.verification_status, evidence.verification_notes,
             evidence.verified_by,
             evidence.verification_date.isoformat() if evidence.verification_date else None,
+            evidence.version_number,
+            1 if evidence.is_current_version else 0,
+            evidence.previous_version_id,
             evidence.created_at.isoformat() if evidence.created_at else None,
             evidence.updated_at.isoformat() if evidence.updated_at else None,
             evidence.created_by, evidence.updated_by
@@ -121,6 +125,8 @@ class EvidenceRepository:
                 evidence_description = ?, evidence_type = ?,
                 verification_status = ?, verification_notes = ?,
                 verified_by = ?, verification_date = ?,
+                version_number = ?, is_current_version = ?,
+                previous_version_id = ?,
                 updated_at = ?, updated_by = ?
             WHERE evidence_id = ?
         """
@@ -132,6 +138,9 @@ class EvidenceRepository:
             evidence.verification_status, evidence.verification_notes,
             evidence.verified_by,
             evidence.verification_date.isoformat() if evidence.verification_date else None,
+            evidence.version_number,
+            1 if evidence.is_current_version else 0,
+            evidence.previous_version_id,
             evidence.updated_at.isoformat(), evidence.updated_by,
             evidence.evidence_id
         )
@@ -178,5 +187,9 @@ class EvidenceRepository:
         for field in ["created_at", "updated_at"]:
             if data.get(field):
                 data[field] = datetime.fromisoformat(data[field])
+
+        # Handle boolean stored as integer
+        if 'is_current_version' in data:
+            data['is_current_version'] = bool(data['is_current_version'])
 
         return Evidence(**{k: v for k, v in data.items() if k in Evidence.__dataclass_fields__})

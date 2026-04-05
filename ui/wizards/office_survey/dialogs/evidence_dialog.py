@@ -58,6 +58,8 @@ class EvidenceDialog(QDialog):
         self.evidence_data = evidence_data
         self.selected_file = None
         self._slide_anim = None
+        self._mode = "replace" if evidence_data and evidence_data.get("_replace_mode") else "create"
+        self._original_evidence_id = evidence_data.get("evidence_id") if evidence_data else None
 
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.Dialog)
         self.setAttribute(Qt.WA_TranslucentBackground)
@@ -293,7 +295,8 @@ class EvidenceDialog(QDialog):
         cancel_btn.clicked.connect(self.reject)
         btn_layout.addWidget(cancel_btn)
 
-        save_btn = QPushButton(tr("wizard.evidence_dialog.add"))
+        save_text = tr("wizard.evidence_dialog.replace") if self._mode == "replace" else tr("wizard.evidence_dialog.add")
+        save_btn = QPushButton(save_text)
         save_btn.setStyleSheet(f"""
             QPushButton {{
                 background-color: {Config.PRIMARY_COLOR};
@@ -372,7 +375,7 @@ class EvidenceDialog(QDialog):
 
     def get_evidence_data(self) -> Dict[str, Any]:
         """Get evidence data from form."""
-        return {
+        data = {
             'evidence_id': self.evidence_data.get('evidence_id') if self.evidence_data else str(uuid.uuid4()),
             'document_type': self.type_combo.currentData(),
             'document_number': self.number_edit.text().strip() or None,
@@ -380,5 +383,17 @@ class EvidenceDialog(QDialog):
             'issuing_authority': self.authority_edit.text().strip() or None,
             'file_path': self.selected_file,
             'file_name': Path(self.selected_file).name if self.selected_file else None,
-            'notes': self.notes_edit.toPlainText().strip() or None
+            'notes': self.notes_edit.toPlainText().strip() or None,
+            '_replace_mode': self._mode == "replace",
+            '_original_evidence_id': self._original_evidence_id,
         }
+        return data
+
+    def accept(self):
+        """Validate and accept."""
+        if self._mode == "replace" and not self.selected_file:
+            from ui.components.toast import Toast
+            Toast.show_toast(
+                self, tr("wizard.evidence_dialog.file_required_for_replace"), Toast.WARNING)
+            return
+        super().accept()

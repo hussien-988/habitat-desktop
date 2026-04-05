@@ -12,7 +12,7 @@ from typing import Optional, Dict, List, Any
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from utils.logger import get_logger
-from services.exceptions import ApiException, NetworkException
+from services.exceptions import ApiException, NetworkException, PasswordChangeRequiredException
 
 # Suppress SSL warnings for self-signed certificates in development
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
@@ -57,11 +57,16 @@ class TRRCMSApiClient:
         self._login_failures: int = 0
         self._login_cooldown_until: Optional[datetime] = None
         self._on_session_expired = None
+        self._on_password_change_required = None
         logger.info(f"API client initialized for {self.base_url}")
 
     def set_session_expired_callback(self, callback):
         """Set callback to invoke when the session expires (token refresh failed or 401)."""
         self._on_session_expired = callback
+
+    def set_password_change_required_callback(self, callback):
+        """Set callback to invoke when password change is required (403 PasswordChangeRequired)."""
+        self._on_password_change_required = callback
 
     def login(self, username: str, password: str) -> Dict[str, Any]:
         """Authenticate and obtain access token."""
@@ -253,9 +258,15 @@ class TRRCMSApiClient:
                     elif self.access_token != token_used:
                         logger.info(f"401 on {endpoint} ignored — token changed by new session")
                 if status_code == 403:
-                    error_code = str(response_data.get("code", "") or response_data.get("errorCode", ""))
+                    error_code = str(response_data.get("code", "") or response_data.get("errorCode", "") or response_data.get("error", ""))
                     if "PasswordChangeRequired" in error_code or "PasswordChangeRequired" in str(response_data):
                         logger.warning(f"[API ERR] 403 PasswordChangeRequired on {endpoint}")
+                        if self._on_password_change_required:
+                            self._on_password_change_required()
+                        raise PasswordChangeRequiredException(
+                            message=f"Password change required on {endpoint}",
+                            response_data=response_data
+                        )
                 log_fn = logger.warning if status_code in (401, 403, 404) else logger.error
                 log_fn(f"[API ERR] {status_code} {method} {endpoint} | Response: {response_data or response_text}")
                 raise ApiException(

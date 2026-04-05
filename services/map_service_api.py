@@ -731,7 +731,9 @@ class MapServiceAPI:
             community_name_ar=community_name,
             neighborhood_code=neighborhood_code,
             neighborhood_name_ar=neighborhood_name,
-            building_number=building_number
+            building_number=building_number,
+            is_assigned=data.get("hasActiveAssignment", False) or data.get("isAssigned", False),
+            is_locked=data.get("isLocked", False),
         )
 
     def _convert_api_building_to_geodata(self, data: Dict[str, Any]) -> BuildingGeoData:

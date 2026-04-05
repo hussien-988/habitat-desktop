@@ -14,7 +14,7 @@ from datetime import datetime, timedelta
 from typing import Any, Callable, Dict, List, Optional
 
 from PyQt5.QtCore import QObject, QTimer, pyqtSignal
-from PyQt5.QtWidgets import QApplication, QMessageBox
+from PyQt5.QtWidgets import QApplication
 
 from utils.logger import get_logger
 
@@ -648,11 +648,7 @@ class ActivityEventFilter(QObject):
 
 
 def show_session_timeout_warning(parent, seconds_remaining: int):
-    """Show session timeout warning using NotificationBar."""
-    from ui.components.notification_bar import NotificationBar
+    """Show session timeout warning using Toast."""
+    from ui.components.toast import Toast
     msg = f"\u0633\u062A\u0646\u062A\u0647\u064A \u062C\u0644\u0633\u062A\u0643 \u062E\u0644\u0627\u0644 {seconds_remaining} \u062B\u0627\u0646\u064A\u0629 \u0628\u0633\u0628\u0628 \u0639\u062F\u0645 \u0627\u0644\u0646\u0634\u0627\u0637."
-    NotificationBar.notify(
-        parent, msg, NotificationBar.WARNING,
-        action_text="\u062A\u0645\u062F\u064A\u062F \u0627\u0644\u062C\u0644\u0633\u0629",
-        duration=seconds_remaining * 1000
-    )
+    Toast.show_toast(parent, msg, Toast.WARNING, duration=seconds_remaining * 1000)

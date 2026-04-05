@@ -48,8 +48,14 @@ class BuildingDetailsPage(QWidget):
         self.unit_controller = UnitController(db)
         self.building_controller = BuildingController(db)
         self.current_building = None
+        self._user_role = None
 
         self._setup_ui()
+
+    def configure_for_role(self, role: str):
+        """Store user role for lock permission checks."""
+        self._user_role = role
+
     # UI Setup
 
     def _setup_ui(self):
@@ -290,12 +296,13 @@ class BuildingDetailsPage(QWidget):
 
         self.current_building = building
 
-        # Update lock button
+        # Update lock button (only admin/data_manager can lock)
         is_locked = getattr(building, 'is_locked', False)
         self._lock_btn.setText(
             tr("building.action.unlock") if is_locked else tr("building.action.lock")
         )
-        self._lock_btn.setVisible(True)
+        can_lock = self._user_role in ('admin', 'data_manager')
+        self._lock_btn.setVisible(can_lock)
 
         display_id = building.building_id_formatted or building.building_id or "-"
         self._header.set_title(display_id)
@@ -567,6 +574,8 @@ class BuildingDetailsPage(QWidget):
     def _on_toggle_lock(self):
         """Toggle building lock state with confirmation."""
         if not self.current_building:
+            return
+        if self._user_role not in ('admin', 'data_manager'):
             return
         from ui.error_handler import ErrorHandler
         is_locked = getattr(self.current_building, 'is_locked', False)

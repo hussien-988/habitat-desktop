@@ -30,6 +30,15 @@ class ValidationException(Exception):
         self.context = context
 
 
+class PasswordChangeRequiredException(ApiException):
+    """Raised when API returns 403 with PasswordChangeRequired."""
+
+    def __init__(self, message: str = "Password change required",
+                 response_data: dict = None):
+        super().__init__(message=message, status_code=403,
+                         response_data=response_data)
+
+
 class NetworkException(Exception):
     """Exception raised for network/connection errors."""
 

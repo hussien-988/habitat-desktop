@@ -399,20 +399,19 @@ class CommitReportDialog(QDialog):
                 with open(filename, 'w', encoding='utf-8') as f:
                     f.write(self._generate_full_report())
 
-                # Show success dialog
-                from ui.components.dialogs import InfoDialog
-                InfoDialog(
-                    title=tr("component.commit_report.save_success_title"),
-                    message=tr("component.commit_report.save_success_message", filename=filename),
-                    parent=self
-                ).exec_()
+                from ui.components.toast import Toast
+                Toast.show_toast(
+                    self,
+                    tr("component.commit_report.save_success_message", filename=filename),
+                    Toast.SUCCESS
+                )
             except Exception as e:
-                from ui.components.dialogs import ErrorDialog
-                ErrorDialog(
-                    title=tr("component.commit_report.save_error_title"),
-                    message=tr("component.commit_report.save_error_message", error=str(e)),
-                    parent=self
-                ).exec_()
+                from ui.components.toast import Toast
+                Toast.show_toast(
+                    self,
+                    tr("component.commit_report.save_error_message", error=str(e)),
+                    Toast.ERROR
+                )
 
     def _on_print_report(self):
         """Print the report."""
@@ -427,10 +426,9 @@ class CommitReportDialog(QDialog):
             document.setPlainText(self._generate_full_report())
             document.print_(printer)
 
-            # Show success dialog
-            from ui.components.dialogs import InfoDialog
-            InfoDialog(
-                title=tr("component.commit_report.print_success_title"),
-                message=tr("component.commit_report.print_success_message"),
-                parent=self
-            ).exec_()
+            from ui.components.toast import Toast
+            Toast.show_toast(
+                self,
+                tr("component.commit_report.print_success_message"),
+                Toast.SUCCESS
+            )

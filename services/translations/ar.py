@@ -2643,6 +2643,7 @@ AR_TRANSLATIONS = {
     "dialog.password.change_success_message": "تم تغيير كلمة المرور بنجاح. سيتم تسجيل دخولك الآن.",
     "dialog.password.forced_welcome": "مرحباً، {name}",
     "dialog.password.forced_reason": "لحماية بياناتك، يرجى تغيير كلمة المرور الخاصة بك.\nهذا الإجراء مطلوب مرة واحدة فقط.",
+    "dialog.password.change_required_message": "يجب تغيير كلمة المرور قبل متابعة استخدام التطبيق",
 
     # person_search.applicant_tag
     "person_search.applicant_tag": "مقدم الطلب",
@@ -2685,6 +2686,8 @@ AR_TRANSLATIONS = {
     "wizard.evidence_dialog.notes": "ملاحظات",
     "wizard.evidence_dialog.notes_placeholder": "أدخل ملاحظات إضافية...",
     "wizard.evidence_dialog.title": "إضافة مستند",
+    "wizard.evidence_dialog.replace": "استبدال الملف",
+    "wizard.evidence_dialog.file_required_for_replace": "يجب اختيار ملف جديد لاستبدال المستند",
 
     # wizard.import
     "wizard.import.retry_hint": "يمكنك إعادة المحاولة",
