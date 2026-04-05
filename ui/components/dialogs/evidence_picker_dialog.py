@@ -269,6 +269,8 @@ class EvidencePickerDialog(QDialog):
             try:
                 b.setCursor(Qt.WaitCursor)
                 b.setEnabled(False)
+                from services.api_client import get_api_client
+                get_api_client()._ensure_valid_token()
                 local = download_evidence_file(eid, fn or eid)
                 if local:
                     QDesktopServices.openUrl(QUrl.fromLocalFile(local))

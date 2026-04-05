@@ -46,41 +46,38 @@ class FieldWorkPreparationPage(QWidget):
     def _setup_ui(self):
         """Setup UI with dark wizard header and step pills."""
         self.setLayoutDirection(get_layout_direction())
-
         self.setStyleSheet(StyleManager.page_background())
+
         outer_layout = QVBoxLayout(self)
         outer_layout.setContentsMargins(0, 0, 0, 0)
         outer_layout.setSpacing(0)
-        content_container = QWidget()
-        content_container.setStyleSheet("background: transparent;")
 
-        content_layout = QVBoxLayout(content_container)
-        from ui.design_system import PageDimensions
-        content_layout.setContentsMargins(
-            PageDimensions.content_padding_h(),
-            PageDimensions.content_padding_v_top(),
-            PageDimensions.content_padding_h(),
-            0
-        )
-        content_layout.setSpacing(0)
-
-        # Dark header with integrated step indicator pills
+        # Dark header — FULL WIDTH (no padding)
         step_names = [tr(key) for key in self._STEP_KEYS]
         self.header = WizardHeader(
             title=tr("wizard.field_work.title"),
             subtitle=tr("wizard.field_work.subtitle"),
             steps=step_names,
         )
-        content_layout.addWidget(self.header)
+        outer_layout.addWidget(self.header)
 
-        # Accent line
+        # Accent line — FULL WIDTH
         self._accent = AccentLine()
-        content_layout.addWidget(self._accent)
+        outer_layout.addWidget(self._accent)
+
+        # Step container — light content area
+        content_wrapper = QWidget()
+        content_wrapper.setStyleSheet(StyleManager.page_background())
+        content_layout = QVBoxLayout(content_wrapper)
+        content_layout.setContentsMargins(0, 0, 0, 0)
+        content_layout.setSpacing(0)
 
         self.step_container = QStackedWidget()
         content_layout.addWidget(self.step_container, 1)
 
-        outer_layout.addWidget(content_container, 1)
+        outer_layout.addWidget(content_wrapper, 1)
+
+        # Footer — FULL WIDTH
         footer = self._create_footer()
         outer_layout.addWidget(footer)
 
@@ -310,16 +307,7 @@ class FieldWorkPreparationPage(QWidget):
         self._update_navigation()
 
         # Clear step 1 selections
-        self.step1._selected_building_ids.clear()
-        self.step1._confirmed_building_ids.clear()
-        while self.step1.selected_table_layout.count():
-            item = self.step1.selected_table_layout.takeAt(0)
-            if item.widget():
-                item.widget().deleteLater()
-        self.step1.buildings_list.clear()
-        self.step1._set_suggestions_visible(False)
-        self.step1._update_selection_count()
-        self.step1._update_selected_card_visibility()
+        self.step1.clear_all_selections()
 
         # Reload filter data (communities/neighborhoods) if not yet loaded
         if hasattr(self.step1, '_load_filter_data') and not self.step1._all_communities:
@@ -340,3 +328,5 @@ class FieldWorkPreparationPage(QWidget):
             self.step2.update_language(is_arabic)
         if self.step3 and hasattr(self.step3, 'update_language'):
             self.step3.update_language(is_arabic)
+        if self.step4 and hasattr(self.step4, 'update_language'):
+            self.step4.update_language(is_arabic)

@@ -2,7 +2,7 @@
 """Building Map Dialog V2 - dialog for building selection via interactive map."""
 
 import json
-from typing import Optional
+from typing import Optional, List
 from ui.error_handler import ErrorHandler
 from PyQt5.QtCore import QTimer, QThread, pyqtSignal
 
@@ -1001,5 +1001,160 @@ def show_building_map_dialog(
 
     if result == dialog.Accepted:
         return dialog.get_selected_building()
+
+    return None
+
+
+class MultiSelectBuildingMapDialog(BuildingMapDialog):
+    """Building map dialog with multi-select support.
+
+    Uses the same fast map, search, landmarks, and streets as BuildingMapDialog
+    but enables multi-select mode so users can click multiple buildings.
+    """
+
+    def __init__(self, db: Database, auth_token: Optional[str] = None, parent=None):
+        self._multi_selected_buildings: List[Building] = []
+        super().__init__(
+            db=db,
+            selected_building_id=None,
+            auth_token=auth_token,
+            read_only=False,
+            selected_building=None,
+            parent=parent,
+        )
+
+    def _start_map_load(self):
+        """Override to enable multiselect in the generated HTML."""
+        from services.tile_server_manager import get_tile_server_url
+        from ui.constants.map_constants import MapConstants
+        from services.landmark_icon_service import reload as reload_landmark_types
+
+        try:
+            reload_landmark_types()
+        except Exception as e:
+            logger.warning(f"Failed to reload landmark types: {e}")
+
+        tile_url = get_tile_server_url()
+        center_lat = MapConstants.DEFAULT_CENTER_LAT
+        center_lon = MapConstants.DEFAULT_CENTER_LON
+        zoom = 15
+
+        empty_geojson = '{"type":"FeatureCollection","features":[]}'
+        try:
+            html = generate_leaflet_html(
+                tile_server_url=tile_url.rstrip('/'),
+                buildings_geojson=empty_geojson,
+                center_lat=center_lat,
+                center_lon=center_lon,
+                zoom=zoom,
+                max_zoom=20,
+                show_legend=True,
+                show_layer_control=False,
+                enable_selection=True,
+                enable_multiselect=True,
+                enable_viewport_loading=True,
+                enable_drawing=False,
+                neighborhoods_geojson=None,
+                landmarks_json='[]',
+                streets_json='[]',
+                boundaries_geojson=None,
+                boundary_level='neighbourhoods',
+            )
+            if not html:
+                logger.error("generate_leaflet_html returned empty HTML")
+                self._show_map_error(tr("dialog.map.map_load_failed"))
+                return
+            self.load_map_html(html)
+        except Exception as e:
+            logger.error(f"Failed to generate map HTML: {e}", exc_info=True)
+            self._show_map_error(tr("dialog.map.map_load_failed"))
+            return
+
+        if self.web_view:
+            self.web_view.loadFinished.connect(self._on_page_ready)
+
+        if self.web_view:
+            js_overlay = (
+                "(function() {"
+                "var overlay = document.createElement('div');"
+                "overlay.id = 'loadingOverlay';"
+                "overlay.style.cssText = 'position:fixed;top:12px;left:50%;transform:translateX(-50%);' +"
+                "'background:rgba(27,43,77,0.85);color:white;padding:8px 20px;border-radius:20px;' +"
+                "'font-size:13px;font-family:Arial;z-index:9999;direction:rtl;';"
+                f"overlay.textContent = '{tr('dialog.map.loading_buildings')}';"
+                "document.body.appendChild(overlay);"
+                "})();"
+            )
+            QTimer.singleShot(300, lambda: self.web_view.page().runJavaScript(js_overlay))
+
+        self._buildings_worker = _BuildingsWorker(
+            self._auth_token, None, False, None,
+            center_lat, center_lon
+        )
+        self._buildings_worker.finished.connect(self._on_buildings_ready)
+        self._buildings_worker.error.connect(self._on_map_data_error)
+        self._buildings_worker.start()
+
+        self._layers_worker = _LayersWorker(self._auth_token)
+        self._layers_worker.finished.connect(self._on_layers_ready)
+        self._layers_worker.error.connect(lambda e: logger.warning(f"Layers loading failed: {e}"))
+        self._layers_worker.start()
+
+    def _on_building_selected_from_map(self, building_id: str):
+        """In multi-select mode, accumulate buildings instead of closing dialog."""
+        logger.info(f"Multi-select: building toggled: {building_id}")
+
+        # Check if already selected - toggle off
+        existing = [b for b in self._multi_selected_buildings if b.building_id == building_id]
+        if existing:
+            self._multi_selected_buildings = [
+                b for b in self._multi_selected_buildings if b.building_id != building_id
+            ]
+            logger.info(f"Deselected {building_id}, total: {len(self._multi_selected_buildings)}")
+            self.confirm_btn.setEnabled(len(self._multi_selected_buildings) > 0)
+            return
+
+        # Find building in cache
+        matching = None
+        for b in (self._buildings_cache or []):
+            if b.building_id == building_id:
+                matching = b
+                break
+
+        if not matching:
+            try:
+                from services.map_service_api import MapServiceAPI
+                map_service = MapServiceAPI()
+                if self._auth_token:
+                    map_service.set_auth_token(self._auth_token)
+                matching = map_service.get_building_with_polygon(building_id)
+            except Exception as e:
+                logger.warning(f"Could not fetch building {building_id}: {e}")
+
+        if matching:
+            self._multi_selected_buildings.append(matching)
+            logger.info(f"Selected {building_id}, total: {len(self._multi_selected_buildings)}")
+            self.confirm_btn.setEnabled(True)
+        else:
+            logger.warning(f"Building {building_id} not found")
+
+    def get_selected_buildings(self) -> List[Building]:
+        """Get all selected buildings."""
+        return list(self._multi_selected_buildings)
+
+
+def show_multiselect_map_dialog(
+    db: Database,
+    auth_token: Optional[str] = None,
+    parent=None,
+) -> Optional[List[Building]]:
+    """Show multi-select building map dialog. Returns list of buildings or None."""
+    dialog = MultiSelectBuildingMapDialog(db, auth_token, parent)
+    result = dialog.exec_()
+
+    if result == dialog.Accepted:
+        selected = dialog.get_selected_buildings()
+        if selected:
+            return selected
 
     return None

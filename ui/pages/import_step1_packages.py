@@ -3,15 +3,17 @@
 
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QFrame,
-    QPushButton, QScrollArea, QSizePolicy, QFileDialog,
+    QPushButton, QScrollArea, QStackedWidget, QSizePolicy, QFileDialog,
     QGraphicsDropShadowEffect,
 )
 from PyQt5.QtCore import Qt, pyqtSignal, QTimer
 from PyQt5.QtGui import QColor
 
+from ui.components.animated_card import EmptyStateAnimated
 from ui.design_system import Colors
 from ui.font_utils import create_font, FontManager
 from ui.style_manager import StyleManager
+from ui.animation_utils import stagger_fade_in
 from services.vocab_service import get_label as vocab_get_label
 from services.translation_manager import tr, get_layout_direction
 from utils.logger import get_logger
@@ -104,21 +106,23 @@ class _PackageCard(QFrame):
         if selected:
             self.setStyleSheet("""
                 QFrame {
-                    background-color: #EFF6FF;
-                    border: 2px solid #3890DF;
+                    background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
+                        stop:0 #EBF3FF, stop:1 #E0EDFF);
+                    border: 2px solid rgba(56, 144, 223, 0.3);
                     border-radius: 12px;
                 }
             """)
         else:
             self.setStyleSheet("""
                 QFrame {
-                    background-color: #FFFFFF;
-                    border: 1px solid #E1E8ED;
+                    background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
+                        stop:0 #F7FAFF, stop:1 #F0F5FF);
+                    border: 1px solid #E2EAF2;
                     border-radius: 12px;
                 }
                 QFrame:hover {
-                    border-color: #93C5FD;
-                    background-color: #FAFCFF;
+                    border-color: rgba(56, 144, 223, 0.3);
+                    background: #F0F5FF;
                 }
             """)
 
@@ -173,10 +177,18 @@ class ImportStep1Packages(QWidget):
         card = QFrame()
         card.setStyleSheet("""
             QFrame {
-                background-color: #FFFFFF;
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
+                    stop:0 #F7FAFF, stop:1 #F0F5FF);
                 border-radius: 16px;
+                border: 1px solid #E2EAF2;
             }
         """)
+        shadow = QGraphicsDropShadowEffect()
+        shadow.setBlurRadius(20)
+        shadow.setXOffset(0)
+        shadow.setYOffset(4)
+        shadow.setColor(QColor(0, 0, 0, 22))
+        card.setGraphicsEffect(shadow)
         card_layout = QVBoxLayout(card)
         card_layout.setContentsMargins(24, 24, 24, 24)
         card_layout.setSpacing(16)
@@ -192,27 +204,12 @@ class ImportStep1Packages(QWidget):
 
         header_row.addStretch()
 
-        self._last_update_label = QLabel("")
-        self._last_update_label.setFont(create_font(size=9, weight=FontManager.WEIGHT_REGULAR))
-        self._last_update_label.setStyleSheet("color: #9CA3AF; background: transparent;")
-        header_row.addWidget(self._last_update_label)
-
         back_btn = QPushButton(tr("wizard.import.step1.back_btn"))
-        back_btn.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
-        back_btn.setFixedSize(80, 32)
+        back_btn.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
+        back_btn.setFixedHeight(36)
+        back_btn.setMinimumWidth(100)
         back_btn.setCursor(Qt.PointingHandCursor)
-        back_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #F1F5F9;
-                color: #475569;
-                border: 1px solid #E2E8F0;
-                border-radius: 6px;
-                font-weight: 600;
-            }
-            QPushButton:hover {
-                background-color: #E2E8F0;
-            }
-        """)
+        back_btn.setStyleSheet(StyleManager.nav_button_secondary())
         back_btn.clicked.connect(self.back_requested.emit)
         header_row.addWidget(back_btn)
 
@@ -223,13 +220,16 @@ class ImportStep1Packages(QWidget):
         sep.setStyleSheet("color: #E1E8ED;")
         card_layout.addWidget(sep)
 
-        # Scroll area for package cards
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        scroll.setFrameShape(QFrame.NoFrame)
-        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
-        scroll.setStyleSheet(
+        # Stacked widget: scroll (cards) vs empty state
+        self._content_stack = QStackedWidget()
+
+        # Page 0: Scroll area for package cards
+        self._scroll = QScrollArea()
+        self._scroll.setWidgetResizable(True)
+        self._scroll.setFrameShape(QFrame.NoFrame)
+        self._scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self._scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        self._scroll.setStyleSheet(
             "QScrollArea { border: none; background: transparent; }"
             + StyleManager.scrollbar()
         )
@@ -241,23 +241,18 @@ class ImportStep1Packages(QWidget):
         self._cards_layout.setSpacing(10)
         self._cards_layout.addStretch()
 
-        scroll.setWidget(self._cards_container)
-        card_layout.addWidget(scroll, 1)
+        self._scroll.setWidget(self._cards_container)
+        self._content_stack.addWidget(self._scroll)
 
-        # Empty state label
-        self._empty_label = QLabel(tr("wizard.import.step1.empty_state"))
-        self._empty_label.setFont(create_font(size=11, weight=FontManager.WEIGHT_REGULAR))
-        self._empty_label.setStyleSheet("color: #9CA3AF; background: transparent;")
-        self._empty_label.setAlignment(Qt.AlignCenter)
-        self._empty_label.setVisible(False)
-        card_layout.addWidget(self._empty_label)
+        # Page 1: Empty state
+        self._empty_label = EmptyStateAnimated(
+            title=tr("wizard.import.step1.empty_state"),
+        )
+        self._content_stack.addWidget(self._empty_label)
 
-        # Auto-refresh hint
-        hint = QLabel(tr("wizard.import.step1.auto_refresh_hint"))
-        hint.setFont(create_font(size=8, weight=FontManager.WEIGHT_REGULAR))
-        hint.setStyleSheet("color: #D1D5DB; background: transparent;")
-        hint.setAlignment(Qt.AlignCenter)
-        card_layout.addWidget(hint)
+        # Start with empty state visible
+        self._content_stack.setCurrentIndex(1)
+        card_layout.addWidget(self._content_stack, 1)
 
         main_layout.addWidget(card, 1)
 
@@ -359,10 +354,6 @@ class ImportStep1Packages(QWidget):
         self.new_packages_count.emit(len(packages))
         self._hide_loading()
 
-        from datetime import datetime
-        now = datetime.now().strftime("%H:%M")
-        self._last_update_label.setText(tr("wizard.import.step1.last_update", time=now))
-
         logger.info(f"Step1: refreshed, {len(packages)} pending package(s)")
 
     def _populate_cards(self, packages: list):
@@ -380,13 +371,13 @@ class ImportStep1Packages(QWidget):
                 item.widget().deleteLater()
 
         if not packages:
-            self._empty_label.setVisible(True)
+            self._content_stack.setCurrentIndex(1)
             self._cards_layout.addStretch()
             self._selected_package_id = None
             self.package_selected.emit("")
             return
 
-        self._empty_label.setVisible(False)
+        self._content_stack.setCurrentIndex(0)
 
         for pkg in packages:
             card = _PackageCard(pkg, parent=self._cards_container)
@@ -395,6 +386,10 @@ class ImportStep1Packages(QWidget):
             self._cards_layout.addWidget(card)
 
         self._cards_layout.addStretch()
+
+        # Stagger entrance animation for package cards
+        if self._cards:
+            stagger_fade_in(self._cards)
 
         # Restore selection if still available
         if self._selected_package_id:
@@ -481,7 +476,7 @@ class ImportStep1Packages(QWidget):
     def update_language(self, is_arabic: bool):
         """Update all translatable texts after language change."""
         self.setLayoutDirection(get_layout_direction())
-        self._empty_label.setText(tr("wizard.import.step1.empty_state"))
+        self._empty_label.set_title(tr("wizard.import.step1.empty_state"))
         self._loading_label.setText(tr("wizard.import.step1.loading"))
 
     def reset(self):

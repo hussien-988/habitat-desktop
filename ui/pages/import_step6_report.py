@@ -102,6 +102,12 @@ class ImportStep6Report(QWidget):
         self._meta_layout.addStretch()
         self._result_card_layout.addLayout(self._meta_layout)
 
+        result_shadow = QGraphicsDropShadowEffect()
+        result_shadow.setBlurRadius(20)
+        result_shadow.setXOffset(0)
+        result_shadow.setYOffset(4)
+        result_shadow.setColor(QColor(0, 0, 0, 22))
+        self._result_card.setGraphicsEffect(result_shadow)
         self._set_result_style("success")
         main_layout.addWidget(self._result_card)
 
@@ -236,23 +242,38 @@ class ImportStep6Report(QWidget):
             ('archivePath', "wizard.import.step6.extra_archive_path"),
         ]
         for key, tr_key in self._extra_keys_tr:
-            row = QHBoxLayout()
+            row_frame = QFrame()
+            row_frame.setFixedHeight(40)
+            row_frame.setStyleSheet("""
+                QFrame {
+                    background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                        stop:0 #FAFCFF, stop:1 transparent);
+                    border-radius: 8px;
+                    border: none;
+                }
+                QFrame QLabel {
+                    border: none;
+                    background: transparent;
+                }
+            """)
+            row = QHBoxLayout(row_frame)
+            row.setContentsMargins(12, 4, 12, 4)
             row.setSpacing(12)
             name = QLabel(f"{tr(tr_key)}:")
             name.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
-            name.setStyleSheet("color: #637381; background: transparent;")
+            name.setStyleSheet("color: #637381;")
             name.setFixedWidth(200)
             row.addWidget(name)
             self._extra_name_labels[key] = name
 
             value = QLabel("-")
             value.setFont(create_font(size=10, weight=FontManager.WEIGHT_REGULAR))
-            value.setStyleSheet("color: #212B36; background: transparent;")
+            value.setStyleSheet("color: #212B36;")
             row.addWidget(value)
             row.addStretch()
 
             self._extra_labels[key] = value
-            self._extra_rows_layout.addLayout(row)
+            self._extra_rows_layout.addWidget(row_frame)
 
         main_layout.addWidget(self._extra_card)
 
@@ -304,10 +325,18 @@ class ImportStep6Report(QWidget):
         card = QFrame()
         card.setStyleSheet("""
             QFrame {
-                background-color: #FFFFFF;
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
+                    stop:0 #F7FAFF, stop:1 #F0F5FF);
                 border-radius: 16px;
+                border: 1px solid #E2EAF2;
             }
         """)
+        shadow = QGraphicsDropShadowEffect()
+        shadow.setBlurRadius(20)
+        shadow.setXOffset(0)
+        shadow.setYOffset(4)
+        shadow.setColor(QColor(0, 0, 0, 22))
+        card.setGraphicsEffect(shadow)
         return card
 
     def _create_stat_box(self, label_text: str, value_text: str,
@@ -318,7 +347,8 @@ class ImportStep6Report(QWidget):
         box.setMinimumWidth(120)
         box.setStyleSheet(f"""
             QFrame {{
-                background-color: {bg};
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
+                    stop:0 {bg}, stop:1 #FFFFFF);
                 border-radius: 12px;
                 border: none;
             }}

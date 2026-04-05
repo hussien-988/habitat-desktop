@@ -3,20 +3,20 @@
 
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
-    QPushButton, QComboBox, QFrame, QToolButton, QSizePolicy,
-    QListWidget, QListWidgetItem, QCheckBox, QGraphicsDropShadowEffect,
+    QPushButton, QComboBox, QFrame, QToolButton, QStackedWidget,
     QScrollArea
-    )
-from PyQt5.QtCore import Qt, pyqtSignal, QSize
-from PyQt5.QtGui import QIcon, QColor
+)
+from PyQt5.QtCore import Qt, pyqtSignal, QSize, QTimer
+from PyQt5.QtGui import QIcon
 
 from controllers.building_controller import BuildingController
 from services.api_client import get_api_client
 from services.api_worker import ApiWorker
 from services.translation_manager import tr, get_layout_direction
+from ui.components.animated_card import AnimatedCard, EmptyStateAnimated
 from ui.components.icon import Icon
 from ui.components.toast import Toast
-from ui.components.wizard_header import WizardHeader
+from ui.animation_utils import stagger_fade_in
 from ui.design_system import Colors, PageDimensions
 from ui.font_utils import create_font, FontManager
 from utils.i18n import I18n
@@ -25,144 +25,152 @@ from utils.logger import get_logger
 logger = get_logger(__name__)
 
 
-class BuildingCheckboxItem(QWidget):
-    """Custom checkbox item for building list."""
+class _SelectableBuildingCard(AnimatedCard):
+    """Card-based building item with selectable checkbox state."""
+
+    selection_changed = pyqtSignal(object, bool)  # (building, is_selected)
+
+    # Status color mapping for building status
+    _STATUS_COLORS = {
+        "intact": "#10B981",
+        "damaged": "#F59E0B",
+        "destroyed": "#EF4444",
+        "سليم": "#10B981",
+        "متضرر": "#F59E0B",
+        "مدمر": "#EF4444",
+    }
 
     def __init__(self, building, parent=None):
-        super().__init__(parent)
         self.building = building
-        self.setCursor(Qt.PointingHandCursor)  # Make entire row clickable
+        self._selected = False
 
-        # Set minimum height
-        self.setMinimumHeight(56)  # Unified height
-
-        layout = QHBoxLayout(self)
-        layout.setContentsMargins(12, 12, 12, 12)  # Unified padding
-        layout.setSpacing(16)  # Unified spacing
-        checkbox_container = QWidget()
-        checkbox_container.setFixedSize(20, 20)
-
-        # Checkbox - border only (no content) - positioned at (0,0)
-        self.checkbox = QCheckBox(checkbox_container)
-        self.checkbox.setGeometry(0, 0, 20, 20)
-        self.checkbox.setStyleSheet(f"""
-            QCheckBox::indicator {{
-                width: 20px;
-                height: 20px;
-                border: 2px solid {Colors.PRIMARY_BLUE};
-                border-radius: 4px;
-                background: white;
-            }}
-            QCheckBox::indicator:checked {{
-                background: white;
-                border-color: {Colors.PRIMARY_BLUE};
-            }}
-            QCheckBox::indicator:hover {{
-                border-color: {Colors.PRIMARY_BLUE};
-            }}
-        """)
-
-        # Checkmark overlay (only visible when checked) - overlaid on top at (0,0)
-        self.check_label = QLabel("✓", checkbox_container)
-        self.check_label.setGeometry(0, 0, 20, 20)
-        self.check_label.setStyleSheet(f"color: {Colors.PRIMARY_BLUE}; font-size: 14px; font-weight: bold; background: transparent; border: none;")
-        self.check_label.setAlignment(Qt.AlignCenter)
-        self.check_label.setVisible(False)  # Hidden by default
-        # Make checkmark transparent to mouse clicks (so checkbox underneath can be clicked)
-        self.check_label.setAttribute(Qt.WA_TransparentForMouseEvents, True)
-
-        # Update checkmark visibility when checkbox state changes
-        self.checkbox.stateChanged.connect(lambda state: self.check_label.setVisible(state == Qt.Checked))
-
-        layout.addWidget(checkbox_container)
-
-        # Icon container - Unified: 32×32px with #f0f7ff background (using building-03)
-        icon_container = QLabel()
-        icon_container.setFixedSize(32, 32)
-        icon_container.setAlignment(Qt.AlignCenter)
-        icon_container.setStyleSheet("""
-            QLabel {
-                background-color: #f0f7ff;
-                border-radius: 6px;
-            }
-        """)
-        icon_pixmap = Icon.load_pixmap("building-03", size=20)
-        if icon_pixmap and not icon_pixmap.isNull():
-            icon_container.setPixmap(icon_pixmap)
-        else:
-            icon_container.setText("🏢")
-        layout.addWidget(icon_container)
-
-        # Text with formatted building ID - using PAGE_SUBTITLE color
-        formatted_id = self._format_building_id_static(building.building_id)
-        item_text = (
-            f"{formatted_id} | "
-            f"{tr('wizard.step1.type_label')}: {building.building_type_display} | "
-            f"{tr('wizard.step1.status_label')}: {building.building_status_display}"
+        # Determine status color from building status
+        status_display = getattr(building, 'building_status_display', '') or ''
+        status_color = self._STATUS_COLORS.get(
+            status_display.lower(), Colors.PRIMARY_BLUE
         )
-        text_label = QLabel(item_text)
-        text_label.setFont(create_font(size=10, weight=FontManager.WEIGHT_REGULAR))
-        text_label.setStyleSheet(f"color: {Colors.PAGE_SUBTITLE}; background: transparent;")
-        layout.addWidget(text_label, 1)
 
-        if getattr(building, 'is_assigned', False):
+        super().__init__(
+            parent,
+            card_height=80,
+            border_radius=10,
+            show_chevron=False,
+            show_strip=True,
+            status_color=status_color,
+            strip_width=4,
+            clickable=True,
+            lift_target=2.0,
+        )
+
+    def _build_content(self, layout):
+        """Populate card with building info."""
+        # Top row: building code (bold)
+        formatted_id = self._format_building_id_static(self.building.building_id)
+        self._code_label = QLabel(formatted_id)
+        self._code_label.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
+        self._code_label.setStyleSheet(f"color: {Colors.PAGE_TITLE}; background: transparent;")
+        layout.addWidget(self._code_label)
+
+        # Bottom row: type + status (secondary text)
+        info_row = QHBoxLayout()
+        info_row.setSpacing(12)
+        info_row.setContentsMargins(0, 0, 0, 0)
+
+        type_display = getattr(self.building, 'building_type_display', '') or ''
+        status_display = getattr(self.building, 'building_status_display', '') or ''
+        secondary_text = f"{tr('wizard.step1.type_label')}: {type_display}"
+        if status_display:
+            secondary_text += f"  |  {tr('wizard.step1.status_label')}: {status_display}"
+
+        secondary_label = QLabel(secondary_text)
+        secondary_label.setFont(create_font(size=9, weight=FontManager.WEIGHT_REGULAR))
+        secondary_label.setStyleSheet(f"color: {Colors.PAGE_SUBTITLE}; background: transparent;")
+        info_row.addWidget(secondary_label, 1)
+
+        # Badges
+        if getattr(self.building, 'is_assigned', False) or getattr(self.building, 'has_active_assignment', False):
             assigned_badge = QLabel(tr("building.assigned"))
-            assigned_badge.setFont(create_font(size=8, weight=FontManager.WEIGHT_MEDIUM))
-            assigned_badge.setFixedHeight(20)
+            assigned_badge.setFont(create_font(size=8, weight=FontManager.WEIGHT_SEMIBOLD))
             assigned_badge.setStyleSheet(
-                f"background: {Colors.PRIMARY_BLUE}; color: #fff; border-radius: 10px; "
-                "padding: 2px 8px;"
+                f"color: white; background: {Colors.PRIMARY_BLUE}; "
+                "border-radius: 9px; padding: 2px 8px;"
             )
-            layout.addWidget(assigned_badge)
+            info_row.addWidget(assigned_badge)
 
-        if getattr(building, 'is_locked', False):
+        if getattr(self.building, 'is_locked', False):
             locked_badge = QLabel(tr("building.locked"))
-            locked_badge.setFont(create_font(size=8, weight=FontManager.WEIGHT_MEDIUM))
-            locked_badge.setFixedHeight(20)
+            locked_badge.setFont(create_font(size=8, weight=FontManager.WEIGHT_SEMIBOLD))
             locked_badge.setStyleSheet(
-                "background: #6c757d; color: #fff; border-radius: 10px; "
-                "padding: 2px 8px;"
+                "color: white; background: #6c757d; "
+                "border-radius: 9px; padding: 2px 8px;"
             )
-            layout.addWidget(locked_badge)
+            info_row.addWidget(locked_badge)
+
+        layout.addLayout(info_row)
+
+    def _apply_base_style(self):
+        """Override base style to show selection state."""
+        r = self._border_radius
+        cn = self._class_name()
+        if self._selected:
+            self.setStyleSheet(
+                f"{cn} {{"
+                f"  background: qlineargradient(x1:0,y1:0,x2:1,y2:1,"
+                f"    stop:0 #EBF5FF, stop:1 #DBEAFE);"
+                f"  border-radius: {r}px;"
+                f"  border: 2px solid {Colors.PRIMARY_BLUE};"
+                f"}}"
+            )
+        else:
+            super()._apply_base_style()
+
+    def _apply_hover_style(self):
+        """Override hover style to show selection state."""
+        r = self._border_radius
+        cn = self._class_name()
+        if self._selected:
+            self.setStyleSheet(
+                f"{cn} {{"
+                f"  background: qlineargradient(x1:0,y1:0,x2:1,y2:1,"
+                f"    stop:0 #DBEAFE, stop:1 #BFDBFE);"
+                f"  border-radius: {r}px;"
+                f"  border: 2px solid {Colors.PRIMARY_BLUE};"
+                f"}}"
+            )
+        else:
+            super()._apply_hover_style()
+
+    @property
+    def is_selected(self):
+        return self._selected
+
+    @is_selected.setter
+    def is_selected(self, value):
+        if self._selected != value:
+            self._selected = value
+            self._apply_base_style()
+            self.update()
 
     def mousePressEvent(self, event):
-        """Handle click on entire row - toggle checkbox."""
-        self.checkbox.setChecked(not self.checkbox.isChecked())
+        """Toggle selection on click."""
+        if event.button() == Qt.LeftButton:
+            self.is_selected = not self._selected
+            self.selection_changed.emit(self.building, self._selected)
         super().mousePressEvent(event)
 
     @staticmethod
     def _format_building_id_static(building_id: str) -> str:
-        """
-        Format building ID with dashes (17 digits: XX-XX-XX-XX-XX-XX-XX-XX-X).
-        Static version for BuildingCheckboxItem.
-        """
+        """Format building ID with dashes (17 digits: XX-XX-XX-XX-XX-XX-XX-XX-X)."""
         if not building_id:
             return ""
-
-        # Remove any existing dashes
         clean_id = building_id.replace("-", "")
-
-        # Format: 2-2-2-2-2-2-2-2-1 (17 digits total)
         if len(clean_id) >= 17:
-            formatted = f"{clean_id[0:2]}-{clean_id[2:4]}-{clean_id[4:6]}-{clean_id[6:8]}-{clean_id[8:10]}-{clean_id[10:12]}-{clean_id[12:14]}-{clean_id[14:16]}-{clean_id[16]}"
-            return formatted
-
-        # Return as-is if not 17 digits
+            return (
+                f"{clean_id[0:2]}-{clean_id[2:4]}-{clean_id[4:6]}-"
+                f"{clean_id[6:8]}-{clean_id[8:10]}-{clean_id[10:12]}-"
+                f"{clean_id[12:14]}-{clean_id[14:16]}-{clean_id[16]}"
+            )
         return building_id
-
-
-class ClickableRowWidget(QWidget):
-    """Widget for table row that toggles checkbox when clicked."""
-
-    def __init__(self, checkbox, parent=None):
-        super().__init__(parent)
-        self.checkbox = checkbox
-        self.setCursor(Qt.PointingHandCursor)
-
-    def mousePressEvent(self, event):
-        """Handle click on entire row - toggle checkbox."""
-        self.checkbox.setChecked(not self.checkbox.isChecked())
-        super().mousePressEvent(event)
 
 
 class FieldWorkPreparationStep1(QWidget):
@@ -176,8 +184,10 @@ class FieldWorkPreparationStep1(QWidget):
         self.building_controller = building_controller
         self.i18n = i18n
         self.page = parent  # Store reference to parent page
-        self._selected_building_ids = set()  # Buildings shown in table (may be unchecked)
-        self._confirmed_building_ids = set()  # Buildings confirmed for transfer (checked only)
+        self._selected_building_ids = set()
+        self._confirmed_building_ids = set()
+        self._selected_buildings = {}  # {building_id: building_object}
+        self._showing_selected_view = False
 
         # Cache for filter data (from API)
         self._all_communities = []  # [(code, name_ar), ...]
@@ -253,52 +263,35 @@ class FieldWorkPreparationStep1(QWidget):
         self._filter_data_worker.start()
 
     def _setup_ui(self):
-        """Setup UI - content only (no header/footer)."""
+        """Setup UI - inline filters, search, chips row, and results area."""
         self.setLayoutDirection(get_layout_direction())
-
-        # Background
         self.setStyleSheet("background: transparent;")
+
         main_layout = QVBoxLayout(self)
-        main_layout.setContentsMargins(0, 0, 0, 0)
-        main_layout.setSpacing(0)
-        cards_container = QWidget()
-        cards_container.setStyleSheet("background-color: transparent;")
-        cards_layout = QVBoxLayout(cards_container)
-        cards_layout.setContentsMargins(0, 15, 0, 16)
-        cards_layout.setSpacing(15)
-        card = QFrame()
-        card.setObjectName("filterCard")
-        card.setStyleSheet(f"""
-            QFrame#filterCard {{
-                background-color: {Colors.SURFACE};
-                border: 1px solid {Colors.BORDER_DEFAULT};
-                border-radius: 12px;
-            }}
-        """)
+        main_layout.setContentsMargins(
+            PageDimensions.content_padding_h(), 16,
+            PageDimensions.content_padding_h(), 0
+        )
+        main_layout.setSpacing(16)
 
-        card.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-
-        card_layout = QVBoxLayout(card)
-        # Padding: 12px all sides
-        card_layout.setContentsMargins(12, 12, 12, 12)
-        card_layout.setSpacing(12)
+        # -- Filter Row (3 combos, inline -- no card wrapper) --
         filters_layout = QHBoxLayout()
-        filters_layout.setSpacing(12)
+        filters_layout.setSpacing(16)
 
         # Filter 1: City
         filter1_container, self._filter1_label = self._create_filter_field(tr("filter.step1.city"))
         self.community_combo = QComboBox()
         self.community_combo.setPlaceholderText(tr("filter.step1.select_city"))
-        self._style_combo(self.community_combo, tr("filter.step1.select_city"))
+        self._style_combo(self.community_combo)
         self.community_combo.currentIndexChanged.connect(self._on_community_changed)
         filter1_container.layout().addWidget(self.community_combo)
         filters_layout.addWidget(filter1_container, 1)
 
-        # Filter 2: Neighborhood — cascading from community
+        # Filter 2: Neighborhood -- cascading from community
         filter2_container, self._filter2_label = self._create_filter_field(tr("filter.step1.neighborhood"))
         self.neighborhood_combo = QComboBox()
         self.neighborhood_combo.setPlaceholderText(tr("filter.step1.select_neighborhood"))
-        self._style_combo(self.neighborhood_combo, tr("filter.step1.select_neighborhood"))
+        self._style_combo(self.neighborhood_combo)
         self.neighborhood_combo.currentIndexChanged.connect(self._on_filter_changed)
         filter2_container.layout().addWidget(self.neighborhood_combo)
         filters_layout.addWidget(filter2_container, 1)
@@ -307,19 +300,24 @@ class FieldWorkPreparationStep1(QWidget):
         filter3_container, self._filter3_label = self._create_filter_field(tr("filter.step1.assignment_status"))
         self.assignment_status_combo = QComboBox()
         self.assignment_status_combo.setPlaceholderText(tr("filter.step1.assignment_status"))
-        self._style_combo(self.assignment_status_combo, tr("filter.step1.assignment_status"))
+        self._style_combo(self.assignment_status_combo)
         self.assignment_status_combo.addItem(tr("filter.step1.all"), None)
         self.assignment_status_combo.addItem(tr("filter.step1.unassigned"), "false")
         self.assignment_status_combo.addItem(tr("filter.step1.assigned"), "true")
+        # Default to "Unassigned" so assigned buildings are hidden from search
+        self.assignment_status_combo.setCurrentIndex(1)
         self.assignment_status_combo.currentIndexChanged.connect(self._on_filter_changed)
         filter3_container.layout().addWidget(self.assignment_status_combo)
         filters_layout.addWidget(filter3_container, 1)
 
-        card_layout.addLayout(filters_layout)
+        main_layout.addLayout(filters_layout)
+
+        # -- Search Row --
         self._search_label = QLabel(tr("wizard.step1.building_code_label"))
         self._search_label.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
         self._search_label.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent;")
-        card_layout.addWidget(self._search_label)
+        main_layout.addWidget(self._search_label)
+
         search_bar = QFrame()
         search_bar.setObjectName("searchBar")
         search_bar.setFixedHeight(42)
@@ -355,15 +353,13 @@ class FieldWorkPreparationStep1(QWidget):
             search_icon_btn.setIcon(QIcon(search_pixmap))
             search_icon_btn.setIconSize(QSize(20, 20))
         else:
-            search_icon_btn.setText("🔍")
-
+            search_icon_btn.setText("?")
         search_icon_btn.clicked.connect(self._on_search)
 
         # Input
         self.building_search = QLineEdit()
         self.building_search.setPlaceholderText(tr("wizard.step1.search_building_code"))
         self.building_search.setLayoutDirection(get_layout_direction())
-        # Hide suggestions when Enter is pressed
         self.building_search.returnPressed.connect(self._on_search_enter)
         self.building_search.setStyleSheet("""
             QLineEdit {
@@ -378,7 +374,7 @@ class FieldWorkPreparationStep1(QWidget):
         """)
         self.building_search.textChanged.connect(self._on_search_text_changed)
 
-        # "بحث على الخريطة" link button
+        # Map link button
         self._map_link_btn = QPushButton(tr("wizard.step1.search_on_map"))
         self._map_link_btn.setCursor(Qt.PointingHandCursor)
         self._map_link_btn.setFlat(True)
@@ -402,218 +398,66 @@ class FieldWorkPreparationStep1(QWidget):
         sb.addWidget(self.building_search)
         sb.addWidget(search_icon_btn, 1)
 
-        card_layout.addWidget(search_bar)
+        main_layout.addWidget(search_bar)
 
-        cards_layout.addWidget(card)
-        self.buildings_list = QListWidget()
-        self.buildings_list.setVisible(False)
-        self.buildings_list.setFixedHeight(0)  # Start collapsed (will be 179 when visible)
-        self.buildings_list.setFixedWidth(1225)
+        # -- Selection Count Label (shown when buildings selected) --
+        self._selection_count_label = QLabel()
+        self._selection_count_label.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
+        self._selection_count_label.setStyleSheet(f"color: {Colors.PRIMARY_BLUE}; background: transparent;")
+        self._selection_count_label.setVisible(False)
+        main_layout.addWidget(self._selection_count_label)
 
-        # Hide scrollbar but keep scrolling
-        self.buildings_list.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        self.buildings_list.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        # -- Results Area (fills remaining space) --
+        self._suggestions_scroll = QScrollArea()
+        self._suggestions_scroll.setWidgetResizable(True)
+        self._suggestions_scroll.setFrameShape(QFrame.NoFrame)
+        self._suggestions_scroll.setStyleSheet(
+            "QScrollArea { background: transparent; border: none; }"
+        )
+        self._suggestions_scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        self._suggestions_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
 
-        self.buildings_list.setStyleSheet(f"""
-            QListWidget {{
-                border: 1px solid {Colors.BORDER_DEFAULT};
-                border-top-left-radius: 0px;
-                border-top-right-radius: 0px;
-                border-bottom-left-radius: 8px;
-                border-bottom-right-radius: 8px;
-                background-color: {Colors.SURFACE};
-            }}
-            QListWidget::item {{
-                padding: 10px 12px;
-                border-bottom: none;
-            }}
-            QListWidget::item:selected {{
-                background-color: #EFF6FF;
-            }}
-        """)
+        self._suggestions_content = QWidget()
+        self._suggestions_content.setStyleSheet("background: transparent;")
+        self._suggestions_layout = QVBoxLayout(self._suggestions_content)
+        self._suggestions_layout.setContentsMargins(4, 4, 4, 4)
+        self._suggestions_layout.setSpacing(6)
+        self._suggestions_layout.addStretch()
+        self._suggestions_scroll.setWidget(self._suggestions_content)
 
-        # Position list: overlaps with card's bottom padding
-        cards_layout.addSpacing(-27)
+        # Track suggestion card widgets
+        self._suggestion_cards = []
 
-        # Empty state label (shown when no buildings found)
-        self.empty_label = QLabel(tr("wizard.step1.no_buildings"))
-        self.empty_label.setFixedWidth(1225)
-        self.empty_label.setFixedHeight(179)
-        self.empty_label.setAlignment(Qt.AlignCenter)
-        self.empty_label.setFont(create_font(size=11, weight=FontManager.WEIGHT_REGULAR))
-        self.empty_label.setStyleSheet(f"""
-            QLabel {{
-                color: #9CA3AF;
-                background-color: {Colors.SURFACE};
-                border: 1px solid {Colors.BORDER_DEFAULT};
-                border-radius: 8px;
-            }}
-        """)
-        self.empty_label.setVisible(False)
+        # Shimmer timer for animated cards
+        self._shimmer_timer = QTimer(self)
+        self._shimmer_timer.setInterval(50)
+        self._shimmer_timer.timeout.connect(self._update_shimmer)
 
-        # Center the list horizontally
-        list_container = QHBoxLayout()
-        list_container.addStretch(1)
-        list_container.addWidget(self.buildings_list)
-        list_container.addWidget(self.empty_label)
-        list_container.addStretch(1)
+        # Empty state (shown initially with hint)
+        self.empty_label = EmptyStateAnimated(
+            title=tr("wizard.step1.select_filters_hint"),
+        )
+        self.empty_label.setMinimumHeight(179)
 
-        cards_layout.addLayout(list_container)
+        # Stacked results: page 0 = empty state, page 1 = results scroll
+        empty_page = QWidget()
+        empty_page.setStyleSheet("background: transparent;")
+        ep_layout = QHBoxLayout(empty_page)
+        ep_layout.setContentsMargins(0, 0, 0, 0)
+        ep_layout.addStretch(1)
+        ep_layout.addWidget(self.empty_label)
+        ep_layout.addStretch(1)
 
-        # Correct spacing
-        cards_layout.addSpacing(42)
-        self.selected_buildings_card = QFrame()
-        self.selected_buildings_card.setObjectName("selectedBuildingsCard")
-        self.selected_buildings_card.setVisible(False)
-        self.selected_buildings_card.setFixedWidth(1249)
-        self.selected_buildings_card.setStyleSheet(f"""
-            QFrame#selectedBuildingsCard {{
-                background-color: {Colors.SURFACE};
-                border: 1px solid {Colors.BORDER_DEFAULT};
-                border-radius: 8px;
-            }}
-        """)
-        self.selected_buildings_card.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Preferred)
+        self._results_stack = QStackedWidget()
+        self._results_stack.setStyleSheet("background: transparent;")
+        self._results_stack.addWidget(empty_page)  # index 0
+        self._results_stack.addWidget(self._suggestions_scroll)  # index 1
+        self._results_stack.setCurrentIndex(0)
 
-        selected_card_layout = QVBoxLayout(self.selected_buildings_card)
-        selected_card_layout.setContentsMargins(12, 12, 12, 12)
-        selected_card_layout.setSpacing(12)
-
-        # Header row
-        header_row = QHBoxLayout()
-        header_row.setSpacing(4)
-
-        self._selected_items_label = QLabel(tr("wizard.step1.selected_items"))
-        self._selected_items_label.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
-        self._selected_items_label.setStyleSheet(f"color: {Colors.PAGE_TITLE}; background: transparent;")
-        header_row.addWidget(self._selected_items_label)
-
-        self.selected_count_label = QLabel("0 بناء")
-        self.selected_count_label.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
-        self.selected_count_label.setStyleSheet(f"color: {Colors.PRIMARY_BLUE}; background: transparent;")
-        header_row.addWidget(self.selected_count_label)
-
-        header_row.addStretch()
-
-        selected_card_layout.addLayout(header_row)
-
-        # Table layout with scroll area
-        self._selected_scroll = QScrollArea()
-        self._selected_scroll.setWidgetResizable(True)
-        self._selected_scroll.setFrameShape(QFrame.NoFrame)
-        self._selected_scroll.setMaximumHeight(400)
-        self._selected_scroll.setStyleSheet("background: transparent; border: none;")
-
-        scroll_content = QWidget()
-        scroll_content.setStyleSheet("background: transparent;")
-        self.selected_table_layout = QVBoxLayout(scroll_content)
-        self.selected_table_layout.setContentsMargins(0, 0, 0, 0)
-        self.selected_table_layout.setSpacing(0)
-
-        self._selected_scroll.setWidget(scroll_content)
-        selected_card_layout.addWidget(self._selected_scroll)
-
-        cards_layout.addWidget(self.selected_buildings_card)
-
-        # Add cards to main layout
-        main_layout.addWidget(cards_container)
-
-        # Add stretch to push content to top
-        main_layout.addStretch(1)
+        main_layout.addWidget(self._results_stack, 1)
 
         from ui.components.loading_spinner import LoadingSpinnerOverlay
         self._spinner = LoadingSpinnerOverlay(self)
-
-    def _create_footer(self):
-        """Create footer with navigation buttons."""
-        footer = QFrame()
-        footer.setStyleSheet(f"""
-            QFrame {{
-                background-color: {Colors.SURFACE};
-                border-top: 1px solid {Colors.BORDER_DEFAULT};
-            }}
-        """)
-        footer.setFixedHeight(74)
-
-        layout = QHBoxLayout(footer)
-        layout.setContentsMargins(130, 12, 130, 12)
-        layout.setSpacing(0)
-
-        # Back button (disabled for Step 1)
-        self.btn_back = QPushButton("<   السابق")
-        self.btn_back.setFixedSize(252, 50)
-        self.btn_back.setCursor(Qt.PointingHandCursor)
-        self.btn_back.setFont(create_font(size=12, weight=FontManager.WEIGHT_SEMIBOLD))
-
-        shadow_back = QGraphicsDropShadowEffect()
-        shadow_back.setBlurRadius(8)
-        shadow_back.setXOffset(0)
-        shadow_back.setYOffset(2)
-        shadow_back.setColor(QColor("#E5EAF6"))
-        self.btn_back.setGraphicsEffect(shadow_back)
-
-        self.btn_back.setStyleSheet(f"""
-            QPushButton {{
-                background-color: {Colors.SURFACE};
-                color: #414D5A;
-                border: none;
-                border-radius: 8px;
-                font-size: 12pt;
-                font-weight: 600;
-                padding: 0;
-            }}
-            QPushButton:hover {{
-                background-color: #F8F9FA;
-            }}
-            QPushButton:disabled {{
-                background-color: transparent;
-                color: transparent;
-                border: none;
-            }}
-        """)
-        self.btn_back.clicked.connect(self.cancelled.emit)
-        self.btn_back.setEnabled(False)  # Disabled on Step 1
-        layout.addWidget(self.btn_back)
-
-        layout.addStretch()
-
-        # Next button
-        self.btn_next = QPushButton("التالي   >")
-        self.btn_next.setFixedSize(252, 50)
-        self.btn_next.setCursor(Qt.PointingHandCursor)
-        self.btn_next.setFont(create_font(size=12, weight=FontManager.WEIGHT_SEMIBOLD))
-
-        shadow_next = QGraphicsDropShadowEffect()
-        shadow_next.setBlurRadius(8)
-        shadow_next.setXOffset(0)
-        shadow_next.setYOffset(2)
-        shadow_next.setColor(QColor("#E5EAF6"))
-        self.btn_next.setGraphicsEffect(shadow_next)
-
-        self.btn_next.setStyleSheet(f"""
-            QPushButton {{
-                background-color: {Colors.PRIMARY_BLUE};
-                color: white;
-                border: none;
-                border-radius: 8px;
-                font-size: 12pt;
-                font-weight: 600;
-                padding: 0;
-            }}
-            QPushButton:hover {{
-                background-color: #2A7BC8;
-            }}
-            QPushButton:disabled {{
-                background-color: #F8F9FA;
-                color: #9CA3AF;
-                border: none;
-            }}
-        """)
-        self.btn_next.clicked.connect(self._on_next)
-        self.btn_next.setEnabled(False)  # Initially disabled
-        layout.addWidget(self.btn_next)
-
-        return footer
 
     def _create_filter_field(self, label_text: str):
         """Create filter field container with label. Returns (container, label)."""
@@ -654,137 +498,69 @@ class FieldWorkPreparationStep1(QWidget):
 
         return ""
 
-    def _style_combo(self, combo: QComboBox, placeholder: str = ""):
-        """Apply consistent styling to combo boxes (SAME as search bar height)."""
+    def _style_combo(self, combo: QComboBox):
+        """Apply consistent styling to combo boxes (full-field clickable)."""
         combo.setFixedHeight(42)
-        combo.setEditable(True)
-        combo.lineEdit().setReadOnly(True)
-        combo.lineEdit().setPlaceholderText(placeholder)
-        combo.lineEdit().installEventFilter(self)
 
-        # Load down.png icon
         down_icon_path = self._get_down_icon_path()
 
         if down_icon_path:
-            combo.setStyleSheet(f"""
-                QComboBox {{
-                    border: 1px solid {Colors.SEARCH_BAR_BORDER};
-                    border-radius: 8px;
-                    padding: 8px 14px;
-                    padding-left: 35px;
-                    background-color: {Colors.SEARCH_BAR_BG};
-                    color: #6c757d;
-                    font-family: 'IBM Plex Sans Arabic';
-                    font-size: 9pt;
-                }}
-                QComboBox::drop-down {{
-                    border: none;
-                    width: 30px;
-                    subcontrol-position: right center;
-                }}
-                QComboBox::down-arrow {{
-                    image: url({down_icon_path});
-                    width: 12px;
-                    height: 12px;
-                }}
-                QComboBox QAbstractItemView {{
-                    border: 1px solid {Colors.BORDER_DEFAULT};
-                    background-color: white;
-                    selection-background-color: #EFF6FF;
-                    selection-color: #6c757d;
-                    color: #6c757d;
-                    font-family: 'IBM Plex Sans Arabic';
-                    font-size: 9pt;
-                    outline: none;
-                }}
-                QComboBox QAbstractItemView::item {{
-                    padding: 8px 12px;
-                    color: #6c757d;
-                }}
-                QComboBox QAbstractItemView::item:hover {{
-                    background-color: #EFF6FF;
-                    color: #6c757d;
-                }}
-                QComboBox QAbstractItemView::item:selected {{
-                    background-color: #EFF6FF;
-                    color: #6c757d;
-                }}
-                QScrollBar:vertical {{
-                    width: 0px;
-                }}
-                QScrollBar:horizontal {{
-                    height: 0px;
-                }}
-                QLineEdit {{
-                    border: none;
-                    background: transparent;
-                    font-family: 'IBM Plex Sans Arabic';
-                    font-size: 9pt;
-                    padding: 0px;
-                    color: #6c757d;
-                }}
-            """)
+            down_arrow_css = f"image: url({down_icon_path}); width: 12px; height: 12px;"
         else:
-            combo.setStyleSheet(f"""
-                QComboBox {{
-                    border: 1px solid {Colors.SEARCH_BAR_BORDER};
-                    border-radius: 8px;
-                    padding: 8px 14px;
-                    padding-left: 35px;
-                    background-color: {Colors.SEARCH_BAR_BG};
-                    color: #6c757d;
-                    font-family: 'IBM Plex Sans Arabic';
-                    font-size: 9pt;
-                }}
-                QComboBox::drop-down {{
-                    border: none;
-                    width: 30px;
-                    subcontrol-position: right center;
-                }}
-                QComboBox::down-arrow {{
-                    border-left: 4px solid transparent;
-                    border-right: 4px solid transparent;
-                    border-top: 5px solid #606266;
-                    width: 0;
-                    height: 0;
-                }}
-                QComboBox QAbstractItemView {{
-                    border: 1px solid {Colors.BORDER_DEFAULT};
-                    background-color: white;
-                    selection-background-color: #EFF6FF;
-                    selection-color: #6c757d;
-                    color: #6c757d;
-                    font-family: 'IBM Plex Sans Arabic';
-                    font-size: 9pt;
-                    outline: none;
-                }}
-                QComboBox QAbstractItemView::item {{
-                    padding: 8px 12px;
-                    color: #6c757d;
-                }}
-                QComboBox QAbstractItemView::item:hover {{
-                    background-color: #EFF6FF;
-                    color: #6c757d;
-                }}
-                QComboBox QAbstractItemView::item:selected {{
-                    background-color: #EFF6FF;
-                    color: #6c757d;
-                }}
-                QScrollBar:vertical {{
-                    width: 0px;
-                }}
-                QScrollBar:horizontal {{
-                    height: 0px;
-                }}
-                QLineEdit {{
-                    border: none;
-                    background: transparent;
-                    font-family: 'IBM Plex Sans Arabic';
-                    font-size: 9pt;
-                    padding: 0px;
-                    color: #6c757d;
-                }}
-            """)
+            down_arrow_css = (
+                "border-left: 4px solid transparent; "
+                "border-right: 4px solid transparent; "
+                "border-top: 5px solid #606266; width: 0; height: 0;"
+            )
+
+        combo.setStyleSheet(f"""
+            QComboBox {{
+                border: 1px solid {Colors.SEARCH_BAR_BORDER};
+                border-radius: 8px;
+                padding: 8px 14px;
+                padding-left: 35px;
+                background-color: {Colors.SEARCH_BAR_BG};
+                color: #6c757d;
+                font-family: 'IBM Plex Sans Arabic';
+                font-size: 9pt;
+            }}
+            QComboBox::drop-down {{
+                border: none;
+                width: 30px;
+                subcontrol-position: right center;
+            }}
+            QComboBox::down-arrow {{
+                {down_arrow_css}
+            }}
+            QComboBox QAbstractItemView {{
+                border: 1px solid {Colors.BORDER_DEFAULT};
+                background-color: white;
+                selection-background-color: #EFF6FF;
+                selection-color: #6c757d;
+                color: #6c757d;
+                font-family: 'IBM Plex Sans Arabic';
+                font-size: 9pt;
+                outline: none;
+            }}
+            QComboBox QAbstractItemView::item {{
+                padding: 8px 12px;
+                color: #6c757d;
+            }}
+            QComboBox QAbstractItemView::item:hover {{
+                background-color: #EFF6FF;
+                color: #6c757d;
+            }}
+            QComboBox QAbstractItemView::item:selected {{
+                background-color: #EFF6FF;
+                color: #6c757d;
+            }}
+            QScrollBar:vertical {{
+                width: 0px;
+            }}
+            QScrollBar:horizontal {{
+                height: 0px;
+            }}
+        """)
 
     def _load_filter_data(self):
         """Load communities and neighborhoods from API."""
@@ -859,211 +635,115 @@ class FieldWorkPreparationStep1(QWidget):
         self._on_filter_changed()
 
     def _on_checkbox_changed(self, building, state):
-        """Handle checkbox state change in suggestions list."""
+        """Handle selection state change from suggestion cards."""
         if state == Qt.Checked:
-            # Add to both sets: selected (in table) and confirmed (for transfer)
             self._selected_building_ids.add(building.building_id)
             self._confirmed_building_ids.add(building.building_id)
-            self._add_building_to_table(building)
+            self._selected_buildings[building.building_id] = building
         else:
-            # Remove from both sets and table
             self._selected_building_ids.discard(building.building_id)
             self._confirmed_building_ids.discard(building.building_id)
-            self._remove_building_from_table(building.building_id)
+            self._selected_buildings.pop(building.building_id, None)
 
         self._update_selection_count()
         self._update_selected_card_visibility()
 
-        # Return focus to search field so Enter key works for dismissing suggestions
-        self.building_search.setFocus()
-
-    def _on_table_checkbox_changed(self, building_id: str, state):
-        """Handle checkbox state change in selected buildings table."""
-        if state == Qt.Checked:
-            # Add to confirmed set (for transfer)
-            self._confirmed_building_ids.add(building_id)
-        else:
-            # Remove from confirmed set (but keep in table)
-            self._confirmed_building_ids.discard(building_id)
-
-        # Update count and button state
-        self._update_selection_count()
-
     def _update_selection_count(self):
-        """Update selection count and button state (based on CONFIRMED buildings only)."""
-        count = len(self._confirmed_building_ids)  # Only confirmed buildings count
+        """Update selection count and button state (based on confirmed buildings)."""
+        count = len(self._confirmed_building_ids)
         # Enable/disable next button via parent page
         if self.page and hasattr(self.page, 'enable_next_button'):
             self.page.enable_next_button(count > 0)
 
     def _update_selected_card_visibility(self):
-        """Show/hide selected buildings card based on selection count."""
-        has_selection = len(self._selected_building_ids) > 0
-        self.selected_buildings_card.setVisible(has_selection)
+        """Show/hide selection count label."""
+        count = len(self._selected_building_ids)
+        has_selection = count > 0
+        self._selection_count_label.setVisible(has_selection)
+        if has_selection:
+            self._selection_count_label.setText(
+                f"{tr('wizard.step1.selected_items')} ({count} {tr('wizard.step1.building_unit')})"
+            )
 
-        # Update header count (confirmed buildings only)
-        count = len(self._confirmed_building_ids)
-        self.selected_count_label.setText(f"{count} {tr('wizard.step1.building_unit')}")
-
-    def _add_building_to_table(self, building):
-        """Add building row to selected buildings table."""
-        # Skip if already in table (prevents duplicates on list rebuild)
-        for i in range(self.selected_table_layout.count()):
-            widget = self.selected_table_layout.itemAt(i).widget()
-            if widget and widget.objectName() == f"row_{building.building_id}":
-                return
-        checkbox_container = QWidget()
-        checkbox_container.setFixedSize(20, 20)
-
-        # Checkbox - border only - positioned at (0,0)
-        checkbox = QCheckBox(checkbox_container)
-        checkbox.setGeometry(0, 0, 20, 20)
-        checkbox.setChecked(True)  # Already selected and confirmed
-        checkbox.setStyleSheet(f"""
-            QCheckBox::indicator {{
-                width: 20px;
-                height: 20px;
-                border: 2px solid {Colors.PRIMARY_BLUE};
-                border-radius: 4px;
-                background: white;
-            }}
-            QCheckBox::indicator:checked {{
-                background: white;
-                border-color: {Colors.PRIMARY_BLUE};
-            }}
-            QCheckBox::indicator:hover {{
-                border-color: {Colors.PRIMARY_BLUE};
-            }}
-        """)
-
-        # Checkmark overlay (same as suggestions list) - overlaid on top at (0,0)
-        check_label = QLabel("✓", checkbox_container)
-        check_label.setGeometry(0, 0, 20, 20)
-        check_label.setStyleSheet(f"color: {Colors.PRIMARY_BLUE}; font-size: 14px; font-weight: bold; background: transparent; border: none;")
-        check_label.setAlignment(Qt.AlignCenter)
-        check_label.setVisible(True)  # Visible by default (checked)
-        # Make checkmark transparent to mouse clicks (so checkbox underneath can be clicked)
-        check_label.setAttribute(Qt.WA_TransparentForMouseEvents, True)
-
-        # Update checkmark visibility when checkbox state changes
-        checkbox.stateChanged.connect(lambda state: check_label.setVisible(state == Qt.Checked))
-
-        # Connect to handler
-        checkbox.stateChanged.connect(
-            lambda state, bid=building.building_id: self._on_table_checkbox_changed(bid, state)
-        )
-
-        # Create row container (clickable)
-        row = ClickableRowWidget(checkbox)
-        row.setObjectName(f"row_{building.building_id}")
-        row._building_obj = building
-        row.setStyleSheet("""
-            QWidget {
-                background: transparent;
-                border: none;
-            }
-        """)
-        row.setMinimumHeight(32)
-
-        row_layout = QHBoxLayout(row)
-        row_layout.setContentsMargins(0, 3, 0, 0)  # Margin top only (3px)
-        row_layout.setSpacing(16)  # Logical spacing between elements
-
-        row_layout.addWidget(checkbox_container)
-        icon_container = QLabel()
-        icon_container.setFixedSize(32, 32)
-        icon_container.setStyleSheet("""
-            QLabel {
-                background-color: #f0f7ff;
-                border-radius: 6px;
-            }
-        """)
-        icon_container.setAlignment(Qt.AlignCenter)
-
-        # Try to load building-03 icon
-        icon_pixmap = Icon.load_pixmap("building-03", size=20)
-        if icon_pixmap and not icon_pixmap.isNull():
-            icon_container.setPixmap(icon_pixmap)
-        else:
-            # Fallback: use emoji
-            icon_container.setText("🏢")
-            icon_container.setStyleSheet("""
-                QLabel {
-                    background-color: #f0f7ff;
-                    border-radius: 6px;
-                    font-size: 16px;
-                }
-            """)
-        row_layout.addWidget(icon_container)
-        formatted_id = self._format_building_id(building.building_id)
-        id_label = QLabel(formatted_id)
-        id_label.setFont(create_font(size=10, weight=FontManager.WEIGHT_REGULAR))
-        id_label.setStyleSheet(f"color: {Colors.PAGE_SUBTITLE}; background: transparent;")
-        row_layout.addWidget(id_label)
-
-        row_layout.addStretch()
-
-        # No remove button - checkbox is enough for unselecting
-
-        # Add row to table
-        self.selected_table_layout.addWidget(row)
-
-    def _format_building_id(self, building_id: str) -> str:
-        """Format building ID with dashes."""
-        if not building_id:
-            return ""
-
-        # Remove any existing dashes
-        clean_id = building_id.replace("-", "")
-
-        # Format: 2-2-2-2-2-2-2-2-1 (17 digits total)
-        if len(clean_id) >= 17:
-            formatted = f"{clean_id[0:2]}-{clean_id[2:4]}-{clean_id[4:6]}-{clean_id[6:8]}-{clean_id[8:10]}-{clean_id[10:12]}-{clean_id[12:14]}-{clean_id[14:16]}-{clean_id[16]}"
-            return formatted
-        else:
-            # If less than 17, just return as-is (or format what we have)
-            return building_id
-
-    def _remove_building_from_table(self, building_id: str):
-        """Remove building row from table."""
-        # Find and remove the widget
-        for i in range(self.selected_table_layout.count()):
-            widget = self.selected_table_layout.itemAt(i).widget()
-            if widget and widget.objectName() == f"row_{building_id}":
-                self.selected_table_layout.removeWidget(widget)
-                widget.deleteLater()
-                break
-
-    def _remove_building_selection(self, building_id: str):
-        """Remove building from selection and update UI."""
-        # Remove from both sets
-        self._selected_building_ids.discard(building_id)
-        self._confirmed_building_ids.discard(building_id)
-
-        # Uncheck checkbox in list
-        for i in range(self.buildings_list.count()):
-            item = self.buildings_list.item(i)
-            widget = self.buildings_list.itemWidget(item)
-
-            if widget and hasattr(widget, 'building'):
-                if widget.building.building_id == building_id:
-                    widget.checkbox.setChecked(False)
-                    break
-
-        # Remove from table
-        self._remove_building_from_table(building_id)
-
-        # Update UI
+    def clear_all_selections(self):
+        """Clear all selections (used by parent page on refresh)."""
+        self._selected_building_ids.clear()
+        self._confirmed_building_ids.clear()
+        self._selected_buildings.clear()
+        self._clear_suggestion_cards()
+        self._set_suggestions_visible(False)
         self._update_selection_count()
         self._update_selected_card_visibility()
 
+    def _remove_building_selection(self, building_id):
+        """Remove building from selection and update UI."""
+        self._selected_building_ids.discard(building_id)
+        self._confirmed_building_ids.discard(building_id)
+        self._selected_buildings.pop(building_id, None)
+
+        # Remove card from view
+        if self._showing_selected_view:
+            for card in self._suggestion_cards[:]:
+                if card.building.building_id == building_id:
+                    self._suggestions_layout.removeWidget(card)
+                    self._suggestion_cards.remove(card)
+                    card.deleteLater()
+                    break
+            if not self._suggestion_cards:
+                self._showing_selected_view = False
+                self.empty_label.set_title(tr("wizard.step1.select_filters_hint"))
+                self._results_stack.setCurrentIndex(0)
+        else:
+            # Uncheck card in search results
+            for card in self._suggestion_cards:
+                if card.building.building_id == building_id:
+                    card.is_selected = False
+                    break
+
+        self._update_selection_count()
+        self._update_selected_card_visibility()
+
+    def _update_shimmer(self):
+        """Repaint suggestion cards for shimmer animation."""
+        for card in self._suggestion_cards:
+            if card and not card.isHidden():
+                card.update()
+
     def _set_suggestions_visible(self, visible: bool):
-        """Show/hide suggestions list with proper height adjustment."""
-        self.buildings_list.setVisible(visible)
-        # Adjust height to prevent spacing gaps when hidden
-        self.buildings_list.setFixedHeight(179 if visible else 0)
-        if not visible:
-            self.empty_label.setVisible(False)
+        """Show/hide results area via stacked widget."""
+        if visible:
+            self._showing_selected_view = False
+            self._results_stack.setCurrentIndex(1)
+            self._shimmer_timer.start()
+        else:
+            self._shimmer_timer.stop()
+            if self._selected_building_ids:
+                self._show_selected_buildings_view()
+            else:
+                self._showing_selected_view = False
+                self.empty_label.set_title(tr("wizard.step1.select_filters_hint"))
+                self._results_stack.setCurrentIndex(0)
+
+    def _show_selected_buildings_view(self):
+        """Show selected buildings as cards in the results area."""
+        self._clear_suggestion_cards()
+        self._showing_selected_view = True
+
+        for bid, building in self._selected_buildings.items():
+            card = _SelectableBuildingCard(building, self._suggestions_content)
+            card.selection_changed.connect(self._on_card_selection_changed)
+            card.is_selected = True
+
+            self._suggestions_layout.insertWidget(
+                self._suggestions_layout.count() - 1, card
+            )
+            self._suggestion_cards.append(card)
+
+        if self._suggestion_cards:
+            stagger_fade_in(self._suggestion_cards, stagger_ms=40, duration=250)
+            self._shimmer_timer.start()
+
+        self._results_stack.setCurrentIndex(1)
 
     def _on_search_text_changed(self, text):
         """Show/hide suggestions on text change."""
@@ -1121,20 +801,19 @@ class FieldWorkPreparationStep1(QWidget):
                 ]
 
             logger.info(f"Loaded {len(buildings)} buildings from API")
-            self.buildings_list.clear()
+            self._clear_suggestion_cards()
 
             if buildings:
-                self.empty_label.setVisible(False)
-                self.buildings_list.setVisible(True)
-                self.buildings_list.setFixedHeight(179)
+                self._results_stack.setCurrentIndex(1)
+                self._shimmer_timer.start()
                 self._populate_buildings_list(buildings)
             else:
-                self.buildings_list.setVisible(False)
-                self.buildings_list.setFixedHeight(0)
-                self.empty_label.setVisible(True)
+                self._shimmer_timer.stop()
+                self.empty_label.set_title(tr("wizard.step1.no_buildings"))
+                self._results_stack.setCurrentIndex(0)
         except Exception as e:
             logger.error(f"Failed to process buildings response: {e}", exc_info=True)
-            self.buildings_list.clear()
+            self._clear_suggestion_cards()
             Toast.show_toast(self, tr("wizard.step1.buildings_load_failed"), Toast.ERROR)
         finally:
             self._spinner.hide_loading()
@@ -1142,7 +821,6 @@ class FieldWorkPreparationStep1(QWidget):
     def _on_buildings_load_error(self, error_msg):
         """Handle API error for building search."""
         logger.error(f"Failed to load buildings from API: {error_msg}")
-        self.buildings_list.clear()
         self._spinner.hide_loading()
         Toast.show_toast(self, tr("wizard.step1.buildings_load_failed"), Toast.ERROR)
 
@@ -1165,23 +843,58 @@ class FieldWorkPreparationStep1(QWidget):
 
         return building
 
+    def _clear_suggestion_cards(self):
+        """Remove all suggestion cards from the scroll area."""
+        self._suggestion_cards.clear()
+        while self._suggestions_layout.count() > 0:
+            item = self._suggestions_layout.takeAt(0)
+            widget = item.widget()
+            if widget:
+                widget.deleteLater()
+
     def _populate_buildings_list(self, buildings):
-        """Populate the suggestions list with building items."""
+        """Populate the results area with _SelectableBuildingCard widgets."""
+        self._clear_suggestion_cards()
+
         for building in buildings:
-            item = QListWidgetItem(self.buildings_list)
-            widget = BuildingCheckboxItem(building, self)
-            widget.checkbox.stateChanged.connect(
-                lambda state, b=building: self._on_checkbox_changed(b, state)
-            )
+            card = _SelectableBuildingCard(building, self._suggestions_content)
+            card.selection_changed.connect(self._on_card_selection_changed)
+
+            # Restore selection state if already selected
             if building.building_id in self._selected_building_ids:
-                widget.checkbox.setChecked(True)
-            item.setSizeHint(widget.sizeHint())
-            self.buildings_list.addItem(item)
-            self.buildings_list.setItemWidget(item, widget)
+                card.is_selected = True
+
+            self._suggestions_layout.insertWidget(
+                self._suggestions_layout.count() - 1, card
+            )
+            self._suggestion_cards.append(card)
+
+        # Stagger fade-in entrance animation for the new cards
+        if self._suggestion_cards:
+            stagger_fade_in(self._suggestion_cards, stagger_ms=40, duration=250)
+
+    def _on_card_selection_changed(self, building, is_selected):
+        """Handle card selection toggle from _SelectableBuildingCard."""
+        if is_selected:
+            self._on_checkbox_changed(building, Qt.Checked)
+        else:
+            self._on_checkbox_changed(building, Qt.Unchecked)
+            # In selected view, remove the deselected card
+            if self._showing_selected_view:
+                for card in self._suggestion_cards[:]:
+                    if card.building.building_id == building.building_id:
+                        self._suggestions_layout.removeWidget(card)
+                        self._suggestion_cards.remove(card)
+                        card.deleteLater()
+                        break
+                if not self._suggestion_cards:
+                    self._showing_selected_view = False
+                    self.empty_label.set_title(tr("wizard.step1.select_filters_hint"))
+                    self._results_stack.setCurrentIndex(0)
 
     def _on_filter_changed(self):
-        """Handle filter change — clears results, user must click search to load."""
-        self.buildings_list.clear()
+        """Handle filter change -- clears results, user must click search to load."""
+        self._clear_suggestion_cards()
         self._set_suggestions_visible(False)
 
     def _on_search(self):
@@ -1195,9 +908,9 @@ class FieldWorkPreparationStep1(QWidget):
         self._update_selected_card_visibility()
 
     def _on_open_map(self):
-        """Open map dialog with polygon drawing for multi-building selection."""
+        """Open map dialog for multi-building selection."""
         try:
-            from ui.components.polygon_map_dialog_v2 import show_polygon_map_dialog
+            from ui.components.building_map_dialog_v2 import show_multiselect_map_dialog
 
             auth_token = None
             try:
@@ -1209,7 +922,7 @@ class FieldWorkPreparationStep1(QWidget):
             except Exception as e:
                 logger.warning(f"Could not get auth token: {e}")
 
-            selected_buildings = show_polygon_map_dialog(
+            selected_buildings = show_multiselect_map_dialog(
                 db=self.building_controller.db,
                 auth_token=auth_token,
                 parent=self
@@ -1235,23 +948,20 @@ class FieldWorkPreparationStep1(QWidget):
                 if building.building_id in self._selected_building_ids:
                     continue
 
-                # Check if building exists in suggestions list
-                # If so, checking the checkbox triggers _on_checkbox_changed which adds to table
+                # Check if building exists in suggestion cards
                 found_in_suggestions = False
-                for i in range(self.buildings_list.count()):
-                    item = self.buildings_list.item(i)
-                    widget = self.buildings_list.itemWidget(item)
-                    if widget and hasattr(widget, 'building'):
-                        if widget.building.building_id == building.building_id:
-                            widget.checkbox.setChecked(True)
-                            found_in_suggestions = True
-                            break
+                for card in self._suggestion_cards:
+                    if card.building.building_id == building.building_id:
+                        card.is_selected = True
+                        card.selection_changed.emit(card.building, True)
+                        found_in_suggestions = True
+                        break
 
                 # Only add directly if NOT in suggestions (avoid double-add)
                 if not found_in_suggestions:
                     self._selected_building_ids.add(building.building_id)
                     self._confirmed_building_ids.add(building.building_id)
-                    self._add_building_to_table(building)
+                    self._selected_buildings[building.building_id] = building
 
                 added_count += 1
 
@@ -1259,8 +969,6 @@ class FieldWorkPreparationStep1(QWidget):
             self._update_selection_count()
             self._update_selected_card_visibility()
 
-            # NO MESSAGE: Buildings are added directly to the list (silent operation)
-            # User can see them in "العناصر المحفوظة" section
             logger.info(f"Added {added_count} buildings from polygon to selection (silent)")
 
         except Exception as e:
@@ -1268,8 +976,8 @@ class FieldWorkPreparationStep1(QWidget):
             from ui.error_handler import ErrorHandler
             ErrorHandler.show_warning(
                 self,
-                f"حدث خطأ أثناء فتح الخريطة:\n{str(e)}",
-                "خطأ - Error"
+                f"\u062d\u062f\u062b \u062e\u0637\u0623 \u0623\u062b\u0646\u0627\u0621 \u0641\u062a\u062d \u0627\u0644\u062e\u0631\u064a\u0637\u0629:\n{str(e)}",
+                "\u062e\u0637\u0623 - Error"
             )
 
     def _on_next(self):
@@ -1291,38 +999,30 @@ class FieldWorkPreparationStep1(QWidget):
         return list(self._selected_building_ids)
 
     def get_selected_buildings(self):
-        """Get list of confirmed (checked) building objects from suggestions list."""
-        confirmed = []
-        for i in range(self.buildings_list.count()):
-            item = self.buildings_list.item(i)
-            widget = self.buildings_list.itemWidget(item)
-            if widget and hasattr(widget, 'building'):
-                if widget.building.building_id in self._confirmed_building_ids:
-                    confirmed.append(widget.building)
-
-        # Also include buildings added via polygon map (not in suggestions)
-        suggestion_ids = {b.building_id for b in confirmed}
-        for bid in self._confirmed_building_ids:
-            if bid not in suggestion_ids:
-                # Check table rows for buildings added via polygon
-                for j in range(self.selected_table_layout.count()):
-                    row_widget = self.selected_table_layout.itemAt(j).widget()
-                    if row_widget and hasattr(row_widget, '_building_obj'):
-                        if row_widget._building_obj.building_id == bid:
-                            confirmed.append(row_widget._building_obj)
-
-        return confirmed
+        """Get list of confirmed (selected) building objects."""
+        return [
+            b for bid, b in self._selected_buildings.items()
+            if bid in self._confirmed_building_ids
+        ]
 
     def eventFilter(self, obj, event):
-        """Event filter for combo dropdowns and dismissing suggestions."""
+        """Event filter for dismissing suggestions on outside click."""
         from PyQt5.QtCore import QEvent, QRect
 
-        if event.type() == QEvent.MouseButtonPress and self.buildings_list.isVisible():
-            # Check if click is inside suggestions list or search bar
+        if event.type() == QEvent.MouseButtonPress and self._results_stack.currentIndex() == 1:
+            # Check if click is inside suggestions area or search bar
             click_pos = event.globalPos()
             inside = False
 
-            for widget in [self.buildings_list, self.building_search]:
+            safe_widgets = [
+                self._suggestions_scroll, self.building_search,
+                self.community_combo, self.community_combo.view(),
+                self.neighborhood_combo, self.neighborhood_combo.view(),
+                self.assignment_status_combo, self.assignment_status_combo.view(),
+            ]
+            for widget in safe_widgets:
+                if widget is None:
+                    continue
                 rect = widget.rect()
                 global_tl = widget.mapToGlobal(rect.topLeft())
                 global_rect = QRect(global_tl, rect.size())
@@ -1359,9 +1059,9 @@ class FieldWorkPreparationStep1(QWidget):
         self._filter3_label.setText(tr("filter.step1.assignment_status"))
 
         # Combo placeholders
-        self.community_combo.lineEdit().setPlaceholderText(tr("filter.step1.select_city"))
-        self.neighborhood_combo.lineEdit().setPlaceholderText(tr("filter.step1.select_neighborhood"))
-        self.assignment_status_combo.lineEdit().setPlaceholderText(tr("filter.step1.assignment_status"))
+        self.community_combo.setPlaceholderText(tr("filter.step1.select_city"))
+        self.neighborhood_combo.setPlaceholderText(tr("filter.step1.select_neighborhood"))
+        self.assignment_status_combo.setPlaceholderText(tr("filter.step1.assignment_status"))
 
         # Assignment status combo items
         self.assignment_status_combo.setItemText(0, tr("filter.step1.all"))
@@ -1373,7 +1073,11 @@ class FieldWorkPreparationStep1(QWidget):
         self.building_search.setPlaceholderText(tr("wizard.step1.search_building_code"))
         self._map_link_btn.setText(tr("wizard.step1.search_on_map"))
 
-        # Empty state and selected items
-        self.empty_label.setText(tr("wizard.step1.no_buildings"))
-        self._selected_items_label.setText(tr("wizard.step1.selected_items"))
+        # Empty state
+        if self._results_stack.currentIndex() == 1:
+            self.empty_label.set_title(tr("wizard.step1.no_buildings"))
+        else:
+            self.empty_label.set_title(tr("wizard.step1.select_filters_hint"))
+
+        # Selection count
         self._update_selected_card_visibility()

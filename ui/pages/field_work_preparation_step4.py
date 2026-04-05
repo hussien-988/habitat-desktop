@@ -17,25 +17,25 @@ from utils.logger import get_logger
 
 logger = get_logger(__name__)
 
-# Transfer status display configuration
+# Transfer status display configuration (labels use translation keys)
 _STATUS_CONFIG = {
     'not_transferred': {
-        'label': 'في الانتظار',
+        'key': 'wizard.step4.status_waiting',
         'color': '#9CA3AF',
         'bg': '#F3F4F6',
     },
     'transferring': {
-        'label': 'قيد المزامنة',
+        'key': 'wizard.step4.status_syncing',
         'color': '#3890DF',
         'bg': '#EBF5FF',
     },
     'transferred': {
-        'label': 'تمت المزامنة',
+        'key': 'wizard.step4.status_done',
         'color': '#10B981',
         'bg': '#ECFDF5',
     },
     'failed': {
-        'label': 'فشلت المزامنة',
+        'key': 'wizard.step4.status_failed',
         'color': '#EF4444',
         'bg': '#FEF2F2',
     },
@@ -274,7 +274,7 @@ class FieldWorkPreparationStep4(QWidget):
 
             if assignment_id in self._status_rows:
                 badge, retry_btn = self._status_rows[assignment_id]
-                badge.setText(config['label'])
+                badge.setText(tr(config['key']))
                 badge.setStyleSheet(f"""
                     padding: 2px 12px;
                     border-radius: 13px;
@@ -336,3 +336,6 @@ class FieldWorkPreparationStep4(QWidget):
         # Update status row badges and retry buttons
         for assignment_id, (badge, retry_btn) in self._status_rows.items():
             retry_btn.setText(tr("wizard.step4.retry"))
+
+        # Re-fetch statuses to re-render badge labels with new translations
+        self._load_transfer_status()

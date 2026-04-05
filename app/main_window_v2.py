@@ -9,7 +9,7 @@ from PyQt5.QtWidgets import (
 
 from PyQt5.QtCore import Qt, pyqtSignal, QPoint, QTimer, QEvent
 
-from PyQt5.QtGui import QKeySequence, QColor, QMouseEvent
+from PyQt5.QtGui import QKeySequence, QColor, QMouseEvent, QPixmap, QPainter
 
 from .config import Config, Pages, save_language, get_saved_language
 from repositories.database import Database
@@ -19,6 +19,86 @@ from utils.logger import get_logger
 from ui.error_handler import ErrorHandler
 
 logger = get_logger(__name__)
+
+
+class _WatermarkOverlay(QWidget):
+    """Transparent overlay that draws a pulsing UN-Habitat watermark on top of all pages."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        import math
+        self._math = math
+
+        self.setAttribute(Qt.WA_TransparentForMouseEvents, True)
+        self.setAttribute(Qt.WA_TranslucentBackground, True)
+        self.setAttribute(Qt.WA_NoSystemBackground, True)
+        self.setAutoFillBackground(False)
+        self.setStyleSheet("background: transparent;")
+
+        # Load watermark image
+        self._watermark = QPixmap()
+        from pathlib import Path
+        import sys
+        base = Path(sys._MEIPASS) if hasattr(sys, '_MEIPASS') else Path(__file__).parent.parent
+        wm_path = base / "assets" / "images" / "login-watermark.png"
+        if wm_path.exists():
+            self._watermark.load(str(wm_path))
+
+        # Animation state
+        self._t = 0.0
+        self._timer = QTimer(self)
+        self._timer.setInterval(50)
+        self._timer.timeout.connect(self._tick)
+        self._timer.start()
+
+    def _tick(self):
+        self._t += 0.05
+        self.update()
+
+    def paintEvent(self, event):
+        if self._watermark.isNull():
+            return
+
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.SmoothPixmapTransform)
+
+        wm_size = int(min(self.width(), self.height()) * 0.30)
+        if wm_size < 10:
+            painter.end()
+            return
+
+        scaled = self._watermark.scaled(
+            wm_size, wm_size,
+            Qt.KeepAspectRatio, Qt.SmoothTransformation
+        )
+
+        x = (self.width() - scaled.width()) // 2
+        y = (self.height() - scaled.height()) // 2
+
+        # Breathing opacity: 0.06 - 0.14
+        opacity = 0.06 + 0.08 * (self._math.sin(self._t * 0.8) + 1) / 2
+        painter.setOpacity(opacity)
+        painter.drawPixmap(x, y, scaled)
+        painter.end()
+
+
+class _WatermarkBackground(QWidget):
+    """Container that holds the page stack and positions a watermark overlay on top."""
+
+    def __init__(self, child_widget: QWidget, parent=None):
+        super().__init__(parent)
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
+        layout.addWidget(child_widget, 1)
+
+        self._overlay = _WatermarkOverlay(self)
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        self._overlay.setGeometry(0, 0, self.width(), self.height())
+        self._overlay.raise_()
 
 
 class MainWindow(QMainWindow):
@@ -325,7 +405,8 @@ class MainWindow(QMainWindow):
         inner.setSpacing(0)
 
         inner.addWidget(self.navbar, 0)
-        inner.addWidget(self.stack, 1)
+        self._watermark_bg = _WatermarkBackground(self.stack, self)
+        inner.addWidget(self._watermark_bg, 1)
 
 
     def _connect_signals(self):
@@ -1181,9 +1262,10 @@ class MainWindow(QMainWindow):
             if hasattr(page, 'clear_notifications'):
                 page.clear_notifications()
 
-        # Sync navbar tab when navigating to import pages
-        if page_id in (Pages.IMPORT_PACKAGES, Pages.IMPORT_WIZARD):
-            self.navbar.set_current_tab(2)
+        # Sync navbar active tab to match the navigated page
+        page_to_tab = {v: k for k, v in self.tab_page_mapping.items()}
+        if page_id in page_to_tab:
+            self.navbar.set_current_tab(page_to_tab[page_id])
 
         # Refresh page data if method exists
         # Show page first, then refresh after fade-in completes

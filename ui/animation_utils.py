@@ -94,6 +94,12 @@ def stagger_fade_in(widgets, stagger_ms: int = AnimationTimings.ROW_STAGGER,
         widget.show()
 
         def _start_anim(w=widget, e=effect):
+            try:
+                # Guard: widget or effect may have been deleted if page navigated away
+                w.isVisible()
+                e.opacity()
+            except RuntimeError:
+                return
             anim = QPropertyAnimation(e, b"opacity", w)
             anim.setDuration(duration)
             anim.setStartValue(0.0)

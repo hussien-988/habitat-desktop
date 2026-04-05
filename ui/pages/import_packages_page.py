@@ -1,34 +1,25 @@
 # -*- coding: utf-8 -*-
-"""Import packages page — dark header design system, table layout, spinner overlay."""
-
-import math
-import random
-import time
+"""Import packages page — dark header design system, card layout, spinner overlay."""
 
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel,
-    QFrame, QTableWidget, QTableWidgetItem, QHeaderView,
-    QComboBox, QMenu, QAction, QStackedWidget, QPushButton,
-    QGraphicsDropShadowEffect, QApplication, QAbstractItemView,
-    QSizePolicy, QScrollArea,
+    QFrame, QMenu, QAction, QStackedWidget, QPushButton,
+    QScrollArea,
 )
-from PyQt5.QtCore import Qt, pyqtSignal, QPoint, QTimer
-from PyQt5.QtGui import (
-    QColor, QFont, QPainter, QLinearGradient, QRadialGradient,
-    QPen, QPainterPath,
-)
+from PyQt5.QtCore import Qt, pyqtSignal, QTimer
+from PyQt5.QtGui import QCursor
 
+from ui.components.animated_card import AnimatedCard, EmptyStateAnimated, animate_card_entrance
 from ui.components.dark_header_zone import DarkHeaderZone
-from ui.components.nav_style_tab import NavStyleTab
 from ui.components.stat_pill import StatPill
 from ui.components.accent_line import AccentLine
 from ui.components.loading_spinner import LoadingSpinnerOverlay
 from ui.error_handler import ErrorHandler
-from ui.design_system import PageDimensions, Colors
+from ui.design_system import PageDimensions
 from ui.style_manager import StyleManager
 from ui.font_utils import create_font, FontManager
 from controllers.import_controller import ImportController
-from services.vocab_service import get_label as vocab_get_label, get_options as vocab_get_options
+from services.vocab_service import get_label as vocab_get_label
 from services.translation_manager import tr, get_layout_direction
 from utils.logger import get_logger
 
@@ -84,125 +75,98 @@ _NAV_BTN_STYLE = """
 """
 
 
-class _EmptyStatePackages(QWidget):
-    """Dark constellation-themed empty state for import packages."""
+class _PackageCard(AnimatedCard):
+    """Import package card showing name, status, dates, record counts."""
 
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.setMinimumHeight(340)
-        self._anim_start = time.time()
+    _STATUS_BADGE_STYLES = {
+        1:  {"bg": "rgba(107,114,128,0.12)", "fg": "#6B7280", "border": "#D1D5DB"},
+        2:  {"bg": "rgba(56,144,223,0.12)", "fg": "#3890DF", "border": "#93C5FD"},
+        3:  {"bg": "rgba(245,158,11,0.12)", "fg": "#F59E0B", "border": "#FCD34D"},
+        4:  {"bg": "rgba(239,68,68,0.12)", "fg": "#EF4444", "border": "#FCA5A5"},
+        5:  {"bg": "rgba(220,38,38,0.12)", "fg": "#DC2626", "border": "#FCA5A5"},
+        6:  {"bg": "rgba(139,92,246,0.12)", "fg": "#8B5CF6", "border": "#C4B5FD"},
+        7:  {"bg": "rgba(5,150,105,0.12)", "fg": "#059669", "border": "#6EE7B7"},
+        8:  {"bg": "rgba(56,144,223,0.12)", "fg": "#3890DF", "border": "#93C5FD"},
+        9:  {"bg": "rgba(16,185,129,0.12)", "fg": "#10B981", "border": "#6EE7B7"},
+        10: {"bg": "rgba(239,68,68,0.12)", "fg": "#EF4444", "border": "#FCA5A5"},
+        11: {"bg": "rgba(245,158,11,0.12)", "fg": "#F59E0B", "border": "#FCD34D"},
+        12: {"bg": "rgba(156,163,175,0.12)", "fg": "#9CA3AF", "border": "#D1D5DB"},
+    }
 
-        random.seed(77)
-        self._particles = []
-        for _ in range(8):
-            self._particles.append({
-                "x": random.uniform(0.1, 0.9),
-                "y": random.uniform(0.1, 0.9),
-                "speed": random.uniform(0.3, 0.7),
-                "phase": random.uniform(0, math.tau),
-            })
+    def __init__(self, pkg_data: dict, parent=None):
+        self._data = pkg_data
+        status_code = pkg_data.get("status_code", 1)
+        color = _STATUS_COLORS.get(status_code, "#6B7280")
+        super().__init__(parent, card_height=110, status_color=color)
 
-        self._timer = QTimer(self)
-        self._timer.setInterval(50)
-        self._timer.timeout.connect(self.update)
+    def _build_content(self, layout):
+        from PyQt5.QtWidgets import QHBoxLayout, QLabel
+        from PyQt5.QtCore import Qt
+        from PyQt5.QtGui import QFont
+        from ui.font_utils import create_font, FontManager
+        from ui.design_system import Colors
+        from services.translation_manager import tr
 
-        layout = QVBoxLayout(self)
-        layout.setAlignment(Qt.AlignCenter)
-        layout.setSpacing(12)
+        d = self._data
+        status_code = d.get("status_code", 1)
 
-        self._icon = QLabel()
-        self._icon.setAlignment(Qt.AlignCenter)
-        self._icon.setFixedSize(72, 72)
-        self._icon.setStyleSheet(
-            "background: rgba(56,144,223,0.08); border-radius: 36px;"
+        # Row 1: Package name + status badge
+        row1 = QHBoxLayout()
+        row1.setSpacing(8)
+        name_label = QLabel(d.get("package_name", "N/A"))
+        name_label.setFont(create_font(size=13, weight=QFont.Bold))
+        name_label.setStyleSheet(f"color: {Colors.PAGE_TITLE}; background: transparent; border: none;")
+        name_label.setMaximumWidth(500)
+        row1.addWidget(name_label)
+        row1.addStretch()
+
+        style = self._STATUS_BADGE_STYLES.get(status_code, self._STATUS_BADGE_STYLES[1])
+        status_text = d.get("status_display", "-")
+        badge = QLabel(status_text)
+        badge.setFont(create_font(size=8, weight=FontManager.WEIGHT_SEMIBOLD))
+        badge.setAlignment(Qt.AlignCenter)
+        badge.setFixedHeight(22)
+        badge.setStyleSheet(
+            f"QLabel {{ background-color: {style['bg']}; color: {style['fg']}; "
+            f"border: 1px solid {style['border']}; border-radius: 11px; "
+            f"padding: 0 10px; }}"
         )
-        self._icon.setText("\U0001F4E6")
-        self._icon.setFont(create_font(size=28))
-        layout.addWidget(self._icon, 0, Qt.AlignCenter)
+        row1.addWidget(badge)
+        layout.addLayout(row1)
 
-        self._title = QLabel(tr("page.import_packages.no_packages"))
-        self._title.setFont(create_font(size=14, weight=QFont.Bold))
-        self._title.setStyleSheet("color: rgba(255,255,255,0.85); background: transparent;")
-        self._title.setAlignment(Qt.AlignCenter)
-        layout.addWidget(self._title)
+        # Row 2: Date + record counts
+        parts = []
+        if d.get("created_date"):
+            parts.append(d["created_date"])
+        if d.get("total_records"):
+            parts.append(f"{tr('import.total_records')}: {d['total_records']}")
+        if d.get("valid_records") is not None:
+            parts.append(f"{tr('import.valid_records')}: {d['valid_records']}")
+        details = QLabel(" \u2009\u00b7\u2009 ".join(parts) if parts else "-")
+        details.setFont(create_font(size=10, weight=FontManager.WEIGHT_REGULAR))
+        details.setStyleSheet(f"color: {Colors.TEXT_SECONDARY}; background: transparent; border: none;")
+        layout.addWidget(details)
 
-        self._subtitle = QLabel(tr("page.import_packages.no_packages_hint"))
-        self._subtitle.setFont(create_font(size=10))
-        self._subtitle.setStyleSheet("color: rgba(255,255,255,0.45); background: transparent;")
-        self._subtitle.setAlignment(Qt.AlignCenter)
-        layout.addWidget(self._subtitle)
-
-    def set_title(self, text: str):
-        self._title.setText(text)
-
-    def set_subtitle(self, text: str):
-        self._subtitle.setText(text)
-
-    def paintEvent(self, event):
-        painter = QPainter(self)
-        painter.setRenderHint(QPainter.Antialiasing)
-        w, h = self.width(), self.height()
-        t = time.time() - self._anim_start
-
-        path = QPainterPath()
-        r = 16.0
-        path.addRoundedRect(0, 0, w, h, r, r)
-
-        grad = QLinearGradient(0, 0, w, h)
-        grad.setColorAt(0.0, QColor("#0E2035"))
-        grad.setColorAt(0.5, QColor("#132D50"))
-        grad.setColorAt(1.0, QColor("#1A3860"))
-        painter.fillPath(path, grad)
-        painter.setClipPath(path)
-
-        # Grid
-        painter.setPen(QPen(QColor(56, 144, 223, 12), 1))
-        for x in range(60, w, 60):
-            painter.drawLine(x, 0, x, h)
-        for y in range(60, h, 60):
-            painter.drawLine(0, y, w, y)
-
-        # Particles
-        positions = []
-        for p in self._particles:
-            px = int((p["x"] + 0.01 * math.sin(t * p["speed"] + p["phase"])) * w)
-            py = int((p["y"] + 0.008 * math.cos(t * p["speed"] * 0.7 + p["phase"])) * h)
-            px = max(4, min(w - 4, px))
-            py = max(4, min(h - 4, py))
-            positions.append((px, py))
-            alpha = 30 + int(15 * math.sin(t * 1.2 + p["phase"]))
-            painter.setPen(Qt.NoPen)
-            painter.setBrush(QColor(139, 172, 200, alpha))
-            painter.drawEllipse(QPoint(px, py), 2, 2)
-
-        for i in range(len(positions)):
-            for j in range(i + 1, len(positions)):
-                dx = positions[i][0] - positions[j][0]
-                dy = positions[i][1] - positions[j][1]
-                dist = math.sqrt(dx * dx + dy * dy)
-                if dist < 180:
-                    alpha = int(12 * (1 - dist / 180))
-                    painter.setPen(QPen(QColor(139, 172, 200, alpha), 1))
-                    painter.drawLine(
-                        positions[i][0], positions[i][1],
-                        positions[j][0], positions[j][1],
-                    )
-
-        painter.setClipping(False)
-        painter.end()
-
-    def showEvent(self, event):
-        super().showEvent(event)
-        if not self._timer.isActive():
-            self._timer.start()
-
-    def hideEvent(self, event):
-        super().hideEvent(event)
-        self._timer.stop()
+        # Row 3: source chip
+        chips_row = QHBoxLayout()
+        chips_row.setSpacing(6)
+        chip_style = (
+            "QLabel {{ background-color: {bg}; color: {fg}; "
+            "border: 1px solid {border}; border-radius: 4px; "
+            "padding: 2px 8px; }}"
+        )
+        source = d.get("source", "")
+        if source:
+            chip = QLabel(source)
+            chip.setFont(create_font(size=8, weight=FontManager.WEIGHT_MEDIUM))
+            chip.setStyleSheet(chip_style.format(bg="#EEF2FF", fg="#4338CA", border="#E0E7FF"))
+            chips_row.addWidget(chip)
+        chips_row.addStretch()
+        layout.addLayout(chips_row)
 
 
 class ImportPackagesPage(QWidget):
-    """Import Packages page with dark header, table, pagination, spinner overlay."""
+    """Import Packages page with dark header, animated cards, pagination, spinner overlay."""
 
     open_wizard = pyqtSignal()
     view_package = pyqtSignal(str)
@@ -218,9 +182,13 @@ class ImportPackagesPage(QWidget):
         self._rows_per_page = 20
         self._total_count = 0
         self._total_pages = 1
-        self._status_filter = ""
         self._user_role = "admin"
         self._loading = False
+        self._card_widgets = []
+
+        self._shimmer_timer = QTimer(self)
+        self._shimmer_timer.setInterval(80)
+        self._shimmer_timer.timeout.connect(self._update_card_shimmer)
 
         self._setup_ui()
 
@@ -249,16 +217,6 @@ class ImportPackagesPage(QWidget):
         self._upload_btn.clicked.connect(self._on_upload_clicked)
         self._header.add_action_widget(self._upload_btn)
 
-        # Status filter combo in row2
-        self._status_combo = QComboBox()
-        self._status_combo.setLayoutDirection(get_layout_direction())
-        self._status_combo.setStyleSheet(StyleManager.dark_combo_box())
-        self._status_combo.addItem(tr("page.import_packages.all_statuses"), "")
-        for code, label in vocab_get_options("import_status"):
-            self._status_combo.addItem(label, str(code))
-        self._status_combo.currentIndexChanged.connect(self._on_status_filter_changed)
-        self._header.add_row2_widget(self._status_combo)
-
         root.addWidget(self._header)
 
         # Accent line
@@ -277,78 +235,43 @@ class ImportPackagesPage(QWidget):
 
         self._stack = QStackedWidget()
 
-        # Page 0: table card
-        self._table_card = self._build_table_card()
-        self._stack.addWidget(self._table_card)
+        # Page 0: scroll area with card container
+        self._scroll = QScrollArea()
+        self._scroll.setWidgetResizable(True)
+        self._scroll.setFrameShape(QFrame.NoFrame)
+        self._scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self._scroll.setStyleSheet(
+            "QScrollArea { border: none; background: transparent; }"
+            + StyleManager.scrollbar()
+        )
+
+        self._scroll_content = QWidget()
+        self._scroll_content.setStyleSheet("background: transparent;")
+        self._cards_layout = QVBoxLayout(self._scroll_content)
+        self._cards_layout.setContentsMargins(0, 0, 0, 0)
+        self._cards_layout.setSpacing(10)
+        self._cards_layout.addStretch()
+
+        self._scroll.setWidget(self._scroll_content)
+        self._stack.addWidget(self._scroll)
 
         # Page 1: empty state
-        self._empty_state = _EmptyStatePackages()
+        self._empty_state = EmptyStateAnimated(
+            title=tr("page.import_packages.no_packages"),
+            description=tr("page.import_packages.no_packages_hint"),
+        )
         self._stack.addWidget(self._empty_state)
 
-        content_layout.addWidget(self._stack)
+        content_layout.addWidget(self._stack, 1)
+
+        # Pagination bar
+        self._pagination_bar = self._build_footer()
+        content_layout.addWidget(self._pagination_bar)
+
         root.addWidget(content_area, 1)
 
         # Loading spinner overlay
         self._spinner = LoadingSpinnerOverlay(self)
-
-    def _build_table_card(self) -> QFrame:
-        card = QFrame()
-        card.setObjectName("tableCard")
-        card.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-        card.setStyleSheet(StyleManager.table_card())
-
-        shadow = QGraphicsDropShadowEffect(card)
-        shadow.setBlurRadius(24)
-        shadow.setXOffset(0)
-        shadow.setYOffset(4)
-        shadow.setColor(QColor(0, 0, 0, 18))
-        card.setGraphicsEffect(shadow)
-
-        card_layout = QVBoxLayout(card)
-        card_layout.setContentsMargins(0, 0, 0, 0)
-        card_layout.setSpacing(0)
-
-        # Table
-        self.table = QTableWidget()
-        self.table.setColumnCount(6)
-        self.table.setRowCount(0)
-        self.table.setLayoutDirection(get_layout_direction())
-        self.table.setEditTriggers(QAbstractItemView.NoEditTriggers)
-        self.table.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
-        self.table.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        self.table.setShowGrid(False)
-        self.table.setFocusPolicy(Qt.NoFocus)
-        self.table.setSelectionMode(QTableWidget.NoSelection)
-        self.table.setStyleSheet(self._table_stylesheet())
-
-        headers = self._header_labels()
-        for i, text in enumerate(headers):
-            self.table.setHorizontalHeaderItem(i, QTableWidgetItem(text))
-
-        header = self.table.horizontalHeader()
-        header.setDefaultAlignment(Qt.AlignRight | Qt.AlignVCenter)
-        header.setFixedHeight(52)
-        header.setStretchLastSection(False)
-        header.setSectionResizeMode(0, QHeaderView.Stretch)
-        header.setSectionResizeMode(1, QHeaderView.ResizeToContents)
-        header.setSectionResizeMode(2, QHeaderView.ResizeToContents)
-        header.setSectionResizeMode(3, QHeaderView.Stretch)
-        header.setSectionResizeMode(4, QHeaderView.Stretch)
-        header.setSectionResizeMode(5, QHeaderView.Fixed)
-        header.resizeSection(5, 50)
-
-        vh = self.table.verticalHeader()
-        vh.setVisible(False)
-        vh.setDefaultSectionSize(50)
-
-        self.table.cellClicked.connect(self._on_cell_clicked)
-        card_layout.addWidget(self.table)
-
-        # Footer / pagination
-        footer = self._build_footer()
-        card_layout.addWidget(footer)
-
-        return card
 
     def _build_footer(self) -> QFrame:
         footer = QFrame()
@@ -418,61 +341,7 @@ class ImportPackagesPage(QWidget):
 
         return footer
 
-    @staticmethod
-    def _header_labels():
-        return [
-            tr("page.import_packages.col_filename"),
-            tr("page.import_packages.col_status"),
-            tr("page.import_packages.col_date"),
-            tr("page.import_packages.col_content"),
-            tr("page.import_packages.col_device"),
-            "",
-        ]
-
-    @staticmethod
-    def _table_stylesheet():
-        return """
-            QTableWidget {
-                border: none;
-                background-color: white;
-                font-size: 10.5pt;
-                color: #212B36;
-                border-top-left-radius: 16px;
-                border-top-right-radius: 16px;
-            }
-            QTableWidget::item {
-                padding: 8px 15px;
-                border-bottom: 1px solid #F0F4F8;
-                color: #212B36;
-                font-size: 10.5pt;
-            }
-            QTableWidget::item:hover {
-                background-color: #F5F9FF;
-            }
-            QHeaderView {
-                border-top-left-radius: 16px;
-                border-top-right-radius: 16px;
-            }
-            QHeaderView::section {
-                background-color: #F0F7FF;
-                padding: 10px 15px;
-                border: none;
-                border-bottom: 2px solid #E0EFFF;
-                color: #3890DF;
-                font-weight: 600;
-                font-size: 10pt;
-            }
-            QHeaderView::section:hover {
-                background-color: #E0EFFF;
-            }
-        """ + StyleManager.scrollbar()
-
     # -- Data loading ------------------------------------------------------
-
-    def _on_status_filter_changed(self, _index):
-        self._status_filter = self._status_combo.currentData() or ""
-        self._current_page = 1
-        self._load_packages()
 
     def _load_packages(self):
         if self._loading:
@@ -484,7 +353,7 @@ class ImportPackagesPage(QWidget):
             result = self.import_controller.get_packages(
                 page=self._current_page,
                 page_size=self._rows_per_page,
-                status_filter=self._status_filter or None,
+                status_filter=None,
             )
 
             items = []
@@ -511,87 +380,83 @@ class ImportPackagesPage(QWidget):
 
             self._stat_total.set_count(total_count)
 
-            if items:
-                self._populate_table(items, total_count)
-                self._stack.setCurrentIndex(0)
-            else:
-                self._stack.setCurrentIndex(1)
-
-            self._update_pagination()
+            self._populate_cards(items, total_count)
         except Exception as exc:
             logger.error("Load packages exception: %s", exc)
         finally:
             self._loading = False
             self._spinner.hide_loading()
 
-    def _populate_table(self, items, total_count):
-        self.table.setRowCount(len(items))
+    def _populate_cards(self, items, total_count):
+        self._clear_cards()
+
+        if not items:
+            self._stack.setCurrentIndex(1)
+            self._update_pagination()
+            return
+
+        self._stack.setCurrentIndex(0)
 
         for idx, pkg in enumerate(items):
-            # Col 0: File name
-            file_name = pkg.get("fileName") or ""
-            name_item = QTableWidgetItem(file_name)
-            name_item.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
-            self.table.setItem(idx, 0, name_item)
-
-            # Col 1: Status badge
-            status_raw = pkg.get("status", 0)
-            if isinstance(status_raw, str) and status_raw.isdigit():
-                status_raw = int(status_raw)
-            display_text = vocab_get_label("import_status", status_raw)
-            color = _STATUS_COLORS.get(status_raw, "#637381")
-            bg = _STATUS_BG.get(status_raw, "rgba(107,114,128,0.10)")
-
-            status_widget = QWidget()
-            status_widget.setStyleSheet("background: transparent;")
-            sl = QHBoxLayout(status_widget)
-            sl.setContentsMargins(4, 4, 4, 4)
-            sl.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
-
-            badge = QLabel(display_text)
-            badge.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
-            badge.setStyleSheet(
-                f"color: {color}; background: {bg}; "
-                f"border-radius: 10px; padding: 3px 10px;"
+            card_data = self._pkg_to_card_data(pkg)
+            card = _PackageCard(card_data)
+            card.clicked.connect(lambda p=pkg: self._on_card_clicked(p))
+            self._cards_layout.insertWidget(
+                self._cards_layout.count() - 1, card
             )
-            badge.setAlignment(Qt.AlignCenter)
-            sl.addWidget(badge)
+            self._card_widgets.append(card)
 
-            self.table.setCellWidget(idx, 1, status_widget)
+        self._update_pagination()
+        animate_card_entrance(self._card_widgets)
 
-            # Col 2: Date
-            date_raw = pkg.get("packageCreatedDate") or pkg.get("createdAtUtc") or ""
-            date_str = str(date_raw)[:10] if date_raw else ""
-            date_item = QTableWidgetItem(date_str)
-            date_item.setForeground(QColor("#78909C"))
-            self.table.setItem(idx, 2, date_item)
+        if not self._shimmer_timer.isActive():
+            self._shimmer_timer.start()
 
-            # Col 3: Content summary
-            buildings = pkg.get("buildingCount", 0) or 0
-            units = pkg.get("propertyUnitCount", 0) or 0
-            persons = pkg.get("personCount", 0) or 0
-            content = tr(
-                "page.import_packages.content_summary",
-                buildings=buildings, units=units, persons=persons,
-            )
-            content_item = QTableWidgetItem(content)
-            content_item.setForeground(QColor("#546E7A"))
-            self.table.setItem(idx, 3, content_item)
+    def _pkg_to_card_data(self, pkg: dict) -> dict:
+        """Convert raw API package dict to card display dict."""
+        status_raw = pkg.get("status", 0)
+        if isinstance(status_raw, str) and status_raw.isdigit():
+            status_raw = int(status_raw)
 
-            # Col 4: Device ID
-            device_id = pkg.get("deviceId") or ""
-            device_str = str(device_id)[:20] if device_id else ""
-            device_item = QTableWidgetItem(device_str)
-            device_item.setForeground(QColor("#90A4AE"))
-            device_item.setFont(create_font(size=9))
-            self.table.setItem(idx, 4, device_item)
+        date_raw = pkg.get("packageCreatedDate") or pkg.get("createdAtUtc") or ""
+        date_str = str(date_raw)[:10] if date_raw else ""
 
-            # Col 5: Actions menu trigger
-            actions_item = QTableWidgetItem("\u22EE")
-            actions_item.setTextAlignment(Qt.AlignCenter)
-            actions_item.setFont(create_font(size=14, weight=FontManager.WEIGHT_BOLD))
-            actions_item.setForeground(QColor("#90A4AE"))
-            self.table.setItem(idx, 5, actions_item)
+        buildings = pkg.get("buildingCount", 0) or 0
+        units = pkg.get("propertyUnitCount", 0) or 0
+        persons = pkg.get("personCount", 0) or 0
+
+        return {
+            "package_name": pkg.get("fileName") or "N/A",
+            "status_code": status_raw,
+            "status_display": vocab_get_label("import_status", status_raw),
+            "created_date": date_str,
+            "total_records": buildings + units + persons if (buildings or units or persons) else None,
+            "valid_records": None,
+            "source": str(pkg.get("deviceId") or "")[:20],
+        }
+
+    def _clear_cards(self):
+        self._shimmer_timer.stop()
+        for card in self._card_widgets:
+            if hasattr(card, '_entrance_anim') and card._entrance_anim:
+                try:
+                    card._entrance_anim.stop()
+                except RuntimeError:
+                    pass
+            try:
+                card.clicked.disconnect()
+            except Exception:
+                pass
+            card.setParent(None)
+            card.deleteLater()
+        self._card_widgets.clear()
+
+    def _update_card_shimmer(self):
+        for card in self._card_widgets:
+            try:
+                card.update()
+            except RuntimeError:
+                pass
 
     # -- Pagination --------------------------------------------------------
 
@@ -656,25 +521,24 @@ class ImportPackagesPage(QWidget):
         self._current_page = 1
         self._load_packages()
 
-    # -- Cell click / context menu -----------------------------------------
+    # -- Card click / context menu -----------------------------------------
 
-    def _on_cell_clicked(self, row, col):
-        if col != 5:
-            return
-        if row >= len(self._packages):
-            return
-        pkg = self._packages[row]
-        self._show_actions_menu(row, col, pkg)
-
-    def _show_actions_menu(self, row, col, pkg):
-        item = self.table.item(row, col)
-        if not item:
-            return
-
-        rect = self.table.visualItemRect(item)
-        position = QPoint(rect.right() - 10, rect.bottom())
-
+    def _on_card_clicked(self, pkg):
         pkg_id = str(pkg.get("id") or pkg.get("packageId") or "")
+        status = pkg.get("status", 0)
+        if isinstance(status, str) and status.isdigit():
+            status = int(status)
+
+        if status == 9:
+            ErrorHandler.show_info(self.window(), tr("page.import_packages.package_completed_msg"))
+            return
+        if status == 12:
+            ErrorHandler.show_info(self.window(), tr("page.import_packages.package_cancelled_msg"))
+            return
+
+        self._on_view_package(pkg_id)
+
+    def _show_card_context_menu(self, pkg, pkg_id):
         status = pkg.get("status", 0)
         if isinstance(status, str) and status.isdigit():
             status = int(status)
@@ -722,7 +586,7 @@ class ImportPackagesPage(QWidget):
             reset_action.triggered.connect(lambda: self._reset_commit(pkg_id))
             menu.addAction(reset_action)
 
-        menu.exec_(self.table.viewport().mapToGlobal(position))
+        menu.exec_(QCursor.pos())
 
     def _on_view_package(self, pkg_id):
         self._spinner.show_loading()
@@ -794,21 +658,11 @@ class ImportPackagesPage(QWidget):
         self._stat_total.set_label(tr("page.import_packages.stat_total"))
         self._upload_btn.setText(tr("page.import_packages.process_new"))
 
-        # Status combo first item
-        self._status_combo.setItemText(0, tr("page.import_packages.all_statuses"))
-
-        # Table headers
-        labels = self._header_labels()
-        for i, text in enumerate(labels):
-            item = self.table.horizontalHeaderItem(i)
-            if item:
-                item.setText(text)
-
         self._rows_label.setText(tr("page.import_packages.rows_per_page"))
 
         # Empty state
         self._empty_state.set_title(tr("page.import_packages.no_packages"))
-        self._empty_state.set_subtitle(tr("page.import_packages.no_packages_hint"))
+        self._empty_state.set_description(tr("page.import_packages.no_packages_hint"))
 
         if self._packages:
-            self._populate_table(self._packages, self._total_count)
+            self._populate_cards(self._packages, self._total_count)

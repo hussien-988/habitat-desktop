@@ -502,7 +502,7 @@ class Navbar(QFrame):
         """Collapsible frosted glass pill: trigger label + expandable content."""
         self._pill_expanded = False
         self._pill_collapsed_w = 120
-        self._pill_expanded_w = 430
+        self._pill_expanded_w = 530
 
         pill = QFrame()
         pill.setObjectName("navbar_pill")
@@ -861,6 +861,8 @@ class Navbar(QFrame):
             self._pill_trigger.setText("\u25C8  " + tr("navbar.pill.settings"))
         if hasattr(self, '_pill_sync_btn'):
             self._load_pill_icon(self._pill_sync_btn, "fluent", tr("navbar.menu.sync_data"))
+        if hasattr(self, '_pill_pwd_btn'):
+            self._load_pill_icon(self._pill_pwd_btn, "safe", tr("navbar.menu.change_password"))
         if hasattr(self, '_pill_logout_btn'):
             self._load_pill_icon(self._pill_logout_btn, "logout", tr("navbar.menu.logout"))
         if hasattr(self, '_pill_lang_btn'):

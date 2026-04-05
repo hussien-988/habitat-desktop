@@ -76,18 +76,22 @@ class ImportStep2Staging(QWidget):
 
         # ── Card 1: Summary Stats ──
         summary_card = self._build_summary_card()
+        self._apply_card_shadow(summary_card)
         scroll_layout.addWidget(summary_card)
 
         # ── Card 2: Entity Breakdown Table ──
         entity_card = self._build_entity_table_card()
+        self._apply_card_shadow(entity_card)
         scroll_layout.addWidget(entity_card)
 
         # ── Card 3: Duplicates / Conflicts ──
         dup_card = self._build_duplicates_card()
+        self._apply_card_shadow(dup_card)
         scroll_layout.addWidget(dup_card)
 
         # ── Card 4: Validator Level Results ──
         level_card = self._build_level_results_card()
+        self._apply_card_shadow(level_card)
         scroll_layout.addWidget(level_card)
 
         scroll_layout.addStretch()
@@ -364,7 +368,8 @@ class ImportStep2Staging(QWidget):
         box.setMinimumWidth(120)
         box.setStyleSheet(f"""
             QFrame {{
-                background-color: {bg};
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
+                    stop:0 {bg}, stop:1 #FFFFFF);
                 border-radius: 10px;
                 border: none;
             }}
@@ -400,11 +405,22 @@ class ImportStep2Staging(QWidget):
         if label:
             label.setText(value)
 
+    def _apply_card_shadow(self, card: QFrame):
+        """Apply consistent drop shadow to a card widget."""
+        shadow = QGraphicsDropShadowEffect()
+        shadow.setBlurRadius(20)
+        shadow.setXOffset(0)
+        shadow.setYOffset(4)
+        shadow.setColor(QColor(0, 0, 0, 22))
+        card.setGraphicsEffect(shadow)
+
     def _card_style(self) -> str:
         return """
             QFrame {
-                background-color: #FFFFFF;
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
+                    stop:0 #F7FAFF, stop:1 #F0F5FF);
                 border-radius: 16px;
+                border: 1px solid #E2EAF2;
             }
         """
 

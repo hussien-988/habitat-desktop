@@ -210,13 +210,14 @@ def download_evidence_file(evidence_id: str, file_name: str) -> Optional[str]:
 
     from services.api_client import get_api_client
     api = get_api_client()
+    api._ensure_valid_token()
 
     try:
         api.download_evidence(evidence_id, save_path)
         if os.path.exists(save_path) and os.path.getsize(save_path) > 0:
             return save_path
     except Exception as e:
-        _logger.debug(f"Direct download failed for {evidence_id}: {e}")
+        _logger.warning(f"Direct download failed for {evidence_id}: {e}")
 
     try:
         meta = api.get_evidence_by_id(evidence_id)

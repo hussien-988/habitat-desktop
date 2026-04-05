@@ -14,7 +14,7 @@ from PyQt5.QtWidgets import (
     QMenu, QAction, QTabWidget, QStackedWidget, QStyleOptionHeader, QStyle,
     QStylePainter, QStyleOptionComboBox, QSizePolicy
     )
-from PyQt5.QtCore import Qt, pyqtSignal, QPoint, QRect, QSize, QLocale
+from PyQt5.QtCore import Qt, pyqtSignal, QPoint, QRect, QSize, QLocale, QTimer
 from PyQt5.QtGui import QColor, QCursor, QPainter, QFont, QIcon, QPixmap
 
 # Try to import WebEngine for map
@@ -54,6 +54,7 @@ from services.api_worker import ApiWorker
 from utils.i18n import I18n
 from utils.logger import get_logger
 from services.translation_manager import tr, get_layout_direction
+from ui.components.animated_card import AnimatedCard, EmptyStateAnimated, animate_card_entrance
 
 logger = get_logger(__name__)
 
@@ -2104,6 +2105,138 @@ class FilterableHeaderView(QHeaderView):
             painter.restore()
 
 
+class _BuildingCard(AnimatedCard):
+    """Building card with code, type, status, neighborhood info."""
+
+    view_building = pyqtSignal(object)
+
+    _STATUS_COLORS = {
+        "intact": "#10B981",
+        "damaged": "#F59E0B",
+        "destroyed": "#EF4444",
+    }
+    _STATUS_STYLES = {
+        "intact": {"bg": "#ECFDF5", "fg": "#065F46", "border": "#6EE7B7"},
+        "damaged": {"bg": "#FFFBEB", "fg": "#92400E", "border": "#FCD34D"},
+        "destroyed": {"bg": "#FEF2F2", "fg": "#991B1B", "border": "#FCA5A5"},
+    }
+
+    def __init__(self, building, parent=None):
+        self._building = building
+        status_key = self._get_status_key(building.building_status)
+        color = self._STATUS_COLORS.get(status_key, "#3890DF")
+        super().__init__(parent, card_height=110, status_color=color)
+
+    def _get_status_key(self, status):
+        if status is None:
+            return "intact"
+        s = str(status).strip().lower()
+        if s in ("1", "intact", "\u0633\u0644\u064a\u0645"):
+            return "intact"
+        elif s in ("2", "damaged", "\u0645\u062a\u0636\u0631\u0631"):
+            return "damaged"
+        elif s in ("3", "destroyed", "\u0645\u062f\u0645\u0631"):
+            return "destroyed"
+        return "intact"
+
+    def _build_content(self, layout):
+        from PyQt5.QtWidgets import QHBoxLayout, QLabel
+        from PyQt5.QtCore import Qt
+        from PyQt5.QtGui import QFont
+        from ui.font_utils import create_font, FontManager
+        from ui.design_system import Colors
+        from services.translation_manager import tr
+        from services.display_mappings import get_building_type_display, get_building_status_display
+
+        b = self._building
+
+        # Row 1: Building code + status badge
+        row1 = QHBoxLayout()
+        row1.setSpacing(8)
+
+        code_label = QLabel(b.building_id_formatted or b.building_id or "N/A")
+        code_label.setFont(create_font(size=13, weight=QFont.Bold))
+        code_label.setStyleSheet(f"color: {Colors.PAGE_TITLE}; background: transparent; border: none;")
+        code_label.setMaximumWidth(400)
+        row1.addWidget(code_label)
+        row1.addStretch()
+
+        # Status badge
+        status_key = self._get_status_key(b.building_status)
+        style = self._STATUS_STYLES.get(status_key, self._STATUS_STYLES["intact"])
+        status_text = get_building_status_display(b.building_status)
+        badge = QLabel(status_text)
+        badge.setFont(create_font(size=8, weight=FontManager.WEIGHT_SEMIBOLD))
+        badge.setAlignment(Qt.AlignCenter)
+        badge.setFixedHeight(22)
+        badge.setStyleSheet(
+            f"QLabel {{ background-color: {style['bg']}; color: {style['fg']}; "
+            f"border: 1px solid {style['border']}; border-radius: 11px; "
+            f"padding: 0 10px; }}"
+        )
+        row1.addWidget(badge)
+        layout.addLayout(row1)
+
+        # Row 2: neighborhood + type + area
+        parts = []
+        neighborhood = (b.neighborhood_name_ar or b.neighborhood_name or "").strip()
+        if neighborhood:
+            parts.append(neighborhood)
+        btype = get_building_type_display(b.building_type)
+        if btype and btype != "-":
+            parts.append(btype)
+        district = (b.district_name_ar or b.district_name or "").strip()
+        if district:
+            parts.append(district)
+
+        details_text = " \u2009\u00b7\u2009 ".join(parts) if parts else "-"
+        details = QLabel(details_text)
+        details.setFont(create_font(size=10, weight=FontManager.WEIGHT_REGULAR))
+        details.setStyleSheet(f"color: {Colors.TEXT_SECONDARY}; background: transparent; border: none;")
+        layout.addWidget(details)
+
+        # Row 3: assignment + lock chips
+        chips_row = QHBoxLayout()
+        chips_row.setSpacing(6)
+
+        chip_style = (
+            "QLabel {{ background-color: {bg}; color: {fg}; "
+            "border: 1px solid {border}; border-radius: 4px; "
+            "padding: 2px 8px; }}"
+        )
+
+        # Assignment chip
+        is_assigned = getattr(b, 'is_assigned', False)
+        if is_assigned:
+            chip = QLabel(tr("building.assigned"))
+            chip.setFont(create_font(size=8, weight=FontManager.WEIGHT_MEDIUM))
+            chip.setStyleSheet(chip_style.format(bg="#EEF2FF", fg="#4338CA", border="#E0E7FF"))
+            chips_row.addWidget(chip)
+
+        # Lock chip
+        is_locked = getattr(b, 'is_locked', False)
+        if is_locked:
+            chip = QLabel(tr("building.locked"))
+            chip.setFont(create_font(size=8, weight=FontManager.WEIGHT_MEDIUM))
+            chip.setStyleSheet(chip_style.format(bg="#FEF2F2", fg="#991B1B", border="#FCA5A5"))
+            chips_row.addWidget(chip)
+
+        # Date chip
+        if b.created_at:
+            chip = QLabel(b.created_at.strftime("%d/%m/%Y"))
+            chip.setFont(create_font(size=8, weight=FontManager.WEIGHT_MEDIUM))
+            chip.setStyleSheet(chip_style.format(bg="#F0FDF4", fg="#15803D", border="#DCFCE7"))
+            chips_row.addWidget(chip)
+
+        chips_row.addStretch()
+        layout.addLayout(chips_row)
+
+    def mousePressEvent(self, event):
+        super().mousePressEvent(event)
+        if event.button() == Qt.LeftButton:
+            self.view_building.emit(self._building)
+
+
 class BuildingsListPage(QWidget):
     """
     Buildings List Page with Table
@@ -2168,59 +2301,68 @@ class BuildingsListPage(QWidget):
         )
         content_layout.setSpacing(12)
 
-        # Table card
-        table_card = QFrame()
-        table_card.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-        table_card.setStyleSheet(StyleManager.table_card())
-        card_layout = QVBoxLayout(table_card)
-        card_layout.setContentsMargins(10, 10, 10, 10)
+        # Stacked widget: cards view + empty state
+        self._stack = QStackedWidget()
 
-        from ui.components.modern_table import ModernTable
+        # Page 0: Scroll area with cards
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        scroll.setStyleSheet(StyleManager.scrollbar())
+        scroll.setFrameShape(QFrame.NoFrame)
 
-        self._modern_table = ModernTable()
-        self._modern_table.set_columns([
-            {"key": "building_code", "label": tr("table.buildings.building_code"),
-             "type": "id", "resize": "stretch"},
-            {"key": "entry_date", "label": tr("table.buildings.entry_date"),
-             "resize": "contents"},
-            {"key": "area", "label": tr("table.buildings.area"),
-             "resize": "contents"},
-            {"key": "neighborhood", "label": tr("table.buildings.neighborhood"),
-             "resize": "contents"},
-            {"key": "building_type", "label": tr("table.buildings.building_type"),
-             "resize": "contents"},
-            {"key": "building_status", "label": tr("table.buildings.building_status"),
-             "resize": "contents"},
-            {"key": "assignment_status", "label": tr("table.buildings.assignment_status"),
-             "type": "status", "resize": "contents",
-             "status_map": {"assigned": "info", "not_assigned": "default"},
-             "display_map": {
-                 "assigned": tr("building.assigned"),
-                 "not_assigned": tr("building.not_assigned"),
-             }},
-            {"key": "lock_status", "label": tr("table.buildings.lock_status"),
-             "type": "status", "resize": "contents",
-             "status_map": {"locked": "error", "unlocked": "success"},
-             "display_map": {
-                 "locked": tr("building.locked"),
-                 "unlocked": tr("building.unlocked"),
-             }},
-        ])
-        self._modern_table.set_page_size(self._rows_per_page)
-        self._modern_table.set_empty_state(tr("page.buildings.no_matching_data"))
-        self._modern_table.row_clicked.connect(self._on_modern_row_clicked)
-        self._modern_table.page_changed.connect(self._on_page_changed)
+        cards_container = QWidget()
+        cards_container.setStyleSheet("background: transparent;")
+        self._cards_layout = QVBoxLayout(cards_container)
+        self._cards_layout.setContentsMargins(0, 0, 0, 0)
+        self._cards_layout.setSpacing(10)
+        self._cards_layout.addStretch()
+        scroll.setWidget(cards_container)
+        self._stack.addWidget(scroll)
 
-        # Connect header click for column filtering
-        self._modern_table._table.horizontalHeader().sectionClicked.disconnect()
-        self._modern_table._table.horizontalHeader().sectionClicked.connect(
-            self._on_header_clicked
+        # Page 1: Empty state
+        self._empty_state = EmptyStateAnimated(
+            title=tr("page.buildings.no_matching_data"),
+            description=tr("page.buildings.empty_description") if hasattr(tr, '__call__') else "",
         )
+        self._stack.addWidget(self._empty_state)
 
-        card_layout.addWidget(self._modern_table)
+        content_layout.addWidget(self._stack)
 
-        content_layout.addWidget(table_card)
+        # Pagination bar
+        self._pagination_bar = QHBoxLayout()
+        self._pagination_bar.setContentsMargins(0, 8, 0, 0)
+        self._pagination_bar.addStretch()
+
+        self._prev_btn = QPushButton("\u276E")
+        self._prev_btn.setFixedSize(32, 28)
+        self._prev_btn.setStyleSheet(StyleManager.pagination_button())
+        self._prev_btn.clicked.connect(lambda: self._go_to_page(self._current_page - 1))
+        self._pagination_bar.addWidget(self._prev_btn)
+
+        self._page_info = QLabel("1-0 / 0")
+        self._page_info.setFont(create_font(size=10, weight=FontManager.WEIGHT_MEDIUM))
+        self._page_info.setStyleSheet(f"color: {Colors.TEXT_SECONDARY}; background: transparent;")
+        self._pagination_bar.addWidget(self._page_info)
+
+        self._next_btn = QPushButton("\u276F")
+        self._next_btn.setFixedSize(32, 28)
+        self._next_btn.setStyleSheet(StyleManager.pagination_button())
+        self._next_btn.clicked.connect(lambda: self._go_to_page(self._current_page + 1))
+        self._pagination_bar.addWidget(self._next_btn)
+
+        content_layout.addLayout(self._pagination_bar)
+
+        # Shimmer timer
+        self._card_widgets = []
+        self._shimmer_timer = QTimer(self)
+        self._shimmer_timer.setInterval(80)
+        self._shimmer_timer.timeout.connect(self._update_card_shimmer)
+
         layout.addWidget(content_wrapper)
+
+        from ui.components.loading_spinner import LoadingSpinnerOverlay
+        self._spinner = LoadingSpinnerOverlay(self)
 
     def refresh(self):
         """Refresh list."""
@@ -2232,8 +2374,9 @@ class BuildingsListPage(QWidget):
         self._user_role = role
 
     def _load_buildings(self):
-        """Load buildings asynchronously so skeleton shimmer is visible."""
-        self._modern_table.show_loading(tr("page.buildings.loading"))
+        """Load buildings asynchronously."""
+        self._clear_cards()
+        self._spinner.show_loading(tr("page.buildings.loading"))
 
         self._load_worker = ApiWorker(self._fetch_buildings_bg)
         self._load_worker.finished.connect(self._on_buildings_loaded)
@@ -2246,6 +2389,7 @@ class BuildingsListPage(QWidget):
 
     def _on_buildings_loaded(self, result):
         """Main thread callback after buildings loaded."""
+        self._spinner.hide_loading()
         if result.success:
             self._all_buildings = result.data
         else:
@@ -2257,17 +2401,16 @@ class BuildingsListPage(QWidget):
 
     def _on_buildings_load_error(self, error_msg):
         """Handle background loading error."""
+        self._spinner.hide_loading()
         Toast.show_toast(self, tr("page.buildings.load_error"), Toast.ERROR)
         logger.error(f"Background load failed: {error_msg}")
         self._all_buildings = []
         self._stat_total.set_count(0)
-        self._modern_table.set_data([], 0)
+        self._populate_table_from_buildings()
 
     def _populate_table_from_buildings(self):
-        """Apply filters, paginate, and feed data to ModernTable."""
+        """Apply filters, paginate, and create building cards."""
         self._buildings = self._apply_filters(self._all_buildings)
-
-        # Update stat pill count
         self._stat_total.set_count(len(self._all_buildings))
 
         total = len(self._buildings)
@@ -2277,22 +2420,27 @@ class BuildingsListPage(QWidget):
         end_idx = min(start_idx + self._rows_per_page, total)
         page_buildings = self._buildings[start_idx:end_idx]
 
-        rows = []
-        for b in page_buildings:
-            rows.append({
-                "building_code": b.building_id_formatted or b.building_id or "",
-                "entry_date": b.created_at.strftime("%d/%m/%Y") if b.created_at else "",
-                "area": (b.district_name_ar or b.district_name or "").strip(),
-                "neighborhood": (b.neighborhood_name_ar or b.neighborhood_name or "").strip(),
-                "building_type": get_building_type_display(b.building_type),
-                "building_status": get_building_status_display(b.building_status),
-                "assignment_status": "assigned" if getattr(b, 'is_assigned', False) else "not_assigned",
-                "lock_status": "locked" if getattr(b, 'is_locked', False) else "unlocked",
-                "_building": b,
-            })
+        # Clear old cards
+        self._clear_cards()
 
-        self._modern_table.set_page(self._current_page)
-        self._modern_table.set_data(rows, total)
+        if not page_buildings:
+            self._stack.setCurrentIndex(1)  # Show empty state
+            self._update_pagination_info(0, 0, total)
+            return
+
+        self._stack.setCurrentIndex(0)  # Show cards
+
+        for b in page_buildings:
+            card = _BuildingCard(b)
+            card.view_building.connect(self.view_building.emit)
+            self._cards_layout.insertWidget(self._cards_layout.count() - 1, card)
+            self._card_widgets.append(card)
+
+        animate_card_entrance(self._card_widgets)
+        if not self._shimmer_timer.isActive():
+            self._shimmer_timer.start()
+
+        self._update_pagination_info(start_idx + 1, end_idx, total)
 
     def _on_header_clicked(self, logical_index: int):
         """
@@ -2532,14 +2680,45 @@ class BuildingsListPage(QWidget):
             {"neighborhoodCode": k, "nameArabic": v} for k, v in seen.items()
         ]
 
-    def _on_modern_row_clicked(self, row_idx, row_data):
-        """Open building details on row click."""
-        building = row_data.get("_building")
-        if building:
-            self.view_building.emit(building)
+    def _clear_cards(self):
+        """Remove all card widgets."""
+        self._shimmer_timer.stop()
+        for card in self._card_widgets:
+            if hasattr(card, '_entrance_anim') and card._entrance_anim:
+                try:
+                    card._entrance_anim.stop()
+                except RuntimeError:
+                    pass
+            try:
+                card.view_building.disconnect()
+            except Exception:
+                pass
+            card.setParent(None)
+            card.deleteLater()
+        self._card_widgets.clear()
+
+    def _update_card_shimmer(self):
+        """Update shimmer animation on all visible cards."""
+        for card in self._card_widgets:
+            try:
+                card.update()
+            except RuntimeError:
+                pass
+
+    def _update_pagination_info(self, start, end, total):
+        """Update pagination labels and button states."""
+        self._page_info.setText(f"{start}-{end} / {total}")
+        self._prev_btn.setEnabled(self._current_page > 1)
+        self._next_btn.setEnabled(self._current_page < self._total_pages)
+
+    def _go_to_page(self, page):
+        """Navigate to a specific page."""
+        if 1 <= page <= self._total_pages:
+            self._current_page = page
+            self._populate_table_from_buildings()
 
     def _on_page_changed(self, page):
-        """Handle page change from ModernTable pagination."""
+        """Handle page change."""
         self._current_page = page
         self._populate_table_from_buildings()
 
@@ -2699,3 +2878,5 @@ class BuildingsPage(QWidget):
     def update_language(self, is_arabic: bool):
         """Update language."""
         self.list_page.update_language(is_arabic)
+        if self.form_page and hasattr(self.form_page, 'update_language'):
+            self.form_page.update_language(is_arabic)
