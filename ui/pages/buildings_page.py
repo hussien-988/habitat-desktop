@@ -40,7 +40,6 @@ from services.export_service import ExportService
 from services.validation_service import ValidationService
 from ui.components.rtl_combo import RtlCombo
 from ui.components.toast import Toast
-from ui.components.dialogs import ExportDialog
 from ui.error_handler import ErrorHandler
 from ui.components.custom_button import CustomButton
 from ui.components.primary_button import PrimaryButton
@@ -2746,6 +2745,8 @@ class BuildingsListPage(QWidget):
 
     def _on_toggle_lock(self, building: Building):
         """Toggle building lock state with confirmation."""
+        if getattr(self, '_user_role', None) not in ('admin', 'data_manager'):
+            return
         is_locked = getattr(building, 'is_locked', False)
         msg_key = "page.buildings.confirm_unlock" if is_locked else "page.buildings.confirm_lock"
         title_key = "building.action.unlock" if is_locked else "building.action.lock"

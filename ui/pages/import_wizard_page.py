@@ -1114,13 +1114,13 @@ class ImportWizardPage(QWidget):
 
     def _on_resolve_duplicates(self):
         """Handle resolve duplicates button from step 2."""
-        from ui.components.dialogs.confirmation_dialog import ConfirmationDialog, DialogResult
-        result = ConfirmationDialog.confirm(
-            parent=self,
-            title="حل التكرارات",
-            message="سيتم نقلك إلى صفحة التكرارات لحل التعارضات المكتشفة.\nبعد حل التكرارات، يمكنك العودة لمتابعة الاستيراد."
+        from ui.error_handler import ErrorHandler
+        confirmed = ErrorHandler.confirm(
+            self,
+            "سيتم نقلك إلى صفحة التكرارات لحل التعارضات المكتشفة.\nبعد حل التكرارات، يمكنك العودة لمتابعة الاستيراد.",
+            "حل التكرارات"
         )
-        if result == DialogResult.YES:
+        if confirmed:
             self.navigate_to_duplicates.emit()
 
     def refresh_from_duplicates(self):

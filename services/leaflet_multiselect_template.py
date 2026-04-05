@@ -141,6 +141,25 @@ MULTISELECT_JS_TEMPLATE = """
             });
         }
 
+        // Toast notification on map
+        function showMapToast(message) {
+            var existing = document.getElementById('map-toast');
+            if (existing) existing.remove();
+
+            var toast = document.createElement('div');
+            toast.id = 'map-toast';
+            toast.textContent = message;
+            toast.style.cssText = 'position:fixed;top:20px;left:50%;transform:translateX(-50%);' +
+                'background:#1F2937;color:#F9FAFB;padding:10px 24px;border-radius:8px;' +
+                'font-size:14px;z-index:10000;box-shadow:0 4px 12px rgba(0,0,0,0.3);' +
+                'direction:rtl;transition:opacity 0.3s;';
+            document.body.appendChild(toast);
+            setTimeout(function() {
+                toast.style.opacity = '0';
+                setTimeout(function() { toast.remove(); }, 300);
+            }, 2500);
+        }
+
         // Attach multi-select click handler to a building layer
         // Exported to window so viewport template can call it for dynamic buildings
         function attachMultiselectHandler(layer) {
@@ -149,32 +168,57 @@ MULTISELECT_JS_TEMPLATE = """
             var buildingId = layer.feature.properties.building_id;
             if (!buildingId) return;
 
+            var isAssigned = layer.feature.properties.is_assigned === true;
+            var isLocked = layer.feature.properties.is_locked === true;
+
             // Unbind any popup to prevent it from showing
             layer.unbindPopup();
+
+            // Tooltip for non-selectable buildings
+            if (isLocked || isAssigned) {
+                var tooltipText = isLocked ? '\u0645\u0628\u0646\u0649 \u0645\u0642\u0641\u0644' : '\u0645\u0639\u064a\u0651\u0646 \u0645\u0633\u0628\u0642\u0627\u064b';
+                layer.bindTooltip(tooltipText, {
+                    permanent: false,
+                    direction: 'top',
+                    className: 'disabled-building-tooltip'
+                });
+            }
 
             // Add click handler for toggle selection
             layer.on('click', function(e) {
                 L.DomEvent.stopPropagation(e);
+
+                if (isLocked) {
+                    showMapToast('\u0647\u0630\u0627 \u0627\u0644\u0645\u0628\u0646\u0649 \u0645\u0642\u0641\u0644 \u062d\u0627\u0644\u064a\u0627\u064b');
+                }
+
+                if (isAssigned) {
+                    showMapToast('\u0647\u0630\u0627 \u0627\u0644\u0645\u0628\u0646\u0649 \u0645\u0639\u064a\u0651\u0646 \u0645\u0633\u0628\u0642\u0627\u064b \u0644\u0641\u0631\u064a\u0642 \u0622\u062e\u0631');
+                }
+
                 toggleBuildingMultiSelect(buildingId, layer, layer.feature);
                 return false;
             });
 
             // Hover effects
             layer.on('mouseover', function(e) {
-                var geomType = layer.feature.geometry.type;
-                if (geomType !== 'Point') {
-                    this.setStyle({
-                        fillOpacity: 0.8,
-                        weight: 3,
-                        color: selectedBuildings.has(buildingId) ? '#2196F3' : '#00BFFF'
-                    });
+                if (isLocked || isAssigned) {
+                    map.getContainer().style.cursor = 'pointer';
+                } else {
+                    var geomType = layer.feature.geometry.type;
+                    if (geomType !== 'Point') {
+                        this.setStyle({
+                            fillOpacity: 0.8,
+                            weight: 3,
+                            color: selectedBuildings.has(buildingId) ? '#2196F3' : '#00BFFF'
+                        });
+                    }
+                    map.getContainer().style.cursor = 'pointer';
                 }
-                map.getContainer().style.cursor = 'pointer';
             });
 
             layer.on('mouseout', function(e) {
                 if (!selectedBuildings.has(buildingId)) {
-                    // Reset to original style
                     var parentLayer = typeof currentBuildingsLayer !== 'undefined' ? currentBuildingsLayer : buildingsLayer;
                     if (parentLayer && typeof parentLayer.resetStyle === 'function') {
                         parentLayer.resetStyle(this);

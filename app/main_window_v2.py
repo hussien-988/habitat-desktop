@@ -581,6 +581,22 @@ class MainWindow(QMainWindow):
         self._vocab_worker = ApiWorker(_background_vocab_refresh)
         self._vocab_worker.start()
 
+        # Pre-initialize map services in background (tile server + landmark icons)
+        import threading
+        threading.Thread(target=self._prewarm_map_services, daemon=True).start()
+
+    def _prewarm_map_services(self):
+        """Pre-initialize map services in background to avoid delays on first map open."""
+        try:
+            from services.tile_server_manager import TileServerManager
+            mgr = TileServerManager.get_instance()
+            mgr.get_tile_metadata()
+            from services.landmark_icon_service import load_landmark_types
+            load_landmark_types()
+            logger.debug("Map services pre-warmed successfully")
+        except Exception as e:
+            logger.debug(f"Map prewarm (non-critical): {e}")
+
     def _finish_login_ui(self, user):
         """Configure UI after background data loads (runs on main thread)."""
         try:
@@ -612,8 +628,8 @@ class MainWindow(QMainWindow):
             self.navbar.configure_for_role(user.role)
 
             # Apply role-based button visibility to content pages
-            for page_id in (Pages.BUILDINGS, Pages.UNITS, Pages.PERSONS,
-                            Pages.IMPORT_WIZARD, Pages.IMPORT_PACKAGES):
+            for page_id in (Pages.BUILDINGS, Pages.BUILDING_DETAILS, Pages.UNITS,
+                            Pages.PERSONS, Pages.IMPORT_WIZARD, Pages.IMPORT_PACKAGES):
                 page = self.pages.get(page_id)
                 if page and hasattr(page, 'configure_for_role'):
                     page.configure_for_role(user.role)
@@ -881,8 +897,8 @@ class MainWindow(QMainWindow):
         if elapsed_ms >= self._session_timeout_ms:
             self._session_timer.stop()
             logger.warning("Session timed out due to inactivity")
-            from PyQt5.QtWidgets import QMessageBox
-            QMessageBox.warning(
+            from ui.components.dialogs.message_dialog import MessageDialog
+            MessageDialog.show_warning(
                 self,
                 "انتهاء الجلسة",
                 "انتهت مهلة الجلسة بسبب عدم النشاط. سيتم تسجيل الخروج تلقائياً."
@@ -918,6 +934,7 @@ class MainWindow(QMainWindow):
             if refresh:
                 api.refresh_token = refresh
             api.set_session_expired_callback(self._on_session_expired)
+            api.set_password_change_required_callback(self._on_password_change_required)
             logger.info("API token set on singleton")
 
         # Pass token to BuildingsPage controller
@@ -970,6 +987,31 @@ class MainWindow(QMainWindow):
         self.current_user = None
         self._stop_session_timer()
         self._show_login()
+
+    def _on_password_change_required(self):
+        """Handle password change required from API 403 (called from background thread)."""
+        if not self.current_user:
+            return
+        if getattr(self, '_password_change_pending', False):
+            return
+        self._password_change_pending = True
+        from PyQt5.QtCore import QTimer
+        QTimer.singleShot(0, self._do_password_change_required)
+
+    def _do_password_change_required(self):
+        """Show password change dialog (runs on main thread)."""
+        self._password_change_pending = False
+        if not self.current_user:
+            return
+        logger.warning(f"Password change required for user: {self.current_user.username}")
+        from ui.components.toast import Toast
+        Toast.show_toast(
+            self,
+            tr("dialog.password.change_required_message"),
+            Toast.WARNING,
+            5000
+        )
+        self._start_forced_password_change(self.current_user)
 
     def _handle_logout(self):
         """Handle logout request."""

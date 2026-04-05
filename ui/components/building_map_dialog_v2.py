@@ -24,7 +24,7 @@ class _BuildingsWorker(QThread):
     error = pyqtSignal(str)
 
     def __init__(self, auth_token, selected_building_id, is_view_only,
-                 fallback_building, center_lat, center_lon):
+                 fallback_building, center_lat, center_lon, data_provider=None):
         super().__init__()
         self._auth_token = auth_token
         self._selected_building_id = selected_building_id
@@ -32,13 +32,14 @@ class _BuildingsWorker(QThread):
         self._fallback_building = fallback_building
         self._center_lat = center_lat
         self._center_lon = center_lon
+        self._data_provider = data_provider
 
     def run(self):
         try:
             result = {}
             from services.map_service_api import MapServiceAPI
 
-            map_service = MapServiceAPI()
+            map_service = MapServiceAPI(data_provider=self._data_provider)
             if self._auth_token:
                 map_service.set_auth_token(self._auth_token)
 
@@ -336,7 +337,9 @@ class BuildingMapDialog(BaseMapDialog):
         auth_token: Optional[str] = None,
         read_only: bool = False,
         selected_building: Optional[Building] = None,
-        parent=None
+        parent=None,
+        show_confirm_button: bool = False,
+        show_multiselect_ui: bool = False,
     ):
         """Initialize building map dialog."""
         self.db = db
@@ -385,7 +388,9 @@ class BuildingMapDialog(BaseMapDialog):
         super().__init__(
             title=title,
             show_search=show_search,
-            enable_viewport_loading=True,  # Enabled: Load buildings dynamically as user pans/zooms
+            show_confirm_button=show_confirm_button,
+            show_multiselect_ui=show_multiselect_ui,
+            enable_viewport_loading=True,
             parent=parent
         )
 
@@ -417,13 +422,6 @@ class BuildingMapDialog(BaseMapDialog):
         """Show map immediately with tiles, then load buildings in background."""
         from services.tile_server_manager import get_tile_server_url
         from ui.constants.map_constants import MapConstants
-        from services.landmark_icon_service import reload as reload_landmark_types
-
-        # Reload landmark types (may have failed at startup before login)
-        try:
-            reload_landmark_types()
-        except Exception as e:
-            logger.warning(f"Failed to reload landmark types: {e}")
 
         tile_url = get_tile_server_url()
         logger.info(f"Map tile server URL: {tile_url}")
@@ -1012,8 +1010,15 @@ class MultiSelectBuildingMapDialog(BuildingMapDialog):
     but enables multi-select mode so users can click multiple buildings.
     """
 
-    def __init__(self, db: Database, auth_token: Optional[str] = None, parent=None):
+    def __init__(self, db: Database, auth_token: Optional[str] = None, parent=None,
+                 center_lat: Optional[float] = None, center_lon: Optional[float] = None,
+                 initial_zoom: Optional[int] = None,
+                 already_selected_ids: Optional[list] = None):
         self._multi_selected_buildings: List[Building] = []
+        self._already_selected_ids = set(already_selected_ids or [])
+        self._initial_center_lat = center_lat
+        self._initial_center_lon = center_lon
+        self._initial_zoom = initial_zoom
         super().__init__(
             db=db,
             selected_building_id=None,
@@ -1021,23 +1026,33 @@ class MultiSelectBuildingMapDialog(BuildingMapDialog):
             read_only=False,
             selected_building=None,
             parent=parent,
+            show_confirm_button=True,
+            show_multiselect_ui=True,
         )
+
+        # Use FieldAssignmentMapProvider for assignment data (hasActiveAssignment, isLocked)
+        try:
+            from services.map_data_provider import FieldAssignmentMapProvider
+            from services.api_client import get_api_client
+            from services.map_service_api import MapServiceAPI
+            fa_provider = FieldAssignmentMapProvider(get_api_client())
+            fa_service = MapServiceAPI(data_provider=fa_provider)
+            if self._auth_token:
+                fa_service.set_auth_token(self._auth_token)
+            if self._viewport_loader:
+                self._viewport_loader.map_service = fa_service
+        except Exception as e:
+            logger.warning(f"Could not set FieldAssignmentMapProvider: {e}")
 
     def _start_map_load(self):
         """Override to enable multiselect in the generated HTML."""
         from services.tile_server_manager import get_tile_server_url
         from ui.constants.map_constants import MapConstants
-        from services.landmark_icon_service import reload as reload_landmark_types
-
-        try:
-            reload_landmark_types()
-        except Exception as e:
-            logger.warning(f"Failed to reload landmark types: {e}")
 
         tile_url = get_tile_server_url()
-        center_lat = MapConstants.DEFAULT_CENTER_LAT
-        center_lon = MapConstants.DEFAULT_CENTER_LON
-        zoom = 15
+        center_lat = getattr(self, '_initial_center_lat', None) or MapConstants.DEFAULT_CENTER_LAT
+        center_lon = getattr(self, '_initial_center_lon', None) or MapConstants.DEFAULT_CENTER_LON
+        zoom = getattr(self, '_initial_zoom', None) or 15
 
         empty_geojson = '{"type":"FeatureCollection","features":[]}'
         try:
@@ -1087,9 +1102,18 @@ class MultiSelectBuildingMapDialog(BuildingMapDialog):
             )
             QTimer.singleShot(300, lambda: self.web_view.page().runJavaScript(js_overlay))
 
+        fa_provider = None
+        try:
+            from services.map_data_provider import FieldAssignmentMapProvider
+            from services.api_client import get_api_client
+            fa_provider = FieldAssignmentMapProvider(get_api_client())
+        except Exception:
+            pass
+
         self._buildings_worker = _BuildingsWorker(
             self._auth_token, None, False, None,
-            center_lat, center_lon
+            center_lat, center_lon,
+            data_provider=fa_provider
         )
         self._buildings_worker.finished.connect(self._on_buildings_ready)
         self._buildings_worker.error.connect(self._on_map_data_error)
@@ -1100,43 +1124,70 @@ class MultiSelectBuildingMapDialog(BuildingMapDialog):
         self._layers_worker.error.connect(lambda e: logger.warning(f"Layers loading failed: {e}"))
         self._layers_worker.start()
 
-    def _on_building_selected_from_map(self, building_id: str):
-        """In multi-select mode, accumulate buildings instead of closing dialog."""
-        logger.info(f"Multi-select: building toggled: {building_id}")
-
-        # Check if already selected - toggle off
-        existing = [b for b in self._multi_selected_buildings if b.building_id == building_id]
-        if existing:
-            self._multi_selected_buildings = [
-                b for b in self._multi_selected_buildings if b.building_id != building_id
-            ]
-            logger.info(f"Deselected {building_id}, total: {len(self._multi_selected_buildings)}")
-            self.confirm_btn.setEnabled(len(self._multi_selected_buildings) > 0)
+    def _on_buildings_multiselected(self, building_ids_json: str):
+        """Override: process batch building IDs from multiselect JS."""
+        import json as _json
+        try:
+            new_ids = set(_json.loads(building_ids_json))
+        except Exception:
             return
 
-        # Find building in cache
-        matching = None
+        current_ids = {b.building_id for b in self._multi_selected_buildings}
+        added = new_ids - current_ids
+        removed = current_ids - new_ids
+
+        # Remove deselected
+        if removed:
+            self._multi_selected_buildings = [
+                b for b in self._multi_selected_buildings if b.building_id not in removed
+            ]
+
+        # Add newly selected
+        for bid in added:
+            # Check if already selected in step1
+            if bid in self._already_selected_ids:
+                if self.web_view:
+                    self.web_view.page().runJavaScript(
+                        "showMapToast('\u0647\u0630\u0627 \u0627\u0644\u0645\u0628\u0646\u0649 \u0645\u062e\u062a\u0627\u0631 \u0645\u0633\u0628\u0642\u0627\u064b');"
+                    )
+                continue
+
+            matching = self._find_building_in_cache(bid)
+            if matching:
+                self._multi_selected_buildings.append(matching)
+
+        self.confirm_btn.setEnabled(len(self._multi_selected_buildings) > 0)
+        logger.info(f"Multi-select: {len(self._multi_selected_buildings)} buildings selected")
+
+    def _find_building_in_cache(self, building_id: str) -> Optional[Building]:
+        """Find building in caches or fetch from API."""
+        # Check initial buildings cache
         for b in (self._buildings_cache or []):
             if b.building_id == building_id:
-                matching = b
-                break
+                return b
 
-        if not matching:
-            try:
-                from services.map_service_api import MapServiceAPI
-                map_service = MapServiceAPI()
-                if self._auth_token:
-                    map_service.set_auth_token(self._auth_token)
-                matching = map_service.get_building_with_polygon(building_id)
-            except Exception as e:
-                logger.warning(f"Could not fetch building {building_id}: {e}")
+        # Check viewport cache
+        if self._viewport_loader:
+            cache = getattr(self._viewport_loader, 'building_cache', None)
+            if cache:
+                cached = cache.get(building_id)
+                if cached:
+                    return cached
 
-        if matching:
-            self._multi_selected_buildings.append(matching)
-            logger.info(f"Selected {building_id}, total: {len(self._multi_selected_buildings)}")
-            self.confirm_btn.setEnabled(True)
-        else:
-            logger.warning(f"Building {building_id} not found")
+        # Fallback: fetch from API
+        try:
+            from services.map_service_api import MapServiceAPI
+            map_service = MapServiceAPI()
+            if self._auth_token:
+                map_service.set_auth_token(self._auth_token)
+            return map_service.get_building_with_polygon(building_id)
+        except Exception as e:
+            logger.warning(f"Could not fetch building {building_id}: {e}")
+            return None
+
+    def _on_building_selected_from_map(self, building_id: str):
+        """Fallback: handle individual building selection signal."""
+        pass
 
     def get_selected_buildings(self) -> List[Building]:
         """Get all selected buildings."""
@@ -1147,9 +1198,19 @@ def show_multiselect_map_dialog(
     db: Database,
     auth_token: Optional[str] = None,
     parent=None,
+    center_lat: Optional[float] = None,
+    center_lon: Optional[float] = None,
+    initial_zoom: Optional[int] = None,
+    already_selected_ids: Optional[list] = None,
 ) -> Optional[List[Building]]:
     """Show multi-select building map dialog. Returns list of buildings or None."""
-    dialog = MultiSelectBuildingMapDialog(db, auth_token, parent)
+    dialog = MultiSelectBuildingMapDialog(
+        db, auth_token, parent,
+        center_lat=center_lat,
+        center_lon=center_lon,
+        initial_zoom=initial_zoom,
+        already_selected_ids=already_selected_ids,
+    )
     result = dialog.exec_()
 
     if result == dialog.Accepted:

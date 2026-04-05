@@ -4,8 +4,8 @@
 from typing import Optional, List
 from PyQt5.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QWidget, QLabel,
-    QPushButton, QLineEdit, QFrame, QToolButton, QListWidget,
-    QListWidgetItem, QScrollArea
+    QPushButton, QLineEdit, QFrame, QToolButton,
+    QScrollArea, QSizePolicy
     )
 from PyQt5.QtCore import Qt, pyqtSignal, QObject, pyqtSlot, QUrl, QThread
 from PyQt5.QtGui import QPainter, QColor, QPainterPath, QPalette
@@ -318,11 +318,6 @@ class BaseMapDialog(QDialog):
             content_layout.addWidget(search_bar)
             self.search_input = self.search_input  # Link for key handling
 
-        # Multi-select UI (optional) - above map
-        if self.show_multiselect_ui:
-            multiselect_ui = self._create_multiselect_ui()
-            content_layout.addWidget(multiselect_ui)
-
         # Map view
         map_w = self.width() - 48
         map_h = self.height() - 174
@@ -374,6 +369,11 @@ class BaseMapDialog(QDialog):
                 border-radius: 8px;
             """)
             content_layout.addWidget(placeholder)
+
+        # Multi-select chips (optional) - below map
+        if self.show_multiselect_ui:
+            multiselect_ui = self._create_multiselect_ui()
+            content_layout.addWidget(multiselect_ui)
 
         # Confirm button area (optional)
         if self.show_confirm_button:
@@ -491,68 +491,67 @@ class BaseMapDialog(QDialog):
         return search_frame
 
     def _create_multiselect_ui(self) -> QFrame:
-        """Create multi-select UI with counter, list, and clear button."""
+        """Create multi-select UI with chips bar below the map."""
         multiselect_frame = QFrame()
         multiselect_frame.setObjectName("multiselectUI")
+        multiselect_frame.setFixedHeight(44)
         multiselect_frame.setStyleSheet(f"""
             QFrame#multiselectUI {{
                 background-color: {Colors.LIGHT_GRAY_BG};
                 border: 1px solid {Colors.BORDER_DEFAULT};
                 border-radius: 8px;
-                padding: 8px;
             }}
         """)
 
         multiselect_layout = QHBoxLayout(multiselect_frame)
-        multiselect_layout.setContentsMargins(12, 8, 12, 8)
-        multiselect_layout.setSpacing(12)
+        multiselect_layout.setContentsMargins(12, 4, 12, 4)
+        multiselect_layout.setSpacing(8)
         multiselect_layout.setDirection(QHBoxLayout.RightToLeft)
 
-        # Counter label
+        # Counter label (right side in RTL)
         self.selection_counter_label = QLabel(tr("dialog.map.zero_buildings_selected"))
-        self.selection_counter_label.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
+        self.selection_counter_label.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
         self.selection_counter_label.setStyleSheet(f"""
             QLabel {{
                 color: {Colors.PRIMARY_BLUE};
                 background: transparent;
-                padding: 4px 8px;
+                padding: 2px 4px;
             }}
         """)
+        self.selection_counter_label.setSizePolicy(QSizePolicy.Maximum, QSizePolicy.Preferred)
         multiselect_layout.addWidget(self.selection_counter_label)
 
-        # Buildings list (compact, scrollable)
-        self.buildings_list_widget = QListWidget()
-        self.buildings_list_widget.setMaximumHeight(80)
-        self.buildings_list_widget.setFont(create_font(size=9, weight=FontManager.WEIGHT_REGULAR))
-        self.buildings_list_widget.setStyleSheet(f"""
-            QListWidget {{
-                background-color: white;
-                border: 1px solid {Colors.BORDER_DEFAULT};
-                border-radius: 4px;
-                padding: 4px;
-            }}
-            QListWidget::item {{
-                padding: 4px;
-                border-bottom: 1px solid {Colors.BACKGROUND};
-            }}
-            QListWidget::item:hover {{
-                background-color: {Colors.LIGHT_GRAY_BG};
-            }}
-        """)
-        multiselect_layout.addWidget(self.buildings_list_widget, 1)
+        # Scrollable chips area
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        scroll.setFixedHeight(34)
+        scroll.setStyleSheet("QScrollArea { background: transparent; border: none; }")
 
-        # Clear all button
+        self._chips_container = QWidget()
+        self._chips_container.setStyleSheet("background: transparent;")
+        self._chips_layout = QHBoxLayout(self._chips_container)
+        self._chips_layout.setContentsMargins(0, 0, 0, 0)
+        self._chips_layout.setSpacing(6)
+        self._chips_layout.setDirection(QHBoxLayout.RightToLeft)
+        self._chips_layout.addStretch()
+
+        scroll.setWidget(self._chips_container)
+        multiselect_layout.addWidget(scroll, 1)
+
+        # Clear all button (left side in RTL)
         self.clear_all_btn = QPushButton(tr("dialog.map.clear_all"))
-        self.clear_all_btn.setFixedSize(100, 32)
+        self.clear_all_btn.setFixedSize(80, 28)
         self.clear_all_btn.setCursor(Qt.PointingHandCursor)
-        self.clear_all_btn.setFont(create_font(size=9, weight=FontManager.WEIGHT_MEDIUM))
+        self.clear_all_btn.setFont(create_font(size=8, weight=FontManager.WEIGHT_MEDIUM))
         self.clear_all_btn.setStyleSheet(f"""
             QPushButton {{
                 background-color: {Colors.ERROR};
                 color: white;
                 border: none;
                 border-radius: 6px;
-                padding: 4px 8px;
+                padding: 2px 6px;
             }}
             QPushButton:hover {{
                 background-color: #c82333;
@@ -568,6 +567,58 @@ class BaseMapDialog(QDialog):
 
         return multiselect_frame
 
+    def _create_chip(self, building_id: str) -> QFrame:
+        """Create a single chip widget for a selected building."""
+        chip = QFrame()
+        chip.setObjectName(f"chip_{building_id}")
+        chip.setStyleSheet(f"""
+            QFrame {{
+                background-color: {Colors.PRIMARY_BLUE};
+                border-radius: 12px;
+                padding: 0px;
+            }}
+        """)
+        chip.setFixedHeight(26)
+
+        chip_layout = QHBoxLayout(chip)
+        chip_layout.setContentsMargins(8, 2, 4, 2)
+        chip_layout.setSpacing(4)
+        chip_layout.setDirection(QHBoxLayout.RightToLeft)
+
+        label = QLabel(building_id)
+        label.setFont(create_font(size=8, weight=FontManager.WEIGHT_MEDIUM))
+        label.setStyleSheet("QLabel { color: white; background: transparent; }")
+        chip_layout.addWidget(label)
+
+        close_btn = QToolButton()
+        close_btn.setText("\u00d7")
+        close_btn.setFixedSize(18, 18)
+        close_btn.setCursor(Qt.PointingHandCursor)
+        close_btn.setStyleSheet(f"""
+            QToolButton {{
+                color: white;
+                background: rgba(255,255,255,0.2);
+                border: none;
+                border-radius: 9px;
+                font-size: 12px;
+                font-weight: bold;
+            }}
+            QToolButton:hover {{
+                background: rgba(255,255,255,0.4);
+            }}
+        """)
+        close_btn.clicked.connect(lambda checked, bid=building_id: self._remove_chip(bid))
+        chip_layout.addWidget(close_btn)
+
+        return chip
+
+    def _remove_chip(self, building_id: str):
+        """Remove a single building from selection via JavaScript."""
+        if self.web_view:
+            self.web_view.page().runJavaScript(
+                f"if (typeof toggleBuildingSelection === 'function') {{ toggleBuildingSelection('{building_id}'); }}"
+            )
+
     def _create_confirm_area(self) -> QWidget:
         """Create confirmation area with coordinates display and buttons."""
         confirm_container = QWidget()
@@ -576,7 +627,7 @@ class BaseMapDialog(QDialog):
         confirm_layout.setContentsMargins(0, 8, 0, 0)
         confirm_layout.setSpacing(12)
 
-        # Coordinates display
+        # Coordinates display (hidden when multiselect UI is shown)
         self.coordinates_display = QLabel(tr("dialog.map.coordinates_not_selected"))
         self.coordinates_display.setAlignment(Qt.AlignCenter)
         self.coordinates_display.setFont(create_font(size=10, weight=FontManager.WEIGHT_MEDIUM))
@@ -589,7 +640,8 @@ class BaseMapDialog(QDialog):
                 padding: 10px 16px;
             }}
         """)
-        confirm_layout.addWidget(self.coordinates_display)
+        if not self.show_multiselect_ui:
+            confirm_layout.addWidget(self.coordinates_display)
 
         # Buttons row
         buttons_row = QHBoxLayout()
@@ -857,15 +909,20 @@ class BaseMapDialog(QDialog):
             self._update_map_buildings(geojson)
 
     def _update_buildings_list(self, building_ids: List[str]):
-        """Update the buildings list widget with selected building IDs."""
-        if not hasattr(self, 'buildings_list_widget'):
+        """Update the chips container with selected building IDs."""
+        if not hasattr(self, '_chips_layout'):
             return
 
-        self.buildings_list_widget.clear()
+        # Clear existing chips (keep the stretch at the end)
+        while self._chips_layout.count() > 1:
+            item = self._chips_layout.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+
+        # Add chip for each building
         for building_id in building_ids:
-            item = QListWidgetItem(f" {building_id}")
-            item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
-            self.buildings_list_widget.addItem(item)
+            chip = self._create_chip(building_id)
+            self._chips_layout.insertWidget(self._chips_layout.count() - 1, chip)
 
     def _on_clear_all_clicked(self):
         """Handle clear all button click - call JavaScript to clear selections."""

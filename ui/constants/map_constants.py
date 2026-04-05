@@ -62,7 +62,7 @@ class MapConstants:
     DRAWN_POLYGON_COLOR = '#28a745'  # أخضر - للمضلع المرسوم الجديد
     DRAWN_POLYGON_OPACITY = 0.4
     # Reference: https://leafletjs.com/reference.html#tilelayer
-    TILE_KEEP_BUFFER = 2              # Extra tile rows/cols beyond viewport (default)
+    TILE_KEEP_BUFFER = 4              # Extra tile rows/cols beyond viewport (reduces blank areas during pan)
     TILE_UPDATE_WHEN_ZOOMING = False  # Don't update tiles mid-zoom animation
     TILE_UPDATE_WHEN_IDLE = True      # Load tiles only after pan/zoom ends (reduces requests)
     TILE_PANE_BACKGROUND = '#1a1a2e'  # Dark background for tile pane (matches satellite imagery)
@@ -73,7 +73,7 @@ class MapConstants:
     CLUSTER_MAX_RADIUS = 60
     DISABLE_CLUSTERING_AT_ZOOM = 15
     CHUNK_INTERVAL = 100  # Chunk loading interval (ms)
-    CHUNK_DELAY = 25  # Delay between chunks (ms)
+    CHUNK_DELAY = 10  # Delay between chunks (ms)
     OVERLAY_COLOR = 'rgba(45, 45, 45, 0.6)'  # رمادي شفاف
     TITLE_BAR_HEIGHT = 32  # px
     SEARCH_BAR_HEIGHT = 42  # px

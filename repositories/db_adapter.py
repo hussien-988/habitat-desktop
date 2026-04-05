@@ -536,6 +536,17 @@ class SQLiteAdapter(DatabaseAdapter):
             )
         """)
 
+        # Migration: add versioning columns to evidence table
+        for col_sql in (
+            "ALTER TABLE evidence ADD COLUMN version_number INTEGER DEFAULT 1",
+            "ALTER TABLE evidence ADD COLUMN is_current_version INTEGER DEFAULT 1",
+            "ALTER TABLE evidence ADD COLUMN previous_version_id TEXT",
+        ):
+            try:
+                cursor.execute(col_sql)
+            except Exception:
+                pass
+
         # Claims table
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS claims (
@@ -1445,6 +1456,17 @@ class PostgreSQLAdapter(DatabaseAdapter):
                 updated_by TEXT
             )
         """)
+
+        # Migration: add versioning columns to evidence table
+        for col_sql in (
+            "ALTER TABLE evidence ADD COLUMN version_number INTEGER DEFAULT 1",
+            "ALTER TABLE evidence ADD COLUMN is_current_version INTEGER DEFAULT 1",
+            "ALTER TABLE evidence ADD COLUMN previous_version_id TEXT",
+        ):
+            try:
+                cursor.execute(col_sql)
+            except Exception:
+                pass
 
         # Claims table
         cursor.execute("""

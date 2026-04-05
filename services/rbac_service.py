@@ -20,6 +20,7 @@ class Permission(Enum):
     BUILDING_CREATE = "building:create"
     BUILDING_EDIT = "building:edit"
     BUILDING_DELETE = "building:delete"
+    BUILDING_LOCK = "building:lock"
 
     # Unit permissions
     UNIT_VIEW = "unit:view"
@@ -132,7 +133,7 @@ class RBACService:
             description="Data import, export, and review",
             description_ar="استيراد وتصدير ومراجعة البيانات",
             permissions=[
-                "building:view", "building:create", "building:edit",
+                "building:view", "building:create", "building:edit", "building:lock",
                 "unit:view", "unit:create", "unit:edit",
                 "person:view", "person:create", "person:edit",
                 "claim:view", "claim:create", "claim:edit", "claim:approve", "claim:reject", "claim:assign",
@@ -216,6 +217,7 @@ class RBACService:
         "btn_create_building": ["building:create"],
         "btn_edit_building": ["building:edit"],
         "btn_delete_building": ["building:delete"],
+        "btn_lock_building": ["building:lock"],
         "btn_create_unit": ["unit:create"],
         "btn_edit_unit": ["unit:edit"],
         "btn_delete_unit": ["unit:delete"],

@@ -331,8 +331,10 @@ class LeafletHTMLGenerator:
         .leaflet-tile-pane {{ background: {MapConstants.TILE_PANE_BACKGROUND}; }}
 
         /* GPU-accelerate tile compositing */
+        .leaflet-tile-pane {{ will-change: transform; }}
         .leaflet-tile {{
             will-change: transform;
+            backface-visibility: hidden;
         }}
 
         /* Loading overlay - hides map until tiles are ready */
@@ -694,6 +696,13 @@ class LeafletHTMLGenerator:
                 "                    popup += '<p><span class=\"label\">النوع:</span> ' + props.type + '</p>';\n"
                 "                }\n"
                 "\n"
+                "                if (props.is_assigned) {\n"
+                "                    popup += '<p><span style=\"background:#FEF3C7;color:#92400E;padding:2px 8px;border-radius:4px;font-size:12px;\">\\u2713 معيّن مسبقاً</span></p>';\n"
+                "                }\n"
+                "                if (props.is_locked) {\n"
+                "                    popup += '<p><span style=\"background:#F3F4F6;color:#6B7280;padding:2px 8px;border-radius:4px;font-size:12px;\">\\uD83D\\uDD12 مبنى مقفل</span></p>';\n"
+                "                }\n"
+                "\n"
                 "                " + selection_btn_js + "\n"
                 "\n"
                 "                popup += '</div>';\n"
@@ -826,9 +835,19 @@ class LeafletHTMLGenerator:
         // Buildings GeoJSON - Direct embedding (Simple & Works)
         var buildingsData = {buildings_json};
 
-        // Summary counts (no per-building spam)
-        var _polyCount = buildingsData.features.filter(f => f.geometry.type === 'Polygon' || f.geometry.type === 'MultiPolygon').length;
-        var _ptCount = buildingsData.features.filter(f => f.geometry.type === 'Point').length;
+        // Convert all Polygon/MultiPolygon geometries to Point (centroid) for pin-only display
+        if (buildingsData && buildingsData.features) {{
+            buildingsData.features.forEach(function(f) {{
+                if (f.geometry.type === 'Polygon' || f.geometry.type === 'MultiPolygon') {{
+                    var bounds = L.geoJSON(f).getBounds();
+                    var center = bounds.getCenter();
+                    f.geometry = {{ type: 'Point', coordinates: [center.lng, center.lat] }};
+                }}
+            }});
+        }}
+
+        // Summary counts
+        var _ptCount = buildingsData.features.length;
 
         // Marker Clustering Configuration
 
@@ -842,8 +861,8 @@ class LeafletHTMLGenerator:
                 disableClusteringAtZoom: 18,
                 spiderfyDistanceMultiplier: 1.5,
                 chunkedLoading: true,
-                chunkInterval: 100,
-                chunkDelay: 25,
+                chunkInterval: {MapConstants.CHUNK_INTERVAL},
+                chunkDelay: {MapConstants.CHUNK_DELAY},
                 removeOutsideVisibleBounds: true,
                 animate: true,
                 animateAddingMarkers: false
@@ -853,44 +872,40 @@ class LeafletHTMLGenerator:
             markers = L.featureGroup();
         }}
 
-        // Create separate layers for points and polygons
+        // Points layer for all buildings (all converted to Point above)
         var pointsLayer = L.featureGroup();
-        var polygonsLayer = L.featureGroup();
 
-        // Add buildings layer with unified geometry handling
+        // Add buildings layer (all features are Points after conversion)
         var buildingsLayer = L.geoJSON(buildingsData, {{
-            // Style function for Polygon/MultiPolygon features
-            style: function(feature) {{
-                var status = getStatusKey(feature.properties.status || 1);
-                var color = statusColors[status] || '#0072BC';
-
-                return {{
-                    color: '#fff',
-                    weight: 2,
-                    fillColor: color,
-                    fillOpacity: 0.6,
-                    opacity: 1,
-                    className: 'building-polygon'
-                }};
-            }},
-
-            // pointToLayer for Point features - استخدام Pin Markers
+            // pointToLayer for Point features
             pointToLayer: function(feature, latlng) {{
                 var status = getStatusKey(feature.properties.status || 1);
                 var color = statusColors[status] || '#0072BC';
+                var isLocked = feature.properties.is_locked === true;
+                var isAssigned = feature.properties.is_assigned === true;
 
-                // SVG Pin Marker
+                var innerSvg;
+                if (isLocked) {{
+                    color = '#9CA3AF';
+                    innerSvg = '<path d="M9.5 8V7a2.5 2.5 0 015 0v1M9 8h6a1 1 0 011 1v4a1 1 0 01-1 1H9a1 1 0 01-1-1V9a1 1 0 011-1z" fill="none" stroke="#fff" stroke-width="1.5"/>';
+                }} else if (isAssigned) {{
+                    color = '#F59E0B';
+                    innerSvg = '<text x="12" y="16" text-anchor="middle" fill="#fff" font-size="10" font-weight="bold">&#10003;</text>';
+                }} else {{
+                    innerSvg = '<circle cx="12" cy="12" r="4" fill="#fff"/>';
+                }}
+
                 var pinIcon = L.divIcon({{
                     className: 'building-pin-icon',
-                    html: '<div style="position: relative; width: 24px; height: 36px;">' +
+                    html: '<div style="position:relative;width:24px;height:36px;">' +
                           '<svg width="24" height="36" viewBox="0 0 24 36" xmlns="http://www.w3.org/2000/svg">' +
                           '<path d="M12 0C5.4 0 0 5.4 0 12c0 8 12 24 12 24s12-16 12-24c0-6.6-5.4-12-12-12z" ' +
                           'fill="' + color + '" stroke="#fff" stroke-width="2"/>' +
-                          '<circle cx="12" cy="12" r="4" fill="#fff"/>' +
+                          innerSvg +
                           '</svg></div>',
                     iconSize: [24, 36],
-                    iconAnchor: [12, 36],      // نقطة الارتكاز (طرف الدبوس)
-                    popupAnchor: [0, -36]      // موقع الـpopup فوق الدبوس
+                    iconAnchor: [12, 36],
+                    popupAnchor: [0, -36]
                 }});
 
                 return L.marker(latlng, {{icon: pinIcon}});
@@ -913,25 +928,16 @@ class LeafletHTMLGenerator:
 
                 {popup_js_block}
 
-                // Add to appropriate layer group
-                // IMPORTANT: We should use actualGeomType (from geometry) not geomType (from properties)
-                // to ensure correct rendering
-                if (actualGeomType === 'Point') {{
-                    pointsLayer.addLayer(layer);
-                    markers.addLayer(layer);
-                }} else {{
-                    polygonsLayer.addLayer(layer);
-                }}
+                // All buildings are Points — add to marker cluster
+                pointsLayer.addLayer(layer);
+                markers.addLayer(layer);
 
                 {hover_js_block}
             }}
         }});
 
-        // Add marker cluster group to map (contains all point markers)
+        // Add marker cluster group to map (contains all markers)
         map.addLayer(markers);
-
-        // Add polygons layer to map (bypasses clustering)
-        polygonsLayer.addTo(map);
 
         // Add existing polygons layer (displayed in blue)
         {LeafletHTMLGenerator._get_existing_polygons_js(existing_polygons_geojson) if existing_polygons_geojson else '// No existing polygons'}
@@ -962,7 +968,7 @@ class LeafletHTMLGenerator:
             }}
         }}
 
-        {LeafletHTMLGenerator._get_legend_js() if show_legend else ''}
+        {LeafletHTMLGenerator._get_status_legend_js() if (show_legend and not enable_multiselect) else ''}
 
         {LeafletHTMLGenerator._get_layer_control_js() if show_layer_control else ''}
 
@@ -1010,6 +1016,8 @@ class LeafletHTMLGenerator:
 
         {LeafletHTMLGenerator._get_multiselect_js() if enable_multiselect else '// Multi-select disabled'}
 
+        {LeafletHTMLGenerator._get_assignment_legend_js() if enable_multiselect else '// Legend disabled (not in multiselect mode)'}
+
         {LeafletHTMLGenerator._get_viewport_loading_js() if enable_viewport_loading else '// Viewport loading disabled'}
 
         // Status confirmation overlay (bottom-left)
@@ -1045,8 +1053,8 @@ class LeafletHTMLGenerator:
 '''
 
     @staticmethod
-    def _get_legend_js() -> str:
-        """Get JavaScript for legend control."""
+    def _get_status_legend_js() -> str:
+        """Get JavaScript for building status legend control."""
         return '''
         // Add legend
         var legend = L.control({ position: 'bottomright' });
@@ -1134,7 +1142,7 @@ class LeafletHTMLGenerator:
             // Zoom-based visibility:
             // zoom 15-16: neighborhood pins visible, initial buildings hidden
             // zoom >= 17: pins hidden, buildings visible
-            // When viewport loading is active, DON'T re-add initial markers/polygonsLayer
+            // When viewport loading is active, DON'T re-add initial markers
             // (viewport loading handles building display at zoom 17+ via its own layers)
             function updateNeighborhoodVisibility() {{
                 var zoom = map.getZoom();
@@ -1146,13 +1154,11 @@ class LeafletHTMLGenerator:
                     // Only add initial buildings if viewport loading is NOT active
                     if (!hasViewportLoading) {{
                         if (typeof markers !== 'undefined' && !map.hasLayer(markers)) map.addLayer(markers);
-                        if (typeof polygonsLayer !== 'undefined' && !map.hasLayer(polygonsLayer)) map.addLayer(polygonsLayer);
                     }}
                 }} else {{
                     // City overview (zoom 15-16) — show pins, hide initial buildings
                     if (!map.hasLayer(neighborhoodPins)) map.addLayer(neighborhoodPins);
                     if (typeof markers !== 'undefined' && map.hasLayer(markers)) map.removeLayer(markers);
-                    if (typeof polygonsLayer !== 'undefined' && map.hasLayer(polygonsLayer)) map.removeLayer(polygonsLayer);
                 }}
             }}
 
@@ -1761,6 +1767,33 @@ class LeafletHTMLGenerator:
         """
         from services.leaflet_multiselect_template import MULTISELECT_JS_TEMPLATE
         return MULTISELECT_JS_TEMPLATE
+
+    @staticmethod
+    def _get_assignment_legend_js() -> str:
+        """Get JavaScript for the color legend control on the assignment map."""
+        return """
+        // Color legend for field assignment map
+        var legend = L.control({position: 'bottomright'});
+        legend.onAdd = function(map) {
+            var div = L.DomUtil.create('div', 'map-legend');
+            div.style.cssText = 'background:white;padding:10px 14px;border-radius:10px;' +
+                'box-shadow:0 2px 10px rgba(0,0,0,0.15);font-size:12px;direction:rtl;line-height:2;' +
+                'border:1px solid rgba(0,0,0,0.08);';
+            var dot = 'display:inline-block;width:12px;height:12px;border-radius:50%;margin-left:6px;vertical-align:middle;';
+            div.innerHTML =
+                '<div style="font-weight:bold;margin-bottom:2px;font-size:13px;">\\u062f\\u0644\\u064a\\u0644 \\u0627\\u0644\\u0623\\u0644\\u0648\\u0627\\u0646</div>' +
+                '<div><span style="' + dot + 'background:#28a745;"></span> \\u0633\\u0644\\u064a\\u0645</div>' +
+                '<div><span style="' + dot + 'background:#ffc107;"></span> \\u0645\\u062a\\u0636\\u0631\\u0631 \\u062c\\u0632\\u0626\\u064a\\u0627\\u064b</div>' +
+                '<div><span style="' + dot + 'background:#dc3545;"></span> \\u0645\\u062a\\u0636\\u0631\\u0631 / \\u0645\\u062f\\u0645\\u0631</div>' +
+                '<div style="border-top:1px solid #eee;margin:4px 0;"></div>' +
+                '<div><span style="' + dot + 'background:#F59E0B;"></span> \\u0645\\u0639\\u064a\\u0651\\u0646 \\u0645\\u0633\\u0628\\u0642\\u0627\\u064b</div>' +
+                '<div><span style="' + dot + 'background:#9CA3AF;"></span> \\u0645\\u0642\\u0641\\u0644</div>' +
+                '<div style="border-top:1px solid #eee;margin:4px 0;"></div>' +
+                '<div><span style="' + dot + 'background:#1976D2;border:2px solid #64B5F6;width:10px;height:10px;"></span> \\u0645\\u062d\\u062f\\u062f \\u062d\\u0627\\u0644\\u064a\\u0627\\u064b</div>';
+            return div;
+        };
+        legend.addTo(map);
+        """
 
     @staticmethod
     def _get_viewport_loading_js() -> str:
