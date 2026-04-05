@@ -115,43 +115,27 @@ class ImportWizardPage(QWidget):
 
         self.setStyleSheet(StyleManager.page_background())
 
-        # Outer layout (no padding) for full-width footer
+        # Outer layout (no padding) for full-width header and footer
         outer_layout = QVBoxLayout(self)
         outer_layout.setContentsMargins(0, 0, 0, 0)
         outer_layout.setSpacing(0)
 
-        # Content container (with padding)
-        content_container = QWidget()
-        content_container.setStyleSheet("background: transparent;")
-
-        content_layout = QVBoxLayout(content_container)
-        from ui.design_system import PageDimensions
-        content_layout.setContentsMargins(
-            PageDimensions.content_padding_h(),
-            PageDimensions.content_padding_v_top(),
-            PageDimensions.content_padding_h(),
-            0
-        )
-        content_layout.setSpacing(0)
-
-        # Dark header with integrated step indicator pills
+        # Dark header with integrated step indicator pills (full-width)
         step_names = [tr(key) for key in _STEP_NAMES_KEYS]
         self.header = WizardHeader(
             title=tr("wizard.import.title"),
             subtitle=tr("wizard.import.subtitle"),
             steps=step_names,
         )
-        content_layout.addWidget(self.header)
+        outer_layout.addWidget(self.header)
 
-        # Accent line
+        # Accent line (full-width)
         self._accent = AccentLine()
-        content_layout.addWidget(self._accent)
+        outer_layout.addWidget(self._accent)
 
         # Step container (QStackedWidget)
         self.step_container = QStackedWidget()
-        content_layout.addWidget(self.step_container, 1)
-
-        outer_layout.addWidget(content_container, 1)
+        outer_layout.addWidget(self.step_container, 1)
 
         # Loading overlay (hidden)
         self._loading_overlay = self._create_loading_overlay()

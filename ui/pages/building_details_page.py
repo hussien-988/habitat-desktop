@@ -2,14 +2,13 @@
 """
 Building Details Page — عرض تفاصيل المبنى
 Card-based view matching review_step.py pattern.
-3 cards: building info, stats, location + units table toggle.
+3 cards: building info, stats, location.
 """
 
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel,
     QPushButton, QFrame, QScrollArea,
     QGraphicsDropShadowEffect,
-    QTableWidget, QTableWidgetItem, QHeaderView, QAbstractItemView
 )
 from PyQt5.QtCore import Qt, pyqtSignal, QSize
 from PyQt5.QtGui import QColor, QIcon
@@ -19,9 +18,11 @@ from repositories.database import Database
 from repositories.building_repository import BuildingRepository
 from controllers.building_controller import BuildingController
 from controllers.unit_controller import UnitController
-from services.display_mappings import get_unit_type_display, get_unit_status_display
 from ui.components.icon import Icon
 from ui.components.toast import Toast
+from ui.components.dark_header_zone import DarkHeaderZone
+from ui.components.stat_pill import StatPill
+from ui.components.accent_line import AccentLine
 from ui.design_system import Colors, PageDimensions, ButtonDimensions
 from ui.font_utils import create_font, FontManager
 from ui.style_manager import StyleManager
@@ -35,7 +36,7 @@ logger = get_logger(__name__)
 
 
 class BuildingDetailsPage(QWidget):
-    """Building details page — 3 cards + units table toggle."""
+    """Building details page — 3 cards (info, stats, location)."""
 
     back_requested = pyqtSignal()
 
@@ -48,93 +49,74 @@ class BuildingDetailsPage(QWidget):
         self.building_controller = BuildingController(db)
         self.current_building = None
 
-        self._units_view_active = False
-        self._units_list = []
-        self._units_page = 1
-        self._units_per_page = 11
-
         self._setup_ui()
     # UI Setup
 
     def _setup_ui(self):
         self.setLayoutDirection(get_layout_direction())
-        self.setStyleSheet(StyleManager.page_background())
+        self.setStyleSheet("background: transparent;")
 
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(
-            PageDimensions.content_padding_h(),
-            PageDimensions.content_padding_v_top(),
-            PageDimensions.content_padding_h(),
-            PageDimensions.CONTENT_PADDING_V_BOTTOM,
-        )
-        layout.setSpacing(15)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
 
-        # Header: [title+breadcrumb right] <stretch> [button left]
-        header_row = QHBoxLayout()
-        header_row.setSpacing(15)
+        # Dark header zone
+        self._header = DarkHeaderZone(self)
+        self.title_label = self._header.get_title_label()
 
-        title_area = QVBoxLayout()
-        title_area.setSpacing(2)
+        self._stat_units = StatPill(tr("page.building_details.units_count"))
+        self._header.add_stat_pill(self._stat_units)
 
-        self.title_label = QLabel("")
-        self.title_label.setFont(create_font(
-            size=FontManager.SIZE_TITLE,
-            weight=FontManager.WEIGHT_SEMIBOLD,
-        ))
-        self.title_label.setStyleSheet(
-            f"color: {Colors.PAGE_TITLE}; background: transparent; border: none;"
-        )
-        title_area.addWidget(self.title_label)
-
-        self.breadcrumb_label = QLabel(tr("page.building_details.breadcrumb"))
-        self.breadcrumb_label.setFont(create_font(
-            size=FontManager.SIZE_BODY,
-            weight=FontManager.WEIGHT_SEMIBOLD,
-        ))
-        self.breadcrumb_label.setStyleSheet(
-            f"color: {Colors.PAGE_SUBTITLE}; background: transparent; border: none;"
-        )
-        title_area.addWidget(self.breadcrumb_label)
-
-        header_row.addLayout(title_area)
-        header_row.addStretch()
-
-        # "عرض" button (same style as save button)
-        self.view_units_btn = QPushButton(tr("page.building_details.view_units"))
-        self.view_units_btn.setFixedSize(ButtonDimensions.SAVE_WIDTH, ButtonDimensions.SAVE_HEIGHT)
-        self.view_units_btn.setCursor(Qt.PointingHandCursor)
-        self.view_units_btn.setFont(create_font(
-            size=ButtonDimensions.SAVE_FONT_SIZE,
-            weight=FontManager.WEIGHT_REGULAR,
-        ))
-        self.view_units_btn.setStyleSheet(StyleManager.nav_button_primary())
-        self.view_units_btn.clicked.connect(self._toggle_units_view)
-        header_row.addWidget(self.view_units_btn)
+        # Action buttons in dark header
+        self._close_btn = QPushButton("×")
+        self._close_btn.setFixedSize(40, ButtonDimensions.SAVE_HEIGHT)
+        self._close_btn.setCursor(Qt.PointingHandCursor)
+        self._close_btn.setFont(create_font(size=16, weight=FontManager.WEIGHT_BOLD))
+        self._close_btn.setStyleSheet(StyleManager.dark_action_button())
+        self._close_btn.clicked.connect(self.back_requested.emit)
+        self._header.add_action_widget(self._close_btn)
 
         self._lock_btn = QPushButton("")
-        self._lock_btn.setFixedSize(ButtonDimensions.SAVE_WIDTH, ButtonDimensions.SAVE_HEIGHT)
+        self._lock_btn.setFixedHeight(ButtonDimensions.SAVE_HEIGHT)
+        self._lock_btn.setMinimumWidth(ButtonDimensions.SAVE_WIDTH)
         self._lock_btn.setCursor(Qt.PointingHandCursor)
         self._lock_btn.setFont(create_font(
             size=ButtonDimensions.SAVE_FONT_SIZE,
             weight=FontManager.WEIGHT_REGULAR,
         ))
-        self._lock_btn.setStyleSheet(StyleManager.back_button_light())
+        self._lock_btn.setStyleSheet(StyleManager.dark_action_button())
         self._lock_btn.clicked.connect(self._on_toggle_lock)
         self._lock_btn.setVisible(False)
-        header_row.addWidget(self._lock_btn)
+        self._header.add_action_widget(self._lock_btn)
 
-        back_btn = QPushButton(tr("action.back"))
-        back_btn.setFixedSize(100, ButtonDimensions.SAVE_HEIGHT)
-        back_btn.setCursor(Qt.PointingHandCursor)
-        back_btn.setFont(create_font(
+        self._back_btn = QPushButton(tr("action.back"))
+        self._back_btn.setFixedSize(100, ButtonDimensions.SAVE_HEIGHT)
+        self._back_btn.setCursor(Qt.PointingHandCursor)
+        self._back_btn.setFont(create_font(
             size=ButtonDimensions.SAVE_FONT_SIZE,
             weight=FontManager.WEIGHT_SEMIBOLD,
         ))
-        back_btn.setStyleSheet(StyleManager.back_button_light())
-        back_btn.clicked.connect(self.back_requested.emit)
-        header_row.addWidget(back_btn)
+        self._back_btn.setStyleSheet(StyleManager.dark_action_button())
+        self._back_btn.clicked.connect(self.back_requested.emit)
+        self._header.add_action_widget(self._back_btn)
 
-        layout.addLayout(header_row)
+        layout.addWidget(self._header)
+
+        # Accent line
+        self._accent_line = AccentLine()
+        layout.addWidget(self._accent_line)
+
+        # Light content wrapper
+        content_wrapper = QWidget()
+        content_wrapper.setStyleSheet(StyleManager.page_background())
+        content_inner = QVBoxLayout(content_wrapper)
+        content_inner.setContentsMargins(
+            PageDimensions.content_padding_h(), 14,
+            PageDimensions.content_padding_h(),
+            PageDimensions.CONTENT_PADDING_V_BOTTOM,
+        )
+        content_inner.setSpacing(15)
+        layout.addWidget(content_wrapper)
 
         # Scroll area
         scroll = QScrollArea()
@@ -155,7 +137,7 @@ class BuildingDetailsPage(QWidget):
         self._scroll_layout.setSpacing(20)
 
         # Card 1: Building info (header + code + address)
-        self.info_card, self.info_content = self._create_card_base(
+        self.info_card, self.info_content, self._info_title_lbl, self._info_subtitle_lbl = self._create_card_base(
             "blue", tr("page.building_details.card_title"), tr("page.building_details.card_subtitle")
         )
         self._scroll_layout.addWidget(self.info_card)
@@ -168,28 +150,26 @@ class BuildingDetailsPage(QWidget):
         self.location_card, self.location_content = self._create_simple_card()
         self._scroll_layout.addWidget(self.location_card)
 
-        # Units table card (initially hidden)
-        self.units_table_card = self._create_units_table_card()
-        self.units_table_card.setVisible(False)
-        self._scroll_layout.addWidget(self.units_table_card)
-
         self._scroll_layout.addStretch()
 
         scroll.setWidget(scroll_content)
         self._scroll = scroll
-        layout.addWidget(scroll)
+        content_inner.addWidget(scroll)
 
         from ui.components.skeleton_loader import DetailSkeleton
         self._skeleton = DetailSkeleton(groups=3, fields_per_group=4, message=tr("page.building_details.loading"))
-        layout.addWidget(self._skeleton)
+        content_inner.addWidget(self._skeleton)
         self._skeleton.hide()
+
+        from ui.components.loading_spinner import LoadingSpinnerOverlay
+        self._spinner = LoadingSpinnerOverlay(self)
     # Card Builders (same pattern as review_step.py)
 
     def _create_card_base(self, icon_name: str, title: str, subtitle: str) -> tuple:
         """Create card with header (icon + title + subtitle). Returns (card, content_layout)."""
         card = QFrame()
         card.setLayoutDirection(get_layout_direction())
-        card.setStyleSheet(StyleManager.form_card())
+        card.setStyleSheet(StyleManager.data_card())
         self._add_shadow(card)
 
         card_layout = QVBoxLayout(card)
@@ -252,13 +232,13 @@ class BuildingDetailsPage(QWidget):
 
         card_layout.addWidget(content_widget)
 
-        return card, content_layout
+        return card, content_layout, title_lbl, subtitle_lbl
 
     def _create_simple_card(self) -> tuple:
         """Create a simple card (no header). Returns (card, content_layout)."""
         card = QFrame()
         card.setLayoutDirection(get_layout_direction())
-        card.setStyleSheet(StyleManager.form_card())
+        card.setStyleSheet(StyleManager.data_card())
         self._add_shadow(card)
 
         card_layout = QVBoxLayout(card)
@@ -283,98 +263,6 @@ class BuildingDetailsPage(QWidget):
         shadow.setYOffset(4)
         shadow.setColor(QColor(0, 0, 0, 25))
         widget.setGraphicsEffect(shadow)
-    # Units Table Card
-
-    def _create_units_table_card(self) -> QFrame:
-        """Create card containing the units table for this building."""
-        card = QFrame()
-        card.setLayoutDirection(get_layout_direction())
-        card.setObjectName("unitsTableCard")
-        card.setStyleSheet(StyleManager.table_card())
-        self._add_shadow(card)
-
-        card_layout = QVBoxLayout(card)
-        card_layout.setContentsMargins(0, 0, 0, 0)
-        card_layout.setSpacing(0)
-
-        # Table widget
-        self.units_table = QTableWidget()
-        self.units_table.setColumnCount(5)
-        self.units_table.setRowCount(self._units_per_page)
-        self.units_table.setLayoutDirection(get_layout_direction())
-        self.units_table.setShowGrid(False)
-        self.units_table.setFocusPolicy(Qt.NoFocus)
-        self.units_table.setSelectionMode(QTableWidget.NoSelection)
-        self.units_table.setEditTriggers(QAbstractItemView.NoEditTriggers)
-        self.units_table.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        self.units_table.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-
-        # Headers
-        headers = [tr("table.units.unit_number"), tr("table.units.area"), tr("table.units.unit_type"), tr("table.units.unit_status"), tr("table.units.unit_description")]
-        for i, text in enumerate(headers):
-            item = QTableWidgetItem(text)
-            self.units_table.setHorizontalHeaderItem(i, item)
-
-        self.units_table.setStyleSheet(StyleManager.modern_table() + StyleManager.scrollbar())
-
-        # Header config
-        h = self.units_table.horizontalHeader()
-        h.setDefaultAlignment(Qt.AlignRight | Qt.AlignVCenter)
-        h.setFixedHeight(56)
-        h.setStretchLastSection(True)
-
-        # Column widths
-        h.setSectionResizeMode(0, QHeaderView.Fixed)
-        h.resizeSection(0, 200)
-        h.setSectionResizeMode(1, QHeaderView.Fixed)
-        h.resizeSection(1, 150)
-        h.setSectionResizeMode(2, QHeaderView.Fixed)
-        h.resizeSection(2, 220)
-        h.setSectionResizeMode(3, QHeaderView.Fixed)
-        h.resizeSection(3, 220)
-        h.setSectionResizeMode(4, QHeaderView.Stretch)
-
-        # Row heights
-        v_header = self.units_table.verticalHeader()
-        v_header.setVisible(False)
-        v_header.setDefaultSectionSize(52)
-
-        card_layout.addWidget(self.units_table)
-
-        # Footer with pagination
-        footer = QFrame()
-        footer.setObjectName("unitsFooter")
-        footer.setStyleSheet(StyleManager.nav_footer())
-        footer.setFixedHeight(58)
-
-        footer_layout = QHBoxLayout(footer)
-        footer_layout.setContentsMargins(16, 0, 16, 0)
-
-        # Navigation buttons
-        self.units_prev_btn = QPushButton(">")
-        self.units_prev_btn.setFixedSize(32, 32)
-        self.units_prev_btn.setCursor(Qt.PointingHandCursor)
-        self.units_prev_btn.setStyleSheet(StyleManager.pagination_button())
-        self.units_prev_btn.clicked.connect(self._on_units_prev_page)
-        footer_layout.addWidget(self.units_prev_btn)
-
-        self.units_next_btn = QPushButton("<")
-        self.units_next_btn.setFixedSize(32, 32)
-        self.units_next_btn.setCursor(Qt.PointingHandCursor)
-        self.units_next_btn.setStyleSheet(StyleManager.pagination_button())
-        self.units_next_btn.clicked.connect(self._on_units_next_page)
-        footer_layout.addWidget(self.units_next_btn)
-
-        self.units_page_label = QLabel("0-0 of 0")
-        self.units_page_label.setStyleSheet(
-            "color: #637381; font-size: 10pt; font-weight: 400; background: transparent;"
-        )
-        footer_layout.addWidget(self.units_page_label)
-        footer_layout.addStretch()
-
-        card_layout.addWidget(footer)
-
-        return card
     # Data Loading
 
     def refresh(self, data=None):
@@ -409,17 +297,8 @@ class BuildingDetailsPage(QWidget):
         )
         self._lock_btn.setVisible(True)
 
-        # Reset to cards view
-        if self._units_view_active:
-            self.info_card.setVisible(True)
-            self.stats_card.setVisible(True)
-            self.location_card.setVisible(True)
-            self.units_table_card.setVisible(False)
-            self.view_units_btn.setText(tr("page.building_details.view_units"))
-            self._units_view_active = False
-
         display_id = building.building_id_formatted or building.building_id or "-"
-        self.title_label.setText(display_id)
+        self._header.set_title(display_id)
 
         # Show cards immediately with available data
         self._skeleton.stop()
@@ -434,6 +313,7 @@ class BuildingDetailsPage(QWidget):
         # Fetch full details + unit counts in background
         building_id_for_api = building.building_uuid or building.building_id
         if building_id_for_api:
+            self._spinner.show_loading(tr("page.building_details.loading"))
             auth_token = None
             try:
                 main_window = self.window()
@@ -484,6 +364,7 @@ class BuildingDetailsPage(QWidget):
 
     def _on_refresh_details_finished(self, result):
         """Callback: update UI with full building details from API."""
+        self._spinner.hide_loading()
         building = result["building"]
         units_data = result["units_data"]
 
@@ -499,11 +380,12 @@ class BuildingDetailsPage(QWidget):
 
         self.current_building = building
         display_id = building.building_id_formatted or building.building_id or "-"
-        self.title_label.setText(display_id)
+        self._header.set_title(display_id)
         self._populate_cards(building)
 
     def _on_refresh_details_error(self, error_msg):
         """Callback: API fetch failed, keep existing data."""
+        self._spinner.hide_loading()
         logger.warning(f"Background building details fetch failed: {error_msg}")
 
     def _clear_layout(self, layout):
@@ -526,6 +408,10 @@ class BuildingDetailsPage(QWidget):
         units_count = str(getattr(building, 'number_of_units', 0))
         apartments_count = str(getattr(building, 'number_of_apartments', 0))
         shops_count = str(getattr(building, 'number_of_shops', 0))
+        try:
+            self._stat_units.set_count(int(units_count))
+        except (ValueError, TypeError):
+            self._stat_units.set_count(0)
         entry_date = format_date(getattr(building, 'created_at', None)) or "-"
         location_desc = getattr(building, 'location_description', '-') or '-'
         general_desc = getattr(building, 'general_description', '-') or '-'
@@ -702,148 +588,6 @@ class BuildingDetailsPage(QWidget):
         else:
             Toast.show_toast(self, tr("building.lock_failed"), Toast.ERROR)
 
-    # Units View Toggle
-
-    def _toggle_units_view(self):
-        """Toggle between cards view and units table view."""
-        if self._units_view_active:
-            self.info_card.setVisible(True)
-            self.stats_card.setVisible(True)
-            self.location_card.setVisible(True)
-            self.units_table_card.setVisible(False)
-            self.view_units_btn.setText(tr("page.building_details.view_units"))
-            self._units_view_active = False
-        else:
-            self.info_card.setVisible(False)
-            self.stats_card.setVisible(False)
-            self.location_card.setVisible(False)
-            self.units_table_card.setVisible(True)
-            self.view_units_btn.setText(tr("action.back"))
-            self._units_view_active = True
-            self._load_units()
-
-    def _load_units(self):
-        """Load units for the current building (non-blocking)."""
-        if not self.current_building:
-            return
-
-        auth_token = None
-        try:
-            main_window = self.window()
-            if main_window and hasattr(main_window, '_api_token') and main_window._api_token:
-                auth_token = main_window._api_token
-        except Exception as e:
-            logger.warning(f"Could not get auth token: {e}")
-
-        building_uuid = self.current_building.building_uuid
-        if not building_uuid:
-            Toast.show_toast(self, tr("page.building_details.no_uuid"), Toast.ERROR)
-            return
-
-        self._load_units_worker = ApiWorker(
-            self._fetch_units_bg, building_uuid, auth_token
-        )
-        self._load_units_worker.finished.connect(self._on_load_units_finished)
-        self._load_units_worker.error.connect(self._on_load_units_error)
-        self._load_units_worker.start()
-
-    def _fetch_units_bg(self, building_uuid, auth_token):
-        """Background: fetch units for building."""
-        if auth_token:
-            self.unit_controller.set_auth_token(auth_token)
-        return self.unit_controller.get_units_for_building(building_uuid)
-
-    def _on_load_units_finished(self, result):
-        """Callback: populate units table with fetched data."""
-        if result.success:
-            self._units_list = result.data or []
-        else:
-            logger.error(f"Failed to load units: {result.message}")
-            self._units_list = []
-            Toast.show_toast(self, tr("page.building_details.units_load_failed").format(error=result.message), Toast.ERROR)
-
-        self._units_page = 1
-        self._update_units_table()
-
-    def _on_load_units_error(self, error_msg):
-        """Callback: units fetch failed."""
-        logger.error(f"Failed to load units: {error_msg}")
-        self._units_list = []
-        self._units_page = 1
-        self._update_units_table()
-        Toast.show_toast(self, tr("page.building_details.units_load_failed").format(error=error_msg), Toast.ERROR)
-
-    def _update_units_table(self):
-        """Populate the units table with current page data."""
-        total = len(self._units_list)
-        total_pages = max(1, (total + self._units_per_page - 1) // self._units_per_page)
-        self._units_page = min(self._units_page, total_pages)
-
-        start_idx = (self._units_page - 1) * self._units_per_page
-        end_idx = min(start_idx + self._units_per_page, total)
-        page_units = self._units_list[start_idx:end_idx]
-
-        self.units_table.clearSpans()
-        self.units_table.setRowCount(self._units_per_page)
-
-        # Clear all cells
-        for row in range(self._units_per_page):
-            for col in range(5):
-                self.units_table.setItem(row, col, QTableWidgetItem(""))
-
-        if total == 0:
-            self.units_table.setSpan(0, 0, self._units_per_page, 5)
-            empty_item = QTableWidgetItem(tr("page.building_details.no_units"))
-            empty_item.setTextAlignment(Qt.AlignCenter)
-            empty_item.setForeground(QColor("#9CA3AF"))
-            self.units_table.setItem(0, 0, empty_item)
-            self.units_page_label.setText("0-0 of 0")
-            self.units_prev_btn.setEnabled(False)
-            self.units_next_btn.setEnabled(False)
-            return
-
-        for row, unit in enumerate(page_units):
-            # col 0: unit number
-            try:
-                num = str(int(unit.unit_number))
-            except (ValueError, TypeError):
-                num = unit.unit_number or ""
-            self.units_table.setItem(row, 0, QTableWidgetItem(num))
-
-            # col 1: area
-            area = str(unit.area_sqm) if unit.area_sqm else "-"
-            self.units_table.setItem(row, 1, QTableWidgetItem(area))
-
-            # col 2: unit type
-            self.units_table.setItem(row, 2, QTableWidgetItem(
-                get_unit_type_display(unit.unit_type)
-            ))
-
-            # col 3: unit status
-            self.units_table.setItem(row, 3, QTableWidgetItem(
-                get_unit_status_display(unit.apartment_status)
-            ))
-
-            # col 4: description (truncated)
-            desc = unit.property_description or ""
-            desc_display = desc[:40] + "..." if len(desc) > 40 else desc
-            self.units_table.setItem(row, 4, QTableWidgetItem(desc_display))
-
-        self.units_page_label.setText(f"{start_idx + 1}-{end_idx} of {total}")
-        self.units_prev_btn.setEnabled(self._units_page > 1)
-        self.units_next_btn.setEnabled(self._units_page < total_pages)
-
-    def _on_units_prev_page(self):
-        if self._units_page > 1:
-            self._units_page -= 1
-            self._update_units_table()
-
-    def _on_units_next_page(self):
-        total = len(self._units_list)
-        total_pages = max(1, (total + self._units_per_page - 1) // self._units_per_page)
-        if self._units_page < total_pages:
-            self._units_page += 1
-            self._update_units_table()
     # Map Dialog
 
     def _open_map_dialog(self):
@@ -874,11 +618,15 @@ class BuildingDetailsPage(QWidget):
         direction = get_layout_direction()
         self.setLayoutDirection(direction)
         self._scroll_content.setLayoutDirection(direction)
-        self.units_table.setLayoutDirection(direction)
-        self.breadcrumb_label.setText(tr("page.building_details.breadcrumb"))
-        if self._units_view_active:
-            self.view_units_btn.setText(tr("action.back"))
-        else:
-            self.view_units_btn.setText(tr("page.building_details.view_units"))
+        for card in [self.info_card, self.stats_card, self.location_card]:
+            card.setLayoutDirection(direction)
+        self._back_btn.setText(tr("action.back"))
+        self._stat_units.set_label(tr("page.building_details.units_count"))
+        self._info_title_lbl.setText(tr("page.building_details.card_title"))
+        self._info_subtitle_lbl.setText(tr("page.building_details.card_subtitle"))
         if self.current_building:
-            self._populate_cards()
+            is_locked = getattr(self.current_building, 'is_locked', False)
+            self._lock_btn.setText(
+                tr("building.action.unlock") if is_locked else tr("building.action.lock")
+            )
+            self._populate_cards(self.current_building)

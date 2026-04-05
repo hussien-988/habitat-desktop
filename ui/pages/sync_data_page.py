@@ -1,14 +1,14 @@
 # -*- coding: utf-8 -*-
 """
 Sync & Data Page — صفحة المزامنة والبيانات
-Displays all building assignments with sync status, accordion details,
+Displays all building assignments with sync status using animated cards,
 sync pulse overlay, status change notifications, and unassign.
 """
 
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel,
-    QFrame, QScrollArea, QSizePolicy, QComboBox,
-    QPushButton
+    QFrame, QScrollArea, QComboBox,
+    QPushButton, QStackedWidget
 )
 from PyQt5.QtCore import Qt, QTimer, QPropertyAnimation, QEasingCurve, pyqtProperty, pyqtSignal
 from PyQt5.QtGui import QFont, QPainter, QColor, QLinearGradient
@@ -19,6 +19,7 @@ from ui.components.icon import Icon
 from ui.components.dark_header_zone import DarkHeaderZone
 from ui.components.stat_pill import StatPill
 from ui.components.accent_line import AccentLine
+from ui.components.animated_card import AnimatedCard, EmptyStateAnimated, animate_card_entrance
 from ui.design_system import Colors, PageDimensions
 from ui.style_manager import StyleManager
 from ui.font_utils import create_font, FontManager
@@ -50,6 +51,16 @@ _PENDING_STATUSES = {'not_transferred', 'pending', '0'}
 _COMPLETED_STATUSES = {'transferred', 'completed', '2'}
 _CANCELLED_STATUSES = {'cancelled', '5'}
 
+# Status string -> strip color mapping
+_STATUS_STRIP_COLOR = {
+    'not_transferred': '#9CA3AF', 'pending': '#9CA3AF', '0': '#9CA3AF',
+    'transferring': '#3890DF', 'in_progress': '#3890DF', '1': '#3890DF',
+    'transferred': '#10B981', 'completed': '#10B981', '2': '#10B981',
+    'failed': '#EF4444', '3': '#EF4444',
+    '4': '#F59E0B', 'retry': '#F59E0B',
+    '5': '#6B7280', 'cancelled': '#6B7280',
+}
+
 def _get_unit_type_ar():
     return {
         1: tr("page.sync.unit_apartment"), 2: tr("page.sync.unit_shop"),
@@ -61,7 +72,7 @@ def _get_unit_type_ar():
 
 
 class _SyncPulseOverlay(QWidget):
-    """Blue sweep overlay for syncing accordion headers."""
+    """Blue sweep overlay for syncing card headers."""
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -94,7 +105,7 @@ class _SyncPulseOverlay(QWidget):
 
         # Base: visible blue tint
         painter.setBrush(QColor(56, 144, 223, 30))
-        painter.drawRoundedRect(rect, 8, 8)
+        painter.drawRoundedRect(rect, 12, 12)
 
         # Sweep band (brighter) moves right-to-left (RTL)
         band_w = int(w * 0.35)
@@ -107,11 +118,230 @@ class _SyncPulseOverlay(QWidget):
         gradient.setColorAt(1.0, QColor(56, 144, 223, 0))
 
         painter.setBrush(gradient)
-        painter.drawRoundedRect(rect, 8, 8)
+        painter.drawRoundedRect(rect, 12, 12)
         painter.end()
 
     def stop(self):
         self._anim.stop()
+
+
+class _AssignmentCard(AnimatedCard):
+    """Animated card for a building assignment.
+
+    Row 1: Assignment/building info (bold) + status badge (top-right)
+    Row 2: Collector name, building count, date (dot-separated)
+    Row 3: Status chips (transferred/pending counts)
+    """
+
+    def __init__(self, assignment: dict, parent=None):
+        self._assignment = assignment
+        self._status_str = self._resolve_status(assignment)
+        strip_color = _STATUS_STRIP_COLOR.get(self._status_str, '#9CA3AF')
+
+        super().__init__(
+            parent,
+            card_height=100,
+            border_radius=12,
+            show_chevron=True,
+            show_strip=True,
+            status_color=strip_color,
+            strip_width=5,
+            clickable=True,
+        )
+
+        self._status_badge = None
+        self._assignment_id = self._resolve_id(assignment)
+
+    @staticmethod
+    def _resolve_status(assignment: dict) -> str:
+        status = (
+            assignment.get("transferStatusName")
+            or assignment.get("transferStatus")
+            or assignment.get("transfer_status")
+            or "not_transferred"
+        )
+        return str(status).lower().replace(" ", "_")
+
+    @staticmethod
+    def _resolve_id(assignment: dict) -> str:
+        return (
+            assignment.get("id")
+            or assignment.get("assignmentId")
+            or assignment.get("assignment_id")
+            or ""
+        )
+
+    def _build_content(self, layout: QVBoxLayout):
+        a = self._assignment
+        status_str = self._status_str
+
+        # -- Row 1: building info + status badge --
+        row1 = QHBoxLayout()
+        row1.setSpacing(8)
+
+        # Building icon
+        icon_container = QLabel()
+        icon_container.setFixedSize(24, 24)
+        icon_container.setStyleSheet(
+            "QLabel { background-color: #EBF5FF; border-radius: 6px; border: none; }"
+        )
+        icon_container.setAlignment(Qt.AlignCenter)
+        icon_pixmap = Icon.load_pixmap("building-03", size=14)
+        if icon_pixmap and not icon_pixmap.isNull():
+            icon_container.setPixmap(icon_pixmap)
+        else:
+            icon_container.setText("B")
+            icon_container.setStyleSheet(
+                "QLabel { background-color: #EBF5FF; border-radius: 6px; "
+                "border: none; color: #3890DF; font-size: 10px; }"
+            )
+        row1.addWidget(icon_container)
+
+        # Building code
+        building_code = (
+            a.get("buildingCode")
+            or a.get("buildingId")
+            or a.get("building_id")
+            or "---"
+        )
+        title_lbl = QLabel(building_code)
+        title_lbl.setFont(create_font(size=FontManager.SIZE_BODY, weight=FontManager.WEIGHT_SEMIBOLD))
+        title_lbl.setStyleSheet("color: #212B36; background: transparent; border: none;")
+        row1.addWidget(title_lbl)
+
+        row1.addStretch()
+
+        # Status badge
+        status_badge = QLabel()
+        is_completed = status_str in _COMPLETED_STATUSES
+        if is_completed:
+            sync_date = (
+                a.get("transferDate")
+                or a.get("transfer_date")
+                or a.get("assignedDate")
+                or a.get("created_at")
+                or ""
+            )
+            date_str = str(sync_date)[:10] if sync_date else ""
+            status_badge.setText(date_str)
+            status_badge.setFont(create_font(size=FontManager.SIZE_CAPTION, weight=QFont.Normal))
+            status_badge.setStyleSheet(
+                f"color: {Colors.TEXT_SECONDARY}; background: transparent; border: none;"
+            )
+        else:
+            label, color, bg = _get_status_config().get(
+                status_str, _get_status_config()['not_transferred']
+            )
+            status_badge.setText(label)
+            status_badge.setFont(create_font(
+                size=FontManager.SIZE_CAPTION,
+                weight=FontManager.WEIGHT_SEMIBOLD
+            ))
+            status_badge.setAlignment(Qt.AlignCenter)
+            status_badge.setFixedHeight(22)
+            status_badge.setMinimumWidth(80)
+            status_badge.setStyleSheet(StyleManager.status_badge(color, bg))
+
+        self._status_badge = status_badge
+        row1.addWidget(status_badge)
+        layout.addLayout(row1)
+
+        # -- Row 2: collector name + building count + date (dot-separated) --
+        row2 = QHBoxLayout()
+        row2.setSpacing(4)
+
+        parts = []
+
+        researcher_name = (
+            a.get("fieldCollectorName")
+            or a.get("fieldCollectorNameAr")
+            or a.get("assignedTo")
+            or a.get("field_team_name")
+            or ""
+        )
+        if researcher_name:
+            parts.append(researcher_name)
+
+        units_count = a.get("propertyUnitsCount") or a.get("unitsCount") or 0
+        if units_count:
+            parts.append(tr("page.sync.units_count", count=units_count))
+
+        assigned_date = (
+            a.get("assignedDate") or a.get("created_at") or ""
+        )
+        if assigned_date:
+            parts.append(str(assigned_date)[:10])
+
+        meta_text = "  \u00B7  ".join(parts) if parts else ""
+        meta_lbl = QLabel(meta_text)
+        meta_lbl.setFont(create_font(size=FontManager.SIZE_CAPTION, weight=FontManager.WEIGHT_REGULAR))
+        meta_lbl.setStyleSheet("color: #637381; background: transparent; border: none;")
+        row2.addWidget(meta_lbl)
+        row2.addStretch()
+        layout.addLayout(row2)
+
+        # -- Row 3: status chips --
+        row3 = QHBoxLayout()
+        row3.setSpacing(6)
+
+        transferred_count = a.get("transferredCount") or a.get("syncedCount") or 0
+        pending_count = a.get("pendingCount") or a.get("notTransferredCount") or 0
+
+        if transferred_count:
+            chip_transferred = QLabel(f"{tr('page.sync.status_synced')}: {transferred_count}")
+            chip_transferred.setFont(create_font(size=8, weight=FontManager.WEIGHT_SEMIBOLD))
+            chip_transferred.setStyleSheet(StyleManager.status_badge('#10B981', '#ECFDF5'))
+            row3.addWidget(chip_transferred)
+
+        if pending_count:
+            chip_pending = QLabel(f"{tr('page.sync.status_pending')}: {pending_count}")
+            chip_pending.setFont(create_font(size=8, weight=FontManager.WEIGHT_SEMIBOLD))
+            chip_pending.setStyleSheet(StyleManager.status_badge('#9CA3AF', '#F3F4F6'))
+            row3.addWidget(chip_pending)
+
+        row3.addStretch()
+        layout.addLayout(row3)
+
+    def update_status(self, assignment: dict, new_status: str):
+        """Update the status badge and strip color in-place."""
+        self._status_str = new_status
+        self._assignment = assignment
+
+        strip_color = _STATUS_STRIP_COLOR.get(new_status, '#9CA3AF')
+        self.set_status_color(strip_color)
+
+        if not self._status_badge:
+            return
+
+        is_completed = new_status in _COMPLETED_STATUSES
+        if is_completed:
+            sync_date = (
+                assignment.get("transferDate")
+                or assignment.get("transfer_date")
+                or assignment.get("assignedDate")
+                or ""
+            )
+            date_str = str(sync_date)[:10] if sync_date else ""
+            self._status_badge.setText(date_str)
+            self._status_badge.setFixedHeight(16777215)
+            self._status_badge.setMinimumWidth(0)
+            self._status_badge.setFont(create_font(size=FontManager.SIZE_CAPTION, weight=QFont.Normal))
+            self._status_badge.setStyleSheet(
+                f"color: {Colors.TEXT_SECONDARY}; background: transparent; border: none;"
+            )
+        else:
+            label, color, bg = _get_status_config().get(
+                new_status, _get_status_config()['not_transferred']
+            )
+            self._status_badge.setText(label)
+            self._status_badge.setFont(create_font(
+                size=FontManager.SIZE_CAPTION,
+                weight=FontManager.WEIGHT_SEMIBOLD
+            ))
+            self._status_badge.setAlignment(Qt.AlignCenter)
+            self._status_badge.setFixedHeight(22)
+            self._status_badge.setMinimumWidth(80)
+            self._status_badge.setStyleSheet(StyleManager.status_badge(color, bg))
 
 
 class SyncDataPage(QWidget):
@@ -124,25 +354,24 @@ class SyncDataPage(QWidget):
         super().__init__(parent)
         self.db = db
         self.i18n = i18n
-        self._rows_container = None
         self._collector_combo = None
 
-        # Accordion state
-        self._accordion_bodies = {}
-        self._accordion_arrows = {}
-        self._details_loaded = {}
-
-        # Smart refresh state
-        self._header_widgets = {}       # assignment_id -> QFrame
-        self._status_widgets = {}       # assignment_id -> QLabel
-        self._sync_overlays = {}        # assignment_id -> _SyncPulseOverlay
-        self._previous_statuses = {}    # assignment_id -> status_str
-        self._current_items = []        # last API items
-        self._assignment_containers = {} # assignment_id -> container QFrame
+        # Card state
+        self._card_widgets = []             # list of _AssignmentCard
+        self._card_map = {}                 # assignment_id -> _AssignmentCard
+        self._sync_overlays = {}            # assignment_id -> _SyncPulseOverlay
+        self._previous_statuses = {}        # assignment_id -> status_str
+        self._current_items = []            # last API items
         self._pending_notifications = 0
 
+        # Shimmer timer for card animation
+        self._shimmer_timer = QTimer(self)
+        self._shimmer_timer.setInterval(80)
+        self._shimmer_timer.timeout.connect(self._update_card_shimmer)
+
         self._setup_ui()
-    # UI Setup
+
+    # -- UI Setup --
 
     def _setup_ui(self):
         self.setStyleSheet("background-color: #f0f7ff;")
@@ -214,29 +443,40 @@ class SyncDataPage(QWidget):
             PageDimensions.content_padding_h(),
             PageDimensions.CONTENT_PADDING_V_BOTTOM
         )
-        content_layout.setSpacing(16)
+        content_layout.setSpacing(0)
 
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        scroll.setFrameShape(QFrame.NoFrame)
-        scroll.setStyleSheet(
+        # Stacked widget: page 0 = scroll area, page 1 = empty state
+        self._stack = QStackedWidget()
+
+        # Page 0: Scroll area with card container
+        self._scroll = QScrollArea()
+        self._scroll.setWidgetResizable(True)
+        self._scroll.setFrameShape(QFrame.NoFrame)
+        self._scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self._scroll.setStyleSheet(
             "QScrollArea { background: transparent; border: none; }"
             + StyleManager.scrollbar()
         )
 
-        scroll_content = QWidget()
-        scroll_content.setStyleSheet("background: transparent;")
-        scroll_layout = QVBoxLayout(scroll_content)
-        scroll_layout.setContentsMargins(0, 0, 0, 0)
-        scroll_layout.setSpacing(16)
+        self._scroll_content = QWidget()
+        self._scroll_content.setStyleSheet("background: transparent;")
+        self._cards_layout = QVBoxLayout(self._scroll_content)
+        self._cards_layout.setContentsMargins(0, 0, 0, 0)
+        self._cards_layout.setSpacing(10)
+        self._cards_layout.addStretch()
 
-        self._card = self._create_card()
-        scroll_layout.addWidget(self._card)
+        self._scroll.setWidget(self._scroll_content)
+        self._stack.addWidget(self._scroll)
 
-        scroll_layout.addStretch()
-        scroll.setWidget(scroll_content)
-        content_layout.addWidget(scroll)
+        # Page 1: Animated empty state
+        self._empty_state = EmptyStateAnimated(
+            title=tr("page.sync.no_assignments"),
+            description="",
+        )
+        self._empty_state.setMinimumHeight(260)
+        self._stack.addWidget(self._empty_state)
 
+        content_layout.addWidget(self._stack, 1)
         main_layout.addWidget(content_wrapper, 1)
 
         from ui.components.loading_spinner import LoadingSpinnerOverlay
@@ -260,33 +500,7 @@ class SyncDataPage(QWidget):
         self._stat_synced.set_count(synced)
         self._stat_failed.set_count(failed)
 
-    def _create_card(self) -> QFrame:
-        card = QFrame()
-        card.setObjectName("syncCard")
-        card.setStyleSheet(StyleManager.table_card())
-        card.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Minimum)
-
-        layout = QVBoxLayout(card)
-        layout.setContentsMargins(20, 16, 20, 16)
-        layout.setSpacing(8)
-
-        self._rows_container = QVBoxLayout()
-        self._rows_container.setSpacing(8)
-        layout.addLayout(self._rows_container)
-
-        self._empty_label = QLabel(tr("page.sync.no_assignments"))
-        self._empty_label.setFont(create_font(
-            size=FontManager.SIZE_BODY, weight=QFont.Normal
-        ))
-        self._empty_label.setStyleSheet(
-            f"color: {Colors.TEXT_SECONDARY}; background: transparent;"
-        )
-        self._empty_label.setAlignment(Qt.AlignCenter)
-        self._empty_label.setMinimumHeight(100)
-        layout.addWidget(self._empty_label)
-
-        return card
-    # Data loading
+    # -- Data loading --
 
     def _load_collectors(self):
         from services.api_client import get_api_client
@@ -349,9 +563,9 @@ class SyncDataPage(QWidget):
         return items
 
     def _load_assignments(self):
-        """Full rebuild of all accordion items (non-blocking)."""
+        """Full rebuild of all card items (non-blocking)."""
         self._spinner.show_loading(tr("page.sync.loading_data"))
-        self._clear_rows()
+        self._clear_cards()
 
         from services.api_client import get_api_client
         api = get_api_client()
@@ -365,40 +579,96 @@ class SyncDataPage(QWidget):
         try:
             items = self._filter_items_from_response(response)
             self._current_items = items
+            self._clear_cards()
 
             if not items:
-                self._empty_label.setText(tr("page.sync.no_assignments"))
-                self._empty_label.show()
+                self._empty_state.set_title(tr("page.sync.no_assignments"))
+                self._stack.setCurrentIndex(1)
                 return
 
-            self._empty_label.hide()
+            self._stack.setCurrentIndex(0)
+
             for assignment in items:
                 aid = self._get_assignment_id(assignment)
                 status_str = self._normalize_status(assignment)
 
-                accordion = self._create_accordion_item(assignment)
-                self._rows_container.addWidget(accordion)
-
+                card = _AssignmentCard(assignment)
+                card.clicked.connect(
+                    lambda a=assignment, a_id=aid: self._on_card_clicked(a, a_id)
+                )
+                self._cards_layout.insertWidget(
+                    self._cards_layout.count() - 1, card
+                )
+                self._card_widgets.append(card)
+                self._card_map[aid] = card
                 self._previous_statuses[aid] = status_str
 
                 if status_str in _SYNCING_STATUSES:
                     self._add_sync_overlay(aid)
 
             self._update_stat_pills()
+            animate_card_entrance(self._card_widgets)
+
+            if not self._shimmer_timer.isActive():
+                self._shimmer_timer.start()
+
         except Exception as e:
             logger.warning(f"Failed to load assignments: {e}")
-            self._empty_label.setText(tr("page.sync.load_failed"))
-            self._empty_label.show()
+            self._empty_state.set_title(tr("page.sync.load_failed"))
+            self._stack.setCurrentIndex(1)
         finally:
             self._spinner.hide_loading()
 
     def _on_assignments_load_error(self, error_msg):
         """Handle assignment list API error."""
         logger.warning(f"Failed to load assignments: {error_msg}")
-        self._empty_label.setText(tr("page.sync.load_failed"))
-        self._empty_label.show()
+        self._empty_state.set_title(tr("page.sync.load_failed"))
+        self._stack.setCurrentIndex(1)
         self._spinner.hide_loading()
-    # Smart Refresh (polling every 10s)
+
+    # -- Card click -> expand detail panel --
+
+    def _on_card_clicked(self, assignment: dict, assignment_id: str):
+        """Toggle detail panel below the clicked card."""
+        card = self._card_map.get(assignment_id)
+        if not card:
+            return
+
+        # Check if detail body already exists
+        detail_key = f"_detail_{assignment_id}"
+        detail_body = getattr(card, detail_key, None)
+
+        if detail_body is not None:
+            # Toggle visibility
+            detail_body.setVisible(not detail_body.isVisible())
+            return
+
+        # Create new detail body below the card
+        idx = self._cards_layout.indexOf(card)
+        if idx < 0:
+            return
+
+        body = QFrame()
+        body.setStyleSheet("""
+            QFrame {
+                background-color: #FBFCFF;
+                border: 1px solid #E2EAF2;
+                border-top: none;
+                border-bottom-left-radius: 12px;
+                border-bottom-right-radius: 12px;
+            }
+        """)
+        body_layout = QVBoxLayout(body)
+        body_layout.setContentsMargins(44, 8, 16, 12)
+        body_layout.setSpacing(10)
+
+        setattr(card, detail_key, body)
+        self._cards_layout.insertWidget(idx + 1, body)
+
+        # Load details asynchronously
+        self._load_assignment_details(assignment_id, assignment, body)
+
+    # -- Smart Refresh (polling every 10s) --
 
     def _smart_refresh(self):
         """Poll API and update status badges + overlays in-place (non-blocking)."""
@@ -428,14 +698,14 @@ class SyncDataPage(QWidget):
 
             old_status = self._previous_statuses.get(aid)
 
-            if aid not in self._assignment_containers:
+            if aid not in self._card_map:
                 needs_full_rebuild = True
                 break
 
             # Status changed
             if old_status is not None and old_status != new_status:
                 self._on_status_changed(assignment, old_status, new_status)
-                self._update_status_widget(aid, assignment, new_status)
+                self._update_card_status(aid, assignment, new_status)
 
                 # Overlay management
                 if new_status in _SYNCING_STATUSES and aid not in self._sync_overlays:
@@ -446,7 +716,7 @@ class SyncDataPage(QWidget):
             self._previous_statuses[aid] = new_status
 
         # Check for removed assignments
-        old_ids = set(self._assignment_containers.keys())
+        old_ids = set(self._card_map.keys())
         if old_ids != new_ids:
             needs_full_rebuild = True
 
@@ -464,233 +734,45 @@ class SyncDataPage(QWidget):
         self._pending_notifications = 0
         self.sync_notification.emit(0)
 
-    def _update_status_widget(self, aid: str, assignment: dict, new_status: str):
-        """Update the status badge/date label in-place."""
-        widget = self._status_widgets.get(aid)
-        if not widget:
+    def _update_card_status(self, aid: str, assignment: dict, new_status: str):
+        """Update the card's status badge and strip color in-place."""
+        card = self._card_map.get(aid)
+        if not card:
             return
+        card.update_status(assignment, new_status)
 
-        is_completed = new_status in _COMPLETED_STATUSES
-
-        if is_completed:
-            sync_date = (
-                assignment.get("transferDate")
-                or assignment.get("transfer_date")
-                or assignment.get("assignedDate")
-                or ""
-            )
-            date_str = str(sync_date)[:10] if sync_date else ""
-            widget.setText(date_str)
-            widget.setFixedHeight(16777215)  # QWIDGETSIZE_MAX
-            widget.setMinimumWidth(0)
-            widget.setFont(create_font(size=FontManager.SIZE_BODY, weight=QFont.Normal))
-            widget.setStyleSheet(
-                f"color: {Colors.TEXT_SECONDARY}; background: transparent; border: none;"
-            )
-        else:
-            label, color, bg = _get_status_config().get(
-                new_status, _get_status_config()['not_transferred']
-            )
-            widget.setText(label)
-            widget.setFont(create_font(
-                size=FontManager.SIZE_CAPTION,
-                weight=FontManager.WEIGHT_SEMIBOLD
-            ))
-            widget.setAlignment(Qt.AlignCenter)
-            widget.setFixedHeight(24)
-            widget.setMinimumWidth(90)
-            widget.setStyleSheet(StyleManager.status_badge(color, bg))
-    # Sync Pulse Overlay
+    # -- Sync Pulse Overlay --
 
     def _add_sync_overlay(self, assignment_id: str):
-        header = self._header_widgets.get(assignment_id)
-        if not header or assignment_id in self._sync_overlays:
+        card = self._card_map.get(assignment_id)
+        if not card or assignment_id in self._sync_overlays:
             return
 
-        overlay = _SyncPulseOverlay(header)
-        overlay.setGeometry(header.rect())
+        overlay = _SyncPulseOverlay(card)
+        overlay.setGeometry(card.rect())
         overlay.show()
         self._sync_overlays[assignment_id] = overlay
 
-        # Resize overlay when header resizes
-        original_resize = header.resizeEvent
+        # Resize overlay when card resizes
+        original_resize = card.resizeEvent
 
-        def on_resize(event, ov=overlay, orig=original_resize):
-            ov.setGeometry(header.rect())
+        def on_resize(event, ov=overlay, c=card, orig=original_resize):
+            ov.setGeometry(c.rect())
             if orig:
                 orig(event)
 
-        header.resizeEvent = on_resize
+        card.resizeEvent = on_resize
 
     def _remove_sync_overlay(self, assignment_id: str):
         overlay = self._sync_overlays.pop(assignment_id, None)
         if overlay:
             overlay.stop()
             overlay.deleteLater()
-    # Accordion item
 
-    def _create_accordion_item(self, assignment: dict) -> QFrame:
-        assignment_id = self._get_assignment_id(assignment)
-
-        container = QFrame()
-        container.setStyleSheet("""
-            QFrame {
-                background: transparent;
-                border: none;
-                border-radius: 12px;
-            }
-        """)
-        container_layout = QVBoxLayout(container)
-        container_layout.setContentsMargins(0, 0, 0, 0)
-        container_layout.setSpacing(0)
-
-        header = self._create_accordion_header(assignment, assignment_id)
-        container_layout.addWidget(header)
-
-        body = QFrame()
-        body.setStyleSheet(StyleManager.accordion_body())
-        body.setVisible(False)
-        self._accordion_bodies[assignment_id] = body
-
-        body_layout = QVBoxLayout(body)
-        body_layout.setContentsMargins(44, 8, 16, 12)
-        body_layout.setSpacing(10)
-
-        container_layout.addWidget(body)
-        self._assignment_containers[assignment_id] = container
-
-        header.mousePressEvent = lambda event, aid=assignment_id, a=assignment: (
-            self._toggle_accordion(aid, a)
-        )
-
-        return container
-
-    def _create_accordion_header(self, assignment: dict, assignment_id: str) -> QFrame:
-        header = QFrame()
-        header.setStyleSheet(StyleManager.accordion_header())
-        header.setCursor(Qt.PointingHandCursor)
-        header.setFixedHeight(52)
-        self._header_widgets[assignment_id] = header
-
-        layout = QHBoxLayout(header)
-        layout.setContentsMargins(16, 0, 16, 0)
-        layout.setSpacing(12)
-
-        # Arrow
-        arrow = QLabel("\u25B6")
-        arrow.setFont(create_font(size=9, weight=FontManager.WEIGHT_REGULAR))
-        arrow.setStyleSheet("color: #637381; background: transparent; border: none;")
-        arrow.setFixedWidth(16)
-        self._accordion_arrows[assignment_id] = arrow
-        layout.addWidget(arrow)
-
-        # Building icon
-        icon_container = QLabel()
-        icon_container.setFixedSize(28, 28)
-        icon_container.setStyleSheet(
-            "QLabel { background-color: #f0f7ff; border-radius: 6px; border: none; }"
-        )
-        icon_container.setAlignment(Qt.AlignCenter)
-        icon_pixmap = Icon.load_pixmap("building-03", size=16)
-        if icon_pixmap and not icon_pixmap.isNull():
-            icon_container.setPixmap(icon_pixmap)
-        else:
-            icon_container.setText("B")
-        layout.addWidget(icon_container)
-
-        # Description text
-        building_code = (
-            assignment.get("buildingCode")
-            or assignment.get("buildingId")
-            or assignment.get("building_id")
-            or "---"
-        )
-        researcher_name = (
-            assignment.get("fieldCollectorName")
-            or assignment.get("fieldCollectorNameAr")
-            or assignment.get("assignedTo")
-            or assignment.get("field_team_name")
-            or ""
-        )
-
-        if researcher_name:
-            display_text = tr("page.sync.assign_building_to", building_code=building_code, researcher=researcher_name)
-        else:
-            display_text = tr("page.sync.assign_building", building_code=building_code)
-
-        text_label = QLabel(display_text)
-        text_label.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
-        text_label.setStyleSheet("color: #212B36; background: transparent; border: none;")
-        layout.addWidget(text_label)
-
-        layout.addStretch()
-
-        # Units count badge
-        units_count = assignment.get("propertyUnitsCount") or assignment.get("unitsCount") or 0
-        if units_count:
-            badge = QLabel(tr("page.sync.units_count", count=units_count))
-            badge.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
-            badge.setStyleSheet(StyleManager.status_badge('#3890DF', '#EBF5FF'))
-            layout.addWidget(badge)
-
-        # Status badge or date
-        status_str = self._normalize_status(assignment)
-        is_completed = status_str in _COMPLETED_STATUSES
-
-        status_widget = QLabel()
-        if is_completed:
-            sync_date = (
-                assignment.get("transferDate")
-                or assignment.get("transfer_date")
-                or assignment.get("assignedDate")
-                or assignment.get("created_at")
-                or ""
-            )
-            date_str = str(sync_date)[:10] if sync_date else ""
-            status_widget.setText(date_str)
-            status_widget.setFont(create_font(size=FontManager.SIZE_BODY, weight=QFont.Normal))
-            status_widget.setStyleSheet(
-                f"color: {Colors.TEXT_SECONDARY}; background: transparent; border: none;"
-            )
-        else:
-            label, color, bg = _get_status_config().get(
-                status_str, _get_status_config()['not_transferred']
-            )
-            status_widget.setText(label)
-            status_widget.setFont(create_font(
-                size=FontManager.SIZE_CAPTION,
-                weight=FontManager.WEIGHT_SEMIBOLD
-            ))
-            status_widget.setAlignment(Qt.AlignCenter)
-            status_widget.setFixedHeight(24)
-            status_widget.setMinimumWidth(90)
-            status_widget.setStyleSheet(StyleManager.status_badge(color, bg))
-
-        self._status_widgets[assignment_id] = status_widget
-        layout.addWidget(status_widget)
-
-        return header
-    # Accordion toggle + lazy details loading
-
-    def _toggle_accordion(self, assignment_id: str, assignment: dict):
-        body = self._accordion_bodies.get(assignment_id)
-        arrow = self._accordion_arrows.get(assignment_id)
-        if body is None:
-            return
-
-        is_visible = body.isVisible()
-
-        if not is_visible and not self._details_loaded.get(assignment_id):
-            self._load_assignment_details(assignment_id, assignment, body)
-            self._details_loaded[assignment_id] = True
-
-        body.setVisible(not is_visible)
-        if arrow:
-            arrow.setText("\u25BC" if not is_visible else "\u25B6")
+    # -- Detail loading (lazy, on card click) --
 
     def _load_assignment_details(self, assignment_id: str, assignment: dict, body: QWidget):
         """Start background fetch of assignment details and units."""
-        # Show loading indicator in body
         body_layout = body.layout()
         loading_label = QLabel(tr("page.sync.loading_details"))
         loading_label.setFont(create_font(size=9, weight=FontManager.WEIGHT_REGULAR))
@@ -870,7 +952,8 @@ class SyncDataPage(QWidget):
         err.setStyleSheet("color: #EF4444; background: transparent; border: none;")
         err.setAlignment(Qt.AlignCenter)
         body_layout.addWidget(err)
-    # Unit card (same pattern as Step 3)
+
+    # -- Unit card (same pattern as Step 3) --
 
     def _create_unit_card(self, unit_data: dict) -> QFrame:
         unit_type = unit_data.get('unitType') or unit_data.get('unit_type') or 'other'
@@ -972,7 +1055,8 @@ class SyncDataPage(QWidget):
             card_layout.addLayout(bottom)
 
         return card
-    # Unassign
+
+    # -- Unassign --
 
     def _unassign_building(self, assignment_id: str):
         from ui.error_handler import ErrorHandler
@@ -1008,7 +1092,52 @@ class SyncDataPage(QWidget):
         from ui.components.toast import Toast
         logger.warning(f"Failed to unassign: {error_msg}")
         Toast.show_toast(self.window(), f"{tr('page.sync.unassign_failed')}: {error_msg}", Toast.ERROR)
-    # Helpers
+
+    # -- Card management --
+
+    def _clear_cards(self):
+        """Remove all card widgets and stop overlays."""
+        self._shimmer_timer.stop()
+
+        # Stop all overlays
+        for overlay in self._sync_overlays.values():
+            overlay.stop()
+            overlay.deleteLater()
+        self._sync_overlays.clear()
+
+        for card in self._card_widgets:
+            if hasattr(card, '_entrance_anim') and card._entrance_anim:
+                try:
+                    card._entrance_anim.stop()
+                except RuntimeError:
+                    pass
+            try:
+                card.clicked.disconnect()
+            except Exception:
+                pass
+            # Remove any detail bodies attached to the card
+            for attr_name in list(vars(card)):
+                if attr_name.startswith("_detail_"):
+                    detail_body = getattr(card, attr_name, None)
+                    if detail_body and isinstance(detail_body, QWidget):
+                        detail_body.setParent(None)
+                        detail_body.deleteLater()
+            card.setParent(None)
+            card.deleteLater()
+
+        self._card_widgets.clear()
+        self._card_map.clear()
+        self._previous_statuses.clear()
+
+    def _update_card_shimmer(self):
+        """Trigger repaint on all visible cards for shimmer animation."""
+        for card in self._card_widgets:
+            try:
+                card.update()
+            except RuntimeError:
+                pass
+
+    # -- Helpers --
 
     @staticmethod
     def _get_assignment_id(assignment: dict) -> str:
@@ -1029,26 +1158,6 @@ class SyncDataPage(QWidget):
         )
         return str(status).lower().replace(" ", "_")
 
-    def _clear_rows(self):
-        # Stop all overlays
-        for overlay in self._sync_overlays.values():
-            overlay.stop()
-            overlay.deleteLater()
-        self._sync_overlays.clear()
-
-        self._accordion_bodies.clear()
-        self._accordion_arrows.clear()
-        self._details_loaded.clear()
-        self._header_widgets.clear()
-        self._status_widgets.clear()
-        self._assignment_containers.clear()
-
-        if self._rows_container:
-            while self._rows_container.count():
-                item = self._rows_container.takeAt(0)
-                if item.widget():
-                    item.widget().deleteLater()
-
     def refresh(self, data=None):
         self._load_collectors()
         self._load_assignments()
@@ -1058,7 +1167,7 @@ class SyncDataPage(QWidget):
         self._header.set_title(tr("page.sync.title"))
         self._back_btn.setText(tr("action.back"))
         self._refresh_btn.setText(tr("page.sync.refresh"))
-        self._empty_label.setText(tr("page.sync.no_assignments"))
+        self._empty_state.set_title(tr("page.sync.no_assignments"))
         self._stat_pending.set_label(tr("page.sync.status_pending"))
         self._stat_syncing.set_label(tr("page.sync.status_syncing"))
         self._stat_synced.set_label(tr("page.sync.status_synced"))

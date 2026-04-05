@@ -1738,8 +1738,11 @@ class TRRCMSApiClient:
         return result if isinstance(result, list) else []
 
     def get_evidence_by_id(self, evidence_id: str) -> Dict[str, Any]:
-        """Get evidence metadata by ID."""
-        return self._request("GET", f"/v1/Surveys/evidence/{evidence_id}")
+        """Get evidence metadata by ID. Tries v1 then v2."""
+        try:
+            return self._request("GET", f"/v1/Surveys/evidence/{evidence_id}")
+        except Exception:
+            return self._request("GET", f"/v2/surveys/evidence/{evidence_id}")
 
     def delete_evidence(self, survey_id: str, evidence_id: str) -> bool:
         """Soft delete an evidence record."""
@@ -1747,32 +1750,45 @@ class TRRCMSApiClient:
         return True
 
     def download_evidence(self, evidence_id: str, save_path: str) -> str:
-        """Download an evidence file to disk."""
+        """Download an evidence file to disk. Tries v1 then v2 endpoints."""
         import os
-        url = f"{self.base_url}/v1/Surveys/evidence/{evidence_id}/download"
         self._ensure_valid_token()
         headers = {
             "Authorization": f"Bearer {self.access_token}",
             "Accept": "*/*"
         }
 
-        logger.info(f"[API REQ] GET /v1/Surveys/evidence/{evidence_id}/download")
+        urls = [
+            f"{self.base_url}/v1/Surveys/evidence/{evidence_id}/download",
+            f"{self.base_url}/v2/surveys/evidence/{evidence_id}/download",
+            f"{self.base_url}/v1/evidence/{evidence_id}/download",
+        ]
 
-        try:
-            response = requests.get(url, headers=headers, timeout=self.config.timeout, verify=False)
-            response.raise_for_status()
-            os.makedirs(os.path.dirname(save_path), exist_ok=True)
-            with open(save_path, 'wb') as f:
-                f.write(response.content)
-            logger.info(f"Evidence downloaded: {evidence_id} -> {save_path}")
-            return save_path
-        except requests.exceptions.HTTPError as e:
-            status_code = e.response.status_code if e.response is not None else 0
-            logger.debug(f"[API ERR] {status_code} download evidence {evidence_id}")
-            raise ApiException(message=str(e), status_code=status_code)
-        except (requests.exceptions.ConnectionError, requests.exceptions.Timeout) as e:
-            logger.error(f"Network error during download: {e}")
-            raise NetworkException(message=str(e), original_error=e)
+        last_error = None
+        for url in urls:
+            try:
+                logger.info(f"[API REQ] GET {url.replace(self.base_url, '')}")
+                response = requests.get(url, headers=headers, timeout=self.config.timeout, verify=False)
+                response.raise_for_status()
+                os.makedirs(os.path.dirname(save_path), exist_ok=True)
+                with open(save_path, 'wb') as f:
+                    f.write(response.content)
+                if os.path.getsize(save_path) > 0:
+                    logger.info(f"Evidence downloaded: {evidence_id} -> {save_path}")
+                    return save_path
+            except requests.exceptions.HTTPError as e:
+                status_code = e.response.status_code if e.response is not None else 0
+                logger.debug(f"[API ERR] {status_code} {url.replace(self.base_url, '')}")
+                last_error = e
+                continue
+            except (requests.exceptions.ConnectionError, requests.exceptions.Timeout) as e:
+                logger.error(f"Network error during download: {e}")
+                raise NetworkException(message=str(e), original_error=e)
+
+        if last_error:
+            status_code = last_error.response.status_code if last_error.response is not None else 0
+            raise ApiException(message=str(last_error), status_code=status_code)
+        raise ApiException(message=f"No download URL succeeded for {evidence_id}", status_code=404)
 
     def _convert_person_to_api_format_with_household(self, person_data: Dict[str, Any], survey_id: str, household_id: str) -> Dict[str, Any]:
         """Convert person data to API format for household-scoped endpoint."""

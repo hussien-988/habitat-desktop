@@ -7,18 +7,16 @@ import time
 
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
-    QTableWidget, QTableWidgetItem, QHeaderView, QFrame,
-    QRadioButton, QButtonGroup, QAbstractItemView,
-    QSizePolicy, QTextEdit, QApplication, QComboBox,
+    QFrame, QComboBox,
     QScrollArea, QGraphicsDropShadowEffect,
 )
 from PyQt5.QtCore import (
     Qt, pyqtSignal, QThread, pyqtSignal as Signal,
-    QTimer, QPoint,
+    QTimer,
 )
 from PyQt5.QtGui import (
-    QColor, QFont, QPainter, QLinearGradient, QRadialGradient,
-    QPen, QPainterPath,
+    QColor, QFont, QPainter, QLinearGradient,
+    QPainterPath,
 )
 
 from repositories.database import Database
@@ -27,6 +25,7 @@ from ui.components.dark_header_zone import DarkHeaderZone
 from ui.components.stat_pill import StatPill
 from ui.components.accent_line import AccentLine
 from ui.components.loading_spinner import LoadingSpinnerOverlay
+from ui.components.animated_card import AnimatedCard, EmptyStateAnimated, animate_card_entrance
 from ui.font_utils import create_font, FontManager
 from ui.style_manager import StyleManager
 from ui.design_system import Colors, PageDimensions
@@ -91,31 +90,6 @@ def _get_type_config(key):
     return {"label": tr(label_key) if label_key else key}
 
 
-RADIO_STYLE = f"""
-    QRadioButton {{
-        background: transparent;
-        border: none;
-        spacing: 0px;
-    }}
-    QRadioButton::indicator {{
-        width: 16px;
-        height: 16px;
-        border-radius: 8px;
-        border: 2px solid #C4CDD5;
-        background: {Colors.BACKGROUND};
-    }}
-    QRadioButton::indicator:hover {{
-        border-color: {Colors.PRIMARY_BLUE};
-    }}
-    QRadioButton::indicator:checked {{
-        width: 16px;
-        height: 16px;
-        border-radius: 8px;
-        border: 4px solid {Colors.PRIMARY_BLUE};
-        background: {Colors.PRIMARY_BLUE};
-    }}
-"""
-
 _PAGINATION_BTN_STYLE = """
     QPushButton {
         background: #F0F7FF;
@@ -133,6 +107,166 @@ _PAGINATION_BTN_STYLE = """
         border-color: #DDE3EA;
     }
 """
+
+
+# ---------------------------------------------------------------------------
+#  Priority → strip color mapping for cards
+# ---------------------------------------------------------------------------
+
+_PRIORITY_STRIP_COLORS = {
+    "Critical": "#EF4444",
+    "High": "#F59E0B",
+    "Medium": "#3890DF",
+    "Low": "#10B981",
+}
+
+_PRIORITY_BADGE_COLORS = {
+    "Critical": {"color": "#FFFFFF", "bg": "#EF4444"},
+    "High": {"color": "#FFFFFF", "bg": "#F59E0B"},
+    "Medium": {"color": "#FFFFFF", "bg": "#3890DF"},
+    "Low": {"color": "#FFFFFF", "bg": "#10B981"},
+}
+
+
+# ---------------------------------------------------------------------------
+#  _DuplicateCard — animated card for a single conflict group
+# ---------------------------------------------------------------------------
+
+class _DuplicateCard(AnimatedCard):
+    """Card representing a single conflict group in the duplicates list.
+
+    Row 1: Conflict group ID (bold) + Priority badge (top-right, colored)
+    Row 2: Type (Property/Person) + affected claims count + detection date
+    Row 3: Status chip + matching field names
+    """
+
+    card_clicked = pyqtSignal(dict)
+
+    def __init__(self, conflict: dict, parent=None):
+        self._conflict = conflict
+        priority = conflict.get("priority", "Medium")
+        strip_color = _PRIORITY_STRIP_COLORS.get(priority, "#3890DF")
+
+        super().__init__(
+            parent,
+            card_height=100,
+            border_radius=12,
+            status_color=strip_color,
+            show_chevron=True,
+            show_strip=True,
+            strip_width=5,
+        )
+        self.clicked.connect(lambda: self.card_clicked.emit(self._conflict))
+
+    def _build_content(self, layout: QVBoxLayout):
+        conflict = self._conflict
+        priority = conflict.get("priority", "Medium")
+
+        # Row 1: Conflict ID (bold) + Priority badge
+        row1 = QHBoxLayout()
+        row1.setSpacing(8)
+
+        conflict_num = conflict.get("conflictNumber", "-")
+        id_label = QLabel(f"#{conflict_num}")
+        id_label.setFont(create_font(size=12, weight=FontManager.WEIGHT_BOLD))
+        id_label.setStyleSheet(
+            f"color: {Colors.PAGE_TITLE}; background: transparent; border: none;"
+        )
+        row1.addWidget(id_label)
+        row1.addStretch()
+
+        # Priority badge
+        pri_cfg = _PRIORITY_BADGE_COLORS.get(priority, {"color": "#FFF", "bg": "#6B7280"})
+        pri_label_key = _PRIORITY_LABEL_KEYS.get(priority, "")
+        pri_text = tr(pri_label_key) if pri_label_key else priority
+        badge = QLabel(pri_text)
+        badge.setFont(create_font(size=8, weight=FontManager.WEIGHT_BOLD))
+        badge.setAlignment(Qt.AlignCenter)
+        badge.setFixedHeight(22)
+        badge.setStyleSheet(
+            f"color: {pri_cfg['color']}; background: {pri_cfg['bg']};"
+            f"border-radius: 6px; padding: 2px 10px; border: none;"
+        )
+        row1.addWidget(badge)
+
+        layout.addLayout(row1)
+
+        # Row 2: Type + affected claims count + detection date (dot-separated)
+        row2 = QHBoxLayout()
+        row2.setSpacing(0)
+
+        ctype = conflict.get("conflictType", "")
+        type_cfg = _get_type_config(ctype) if ctype else {"label": "-"}
+        type_text = type_cfg["label"]
+
+        first_id = conflict.get("firstEntityIdentifier", conflict.get("firstEntityId", "-"))
+        second_id = conflict.get("secondEntityIdentifier", conflict.get("secondEntityId", "-"))
+        claims_text = f"{first_id} / {second_id}"
+
+        date_str = conflict.get("detectedDate", conflict.get("assignedDate", ""))
+        if date_str and "T" in str(date_str):
+            date_str = str(date_str).split("T")[0]
+
+        score = conflict.get("similarityScore", 0)
+        score_pct = f"{score * 100:.0f}%" if isinstance(score, float) and score <= 1 else f"{score}%"
+
+        parts = [type_text, claims_text]
+        if date_str:
+            parts.append(str(date_str))
+        info_str = "  \u00B7  ".join(parts)
+
+        info_label = QLabel(info_str)
+        info_label.setFont(create_font(size=9, weight=FontManager.WEIGHT_REGULAR))
+        info_label.setStyleSheet(
+            "color: #6B7280; background: transparent; border: none;"
+        )
+        row2.addWidget(info_label)
+        row2.addStretch()
+
+        # Similarity score badge
+        sv = score if isinstance(score, (int, float)) else 0
+        score_color = "#EF4444" if sv >= 0.9 else "#F59E0B" if sv >= 0.7 else "#6B7280"
+        score_label = QLabel(score_pct)
+        score_label.setFont(create_font(size=9, weight=FontManager.WEIGHT_BOLD))
+        score_label.setStyleSheet(
+            f"color: {score_color}; background: transparent; border: none;"
+        )
+        row2.addWidget(score_label)
+
+        layout.addLayout(row2)
+
+        # Row 3: Status chip + matching fields
+        row3 = QHBoxLayout()
+        row3.setSpacing(8)
+
+        status = conflict.get("status", "Pending")
+        st_cfg = _get_status_config(status) if status else {"label": "-", "color": "#6B7280", "bg": "#F3F4F6"}
+        status_chip = QLabel(st_cfg["label"])
+        status_chip.setFont(create_font(size=8, weight=FontManager.WEIGHT_SEMIBOLD))
+        status_chip.setAlignment(Qt.AlignCenter)
+        status_chip.setFixedHeight(20)
+        status_chip.setStyleSheet(
+            f"color: {st_cfg['color']}; background: {st_cfg['bg']};"
+            f"border-radius: 5px; padding: 1px 8px; border: none;"
+        )
+        row3.addWidget(status_chip)
+
+        # Matching field names (if available)
+        match_fields = conflict.get("matchingFields", conflict.get("matchFields", []))
+        if match_fields:
+            if isinstance(match_fields, list):
+                fields_text = ", ".join(str(f) for f in match_fields[:3])
+            else:
+                fields_text = str(match_fields)
+            fields_label = QLabel(fields_text)
+            fields_label.setFont(create_font(size=8, weight=FontManager.WEIGHT_REGULAR))
+            fields_label.setStyleSheet(
+                "color: #9CA3AF; background: transparent; border: none;"
+            )
+            row3.addWidget(fields_label)
+
+        row3.addStretch()
+        layout.addLayout(row3)
 
 
 # ---------------------------------------------------------------------------
@@ -312,105 +446,7 @@ class _ResolutionWorker(QThread):
             self.error.emit(str(e))
 
 
-# ---------------------------------------------------------------------------
-#  Empty state (dark constellation)
-# ---------------------------------------------------------------------------
-
-class _EmptyStateConflicts(QWidget):
-    """Dark constellation-themed empty state."""
-
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.setMinimumHeight(280)
-        self._anim_start = time.time()
-
-        random.seed(99)
-        self._particles = []
-        for _ in range(7):
-            self._particles.append({
-                "x": random.uniform(0.1, 0.9),
-                "y": random.uniform(0.1, 0.9),
-                "speed": random.uniform(0.3, 0.7),
-                "phase": random.uniform(0, math.tau),
-            })
-
-        self._timer = QTimer(self)
-        self._timer.setInterval(50)
-        self._timer.timeout.connect(self.update)
-
-        layout = QVBoxLayout(self)
-        layout.setAlignment(Qt.AlignCenter)
-        layout.setSpacing(10)
-
-        self._title = QLabel(tr("page.duplicates.no_conflicts"))
-        self._title.setFont(create_font(size=13, weight=QFont.Bold))
-        self._title.setStyleSheet("color: rgba(255,255,255,0.85); background: transparent;")
-        self._title.setAlignment(Qt.AlignCenter)
-        layout.addWidget(self._title)
-
-        self._subtitle = QLabel(tr("page.duplicates.no_conflicts_hint"))
-        self._subtitle.setFont(create_font(size=10))
-        self._subtitle.setStyleSheet("color: rgba(255,255,255,0.4); background: transparent;")
-        self._subtitle.setAlignment(Qt.AlignCenter)
-        layout.addWidget(self._subtitle)
-
-    def paintEvent(self, event):
-        painter = QPainter(self)
-        painter.setRenderHint(QPainter.Antialiasing)
-        w, h = self.width(), self.height()
-        t = time.time() - self._anim_start
-
-        path = QPainterPath()
-        path.addRoundedRect(0, 0, w, h, 16, 16)
-        grad = QLinearGradient(0, 0, w, h)
-        grad.setColorAt(0.0, QColor("#0E2035"))
-        grad.setColorAt(0.5, QColor("#132D50"))
-        grad.setColorAt(1.0, QColor("#1A3860"))
-        painter.fillPath(path, grad)
-        painter.setClipPath(path)
-
-        painter.setPen(QPen(QColor(56, 144, 223, 12), 1))
-        for x in range(60, w, 60):
-            painter.drawLine(x, 0, x, h)
-        for y in range(60, h, 60):
-            painter.drawLine(0, y, w, y)
-
-        positions = []
-        for p in self._particles:
-            px = int((p["x"] + 0.01 * math.sin(t * p["speed"] + p["phase"])) * w)
-            py = int((p["y"] + 0.008 * math.cos(t * p["speed"] * 0.7 + p["phase"])) * h)
-            px = max(4, min(w - 4, px))
-            py = max(4, min(h - 4, py))
-            positions.append((px, py))
-            alpha = 28 + int(14 * math.sin(t * 1.2 + p["phase"]))
-            painter.setPen(Qt.NoPen)
-            painter.setBrush(QColor(139, 172, 200, alpha))
-            painter.drawEllipse(QPoint(px, py), 2, 2)
-
-        for i in range(len(positions)):
-            for j in range(i + 1, len(positions)):
-                dx = positions[i][0] - positions[j][0]
-                dy = positions[i][1] - positions[j][1]
-                dist = math.sqrt(dx * dx + dy * dy)
-                if dist < 180:
-                    alpha = int(12 * (1 - dist / 180))
-                    painter.setPen(QPen(QColor(139, 172, 200, alpha), 1))
-                    painter.drawLine(
-                        positions[i][0], positions[i][1],
-                        positions[j][0], positions[j][1],
-                    )
-
-        painter.setClipping(False)
-        painter.end()
-
-    def showEvent(self, event):
-        super().showEvent(event)
-        if not self._timer.isActive():
-            self._timer.start()
-
-    def hideEvent(self, event):
-        super().hideEvent(event)
-        self._timer.stop()
+# _EmptyStateConflicts removed — using EmptyStateAnimated from animated_card.py
 
 
 # ---------------------------------------------------------------------------
@@ -434,10 +470,14 @@ class DuplicatesPage(QWidget):
         self._current_page = 1
         self._total_pages = 1
         self._page_size = 20
-        self._selected_conflict_idx = -1
-        self._detail_data = None
         self._exclude_resolved = False
         self._loading = False
+        self._conflict_cards = []
+
+        # Shimmer timer for card animation (80ms)
+        self._card_shimmer_timer = QTimer(self)
+        self._card_shimmer_timer.setInterval(80)
+        self._card_shimmer_timer.timeout.connect(self._update_card_shimmer)
 
         self._setup_ui()
 
@@ -549,19 +589,27 @@ class DuplicatesPage(QWidget):
         self._content_layout.setSpacing(12)
         scroll.setWidget(scroll_content)
 
-        # Conflict list table card
-        self._conflict_list_card = self._build_conflict_list()
-        self._content_layout.addWidget(self._conflict_list_card)
+        # Conflict cards container (replaces table)
+        self._cards_container = QWidget()
+        self._cards_container.setStyleSheet("background: transparent;")
+        self._cards_layout = QVBoxLayout(self._cards_container)
+        self._cards_layout.setContentsMargins(0, 0, 0, 0)
+        self._cards_layout.setSpacing(10)
+        self._content_layout.addWidget(self._cards_container)
 
-        # Empty state (constellation)
-        self._empty_state = _EmptyStateConflicts()
+        # Pagination footer
+        self._pagination_footer = self._build_pagination_footer()
+        self._content_layout.addWidget(self._pagination_footer)
+        self._pagination_footer.setVisible(False)
+
+        # Empty state (reusable EmptyStateAnimated)
+        self._empty_state = EmptyStateAnimated(
+            title=tr("page.duplicates.no_conflicts"),
+            description=tr("page.duplicates.no_conflicts_hint"),
+        )
+        self._empty_state.setMinimumHeight(280)
         self._content_layout.addWidget(self._empty_state)
         self._empty_state.setVisible(False)
-
-        # Resolution section
-        self._resolution_card = self._build_resolution_section()
-        self._content_layout.addWidget(self._resolution_card)
-        self._resolution_card.setVisible(False)
 
         self._content_layout.addStretch()
 
@@ -635,11 +683,10 @@ class DuplicatesPage(QWidget):
         self._card_property = _GlowCard(tr("page.duplicates.card_property"), 0, "#F59E0B")
         self._card_person = _GlowCard(tr("page.duplicates.card_person"), 0, "#8B5CF6")
         self._card_resolved = _GlowCard(tr("page.duplicates.card_resolved"), 0, "#10B981")
-        self._card_overdue = _GlowCard(tr("page.duplicates.card_overdue"), 0, "#DC2626")
 
         self._summary_cards = [
             self._card_total, self._card_property, self._card_person,
-            self._card_resolved, self._card_overdue,
+            self._card_resolved,
         ]
         for card in self._summary_cards:
             layout.addWidget(card)
@@ -648,7 +695,6 @@ class DuplicatesPage(QWidget):
         self._card_property.clicked.connect(lambda: self._filter_by_card("PropertyDuplicate"))
         self._card_person.clicked.connect(lambda: self._filter_by_card("PersonDuplicate"))
         self._card_resolved.clicked.connect(lambda: self._filter_by_card("Resolved"))
-        self._card_overdue.clicked.connect(lambda: self._filter_by_card("overdue"))
 
         return container
 
@@ -686,101 +732,13 @@ class DuplicatesPage(QWidget):
 
         return container
 
-    # -- Conflict List Table -----------------------------------------------
+    # -- Pagination Footer -------------------------------------------------
 
-    def _build_conflict_list(self) -> QFrame:
-        card = QFrame()
-        card.setObjectName("conflictListCard")
-        card.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-        card.setStyleSheet(
-            StyleManager.table_card().replace("QFrame", "QFrame#conflictListCard")
-        )
-
-        shadow = QGraphicsDropShadowEffect()
-        shadow.setBlurRadius(24)
-        shadow.setXOffset(0)
-        shadow.setYOffset(4)
-        shadow.setColor(QColor(0, 0, 0, 18))
-        card.setGraphicsEffect(shadow)
-
-        card_layout = QVBoxLayout(card)
-        card_layout.setSpacing(0)
-        card_layout.setContentsMargins(0, 0, 0, 0)
-
-        # Table
-        self._table = QTableWidget()
-        self._table.setColumnCount(8)
-        self._table.setRowCount(0)
-        self._table.setHorizontalHeaderLabels(self._table_header_labels())
-        self._table.verticalHeader().setVisible(False)
-        self._table.setSelectionMode(QAbstractItemView.SingleSelection)
-        self._table.setSelectionBehavior(QAbstractItemView.SelectRows)
-        self._table.setEditTriggers(QAbstractItemView.NoEditTriggers)
-        self._table.setShowGrid(False)
-        self._table.setFocusPolicy(Qt.NoFocus)
-        self._table.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
-        self._table.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-
-        header = self._table.horizontalHeader()
-        header.setDefaultAlignment(Qt.AlignCenter)
-        header.setFixedHeight(52)
-        header.setSectionResizeMode(QHeaderView.Stretch)
-        header.setSectionResizeMode(0, QHeaderView.ResizeToContents)
-        header.setSectionResizeMode(4, QHeaderView.ResizeToContents)
-
-        vh = self._table.verticalHeader()
-        vh.setDefaultSectionSize(50)
-
-        self._table.setStyleSheet("""
-            QTableWidget {
-                background-color: white;
-                border: none;
-                outline: none;
-                font-size: 10pt;
-                color: #212B36;
-                border-top-left-radius: 16px;
-                border-top-right-radius: 16px;
-            }
-            QTableWidget::item {
-                padding: 8px 12px;
-                border-bottom: 1px solid #F0F4F8;
-                color: #212B36;
-                font-size: 10pt;
-            }
-            QTableWidget::item:selected {
-                background-color: #EBF5FF;
-                color: #1F2937;
-            }
-            QTableWidget::item:hover {
-                background-color: #F5F9FF;
-            }
-            QHeaderView {
-                border-top-left-radius: 16px;
-                border-top-right-radius: 16px;
-            }
-            QHeaderView::section {
-                background-color: #F0F7FF;
-                padding: 10px;
-                border: none;
-                border-bottom: 2px solid #E0EFFF;
-                color: #3890DF;
-                font-weight: 600;
-                font-size: 9.5pt;
-            }
-            QHeaderView::section:hover {
-                background-color: #E0EFFF;
-            }
-        """ + StyleManager.scrollbar())
-
-        self._table.selectionModel().selectionChanged.connect(self._on_row_selected)
-        card_layout.addWidget(self._table)
-
-        # Footer with pagination
+    def _build_pagination_footer(self) -> QFrame:
         footer = QFrame()
         footer.setFixedHeight(54)
         footer.setStyleSheet(
-            StyleManager.nav_footer()
-            + "QFrame { border-bottom-left-radius: 16px; border-bottom-right-radius: 16px; }"
+            "QFrame { background: #FAFCFF; border: 1px solid #E2EAF2; border-radius: 12px; }"
         )
 
         fl = QHBoxLayout(footer)
@@ -816,322 +774,24 @@ class DuplicatesPage(QWidget):
         self._count_label.setStyleSheet("color: #78909C; background: transparent; border: none;")
         fl.addWidget(self._count_label)
 
-        card_layout.addWidget(footer)
+        return footer
 
-        return card
+    # -- Card management ---------------------------------------------------
 
-    @staticmethod
-    def _table_header_labels():
-        return [
-            tr("page.duplicates.col_conflict_number"),
-            tr("page.duplicates.col_type"),
-            tr("page.duplicates.col_first_record"),
-            tr("page.duplicates.col_second_record"),
-            tr("page.duplicates.col_match_score"),
-            tr("page.duplicates.col_priority"),
-            tr("page.duplicates.col_status"),
-            tr("page.duplicates.col_date"),
-        ]
+    def _clear_cards(self):
+        """Remove all existing conflict cards from the layout."""
+        self._card_shimmer_timer.stop()
+        for card in self._conflict_cards:
+            card.setParent(None)
+            card.deleteLater()
+        self._conflict_cards.clear()
 
-    # -- Resolution Section ------------------------------------------------
+    def _update_card_shimmer(self):
+        """Trigger repaint on all visible cards for shimmer animation."""
+        for card in self._conflict_cards:
+            if card.isVisible():
+                card.update()
 
-    def _build_resolution_section(self) -> QFrame:
-        card = QFrame()
-        card.setObjectName("resolutionCard")
-        card.setStyleSheet(
-            StyleManager.form_card().replace("QFrame", "QFrame#resolutionCard")
-        )
-
-        shadow = QGraphicsDropShadowEffect()
-        shadow.setBlurRadius(20)
-        shadow.setXOffset(0)
-        shadow.setYOffset(3)
-        shadow.setColor(QColor(0, 0, 0, 15))
-        card.setGraphicsEffect(shadow)
-
-        card_layout = QVBoxLayout(card)
-        card_layout.setSpacing(14)
-        card_layout.setContentsMargins(20, 18, 20, 18)
-
-        # Title row
-        title_row = QHBoxLayout()
-        self._resolution_title = QLabel(tr("page.duplicates.resolution_action"))
-        self._resolution_title.setFont(create_font(size=14, weight=FontManager.WEIGHT_BOLD))
-        self._resolution_title.setStyleSheet(f"color: {Colors.PAGE_TITLE}; background: transparent; border: none;")
-
-        self._conflict_info_label = QLabel("")
-        self._conflict_info_label.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
-        self._conflict_info_label.setStyleSheet("color: #78909C; background: transparent; border: none;")
-
-        self._view_details_btn = QPushButton(tr("page.duplicates.view_details"))
-        self._view_details_btn.setCursor(Qt.PointingHandCursor)
-        self._view_details_btn.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
-        self._view_details_btn.setStyleSheet(f"""
-            QPushButton {{
-                color: {Colors.PRIMARY_BLUE};
-                background: {Colors.PRIMARY_BLUE}0D;
-                border: 1px solid {Colors.PRIMARY_BLUE}33;
-                border-radius: 8px;
-                padding: 6px 16px;
-            }}
-            QPushButton:hover {{
-                background: {Colors.PRIMARY_BLUE}1A;
-                border-color: {Colors.PRIMARY_BLUE}66;
-            }}
-        """)
-        self._view_details_btn.clicked.connect(self._on_view_details)
-
-        title_row.addWidget(self._resolution_title)
-        title_row.addWidget(self._conflict_info_label)
-        title_row.addStretch()
-        title_row.addWidget(self._view_details_btn)
-        card_layout.addLayout(title_row)
-
-        # Separator
-        sep = QFrame()
-        sep.setFixedHeight(1)
-        sep.setStyleSheet("background-color: #F0F4F8;")
-        card_layout.addWidget(sep)
-
-        # Comparison preview
-        self._comparison_frame = QFrame()
-        self._comparison_frame.setStyleSheet(StyleManager.data_card())
-        comp_layout = QHBoxLayout(self._comparison_frame)
-        comp_layout.setContentsMargins(16, 12, 16, 12)
-        comp_layout.setSpacing(20)
-
-        self._record_a_frame = self._build_record_preview(tr("page.duplicates.col_first_record"))
-        comp_layout.addWidget(self._record_a_frame, 1)
-
-        vs_label = QLabel("VS")
-        vs_label.setAlignment(Qt.AlignCenter)
-        vs_label.setFixedWidth(50)
-        vs_label.setFont(create_font(size=12, weight=FontManager.WEIGHT_BOLD))
-        vs_label.setStyleSheet(f"""
-            color: {Colors.PRIMARY_BLUE};
-            background: {Colors.PRIMARY_BLUE}12;
-            border-radius: 25px;
-            padding: 8px;
-            border: none;
-        """)
-        comp_layout.addWidget(vs_label)
-
-        self._record_b_frame = self._build_record_preview(tr("page.duplicates.col_second_record"))
-        comp_layout.addWidget(self._record_b_frame, 1)
-
-        card_layout.addWidget(self._comparison_frame)
-
-        # Interactive zone (hidden for resolved conflicts)
-        self._interactive_zone = QWidget()
-        self._interactive_zone.setStyleSheet("background: transparent;")
-        iz_layout = QVBoxLayout(self._interactive_zone)
-        iz_layout.setContentsMargins(0, 0, 0, 0)
-        iz_layout.setSpacing(10)
-
-        # Resolution options
-        self._resolution_group = QButtonGroup(self)
-        options_layout = QHBoxLayout()
-        options_layout.setSpacing(16)
-
-        for idx, (label, value) in enumerate([
-            (tr("page.duplicates.merge_records"), "merge"),
-            (tr("page.duplicates.keep_separate"), "keep_separate"),
-        ]):
-            radio = QRadioButton(label)
-            radio.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
-            radio.setStyleSheet(RADIO_STYLE + " QRadioButton { padding: 8px 14px; }")
-            radio.setProperty("resolution_type", value)
-            self._resolution_group.addButton(radio, idx)
-            options_layout.addWidget(radio)
-            if idx == 0:
-                radio.setChecked(True)
-
-        options_layout.addStretch()
-
-        self._master_label = QLabel(tr("page.duplicates.master_record"))
-        self._master_label.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
-        self._master_label.setStyleSheet("color: #78909C; background: transparent; border: none;")
-
-        self._master_combo = QComboBox()
-        self._master_combo.setStyleSheet(f"""
-            QComboBox {{
-                border: 1.5px solid #E5E7EB;
-                border-radius: 8px;
-                padding: 4px 12px;
-                background: #FAFBFC;
-                color: #374151;
-                min-width: 180px;
-            }}
-            QComboBox:hover {{ border-color: {Colors.PRIMARY_BLUE}88; }}
-        """)
-        self._master_combo.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
-
-        options_layout.addWidget(self._master_label)
-        options_layout.addWidget(self._master_combo)
-        iz_layout.addLayout(options_layout)
-
-        self._resolution_group.buttonClicked.connect(self._on_resolution_type_changed)
-
-        # Justification
-        just_label = QLabel(tr("page.duplicates.justification_label"))
-        just_label.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
-        just_label.setStyleSheet("color: #78909C; background: transparent; border: none;")
-        iz_layout.addWidget(just_label)
-
-        self._justification_edit = QTextEdit()
-        self._justification_edit.setPlaceholderText(tr("page.duplicates.justification_placeholder"))
-        self._justification_edit.setFixedHeight(72)
-        self._justification_edit.setFont(create_font(size=9, weight=FontManager.WEIGHT_REGULAR))
-        self._justification_edit.setStyleSheet(f"""
-            QTextEdit {{
-                border: 1.5px solid #E5E7EB;
-                border-radius: 10px;
-                padding: 10px;
-                background: #FAFBFC;
-                color: #333;
-            }}
-            QTextEdit:focus {{
-                border-color: {Colors.PRIMARY_BLUE};
-                background: white;
-            }}
-        """)
-        iz_layout.addWidget(self._justification_edit)
-
-        # Action button
-        btn_layout = QHBoxLayout()
-        btn_layout.addStretch()
-
-        self._action_btn = QPushButton(tr("page.duplicates.execute_action"))
-        self._action_btn.setCursor(Qt.PointingHandCursor)
-        self._action_btn.setFont(create_font(size=11, weight=FontManager.WEIGHT_SEMIBOLD))
-        self._action_btn.setFixedSize(160, 44)
-        self._action_btn.setStyleSheet(StyleManager.dark_action_button())
-        self._action_btn.clicked.connect(self._on_action_clicked)
-        btn_layout.addWidget(self._action_btn)
-
-        iz_layout.addLayout(btn_layout)
-        card_layout.addWidget(self._interactive_zone)
-
-        # Resolved summary (shown instead of interactive zone for resolved conflicts)
-        self._resolved_summary_frame = QFrame()
-        self._resolved_summary_frame.setStyleSheet(
-            StyleManager.data_card()
-            + " QLabel { background: transparent; border: none; }"
-        )
-        self._resolved_summary_frame.setVisible(False)
-        rs_layout = QVBoxLayout(self._resolved_summary_frame)
-        rs_layout.setContentsMargins(16, 14, 16, 14)
-        rs_layout.setSpacing(10)
-
-        # Status banner
-        self._rs_status_label = QLabel("")
-        self._rs_status_label.setFont(create_font(size=10, weight=FontManager.WEIGHT_BOLD))
-        self._rs_status_label.setAlignment(Qt.AlignCenter)
-        self._rs_status_label.setFixedHeight(32)
-        self._rs_status_label.setStyleSheet(
-            "border-radius: 6px; padding: 4px 12px;"
-        )
-        rs_layout.addWidget(self._rs_status_label)
-
-        # Info rows
-        self._rs_type_row = self._make_summary_row()
-        self._rs_master_row = self._make_summary_row()
-        self._rs_just_row = self._make_summary_row()
-        self._rs_date_row = self._make_summary_row()
-        for row_w in (self._rs_type_row, self._rs_master_row, self._rs_just_row, self._rs_date_row):
-            rs_layout.addWidget(row_w)
-
-        card_layout.addWidget(self._resolved_summary_frame)
-
-        return card
-
-    def _build_record_preview(self, title: str) -> QFrame:
-        frame = QFrame()
-        frame.setStyleSheet("QFrame { background: transparent; border: none; }")
-        layout = QVBoxLayout(frame)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(4)
-
-        title_lbl = QLabel(title)
-        title_lbl.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
-        title_lbl.setStyleSheet("color: #78909C; background: transparent;")
-        layout.addWidget(title_lbl)
-
-        id_lbl = QLabel("-")
-        id_lbl.setObjectName("record_id")
-        id_lbl.setFont(create_font(size=11, weight=FontManager.WEIGHT_BOLD))
-        id_lbl.setStyleSheet(f"color: {Colors.PAGE_TITLE}; background: transparent;")
-        layout.addWidget(id_lbl)
-
-        desc_lbl = QLabel("-")
-        desc_lbl.setObjectName("record_desc")
-        desc_lbl.setFont(create_font(size=9, weight=FontManager.WEIGHT_REGULAR))
-        desc_lbl.setStyleSheet("color: #6B7280; background: transparent;")
-        desc_lbl.setWordWrap(True)
-        layout.addWidget(desc_lbl)
-
-        return frame
-
-    def _make_summary_row(self) -> QWidget:
-        """Create a key-value row widget for the resolved summary panel."""
-        w = QWidget()
-        w.setStyleSheet("background: transparent;")
-        row = QHBoxLayout(w)
-        row.setContentsMargins(0, 0, 0, 0)
-        row.setSpacing(8)
-        key_lbl = QLabel("")
-        key_lbl.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
-        key_lbl.setStyleSheet("color: #78909C; background: transparent; border: none;")
-        key_lbl.setFixedWidth(130)
-        val_lbl = QLabel("")
-        val_lbl.setFont(create_font(size=9, weight=FontManager.WEIGHT_REGULAR))
-        val_lbl.setStyleSheet(f"color: {Colors.PAGE_TITLE}; background: transparent; border: none;")
-        val_lbl.setWordWrap(True)
-        row.addWidget(key_lbl)
-        row.addWidget(val_lbl, 1)
-        w.key_lbl = key_lbl
-        w.val_lbl = val_lbl
-        return w
-
-    def _populate_resolved_summary(self, conflict: dict):
-        """Fill the resolved summary panel from conflict data."""
-        status = conflict.get("status", "")
-        is_auto = status.lower() == "autoresolved"
-        status_colors = {
-            "resolved": ("#22C55E", "#F0FDF4"),
-            "autoresolved": ("#A855F7", "#FAF5FF"),
-        }
-        fg, bg = status_colors.get(status.lower(), ("#22C55E", "#F0FDF4"))
-        status_text = tr("page.duplicates.status_autoresolved") if is_auto else tr("page.duplicates.status_resolved")
-        self._rs_status_label.setText(status_text)
-        self._rs_status_label.setStyleSheet(
-            f"border-radius: 6px; padding: 4px 12px; color: {fg}; background: {bg}; border: 1px solid {fg}33;"
-        )
-
-        res_type = conflict.get("resolutionType", "") or ""
-        if res_type in ("merge_records", "merge"):
-            type_display = tr("page.duplicates.merge_records")
-        elif res_type in ("keep_separate",):
-            type_display = tr("page.duplicates.keep_separate")
-        else:
-            type_display = res_type or "-"
-
-        master_id = conflict.get("masterRecordId") or conflict.get("masterEntityId") or "-"
-        justification = conflict.get("justification") or conflict.get("resolutionNotes") or "-"
-        resolved_at = str(conflict.get("resolvedAt") or conflict.get("resolvedDate") or "")[:10] or "-"
-        resolved_by = conflict.get("resolvedBy") or conflict.get("resolvedByUser") or "-"
-        meta = f"{resolved_at}  |  {resolved_by}" if resolved_by != "-" else resolved_at
-
-        for row_w, key_txt, val_txt, visible in [
-            (self._rs_type_row, tr("page.duplicates.resolution_type"), type_display, bool(res_type)),
-            (self._rs_master_row, tr("page.duplicates.master_record"), str(master_id),
-             res_type in ("merge_records", "merge")),
-            (self._rs_just_row, tr("page.duplicates.justification_label"), justification, True),
-            (self._rs_date_row, tr("page.duplicates.resolved_meta"), meta, resolved_at != "-"),
-        ]:
-            row_w.key_lbl.setText(key_txt)
-            row_w.val_lbl.setText(val_txt)
-            row_w.setVisible(visible)
 
     # -- Data Loading ------------------------------------------------------
 
@@ -1164,9 +824,9 @@ class DuplicatesPage(QWidget):
             self._worker.wait(500)
 
         self._shimmer_container.setVisible(True)
-        self._conflict_list_card.setVisible(False)
+        self._cards_container.setVisible(False)
+        self._pagination_footer.setVisible(False)
         self._empty_state.setVisible(False)
-        self._resolution_card.setVisible(False)
 
         self._worker = _ConflictWorker(
             self.duplicate_service,
@@ -1196,7 +856,6 @@ class DuplicatesPage(QWidget):
         self._card_property.update_count(pending_property)
         self._card_person.update_count(pending_person)
         self._card_resolved.update_count(summary.get("resolvedCount", 0))
-        self._card_overdue.update_count(summary.get("overdueCount", 0))
 
         self._stat_pending.set_count(pending_total)
 
@@ -1220,11 +879,13 @@ class DuplicatesPage(QWidget):
         )
 
         if self._conflicts:
-            self._conflict_list_card.setVisible(True)
+            self._cards_container.setVisible(True)
+            self._pagination_footer.setVisible(True)
             self._empty_state.setVisible(False)
-            self._populate_table()
+            self._populate_cards()
         else:
-            self._conflict_list_card.setVisible(False)
+            self._cards_container.setVisible(False)
+            self._pagination_footer.setVisible(False)
             self._empty_state.setVisible(True)
 
         self._update_pagination()
@@ -1238,228 +899,38 @@ class DuplicatesPage(QWidget):
         self._shimmer_container.setVisible(False)
 
         self._conflicts = []
-        self._conflict_list_card.setVisible(False)
+        self._clear_cards()
+        self._cards_container.setVisible(False)
+        self._pagination_footer.setVisible(False)
         self._empty_state.setVisible(True)
         Toast.show_toast(self, tr("page.duplicates.load_failed", error=error_msg), Toast.ERROR)
         logger.error("Conflict load error: %s", error_msg)
 
-    # -- Table Population --------------------------------------------------
+    # -- Card Population ---------------------------------------------------
 
-    def _populate_table(self):
-        self._selected_conflict_idx = -1
-        self._resolution_card.setVisible(False)
+    def _populate_cards(self):
+        self._clear_cards()
 
-        self._table.setRowCount(len(self._conflicts))
+        for idx, conflict in enumerate(self._conflicts):
+            card = _DuplicateCard(conflict, parent=self._cards_container)
+            card.card_clicked.connect(lambda c, i=idx: self._on_card_clicked(i, c))
+            self._cards_layout.addWidget(card)
+            self._conflict_cards.append(card)
 
-        for row_idx, conflict in enumerate(self._conflicts):
-            # Conflict number
-            num_item = QTableWidgetItem(conflict.get("conflictNumber", "-"))
-            num_item.setTextAlignment(Qt.AlignCenter)
-            num_item.setFont(create_font(size=9, weight=FontManager.WEIGHT_BOLD))
-            self._table.setItem(row_idx, 0, num_item)
+        # Animate entrance with stagger
+        animate_card_entrance(self._conflict_cards, parent=self)
 
-            # Type
-            ctype = conflict.get("conflictType", "")
-            type_cfg = _get_type_config(ctype) if ctype else {"label": "-"}
-            type_item = QTableWidgetItem(type_cfg["label"])
-            type_item.setTextAlignment(Qt.AlignCenter)
-            type_item.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
-            self._table.setItem(row_idx, 1, type_item)
+        # Start shimmer timer
+        if self._conflict_cards:
+            self._card_shimmer_timer.start()
 
-            # First entity
-            first_id = conflict.get("firstEntityIdentifier", conflict.get("firstEntityId", "-"))
-            first_item = QTableWidgetItem(str(first_id))
-            first_item.setTextAlignment(Qt.AlignCenter)
-            self._table.setItem(row_idx, 2, first_item)
+    # -- Card Click → Navigate to Comparison Page --------------------------
 
-            # Second entity
-            second_id = conflict.get("secondEntityIdentifier", conflict.get("secondEntityId", "-"))
-            second_item = QTableWidgetItem(str(second_id))
-            second_item.setTextAlignment(Qt.AlignCenter)
-            self._table.setItem(row_idx, 3, second_item)
-
-            # Similarity score
-            score = conflict.get("similarityScore", 0)
-            score_pct = f"{score * 100:.0f}%" if isinstance(score, float) and score <= 1 else f"{score}%"
-            score_item = QTableWidgetItem(score_pct)
-            score_item.setTextAlignment(Qt.AlignCenter)
-            score_item.setFont(create_font(size=9, weight=FontManager.WEIGHT_BOLD))
-            sv = score if isinstance(score, (int, float)) else 0
-            score_color = "#EF4444" if sv >= 0.9 else "#F59E0B" if sv >= 0.7 else "#6B7280"
-            score_item.setForeground(QColor(score_color))
-            self._table.setItem(row_idx, 4, score_item)
-
-            # Priority
-            priority = conflict.get("priority", "Medium")
-            pri_cfg = _get_priority_config(priority) if priority else {"label": "-", "color": "#6B7280"}
-            pri_item = QTableWidgetItem(pri_cfg["label"])
-            pri_item.setTextAlignment(Qt.AlignCenter)
-            pri_item.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
-            pri_item.setForeground(QColor(pri_cfg["color"]))
-            self._table.setItem(row_idx, 5, pri_item)
-
-            # Status
-            status = conflict.get("status", "Pending")
-            st_cfg = _get_status_config(status) if status else {"label": "-", "color": "#6B7280"}
-            st_item = QTableWidgetItem(st_cfg["label"])
-            st_item.setTextAlignment(Qt.AlignCenter)
-            st_item.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
-            st_item.setForeground(QColor(st_cfg["color"]))
-            self._table.setItem(row_idx, 6, st_item)
-
-            # Date
-            date_str = conflict.get("detectedDate", conflict.get("assignedDate", ""))
-            if date_str and "T" in str(date_str):
-                date_str = str(date_str).split("T")[0]
-            date_item = QTableWidgetItem(str(date_str))
-            date_item.setTextAlignment(Qt.AlignCenter)
-            date_item.setFont(create_font(size=8))
-            date_item.setForeground(QColor("#9CA3AF"))
-            self._table.setItem(row_idx, 7, date_item)
-
-    # -- Selection & Resolution --------------------------------------------
-
-    def _on_row_selected(self):
-        rows = self._table.selectionModel().selectedRows()
-        if not rows:
-            self._selected_conflict_idx = -1
-            self._resolution_card.setVisible(False)
-            return
-
-        idx = rows[0].row()
+    def _on_card_clicked(self, idx: int, conflict: dict):
+        """Navigate to full-page comparison/resolution view."""
         if idx >= len(self._conflicts):
-            self._table.clearSelection()
-            self._selected_conflict_idx = -1
-            self._resolution_card.setVisible(False)
             return
-
-        self._selected_conflict_idx = idx
         conflict = self._conflicts[idx]
-
-        self._resolution_card.setVisible(True)
-
-        cnum = conflict.get("conflictNumber", "")
-        ctype = conflict.get("conflictType", "")
-        type_cfg = _get_type_config(ctype) if ctype else {"label": "-"}
-        self._conflict_info_label.setText(f"#{cnum} \u2014 {type_cfg['label']}")
-
-        first_id = conflict.get("firstEntityIdentifier", conflict.get("firstEntityId", "-"))
-        second_id = conflict.get("secondEntityIdentifier", conflict.get("secondEntityId", "-"))
-
-        a_id = self._record_a_frame.findChild(QLabel, "record_id")
-        a_desc = self._record_a_frame.findChild(QLabel, "record_desc")
-        b_id = self._record_b_frame.findChild(QLabel, "record_id")
-        b_desc = self._record_b_frame.findChild(QLabel, "record_desc")
-
-        if a_id:
-            a_id.setText(str(first_id))
-        if a_desc:
-            a_desc.setText(tr("page.duplicates.identifier", id=conflict.get("firstEntityId", "-")))
-        if b_id:
-            b_id.setText(str(second_id))
-        if b_desc:
-            b_desc.setText(tr("page.duplicates.identifier", id=conflict.get("secondEntityId", "-")))
-
-        self._master_combo.clear()
-        self._master_combo.addItem(
-            tr("page.duplicates.first_record_id", id=first_id),
-            conflict.get("firstEntityId", ""),
-        )
-        self._master_combo.addItem(
-            tr("page.duplicates.second_record_id", id=second_id),
-            conflict.get("secondEntityId", ""),
-        )
-
-        is_resolved = conflict.get("status", "").lower() in ("resolved", "autoresolved")
-        self._interactive_zone.setVisible(not is_resolved)
-        self._resolved_summary_frame.setVisible(is_resolved)
-        if is_resolved:
-            self._populate_resolved_summary(conflict)
-            return
-
-        self._justification_edit.clear()
-        self._on_resolution_type_changed()
-
-    def _on_resolution_type_changed(self):
-        selected = self._resolution_group.checkedButton()
-        if not selected:
-            return
-        is_merge = selected.property("resolution_type") == "merge"
-        self._master_label.setVisible(is_merge)
-        self._master_combo.setVisible(is_merge)
-
-    def _on_action_clicked(self):
-        if self._selected_conflict_idx < 0 or self._selected_conflict_idx >= len(self._conflicts):
-            Toast.show_toast(self, tr("page.duplicates.select_conflict"), Toast.WARNING)
-            return
-
-        justification = self._justification_edit.toPlainText().strip()
-        if not justification:
-            Toast.show_toast(self, tr("page.duplicates.enter_justification"), Toast.WARNING)
-            return
-
-        selected_radio = self._resolution_group.checkedButton()
-        if not selected_radio:
-            Toast.show_toast(self, tr("page.duplicates.select_action_type"), Toast.WARNING)
-            return
-
-        resolution_type = selected_radio.property("resolution_type")
-        conflict = self._conflicts[self._selected_conflict_idx]
-        conflict_id = conflict.get("id", "")
-
-        action_labels = {
-            "merge": tr("page.duplicates.merge_records"),
-            "keep_separate": tr("page.duplicates.keep_records_separate"),
-        }
-        action_label = action_labels.get(resolution_type, tr("page.duplicates.execute_action"))
-
-        from ui.error_handler import ErrorHandler
-        if not ErrorHandler.confirm(
-            self,
-            tr("page.duplicates.confirm_action_msg", action=action_label),
-            tr("page.duplicates.confirm_action_title"),
-        ):
-            return
-
-        master_id = ""
-        if resolution_type == "merge":
-            master_id = self._master_combo.currentData()
-            if not master_id:
-                Toast.show_toast(self, tr("page.duplicates.select_master_record"), Toast.WARNING)
-                return
-
-        self._action_btn.setEnabled(False)
-        self._spinner.show_loading(tr("page.duplicates.executing_action"))
-        self._resolution_worker = _ResolutionWorker(
-            self.duplicate_service, resolution_type,
-            conflict_id, justification, master_id,
-        )
-        self._resolution_worker.finished.connect(self._on_resolution_finished)
-        self._resolution_worker.error.connect(self._on_resolution_error)
-        self._resolution_worker.start()
-
-    def _on_resolution_finished(self, success: bool):
-        self._spinner.hide_loading()
-        self._action_btn.setEnabled(True)
-        if success:
-            self._justification_edit.clear()
-            Toast.show_toast(self, tr("page.duplicates.action_success"), Toast.SUCCESS)
-            self._load_conflicts()
-        else:
-            Toast.show_toast(self, tr("page.duplicates.action_failed"), Toast.ERROR)
-
-    def _on_resolution_error(self, error_msg: str):
-        self._spinner.hide_loading()
-        self._action_btn.setEnabled(True)
-        Toast.show_toast(
-            self, tr("page.duplicates.action_failed_detail", error=error_msg), Toast.ERROR
-        )
-
-    def _on_view_details(self):
-        if self._selected_conflict_idx < 0:
-            return
-        conflict = self._conflicts[self._selected_conflict_idx]
-        self._spinner.show_loading()
         self.view_comparison_requested.emit(conflict)
 
     # -- Filter & Pagination -----------------------------------------------
@@ -1492,10 +963,6 @@ class DuplicatesPage(QWidget):
             self._type_filter.setCurrentIndex(0)
             self._status_filter.setCurrentIndex(self._status_filter.findData("Resolved"))
             self._card_resolved.set_active(True)
-        elif card_type == "overdue":
-            self._type_filter.setCurrentIndex(0)
-            self._status_filter.setCurrentIndex(0)
-            self._card_overdue.set_active(True)
 
         self._type_filter.blockSignals(False)
         self._status_filter.blockSignals(False)
@@ -1531,10 +998,77 @@ class DuplicatesPage(QWidget):
     def hideEvent(self, event):
         for s in self._shimmer_widgets:
             s.stop()
+        self._card_shimmer_timer.stop()
         super().hideEvent(event)
 
     def update_language(self, is_arabic: bool):
-        self.setLayoutDirection(get_layout_direction())
+        direction = get_layout_direction()
+        self.setLayoutDirection(direction)
+
+        # Header
         self._header.set_title(tr("page.duplicates.title"))
         self._stat_pending.set_label(tr("page.duplicates.stat_pending"))
         self._refresh_btn.setText(tr("page.duplicates.refresh"))
+
+        # Summary cards
+        self._card_total.title_label.setText(tr("page.duplicates.card_total"))
+        self._card_property.title_label.setText(tr("page.duplicates.card_property"))
+        self._card_person.title_label.setText(tr("page.duplicates.card_person"))
+        self._card_resolved.title_label.setText(tr("page.duplicates.card_resolved"))
+
+        # Type filter
+        self._type_filter.blockSignals(True)
+        cur_type = self._type_filter.currentData()
+        self._type_filter.clear()
+        self._type_filter.addItem(tr("page.duplicates.all_types"), "")
+        self._type_filter.addItem(tr("page.duplicates.card_property"), "PropertyDuplicate")
+        self._type_filter.addItem(tr("page.duplicates.card_person"), "PersonDuplicate")
+        if cur_type:
+            idx = self._type_filter.findData(cur_type)
+            if idx >= 0:
+                self._type_filter.setCurrentIndex(idx)
+        self._type_filter.setLayoutDirection(direction)
+        self._type_filter.blockSignals(False)
+
+        # Status filter
+        self._status_filter.blockSignals(True)
+        cur_status = self._status_filter.currentData()
+        self._status_filter.clear()
+        self._status_filter.addItem(tr("page.duplicates.all_statuses"), "")
+        self._status_filter.addItem(tr("page.duplicates.status_pending"), "Pending")
+        self._status_filter.addItem(tr("page.duplicates.status_pending_review"), "PendingReview")
+        self._status_filter.addItem(tr("page.duplicates.status_in_review"), "InReview")
+        self._status_filter.addItem(tr("page.duplicates.status_resolved"), "Resolved")
+        self._status_filter.addItem(tr("page.duplicates.status_auto_resolved"), "AutoResolved")
+        if cur_status:
+            idx = self._status_filter.findData(cur_status)
+            if idx >= 0:
+                self._status_filter.setCurrentIndex(idx)
+        self._status_filter.setLayoutDirection(direction)
+        self._status_filter.blockSignals(False)
+
+        # Priority filter
+        self._priority_filter.blockSignals(True)
+        cur_priority = self._priority_filter.currentData()
+        self._priority_filter.clear()
+        self._priority_filter.addItem(tr("page.duplicates.all_priorities"), "")
+        self._priority_filter.addItem(tr("page.duplicates.priority_critical"), "Critical")
+        self._priority_filter.addItem(tr("page.duplicates.priority_high"), "High")
+        self._priority_filter.addItem(tr("page.duplicates.priority_medium"), "Medium")
+        self._priority_filter.addItem(tr("page.duplicates.priority_low"), "Low")
+        if cur_priority:
+            idx = self._priority_filter.findData(cur_priority)
+            if idx >= 0:
+                self._priority_filter.setCurrentIndex(idx)
+        self._priority_filter.setLayoutDirection(direction)
+        self._priority_filter.blockSignals(False)
+
+        # Pagination
+        self._prev_btn.setText(tr("page.duplicates.previous"))
+        self._next_btn.setText(tr("page.duplicates.next"))
+        self._count_label.setText(
+            tr("page.duplicates.showing_count", shown=len(self._conflicts), total=len(self._conflicts))
+        )
+
+        # Reload cards to pick up new translations
+        self._load_conflicts()

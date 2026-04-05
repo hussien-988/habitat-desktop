@@ -14,6 +14,7 @@ from services.api_worker import ApiWorker
 from services.translation_manager import tr, get_layout_direction
 from ui.components.icon import Icon
 from ui.components.toast import Toast
+from ui.animation_utils import stagger_fade_in
 from ui.design_system import Colors
 from ui.font_utils import create_font, FontManager
 from ui.style_manager import StyleManager
@@ -119,13 +120,7 @@ class FieldWorkPreparationStep3(QWidget):
         layout.setContentsMargins(0, 24, 0, 0)
         layout.setSpacing(16)
         info_card = QFrame()
-        info_card.setStyleSheet(f"""
-            QFrame {{
-                background-color: {Colors.SURFACE};
-                border-radius: 12px;
-                border: 1px solid {Colors.BORDER_DEFAULT};
-            }}
-        """)
+        info_card.setStyleSheet(StyleManager.data_card())
         info_layout = QVBoxLayout(info_card)
         info_layout.setContentsMargins(24, 20, 24, 20)
         info_layout.setSpacing(12)
@@ -188,13 +183,7 @@ class FieldWorkPreparationStep3(QWidget):
 
         layout.addWidget(info_card)
         buildings_card = QFrame()
-        buildings_card.setStyleSheet(f"""
-            QFrame {{
-                background-color: {Colors.SURFACE};
-                border-radius: 12px;
-                border: 1px solid {Colors.BORDER_DEFAULT};
-            }}
-        """)
+        buildings_card.setStyleSheet(StyleManager.data_card())
         buildings_card_layout = QVBoxLayout(buildings_card)
         buildings_card_layout.setContentsMargins(24, 16, 24, 16)
         buildings_card_layout.setSpacing(6)
@@ -219,6 +208,8 @@ class FieldWorkPreparationStep3(QWidget):
 
         scroll.setWidget(scroll_content)
         outer.addWidget(scroll)
+
+        stagger_fade_in([info_card, buildings_card])
 
     def _create_accordion_item(self, index, building, building_id):
         """Create an accordion item for a building."""

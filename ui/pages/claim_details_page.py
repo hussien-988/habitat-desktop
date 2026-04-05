@@ -439,6 +439,7 @@ class _WatermarkScrollArea(QScrollArea):
         self._logo_effect = QGraphicsOpacityEffect(self._logo)
         self._logo_effect.setOpacity(0.04)
         self._logo.setGraphicsEffect(self._logo_effect)
+        self._logo.setAttribute(Qt.WA_TransparentForMouseEvents, True)
         self._logo.setStyleSheet("background: transparent;")
 
         self._logo_opacity = 0.04
@@ -508,6 +509,11 @@ class ClaimDetailsPage(QWidget):
 
         from ui.components.loading_spinner import LoadingSpinnerOverlay
         self._spinner = LoadingSpinnerOverlay(self)
+
+    def _is_claim_open(self):
+        """Check if current claim has open status using consistent fallback logic."""
+        status = self._claim_data.get("caseStatus") or self._claim_data.get("status") or 1
+        return status in (1, "1")
 
     def _setup_ui(self):
         self.setLayoutDirection(get_layout_direction())
@@ -937,6 +943,11 @@ class ClaimDetailsPage(QWidget):
 
     def _populate_relation_card(self):
         try:
+            # Preserve ownership share input value across rebuilds
+            _saved_share_text = None
+            if self._is_editing and self._ownership_share_input:
+                _saved_share_text = self._ownership_share_input.text()
+
             self._clear_layout(self._relation_content)
 
             self._add_section_header(
@@ -947,9 +958,7 @@ class ClaimDetailsPage(QWidget):
 
             claim = self._claim_data
             current_type = claim.get("claimType", "")
-            raw_case_status = claim.get("caseStatus")
-            # None means the API hasn't set it yet → still open (default state)
-            is_claim_open = (raw_case_status is None or raw_case_status == 1)
+            is_claim_open = self._is_claim_open()
 
             # Claim type row
             type_row = QHBoxLayout()
@@ -1035,7 +1044,9 @@ class ClaimDetailsPage(QWidget):
                         QLineEdit:hover { border-color: #93C5FD; }
                         QLineEdit:focus { border-color: #3890DF; }
                     """)
-                    if raw_share is not None:
+                    if _saved_share_text is not None:
+                        self._ownership_share_input.setText(_saved_share_text)
+                    elif raw_share is not None:
                         try:
                             self._ownership_share_input.setText(str(round(float(raw_share) * 2400)))
                         except (ValueError, TypeError):
@@ -1089,20 +1100,6 @@ class ClaimDetailsPage(QWidget):
                 """)
                 upload_btn.clicked.connect(self._on_upload_evidence)
                 ev_header.addWidget(upload_btn)
-
-                pick_btn = QPushButton(tr("page.claim_details.pick_document"))
-                pick_btn.setFixedHeight(32)
-                pick_btn.setCursor(Qt.PointingHandCursor)
-                pick_btn.setStyleSheet(f"""
-                    QPushButton {{
-                        background-color: transparent; color: {Colors.PRIMARY_BLUE};
-                        border: 1.5px solid {Colors.PRIMARY_BLUE}; border-radius: 6px;
-                        padding: 0 16px; font-size: 12px; font-weight: 600;
-                    }}
-                    QPushButton:hover {{ background-color: #EFF6FF; }}
-                """)
-                pick_btn.clicked.connect(self._on_pick_existing_evidence)
-                ev_header.addWidget(pick_btn)
 
             ev_header_widget = QWidget()
             ev_header_widget.setStyleSheet("background: transparent; border: none;")
@@ -1241,8 +1238,7 @@ class ClaimDetailsPage(QWidget):
         name_lbl.setWordWrap(True)
         card_layout.addWidget(name_lbl)
 
-        case_status = self._claim_data.get("caseStatus") or self._claim_data.get("status", 1)
-        if self._is_editing and ev_id and case_status == 1:
+        if self._is_editing and ev_id and self._is_claim_open():
             del_btn = QPushButton("\u2715", card)
             del_btn.setFixedSize(18, 18)
             del_btn.move(60, 2)
@@ -1372,6 +1368,8 @@ class ClaimDetailsPage(QWidget):
 
     def _download_evidence_file(self, evidence_id, file_name):
         try:
+            from services.api_client import get_api_client
+            get_api_client()._ensure_valid_token()
             from utils.helpers import download_evidence_file
             return download_evidence_file(evidence_id, file_name)
         except Exception as e:
@@ -1507,6 +1505,7 @@ class ClaimDetailsPage(QWidget):
         self._extract_relation_id()
 
         self._header.set_editing(True)
+        self._header.set_edit_visible(False)
         self._animate_relation_card_edit(True)
         self._populate_relation_card()
 
@@ -1516,8 +1515,7 @@ class ClaimDetailsPage(QWidget):
         if hasattr(main_window, 'current_user') and main_window.current_user:
             role = getattr(main_window.current_user, 'role', '')
             can_edit = role in ("admin", "data_manager")
-        raw_case = self._claim_data.get("caseStatus")
-        is_open = (raw_case is None or raw_case == 1)
+        is_open = self._is_claim_open()
         if can_edit and not is_open:
             self._header.set_edit_text(tr("page.claim_details.edit_share_docs"))
         else:
@@ -1626,8 +1624,7 @@ class ClaimDetailsPage(QWidget):
 
         ctrl = ClaimController()
 
-        case_status = self._claim_data.get("caseStatus", 1)
-        if case_status != 1:
+        if not self._is_claim_open():
             self._pending_deletes = []
 
         new_type = self._claim_type_combo.currentData() if self._claim_type_combo else None
@@ -1751,10 +1748,12 @@ class ClaimDetailsPage(QWidget):
 
         self._animate_relation_card_edit(False)
         self._header.set_editing(False)
+        self._header.set_edit_visible(True)
         self._reload_claim_data()
 
     def _on_save_error(self, error_msg):
         self._spinner.hide_loading()
+        self._header.set_edit_visible(True)
         self._header.edit_clicked.connect(self._on_edit_or_save_clicked)
         logger.error(f"Save error: {error_msg}")
         Toast.show_toast(self, tr("page.claim_details.save_failed", error=error_msg), Toast.ERROR)

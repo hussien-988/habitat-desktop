@@ -6,16 +6,17 @@ import sys
 
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
-    QFrame, QToolButton, QSizePolicy, QRadioButton,
-    QTableWidget, QTableWidgetItem, QHeaderView, QAbstractItemView,
-    QMenu, QAction
+    QFrame, QToolButton, QSizePolicy, QScrollArea,
+    QMenu, QAction,
 )
-from PyQt5.QtCore import Qt, pyqtSignal, QSize, QPoint
-from PyQt5.QtGui import QIcon, QColor, QPixmap
+from PyQt5.QtCore import Qt, pyqtSignal, QSize, QPoint, QTimer
+from PyQt5.QtGui import QIcon, QColor
 
+from ui.components.animated_card import AnimatedCard, EmptyStateAnimated
 from ui.components.icon import Icon
 from ui.components.toast import Toast
-from ui.design_system import Colors
+from ui.animation_utils import stagger_fade_in
+from ui.design_system import Colors, PageDimensions
 from ui.font_utils import create_font, FontManager
 from ui.style_manager import StyleManager
 from utils.i18n import I18n
@@ -24,6 +25,142 @@ from services.translation_manager import tr, get_layout_direction
 from utils.logger import get_logger
 
 logger = get_logger(__name__)
+
+
+class _ResearcherCard(AnimatedCard):
+    """Card-based researcher item with selectable radio-like state."""
+
+    card_selected = pyqtSignal(object)  # Emits researcher dict
+
+    def __init__(self, researcher_data: dict, parent=None):
+        self.researcher_data = researcher_data
+        self._selected = False
+
+        # Green strip for available, red for unavailable
+        is_available = researcher_data.get('is_available', True)
+        status_color = "#10B981" if is_available else "#EF4444"
+
+        super().__init__(
+            parent,
+            card_height=90,
+            border_radius=10,
+            show_chevron=False,
+            show_strip=True,
+            status_color=status_color,
+            strip_width=4,
+            clickable=True,
+            lift_target=2.0,
+        )
+
+    def _build_content(self, layout):
+        """Populate card with researcher info."""
+        # Top row: name (bold) + role badge
+        top_row = QHBoxLayout()
+        top_row.setSpacing(10)
+        top_row.setContentsMargins(0, 0, 0, 0)
+
+        name_label = QLabel(self.researcher_data.get('display_name', ''))
+        name_label.setFont(create_font(size=11, weight=FontManager.WEIGHT_SEMIBOLD))
+        name_label.setStyleSheet(f"color: {Colors.PAGE_TITLE}; background: transparent;")
+        top_row.addWidget(name_label)
+
+        # Availability badge
+        is_available = self.researcher_data.get('is_available', True)
+        avail_text = tr("wizard.step2.available") if is_available else tr("wizard.step2.unavailable")
+        avail_color = "#10B981" if is_available else "#EF4444"
+        avail_bg = "#ECFDF5" if is_available else "#FEF2F2"
+
+        avail_badge = QLabel(avail_text)
+        avail_badge.setFont(create_font(size=8, weight=FontManager.WEIGHT_SEMIBOLD))
+        avail_badge.setStyleSheet(
+            f"color: {avail_color}; background-color: {avail_bg}; "
+            "padding: 2px 10px; border-radius: 9px;"
+        )
+        top_row.addWidget(avail_badge)
+
+        # Team badge
+        team = self.researcher_data.get('team_name')
+        if team:
+            team_badge = QLabel(team)
+            team_badge.setFont(create_font(size=8, weight=FontManager.WEIGHT_SEMIBOLD))
+            team_badge.setStyleSheet(
+                f"color: {Colors.PRIMARY_BLUE}; background-color: #EBF5FF; "
+                "padding: 2px 10px; border-radius: 9px;"
+            )
+            top_row.addWidget(team_badge)
+
+        top_row.addStretch()
+        layout.addLayout(top_row)
+
+        # Bottom row: username + assignment count
+        bottom_row = QHBoxLayout()
+        bottom_row.setSpacing(16)
+        bottom_row.setContentsMargins(0, 0, 0, 0)
+
+        username = self.researcher_data.get('username', '')
+        if username:
+            user_label = QLabel(f"@{username}")
+            user_label.setFont(create_font(size=9, weight=FontManager.WEIGHT_REGULAR))
+            user_label.setStyleSheet(f"color: {Colors.PAGE_SUBTITLE}; background: transparent;")
+            bottom_row.addWidget(user_label)
+
+        active = self.researcher_data.get('active_assignments', 0)
+        count_label = QLabel(f"{tr('wizard.step2.col_active_tasks')}: {active}")
+        count_label.setFont(create_font(size=9, weight=FontManager.WEIGHT_REGULAR))
+        count_label.setStyleSheet(f"color: {Colors.PAGE_SUBTITLE}; background: transparent;")
+        bottom_row.addWidget(count_label)
+
+        bottom_row.addStretch()
+        layout.addLayout(bottom_row)
+
+    def _apply_base_style(self):
+        """Override base style to show selection state."""
+        r = self._border_radius
+        cn = self._class_name()
+        if self._selected:
+            self.setStyleSheet(
+                f"{cn} {{"
+                f"  background: qlineargradient(x1:0,y1:0,x2:1,y2:1,"
+                f"    stop:0 #EBF5FF, stop:1 #DBEAFE);"
+                f"  border-radius: {r}px;"
+                f"  border: 2px solid {Colors.PRIMARY_BLUE};"
+                f"}}"
+            )
+        else:
+            super()._apply_base_style()
+
+    def _apply_hover_style(self):
+        """Override hover style to show selection state."""
+        r = self._border_radius
+        cn = self._class_name()
+        if self._selected:
+            self.setStyleSheet(
+                f"{cn} {{"
+                f"  background: qlineargradient(x1:0,y1:0,x2:1,y2:1,"
+                f"    stop:0 #DBEAFE, stop:1 #BFDBFE);"
+                f"  border-radius: {r}px;"
+                f"  border: 2px solid {Colors.PRIMARY_BLUE};"
+                f"}}"
+            )
+        else:
+            super()._apply_hover_style()
+
+    @property
+    def is_selected(self):
+        return self._selected
+
+    @is_selected.setter
+    def is_selected(self, value):
+        if self._selected != value:
+            self._selected = value
+            self._apply_base_style()
+            self.update()
+
+    def mousePressEvent(self, event):
+        """Emit card_selected on click (radio-style, only one can be active)."""
+        if event.button() == Qt.LeftButton:
+            self.card_selected.emit(self.researcher_data)
+        super().mousePressEvent(event)
 
 
 class FieldWorkPreparationStep2(QWidget):
@@ -42,7 +179,6 @@ class FieldWorkPreparationStep2(QWidget):
         # Filters
         self._active_filters = {
             'availability': None,
-            'team': None,
         }
 
         self._all_researchers = []
@@ -64,7 +200,7 @@ class FieldWorkPreparationStep2(QWidget):
         """Handle successful researcher fetch."""
         self._all_researchers = researchers or []
         self._researchers = list(self._all_researchers)
-        self._update_table()
+        self._update_cards()
         self._spinner.hide_loading()
 
     def _on_researchers_load_error(self, error_msg):
@@ -72,7 +208,7 @@ class FieldWorkPreparationStep2(QWidget):
         logger.warning(f"Failed to load researchers: {error_msg}")
         self._all_researchers = []
         self._researchers = []
-        self._update_table()
+        self._update_cards()
         self._spinner.hide_loading()
         Toast.show_toast(self, tr("wizard.step2.err_load_researchers"), Toast.ERROR)
 
@@ -156,7 +292,8 @@ class FieldWorkPreparationStep2(QWidget):
         self.setStyleSheet("background: transparent;")
 
         main_layout = QVBoxLayout(self)
-        main_layout.setContentsMargins(0, 0, 0, 0)
+        pad_h = PageDimensions.content_padding_h()
+        main_layout.setContentsMargins(pad_h, 0, pad_h, 0)
         main_layout.setSpacing(0)
 
         cards_container = QWidget()
@@ -243,254 +380,146 @@ class FieldWorkPreparationStep2(QWidget):
         sb.addWidget(search_icon_btn, 1)
 
         search_card_layout.addWidget(search_bar)
-        cards_layout.addWidget(search_card)
-        table_card = QFrame()
-        table_card.setStyleSheet("background-color: white; border-radius: 16px;")
-        table_card_layout = QVBoxLayout(table_card)
-        table_card_layout.setContentsMargins(10, 10, 10, 10)
-        table_card_layout.setSpacing(0)
 
-        self.table = QTableWidget()
-        self.table.setColumnCount(5)
-        self.table.setLayoutDirection(get_layout_direction())
-        self.table.setShowGrid(False)
-        self.table.setFocusPolicy(Qt.NoFocus)
-        self.table.setSelectionMode(QTableWidget.NoSelection)
-        self.table.setEditTriggers(QAbstractItemView.NoEditTriggers)
-        self.table.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        self.table.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        # Filter buttons row
+        filter_row = QHBoxLayout()
+        filter_row.setSpacing(8)
 
-        # Filter icon for headers
-        if hasattr(sys, '_MEIPASS'):
-            base_path = Path(sys._MEIPASS)
-        else:
-            base_path = Path(__file__).parent.parent.parent
-        self._icon_path = base_path / "assets" / "images" / "down.png"
-
-        headers = [
-            "",
-            tr("wizard.step2.col_collector_name"),
-            tr("wizard.step2.col_availability"),
-            tr("wizard.step2.col_active_tasks"),
-            tr("wizard.step2.col_team"),
-        ]
-        for i, text in enumerate(headers):
-            item = QTableWidgetItem(text)
-            if i in (2, 4) and self._icon_path.exists():
-                item.setIcon(QIcon(str(self._icon_path)))
-            self.table.setHorizontalHeaderItem(i, item)
-
-        self.table.setStyleSheet(f"""
-            QTableWidget {{
-                border: none;
-                background-color: white;
-                font-size: 10.5pt;
-                font-weight: 400;
-                color: {Colors.PAGE_TITLE};
-            }}
-            QTableWidget::item {{
-                padding: 8px 15px;
-                border-bottom: 1px solid #F0F0F0;
-                color: {Colors.PAGE_TITLE};
-                font-size: 10.5pt;
-                font-weight: 400;
-            }}
-            QTableWidget::item:hover {{
-                background-color: #FAFBFC;
-            }}
-            QHeaderView {{
-                border-top-left-radius: 16px;
-                border-top-right-radius: 16px;
-            }}
-            QHeaderView::section {{
-                background-color: #F8F9FA;
-                padding: 12px;
-                padding-left: 30px;
-                border: none;
+        self._filter_avail_btn = QToolButton()
+        self._filter_avail_btn.setText(tr("wizard.step2.col_availability") + " \u25BE")
+        self._filter_avail_btn.setCursor(Qt.PointingHandCursor)
+        self._filter_avail_btn.setStyleSheet(f"""
+            QToolButton {{
+                border: 1px solid {Colors.BORDER_DEFAULT};
+                border-radius: 6px;
+                padding: 4px 10px;
+                font-size: 9pt;
                 color: #637381;
-                font-weight: 600;
-                font-size: 11pt;
-                height: 56px;
+                background: #F8F9FA;
             }}
-            QHeaderView::section:hover {{
-                background-color: #EBEEF2;
-            }}
-        """ + StyleManager.scrollbar())
-
-        # Header config
-        h_header = self.table.horizontalHeader()
-        h_header.setDefaultAlignment(Qt.AlignRight | Qt.AlignVCenter)
-        h_header.setFixedHeight(56)
-        h_header.setStretchLastSection(False)
-        h_header.setMouseTracking(True)
-        h_header.sectionEntered.connect(self._on_header_hover)
-        h_header.sectionClicked.connect(self._on_header_clicked)
-
-        # Column widths
-        h_header.setSectionResizeMode(0, QHeaderView.Fixed)
-        h_header.resizeSection(0, 50)
-        h_header.setSectionResizeMode(1, QHeaderView.Stretch)
-        h_header.setSectionResizeMode(2, QHeaderView.Fixed)
-        h_header.resizeSection(2, 150)
-        h_header.setSectionResizeMode(3, QHeaderView.Fixed)
-        h_header.resizeSection(3, 140)
-        h_header.setSectionResizeMode(4, QHeaderView.Fixed)
-        h_header.resizeSection(4, 170)
-
-        # Row heights
-        v_header = self.table.verticalHeader()
-        v_header.setVisible(False)
-        v_header.setDefaultSectionSize(52)
-
-        # Row click
-        self.table.cellClicked.connect(self._on_cell_clicked)
-
-        table_card_layout.addWidget(self.table)
-
-        # Table footer with count
-        footer_frame = QFrame()
-        footer_frame.setStyleSheet(f"""
-            QFrame {{
-                background-color: #F8F9FA;
-                border-top: 1px solid {Colors.BORDER_DEFAULT};
-                border-bottom-left-radius: 16px;
-                border-bottom-right-radius: 16px;
+            QToolButton:hover {{
+                background: #EFF6FF;
+                border-color: {Colors.PRIMARY_BLUE};
+                color: {Colors.PRIMARY_BLUE};
             }}
         """)
-        footer_frame.setFixedHeight(42)
+        self._filter_avail_btn.clicked.connect(lambda: self._show_filter_menu(2))
+        filter_row.addWidget(self._filter_avail_btn)
 
-        footer_layout = QHBoxLayout(footer_frame)
-        footer_layout.setContentsMargins(16, 8, 16, 8)
+        filter_row.addStretch()
+        search_card_layout.addLayout(filter_row)
 
+        cards_layout.addWidget(search_card)
+
+        # Scroll area for researcher cards
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.NoFrame)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        scroll.setStyleSheet(
+            "QScrollArea { border: none; background: transparent; }"
+            + StyleManager.scrollbar()
+        )
+
+        self._scroll_content = QWidget()
+        self._scroll_content.setStyleSheet("background: transparent;")
+        self._cards_layout = QVBoxLayout(self._scroll_content)
+        self._cards_layout.setContentsMargins(0, 0, 0, 0)
+        self._cards_layout.setSpacing(8)
+        self._cards_layout.addStretch()
+
+        scroll.setWidget(self._scroll_content)
+        cards_layout.addWidget(scroll, 1)
+
+        # Empty state label
+        self._empty_label = EmptyStateAnimated(
+            title=tr("wizard.step2.no_matching_collectors"),
+        )
+        self._empty_label.setMinimumHeight(150)
+        self._empty_label.setVisible(False)
+        cards_layout.addWidget(self._empty_label)
+
+        # Footer with count
         self.count_label = QLabel(tr("wizard.step2.result_count", count=0))
-        self.count_label.setStyleSheet("color: #637381; font-size: 10pt; background: transparent;")
-        footer_layout.addWidget(self.count_label)
-        footer_layout.addStretch()
+        self.count_label.setFont(create_font(size=9, weight=FontManager.WEIGHT_REGULAR))
+        self.count_label.setStyleSheet("color: #637381; background: transparent;")
+        cards_layout.addWidget(self.count_label)
 
-        table_card_layout.addWidget(footer_frame)
-        cards_layout.addWidget(table_card)
+        # Card state
+        self._card_widgets: list = []
+        self._shimmer_timer = QTimer(self)
+        self._shimmer_timer.setInterval(80)
+        self._shimmer_timer.timeout.connect(self._update_card_shimmer)
 
-        # Load table
-        self._update_table()
+        # Initial populate
+        self._update_cards()
 
-        main_layout.addWidget(cards_container)
-        main_layout.addStretch(1)
+        main_layout.addWidget(cards_container, 1)
 
-    # ── Table ──
+    # ── Cards ──
 
-    def _update_table(self):
-        """Populate table with filtered researchers."""
+    def _update_cards(self):
+        """Populate cards with filtered researchers."""
+        self._clear_cards()
+
         researchers = self._researchers
         total = len(researchers)
 
-        self.table.setRowCount(0)
-        self.table.setRowCount(max(total, 1))
-        self.table.clearSpans()
-
         if total == 0:
-            self.table.setSpan(0, 0, 1, 5)
-            empty_item = QTableWidgetItem(tr("wizard.step2.no_matching_collectors"))
-            empty_item.setTextAlignment(Qt.AlignCenter)
-            empty_item.setForeground(QColor("#9CA3AF"))
-            self.table.setItem(0, 0, empty_item)
+            self._empty_label.setVisible(True)
             self.count_label.setText(tr("wizard.step2.result_count", count=0))
             return
 
-        for row, researcher in enumerate(researchers):
-            # Col 0: Radio button
-            radio_container = QWidget()
-            radio_container.setStyleSheet("background: transparent;")
-            radio_layout = QHBoxLayout(radio_container)
-            radio_layout.setContentsMargins(0, 0, 0, 0)
-            radio_layout.setAlignment(Qt.AlignCenter)
+        self._empty_label.setVisible(False)
 
-            radio = QRadioButton()
-            radio.setFixedSize(20, 20)
-            radio.setStyleSheet(f"""
-                QRadioButton::indicator {{
-                    width: 18px;
-                    height: 18px;
-                    border: 2px solid #C4CDD5;
-                    border-radius: 9px;
-                    background: white;
-                }}
-                QRadioButton::indicator:hover {{
-                    border-color: {Colors.PRIMARY_BLUE};
-                }}
-                QRadioButton::indicator:checked {{
-                    border: 2px solid {Colors.PRIMARY_BLUE};
-                    background: qradialgradient(
-                        cx:0.5, cy:0.5, radius:0.4,
-                        fx:0.5, fy:0.5,
-                        stop:0 {Colors.PRIMARY_BLUE}, stop:0.6 {Colors.PRIMARY_BLUE}, stop:0.7 white
-                    );
-                }}
-            """)
+        for researcher in researchers:
+            card = _ResearcherCard(researcher, parent=self._scroll_content)
+            card.card_selected.connect(self._on_card_selected)
 
-            # Check if this was the previously selected researcher
+            # Restore selection state
             if self._selected_researcher and researcher['id'] == self._selected_researcher['id']:
-                radio.setChecked(True)
-                self._selected_radio = radio
+                card.is_selected = True
 
-            radio.toggled.connect(
-                lambda checked, rdata=researcher, r=radio:
-                self._on_researcher_selected(rdata, checked, r)
-            )
-
-            radio_layout.addWidget(radio)
-            self.table.setCellWidget(row, 0, radio_container)
-
-            # Col 1: Name
-            name_item = QTableWidgetItem(researcher['display_name'])
-            self.table.setItem(row, 1, name_item)
-
-            # Col 2: Availability (colored)
-            is_available = researcher['is_available']
-            avail_text = tr("wizard.step2.available") if is_available else tr("wizard.step2.unavailable")
-            avail_item = QTableWidgetItem(avail_text)
-            avail_item.setForeground(QColor("#10B981") if is_available else QColor("#EF4444"))
-            self.table.setItem(row, 2, avail_item)
-
-            # Col 3: Active assignments
-            count = researcher.get('active_assignments', 0)
-            count_item = QTableWidgetItem(str(count))
-            count_item.setTextAlignment(Qt.AlignCenter)
-            self.table.setItem(row, 3, count_item)
-
-            # Col 4: Team name
-            team = researcher.get('team_name') or "—"
-            team_item = QTableWidgetItem(team)
-            self.table.setItem(row, 4, team_item)
+            self._card_widgets.append(card)
+            self._cards_layout.insertWidget(self._cards_layout.count() - 1, card)
 
         self.count_label.setText(tr("wizard.step2.result_count", count=total))
 
+        # Animate entrance
+        if self._card_widgets:
+            stagger_fade_in(self._card_widgets)
+            self._shimmer_timer.start()
+
+        # Verify selection still exists
         if self._selected_researcher:
             selected_id = self._selected_researcher['id']
             if not any(r['id'] == selected_id for r in researchers):
                 self._selected_researcher = None
-                self._selected_radio = None
 
-    def _on_cell_clicked(self, row, col):
-        """Handle clicking on a table row — select the radio in that row."""
-        if col == 0:
-            return  # Radio button handles itself
-        radio_widget = self.table.cellWidget(row, 0)
-        if radio_widget:
-            radio = radio_widget.findChild(QRadioButton)
-            if radio:
-                radio.setChecked(True)
+    def _clear_cards(self):
+        """Remove all researcher cards."""
+        self._shimmer_timer.stop()
+        for card in self._card_widgets:
+            try:
+                card.card_selected.disconnect()
+            except (TypeError, RuntimeError):
+                pass
+            self._cards_layout.removeWidget(card)
+            card.deleteLater()
+        self._card_widgets.clear()
+
+    def _update_card_shimmer(self):
+        """Drive shimmer animation on all visible cards."""
+        for card in self._card_widgets:
+            card.update()
 
     # ── Selection ──
 
-    def _on_researcher_selected(self, researcher_data, checked, radio):
-        """Handle researcher selection via radio button."""
-        if not checked:
-            return
-
-        # Uncheck previous radio if different
-        if self._selected_radio and self._selected_radio is not radio:
-            self._selected_radio.setChecked(False)
-        self._selected_radio = radio
+    def _on_card_selected(self, researcher_data):
+        """Handle researcher card click (radio-style: only one selected)."""
+        # Deselect all cards
+        for card in self._card_widgets:
+            card.is_selected = (card.researcher_data['id'] == researcher_data['id'])
 
         self._selected_researcher = {
             'id': researcher_data['id'],
@@ -513,12 +542,12 @@ class FieldWorkPreparationStep2(QWidget):
     # ── Search & Filter ──
 
     def _filter_and_update(self):
-        """Apply search text + header filters and refresh table."""
+        """Apply search text + filters and refresh cards."""
         search_text = self.researcher_search.text().strip().lower()
 
         filtered = list(self._all_researchers)
 
-        # Text search (by name)
+        # Text search (by name or username)
         if search_text:
             filtered = [
                 r for r in filtered
@@ -533,41 +562,17 @@ class FieldWorkPreparationStep2(QWidget):
         elif avail_filter == "unavailable":
             filtered = [r for r in filtered if not r['is_available']]
 
-        # Team filter
-        team_filter = self._active_filters.get('team')
-        if team_filter:
-            filtered = [r for r in filtered if (r.get('team_name') or "—") == team_filter]
-
         self._researchers = filtered
-        self._update_table()
-
-    def _on_header_hover(self, logical_index):
-        """Change cursor for filterable columns."""
-        header = self.table.horizontalHeader()
-        if logical_index in (2, 4):
-            header.setCursor(Qt.PointingHandCursor)
-        else:
-            header.setCursor(Qt.ArrowCursor)
-
-    def _on_header_clicked(self, logical_index):
-        """Show filter menu for filterable columns."""
-        if logical_index not in (2, 4):
-            return
-        self._show_filter_menu(logical_index)
+        self._update_cards()
 
     def _show_filter_menu(self, column_index):
-        """Build and display filter menu for a column."""
+        """Build and display filter menu for availability."""
         unique_values = set()
         filter_key = None
 
         if column_index == 2:
             filter_key = 'availability'
             unique_values = {"available", "unavailable"}
-        elif column_index == 4:
-            filter_key = 'team'
-            for r in self._all_researchers:
-                team = r.get('team_name') or "—"
-                unique_values.add(team)
 
         if not unique_values:
             return
@@ -611,14 +616,17 @@ class FieldWorkPreparationStep2(QWidget):
                 action.setChecked(True)
             menu.addAction(action)
 
-        header = self.table.horizontalHeader()
-        x_pos = header.sectionViewportPosition(column_index)
-        y_pos = header.height()
-        pos = self.table.mapToGlobal(QPoint(x_pos, y_pos))
+        # Show below the filter button
+        if hasattr(self, '_filter_avail_btn'):
+            pos = self._filter_avail_btn.mapToGlobal(
+                QPoint(0, self._filter_avail_btn.height())
+            )
+        else:
+            pos = self.mapToGlobal(QPoint(0, 0))
         menu.exec_(pos)
 
     def _apply_filter(self, filter_key, filter_value):
-        """Apply a header filter and refresh."""
+        """Apply a filter and refresh."""
         self._active_filters[filter_key] = filter_value
         self._filter_and_update()
 
@@ -637,25 +645,16 @@ class FieldWorkPreparationStep2(QWidget):
         self.researcher_search.setPlaceholderText(tr("wizard.step2.search_placeholder"))
         self.researcher_search.setLayoutDirection(get_layout_direction())
 
-        # Table header items
-        headers = [
-            "",
-            tr("wizard.step2.col_collector_name"),
-            tr("wizard.step2.col_availability"),
-            tr("wizard.step2.col_active_tasks"),
-            tr("wizard.step2.col_team"),
-        ]
-        for i, text in enumerate(headers):
-            item = QTableWidgetItem(text)
-            if i in (2, 4) and self._icon_path.exists():
-                item.setIcon(QIcon(str(self._icon_path)))
-            self.table.setHorizontalHeaderItem(i, item)
+        # Filter button
+        if hasattr(self, '_filter_avail_btn'):
+            self._filter_avail_btn.setText(tr("wizard.step2.col_availability") + " \u25BE")
 
-        self.table.setLayoutDirection(get_layout_direction())
+        # Empty state
+        self._empty_label.set_title(tr("wizard.step2.no_matching_collectors"))
 
         # Footer count label
         count = len(self._researchers)
         self.count_label.setText(tr("wizard.step2.result_count", count=count))
 
-        # Re-populate table to update availability text
-        self._update_table()
+        # Re-populate cards to update text
+        self._update_cards()

@@ -9,6 +9,7 @@ from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtGui import QColor
 
 from ui.font_utils import create_font, FontManager
+from ui.style_manager import StyleManager
 from services.translation_manager import tr, get_layout_direction
 from utils.logger import get_logger
 
@@ -56,10 +57,18 @@ class ImportStep5Commit(QWidget):
         card = QFrame()
         card.setStyleSheet("""
             QFrame {
-                background-color: #FFFFFF;
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
+                    stop:0 #F7FAFF, stop:1 #F0F5FF);
                 border-radius: 16px;
+                border: 1px solid #E2EAF2;
             }
         """)
+        shadow = QGraphicsDropShadowEffect()
+        shadow.setBlurRadius(20)
+        shadow.setXOffset(0)
+        shadow.setYOffset(4)
+        shadow.setColor(QColor(0, 0, 0, 22))
+        card.setGraphicsEffect(shadow)
         card_layout = QVBoxLayout(card)
         card_layout.setContentsMargins(32, 24, 32, 24)
         card_layout.setSpacing(16)
@@ -87,23 +96,38 @@ class ImportStep5Commit(QWidget):
 
         self._count_labels = {}
         for key, ar_name in _get_entity_sections():
-            row = QHBoxLayout()
+            row_frame = QFrame()
+            row_frame.setFixedHeight(40)
+            row_frame.setStyleSheet("""
+                QFrame {
+                    background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                        stop:0 #FAFCFF, stop:1 transparent);
+                    border-radius: 8px;
+                    border: none;
+                }
+                QFrame QLabel {
+                    border: none;
+                    background: transparent;
+                }
+            """)
+            row = QHBoxLayout(row_frame)
+            row.setContentsMargins(12, 4, 12, 4)
             row.setSpacing(12)
 
             name_label = QLabel(f"{ar_name}:")
             name_label.setFont(create_font(size=11, weight=FontManager.WEIGHT_SEMIBOLD))
-            name_label.setStyleSheet("color: #637381; background: transparent;")
+            name_label.setStyleSheet("color: #637381;")
             name_label.setFixedWidth(200)
             row.addWidget(name_label)
 
             count_label = QLabel("0")
             count_label.setFont(create_font(size=11, weight=FontManager.WEIGHT_REGULAR))
-            count_label.setStyleSheet("color: #212B36; background: transparent;")
+            count_label.setStyleSheet("color: #212B36;")
             row.addWidget(count_label)
             row.addStretch()
 
             self._count_labels[key] = count_label
-            self._counts_layout.addLayout(row)
+            self._counts_layout.addWidget(row_frame)
 
         card_layout.addLayout(self._counts_layout)
 
@@ -155,7 +179,8 @@ class ImportStep5Commit(QWidget):
                 border-radius: 4px;
             }
             QProgressBar::chunk {
-                background-color: #10B981;
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                    stop:0 #4DA0EF, stop:0.5 #3890DF, stop:1 #2E7BD6);
                 border-radius: 4px;
             }
         """)

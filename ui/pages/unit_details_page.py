@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Unit details view page."""
+"""Unit details view page with DarkHeaderZone."""
 
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel,
@@ -17,6 +17,9 @@ from ui.font_utils import create_font, FontManager
 from ui.style_manager import StyleManager
 from ui.design_system import Colors, PageDimensions
 from ui.components.icon import Icon
+from ui.components.dark_header_zone import DarkHeaderZone
+from ui.components.accent_line import AccentLine
+from ui.animation_utils import stagger_fade_in
 from utils.i18n import I18n
 from utils.logger import get_logger
 
@@ -24,7 +27,7 @@ logger = get_logger(__name__)
 
 
 class UnitDetailsPage(QWidget):
-    """Unit details view page — mirrors wizard unit card section."""
+    """Unit details view page with dark header."""
 
     back_requested = pyqtSignal()
 
@@ -37,53 +40,48 @@ class UnitDetailsPage(QWidget):
         self._setup_ui()
 
     def _setup_ui(self):
-        self.setStyleSheet(StyleManager.page_background())
+        self.setStyleSheet("background: transparent;")
 
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(
-            PageDimensions.content_padding_h(),
-            PageDimensions.content_padding_v_top(),
-            PageDimensions.content_padding_h(),
-            PageDimensions.CONTENT_PADDING_V_BOTTOM,
-        )
-        layout.setSpacing(15)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
 
-        # Header row
-        header_row = QHBoxLayout()
-        header_row.setSpacing(15)
-
-        title_area = QVBoxLayout()
-        title_area.setSpacing(2)
-
-        self.title_label = QLabel("")
-        self.title_label.setFont(create_font(size=FontManager.SIZE_TITLE, weight=FontManager.WEIGHT_SEMIBOLD))
-        self.title_label.setStyleSheet(f"color: {Colors.PAGE_TITLE}; background: transparent; border: none;")
-        title_area.addWidget(self.title_label)
-
-        self.breadcrumb = QLabel(tr("page.unit_details.breadcrumb"))
-        self.breadcrumb.setFont(create_font(size=FontManager.SIZE_BODY, weight=FontManager.WEIGHT_SEMIBOLD))
-        self.breadcrumb.setStyleSheet(f"color: {Colors.PAGE_SUBTITLE}; background: transparent; border: none;")
-        title_area.addWidget(self.breadcrumb)
-
-        header_row.addLayout(title_area)
-        header_row.addStretch()
+        # Dark header zone
+        self._header = DarkHeaderZone(self)
+        self._header.set_title("")
 
         self._back_btn = QPushButton(tr("action.back"))
         self._back_btn.setFixedSize(100, 40)
         self._back_btn.setCursor(Qt.PointingHandCursor)
         self._back_btn.setFont(create_font(size=FontManager.SIZE_BODY, weight=FontManager.WEIGHT_SEMIBOLD))
-        self._back_btn.setStyleSheet(StyleManager.back_button_light())
+        self._back_btn.setStyleSheet(StyleManager.dark_action_button())
         self._back_btn.clicked.connect(self.back_requested.emit)
-        header_row.addWidget(self._back_btn)
+        self._header.add_action_widget(self._back_btn)
 
-        layout.addLayout(header_row)
+        layout.addWidget(self._header)
 
-        # Card container — populated in refresh()
+        # Accent line
+        self._accent_line = AccentLine()
+        layout.addWidget(self._accent_line)
+
+        # Light content wrapper
+        content_wrapper = QWidget()
+        content_wrapper.setStyleSheet(StyleManager.page_background())
+        content_inner = QVBoxLayout(content_wrapper)
+        content_inner.setContentsMargins(
+            PageDimensions.content_padding_h(), 14,
+            PageDimensions.content_padding_h(),
+            PageDimensions.CONTENT_PADDING_V_BOTTOM,
+        )
+        content_inner.setSpacing(15)
+
+        # Card container
         self._card_container = QVBoxLayout()
         self._card_container.setContentsMargins(0, 0, 0, 0)
-        layout.addLayout(self._card_container)
+        content_inner.addLayout(self._card_container)
+        content_inner.addStretch()
 
-        layout.addStretch()
+        layout.addWidget(content_wrapper)
 
     def refresh(self, data=None):
         """Load unit and display card. Accepts PropertyUnit object or string ID."""
@@ -103,11 +101,9 @@ class UnitDetailsPage(QWidget):
 
         self.current_unit = unit
 
-        # Update title with unit number
         display_num = str(unit.unit_number or unit.apartment_number or "?")
-        self.title_label.setText(display_num)
+        self._header.set_title(display_num)
 
-        # Clear old card and rebuild
         self._rebuild_card(unit)
 
     def _rebuild_card(self, unit):
@@ -117,35 +113,42 @@ class UnitDetailsPage(QWidget):
             if item.widget():
                 item.widget().deleteLater()
 
-        # White outer frame (same as units_main_frame in wizard)
+        # Outer frame with gradient bg
         frame = QFrame()
         frame.setObjectName("unitDetailFrame")
-        frame.setStyleSheet(StyleManager.form_card())
+        frame.setStyleSheet(StyleManager.data_card())
+        shadow = QGraphicsDropShadowEffect()
+        shadow.setBlurRadius(20)
+        shadow.setXOffset(0)
+        shadow.setYOffset(4)
+        shadow.setColor(QColor(0, 0, 0, 22))
+        frame.setGraphicsEffect(shadow)
+
         frame_layout = QVBoxLayout(frame)
         frame_layout.setSpacing(12)
         frame_layout.setContentsMargins(11, 11, 11, 11)
 
-        # Section header: icon + "المقاسم" / "معلومات المقاسم" (no add button)
+        # Section header
         header = self._build_section_header()
         frame_layout.addLayout(header)
 
-        # Unit card (same as _create_unit_card but without selection)
+        # Unit card
         card = self._build_unit_card(unit)
         frame_layout.addWidget(card)
 
         self._card_container.addWidget(frame)
 
+        stagger_fade_in([frame])
+
     def _build_section_header(self) -> QHBoxLayout:
-        """Build section header — mirrors wizard unit_selection_step lines 241-315."""
+        """Build section header with icon + title/subtitle."""
         header_layout = QHBoxLayout()
         header_layout.setSpacing(0)
         header_layout.setContentsMargins(0, 0, 0, 0)
 
-        # Right side: Icon container + Title/Subtitle
         right_header = QHBoxLayout()
         right_header.setSpacing(8)
 
-        # Icon container 48×48, background #F0F7FF, border-radius 6px
         icon_container = QFrame()
         icon_container.setFixedSize(48, 48)
         icon_container.setStyleSheet(f"""
@@ -163,14 +166,11 @@ class UnitDetailsPage(QWidget):
         icon_pixmap = Icon.load_pixmap("move", size=24)
         if icon_pixmap and not icon_pixmap.isNull():
             icon_label.setPixmap(icon_pixmap)
-        else:
-            icon_label.setText("🏘️")
         icon_label.setStyleSheet("background: transparent; border: none;")
         icon_container_layout.addWidget(icon_label)
 
         right_header.addWidget(icon_container)
 
-        # Title + Subtitle
         title_subtitle_layout = QVBoxLayout()
         title_subtitle_layout.setSpacing(2)
         title_subtitle_layout.setContentsMargins(0, 0, 0, 0)
@@ -188,26 +188,17 @@ class UnitDetailsPage(QWidget):
         title_subtitle_layout.addWidget(subtitle)
 
         right_header.addLayout(title_subtitle_layout)
-
         header_layout.addLayout(right_header)
         header_layout.addStretch()
 
         return header_layout
 
     def _build_unit_card(self, unit) -> QFrame:
-        """
-        Build unit info card — exact copy of _create_unit_card() from
-        unit_selection_step.py lines 587-760, but without:
-        - selection state / checkmark
-        - hover border change
-        - click handler / cursor
-        - setFixedSize (uses fill-width instead)
-        """
+        """Build unit info card with gradient background."""
         card = QFrame()
         card.setObjectName("unitCard")
         card.setStyleSheet(StyleManager.data_card())
 
-        # Shadow — same as wizard
         card_shadow = QGraphicsDropShadowEffect()
         card_shadow.setBlurRadius(8)
         card_shadow.setXOffset(0)
@@ -217,12 +208,11 @@ class UnitDetailsPage(QWidget):
 
         card.setLayoutDirection(get_layout_direction())
 
-        # Main layout
         main_layout = QVBoxLayout(card)
         main_layout.setSpacing(8)
         main_layout.setContentsMargins(12, 12, 12, 12)
 
-        # --- Data preparation (same as wizard) ---
+        # Data preparation
         unit_display_num = str(unit.unit_number or unit.apartment_number or "?")
         unit_type_val = unit.unit_type_display_ar if hasattr(unit, 'unit_type_display_ar') else (unit.unit_type or "-")
 
@@ -242,7 +232,7 @@ class UnitDetailsPage(QWidget):
         else:
             area_val = "-"
 
-        # --- Top Row: 6-column grid ---
+        # 6-column grid
         data_points = [
             (tr("page.unit_details.unit_number"), unit_display_num),
             (tr("page.unit_details.floor_number"), floor_val),
@@ -278,7 +268,7 @@ class UnitDetailsPage(QWidget):
 
         main_layout.addLayout(grid_layout)
 
-        # --- Dotted divider ---
+        # Divider
         divider = QFrame()
         divider.setFixedHeight(1)
         divider.setStyleSheet("""
@@ -290,7 +280,7 @@ class UnitDetailsPage(QWidget):
         """)
         main_layout.addWidget(divider)
 
-        # --- Description section ---
+        # Description
         desc_layout = QVBoxLayout()
         desc_layout.setContentsMargins(0, 0, 0, 0)
         desc_layout.setSpacing(2)
@@ -318,7 +308,6 @@ class UnitDetailsPage(QWidget):
     def update_language(self, is_arabic: bool):
         """Update all translatable texts when language changes."""
         self.setLayoutDirection(get_layout_direction())
-        self.breadcrumb.setText(tr("page.unit_details.breadcrumb"))
         self._back_btn.setText(tr("action.back"))
         if self.current_unit:
             self._rebuild_card(self.current_unit)

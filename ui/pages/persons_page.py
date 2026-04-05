@@ -1,15 +1,17 @@
 # -*- coding: utf-8 -*-
-"""Persons management page with search, CRUD, and validation."""
+"""Persons management page with animated card layout, DarkHeaderZone, and CRUD."""
 
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
     QPushButton, QComboBox, QTableView, QHeaderView,
     QFrame, QDialog, QFormLayout, QSpinBox, QFileDialog,
     QAbstractItemView, QGraphicsDropShadowEffect, QCheckBox,
-    QGroupBox, QScrollArea
+    QGroupBox, QScrollArea, QStackedWidget, QSizePolicy
 )
-from PyQt5.QtCore import Qt, pyqtSignal, QModelIndex
-from PyQt5.QtGui import QColor
+from PyQt5.QtCore import (
+    Qt, pyqtSignal, QModelIndex, QTimer, QPropertyAnimation, QEasingCurve
+)
+from PyQt5.QtGui import QColor, QCursor, QFont
 import re
 
 from app.config import Config
@@ -22,6 +24,10 @@ from services.api_worker import ApiWorker
 from services.validation_service import ValidationService
 from ui.components.toast import Toast
 from ui.components.base_table_model import BaseTableModel
+from ui.components.animated_card import AnimatedCard, EmptyStateAnimated, animate_card_entrance
+from ui.components.dark_header_zone import DarkHeaderZone
+from ui.components.stat_pill import StatPill
+from ui.components.accent_line import AccentLine
 from ui.style_manager import StyleManager
 from ui.design_system import Colors, PageDimensions
 from ui.font_utils import create_font, FontManager
@@ -577,10 +583,202 @@ class PersonDialog(QDialog):
         }
 
 
+# ---------------------------------------------------------------------------
+#  Styles
+# ---------------------------------------------------------------------------
+
+_DARK_INPUT_STYLE = """
+    QLineEdit {
+        background: rgba(10, 22, 40, 140);
+        color: white;
+        border: 1px solid rgba(56, 144, 223, 35);
+        border-radius: 8px;
+        padding: 0 12px 0 12px;
+    }
+    QLineEdit:focus {
+        border: 1.5px solid rgba(56, 144, 223, 140);
+        background: rgba(10, 22, 40, 180);
+    }
+    QLineEdit::placeholder {
+        color: rgba(139, 172, 200, 130);
+    }
+"""
+
+_ADD_BTN_STYLE = """
+    QPushButton {
+        background: qlineargradient(x1:0, y1:0, x2:0.5, y2:1,
+            stop:0 #4DA0EF, stop:0.45 #3890DF, stop:1 #2E7BD6);
+        color: white;
+        border: 1px solid rgba(120, 190, 255, 0.35);
+        border-radius: 10px;
+        padding: 0 24px;
+        font-weight: 700;
+        font-size: 13pt;
+    }
+    QPushButton:hover {
+        background: qlineargradient(x1:0, y1:0, x2:0.5, y2:1,
+            stop:0 #5AACFF, stop:0.45 #4DA0EF, stop:1 #3890DF);
+        border: 1px solid rgba(140, 210, 255, 0.55);
+    }
+    QPushButton:pressed {
+        background: #2E7BD6;
+    }
+    QPushButton:disabled {
+        background: rgba(56, 144, 223, 0.35);
+        color: rgba(255, 255, 255, 0.5);
+    }
+"""
+
+_NAV_BTN_STYLE = """
+    QPushButton {
+        background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+            stop:0 #FAFBFF, stop:1 #F0F4FA);
+        border: 1px solid rgba(56, 144, 223, 0.20);
+        border-radius: 8px; color: #3890DF;
+        padding: 0 10px; font-weight: 600;
+    }
+    QPushButton:hover {
+        background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+            stop:0 #EBF5FF, stop:1 #E0EDFA);
+        border-color: rgba(56, 144, 223, 0.40);
+    }
+    QPushButton:pressed {
+        background: #E0EDFA;
+    }
+    QPushButton:disabled {
+        color: #C0C8D0;
+        background: #F5F7FA;
+        border-color: #E8ECF0;
+    }
+"""
+
+
+# ---------------------------------------------------------------------------
+#  _PersonCard
+# ---------------------------------------------------------------------------
+
+class _PersonCard(AnimatedCard):
+    """Person card showing name, father, ID, gender, contact."""
+
+    _GENDER_COLORS = {
+        "male": "#3890DF",
+        "female": "#EC4899",
+        "unknown": "#9CA3AF",
+    }
+    _GENDER_STYLES = {
+        "male": {"bg": "#EFF6FF", "fg": "#1E40AF", "border": "#93C5FD"},
+        "female": {"bg": "#FDF2F8", "fg": "#9D174D", "border": "#F9A8D4"},
+        "unknown": {"bg": "#F3F4F6", "fg": "#6B7280", "border": "#D1D5DB"},
+    }
+
+    def __init__(self, person, is_arabic=True, parent=None):
+        self._person = person
+        self._is_arabic = is_arabic
+        gender_key = self._get_gender_key(person)
+        color = self._GENDER_COLORS.get(gender_key, "#9CA3AF")
+        super().__init__(parent, card_height=100, status_color=color)
+
+    def _get_gender_key(self, person):
+        g = getattr(person, 'gender', None)
+        if g is None:
+            return "unknown"
+        s = str(g).strip().lower()
+        if s in ("male", "\u0630\u0643\u0631", "m", "1"):
+            return "male"
+        elif s in ("female", "\u0623\u0646\u062b\u0649", "f", "2"):
+            return "female"
+        return "unknown"
+
+    def _build_content(self, layout):
+        from PyQt5.QtWidgets import QHBoxLayout, QLabel
+        from PyQt5.QtCore import Qt
+        from PyQt5.QtGui import QFont
+        from ui.font_utils import create_font, FontManager
+        from ui.design_system import Colors
+        from services.translation_manager import tr
+
+        p = self._person
+
+        # Row 1: Full name + gender badge
+        row1 = QHBoxLayout()
+        row1.setSpacing(8)
+        name = p.full_name_ar if self._is_arabic else p.full_name
+        name_label = QLabel(name or "-")
+        name_label.setFont(create_font(size=13, weight=QFont.Bold))
+        name_label.setStyleSheet(f"color: {Colors.PAGE_TITLE}; background: transparent; border: none;")
+        name_label.setMaximumWidth(500)
+        row1.addWidget(name_label)
+        row1.addStretch()
+
+        gender_key = self._get_gender_key(p)
+        style = self._GENDER_STYLES.get(gender_key, self._GENDER_STYLES["unknown"])
+        gender_text = p.gender_display_ar if self._is_arabic else (p.gender_display or "-")
+        badge = QLabel(gender_text or "-")
+        badge.setFont(create_font(size=8, weight=FontManager.WEIGHT_SEMIBOLD))
+        badge.setAlignment(Qt.AlignCenter)
+        badge.setFixedHeight(22)
+        badge.setStyleSheet(
+            f"QLabel {{ background-color: {style['bg']}; color: {style['fg']}; "
+            f"border: 1px solid {style['border']}; border-radius: 11px; "
+            f"padding: 0 10px; }}"
+        )
+        row1.addWidget(badge)
+        layout.addLayout(row1)
+
+        # Row 2: Father name + National ID
+        parts = []
+        father = p.father_name_ar if self._is_arabic else p.father_name
+        if father:
+            parts.append(f"{tr('table.persons.father_name')}: {father}")
+        if p.national_id:
+            parts.append(f"{tr('table.persons.national_id')}: {p.national_id}")
+        details = QLabel(" \u2009\u00b7\u2009 ".join(parts) if parts else "-")
+        details.setFont(create_font(size=10, weight=FontManager.WEIGHT_REGULAR))
+        details.setStyleSheet(f"color: {Colors.TEXT_SECONDARY}; background: transparent; border: none;")
+        layout.addWidget(details)
+
+        # Row 3: Contact chips
+        chips_row = QHBoxLayout()
+        chips_row.setSpacing(6)
+        chip_style = (
+            "QLabel {{ background-color: {bg}; color: {fg}; "
+            "border: 1px solid {border}; border-radius: 4px; "
+            "padding: 2px 8px; }}"
+        )
+        phone = p.phone_number or p.mobile_number
+        if phone:
+            chip = QLabel(phone)
+            chip.setFont(create_font(size=8, weight=FontManager.WEIGHT_MEDIUM))
+            chip.setStyleSheet(chip_style.format(bg="#F0F4FA", fg="#475569", border="#E2E8F0"))
+            chips_row.addWidget(chip)
+        if p.email:
+            chip = QLabel(p.email)
+            chip.setFont(create_font(size=8, weight=FontManager.WEIGHT_MEDIUM))
+            chip.setStyleSheet(chip_style.format(bg="#EEF2FF", fg="#4338CA", border="#E0E7FF"))
+            chips_row.addWidget(chip)
+        if p.nationality:
+            chip = QLabel(p.nationality)
+            chip.setFont(create_font(size=8, weight=FontManager.WEIGHT_MEDIUM))
+            chip.setStyleSheet(chip_style.format(bg="#F0FDF4", fg="#15803D", border="#DCFCE7"))
+            chips_row.addWidget(chip)
+        chips_row.addStretch()
+        layout.addLayout(chips_row)
+
+    def get_person(self):
+        """Return the underlying Person object."""
+        return self._person
+
+
+# ---------------------------------------------------------------------------
+#  PersonsPage
+# ---------------------------------------------------------------------------
+
 class PersonsPage(QWidget):
-    """Persons management page."""
+    """Persons management page with animated card layout."""
 
     view_person = pyqtSignal(str)
+
+    _PAGE_SIZE = 20
 
     def __init__(self, db: Database, i18n: I18n, parent=None):
         super().__init__(parent)
@@ -588,127 +786,156 @@ class PersonsPage(QWidget):
         self.i18n = i18n
         self.person_controller = PersonController(db)
 
+        self._card_widgets = []
+        self._all_persons = []
+        self._current_page = 1
+        self._total_count = 0
+        self._user_role = ""
+
+        # Keep table model for backward compatibility
+        self.table_model = PersonsTableModel(is_arabic=self.i18n.is_arabic())
+
+        self._search_timer = QTimer(self)
+        self._search_timer.setSingleShot(True)
+        self._search_timer.setInterval(400)
+        self._search_timer.timeout.connect(self._load_persons)
+
+        self._shimmer_timer = QTimer(self)
+        self._shimmer_timer.setInterval(80)
+        self._shimmer_timer.timeout.connect(self._update_card_shimmer)
+
         self._setup_ui()
 
     def _setup_ui(self):
-        self.setStyleSheet(StyleManager.page_background())
+        self.setStyleSheet("background: transparent;")
 
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(
-            PageDimensions.content_padding_h(),
-            PageDimensions.content_padding_v_top(),
-            PageDimensions.content_padding_h(),
-            PageDimensions.CONTENT_PADDING_V_BOTTOM,
-        )
-        layout.setSpacing(20)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
 
-        # Header
-        header_layout = QHBoxLayout()
+        # Dark header zone
+        self._header = DarkHeaderZone(self)
+        self._header.set_title(tr("page.persons.title"))
 
-        self._title = QLabel(tr("page.persons.title"))
-        self._title.setFont(create_font(size=FontManager.SIZE_TITLE, weight=FontManager.WEIGHT_SEMIBOLD))
-        self._title.setStyleSheet(f"color: {Colors.PAGE_TITLE}; background: transparent; border: none;")
-        header_layout.addWidget(self._title)
-        header_layout.addStretch()
+        # Stat pill
+        self._stat_total = StatPill(tr("page.persons.total"))
+        self._header.add_stat_pill(self._stat_total)
 
-        # Add person button
+        # Add person button in header
         self.add_btn = QPushButton("+ " + tr("page.persons.add_new"))
-        self.add_btn.setStyleSheet(StyleManager.nav_button_primary())
-        self.add_btn.setCursor(Qt.PointingHandCursor)
-        self.add_btn.setFont(create_font(size=FontManager.SIZE_BODY, weight=FontManager.WEIGHT_SEMIBOLD))
+        self.add_btn.setFixedHeight(38)
+        self.add_btn.setCursor(QCursor(Qt.PointingHandCursor))
+        self.add_btn.setFont(create_font(size=12, weight=QFont.Bold))
+        self.add_btn.setStyleSheet(_ADD_BTN_STYLE)
         self.add_btn.clicked.connect(self._on_add_person)
-        header_layout.addWidget(self.add_btn)
+        self._header.add_action_widget(self.add_btn)
 
-        layout.addLayout(header_layout)
-
-        # Filters
-        filters_frame = QFrame()
-        filters_frame.setStyleSheet(StyleManager.form_card())
-
-        shadow = QGraphicsDropShadowEffect()
-        shadow.setBlurRadius(20)
-        shadow.setColor(QColor(0, 0, 0, 20))
-        shadow.setOffset(0, 4)
-        filters_frame.setGraphicsEffect(shadow)
-
-        filters_layout = QHBoxLayout(filters_frame)
-        filters_layout.setContentsMargins(24, 20, 24, 20)
-        filters_layout.setSpacing(20)
-
-        # Name search
+        # Search field in header row 2
         self.name_search = QLineEdit()
         self.name_search.setPlaceholderText(tr("filter.persons.search_by_name"))
-        self.name_search.setMinimumWidth(200)
-        self.name_search.setStyleSheet(StyleManager.form_input_light())
+        self.name_search.setFixedSize(280, 34)
+        self.name_search.setFont(create_font(size=11, weight=FontManager.WEIGHT_REGULAR))
+        self.name_search.setStyleSheet(_DARK_INPUT_STYLE)
         self.name_search.textChanged.connect(self._on_filter_changed)
-        filters_layout.addWidget(self.name_search)
+        self._header.set_search_field(self.name_search)
 
-        # National ID search
-        self.nid_search = QLineEdit()
-        self.nid_search.setPlaceholderText(tr("filter.persons.national_id"))
-        self.nid_search.setMaximumWidth(150)
-        self.nid_search.setStyleSheet(StyleManager.form_input_light())
-        self.nid_search.textChanged.connect(self._on_filter_changed)
-        filters_layout.addWidget(self.nid_search)
+        layout.addWidget(self._header)
 
-        # Gender filter
-        self.gender_combo = QComboBox()
-        self.gender_combo.addItem(tr("filter.all"), "")
-        for code, label in vocab_get_options("Gender"):
-            self.gender_combo.addItem(label, code)
-        self.gender_combo.setStyleSheet(StyleManager.form_combo_light())
-        self.gender_combo.currentIndexChanged.connect(self._on_filter_changed)
-        filters_layout.addWidget(self.gender_combo)
+        # Accent line
+        self._accent_line = AccentLine()
+        layout.addWidget(self._accent_line)
 
-        filters_layout.addStretch()
-        layout.addWidget(filters_frame)
+        # Light content area
+        self._content_wrapper = QWidget()
+        self._content_wrapper.setStyleSheet(f"background-color: {Colors.BACKGROUND};")
+        content_layout = QVBoxLayout(self._content_wrapper)
+        content_layout.setContentsMargins(
+            PageDimensions.content_padding_h(), 14,
+            PageDimensions.content_padding_h(),
+            PageDimensions.CONTENT_PADDING_V_BOTTOM
+        )
+        content_layout.setSpacing(0)
 
-        # Results count
-        self.count_label = QLabel("")
-        self.count_label.setStyleSheet(f"color: {Colors.PAGE_SUBTITLE}; background: transparent;")
-        layout.addWidget(self.count_label)
+        # Stacked widget: cards vs empty state
+        self._stack = QStackedWidget()
 
-        # Table
-        table_frame = QFrame()
-        table_frame.setStyleSheet(StyleManager.table_card())
+        # Scroll area for cards
+        self._scroll = QScrollArea()
+        self._scroll.setWidgetResizable(True)
+        self._scroll.setFrameShape(QFrame.NoFrame)
+        self._scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self._scroll.setStyleSheet(
+            "QScrollArea { border: none; background: transparent; }"
+            + StyleManager.scrollbar()
+        )
 
-        table_shadow = QGraphicsDropShadowEffect()
-        table_shadow.setBlurRadius(20)
-        table_shadow.setColor(QColor(0, 0, 0, 20))
-        table_shadow.setOffset(0, 4)
-        table_frame.setGraphicsEffect(table_shadow)
+        self._scroll_content = QWidget()
+        self._scroll_content.setStyleSheet("background: transparent;")
+        self._cards_layout = QVBoxLayout(self._scroll_content)
+        self._cards_layout.setContentsMargins(0, 0, 0, 0)
+        self._cards_layout.setSpacing(10)
+        self._cards_layout.addStretch()
 
-        table_layout = QVBoxLayout(table_frame)
-        table_layout.setContentsMargins(0, 0, 0, 0)
+        self._scroll.setWidget(self._scroll_content)
+        self._stack.addWidget(self._scroll)  # index 0
 
-        self.table = QTableView()
-        self.table.setAlternatingRowColors(True)
-        self.table.setSelectionBehavior(QAbstractItemView.SelectRows)
-        self.table.setSelectionMode(QAbstractItemView.SingleSelection)
-        self.table.setSortingEnabled(True)
-        self.table.setShowGrid(False)
-        self.table.verticalHeader().setVisible(False)
-        self.table.horizontalHeader().setStretchLastSection(True)
-        self.table.setStyleSheet(StyleManager.modern_table())
-        self.table.doubleClicked.connect(self._on_row_double_click)
+        # Empty state
+        self._empty_state = EmptyStateAnimated(
+            title=tr("page.persons.no_persons"),
+            description=tr("page.persons.empty_description")
+        )
+        self._stack.addWidget(self._empty_state)  # index 1
 
-        self.table_model = PersonsTableModel(is_arabic=self.i18n.is_arabic())
-        self.table.setModel(self.table_model)
+        content_layout.addWidget(self._stack, 1)
 
-        table_layout.addWidget(self.table)
-        layout.addWidget(table_frame)
+        # Pagination
+        self._pagination = self._create_pagination()
+        content_layout.addWidget(self._pagination)
 
+        layout.addWidget(self._content_wrapper, 1)
+
+        # Loading spinner overlay
         from ui.components.loading_spinner import LoadingSpinnerOverlay
         self._spinner = LoadingSpinnerOverlay(self)
 
-        from ui.components.skeleton_loader import TableSkeleton
-        self._skeleton = TableSkeleton(columns=6, rows=8, message=tr("page.persons.loading_persons"))
-        table_layout.addWidget(self._skeleton)
-        self._skeleton.hide()
+    def _create_pagination(self):
+        """Build the pagination bar."""
+        bar = QFrame()
+        bar.setFixedHeight(40)
+        bar.setStyleSheet("QFrame { background: transparent; border: none; }")
+        bar_layout = QHBoxLayout(bar)
+        bar_layout.setContentsMargins(4, 6, 4, 0)
+        bar_layout.addStretch()
+
+        self._prev_btn = QPushButton("\u276E")
+        self._prev_btn.setFixedSize(32, 28)
+        self._prev_btn.setCursor(QCursor(Qt.PointingHandCursor))
+        self._prev_btn.setStyleSheet(_NAV_BTN_STYLE)
+        self._prev_btn.clicked.connect(self._on_prev_page)
+        bar_layout.addWidget(self._prev_btn)
+
+        self._page_info = QLabel("")
+        self._page_info.setFont(create_font(size=10, weight=FontManager.WEIGHT_MEDIUM))
+        self._page_info.setStyleSheet(f"color: {Colors.TEXT_SECONDARY};")
+        self._page_info.setAlignment(Qt.AlignCenter)
+        self._page_info.setMinimumWidth(80)
+        bar_layout.addWidget(self._page_info)
+
+        self._next_btn = QPushButton("\u276F")
+        self._next_btn.setFixedSize(32, 28)
+        self._next_btn.setCursor(QCursor(Qt.PointingHandCursor))
+        self._next_btn.setStyleSheet(_NAV_BTN_STYLE)
+        self._next_btn.clicked.connect(self._on_next_page)
+        bar_layout.addWidget(self._next_btn)
+
+        return bar
+
+    # -- Public interface --
 
     def refresh(self, data=None):
         """Refresh the persons list."""
         logger.debug("Refreshing persons page")
+        self._current_page = 1
         self._load_persons()
 
     def configure_for_role(self, role: str):
@@ -718,19 +945,15 @@ class PersonsPage(QWidget):
         if hasattr(self, 'add_btn'):
             self.add_btn.setEnabled(can_create)
 
+    # -- Data loading --
+
     def _load_persons(self):
         """Load persons with filters."""
-        self.table.hide()
-        self._skeleton.show()
-        self._skeleton.start()
+        self._spinner.show_loading(tr("page.persons.loading_persons"))
         name = self.name_search.text().strip()
-        nid = self.nid_search.text().strip()
-        gender = self.gender_combo.currentData()
 
         filter_ = PersonFilter(
             full_name=name or None,
-            national_id=nid or None,
-            gender=gender or None,
             limit=500
         )
 
@@ -740,35 +963,177 @@ class PersonsPage(QWidget):
         self._load_persons_worker.start()
 
     def _on_load_persons_finished(self, result):
-        self._skeleton.stop()
-        self._skeleton.hide()
-        self.table.show()
+        self._spinner.hide_loading()
         if result.success:
-            persons = result.data
-            self.table_model.set_persons(persons)
-            self.count_label.setText(tr("page.persons.found_count", count=len(persons)))
+            self._all_persons = result.data or []
+            self._total_count = len(self._all_persons)
+            self._stat_total.set_count(self._total_count)
+            self.table_model.set_persons(self._all_persons)
+            self._populate_cards()
         else:
             logger.error(f"Failed to load persons: {result.message}")
             Toast.show_toast(self, tr("page.persons.load_failed", error=result.message), Toast.ERROR)
+            self._all_persons = []
+            self._total_count = 0
+            self._stat_total.set_count(0)
             self.table_model.set_persons([])
-            self.count_label.setText(tr("page.persons.found_count", count=0))
+            self._populate_cards()
 
     def _on_load_persons_error(self, error_msg):
-        self._skeleton.stop()
-        self._skeleton.hide()
-        self.table.show()
+        self._spinner.hide_loading()
         logger.error(f"Failed to load persons: {error_msg}")
         Toast.show_toast(self, tr("page.persons.load_failed", error=error_msg), Toast.ERROR)
+        self._all_persons = []
+        self._total_count = 0
+        self._stat_total.set_count(0)
         self.table_model.set_persons([])
-        self.count_label.setText(tr("page.persons.found_count", count=0))
+        self._populate_cards()
+
+    # -- Card population --
+
+    def _populate_cards(self):
+        """Populate card widgets from the current page slice of persons."""
+        try:
+            self._clear_cards()
+
+            total = len(self._all_persons)
+            if total == 0:
+                self._stack.setCurrentIndex(1)
+                self._empty_state.set_title(tr("page.persons.no_persons"))
+                self._empty_state.set_description(tr("page.persons.empty_description"))
+                self._update_pagination()
+                return
+
+            self._stack.setCurrentIndex(0)
+
+            # Paginate
+            ps = self._PAGE_SIZE
+            total_pages = max(1, -(-total // ps))
+            self._current_page = max(1, min(self._current_page, total_pages))
+            start = (self._current_page - 1) * ps
+            end = min(start + ps, total)
+            page_persons = self._all_persons[start:end]
+
+            is_arabic = self.i18n.is_arabic()
+            for person in page_persons:
+                card = _PersonCard(person, is_arabic=is_arabic, parent=self._scroll_content)
+                card.clicked.connect(lambda p=person: self._edit_person(p))
+                self._cards_layout.insertWidget(
+                    self._cards_layout.count() - 1, card
+                )
+                self._card_widgets.append(card)
+
+            self._update_pagination()
+            self._animate_card_entrance()
+
+            if not self._shimmer_timer.isActive():
+                self._shimmer_timer.start()
+
+        except Exception as e:
+            logger.error(f"Error populating person cards: {e}")
+            self._stack.setCurrentIndex(1)
+
+    def _animate_card_entrance(self):
+        """Stagger fade-in entrance for cards."""
+        count = len(self._card_widgets)
+        if count > 30 or count == 0:
+            return
+
+        for i, card in enumerate(self._card_widgets):
+            from PyQt5.QtWidgets import QGraphicsOpacityEffect
+            opacity_eff = QGraphicsOpacityEffect(card)
+            opacity_eff.setOpacity(0.0)
+            card.setGraphicsEffect(opacity_eff)
+
+            anim = QPropertyAnimation(opacity_eff, b"opacity")
+            anim.setDuration(300)
+            anim.setStartValue(0.0)
+            anim.setEndValue(1.0)
+            anim.setEasingCurve(QEasingCurve.OutCubic)
+
+            def _restore_shadow(c=card):
+                try:
+                    s = QGraphicsDropShadowEffect(c)
+                    s.setBlurRadius(20)
+                    s.setOffset(0, 4)
+                    s.setColor(QColor(0, 0, 0, 22))
+                    c.setGraphicsEffect(s)
+                except RuntimeError:
+                    pass
+
+            anim.finished.connect(_restore_shadow)
+            QTimer.singleShot(i * 40, anim.start)
+
+            card._entrance_anim = anim
+            card._entrance_effect = opacity_eff
+
+    def _clear_cards(self):
+        """Remove all card widgets from the layout."""
+        self._shimmer_timer.stop()
+        for card in self._card_widgets:
+            if hasattr(card, '_entrance_anim') and card._entrance_anim:
+                try:
+                    card._entrance_anim.stop()
+                except RuntimeError:
+                    pass
+            try:
+                card.clicked.disconnect()
+            except Exception:
+                pass
+            card.setParent(None)
+            card.deleteLater()
+        self._card_widgets.clear()
+
+    def _update_card_shimmer(self):
+        """Repaint cards so shimmer animation progresses."""
+        for card in self._card_widgets:
+            try:
+                card.update()
+            except RuntimeError:
+                pass
+
+    # -- Pagination --
+
+    def _on_prev_page(self):
+        if self._current_page > 1:
+            self._current_page -= 1
+            self._populate_cards()
+
+    def _on_next_page(self):
+        total_pages = max(1, -(-len(self._all_persons) // self._PAGE_SIZE))
+        if self._current_page < total_pages:
+            self._current_page += 1
+            self._populate_cards()
+
+    def _update_pagination(self):
+        """Update pagination bar labels and button states."""
+        total = len(self._all_persons)
+        ps = self._PAGE_SIZE
+        total_pages = max(1, -(-total // ps))
+        page = self._current_page
+        start = (page - 1) * ps + 1
+        end = min(page * ps, total)
+        if total > 0:
+            self._page_info.setText(f"{start}-{end}  /  {total}")
+        else:
+            self._page_info.setText("")
+        self._prev_btn.setEnabled(page > 1)
+        self._next_btn.setEnabled(page < total_pages)
+
+    # -- Filter --
 
     def _on_filter_changed(self):
-        self._load_persons()
+        self._current_page = 1
+        self._search_timer.start()
 
-    def _on_row_double_click(self, index):
-        person = self.table_model.get_person(index.row())
+    # -- Card click (edit) --
+
+    def _on_card_clicked(self, person):
+        """Handle card click to edit person."""
         if person:
             self._edit_person(person)
+
+    # -- CRUD operations --
 
     def _on_add_person(self):
         """Add new person."""
@@ -835,12 +1200,14 @@ class PersonsPage(QWidget):
         logger.error(f"Failed to update person: {error_msg}")
         Toast.show_toast(self, tr("page.persons.update_failed", error=error_msg), Toast.ERROR)
 
+    # -- Language --
+
     def update_language(self, is_arabic: bool):
         self.setLayoutDirection(get_layout_direction())
-        self._title.setText(tr("page.persons.title"))
+        self._header.set_title(tr("page.persons.title"))
         self.add_btn.setText("+ " + tr("page.persons.add_new"))
         self.name_search.setPlaceholderText(tr("filter.persons.search_by_name"))
-        self.nid_search.setPlaceholderText(tr("filter.persons.national_id"))
-        # Update gender filter combo "All" item
-        self.gender_combo.setItemText(0, tr("filter.all"))
+        self._stat_total.set_label(tr("page.persons.total"))
+        self._empty_state.set_title(tr("page.persons.no_persons"))
+        self._empty_state.set_description(tr("page.persons.empty_description"))
         self.table_model.set_language(is_arabic)

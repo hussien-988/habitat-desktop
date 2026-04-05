@@ -1,22 +1,25 @@
 # -*- coding: utf-8 -*-
-"""Claim comparison page for side-by-side record comparison and merge."""
+"""Claim comparison page — full-page comparison and merge resolution."""
 
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QFrame, QRadioButton, QButtonGroup, QScrollArea,
-    QSizePolicy, QGraphicsDropShadowEffect, QTextEdit
+    QSizePolicy, QGraphicsDropShadowEffect, QTextEdit,
+    QGridLayout,
 )
-from PyQt5.QtCore import Qt, pyqtSignal, QSize, QThread
-from PyQt5.QtGui import QColor, QIcon
+from PyQt5.QtCore import Qt, pyqtSignal, QSize
+from PyQt5.QtGui import QColor, QIcon, QCursor
 
 from repositories.database import Database
 from services.duplicate_service import DuplicateService
 from ui.font_utils import create_font, FontManager
 from ui.style_manager import StyleManager
-from ui.design_system import Colors, PageDimensions
-from ui.components.claim_list_card import ClaimListCard
+from ui.design_system import Colors, PageDimensions, ButtonDimensions
+from ui.components.dark_header_zone import DarkHeaderZone
+from ui.components.accent_line import AccentLine
 from ui.components.icon import Icon
 from ui.components.toast import Toast
+from ui.animation_utils import stagger_fade_in
 from services.api_worker import ApiWorker
 from services.translation_manager import tr, get_layout_direction
 from utils.i18n import I18n
@@ -26,9 +29,200 @@ logger = get_logger(__name__)
 
 RADIO_STYLE = StyleManager.radio_button()
 
+# ─── Styles ───────────────────────────────────────────────────────────
+_RECORD_CARD_NORMAL = f"""
+    QFrame#recordCard {{
+        background: qlineargradient(x1:0,y1:0,x2:1,y2:1,
+            stop:0 #F7FAFF, stop:1 #F0F5FF);
+        border: 1.5px solid #E2EAF2;
+        border-radius: 12px;
+    }}
+"""
 
+_RECORD_CARD_SELECTED = f"""
+    QFrame#recordCard {{
+        background: qlineargradient(x1:0,y1:0,x2:1,y2:1,
+            stop:0 #EBF5FF, stop:1 #E0EFFF);
+        border: 2px solid {Colors.PRIMARY_BLUE};
+        border-radius: 12px;
+    }}
+"""
+
+_SECTION_CARD_STYLE = f"""
+    QFrame#sectionCard {{
+        background: qlineargradient(x1:0,y1:0,x2:1,y2:1,
+            stop:0 #F7FAFF, stop:1 #F0F5FF);
+        border: 1px solid #E2EAF2;
+        border-radius: 14px;
+    }}
+"""
+
+_TABLE_HEADER_STYLE = f"""
+    QFrame {{
+        background: #0E2035;
+        border: none;
+    }}
+"""
+
+_TABLE_HEADER_LABEL = """
+    QLabel {
+        color: #FFFFFF;
+        background: transparent;
+        border: none;
+        padding: 12px 16px;
+    }
+"""
+
+_TABLE_ROW_FIELD = f"""
+    QLabel {{
+        color: {Colors.PAGE_TITLE};
+        background: transparent;
+        border: none;
+        padding: 11px 16px;
+        font-weight: 600;
+    }}
+"""
+
+_TABLE_ROW_VALUE_A = f"""
+    QLabel {{
+        color: {Colors.WIZARD_TITLE};
+        background: #F0F7FF;
+        border: none;
+        padding: 11px 16px;
+    }}
+"""
+
+_TABLE_ROW_VALUE_B = f"""
+    QLabel {{
+        color: {Colors.WIZARD_TITLE};
+        background: #FAFBFF;
+        border: none;
+        padding: 11px 16px;
+    }}
+"""
+
+_TABLE_DIFF_INDICATOR = f"""
+    QLabel {{
+        color: {Colors.PRIMARY_BLUE};
+        background: #EBF5FF;
+        border-left: 3px solid {Colors.PRIMARY_BLUE};
+        padding: 11px 16px;
+        font-weight: 700;
+    }}
+"""
+
+_DOC_COLUMN_STYLE = """
+    QFrame {
+        background: #F8FAFC;
+        border-radius: 12px;
+        border: 1px solid #E5E7EB;
+    }
+"""
+
+
+# ─── RecordCard ───────────────────────────────────────────────────────
+class _RecordCard(QFrame):
+    """Selectable record card for primary record selection."""
+
+    card_clicked = pyqtSignal()
+
+    def __init__(self, data: dict, parent=None):
+        super().__init__(parent)
+        self.setObjectName("recordCard")
+        self.setFixedHeight(72)
+        self.setCursor(QCursor(Qt.PointingHandCursor))
+        self._selected = False
+        self.setStyleSheet(_RECORD_CARD_NORMAL)
+
+        shadow = QGraphicsDropShadowEffect(self)
+        shadow.setBlurRadius(16)
+        shadow.setXOffset(0)
+        shadow.setYOffset(3)
+        shadow.setColor(QColor(0, 0, 0, 18))
+        self.setGraphicsEffect(shadow)
+
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(16, 8, 16, 8)
+        layout.setSpacing(14)
+
+        # Radio indicator
+        self._radio = QRadioButton()
+        self._radio.setStyleSheet(RADIO_STYLE)
+        self._radio.setFixedSize(20, 20)
+        layout.addWidget(self._radio)
+
+        # Icon
+        icon_name = data.get("icon", "blue")
+        icon_label = QLabel()
+        icon_label.setFixedSize(32, 32)
+        icon_label.setAlignment(Qt.AlignCenter)
+        icon_label.setStyleSheet(
+            "QLabel { background: #ffffff; border: 1px solid #DBEAFE; border-radius: 8px; }"
+        )
+        pixmap = Icon.load_pixmap(icon_name, size=16)
+        if pixmap and not pixmap.isNull():
+            icon_label.setPixmap(pixmap)
+        layout.addWidget(icon_label)
+
+        # Text block
+        text_block = QWidget()
+        text_block.setStyleSheet("background: transparent; border: none;")
+        text_layout = QVBoxLayout(text_block)
+        text_layout.setContentsMargins(0, 0, 0, 0)
+        text_layout.setSpacing(2)
+
+        self._label = QLabel(data.get("label", ""))
+        self._label.setFont(create_font(size=11, weight=FontManager.WEIGHT_BOLD))
+        self._label.setStyleSheet(f"color: {Colors.PAGE_TITLE}; background: transparent; border: none;")
+
+        detail_parts = []
+        identifier = data.get("identifier", "")
+        if identifier:
+            detail_parts.append(identifier)
+        date_str = data.get("date", "")
+        if date_str:
+            detail_parts.append(date_str)
+        subtitle = data.get("subtitle", "")
+        if subtitle:
+            detail_parts.append(subtitle)
+
+        self._detail = QLabel("  \u00B7  ".join(detail_parts) if detail_parts else "")
+        self._detail.setFont(create_font(size=9, weight=FontManager.WEIGHT_REGULAR))
+        self._detail.setStyleSheet(f"color: {Colors.WIZARD_SUBTITLE}; background: transparent; border: none;")
+
+        text_layout.addWidget(self._label)
+        text_layout.addWidget(self._detail)
+
+        layout.addWidget(text_block, 1)
+
+    @property
+    def radio(self) -> QRadioButton:
+        return self._radio
+
+    def set_selected(self, selected: bool):
+        self._selected = selected
+        if selected:
+            self.setStyleSheet(_RECORD_CARD_SELECTED)
+            shadow = self.graphicsEffect()
+            if isinstance(shadow, QGraphicsDropShadowEffect):
+                shadow.setColor(QColor(56, 144, 223, 40))
+                shadow.setBlurRadius(20)
+        else:
+            self.setStyleSheet(_RECORD_CARD_NORMAL)
+            shadow = self.graphicsEffect()
+            if isinstance(shadow, QGraphicsDropShadowEffect):
+                shadow.setColor(QColor(0, 0, 0, 18))
+                shadow.setBlurRadius(16)
+
+    def mousePressEvent(self, event):
+        self._radio.setChecked(True)
+        self.card_clicked.emit()
+        super().mousePressEvent(event)
+
+
+# ─── Main Page ────────────────────────────────────────────────────────
 class ClaimComparisonPage(QWidget):
-    """Claim comparison page — shows two persons side by side for merge."""
+    """Claim comparison page — tabular comparison and merge resolution."""
 
     back_requested = pyqtSignal()
 
@@ -42,6 +236,8 @@ class ClaimComparisonPage(QWidget):
         self._comparison_data = []
         self._user_id = None
         self._current_conflict_type = ""
+        self._record_cards = []
+        self._is_resolved = False
         self._setup_ui()
 
         from ui.components.loading_spinner import LoadingSpinnerOverlay
@@ -51,12 +247,86 @@ class ClaimComparisonPage(QWidget):
         """Set current user ID for audit trail."""
         self._user_id = user_id
 
+    # ────────────────────────────────────────────
+    # UI Setup
+    # ────────────────────────────────────────────
     def _setup_ui(self):
-        self.setStyleSheet(StyleManager.page_background())
-
         outer_layout = QVBoxLayout(self)
         outer_layout.setContentsMargins(0, 0, 0, 0)
         outer_layout.setSpacing(0)
+
+        # Dark header zone
+        self._header = DarkHeaderZone(self)
+        self._header.set_title(tr("page.comparison.title"))
+
+        # Action button in header
+        self.action_btn = QPushButton(tr("page.comparison.execute"))
+        self.action_btn.setCursor(Qt.PointingHandCursor)
+        self.action_btn.setFont(create_font(
+            size=ButtonDimensions.SAVE_FONT_SIZE,
+            weight=FontManager.WEIGHT_SEMIBOLD,
+        ))
+        self.action_btn.setFixedSize(100, ButtonDimensions.SAVE_HEIGHT)
+        self.action_btn.setStyleSheet(StyleManager.dark_action_button())
+        self.action_btn.clicked.connect(self._on_action_clicked)
+        self._header.add_action_widget(self.action_btn)
+
+        # Back button in header
+        self._back_btn = QPushButton(tr("action.back"))
+        self._back_btn.setCursor(Qt.PointingHandCursor)
+        self._back_btn.setFont(create_font(
+            size=ButtonDimensions.SAVE_FONT_SIZE,
+            weight=FontManager.WEIGHT_SEMIBOLD,
+        ))
+        self._back_btn.setFixedSize(100, ButtonDimensions.SAVE_HEIGHT)
+        self._back_btn.setStyleSheet(StyleManager.dark_action_button())
+        self._back_btn.clicked.connect(self.back_requested.emit)
+        self._header.add_action_widget(self._back_btn)
+
+        outer_layout.addWidget(self._header)
+
+        # Accent line
+        self._accent_line = AccentLine()
+        outer_layout.addWidget(self._accent_line)
+
+        # Resolved status banner (hidden by default)
+        self._resolved_banner = QFrame()
+        self._resolved_banner.setFixedHeight(40)
+        self._resolved_banner.setStyleSheet(
+            "QFrame { background: #D1FAE5; border-bottom: 1px solid #A7F3D0; }"
+        )
+        banner_layout = QHBoxLayout(self._resolved_banner)
+        banner_layout.setContentsMargins(
+            PageDimensions.content_padding_h(), 0,
+            PageDimensions.content_padding_h(), 0,
+        )
+        banner_layout.setSpacing(8)
+
+        resolved_icon = QLabel()
+        resolved_icon.setFixedSize(20, 20)
+        resolved_icon.setAlignment(Qt.AlignCenter)
+        resolved_icon.setStyleSheet(
+            "QLabel { background: #10B981; border-radius: 10px; color: #FFFFFF;"
+            " font-weight: 700; font-size: 12px; border: none; }"
+        )
+        resolved_icon.setText("\u2713")
+        banner_layout.addWidget(resolved_icon)
+
+        self._resolved_label = QLabel(tr("page.comparison.resolved_status"))
+        self._resolved_label.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
+        self._resolved_label.setStyleSheet("color: #065F46; background: transparent; border: none;")
+        banner_layout.addWidget(self._resolved_label)
+        banner_layout.addStretch()
+
+        self._resolved_banner.setVisible(False)
+        outer_layout.addWidget(self._resolved_banner)
+
+        # Light content wrapper
+        content_wrapper = QWidget()
+        content_wrapper.setStyleSheet(StyleManager.page_background())
+        content_inner = QVBoxLayout(content_wrapper)
+        content_inner.setContentsMargins(0, 0, 0, 0)
+        content_inner.setSpacing(0)
 
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
@@ -72,212 +342,240 @@ class ClaimComparisonPage(QWidget):
         content.setStyleSheet("background: transparent;")
         self._content_layout = QVBoxLayout(content)
         self._content_layout.setContentsMargins(
-            PageDimensions.content_padding_h(),
-            PageDimensions.content_padding_v_top(),
+            PageDimensions.content_padding_h(), 14,
             PageDimensions.content_padding_h(),
             PageDimensions.CONTENT_PADDING_V_BOTTOM,
         )
-        self._content_layout.setSpacing(20)
+        self._content_layout.setSpacing(16)
 
-        # Header
-        header = self._build_header()
-        self._content_layout.addLayout(header)
+        # Section 1: Record Selection
+        self._records_title = self._build_section_title(
+            "blue",
+            tr("page.comparison.records_section"),
+            tr("page.comparison.records_section_subtitle"),
+        )
+        self._content_layout.addWidget(self._records_title)
 
-        # Claims card
-        self._claims_card = self._build_claims_container()
-        self._content_layout.addWidget(self._claims_card)
+        self._records_card = QFrame()
+        self._records_card.setObjectName("sectionCard")
+        self._records_card.setStyleSheet(_SECTION_CARD_STYLE)
+        records_card_layout = QVBoxLayout(self._records_card)
+        records_card_layout.setContentsMargins(16, 16, 16, 16)
+        records_card_layout.setSpacing(10)
+        self._records_layout = QVBoxLayout()
+        self._records_layout.setSpacing(10)
+        records_card_layout.addLayout(self._records_layout)
+        self._content_layout.addWidget(self._records_card)
 
-        # Comparison section
-        self._comparison_wrapper = self._build_comparison_container()
-        self._content_layout.addWidget(self._comparison_wrapper)
+        # Section 2: Comparison Table
+        self._comparison_title = self._build_section_title(
+            "move",
+            tr("page.comparison.comparison"),
+            tr("page.comparison.comparison_section_subtitle"),
+        )
+        self._content_layout.addWidget(self._comparison_title)
 
-        # Document comparison section
-        self._doc_comparison_card = self._build_document_comparison()
-        self._content_layout.addWidget(self._doc_comparison_card)
+        self._comparison_card = QFrame()
+        self._comparison_card.setObjectName("sectionCard")
+        self._comparison_card.setStyleSheet(_SECTION_CARD_STYLE)
+        comp_card_layout = QVBoxLayout(self._comparison_card)
+        comp_card_layout.setContentsMargins(0, 0, 0, 0)
+        comp_card_layout.setSpacing(0)
+        self._table_container = QWidget()
+        self._table_container.setStyleSheet("background: transparent;")
+        self._table_grid = QGridLayout(self._table_container)
+        self._table_grid.setContentsMargins(0, 0, 0, 0)
+        self._table_grid.setSpacing(0)
+        self._table_grid.setColumnStretch(0, 30)
+        self._table_grid.setColumnStretch(1, 0)
+        self._table_grid.setColumnStretch(2, 35)
+        self._table_grid.setColumnStretch(3, 0)
+        self._table_grid.setColumnStretch(4, 35)
+        comp_card_layout.addWidget(self._table_container)
+        self._content_layout.addWidget(self._comparison_card)
 
-        # Resolution section
-        self._resolution_card = self._build_resolution_section()
-        self._content_layout.addWidget(self._resolution_card)
-
-        self._content_layout.addStretch()
-        scroll.setWidget(content)
-        outer_layout.addWidget(scroll)
-
-    # ────────────────────────────────────────────
-    # Header
-    # ────────────────────────────────────────────
-    def _build_header(self) -> QVBoxLayout:
-        header = QVBoxLayout()
-        header.setSpacing(4)
-        header.setContentsMargins(0, 0, 0, 0)
-
-        top_row = QHBoxLayout()
-        top_row.setContentsMargins(0, 0, 0, 0)
-
-        self._header_title = QLabel(tr("page.comparison.title"))
-        self._header_title.setFont(create_font(size=FontManager.SIZE_TITLE, weight=FontManager.WEIGHT_SEMIBOLD))
-        self._header_title.setStyleSheet(f"color: {Colors.PAGE_TITLE}; background: transparent; border: none;")
-
-        self.action_btn = QPushButton(tr("page.comparison.execute"))
-        self.action_btn.setCursor(Qt.PointingHandCursor)
-        self.action_btn.setFont(create_font(size=FontManager.SIZE_BODY, weight=FontManager.WEIGHT_SEMIBOLD))
-        self.action_btn.setFixedSize(90, 48)
-        self.action_btn.setStyleSheet(StyleManager.nav_button_primary())
-        self.action_btn.clicked.connect(self._on_action_clicked)
-
-        top_row.addWidget(self._header_title)
-        top_row.addStretch()
-        top_row.addWidget(self.action_btn)
-        header.addLayout(top_row)
-
-        # Breadcrumb
-        self._breadcrumb = QLabel(tr("page.comparison.breadcrumb"))
-        self._breadcrumb.setFont(create_font(size=FontManager.SIZE_BODY, weight=FontManager.WEIGHT_SEMIBOLD))
-        self._breadcrumb.setStyleSheet(f"color: {Colors.PAGE_SUBTITLE}; background: transparent; border: none;")
-        header.addWidget(self._breadcrumb)
-
-        return header
-
-    # ────────────────────────────────────────────
-    # Claims Container
-    # ────────────────────────────────────────────
-    def _build_claims_container(self) -> QFrame:
-        card = QFrame()
-        card.setObjectName("claimsCompCard")
-        card.setStyleSheet(StyleManager.form_card())
-
-        card_layout = QVBoxLayout(card)
-        card_layout.setSpacing(8)
-        card_layout.setContentsMargins(16, 16, 16, 16)
-
-        title_row = QHBoxLayout()
-        title_row.setContentsMargins(0, 0, 0, 0)
-
-        title_label = QLabel(tr("page.comparison.persons"))
-        title_label.setFont(create_font(size=14, weight=FontManager.WEIGHT_BOLD))
-        title_label.setStyleSheet("color: #E74C3C; background: transparent; border: none;")
-
-        title_row.addWidget(title_label)
-        title_row.addStretch()
-        card_layout.addLayout(title_row)
-
-        subtitle = QLabel(tr("page.comparison.select_primary_record"))
-        subtitle.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
-        subtitle.setStyleSheet(f"color: {Colors.WIZARD_SUBTITLE}; background: transparent; border: none;")
-        card_layout.addWidget(subtitle)
-
-        self._claims_rows_layout = QVBoxLayout()
-        self._claims_rows_layout.setSpacing(8)
-        card_layout.addLayout(self._claims_rows_layout)
-
-        return card
-
-    # ────────────────────────────────────────────
-    # Comparison Container
-    # ────────────────────────────────────────────
-    def _build_comparison_container(self) -> QFrame:
-        wrapper = QFrame()
-        wrapper.setObjectName("comparisonWrapper")
-        wrapper.setStyleSheet("QFrame#comparisonWrapper { background: transparent; border: none; }")
-
-        wrapper_layout = QVBoxLayout(wrapper)
-        wrapper_layout.setSpacing(16)
-        wrapper_layout.setContentsMargins(0, 0, 0, 0)
-
-        comp_title = QLabel(tr("page.comparison.comparison"))
-        comp_title.setFont(create_font(size=14, weight=FontManager.WEIGHT_BOLD))
-        comp_title.setStyleSheet("color: #E74C3C; background: transparent; border: none;")
-        wrapper_layout.addWidget(comp_title)
-
-        self._comparison_cards_layout = QHBoxLayout()
-        self._comparison_cards_layout.setSpacing(30)
-        wrapper_layout.addLayout(self._comparison_cards_layout)
-
-        return wrapper
-
-    # ────────────────────────────────────────────
-    # Document Comparison Section
-    # ────────────────────────────────────────────
-    def _build_document_comparison(self) -> QFrame:
-        card = QFrame()
-        card.setObjectName("docCompCard")
-        card.setStyleSheet(StyleManager.form_card())
-
-        card_layout = QVBoxLayout(card)
-        card_layout.setSpacing(16)
-        card_layout.setContentsMargins(16, 16, 16, 16)
-
-        title_row = QHBoxLayout()
-        title_label = QLabel(tr("page.comparison.document_comparison"))
-        title_label.setFont(create_font(size=14, weight=FontManager.WEIGHT_BOLD))
-        title_label.setStyleSheet(f"color: {Colors.PAGE_TITLE}; background: transparent; border: none;")
+        # Section 3: Document Comparison
+        doc_title_row = QHBoxLayout()
+        doc_title_row.setSpacing(12)
+        self._doc_title = self._build_section_title(
+            "dec",
+            tr("page.comparison.document_comparison"),
+            tr("page.comparison.doc_section_subtitle"),
+        )
+        doc_title_row.addWidget(self._doc_title, 1)
 
         self._doc_load_btn = QPushButton(tr("page.comparison.load_comparison"))
         self._doc_load_btn.setCursor(Qt.PointingHandCursor)
         self._doc_load_btn.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
+        self._doc_load_btn.setFixedHeight(32)
         self._doc_load_btn.setStyleSheet(f"""
             QPushButton {{
-                color: {Colors.PRIMARY_BLUE};
-                background: {Colors.PRIMARY_BLUE}0D;
-                border: 1px solid {Colors.PRIMARY_BLUE}33;
+                color: #FFFFFF;
+                background: {Colors.PRIMARY_BLUE};
+                border: none;
                 border-radius: 8px;
-                padding: 6px 16px;
+                padding: 6px 20px;
             }}
             QPushButton:hover {{
-                background: {Colors.PRIMARY_BLUE}1A;
-                border-color: {Colors.PRIMARY_BLUE}66;
+                background: #2D7BC9;
+            }}
+            QPushButton:disabled {{
+                background: #A0C4E8;
+                color: #D0E4F5;
             }}
         """)
         self._doc_load_btn.clicked.connect(self._load_document_comparison)
+        doc_title_row.addWidget(self._doc_load_btn, 0, Qt.AlignBottom)
 
-        title_row.addWidget(title_label)
-        title_row.addStretch()
-        title_row.addWidget(self._doc_load_btn)
-        card_layout.addLayout(title_row)
+        doc_title_widget = QWidget()
+        doc_title_widget.setStyleSheet("background: transparent;")
+        doc_title_widget.setLayout(doc_title_row)
+        self._content_layout.addWidget(doc_title_widget)
 
-        subtitle = QLabel(tr("page.comparison.documents_linked_to_records"))
-        subtitle.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
-        subtitle.setStyleSheet(f"color: {Colors.WIZARD_SUBTITLE}; background: transparent; border: none;")
-        card_layout.addWidget(subtitle)
+        self._doc_card = QFrame()
+        self._doc_card.setObjectName("sectionCard")
+        self._doc_card.setStyleSheet(_SECTION_CARD_STYLE)
+        doc_card_layout = QVBoxLayout(self._doc_card)
+        doc_card_layout.setContentsMargins(16, 16, 16, 16)
+        doc_card_layout.setSpacing(12)
 
-        # Two-column layout for documents
+        # Doc columns container
         self._doc_columns_layout = QHBoxLayout()
-        self._doc_columns_layout.setSpacing(20)
+        self._doc_columns_layout.setSpacing(0)
 
-        # First entity docs
-        self._doc_first_frame = self._build_doc_entity_column(tr("page.comparison.first_record_docs"))
+        self._doc_first_frame = self._build_doc_column(tr("page.comparison.first_record_docs"))
         self._doc_columns_layout.addWidget(self._doc_first_frame, 1)
 
-        # VS divider
-        vs = QLabel("VS")
-        vs.setAlignment(Qt.AlignCenter)
-        vs.setFixedWidth(40)
-        vs.setFont(create_font(size=11, weight=FontManager.WEIGHT_BOLD))
-        vs.setStyleSheet(f"color: {Colors.PRIMARY_BLUE}; background: {Colors.PRIMARY_BLUE}10; border-radius: 20px; padding: 8px; border: none;")
-        self._doc_columns_layout.addWidget(vs)
+        # Thin vertical separator
+        separator = QFrame()
+        separator.setFixedWidth(1)
+        separator.setStyleSheet("QFrame { background: #E2EAF2; }")
+        self._doc_columns_layout.addWidget(separator)
 
-        # Second entity docs
-        self._doc_second_frame = self._build_doc_entity_column(tr("page.comparison.second_record_docs"))
+        self._doc_second_frame = self._build_doc_column(tr("page.comparison.second_record_docs"))
         self._doc_columns_layout.addWidget(self._doc_second_frame, 1)
 
-        card_layout.addLayout(self._doc_columns_layout)
+        doc_card_layout.addLayout(self._doc_columns_layout)
 
-        # Empty state
+        # Doc empty state
         self._doc_empty_label = QLabel(tr("page.comparison.click_load_comparison"))
         self._doc_empty_label.setAlignment(Qt.AlignCenter)
         self._doc_empty_label.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
         self._doc_empty_label.setStyleSheet("color: #9CA3AF; background: transparent; padding: 30px;")
-        card_layout.addWidget(self._doc_empty_label)
+        doc_card_layout.addWidget(self._doc_empty_label)
 
-        # Initially hide columns, show empty state
         self._doc_first_frame.setVisible(False)
         self._doc_second_frame.setVisible(False)
 
-        return card
+        self._content_layout.addWidget(self._doc_card)
 
-    def _build_doc_entity_column(self, title: str) -> QFrame:
+        # Section 4: Resolution
+        self._resolution_title = self._build_section_title(
+            "yelow",
+            tr("page.comparison.resolution_action"),
+            tr("page.comparison.resolution_subtitle"),
+        )
+        self._content_layout.addWidget(self._resolution_title)
+
+        self._resolution_card = QFrame()
+        self._resolution_card.setObjectName("sectionCard")
+        self._resolution_card.setStyleSheet(_SECTION_CARD_STYLE)
+        res_layout = QVBoxLayout(self._resolution_card)
+        res_layout.setContentsMargins(20, 20, 20, 20)
+        res_layout.setSpacing(14)
+
+        self._resolution_group = QButtonGroup(self)
+        resolution_options = [
+            (tr("page.comparison.merge_records"), "merge"),
+            (tr("page.comparison.keep_separate"), "keep_separate"),
+        ]
+
+        options_layout = QHBoxLayout()
+        options_layout.setSpacing(24)
+        for idx, (label, value) in enumerate(resolution_options):
+            radio = QRadioButton(label)
+            radio.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
+            radio.setStyleSheet(RADIO_STYLE + " QRadioButton { padding: 6px 12px; }")
+            radio.setProperty("resolution_type", value)
+            self._resolution_group.addButton(radio, idx)
+            options_layout.addWidget(radio)
+            if idx == 0:
+                radio.setChecked(True)
+        options_layout.addStretch()
+        res_layout.addLayout(options_layout)
+
+        just_label = QLabel(tr("page.comparison.justification_required"))
+        just_label.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
+        just_label.setStyleSheet(f"color: {Colors.WIZARD_SUBTITLE}; background: transparent; border: none;")
+        res_layout.addWidget(just_label)
+
+        self._justification_edit = QTextEdit()
+        self._justification_edit.setPlaceholderText(tr("page.comparison.enter_justification"))
+        self._justification_edit.setFixedHeight(80)
+        self._justification_edit.setFont(create_font(size=9, weight=FontManager.WEIGHT_REGULAR))
+        self._justification_edit.setStyleSheet(StyleManager.form_input_light())
+        res_layout.addWidget(self._justification_edit)
+
+        self._content_layout.addWidget(self._resolution_card)
+
+        self._content_layout.addStretch()
+        scroll.setWidget(content)
+        content_inner.addWidget(scroll)
+        outer_layout.addWidget(content_wrapper, 1)
+
+    # ────────────────────────────────────────────
+    # Section Title Builder
+    # ────────────────────────────────────────────
+    def _build_section_title(self, icon_name: str, title: str, subtitle: str) -> QWidget:
+        container = QWidget()
+        container.setStyleSheet("background: transparent; border: none;")
+        layout = QHBoxLayout(container)
+        layout.setContentsMargins(0, 8, 0, 0)
+        layout.setSpacing(10)
+
+        icon_label = QLabel()
+        icon_label.setFixedSize(28, 28)
+        icon_label.setAlignment(Qt.AlignCenter)
+        icon_label.setStyleSheet(
+            "QLabel { background: #ffffff; border: 1px solid #DBEAFE; border-radius: 7px; }"
+        )
+        pixmap = Icon.load_pixmap(icon_name, size=14)
+        if pixmap and not pixmap.isNull():
+            icon_label.setPixmap(pixmap)
+
+        text_container = QWidget()
+        text_container.setStyleSheet("background: transparent; border: none;")
+        text_layout = QVBoxLayout(text_container)
+        text_layout.setContentsMargins(0, 0, 0, 0)
+        text_layout.setSpacing(2)
+
+        title_label = QLabel(title)
+        title_label.setFont(create_font(size=13, weight=FontManager.WEIGHT_BOLD))
+        title_label.setStyleSheet(f"color: {Colors.PAGE_TITLE}; background: transparent; border: none;")
+
+        subtitle_label = QLabel(subtitle)
+        subtitle_label.setFont(create_font(size=9, weight=FontManager.WEIGHT_REGULAR))
+        subtitle_label.setStyleSheet(f"color: {Colors.WIZARD_SUBTITLE}; background: transparent; border: none;")
+
+        text_layout.addWidget(title_label)
+        text_layout.addWidget(subtitle_label)
+
+        layout.addWidget(icon_label)
+        layout.addWidget(text_container)
+        layout.addStretch()
+
+        # Store references for update_language
+        container._title_label = title_label
+        container._subtitle_label = subtitle_label
+
+        return container
+
+    # ────────────────────────────────────────────
+    # Document Column Builder
+    # ────────────────────────────────────────────
+    def _build_doc_column(self, title: str) -> QFrame:
         frame = QFrame()
-        frame.setStyleSheet("QFrame { background: #F8FAFC; border-radius: 12px; border: 1px solid #E5E7EB; }")
+        frame.setStyleSheet(_DOC_COLUMN_STYLE)
 
         layout = QVBoxLayout(frame)
         layout.setContentsMargins(12, 12, 12, 12)
@@ -294,7 +592,6 @@ class ClaimComparisonPage(QWidget):
         count_lbl.setStyleSheet(f"color: {Colors.WIZARD_SUBTITLE}; background: transparent; border: none;")
         layout.addWidget(count_lbl)
 
-        # Container for evidence cards
         docs_container = QVBoxLayout()
         docs_container.setSpacing(6)
         docs_container.setObjectName("docs_list")
@@ -303,6 +600,147 @@ class ClaimComparisonPage(QWidget):
         layout.addStretch()
         return frame
 
+    # ────────────────────────────────────────────
+    # Comparison Table Population
+    # ────────────────────────────────────────────
+    def _populate_comparison_table(self, comparison_dicts: list, diff_fields: set):
+        """Fill the comparison table grid with field rows."""
+        self._clear_grid(self._table_grid)
+
+        if len(comparison_dicts) < 2:
+            return
+
+        # Dark header row
+        header_frame = QFrame()
+        header_frame.setStyleSheet(
+            "QFrame { background: #0E2035; border-top-left-radius: 14px;"
+            " border-top-right-radius: 14px; }"
+        )
+        header_layout = QHBoxLayout(header_frame)
+        header_layout.setContentsMargins(0, 0, 0, 0)
+        header_layout.setSpacing(0)
+
+        headers = [
+            (tr("page.comparison.field_name"), 30),
+            (tr("page.comparison.record_a"), 35),
+            (tr("page.comparison.record_b"), 35),
+        ]
+        for col, (text, stretch) in enumerate(headers):
+            lbl = QLabel(text)
+            lbl.setFont(create_font(size=10, weight=FontManager.WEIGHT_BOLD))
+            lbl.setStyleSheet(_TABLE_HEADER_LABEL)
+            header_layout.addWidget(lbl, stretch)
+            if col < 2:
+                sep = QFrame()
+                sep.setFixedWidth(1)
+                sep.setStyleSheet("QFrame { background: rgba(255,255,255,0.15); }")
+                header_layout.addWidget(sep)
+
+        self._table_grid.addWidget(header_frame, 0, 0, 1, 5)
+
+        # Determine fields based on conflict type
+        if self._current_conflict_type == "PersonDuplicate":
+            fields = [
+                ("full_name_ar", tr("page.comparison.full_name")),
+                ("mother_name", tr("page.comparison.mother_name")),
+                ("national_id", tr("page.comparison.national_id")),
+                ("date_of_birth", tr("page.comparison.date_of_birth")),
+                ("gender", tr("page.comparison.gender")),
+                ("nationality", tr("page.comparison.nationality")),
+                ("phone_number", tr("page.comparison.phone_number")),
+            ]
+        else:
+            fields = [
+                ("building_code", tr("page.comparison.building_data")),
+                ("address", tr("page.comparison.building_location")),
+                ("residential_units", tr("page.comparison.residential_units")),
+                ("commercial_units", tr("page.comparison.commercial_units")),
+                ("total_units", tr("page.comparison.total_units")),
+                ("building_type", tr("page.comparison.building_type")),
+                ("building_status", tr("page.comparison.building_status")),
+                ("general_description", tr("page.comparison.building_description")),
+                ("unit_status", tr("page.comparison.unit_status")),
+                ("unit_type", tr("page.comparison.unit_type")),
+                ("area_sqm", tr("page.comparison.unit_area")),
+                ("rooms", tr("page.comparison.num_rooms")),
+                ("floor", tr("page.comparison.floor_number")),
+                ("unit_number", tr("page.comparison.unit_number")),
+            ]
+
+        row_offset = 1
+        for idx, (field_key, label_text) in enumerate(fields):
+            row = row_offset + idx
+            is_diff = field_key in diff_fields
+            is_alt = idx % 2 == 0
+            alt_bg = "#F8FBFF" if is_alt else "transparent"
+
+            # Field label column
+            field_lbl = QLabel(label_text)
+            field_lbl.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
+            field_lbl.setStyleSheet(_TABLE_ROW_FIELD.replace("transparent", alt_bg))
+            self._table_grid.addWidget(field_lbl, row, 0)
+
+            # Thin separator between field and record A
+            sep1 = QFrame()
+            sep1.setFixedWidth(1)
+            sep1.setStyleSheet(f"QFrame {{ background: #E2EAF2; }}")
+            self._table_grid.addWidget(sep1, row, 1)
+
+            # Record A value
+            val_a = str(comparison_dicts[0].get(field_key, "-"))
+            lbl_a = QLabel(val_a)
+            lbl_a.setWordWrap(True)
+            if is_diff:
+                lbl_a.setFont(create_font(size=9, weight=FontManager.WEIGHT_BOLD))
+                lbl_a.setStyleSheet(_TABLE_DIFF_INDICATOR.replace("#EBF5FF", "#E8F2FF"))
+            else:
+                lbl_a.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
+                lbl_a.setStyleSheet(_TABLE_ROW_VALUE_A.replace("#F0F7FF", "#EDF4FF" if is_alt else "#F0F7FF"))
+            self._table_grid.addWidget(lbl_a, row, 2)
+
+            # Thin separator between record A and B
+            sep2 = QFrame()
+            sep2.setFixedWidth(1)
+            sep2.setStyleSheet(f"QFrame {{ background: #E2EAF2; }}")
+            self._table_grid.addWidget(sep2, row, 3)
+
+            # Record B value
+            val_b = str(comparison_dicts[1].get(field_key, "-"))
+            lbl_b = QLabel(val_b)
+            lbl_b.setWordWrap(True)
+            if is_diff:
+                lbl_b.setFont(create_font(size=9, weight=FontManager.WEIGHT_BOLD))
+                lbl_b.setStyleSheet(_TABLE_DIFF_INDICATOR.replace("#EBF5FF", "#FFF8EB"))
+            else:
+                lbl_b.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
+                lbl_b.setStyleSheet(_TABLE_ROW_VALUE_B.replace("#FAFBFF", "#F5F7FF" if is_alt else "#FAFBFF"))
+            self._table_grid.addWidget(lbl_b, row, 4)
+
+        # Bottom border row
+        bottom_frame = QFrame()
+        bottom_frame.setFixedHeight(2)
+        bottom_frame.setStyleSheet("QFrame { background: #E2EAF2; }")
+        self._table_grid.addWidget(bottom_frame, row_offset + len(fields), 0, 1, 5)
+
+    def _clear_grid(self, grid: QGridLayout):
+        """Remove all widgets from a grid layout."""
+        while grid.count():
+            item = grid.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+
+    # ────────────────────────────────────────────
+    # Record Selection UI Update
+    # ────────────────────────────────────────────
+    def _update_record_selection(self):
+        """Update record card visual states based on radio selection."""
+        checked_id = self.claim_radio_group.checkedId()
+        for idx, card in enumerate(self._record_cards):
+            card.set_selected(idx == checked_id)
+
+    # ────────────────────────────────────────────
+    # Evidence Card Builder
+    # ────────────────────────────────────────────
     def _build_evidence_card(self, evidence: dict) -> QFrame:
         card = QFrame()
         card.setStyleSheet("""
@@ -349,7 +787,10 @@ class ClaimComparisonPage(QWidget):
         ver_lbl.setAlignment(Qt.AlignCenter)
         is_current = evidence.get("isCurrentVersion", True)
         ver_color = "#10B981" if is_current else "#9CA3AF"
-        ver_lbl.setStyleSheet(f"color: {ver_color}; background: {ver_color}15; border-radius: 4px; padding: 2px; border: none;")
+        ver_lbl.setStyleSheet(
+            f"color: {ver_color}; background: {ver_color}15; "
+            f"border-radius: 4px; padding: 2px; border: none;"
+        )
         name_row.addWidget(ver_lbl)
 
         layout.addLayout(name_row)
@@ -403,20 +844,19 @@ class ClaimComparisonPage(QWidget):
     @staticmethod
     def _get_file_icon(mime_type: str) -> str:
         if not mime_type:
-            return "📄"
+            return "F"
         if "pdf" in mime_type:
-            return "📕"
+            return "PDF"
         if "image" in mime_type:
-            return "🖼"
+            return "IMG"
         if "word" in mime_type or "document" in mime_type:
-            return "📘"
+            return "DOC"
         if "excel" in mime_type or "spreadsheet" in mime_type:
-            return "📗"
-        return "📄"
+            return "XLS"
+        return "F"
 
     def _populate_doc_column(self, frame: QFrame, evidences: list):
         layout = frame.layout()
-        # Find docs_list container
         docs_layout = None
         for i in range(layout.count()):
             item = layout.itemAt(i)
@@ -427,22 +867,26 @@ class ClaimComparisonPage(QWidget):
         if not docs_layout:
             return
 
-        # Clear existing
         while docs_layout.count():
             child = docs_layout.takeAt(0)
             if child.widget():
                 child.widget().deleteLater()
 
-        # Update count
         count_lbl = frame.findChild(QLabel, "doc_count")
         if count_lbl:
-            count_lbl.setText(f"{len(evidences)} {tr('page.comparison.document_singular')}" if len(evidences) != 0 else tr("page.comparison.no_documents"))
+            count_lbl.setText(
+                f"{len(evidences)} {tr('page.comparison.document_singular')}"
+                if len(evidences) != 0
+                else tr("page.comparison.no_documents")
+            )
 
-        # Add evidence cards
         for ev in evidences:
             ev_card = self._build_evidence_card(ev)
             docs_layout.addWidget(ev_card)
 
+    # ────────────────────────────────────────────
+    # Document Comparison Fetch
+    # ────────────────────────────────────────────
     def _load_document_comparison(self):
         if not self._current_group:
             return
@@ -473,7 +917,6 @@ class ClaimComparisonPage(QWidget):
         first_evidences = []
         second_evidences = []
 
-        # Try document-comparison endpoint first
         try:
             doc_data = self.duplicate_service.get_document_comparison(conflict_id)
             logger.info(f"Document comparison response: {str(doc_data)[:500]}")
@@ -519,7 +962,6 @@ class ClaimComparisonPage(QWidget):
         except Exception as e:
             logger.warning(f"Document comparison endpoint failed: {e}")
 
-        # Fallback: fetch building documents directly from each entity
         if not first_evidences and not second_evidences:
             if not is_person:
                 try:
@@ -575,373 +1017,6 @@ class ClaimComparisonPage(QWidget):
         Toast.show_toast(self, tr("page.comparison.failed_loading_documents"), Toast.ERROR)
 
     # ────────────────────────────────────────────
-    # Resolution Section
-    # ────────────────────────────────────────────
-    def _build_resolution_section(self) -> QFrame:
-        card = QFrame()
-        card.setObjectName("resolutionCompCard")
-        card.setStyleSheet(StyleManager.form_card())
-
-        card_layout = QVBoxLayout(card)
-        card_layout.setSpacing(12)
-        card_layout.setContentsMargins(16, 16, 16, 16)
-
-        title_label = QLabel(tr("page.comparison.resolution_action"))
-        title_label.setFont(create_font(size=14, weight=FontManager.WEIGHT_BOLD))
-        title_label.setStyleSheet("color: #E74C3C; background: transparent; border: none;")
-        card_layout.addWidget(title_label)
-
-        self._resolution_group = QButtonGroup(self)
-        resolution_options = [
-            (tr("page.comparison.merge_records"), "merge"),
-            (tr("page.comparison.keep_separate"), "keep_separate"),
-        ]
-
-        options_layout = QHBoxLayout()
-        options_layout.setSpacing(24)
-        for idx, (label, value) in enumerate(resolution_options):
-            radio = QRadioButton(label)
-            radio.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
-            radio.setStyleSheet(RADIO_STYLE + " QRadioButton { padding: 6px 12px; }")
-            radio.setProperty("resolution_type", value)
-            self._resolution_group.addButton(radio, idx)
-            options_layout.addWidget(radio)
-            if idx == 0:
-                radio.setChecked(True)
-        options_layout.addStretch()
-        card_layout.addLayout(options_layout)
-
-        just_label = QLabel(tr("page.comparison.justification_required"))
-        just_label.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
-        just_label.setStyleSheet(f"color: {Colors.WIZARD_SUBTITLE}; background: transparent;")
-        card_layout.addWidget(just_label)
-
-        self._justification_edit = QTextEdit()
-        self._justification_edit.setPlaceholderText(tr("page.comparison.enter_justification"))
-        self._justification_edit.setFixedHeight(80)
-        self._justification_edit.setFont(create_font(size=9, weight=FontManager.WEIGHT_REGULAR))
-        self._justification_edit.setStyleSheet(f"""
-            QTextEdit {{
-                border: 1px solid #E5E7EB;
-                border-radius: 8px;
-                padding: 8px;
-                background: #FAFBFC;
-                color: #333;
-            }}
-            QTextEdit:focus {{
-                border-color: {Colors.PRIMARY_BLUE};
-            }}
-        """)
-        card_layout.addWidget(self._justification_edit)
-
-        return card
-
-    # ────────────────────────────────────────────
-    # Shared widget builders
-    # ────────────────────────────────────────────
-    def _create_inner_card_frame(self) -> QFrame:
-        card = QFrame()
-        card.setStyleSheet(StyleManager.form_card())
-        shadow = QGraphicsDropShadowEffect()
-        shadow.setBlurRadius(20)
-        shadow.setXOffset(0)
-        shadow.setYOffset(4)
-        shadow.setColor(QColor(0, 0, 0, 25))
-        card.setGraphicsEffect(shadow)
-        return card
-
-    def _create_card_header(self, icon_name: str, title_text: str, subtitle_text: str) -> QWidget:
-        header_container = QWidget()
-        header_container.setStyleSheet("background: transparent; border: none;")
-        header_layout = QHBoxLayout(header_container)
-        header_layout.setContentsMargins(0, 0, 0, 0)
-        header_layout.setSpacing(10)
-
-        icon_label = QLabel()
-        icon_label.setFixedSize(28, 28)
-        icon_label.setAlignment(Qt.AlignCenter)
-        icon_label.setStyleSheet("""
-            QLabel {
-                background-color: #ffffff;
-                border: 1px solid #DBEAFE;
-                border-radius: 7px;
-            }
-        """)
-        icon_pixmap = Icon.load_pixmap(icon_name, size=14)
-        if icon_pixmap and not icon_pixmap.isNull():
-            icon_label.setPixmap(icon_pixmap)
-
-        title_container = QWidget()
-        title_container.setStyleSheet("background: transparent; border: none;")
-        title_layout = QVBoxLayout(title_container)
-        title_layout.setContentsMargins(0, 0, 0, 0)
-        title_layout.setSpacing(2)
-
-        title_label = QLabel(title_text)
-        title_label.setFont(create_font(size=FontManager.WIZARD_STEP_TITLE, weight=FontManager.WEIGHT_SEMIBOLD))
-        title_label.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent; border: none;")
-
-        subtitle_label = QLabel(subtitle_text)
-        subtitle_label.setFont(create_font(size=FontManager.WIZARD_STEP_SUBTITLE, weight=FontManager.WEIGHT_REGULAR))
-        subtitle_label.setStyleSheet(f"color: {Colors.WIZARD_SUBTITLE}; background: transparent; border: none;")
-
-        title_layout.addWidget(title_label)
-        title_layout.addWidget(subtitle_label)
-
-        header_layout.addWidget(icon_label)
-        header_layout.addWidget(title_container)
-        header_layout.addStretch()
-
-        return header_container
-
-    def _create_field_vertical(self, label_text: str, value_text: str, is_diff: bool = False) -> QWidget:
-        field = QWidget()
-        field.setStyleSheet("background: transparent; border: none;")
-        field_layout = QVBoxLayout(field)
-        field_layout.setContentsMargins(0, 0, 0, 0)
-        field_layout.setSpacing(4)
-
-        label = QLabel(label_text)
-        label.setFont(create_font(size=FontManager.WIZARD_CARD_LABEL, weight=FontManager.WEIGHT_SEMIBOLD))
-        label.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent; border: none;")
-        label.setAlignment(Qt.AlignRight | Qt.AlignAbsolute)
-
-        value = QLabel(value_text)
-        value.setWordWrap(True)
-        value.setAlignment(Qt.AlignRight | Qt.AlignAbsolute)
-
-        if is_diff:
-            value.setFont(create_font(size=FontManager.WIZARD_CARD_VALUE, weight=FontManager.WEIGHT_BOLD))
-            value.setStyleSheet("color: #E74C3C; background: #FFF3CD; border: none; padding: 2px 4px; border-radius: 4px;")
-        else:
-            value.setFont(create_font(size=FontManager.WIZARD_CARD_VALUE, weight=FontManager.WEIGHT_SEMIBOLD))
-            value.setStyleSheet(f"color: {Colors.WIZARD_SUBTITLE}; background: transparent; border: none;")
-
-        field_layout.addWidget(label)
-        field_layout.addWidget(value)
-        return field
-
-    # ────────────────────────────────────────────
-    # Inner Cards with diff highlighting
-    # ────────────────────────────────────────────
-    def _build_building_info_card(self, data: dict, diff_fields: set) -> QFrame:
-        card = self._create_inner_card_frame()
-        card_layout = QVBoxLayout(card)
-        card_layout.setContentsMargins(20, 20, 20, 20)
-        card_layout.setSpacing(16)
-
-        header = self._create_card_header("blue", tr("page.comparison.building_data"), tr("page.comparison.building_location"))
-        card_layout.addWidget(header)
-
-        code_label = QLabel(data.get("building_code", "-"))
-        code_label.setFont(create_font(size=FontManager.WIZARD_CARD_VALUE, weight=FontManager.WEIGHT_SEMIBOLD))
-        code_label.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent; border: none;")
-        code_label.setAlignment(Qt.AlignRight | Qt.AlignAbsolute)
-        card_layout.addWidget(code_label)
-
-        # Address pill
-        address = data.get("address", "-")
-        addr_bar = QFrame()
-        addr_bar.setFixedHeight(28)
-        addr_bar.setStyleSheet("QFrame { background-color: #F8FAFF; border: none; border-radius: 8px; }")
-
-        addr_row = QHBoxLayout(addr_bar)
-        addr_row.setContentsMargins(12, 0, 12, 0)
-        addr_row.setSpacing(8)
-        addr_row.addStretch()
-
-        addr_icon = QLabel()
-        addr_icon.setStyleSheet("background: transparent; border: none;")
-        addr_icon_pixmap = Icon.load_pixmap("dec", size=16)
-        if addr_icon_pixmap and not addr_icon_pixmap.isNull():
-            addr_icon.setPixmap(addr_icon_pixmap)
-        addr_row.addWidget(addr_icon)
-
-        addr_text = QLabel(address)
-        addr_text.setAlignment(Qt.AlignCenter)
-        addr_text.setFont(create_font(size=FontManager.WIZARD_CARD_VALUE, weight=FontManager.WEIGHT_REGULAR))
-        addr_text.setStyleSheet("color: #0F5B95; background: transparent; border: none;")
-        addr_row.addWidget(addr_text)
-        addr_row.addStretch()
-
-        card_layout.addWidget(addr_bar)
-        return card
-
-    def _build_building_details_card(self, data: dict, diff_fields: set) -> QFrame:
-        card = self._create_inner_card_frame()
-        card_layout = QVBoxLayout(card)
-        card_layout.setContentsMargins(12, 12, 12, 12)
-        card_layout.setSpacing(12)
-
-        stat_items = [
-            ("commercial_units", tr("page.comparison.commercial_units"), data.get("commercial_units", "-")),
-            ("residential_units", tr("page.comparison.residential_units"), data.get("residential_units", "-")),
-            ("total_units", tr("page.comparison.total_units"), data.get("total_units", "-")),
-            ("building_type", tr("page.comparison.building_type"), data.get("building_type", "-")),
-            ("building_status", tr("page.comparison.building_status"), data.get("building_status", "-")),
-            ("general_description", tr("page.comparison.building_description"), data.get("general_description", "-")),
-        ]
-
-        for field_key, label_text, value_text in stat_items:
-            field = self._create_field_vertical(
-                label_text, str(value_text),
-                is_diff=(field_key in diff_fields)
-            )
-            card_layout.addWidget(field)
-
-        # Map placeholder
-        map_label = QLabel(tr("page.comparison.building_location_map"))
-        map_label.setFont(create_font(size=FontManager.WIZARD_CARD_LABEL, weight=FontManager.WEIGHT_SEMIBOLD))
-        map_label.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent; border: none;")
-        map_label.setAlignment(Qt.AlignRight | Qt.AlignAbsolute)
-        card_layout.addWidget(map_label)
-
-        map_container = QLabel()
-        map_container.setFixedHeight(130)
-        map_container.setAlignment(Qt.AlignCenter)
-        map_container.setObjectName("compMapContainer")
-        map_container.setStyleSheet("QLabel#compMapContainer { background-color: #E8E8E8; border-radius: 8px; border: none; }")
-
-        loc_fallback = Icon.load_pixmap("carbon_location-filled", size=48)
-        if loc_fallback and not loc_fallback.isNull():
-            map_container.setPixmap(loc_fallback)
-
-        card_layout.addWidget(map_container)
-        card_layout.addStretch()
-        return card
-
-    def _build_unit_info_card(self, data: dict, diff_fields: set) -> QFrame:
-        card = self._create_inner_card_frame()
-        card_layout = QVBoxLayout(card)
-        card_layout.setContentsMargins(20, 20, 20, 20)
-        card_layout.setSpacing(16)
-
-        header = self._create_card_header("move", tr("page.comparison.units"), tr("page.comparison.unit_info"))
-        card_layout.addWidget(header)
-
-        unit_items = [
-            ("unit_status", tr("page.comparison.unit_status"), data.get("unit_status", "-")),
-            ("unit_type", tr("page.comparison.unit_type"), data.get("unit_type", "-")),
-            ("area_sqm", tr("page.comparison.unit_area"), data.get("area_sqm", "-")),
-            ("rooms", tr("page.comparison.num_rooms"), data.get("rooms", "-")),
-            ("floor", tr("page.comparison.floor_number"), data.get("floor", "-")),
-            ("unit_number", tr("page.comparison.unit_number"), data.get("unit_number", "-")),
-        ]
-
-        for field_key, label_text, value_text in unit_items:
-            field = self._create_field_vertical(
-                label_text, str(value_text),
-                is_diff=(field_key in diff_fields)
-            )
-            card_layout.addWidget(field)
-
-        card_layout.addStretch()
-        return card
-
-    def _build_person_comparison_card(self, data: dict, diff_fields: set) -> QFrame:
-        card = self._create_inner_card_frame()
-        card_layout = QVBoxLayout(card)
-        card_layout.setContentsMargins(20, 20, 20, 20)
-        card_layout.setSpacing(16)
-
-        header = self._create_card_header("yelow", tr("page.comparison.person_data"), tr("page.comparison.duplicate_person_info"))
-        card_layout.addWidget(header)
-
-        person_items = [
-            ("full_name_ar", tr("page.comparison.full_name"), data.get("full_name_ar", "-")),
-            ("mother_name", tr("page.comparison.mother_name"), data.get("mother_name", "-")),
-            ("national_id", tr("page.comparison.national_id"), data.get("national_id", "-")),
-            ("date_of_birth", tr("page.comparison.date_of_birth"), data.get("date_of_birth", "-")),
-            ("gender", tr("page.comparison.gender"), data.get("gender", "-")),
-            ("nationality", tr("page.comparison.nationality"), data.get("nationality", "-")),
-            ("phone_number", tr("page.comparison.phone_number"), data.get("phone_number", "-")),
-        ]
-
-        for field_key, label_text, value_text in person_items:
-            field = self._create_field_vertical(
-                label_text, str(value_text),
-                is_diff=(field_key in diff_fields)
-            )
-            card_layout.addWidget(field)
-
-        card_layout.addStretch()
-        return card
-
-    def _map_person_to_comparison_dict(self, record: dict) -> dict:
-        from services.vocab_service import get_label
-
-        full_name_ar = record.get("fullNameArabic") or ""
-        if not full_name_ar:
-            parts = filter(None, [
-                record.get("firstNameArabic", ""),
-                record.get("fatherNameArabic", ""),
-                record.get("familyNameArabic", ""),
-            ])
-            full_name_ar = " ".join(parts) or "-"
-
-        dob = record.get("dateOfBirth") or ""
-        if dob and "T" in str(dob):
-            dob = str(dob).split("T")[0]
-
-        gender_raw = record.get("gender")
-        gender_label = get_label("Gender", gender_raw, lang="ar") if gender_raw else "-"
-
-        nationality_raw = record.get("nationality")
-        nationality_label = get_label("Nationality", nationality_raw, lang="ar") if nationality_raw else "-"
-
-        return {
-            "full_name_ar": str(full_name_ar),
-            "mother_name": str(record.get("motherNameArabic") or "-"),
-            "national_id": str(record.get("nationalId") or "-"),
-            "date_of_birth": dob or "-",
-            "gender": gender_label,
-            "nationality": nationality_label,
-            "phone_number": str(record.get("mobileNumber") or "-"),
-        }
-
-    def _compute_person_diff_fields(self, comparison_dicts: list) -> set:
-        if len(comparison_dicts) < 2:
-            return set()
-        diff_fields = set()
-        all_keys = [
-            "full_name_ar", "mother_name", "national_id",
-            "date_of_birth", "gender", "nationality", "phone_number",
-        ]
-        for key in all_keys:
-            values = {str(d.get(key, "")) for d in comparison_dicts}
-            if len(values) > 1:
-                diff_fields.add(key)
-        return diff_fields
-
-    def _build_outer_comparison_card(self, data: dict, diff_fields: set) -> QFrame:
-        outer = QFrame()
-        outer.setObjectName("outerCompCard")
-        outer.setStyleSheet(StyleManager.form_card())
-        shadow = QGraphicsDropShadowEffect()
-        shadow.setBlurRadius(20)
-        shadow.setXOffset(0)
-        shadow.setYOffset(4)
-        shadow.setColor(QColor(0, 0, 0, 25))
-        outer.setGraphicsEffect(shadow)
-
-        outer_layout = QVBoxLayout(outer)
-        outer_layout.setContentsMargins(12, 12, 12, 12)
-        outer_layout.setSpacing(16)
-
-        if self._current_conflict_type == "PersonDuplicate":
-            person_card = self._build_person_comparison_card(data, diff_fields)
-            outer_layout.addWidget(person_card, 1)
-        else:
-            card1 = self._build_building_info_card(data, diff_fields)
-            card1.setFixedHeight(170)
-            outer_layout.addWidget(card1)
-
-            card3 = self._build_unit_info_card(data, diff_fields)
-            outer_layout.addWidget(card3, 1)
-
-        return outer
-
-    # ────────────────────────────────────────────
     # Layout helpers
     # ────────────────────────────────────────────
     def _clear_layout(self, layout):
@@ -953,18 +1028,16 @@ class ClaimComparisonPage(QWidget):
             elif item.layout():
                 self._clear_layout(item.layout())
 
+    # ────────────────────────────────────────────
+    # Data Mapping (preserved as-is)
+    # ────────────────────────────────────────────
     def _map_to_comparison_dict(self, building: dict, unit: dict) -> dict:
-        """Map API records to the format expected by comparison cards.
-
-        When data comes from dataComparison (flat dict), pass the same dict
-        as both building and unit so all fields are found.
-        """
+        """Map API records to the format expected by comparison table."""
         from services.display_mappings import (
             get_building_type_display, get_building_status_display,
             get_unit_type_display, get_unit_status_display,
         )
 
-        # Handle both camelCase (API) and snake_case (legacy) field names
         address_parts = filter(None, [
             building.get("governorateName", building.get("governorate_name_ar", "")),
             building.get("districtName", building.get("district_name_ar", "")),
@@ -972,14 +1045,12 @@ class ClaimComparisonPage(QWidget):
             building.get("address", ""),
         ])
 
-        # Building type/status with vocab resolution
         raw_btype = building.get("buildingType", building.get("building_type", ""))
         raw_bstatus = building.get("buildingStatus", building.get("building_status",
                        building.get("status", "")))
         building_type_label = get_building_type_display(raw_btype) if raw_btype else "-"
         building_status_label = get_building_status_display(raw_bstatus) if raw_bstatus else "-"
 
-        # Unit fields: look in unit dict first, then building dict (for flat dicts)
         def _get_unit(key1, key2="", key3=""):
             val = unit.get(key1, "")
             if not val and key2:
@@ -1033,7 +1104,7 @@ class ClaimComparisonPage(QWidget):
         }
 
     def _compute_comparison_diff_fields(self, comparison_dicts: list) -> set:
-        """Find which fields differ across comparison cards."""
+        """Find which fields differ across comparison records."""
         if len(comparison_dicts) < 2:
             return set()
         diff_fields = set()
@@ -1046,8 +1117,54 @@ class ClaimComparisonPage(QWidget):
                 diff_fields.add(key)
         return diff_fields
 
+    def _map_person_to_comparison_dict(self, record: dict) -> dict:
+        from services.vocab_service import get_label
+
+        full_name_ar = record.get("fullNameArabic") or ""
+        if not full_name_ar:
+            parts = filter(None, [
+                record.get("firstNameArabic", ""),
+                record.get("fatherNameArabic", ""),
+                record.get("familyNameArabic", ""),
+            ])
+            full_name_ar = " ".join(parts) or "-"
+
+        dob = record.get("dateOfBirth") or ""
+        if dob and "T" in str(dob):
+            dob = str(dob).split("T")[0]
+
+        gender_raw = record.get("gender")
+        gender_label = get_label("Gender", gender_raw, lang="ar") if gender_raw else "-"
+
+        nationality_raw = record.get("nationality")
+        nationality_label = get_label("Nationality", nationality_raw, lang="ar") if nationality_raw else "-"
+
+        return {
+            "full_name_ar": str(full_name_ar),
+            "mother_name": str(record.get("motherNameArabic") or "-"),
+            "national_id": str(record.get("nationalId") or "-"),
+            "date_of_birth": dob or "-",
+            "gender": gender_label,
+            "nationality": nationality_label,
+            "phone_number": str(record.get("mobileNumber") or "-"),
+        }
+
+    def _compute_person_diff_fields(self, comparison_dicts: list) -> set:
+        if len(comparison_dicts) < 2:
+            return set()
+        diff_fields = set()
+        all_keys = [
+            "full_name_ar", "mother_name", "national_id",
+            "date_of_birth", "gender", "nationality", "phone_number",
+        ]
+        for key in all_keys:
+            values = {str(d.get(key, "")) for d in comparison_dicts}
+            if len(values) > 1:
+                diff_fields.add(key)
+        return diff_fields
+
     # ────────────────────────────────────────────
-    # Actions
+    # Resolution Action
     # ────────────────────────────────────────────
     def _on_action_clicked(self):
         """Handle resolution action using Conflicts API."""
@@ -1130,11 +1247,7 @@ class ClaimComparisonPage(QWidget):
     # Refresh — populate with real data from API
     # ────────────────────────────────────────────
     def refresh(self, data=None):
-        """Refresh page with conflict data from API.
-
-        Args:
-            data: Conflict dict from API (has id, firstEntityId, secondEntityId, etc.)
-        """
+        """Refresh page with conflict data from API."""
         logger.debug("Refreshing claim comparison page")
         if data is None:
             return
@@ -1145,6 +1258,34 @@ class ClaimComparisonPage(QWidget):
         self._current_group = data
         self._current_conflict_type = data.get("conflictType", "")
         is_person = self._current_conflict_type == "PersonDuplicate"
+
+        # Resolved / read-only mode
+        status = data.get("status", "")
+        self._is_resolved = status in ("Resolved", "AutoResolved")
+
+        # Update header title with conflict type (+ resolved tag)
+        type_label = tr("page.duplicates.type_person") if is_person else tr("page.duplicates.type_property")
+        if self._is_resolved:
+            title_text = f"{tr('page.comparison.title')} - {type_label} ({tr('page.comparison.resolved_status')})"
+        else:
+            title_text = f"{tr('page.comparison.title')} - {type_label}"
+        self._header.set_title(title_text)
+        self._accent_line.pulse()
+
+        # Toggle resolved banner and resolution section
+        self._resolved_banner.setVisible(self._is_resolved)
+        self._resolution_title.setVisible(not self._is_resolved)
+        self._resolution_card.setVisible(not self._is_resolved)
+        self.action_btn.setVisible(not self._is_resolved)
+
+        # Reset doc comparison
+        self._doc_empty_label.setVisible(True)
+        self._doc_first_frame.setVisible(False)
+        self._doc_second_frame.setVisible(False)
+        self._doc_load_btn.setEnabled(True)
+
+        # Reset justification
+        self._justification_edit.clear()
 
         # Show spinner during data fetch
         self._spinner.show_loading(tr("component.loading.default"))
@@ -1182,7 +1323,6 @@ class ClaimComparisonPage(QWidget):
         """Handle comparison data fetch failure."""
         self._spinner.hide_loading()
         logger.error(f"Failed to fetch comparison data: {error_msg}")
-        from ui.components.toast import Toast
         Toast.show_toast(self, str(error_msg), Toast.ERROR)
 
     def _on_comparison_data_loaded(self, data, result):
@@ -1201,18 +1341,17 @@ class ClaimComparisonPage(QWidget):
                 logger.info(f"dataComparison type={type(raw_dc).__name__}, "
                             f"preview={str(raw_dc)[:300]}")
 
-        # --- Populate claims section ---
-        self._clear_layout(self._claims_rows_layout)
+        # --- Populate records section ---
+        self._clear_layout(self._records_layout)
+        self._record_cards.clear()
 
         for btn in self.claim_radio_group.buttons():
             self.claim_radio_group.removeButton(btn)
 
-        # Build two record entries from the conflict data
         records = []
         first_id = data.get("firstEntityIdentifier", data.get("firstEntityId", "-"))
         second_id = data.get("secondEntityIdentifier", data.get("secondEntityId", "-"))
 
-        # dataComparison from API may be a JSON string or a list
         raw_comparison = details.get("dataComparison", "")
         data_comparison = []
         if raw_comparison:
@@ -1258,48 +1397,46 @@ class ClaimComparisonPage(QWidget):
                     nid = p.get("nationalId", "") if p else ""
                     person_national_ids.append(str(nid) if nid else "")
 
+        # Build record selection cards
+        date_str = ""
+        raw_date = data.get("detectedDate", "")
+        if raw_date and "T" in str(raw_date):
+            date_str = str(raw_date).split("T")[0]
+
         for idx, record in enumerate(records):
-            row = QHBoxLayout()
-            row.setSpacing(16)
-            row.setContentsMargins(0, 0, 0, 0)
-
-            radio = QRadioButton()
-            radio.setStyleSheet(RADIO_STYLE)
-            self.claim_radio_group.addButton(radio, idx)
-            if idx == 0:
-                radio.setChecked(True)
-            row.addWidget(radio)
-
-            icon_name = "blue" if not is_person else "yelow"
-
-            # For person duplicates: show national ID as subtitle
             subtitle = ""
             if is_person and idx < len(person_national_ids) and person_national_ids[idx]:
                 subtitle = person_national_ids[idx]
+            elif not is_person:
+                subtitle = self._current_conflict_type
 
-            claim_card_data = {
-                "claim_id": record["identifier"],
-                "claimant_name": record["label"],
-                "date": data.get("detectedDate", "").split("T")[0] if "T" in str(data.get("detectedDate", "")) else "",
-                "governorate_name_ar": subtitle if is_person else self._current_conflict_type,
-                "district_name_ar": "",
-                "subdistrict_name_ar": "",
-                "neighborhood_name_ar": "",
-                "building_id": record["id"],
-                "unit_number": "",
+            icon_name = "yelow" if is_person else "blue"
+            card_data = {
+                "label": record["label"],
+                "identifier": record["identifier"],
+                "date": date_str,
+                "subtitle": subtitle,
+                "icon": icon_name,
             }
 
-            claim_card = ClaimListCard(claim_card_data, icon_name=icon_name)
-            claim_card.setFixedHeight(112)
-            row.addWidget(claim_card, 1)
+            record_card = _RecordCard(card_data, parent=self._records_card)
+            self.claim_radio_group.addButton(record_card.radio, idx)
+            if idx == 0:
+                record_card.radio.setChecked(True)
+            record_card.card_clicked.connect(self._update_record_selection)
+            self._records_layout.addWidget(record_card)
+            self._record_cards.append(record_card)
 
-            self._claims_rows_layout.addLayout(row)
+        self._update_record_selection()
 
-        # --- Populate comparison section ---
-        self._clear_layout(self._comparison_cards_layout)
+        # Disable record selection in resolved mode
+        if self._is_resolved:
+            for card in self._record_cards:
+                card.setEnabled(False)
+                card.setCursor(QCursor(Qt.ArrowCursor))
 
+        # --- Populate comparison table ---
         if is_person:
-            # Person duplicates: use already-fetched data (no additional blocking)
             comparison_dicts = []
             for idx, record in enumerate(records):
                 person_dto = _fetched_persons.get(record["id"])
@@ -1325,10 +1462,7 @@ class ClaimComparisonPage(QWidget):
                     comparison_dicts.append(self._map_person_to_comparison_dict({}))
 
             diff_fields = self._compute_person_diff_fields(comparison_dicts)
-
-            for comp_dict in comparison_dicts:
-                outer_card = self._build_outer_comparison_card(comp_dict, diff_fields)
-                self._comparison_cards_layout.addWidget(outer_card, 1)
+            self._populate_comparison_table(comparison_dicts, diff_fields)
         else:
             # Property duplicates: fetch units asynchronously
             record_ids = [r["id"] for r in records]
@@ -1395,20 +1529,57 @@ class ClaimComparisonPage(QWidget):
                 comparison_dicts.append(self._map_to_comparison_dict({}, {}))
 
         diff_fields = self._compute_comparison_diff_fields(comparison_dicts)
-
-        self._clear_layout(self._comparison_cards_layout)
-        for comp_dict in comparison_dicts:
-            outer_card = self._build_outer_comparison_card(comp_dict, diff_fields)
-            self._comparison_cards_layout.addWidget(outer_card, 1)
+        self._populate_comparison_table(comparison_dicts, diff_fields)
 
     def _on_property_units_error(self, error_msg):
         """Handle property unit fetch error."""
         self._spinner.hide_loading()
         logger.error(f"Failed to fetch property units: {error_msg}")
 
+    # ────────────────────────────────────────────
+    # Language Update
+    # ────────────────────────────────────────────
     def update_language(self, is_arabic: bool):
-        self._header_title.setText(tr("page.comparison.title"))
-        self._breadcrumb.setText(tr("page.comparison.breadcrumb"))
+        direction = get_layout_direction()
+        self.setLayoutDirection(direction)
+
+        # Header
+        self._header.set_title(tr("page.comparison.title"))
+        self._back_btn.setText(tr("action.back"))
         self.action_btn.setText(tr("page.comparison.execute"))
+
+        # Section titles
+        self._records_title._title_label.setText(tr("page.comparison.records_section"))
+        self._records_title._subtitle_label.setText(tr("page.comparison.records_section_subtitle"))
+
+        self._comparison_title._title_label.setText(tr("page.comparison.comparison"))
+        self._comparison_title._subtitle_label.setText(tr("page.comparison.comparison_section_subtitle"))
+
+        self._doc_title._title_label.setText(tr("page.comparison.document_comparison"))
+        self._doc_title._subtitle_label.setText(tr("page.comparison.doc_section_subtitle"))
+
+        self._resolution_title._title_label.setText(tr("page.comparison.resolution_action"))
+        self._resolution_title._subtitle_label.setText(tr("page.comparison.resolution_subtitle"))
+
+        # Resolved banner
+        self._resolved_label.setText(tr("page.comparison.resolved_status"))
+
+        # Doc load button & empty state
         self._doc_load_btn.setText(tr("page.comparison.load_comparison"))
         self._doc_empty_label.setText(tr("page.comparison.click_load_comparison"))
+
+        # Resolution radio buttons
+        resolution_labels = [
+            tr("page.comparison.merge_records"),
+            tr("page.comparison.keep_separate"),
+        ]
+        for idx, btn in enumerate(self._resolution_group.buttons()):
+            if idx < len(resolution_labels):
+                btn.setText(resolution_labels[idx])
+
+        # Justification
+        self._justification_edit.setPlaceholderText(tr("page.comparison.enter_justification"))
+
+        # Re-render if data is loaded
+        if self._current_group:
+            self.refresh(self._current_group)

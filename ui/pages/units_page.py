@@ -1,12 +1,14 @@
 # -*- coding: utf-8 -*-
-"""Property Units list page with filters and CRUD operations."""
+"""Property Units list page with animated card-based layout and dark header."""
 
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel,
     QPushButton, QComboBox, QTableWidget, QTableWidgetItem, QHeaderView,
-    QFrame, QDialog, QAbstractItemView, QSizePolicy
+    QFrame, QDialog, QAbstractItemView, QSizePolicy,
+    QScrollArea, QStackedWidget, QGraphicsDropShadowEffect,
+    QGraphicsOpacityEffect,
 )
-from PyQt5.QtCore import Qt, pyqtSignal, QPoint, QTimer
+from PyQt5.QtCore import Qt, pyqtSignal, QPoint, QTimer, QPropertyAnimation, QEasingCurve
 from PyQt5.QtGui import QColor, QIcon, QCursor, QFont
 
 from app.config import Config
@@ -28,14 +30,113 @@ from ui.components.primary_button import PrimaryButton
 from ui.error_handler import ErrorHandler
 from utils.i18n import I18n
 from utils.logger import get_logger
-from ui.style_manager import StyleManager, PageDimensions
+from ui.style_manager import StyleManager
 from services.translation_manager import tr, get_layout_direction
+from ui.components.animated_card import AnimatedCard, EmptyStateAnimated, animate_card_entrance
+from ui.components.dark_header_zone import DarkHeaderZone
+from ui.components.stat_pill import StatPill
+from ui.components.accent_line import AccentLine
+from ui.design_system import Colors, PageDimensions
+from ui.font_utils import create_font, FontManager
 
 logger = get_logger(__name__)
 
 
+class _UnitCard(AnimatedCard):
+    """Unit card showing unit number, floor, type, area, status."""
+
+    _STATUS_COLORS = {
+        "occupied": "#10B981",
+        "vacant": "#F59E0B",
+        "under_maintenance": "#EF4444",
+    }
+    _STATUS_STYLES = {
+        "occupied": {"bg": "#ECFDF5", "fg": "#065F46", "border": "#6EE7B7"},
+        "vacant": {"bg": "#FFFBEB", "fg": "#92400E", "border": "#FCD34D"},
+        "under_maintenance": {"bg": "#FEF2F2", "fg": "#991B1B", "border": "#FCA5A5"},
+    }
+
+    def __init__(self, unit, parent=None):
+        self._unit = unit
+        status_key = self._get_status_key(unit)
+        color = self._STATUS_COLORS.get(status_key, "#3890DF")
+        super().__init__(parent, card_height=100, status_color=color)
+
+    def _get_status_key(self, unit):
+        status = getattr(unit, 'apartment_status', None)
+        if status is None:
+            return "vacant"
+        s = str(status).strip().lower()
+        if s in ("occupied", "\u0645\u0623\u0647\u0648\u0644\u0629", "1"):
+            return "occupied"
+        elif s in ("vacant", "\u0634\u0627\u063a\u0631\u0629", "2"):
+            return "vacant"
+        return "under_maintenance"
+
+    def _build_content(self, layout):
+        from PyQt5.QtWidgets import QHBoxLayout, QLabel
+        from PyQt5.QtCore import Qt
+        from PyQt5.QtGui import QFont
+        from ui.font_utils import create_font, FontManager
+        from ui.design_system import Colors
+        from services.translation_manager import tr
+        from services.display_mappings import get_unit_type_display, get_unit_status_display
+
+        u = self._unit
+
+        # Row 1: Unit number + status badge
+        row1 = QHBoxLayout()
+        row1.setSpacing(8)
+        display_num = str(u.unit_number or u.apartment_number or "?")
+        num_label = QLabel(f"{tr('page.unit_details.unit_number')}: {display_num}")
+        num_label.setFont(create_font(size=13, weight=QFont.Bold))
+        num_label.setStyleSheet(f"color: {Colors.PAGE_TITLE}; background: transparent; border: none;")
+        row1.addWidget(num_label)
+        row1.addStretch()
+
+        status_key = self._get_status_key(u)
+        style = self._STATUS_STYLES.get(status_key, self._STATUS_STYLES["vacant"])
+        status_text = get_unit_status_display(getattr(u, 'apartment_status', None)) if hasattr(u, 'apartment_status') else "-"
+        badge = QLabel(status_text)
+        badge.setFont(create_font(size=8, weight=FontManager.WEIGHT_SEMIBOLD))
+        badge.setAlignment(Qt.AlignCenter)
+        badge.setFixedHeight(22)
+        badge.setStyleSheet(
+            f"QLabel {{ background-color: {style['bg']}; color: {style['fg']}; "
+            f"border: 1px solid {style['border']}; border-radius: 11px; "
+            f"padding: 0 10px; }}"
+        )
+        row1.addWidget(badge)
+        layout.addLayout(row1)
+
+        # Row 2: Floor + Type + Area
+        parts = []
+        if u.floor_number is not None:
+            parts.append(f"{tr('page.unit_details.floor_number')}: {u.floor_number}")
+        unit_type = getattr(u, 'unit_type_display_ar', None) or get_unit_type_display(getattr(u, 'unit_type', None))
+        if unit_type and unit_type != "-":
+            parts.append(unit_type)
+        if u.area_sqm:
+            try:
+                parts.append(f"{float(u.area_sqm):.1f} {tr('unit.sqm')}")
+            except (ValueError, TypeError):
+                pass
+        details = QLabel(" \u2009\u00b7\u2009 ".join(parts) if parts else "-")
+        details.setFont(create_font(size=10, weight=FontManager.WEIGHT_REGULAR))
+        details.setStyleSheet(f"color: {Colors.TEXT_SECONDARY}; background: transparent; border: none;")
+        layout.addWidget(details)
+
+        # Row 3: Description
+        desc = u.property_description or ""
+        if desc:
+            desc_label = QLabel(desc[:80] + ("..." if len(desc) > 80 else ""))
+            desc_label.setFont(create_font(size=9, weight=FontManager.WEIGHT_REGULAR))
+            desc_label.setStyleSheet(f"color: {Colors.TEXT_SECONDARY}; background: transparent; border: none; opacity: 0.7;")
+            layout.addWidget(desc_label)
+
+
 class UnitsPage(QWidget):
-    """Property Units management page — grouped by building, API-backed."""
+    """Property Units management page -- grouped by building, API-backed."""
 
     view_unit = pyqtSignal(object)
     edit_unit_signal = pyqtSignal(object)
@@ -52,13 +153,13 @@ class UnitsPage(QWidget):
 
         # Grouped data: list of BuildingWithUnitsDto dicts
         self._groups = []
-        # Flat list of row descriptors: {'type': 'unit', 'group': dict, 'unit': PropertyUnit}
+        # Flat list of row descriptors
         self._rows = []
         self._total_units = 0
         self._total_buildings = 0
 
         self._current_page = 1
-        self._rows_per_page = 11
+        self._rows_per_page = 20
         self._total_pages = 1
 
         # API-side filters (sent as query params)
@@ -69,196 +170,136 @@ class UnitsPage(QWidget):
         }
         self._buildings_cache = {}
 
+        self._card_widgets = []
+
+        # Shared timer for card shimmer animation
+        self._shimmer_timer = QTimer(self)
+        self._shimmer_timer.setInterval(80)
+        self._shimmer_timer.timeout.connect(self._update_card_shimmer)
+
         self._setup_ui()
 
     def _setup_ui(self):
-        from ui.design_system import Colors
-        from ui.font_utils import create_font, FontManager
-        from pathlib import Path
-        import sys
+        self.setStyleSheet("background: transparent;")
 
-        self.setStyleSheet(StyleManager.page_background())
+        main = QVBoxLayout(self)
+        main.setContentsMargins(0, 0, 0, 0)
+        main.setSpacing(0)
 
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(
-            PageDimensions.content_padding_h(),
-            PageDimensions.content_padding_v_top(),
+        # Dark header zone
+        self._header = DarkHeaderZone(self)
+        self._header.set_title(tr("page.units.title"))
+
+        self._stat_units = StatPill(tr("page.units.stat_units"))
+        self._header.add_stat_pill(self._stat_units)
+
+        self._stat_buildings = StatPill(tr("page.units.stat_buildings"))
+        self._header.add_stat_pill(self._stat_buildings)
+
+        # Add button in header
+        self.add_btn = PrimaryButton(tr("page.units.add_new"), icon_name="icon")
+        self.add_btn.clicked.connect(self._on_add_unit)
+        self._header.add_action_widget(self.add_btn)
+
+        main.addWidget(self._header)
+
+        # Accent line
+        self._accent_line = AccentLine()
+        main.addWidget(self._accent_line)
+
+        # Light content area
+        self._content_wrapper = QWidget()
+        self._content_wrapper.setStyleSheet(f"background-color: {Colors.BACKGROUND};")
+        content_layout = QVBoxLayout(self._content_wrapper)
+        content_layout.setContentsMargins(
+            PageDimensions.content_padding_h(), 14,
             PageDimensions.content_padding_h(),
             PageDimensions.CONTENT_PADDING_V_BOTTOM,
         )
-        layout.setSpacing(15)
+        content_layout.setSpacing(0)
 
-        # Header row
-        top_row = QHBoxLayout()
-        top_row.setSpacing(20)
+        # Stacked widget: cards scroll vs empty state
+        self._stack = QStackedWidget()
 
-        self._title = QLabel(tr("page.units.title"))
-        self._title.setFont(create_font(size=FontManager.SIZE_TITLE, weight=FontManager.WEIGHT_SEMIBOLD))
-        self._title.setStyleSheet(f"color: {Colors.PAGE_TITLE}; background: transparent; border: none;")
-        top_row.addWidget(self._title)
-
-        top_row.addStretch()
-
-        self.add_btn = PrimaryButton(tr("page.units.add_new"), icon_name="icon")
-        self.add_btn.clicked.connect(self._on_add_unit)
-        top_row.addWidget(self.add_btn)
-
-        layout.addLayout(top_row)
-
-        # Table card
-        table_card = QFrame()
-        table_card.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-        table_card.setStyleSheet(StyleManager.table_card())
-        card_layout = QVBoxLayout(table_card)
-        card_layout.setContentsMargins(10, 10, 10, 10)
-        card_layout.setSpacing(0)
-
-        self.table = QTableWidget()
-        self.table.setColumnCount(6)
-        self.table.setRowCount(11)
-        self.table.setLayoutDirection(get_layout_direction())
-        self.table.setShowGrid(False)
-        self.table.setFocusPolicy(Qt.NoFocus)
-        self.table.setSelectionMode(QTableWidget.NoSelection)
-        self.table.setEditTriggers(QAbstractItemView.NoEditTriggers)
-        self.table.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        self.table.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-
-        if hasattr(sys, '_MEIPASS'):
-            base_path = Path(sys._MEIPASS)
-        else:
-            base_path = Path(__file__).parent.parent.parent
-        icon_path = base_path / "assets" / "images" / "down.png"
-
-        # Filterable cols are 2 (unit type) and 3 (unit status)
-        headers = [tr("table.units.unit_number"), tr("table.units.building_code"), tr("table.units.unit_type"), tr("table.units.unit_status"), tr("table.units.unit_description"), ""]
-        for i, text in enumerate(headers):
-            item = QTableWidgetItem(text)
-            if i in (2, 3) and icon_path.exists():
-                item.setIcon(QIcon(str(icon_path)))
-            self.table.setHorizontalHeaderItem(i, item)
-
-        self.table.setStyleSheet(StyleManager.modern_table() + StyleManager.scrollbar())
-
-        header = self.table.horizontalHeader()
-        header.setDefaultAlignment(Qt.AlignRight | Qt.AlignVCenter)
-        header.setFixedHeight(56)
-        header.setStretchLastSection(False)
-        header.setMouseTracking(True)
-        header.sectionEntered.connect(self._on_header_hover)
-        header.sectionClicked.connect(self._on_header_clicked)
-
-        header.setSectionResizeMode(0, QHeaderView.ResizeToContents)  # Unit number
-        header.setSectionResizeMode(1, QHeaderView.ResizeToContents)  # Building code
-        header.setSectionResizeMode(2, QHeaderView.ResizeToContents)  # Unit type
-        header.setSectionResizeMode(3, QHeaderView.ResizeToContents)  # Unit status
-        header.setSectionResizeMode(4, QHeaderView.Stretch)           # Description
-        header.setSectionResizeMode(5, QHeaderView.Fixed)             # Actions
-        header.resizeSection(5, 44)
-
-        v_header = self.table.verticalHeader()
-        v_header.setVisible(False)
-        v_header.setDefaultSectionSize(52)
-
-        self.table.cellClicked.connect(self._on_cell_clicked)
-        self.table.cellDoubleClicked.connect(self._on_row_double_click)
-
-        # Skeleton loading placeholder
-        from ui.components.skeleton_loader import TableSkeleton
-        self._skeleton = TableSkeleton(columns=6, rows=11, message=tr("page.units.loading"))
-        card_layout.addWidget(self._skeleton)
-        self._skeleton.hide()
-
-        card_layout.addWidget(self.table)
-
-        # Footer (pagination)
-        self._footer_frame = QFrame()
-        footer_frame = self._footer_frame
-        footer_frame.setStyleSheet(StyleManager.nav_footer())
-        footer_frame.setFixedHeight(58)
-
-        footer = QHBoxLayout(footer_frame)
-        footer.setContentsMargins(10, 10, 10, 10)
-
-        nav_container = QWidget()
-        nav_container.setStyleSheet("background: transparent;")
-        nav_layout = QHBoxLayout(nav_container)
-        nav_layout.setContentsMargins(0, 0, 0, 0)
-        nav_layout.setSpacing(8)
-
-        self.prev_btn = QPushButton(">")
-        self.prev_btn.setFixedSize(32, 32)
-        self.prev_btn.setStyleSheet(StyleManager.pagination_button())
-        self.prev_btn.clicked.connect(self._on_prev_page)
-        nav_layout.addWidget(self.prev_btn)
-
-        self.next_btn = QPushButton("<")
-        self.next_btn.setFixedSize(32, 32)
-        self.next_btn.setStyleSheet(StyleManager.pagination_button())
-        self.next_btn.clicked.connect(self._on_next_page)
-        nav_layout.addWidget(self.next_btn)
-
-        footer.addWidget(nav_container)
-
-        self.page_label = QLabel("0-0 of 0")
-        self.page_label.setStyleSheet(
-            "color: #637381; font-size: 10pt; font-weight: 400; background: transparent;"
+        self._scroll = QScrollArea()
+        self._scroll.setWidgetResizable(True)
+        self._scroll.setFrameShape(QFrame.NoFrame)
+        self._scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self._scroll.setStyleSheet(
+            "QScrollArea { border: none; background: transparent; }"
+            + StyleManager.scrollbar()
         )
-        footer.addWidget(self.page_label)
 
-        from PyQt5.QtGui import QPixmap
-        rows_container = QFrame()
-        rows_container.setStyleSheet("""
-            QFrame {
-                background: transparent;
-                border: 1px solid #E1E8ED;
-                border-radius: 4px;
-                padding: 4px 8px;
+        self._scroll_content = QWidget()
+        self._scroll_content.setStyleSheet("background: transparent;")
+        self._cards_layout = QVBoxLayout(self._scroll_content)
+        self._cards_layout.setContentsMargins(0, 0, 0, 0)
+        self._cards_layout.setSpacing(10)
+        self._cards_layout.addStretch()
+
+        self._scroll.setWidget(self._scroll_content)
+        self._stack.addWidget(self._scroll)
+
+        self._empty_state = EmptyStateAnimated(
+            title=tr("page.units.no_units"),
+            description=tr("page.units.empty_description") if hasattr(tr, '__call__') else "",
+        )
+        self._stack.addWidget(self._empty_state)
+
+        content_layout.addWidget(self._stack, 1)
+
+        # Pagination bar
+        self._pagination = self._create_pagination()
+        content_layout.addWidget(self._pagination)
+
+        main.addWidget(self._content_wrapper, 1)
+
+        # Loading spinner overlay
+        from ui.components.loading_spinner import LoadingSpinnerOverlay
+        self._spinner = LoadingSpinnerOverlay(self)
+
+    def _create_pagination(self):
+        bar = QFrame()
+        bar.setFixedHeight(40)
+        bar.setStyleSheet("QFrame { background: transparent; border: none; }")
+        layout = QHBoxLayout(bar)
+        layout.setContentsMargins(4, 6, 4, 0)
+        layout.addStretch()
+
+        _NAV_BTN = """
+            QPushButton {
+                background: rgba(56, 144, 223, 0.08);
+                border: 1px solid rgba(56, 144, 223, 0.2);
+                border-radius: 6px; color: #3890DF;
+                padding: 0 10px; font-weight: 600;
             }
-            QFrame:hover { background-color: #EBEEF2; }
-        """)
-        rows_container.setCursor(Qt.PointingHandCursor)
-        rows_layout = QHBoxLayout(rows_container)
-        rows_layout.setContentsMargins(4, 2, 4, 2)
-        rows_layout.setSpacing(4)
+            QPushButton:hover { background: rgba(56, 144, 223, 0.18); }
+            QPushButton:disabled { color: #B0BEC5; background: transparent; border-color: #E0E0E0; }
+        """
+        self.prev_btn = QPushButton("\u276E")
+        self.prev_btn.setFixedSize(32, 28)
+        self.prev_btn.setCursor(QCursor(Qt.PointingHandCursor))
+        self.prev_btn.setStyleSheet(_NAV_BTN)
+        self.prev_btn.clicked.connect(self._on_prev_page)
+        layout.addWidget(self.prev_btn)
 
-        down_icon_label = QLabel()
-        if icon_path.exists():
-            down_pixmap = QPixmap(str(icon_path))
-            if not down_pixmap.isNull():
-                down_pixmap = down_pixmap.scaled(10, 10, Qt.KeepAspectRatio, Qt.SmoothTransformation)
-                down_icon_label.setPixmap(down_pixmap)
-        down_icon_label.setStyleSheet("background: transparent; border: none;")
-        rows_layout.addWidget(down_icon_label)
+        self._page_info = QLabel("")
+        self._page_info.setFont(create_font(size=10, weight=FontManager.WEIGHT_MEDIUM))
+        self._page_info.setStyleSheet(f"color: {Colors.TEXT_SECONDARY};")
+        self._page_info.setAlignment(Qt.AlignCenter)
+        self._page_info.setMinimumWidth(80)
+        layout.addWidget(self._page_info)
 
-        self.rows_number = QLabel(str(self._rows_per_page))
-        self.rows_number.setStyleSheet(
-            "color: #637381; font-size: 10pt; font-weight: 400; background: transparent; border: none;"
-        )
-        rows_layout.addWidget(self.rows_number)
+        self.next_btn = QPushButton("\u276F")
+        self.next_btn.setFixedSize(32, 28)
+        self.next_btn.setCursor(QCursor(Qt.PointingHandCursor))
+        self.next_btn.setStyleSheet(_NAV_BTN)
+        self.next_btn.clicked.connect(self._on_next_page)
+        layout.addWidget(self.next_btn)
 
-        rows_container.mousePressEvent = lambda e: self._show_page_selection_menu(rows_container)
-        footer.addWidget(rows_container)
+        return bar
 
-        self._rows_label = QLabel(tr("page.units.rows_per_page"))
-        self._rows_label.setStyleSheet(
-            "color: #637381; font-size: 10pt; font-weight: 400; background: transparent;"
-        )
-        footer.addWidget(self._rows_label)
-
-        from ui.components.toggle_switch import ToggleSwitch
-        self.dense_toggle = ToggleSwitch(tr("page.units.dense"), checked=True)
-        self.dense_toggle.toggled.connect(self._on_dense_toggle)
-
-        footer.addStretch()
-        footer.addWidget(self.dense_toggle)
-
-        card_layout.addWidget(footer_frame)
-        layout.addWidget(table_card)
-
-        pass
-
-    # ── Data loading ──
+    # -- Data loading --
 
     def refresh(self, data=None):
         logger.debug("Refreshing units page")
@@ -292,10 +333,7 @@ class UnitsPage(QWidget):
         )
 
     def _load_units(self):
-        self.table.hide()
-        self._footer_frame.hide()
-        self._skeleton.show()
-        self._skeleton.start()
+        self._spinner.show_loading(tr("page.units.loading"))
         self._set_auth_token()
         self._load_units_worker = ApiWorker(
             self.unit_controller.get_units_grouped,
@@ -308,10 +346,7 @@ class UnitsPage(QWidget):
         self._load_units_worker.start()
 
     def _on_load_units_finished(self, result):
-        self._skeleton.stop()
-        self._skeleton.hide()
-        self.table.show()
-        self._footer_frame.show()
+        self._spinner.hide_loading()
         if result.success:
             self._groups = result.data or []
         else:
@@ -321,20 +356,18 @@ class UnitsPage(QWidget):
         self._total_buildings = len(self._groups)
         self._rebuild_rows()
         self._current_page = 1
-        self._update_table()
+        self._populate_cards()
 
     def _on_load_units_error(self, error_msg):
-        self._skeleton.stop()
-        self._skeleton.hide()
-        self.table.show()
-        self._footer_frame.show()
+        self._spinner.hide_loading()
         logger.warning(f"API grouped load failed: {error_msg}")
+        Toast.show_toast(self, tr("page.units.load_error") if tr("page.units.load_error") != "page.units.load_error" else str(error_msg), Toast.ERROR)
         self._groups = []
         self._total_units = 0
         self._total_buildings = 0
         self._rebuild_rows()
         self._current_page = 1
-        self._update_table()
+        self._populate_cards()
 
     def _rebuild_rows(self):
         self._rows = []
@@ -344,158 +377,131 @@ class UnitsPage(QWidget):
                 unit = self._dto_to_unit(dto, group.get('buildingId'))
                 self._rows.append({'type': 'unit', 'group': group, 'unit': unit, 'building': building})
 
-    # ── Table rendering ──
+    # -- Card population --
 
-    def _update_table(self):
-        total_rows = len(self._rows)
-        self._total_pages = max(1, (total_rows + self._rows_per_page - 1) // self._rows_per_page)
-        self._current_page = min(self._current_page, self._total_pages)
+    def _populate_cards(self):
+        try:
+            self._clear_cards()
 
-        start_idx = (self._current_page - 1) * self._rows_per_page
-        end_idx = min(start_idx + self._rows_per_page, total_rows)
-        page_rows = self._rows[start_idx:end_idx]
+            # Update stat pills
+            self._stat_units.set_count(self._total_units)
+            self._stat_buildings.set_count(self._total_buildings)
 
-        # Clear all rows
-        self.table.clearSpans()
-        for row in range(self.table.rowCount()):
-            for col in range(6):
-                self.table.setItem(row, col, QTableWidgetItem(""))
-            self.table.setCellWidget(row, 5, None)
+            total_rows = len(self._rows)
+            self._total_pages = max(1, (total_rows + self._rows_per_page - 1) // self._rows_per_page)
+            self._current_page = min(self._current_page, self._total_pages)
 
-        if total_rows == 0:
-            self.table.setSpan(0, 0, self.table.rowCount(), 6)
-            empty_item = QTableWidgetItem(tr("page.units.no_units"))
-            empty_item.setTextAlignment(Qt.AlignCenter)
-            empty_item.setForeground(QColor("#9CA3AF"))
-            self.table.setItem(0, 0, empty_item)
-            self.page_label.setText("0-0 of 0")
-            self.prev_btn.setEnabled(False)
-            self.next_btn.setEnabled(False)
+            if total_rows == 0:
+                self._stack.setCurrentIndex(1)
+                self._empty_state.set_title(tr("page.units.no_units"))
+                self._update_pagination_info()
+                return
+
+            self._stack.setCurrentIndex(0)
+
+            start_idx = (self._current_page - 1) * self._rows_per_page
+            end_idx = min(start_idx + self._rows_per_page, total_rows)
+            page_rows = self._rows[start_idx:end_idx]
+
+            for row_data in page_rows:
+                unit = row_data['unit']
+                group = row_data['group']
+                card = _UnitCard(unit)
+                card.clicked.connect(lambda u=unit, g=group: self._on_card_clicked(u, g))
+                self._cards_layout.insertWidget(
+                    self._cards_layout.count() - 1, card
+                )
+                self._card_widgets.append(card)
+
+            self._update_pagination_info()
+            self._animate_card_entrance()
+
+            if not self._shimmer_timer.isActive():
+                self._shimmer_timer.start()
+        except Exception as e:
+            logger.error(f"Error populating unit cards: {e}")
+            self._stack.setCurrentIndex(1)
+
+    def _animate_card_entrance(self):
+        count = len(self._card_widgets)
+        if count > 30 or count == 0:
             return
 
-        for row_idx, row_data in enumerate(page_rows):
-            self._render_unit_row(row_idx, row_data['unit'], row_data['group'], row_data.get('building'))
+        for i, card in enumerate(self._card_widgets):
+            opacity_eff = QGraphicsOpacityEffect(card)
+            opacity_eff.setOpacity(0.0)
+            card.setGraphicsEffect(opacity_eff)
 
-        self.page_label.setText(f"{start_idx + 1}-{end_idx} of {total_rows}")
-        self.rows_number.setText(str(self._rows_per_page))
-        self.prev_btn.setEnabled(self._current_page > 1)
-        self.next_btn.setEnabled(self._current_page < self._total_pages)
+            anim = QPropertyAnimation(opacity_eff, b"opacity")
+            anim.setDuration(300)
+            anim.setStartValue(0.0)
+            anim.setEndValue(1.0)
+            anim.setEasingCurve(QEasingCurve.OutCubic)
 
-    def _render_unit_row(self, row: int, unit: PropertyUnit, group: dict, building=None):
-        self.table.setItem(row, 0, QTableWidgetItem(str(unit.unit_number or "")))
+            def _restore_shadow(c=card):
+                try:
+                    s = QGraphicsDropShadowEffect(c)
+                    s.setBlurRadius(20)
+                    s.setOffset(0, 4)
+                    s.setColor(QColor(0, 0, 0, 22))
+                    c.setGraphicsEffect(s)
+                except RuntimeError:
+                    pass
 
-        if building and building.building_id:
-            building_code = building.building_id_formatted or building.building_id
+            anim.finished.connect(_restore_shadow)
+            QTimer.singleShot(i * 40, anim.start)
+
+            card._entrance_anim = anim
+            card._entrance_effect = opacity_eff
+
+    def _clear_cards(self):
+        self._shimmer_timer.stop()
+        for card in self._card_widgets:
+            if hasattr(card, '_entrance_anim') and card._entrance_anim:
+                try:
+                    card._entrance_anim.stop()
+                except RuntimeError:
+                    pass
+            try:
+                card.clicked.disconnect()
+            except Exception:
+                pass
+            card.setParent(None)
+            card.deleteLater()
+        self._card_widgets.clear()
+
+    def _update_card_shimmer(self):
+        for card in self._card_widgets:
+            try:
+                card.update()
+            except RuntimeError:
+                pass
+
+    def _update_pagination_info(self):
+        total = len(self._rows)
+        ps = self._rows_per_page
+        total_pages = max(1, (total + ps - 1) // ps)
+        page = self._current_page
+        start = (page - 1) * ps + 1
+        end = min(page * ps, total)
+        if total > 0:
+            self._page_info.setText(f"{start}-{end}  /  {total}")
         else:
-            building_code = group.get('buildingNumber') or group.get('buildingId', '')
-        self.table.setItem(row, 1, QTableWidgetItem(building_code))
+            self._page_info.setText("")
+        self.prev_btn.setEnabled(page > 1)
+        self.next_btn.setEnabled(page < total_pages)
 
-        self.table.setItem(row, 2, QTableWidgetItem(get_unit_type_display(unit.unit_type)))
-        self.table.setItem(row, 3, QTableWidgetItem(get_unit_status_display(unit.apartment_status)))
+    # -- Card interactions --
 
-        desc = unit.property_description or ""
-        desc_display = desc[:40] + "..." if len(desc) > 40 else desc
-        self.table.setItem(row, 4, QTableWidgetItem(desc_display))
+    def _on_card_clicked(self, unit, group):
+        self.view_unit.emit(unit)
 
-        dots_item = QTableWidgetItem("⋮")
-        dots_item.setTextAlignment(Qt.AlignCenter)
-        dots_font = QFont()
-        dots_font.setPointSize(18)
-        dots_font.setWeight(QFont.Bold)
-        dots_item.setFont(dots_font)
-        dots_item.setForeground(QColor("#637381"))
-        self.table.setItem(row, 5, dots_item)
+    def _on_card_right_click(self, unit, group, pos):
+        self._show_card_actions_menu(unit, group, pos)
 
-    # ── Pagination ──
-
-    def _on_prev_page(self):
-        if self._current_page > 1:
-            self._current_page -= 1
-            self._update_table()
-
-    def _on_next_page(self):
-        if self._current_page < self._total_pages:
-            self._current_page += 1
-            self._update_table()
-
-    def _go_to_page(self, page_num):
-        if 1 <= page_num <= self._total_pages:
-            self._current_page = page_num
-            self._update_table()
-
-    def _show_page_selection_menu(self, parent_widget):
-        from PyQt5.QtWidgets import QMenu
-        menu = QMenu(self)
-        menu.setStyleSheet("""
-            QMenu {
-                background-color: white;
-                border: 1px solid #E1E8ED;
-                border-radius: 4px;
-                padding: 4px;
-            }
-            QMenu::item {
-                padding: 6px 20px;
-                color: #637381;
-                font-size: 10pt;
-            }
-            QMenu::item:selected {
-                background-color: #E3F2FD;
-                color: #3498db;
-            }
-        """)
-        for size in [5, 10, 15, 25]:
-            action = menu.addAction(str(size))
-            if size == self._rows_per_page:
-                action.setEnabled(False)
-            else:
-                action.triggered.connect(lambda checked, s=size: self._set_rows_per_page(s))
-        menu.exec_(parent_widget.mapToGlobal(parent_widget.rect().bottomLeft()))
-
-    def _set_rows_per_page(self, size):
-        self._rows_per_page = size
-        self.table.setRowCount(size)
-        v_header = self.table.verticalHeader()
-        v_header.setDefaultSectionSize(76)
-        self._current_page = 1
-        self._update_table()
-
-    def _on_dense_toggle(self, checked):
-        row_height = 52 if checked else 68
-        v_header = self.table.verticalHeader()
-        v_header.setDefaultSectionSize(row_height)
-        if checked:
-            self.table.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        else:
-            self.table.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
-
-    # ── Row interactions ──
-
-    def _on_row_double_click(self, row, col):
-        start_idx = (self._current_page - 1) * self._rows_per_page
-        row_idx = start_idx + row
-        if row_idx >= len(self._rows):
-            return
-        self.view_unit.emit(self._rows[row_idx]['unit'])
-
-    def _on_cell_clicked(self, row: int, col: int):
-        if col != 5:
-            return
-        start_idx = (self._current_page - 1) * self._rows_per_page
-        row_idx = start_idx + row
-        if row_idx >= len(self._rows):
-            return
-        row_data = self._rows[row_idx]
-        item = self.table.item(row, 0)
-        if not item or not item.text().strip():
-            return
-        self._show_actions_menu(row, col, row_data['unit'], row_data['group'])
-
-    def _show_actions_menu(self, row: int, col: int, unit: PropertyUnit, group: dict):
+    def _show_card_actions_menu(self, unit: PropertyUnit, group: dict, global_pos=None):
         from PyQt5.QtWidgets import QMenu, QAction
         from ui.components.icon import Icon
-
-        rect = self.table.visualItemRect(self.table.item(row, col))
-        position = QPoint(rect.right() - 10, rect.bottom())
 
         menu = QMenu(self)
         menu.setFixedSize(200, 149)
@@ -542,82 +548,29 @@ class UnitsPage(QWidget):
                 background-color: #F6F6F7;
             }
         """)
-        menu.exec_(self.table.viewport().mapToGlobal(position))
-
-    # ── Header filter system ──
-
-    def _on_header_hover(self, logical_index: int):
-        header = self.table.horizontalHeader()
-        if logical_index in (2, 3):
-            header.setCursor(Qt.PointingHandCursor)
+        if global_pos:
+            menu.exec_(global_pos)
         else:
-            header.setCursor(Qt.ArrowCursor)
+            menu.exec_(QCursor.pos())
 
-    def _on_header_clicked(self, logical_index: int):
-        if logical_index not in (2, 3):
-            return
-        self._show_filter_menu(logical_index)
+    # -- Pagination --
 
-    def _show_filter_menu(self, column_index: int):
-        filter_key = None
-        unique_values = set()
+    def _on_prev_page(self):
+        if self._current_page > 1:
+            self._current_page -= 1
+            self._populate_cards()
 
-        if column_index == 2:
-            filter_key = 'unit_type'
-            for code, label in get_unit_type_options():
-                if code is not None and code != "":
-                    unique_values.add((code, label))
-        elif column_index == 3:
-            filter_key = 'unit_status'
-            for code, label in get_unit_status_options():
-                if code is not None and code != "":
-                    unique_values.add((code, label))
+    def _on_next_page(self):
+        if self._current_page < self._total_pages:
+            self._current_page += 1
+            self._populate_cards()
 
-        if not unique_values:
-            return
+    def _go_to_page(self, page_num):
+        if 1 <= page_num <= self._total_pages:
+            self._current_page = page_num
+            self._populate_cards()
 
-        from PyQt5.QtWidgets import QMenu, QAction
-        menu = QMenu(self)
-        menu.setLayoutDirection(get_layout_direction())
-        menu.setStyleSheet("""
-            QMenu {
-                background-color: white;
-                border: 1px solid #E1E8ED;
-                border-radius: 8px;
-                padding: 8px;
-            }
-            QMenu::item {
-                padding: 10px 20px;
-                border-radius: 4px;
-                font-size: 10pt;
-                color: #637381;
-            }
-            QMenu::item:selected {
-                background-color: #EFF6FF;
-                color: #3890DF;
-            }
-        """)
-
-        clear_action = QAction(tr("filter.show_all"), self)
-        clear_action.triggered.connect(lambda: self._apply_filter(filter_key, None))
-        menu.addAction(clear_action)
-        menu.addSeparator()
-
-        sorted_values = sorted(unique_values, key=lambda x: str(x[1]))
-        current_val = self._active_filters.get(filter_key)
-        for code, display in sorted_values:
-            action = QAction(display, self)
-            action.triggered.connect(lambda checked, c=code: self._apply_filter(filter_key, c))
-            if current_val is not None and str(current_val) == str(code):
-                action.setCheckable(True)
-                action.setChecked(True)
-            menu.addAction(action)
-
-        header = self.table.horizontalHeader()
-        x_pos = header.sectionViewportPosition(column_index)
-        y_pos = header.height()
-        pos = self.table.mapToGlobal(QPoint(x_pos, y_pos))
-        menu.exec_(pos)
+    # -- Filter system --
 
     def _apply_filter(self, filter_key: str, filter_value):
         """Apply API-side filter and reload from server."""
@@ -631,7 +584,7 @@ class UnitsPage(QWidget):
         self._current_page = 1
         self._load_units()
 
-    # ── Building helper ──
+    # -- Building helper --
 
     def _get_building_for_group(self, group: dict):
         """Return a Building object for a group dict using API only."""
@@ -669,7 +622,7 @@ class UnitsPage(QWidget):
         self._buildings_cache[building_id] = b
         return b
 
-    # ── CRUD operations ──
+    # -- CRUD operations --
 
     def _on_add_unit(self):
         """Open building picker then add unit dialog."""
@@ -751,14 +704,18 @@ class UnitsPage(QWidget):
                 Toast.show_toast(self, tr("error.unit.delete_failed"), Toast.ERROR)
 
     def update_language(self, is_arabic: bool):
-        self.setLayoutDirection(get_layout_direction())
-        self.table.setLayoutDirection(get_layout_direction())
-        self._title.setText(tr("page.units.title"))
+        direction = get_layout_direction()
+        self.setLayoutDirection(direction)
+
+        self._header.set_title(tr("page.units.title"))
         self.add_btn.setText(tr("page.units.add_new"))
-        self._rows_label.setText(tr("page.units.rows_per_page"))
-        headers = [tr("table.units.unit_number"), tr("table.units.building_code"), tr("table.units.unit_type"), tr("table.units.unit_status"), tr("table.units.unit_description"), ""]
-        for i, text in enumerate(headers):
-            item = self.table.horizontalHeaderItem(i)
-            if item:
-                item.setText(text)
-        self._update_table()
+        self._stat_units.set_label(tr("page.units.stat_units"))
+        self._stat_buildings.set_label(tr("page.units.stat_buildings"))
+
+        self._scroll.setLayoutDirection(direction)
+        self._scroll_content.setLayoutDirection(direction)
+
+        if self._rows:
+            self._populate_cards()
+        else:
+            self._empty_state.set_title(tr("page.units.no_units"))

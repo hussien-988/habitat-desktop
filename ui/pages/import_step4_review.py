@@ -9,6 +9,7 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtGui import QColor
 
+from ui.components.animated_card import EmptyStateAnimated
 from ui.design_system import Colors, PageDimensions
 from ui.font_utils import create_font, FontManager
 from ui.style_manager import StyleManager
@@ -186,10 +187,9 @@ class ImportStep4Review(QWidget):
         table_layout.addWidget(table_title)
 
         # Empty state label
-        self._empty_label = QLabel(tr("wizard.import.step4.no_staged_entities"))
-        self._empty_label.setFont(create_font(size=11, weight=FontManager.WEIGHT_REGULAR))
-        self._empty_label.setStyleSheet("color: #9CA3AF; background: transparent;")
-        self._empty_label.setAlignment(Qt.AlignCenter)
+        self._empty_label = EmptyStateAnimated(
+            title=tr("wizard.import.step4.no_staged_entities"),
+        )
         self._empty_label.setMinimumHeight(200)
         self._empty_label.setVisible(False)
         table_layout.addWidget(self._empty_label)
@@ -259,10 +259,18 @@ class ImportStep4Review(QWidget):
         card = QFrame()
         card.setStyleSheet("""
             QFrame {
-                background-color: #FFFFFF;
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
+                    stop:0 #F7FAFF, stop:1 #F0F5FF);
                 border-radius: 16px;
+                border: 1px solid #E2EAF2;
             }
         """)
+        shadow = QGraphicsDropShadowEffect()
+        shadow.setBlurRadius(20)
+        shadow.setXOffset(0)
+        shadow.setYOffset(4)
+        shadow.setColor(QColor(0, 0, 0, 22))
+        card.setGraphicsEffect(shadow)
         return card
 
     def _create_count_badge(self, label_text: str, count_text: str,
@@ -273,7 +281,8 @@ class ImportStep4Review(QWidget):
         container.setMinimumWidth(130)
         container.setStyleSheet(f"""
             QFrame {{
-                background-color: {bg};
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
+                    stop:0 {bg}, stop:1 #FFFFFF);
                 border-radius: 10px;
                 border: none;
             }}
@@ -534,7 +543,7 @@ class ImportStep4Review(QWidget):
         self._total_label.setText(tr("wizard.import.step4.total_entities", count=total))
 
         # Empty state label
-        self._empty_label.setText(tr("wizard.import.step4.no_staged_entities"))
+        self._empty_label.set_title(tr("wizard.import.step4.no_staged_entities"))
 
         # Loading label
         self._loading_label.setText(tr("wizard.import.step4.loading"))
