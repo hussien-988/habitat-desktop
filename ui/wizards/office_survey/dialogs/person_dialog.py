@@ -35,7 +35,7 @@ from ui.components.rtl_combo import RtlCombo
 from ui.components.centered_text_edit import CenteredTextEdit
 from ui.components.toast import Toast
 from ui.components.loading_spinner import LoadingSpinnerOverlay
-from ui.design_system import Colors
+from ui.design_system import Colors, ScreenScale
 from ui.font_utils import create_font, FontManager
 from ui.wizards.office_survey.wizard_styles import FORM_FIELD_STYLE
 from utils.logger import get_logger
@@ -193,7 +193,7 @@ class PersonDialog(QDialog):
 
         # Dark header bar
         header_bar = QFrame()
-        header_bar.setFixedHeight(50)
+        header_bar.setFixedHeight(ScreenScale.h(50))
         header_bar.setObjectName("PanelHeader")
         header_bar.setStyleSheet("""
             QFrame#PanelHeader {
@@ -212,7 +212,7 @@ class PersonDialog(QDialog):
         # Close button in header
         close_btn = QPushButton("\u2715")
         close_btn.setCursor(Qt.PointingHandCursor)
-        close_btn.setFixedSize(30, 30)
+        close_btn.setFixedSize(ScreenScale.w(30), ScreenScale.h(30))
         close_btn.setFont(create_font(size=10, weight=FontManager.WEIGHT_MEDIUM))
         close_btn.setStyleSheet("""
             QPushButton {
@@ -433,7 +433,7 @@ class PersonDialog(QDialog):
         self._progress_bars = []
         for _ in range(3):
             bar = QFrame()
-            bar.setFixedHeight(5)
+            bar.setFixedHeight(ScreenScale.h(5))
             bar.setLayoutDirection(Qt.LeftToRight)  # Prevent RTL from flipping gradient
             bar.setStyleSheet("QFrame { background-color: rgba(255, 255, 255, 0.1); border-radius: 2px; }")
             self._progress_bars.append(bar)
@@ -783,7 +783,7 @@ class PersonDialog(QDialog):
         mobile_layout.setDirection(QHBoxLayout.RightToLeft)
 
         prefix_label = QLabel("+963 | 09")
-        prefix_label.setFixedWidth(90)
+        prefix_label.setFixedWidth(ScreenScale.w(90))
         prefix_label.setAlignment(Qt.AlignCenter)
         prefix_label.setStyleSheet("""
             color: rgba(180, 210, 240, 0.7);
@@ -944,7 +944,7 @@ class PersonDialog(QDialog):
         self.notes.setPlaceholderStyleSheet(
             "color: rgba(180, 210, 240, 0.4); background: transparent; font-size: 16px; font-weight: 400;"
         )
-        self.notes.setMaximumHeight(80)
+        self.notes.setMaximumHeight(ScreenScale.h(80))
         self.notes.setStyleSheet("""
             QTextEdit {
                 border: 1px solid rgba(56, 144, 223, 0.2);
@@ -1117,7 +1117,7 @@ class PersonDialog(QDialog):
 
             # View button
             view_btn = QPushButton("\u29c9")
-            view_btn.setFixedSize(26, 26)
+            view_btn.setFixedSize(ScreenScale.w(26), ScreenScale.h(26))
             view_btn.setCursor(Qt.PointingHandCursor)
             view_btn.setToolTip(tr("wizard.person_dialog.view_document"))
             view_btn.setStyleSheet(
@@ -1161,7 +1161,7 @@ class PersonDialog(QDialog):
     def _create_btn(self, text: str, primary: bool = True, callback=None) -> QPushButton:
         """Create a styled action button."""
         btn = QPushButton(text)
-        btn.setFixedHeight(44)
+        btn.setFixedHeight(ScreenScale.h(44))
         btn.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         if primary:
             btn.setStyleSheet("""
@@ -1203,7 +1203,7 @@ class PersonDialog(QDialog):
 
         frame = QFrame()
         frame.setObjectName(obj_name)
-        frame.setMinimumHeight(55)
+        frame.setMinimumHeight(ScreenScale.h(55))
         frame.setStyleSheet(f"""
             QFrame#{obj_name} {{
                 border: 2px dashed rgba(56, 144, 223, 0.3);
@@ -1233,7 +1233,7 @@ class PersonDialog(QDialog):
 
         # Upload icon (centered)
         icon_lbl = QLabel()
-        icon_lbl.setFixedSize(22, 22)
+        icon_lbl.setFixedSize(ScreenScale.w(22), ScreenScale.h(22))
         icon_lbl.setAlignment(Qt.AlignCenter)
         icon_lbl.setStyleSheet("border: none; background: transparent;")
         upload_pixmap = Icon.load_pixmap("upload_file", size=20)
@@ -1277,12 +1277,12 @@ class PersonDialog(QDialog):
     def _create_thumbnail_widget(self, file_path: str, remove_callback) -> QWidget:
         """Create a single thumbnail widget with image preview and X remove button."""
         container = QWidget()
-        container.setFixedSize(48, 48)
+        container.setFixedSize(ScreenScale.w(48), ScreenScale.h(48))
         container.setStyleSheet("border: none; background: transparent;")
 
         # Thumbnail image
         thumb = QLabel(container)
-        thumb.setFixedSize(44, 44)
+        thumb.setFixedSize(ScreenScale.w(44), ScreenScale.h(44))
         thumb.move(4, 4)
         thumb.setAlignment(Qt.AlignCenter)
         thumb.setStyleSheet("""
@@ -1308,7 +1308,7 @@ class PersonDialog(QDialog):
 
         # X remove button (small dark circle, top-left corner)
         x_btn = QLabel(container)
-        x_btn.setFixedSize(18, 18)
+        x_btn.setFixedSize(ScreenScale.w(18), ScreenScale.h(18))
         x_btn.move(0, 0)
         x_btn.setText("✕")
         x_btn.setAlignment(Qt.AlignCenter)
@@ -1959,11 +1959,11 @@ class PersonDialog(QDialog):
         evidence_id = entry.get('evidence_id', '')
 
         container = QWidget()
-        container.setFixedSize(48, 48)
+        container.setFixedSize(ScreenScale.w(48), ScreenScale.h(48))
         container.setStyleSheet("border: none; background: transparent;")
 
         thumb = QLabel(container)
-        thumb.setFixedSize(44, 44)
+        thumb.setFixedSize(ScreenScale.w(44), ScreenScale.h(44))
         thumb.move(4, 4)
         thumb.setAlignment(Qt.AlignCenter)
         thumb.setStyleSheet(
@@ -1992,7 +1992,7 @@ class PersonDialog(QDialog):
         thumb.mousePressEvent = _open_doc
 
         x_btn = QLabel(container)
-        x_btn.setFixedSize(18, 18)
+        x_btn.setFixedSize(ScreenScale.w(18), ScreenScale.h(18))
         x_btn.move(0, 0)
         x_btn.setText("✕")
         x_btn.setAlignment(Qt.AlignCenter)
@@ -2029,7 +2029,7 @@ class PersonDialog(QDialog):
         dlg = QDialog(self)
         dlg.setWindowFlags(Qt.Dialog | Qt.FramelessWindowHint)
         dlg.setAttribute(Qt.WA_TranslucentBackground)
-        dlg.setFixedWidth(300)
+        dlg.setFixedWidth(ScreenScale.w(300))
 
         # Container with white background + rounded corners
         container = QWidget(dlg)
@@ -2054,7 +2054,7 @@ class PersonDialog(QDialog):
 
         # Warning icon (small circle)
         icon_lbl = QLabel("⚠")
-        icon_lbl.setFixedSize(40, 40)
+        icon_lbl.setFixedSize(ScreenScale.w(40), ScreenScale.h(40))
         icon_lbl.setAlignment(Qt.AlignCenter)
         icon_lbl.setStyleSheet("""
             background-color: #FEF3C7;
@@ -2088,7 +2088,7 @@ class PersonDialog(QDialog):
         btn_row.setSpacing(8)
 
         cancel_btn = QPushButton(tr("common.cancel"))
-        cancel_btn.setFixedHeight(34)
+        cancel_btn.setFixedHeight(ScreenScale.h(34))
         cancel_btn.setCursor(Qt.PointingHandCursor)
         cancel_btn.setFont(create_font(size=9, weight=FontManager.WEIGHT_MEDIUM))
         cancel_btn.setStyleSheet("""
@@ -2104,7 +2104,7 @@ class PersonDialog(QDialog):
         cancel_btn.clicked.connect(dlg.reject)
 
         replace_btn = QPushButton(tr("wizard.person_dialog.replace_file"))
-        replace_btn.setFixedHeight(34)
+        replace_btn.setFixedHeight(ScreenScale.h(34))
         replace_btn.setCursor(Qt.PointingHandCursor)
         replace_btn.setFont(create_font(size=9, weight=FontManager.WEIGHT_MEDIUM))
         replace_btn.setStyleSheet("""
@@ -2154,7 +2154,7 @@ class PersonDialog(QDialog):
         dlg = QDialog(self)
         dlg.setWindowFlags(Qt.Dialog | Qt.FramelessWindowHint)
         dlg.setAttribute(Qt.WA_TranslucentBackground)
-        dlg.setFixedWidth(340)
+        dlg.setFixedWidth(ScreenScale.w(340))
 
         container = QWidget(dlg)
         container.setObjectName("date_container")
@@ -2258,7 +2258,7 @@ class PersonDialog(QDialog):
         btn_row.setSpacing(8)
 
         cancel_btn = QPushButton(tr("common.cancel"))
-        cancel_btn.setFixedHeight(34)
+        cancel_btn.setFixedHeight(ScreenScale.h(34))
         cancel_btn.setCursor(Qt.PointingHandCursor)
         cancel_btn.setFont(create_font(size=9, weight=FontManager.WEIGHT_MEDIUM))
         cancel_btn.setStyleSheet("""
@@ -2274,7 +2274,7 @@ class PersonDialog(QDialog):
         cancel_btn.clicked.connect(dlg.reject)
 
         confirm_btn = QPushButton(tr("common.confirm"))
-        confirm_btn.setFixedHeight(34)
+        confirm_btn.setFixedHeight(ScreenScale.h(34))
         confirm_btn.setCursor(Qt.PointingHandCursor)
         confirm_btn.setFont(create_font(size=9, weight=FontManager.WEIGHT_MEDIUM))
         confirm_btn.setStyleSheet("""
@@ -2317,7 +2317,7 @@ class PersonDialog(QDialog):
         dlg = QDialog(self)
         dlg.setWindowFlags(Qt.Dialog | Qt.FramelessWindowHint)
         dlg.setAttribute(Qt.WA_TranslucentBackground)
-        dlg.setFixedWidth(340)
+        dlg.setFixedWidth(ScreenScale.w(340))
         result = [None]
 
         container = QWidget(dlg)
@@ -2358,7 +2358,7 @@ class PersonDialog(QDialog):
         btn_row.setSpacing(8)
 
         same_btn = QPushButton(tr("wizard.person_dialog.same_date"))
-        same_btn.setFixedHeight(34)
+        same_btn.setFixedHeight(ScreenScale.h(34))
         same_btn.setCursor(Qt.PointingHandCursor)
         same_btn.setFont(create_font(size=9, weight=FontManager.WEIGHT_MEDIUM))
         same_btn.setStyleSheet("""
@@ -2374,7 +2374,7 @@ class PersonDialog(QDialog):
         same_btn.clicked.connect(lambda: (result.__setitem__(0, True), dlg.accept()))
 
         sep_btn = QPushButton(tr("wizard.person_dialog.separate_dates"))
-        sep_btn.setFixedHeight(34)
+        sep_btn.setFixedHeight(ScreenScale.h(34))
         sep_btn.setCursor(Qt.PointingHandCursor)
         sep_btn.setFont(create_font(size=9, weight=FontManager.WEIGHT_MEDIUM))
         sep_btn.setStyleSheet("""

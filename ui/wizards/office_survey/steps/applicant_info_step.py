@@ -27,7 +27,7 @@ from ui.wizards.office_survey.wizard_styles import (
     STEP_CARD_STYLE, FORM_FIELD_STYLE,
     make_step_card, make_icon_header, make_divider, make_sub_section_header,
 )
-from ui.design_system import Colors
+from ui.design_system import Colors, ScreenScale
 from ui.font_utils import create_font, FontManager
 from ui.components.rtl_combo import RtlCombo
 from ui.style_manager import StyleManager
@@ -270,7 +270,7 @@ class ApplicantInfoStep(BaseStep):
         mob_layout.setSpacing(0)
         mob_layout.setDirection(QHBoxLayout.RightToLeft)
         prefix_lbl = QLabel("+963 | 09")
-        prefix_lbl.setFixedWidth(90)
+        prefix_lbl.setFixedWidth(ScreenScale.w(90))
         prefix_lbl.setAlignment(Qt.AlignCenter)
         prefix_lbl.setStyleSheet(f"""
             QLabel {{
@@ -361,11 +361,11 @@ class ApplicantInfoStep(BaseStep):
 
     def _create_thumbnail_widget(self, file_path: str, remove_callback) -> QWidget:
         container = QWidget()
-        container.setFixedSize(52, 52)
+        container.setFixedSize(ScreenScale.w(52), ScreenScale.h(52))
         container.setStyleSheet("border: none; background: transparent;")
 
         thumb = QLabel(container)
-        thumb.setFixedSize(48, 48)
+        thumb.setFixedSize(ScreenScale.w(48), ScreenScale.h(48))
         thumb.move(4, 4)
         thumb.setAlignment(Qt.AlignCenter)
         thumb.setStyleSheet("""
@@ -387,7 +387,7 @@ class ApplicantInfoStep(BaseStep):
         thumb.mousePressEvent = _open_file
 
         x_btn = QLabel(container)
-        x_btn.setFixedSize(18, 18)
+        x_btn.setFixedSize(ScreenScale.w(18), ScreenScale.h(18))
         x_btn.move(0, 0)
         x_btn.setText("\u2715")
         x_btn.setAlignment(Qt.AlignCenter)
@@ -438,7 +438,7 @@ class ApplicantInfoStep(BaseStep):
 
         frame = QFrame()
         frame.setObjectName(obj_name)
-        frame.setMinimumHeight(60)
+        frame.setMinimumHeight(ScreenScale.h(60))
         frame.setStyleSheet(f"""
             QFrame#{obj_name} {{
                 border: 2px dashed rgba(56, 144, 223, 0.35);
@@ -467,7 +467,7 @@ class ApplicantInfoStep(BaseStep):
         row_layout.addStretch()
 
         icon_lbl = QLabel()
-        icon_lbl.setFixedSize(24, 24)
+        icon_lbl.setFixedSize(ScreenScale.w(24), ScreenScale.h(24))
         icon_lbl.setAlignment(Qt.AlignCenter)
         icon_lbl.setStyleSheet("border: none; background: transparent;")
         up_px = Icon.load_pixmap("upload_file", size=22)

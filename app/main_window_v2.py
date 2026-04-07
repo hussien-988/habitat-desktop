@@ -17,6 +17,7 @@ from services.translation_manager import tr, set_language as tm_set_language
 from utils.i18n import I18n
 from utils.logger import get_logger
 from ui.error_handler import ErrorHandler
+from ui.design_system import ScreenScale
 
 logger = get_logger(__name__)
 
@@ -163,7 +164,6 @@ class MainWindow(QMainWindow):
         screen = self.screen().availableGeometry()
 
         # Initialize screen scaling for all UI components
-        from ui.design_system import ScreenScale
         ScreenScale.initialize(screen)
 
         # Window = 95% of available screen, capped at reference size
@@ -271,7 +271,7 @@ class MainWindow(QMainWindow):
 
         # مقبض تغيير الحجم (resize) خليّه جوّا الإطار
         self._size_grip = QSizeGrip(self.window_frame)
-        self._size_grip.setFixedSize(16, 16)
+        self._size_grip.setFixedSize(ScreenScale.w(16), ScreenScale.h(16))
         self._size_grip.setStyleSheet("background: transparent;")
 
 
@@ -1869,6 +1869,53 @@ class MainWindow(QMainWindow):
     def showEvent(self, event):
         super().showEvent(event)
         self._apply_round_mask()
+
+        # Connect screen change signals (only once)
+        if not hasattr(self, '_screen_signals_connected'):
+            self._screen_signals_connected = True
+            handle = self.windowHandle()
+            if handle:
+                handle.screenChanged.connect(self._on_window_screen_changed)
+            current_screen = self.screen()
+            if current_screen:
+                current_screen.geometryChanged.connect(
+                    self._on_screen_geometry_changed
+                )
+                current_screen.logicalDotsPerInchChanged.connect(
+                    self._on_dpi_changed
+                )
+
+    def _on_screen_geometry_changed(self, _new_geo):
+        """Screen resolution/size changed."""
+        ScreenScale.initialize(self.screen().availableGeometry())
+        self._adapt_to_screen()
+
+    def _on_dpi_changed(self, _new_dpi):
+        """Windows DPI scale changed (125%, 150%, etc.)."""
+        ScreenScale.initialize(self.screen().availableGeometry())
+        self._adapt_to_screen()
+
+    def _on_window_screen_changed(self, new_screen):
+        """Window moved to a different monitor."""
+        if new_screen:
+            ScreenScale.initialize(new_screen.availableGeometry())
+            new_screen.geometryChanged.connect(
+                self._on_screen_geometry_changed
+            )
+            new_screen.logicalDotsPerInchChanged.connect(
+                self._on_dpi_changed
+            )
+            self._adapt_to_screen()
+
+    def _adapt_to_screen(self):
+        """Re-adapt window size after screen change."""
+        screen = self.screen().availableGeometry()
+        w = min(1512, int(screen.width() * 0.95))
+        h = min(982, int(screen.height() * 0.95))
+        self.setMinimumSize(1024, 680)
+        x = (screen.width() - w) // 2
+        y = (screen.height() - h) // 2
+        self.setGeometry(x, y, w, h)
 
     def resizeEvent(self, event):
         super().resizeEvent(event)

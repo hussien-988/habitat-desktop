@@ -5,11 +5,11 @@ from PyQt5.QtCore import Qt
 
 
 class ScreenScale:
-    """Screen-aware scaling utility.
+    """Screen-aware scaling utility (logical pixels).
 
-    Call ScreenScale.initialize(screen_geometry) once from the main window
-    before any UI is built. On screens smaller than 1512x982, dimensions
-    scale down proportionally. On larger screens, no scaling (1.0).
+    Call ScreenScale.initialize(screen_geometry) from the main window.
+    Scales proportionally relative to the 1512x982 reference resolution.
+    Works with Qt's AA_EnableHighDpiScaling (no double-scaling).
     """
     _ref_width = 1512
     _ref_height = 982
@@ -20,8 +20,8 @@ class ScreenScale:
     def initialize(cls, screen_geometry):
         avail_w = screen_geometry.width()
         avail_h = screen_geometry.height()
-        cls._scale_x = min(avail_w / cls._ref_width, 1.0)
-        cls._scale_y = min(avail_h / cls._ref_height, 1.0)
+        cls._scale_x = avail_w / cls._ref_width
+        cls._scale_y = avail_h / cls._ref_height
 
     @classmethod
     def w(cls, px):
@@ -39,6 +39,30 @@ class ScreenScale:
         return min(cls._scale_x, cls._scale_y)
 
 
+class FormDimensions:
+    """Scaled form element dimensions."""
+
+    @classmethod
+    def input_height(cls):
+        return ScreenScale.h(45)
+
+    @classmethod
+    def button_height(cls):
+        return ScreenScale.h(48)
+
+    @classmethod
+    def icon_sm(cls):
+        return ScreenScale.h(20)
+
+    @classmethod
+    def icon_md(cls):
+        return ScreenScale.h(32)
+
+    @classmethod
+    def icon_lg(cls):
+        return ScreenScale.h(48)
+
+
 class Colors:
     """Color palette."""
     # Primary Colors
@@ -54,24 +78,24 @@ class Colors:
     LIGHT_GRAY_BG = "#FAFBFC"  # Very light gray for alternating rows
 
     # Navbar colors
-    NAVBAR_BG = "#122C49"  # Dark navy blue navbar background
-    NAVBAR_BG_HOVER = "#1A3A5C"  # Slightly lighter on hover
-    NAVBAR_BORDER = "#0F2338"  # Darker border below navbar
+    NAVBAR_BG = "#1A3A5C"  # Navy blue navbar background
+    NAVBAR_BG_HOVER = "#224A70"  # Slightly lighter on hover
+    NAVBAR_BORDER = "#152E4A"  # Border below navbar
     NAVBAR_TAB_ACTIVE = "#9BC2FF"  # Active tab indicator color
 
     # Search bar background
-    SEARCH_BG = "#1A3A5C"  # Search bar background in navbar (slightly lighter than navbar)
+    SEARCH_BG = "#224A70"  # Search bar background in navbar (slightly lighter than navbar)
 
     # Horizon Blue navbar gradient palette
-    NAVBAR_GRADIENT_TOP = "#0A1628"
-    NAVBAR_GRADIENT_MID = "#0F2440"
-    NAVBAR_GRADIENT_BOT = "#122C49"
-    NAVBAR_TABS_TOP = "#10243E"
-    NAVBAR_TABS_BOT = "#0D1E35"
-    NAVBAR_DIVIDER_BLUE = "rgba(100, 160, 220, 0.25)"
+    NAVBAR_GRADIENT_TOP = "#152D4A"
+    NAVBAR_GRADIENT_MID = "#1A3A5C"
+    NAVBAR_GRADIENT_BOT = "#1E4468"
+    NAVBAR_TABS_TOP = "#183558"
+    NAVBAR_TABS_BOT = "#142E4E"
+    NAVBAR_DIVIDER_BLUE = "rgba(100, 160, 220, 0.30)"
 
     # Frosted glass palette (shared with login page)
-    FROSTED_BG = "rgba(15, 31, 61, 200)"
+    FROSTED_BG = "rgba(20, 40, 75, 185)"
     FROSTED_BORDER = "rgba(56, 144, 223, 30)"
     FROSTED_BORDER_HOVER = "rgba(56, 144, 223, 80)"
     CONSOLE_MUTED_TEXT = "rgba(139, 172, 200, 220)"
@@ -351,6 +375,23 @@ class NavbarDimensions:
     # Language slide toggle
     LANG_TOGGLE_WIDTH = 56
     LANG_TOGGLE_HEIGHT = 22
+
+    # Scaled accessors
+    @classmethod
+    def container_height(cls):
+        return ScreenScale.h(cls.CONTAINER_HEIGHT)
+
+    @classmethod
+    def top_bar_height(cls):
+        return ScreenScale.h(cls.TOP_BAR_HEIGHT)
+
+    @classmethod
+    def tabs_bar_height(cls):
+        return ScreenScale.h(cls.TABS_BAR_HEIGHT)
+
+    @classmethod
+    def tab_height(cls):
+        return ScreenScale.h(cls.TAB_HEIGHT)
 
 
 class PageDimensions:

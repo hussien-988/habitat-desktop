@@ -10,6 +10,7 @@ from PyQt5.QtGui import QPainter, QColor, QPaintEvent, QLinearGradient
 
 from ui.font_utils import create_font, FontManager
 from services.translation_manager import tr, get_layout_direction
+from ui.design_system import ScreenScale
 
 _CONTAINER_STYLE = """
     QWidget#_overlay_container {
@@ -56,7 +57,7 @@ class LoadingOverlay(QWidget):
 
         container = QWidget()
         container.setObjectName("_overlay_container")
-        container.setFixedSize(340, 110)
+        container.setFixedSize(ScreenScale.w(340), ScreenScale.h(110))
         container.setStyleSheet(_CONTAINER_STYLE)
 
         container_layout = QVBoxLayout(container)

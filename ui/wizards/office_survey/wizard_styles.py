@@ -7,6 +7,7 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QColor
+from ui.design_system import ScreenScale
 
 
 # -- Step card (white rounded container with blue accent left border) --
@@ -544,7 +545,7 @@ def make_badge(text: str, variant: str = "blue") -> QLabel:
     lbl.setFont(create_font(size=8, weight=FontManager.WEIGHT_SEMIBOLD))
     lbl.setStyleSheet(styles.get(variant, BADGE_BLUE))
     lbl.setAlignment(Qt.AlignCenter)
-    lbl.setFixedHeight(24)
+    lbl.setFixedHeight(ScreenScale.h(24))
     return lbl
 
 
@@ -596,7 +597,7 @@ def make_empty_state(icon_name: str, title: str, subtitle: str = "") -> QWidget:
 
     # Icon circle
     icon_circle = QLabel()
-    icon_circle.setFixedSize(80, 80)
+    icon_circle.setFixedSize(ScreenScale.w(80), ScreenScale.h(80))
     icon_circle.setAlignment(Qt.AlignCenter)
     icon_circle.setStyleSheet(EMPTY_STATE_ICON_STYLE)
     px = Icon.load_pixmap(icon_name, size=40)
@@ -618,7 +619,7 @@ def make_empty_state(icon_name: str, title: str, subtitle: str = "") -> QWidget:
         s.setStyleSheet("color: #94A3B8; background: transparent; border: none;")
         s.setAlignment(Qt.AlignCenter)
         s.setWordWrap(True)
-        s.setMaximumWidth(320)
+        s.setMaximumWidth(ScreenScale.w(320))
         layout.addWidget(s, alignment=Qt.AlignCenter)
 
     return container

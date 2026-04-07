@@ -16,7 +16,7 @@ from ui.components.animated_card import AnimatedCard, EmptyStateAnimated
 from ui.components.icon import Icon
 from ui.components.toast import Toast
 from ui.animation_utils import stagger_fade_in
-from ui.design_system import Colors, PageDimensions
+from ui.design_system import Colors, PageDimensions, ScreenScale
 from ui.font_utils import create_font, FontManager
 from ui.style_manager import StyleManager
 from utils.i18n import I18n
@@ -45,7 +45,7 @@ class _ResearcherCard(AnimatedCard):
             card_height=90,
             border_radius=10,
             show_chevron=False,
-            show_strip=True,
+            show_strip=False,
             status_color=status_color,
             strip_width=4,
             clickable=True,
@@ -324,7 +324,7 @@ class FieldWorkPreparationStep2(QWidget):
         # Search bar
         search_bar = QFrame()
         search_bar.setObjectName("searchBar")
-        search_bar.setFixedHeight(42)
+        search_bar.setFixedHeight(ScreenScale.h(42))
         search_bar.setStyleSheet(f"""
             QFrame#searchBar {{
                 background-color: {Colors.SEARCH_BAR_BG};
@@ -340,7 +340,7 @@ class FieldWorkPreparationStep2(QWidget):
 
         search_icon_btn = QToolButton()
         search_icon_btn.setCursor(Qt.PointingHandCursor)
-        search_icon_btn.setFixedSize(30, 30)
+        search_icon_btn.setFixedSize(ScreenScale.w(30), ScreenScale.h(30))
         search_icon_btn.setStyleSheet("""
             QToolButton {
                 border: none;
@@ -435,7 +435,7 @@ class FieldWorkPreparationStep2(QWidget):
         self._empty_label = EmptyStateAnimated(
             title=tr("wizard.step2.no_matching_collectors"),
         )
-        self._empty_label.setMinimumHeight(150)
+        self._empty_label.setMinimumHeight(ScreenScale.h(150))
         self._empty_label.setVisible(False)
         cards_layout.addWidget(self._empty_label)
 

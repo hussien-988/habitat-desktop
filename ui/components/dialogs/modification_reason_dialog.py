@@ -11,7 +11,7 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QColor, QFont
 
-from ui.design_system import Colors
+from ui.design_system import Colors, ScreenScale
 from ui.font_utils import create_font, FontManager
 from utils.logger import get_logger
 from services.translation_manager import tr, get_layout_direction
@@ -30,7 +30,10 @@ class ModificationReasonDialog(QDialog):
         self._reason = ""
 
         self.setModal(True)
-        self.setFixedSize(540, 440)
+        from PyQt5.QtWidgets import QApplication
+        _scr = QApplication.primaryScreen().availableGeometry()
+        self.resize(min(540, int(_scr.width() * 0.45)), min(440, int(_scr.height() * 0.50)))
+        self.setMinimumSize(400, 340)
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.Dialog)
         self.setAttribute(Qt.WA_TranslucentBackground)
         self.setStyleSheet("QDialog { background-color: transparent; }")
@@ -119,8 +122,8 @@ class ModificationReasonDialog(QDialog):
         self._reason_input = QTextEdit()
         self._reason_input.setLayoutDirection(get_layout_direction())
         self._reason_input.setPlaceholderText(tr("dialog.modification_reason.placeholder"))
-        self._reason_input.setMinimumHeight(90)
-        self._reason_input.setMaximumHeight(120)
+        self._reason_input.setMinimumHeight(ScreenScale.h(90))
+        self._reason_input.setMaximumHeight(ScreenScale.h(120))
         self._reason_input.setStyleSheet(f"""
             QTextEdit {{
                 background-color: #f0f7ff;
@@ -165,7 +168,7 @@ class ModificationReasonDialog(QDialog):
 
     def _create_button(self, text: str, primary: bool) -> QPushButton:
         btn = QPushButton(text)
-        btn.setFixedSize(170, 50)
+        btn.setFixedSize(ScreenScale.w(170), ScreenScale.h(50))
         btn.setCursor(Qt.PointingHandCursor)
         btn.setFont(create_font(size=10, weight=FontManager.WEIGHT_MEDIUM))
 

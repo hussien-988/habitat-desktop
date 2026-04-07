@@ -28,7 +28,7 @@ from services.api_client import get_api_client
 from utils.logger import get_logger
 from ui.error_handler import ErrorHandler
 from ui.font_utils import FontManager, create_font
-from ui.design_system import Colors
+from ui.design_system import Colors, ScreenScale
 from ui.wizards.office_survey.wizard_styles import (
     STEP_CARD_STYLE, IN_CARD_ACTION_STYLE,
     make_step_card, make_icon_header, PERSON_CARD_STYLE,
@@ -142,7 +142,7 @@ class OccupancyClaimsStep(BaseStep):
 
         # Icon with orange circle background (same as claim_step)
         icon_container = QLabel()
-        icon_container.setFixedSize(70, 70)
+        icon_container.setFixedSize(ScreenScale.w(70), ScreenScale.h(70))
         icon_container.setAlignment(Qt.AlignCenter)
         icon_container.setStyleSheet(EMPTY_STATE_ICON_STYLE)
 
@@ -382,7 +382,7 @@ class OccupancyClaimsStep(BaseStep):
 
         card = QFrame()
         card.setLayoutDirection(get_layout_direction())
-        card.setFixedHeight(68)
+        card.setFixedHeight(ScreenScale.h(68))
         card.setStyleSheet(PERSON_CARD_STYLE)
         card.setCursor(Qt.PointingHandCursor)
         card.mousePressEvent = lambda e, pid=person_id: self._view_person(pid) if e.button() == Qt.LeftButton else None
@@ -396,7 +396,7 @@ class OccupancyClaimsStep(BaseStep):
         right_group.setSpacing(12)
 
         icon_lbl = QLabel()
-        icon_lbl.setFixedSize(40, 40)
+        icon_lbl.setFixedSize(ScreenScale.w(40), ScreenScale.h(40))
         icon_lbl.setAlignment(Qt.AlignCenter)
         icon_lbl.setStyleSheet("""
             QLabel {
@@ -439,13 +439,13 @@ class OccupancyClaimsStep(BaseStep):
 
         # Left side: menu button
         menu_btn = QPushButton("⋮")
-        menu_btn.setFixedSize(36, 36)
+        menu_btn.setFixedSize(ScreenScale.w(36), ScreenScale.h(36))
         menu_btn.setStyleSheet(MENU_DOTS_STYLE)
         menu_btn.setCursor(Qt.PointingHandCursor)
 
         menu = QMenu(menu_btn)
         menu.setLayoutDirection(get_layout_direction())
-        menu.setFixedSize(99, 80)
+        menu.setFixedSize(ScreenScale.w(99), ScreenScale.h(80))
         menu.setStyleSheet(CONTEXT_MENU_STYLE)
 
         eye_icon = QIcon(str(Config.IMAGES_DIR / "Eye.png"))

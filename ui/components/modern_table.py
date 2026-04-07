@@ -18,7 +18,7 @@ from PyQt5.QtGui import QColor, QPainter, QFont, QIcon, QCursor
 from ui.design_system import (
     ModernTableDimensions as MTD, Colors, BorderRadius,
     Typography, Spacing, AnimationTimings, SkeletonColors
-)
+, ScreenScale, ScreenScale)
 from ui.font_utils import create_font, FontManager
 from services.translation_manager import get_layout_direction, tr
 
@@ -49,7 +49,7 @@ class _StatusBadge(QLabel):
             border-radius: {MTD.STATUS_BADGE_RADIUS}px;
             padding: {MTD.STATUS_BADGE_PADDING_V}px {MTD.STATUS_BADGE_PADDING_H}px;
         """)
-        self.setFixedHeight(24)
+        self.setFixedHeight(ScreenScale.h(24))
 
 
 class _ActionBar(QWidget):
@@ -65,7 +65,7 @@ class _ActionBar(QWidget):
         for icon_text, tooltip, callback in actions:
             btn = QPushButton(icon_text)
             btn.setToolTip(tooltip)
-            btn.setFixedSize(28, 28)
+            btn.setFixedSize(ScreenScale.w(28), ScreenScale.h(28))
             btn.setCursor(Qt.PointingHandCursor)
             btn.setFont(create_font(size=12, weight=FontManager.WEIGHT_REGULAR))
             btn.setStyleSheet(f"""

@@ -23,7 +23,7 @@ from ui.components.toast import Toast
 from ui.components.dark_header_zone import DarkHeaderZone
 from ui.components.stat_pill import StatPill
 from ui.components.accent_line import AccentLine
-from ui.design_system import Colors, PageDimensions, ButtonDimensions
+from ui.design_system import Colors, PageDimensions, ButtonDimensions, ScreenScale
 from ui.font_utils import create_font, FontManager
 from ui.style_manager import StyleManager
 from utils.helpers import format_date, build_hierarchical_address
@@ -75,7 +75,7 @@ class BuildingDetailsPage(QWidget):
 
         # Action buttons in dark header
         self._close_btn = QPushButton("×")
-        self._close_btn.setFixedSize(40, ButtonDimensions.SAVE_HEIGHT)
+        self._close_btn.setFixedSize(ScreenScale.w(40), ButtonDimensions.SAVE_HEIGHT)
         self._close_btn.setCursor(Qt.PointingHandCursor)
         self._close_btn.setFont(create_font(size=16, weight=FontManager.WEIGHT_BOLD))
         self._close_btn.setStyleSheet(StyleManager.dark_action_button())
@@ -96,7 +96,7 @@ class BuildingDetailsPage(QWidget):
         self._header.add_action_widget(self._lock_btn)
 
         self._back_btn = QPushButton(tr("action.back"))
-        self._back_btn.setFixedSize(100, ButtonDimensions.SAVE_HEIGHT)
+        self._back_btn.setFixedSize(ScreenScale.w(100), ButtonDimensions.SAVE_HEIGHT)
         self._back_btn.setCursor(Qt.PointingHandCursor)
         self._back_btn.setFont(create_font(
             size=ButtonDimensions.SAVE_FONT_SIZE,
@@ -191,7 +191,7 @@ class BuildingDetailsPage(QWidget):
 
         # Icon (28x28, rounded)
         icon_label = QLabel()
-        icon_label.setFixedSize(28, 28)
+        icon_label.setFixedSize(ScreenScale.w(28), ScreenScale.h(28))
         icon_label.setAlignment(Qt.AlignCenter)
         icon_label.setStyleSheet("""
             QLabel {
@@ -431,7 +431,7 @@ class BuildingDetailsPage(QWidget):
         address = build_hierarchical_address(building_obj=building, unit_obj=None, include_unit=False)
         addr_bar = QFrame()
         addr_bar.setLayoutDirection(get_layout_direction())
-        addr_bar.setFixedHeight(28)
+        addr_bar.setFixedHeight(ScreenScale.h(28))
         addr_bar.setStyleSheet("QFrame { background-color: #F8FAFF; border: none; border-radius: 8px; }")
         addr_row = QHBoxLayout(addr_bar)
         addr_row.setContentsMargins(12, 0, 12, 0)
@@ -498,7 +498,7 @@ class BuildingDetailsPage(QWidget):
 
         # Map placeholder
         map_container = QLabel()
-        map_container.setFixedSize(400, 130)
+        map_container.setFixedSize(ScreenScale.w(400), ScreenScale.h(130))
         map_container.setAlignment(Qt.AlignCenter)
         map_container.setObjectName("detailsMapContainer")
         map_container.setStyleSheet("QLabel#detailsMapContainer { background-color: #E8E8E8; border-radius: 8px; }")
@@ -514,7 +514,7 @@ class BuildingDetailsPage(QWidget):
 
         # "فتح الخريطة" button
         map_button = QPushButton(map_container)
-        map_button.setFixedSize(94, 20)
+        map_button.setFixedSize(ScreenScale.w(94), ScreenScale.h(20))
         map_button.move(8, 8)
         map_button.setCursor(Qt.PointingHandCursor)
         pill_pixmap = Icon.load_pixmap("pill", size=12)
@@ -549,7 +549,7 @@ class BuildingDetailsPage(QWidget):
         loc_pixmap = Icon.load_pixmap("carbon_location-filled", size=56)
         if loc_pixmap and not loc_pixmap.isNull():
             location_icon.setPixmap(loc_pixmap)
-            location_icon.setFixedSize(56, 56)
+            location_icon.setFixedSize(ScreenScale.w(56), ScreenScale.h(56))
             location_icon.move(172, 37)
             location_icon.setStyleSheet("background: transparent;")
 

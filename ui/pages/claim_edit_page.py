@@ -11,7 +11,7 @@ from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtGui import QFont, QColor
 from PyQt5.QtWidgets import QGraphicsDropShadowEffect
 
-from ui.design_system import Colors, PageDimensions
+from ui.design_system import Colors, PageDimensions, ScreenScale
 from ui.font_utils import create_font, FontManager
 from ui.style_manager import StyleManager
 from ui.components.toast import Toast
@@ -221,7 +221,7 @@ class ClaimEditPage(QWidget):
         # Add button
         self._add_evidence_btn = QPushButton(tr("page.claim_edit.add_document"))
         self._add_evidence_btn.setCursor(Qt.PointingHandCursor)
-        self._add_evidence_btn.setFixedHeight(36)
+        self._add_evidence_btn.setFixedHeight(ScreenScale.h(36))
         self._add_evidence_btn.setStyleSheet(f"""
             QPushButton {{
                 background-color: white;
@@ -260,7 +260,7 @@ class ClaimEditPage(QWidget):
         grid.addWidget(self._notes_label, 1, 0, 1, 2)
 
         self._processing_notes = QTextEdit()
-        self._processing_notes.setMaximumHeight(80)
+        self._processing_notes.setMaximumHeight(ScreenScale.h(80))
         self._processing_notes.setStyleSheet(self._textarea_style())
         grid.addWidget(self._processing_notes, 2, 0, 1, 2)
 
@@ -269,7 +269,7 @@ class ClaimEditPage(QWidget):
         grid.addWidget(self._remarks_label, 3, 0, 1, 2)
 
         self._public_remarks = QTextEdit()
-        self._public_remarks.setMaximumHeight(80)
+        self._public_remarks.setMaximumHeight(ScreenScale.h(80))
         self._public_remarks.setStyleSheet(self._textarea_style())
         grid.addWidget(self._public_remarks, 4, 0, 1, 2)
 
@@ -279,14 +279,14 @@ class ClaimEditPage(QWidget):
 
     def _create_action_bar(self) -> QWidget:
         bar = QWidget()
-        bar.setFixedHeight(56)
+        bar.setFixedHeight(ScreenScale.h(56))
         layout = QHBoxLayout(bar)
         layout.setContentsMargins(0, 8, 0, 8)
         layout.setSpacing(12)
         layout.addStretch()
 
         cancel_btn = QPushButton(tr("button.cancel"))
-        cancel_btn.setFixedSize(120, 40)
+        cancel_btn.setFixedSize(ScreenScale.w(120), ScreenScale.h(40))
         cancel_btn.setCursor(Qt.PointingHandCursor)
         cancel_btn.setStyleSheet(f"""
             QPushButton {{
@@ -303,7 +303,7 @@ class ClaimEditPage(QWidget):
         layout.addWidget(cancel_btn)
 
         save_btn = QPushButton(tr("page.claim_edit.save_changes"))
-        save_btn.setFixedSize(160, 40)
+        save_btn.setFixedSize(ScreenScale.w(160), ScreenScale.h(40))
         save_btn.setCursor(Qt.PointingHandCursor)
         save_btn.setStyleSheet(f"""
             QPushButton {{
@@ -478,7 +478,7 @@ class ClaimEditPage(QWidget):
 
     def _create_evidence_row(self, ev: dict) -> QFrame:
         row = QFrame()
-        row.setFixedHeight(40)
+        row.setFixedHeight(ScreenScale.h(40))
         row.setStyleSheet(f"""
             QFrame {{
                 background-color: white;
@@ -495,7 +495,7 @@ class ClaimEditPage(QWidget):
         type_text = tr("page.claim_edit.ev_identification") if "identification" in str(ev_type).lower() else tr("page.claim_edit.ev_tenure")
 
         type_badge = QLabel(type_text)
-        type_badge.setFixedWidth(50)
+        type_badge.setFixedWidth(ScreenScale.w(50))
         type_badge.setAlignment(Qt.AlignCenter)
         type_badge.setStyleSheet(f"""
             QLabel {{
@@ -517,7 +517,7 @@ class ClaimEditPage(QWidget):
         layout.addStretch()
 
         del_btn = QPushButton(tr("action.delete"))
-        del_btn.setFixedSize(60, 28)
+        del_btn.setFixedSize(ScreenScale.w(60), ScreenScale.h(28))
         del_btn.setCursor(Qt.PointingHandCursor)
         del_btn.setStyleSheet("""
             QPushButton {
@@ -858,7 +858,7 @@ class ClaimEditPage(QWidget):
 
         inp = QLineEdit()
         inp.setStyleSheet(StyleManager.form_input())
-        inp.setFixedHeight(43)
+        inp.setFixedHeight(ScreenScale.h(43))
         v.addWidget(inp)
 
         grid.addWidget(container, row, col)
@@ -880,7 +880,7 @@ class ClaimEditPage(QWidget):
         for val, text in options:
             combo.addItem(text, val)
         combo.setStyleSheet(StyleManager.form_input())
-        combo.setFixedHeight(43)
+        combo.setFixedHeight(ScreenScale.h(43))
         v.addWidget(combo)
 
         grid.addWidget(container, row, col)

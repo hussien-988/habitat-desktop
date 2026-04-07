@@ -385,6 +385,12 @@ def main():
     # Set Qt attributes BEFORE creating QApplication
     QApplication.setAttribute(Qt.AA_EnableHighDpiScaling, True)  # type: ignore
     QApplication.setAttribute(Qt.AA_UseHighDpiPixmaps, True)  # type: ignore
+    try:
+        QApplication.setHighDpiScaleFactorRoundingPolicy(
+            Qt.HighDpiScaleFactorRoundingPolicy.PassThrough  # type: ignore
+        )
+    except AttributeError:
+        pass  # Qt5 versions prior to 5.14 don't have this
     QApplication.setAttribute(Qt.AA_ShareOpenGLContexts, True)  # type: ignore
 
     # Initialize logging

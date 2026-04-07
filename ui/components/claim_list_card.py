@@ -9,7 +9,7 @@ from PyQt5.QtCore import Qt, pyqtSignal, QSize
 from PyQt5.QtGui import QFont, QColor
 from PyQt5.QtWidgets import QGraphicsDropShadowEffect
 
-from ..design_system import PageDimensions, Typography
+from ..design_system import PageDimensions, Typography, ScreenScale
 from ..style_manager import StyleManager
 from .icon import Icon, IconSize
 from services.translation_manager import tr
@@ -64,7 +64,7 @@ class ClaimListCard(QFrame):
         # Icon button
         icon_btn = QPushButton()
         icon_btn.setCursor(Qt.PointingHandCursor)
-        icon_btn.setFixedSize(32, 32)
+        icon_btn.setFixedSize(ScreenScale.w(32), ScreenScale.h(32))
 
         q_icon = Icon.load_qicon(self.icon_name)
         if q_icon:

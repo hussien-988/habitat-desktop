@@ -1781,3 +1781,46 @@ def get_input_style(variant: str = "default") -> str:
         return StyleManager.input_field(InputVariant.SUCCESS)
     else:
         return StyleManager.input_field(InputVariant.DEFAULT)
+
+
+def mark_field_error(widget, error_label=None, message: str = "") -> None:
+    """Apply error visual state to an input widget.
+
+    Args:
+        widget: QLineEdit, QComboBox, or similar input widget.
+        error_label: Optional QLabel to show the error message below the field.
+        message: Error text to display in the error_label.
+    """
+    widget.setStyleSheet(StyleManager.input_field(InputVariant.ERROR))
+    if error_label is not None:
+        error_label.setText(message)
+        error_label.setVisible(bool(message))
+
+
+def mark_field_valid(widget, error_label=None) -> None:
+    """Apply success/valid visual state to an input widget."""
+    widget.setStyleSheet(StyleManager.input_field(InputVariant.SUCCESS))
+    if error_label is not None:
+        error_label.setVisible(False)
+
+
+def clear_field_state(widget, error_label=None) -> None:
+    """Reset an input widget to its default (neutral) visual state."""
+    widget.setStyleSheet(StyleManager.input_field(InputVariant.DEFAULT))
+    if error_label is not None:
+        error_label.setVisible(False)
+
+
+def required_label_html(text: str) -> str:
+    """Return an HTML label string with a red asterisk for required fields.
+
+    Usage::
+
+        label.setText(required_label_html(tr("field.name")))
+
+    Args:
+        text: The field label text (plain string).
+    Returns:
+        HTML string with a red asterisk appended.
+    """
+    return f"{text} <span style='color:{Colors.ERROR};'>*</span>"

@@ -27,6 +27,7 @@ from ui.error_handler import ErrorHandler
 from utils.i18n import I18n
 from utils.logger import get_logger
 from services.translation_manager import tr, get_layout_direction
+from ui.design_system import ScreenScale
 
 logger = get_logger(__name__)
 
@@ -121,8 +122,8 @@ class HouseholdDialog(QDialog):
         self._is_edit_mode = household is not None
 
         self.setWindowTitle(tr("edit_household") if household else tr("add_household"))
-        self.setMinimumWidth(600)
-        self.setMinimumHeight(650)
+        self.setMinimumWidth(ScreenScale.w(600))
+        self.setMinimumHeight(ScreenScale.h(650))
         self._setup_ui()
 
         if household:
@@ -154,7 +155,7 @@ class HouseholdDialog(QDialog):
         unit_form.setSpacing(10)
 
         self.unit_combo = QComboBox()
-        self.unit_combo.setMinimumWidth(350)
+        self.unit_combo.setMinimumWidth(ScreenScale.w(350))
         units = self.unit_repo.get_all(limit=500)
         self.unit_combo.addItem(tr("page.households.select_unit"), "")
         for u in units:
@@ -170,7 +171,7 @@ class HouseholdDialog(QDialog):
 
         # Person selection (optional)
         self.person_combo = QComboBox()
-        self.person_combo.setMinimumWidth(350)
+        self.person_combo.setMinimumWidth(ScreenScale.w(350))
         persons = self.person_repo.get_all(limit=500)
         self.person_combo.addItem(tr("page.households.select_person_optional"), "")
         for p in persons:
@@ -292,7 +293,7 @@ class HouseholdDialog(QDialog):
 
         layout.addWidget(details_group)
         self.notes = QTextEdit()
-        self.notes.setMaximumHeight(60)
+        self.notes.setMaximumHeight(ScreenScale.h(60))
         self.notes.setPlaceholderText(tr("page.households.additional_notes_placeholder"))
         layout.addWidget(QLabel(tr("page.households.notes_label")))
         layout.addWidget(self.notes)
@@ -568,7 +569,7 @@ class HouseholdsPage(QWidget):
         self._unit_filter_label = QLabel(tr("page.households.unit_filter"))
         filters_layout.addWidget(self._unit_filter_label)
         self.unit_filter = QComboBox()
-        self.unit_filter.setMinimumWidth(200)
+        self.unit_filter.setMinimumWidth(ScreenScale.w(200))
         self.unit_filter.addItem(tr("all"), "")
         self.unit_filter.currentIndexChanged.connect(self._on_filter_changed)
         filters_layout.addWidget(self.unit_filter)

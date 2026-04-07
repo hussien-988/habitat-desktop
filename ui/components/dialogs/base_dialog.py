@@ -10,7 +10,7 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt, QPropertyAnimation, QEasingCurve, pyqtSignal
 from PyQt5.QtGui import QFont, QPixmap, QPainter, QColor
 
-from ui.design_system import Colors, ButtonDimensions, DialogColors
+from ui.design_system import Colors, ButtonDimensions, DialogColors, ScreenScale
 from ui.font_utils import create_font
 from ui.style_manager import StyleManager
 from utils.logger import get_logger
@@ -123,7 +123,7 @@ class BaseDialog(QWidget):
             # Dialog card inside overlay
             self.dialog_card = QFrame()
             self.dialog_card.setObjectName("DialogCard")
-            self.dialog_card.setFixedWidth(400)
+            self.dialog_card.setFixedWidth(ScreenScale.w(400))
             self.dialog_card.setStyleSheet(f"""
                 QFrame#DialogCard {{
                     background-color: #FFFFFF;
@@ -139,7 +139,7 @@ class BaseDialog(QWidget):
             # Dialog card with shadow - centered as standalone widget
             self.dialog_card = QFrame()
             self.dialog_card.setObjectName("DialogCard")
-            self.dialog_card.setFixedWidth(400)
+            self.dialog_card.setFixedWidth(ScreenScale.w(400))
             self.dialog_card.setStyleSheet(f"""
                 QFrame#DialogCard {{
                     background-color: #FFFFFF;
@@ -214,7 +214,7 @@ class BaseDialog(QWidget):
         """Create icon with colored circular background."""
         # Icon container
         icon_widget = QWidget()
-        icon_widget.setFixedSize(48, 48)
+        icon_widget.setFixedSize(ScreenScale.w(48), ScreenScale.h(48))
 
         # Get colors based on dialog type
         bg_color, icon_color = self._get_icon_colors()
@@ -339,8 +339,8 @@ class BaseDialog(QWidget):
         btn.setCursor(Qt.PointingHandCursor)
 
         # Button dimensions
-        btn.setFixedHeight(48)
-        btn.setMinimumWidth(120)
+        btn.setFixedHeight(ScreenScale.h(48))
+        btn.setMinimumWidth(ScreenScale.w(120))
         btn.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Fixed)
 
         btn_font = create_font(

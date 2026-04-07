@@ -28,7 +28,7 @@ from ui.wizards.office_survey.steps.claim_step import ClaimStep
 
 from repositories.survey_repository import SurveyRepository
 from repositories.database import Database
-from ui.design_system import PageDimensions, Colors, ButtonDimensions
+from ui.design_system import PageDimensions, Colors, ButtonDimensions, ScreenScale
 from ui.style_manager import StyleManager
 from ui.font_utils import create_font, FontManager
 from ui.components.toast import Toast
@@ -272,7 +272,7 @@ class OfficeSurveyWizard(BaseWizard):
 
         ok_btn = QPushButton(tr("button.ok"))
         ok_btn.setCursor(Qt.PointingHandCursor)
-        ok_btn.setFixedHeight(44)
+        ok_btn.setFixedHeight(ScreenScale.h(44))
         ok_btn.setStyleSheet(
             "QPushButton {"
             "    background-color: #3890DF; color: white; border: none;"
@@ -695,7 +695,7 @@ class OfficeSurveyWizard(BaseWizard):
 
         for num, name in self.get_step_names():
             step_tab = NavStyleTab(name)
-            step_tab.setFixedSize(ButtonDimensions.STEP_TAB_WIDTH + 20, ButtonDimensions.STEP_TAB_HEIGHT + 3)
+            step_tab.setFixedSize(ScreenScale.w(ButtonDimensions.STEP_TAB_WIDTH + 20), ScreenScale.h(ButtonDimensions.STEP_TAB_HEIGHT + 3))
 
             tab_font_size = 7 if num in ("3", "4") else 9
             self._step_font_sizes.append(tab_font_size)

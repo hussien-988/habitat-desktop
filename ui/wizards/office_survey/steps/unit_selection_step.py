@@ -32,7 +32,7 @@ from services.api_client import get_api_client
 from services.api_worker import ApiWorker
 from utils.logger import get_logger
 from utils.helpers import build_hierarchical_address
-from ui.design_system import Colors
+from ui.design_system import Colors, ScreenScale
 from ui.style_manager import StyleManager
 from ui.components.icon import Icon
 from ui.components.action_button import ActionButton
@@ -96,7 +96,7 @@ class UnitSelectionStep(BaseStep):
         card_layout.setContentsMargins(16, 16, 16, 16)
         card_layout.setSpacing(12)
         address_container = QFrame()
-        address_container.setFixedHeight(32)
+        address_container.setFixedHeight(ScreenScale.h(32))
         address_container.setStyleSheet("""
             QFrame {
                 background-color: #F0F4FA;
@@ -269,7 +269,7 @@ class UnitSelectionStep(BaseStep):
 
         # Icon with orange circle background
         icon_container = QLabel()
-        icon_container.setFixedSize(70, 70)
+        icon_container.setFixedSize(ScreenScale.w(70), ScreenScale.h(70))
         icon_container.setAlignment(Qt.AlignCenter)
         icon_container.setStyleSheet("""
             background-color: #EBF5FF;
@@ -612,7 +612,7 @@ class UnitSelectionStep(BaseStep):
         desc_text.setAlignment(Qt.AlignLeft | Qt.AlignTop)  # Left in RTL = Right visually
         
         desc_text.setWordWrap(True)
-        desc_text.setMaximumHeight(40)
+        desc_text.setMaximumHeight(ScreenScale.h(40))
 
         desc_layout.addWidget(desc_title)
         desc_layout.addWidget(desc_text)
@@ -789,14 +789,14 @@ class UnitSelectionStep(BaseStep):
         self._if_floor.setRange(-3, 100)
         self._if_floor.setLocale(QLocale(QLocale.English, QLocale.UnitedStates))
         self._if_floor.setStyleSheet(bs_spin_style)
-        self._if_floor.setMinimumHeight(44)
+        self._if_floor.setMinimumHeight(ScreenScale.h(44))
         row1.addLayout(self._make_bs_field(tr("wizard.unit_dialog.floor_number"), self._if_floor, bs_label_style), 1)
 
         self._if_unit_num = QSpinBox()
         self._if_unit_num.setRange(0, 9999)
         self._if_unit_num.setLocale(QLocale(QLocale.English, QLocale.UnitedStates))
         self._if_unit_num.setStyleSheet(bs_spin_style)
-        self._if_unit_num.setMinimumHeight(44)
+        self._if_unit_num.setMinimumHeight(ScreenScale.h(44))
         row1.addLayout(self._make_bs_field(tr("wizard.unit_dialog.unit_number"), self._if_unit_num, bs_label_style), 1)
         form_layout.addLayout(row1)
 
@@ -805,7 +805,7 @@ class UnitSelectionStep(BaseStep):
         row2.setSpacing(16)
         self._if_type = RtlCombo()
         self._if_type.setStyleSheet(bs_combo_style)
-        self._if_type.setMinimumHeight(44)
+        self._if_type.setMinimumHeight(ScreenScale.h(44))
         self._if_type.addItem(tr("wizard.unit_dialog.select"), 0)
         for code, label in get_unit_type_options():
             self._if_type.addItem(label, code)
@@ -813,7 +813,7 @@ class UnitSelectionStep(BaseStep):
 
         self._if_status = RtlCombo()
         self._if_status.setStyleSheet(bs_combo_style)
-        self._if_status.setMinimumHeight(44)
+        self._if_status.setMinimumHeight(ScreenScale.h(44))
         self._if_status.addItem(tr("wizard.unit_dialog.select"), 0)
         for code, label in get_unit_status_options():
             self._if_status.addItem(label, code)
@@ -827,13 +827,13 @@ class UnitSelectionStep(BaseStep):
         self._if_rooms.setRange(0, 20)
         self._if_rooms.setLocale(QLocale(QLocale.English, QLocale.UnitedStates))
         self._if_rooms.setStyleSheet(bs_spin_style)
-        self._if_rooms.setMinimumHeight(44)
+        self._if_rooms.setMinimumHeight(ScreenScale.h(44))
         row3.addLayout(self._make_bs_field(tr("wizard.unit_dialog.rooms"), self._if_rooms, bs_label_style), 1)
 
         self._if_area = QLineEdit()
         self._if_area.setPlaceholderText(tr("wizard.unit_dialog.area_placeholder"))
         self._if_area.setStyleSheet(bs_field_style)
-        self._if_area.setMinimumHeight(44)
+        self._if_area.setMinimumHeight(ScreenScale.h(44))
         area_validator = QDoubleValidator(0.0, 999999.99, 2, self._if_area)
         area_validator.setLocale(QLocale(QLocale.English, QLocale.UnitedStates))
         area_validator.setNotation(QDoubleValidator.StandardNotation)
@@ -843,8 +843,8 @@ class UnitSelectionStep(BaseStep):
 
         # Row 4: Description (full width)
         self._if_desc = QTextEdit()
-        self._if_desc.setMinimumHeight(80)
-        self._if_desc.setMaximumHeight(100)
+        self._if_desc.setMinimumHeight(ScreenScale.h(80))
+        self._if_desc.setMaximumHeight(ScreenScale.h(100))
         self._if_desc.setPlaceholderText(tr("wizard.unit_dialog.description_placeholder"))
         self._if_desc.setStyleSheet(bs_field_style)
         form_layout.addLayout(self._make_bs_field(tr("wizard.unit_dialog.description"), self._if_desc, bs_label_style))
@@ -855,7 +855,7 @@ class UnitSelectionStep(BaseStep):
 
         cancel_btn = QPushButton(tr("common.cancel"))
         cancel_btn.setCursor(Qt.PointingHandCursor)
-        cancel_btn.setFixedHeight(48)
+        cancel_btn.setFixedHeight(ScreenScale.h(48))
         cancel_btn.setFont(create_font(size=FontManager.SIZE_BODY, weight=FontManager.WEIGHT_SEMIBOLD))
         cancel_btn.setStyleSheet("""
             QPushButton {
@@ -874,7 +874,7 @@ class UnitSelectionStep(BaseStep):
 
         save_btn = QPushButton(tr("common.save"))
         save_btn.setCursor(Qt.PointingHandCursor)
-        save_btn.setFixedHeight(48)
+        save_btn.setFixedHeight(ScreenScale.h(48))
         save_btn.setFont(create_font(size=FontManager.SIZE_BODY, weight=FontManager.WEIGHT_SEMIBOLD))
         save_btn.setStyleSheet(f"""
             QPushButton {{

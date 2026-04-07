@@ -13,6 +13,7 @@ from ui.font_utils import create_font, FontManager
 from ui.style_manager import StyleManager
 from services.translation_manager import tr, get_layout_direction
 from utils.logger import get_logger
+from ui.design_system import ScreenScale
 
 logger = get_logger(__name__)
 
@@ -205,7 +206,7 @@ class ImportStep6Report(QWidget):
         """)
         self._breakdown_table.setFont(create_font(size=10, weight=FontManager.WEIGHT_REGULAR))
         header.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
-        self._breakdown_table.setMaximumHeight(340)
+        self._breakdown_table.setMaximumHeight(ScreenScale.h(340))
 
         breakdown_layout.addWidget(self._breakdown_table)
         main_layout.addWidget(breakdown_card)
@@ -243,7 +244,7 @@ class ImportStep6Report(QWidget):
         ]
         for key, tr_key in self._extra_keys_tr:
             row_frame = QFrame()
-            row_frame.setFixedHeight(40)
+            row_frame.setFixedHeight(ScreenScale.h(40))
             row_frame.setStyleSheet("""
                 QFrame {
                     background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
@@ -262,7 +263,7 @@ class ImportStep6Report(QWidget):
             name = QLabel(f"{tr(tr_key)}:")
             name.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
             name.setStyleSheet("color: #637381;")
-            name.setFixedWidth(200)
+            name.setFixedWidth(ScreenScale.w(200))
             row.addWidget(name)
             self._extra_name_labels[key] = name
 
@@ -303,7 +304,7 @@ class ImportStep6Report(QWidget):
             "QScrollArea { background: transparent; border: none; }"
             + StyleManager.scrollbar()
         )
-        self._errors_scroll.setMaximumHeight(250)
+        self._errors_scroll.setMaximumHeight(ScreenScale.h(250))
 
         self._errors_container = QWidget()
         self._errors_container.setStyleSheet("background: transparent;")
@@ -343,8 +344,8 @@ class ImportStep6Report(QWidget):
                          color: str, bg: str):
         """Create a stat box with value and label. Returns (box, label)."""
         box = QFrame()
-        box.setFixedHeight(70)
-        box.setMinimumWidth(120)
+        box.setFixedHeight(ScreenScale.h(70))
+        box.setMinimumWidth(ScreenScale.w(120))
         box.setStyleSheet(f"""
             QFrame {{
                 background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
@@ -429,7 +430,7 @@ class ImportStep6Report(QWidget):
         ol.setAlignment(Qt.AlignCenter)
 
         card = QFrame()
-        card.setFixedSize(240, 90)
+        card.setFixedSize(ScreenScale.w(240), ScreenScale.h(90))
         card.setStyleSheet(
             "QFrame { background: white; border-radius: 16px; }"
         )
@@ -648,7 +649,7 @@ class ImportStep6Report(QWidget):
 
         for err in errors:
             row = QFrame()
-            row.setFixedHeight(48)
+            row.setFixedHeight(ScreenScale.h(48))
             row.setStyleSheet("""
                 QFrame {
                     background-color: #FEF2F2;
@@ -668,7 +669,7 @@ class ImportStep6Report(QWidget):
             entity_label = QLabel(entity_names.get(entity_type, entity_type))
             entity_label.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
             entity_label.setStyleSheet("color: #991B1B;")
-            entity_label.setFixedWidth(140)
+            entity_label.setFixedWidth(ScreenScale.w(140))
             row_layout.addWidget(entity_label)
 
             original_id = err.get("originalEntityId", "")
@@ -676,7 +677,7 @@ class ImportStep6Report(QWidget):
                 id_label = QLabel(str(original_id)[:12])
                 id_label.setFont(create_font(size=9, weight=FontManager.WEIGHT_REGULAR))
                 id_label.setStyleSheet("color: #B91C1C;")
-                id_label.setFixedWidth(100)
+                id_label.setFixedWidth(ScreenScale.w(100))
                 row_layout.addWidget(id_label)
 
             msg = err.get("errorMessage", "")

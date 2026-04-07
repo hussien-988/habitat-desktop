@@ -21,7 +21,7 @@ from PyQt5.QtGui import (
 )
 
 from ui.wizards.office_survey.survey_context import SurveyContext
-from ui.design_system import Colors, PageDimensions
+from ui.design_system import Colors, PageDimensions, ScreenScale
 from ui.font_utils import create_font, FontManager
 from ui.style_manager import StyleManager
 from ui.components.icon import Icon
@@ -265,7 +265,7 @@ class _CaseDetailsHeader(QWidget):
         row1.setSpacing(12)
 
         self._back_btn = QPushButton()
-        self._back_btn.setFixedSize(40, 40)
+        self._back_btn.setFixedSize(ScreenScale.w(40), ScreenScale.h(40))
         self._back_btn.setCursor(QCursor(Qt.PointingHandCursor))
         self._back_btn.setStyleSheet("""
             QPushButton {
@@ -298,7 +298,7 @@ class _CaseDetailsHeader(QWidget):
         self._ref_label = QLabel("")
         self._ref_label.setFont(create_font(size=15, weight=QFont.Bold))
         self._ref_label.setStyleSheet("color: #2A6CB5; background: transparent;")
-        self._ref_label.setMinimumWidth(200)
+        self._ref_label.setMinimumWidth(ScreenScale.w(200))
         self._ref_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
         ref_glow = QGraphicsDropShadowEffect(self._ref_label)
         ref_glow.setBlurRadius(12)
@@ -311,7 +311,7 @@ class _CaseDetailsHeader(QWidget):
 
         # Resume button (draft only)
         self._resume_btn = QPushButton(tr("page.case_details.resume"))
-        self._resume_btn.setFixedSize(160, 38)
+        self._resume_btn.setFixedSize(ScreenScale.w(160), ScreenScale.h(38))
         self._resume_btn.setCursor(QCursor(Qt.PointingHandCursor))
         self._resume_btn.setVisible(False)
         self._resume_btn.setFont(create_font(size=11, weight=QFont.DemiBold))
@@ -342,7 +342,7 @@ class _CaseDetailsHeader(QWidget):
 
         # Cancel button (draft only)
         self._cancel_btn = QPushButton(tr("page.case_details.cancel_survey"))
-        self._cancel_btn.setFixedSize(130, 38)
+        self._cancel_btn.setFixedSize(ScreenScale.w(130), ScreenScale.h(38))
         self._cancel_btn.setCursor(QCursor(Qt.PointingHandCursor))
         self._cancel_btn.setVisible(False)
         self._cancel_btn.setFont(create_font(size=11, weight=QFont.DemiBold))
@@ -368,7 +368,7 @@ class _CaseDetailsHeader(QWidget):
 
         # Resume Obstructed button (obstructed surveys, admin/data_manager only)
         self._resume_obstructed_btn = QPushButton(tr("page.case_details.resume_obstructed"))
-        self._resume_obstructed_btn.setFixedSize(160, 38)
+        self._resume_obstructed_btn.setFixedSize(ScreenScale.w(160), ScreenScale.h(38))
         self._resume_obstructed_btn.setCursor(QCursor(Qt.PointingHandCursor))
         self._resume_obstructed_btn.setVisible(False)
         self._resume_obstructed_btn.setFont(create_font(size=11, weight=QFont.DemiBold))
@@ -396,7 +396,7 @@ class _CaseDetailsHeader(QWidget):
 
         # Revert to Draft button (finalized surveys, admin/data_manager only)
         self._revert_btn = QPushButton(tr("page.case_details.revert_to_draft"))
-        self._revert_btn.setFixedSize(160, 38)
+        self._revert_btn.setFixedSize(ScreenScale.w(160), ScreenScale.h(38))
         self._revert_btn.setCursor(QCursor(Qt.PointingHandCursor))
         self._revert_btn.setVisible(False)
         self._revert_btn.setFont(create_font(size=11, weight=QFont.DemiBold))
@@ -461,7 +461,7 @@ class _CaseDetailsHeader(QWidget):
             badge = QLabel(text)
             badge.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
             badge.setAlignment(Qt.AlignCenter)
-            badge.setFixedHeight(22)
+            badge.setFixedHeight(ScreenScale.h(22))
             badge.setStyleSheet(
                 f"QLabel {{ background: {bg}; color: {fg}; "
                 f"border-radius: 11px; padding: 0 10px; border: none; }}"
@@ -627,7 +627,7 @@ class CaseDetailsPage(QWidget):
         h_layout.setSpacing(10)
 
         icon_label = QLabel()
-        icon_label.setFixedSize(28, 28)
+        icon_label.setFixedSize(ScreenScale.w(28), ScreenScale.h(28))
         icon_label.setAlignment(Qt.AlignCenter)
         icon_label.setStyleSheet(
             "QLabel { background-color: #ffffff; border: 1px solid #DBEAFE; border-radius: 7px; }"
@@ -680,7 +680,7 @@ class CaseDetailsPage(QWidget):
         badge = QLabel(str(text))
         badge.setFont(create_font(size=11, weight=FontManager.WEIGHT_SEMIBOLD))
         badge.setAlignment(Qt.AlignCenter)
-        badge.setFixedHeight(26)
+        badge.setFixedHeight(ScreenScale.h(26))
         badge.setStyleSheet(
             f"QLabel {{ background-color: {bg_color}; color: {text_color}; "
             f"border: none; border-radius: 13px; padding: 2px 14px; }}"
@@ -750,7 +750,7 @@ class CaseDetailsPage(QWidget):
         lbl.setFont(create_font(size=FontManager.SIZE_BODY, weight=FontManager.WEIGHT_REGULAR))
         lbl.setStyleSheet(f"color: {Colors.TEXT_SECONDARY}; background: transparent; border: none;")
         lbl.setAlignment(Qt.AlignCenter)
-        lbl.setMinimumHeight(40)
+        lbl.setMinimumHeight(ScreenScale.h(40))
         return lbl
 
     def _clear_layout(self, layout):
@@ -1166,7 +1166,7 @@ class CaseDetailsPage(QWidget):
 
         # Person icon
         icon_label = QLabel()
-        icon_label.setFixedSize(32, 32)
+        icon_label.setFixedSize(ScreenScale.w(32), ScreenScale.h(32))
         icon_label.setAlignment(Qt.AlignCenter)
         icon_label.setStyleSheet(
             "QLabel { background-color: #EFF6FF; border: 1px solid #DBEAFE; border-radius: 16px; }"

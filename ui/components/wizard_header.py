@@ -21,7 +21,7 @@ from PyQt5.QtGui import (
 )
 
 from ui.font_utils import create_font, FontManager
-from ui.design_system import Colors, PageDimensions
+from ui.design_system import Colors, PageDimensions, ScreenScale
 from ui.style_manager import StyleManager
 
 
@@ -73,9 +73,9 @@ class WizardHeader(QWidget):
         """Build the dark header UI."""
         self.setAttribute(Qt.WA_StyledBackground, False)
         if self._steps:
-            self.setMinimumHeight(130)
+            self.setMinimumHeight(ScreenScale.h(130))
         else:
-            self.setMinimumHeight(90)
+            self.setMinimumHeight(ScreenScale.h(90))
 
         main_layout = QVBoxLayout(self)
         main_layout.setContentsMargins(
@@ -128,15 +128,15 @@ class WizardHeader(QWidget):
             pill = QLabel(f" {i + 1}. {step_name} ")
             pill.setAlignment(Qt.AlignCenter)
             pill.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
-            pill.setFixedHeight(28)
-            pill.setMinimumWidth(60)
+            pill.setFixedHeight(ScreenScale.h(28))
+            pill.setMinimumWidth(ScreenScale.w(60))
             self._step_pills.append(pill)
             steps_row.addWidget(pill)
 
             # Connector line between pills (not after last)
             if i < len(self._steps) - 1:
                 connector = QFrame()
-                connector.setFixedSize(28, 2)
+                connector.setFixedSize(ScreenScale.w(28), 2)
                 self._step_connectors.append(connector)
                 steps_row.addWidget(connector, 0, Qt.AlignVCenter)
 
@@ -186,10 +186,10 @@ class WizardHeader(QWidget):
             self._step_pills.clear()
             self._step_connectors.clear()
         if steps:
-            self.setMinimumHeight(130)
+            self.setMinimumHeight(ScreenScale.h(130))
             self._build_step_indicator(self.layout())
         else:
-            self.setMinimumHeight(90)
+            self.setMinimumHeight(ScreenScale.h(90))
 
     def set_current_step(self, step: int):
         """Set the currently active step index (0-based)."""

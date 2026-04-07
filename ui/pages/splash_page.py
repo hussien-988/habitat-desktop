@@ -20,7 +20,7 @@ from PyQt5.QtGui import (
 
 from app.config import Config
 from services.translation_manager import tr, get_layout_direction
-from ui.design_system import Colors
+from ui.design_system import Colors, ScreenScale
 from ui.font_utils import create_font, FontManager
 from utils.logger import get_logger
 
@@ -77,7 +77,7 @@ class _PainterIcon(QWidget):
 
     def __init__(self, paint_func, color, parent=None):
         super().__init__(parent)
-        self.setFixedSize(48, 48)
+        self.setFixedSize(ScreenScale.w(48), ScreenScale.h(48))
         self._paint_func = paint_func
         self._color = color
         self.setStyleSheet("background: transparent;")
@@ -101,7 +101,7 @@ class _GlowLogo(QWidget):
         self._pixmap = pixmap
         self._glow_phase = 0.8
         self._start = 0
-        self.setFixedSize(160, 160)
+        self.setFixedSize(ScreenScale.w(160), ScreenScale.h(160))
         self.setStyleSheet("background: transparent;")
 
         self._timer = QTimer(self)
@@ -152,7 +152,7 @@ class _ModeCard(QFrame):
     def __init__(self, paint_func, title: str, subtitle: str,
                  description: str, accent_color: str, parent=None):
         super().__init__(parent)
-        self.setFixedSize(300, 220)
+        self.setFixedSize(ScreenScale.w(300), ScreenScale.h(220))
         self.setCursor(Qt.PointingHandCursor)
         self._accent = accent_color
         self._hovered = False

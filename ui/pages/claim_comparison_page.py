@@ -14,7 +14,7 @@ from repositories.database import Database
 from services.duplicate_service import DuplicateService
 from ui.font_utils import create_font, FontManager
 from ui.style_manager import StyleManager
-from ui.design_system import Colors, PageDimensions, ButtonDimensions
+from ui.design_system import Colors, PageDimensions, ButtonDimensions, ScreenScale
 from ui.components.dark_header_zone import DarkHeaderZone
 from ui.components.accent_line import AccentLine
 from ui.components.icon import Icon
@@ -129,7 +129,7 @@ class _RecordCard(QFrame):
     def __init__(self, data: dict, parent=None):
         super().__init__(parent)
         self.setObjectName("recordCard")
-        self.setFixedHeight(72)
+        self.setFixedHeight(ScreenScale.h(72))
         self.setCursor(QCursor(Qt.PointingHandCursor))
         self._selected = False
         self.setStyleSheet(_RECORD_CARD_NORMAL)
@@ -148,13 +148,13 @@ class _RecordCard(QFrame):
         # Radio indicator
         self._radio = QRadioButton()
         self._radio.setStyleSheet(RADIO_STYLE)
-        self._radio.setFixedSize(20, 20)
+        self._radio.setFixedSize(ScreenScale.w(20), ScreenScale.h(20))
         layout.addWidget(self._radio)
 
         # Icon
         icon_name = data.get("icon", "blue")
         icon_label = QLabel()
-        icon_label.setFixedSize(32, 32)
+        icon_label.setFixedSize(ScreenScale.w(32), ScreenScale.h(32))
         icon_label.setAlignment(Qt.AlignCenter)
         icon_label.setStyleSheet(
             "QLabel { background: #ffffff; border: 1px solid #DBEAFE; border-radius: 8px; }"
@@ -266,7 +266,7 @@ class ClaimComparisonPage(QWidget):
             size=ButtonDimensions.SAVE_FONT_SIZE,
             weight=FontManager.WEIGHT_SEMIBOLD,
         ))
-        self.action_btn.setFixedSize(100, ButtonDimensions.SAVE_HEIGHT)
+        self.action_btn.setFixedSize(ScreenScale.w(100), ButtonDimensions.SAVE_HEIGHT)
         self.action_btn.setStyleSheet(StyleManager.dark_action_button())
         self.action_btn.clicked.connect(self._on_action_clicked)
         self._header.add_action_widget(self.action_btn)
@@ -278,7 +278,7 @@ class ClaimComparisonPage(QWidget):
             size=ButtonDimensions.SAVE_FONT_SIZE,
             weight=FontManager.WEIGHT_SEMIBOLD,
         ))
-        self._back_btn.setFixedSize(100, ButtonDimensions.SAVE_HEIGHT)
+        self._back_btn.setFixedSize(ScreenScale.w(100), ButtonDimensions.SAVE_HEIGHT)
         self._back_btn.setStyleSheet(StyleManager.dark_action_button())
         self._back_btn.clicked.connect(self.back_requested.emit)
         self._header.add_action_widget(self._back_btn)
@@ -291,7 +291,7 @@ class ClaimComparisonPage(QWidget):
 
         # Resolved status banner (hidden by default)
         self._resolved_banner = QFrame()
-        self._resolved_banner.setFixedHeight(40)
+        self._resolved_banner.setFixedHeight(ScreenScale.h(40))
         self._resolved_banner.setStyleSheet(
             "QFrame { background: #D1FAE5; border-bottom: 1px solid #A7F3D0; }"
         )
@@ -303,7 +303,7 @@ class ClaimComparisonPage(QWidget):
         banner_layout.setSpacing(8)
 
         resolved_icon = QLabel()
-        resolved_icon.setFixedSize(20, 20)
+        resolved_icon.setFixedSize(ScreenScale.w(20), ScreenScale.h(20))
         resolved_icon.setAlignment(Qt.AlignCenter)
         resolved_icon.setStyleSheet(
             "QLabel { background: #10B981; border-radius: 10px; color: #FFFFFF;"
@@ -407,7 +407,7 @@ class ClaimComparisonPage(QWidget):
         self._doc_load_btn = QPushButton(tr("page.comparison.load_comparison"))
         self._doc_load_btn.setCursor(Qt.PointingHandCursor)
         self._doc_load_btn.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
-        self._doc_load_btn.setFixedHeight(32)
+        self._doc_load_btn.setFixedHeight(ScreenScale.h(32))
         self._doc_load_btn.setStyleSheet(f"""
             QPushButton {{
                 color: #FFFFFF;
@@ -511,7 +511,7 @@ class ClaimComparisonPage(QWidget):
 
         self._justification_edit = QTextEdit()
         self._justification_edit.setPlaceholderText(tr("page.comparison.enter_justification"))
-        self._justification_edit.setFixedHeight(80)
+        self._justification_edit.setFixedHeight(ScreenScale.h(80))
         self._justification_edit.setFont(create_font(size=9, weight=FontManager.WEIGHT_REGULAR))
         self._justification_edit.setStyleSheet(StyleManager.form_input_light())
         res_layout.addWidget(self._justification_edit)
@@ -534,7 +534,7 @@ class ClaimComparisonPage(QWidget):
         layout.setSpacing(10)
 
         icon_label = QLabel()
-        icon_label.setFixedSize(28, 28)
+        icon_label.setFixedSize(ScreenScale.w(28), ScreenScale.h(28))
         icon_label.setAlignment(Qt.AlignCenter)
         icon_label.setStyleSheet(
             "QLabel { background: #ffffff; border: 1px solid #DBEAFE; border-radius: 7px; }"
@@ -770,7 +770,7 @@ class ClaimComparisonPage(QWidget):
         icon_lbl = QLabel(icon_text)
         icon_lbl.setFont(create_font(size=12, weight=FontManager.WEIGHT_REGULAR))
         icon_lbl.setStyleSheet("background: transparent; border: none;")
-        icon_lbl.setFixedWidth(20)
+        icon_lbl.setFixedWidth(ScreenScale.w(20))
         name_row.addWidget(icon_lbl)
 
         name_lbl = QLabel(file_name or "-")
@@ -783,7 +783,7 @@ class ClaimComparisonPage(QWidget):
         version = evidence.get("versionNumber", 1)
         ver_lbl = QLabel(f"v{version}")
         ver_lbl.setFont(create_font(size=7, weight=FontManager.WEIGHT_BOLD))
-        ver_lbl.setFixedWidth(28)
+        ver_lbl.setFixedWidth(ScreenScale.w(28))
         ver_lbl.setAlignment(Qt.AlignCenter)
         is_current = evidence.get("isCurrentVersion", True)
         ver_color = "#10B981" if is_current else "#9CA3AF"

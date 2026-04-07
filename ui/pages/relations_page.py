@@ -30,6 +30,7 @@ from ui.error_handler import ErrorHandler
 from utils.i18n import I18n
 from utils.logger import get_logger
 from services.translation_manager import tr, get_layout_direction
+from ui.design_system import ScreenScale
 
 logger = get_logger(__name__)
 
@@ -175,8 +176,8 @@ class EvidenceDialog(QDialog):
         self._selected_file_path = None
 
         self.setWindowTitle(i18n.t("edit_evidence") if evidence else i18n.t("add_evidence"))
-        self.setMinimumWidth(500)
-        self.setMinimumHeight(450)
+        self.setMinimumWidth(ScreenScale.w(500))
+        self.setMinimumHeight(ScreenScale.h(450))
         self._setup_ui()
 
         if evidence:
@@ -239,7 +240,7 @@ class EvidenceDialog(QDialog):
         desc_layout = QVBoxLayout(desc_group)
 
         self.description = QTextEdit()
-        self.description.setMaximumHeight(80)
+        self.description.setMaximumHeight(ScreenScale.h(80))
         self.description.setPlaceholderText(tr("page.relations.evidence_description_placeholder"))
         desc_layout.addWidget(self.description)
 
@@ -258,7 +259,7 @@ class EvidenceDialog(QDialog):
         status_form.addRow(tr("page.relations.status_label"), self.status_combo)
 
         self.verification_notes = QTextEdit()
-        self.verification_notes.setMaximumHeight(60)
+        self.verification_notes.setMaximumHeight(ScreenScale.h(60))
         self.verification_notes.setPlaceholderText(tr("page.relations.verification_notes_placeholder"))
         status_form.addRow(tr("page.relations.notes_label"), self.verification_notes)
 
@@ -433,8 +434,8 @@ class RelationDialog(QDialog):
         self._is_edit_mode = relation is not None
 
         self.setWindowTitle(i18n.t("edit_relation") if relation else i18n.t("add_relation"))
-        self.setMinimumWidth(550)
-        self.setMinimumHeight(500)
+        self.setMinimumWidth(ScreenScale.w(550))
+        self.setMinimumHeight(ScreenScale.h(500))
         self._setup_ui()
 
         if relation:
@@ -470,7 +471,7 @@ class RelationDialog(QDialog):
         person_layout.setSpacing(4)
 
         self.person_combo = QComboBox()
-        self.person_combo.setMinimumWidth(300)
+        self.person_combo.setMinimumWidth(ScreenScale.w(300))
         persons = self.person_repo.get_all(limit=500)
         self.person_combo.addItem(tr("page.relations.select_person"), "")
         for p in persons:
@@ -492,7 +493,7 @@ class RelationDialog(QDialog):
         unit_layout.setSpacing(4)
 
         self.unit_combo = QComboBox()
-        self.unit_combo.setMinimumWidth(300)
+        self.unit_combo.setMinimumWidth(ScreenScale.w(300))
         units = self.unit_repo.get_all(limit=500)
         self.unit_combo.addItem(tr("page.relations.select_unit"), "")
         for u in units:
@@ -592,7 +593,7 @@ class RelationDialog(QDialog):
 
         layout.addWidget(dates_group)
         self.notes = QTextEdit()
-        self.notes.setMaximumHeight(80)
+        self.notes.setMaximumHeight(ScreenScale.h(80))
         self.notes.setPlaceholderText(tr("page.relations.additional_notes_placeholder"))
         layout.addWidget(QLabel(tr("page.relations.notes_label")))
         layout.addWidget(self.notes)
@@ -874,7 +875,7 @@ class RelationsPage(QWidget):
         self._person_filter_label = QLabel(tr("page.relations.person_filter"))
         filters_layout.addWidget(self._person_filter_label)
         self.person_filter = QComboBox()
-        self.person_filter.setMinimumWidth(200)
+        self.person_filter.setMinimumWidth(ScreenScale.w(200))
         self.person_filter.addItem(self.i18n.t("all"), "")
         self.person_filter.currentIndexChanged.connect(self._on_filter_changed)
         filters_layout.addWidget(self.person_filter)
@@ -883,7 +884,7 @@ class RelationsPage(QWidget):
         self._unit_filter_label = QLabel(tr("page.relations.unit_filter"))
         filters_layout.addWidget(self._unit_filter_label)
         self.unit_filter = QComboBox()
-        self.unit_filter.setMinimumWidth(200)
+        self.unit_filter.setMinimumWidth(ScreenScale.w(200))
         self.unit_filter.addItem(self.i18n.t("all"), "")
         self.unit_filter.currentIndexChanged.connect(self._on_filter_changed)
         filters_layout.addWidget(self.unit_filter)

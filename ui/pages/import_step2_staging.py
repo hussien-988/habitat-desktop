@@ -10,7 +10,7 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt, QTimer, pyqtSignal
 from PyQt5.QtGui import QColor
 
-from ui.design_system import Colors, PageDimensions
+from ui.design_system import Colors, PageDimensions, ScreenScale
 from ui.font_utils import create_font, FontManager
 from ui.style_manager import StyleManager
 from services.translation_manager import tr, get_layout_direction
@@ -122,8 +122,8 @@ class ImportStep2Staging(QWidget):
         self._clean_badge = QLabel("")
         self._clean_badge.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
         self._clean_badge.setAlignment(Qt.AlignCenter)
-        self._clean_badge.setFixedHeight(32)
-        self._clean_badge.setMinimumWidth(200)
+        self._clean_badge.setFixedHeight(ScreenScale.h(32))
+        self._clean_badge.setMinimumWidth(ScreenScale.w(200))
         self._clean_badge.setVisible(False)
         layout.addWidget(self._clean_badge, alignment=Qt.AlignRight)
 
@@ -188,7 +188,7 @@ class ImportStep2Staging(QWidget):
         self._entity_table.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self._entity_table.setSelectionMode(QAbstractItemView.NoSelection)
         self._entity_table.verticalHeader().setVisible(False)
-        self._entity_table.setFixedHeight(44 * len(_ENTITY_SECTION_KEYS) + 36)
+        self._entity_table.setFixedHeight(ScreenScale.h(44) * len(_ENTITY_SECTION_KEYS) + ScreenScale.h(36))
 
         header = self._entity_table.horizontalHeader()
         header.setSectionResizeMode(0, QHeaderView.Stretch)
@@ -291,7 +291,7 @@ class ImportStep2Staging(QWidget):
 
         warning_icon = QLabel("!")
         warning_icon.setFont(create_font(size=14, weight=FontManager.WEIGHT_BOLD))
-        warning_icon.setFixedSize(28, 28)
+        warning_icon.setFixedSize(ScreenScale.w(28), ScreenScale.h(28))
         warning_icon.setAlignment(Qt.AlignCenter)
         warning_icon.setStyleSheet("""
             color: #F59E0B;
@@ -315,7 +315,7 @@ class ImportStep2Staging(QWidget):
         self._resolve_dups_btn = QPushButton(tr("wizard.import.step2.resolve_duplicates"))
         self._resolve_dups_btn.setCursor(Qt.PointingHandCursor)
         self._resolve_dups_btn.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
-        self._resolve_dups_btn.setFixedSize(180, 40)
+        self._resolve_dups_btn.setFixedSize(ScreenScale.w(180), ScreenScale.h(40))
         self._resolve_dups_btn.setStyleSheet("""
             QPushButton {
                 background-color: #F59E0B;
@@ -364,8 +364,8 @@ class ImportStep2Staging(QWidget):
                          color: str, bg: str) -> QFrame:
         """Create a stat box with value and label."""
         box = QFrame()
-        box.setFixedHeight(64)
-        box.setMinimumWidth(120)
+        box.setFixedHeight(ScreenScale.h(64))
+        box.setMinimumWidth(ScreenScale.w(120))
         box.setStyleSheet(f"""
             QFrame {{
                 background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
@@ -437,7 +437,7 @@ class ImportStep2Staging(QWidget):
         overlay_layout.setAlignment(Qt.AlignCenter)
 
         card = QFrame()
-        card.setFixedSize(240, 90)
+        card.setFixedSize(ScreenScale.w(240), ScreenScale.h(90))
         card.setStyleSheet("""
             QFrame {
                 background-color: #FFFFFF;
@@ -658,7 +658,7 @@ class ImportStep2Staging(QWidget):
             border_color = "#D1FAE5"
             bg_color = "#ECFDF5"
 
-        row.setFixedHeight(48)
+        row.setFixedHeight(ScreenScale.h(48))
         row.setStyleSheet(f"""
             QFrame {{
                 background-color: {bg_color};
@@ -680,7 +680,7 @@ class ImportStep2Staging(QWidget):
         level_label = QLabel(tr("wizard.import.step2.level_num", num=level_num))
         level_label.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
         level_label.setStyleSheet("color: #212B36;")
-        level_label.setFixedWidth(80)
+        level_label.setFixedWidth(ScreenScale.w(80))
         row_layout.addWidget(level_label)
 
         # Validator name

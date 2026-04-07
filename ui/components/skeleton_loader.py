@@ -13,7 +13,7 @@ from PyQt5.QtGui import QPainter, QLinearGradient, QColor, QBrush
 from ui.design_system import (
     SkeletonColors, AnimationTimings, Colors, BorderRadius,
     Typography, Spacing
-)
+, ScreenScale, ScreenScale)
 from services.translation_manager import get_layout_direction
 
 
@@ -219,7 +219,7 @@ class CardSkeleton(SkeletonBase):
 
         for i in range(cards):
             card = QFrame()
-            card.setFixedHeight(120)
+            card.setFixedHeight(ScreenScale.h(120))
             card.setStyleSheet(f"""
                 QFrame {{
                     background: {Colors.SURFACE};

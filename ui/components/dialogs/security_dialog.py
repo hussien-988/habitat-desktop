@@ -14,7 +14,7 @@ from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QColor, QFont
 
 from ui.components.icon import Icon
-from ui.design_system import Colors
+from ui.design_system import Colors, ScreenScale
 from ui.font_utils import create_font, FontManager
 from utils.logger import get_logger
 from services.translation_manager import tr, get_layout_direction
@@ -31,7 +31,10 @@ class SecurityDialog(QDialog):
         self.max_attempts = max_attempts
 
         self.setModal(True)
-        self.setFixedSize(613, 344)
+        from PyQt5.QtWidgets import QApplication
+        _scr = QApplication.primaryScreen().availableGeometry()
+        self.resize(min(613, int(_scr.width() * 0.48)), min(344, int(_scr.height() * 0.40)))
+        self.setMinimumSize(450, 290)
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.Dialog)
         self.setAttribute(Qt.WA_TranslucentBackground)
         self.setStyleSheet("QDialog { background-color: transparent; }")
@@ -137,7 +140,7 @@ class SecurityDialog(QDialog):
     def _create_spinbox_with_arrows(self, spinbox: QSpinBox) -> QFrame:
         """Custom spinbox container with icon arrows."""
         container = QFrame()
-        container.setFixedHeight(42)
+        container.setFixedHeight(ScreenScale.h(42))
         container.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         container.setStyleSheet("""
             QFrame {
@@ -172,7 +175,7 @@ class SecurityDialog(QDialog):
 
         # Arrow column with border separator (right border in RTL since arrows appear on left)
         arrow_container = QFrame()
-        arrow_container.setFixedWidth(30)
+        arrow_container.setFixedWidth(ScreenScale.w(30))
         arrow_container.setStyleSheet("""
             QFrame {
                 border: none;
@@ -188,7 +191,7 @@ class SecurityDialog(QDialog):
 
         # Up arrow
         up_label = QLabel()
-        up_label.setFixedSize(30, 21)
+        up_label.setFixedSize(ScreenScale.w(30), ScreenScale.h(21))
         up_label.setAlignment(Qt.AlignCenter)
         up_pixmap = Icon.load_pixmap("^", size=10)
         if up_pixmap and not up_pixmap.isNull():
@@ -202,7 +205,7 @@ class SecurityDialog(QDialog):
 
         # Down arrow
         down_label = QLabel()
-        down_label.setFixedSize(30, 21)
+        down_label.setFixedSize(ScreenScale.w(30), ScreenScale.h(21))
         down_label.setAlignment(Qt.AlignCenter)
         down_pixmap = Icon.load_pixmap("v", size=10)
         if down_pixmap and not down_pixmap.isNull():
@@ -220,7 +223,7 @@ class SecurityDialog(QDialog):
 
     def _create_button(self, text: str, primary: bool) -> QPushButton:
         btn = QPushButton(text)
-        btn.setFixedSize(170, 50)
+        btn.setFixedSize(ScreenScale.w(170), ScreenScale.h(50))
         btn.setCursor(Qt.PointingHandCursor)
         btn.setFont(create_font(size=10, weight=QFont.Medium))
 

@@ -24,7 +24,7 @@ from PyQt5.QtGui import (
     QPainterPath, QCursor, QIcon,
 )
 
-from ui.design_system import Colors, PageDimensions
+from ui.design_system import Colors, PageDimensions, ScreenScale
 from ui.font_utils import create_font, FontManager
 from ui.style_manager import StyleManager
 from ui.components.icon import Icon
@@ -282,7 +282,7 @@ class _CaseEntityHeader(QWidget):
 
         # Back button
         self._back_btn = QPushButton()
-        self._back_btn.setFixedSize(40, 40)
+        self._back_btn.setFixedSize(ScreenScale.w(40), ScreenScale.h(40))
         self._back_btn.setCursor(QCursor(Qt.PointingHandCursor))
         self._back_btn.setStyleSheet("""
             QPushButton {
@@ -315,7 +315,7 @@ class _CaseEntityHeader(QWidget):
         self._num_label = QLabel("")
         self._num_label.setFont(create_font(size=15, weight=QFont.Bold))
         self._num_label.setStyleSheet("color: #2A6CB5; background: transparent;")
-        self._num_label.setMinimumWidth(200)
+        self._num_label.setMinimumWidth(ScreenScale.w(200))
         self._num_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
         self._num_label.setLayoutDirection(Qt.LeftToRight)
         self._num_label.setAlignment(
@@ -334,7 +334,7 @@ class _CaseEntityHeader(QWidget):
 
         # Toggle editable button (admin/data_manager only)
         self._toggle_editable_btn = QPushButton("\u0642\u0641\u0644 \u0627\u0644\u062a\u0639\u062f\u064a\u0644")
-        self._toggle_editable_btn.setFixedSize(140, 38)
+        self._toggle_editable_btn.setFixedSize(ScreenScale.w(140), ScreenScale.h(38))
         self._toggle_editable_btn.setCursor(QCursor(Qt.PointingHandCursor))
         self._toggle_editable_btn.setVisible(False)
         self._toggle_editable_btn.setFont(create_font(size=11, weight=FontManager.WEIGHT_SEMIBOLD))
@@ -364,7 +364,7 @@ class _CaseEntityHeader(QWidget):
 
         # Revisit button (admin/data_manager only)
         self._revisit_btn = QPushButton("\u0625\u0639\u0627\u062f\u0629 \u0632\u064a\u0627\u0631\u0629")
-        self._revisit_btn.setFixedSize(140, 38)
+        self._revisit_btn.setFixedSize(ScreenScale.w(140), ScreenScale.h(38))
         self._revisit_btn.setCursor(QCursor(Qt.PointingHandCursor))
         self._revisit_btn.setVisible(False)
         self._revisit_btn.setFont(create_font(size=11, weight=FontManager.WEIGHT_SEMIBOLD))
@@ -427,7 +427,7 @@ class _CaseEntityHeader(QWidget):
             badge = QLabel(text)
             badge.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
             badge.setAlignment(Qt.AlignCenter)
-            badge.setFixedHeight(22)
+            badge.setFixedHeight(ScreenScale.h(22))
             badge.setStyleSheet(
                 f"QLabel {{ background: {bg}; color: {fg}; "
                 f"border-radius: 11px; padding: 0 10px; border: none; }}"
@@ -489,7 +489,7 @@ class _SurveyMiniCard(QFrame):
         self._lift_anim = None
 
         self.setCursor(QCursor(Qt.PointingHandCursor))
-        self.setFixedHeight(80)
+        self.setFixedHeight(ScreenScale.h(80))
         self.setMouseTracking(True)
         self._build_ui()
 
@@ -514,20 +514,8 @@ class _SurveyMiniCard(QFrame):
         outer.setContentsMargins(0, 0, 16, 0)
         outer.setSpacing(0)
 
-        # Blue status strip
-        strip = QFrame()
-        strip.setFixedWidth(4)
-        is_rtl = get_layout_direction() == Qt.RightToLeft
-        corner = "right" if is_rtl else "left"
-        strip.setStyleSheet(
-            f"background: qlineargradient(x1:0, y1:0, x2:0, y2:1, "
-            f"stop:0 #3890DF, stop:0.5 #5BA8F0, stop:1 #3890DF); "
-            f"border-top-{corner}-radius: 12px; border-bottom-{corner}-radius: 12px;"
-        )
-        outer.addWidget(strip)
-
         content = QVBoxLayout()
-        content.setContentsMargins(14, 8, 0, 8)
+        content.setContentsMargins(18, 8, 0, 8)
         content.setSpacing(3)
 
         # Row 1: Reference code + status badge
@@ -540,7 +528,7 @@ class _SurveyMiniCard(QFrame):
         ref_label.setStyleSheet(
             f"color: {Colors.PAGE_TITLE}; background: transparent; border: none;"
         )
-        ref_label.setMaximumWidth(400)
+        ref_label.setMaximumWidth(ScreenScale.w(400))
         row1.addWidget(ref_label)
         row1.addStretch()
 
@@ -549,7 +537,7 @@ class _SurveyMiniCard(QFrame):
             status_badge = QLabel(str(status_text))
             status_badge.setFont(create_font(size=8, weight=FontManager.WEIGHT_SEMIBOLD))
             status_badge.setAlignment(Qt.AlignCenter)
-            status_badge.setFixedHeight(20)
+            status_badge.setFixedHeight(ScreenScale.h(20))
             status_badge.setStyleSheet(
                 "QLabel { background: #EFF6FF; color: #1E40AF; "
                 "border: 1px solid #BFDBFE; border-radius: 10px; padding: 0 8px; }"
@@ -719,7 +707,7 @@ class _ClaimMiniCard(QFrame):
         self._lift_anim = None
 
         self.setCursor(QCursor(Qt.PointingHandCursor))
-        self.setFixedHeight(80)
+        self.setFixedHeight(ScreenScale.h(80))
         self.setMouseTracking(True)
         self._build_ui()
 
@@ -770,7 +758,7 @@ class _ClaimMiniCard(QFrame):
         num_label.setStyleSheet(
             f"color: {Colors.PAGE_TITLE}; background: transparent; border: none;"
         )
-        num_label.setMaximumWidth(400)
+        num_label.setMaximumWidth(ScreenScale.w(400))
         row1.addWidget(num_label)
         row1.addStretch()
 
@@ -779,7 +767,7 @@ class _ClaimMiniCard(QFrame):
             type_badge = QLabel(str(claim_type))
             type_badge.setFont(create_font(size=8, weight=FontManager.WEIGHT_SEMIBOLD))
             type_badge.setAlignment(Qt.AlignCenter)
-            type_badge.setFixedHeight(20)
+            type_badge.setFixedHeight(ScreenScale.h(20))
             type_badge.setStyleSheet(
                 "QLabel { background: #FEF3C7; color: #B45309; "
                 "border: 1px solid #FDE68A; border-radius: 10px; padding: 0 8px; }"
@@ -796,7 +784,7 @@ class _ClaimMiniCard(QFrame):
             name_label.setStyleSheet(
                 f"color: {Colors.TEXT_SECONDARY}; background: transparent; border: none;"
             )
-            name_label.setMaximumWidth(300)
+            name_label.setMaximumWidth(ScreenScale.w(300))
             content.addWidget(name_label)
 
         outer.addLayout(content, 1)
@@ -1050,7 +1038,7 @@ class CaseEntityDetailsPage(QWidget):
         h_layout.setSpacing(10)
 
         icon_label = QLabel()
-        icon_label.setFixedSize(28, 28)
+        icon_label.setFixedSize(ScreenScale.w(28), ScreenScale.h(28))
         icon_label.setAlignment(Qt.AlignCenter)
         icon_label.setStyleSheet(
             "QLabel { background-color: #ffffff; border: 1px solid #DBEAFE; border-radius: 7px; }"
@@ -1104,7 +1092,7 @@ class CaseEntityDetailsPage(QWidget):
         badge = QLabel(str(text))
         badge.setFont(create_font(size=11, weight=FontManager.WEIGHT_SEMIBOLD))
         badge.setAlignment(Qt.AlignCenter)
-        badge.setFixedHeight(26)
+        badge.setFixedHeight(ScreenScale.h(26))
         badge.setStyleSheet(
             f"QLabel {{ background-color: {bg_color}; color: {text_color}; "
             f"border: none; border-radius: 13px; padding: 2px 14px; }}"

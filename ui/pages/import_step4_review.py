@@ -10,7 +10,7 @@ from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtGui import QColor
 
 from ui.components.animated_card import EmptyStateAnimated
-from ui.design_system import Colors, PageDimensions
+from ui.design_system import Colors, PageDimensions, ScreenScale
 from ui.font_utils import create_font, FontManager
 from ui.style_manager import StyleManager
 from services.translation_manager import tr, get_layout_direction
@@ -190,7 +190,7 @@ class ImportStep4Review(QWidget):
         self._empty_label = EmptyStateAnimated(
             title=tr("wizard.import.step4.no_staged_entities"),
         )
-        self._empty_label.setMinimumHeight(200)
+        self._empty_label.setMinimumHeight(ScreenScale.h(200))
         self._empty_label.setVisible(False)
         table_layout.addWidget(self._empty_label)
 
@@ -208,7 +208,7 @@ class ImportStep4Review(QWidget):
         self._table.setSelectionBehavior(QAbstractItemView.SelectRows)
         self._table.setAlternatingRowColors(True)
         self._table.verticalHeader().setVisible(False)
-        self._table.setMinimumHeight(350)
+        self._table.setMinimumHeight(ScreenScale.h(350))
 
         header = self._table.horizontalHeader()
         header.setSectionResizeMode(0, QHeaderView.Fixed)
@@ -277,8 +277,8 @@ class ImportStep4Review(QWidget):
                             color: str, bg: str):
         """Create a summary count badge. Returns (container, count_label)."""
         container = QFrame()
-        container.setFixedHeight(50)
-        container.setMinimumWidth(130)
+        container.setFixedHeight(ScreenScale.h(50))
+        container.setMinimumWidth(ScreenScale.w(130))
         container.setStyleSheet(f"""
             QFrame {{
                 background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
@@ -319,7 +319,7 @@ class ImportStep4Review(QWidget):
         overlay_layout.setAlignment(Qt.AlignCenter)
 
         card = QFrame()
-        card.setFixedSize(240, 90)
+        card.setFixedSize(ScreenScale.w(240), ScreenScale.h(90))
         card.setStyleSheet("""
             QFrame {
                 background-color: #FFFFFF;
@@ -478,8 +478,8 @@ class ImportStep4Review(QWidget):
         badge = QLabel(config['label'])
         badge.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
         badge.setAlignment(Qt.AlignCenter)
-        badge.setFixedHeight(26)
-        badge.setMinimumWidth(80)
+        badge.setFixedHeight(ScreenScale.h(26))
+        badge.setMinimumWidth(ScreenScale.w(80))
         badge.setStyleSheet(f"""
             padding: 2px 12px;
             border-radius: 13px;
@@ -509,8 +509,8 @@ class ImportStep4Review(QWidget):
         badge = QLabel(label)
         badge.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
         badge.setAlignment(Qt.AlignCenter)
-        badge.setFixedHeight(26)
-        badge.setMinimumWidth(80)
+        badge.setFixedHeight(ScreenScale.h(26))
+        badge.setMinimumWidth(ScreenScale.w(80))
         badge.setStyleSheet(f"""
             padding: 2px 12px;
             border-radius: 13px;

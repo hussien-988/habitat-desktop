@@ -11,7 +11,7 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt, QSize
 from PyQt5.QtGui import QColor, QIcon, QPixmap
 
-from ui.design_system import Colors
+from ui.design_system import Colors, ScreenScale
 from ui.font_utils import create_font, FontManager
 from utils.logger import get_logger
 from services.translation_manager import tr, get_layout_direction
@@ -30,7 +30,10 @@ class EvidencePickerDialog(QDialog):
         self._selected_ids = []
 
         self.setModal(True)
-        self.setFixedSize(540, 480)
+        from PyQt5.QtWidgets import QApplication
+        _scr = QApplication.primaryScreen().availableGeometry()
+        self.resize(min(540, int(_scr.width() * 0.45)), min(480, int(_scr.height() * 0.55)))
+        self.setMinimumSize(400, 360)
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.Dialog)
         self.setAttribute(Qt.WA_TranslucentBackground)
         self.setStyleSheet("QDialog { background-color: transparent; }")
@@ -79,7 +82,7 @@ class EvidencePickerDialog(QDialog):
         header.addStretch()
 
         close_btn = QPushButton("\u2715")
-        close_btn.setFixedSize(32, 32)
+        close_btn.setFixedSize(ScreenScale.w(32), ScreenScale.h(32))
         close_btn.setCursor(Qt.PointingHandCursor)
         close_btn.setStyleSheet("""
             QPushButton {
@@ -217,7 +220,7 @@ class EvidencePickerDialog(QDialog):
                           "MP3": "#7C3AED", "WAV": "#7C3AED", "OGG": "#7C3AED", "M4A": "#7C3AED"}
             bg = ext_colors.get(ext, "#718096")
             ext_badge = QLabel(ext)
-            ext_badge.setFixedSize(40, 22)
+            ext_badge.setFixedSize(ScreenScale.w(40), ScreenScale.h(22))
             ext_badge.setAlignment(Qt.AlignCenter)
             ext_badge.setFont(create_font(size=9, weight=FontManager.WEIGHT_BOLD))
             ext_badge.setStyleSheet(
@@ -235,7 +238,7 @@ class EvidencePickerDialog(QDialog):
         from utils.helpers import download_evidence_file
 
         btn = QPushButton()
-        btn.setFixedSize(32, 32)
+        btn.setFixedSize(ScreenScale.w(32), ScreenScale.h(32))
         btn.setToolTip(tr("dialog.evidence_picker.view_document"))
         btn.setCursor(Qt.PointingHandCursor)
         btn.setStyleSheet("""
@@ -290,7 +293,7 @@ class EvidencePickerDialog(QDialog):
 
     def _create_button(self, text: str, primary: bool) -> QPushButton:
         btn = QPushButton(text)
-        btn.setFixedSize(150, 44)
+        btn.setFixedSize(ScreenScale.w(150), ScreenScale.h(44))
         btn.setCursor(Qt.PointingHandCursor)
         btn.setFont(create_font(size=10, weight=FontManager.WEIGHT_MEDIUM))
 

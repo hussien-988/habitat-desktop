@@ -12,6 +12,7 @@ from ui.font_utils import create_font, FontManager
 from ui.style_manager import StyleManager
 from services.translation_manager import tr, get_layout_direction
 from utils.logger import get_logger
+from ui.design_system import ScreenScale
 
 logger = get_logger(__name__)
 
@@ -97,7 +98,7 @@ class ImportStep5Commit(QWidget):
         self._count_labels = {}
         for key, ar_name in _get_entity_sections():
             row_frame = QFrame()
-            row_frame.setFixedHeight(40)
+            row_frame.setFixedHeight(ScreenScale.h(40))
             row_frame.setStyleSheet("""
                 QFrame {
                     background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
@@ -117,7 +118,7 @@ class ImportStep5Commit(QWidget):
             name_label = QLabel(f"{ar_name}:")
             name_label.setFont(create_font(size=11, weight=FontManager.WEIGHT_SEMIBOLD))
             name_label.setStyleSheet("color: #637381;")
-            name_label.setFixedWidth(200)
+            name_label.setFixedWidth(ScreenScale.w(200))
             row.addWidget(name_label)
 
             count_label = QLabel("0")
@@ -150,7 +151,7 @@ class ImportStep5Commit(QWidget):
 
         warning_icon = QLabel("!")
         warning_icon.setFont(create_font(size=14, weight=FontManager.WEIGHT_BOLD))
-        warning_icon.setFixedSize(28, 28)
+        warning_icon.setFixedSize(ScreenScale.w(28), ScreenScale.h(28))
         warning_icon.setAlignment(Qt.AlignCenter)
         warning_icon.setStyleSheet("""
             color: #F59E0B;
@@ -169,7 +170,7 @@ class ImportStep5Commit(QWidget):
 
         # Progress bar (hidden initially, shown by orchestrator during commit)
         self._progress_bar = QProgressBar()
-        self._progress_bar.setFixedHeight(8)
+        self._progress_bar.setFixedHeight(ScreenScale.h(8))
         self._progress_bar.setRange(0, 0)  # indeterminate
         self._progress_bar.setVisible(False)
         self._progress_bar.setStyleSheet("""
@@ -205,7 +206,7 @@ class ImportStep5Commit(QWidget):
         ol.setAlignment(Qt.AlignCenter)
 
         card = QFrame()
-        card.setFixedSize(240, 90)
+        card.setFixedSize(ScreenScale.w(240), ScreenScale.h(90))
         card.setStyleSheet(
             "QFrame { background: white; border-radius: 16px; }"
         )

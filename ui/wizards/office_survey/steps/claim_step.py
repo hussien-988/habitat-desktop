@@ -41,7 +41,7 @@ from ui.wizards.office_survey.wizard_styles import (
     CASE_CLOSED_FIELD_STYLE, CASE_OPEN_FIELD_STYLE, READONLY_BG,
 )
 from ui.font_utils import FontManager, create_font
-from ui.design_system import Colors
+from ui.design_system import Colors, ScreenScale
 from ui.components.icon import Icon
 from utils.logger import get_logger
 from ui.wizards.office_survey.steps.occupancy_claims_step import _is_owner_relation
@@ -337,7 +337,7 @@ class ClaimStep(BaseStep):
 
         # Icon with blue circle background
         icon_container = QLabel()
-        icon_container.setFixedSize(80, 80)
+        icon_container.setFixedSize(ScreenScale.w(80), ScreenScale.h(80))
         icon_container.setAlignment(Qt.AlignCenter)
         icon_container.setStyleSheet(EMPTY_STATE_ICON_STYLE)
 
@@ -381,7 +381,7 @@ class ClaimStep(BaseStep):
         h_layout.setSpacing(10)
 
         icon_label = QLabel()
-        icon_label.setFixedSize(32, 32)
+        icon_label.setFixedSize(ScreenScale.w(32), ScreenScale.h(32))
         icon_label.setAlignment(Qt.AlignCenter)
         icon_label.setStyleSheet(
             "QLabel { background-color: #EBF5FF; border: 1px solid #DBEAFE; border-radius: 8px; }"
@@ -510,8 +510,8 @@ class ClaimStep(BaseStep):
             "color: #9CA3AF; background: transparent; font-size: 16px; font-weight: 400;"
         )
         claim_notes.setReadOnly(True)
-        claim_notes.setMinimumHeight(100)
-        claim_notes.setMaximumHeight(120)
+        claim_notes.setMinimumHeight(ScreenScale.h(100))
+        claim_notes.setMaximumHeight(ScreenScale.h(120))
         claim_notes.setStyleSheet(f"""
             QTextEdit {{
                 background-color: {READONLY_BG};
@@ -528,7 +528,7 @@ class ClaimStep(BaseStep):
         # Evidence status pill
         claim_eval_label = QLabel(tr("wizard.claim.evidence_available"))
         claim_eval_label.setAlignment(Qt.AlignCenter)
-        claim_eval_label.setFixedHeight(36)
+        claim_eval_label.setFixedHeight(ScreenScale.h(36))
         claim_eval_label.setFont(create_font(size=FontManager.WIZARD_BADGE, weight=FontManager.WEIGHT_SEMIBOLD))
         claim_eval_label.setStyleSheet(EVIDENCE_AVAILABLE_STYLE)
         card_layout.addWidget(claim_eval_label)

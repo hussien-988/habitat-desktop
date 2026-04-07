@@ -24,6 +24,7 @@ from app.config import Config
 from services.vocab_service import get_options as vocab_get_options
 from services.translation_manager import tr, get_layout_direction
 from utils.logger import get_logger
+from ui.design_system import ScreenScale
 
 logger = get_logger(__name__)
 
@@ -126,7 +127,7 @@ class EvidenceDialog(QDialog):
 
         # Dark header
         hdr = QFrame()
-        hdr.setFixedHeight(48)
+        hdr.setFixedHeight(ScreenScale.h(48))
         hdr.setObjectName("EvHdr")
         hdr.setStyleSheet("""
             QFrame#EvHdr {
@@ -142,7 +143,7 @@ class EvidenceDialog(QDialog):
         hl.setSpacing(10)
         cbtn = QPushButton("\u2715")
         cbtn.setCursor(Qt.PointingHandCursor)
-        cbtn.setFixedSize(28, 28)
+        cbtn.setFixedSize(ScreenScale.w(28), ScreenScale.h(28))
         cbtn.setStyleSheet("""
             QPushButton {
                 background: rgba(255, 255, 255, 0.08);
@@ -256,7 +257,7 @@ class EvidenceDialog(QDialog):
 
         self.notes_edit = QTextEdit()
         self.notes_edit.setPlaceholderText(tr("wizard.evidence_dialog.notes_placeholder"))
-        self.notes_edit.setMaximumHeight(80)
+        self.notes_edit.setMaximumHeight(ScreenScale.h(80))
         self.notes_edit.setStyleSheet("""
             QTextEdit {
                 border: 1px solid #ddd;

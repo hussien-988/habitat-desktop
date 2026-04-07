@@ -9,7 +9,7 @@ from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtGui import QFont, QCursor
 
 from ui.components.icon import Icon
-from ui.design_system import NavbarDimensions, Colors, Typography
+from ui.design_system import NavbarDimensions, Colors, Typography, ScreenScale
 
 
 class IDBadgeWidget(QWidget):
@@ -34,7 +34,7 @@ class IDBadgeWidget(QWidget):
 
     def _create_user_icon(self):
         icon_label = QLabel()
-        icon_label.setFixedSize(22, 22)
+        icon_label.setFixedSize(ScreenScale.w(22), ScreenScale.h(22))
         icon_label.setAlignment(Qt.AlignCenter)
 
         vector_pixmap = Icon.load_pixmap("Vector", size=11)
@@ -75,7 +75,7 @@ class IDBadgeWidget(QWidget):
         self.id_label = self._create_id_text_label(display_id)
         layout.addWidget(self.id_label)
 
-        self.setFixedHeight(30)
+        self.setFixedHeight(ScreenScale.h(30))
 
     def _apply_styling(self):
         self.setStyleSheet(f"""

@@ -10,7 +10,7 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt, pyqtSignal, QObject, pyqtSlot, QUrl, QThread
 from PyQt5.QtGui import QPainter, QColor, QPainterPath, QPalette
 
-from ui.design_system import Colors
+from ui.design_system import Colors, ScreenScale
 from ui.font_utils import create_font, FontManager
 from utils.logger import get_logger
 from services.viewport_map_loader import ViewportMapLoader
@@ -388,7 +388,7 @@ class BaseMapDialog(QDialog):
     def _create_title_bar(self) -> QWidget:
         """Create title bar with close button."""
         title_bar = QWidget()
-        title_bar.setFixedHeight(32)
+        title_bar.setFixedHeight(ScreenScale.h(32))
         title_bar.setStyleSheet("background: transparent;")
 
         layout = QHBoxLayout(title_bar)
@@ -406,7 +406,7 @@ class BaseMapDialog(QDialog):
 
         # Close button
         close_btn = QPushButton("✕")
-        close_btn.setFixedSize(32, 32)
+        close_btn.setFixedSize(ScreenScale.w(32), ScreenScale.h(32))
         close_btn.setCursor(Qt.PointingHandCursor)
         close_btn.setFont(create_font(size=14, weight=FontManager.WEIGHT_REGULAR))
         close_btn.setStyleSheet(f"""
@@ -433,7 +433,7 @@ class BaseMapDialog(QDialog):
         """Create search bar - matches BuildingMapWidget."""
         search_frame = QFrame()
         search_frame.setObjectName("searchBar")
-        search_frame.setFixedHeight(42)
+        search_frame.setFixedHeight(ScreenScale.h(42))
         search_frame.setStyleSheet(f"""
             QFrame#searchBar {{
                 background-color: {Colors.SEARCH_BAR_BG};
@@ -474,7 +474,7 @@ class BaseMapDialog(QDialog):
 
         # Search icon
         search_icon = QLabel()
-        search_icon.setFixedSize(20, 20)
+        search_icon.setFixedSize(ScreenScale.w(20), ScreenScale.h(20))
         search_icon.setAlignment(Qt.AlignCenter)
 
         from ui.components.icon import Icon
@@ -494,7 +494,7 @@ class BaseMapDialog(QDialog):
         """Create multi-select UI with chips bar below the map."""
         multiselect_frame = QFrame()
         multiselect_frame.setObjectName("multiselectUI")
-        multiselect_frame.setFixedHeight(44)
+        multiselect_frame.setFixedHeight(ScreenScale.h(44))
         multiselect_frame.setStyleSheet(f"""
             QFrame#multiselectUI {{
                 background-color: {Colors.LIGHT_GRAY_BG};
@@ -526,7 +526,7 @@ class BaseMapDialog(QDialog):
         scroll.setWidgetResizable(True)
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        scroll.setFixedHeight(34)
+        scroll.setFixedHeight(ScreenScale.h(34))
         scroll.setStyleSheet("QScrollArea { background: transparent; border: none; }")
 
         self._chips_container = QWidget()
@@ -542,7 +542,7 @@ class BaseMapDialog(QDialog):
 
         # Clear all button (left side in RTL)
         self.clear_all_btn = QPushButton(tr("dialog.map.clear_all"))
-        self.clear_all_btn.setFixedSize(80, 28)
+        self.clear_all_btn.setFixedSize(ScreenScale.w(80), ScreenScale.h(28))
         self.clear_all_btn.setCursor(Qt.PointingHandCursor)
         self.clear_all_btn.setFont(create_font(size=8, weight=FontManager.WEIGHT_MEDIUM))
         self.clear_all_btn.setStyleSheet(f"""
@@ -578,7 +578,7 @@ class BaseMapDialog(QDialog):
                 padding: 0px;
             }}
         """)
-        chip.setFixedHeight(26)
+        chip.setFixedHeight(ScreenScale.h(26))
 
         chip_layout = QHBoxLayout(chip)
         chip_layout.setContentsMargins(8, 2, 4, 2)
@@ -592,7 +592,7 @@ class BaseMapDialog(QDialog):
 
         close_btn = QToolButton()
         close_btn.setText("\u00d7")
-        close_btn.setFixedSize(18, 18)
+        close_btn.setFixedSize(ScreenScale.w(18), ScreenScale.h(18))
         close_btn.setCursor(Qt.PointingHandCursor)
         close_btn.setStyleSheet(f"""
             QToolButton {{
@@ -650,7 +650,7 @@ class BaseMapDialog(QDialog):
 
         # Cancel button
         cancel_btn = QPushButton(tr("button.cancel"))
-        cancel_btn.setFixedSize(120, 40)
+        cancel_btn.setFixedSize(ScreenScale.w(120), ScreenScale.h(40))
         cancel_btn.setCursor(Qt.PointingHandCursor)
         cancel_btn.setFont(create_font(size=10, weight=FontManager.WEIGHT_MEDIUM))
         cancel_btn.setStyleSheet(f"""
@@ -671,7 +671,7 @@ class BaseMapDialog(QDialog):
 
         # Confirm button
         self.confirm_btn = QPushButton(tr("dialog.map.confirm_coordinates"))
-        self.confirm_btn.setFixedSize(160, 40)
+        self.confirm_btn.setFixedSize(ScreenScale.w(160), ScreenScale.h(40))
         self.confirm_btn.setCursor(Qt.PointingHandCursor)
         self.confirm_btn.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
         self.confirm_btn.setStyleSheet(f"""

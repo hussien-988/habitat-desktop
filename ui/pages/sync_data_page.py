@@ -20,7 +20,7 @@ from ui.components.dark_header_zone import DarkHeaderZone
 from ui.components.stat_pill import StatPill
 from ui.components.accent_line import AccentLine
 from ui.components.animated_card import AnimatedCard, EmptyStateAnimated, animate_card_entrance
-from ui.design_system import Colors, PageDimensions
+from ui.design_system import Colors, PageDimensions, ScreenScale
 from ui.style_manager import StyleManager
 from ui.font_utils import create_font, FontManager
 from utils.logger import get_logger
@@ -143,7 +143,7 @@ class _AssignmentCard(AnimatedCard):
             card_height=100,
             border_radius=12,
             show_chevron=True,
-            show_strip=True,
+            show_strip=False,
             status_color=strip_color,
             strip_width=5,
             clickable=True,
@@ -181,7 +181,7 @@ class _AssignmentCard(AnimatedCard):
 
         # Building icon
         icon_container = QLabel()
-        icon_container.setFixedSize(24, 24)
+        icon_container.setFixedSize(ScreenScale.w(24), ScreenScale.h(24))
         icon_container.setStyleSheet(
             "QLabel { background-color: #EBF5FF; border-radius: 6px; border: none; }"
         )
@@ -238,8 +238,8 @@ class _AssignmentCard(AnimatedCard):
                 weight=FontManager.WEIGHT_SEMIBOLD
             ))
             status_badge.setAlignment(Qt.AlignCenter)
-            status_badge.setFixedHeight(22)
-            status_badge.setMinimumWidth(80)
+            status_badge.setFixedHeight(ScreenScale.h(22))
+            status_badge.setMinimumWidth(ScreenScale.w(80))
             status_badge.setStyleSheet(StyleManager.status_badge(color, bg))
 
         self._status_badge = status_badge
@@ -323,7 +323,7 @@ class _AssignmentCard(AnimatedCard):
             )
             date_str = str(sync_date)[:10] if sync_date else ""
             self._status_badge.setText(date_str)
-            self._status_badge.setFixedHeight(16777215)
+            self._status_badge.setFixedHeight(ScreenScale.h(16777215))
             self._status_badge.setMinimumWidth(0)
             self._status_badge.setFont(create_font(size=FontManager.SIZE_CAPTION, weight=QFont.Normal))
             self._status_badge.setStyleSheet(
@@ -339,8 +339,8 @@ class _AssignmentCard(AnimatedCard):
                 weight=FontManager.WEIGHT_SEMIBOLD
             ))
             self._status_badge.setAlignment(Qt.AlignCenter)
-            self._status_badge.setFixedHeight(22)
-            self._status_badge.setMinimumWidth(80)
+            self._status_badge.setFixedHeight(ScreenScale.h(22))
+            self._status_badge.setMinimumWidth(ScreenScale.w(80))
             self._status_badge.setStyleSheet(StyleManager.status_badge(color, bg))
 
 
@@ -400,8 +400,8 @@ class SyncDataPage(QWidget):
 
         # Collector filter combo in header (dark style)
         self._collector_combo = QComboBox()
-        self._collector_combo.setFixedHeight(34)
-        self._collector_combo.setFixedWidth(220)
+        self._collector_combo.setFixedHeight(ScreenScale.h(34))
+        self._collector_combo.setFixedWidth(ScreenScale.w(220))
         self._collector_combo.setEditable(True)
         self._collector_combo.lineEdit().setReadOnly(True)
         self._collector_combo.lineEdit().setPlaceholderText(tr("page.sync.all_collectors"))
@@ -412,7 +412,7 @@ class SyncDataPage(QWidget):
 
         # Back button in header actions
         self._back_btn = QPushButton(tr("action.back"))
-        self._back_btn.setFixedSize(100, 36)
+        self._back_btn.setFixedSize(ScreenScale.w(100), ScreenScale.h(36))
         self._back_btn.setCursor(Qt.PointingHandCursor)
         self._back_btn.setFont(create_font(size=FontManager.SIZE_BODY, weight=FontManager.WEIGHT_SEMIBOLD))
         self._back_btn.setStyleSheet(StyleManager.refresh_button_dark())
@@ -421,7 +421,7 @@ class SyncDataPage(QWidget):
 
         # Refresh button in header actions
         self._refresh_btn = QPushButton(tr("page.sync.refresh"))
-        self._refresh_btn.setFixedSize(100, 36)
+        self._refresh_btn.setFixedSize(ScreenScale.w(100), ScreenScale.h(36))
         self._refresh_btn.setCursor(Qt.PointingHandCursor)
         self._refresh_btn.setFont(create_font(size=FontManager.SIZE_BODY, weight=FontManager.WEIGHT_SEMIBOLD))
         self._refresh_btn.setStyleSheet(StyleManager.refresh_button_dark())
@@ -473,7 +473,7 @@ class SyncDataPage(QWidget):
             title=tr("page.sync.no_assignments"),
             description="",
         )
-        self._empty_state.setMinimumHeight(260)
+        self._empty_state.setMinimumHeight(ScreenScale.h(260))
         self._stack.addWidget(self._empty_state)
 
         content_layout.addWidget(self._stack, 1)
@@ -875,7 +875,7 @@ class SyncDataPage(QWidget):
                 lbl = QLabel(label_text)
                 lbl.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
                 lbl.setStyleSheet("color: #637381; background: transparent; border: none;")
-                lbl.setFixedWidth(120)
+                lbl.setFixedWidth(ScreenScale.w(120))
                 row.addWidget(lbl)
 
                 val = QLabel(value_text)
@@ -907,7 +907,7 @@ class SyncDataPage(QWidget):
                 unassign_btn = QPushButton(tr("page.sync.unassign"))
                 unassign_btn.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
                 unassign_btn.setCursor(Qt.PointingHandCursor)
-                unassign_btn.setFixedHeight(36)
+                unassign_btn.setFixedHeight(ScreenScale.h(36))
                 unassign_btn.setStyleSheet("""
                     QPushButton {
                         color: #EF4444;
@@ -1025,7 +1025,7 @@ class SyncDataPage(QWidget):
             if i < len(data_points) - 1:
                 sep = QFrame()
                 sep.setFixedWidth(1)
-                sep.setFixedHeight(28)
+                sep.setFixedHeight(ScreenScale.h(28))
                 sep.setStyleSheet("background-color: #F0F0F0; border: none;")
                 grid.addWidget(sep)
 

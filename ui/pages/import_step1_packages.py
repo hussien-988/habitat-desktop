@@ -10,7 +10,7 @@ from PyQt5.QtCore import Qt, pyqtSignal, QTimer
 from PyQt5.QtGui import QColor
 
 from ui.components.animated_card import EmptyStateAnimated
-from ui.design_system import Colors
+from ui.design_system import Colors, ScreenScale
 from ui.font_utils import create_font, FontManager
 from ui.style_manager import StyleManager
 from ui.animation_utils import stagger_fade_in
@@ -37,7 +37,7 @@ class _PackageCard(QFrame):
 
     def _setup_ui(self, pkg: dict):
         self.setCursor(Qt.PointingHandCursor)
-        self.setFixedHeight(100)
+        self.setFixedHeight(ScreenScale.h(100))
         self._apply_style(selected=False)
 
         layout = QVBoxLayout(self)
@@ -61,7 +61,7 @@ class _PackageCard(QFrame):
         badge = QLabel(badge_text)
         badge.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
         badge.setAlignment(Qt.AlignCenter)
-        badge.setFixedSize(80, 22)
+        badge.setFixedSize(ScreenScale.w(80), ScreenScale.h(22))
         badge.setStyleSheet("""
             QLabel {
                 background-color: #DBEAFE;
@@ -206,8 +206,8 @@ class ImportStep1Packages(QWidget):
 
         back_btn = QPushButton(tr("wizard.import.step1.back_btn"))
         back_btn.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
-        back_btn.setFixedHeight(36)
-        back_btn.setMinimumWidth(100)
+        back_btn.setFixedHeight(ScreenScale.h(36))
+        back_btn.setMinimumWidth(ScreenScale.w(100))
         back_btn.setCursor(Qt.PointingHandCursor)
         back_btn.setStyleSheet(StyleManager.nav_button_secondary())
         back_btn.clicked.connect(self.back_requested.emit)
@@ -267,7 +267,7 @@ class ImportStep1Packages(QWidget):
         overlay_layout.setAlignment(Qt.AlignCenter)
 
         card = QFrame()
-        card.setFixedSize(240, 90)
+        card.setFixedSize(ScreenScale.w(240), ScreenScale.h(90))
         card.setStyleSheet("""
             QFrame {
                 background-color: #FFFFFF;

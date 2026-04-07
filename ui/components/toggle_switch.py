@@ -2,6 +2,7 @@
 from PyQt5.QtWidgets import QWidget, QHBoxLayout, QLabel
 from PyQt5.QtCore import Qt, pyqtSignal, QRectF
 from PyQt5.QtGui import QPainter, QColor, QPen
+from ui.design_system import ScreenScale
 
 
 class ToggleSwitch(QWidget):
@@ -22,7 +23,7 @@ class ToggleSwitch(QWidget):
         super().__init__(parent)
         self._checked = checked
         self.setCursor(Qt.PointingHandCursor)
-        self.setFixedHeight(28)
+        self.setFixedHeight(ScreenScale.h(28))
 
         layout = QHBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)

@@ -21,7 +21,7 @@ from PyQt5.QtGui import (
     QPen, QPainterPath,
 )
 
-from ui.design_system import PageDimensions
+from ui.design_system import PageDimensions, ScreenScale
 from ui.font_utils import create_font
 
 
@@ -35,7 +35,7 @@ class DarkHeaderZone(QFrame):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setMinimumHeight(140)
+        self.setMinimumHeight(ScreenScale.h(140))
         self.setAttribute(Qt.WA_StyledBackground, False)
 
         self._anim_start = time.time()
@@ -156,9 +156,9 @@ class DarkHeaderZone(QFrame):
         path.closeSubpath()
 
         grad = QLinearGradient(0, 0, w, h)
-        grad.setColorAt(0.0, QColor("#0E2035"))
-        grad.setColorAt(0.5, QColor("#132D50"))
-        grad.setColorAt(1.0, QColor("#1A3860"))
+        grad.setColorAt(0.0, QColor("#152D4A"))
+        grad.setColorAt(0.5, QColor("#1A3A5C"))
+        grad.setColorAt(1.0, QColor("#1E4468"))
         painter.fillPath(path, grad)
 
         painter.setClipPath(path)

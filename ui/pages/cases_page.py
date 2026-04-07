@@ -26,7 +26,7 @@ from PyQt5.QtGui import (
     QPainterPath, QCursor,
 )
 
-from ui.design_system import Colors, PageDimensions, Spacing
+from ui.design_system import Colors, PageDimensions, Spacing, ScreenScale
 from ui.font_utils import create_font, FontManager
 from ui.style_manager import StyleManager
 from ui.components.icon import Icon
@@ -37,6 +37,7 @@ from services.translation_manager import tr, get_layout_direction, get_language
 from services.display_mappings import get_survey_type_display
 from services.api_worker import ApiWorker
 from ui.components.toast import Toast
+from ui.components.empty_state import EmptyState
 
 logger = logging.getLogger(__name__)
 
@@ -148,7 +149,7 @@ class _SurveyCard(QFrame):
         self._lift_value = 0.0
         self._lift_anim = None
         self.setCursor(QCursor(Qt.PointingHandCursor))
-        self.setFixedHeight(110)
+        self.setFixedHeight(ScreenScale.h(110))
         self.setMouseTracking(True)
         self._build_ui(card_data)
 
@@ -173,28 +174,9 @@ class _SurveyCard(QFrame):
         outer.setContentsMargins(0, 0, 20, 0)
         outer.setSpacing(0)
 
-        # Left status strip with gradient
-        style = _STATUS_STYLES.get(self._status, _STATUS_STYLES["draft"])
-        strip = QFrame()
-        strip.setFixedWidth(5)
-        is_rtl = get_layout_direction() == Qt.RightToLeft
-        if is_rtl:
-            strip.setStyleSheet(
-                f"background: qlineargradient(x1:0, y1:0, x2:0, y2:1, "
-                f"stop:0 {style['fg']}, stop:0.5 {style['border']}, stop:1 {style['fg']}); "
-                "border-top-right-radius: 14px; border-bottom-right-radius: 14px;"
-            )
-        else:
-            strip.setStyleSheet(
-                f"background: qlineargradient(x1:0, y1:0, x2:0, y2:1, "
-                f"stop:0 {style['fg']}, stop:0.5 {style['border']}, stop:1 {style['fg']}); "
-                "border-top-left-radius: 14px; border-bottom-left-radius: 14px;"
-            )
-        outer.addWidget(strip)
-
         # Content
         content = QVBoxLayout()
-        content.setContentsMargins(18, 14, 0, 14)
+        content.setContentsMargins(20, 14, 0, 14)
         content.setSpacing(4)
 
         # Row 1: contact person name + status badge
@@ -206,7 +188,7 @@ class _SurveyCard(QFrame):
         name_label.setStyleSheet(
             f"color: {Colors.PAGE_TITLE}; background: transparent; border: none;"
         )
-        name_label.setMaximumWidth(600)
+        name_label.setMaximumWidth(ScreenScale.w(600))
         row1.addWidget(name_label)
         row1.addStretch()
 
@@ -214,7 +196,7 @@ class _SurveyCard(QFrame):
         badge = QLabel(status_text)
         badge.setFont(create_font(size=8, weight=FontManager.WEIGHT_SEMIBOLD))
         badge.setAlignment(Qt.AlignCenter)
-        badge.setFixedHeight(22)
+        badge.setFixedHeight(ScreenScale.h(22))
         badge.setStyleSheet(
             f"QLabel {{ background-color: {style['bg']}; color: {style['fg']}; "
             f"border: 1px solid {style['border']}; border-radius: 11px; "
@@ -422,219 +404,29 @@ class _SurveyCard(QFrame):
 
 
 # ---------------------------------------------------------------------------
-#  _EmptyStateAnimated — Dark navy cartographic empty state
+#  _EmptyStateAnimated — Light professional empty state
 # ---------------------------------------------------------------------------
 
 class _EmptyStateAnimated(QWidget):
-    """Dark-themed empty state with constellation particles and
-    cartographic motifs."""
+    """Light-themed institutional empty state."""
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self._title_text = tr("page.cases.no_drafts")
-        self._desc_text = tr("page.cases.empty_description")
-
-        self._anim_start = time.time()
-
-        self._shimmer_pos = 0.0
-        self._shimmer_anim = QPropertyAnimation(self, b"shimmerPos")
-        self._shimmer_anim.setDuration(2500)
-        self._shimmer_anim.setStartValue(0.0)
-        self._shimmer_anim.setEndValue(1.0)
-        self._shimmer_anim.setEasingCurve(QEasingCurve.InOutQuad)
-        self._shimmer_anim.setLoopCount(-1)
-        self._shimmer_anim.start()
-
-        random.seed(77)
-        self._particles = []
-        for _ in range(12):
-            self._particles.append({
-                "x": random.uniform(0.05, 0.95),
-                "y": random.uniform(0.05, 0.95),
-                "phase": random.uniform(0, math.tau),
-                "speed": random.uniform(0.3, 0.8),
-            })
-
-        self._timer = QTimer(self)
-        self._timer.setInterval(50)
-        self._timer.timeout.connect(self.update)
-        self._timer.start()
-
-    @pyqtProperty(float)
-    def shimmerPos(self):
-        return self._shimmer_pos
-
-    @shimmerPos.setter
-    def shimmerPos(self, val):
-        self._shimmer_pos = val
-        self.update()
+        layout = QVBoxLayout(self)
+        layout.setAlignment(Qt.AlignCenter)
+        layout.setContentsMargins(0, 0, 0, 0)
+        self._inner = EmptyState(
+            icon_name="folder",
+            title=tr("page.cases.no_drafts"),
+            description=tr("page.cases.empty_description"),
+        )
+        layout.addWidget(self._inner, 0, Qt.AlignCenter)
 
     def set_title(self, text: str):
-        self._title_text = text
-        self.update()
+        self._inner.set_title(text)
 
     def set_description(self, text: str):
-        self._desc_text = text
-        self.update()
-
-    def paintEvent(self, event):
-        painter = QPainter(self)
-        painter.setRenderHint(QPainter.Antialiasing)
-        w, h = self.width(), self.height()
-        t = time.time() - self._anim_start
-
-        # Dark navy gradient
-        bg_grad = QLinearGradient(0, 0, w, h)
-        bg_grad.setColorAt(0.0, QColor("#0E2035"))
-        bg_grad.setColorAt(0.5, QColor("#132D50"))
-        bg_grad.setColorAt(1.0, QColor("#1A3860"))
-        painter.fillRect(0, 0, w, h, bg_grad)
-
-        # Grid
-        painter.setPen(QPen(QColor(56, 144, 223, 12), 0.5))
-        for x in range(0, w, 60):
-            painter.drawLine(x, 0, x, h)
-        for y in range(0, h, 60):
-            painter.drawLine(0, y, w, y)
-
-        # Particles
-        positions = []
-        for p in self._particles:
-            px = int((p["x"] + 0.012 * math.sin(t * p["speed"] + p["phase"])) * w)
-            py = int((p["y"] + 0.010 * math.cos(t * p["speed"] * 0.7 + p["phase"])) * h)
-            px = max(4, min(w - 4, px))
-            py = max(4, min(h - 4, py))
-            positions.append((px, py))
-            alpha = 35 + int(18 * math.sin(t * 1.5 + p["phase"]))
-            painter.setPen(Qt.NoPen)
-            painter.setBrush(QColor(139, 172, 200, alpha))
-            painter.drawEllipse(QPoint(px, py), 2, 2)
-
-        for i in range(len(positions)):
-            for j in range(i + 1, len(positions)):
-                dx = positions[i][0] - positions[j][0]
-                dy = positions[i][1] - positions[j][1]
-                dist = math.sqrt(dx * dx + dy * dy)
-                if dist < 150:
-                    alpha = int(12 * (1 - dist / 150))
-                    painter.setPen(QPen(QColor(139, 172, 200, alpha), 1))
-                    painter.drawLine(
-                        positions[i][0], positions[i][1],
-                        positions[j][0], positions[j][1]
-                    )
-
-        cx, cy = w // 2, int(h * 0.40)
-        fw, fh = 110, 80
-
-        # Breathing glow
-        glow_alpha = 20 + int(12 * math.sin(t * 0.8))
-        glow = QRadialGradient(cx, cy, 100)
-        glow.setColorAt(0, QColor(56, 144, 223, glow_alpha))
-        glow.setColorAt(1, QColor(56, 144, 223, 0))
-        painter.setPen(Qt.NoPen)
-        painter.setBrush(glow)
-        painter.drawEllipse(cx - 100, cy - 100, 200, 200)
-
-        # Concentric circles
-        for i, radius in enumerate([40, 65, 90]):
-            alpha = int(15 + 8 * math.sin(t * 0.4 + i * 1.2))
-            painter.setPen(QPen(QColor(56, 144, 223, alpha), 0.8))
-            painter.setBrush(Qt.NoBrush)
-            painter.drawEllipse(cx - radius, cy - radius, radius * 2, radius * 2)
-
-        # Crosshairs
-        cross_alpha = int(12 + 6 * math.sin(t * 0.3))
-        painter.setPen(QPen(QColor(56, 144, 223, cross_alpha), 0.5))
-        painter.drawLine(cx - 100, cy, cx - 55, cy)
-        painter.drawLine(cx + 55, cy, cx + 100, cy)
-        painter.drawLine(cx, cy - 85, cx, cy - 50)
-        painter.drawLine(cx, cy + 50, cx, cy + 85)
-
-        # Folder body
-        folder = QPainterPath()
-        folder.moveTo(cx - fw // 2, cy - fh // 2 + 16)
-        folder.lineTo(cx - fw // 2, cy + fh // 2)
-        folder.lineTo(cx + fw // 2, cy + fh // 2)
-        folder.lineTo(cx + fw // 2, cy - fh // 2 + 16)
-        folder.closeSubpath()
-        painter.setPen(QPen(QColor(56, 144, 223, 40), 1.5))
-        painter.setBrush(QColor(15, 31, 61, 180))
-        painter.drawPath(folder)
-
-        # Folder tab
-        tab_path = QPainterPath()
-        tab_path.moveTo(cx - fw // 2, cy - fh // 2 + 16)
-        tab_path.lineTo(cx - fw // 2, cy - fh // 2 + 4)
-        tab_path.lineTo(cx - fw // 2 + 4, cy - fh // 2)
-        tab_path.lineTo(cx - 12, cy - fh // 2)
-        tab_path.lineTo(cx - 8, cy - fh // 2 + 8)
-        tab_path.lineTo(cx + 8, cy - fh // 2 + 8)
-        tab_path.lineTo(cx + 12, cy - fh // 2 + 16)
-        tab_path.closeSubpath()
-        painter.setPen(QPen(QColor(56, 144, 223, 40), 1.5))
-        painter.setBrush(QColor(20, 40, 70, 200))
-        painter.drawPath(tab_path)
-
-        # Documents
-        doc_x, doc_y = cx - 18, cy - fh // 2 + 24
-        for i in range(2):
-            dx = doc_x + i * 14
-            dy = doc_y + i * 5
-            painter.setPen(QPen(QColor(56, 144, 223, 30), 1))
-            painter.setBrush(QColor(25, 50, 85))
-            painter.drawRoundedRect(QRectF(dx, dy, 30, 38), 3, 3)
-            painter.setPen(Qt.NoPen)
-            painter.setBrush(QColor(56, 144, 223, 25))
-            for line_y in range(3):
-                lw = 20 if line_y < 2 else 13
-                painter.drawRect(QRectF(dx + 5, dy + 9 + line_y * 8, lw, 2))
-
-        # Ground shadow
-        painter.setPen(QPen(QColor(56, 144, 223, 20), 1))
-        painter.drawLine(cx - fw // 2 + 8, cy + fh // 2 + 3,
-                         cx + fw // 2 - 8, cy + fh // 2 + 3)
-
-        # Shimmer sweep
-        shimmer_x = int((self._shimmer_pos * 2 - 0.5) * fw + cx - fw // 2)
-        sg = QLinearGradient(shimmer_x - 30, 0, shimmer_x + 30, 0)
-        sg.setColorAt(0, QColor(56, 144, 223, 0))
-        sg.setColorAt(0.5, QColor(91, 168, 240, 50))
-        sg.setColorAt(1, QColor(56, 144, 223, 0))
-        cp = QPainterPath()
-        cp.addRect(QRectF(cx - fw // 2, cy - fh // 2, fw, fh))
-        painter.setClipPath(cp)
-        painter.setPen(Qt.NoPen)
-        painter.setBrush(sg)
-        painter.drawRect(shimmer_x - 30, cy - fh // 2, 60, fh)
-        painter.setClipping(False)
-
-        # Title
-        painter.setFont(create_font(size=FontManager.SIZE_TITLE, weight=QFont.DemiBold))
-        painter.setPen(QColor(255, 255, 255))
-        painter.drawText(QRectF(0, cy + fh // 2 + 28, w, 30), Qt.AlignCenter, self._title_text)
-
-        # Description
-        painter.setFont(create_font(size=FontManager.SIZE_BODY, weight=FontManager.WEIGHT_REGULAR))
-        painter.setPen(QColor(139, 172, 200, 200))
-        painter.drawText(QRectF(w * 0.2, cy + fh // 2 + 62, w * 0.6, 40),
-                         Qt.AlignCenter | Qt.TextWordWrap, self._desc_text)
-
-        painter.end()
-
-    def showEvent(self, event):
-        super().showEvent(event)
-        if not self._timer.isActive():
-            self._timer.start()
-        if self._shimmer_anim.state() != QPropertyAnimation.Running:
-            self._shimmer_anim.start()
-
-    def hideEvent(self, event):
-        super().hideEvent(event)
-        self._timer.stop()
-
-    def resizeEvent(self, event):
-        super().resizeEvent(event)
-        self.update()
+        self._inner.set_description(text)
 
 
 # ---------------------------------------------------------------------------
@@ -699,8 +491,8 @@ class CasesPage(QWidget):
         # Add button in header actions
         self._add_btn = QPushButton(tr("wizard.button.add_case"))
         self._add_btn.setCursor(QCursor(Qt.PointingHandCursor))
-        self._add_btn.setFixedHeight(42)
-        self._add_btn.setMinimumWidth(150)
+        self._add_btn.setFixedHeight(ScreenScale.h(42))
+        self._add_btn.setMinimumWidth(ScreenScale.w(150))
         self._add_btn.setFont(create_font(size=13, weight=FontManager.WEIGHT_BOLD))
         self._add_btn.setStyleSheet(_ADD_BTN_STYLE)
         self._add_btn.clicked.connect(self.add_claim_clicked.emit)
@@ -710,21 +502,21 @@ class CasesPage(QWidget):
         tab_font = create_font(size=12, weight=QFont.DemiBold)
 
         self._tab_draft = NavStyleTab(tr("page.cases.tab_draft"))
-        self._tab_draft.setFixedSize(130, 38)
+        self._tab_draft.setFixedSize(ScreenScale.w(130), ScreenScale.h(38))
         self._tab_draft.set_font(tab_font)
         self._tab_draft.set_active(True)
         self._tab_draft.clicked.connect(lambda: self._on_tab("draft"))
         self._header.add_tab(self._tab_draft)
 
         self._tab_finalized = NavStyleTab(tr("page.cases.tab_finalized"))
-        self._tab_finalized.setFixedSize(130, 38)
+        self._tab_finalized.setFixedSize(ScreenScale.w(130), ScreenScale.h(38))
         self._tab_finalized.set_font(tab_font)
         self._tab_finalized.set_active(False)
         self._tab_finalized.clicked.connect(lambda: self._on_tab("finalized"))
         self._header.add_tab(self._tab_finalized)
 
         self._tab_obstructed = NavStyleTab(tr("page.cases.tab_obstructed"))
-        self._tab_obstructed.setFixedSize(130, 38)
+        self._tab_obstructed.setFixedSize(ScreenScale.w(130), ScreenScale.h(38))
         self._tab_obstructed.set_font(tab_font)
         self._tab_obstructed.set_active(False)
         self._tab_obstructed.setVisible(False)
@@ -734,14 +526,14 @@ class CasesPage(QWidget):
         # Search field (row 2)
         self._search = QLineEdit()
         self._search.setPlaceholderText(tr("page.cases.search_person"))
-        self._search.setFixedSize(280, 34)
+        self._search.setFixedSize(ScreenScale.w(280), ScreenScale.h(34))
         self._search.setFont(create_font(size=11, weight=FontManager.WEIGHT_REGULAR))
         self._search.setStyleSheet(_DARK_INPUT_STYLE)
         search_icon = Icon.load_pixmap("search", 16)
         if search_icon and not search_icon.isNull():
             icon_label = QLabel(self._search)
             icon_label.setPixmap(search_icon)
-            icon_label.setFixedSize(16, 16)
+            icon_label.setFixedSize(ScreenScale.w(16), ScreenScale.h(16))
             icon_label.move(10, 9)
             icon_label.setStyleSheet("background: transparent; border: none;")
         self._search.textChanged.connect(self._on_search_changed)
@@ -805,14 +597,14 @@ class CasesPage(QWidget):
 
     def _create_pagination(self):
         bar = QFrame()
-        bar.setFixedHeight(40)
+        bar.setFixedHeight(ScreenScale.h(40))
         bar.setStyleSheet("QFrame { background: transparent; border: none; }")
         layout = QHBoxLayout(bar)
         layout.setContentsMargins(4, 6, 4, 0)
         layout.addStretch()
 
         self._prev_btn = QPushButton("\u276E")
-        self._prev_btn.setFixedSize(32, 28)
+        self._prev_btn.setFixedSize(ScreenScale.w(32), ScreenScale.h(28))
         self._prev_btn.setCursor(QCursor(Qt.PointingHandCursor))
         self._prev_btn.setStyleSheet(_NAV_BTN_STYLE)
         self._prev_btn.clicked.connect(self._on_prev_page)
@@ -822,11 +614,11 @@ class CasesPage(QWidget):
         self._page_info.setFont(create_font(size=10, weight=FontManager.WEIGHT_MEDIUM))
         self._page_info.setStyleSheet(f"color: {Colors.TEXT_SECONDARY};")
         self._page_info.setAlignment(Qt.AlignCenter)
-        self._page_info.setMinimumWidth(80)
+        self._page_info.setMinimumWidth(ScreenScale.w(80))
         layout.addWidget(self._page_info)
 
         self._next_btn = QPushButton("\u276F")
-        self._next_btn.setFixedSize(32, 28)
+        self._next_btn.setFixedSize(ScreenScale.w(32), ScreenScale.h(28))
         self._next_btn.setCursor(QCursor(Qt.PointingHandCursor))
         self._next_btn.setStyleSheet(_NAV_BTN_STYLE)
         self._next_btn.clicked.connect(self._on_next_page)
@@ -947,7 +739,7 @@ class CasesPage(QWidget):
 
     def _build_results_bar(self):
         bar = QFrame()
-        bar.setFixedHeight(44)
+        bar.setFixedHeight(ScreenScale.h(44))
         bar.setStyleSheet(
             "QFrame { background: rgba(56, 144, 223, 0.07);"
             " border-radius: 8px; border: 1px solid rgba(56, 144, 223, 0.15);"
@@ -957,7 +749,7 @@ class CasesPage(QWidget):
         layout.setContentsMargins(12, 0, 12, 0)
         layout.setSpacing(12)
         self._back_btn = QPushButton("رجوع")
-        self._back_btn.setFixedSize(80, 30)
+        self._back_btn.setFixedSize(ScreenScale.w(80), ScreenScale.h(30))
         self._back_btn.setCursor(QCursor(Qt.PointingHandCursor))
         self._back_btn.setStyleSheet(
             "QPushButton { background: rgba(56, 144, 223, 0.15);"

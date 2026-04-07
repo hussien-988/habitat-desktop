@@ -15,7 +15,7 @@ from services.display_mappings import get_unit_status_display
 from services.translation_manager import tr, get_layout_direction
 from ui.font_utils import create_font, FontManager
 from ui.style_manager import StyleManager
-from ui.design_system import Colors, PageDimensions
+from ui.design_system import Colors, PageDimensions, ScreenScale
 from ui.components.icon import Icon
 from ui.components.dark_header_zone import DarkHeaderZone
 from ui.components.accent_line import AccentLine
@@ -51,7 +51,7 @@ class UnitDetailsPage(QWidget):
         self._header.set_title("")
 
         self._back_btn = QPushButton(tr("action.back"))
-        self._back_btn.setFixedSize(100, 40)
+        self._back_btn.setFixedSize(ScreenScale.w(100), ScreenScale.h(40))
         self._back_btn.setCursor(Qt.PointingHandCursor)
         self._back_btn.setFont(create_font(size=FontManager.SIZE_BODY, weight=FontManager.WEIGHT_SEMIBOLD))
         self._back_btn.setStyleSheet(StyleManager.dark_action_button())
@@ -150,7 +150,7 @@ class UnitDetailsPage(QWidget):
         right_header.setSpacing(8)
 
         icon_container = QFrame()
-        icon_container.setFixedSize(48, 48)
+        icon_container.setFixedSize(ScreenScale.w(48), ScreenScale.h(48))
         icon_container.setStyleSheet(f"""
             QFrame {{
                 background-color: {Colors.BACKGROUND};
@@ -297,7 +297,7 @@ class UnitDetailsPage(QWidget):
         desc_text.setStyleSheet("color: #86909B;")
         desc_text.setAlignment(Qt.AlignLeft | Qt.AlignTop)
         desc_text.setWordWrap(True)
-        desc_text.setMaximumHeight(40)
+        desc_text.setMaximumHeight(ScreenScale.h(40))
 
         desc_layout.addWidget(desc_title)
         desc_layout.addWidget(desc_text)

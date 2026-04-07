@@ -32,7 +32,7 @@ from app.config import Config
 from services.api_client import get_api_client
 from utils.logger import get_logger
 from ui.components.toast import Toast
-from ui.design_system import Colors
+from ui.design_system import Colors, ScreenScale
 from ui.components.icon import Icon
 from ui.font_utils import create_font, FontManager
 from services.translation_manager import tr, get_layout_direction
@@ -84,7 +84,7 @@ class HouseholdStep(BaseStep):
         card_layout.setContentsMargins(16, 16, 16, 16)
         card_layout.setSpacing(12)
         address_container = QFrame()
-        address_container.setFixedHeight(32)
+        address_container.setFixedHeight(ScreenScale.h(32))
         address_container.setStyleSheet("""
             QFrame {
                 background-color: #F0F4FA;
@@ -145,7 +145,7 @@ class HouseholdStep(BaseStep):
         card_layout.addLayout(stats_row)
         # Same order as unit_selection_step unit cards
         unit_info_container = QFrame()
-        unit_info_container.setFixedHeight(73)
+        unit_info_container.setFixedHeight(ScreenScale.h(73))
         unit_info_container.setStyleSheet("""
             QFrame {
                 background-color: #F8FAFF;
@@ -235,7 +235,7 @@ class HouseholdStep(BaseStep):
                 continue
             self.hh_occupancy_nature.addItem(display_name, code)
         self.hh_occupancy_nature.setStyleSheet(combo_style)
-        self.hh_occupancy_nature.setMinimumHeight(38)
+        self.hh_occupancy_nature.setMinimumHeight(ScreenScale.h(38))
         nature_col.addWidget(self.hh_occupancy_nature)
 
         occupancy_row.addLayout(nature_col, 1)
@@ -256,7 +256,7 @@ class HouseholdStep(BaseStep):
                 continue
             self.hh_occupancy_type.addItem(display_name, code)
         self.hh_occupancy_type.setStyleSheet(combo_style)
-        self.hh_occupancy_type.setMinimumHeight(38)
+        self.hh_occupancy_type.setMinimumHeight(ScreenScale.h(38))
         type_col.addWidget(self.hh_occupancy_type)
 
         occupancy_row.addLayout(type_col, 1)
@@ -280,7 +280,7 @@ class HouseholdStep(BaseStep):
         self.hh_total_members.setButtonSymbols(QSpinBox.NoButtons)
 
         members_widget = self._create_spinbox_with_arrows(self.hh_total_members)
-        members_widget.setFixedHeight(45)
+        members_widget.setFixedHeight(ScreenScale.h(45))
         total_members_layout.addWidget(members_widget)
 
         family_info_layout.addLayout(total_members_layout)
@@ -299,7 +299,7 @@ class HouseholdStep(BaseStep):
         self.hh_notes.setPlaceholderStyleSheet(
             f"color: {Colors.WIZARD_SUBTITLE}; background: transparent; font-size: 10pt;"
         )
-        self.hh_notes.setMaximumHeight(80)
+        self.hh_notes.setMaximumHeight(ScreenScale.h(80))
         self.hh_notes.setLayoutDirection(get_layout_direction())
         self.hh_notes.setStyleSheet(f"""
             QTextEdit {{
@@ -415,7 +415,7 @@ class HouseholdStep(BaseStep):
             QFrame container with spinbox and arrows
         """
         container = QFrame()
-        container.setFixedHeight(45)
+        container.setFixedHeight(ScreenScale.h(45))
         container.setStyleSheet(f"""
             QFrame {{
                 border: 1px solid #E1E8ED;
@@ -453,7 +453,7 @@ class HouseholdStep(BaseStep):
 
         # Arrow column (RIGHT side) with left border separator
         arrow_container = QFrame()
-        arrow_container.setFixedWidth(30)
+        arrow_container.setFixedWidth(ScreenScale.w(30))
         arrow_container.setStyleSheet("""
             QFrame {
                 border: none;
@@ -469,7 +469,7 @@ class HouseholdStep(BaseStep):
 
         # Up arrow icon (^.png)
         up_label = QLabel()
-        up_label.setFixedSize(30, 22)
+        up_label.setFixedSize(ScreenScale.w(30), ScreenScale.h(22))
         up_label.setAlignment(Qt.AlignCenter)
         up_pixmap = Icon.load_pixmap("^", size=10)
         if up_pixmap and not up_pixmap.isNull():
@@ -483,7 +483,7 @@ class HouseholdStep(BaseStep):
 
         # Down arrow icon (v.png)
         down_label = QLabel()
-        down_label.setFixedSize(30, 22)
+        down_label.setFixedSize(ScreenScale.w(30), ScreenScale.h(22))
         down_label.setAlignment(Qt.AlignCenter)
         down_pixmap = Icon.load_pixmap("v", size=10)
         if down_pixmap and not down_pixmap.isNull():
@@ -517,7 +517,7 @@ class HouseholdStep(BaseStep):
         """
         card = QFrame()
         card.setObjectName(f"{title}Card")
-        card.setMinimumHeight(280)
+        card.setMinimumHeight(ScreenScale.h(280))
         card.setStyleSheet(f"""
             QFrame#{title}Card {{
                 background-color: #F8FAFF;

@@ -11,6 +11,7 @@ from PyQt5.QtGui import QFont
 from app.config import Config
 from ui.font_utils import create_font, FontManager
 from services.translation_manager import tr
+from ui.design_system import ScreenScale
 
 
 class VocabularyIncompatibilityDialog(QDialog):
@@ -22,8 +23,8 @@ class VocabularyIncompatibilityDialog(QDialog):
         self.package_info = package_info
 
         self.setWindowTitle(tr("component.vocab_incompatibility.window_title"))
-        self.setMinimumWidth(700)
-        self.setMinimumHeight(600)
+        self.setMinimumWidth(ScreenScale.w(700))
+        self.setMinimumHeight(ScreenScale.h(600))
         self._setup_ui()
 
     def _setup_ui(self):
@@ -95,7 +96,7 @@ class VocabularyIncompatibilityDialog(QDialog):
             label = QLabel(label_text)
             label.setFont(create_font(size=9, weight=QFont.Bold, letter_spacing=0))
             label.setStyleSheet(f"color: {Config.TEXT_LIGHT};")
-            label.setMinimumWidth(120)
+            label.setMinimumWidth(ScreenScale.w(120))
             row.addWidget(label)
 
             value = QLabel(str(value_text))

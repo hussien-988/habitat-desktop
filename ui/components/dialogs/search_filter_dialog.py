@@ -14,7 +14,7 @@ from PyQt5.QtCore import Qt, QDate, QSize
 from PyQt5.QtGui import QColor, QFont, QIcon
 from pathlib import Path
 
-from ui.design_system import Colors
+from ui.design_system import Colors, ScreenScale
 from ui.font_utils import create_font, FontManager
 from services.translation_manager import tr, get_layout_direction
 
@@ -130,7 +130,10 @@ class SearchFilterDialog(QDialog):
         # White container card (same pattern as SecurityDialog/PasswordDialog)
         container = QFrame()
         container.setObjectName("filterContainer")
-        container.setFixedWidth(476)
+        from PyQt5.QtWidgets import QApplication
+        _scr = QApplication.primaryScreen().availableGeometry()
+        container.setMinimumWidth(ScreenScale.w(360))
+        container.setMaximumWidth(min(476, int(_scr.width() * 0.40)))
         container.setLayoutDirection(get_layout_direction())
         container.setStyleSheet("""
             QFrame#filterContainer {
@@ -177,7 +180,7 @@ class SearchFilterDialog(QDialog):
         layout.addWidget(addr_label)
 
         self.address_combo = QComboBox()
-        self.address_combo.setFixedHeight(42)
+        self.address_combo.setFixedHeight(ScreenScale.h(42))
         self.address_combo.setFont(create_font(size=FontManager.SIZE_BODY, weight=FontManager.WEIGHT_REGULAR))
         self.address_combo.setStyleSheet(_COMBO_STYLE)
         self.address_combo.addItem(tr("navbar.filter.choose"), "")
@@ -195,7 +198,7 @@ class SearchFilterDialog(QDialog):
         self.date_input.setCalendarPopup(True)
         self.date_input.setDate(QDate.currentDate())
         self.date_input.setDisplayFormat("yyyy-MM-dd")
-        self.date_input.setFixedHeight(42)
+        self.date_input.setFixedHeight(ScreenScale.h(42))
         self.date_input.setStyleSheet(_DATE_STYLE)
         self.date_input.setFont(create_font(size=FontManager.SIZE_BODY, weight=FontManager.WEIGHT_REGULAR))
         self.date_input.setLayoutDirection(Qt.LeftToRight)
@@ -226,7 +229,7 @@ class SearchFilterDialog(QDialog):
 
         field = QLineEdit()
         field.setPlaceholderText(placeholder)
-        field.setFixedHeight(42)
+        field.setFixedHeight(ScreenScale.h(42))
         field.setFont(create_font(size=FontManager.SIZE_BODY, weight=FontManager.WEIGHT_REGULAR))
         field.setStyleSheet(_INPUT_STYLE)
 
@@ -252,7 +255,7 @@ class SearchFilterDialog(QDialog):
     def _create_button(self, text: str, primary: bool) -> QPushButton:
         """Create styled button."""
         btn = QPushButton(text)
-        btn.setFixedSize(170, 50)
+        btn.setFixedSize(ScreenScale.w(170), ScreenScale.h(50))
         btn.setCursor(Qt.PointingHandCursor)
         btn.setFont(create_font(size=10, weight=QFont.Medium))
 

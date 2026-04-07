@@ -25,7 +25,7 @@ from PyQt5.QtGui import (
     QPainterPath, QCursor,
 )
 
-from ui.design_system import Colors, PageDimensions, Spacing
+from ui.design_system import Colors, PageDimensions, Spacing, ScreenScale
 from ui.font_utils import create_font, FontManager
 from ui.style_manager import StyleManager
 from ui.components.icon import Icon
@@ -94,7 +94,7 @@ class _ClaimCard(QFrame):
         self._lift_value = 0.0
         self._lift_anim = None
         self.setCursor(QCursor(Qt.PointingHandCursor))
-        self.setFixedHeight(120)
+        self.setFixedHeight(ScreenScale.h(120))
         self.setMouseTracking(True)
         self._build_ui(claim_data)
 
@@ -118,19 +118,9 @@ class _ClaimCard(QFrame):
         outer.setContentsMargins(0, 0, 16, 0)
         outer.setSpacing(0)
 
-        # Left status strip
-        style = _STATUS_STYLES.get(self._status, _STATUS_STYLES["open"])
-        strip = QFrame()
-        strip.setFixedWidth(6)
-        strip.setStyleSheet(
-            f"background-color: {style['fg']}; "
-            "border-top-left-radius: 12px; border-bottom-left-radius: 12px;"
-        )
-        outer.addWidget(strip)
-
         # Content
         content = QVBoxLayout()
-        content.setContentsMargins(16, 12, 0, 12)
+        content.setContentsMargins(20, 12, 0, 12)
         content.setSpacing(6)
 
         # Row 1: claim number + status badge
@@ -151,7 +141,7 @@ class _ClaimCard(QFrame):
         badge = QLabel(status_text)
         badge.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
         badge.setAlignment(Qt.AlignCenter)
-        badge.setFixedHeight(24)
+        badge.setFixedHeight(ScreenScale.h(24))
         badge.setStyleSheet(
             f"QLabel {{ background-color: {style['bg']}; color: {style['fg']}; "
             f"border: 1px solid {style['border']}; border-radius: 12px; "
@@ -167,7 +157,7 @@ class _ClaimCard(QFrame):
         name_label.setStyleSheet(
             f"color: {Colors.PAGE_TITLE}; background: transparent; border: none;"
         )
-        name_label.setMaximumWidth(600)
+        name_label.setMaximumWidth(ScreenScale.w(600))
         content.addWidget(name_label)
 
         # Row 3: details
@@ -624,14 +614,14 @@ class CompletedClaimsPage(QWidget):
         tab_font = create_font(size=12, weight=QFont.DemiBold)
 
         self._tab_open = NavStyleTab(tr("page.claims.tab_open"))
-        self._tab_open.setFixedSize(130, 38)
+        self._tab_open.setFixedSize(ScreenScale.w(130), ScreenScale.h(38))
         self._tab_open.set_font(tab_font)
         self._tab_open.set_active(True)
         self._tab_open.clicked.connect(lambda: self._on_tab("open"))
         self._header.add_tab(self._tab_open)
 
         self._tab_closed = NavStyleTab(tr("page.claims.tab_closed"))
-        self._tab_closed.setFixedSize(130, 38)
+        self._tab_closed.setFixedSize(ScreenScale.w(130), ScreenScale.h(38))
         self._tab_closed.set_font(tab_font)
         self._tab_closed.set_active(False)
         self._tab_closed.clicked.connect(lambda: self._on_tab("closed"))
@@ -639,7 +629,7 @@ class CompletedClaimsPage(QWidget):
 
         self._search = QLineEdit()
         self._search.setPlaceholderText("بحث برقم مراجعة المسح (OFC-...)")
-        self._search.setFixedSize(280, 34)
+        self._search.setFixedSize(ScreenScale.w(280), ScreenScale.h(34))
         self._search.setFont(create_font(size=11, weight=FontManager.WEIGHT_REGULAR))
         self._search.setStyleSheet("""
             QLineEdit {
@@ -661,7 +651,7 @@ class CompletedClaimsPage(QWidget):
         if search_icon and not search_icon.isNull():
             icon_label = QLabel(self._search)
             icon_label.setPixmap(search_icon)
-            icon_label.setFixedSize(16, 16)
+            icon_label.setFixedSize(ScreenScale.w(16), ScreenScale.h(16))
             icon_label.move(10, 9)
             icon_label.setStyleSheet("background: transparent; border: none;")
         self._search.returnPressed.connect(self._on_search_triggered)
@@ -725,7 +715,7 @@ class CompletedClaimsPage(QWidget):
 
     def _create_pagination(self):
         bar = QFrame()
-        bar.setFixedHeight(40)
+        bar.setFixedHeight(ScreenScale.h(40))
         bar.setStyleSheet("QFrame { background: transparent; border: none; }")
         layout = QHBoxLayout(bar)
         layout.setContentsMargins(4, 6, 4, 0)
@@ -742,7 +732,7 @@ class CompletedClaimsPage(QWidget):
             QPushButton:disabled { color: #B0BEC5; background: transparent; border-color: #E0E0E0; }
         """
         self._prev_btn = QPushButton("\u276E")
-        self._prev_btn.setFixedSize(32, 28)
+        self._prev_btn.setFixedSize(ScreenScale.w(32), ScreenScale.h(28))
         self._prev_btn.setCursor(QCursor(Qt.PointingHandCursor))
         self._prev_btn.setStyleSheet(_NAV_BTN)
         self._prev_btn.clicked.connect(self._on_prev_page)
@@ -752,11 +742,11 @@ class CompletedClaimsPage(QWidget):
         self._page_info.setFont(create_font(size=10, weight=FontManager.WEIGHT_MEDIUM))
         self._page_info.setStyleSheet(f"color: {Colors.TEXT_SECONDARY};")
         self._page_info.setAlignment(Qt.AlignCenter)
-        self._page_info.setMinimumWidth(80)
+        self._page_info.setMinimumWidth(ScreenScale.w(80))
         layout.addWidget(self._page_info)
 
         self._next_btn = QPushButton("\u276F")
-        self._next_btn.setFixedSize(32, 28)
+        self._next_btn.setFixedSize(ScreenScale.w(32), ScreenScale.h(28))
         self._next_btn.setCursor(QCursor(Qt.PointingHandCursor))
         self._next_btn.setStyleSheet(_NAV_BTN)
         self._next_btn.clicked.connect(self._on_next_page)
@@ -838,7 +828,7 @@ class CompletedClaimsPage(QWidget):
 
     def _build_results_bar(self):
         bar = QFrame()
-        bar.setFixedHeight(44)
+        bar.setFixedHeight(ScreenScale.h(44))
         bar.setStyleSheet(
             "QFrame { background: rgba(56, 144, 223, 0.07);"
             " border-radius: 8px; border: 1px solid rgba(56, 144, 223, 0.15);"
@@ -849,7 +839,7 @@ class CompletedClaimsPage(QWidget):
         layout.setSpacing(12)
 
         self._back_btn = QPushButton("رجوع")
-        self._back_btn.setFixedSize(80, 30)
+        self._back_btn.setFixedSize(ScreenScale.w(80), ScreenScale.h(30))
         self._back_btn.setCursor(Qt.PointingHandCursor)
         self._back_btn.setStyleSheet(
             "QPushButton { background: rgba(56, 144, 223, 0.15);"

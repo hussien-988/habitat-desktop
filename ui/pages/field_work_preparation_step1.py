@@ -17,7 +17,7 @@ from ui.components.animated_card import AnimatedCard, EmptyStateAnimated
 from ui.components.icon import Icon
 from ui.components.toast import Toast
 from ui.animation_utils import stagger_fade_in
-from ui.design_system import Colors, PageDimensions
+from ui.design_system import Colors, PageDimensions, ScreenScale
 from ui.font_utils import create_font, FontManager
 from utils.i18n import I18n
 from utils.logger import get_logger
@@ -55,7 +55,7 @@ class _SelectableBuildingCard(AnimatedCard):
             card_height=80,
             border_radius=10,
             show_chevron=False,
-            show_strip=True,
+            show_strip=False,
             status_color=status_color,
             strip_width=4,
             clickable=True,
@@ -322,7 +322,7 @@ class FieldWorkPreparationStep1(QWidget):
 
         search_bar = QFrame()
         search_bar.setObjectName("searchBar")
-        search_bar.setFixedHeight(42)
+        search_bar.setFixedHeight(ScreenScale.h(42))
         search_bar.setStyleSheet(f"""
             QFrame#searchBar {{
                 background-color: {Colors.SEARCH_BAR_BG};
@@ -339,7 +339,7 @@ class FieldWorkPreparationStep1(QWidget):
         # Search icon button
         search_icon_btn = QToolButton()
         search_icon_btn.setCursor(Qt.PointingHandCursor)
-        search_icon_btn.setFixedSize(30, 30)
+        search_icon_btn.setFixedSize(ScreenScale.w(30), ScreenScale.h(30))
         search_icon_btn.setStyleSheet("""
             QToolButton {
                 border: none;
@@ -439,7 +439,7 @@ class FieldWorkPreparationStep1(QWidget):
         self.empty_label = EmptyStateAnimated(
             title=tr("wizard.step1.select_filters_hint"),
         )
-        self.empty_label.setMinimumHeight(179)
+        self.empty_label.setMinimumHeight(ScreenScale.h(179))
 
         # Stacked results: page 0 = empty state, page 1 = results scroll
         empty_page = QWidget()
@@ -502,7 +502,7 @@ class FieldWorkPreparationStep1(QWidget):
 
     def _style_combo(self, combo: QComboBox):
         """Apply consistent styling to combo boxes (full-field clickable)."""
-        combo.setFixedHeight(42)
+        combo.setFixedHeight(ScreenScale.h(42))
 
         down_icon_path = self._get_down_icon_path()
 

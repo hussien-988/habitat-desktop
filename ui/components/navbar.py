@@ -19,7 +19,7 @@ from PyQt5.QtGui import (
     QRadialGradient, QLinearGradient, QPen
 )
 
-from ..design_system import Colors, NavbarDimensions, Typography, Spacing
+from ..design_system import Colors, NavbarDimensions, Typography, Spacing, ScreenScale
 from ..font_utils import create_font, FontManager
 from ..style_manager import StyleManager
 from .logo import LogoWidget
@@ -354,7 +354,7 @@ class Navbar(QFrame):
         """)
         main_layout.addWidget(bottom_glow)
 
-        self.setFixedHeight(NavbarDimensions.CONTAINER_HEIGHT)
+        self.setFixedHeight(NavbarDimensions.container_height())
 
     # -- Top Bar --
 
@@ -362,7 +362,7 @@ class Navbar(QFrame):
         top_bar = DraggableFrame()
         top_bar.setObjectName("navbar_top")
         top_bar.setAttribute(Qt.WA_StyledBackground, True)
-        top_bar.setFixedHeight(NavbarDimensions.TOP_BAR_HEIGHT)
+        top_bar.setFixedHeight(NavbarDimensions.top_bar_height())
         top_bar.setLayoutDirection(Qt.RightToLeft)
 
         layout = QHBoxLayout(top_bar)
@@ -417,7 +417,7 @@ class Navbar(QFrame):
         btn_close.setObjectName("win_close")
 
         for b in (btn_min, btn_max, btn_close):
-            b.setFixedSize(46, 32)
+            b.setFixedSize(ScreenScale.w(46), ScreenScale.h(32))
             b.setFocusPolicy(Qt.NoFocus)
             b.setCursor(QCursor(Qt.PointingHandCursor))
 
@@ -443,7 +443,7 @@ class Navbar(QFrame):
     def _create_tabs_bar(self):
         self._tabs_bar_frame = _TabsBarFrame()
         self._tabs_bar_frame.setObjectName("tabs_bar")
-        self._tabs_bar_frame.setFixedHeight(NavbarDimensions.TABS_BAR_HEIGHT)
+        self._tabs_bar_frame.setFixedHeight(NavbarDimensions.tabs_bar_height())
 
         layout = QHBoxLayout(self._tabs_bar_frame)
         layout.setContentsMargins(
@@ -486,8 +486,8 @@ class Navbar(QFrame):
 
     def _create_tab_button(self, title: str, index: int) -> CurvedTab:
         tab = CurvedTab(title, theme="dark")
-        tab.setFixedHeight(NavbarDimensions.TAB_HEIGHT)
-        tab.setMinimumWidth(100)
+        tab.setFixedHeight(NavbarDimensions.tab_height())
+        tab.setMinimumWidth(ScreenScale.w(100))
         tab.setCursor(QCursor(Qt.PointingHandCursor))
         tab.set_font(create_font(
             size=NavbarDimensions.TAB_FONT_SIZE,
@@ -507,7 +507,7 @@ class Navbar(QFrame):
 
         pill = QFrame()
         pill.setObjectName("navbar_pill")
-        pill.setFixedHeight(36)
+        pill.setFixedHeight(ScreenScale.h(36))
         pill.setFixedWidth(self._pill_collapsed_w)
         pill.setStyleSheet("""
             QFrame#navbar_pill {
@@ -574,7 +574,7 @@ class Navbar(QFrame):
         # Sync button
         self._pill_sync_btn = QPushButton()
         self._pill_sync_btn.setStyleSheet(_BTN_STYLE)
-        self._pill_sync_btn.setFixedHeight(28)
+        self._pill_sync_btn.setFixedHeight(ScreenScale.h(28))
         self._pill_sync_btn.setFont(_btn_font)
         self._pill_sync_btn.setCursor(QCursor(Qt.PointingHandCursor))
         self._pill_sync_btn.setFocusPolicy(Qt.NoFocus)
@@ -589,7 +589,7 @@ class Navbar(QFrame):
         # Password change button
         self._pill_pwd_btn = QPushButton()
         self._pill_pwd_btn.setStyleSheet(_BTN_STYLE)
-        self._pill_pwd_btn.setFixedHeight(28)
+        self._pill_pwd_btn.setFixedHeight(ScreenScale.h(28))
         self._pill_pwd_btn.setFont(_btn_font)
         self._pill_pwd_btn.setCursor(QCursor(Qt.PointingHandCursor))
         self._pill_pwd_btn.setFocusPolicy(Qt.NoFocus)
@@ -604,7 +604,7 @@ class Navbar(QFrame):
         # Language toggle button
         self._pill_lang_btn = QPushButton()
         self._pill_lang_btn.setStyleSheet(_BTN_STYLE)
-        self._pill_lang_btn.setFixedHeight(28)
+        self._pill_lang_btn.setFixedHeight(ScreenScale.h(28))
         self._pill_lang_btn.setFont(_btn_font)
         self._pill_lang_btn.setCursor(QCursor(Qt.PointingHandCursor))
         self._pill_lang_btn.setFocusPolicy(Qt.NoFocus)
@@ -627,7 +627,7 @@ class Navbar(QFrame):
         # Logout button
         self._pill_logout_btn = QPushButton()
         self._pill_logout_btn.setStyleSheet(_BTN_STYLE)
-        self._pill_logout_btn.setFixedHeight(28)
+        self._pill_logout_btn.setFixedHeight(ScreenScale.h(28))
         self._pill_logout_btn.setFont(_btn_font)
         self._pill_logout_btn.setCursor(QCursor(Qt.PointingHandCursor))
         self._pill_logout_btn.setFocusPolicy(Qt.NoFocus)
@@ -640,7 +640,7 @@ class Navbar(QFrame):
         # Notification badge on sync button
         self._pill_sync_badge = QLabel(self._pill_sync_btn)
         self._pill_sync_badge.setAlignment(Qt.AlignCenter)
-        self._pill_sync_badge.setFixedSize(16, 16)
+        self._pill_sync_badge.setFixedSize(ScreenScale.w(16), ScreenScale.h(16))
         self._pill_sync_badge.setStyleSheet("""
             QLabel {
                 background-color: #EF4444;
@@ -697,7 +697,7 @@ class Navbar(QFrame):
 
     def _create_pill_separator(self):
         sep = QFrame()
-        sep.setFixedSize(1, 16)
+        sep.setFixedSize(1, ScreenScale.h(16))
         sep.setStyleSheet("background: rgba(139, 172, 200, 40);")
         return sep
 
@@ -982,7 +982,7 @@ class SimpleNavbar(QFrame):
 
         if self.show_back:
             back_btn = QPushButton("\u2190")
-            back_btn.setFixedSize(40, 40)
+            back_btn.setFixedSize(ScreenScale.w(40), ScreenScale.h(40))
             back_btn.setFont(create_font(size=15, weight=QFont.Normal))
             back_btn.setCursor(QCursor(Qt.PointingHandCursor))
             back_btn.setStyleSheet("""
@@ -1008,14 +1008,14 @@ class SimpleNavbar(QFrame):
 
         if self.show_search:
             search_widget = QWidget()
-            search_widget.setMinimumWidth(200)
-            search_widget.setMaximumWidth(320)
+            search_widget.setMinimumWidth(ScreenScale.w(200))
+            search_widget.setMaximumWidth(ScreenScale.w(320))
             search_layout = QHBoxLayout(search_widget)
             search_layout.setContentsMargins(0, 0, 0, 0)
             self.search_input = QLineEdit()
             self.search_input.setPlaceholderText(tr("navbar.search.simple"))
             self.search_input.setFont(create_font(size=10, weight=QFont.Normal, letter_spacing=0))
-            self.search_input.setFixedHeight(36)
+            self.search_input.setFixedHeight(ScreenScale.h(36))
             self.search_input.setStyleSheet(f"""
                 QLineEdit {{
                     background-color: {Colors.SEARCH_BG};
@@ -1027,7 +1027,7 @@ class SimpleNavbar(QFrame):
             search_layout.addWidget(self.search_input)
             layout.addWidget(search_widget)
 
-        self.setFixedHeight(60)
+        self.setFixedHeight(ScreenScale.h(60))
 
     def _apply_styles(self):
         self.setStyleSheet(f"""

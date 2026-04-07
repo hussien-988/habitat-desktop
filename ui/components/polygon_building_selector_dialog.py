@@ -18,6 +18,7 @@ from models.building import Building
 from repositories.database import Database
 from utils.logger import get_logger
 from services.translation_manager import tr, get_layout_direction
+from ui.design_system import ScreenScale
 
 logger = get_logger(__name__)
 
@@ -103,7 +104,7 @@ class PolygonBuildingSelectorDialog(QDialog):
 
         # Polygon editor widget
         self.polygon_editor = PolygonEditorWidget(self)
-        self.polygon_editor.setMinimumHeight(400)
+        self.polygon_editor.setMinimumHeight(ScreenScale.h(400))
         editor_layout.addWidget(self.polygon_editor)
 
         main_layout.addWidget(editor_group)
@@ -161,7 +162,7 @@ class PolygonBuildingSelectorDialog(QDialog):
                 color: #2C3E50;
             }
         """)
-        self.buildings_list.setMaximumHeight(150)
+        self.buildings_list.setMaximumHeight(ScreenScale.h(150))
         buildings_layout.addWidget(self.buildings_list)
 
         main_layout.addWidget(buildings_group)
@@ -170,7 +171,7 @@ class PolygonBuildingSelectorDialog(QDialog):
 
         self.select_btn = QPushButton(tr("dialog.polygon_selector.select_buildings_btn"))
         self.select_btn.setEnabled(False)
-        self.select_btn.setMinimumHeight(40)
+        self.select_btn.setMinimumHeight(ScreenScale.h(40))
         self.select_btn.setStyleSheet("""
             QPushButton {
                 font-family: 'IBM Plex Sans Arabic';
@@ -193,7 +194,7 @@ class PolygonBuildingSelectorDialog(QDialog):
         self.select_btn.clicked.connect(self.accept)
 
         cancel_btn = QPushButton(tr("button.cancel"))
-        cancel_btn.setMinimumHeight(40)
+        cancel_btn.setMinimumHeight(ScreenScale.h(40))
         cancel_btn.setStyleSheet("""
             QPushButton {
                 font-family: 'IBM Plex Sans Arabic';

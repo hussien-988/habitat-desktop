@@ -10,6 +10,7 @@ from PyQt5.QtGui import QFont, QColor
 
 from ui.font_utils import create_font, FontManager
 from services.translation_manager import tr
+from ui.design_system import ScreenScale
 
 
 # Dialog type definitions: (icon_char, icon_bg_color, title_color, btn_color, btn_hover)
@@ -41,7 +42,7 @@ class MessageDialog(QDialog):
         self.setWindowFlags(Qt.Dialog | Qt.FramelessWindowHint)
         self.setAttribute(Qt.WA_TranslucentBackground)
         self.setModal(True)
-        self.setFixedWidth(420)
+        self.setFixedWidth(ScreenScale.w(420))
 
         icon_char, icon_bg, title_color, btn_color, btn_hover = _TYPES.get(
             dialog_type, _TYPES["info"]
@@ -63,7 +64,7 @@ class MessageDialog(QDialog):
 
         # Icon circle
         icon_container = QWidget()
-        icon_container.setFixedSize(72, 72)
+        icon_container.setFixedSize(ScreenScale.w(72), ScreenScale.h(72))
         icon_container.setStyleSheet(
             f"QWidget {{ background-color: {icon_bg}; border-radius: 36px; }}"
         )
@@ -103,7 +104,7 @@ class MessageDialog(QDialog):
 
         if show_cancel:
             cancel_btn = QPushButton(cancel_text)
-            cancel_btn.setFixedHeight(42)
+            cancel_btn.setFixedHeight(ScreenScale.h(42))
             cancel_btn.setCursor(Qt.PointingHandCursor)
             cancel_btn.setFont(create_font(size=12, weight=FontManager.WEIGHT_SEMIBOLD))
             cancel_btn.setStyleSheet("""
@@ -121,7 +122,7 @@ class MessageDialog(QDialog):
             btn_layout.addWidget(cancel_btn, 1)
 
         ok_btn = QPushButton(ok_text)
-        ok_btn.setFixedHeight(42)
+        ok_btn.setFixedHeight(ScreenScale.h(42))
         ok_btn.setCursor(Qt.PointingHandCursor)
         ok_btn.setFont(create_font(size=12, weight=FontManager.WEIGHT_SEMIBOLD))
         ok_btn.setStyleSheet(f"""

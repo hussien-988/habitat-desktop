@@ -22,7 +22,7 @@ from ui.wizards.office_survey.wizard_styles import (
     STEP_CARD_STYLE, READONLY_FIELD_STYLE, SECTION_HEADER_STYLE,
     make_step_card, make_icon_header, make_divider, DIVIDER_COLOR,
 )
-from ui.design_system import Colors
+from ui.design_system import Colors, ScreenScale
 from ui.font_utils import create_font, FontManager
 from ui.style_manager import StyleManager
 from services.display_mappings import get_building_type_display, get_building_status_display
@@ -145,11 +145,11 @@ class BuildingInfoStep(BaseStep):
         map_section.setSpacing(4)
 
         map_align_lbl = QLabel("")
-        map_align_lbl.setFixedHeight(16)
+        map_align_lbl.setFixedHeight(ScreenScale.h(16))
         map_section.addWidget(map_align_lbl)
 
         self._map_container = QLabel()
-        self._map_container.setFixedSize(400, 130)
+        self._map_container.setFixedSize(ScreenScale.w(400), ScreenScale.h(130))
         self._map_container.setAlignment(Qt.AlignCenter)
         self._map_container.setObjectName("mapContainer")
         self._map_container.setStyleSheet("""
@@ -172,7 +172,7 @@ class BuildingInfoStep(BaseStep):
         loc_px = Icon.load_pixmap("carbon_location-filled", size=56)
         if loc_px and not loc_px.isNull():
             loc_icon_lbl.setPixmap(loc_px)
-            loc_icon_lbl.setFixedSize(56, 56)
+            loc_icon_lbl.setFixedSize(ScreenScale.w(56), ScreenScale.h(56))
             loc_icon_lbl.move(172, 37)
             loc_icon_lbl.setStyleSheet("background: transparent;")
 
@@ -180,7 +180,7 @@ class BuildingInfoStep(BaseStep):
         from PyQt5.QtGui import QIcon
         from PyQt5.QtCore import QSize
         map_button = QPushButton(self._map_container)
-        map_button.setFixedSize(94, 20)
+        map_button.setFixedSize(ScreenScale.w(94), ScreenScale.h(20))
         map_button.move(8, 8)
         map_button.setCursor(Qt.PointingHandCursor)
         pill_px = Icon.load_pixmap("pill", size=12)
@@ -236,7 +236,7 @@ class BuildingInfoStep(BaseStep):
         docs_section.addWidget(docs_lbl)
 
         self._docs_btn = QPushButton(tr("wizard.building_info.show_documents"))
-        self._docs_btn.setFixedHeight(40)
+        self._docs_btn.setFixedHeight(ScreenScale.h(40))
         self._docs_btn.setCursor(QCursor(Qt.PointingHandCursor))
         self._docs_btn.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
         self._docs_btn.setStyleSheet("""
@@ -267,7 +267,7 @@ class BuildingInfoStep(BaseStep):
 
         self.f_description = QTextEdit()
         self.f_description.setReadOnly(True)
-        self.f_description.setFixedHeight(130)
+        self.f_description.setFixedHeight(ScreenScale.h(130))
         self.f_description.setStyleSheet(_TEXTAREA_STYLE)
         self.f_description.setPlaceholderText(tr("wizard.building_info.no_description"))
         desc_section.addWidget(self.f_description)
@@ -326,7 +326,7 @@ class BuildingInfoStep(BaseStep):
 
         field = QLineEdit()
         field.setReadOnly(True)
-        field.setFixedHeight(40)
+        field.setFixedHeight(ScreenScale.h(40))
         field.setAlignment(Qt.AlignCenter)
         field.setStyleSheet(READONLY_FIELD_STYLE)
         vbox.addWidget(field)
@@ -437,7 +437,7 @@ class BuildingInfoStep(BaseStep):
 
         dlg = QDialog(self)
         dlg.setWindowFlags(Qt.FramelessWindowHint | Qt.Dialog)
-        dlg.setFixedSize(500, 400)
+        dlg.setFixedSize(ScreenScale.w(500), ScreenScale.h(400))
         dlg.setStyleSheet("""
             QDialog {
                 background-color: white;
@@ -459,7 +459,7 @@ class BuildingInfoStep(BaseStep):
         header.addStretch()
 
         close_btn = QPushButton("X")
-        close_btn.setFixedSize(32, 32)
+        close_btn.setFixedSize(ScreenScale.w(32), ScreenScale.h(32))
         close_btn.setCursor(QCursor(Qt.PointingHandCursor))
         close_btn.setStyleSheet("""
             QPushButton {
@@ -497,7 +497,7 @@ class BuildingInfoStep(BaseStep):
     def _make_doc_row(self, doc: dict) -> QFrame:
         """Create a row widget for a single document."""
         row = QFrame()
-        row.setFixedHeight(50)
+        row.setFixedHeight(ScreenScale.h(50))
         row.setStyleSheet("""
             QFrame {
                 background-color: #F8FAFF;
@@ -521,7 +521,7 @@ class BuildingInfoStep(BaseStep):
         icon_fg = "#1D4ED8" if mime_type.startswith("image/") else "#DC2626" if "pdf" in mime_type else "#374151"
 
         icon_lbl = QLabel(icon_text)
-        icon_lbl.setFixedSize(36, 36)
+        icon_lbl.setFixedSize(ScreenScale.w(36), ScreenScale.h(36))
         icon_lbl.setAlignment(Qt.AlignCenter)
         icon_lbl.setFont(create_font(size=8, weight=FontManager.WEIGHT_SEMIBOLD))
         icon_lbl.setStyleSheet(
