@@ -751,7 +751,7 @@ class ReviewStep(BaseStep):
         grid.setSpacing(16)
 
         ctx = self.context
-        ref = ctx.reference_number or ctx.get_data("survey_id") or "-"
+        ref = ctx.get_data("survey_id") or "-"
         created = ""
         if ctx.created_at:
             try:
@@ -1543,6 +1543,18 @@ class ReviewStep(BaseStep):
             self._api_service.finalize_survey_status(survey_id)
             logger.info(f"Survey {survey_id} finalized successfully")
             self.context.status = "finalized"
+            # Fetch updated survey to get the proper referenceCode
+            try:
+                updated = self._api_service.get_office_survey(survey_id)
+                ref_code = updated.get("referenceCode", "")
+                if ref_code:
+                    self.context.reference_number = ref_code
+                    if hasattr(self.context, 'finalize_response') and self.context.finalize_response:
+                        if "survey" not in self.context.finalize_response:
+                            self.context.finalize_response["survey"] = {}
+                        self.context.finalize_response["survey"]["referenceCode"] = ref_code
+            except Exception as e:
+                logger.debug(f"Could not refresh reference code: {e}")
         except Exception as e:
             logger.error(f"Failed to finalize survey status {survey_id}: {e}")
             from services.error_mapper import map_exception

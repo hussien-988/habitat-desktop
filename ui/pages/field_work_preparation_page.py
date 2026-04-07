@@ -139,6 +139,10 @@ class FieldWorkPreparationPage(QWidget):
 
         self.current_step = 0
 
+        # Revisit mode state (set by _start_revisit_mode)
+        self._revisit_buildings = None
+        self._revisit_unit_id = None
+
     def load_data(self):
         """Load filter data for step 1 (call after login)."""
         if self.step1:
@@ -186,11 +190,15 @@ class FieldWorkPreparationPage(QWidget):
         elif self.current_step == 1:
             # Moving from Step 2 to Step 3 (summary)
             researcher = self.step2.get_selected_researcher()
-            buildings = self.step1.get_selected_buildings()
             if not researcher:
                 from ui.components.toast import Toast
                 Toast.show_toast(self, tr("wizard.field_work.select_researcher_warning"), Toast.WARNING)
                 return
+
+            # Use revisit buildings if in revisit mode, otherwise from step1
+            buildings = self._revisit_buildings or self.step1.get_selected_buildings()
+            revisit_unit_id = self._revisit_unit_id
+            revisit_building_id = self._revisit_buildings[0].building_id if self._revisit_buildings else ''
 
             # Rebuild step3 each time (fresh data)
             if self.step3 is not None:
@@ -198,7 +206,12 @@ class FieldWorkPreparationPage(QWidget):
                 self.step3.deleteLater()
 
             from ui.pages.field_work_preparation_step3 import FieldWorkPreparationStep3
-            self.step3 = FieldWorkPreparationStep3(buildings, researcher, parent=self)
+            self.step3 = FieldWorkPreparationStep3(
+                buildings, researcher,
+                revisit_unit_id=revisit_unit_id,
+                revisit_building_id=revisit_building_id,
+                parent=self,
+            )
             self.step_container.addWidget(self.step3)
 
             self.current_step = 2
@@ -214,7 +227,7 @@ class FieldWorkPreparationPage(QWidget):
                 workflow_data = {
                     'buildings': summary['buildings'],
                     'researcher': summary['researcher'],
-                    'revisit_buildings': summary.get('revisit_buildings', []),
+                    'revisit_reasons': summary.get('revisit_reasons', {}),
                 }
                 logger.info(f"Submitting field work: {len(workflow_data['buildings'])} buildings")
                 main_window = self.window()
@@ -240,7 +253,8 @@ class FieldWorkPreparationPage(QWidget):
             self.btn_next.setEnabled(has_selection)
 
         elif self.current_step == 1:
-            self.btn_back.setEnabled(True)
+            # In revisit mode there is no step1 to go back to
+            self.btn_back.setEnabled(not bool(self._revisit_buildings))
             self.btn_next.setText(tr("wizard.field_work.btn_next"))
             has_researcher = self.step2.get_selected_researcher() is not None if self.step2 else False
             self.btn_next.setEnabled(has_researcher)
@@ -282,7 +296,11 @@ class FieldWorkPreparationPage(QWidget):
         self._update_navigation()
 
     def refresh(self, data=None):
-        """Reset wizard to step 1 for a new assignment."""
+        """Reset wizard to step 1 for a new assignment, or start at step 2 in revisit mode."""
+        # Reset revisit state
+        self._revisit_buildings = None
+        self._revisit_unit_id = None
+
         # Remove step 4 if exists
         if self.step4 is not None:
             if hasattr(self.step4, 'stop_refresh'):
@@ -301,17 +319,41 @@ class FieldWorkPreparationPage(QWidget):
             self.step2.deleteLater()
             self.step2 = None
 
-        # Reset to step 1
-        self.current_step = 0
-        self.step_container.setCurrentIndex(0)
-        self._update_navigation()
-
         # Clear step 1 selections
         self.step1.clear_all_selections()
 
         # Reload filter data (communities/neighborhoods) if not yet loaded
         if hasattr(self.step1, '_load_filter_data') and not self.step1._all_communities:
             self.step1._load_filter_data()
+
+        # If revisit mode, skip step 1 and go directly to step 2
+        if data and data.get('revisit_mode'):
+            self._start_revisit_mode(data['building_id'], data['unit_id'])
+            return
+
+        # Normal mode: reset to step 1
+        self.current_step = 0
+        self.step_container.setCurrentIndex(0)
+        self._update_navigation()
+
+    def _start_revisit_mode(self, building_id, unit_id):
+        """Initialize revisit mode: pre-select building, skip to step 2."""
+        from types import SimpleNamespace
+        from ui.pages.field_work_preparation_step2 import FieldWorkPreparationStep2
+        building_ns = SimpleNamespace(
+            building_uuid=building_id,
+            building_id=building_id,
+        )
+        self._revisit_buildings = [building_ns]
+        self._revisit_unit_id = unit_id
+
+        self.step2 = FieldWorkPreparationStep2(
+            self._revisit_buildings, self.i18n, parent=self
+        )
+        self.step_container.addWidget(self.step2)
+        self.step_container.setCurrentWidget(self.step2)
+        self.current_step = 1
+        self._update_navigation()
 
     def update_language(self, is_arabic=True):
         """Update all translatable strings when language changes."""

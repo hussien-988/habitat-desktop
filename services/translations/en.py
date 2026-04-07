@@ -258,6 +258,18 @@ EN_TRANSLATIONS = {
     "mapping.evidence_type.proxy": "Power of Attorney",
     "mapping.evidence_type.acknowledgment": "Acknowledgment",
 
+    # Identification Document Types (IdentificationDocumentType enum - v1.7)
+    "mapping.id_doc_type.personal_id_photo": "Personal ID Photo",
+    "mapping.id_doc_type.family_record": "Family Record",
+    "mapping.id_doc_type.photo": "Photo",
+
+    # Survey Status (SurveyStatus enum - v1.7 includes Obstructed)
+    "mapping.survey_status.draft": "Draft",
+    "mapping.survey_status.finalized": "Finalized",
+    "mapping.survey_status.obstructed": "Obstructed",
+    "mapping.survey_status.cancelled": "Cancelled",
+    "mapping.survey_status.archived": "Archived",
+
     # Occupancy Types (OccupancyType enum)
     "mapping.occupancy_type.owner_occupied": "Owner Occupied",
     "mapping.occupancy_type.tenant_occupied": "Tenant Occupied",
@@ -460,7 +472,7 @@ EN_TRANSLATIONS = {
     "wizard.household.unit_type_label": "Unit Type",
     "wizard.household.unit_status_label": "Unit Status",
     "wizard.household.members_required": "Number of household members must be greater than zero",
-    "wizard.household.members_mismatch": "Ensure member count matches the details (excluding persons with disabilities)",
+    "wizard.household.members_mismatch": "Ensure member count matches the details ",
     "wizard.household.disability_exceeds_total": "Disability count cannot exceed total household members",
     "wizard.household.total_members_hint": "Excluding persons with disabilities",
     "wizard.person.card_title": "Persons Data",
@@ -621,6 +633,7 @@ EN_TRANSLATIONS = {
     "wizard.person_dialog.nationality_syrian": "Syrian",
     "wizard.person_dialog.nationality_palestinian": "Palestinian",
     "wizard.person_dialog.nationality_other": "Other",
+    "wizard.person_dialog.id_document_type": "ID Document Type",
     "wizard.person_dialog.attach_id_photos": "Attach ID Photos",
     "wizard.person_dialog.person_role": "Person Role",
     "wizard.person_dialog.occupancy_nature": "Occupancy Nature",
@@ -795,6 +808,11 @@ EN_TRANSLATIONS = {
     "navbar.tab.user_management": "User Management",
     "navbar.tab.map": "Map",
     "navbar.tab.field_assignment": "Field Work Preparation",
+    "navbar.tab.case_management": "Case Management",
+
+    # Case Management Page
+    "page.case_management.no_surveys": "No surveys linked to this case",
+    "page.case_management.load_failed": "Failed to load case data",
     "page.case_details.edit_claim": "Edit Claim",
     "navbar.search.default": "Search by code or name...",
     "navbar.search.by_name": "Search by recipient name...",
@@ -897,12 +915,14 @@ EN_TRANSLATIONS = {
     # Cases page
     "page.cases.tab_draft": "Draft",
     "page.cases.tab_finalized": "Finalized",
+    "page.cases.tab_obstructed": "Obstructed",
     "page.cases.search_person": "Search by person name...",
     "page.cases.loading": "Loading surveys...",
     "page.cases.load_error": "Failed to load surveys",
     "page.cases.unspecified": "Unspecified",
     "page.cases.no_drafts": "No drafts available",
     "page.cases.no_finalized": "No finalized surveys yet",
+    "page.cases.no_obstructed": "No obstructed surveys",
     "page.cases.empty_description": "Start adding surveys to appear here",
 
     # Search page
@@ -1094,6 +1114,10 @@ EN_TRANSLATIONS = {
 
     # Case details page
     "page.case_details.resume": "Resume Editing",
+    "page.case_details.resume_obstructed": "Resume Survey",
+    "page.case_details.revert_to_draft": "Revert to Draft",
+    "page.case_details.revert_reason_placeholder": "Enter reason for reverting to draft...",
+    "page.case_details.confirm_revert": "Confirm Revert",
     "page.case_details.cancel_survey": "Cancel Survey",
     "page.case_details.cancel_confirm": "Are you sure you want to cancel this survey?\nPlease enter the cancellation reason below.",
     "page.case_details.cancel_reason_placeholder": "Enter cancellation reason here...",
@@ -1101,6 +1125,7 @@ EN_TRANSLATIONS = {
     "page.case_details.reason_required": "Cancellation reason is required",
     "page.case_details.status_draft": "Draft",
     "page.case_details.status_completed": "Completed",
+    "page.case_details.status_obstructed": "Obstructed",
     "page.case_details.section_survey": "Survey Information",
     "page.case_details.section_survey_sub": "General survey data and status",
     "page.case_details.section_building": "Building Information",
@@ -2852,6 +2877,8 @@ EN_TRANSLATIONS = {
     "wizard.step3.revisit": "Revisit",
     "wizard.step3.revisit_reason_placeholder": "Reason for revisit...",
     "wizard.step3.revisit_reason_required": "Revisit reason is required",
+    "wizard.step3.survey_done": "Surveyed",
+    "wizard.step3.survey_not_done": "Not Surveyed",
     "wizard.step3.surveyed": "Surveyed",
     "wizard.step3.type": "Type",
     "wizard.step3.unavailable": "Unavailable",

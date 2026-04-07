@@ -31,20 +31,10 @@ logger = get_logger(__name__)
 class EvidenceDialog(QDialog):
     """Dialog for attaching evidence/documents."""
 
-    DOCUMENT_TYPES = [
-        ("TAPU_GREEN", "صك ملكية (طابو أخضر)"),
-        ("PROPERTY_REG", "بيان قيد عقاري"),
-        ("COURT_RULING", "حكم قضائي"),
-        ("SALE_NOTARIZED", "عقد بيع موثق"),
-        ("SALE_INFORMAL", "عقد بيع غير موثق"),
-        ("RENT_REGISTERED", "عقد إيجار مسجل"),
-        ("RENT_INFORMAL", "عقد إيجار غير مسجل"),
-        ("UTILITY_BILL", "فاتورة مرافق"),
-        ("MUKHTAR_CERT", "شهادة المختار"),
-        ("INHERITANCE", "حصر إرث"),
-        ("WITNESS_STATEMENT", "إفادة شاهد"),
-        ("OTHER", "أخرى"),
-    ]
+    # EvidenceType codes excluded from tenure evidence per API v1.7:
+    # 1 = IdentificationDocument (moved to IdentificationDocument entity)
+    # 5 = Photo (moved to IdentificationDocument entity)
+    _EXCLUDED_EVIDENCE_TYPE_CODES = {1, 5}
 
     def __init__(self, evidence_data: Optional[Dict] = None, parent=None):
         """
@@ -194,7 +184,9 @@ class EvidenceDialog(QDialog):
         layout.addWidget(type_label)
 
         self.type_combo = QComboBox()
-        for code, label in vocab_get_options("DocumentType"):
+        for code, label in vocab_get_options("EvidenceType"):
+            if code in self._EXCLUDED_EVIDENCE_TYPE_CODES:
+                continue
             self.type_combo.addItem(label, code)
         self.type_combo.setStyleSheet(self._input_style())
         layout.addWidget(self.type_combo)
@@ -333,7 +325,7 @@ class EvidenceDialog(QDialog):
         """Browse for file."""
         file_path, _ = QFileDialog.getOpenFileName(
             self, tr("wizard.evidence_dialog.choose_file"), "",
-            "Documents (*.pdf *.jpg *.jpeg *.png *.doc *.docx);;All Files (*)"
+            "Documents (*.pdf *.jpg *.jpeg *.png *.doc *.docx *.mp3 *.wav *.ogg *.m4a);;All Files (*)"
         )
         if file_path:
             self.selected_file = file_path

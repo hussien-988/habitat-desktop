@@ -979,11 +979,12 @@ class FieldWorkPreparationStep1(QWidget):
 
                 added_count += 1
 
-            # Update UI
+            # Update UI - show selected buildings as cards
             self._update_selection_count()
+            self._show_selected_buildings_view()
             self._update_selected_card_visibility()
 
-            logger.info(f"Added {added_count} buildings from polygon to selection (silent)")
+            logger.info(f"Added {added_count} buildings from map to selection")
 
         except Exception as e:
             logger.error(f"Error opening map selector: {e}", exc_info=True)

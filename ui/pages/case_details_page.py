@@ -246,6 +246,8 @@ class _CaseDetailsHeader(QWidget):
     back_clicked = pyqtSignal()
     resume_clicked = pyqtSignal()
     cancel_clicked = pyqtSignal()
+    resume_obstructed_clicked = pyqtSignal()
+    revert_to_draft_clicked = pyqtSignal()
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -364,6 +366,60 @@ class _CaseDetailsHeader(QWidget):
         self._cancel_btn.clicked.connect(self.cancel_clicked.emit)
         row1.addWidget(self._cancel_btn)
 
+        # Resume Obstructed button (obstructed surveys, admin/data_manager only)
+        self._resume_obstructed_btn = QPushButton(tr("page.case_details.resume_obstructed"))
+        self._resume_obstructed_btn.setFixedSize(160, 38)
+        self._resume_obstructed_btn.setCursor(QCursor(Qt.PointingHandCursor))
+        self._resume_obstructed_btn.setVisible(False)
+        self._resume_obstructed_btn.setFont(create_font(size=11, weight=QFont.DemiBold))
+        self._resume_obstructed_btn.setStyleSheet("""
+            QPushButton {
+                background: qlineargradient(
+                    x1:0, y1:0, x2:1, y2:1,
+                    stop:0 #D97706, stop:1 #F59E0B
+                );
+                color: white; border: none;
+                border-radius: 12px; padding: 0 24px;
+            }
+            QPushButton:hover {
+                background: qlineargradient(
+                    x1:0, y1:0, x2:1, y2:1,
+                    stop:0 #B45309, stop:1 #D97706
+                );
+            }
+            QPushButton:pressed {
+                background: #B45309;
+            }
+        """)
+        self._resume_obstructed_btn.clicked.connect(self.resume_obstructed_clicked.emit)
+        row1.addWidget(self._resume_obstructed_btn)
+
+        # Revert to Draft button (finalized surveys, admin/data_manager only)
+        self._revert_btn = QPushButton(tr("page.case_details.revert_to_draft"))
+        self._revert_btn.setFixedSize(160, 38)
+        self._revert_btn.setCursor(QCursor(Qt.PointingHandCursor))
+        self._revert_btn.setVisible(False)
+        self._revert_btn.setFont(create_font(size=11, weight=QFont.DemiBold))
+        self._revert_btn.setStyleSheet("""
+            QPushButton {
+                background: qlineargradient(
+                    x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #FFFFFF, stop:1 #F0F4FA
+                );
+                border: 1.5px solid rgba(217, 119, 6, 0.35);
+                border-radius: 10px;
+                color: #D97706; padding: 0 14px;
+            }
+            QPushButton:hover {
+                background: #FFFBEB;
+                border: 1.5px solid rgba(217, 119, 6, 0.6);
+                color: #B45309;
+            }
+            QPushButton:pressed { background: #FEF3C7; }
+        """)
+        self._revert_btn.clicked.connect(self.revert_to_draft_clicked.emit)
+        row1.addWidget(self._revert_btn)
+
         outer.addLayout(row1)
         outer.addSpacing(8)
 
@@ -381,7 +437,7 @@ class _CaseDetailsHeader(QWidget):
         self._accent_line = _AccentLine()
         outer.addWidget(self._accent_line)
 
-    def set_info(self, ref_number, badges, is_draft):
+    def set_info(self, ref_number, badges, is_draft, can_resume_obstructed=False, can_revert=False):
         self._ref_label.setText(ref_number or tr("page.case_details.title"))
         self._ref_label.setLayoutDirection(Qt.LeftToRight)
         self._ref_label.setAlignment(
@@ -392,6 +448,8 @@ class _CaseDetailsHeader(QWidget):
 
         self._resume_btn.setVisible(is_draft)
         self._cancel_btn.setVisible(is_draft)
+        self._resume_obstructed_btn.setVisible(can_resume_obstructed)
+        self._revert_btn.setVisible(can_revert)
 
         # Clear old badges
         while self._badges_layout.count():
@@ -415,6 +473,8 @@ class _CaseDetailsHeader(QWidget):
     def update_texts(self):
         self._resume_btn.setText(tr("page.case_details.resume"))
         self._cancel_btn.setText(tr("page.case_details.cancel_survey"))
+        self._resume_obstructed_btn.setText(tr("page.case_details.resume_obstructed"))
+        self._revert_btn.setText(tr("page.case_details.revert_to_draft"))
         self._ref_label.setAlignment(
             Qt.AlignRight | Qt.AlignVCenter
             if get_layout_direction() == Qt.RightToLeft
@@ -432,11 +492,18 @@ class CaseDetailsPage(QWidget):
     back_requested = pyqtSignal()
     resume_requested = pyqtSignal(str)  # survey_id
     cancel_requested = pyqtSignal(str, str)  # survey_id, reason
+    resume_obstructed_requested = pyqtSignal(str)  # survey_id
+    revert_requested = pyqtSignal(str, str)  # survey_id, reason
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self._context = SurveyContext()
+        self._user_role = ""
         self._setup_ui()
+
+    def configure_for_role(self, role: str):
+        """Set user role for permission-based button visibility."""
+        self._user_role = role
 
     # -- UI Setup --
 
@@ -458,6 +525,8 @@ class CaseDetailsPage(QWidget):
         self._header.back_clicked.connect(self.back_requested.emit)
         self._header.resume_clicked.connect(self._on_resume_clicked)
         self._header.cancel_clicked.connect(self._on_cancel_clicked)
+        self._header.resume_obstructed_clicked.connect(self._on_resume_obstructed_clicked)
+        self._header.revert_to_draft_clicked.connect(self._on_revert_to_draft_clicked)
         main_layout.addWidget(self._header)
         main_layout.addSpacing(16)
 
@@ -731,12 +800,21 @@ class CaseDetailsPage(QWidget):
         ctx = self._context
         ref = ctx.reference_number or ctx.get_data("survey_id") or ""
         status = getattr(ctx, 'status', '') or ctx.get_data("status") or ""
-        is_draft = str(status).lower() in ("draft", "1", "")
+        status_lower = str(status).lower()
+        is_draft = status_lower in ("draft", "1", "")
+        is_obstructed = status_lower in ("obstructed", "4")
+        is_finalized = not is_draft and not is_obstructed
+
+        can_manage = self._user_role in ("admin", "data_manager")
+        can_resume_obstructed = is_obstructed and can_manage
+        can_revert = is_finalized and can_manage
 
         badges = []
 
         # Status badge
-        if is_draft:
+        if is_obstructed:
+            badges.append((tr("page.case_details.status_obstructed"), "#FFFBEB", "#B45309"))
+        elif is_draft:
             badges.append((tr("page.case_details.status_draft"), "#FEF3C7", "#92400E"))
         else:
             badges.append((tr("page.case_details.status_completed"), "#D1FAE5", "#065F46"))
@@ -752,7 +830,7 @@ class CaseDetailsPage(QWidget):
         if ctx.building and ctx.building.building_id_formatted:
             badges.append((ctx.building.building_id_formatted, "#F0F9FF", "#0369A1"))
 
-        self._header.set_info(ref, badges, is_draft)
+        self._header.set_info(ref, badges, is_draft, can_resume_obstructed, can_revert)
 
     # -- Survey Info Card --
 
@@ -1237,6 +1315,49 @@ class CaseDetailsPage(QWidget):
             return
         logger.info(f"Cancel requested for survey: {survey_id}")
         self.cancel_requested.emit(survey_id, reason)
+
+    def _on_resume_obstructed_clicked(self):
+        survey_id = None
+        if self._context:
+            survey_id = self._context.get_data("survey_id")
+            if not survey_id:
+                survey_id = getattr(self._context, 'wizard_id', None)
+        if survey_id:
+            logger.info(f"Resume obstructed requested for survey: {survey_id}")
+            self.resume_obstructed_requested.emit(survey_id)
+        else:
+            logger.warning("No survey_id in context for resume obstructed")
+
+    def _on_revert_to_draft_clicked(self):
+        survey_id = None
+        if self._context:
+            survey_id = self._context.get_data("survey_id")
+            if not survey_id:
+                survey_id = getattr(self._context, 'wizard_id', None)
+        if not survey_id:
+            logger.warning("No survey_id in context for revert to draft")
+            return
+
+        from ui.components.bottom_sheet import BottomSheet
+        sheet = BottomSheet.form(
+            parent=self,
+            title=tr("page.case_details.revert_to_draft"),
+            fields=[
+                ("reason", tr("page.case_details.revert_reason_placeholder"), "multiline"),
+            ],
+            submit_text=tr("page.case_details.confirm_revert"),
+            cancel_text=tr("action.dismiss"),
+        )
+        sheet.confirmed.connect(lambda: self._handle_revert_confirmed(sheet, survey_id))
+
+    def _handle_revert_confirmed(self, sheet, survey_id):
+        data = sheet.get_form_data()
+        reason = (data.get("reason") or "").strip()
+        if not reason:
+            Toast.show_toast(self, tr("page.case_details.reason_required"), Toast.WARNING)
+            return
+        logger.info(f"Revert to draft requested for survey: {survey_id}")
+        self.revert_requested.emit(survey_id, reason)
 
     # -- Language --
 

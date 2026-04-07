@@ -314,16 +314,20 @@ def _build_from_translation_keys():
         ],
         "evidencetype": [
             (0, "mapping.select"),
-            (1, "mapping.evidence_type.identification_document"),
             (2, "mapping.evidence_type.ownership_deed"),
             (3, "mapping.evidence_type.rental_contract"),
             (4, "mapping.evidence_type.utility_bill"),
-            (5, "mapping.evidence_type.photo"),
             (6, "mapping.evidence_type.official_letter"),
             (7, "mapping.evidence_type.court_order"),
             (8, "mapping.evidence_type.inheritance_document"),
             (9, "mapping.evidence_type.tax_receipt"),
             (99, "mapping.evidence_type.other"),
+        ],
+        "identificationdocumenttype": [
+            (0, "mapping.select"),
+            (1, "mapping.id_doc_type.personal_id_photo"),
+            (2, "mapping.id_doc_type.family_record"),
+            (3, "mapping.id_doc_type.photo"),
         ],
         "occupancytype": [
             (0, "mapping.select"),
@@ -423,6 +427,13 @@ def _build_from_translation_keys():
             ("pending", "mapping.evidence_status.pending"),
             ("verified", "mapping.evidence_status.verified"),
             ("rejected", "mapping.evidence_status.rejected"),
+        ],
+        "surveystatus": [
+            (1, "mapping.survey_status.draft"),
+            (3, "mapping.survey_status.finalized"),
+            (4, "mapping.survey_status.obstructed"),
+            (8, "mapping.survey_status.cancelled"),
+            (99, "mapping.survey_status.archived"),
         ],
     }
 

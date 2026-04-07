@@ -213,7 +213,8 @@ class EvidencePickerDialog(QDialog):
         ext = file_name.rsplit(".", 1)[-1].upper() if "." in file_name else ""
         if ext:
             ext_colors = {"PDF": "#E53E3E", "JPG": "#3182CE", "JPEG": "#3182CE",
-                          "PNG": "#3182CE", "DOC": "#718096", "DOCX": "#718096"}
+                          "PNG": "#3182CE", "DOC": "#718096", "DOCX": "#718096",
+                          "MP3": "#7C3AED", "WAV": "#7C3AED", "OGG": "#7C3AED", "M4A": "#7C3AED"}
             bg = ext_colors.get(ext, "#718096")
             ext_badge = QLabel(ext)
             ext_badge.setFixedSize(40, 22)

@@ -137,20 +137,9 @@ class OfficeSurveyWizard(BaseWizard):
             # skip all draft-save logic and show success directly
             if self.context.status == "finalized":
                 finalize_resp = getattr(self.context, 'finalize_response', None) or {}
-                created_claims = finalize_resp.get("createdClaims", [])
-                if created_claims:
-                    self._show_finalized_success_popup(claims=created_claims)
-                    return True
-
-                claim_number = (
-                    finalize_resp.get("claimNumber")
-                    or finalize_resp.get("claimId")
-                    or ""
-                )
-                if not claim_number:
-                    self._fetch_claim_number_sync()
-                    return True
-                self._show_finalized_success_popup(claim_number=claim_number)
+                survey_data = finalize_resp.get("survey", {})
+                ref_code = survey_data.get("referenceCode", "") or self.context.reference_number
+                self._show_finalized_success_popup(ref_code)
                 return True
 
             # Determine status based on claim creation result
@@ -199,140 +188,13 @@ class OfficeSurveyWizard(BaseWizard):
             )
             return False
 
-    def _fetch_claim_number_from_api(self, callback=None):
-        """Fetch claim number from claims summaries API in background.
-
-        Args:
-            callback: Optional callable(str) invoked with the claim number.
-        """
-        survey_id = self.context.get_data("survey_id")
-        if not survey_id:
-            if callback:
-                callback("")
-            return
-
-        from services.api_client import get_api_client
-        api = get_api_client()
-        main_window = self.window()
-        if main_window and hasattr(main_window, '_api_token'):
-            api.set_access_token(main_window._api_token)
-
-        def _do_fetch():
-            return api.get_claims_summaries(survey_visit_id=survey_id)
-
-        def _on_finished(response):
-            self._spinner.hide_loading()
-            items = response if isinstance(response, list) else response.get("items", [])
-            if items and len(items) > 0:
-                claims_list = [
-                    {
-                        "claimNumber": it.get("claimNumber", ""),
-                        "fullNameArabic": it.get("primaryClaimantName", "") or it.get("fullNameArabic", ""),
-                    }
-                    for it in items
-                ]
-                if callback:
-                    callback(claims=claims_list)
-            else:
-                if callback:
-                    callback(claim_number="")
-
-        def _on_error(msg):
-            self._spinner.hide_loading()
-            logger.warning(f"Could not fetch claim number from API: {msg}")
-            if callback:
-                callback(claim_number="")
-
-        self._spinner.show_loading(tr("component.loading.default"))
-        self._claim_number_worker = ApiWorker(_do_fetch)
-        self._claim_number_worker.finished.connect(_on_finished)
-        self._claim_number_worker.error.connect(_on_error)
-        self._claim_number_worker.start()
-
-    def _fetch_claim_number_sync(self):
-        """Fetch claims from API synchronously, then show success dialog."""
-        from PyQt5.QtCore import QEventLoop
-        survey_id = self.context.get_data("survey_id")
-        if not survey_id:
-            self._show_finalized_success_popup()
-            return
-
-        from services.api_client import get_api_client
-        api = get_api_client()
-        main_window = self.window()
-        if main_window and hasattr(main_window, '_api_token'):
-            api.set_access_token(main_window._api_token)
-
-        loop = QEventLoop()
-        result_holder = [None]
-
-        def _do_fetch():
-            return api.get_claims_summaries(survey_visit_id=survey_id)
-
-        def _on_finished(response):
-            self._spinner.hide_loading()
-            items = response if isinstance(response, list) else response.get("items", [])
-            if items:
-                result_holder[0] = [
-                    {
-                        "claimNumber": it.get("claimNumber", ""),
-                        "fullNameArabic": it.get("primaryClaimantName", "") or it.get("fullNameArabic", ""),
-                    }
-                    for it in items
-                ]
-            loop.quit()
-
-        def _on_error(msg):
-            self._spinner.hide_loading()
-            logger.warning(f"Could not fetch claim number from API: {msg}")
-            loop.quit()
-
-        self._spinner.show_loading(tr("component.loading.default"))
-        worker = ApiWorker(_do_fetch)
-        worker.finished.connect(_on_finished)
-        worker.error.connect(_on_error)
-        worker.start()
-        loop.exec_()
-
-        if result_holder[0]:
-            self._show_finalized_success_popup(claims=result_holder[0])
-        else:
-            self._show_finalized_success_popup()
-
-    def _show_finalized_success_popup(self, claim_number: str = "", claims: list = None):
-        """Show success BottomSheet with person names and claim numbers."""
+    def _show_finalized_success_popup(self, ref_code: str = ""):
+        """Show success dialog with survey reference code."""
         from PyQt5.QtWidgets import (
             QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
-            QFrame, QGraphicsDropShadowEffect,
+            QFrame, QGraphicsDropShadowEffect, QLineEdit,
         )
         from PyQt5.QtGui import QColor
-
-        # Build claims display data
-        display_rows = []
-        if claims:
-            for c in claims:
-                name = (c.get("fullNameArabic") or c.get("primaryClaimantName")
-                        or c.get("fullName") or "")
-                num = c.get("claimNumber") or c.get("claimId") or ""
-                if name or num:
-                    display_rows.append((name, str(num)))
-        elif claim_number:
-            name = ""
-            if self.context.applicant:
-                a = self.context.applicant
-                parts = [a.get("first_name_ar", ""), a.get("father_name_ar", ""), a.get("last_name_ar", "")]
-                name = " ".join(p for p in parts if p) or a.get("full_name", "")
-            if not name and self.context.persons:
-                p = self.context.persons[0]
-                parts = [p.get("first_name", ""), p.get("father_name", ""), p.get("last_name", "")]
-                name = " ".join(part for part in parts if part) or p.get("full_name", "")
-            display_rows.append((name, str(claim_number)))
-
-        if not display_rows and self.context.persons:
-            for p in self.context.persons:
-                parts = [p.get("first_name", ""), p.get("father_name", ""), p.get("last_name", "")]
-                name = " ".join(part for part in parts if part) or p.get("full_name", "")
-                display_rows.append((name, ""))
 
         dlg = QDialog(self)
         dlg.setWindowFlags(Qt.FramelessWindowHint | Qt.Dialog)
@@ -385,35 +247,28 @@ class OfficeSurveyWizard(BaseWizard):
         title.setWordWrap(True)
         card_layout.addWidget(title)
 
-        if display_rows:
-            hdr = QHBoxLayout()
-            hdr.setContentsMargins(4, 0, 4, 0)
-            name_hdr = QLabel(tr("wizard.success.col_name"))
-            name_hdr.setStyleSheet("color: rgba(140, 190, 240, 0.7); font-size: 11px; font-weight: 600;")
-            claim_hdr = QLabel(tr("wizard.success.col_claim"))
-            claim_hdr.setStyleSheet("color: rgba(140, 190, 240, 0.7); font-size: 11px; font-weight: 600;")
-            claim_hdr.setAlignment(Qt.AlignLeft)
-            hdr.addWidget(name_hdr, 1)
-            hdr.addWidget(claim_hdr, 1)
-            card_layout.addLayout(hdr)
+        if ref_code:
+            hint_lbl = QLabel("رقم المراجعة")
+            hint_lbl.setAlignment(Qt.AlignCenter)
+            hint_lbl.setStyleSheet("color: rgba(140, 190, 240, 0.7); font-size: 12px;")
+            card_layout.addWidget(hint_lbl)
 
-            div = QFrame()
-            div.setFixedHeight(1)
-            div.setStyleSheet("background-color: rgba(255, 255, 255, 0.1);")
-            card_layout.addWidget(div)
-
-            for name, num in display_rows:
-                row = QHBoxLayout()
-                row.setContentsMargins(4, 4, 4, 4)
-                name_lbl = QLabel(name or "-")
-                name_lbl.setStyleSheet("color: rgba(240, 248, 255, 0.9); font-size: 14px;")
-                name_lbl.setWordWrap(True)
-                num_lbl = QLabel(num or "-")
-                num_lbl.setStyleSheet("color: rgba(74, 222, 128, 0.9); font-size: 13px; font-weight: 600;")
-                num_lbl.setAlignment(Qt.AlignLeft)
-                row.addWidget(name_lbl, 1)
-                row.addWidget(num_lbl, 1)
-                card_layout.addLayout(row)
+            ref_field = QLineEdit(ref_code)
+            ref_field.setReadOnly(True)
+            ref_field.setAlignment(Qt.AlignCenter)
+            ref_field.setStyleSheet(
+                "QLineEdit {"
+                "    background: rgba(74, 222, 128, 0.1);"
+                "    border: 1px solid rgba(74, 222, 128, 0.4);"
+                "    border-radius: 8px;"
+                "    color: #4ADE80;"
+                "    font-size: 20px;"
+                "    font-weight: 700;"
+                "    padding: 10px 16px;"
+                "    letter-spacing: 2px;"
+                "}"
+            )
+            card_layout.addWidget(ref_field)
 
         ok_btn = QPushButton(tr("button.ok"))
         ok_btn.setCursor(Qt.PointingHandCursor)
